@@ -20,6 +20,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `Lazy` sources over the lines of a file (closed before the terminal returns)
   and the values of a channel; `File.foreach(...).each` with no step is
   `CHECK-LAZY-NO-STEP` (use `File.each_line`).
+- `try` works in every block of a `Lazy` method (`map`, `filter`, `reduce`,
+  `find` ...): a failed `try` ends the pipeline and the terminal returns its
+  error. `lz.write_lines(path, timeout_ms)` writes the lines of a
+  `Lazy[String]` to a file (created or truncated, closed before it returns)
+  and gives `Result[Void]`.
 - CI runs one conformance matrix on Linux, Windows and macOS (Intel and ARM),
   with a report of what each system tested and skipped.
 - `Task.cancel(task)` cancels a task and its descendants without waiting.

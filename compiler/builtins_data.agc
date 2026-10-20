@@ -1694,6 +1694,23 @@ ROWS_20: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Lazy.write_lines",
+      parameters: [
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.String)),
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: ["filesystem"],
+      description: (
+        "Terminal: write each item and a line feed to a file, created or truncated; the file opens before the first " +
+        "item is pulled and is flushed and closed before the terminal returns; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "List.all?",
       parameters: [
         Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
@@ -3950,6 +3967,20 @@ ROWS_53: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "__lazy_with_index",
       effects: [],
+      description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "__lazy_write_lines",
+      parameters: [
+        Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.String)),
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "__lazy_write_lines",
+      effects: ["filesystem"],
       description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
       alternatives: [],
     ),

@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 474,
+  "stdout": [
+    "three lines: ok() \"a\\nbc\\n\\n\"",
+    "truncated: ok() \"new\\n\"",
+    "no items, an empty file: ok() \"\"",
+    "an endless source with take: ok() \"1\\n2\\n4\\n8\\n\"",
+    "a copy through steps: ok() \"1\\n2\\n8\\n\"",
+    "lines past the buffer: ok() 140006",
+    "a failed try keeps what was written: error(\"cannot convert \\\"x\\\" to Int\") \"10\\n20\\n\"",
+    "a line over 1 MiB: error(\"filesystem: line exceeds 1048576 bytes\") \"ok\\n\"",
+    "a missing directory: false",
+    "a directory: false",
+    "a bad timeout: error(\"filesystem: timeout must be positive milliseconds\")",
+    "a failed open pulls nothing: false",
+    ""
+  ],
+  "stderr": []
+}

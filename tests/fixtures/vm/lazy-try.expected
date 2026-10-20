@@ -1,0 +1,33 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 893,
+  "stdout": [
+    "  map 1",
+    "  map 2",
+    "  map x",
+    "map: error(\"cannot convert \\\"x\\\" to Int\")",
+    "all good: ok([10, 20])",
+    "filter: error(\"no 3\")",
+    "take_while: error(\"no 3\")",
+    "drop_while: error(\"no 3\")",
+    "flat_map: error(\"no 3\")",
+    "with_index: error(\"no 3\")",
+    "chunk_while: error(\"no 3\")",
+    "  produce after 1",
+    "  produce after 2",
+    "  produce after 3",
+    "produce: error(\"no 3\")",
+    "reduce: error(\"no 3\")",
+    "find: error(\"no 3\")",
+    "  each 1",
+    "  each 2",
+    "each: error(\"no 3\")",
+    "after a slice: error(\"no 3\")",
+    "first stops before the failure: ok([1, 2])",
+    "channel: error(\"no 3\")",
+    "the value after it is still there: ok([4])",
+    ""
+  ],
+  "stderr": []
+}

@@ -74,6 +74,20 @@ export def check_block_body(
   known_result: T.Type,
   each_receiver: Ast.Optional[Ast.Expr],
 ) -> Result[State.Out]
+  return check_block_in(cx, st, block, known_params, known_result, each_receiver, false)
+end
+
+## check_block_body for the block of a Lazy method when step is true: a `try` in it (not in a block nested in it) ends
+## the pipeline, whatever the block's result type (State.St.step).
+export def check_block_in(
+  cx: State.Cx,
+  st: State.St,
+  block: Ast.BlockLit,
+  known_params: Ast.Optional[List[T.Type]],
+  known_result: T.Type,
+  each_receiver: Ast.Optional[Ast.Expr],
+  step: Bool,
+) -> Result[State.Out]
   types = try block_parameter_types(cx, st, block, known_params)
   slot = State.Slot.Infer
   if T.is(known_result, "Result") and T.unknown?(T.item(known_result))
@@ -84,6 +98,7 @@ export def check_block_body(
   inside = st.with(
     loops: 0,
     result: slot,
+    step: step,
     capture: Ast.Optional.Present(
       State.Capture(boundary: st.depth, params: block.params, each_receiver: each_receiver),
     ),
@@ -110,7 +125,7 @@ export def check_block_body(
     )
   end
   block_type = T.Type.Fn(types, result)
-  after = State.leave(done.st, st).with(result: st.result, capture: st.capture, loops: st.loops)
+  after = State.leave(done.st, st).with(result: st.result, capture: st.capture, loops: st.loops, step: st.step)
   return ok(State.Out(st: State.record_type(after, block.id, block_type), type: block_type))
 end
 

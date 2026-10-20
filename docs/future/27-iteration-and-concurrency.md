@@ -18,8 +18,9 @@ the builtin enum `Await[T]`) is built (roadmap 17c): the owner decided on
 for order step 8.2. 27.4 (`File.each_line` and lazy pipelines) is in two
 steps, decided by the owner on 2026-10-14: step 1 is item 17d at order row
 7.2.1h (built), step 2 is item 17e, renamed `Lazy[T]` by the owner on
-2026-10-20; its PR 1 (lists, ranges and `Lazy.produce`) and its PR 2 (the I/O
-sources `File.foreach` and `ch.lazy`) are built. 27.5 records what was decided
+2026-10-20; its PR 1 (lists, ranges and `Lazy.produce`), its PR 2 (the I/O
+sources `File.foreach` and `ch.lazy`) and its PR 3 (`try` in the blocks and
+the `write_lines` terminal) are built. 27.5 records what was decided
 against (generators, fibers, Agent-style shared state, public locks), so it is
 not proposed again. This section finalizes the earlier channel proposal and
 answers [section
@@ -568,7 +569,8 @@ which is the program's own task.
 memory and adds no type (roadmap 17d, order row 7.2.1h, built). Step 2 is a
 lazy recipe over sources, named `Lazy[T]` by the owner on 2026-10-20 (after
 Ruby's `Enumerator::Lazy`; it was planned as `Stream[T]`), roadmap 17e. Its PR
-1 (lists, ranges and `Lazy.produce`) and PR 2 (the I/O sources) are built.
+1 (lists, ranges and `Lazy.produce`), PR 2 (the I/O sources) and PR 3 (`try`
+in the blocks, `write_lines`) are built.
 
 The owner judged that streaming without loading everything is needed: Python
 iterators and Ruby `yield` cover it, and Agentica's loop and channel forms are
@@ -705,6 +707,34 @@ The decisions PR 2 took:
 
 Socket and process lines stay an open question for the same reason as the
 second terminal: a stream cannot be read twice.
+
+**Step 2, PR 3 (built).** Decided by the owner on 2026-10-20, after comparing
+a CSV ledger ETL in Ruby, Elixir and Agentica:
+
+- **`try` works in every block of a `Lazy` method** (a step, `Lazy.produce`, a
+  terminal), whatever the block's result type. A failed `try` ends the
+  pipeline: no later item is pulled, the files of the run are closed, and the
+  terminal returns the error. A block nested in such a block follows the usual
+  rule (`CHECK-TRY-CONTEXT` unless it returns a `Result`). The checker marks
+  each such `try` (`St.step`, `Checked.step_tries`) and the lowering emits the
+  opcode `try-step` for it: on an error it returns from the block like `try`
+  and sets `escaped` on the terminal's stepper, so a block whose value is
+  itself a `Result` is never mistaken for a failure, and no other path pays
+  for it. Wrapping the block's value in `ok(...)` was the other way; it costs
+  an allocation per item and a second form of every step.
+- **`lz.write_lines(path, timeout_ms)`**, on a `Lazy[String]`, gives
+  `Result[Void]`: each item and a line feed into a file, created or truncated
+  (mode `write` of `File.open`). The file opens before the first item is
+  pulled, so a failed open reads nothing (a channel keeps its values), and it
+  is flushed and closed before the terminal returns, whatever ended it; its
+  close error is the result when nothing failed before, since a buffered write
+  may fail only there. What was written before an error stays. The output is
+  buffered 64 KiB at a time (not the 4 KiB of `File.write`, which would make a
+  file job per 4 KiB), and a line over 1 MiB is an error, as `File.write`
+  refuses such a text. There is no `buffer_bytes` argument: the reader needs
+  one to bound a line, the writer does not. The timeout bounds the open, each
+  write and the close, like the other file calls, and there is no permission
+  flag for files (`--allow-run` is for processes only).
 
 **Later.** An Elixir-style `transform` (an accumulator, 0 to n items out per
 item in, and a halt), if a program needs it, returns a std builtin struct from

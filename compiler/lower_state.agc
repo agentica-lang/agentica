@@ -42,6 +42,7 @@ end
 ## enum name (the program's and the builtin ones it uses) to "Struct" or "Enum"; structs the struct info by name;
 ## variants the id of "Enum.Variant"; json_structs the structs JSON.decode may build; functions the index of each
 ## declared function; bodies the prelude function each call of a prelude builtin runs, by id of the call (prelude.agc);
+## step_tries the `try` nodes in the blocks of Lazy methods, which lower to try-step;
 ## fills the functions that have default values, by name; reads what a constant read becomes. file
 ## is the file of the function being lowered and index its position in the sources. expression lowers an expression,
 ## and block lowers a block as a function: the cycles between expressions, statements and blocks go through these two
@@ -55,6 +56,7 @@ export struct Cx
   json_structs: Set[String]
   functions: Map[String, Int]
   bodies: Map[Int, String]
+  step_tries: Set[Int]
   fills: Map[String, Fill]
   reads: Map[String, Read]
   file: String

@@ -186,6 +186,18 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `tests/fixtures/vm/lazy-file.agc`, `lazy-channel.agc`,
   `step-limited/lazy-channel-endless.agc`; closes on every path:
   `tests/test_vm_lazy_io.py`; N=4: `tests/test_vm_multicore.py`.
+- Lazy PR 3 (17e): `lz.write_lines(path, ms)` is the terminal `LAZY_WRITE`,
+  driving the line writer `agc_line_writer` of `vm/files.c` (`agc_writer_*` in
+  `services.h`): it opens before the first pull (`sink_ready`), parks on each
+  write job (`WAIT_SINK`) and is flushed and closed in `lazy_done` after the
+  reader (`WAIT_SINK_CLOSE`); its close error replaces an ok result. `try` in
+  any block of a `Lazy` method: `check_prelude.agc` checks the blocks of
+  `module == "lazy"` rows with `St.step`, `check_try` records the ids
+  (`Checked.step_tries`), the lowering emits `try-step`, and the interpreter
+  sets `agc_stepper.escaped` (`mark_escape`) so `lazy_resume` ends the run with
+  the error. Goldens: `tests/fixtures/vm/lazy-try.agc`, `lazy-write.agc`; the
+  round trip and the closes: `tests/test_vm_lazy_io.py`; the Python peer:
+  `tests/test_stdlib_prelude.py`.
 - tests/test_filesystem.py (unittest) runs checked Agentica programs through the
   CLI on the VM against temporary directories, including Path.real through link
   chains, loops and long paths and System.env with bytes that are not UTF-8,

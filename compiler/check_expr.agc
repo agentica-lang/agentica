@@ -206,9 +206,10 @@ def check_invoke(cx: State.Cx, st: State.St, node: Ast.Invoke) -> Result[State.O
 end
 
 # try needs a function, or a block, that returns a Result (a block with an inferred result qualifies only when it must
-# give a Result), and an operand that is a Result.
+# give a Result), and an operand that is a Result. In the block of a Lazy method any `try` works: its error ends the
+# pipeline and is the terminal's result, so it is recorded for the lowering (try-step).
 def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -> Result[State.Out]
-  if !result_context?(st)
+  if !st.step and !result_context?(st)
     return error(
       State.fail_help(
         cx,
@@ -228,7 +229,11 @@ def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -
   if !T.is(out.type, "Result")
     return error(State.mismatch(cx, out.st, T.Type.Result(T.Type.Var("T")), out.type, Ast.expr_span(node.operand)))
   end
-  return ok(State.Out(st: out.st, type: T.item(out.type)))
+  after = out.st
+  if st.step
+    after = after.with(step_tries: after.step_tries.add(node.id))
+  end
+  return ok(State.Out(st: after, type: T.item(out.type)))
 end
 
 def result_context?(st: State.St) -> Bool

@@ -321,6 +321,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     timed-out job (so a timed-out close can log it twice, and a handle still
     open when the run ends is released without it).
     `tests/test_vm_lazy_io.py` reads them to see the closes on every platform)
+  - `Lazy.write_lines` (17e) writes through `agc_line_writer` (`agc_writer_new`,
+    `agc_writer_next`, `agc_writer_stop`), phases START, OPENED, READY, WROTE,
+    CLOSE, CLOSING, CLOSED: `OP_OPEN_WRITE`, then each line and its LF into the
+    handle's buffer sized to `CHUNK` (64 KiB, not `WRITE_BUFFER`), a full
+    buffer going out as one `OP_WRITE` (`write_out` with `newline`), then
+    `close_handle`, whose error is the outcome when there was none. A line over
+    `LIMIT` is an error; the handle is private, so no handle lock is taken
 - `vm/output.c`
   - the writer of stdout and stderr, but not the only one: `vm/process.c`
     forwards a child's stderr to `err.file` with a blocking `fwrite`

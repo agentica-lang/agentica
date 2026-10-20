@@ -134,7 +134,9 @@ typed op still checks its tags at run time (4.2).
 - **Form:** `try`
   - **Lowering:** `step` (the `try` span), the operand, then `try dst src`: on
     an error, return that Result from the function (the block, inside a block).
-    `return try f(...)` is not a tail call.
+    `return try f(...)` is not a tail call. A `try` that the checker found in
+    the block of a `Lazy` method (`Checked.step_tries`) is `try-step dst src`
+    instead.
 
 - **Form:** `ok`, `error`, `Result.*`
   - **Lowering:** Builtin calls. `Result.Ok(x)` and `Result.Err(m)` are `ok` and
@@ -303,9 +305,15 @@ behavior.
     `R[b+2]`, ... in that order.
 
 - **Group:** Result
-  - **Opcodes:** `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b`
+  - **Opcodes:** `TRY a b`, `IS_OK a b`, `RESULT_VALUE a b`, `TRY_STEP a b`
   - **Meaning:** `TRY`: if `R[b]` is an error, return it, else `R[a]` = its
-    value.
+    value. `TRY_STEP` (opcode 52) is `TRY` in the block of a `Lazy` method: on
+    an error it also sets `escaped` on the stepper of the frame below (4.3), so
+    the terminal ends the pipeline with that error instead of taking it as the
+    block's value. The frame below must be the native frame of a `Lazy`
+    terminal (`agc_stepper.lazy`), else `RUNTIME-INTERNAL`: another stepper
+    (`File.each_line`, `Profile.measure`) or a native loop such as `List.map`
+    is refused.
 
 - **Group:** Range
   - **Opcodes:** `RANGE a b c`, `RANGE_BOUNDS a b`
@@ -321,7 +329,7 @@ behavior.
     never
     set is `RUNTIME-INTERNAL`.
 
-There are 52 opcodes. Everything else, including `ok`, `error`, `puts` and every
+There are 53 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `OPCODES` in `compiler/bytecode_tables.agc` and `agc_opcode` in `vm/value.h`.
 New opcodes
@@ -423,7 +431,11 @@ Details that code and tests rely on:
   `ch.lazy` they take it only around the line reader of `File.each_line` and
   `agc_channel_receive`, which may park inside that section; the step then
   returns `AGC_STEP_WAIT` with the lock dropped, and the file is closed before
-  every `AGC_STEP_END`.
+  every `AGC_STEP_END`. `write_lines` is a terminal with a line writer
+  (`agc_writer_next` in `vm/files.c`): it opens its file before the first item,
+  parks on each write job and on the close, under the same lock rule. A
+  callback that returns through a failed `TRY_STEP` sets `escaped` on the
+  stepper; the terminal clears it and ends with that error.
 - `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native
   frames. Before each callback they charge one step at the call span, the same
   check as `STEP`. They stop by comparing with the last value before adding, so
@@ -541,6 +553,8 @@ distinct type
   Version 5 added the Globals section (version 4 is the Updates section and
   `STRUCT_WITH`, 15c). Version 6 added the prelude flag of each function
   (4.7). Versions 7 and 8 are reserved by the designs of §42 and §41.
+  Opcode 52 (`TRY_STEP`) did not bump it: an older VM rejects the file as an
+  unknown opcode.
 - The C loader is the only reader of this format. There is no Racket reader, and
   no compatibility shims, with one transitional exception: the loader also
   reads format 5, which has no prelude flag, as long as `bootstrap/stage0.agcb`

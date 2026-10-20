@@ -357,6 +357,87 @@ def test_composed_lazy_steps_agree_with_python_generators(tmp_path):
         assert result.stdout.splitlines() == composed_peer_lines(numbers, size, count), text
 
 
+class PeerFailure(Exception):
+    """A failed try in the Python peer of a Lazy block: it ends the generator chain like the VM ends the pipeline."""
+
+
+def try_peer_lines(words, count, limit):
+    """Expected output of try_peer_program(): each failed try is the result of its terminal."""
+    def number(text):
+        try:
+            return int(text)
+        except ValueError:
+            raise PeerFailure("bad " + text) from None
+
+    def capped(n):
+        if n > limit:
+            raise PeerFailure("over %d" % n)
+        return n
+
+    def outcome(compute):
+        try:
+            return show(("ok", compute()))
+        except PeerFailure as failure:
+            return show(("error", str(failure)))
+
+    def found():
+        hit = next((word for word in words if number(word) > 5), None)
+        if hit is None:
+            raise PeerFailure("not found")
+        return hit
+
+    return [
+        outcome(lambda: [number(word) for word in words]),
+        outcome(lambda: list(itertools.islice((n for n in map(number, words) if n % 2 == 0), count))),
+        outcome(lambda: sum(capped(n) for n in map(number, words))),
+        outcome(found),
+        outcome(lambda: [number(word) * index for index, word in enumerate(words[:count])]),
+    ]
+
+
+def try_peer_program(words, count, limit):
+    """Build one Agentica program with a try in Lazy blocks, checked against try_peer_lines()."""
+    return """\
+def number(text: String) -> Result[Int]
+  parsed = text.to_i
+  if !parsed.ok?
+    return error("bad #{{text}}")
+  end
+  return parsed
+end
+
+def capped(n: Int) -> Result[Int]
+  if n > {limit}
+    return error("over #{{n}}")
+  end
+  return ok(n)
+end
+
+def main() -> Void
+  words: List[String] = [{words}]
+  puts(words.lazy.map do |word| try number(word) end.to_a.to_s)
+  puts(words.lazy.map do |word| try number(word) end.filter do |n| n % 2 == 0 end.first({count}).to_s)
+  puts(words.lazy.map do |word| try number(word) end.reduce(0) do |sum, n| sum + try capped(n) end.to_s)
+  puts(words.lazy.find do |word| try number(word) > 5 end.to_s)
+  puts(words.lazy.take({count}).with_index do |word, index| try number(word) * index end.to_a.to_s)
+end
+""".format(words=", ".join(map(literal, words)), count=count, limit=limit)
+
+
+def test_a_try_in_lazy_blocks_agrees_with_python_generators(tmp_path):
+    random.seed(3313)
+    for case in range(8):
+        words = [random.choice(["1", "2", "-3", "7", "10", "0", "x"]) for _ in range(random.choice([0, 1, 3, 6, 9]))]
+        count = random.choice([0, 1, 2, 5])
+        limit = random.choice([1, 7, 100])
+        path = tmp_path / ("try%d.agc" % case)
+        text = try_peer_program(words, count, limit)
+        path.write_text(text, encoding="utf-8")
+        result = run(cli() + [str(path)])
+        assert result.code == 0, result.stderr + text
+        assert result.stdout.splitlines() == try_peer_lines(words, count, limit), text
+
+
 def test_compare_agrees_with_python_code_point_order(tmp_path):
     random.seed(77)
     alphabet = ["a", "b", "A", "\u00e9", "z", "\u65e5", "\U0001f600", "\u00ff", "\uffff"]

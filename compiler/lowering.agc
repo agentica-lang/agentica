@@ -112,6 +112,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     json_structs: tables.json_structs,
     functions: by_name,
     bodies: checked.bodies,
+    step_tries: checked.step_tries,
     fills: fills_of(functions, index_of),
     reads: reads_of(plan),
     file: linked.modules[0].file,

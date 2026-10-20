@@ -77,6 +77,17 @@ bool agc_lines_buffer_ok(int64_t buffer_bytes);
 agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes, int64_t timeout, uint32_t span);
 agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, agc_value *out);
 void agc_lines_stop(agc_line_reader *r, agc_value outcome);
+/* The lines of Lazy.write_lines (vm/lazy.c) into a file by path, created or truncated: the same rules as the reader.
+   agc_writer_new opens nothing; the first agc_writer_next opens the file. READY means the writer waits for a line:
+   the next call passes it as `line` (a String; Void passes none). WAIT means the task parks on a file job, whose
+   result is the `last` of the next call (with a Void line). END puts the outcome in *out and comes only after the
+   file is flushed and closed. agc_writer_stop, while READY, ends the writer with that outcome: the next calls close
+   the file. */
+typedef struct agc_line_writer agc_line_writer;
+typedef enum { AGC_WRITER_READY, AGC_WRITER_WAIT, AGC_WRITER_END } agc_writer_status;
+agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, uint32_t span);
+agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out);
+void agc_writer_stop(agc_line_writer *w, agc_value outcome);
 char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);

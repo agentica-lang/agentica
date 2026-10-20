@@ -39,6 +39,7 @@ Lazy.first(lazy: Lazy[A], count: Int) -> Result[List[A]]      # take(count) then
 Lazy.each(lazy: Lazy[A], f: Fn[A, Result[Void]]) -> Result[Void]   # stops at f's first error and returns it
 Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]
 Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]         # error("not found") when the source ends
+Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # each item + LF into a file
 ```
 
 ```ruby
@@ -71,6 +72,29 @@ end
   `Lazy` has, on a list or range (`xs.each_cons(2)`), is `CHECK-UNKNOWN-METHOD`:
   write `xs.lazy.each_cons(2)`.
 - Steps are methods: `lz |> Lazy.map() do ... end` is `CHECK-PIPE-METHOD`.
+
+## try in the blocks
+
+`try` works in every block of a `Lazy` method (a step, `Lazy.produce`, a
+terminal), whatever the block gives; the block still ends with a plain value,
+not `ok(...)`. A failed `try` ends the pipeline: no later item is pulled, a
+file of the run is closed, and the terminal returns the error.
+
+```ruby
+def parse(text: String) -> Result[Int]
+  return text.to_i
+end
+
+def main() -> Void
+  words = ["1", "2", "x"]
+  puts(words.lazy.map do |w| try parse(w) * 10 end.first(2))   # ok([10, 20])
+  puts(words.lazy.map do |w| try parse(w) * 10 end.to_a)       # error("cannot convert \"x\" to Int")
+end
+```
+
+- A block nested in a `Lazy` block (`xs.map do ... end` inside a step) follows
+  the usual rule: `try` there is `CHECK-TRY-CONTEXT` unless that block returns
+  a Result.
 
 ## Files and channels
 
@@ -105,3 +129,29 @@ end
   `first` and `find` take only what they need, `take_while` consumes the first
   value it rejects. A second terminal on a drained, closed channel gives
   `ok([])`, not an error.
+
+## write_lines
+
+```ruby
+def cents(line: String) -> Result[Int]
+  return line.split(",")[1].to_i
+end
+
+def main() -> Void
+  done = File.foreach("ledger.csv", 4096, 1000).drop(1).map do |line|
+    "#{try cents(line) * 100}"
+  end.write_lines("out.txt", 1000)                            # ok(), or the first error
+  puts(done)
+end
+```
+
+- `write_lines(path, timeout_ms)` takes a `Lazy[String]` (a `Lazy[Int]` is
+  `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates the
+  file and writes each item and `\n`.
+- The file opens before the first item is pulled (a failed open reads
+  nothing) and is flushed and closed before the terminal returns, on every
+  path. What was written before an error stays. A crash or cancel of the task
+  closes it at the task's end.
+- A timeout `<= 0`, a bad path, a failed open, write or close, and a line over
+  1 MiB end the terminal with an error Result. `timeout_ms` bounds the open,
+  each 64 KiB write and the close.

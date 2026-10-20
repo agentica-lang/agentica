@@ -14,6 +14,7 @@ File.flush(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.close(handle: FileHandle, timeout_ms: Int) -> Result[Void]
 File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
 File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]   # references/lazy.md
+Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # references/lazy.md
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
 File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]

@@ -750,6 +750,18 @@ static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32
   frame->tail = true;
 }
 
+/* The failed try of a block that a Lazy terminal called (TRY_STEP, docs/vm/03-ir-and-bytecode.md §4.2): the error
+   goes back to that terminal as for TRY, marked as an escape, so the terminal ends the pipeline with it instead of
+   taking it as the block's value. The frame below must be the stepper of a Lazy terminal (agc_stepper.lazy); any other
+   native frame, such as File.each_line, Profile.measure or List.map, is bytecode the front end never writes. Out of
+   line and only on the failure path, so TRY and the loop keep their shape. */
+static __attribute__((noinline, cold)) void mark_escape(agc_vm *vm, agc_task *t, uint32_t span) {
+  agc_native *below = t->frame_count >= 2 ? t->frames[t->frame_count - 2].native : NULL;
+  if (!below || below->kind != AGC_NATIVE_STEPPER || !below->stepper->lazy)
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try-step outside a Lazy block", span);
+  below->stepper->escaped = true;
+}
+
 static bool return_value(agc_vm *vm, agc_value result) {
   agc_task *t = vm->task;
   uint32_t ret = t->frames[t->frame_count - 1].ret;
@@ -1170,12 +1182,15 @@ reload:
         if (t->parking) return park_task(t);
         if (vm->yield) return AGC_TURN_YIELD;
         goto reload;
-      case AGC_OP_TRY: {
+      case AGC_OP_TRY:
+      case AGC_OP_TRY_STEP: {
         const agc_result *r = agc_as_result(vm, R[in.b]);
         if (r->ok) {
           R[in.a] = r->value;
         } else {
-          if (t->frame_count == 1 && t == vm->rt->main)
+          if (in.op == AGC_OP_TRY_STEP)
+            mark_escape(vm, t, SPAN);
+          else if (t->frame_count == 1 && t == vm->rt->main)
             agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try in the entry function", SPAN);
           if (!return_value(vm, R[in.b])) return AGC_TURN_DONE;
           if (t->parking) return park_task(t);

@@ -26,13 +26,13 @@ end
 ## row, and the type of the call, the result of the form with the variables filled in.
 export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   form = site.selected
+  row = PRELUDE[form.name]
   bound = Bound(st: st, types: {}, spans: {})
   index = 0
   while index < form.parameters.size
-    bound = try check_argument(cx, bound, site.args[index], form.parameters[index].type)
+    bound = try check_argument(cx, bound, site.args[index], form.parameters[index].type, row.module == "lazy")
     index += 1
   end
-  row = PRELUDE[form.name]
   try check_limits(cx, bound, form, row, site.node.span)
   found = bound.st.with(bodies: bound.st.bodies.put(site.node.id, body_of(row, bound.types)))
   return ok(State.Out(st: found, type: CheckTypes.substitute(form.result, bound.types)))
@@ -40,15 +40,15 @@ end
 
 # One argument: a block is checked with the parameter types known so far and the result the parameter says, any other
 # expression with its parameter type when that is known. Then the type found is matched against the parameter, which
-# binds the variables not seen yet.
-def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type) -> Result[Bound]
+# binds the variables not seen yet. step is true for a method of Lazy: a `try` in its block ends the pipeline.
+def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, step: Bool) -> Result[Bound]
   wanted = CheckTypes.substitute(template, bound.types)
   span = Ast.expr_span(arg)
   checked = State.Out(st: bound.st, type: T.Type.Unknown)
   case arg
     Ast.Expr.BlockLit(block) ->
       if T.is(template, "Fn")
-        checked = try check_block(cx, bound, block, wanted)
+        checked = try check_block(cx, bound, block, wanted, step)
       else
         checked = try State.expr(cx, bound.st, arg, T.Type.Unknown)
       end
@@ -70,7 +70,7 @@ end
 
 # A block given for a parameter of type Fn[...]: its parameters are the types the Fn has, all known by now (the
 # receiver comes first), and the result is the one the Fn has when that is known.
-def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, wanted: T.Type) -> Result[State.Out]
+def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, wanted: T.Type, step: Bool) -> Result[State.Out]
   params = T.params(wanted)
   if params.any? do |param: T.Type| CheckTypes.has_variables?(param) end
     return error(
@@ -81,7 +81,7 @@ def check_block(cx: State.Cx, bound: Bound, block: Ast.BlockLit, wanted: T.Type)
   if CheckTypes.has_variables?(result)
     result = T.Type.Unknown
   end
-  return Stmt.check_block_body(cx, bound.st, block, Ast.Optional.Present(params), result, Ast.Optional.Absent)
+  return Stmt.check_block_in(cx, bound.st, block, Ast.Optional.Present(params), result, Ast.Optional.Absent, step)
 end
 
 # CHECK-TYPE-MISMATCH at the argument that bound a limited variable to a type the row does not allow.

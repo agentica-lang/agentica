@@ -155,6 +155,19 @@ be read twice. The library page is
   stop the source: an endless source then ends, and `Lazy.produce` does not
   call its block for an item that no step needs. `to_a`, `reduce` and `each` on
   an endless source never end.
+- `lz.write_lines(path, timeout_ms)` (on a `Lazy[String]`, `Result[Void]`) is
+  the terminal that writes each item and a line feed to a file, created or
+  truncated. The file opens before the first item is pulled (a failed open
+  pulls nothing) and is flushed and closed before the terminal returns,
+  whatever ended it; a crash or cancel of the task closes it at the task's
+  end. Lines are buffered and written 64 KiB at a time; `timeout_ms` bounds the
+  open, each write and the close. A bad timeout or path, a failed open, write
+  or close, and a line over 1 MiB end the terminal with that error. What was
+  written before an error stays in the file. A line holding a line feed reads
+  back as two lines.
+- `try` works in every block of a `Lazy` method, whatever the block's result
+  type: a failed `try` ends the pipeline at once, no later item is pulled, and
+  the terminal returns its error. A file the run opened is closed first.
 - Each item pulled from the source costs one step, and each callback a step
   plus its body, as in `Range.each`. A terminal can be switched out between
   items, so `--max-steps` (`RUNTIME-STEP-LIMIT`), the turns of other tasks and

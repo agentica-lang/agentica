@@ -102,6 +102,16 @@ struct agc_line_reader {
   int64_t timeout;
 };
 
+typedef enum {
+  WRITER_START, WRITER_OPENED, WRITER_READY, WRITER_WROTE, WRITER_CLOSE, WRITER_CLOSING, WRITER_CLOSED
+} writer_phase;
+
+struct agc_line_writer {
+  writer_phase phase;
+  agc_value path, handle, outcome;
+  int64_t timeout;
+};
+
 /* File.each_line: the reader and whether the block is running (its result comes back as `last`). */
 typedef struct {
   agc_stepper stepper;
@@ -418,6 +428,8 @@ static bool write_all(int fd, const uint8_t *data, size_t len, int *err) {
   return true;
 }
 
+/* The release of a handle that was not closed: one blocking write of what it buffers (at most WRITE_BUFFER, or CHUNK
+   for a line writer's handle; §14.1, release flush), then the descriptor is closed. */
 static void release_state(void *native) {
   file_state *st = native;
   int err;
@@ -1049,8 +1061,9 @@ static void work(void *data) {
 
 static void drop(void *data) {
   op *o = data;
-  /* On the I/O thread, release_state's flush of a regular file is one blocking write of at most WRITE_BUFFER bytes;
-     only a polled descriptor is non-blocking (work_open), so its flush never waits. */
+  /* On the I/O thread, release_state's flush of a regular file is one blocking write of at most WRITE_BUFFER bytes, or
+     CHUNK for the handle of a line writer (docs/vm/14-core-invariants.md §14.1, release flush); only a polled
+     descriptor is non-blocking (work_open), so its flush never waits. */
   if (o->owns_st && o->st) release_state(o->st);
   if (o->poller)
     agc_poller_close(o->poller);
@@ -1598,15 +1611,17 @@ static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   return read_op(vm, args[0], OP_READ_LINE, 0, agc_as_int(vm, args[1]));
 }
 
-static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const uint8_t *data, size_t len,
+/* The buffered output, then `len` bytes of data and an LF when `newline`, in one write job. */
+static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const uint8_t *data, size_t len, bool newline,
                            int64_t timeout) {
   op *o = new_op(vm, OP_WRITE);
   o->st = st;
-  o->in_len = st->end + len;
+  o->in_len = st->end + len + (newline ? 1 : 0);
   o->in = malloc(o->in_len ? o->in_len : 1);
   if (!o->in) agc_out_of_memory();
   if (st->end) memcpy(o->in, st->buf, st->end);
   if (len) memcpy(o->in + st->end, data, len);
+  if (newline) o->in[o->in_len - 1] = '\n';
   st->end = 0;
   return start(vm, o, handle, timeout);
 }
@@ -1616,7 +1631,7 @@ static agc_value write_bytes(agc_vm *vm, agc_value handle, const uint8_t *data, 
   if (blocked(vm, handle, &timeout, &failure)) return failure;
   file_state *st = usable(vm, handle, false, &failure);
   if (!st) return failure;
-  if (st->end + len > WRITE_BUFFER) return write_out(vm, handle, st, data, len, timeout);
+  if (st->end + len > WRITE_BUFFER) return write_out(vm, handle, st, data, len, false, timeout);
   if (!st->buf) {
     st->buf = malloc(WRITE_BUFFER);
     if (!st->buf) agc_out_of_memory();
@@ -1650,7 +1665,7 @@ static agc_value builtin_flush(agc_vm *vm, agc_value *args, uint32_t span) {
   file_state *st = usable(vm, args[0], false, &failure);
   if (!st) return failure;
   if (!st->end) return ok_void();
-  return write_out(vm, args[0], st, NULL, 0, timeout);
+  return write_out(vm, args[0], st, NULL, 0, false, timeout);
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1842,6 +1857,115 @@ static agc_value builtin_each_line(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, uint32_t span) {
+  files_on(vm, span);
+  agc_as_string(vm, path);
+  agc_line_writer *w = agc_alloc(sizeof(agc_line_writer));
+  w->phase = WRITER_START;
+  w->path = path;
+  w->handle = agc_void();
+  w->outcome = ok_void();
+  w->timeout = timeout;
+  return w;
+}
+
+/* One line and its LF into the handle's buffer, which the writer sizes to CHUNK; a line that does not fit goes out
+   with the buffer in one write job. A line over 1 MiB is refused, as File.write refuses such a text. */
+static agc_value writer_put(agc_vm *vm, agc_line_writer *w, file_state *st, const agc_string *line) {
+  if (line->bytes > LIMIT) return error_of("filesystem: line exceeds 1048576 bytes");
+  agc_charge_bytes(vm, line->bytes + 1);
+  if (!st->buf) {
+    st->buf = malloc(CHUNK);
+    if (!st->buf) agc_out_of_memory();
+    st->cap = CHUNK;
+  }
+  if (st->end + line->bytes + 1 > st->cap)
+    return write_out(vm, w->handle, st, (const uint8_t *)line->data, line->bytes, true, w->timeout);
+  memcpy(st->buf + st->end, line->data, line->bytes);
+  st->buf[st->end + line->bytes] = '\n';
+  st->end += line->bytes + 1;
+  return ok_void();
+}
+
+/* The phases run in order: open (create or truncate), then one line per call while READY, then flush and close.
+   Every path that opened the file goes through WRITER_CLOSE, so it is closed before END. The close flushes what is
+   buffered, and its error is the outcome when nothing failed before, since a write error may show up only there. */
+agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out) {
+  for (;;) {
+    switch (w->phase) {
+      case WRITER_START: {
+        const agc_string *path = agc_as_string(vm, w->path);
+        agc_value refused = lines_refused(path, w->timeout);
+        if (!agc_is(refused, AGC_T_VOID)) {
+          w->outcome = refused;
+          w->phase = WRITER_CLOSED;
+          break;
+        }
+        w->phase = WRITER_OPENED;
+        last = start(vm, open_op(vm, OP_OPEN_WRITE, path), agc_void(), w->timeout);
+        if (vm->task->parking) return AGC_WRITER_WAIT;
+        break;
+      }
+      case WRITER_OPENED:
+        if (!agc_as_result(vm, last)->ok) {
+          w->outcome = last;
+          w->phase = WRITER_CLOSED;
+          break;
+        }
+        w->handle = agc_as_result(vm, last)->value;
+        w->phase = WRITER_READY;
+        break;
+      case WRITER_READY: {
+        if (agc_is(line, AGC_T_VOID)) return AGC_WRITER_READY;
+        const agc_resource *res = agc_as_handle(vm, w->handle);
+        if (!res->native || res->closing) {
+          agc_writer_stop(w, error_of("filesystem: file handle is closed"));
+          break;
+        }
+        w->phase = WRITER_WROTE;
+        last = writer_put(vm, w, res->native, agc_as_string(vm, line));
+        line = agc_void();
+        if (vm->task->parking) return AGC_WRITER_WAIT;
+        break;
+      }
+      case WRITER_WROTE:
+        w->phase = WRITER_READY;
+        if (!agc_as_result(vm, last)->ok) agc_writer_stop(w, last);
+        break;
+      case WRITER_CLOSE: {
+        agc_resource *res = agc_as_handle(vm, w->handle);
+        w->phase = WRITER_CLOSED;
+        if (!res->native || res->closing) {
+          /* The handle went away under the writer (a write job that timed out takes it, and nothing else can reach
+             it), so what it buffered is lost: never an ok outcome. */
+          if (agc_as_result(vm, w->outcome)->ok) w->outcome = error_of("filesystem: file handle is closed");
+          break;
+        }
+        w->phase = WRITER_CLOSING;
+        last = close_handle(vm, res, w->handle, w->timeout);
+        if (vm->task->parking) return AGC_WRITER_WAIT;
+        break;
+      }
+      case WRITER_CLOSING:
+        w->phase = WRITER_CLOSED;
+        if (agc_as_result(vm, w->outcome)->ok && !agc_as_result(vm, last)->ok) w->outcome = last;
+        break;
+      case WRITER_CLOSED: *out = w->outcome; return AGC_WRITER_END;
+    }
+  }
+}
+
+/* Called while the writer waits for a line (or before it opened): the next call closes the file. */
+void agc_writer_stop(agc_line_writer *w, agc_value outcome) {
+  if (w->phase == WRITER_READY) {
+    w->outcome = outcome;
+    w->phase = WRITER_CLOSE;
+  } else if (w->phase == WRITER_START) {
+    w->outcome = outcome;
+    w->phase = WRITER_CLOSED;
+  }
+}
+
 static agc_value builtin_real(agc_vm *vm, agc_value *args, uint32_t span) {
   files_on(vm, span);
   const agc_string *path = agc_as_string(vm, args[0]);
@@ -2029,6 +2153,25 @@ agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, 
 
 void agc_lines_stop(agc_line_reader *r, agc_value outcome) {
   (void)r;
+  (void)outcome;
+}
+
+agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, uint32_t span) {
+  (void)path;
+  (void)timeout;
+  agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
+}
+
+agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out) {
+  (void)w;
+  (void)last;
+  (void)line;
+  (void)out;
+  agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", 0);
+}
+
+void agc_writer_stop(agc_line_writer *w, agc_value outcome) {
+  (void)w;
   (void)outcome;
 }
 

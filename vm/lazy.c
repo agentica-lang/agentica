@@ -4,7 +4,8 @@
  * the builtins here are prelude-only. Nodes never change after they are made, so a Lazy can be shared by tasks on
  * any scheduler and run more than once: each terminal call has its own run state, and its callbacks run on the task
  * that called it. The I/O sources (File.foreach, ch.lazy) open or read only inside a terminal; their terminal parks
- * on the file job or the channel like any other wait. Service layer.
+ * on the file job or the channel like any other wait, and so does write_lines, the terminal that writes to a file. A
+ * failed `try` in a block ends the run with its error (agc_stepper.escaped). Service layer.
  */
 #include "services.h"
 
@@ -36,11 +37,14 @@ typedef struct {
   bool pending;
 } lazy_stage;
 
-typedef enum { LAZY_TO_A, LAZY_EACH, LAZY_REDUCE, LAZY_FIND } lazy_terminal;
+typedef enum { LAZY_TO_A, LAZY_EACH, LAZY_REDUCE, LAZY_FIND, LAZY_WRITE } lazy_terminal;
 
 /* What the run waits for: a callback of the source (produce), of a stage or of the terminal; a file job or a channel
-   value of an I/O source (WAIT_IO); the close of the file before the terminal returns (WAIT_CLOSE). */
-typedef enum { WAIT_NONE, WAIT_SOURCE, WAIT_STAGE, WAIT_TERMINAL, WAIT_IO, WAIT_CLOSE } lazy_wait;
+   value of an I/O source (WAIT_IO); the close of the source's file before the terminal returns (WAIT_CLOSE); a file
+   job of write_lines (WAIT_SINK: the open or a write; WAIT_SINK_CLOSE: its flush and close at the end). */
+typedef enum {
+  WAIT_NONE, WAIT_SOURCE, WAIT_STAGE, WAIT_TERMINAL, WAIT_IO, WAIT_CLOSE, WAIT_SINK, WAIT_SINK_CLOSE
+} lazy_wait;
 
 typedef enum { NEXT_ITEM, NEXT_NONE, NEXT_STEP } lazy_pull;
 
@@ -62,8 +66,10 @@ typedef struct {
   bool more, started;     /* a range source has values left; produce gave its seed */
   agc_value seed;         /* produce: the last item it gave */
   agc_line_reader *lines; /* a file source: its reader, which owns the open file */
+  agc_line_writer *sink;  /* write_lines: its writer, which owns the file it writes */
+  bool sink_ready;        /* write_lines: the file is open, so items may be pulled */
   agc_value io_last;      /* a file source: the result of the job it waited on */
-  agc_value final;        /* the result, kept while the file closes */
+  agc_value final;        /* the result, kept while the files close */
   uint32_t span;
 } lazy_run;
 
@@ -255,18 +261,26 @@ static agc_value lazy_finish(lazy_run *run) {
     case LAZY_TO_A: return agc_result_value(true, agc_list_value(agc_list_from_array(run->out, run->out_len)));
     case LAZY_EACH: return agc_result_value(true, agc_void());
     case LAZY_REDUCE: return agc_result_value(true, run->acc);
+    case LAZY_WRITE: return agc_result_value(true, agc_void());
     case LAZY_FIND: break;
   }
   return lazy_error("not found");
 }
 
-/* The two calls of a run that touch shared state: the line reader starts file jobs and closes the handle, a receive
-   changes the channel's lists and parks on them. The run is `unlocked` (agc_stepper), so each takes rt->sync only for
-   the call, and a park is registered inside it; the drop comes before the step returns WAIT. A failure inside jumps
-   out with the lock held, and agc_sync_reset gives it back. */
+/* The calls of a run that touch shared state: the line reader and writer start file jobs and close the handle, a
+   receive changes the channel's lists and parks on them. The run is `unlocked` (agc_stepper), so each takes rt->sync
+   only for the call, and a park is registered inside it; the drop comes before the step returns WAIT. A failure
+   inside jumps out with the lock held, and agc_sync_reset gives it back. */
 static agc_lines_status lazy_lines_next(agc_vm *vm, lazy_run *run, agc_value last, agc_value *out) {
   agc_sync_take(vm);
   agc_lines_status status = agc_lines_next(vm, run->lines, last, out);
+  agc_sync_drop(vm);
+  return status;
+}
+
+static agc_writer_status lazy_write(agc_vm *vm, lazy_run *run, agc_value last, agc_value line, agc_value *out) {
+  agc_sync_take(vm);
+  agc_writer_status status = agc_writer_next(vm, run->sink, last, line, out);
   agc_sync_drop(vm);
   return status;
 }
@@ -278,34 +292,77 @@ static agc_recv_status lazy_receive(agc_vm *vm, const lazy_node *source, agc_val
   return status;
 }
 
-/* Closes the file of a file source, then ends the terminal with `result` (kept in run->final while the close waits).
-   Every end of a run comes here, so the file is closed whatever ended it: the end of the items, a take or find that
-   had enough, an error from a callback or a failed read. A raise, a cancel or --max-steps ends the task instead, and
-   the task's end closes the file it owns. */
+/* Closes the file of a file source, then the file of write_lines, then ends the terminal with `result` (kept in
+   run->final while a close waits). Every end of a run comes here, so the files are closed whatever ended it: the end
+   of the items, a take or find that had enough, an error from a callback, a failed `try` in a block, a failed read
+   or write. A raise, a cancel or --max-steps ends the task instead, and the task's end closes the files it owns. The
+   writer's own error (a failed flush or close) is the result when the run had none. */
 static agc_step lazy_done(agc_vm *vm, lazy_run *run, agc_value result, agc_value last) {
-  if (!run->lines) return lazy_end(result);
-  if (run->waiting != WAIT_CLOSE) {
+  if (!run->lines && !run->sink) return lazy_end(result);
+  lazy_wait waiting = run->waiting;
+  if (waiting != WAIT_CLOSE && waiting != WAIT_SINK_CLOSE) {
     run->final = result;
-    agc_lines_stop(run->lines, result);
+    if (run->lines) agc_lines_stop(run->lines, result);
+    if (run->sink) agc_writer_stop(run->sink, result);
     last = agc_void();
   }
   run->waiting = WAIT_NONE;
   agc_value outcome = agc_void();
-  if (lazy_lines_next(vm, run, last, &outcome) == AGC_LINES_WAIT) {
-    run->waiting = WAIT_CLOSE;
-    return (agc_step){.kind = AGC_STEP_WAIT};
+  if (run->lines && waiting != WAIT_SINK_CLOSE) {
+    if (lazy_lines_next(vm, run, last, &outcome) == AGC_LINES_WAIT) {
+      run->waiting = WAIT_CLOSE;
+      return (agc_step){.kind = AGC_STEP_WAIT};
+    }
+    last = agc_void();
+  }
+  if (run->sink) {
+    if (lazy_write(vm, run, last, agc_void(), &outcome) == AGC_WRITER_WAIT) {
+      run->waiting = WAIT_SINK_CLOSE;
+      return (agc_step){.kind = AGC_STEP_WAIT};
+    }
+    if (agc_as_result(vm, run->final)->ok) run->final = outcome;
   }
   return lazy_end(run->final);
+}
+
+/* write_lines: drives the writer with `line` (Void for none) after a job came back with `last`. False when it waits
+   for the next line; true with *step when the run parks on a file job or ends (the open or a write failed). */
+static bool lazy_sink(agc_vm *vm, lazy_run *run, agc_value last, agc_value line, agc_step *step) {
+  agc_value out = agc_void();
+  switch (lazy_write(vm, run, last, line, &out)) {
+    case AGC_WRITER_READY: run->sink_ready = true; return false;
+    case AGC_WRITER_WAIT:
+      run->waiting = WAIT_SINK;
+      *step = (agc_step){.kind = AGC_STEP_WAIT};
+      return true;
+    case AGC_WRITER_END: break;
+  }
+  *step = lazy_done(vm, run, out, agc_void());
+  return true;
 }
 
 /* A callback came back with `last`, for the stage at run->at (or the source, or the terminal). */
 static bool lazy_resume(agc_vm *vm, lazy_run *run, agc_value last, agc_step *done) {
   lazy_wait waiting = run->waiting;
-  if (waiting == WAIT_CLOSE) {
+  if (waiting == WAIT_CLOSE || waiting == WAIT_SINK_CLOSE) {
     *done = lazy_done(vm, run, run->final, last);
     return true;
   }
   run->waiting = WAIT_NONE;
+  if (run->stepper.escaped) {
+    /* A failed `try` in the block that just returned: `last` is its error, and it ends the run. */
+    run->stepper.escaped = false;
+    if (waiting != WAIT_SOURCE && waiting != WAIT_STAGE && waiting != WAIT_TERMINAL)
+      agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy block escaped while no block ran", run->span);
+    if (agc_as_result(vm, last)->ok) agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy block escaped with ok", run->span);
+    *done = lazy_done(vm, run, last, agc_void());
+    return true;
+  }
+  if (waiting == WAIT_SINK) {
+    if (lazy_sink(vm, run, last, agc_void(), done)) return true;
+    run->at = 0;
+    return false;
+  }
   if (waiting == WAIT_IO) {
     /* A file job's result; a channel wait is a retry park, so its `last` means nothing and the receive runs again. */
     run->io_last = last;
@@ -493,6 +550,8 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   lazy_run *run = (lazy_run *)self;
   agc_step step;
   if (run->waiting != WAIT_NONE && lazy_resume(vm, run, last, &step)) return step;
+  /* write_lines opens its file before it pulls the first item, so a failed open reads nothing. */
+  if (run->sink && !run->sink_ready && lazy_sink(vm, run, agc_void(), agc_void(), &step)) return step;
   for (;;) {
     if (run->at == 0) {
       lazy_pull pulled = lazy_next(vm, run, &step);
@@ -515,6 +574,10 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         case LAZY_EACH:
         case LAZY_FIND: run->waiting = WAIT_TERMINAL; return lazy_call(run->fn, run->item);
         case LAZY_REDUCE: run->waiting = WAIT_TERMINAL; return lazy_call2(run->fn, run->acc, run->item);
+        case LAZY_WRITE:
+          run->at = 0;
+          if (lazy_sink(vm, run, agc_void(), run->item, &step)) return step;
+          continue;
       }
     }
     size_t i = run->at;
@@ -599,13 +662,16 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   }
 }
 
+/* Starts a terminal on the calling task. fn is the callback (none for to_a) and acc the initial value of reduce;
+   write_lines passes its path and timeout in them. */
 static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal, agc_value fn, agc_value acc,
                             uint32_t span) {
   const lazy_node *node = agc_as_lazy(vm, recipe);
-  if (terminal != LAZY_TO_A) agc_as_fn(vm, fn);
+  if (terminal != LAZY_TO_A && terminal != LAZY_WRITE) agc_as_fn(vm, fn);
   lazy_run *run = agc_alloc(sizeof(lazy_run));
   run->stepper.step = lazy_step;
   run->stepper.no_block = true;
+  run->stepper.lazy = true;
   run->terminal = terminal;
   run->fn = fn;
   run->acc = acc;
@@ -627,9 +693,10 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   if (source->kind == LAZY_LIST) agc_list_cursor_begin(&run->items, agc_as_list(vm, source->value), 0);
   if (source->kind == LAZY_RANGE) run->more = agc_range_bounds(agc_as_range(vm, source->value), &run->next, &run->last);
   if (source->kind == LAZY_FILE) run->lines = agc_lines_new(vm, source->value, source->count, source->timeout, span);
+  if (terminal == LAZY_WRITE) run->sink = agc_writer_new(vm, fn, agc_as_int(vm, acc), span);
   /* A run reads immutable nodes and writes only this run, which belongs to the calling task. An I/O source also starts
-     file jobs, closes the file and parks on channel lists: it takes rt->sync around those calls only (lazy_lines_next,
-     lazy_receive), so a long to_a or a chain of steps never holds it. */
+     file jobs, closes the file and parks on channel lists, and write_lines starts file jobs: they take rt->sync around
+     those calls only (lazy_lines_next, lazy_receive, lazy_write), so a long to_a or a chain of steps never holds it. */
   run->stepper.unlocked = true;
   agc_task_stepper(vm, &run->stepper);
   return agc_void();
@@ -651,9 +718,16 @@ static agc_value builtin_find(agc_vm *vm, agc_value *args, uint32_t span) {
   return lazy_start(vm, args[0], LAZY_FIND, args[1], agc_void(), span);
 }
 
+/* __lazy_write_lines(lazy, path, timeout_ms): the file opens in the terminal; a bad timeout or path is its error. */
+static agc_value builtin_write_lines(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_as_string(vm, args[1]);
+  agc_as_int(vm, args[2]);
+  return lazy_start(vm, args[0], LAZY_WRITE, args[1], args[2], span);
+}
+
 /* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task, so no row
-   takes rt->sync. The steps of a terminal run unlocked (agc_stepper.unlocked); over a file or a channel they take it
-   around the reader and the receive only. Callbacks run as bytecode. */
+   takes rt->sync. The steps of a terminal run unlocked (agc_stepper.unlocked); over a file or a channel, and in
+   write_lines, they take it around the reader, the receive and the writer only. Callbacks run as bytecode. */
 const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_range", 1, builtin_range, AGC_NATIVE_NONE, AGC_COST_NONE, false},
@@ -671,6 +745,7 @@ const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_each", 2, builtin_each, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_reduce", 3, builtin_reduce, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_find", 2, builtin_find, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"__lazy_write_lines", 3, builtin_write_lines, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };
 
 const size_t agc_lazy_builtin_count = sizeof agc_lazy_builtins / sizeof agc_lazy_builtins[0];

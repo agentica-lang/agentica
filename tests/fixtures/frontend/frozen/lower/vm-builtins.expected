@@ -246,6 +246,7 @@ __lazy_reduce
 __lazy_test
 __lazy_to_a
 __lazy_with_index
+__lazy_write_lines
 error
 ok
 puts

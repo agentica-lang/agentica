@@ -1,0 +1,83 @@
+program 0:1:89-11:1 entry=1 globals=0
+source 0 "lazy-try.agc" chars=270
+source 1 "<prelude>/lazy.agc" chars=0
+fn0 "parse" params=1 captures=0 slots=3 @ 0:2:1-6:1
+    step @ 0:3:3-4:1
+    step @ 0:3:7-3:20
+    step @ 0:3:11-3:20
+    step @ 0:3:11-3:15
+    move r2 r0 @ 0:3:11-3:15
+    call-builtin r2 "String.to_int" 1 @ 0:3:11-3:20 0:3:11-3:15
+    try r1 r2 @ 0:3:7-3:20
+    step @ 0:4:3-5:1
+    step @ 0:4:10-4:15
+    step @ 0:4:13-4:14
+    move r2 r1 @ 0:4:13-4:14
+    call-builtin r2 "ok" 1 @ 0:4:10-4:15 0:4:13-4:14
+    return r2 @ 0:4:3-5:1
+    const r2 void @ 0:2:1-6:1
+    return r2 @ 0:2:1-6:1
+fn1 "main" params=0 captures=0 slots=5 entry @ 0:7:1-11:1
+    step @ 0:8:3-9:1
+    step @ 0:8:11-8:21
+    step @ 0:8:12-8:15
+    const r1 "1" @ 0:8:12-8:15
+    step @ 0:8:17-8:20
+    const r2 "2" @ 0:8:17-8:20
+    list r0 r1 2 @ 0:8:11-8:21
+    step @ 0:9:3-10:1
+    step @ 0:9:3-9:58
+    step @ 0:9:8-9:57
+    step @ 0:9:8-9:52
+    step @ 0:9:8-9:18
+    step @ 0:9:8-9:13
+    move r4 r0 @ 0:9:8-9:13
+    call r4 fn2 @ 0:9:8-9:18 0:9:8-9:13
+    move r3 r4 @ 0:9:8-9:18
+    step @ 0:9:23-9:52
+    closure r4 fn5 @ 0:9:23-9:52
+    call r3 fn3 @ 0:9:8-9:52 0:9:8-9:18 0:9:23-9:52
+    move r2 r3 @ 0:9:8-9:52
+    call r2 fn4 @ 0:9:8-9:57 0:9:8-9:52
+    move r1 r2 @ 0:9:8-9:57
+    call-builtin r1 "puts" 1 @ 0:9:3-9:58 0:9:8-9:57
+    const r1 void @ 0:7:1-11:1
+    return r1 @ 0:7:1-11:1
+fn2 "@prelude::lazy::from_list" params=1 captures=0 slots=2 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r1 r0 @ 1:1:1-1:1
+    call-builtin r1 "__lazy_list" 1 @ 1:1:1-1:1 1:1:1-1:1
+    return r1 @ 1:1:1-1:1
+    const r1 void @ 1:1:1-1:1
+    return r1 @ 1:1:1-1:1
+fn3 "@prelude::lazy::map" params=2 captures=0 slots=4 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r2 r0 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r3 r1 @ 1:1:1-1:1
+    call-builtin r2 "__lazy_map" 2 @ 1:1:1-1:1 1:1:1-1:1 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+    const r2 void @ 1:1:1-1:1
+    return r2 @ 1:1:1-1:1
+fn4 "@prelude::lazy::to_a" params=1 captures=0 slots=2 @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    step @ 1:1:1-1:1
+    move r1 r0 @ 1:1:1-1:1
+    call-builtin r1 "__lazy_to_a" 1 @ 1:1:1-1:1 1:1:1-1:1
+    return r1 @ 1:1:1-1:1
+    const r1 void @ 1:1:1-1:1
+    return r1 @ 1:1:1-1:1
+fn5 "block@lazy-try.agc:9:23" params=1 captures=0 slots=3 @ 0:9:23-9:52
+    step @ 0:9:33-9:48
+    step @ 0:9:33-9:48
+    step @ 0:9:37-9:48
+    step @ 0:9:43-9:47
+    move r2 r0 @ 0:9:43-9:47
+    call r2 fn0 @ 0:9:37-9:48
+    try-step r1 r2 @ 0:9:33-9:48
+    return r1 @ 0:9:33-9:48
