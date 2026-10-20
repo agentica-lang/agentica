@@ -13,6 +13,11 @@ return an error `Result` that names the missing feature. Likewise, when
 call returns an error `Result` that names the missing feature. If it lands after
 7i, it is VM only.
 
+**Landed:** `Crypto.sha256(data: List[Int]) -> List[Int]` (#455,
+`docs/grammar/06b-builtins.md`), on OpenSSL 3.0 or newer through
+`vm/digest_openssl.c`. It takes and gives `List[Int]` until `Bytes` exists, and
+moves to `Bytes` with the other byte APIs.
+
 **Sketch** (names are not final):
 
 ```text
