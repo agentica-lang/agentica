@@ -484,11 +484,11 @@ after them may run in parallel when needed and keep their relative order.
     peak memory and real start-up, against Python as an outside reference
 
 - **Order:** 9.1
-  - **Next work:** JIT (7m, `docs/future/22-jit.md` §22): required, not gated;
-    after 7l and 7j, independent of 7i and of the multicore decision, and before
-    multicore (row 11), by the owner's decision of 2026-10-16. The FFI of
-    [§40](../future/40-native-code.md) comes before it, by the owner's decision
-    of 2026-10-15
+  - **Next work:** JIT (7m, `docs/future/22-jit.md` §22): required; it comes
+    after packages and the FFI
+    ([§40.5](../future/40-native-code.md#405-order)). It follows 7l and 7j, is
+    independent of 7i and of the multicore decision, and comes before multicore
+    (row 11), by the owner's decision of 2026-10-16
   - **Outcome:** Hot functions run as native code with the same results
 
 - **Order:** 11
@@ -569,9 +569,11 @@ PRs, not rows of this table. The release cut right after step 7b was 0.3.0,
 the last one with the Racket front end (owner decision, 2026-10-15).
 
 The owner set this order for the work after the bootstrap on 2026-10-15 and
-revised it on 2026-10-16: the rows that waited for the bootstrap come first,
-then the path to the JIT (row 9.1, which should also speed up `agentica test`),
-and the other features after the JIT.
+revised it on 2026-10-16 and on 2026-10-20 (packages before the FFI,
+[§40.5](../future/40-native-code.md#405-order)): the rows that waited for the
+bootstrap come first, then the path to the JIT (row 9.1, which should also speed
+up `agentica test`), and the other features after the JIT. The package system
+and the FFI sit on that path.
 
 1. **Done (2026-10-16, PR #312)**: release 0.4.0, the first release with the
    single binary ([§18.3](../future/18-front-end-language.md#183-port)).
@@ -597,7 +599,10 @@ and the other features after the JIT.
    §49: 49a done, then generic 49b), test functions without `main`
    (row 7.11, §50), and `Task.map` (**done**, 17a, PR #316).
 7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
-   7.7), the server measurement (row 9), the FFI and native module header
+   7.7), the server measurement (row 9), the native Windows and macOS builds
+   (issue [#344](https://github.com/sonic182/agentica/issues/344), no row of
+   its own yet), the package system ([§45](../future/45-packages.md)), the FFI
+   and native module header
    ([§40](../future/40-native-code.md)), then the JIT (row 9.1). Multicore
    (row 11) comes after the JIT (owner, 2026-10-16), and the work stops before
    it for the owner's review.
@@ -631,10 +636,12 @@ It has no row in this table. It would reuse the §39 commands and the §32 doc
 comments, so it can only start after them (and is easiest on the self-hosted
 front end of §18).
 
-Designed, not scheduled: packages (§45,
+Designed: packages (§45,
 [`docs/future/45-packages.md`](../future/45-packages.md)). It has no row in this
 table. Its first step, the TOML parser `std/toml` (45-0), is a std module and
-landed before the bootstrap (done). The manager waits for step 8 of §18.3.
+landed before the bootstrap (done). It sits on the path to the JIT, before the
+FFI (step 7 above). The phases after 45-0 wait for the owner's answers to
+§45.14.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep

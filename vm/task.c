@@ -868,20 +868,20 @@ agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_
   return child;
 }
 
-/* Runs fn(handle) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
+/* Runs fn(arg) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
    root is a node like agc_task_group that never runs, but it has no parent, so no task's crash, cancel or end reaches
    it, and Test.test finds no leftover under the caller. Its descendants are service tasks: Task.pending_count leaves
    them out, they are in no test, and their timers do not keep a stalled run waiting (idle_wait). They end by
    themselves or with the run. The seed comes from the task's id, not from the caller's stream, so making a client
    does not change the caller's Random values. */
-agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, uint32_t span) {
+agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value arg, uint32_t span) {
   agc_resource *r = claim(vm, handle, span);
   agc_task *root = agc_alloc(sizeof(agc_task));
   root->group = true;
   root->service = true;
   atomic_store_explicit(&root->state, AGC_TASK_PARKED, memory_order_relaxed);
   root->result = agc_void();
-  agc_task *child = agc_task_spawn_in(vm, root, fn, &handle, 1, span);
+  agc_task *child = agc_task_spawn_in(vm, root, fn, &arg, 1, span);
   agc_random_seed(&child->random, child->id);
   agc_hand_over(r, child);
   return child;

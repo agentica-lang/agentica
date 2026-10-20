@@ -21,7 +21,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli test-distribution clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-net vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli test-distribution release-check release-package release-smoke clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-net vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -203,6 +203,27 @@ smoke: $(PRODUCT)
 # The built binary, copied away from the checkout, still imports its std/ modules
 test-distribution: $(PRODUCT)
 	AGENTICA_TEST_EXECUTABLE=$(CURDIR)/$(PRODUCT) $(MAKE) --no-print-directory test-py TESTS=tests/test_stdlib_distribution.py
+
+# The release steps of the host's platform (release.yml runs them on each of the four). RELEASE_PLATFORM names the archive
+# (linux-x86_64, windows-x86_64, macos-x86_64, macos-arm64); release-check wants VM_GLIBC (Linux) or MACOSX_DEPLOYMENT_TARGET
+# (macOS) in the environment, the floor the binary was built for.
+RELEASE_PLATFORM ?= $(if $(filter Windows_NT,$(VM_OS)),windows,$(if $(filter Darwin,$(shell uname -s)),macos,linux))-$(if $(filter arm64 aarch64,$(shell uname -m)),arm64,x86_64)
+RELEASE_OS := $(firstword $(subst -, ,$(RELEASE_PLATFORM)))
+RELEASE_ARCH := $(lastword $(subst -, ,$(RELEASE_PLATFORM)))
+RELEASE_FORMAT := $(if $(filter windows,$(RELEASE_OS)),pe,$(if $(filter macos,$(RELEASE_OS)),macho,elf))
+RELEASE_FLOOR := $(if $(filter linux,$(RELEASE_OS)),$(VM_GLIBC),$(if $(filter macos,$(RELEASE_OS)),$(MACOSX_DEPLOYMENT_TARGET)))
+
+# The format checks of the stripped binary: architecture, floor, libraries, hardening (tools/release-check.sh)
+release-check: $(PRODUCT)
+	tools/release-check.sh $(RELEASE_FORMAT) $(PRODUCT) $(RELEASE_ARCH) $(RELEASE_FLOOR)
+
+# dist/agentica-VERSION-PLATFORM.(tar.gz|zip) with the licenses (tools/release.py)
+release-package: $(PRODUCT)
+	$(PYTHON) tools/release.py package --platform $(RELEASE_PLATFORM) --binary $(PRODUCT) --out dist
+
+# The package, extracted away from the checkout, used with a controlled PATH
+release-smoke:
+	$(PYTHON) -I tools/release.py smoke dist/$$($(PYTHON) tools/release.py name --platform $(RELEASE_PLATFORM)) --platform $(RELEASE_PLATFORM) --binary $(PRODUCT)
 
 # make goldens FIXTURES="name ..." rewrites only those fixtures (names without .agc)
 # Without FIXTURES it also rewrites the CLI output golden tests/fixtures/cli/forms.json (tests/test_cli_forms.py) and the
