@@ -519,7 +519,7 @@ def skip_reason(name):
     """Why this system does not run the golden of the fixture, or None: a "host-only:" or "known-issue:" text."""
     family = VARIANT_FAMILY.search(name)
     if family and (family.group(1) == "windows") != WINDOWS:
-        return "host-only: %s holds what %s answers" % (name, "Windows" if family.group(1) == "windows"
+        return "host-only: %s holds the answers of %s" % (name, "Windows" if family.group(1) == "windows"
                                                         else "Linux and macOS")
     system = "windows" if WINDOWS else sys.platform
     gap = KNOWN_ISSUE_FIXTURES.get(name, {}).get(system)

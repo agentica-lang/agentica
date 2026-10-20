@@ -88,7 +88,7 @@ HOST_ONLY_ALLOWED = {
 }
 
 # The reason of a golden fixture that holds the answers of the other family of systems (tests/vm_diff_support.py).
-FIXTURE_VARIANT = re.compile(r"^([\w.-]+-(posix|windows)\.agc) holds what")
+FIXTURE_VARIANT = re.compile(r"^([\w.-]+-(posix|windows)\.agc) holds the answers of")
 
 # area -> (what it proves, modules). The order is the order of the workflow steps. The areas that the Makefile and the
 # workflow run on their own (the build, the fixed point, the C tests and the destructive filesystem group) are steps of
@@ -421,8 +421,8 @@ def merge(directory: Path) -> tuple[str, bool]:
     for platform_name, found in summaries.items():
         for case, outcome in found.items():
             cases.setdefault(case, {})[platform_name] = outcome
-    never = sorted(case for case, by in cases.items()
-                   if "pass" not in by.values() and set(by.values()) != {"tier"})
+    # A slow-tier case is not selected anywhere in the fast tier (the other tier runs it), whatever else a system says.
+    never = sorted(case for case, by in cases.items() if "pass" not in by.values() and "tier" not in by.values())
     problems.extend(f"ran on no system: {case} ({', '.join(f'{p}: {o}' for p, o in sorted(cases[case].items()))})"
                     for case in never)
     on_all = sum(1 for by in cases.values() if sum(1 for o in by.values() if o == "pass") == len(PLATFORMS))

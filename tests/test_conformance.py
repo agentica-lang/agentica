@@ -113,7 +113,7 @@ def test_a_module_that_is_host_only_on_this_system_needs_no_passed_case(tmp_path
 
 
 def test_a_golden_variant_is_host_only_on_the_other_family_of_systems_only(tmp_path):
-    reason = "system-env-case-windows.agc holds what Windows answers"
+    reason = "system-env-case-windows.agc holds the answers of Windows"
     assert conformance.host_only_allowed("linux-x86_64", "tests/test_vm_diff_2.py", reason)
     assert not conformance.host_only_allowed("windows-x86_64", "tests/test_vm_diff_2.py", reason)
 
@@ -149,6 +149,14 @@ def test_a_case_that_ran_on_no_system_fails_the_merge_of_the_four_summaries(tmp_
         path = tmp_path / platform_name / "summary.json"
         data = json.loads(path.read_text())
         data["cases"]["tests/a.py::t::nowhere"] = "pass" if platform_name == "windows-x86_64" else "host-only"
+        path.write_text(json.dumps(data))
+    text, ok = conformance.merge(tmp_path)
+    assert ok, text
+    # A slow-tier case is skipped everywhere in the fast tier; a system that also names an issue does not change that.
+    for platform_name in conformance.PLATFORMS:
+        path = tmp_path / platform_name / "summary.json"
+        data = json.loads(path.read_text())
+        data["cases"]["tests/a.py::t::slow"] = "known-issue" if platform_name == "windows-x86_64" else "tier"
         path.write_text(json.dumps(data))
     text, ok = conformance.merge(tmp_path)
     assert ok, text
