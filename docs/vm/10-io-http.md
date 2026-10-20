@@ -66,6 +66,8 @@ HTTP is split between the C builtin module `HttpWire` and the Agentica module
 answers are in the grammar (`docs/grammar/06d-io-and-network.md`, "HTTP client
 and server"). The client is 10.7.1, the server 10.7.2, the answers 10.7.3 and
 the tests 10.7.4. Streaming is planned in `docs/future/30-hybrid-http.md`.
+Both halves build and run on Linux, macOS and Windows: the C side works on
+libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
 - **C (`HttpWire`)** is VM-only and std-only. It keeps the byte-level,
   security-critical and shared parts: the parser and decoder (10.6), the UTF-8
@@ -492,6 +494,12 @@ and a body that is not UTF-8. A connection that fails is never pooled.
   Python's `http.client` and Node's `http`, including chunked uploads,
   `Expect: 100-continue`, pipelining and many concurrent clients up to
   `max_connections`. Python and Node are required in CI.
+- **Platforms**: `tests/test_vm_http.py` and the HTTPS cases of
+  `tests/test_vm_tls.py` run in the macOS and Windows jobs of `platforms.yml`
+  too. The Python peers print LF on Windows; the flood case reads the server's
+  memory with `ps`, or on Windows with `GetProcessMemoryInfo`; the TLS waiters
+  case blocks the CA file read on a FIFO, or on Windows, which has no FIFO, on
+  a named pipe.
 - **Guards**: a user file, a `pkg/` module and a relative import that call
   `HttpWire.service` each get `CHECK-UNKNOWN-NAME` with the `std/http` help
   (the `check` spec tests of the modules rules).

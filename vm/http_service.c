@@ -4,12 +4,11 @@
  * service root (agc_task_service): no caller's crash, cancel or end reaches it,
  * Task.pending_count and Test.test do not see it, and it owns the jobs channel.
  * The HttpClient holds the channel, the options and the TLS context of its
- * https connections (vm/tcp.c). Linux and macOS; a stub table elsewhere.
+ * https connections (vm/tcp.c).
  * Service layer. Design: docs/vm/10-io-http.md §10.7.1.
  */
 #include "services.h"
 
-#if defined(__linux__) || defined(__APPLE__)
 /* HttpWire.service(jobs, options, f): jobs is a new channel, which nobody owns yet; f gets the client. Options of
    another shape are bytecode the front end would not write: a wrong-type failure, as for any other argument. */
 static agc_value builtin_service(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -50,8 +49,3 @@ const agc_builtin agc_http_service_builtins[] = {
 };
 
 const size_t agc_http_service_builtin_count = sizeof agc_http_service_builtins / sizeof agc_http_service_builtins[0];
-#else
-const agc_builtin agc_http_service_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
-
-const size_t agc_http_service_builtin_count = 0;
-#endif

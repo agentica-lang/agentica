@@ -188,7 +188,6 @@ def package(platform: str, binary: Path, out: Path) -> Path:
 # ---------------------------------------------------------------------------------------------------------------
 # smoke: the extracted package, away from the checkout and the build environment
 
-# std/http is left out on purpose: Windows lacks its service builtins, so network_smoke imports it on its own.
 HELLO = 'def main() -> Void\n  puts("hola, mundo ✓ ñandú")\nend\n'
 BAD = 'def main() -> Void\n  count = 1\n  count = "two"\n  puts(count)\nend\n'
 STD = """\
@@ -197,6 +196,7 @@ import Binary from "std/binary"
 import Toml from "std/toml"
 import Logger from "std/logger"
 import BDD from "std/bdd"
+import HTTP from "std/http"
 
 def main() -> Void
   q = Queue.push(Queue.new(), "embedded")
@@ -313,9 +313,6 @@ def main() -> Void
   HTTP.close_server(server)
 end
 """
-# What the VM prints when bytecode names a builtin this build lacks (loader.c, "invalid bytecode: unknown builtin"):
-# the way a binary says that a feature, std/http on Windows today, is not built in.
-NO_BUILTIN = "unknown builtin"
 
 
 class Smoke:
@@ -360,23 +357,13 @@ def extract(archive: Path, dest: Path) -> None:
             t.extractall(dest, filter="data")
 
 
-def network_smoke(s: Smoke, work: Path, platform: str) -> None:
-    """Loopback TCP everywhere, and HTTP on the platforms whose binary has std/http.
-
-    TCP must work on every platform. A binary says what it has: when its bytecode names a builtin the build lacks,
-    the loader rejects it with "unknown builtin". Windows has TCP but not yet the HttpWire service builtins that
-    std/http needs, so there, and only for that exact message, the HTTP part is skipped; on Linux and macOS that
-    message is a failure, and any other failure is one everywhere.
-    """
+def network_smoke(s: Smoke, work: Path) -> None:
+    """Loopback TCP and HTTP (std/http client and server), which must work on every platform."""
     (work / "tcp.agc").write_text(TCP, encoding="utf-8")
     proc = s.run("tcp.agc", code=None)
     s.expect("TCP loopback echo", proc.returncode == 0 and proc.stdout == "echo ñandú\n", proc)
     (work / "http.agc").write_text(HTTP_LOOP, encoding="utf-8")
     proc = s.run("http.agc", code=None)
-    if proc.returncode != 0 and NO_BUILTIN in proc.stderr and platform.startswith("windows"):
-        note = f"HTTP skipped: this binary has no std/http builtins ({platform}): {proc.stderr.strip()}"
-        print(f"::notice title=Release smoke::{note}" if os.environ.get("GITHUB_ACTIONS") else f"skip: {note}")
-        return
     s.expect("HTTP loopback client and server", proc.returncode == 0 and proc.stdout == "200 hola ñandú\n404\n", proc)
 
 
@@ -457,7 +444,7 @@ def smoke(archive: Path, platform: str, binary: Path | None) -> None:
         out = s.run("process.agc", str(exe), code=None)
         s.expect("processes need --allow-run", out.returncode != 0, out)
 
-        network_smoke(s, work, platform)
+        network_smoke(s, work)
         print(f"smoke passed: {s.checks} checks on {archive.name}")
     finally:
         shutil.rmtree(base, ignore_errors=True)

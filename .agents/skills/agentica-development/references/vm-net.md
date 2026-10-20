@@ -106,7 +106,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/http_wire.c`
   - **Owns:** the `HttpWire` functions std/http's client and server read and
-    write with (Linux and macOS; stubs on Windows): `chunked`, `chunk`,
+    write with (Linux, macOS and Windows): `chunked`, `chunk`,
     `chunk_read`, `text`, `encode_request`, `encode_response` and
     `error_answer`. No I/O and no state: each takes bytes or a record and
     returns a string or a std-only record (`HttpWire.Chunk`, `HttpWire.Text`,
@@ -122,8 +122,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     value built from the cut (`head_value`, `text_value`).
 
 - **Path:** `vm/http_server.c`
-  - **Owns:** The `HttpWire` server task group (Linux and macOS; stubs on
-    Windows). The I/O thread owns the server's listener, open count and queue
+  - **Owns:** The `HttpWire` server task group (Linux, macOS and Windows).
+    The I/O thread owns the server's listener, open count and queue
     of `accept` and `wait` jobs; builtins change them only by posted steps
     (`agc_loop_call`), `closed` is atomic, and an accept's done half makes the
     socket from the connection the I/O thread took (§10.7.2). Runs at N > 1:
@@ -132,20 +132,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/http_service.c`
   - **Owns:** `HttpWire.service`, `jobs` and `options`
-    (`agc_http_service_builtins`, Linux and macOS, a stub table on Windows;
-    §10.7.1). `service` runs the client's owner task with `agc_task_service`
-    (`vm/task.c`): a root with no parent, so the client outlives a crash or
-    cancel of its maker, `Task.pending_count` and `Test.test` leave its tasks
-    out, and their timers are weak for the stall check (`rt->timers_weak`). The
-    `HttpClient` value holds the jobs channel and the options. The pool itself
-    (owner, one worker per connection, FIFO, retry) is `stdlib/http.agc`, on
-    `TCP`, `TLS`, `Channel` and `Task`; the workers' sockets are tcp.c sockets,
-    so the end of the run sends their TLS close_notify. `service` builds the
-    client first and passes it to its owner function. The client's TLS context
+    (`agc_http_service_builtins`, Linux, macOS and Windows; §10.7.1). `service`
+    runs the client's owner task with `agc_task_service` (`vm/task.c`): a root
+    with no parent, so the client outlives a crash or cancel of its maker,
+    `Task.pending_count` and `Test.test` leave its tasks out, and their timers
+    are weak for the stall check (`rt->timers_weak`). The `HttpClient` value
+    holds the jobs channel and the options. The pool itself (owner, one worker
+    per connection, FIFO, retry) is `stdlib/http.agc`, on `TCP`, `TLS`,
+    `Channel` and `Task`; the workers' sockets are tcp.c sockets, so the end of
+    the run sends their TLS close_notify. `service` builds the client first and
+    passes it to its owner function. The client's TLS context
     (`HttpWire.connect_tls`, `HttpWire.drop_tls`, #394) is a reference-counted
-    `tls_shared` in `vm/tcp.c`, built once on a pool thread; each connection
-    and the build hold a reference, so `drop_tls` never frees it under a
-    handshake
+    `tls_shared` in `vm/tcp.c`, built once on a pool thread; each connection and
+    the build hold a reference, so `drop_tls` never frees it under a handshake
 
 - **Path:** `vm/tls.h`, `vm/tls_openssl.c`, `vm/tls_trust.h`, `vm/tls_trust.c`,
   `vm/tls_trust_{posix,darwin,windows}.c`
@@ -296,8 +295,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     connection closes, or gives the reason without writing
 - `vm/http_server.c`
   - `HttpWire.server`, `accept`, `spawn`, `close_server`, `wait` and
-    `local_port` (`agc_http_server_builtins`, Linux and macOS, a stub table
-    elsewhere; §10.7)
+    `local_port` (`agc_http_server_builtins`, Linux, macOS and Windows;
+    §10.7)
   - The `HttpServer` holds a `server` (listener, open count, `max`, waiting
     `accept` and `wait` jobs poked by the listener watch, a freed slot and the
     close) and a group node (`agc_task_group`) in which `server` starts
@@ -505,30 +504,29 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     steps each): every run of the `--max-steps` sweep does a handshake.
   - Put other TLS cases in `tests/test_vm_tls.py`, which runs each once, with
     short timeouts, small payloads and no sleeps. It runs in the macOS and
-    Windows jobs of `platforms.yml`; on Windows its HTTPS cases skip (`HTTPS`
-    mark) until the HTTP client builtins are there (step 12). Peers print LF
-    on Windows too (`sys.stdout.reconfigure(newline="\n")`).
+    Windows jobs of `platforms.yml`, HTTPS cases included; the waiters case
+    blocks its CA file on a FIFO, or on Windows a named pipe (`BlockingFile`).
+    Peers print LF on Windows too (`sys.stdout.reconfigure(newline="\n")`).
   - The `tls-*` fixtures take their certificate directory as `@fixtures/tls` in
     `.args` (`fixture_arg` in `tests/vm_diff_support.py` makes it absolute,
     since the tests and `make goldens` run from different directories).
   - Certificates come from `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or
     newer for the expired one).
-- **HTTP client (20a, in on Linux)**: `stdlib/http.agc` on `vm/http_service.c`,
-  `vm/http_wire.c` and the reads of `vm/tcp.c` (the std-only guard). The
-  `http-client-service` and `test-client-no-leftover` fixtures hold the service
-  task's rules. The `http-*` fixtures are their own peers (a TCP
-  server task in the same program; only `main` prints); the std/http URL
-  parser costs about 500 steps per call, so the sweep samples them. Put the
-  other cases in `tests/test_vm_http.py`, which starts one Python peer
+- **HTTP client (20a; Linux, macOS, Windows)**: `stdlib/http.agc` on
+  `vm/http_service.c`, `vm/http_wire.c` and the reads of `vm/tcp.c` (the
+  std-only guard). The `http-client-service` and `test-client-no-leftover`
+  fixtures hold the service task's rules. The `http-*` fixtures are their own
+  peers (a TCP server task in the same program; only `main` prints); the
+  std/http URL parser costs about 500 steps per call, so the sweep samples them.
+  Put the other cases in `tests/test_vm_http.py`, which starts one Python peer
   per client case (`tests/fixtures/http-peer.py`: a `ThreadingHTTPServer`, the
-same over `ssl`, and a raw socket server with
-  canned hostile responses) and runs three programs once. Python 3
-  (standard library only) is required in CI, as Node is for TCP: with `CI`
-  set the test fails without it, locally it prints a skip. picohttpparser
-  is the submodule `vm/third_party/picohttpparser` (v1.4); bumping it: check
-  out the new tag inside it, `git add` it, and rerun
+  same over `ssl`, and a raw socket server with canned hostile responses) and
+  runs three programs once. Python 3 (standard library only) is required in CI,
+  as Node is for TCP: with `CI` set the test fails without it, locally it prints
+  a skip. picohttpparser is the submodule `vm/third_party/picohttpparser`
+  (v1.4); bumping it: check out the new tag inside it, `git add` it, and rerun
   `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/test_vm_http.py`.
-- **HTTP server (20c, in on Linux)**
+- **HTTP server (20c; Linux, macOS, Windows)**
   - `vm/http_server.c` on `vm/net.h`; `vm/http_wire.c` on the same parser and
     `vm/http_fields.c`.
   - The `http-server*` fixtures are their own peers (the `std/http` client, or a
@@ -545,6 +543,9 @@ same over `ssl`, and a raw socket server with
     keep-alive, `HEAD`, concurrent clients)
   - closing its stdin ends the server.
   - Node and Python are required in CI.
+  - The module runs in the macOS and Windows jobs of `platforms.yml` too. Its
+    Python peers print LF on Windows, and the flood case reads the VM's memory
+    with `ps`, or on Windows with `GetProcessMemoryInfo` (ctypes).
   - A connection task is `hidden`: of its unobserved crashes only the first per
     test (or per run) stays in the crash list, the others count on it
     (`quiet_more`), so a long-running server does not grow the list

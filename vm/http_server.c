@@ -1,5 +1,5 @@
 /*
- * The HttpServer task group builtins (Linux and macOS), called only by
+ * The HttpServer task group builtins, called only by
  * stdlib/http.agc: server, accept, spawn, close_server, wait and local_port.
  * std/http reads the requests and writes the responses itself. Service layer.
  * Design: docs/vm/10-io-http.md §10.7.2.
@@ -7,7 +7,6 @@
 #include "http_fields.h"
 #include "net.h"
 
-#if defined(__linux__) || defined(__APPLE__)
 #include <inttypes.h>
 #include <stdatomic.h>
 #include <stdlib.h>
@@ -353,8 +352,3 @@ const agc_builtin agc_http_server_builtins[] = {
 };
 
 const size_t agc_http_server_builtin_count = sizeof agc_http_server_builtins / sizeof agc_http_server_builtins[0];
-#else
-const agc_builtin agc_http_server_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false}};
-
-const size_t agc_http_server_builtin_count = 0;
-#endif

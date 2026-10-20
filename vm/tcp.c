@@ -849,6 +849,8 @@ static void serve(net *n) {
       q->accept_rc = rc;
       finish(q);
       shut(n, "accept");
+      /* An observer (the HTTP server) must see the close, or its parked accepts and waits would never end. */
+      if (n->watch) n->watch(n->watcher);
       return;
     }
     c->users++;
@@ -878,6 +880,8 @@ static void incoming(uv_stream_t *server, int status) {
     if (q) q->error = status;
     finish(q);
     shut(n, "accept");
+    /* As in serve: tell the observer (the HTTP server, which holds a retain, so n stays alive) that it closed. */
+    if (n->watch) n->watch(n->watcher);
     return;
   }
   k->backlog++;
