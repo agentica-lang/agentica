@@ -421,8 +421,9 @@ if not. The script fails when:
 4. an adapter file includes `port.h`, `services.h`, `net.h` or `http_fields.h`
    (it may include `value.h`; rule 8 keeps it to the memory functions);
 5. a third-party header is included outside its place: `<gc.h>` only in
-   `value.c`; `<openssl/...>` only in `tls_openssl.c` and `digest_openssl.c`;
-   `<picohttpparser.h>` only in `http_pico.c`; `"yyjson.h"` only in `json.c`;
+   `value.c`; `<openssl/...>` only in `tls_openssl.c`, `digest_openssl.c`,
+   `tls_trust.c` and `tls_trust_posix.c`; `<picohttpparser.h>` only in
+   `http_pico.c`; `"yyjson.h"` only in `json.c`;
    `<uv.h>` only in `loop.c`,
    `runq.c`, `sync.c` and `inbox.c` (for `uv_mutex_t`, the one mutex type that
    also builds on Windows, and `uv_async_t`, which wakes the loop),

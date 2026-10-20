@@ -8,6 +8,7 @@ their fixtures run here. The other cases check what threads must keep: whole lin
 the run from any scheduler, standard input and FIFOs, sockets used and closed from several schedulers, and the switch.
 `make test-multicore` runs this module; `make vm-tsan-run` runs it on a ThreadSanitizer build.
 """
+import hashlib
 import json
 import os
 import re
@@ -149,6 +150,32 @@ def test_tasks_on_four_schedulers_give_the_exact_sum(tmp_path, repeats):
     for _ in range(repeats):
         result = vm(bytecode)
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % expected_fan_out(), "")
+
+
+# Crypto.sha256 runs without the shared lock (vm/crypto.c), so eight tasks hash 64 KiB each at once.
+SHA256_TASKS = """\
+def digest(seed: Int) -> Result[List[Int]]
+  data = (0..65535).to_a.map do |i|
+    (i * 31 + seed * 7 + i / 256) % 256
+  end
+  return ok(Crypto.sha256(data))
+end
+
+def main() -> Void
+  results = Task.map((1..8).to_a, 8, 30000, &digest)
+  for r in results
+    puts(r.unwrap!)
+  end
+end
+"""
+
+
+def test_sha256_in_eight_tasks_on_four_schedulers_matches_hashlib(tmp_path):
+    result = vm(program(tmp_path, "sha256", SHA256_TASKS))
+    assert (result.code, result.stderr) == (0, "")
+    expected = [list(hashlib.sha256(bytes((i * 31 + seed * 7 + i // 256) % 256 for i in range(65536))).digest())
+                for seed in range(1, 9)]
+    assert [json.loads(line) for line in result.stdout.splitlines()] == expected
 
 
 PRINTERS = """\
