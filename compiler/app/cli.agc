@@ -32,9 +32,9 @@ import Lowering from "../lower/lowering"
 import LowerText from "../lower/lower_text"
 import Pipeline from "pipeline"
 import Resolve from "../modules/resolve_import"
-import SaveFile from "save_file"
-import SourceFile from "../modules/source_file"
-import {IO_TIMEOUT_MS} from "../modules/link_env"
+import SaveFile from "../io/save_file"
+import SourceFile from "../syntax/source_file"
+import SourceReader from "../io/source_reader"
 
 # The deadline of each call that writes the output of `compile`, in milliseconds.
 SAVE_TIMEOUT = 60000
@@ -133,7 +133,8 @@ def dump_ir(session: Session, source: String, front: Pipeline.Checked) -> Int
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return reject(session, problem, source)
     Lowering.Lowered.Done(program) ->
-      return emit(Reply.printed("#{LowerText.program_text(front.linked.root_dir, program)}\n"))
+      text = LowerText.program_text(session.settings.workspace, front.linked.root_dir, program)
+      return emit(Reply.printed("#{text}\n"))
   end
 end
 
@@ -213,7 +214,7 @@ def source_text(file: String, root: Bool, settings: Env.Settings) -> String
   if !root and file.starts_with?("std/")
     return text_of(Resolve.read_source(settings, file))
   end
-  return text_of(SourceFile.read_shown(file, IO_TIMEOUT_MS))
+  return text_of(SourceReader.read_shown(file))
 end
 
 def text_of(read: SourceFile.Read) -> String

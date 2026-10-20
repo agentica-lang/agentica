@@ -21,7 +21,7 @@ import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Parser from "../syntax/parser"
 import Resolve from "../modules/resolve_import"
-import SourceFile from "../modules/source_file"
+import SourceFile from "../syntax/source_file"
 import Source from "../syntax/source"
 import T from "../check/types"
 

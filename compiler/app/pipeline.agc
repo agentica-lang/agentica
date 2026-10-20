@@ -5,13 +5,11 @@ import Writer from "../bytecode/bytecode_writer"
 import Problems from "../check/check_failure"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
+import SourceReader from "../io/source_reader"
 import Linker from "../modules/linker"
 import Env from "../modules/link_env"
 import Lowering from "../lower/lowering"
-import SourceFile from "../modules/source_file"
-
-# The deadline, in milliseconds, of the read of the root file.
-READ_TIMEOUT = 10000
+import SourceFile from "../syntax/source_file"
 
 ## What the root file is: it can be read as UTF-8, it cannot be read (the system's message), or it is not UTF-8
 ## (LEX-INVALID-UTF8, in that file).
@@ -42,7 +40,7 @@ end
 ## Reads the root file once, so a file that cannot be read or decoded is told apart from a problem of the program. The
 ## linker reads it again; every problem names `path` as it was given.
 export def read_root(path: String) -> Root
-  case SourceFile.read(path, READ_TIMEOUT)
+  case SourceReader.read(path)
     SourceFile.Read.Unreadable(message) -> return Root.Unreadable(message)
     SourceFile.Read.Invalid(at) -> return Root.Invalid(stage_problem(path, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Text(_) -> return Root.Readable
@@ -66,7 +64,8 @@ end
 export def build(front: Checked, settings: Env.Settings) -> Compiled
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
-    Lowering.Lowered.Done(program) -> return write(Writer.write(front.linked.root_dir, program, settings.version))
+    Lowering.Lowered.Done(program) ->
+      return write(Writer.write(settings.workspace, front.linked.root_dir, program, settings.version))
   end
 end
 

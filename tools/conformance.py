@@ -53,7 +53,6 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 KNOWN_ISSUES = {
     432: "Windows: no independent peer for the child channel protocol (two pipes at descriptors 3 and 4)",
     433: "Windows: no test for blocking stream files (named pipes instead of FIFOs)",
-    434: "Windows: process cleanup and handoff cases are tested with /bin/sh or POSIX signals only",
     437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",
 }
 
@@ -64,6 +63,7 @@ TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier o
 WINDOWS_ONLY_MODULES = frozenset({
     "tests/test_process_windows.py", "tests/test_windows_console_stop.py", "tests/test_windows_filesystem_safety.py",
     "tests/test_windows_handle_counts.py", "tests/test_windows_metadata_and_locks.py",
+    "tests/test_windows_process_cleanup.py",
 })
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
@@ -139,6 +139,7 @@ AREAS = {
             "tests/test_process_windows.py", "tests/test_vm_child_channel.py",
             "tests/test_vm_child_channel_posix.py", "tests/test_vm_stop.py", "tests/test_vm_test_protocol.py",
             "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py",
+            "tests/test_windows_process_cleanup.py",
         ],
     ),
     "tasks": (
@@ -178,9 +179,11 @@ EXCLUDED = {
     "tests/test_frontend_modules.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_parser.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_refreeze.py": "tools/refreeze.py, a developer tool",
+    "tests/test_frontend_workspace.py": "the linker over an in-memory Workspace, the same on every system",
     "tests/test_stdlib_docs.py": "a check of the sources (docs on every export), the same on every system",
     "tests/test_stdlib_modules.py": "a check of stdlib/MODULES, the same on every system",
     "tests/test_style_line_width.py": "a check of the sources (line width), the same on every system",
+    "tests/test_style_core_purity.py": "a check of the sources (the stage folders never call the machine), the same on every system",
     "tests/test_vm_style.py": "a check of the C sources (style), the same on every system",
     "tests/test_timeout_guard.py": "the time limit of the test harness itself",
     "tests/test_vm_trace.py": "VM tracing, a developer tool of the Linux debug builds",

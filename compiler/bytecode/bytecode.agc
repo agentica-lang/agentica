@@ -1,12 +1,13 @@
 import Writer from "bytecode_writer"
 import CheckText from "../check/check_text"
 import Checker from "../check/checker"
+import Host from "../io/host"
 import Env from "../modules/link_env"
 import LinkText from "../modules/link_text"
 import Linker from "../modules/linker"
 import Lowering from "../lower/lowering"
 import LowerText from "../lower/lower_text"
-import SaveFile from "../app/save_file"
+import SaveFile from "../io/save_file"
 
 # `agentica compiler/bytecode/bytecode.agc [flags] ROOT -o OUT ...` links, checks, lowers and writes each ROOT file to
 # the .agcb file OUT, and prints `== ROOT`, then `wrote N bytes` or the ERROR line of the first failure (those of
@@ -16,7 +17,7 @@ import SaveFile from "../app/save_file"
 # it as an input, 35.3).
 def main() -> Void
   stdlib = "stdlib"
-  env = Env.process_env()
+  env = Host.process_env()
   version = ""
   root = ""
   output_next = false
@@ -24,7 +25,7 @@ def main() -> Void
     if output_next
       output_next = false
       puts("== #{root}")
-      puts(compile(root, argument, Env.settings(stdlib, env).with(version: version)))
+      puts(compile(root, argument, Env.settings(Host.workspace(), stdlib, env).with(version: version)))
     elsif argument == "-o"
       output_next = true
     elsif argument.starts_with?("--stdlib=")
@@ -48,31 +49,32 @@ end
 # Compiles the file at path into the file at output, and says what happened in one line.
 def compile(path: String, output: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return LinkText.failure_text(LinkText.root_dir_of(path), failure)
+    Linker.Linking.Failed(failure) -> return LinkText.root_failure_text(settings.workspace, path, failure)
     Linker.Linking.Done(linked) -> return check(linked, output, settings)
   end
 end
 
 def check(linked: Linker.Linked, output: String, settings: Env.Settings) -> String
   case Checker.check(linked, settings)
-    Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
+    Checker.Checking.Failed(problem) -> return CheckText.problem_text(settings.workspace, linked.root_dir, problem)
     Checker.Checking.Done(checked) ->
       lowered = Lowering.lower(linked, checked)
-      return lower(linked, lowered, output, settings.version)
+      return lower(linked, lowered, output, settings)
   end
 end
 
-def lower(linked: Linker.Linked, lowered: Lowering.Lowered, output: String, version: String) -> String
+def lower(linked: Linker.Linked, lowered: Lowering.Lowered, output: String, settings: Env.Settings) -> String
   case lowered
-    Lowering.Lowered.Failed(problem) -> return LowerText.problem_text(linked.root_dir, problem)
+    Lowering.Lowered.Failed(problem) -> return LowerText.problem_text(settings.workspace, linked.root_dir, problem)
     Lowering.Lowered.Done(program) ->
-      return write(linked.root_dir, Writer.write(linked.root_dir, program, version), output)
+      written = Writer.write(settings.workspace, linked.root_dir, program, settings.version)
+      return write(linked.root_dir, written, output, settings)
   end
 end
 
-def write(root_dir: String, written: Writer.Written, output: String) -> String
+def write(root_dir: String, written: Writer.Written, output: String, settings: Env.Settings) -> String
   case written
-    Writer.Written.Failed(problem) -> return LowerText.problem_text(root_dir, problem)
+    Writer.Written.Failed(problem) -> return LowerText.problem_text(settings.workspace, root_dir, problem)
     Writer.Written.Done(bytes) ->
       saved = SaveFile.bytes(output, bytes, 60000)
       if saved.ok?

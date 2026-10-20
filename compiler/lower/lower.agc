@@ -1,3 +1,4 @@
+import Host from "../io/host"
 import Env from "../modules/link_env"
 import LowerText from "lower_text"
 
@@ -7,7 +8,7 @@ import LowerText from "lower_text"
 def main() -> Void
   stdlib = "stdlib"
   burn = 0
-  env = Env.process_env()
+  env = Host.process_env()
   for argument in System.args()
     if argument.starts_with?("--stdlib=")
       stdlib = argument.slice(9, argument.length - 9)
@@ -23,7 +24,7 @@ def main() -> Void
       env = env.with(local_app_data: argument.slice(17, argument.length - 17))
     else
       puts("== #{argument}")
-      puts(LowerText.lower_text_after(argument, Env.settings(stdlib, env), burn))
+      puts(LowerText.lower_text_after(argument, Env.settings(Host.workspace(), stdlib, env), burn))
     end
   end
 end

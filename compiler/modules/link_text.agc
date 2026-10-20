@@ -6,6 +6,7 @@ import Failure from "link_failure"
 import Linker from "linker"
 import ParseText from "../syntax/parse_text"
 import Text from "../syntax/text"
+import Workspace from "workspace"
 
 ## The text form of linking the file at path: the linked program, or the ERROR line of the first failure. The first
 ## line is `program #id span`, the root's module doc as ` module-doc="..."`. Each file that declares something follows
@@ -16,7 +17,7 @@ import Text from "../syntax/text"
 export def link_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) -> return program_lines(linked, {}).join("\n")
-    Linker.Linking.Failed(failure) -> return failure_text(root_dir_of(path), failure)
+    Linker.Linking.Failed(failure) -> return root_failure_text(settings.workspace, path, failure)
   end
 end
 
@@ -30,22 +31,19 @@ export def ids_text(path: String, settings: Env.Settings) -> String
         "module #{Text.quote(module.name)} first=#{module.first_id} next=#{module.next_id}"
       end
       return lines.join("\n")
-    Linker.Linking.Failed(failure) -> return failure_text(root_dir_of(path), failure)
+    Linker.Linking.Failed(failure) -> return root_failure_text(settings.workspace, path, failure)
   end
 end
 
-# The folder of the canonical root file, "" when the file cannot be resolved.
-export def root_dir_of(path: String) -> String
-  real = Path.real(path)
-  if real.ok?
-    return Paths.directory_of(real.unwrap!)
-  end
-  return ""
+## The ERROR line of the failure of linking the root file at `path`.
+export def root_failure_text(workspace: Workspace.Workspace, path: String, failure: Failure.Failure) -> String
+  return failure_text(workspace, root_dir_of(workspace, path), failure)
 end
 
 ## The ERROR line of a link failure, with the file it is in.
-export def failure_text(root_dir: String, failure: Failure.Failure) -> String
-  return "#{Text.diagnostic_line(failure.diagnostic)} file=#{Text.quote(Paths.stored_file(root_dir, failure.file))}"
+export def failure_text(workspace: Workspace.Workspace, root_dir: String, failure: Failure.Failure) -> String
+  shown = Text.quote(Paths.stored_file(workspace, root_dir, failure.file))
+  return "#{Text.diagnostic_line(failure.diagnostic)} file=#{shown}"
 end
 
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).
@@ -76,4 +74,13 @@ def module_lines(out: List[String], module: Linker.LinkedModule, notes: Map[Int,
     lines = ParseText.print_decl(lines, at, "declaration", decl)
   end
   return lines
+end
+
+# The folder of the canonical root file, "" when the file cannot be resolved.
+def root_dir_of(workspace: Workspace.Workspace, path: String) -> String
+  real = workspace.real_path.call(path)
+  if real.ok?
+    return Paths.directory_of(real.unwrap!)
+  end
+  return ""
 end

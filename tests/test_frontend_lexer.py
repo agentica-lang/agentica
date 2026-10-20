@@ -66,7 +66,7 @@ def test_the_unicode_table_is_the_char_graphic_table_of_the_freeze(lexer_stage):
 
 
 def test_invalid_utf8_is_lex_invalid_utf8_at_the_first_bad_byte(lexer_stage, tmp_path):
-    # The file is read by compiler/modules/source_file.agc before the lexer sees it.
+    # The file is read by compiler/io/source_reader.agc before the lexer sees it.
     outputs = lexer_stage.lex({"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"}, tmp_path)
     lexer_stage.assert_golden(outputs["invalid.agc"], FROZEN / "lexer" / "invalid-utf8.expected")
     assert re.search(r"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 ", outputs["invalid.agc"])
