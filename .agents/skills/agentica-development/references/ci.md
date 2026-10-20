@@ -254,6 +254,9 @@ character reaches the console. A new process group turns Ctrl+C off, so Ctrl+C
 is not sent; libuv reports both events through one console handler
 (`uv_signal_t`).
 
+`tests/test_windows_handle_counts.py` also needs native Windows (named pipes and
+`GetProcessHandleCount`), so it runs on the Windows job and Wine skips it.
+
 Piped-input tests do not exercise console input. After changing Windows stdin
 handling, a check on a native Windows terminal (not Wine) is useful but does not
 block a change. Save this as `console-input.agc` in a scratch directory:

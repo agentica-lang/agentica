@@ -439,7 +439,9 @@ end
     assert (code, output) == (0, 'ok()\nok("x")\n'), errors
 
 
-@host_only(WINDOWS, "the VM's pipes are reopened through the folder of its descriptors; Windows has none (test_file_calls_cannot_name_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock in test_windows_handle_counts.py lists its pipes)")
+@host_only(WINDOWS, "the VM's pipes are reopened through the folder of its descriptors; Windows has none "
+                    "(test_file_calls_cannot_name_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock in "
+                    "test_windows_handle_counts.py lists its pipes)")
 def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(new_dir, run_vm_bounded):
     root = new_dir()
     code, output, errors = run_vm_bounded(root, r"""def main() -> Void
