@@ -9613,5 +9613,85 @@
       ],
       "covers": "xs.produce(1)"
     }
+  ],
+  "File.foreach and ch.lazy are Lazy sources, and File.foreach(...).each with no step is File.each_line": [
+    {
+      "program": [
+        "def show(line: String) -> Result[Void]",
+        "  puts(line)",
+        "  return ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  lines: Lazy[String] = File.foreach(\"a.txt\", 1024, 5000)",
+        "  puts(lines.map do |line| line.length end.to_a)",
+        "  puts(File.foreach(\"a.txt\", 1024, 5000).first(3))",
+        "  done = File.foreach(\"a.txt\", 1024, 5000).filter do |line| line != \"\" end.each(&show)",
+        "  ch: Channel[Int] = Channel.new(1)",
+        "  values: Lazy[Int] = ch.lazy(100)",
+        "  sum = ch.lazy(100).each do |n|",
+        "    puts(n)",
+        "    ok()",
+        "  end",
+        "  puts(done.ok? and sum.ok? and values.to_a.ok?)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = File.foreach(\"a.txt\", 1024, 5000).each do |line|",
+        "    puts(line)",
+        "    ok()",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-LAZY-NO-STEP",
+      "start": [2, 7],
+      "covers": "File.foreach(\"a.txt\", 1024, 5000).each do |line|\n    puts(line)\n    ok()\n  end",
+      "help": true
+    },
+    {
+      "program": [
+        "def show(line: String) -> Result[Void]",
+        "  return ok()",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(File.foreach(\"a.txt\", 1024, 5000).each(&show))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-LAZY-NO-STEP",
+      "start": [6, 8],
+      "covers": "File.foreach(\"a.txt\", 1024, 5000).each(&show)",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  ch: Channel[Int] = Channel.new(1)",
+        "  words: Lazy[String] = ch.lazy(100)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 25],
+      "covers": "ch.lazy(100)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  lines = File.foreach(\"a.txt\", \"1024\", 5000)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 33],
+      "covers": "\"1024\""
+    }
   ]
 }

@@ -3,13 +3,14 @@
  * (docs/future/27-iteration-and-concurrency.md §27.4). The prelude (stdlib/prelude/lazy.agc) gives the typed names;
  * the builtins here are prelude-only. Nodes never change after they are made, so a Lazy can be shared by tasks on
  * any scheduler and run more than once: each terminal call has its own run state, and its callbacks run on the task
- * that called it. Service layer.
+ * that called it. The I/O sources (File.foreach, ch.lazy) open or read only inside a terminal; their terminal parks
+ * on the file job or the channel like any other wait. Service layer.
  */
 #include "services.h"
 
 typedef enum {
   LAZY_LIST, LAZY_RANGE, LAZY_PRODUCE, LAZY_MAP, LAZY_FILTER, LAZY_TAKE_WHILE, LAZY_DROP_WHILE, LAZY_TAKE, LAZY_DROP,
-  LAZY_EACH_SLICE, LAZY_EACH_CONS, LAZY_WITH_INDEX, LAZY_FLAT_MAP, LAZY_CHUNK_WHILE
+  LAZY_EACH_SLICE, LAZY_EACH_CONS, LAZY_WITH_INDEX, LAZY_FLAT_MAP, LAZY_CHUNK_WHILE, LAZY_FILE, LAZY_CHANNEL
 } lazy_kind;
 
 typedef struct lazy_node lazy_node;
@@ -18,9 +19,10 @@ struct lazy_node {
   lazy_kind kind;
   const lazy_node *parent; /* NULL for a source */
   size_t depth;            /* nodes from the source to this one, both included */
-  agc_value value;         /* the list or range of a source, the seed of produce */
+  agc_value value;         /* the list or range of a source, the seed of produce, the path of a file, the channel */
   agc_value fn;            /* the callback of a step, or of produce */
-  int64_t count;           /* the count of take and drop, the size of each_slice and each_cons */
+  int64_t count;           /* the count of take and drop, the size of each_slice and each_cons, a file's buffer */
+  int64_t timeout;         /* a file or channel source: the timeout of each wait */
 };
 
 /* The state of one stage in one run. */
@@ -36,7 +38,11 @@ typedef struct {
 
 typedef enum { LAZY_TO_A, LAZY_EACH, LAZY_REDUCE, LAZY_FIND } lazy_terminal;
 
-typedef enum { WAIT_NONE, WAIT_SOURCE, WAIT_STAGE, WAIT_TERMINAL } lazy_wait;
+/* What the run waits for: a callback of the source (produce), of a stage or of the terminal; a file job or a channel
+   value of an I/O source (WAIT_IO); the close of the file before the terminal returns (WAIT_CLOSE). */
+typedef enum { WAIT_NONE, WAIT_SOURCE, WAIT_STAGE, WAIT_TERMINAL, WAIT_IO, WAIT_CLOSE } lazy_wait;
+
+typedef enum { NEXT_ITEM, NEXT_NONE, NEXT_STEP } lazy_pull;
 
 typedef struct {
   agc_stepper stepper;
@@ -55,6 +61,9 @@ typedef struct {
   int64_t next, last;     /* a range source: the next value and the last one */
   bool more, started;     /* a range source has values left; produce gave its seed */
   agc_value seed;         /* produce: the last item it gave */
+  agc_line_reader *lines;       /* a file source: its reader, which owns the open file */
+  agc_value io_last;      /* a file source: the result of the job it waited on */
+  agc_value final;        /* the result, kept while the file closes */
   uint32_t span;
 } lazy_run;
 
@@ -73,19 +82,28 @@ static agc_value lazy_error(const char *message) {
   return agc_result_value(false, agc_string_value(agc_make_string(message, len, len)));
 }
 
-static _Noreturn void lazy_fail_count(agc_vm *vm, const char *message, uint32_t span) {
+/* Argument 1 of the prelude function is the bad one: the count of take, drop, first, each_slice and each_cons, the
+   buffer_bytes of File.foreach, the timeout_ms of ch.lazy. */
+static _Noreturn void lazy_fail_argument(agc_vm *vm, const char *code, const char *message, uint32_t span) {
   size_t len = strlen(message);
-  /* Argument 1 of the prelude function (take, drop, first, each_slice, each_cons) is the count. */
-  agc_fail_argument(vm, "RUNTIME-INVALID-COUNT", agc_make_string(message, len, len), 1, span);
+  agc_fail_argument(vm, code, agc_make_string(message, len, len), 1, span);
 }
 
-static agc_value lazy_source(lazy_kind kind, agc_value value, agc_value fn) {
+static _Noreturn void lazy_fail_count(agc_vm *vm, const char *message, uint32_t span) {
+  lazy_fail_argument(vm, "RUNTIME-INVALID-COUNT", message, span);
+}
+
+static lazy_node *lazy_new_source(lazy_kind kind, agc_value value, agc_value fn) {
   lazy_node *node = agc_alloc(sizeof(lazy_node));
   node->kind = kind;
   node->depth = 1;
   node->value = value;
   node->fn = fn;
-  return agc_lazy_value(node);
+  return node;
+}
+
+static agc_value lazy_source(lazy_kind kind, agc_value value, agc_value fn) {
+  return agc_lazy_value(lazy_new_source(kind, value, fn));
 }
 
 static agc_value lazy_step_node(agc_vm *vm, agc_value parent, lazy_kind kind, agc_value fn, int64_t count) {
@@ -115,6 +133,29 @@ static agc_value builtin_produce(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_as_fn(vm, args[1]);
   return lazy_source(LAZY_PRODUCE, args[0], args[1]);
+}
+
+/* __lazy_file(path, buffer_bytes, timeout_ms): File.foreach. Nothing is opened here; a bad timeout or path is the
+   error of the terminal, as for File.each_line. */
+static agc_value builtin_file(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_as_string(vm, args[0]);
+  int64_t buffer = agc_as_int(vm, args[1]);
+  if (!agc_lines_buffer_ok(buffer))
+    lazy_fail_count(vm, "buffer_bytes must be between 1024 and 16777216", span);
+  lazy_node *node = lazy_new_source(LAZY_FILE, args[0], agc_void());
+  node->count = buffer;
+  node->timeout = agc_as_int(vm, args[2]);
+  return agc_lazy_value(node);
+}
+
+/* __lazy_channel(channel, timeout_ms): ch.lazy. */
+static agc_value builtin_channel(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_as_channel(vm, args[0]);
+  int64_t timeout = agc_as_int(vm, args[1]);
+  if (timeout < 0) lazy_fail_argument(vm, "RUNTIME-INVALID-DURATION", "channel timeout must be nonnegative", span);
+  lazy_node *node = lazy_new_source(LAZY_CHANNEL, args[0], agc_void());
+  node->timeout = timeout;
+  return agc_lazy_value(node);
 }
 
 /* A step of (lazy, f): map, with_index, flat_map, chunk_while. */
@@ -209,21 +250,49 @@ static void lazy_end_at(lazy_run *run, size_t stage) {
   if (run->ended < stage + 1) run->ended = stage + 1;
 }
 
-static agc_step lazy_finish(lazy_run *run) {
+static agc_value lazy_finish(lazy_run *run) {
   switch (run->terminal) {
-    case LAZY_TO_A:
-      return lazy_end(agc_result_value(true, agc_list_value(agc_list_from_array(run->out, run->out_len))));
-    case LAZY_EACH: return lazy_end(agc_result_value(true, agc_void()));
-    case LAZY_REDUCE: return lazy_end(agc_result_value(true, run->acc));
+    case LAZY_TO_A: return agc_result_value(true, agc_list_value(agc_list_from_array(run->out, run->out_len)));
+    case LAZY_EACH: return agc_result_value(true, agc_void());
+    case LAZY_REDUCE: return agc_result_value(true, run->acc);
     case LAZY_FIND: break;
   }
-  return lazy_end(lazy_error("not found"));
+  return lazy_error("not found");
+}
+
+/* Closes the file of a file source, then ends the terminal with `result` (kept in run->final while the close waits).
+   Every end of a run comes here, so the file is closed whatever ended it: the end of the items, a take or find that
+   had enough, an error from a callback or a failed read. A raise, a cancel or --max-steps ends the task instead, and
+   the task's end closes the file it owns. */
+static agc_step lazy_done(agc_vm *vm, lazy_run *run, agc_value result, agc_value last) {
+  if (!run->lines) return lazy_end(result);
+  if (run->waiting != WAIT_CLOSE) {
+    run->final = result;
+    agc_lines_stop(run->lines, result);
+    last = agc_void();
+  }
+  run->waiting = WAIT_NONE;
+  agc_value outcome = agc_void();
+  if (agc_lines_next(vm, run->lines, last, &outcome) == AGC_LINES_WAIT) {
+    run->waiting = WAIT_CLOSE;
+    return (agc_step){.kind = AGC_STEP_WAIT};
+  }
+  return lazy_end(run->final);
 }
 
 /* A callback came back with `last`, for the stage at run->at (or the source, or the terminal). */
 static bool lazy_resume(agc_vm *vm, lazy_run *run, agc_value last, agc_step *done) {
   lazy_wait waiting = run->waiting;
+  if (waiting == WAIT_CLOSE) {
+    *done = lazy_done(vm, run, run->final, last);
+    return true;
+  }
   run->waiting = WAIT_NONE;
+  if (waiting == WAIT_IO) {
+    /* A file job's result; a channel wait is a retry park, so its `last` means nothing and the receive runs again. */
+    run->io_last = last;
+    return false;
+  }
   if (waiting == WAIT_SOURCE) {
     run->seed = last;
     run->item = last;
@@ -233,12 +302,12 @@ static bool lazy_resume(agc_vm *vm, lazy_run *run, agc_value last, agc_step *don
   if (waiting == WAIT_TERMINAL) {
     run->at = 0;
     if (run->terminal == LAZY_EACH && !agc_as_result(vm, last)->ok) {
-      *done = lazy_end(last);
+      *done = lazy_done(vm, run, last, agc_void());
       return true;
     }
     if (run->terminal == LAZY_REDUCE) run->acc = last;
     if (run->terminal == LAZY_FIND && agc_as_bool(vm, last)) {
-      *done = lazy_end(agc_result_value(true, run->item));
+      *done = lazy_done(vm, run, agc_result_value(true, run->item), agc_void());
       return true;
     }
     return false;
@@ -295,45 +364,74 @@ static bool lazy_resume(agc_vm *vm, lazy_run *run, agc_value last, agc_step *don
   return false;
 }
 
+/* An I/O source's next item: NEXT_ITEM with run->item, NEXT_NONE when the source ended, NEXT_STEP with *call when
+   the run waits (a file job, a channel value) or ends (a read error, a timeout). */
+static lazy_pull lazy_io(agc_vm *vm, lazy_run *run, const lazy_node *source, agc_step *call) {
+  if (source->kind == LAZY_CHANNEL) {
+    switch (agc_channel_receive(vm, agc_as_channel(vm, source->value), source->timeout, &run->item)) {
+      case AGC_RECV_VALUE: return NEXT_ITEM;
+      case AGC_RECV_CLOSED: return NEXT_NONE;
+      case AGC_RECV_TIMED_OUT: *call = lazy_end(lazy_error("channel: timed out")); return NEXT_STEP;
+      case AGC_RECV_WAIT: break;
+    }
+  } else {
+    agc_value last = run->io_last, out = agc_void();
+    run->io_last = agc_void();
+    switch (agc_lines_next(vm, run->lines, last, &out)) {
+      case AGC_LINES_LINE: run->item = out; return NEXT_ITEM;
+      case AGC_LINES_END:
+        /* The reader closed the file before it gave END. */
+        if (agc_as_result(vm, out)->ok) return NEXT_NONE;
+        *call = lazy_end(out);
+        return NEXT_STEP;
+      case AGC_LINES_WAIT: break;
+    }
+  }
+  run->waiting = WAIT_IO;
+  *call = (agc_step){.kind = AGC_STEP_WAIT};
+  return NEXT_STEP;
+}
+
 /* The next item for the first stage that is not ended: the rest of a flat_map list (the one nearest the terminal
-   first, since its items came from an older item), then what an ended stage still holds, then the source. Returns
-   false with run->at still 0 when no item came yet (a stage was ended, or produce must be called). */
-static bool lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
+   first, since its items came from an older item), then what an ended stage still holds, then the source. NEXT_NONE
+   with run->at still 0 when no item came yet (a stage was ended); NEXT_STEP with *call when the run must call produce,
+   wait for an I/O source, or end. */
+static lazy_pull lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
   size_t low = run->ended > 1 ? run->ended : 1;
   for (size_t j = run->count; j-- > low;) {
     lazy_stage *s = &run->stages[j];
     if (!s->pending) continue;
     if (agc_list_cursor_next(&s->rest, &run->item)) {
       run->at = j + 1;
-      return true;
+      return NEXT_ITEM;
     }
     s->pending = false;
   }
   if (run->ended > 0) {
     size_t f = run->ended;
     run->ended++;
-    if (f >= run->count) return false;
+    if (f >= run->count) return NEXT_NONE;
     lazy_stage *s = &run->stages[f];
     lazy_kind kind = run->nodes[f]->kind;
     if ((kind == LAZY_EACH_SLICE || kind == LAZY_CHUNK_WHILE) && s->len > 0) {
       run->item = lazy_group(s);
       run->at = f + 1;
-      return true;
+      return NEXT_ITEM;
     }
-    return false;
+    return NEXT_NONE;
   }
   const lazy_node *source = run->nodes[0];
   switch (source->kind) {
     case LAZY_LIST:
       if (!agc_list_cursor_next(&run->items, &run->item)) {
         run->ended = 1;
-        return false;
+        return NEXT_NONE;
       }
       break;
     case LAZY_RANGE:
       if (!run->more) {
         run->ended = 1;
-        return false;
+        return NEXT_NONE;
       }
       run->item = agc_int(run->next);
       run->more = run->next != run->last;
@@ -343,16 +441,23 @@ static bool lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
       if (run->started) {
         run->waiting = WAIT_SOURCE;
         *call = lazy_call(source->fn, run->seed);
-        return false;
+        return NEXT_STEP;
       }
       run->started = true;
       run->seed = source->value;
       run->item = source->value;
       break;
+    case LAZY_FILE:
+    case LAZY_CHANNEL: {
+      lazy_pull pulled = lazy_io(vm, run, source, call);
+      if (pulled == NEXT_NONE) run->ended = 1;
+      if (pulled != NEXT_ITEM) return pulled;
+      break;
+    }
     default: agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy without a source", run->span);
   }
   run->at = 1;
-  return true;
+  return NEXT_ITEM;
 }
 
 /* A terminal is a stepper (port.h). It pulls one item from the source and moves it through the stages in order until
@@ -372,13 +477,15 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   if (run->waiting != WAIT_NONE && lazy_resume(vm, run, last, &step)) return step;
   for (;;) {
     if (run->at == 0) {
-      step.kind = AGC_STEP_END;
-      if (!lazy_next(vm, run, &step)) {
-        if (run->waiting == WAIT_SOURCE) return step;
-        if (run->ended > run->count) return lazy_finish(run);
+      lazy_pull pulled = lazy_next(vm, run, &step);
+      if (pulled == NEXT_STEP) return step.kind == AGC_STEP_END ? lazy_done(vm, run, step.value, agc_void()) : step;
+      if (pulled == NEXT_NONE) {
+        if (run->ended > run->count) return lazy_done(vm, run, lazy_finish(run), agc_void());
         continue;
       }
-      if (agc_step_turn(vm, run->span) || agc_turn_charge(vm)) return (agc_step){.kind = AGC_STEP_YIELD};
+      /* Both run: the charge of the stages before must not be skipped when the step count ends the turn first. */
+      bool charged = agc_turn_charge(vm);
+      if (agc_step_turn(vm, run->span) || charged) return (agc_step){.kind = AGC_STEP_YIELD};
     }
     if (run->at == run->count) {
       switch (run->terminal) {
@@ -480,8 +587,6 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   if (terminal != LAZY_TO_A) agc_as_fn(vm, fn);
   lazy_run *run = agc_alloc(sizeof(lazy_run));
   run->stepper.step = lazy_step;
-  /* lazy_step reads immutable nodes and writes only this run, which belongs to the calling task. */
-  run->stepper.unlocked = true;
   run->stepper.no_block = true;
   run->terminal = terminal;
   run->fn = fn;
@@ -503,6 +608,10 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   const lazy_node *source = run->nodes[0];
   if (source->kind == LAZY_LIST) agc_list_cursor_begin(&run->items, agc_as_list(vm, source->value), 0);
   if (source->kind == LAZY_RANGE) run->more = agc_range_bounds(agc_as_range(vm, source->value), &run->next, &run->last);
+  if (source->kind == LAZY_FILE) run->lines = agc_lines_new(vm, source->value, source->count, source->timeout, span);
+  /* A list, range or produce run reads immutable nodes and writes only this run, which belongs to the calling task.
+     An I/O source starts file jobs, closes the file and parks on channel lists, so its run takes rt->sync. */
+  run->stepper.unlocked = source->kind != LAZY_FILE && source->kind != LAZY_CHANNEL;
   agc_task_stepper(vm, &run->stepper);
   return agc_void();
 }
@@ -524,11 +633,14 @@ static agc_value builtin_find(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task, so no row
-   takes rt->sync, and neither do the terminals' steps (agc_stepper.unlocked); their callbacks run as bytecode. */
+   takes rt->sync. The steps of a terminal over a list, a range or produce do not take it either
+   (agc_stepper.unlocked); the steps over a file or a channel do (lazy_start). Callbacks run as bytecode. */
 const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_range", 1, builtin_range, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_produce", 2, builtin_produce, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"__lazy_file", 3, builtin_file, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"__lazy_channel", 2, builtin_channel, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_map", 2, builtin_map, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_with_index", 2, builtin_with_index, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_flat_map", 2, builtin_flat_map, AGC_NATIVE_NONE, AGC_COST_NONE, false},

@@ -100,7 +100,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   process_posix.c # the POSIX side of process_os.h: every file may run, PATH splits at ':'
   process_windows.c # the Windows side: .exe and .com only, ';' and quoted PATH entries, refused names
   stream.c        # input buffer and write path shared by processes and TCP (references/vm-net.md)
-  lazy.c          # Lazy[T]: recipe nodes and the terminal stepper that pulls one item at a time (docs/future/27 §27.4)
+  lazy.c          # Lazy[T]: recipe nodes and the terminal stepper that pulls one item at a time, over lists, ranges, produce, files and channels (docs/future/27 §27.4)
   tcp.c           # TCP and TLS builtins on libuv handles (references/vm-net.md)
   net.h           # tcp.c connection object for other C modules (references/vm-net.md)
   net_os.h        # the errno a libuv socket or pipe error shows (references/vm-net.md)

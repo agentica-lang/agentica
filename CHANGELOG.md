@@ -16,6 +16,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/http` (HTTP and HTTPS client and server) runs on Windows.
 - `Lazy[T]`: lazy pipelines over lists, ranges and `Lazy.produce`
   (`xs.lazy.filter do ... end.first(3)`); terminals return a `Result`.
+- `File.foreach(path, buffer_bytes, timeout_ms)` and `ch.lazy(timeout_ms)`:
+  `Lazy` sources over the lines of a file (closed before the terminal returns)
+  and the values of a channel.
 
 ### Changed
 

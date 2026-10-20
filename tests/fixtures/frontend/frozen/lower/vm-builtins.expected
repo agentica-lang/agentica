@@ -227,9 +227,11 @@ Time.monotonic_ms
 Time.monotonic_ns
 Time.now_ms
 __fail_arg
+__lazy_channel
 __lazy_chunk_while
 __lazy_count
 __lazy_each
+__lazy_file
 __lazy_find
 __lazy_flat_map
 __lazy_group

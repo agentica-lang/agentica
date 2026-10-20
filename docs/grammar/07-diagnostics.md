@@ -438,6 +438,11 @@ type:
   - **Help:** a `Lazy` runs only in a terminal; collect it first with `try
     lz.to_a` (or `lz.first(n)`)
 
+- **Written:** `File.foreach(path, n, ms).each do |line| ... end`, with no step
+  between the source and `.each` (`CHECK-LAZY-NO-STEP`)
+  - **Help:** `File.each_line(path, buffer_bytes, timeout_ms) do |line| ...
+    end`; keep `File.foreach` for a chain with a step
+
 - **Written:** `Agent.start_link(...)` and other `Agent.` calls
   - **Help:** return values from tasks and combine them with `reduce`, or keep
     the state in one task that receives on a `Channel`

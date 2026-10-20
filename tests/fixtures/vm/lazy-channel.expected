@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 439,
+  "stdout": [
+    "first(2): ok([1, 2])",
+    "the rest, squared: ok([16, 36, 64])",
+    "closed and drained: ok([])",
+    "  pair [1, 2]",
+    "  pair [3, 4]",
+    "  pair [5]",
+    "an error from the block: error(\"an odd one out: [5]\")",
+    "a timeout: error(\"channel: timed out\")",
+    "a cancel while parked: error(\"task: timed out\")",
+    "the channel still works: ok([\"after\"])",
+    ""
+  ],
+  "stderr": []
+}

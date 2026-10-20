@@ -440,6 +440,12 @@ Read first: `references/vm.md`.
     `tests/test_stdlib_modules.py` checks `stdlib/MODULES` against the folder,
     without the binary
 
+- **Path:** `tests/test_vm_lazy_io.py`
+  - **Owns:** `File.foreach` closes its file on every exit path of a terminal
+    (`tests/fixtures/vm/lazy-file.agc` under the io trace: no `file_open` while
+    another file is open), and the end of a run that `--max-steps` stopped
+    closes it; portable, so the macOS and Windows jobs of `platforms.yml` run it
+
 - **Path:** `tests/test_vm_file_lines.py`
   - **Owns:** `File.each_line`: a 10 MB file of short lines streams in order in
     about size over buffer pool jobs (the I/O trace) with bounded peak memory;

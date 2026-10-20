@@ -1,12 +1,12 @@
 ---
 title: Lazy
 weight: 6
-description: Lazy pipelines over lists, ranges and endless sources, run one item at a time by a terminal.
+description: Lazy pipelines over lists, ranges, endless sources, files and channels, run one item at a time by a terminal.
 ---
 
-A `Lazy[T]` is a recipe: a source and the steps after it. Building one does no work. A terminal (`to_a`, `first`, `each`, `reduce`, `find`) runs it, and pulls one item at a time from the source through every step, so no step builds a list of all the items. A step returns a new `Lazy`; the old one is unchanged, and each terminal runs the source again from the start.
+A `Lazy[T]` is a recipe: a source and the steps after it. Building one does no work. A terminal (`to_a`, `first`, `each`, `reduce`, `find`) runs it, and pulls one item at a time from the source through every step, so no step builds a list of all the items. A step returns a new `Lazy`; the old one is unchanged, and each terminal runs the source again from the start (a channel, which cannot be read twice, goes on where the last terminal stopped).
 
-Use a `Lazy` for an endless source, or when only the first few results of a long chain are needed. For a list you will walk whole, the eager [List](/library/data-structures/list/) methods are the one form.
+Use a `Lazy` for an endless source, for the lines of a big file or the values of a channel, or when only the first few results of a long chain are needed. For a list you will walk whole, the eager [List](/library/data-structures/list/) methods are the one form.
 
 ```agentica
 def main() -> Void
@@ -21,7 +21,7 @@ ok([1, 9, 25])
 ok([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]])
 ```
 
-Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. A terminal can be switched out between items, so other tasks keep running.
+Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. A terminal can be switched out between items, so other tasks keep running; a terminal over a file or a channel parks while it waits, and a cancel reaches it there.
 
 A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. There is no `next`: a `Lazy` is a recipe, not a cursor. A `List` method on a `Lazy`, such as `lz.size`, is `CHECK-UNKNOWN-METHOD` with a help that shows `to_a`; a step only `Lazy` has, such as `xs.each_cons(2)` on a list, shows `.lazy`.
 
@@ -31,6 +31,8 @@ A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. 
 List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]
+File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]
+Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]
 ```
 
 `Lazy.produce` gives `seed`, then `f(seed)`, then `f(f(seed))`, without end. It does not call its block for an item that no step needs.
@@ -47,6 +49,49 @@ end
 ok([3, 1, 2])
 ok([1, 2, 3])
 ok(["a", "aa", "aaa"])
+```
+
+### File.foreach
+
+The lines of a file, read as [`File.each_line`](/library/io-and-system/files/#fileeach_line) reads them: a block of `buffer_bytes` (1024 to 16777216, also the longest line) at a time, and `timeout_ms` for each read. Building the `Lazy` opens nothing. The file opens when a terminal starts and closes before the terminal returns, whatever ended it: the end of the file, a `take` or `find` that had enough, an error from the block, a failed `try`. A crash or cancel of the task closes it when the task ends.
+
+A read error (invalid UTF-8, a line over the buffer), a missing file or a bad timeout ends the terminal with that error. `File.foreach(...).each do ... end` with no step in between is `CHECK-LAZY-NO-STEP`: write `File.each_line` for that.
+
+```agentica {mode="check"}
+def main() -> Void
+  head = File.foreach("server.log", 4096, 1000).first(10)
+  errors = File.foreach("server.log", 4096, 1000).filter do |line| line.include?("ERROR") end.each do |line|
+    puts(line)
+    ok()
+  end
+  puts(head.ok? and errors.ok?)
+end
+```
+
+### ch.lazy
+
+The values of a channel until it is closed and drained. Each wait for a value obeys `timeout_ms`, and a timeout ends the terminal with `error("channel: timed out")`. A channel cannot be read twice: a second terminal goes on with the values the first did not take, and a value a terminal took is gone, even when a later step dropped it. `take`, `first` and `find` take no value they do not need.
+
+```agentica
+def produce(ch: Channel[Int]) -> Void
+  for i in 1..6
+    ch.send(i, 1000).unwrap!
+  end
+  ch.close
+end
+
+def main() -> Void
+  ch: Channel[Int] = Channel.new(2)
+  Task.spawn(&produce, ch)
+  values = ch.lazy(1000)
+  puts(values.first(2))
+  puts(values.map do |n| n * n end.to_a)
+end
+```
+
+```output
+ok([1, 2])
+ok([9, 16, 25, 36])
 ```
 
 ## map, filter and flat_map

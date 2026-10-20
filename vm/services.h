@@ -65,6 +65,18 @@ void agc_files_init(agc_vm *vm);
 agc_file_ids agc_files_inherited(void);
 void agc_files_forget(agc_file_ids *ids, int fd);
 void agc_files_close(agc_vm *vm);
+/* The lines of a file by path, read with a block buffer: the reader of File.each_line and File.foreach (vm/lazy.c),
+   driven by a stepper one line at a time. Its steps start file jobs and close the handle, so the stepper that drives
+   it runs with rt->sync (it is not `unlocked`). agc_lines_new opens nothing; the first agc_lines_next opens the file.
+   LINE puts the next line in *out; WAIT means the task parks on a file job, whose result is the `last` of the next
+   call; END puts the outcome in *out (ok() at the end of the file, else the error) and comes only after the file is
+   closed. agc_lines_stop, between two lines, ends the reader with that outcome: the next calls close the file. */
+typedef struct agc_line_reader agc_line_reader;
+typedef enum { AGC_LINES_LINE, AGC_LINES_WAIT, AGC_LINES_END } agc_lines_status;
+bool agc_lines_buffer_ok(int64_t buffer_bytes);
+agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes, int64_t timeout, uint32_t span);
+agc_lines_status agc_lines_next(agc_vm *vm, agc_line_reader *r, agc_value last, agc_value *out);
+void agc_lines_stop(agc_line_reader *r, agc_value outcome);
 char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);

@@ -41,9 +41,9 @@ export VM_BUILTINS = Set.new([
   "Process.channel_read_line", "Process.channel_send", "Process.channel_close", "Process.read_available",
   "Process.parent_read_line", "Process.parent_send", "Task.await_result", "Task.unobserved_crash", "Test.test",
   "Test.run", "Test.eq", "Test.ok?", "Test.error?", "Test.assert", "FrontEnd.hand_off", "FrontEnd.std_source",
-  "Task.map", "String.compare", "__fail_arg", "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_find",
-  "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce",
-  "__lazy_test", "__lazy_to_a", "__lazy_with_index",
+  "Task.map", "String.compare", "__fail_arg", "__lazy_channel", "__lazy_chunk_while", "__lazy_count", "__lazy_each",
+  "__lazy_file", "__lazy_find", "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce",
+  "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a", "__lazy_with_index",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of

@@ -165,13 +165,24 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `vm/interp.c`): it reads one line at a time through a buffer of `buffer_bytes
   + 1` bytes, one pool job (regular file) or one poller read (FIFO, pipe, or a
   device that can wait) per read, each with its own `timeout_ms`; the file
-  closes on every return path, and a task cancelled while it waits leaves the
-  handle open until the end of run, as `File.open` does. `buffer_bytes` outside
+  closes on every return path, and the end of a task cancelled while it waits
+  closes the handle, as for `File.open`. `buffer_bytes` outside
   1,024 to 16,777,216 is `RUNTIME-INVALID-COUNT` at the argument, before the
   file opens; a timeout of zero or less is an error Result.
   `tests/test_vm_file_lines.py` (with `tests/fixtures/lines-peer.py`) and
   `vm/tests/each_line_test.c` cover it; `tests/fixtures/vm/file-each-line*.agc`
   are the goldens.
+- File.foreach and ch.lazy (17e) are the I/O sources of `Lazy` (`vm/lazy.c`,
+  `LAZY_FILE` and `LAZY_CHANNEL`): prelude rows like the other sources. The
+  terminal drives the line reader of `File.each_line` (`agc_lines_*` in
+  `services.h`) or `agc_channel_receive` (`port.h`), parks on the file job or
+  the channel (`WAIT_IO`, a retry park for the channel), and closes the file in
+  `lazy_done` before every END (`WAIT_CLOSE`). Such a run is not `unlocked`.
+  `CHECK-LAZY-NO-STEP` (`compiler/check_method.agc`) rejects
+  `File.foreach(...).each` written as one chain. Goldens:
+  `tests/fixtures/vm/lazy-file.agc`, `lazy-channel.agc`,
+  `step-limited/lazy-channel-endless.agc`; closes on every path:
+  `tests/test_vm_lazy_io.py`; N=4: `tests/test_vm_multicore.py`.
 - tests/test_filesystem.py (unittest) runs checked Agentica programs through the
   CLI on the VM against temporary directories, including Path.real through link
   chains, loops and long paths and System.env with bytes that are not UTF-8,

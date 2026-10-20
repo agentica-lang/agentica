@@ -109,8 +109,10 @@ typedef struct agc_stepper agc_stepper;
 typedef agc_step (*agc_step_fn)(agc_vm *vm, agc_stepper *self, agc_value last);
 
 /* Both flags are false in a zeroed state, the default. `unlocked`: the step touches only state its task owns (and
-   immutable values), so the interpreter runs it without rt->sync. `no_block`: the builtin's last argument is not a
-   block; every call the step makes names its `fn`. Otherwise the last argument must be a function value. */
+   immutable values), so the interpreter runs it without rt->sync. Such a step never returns AGC_STEP_WAIT and never
+   parks, and it does not touch waiter, task or channel lists, the registry or the loop: all of those belong to
+   rt->sync. A stepper that may wait leaves the flag false for the whole run. `no_block`: the builtin's last argument
+   is not a block; every call the step makes names its `fn`. Otherwise the last argument must be a function value. */
 struct agc_stepper {
   agc_step_fn step;
   bool unlocked;
@@ -524,6 +526,11 @@ void agc_disown(agc_resource *r);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
 bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
+/* One receive from c, as Channel.recv does, for a stepper that holds rt->sync (Lazy over a channel). VALUE puts the
+   value in *out; CLOSED means closed and drained; TIMED_OUT means the wait for this value passed timeout_ms; WAIT
+   means the task parks (a retry park), and the stepper calls this again with the same c and timeout when it wakes. */
+typedef enum { AGC_RECV_VALUE, AGC_RECV_CLOSED, AGC_RECV_TIMED_OUT, AGC_RECV_WAIT } agc_recv_status;
+agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout_ms, agc_value *out);
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);

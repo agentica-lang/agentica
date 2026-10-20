@@ -295,8 +295,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`, `filesystem:
     cannot resolve path` with the path and the OS error text, and the result is
     decoded with `lossy`, one U+FFFD per bad byte)
-  - `File.each_line` (7.2.1h, `lines_step`, a stepper state machine with phases
-    START, OPENED, SCAN, RESUME, CLOSE, CLOSED: it opens the path with
+  - `File.each_line` (7.2.1h) and `File.foreach` (17e) share one line reader,
+    `agc_line_reader` (`agc_lines_new`, `agc_lines_next`, `agc_lines_stop` in
+    `services.h`), a state machine with
+    phases START, OPENED, SCAN, READ, CLOSE, CLOSED that a stepper drives one
+    line at a time (`lines_step` for `each_line`, the terminal of `vm/lazy.c`
+    for `foreach`; both run under `rt->sync`). It opens the path with
     `OP_OPEN_READ`, reads one `OP_READ_BLOCK` job at a time into a buffer of
     `buffer_bytes + 1` bytes made once, with the pending bytes compacted to the
     front (`compact`) and each read clamped to `buffer_bytes` bytes
@@ -309,7 +313,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     terminator; text is checked with `agc_utf8_chars`; the handle is owned with
     `agc_own(close_file)` like `File.open`; the buffer range check comes first,
     then the timeout, then the path contract error; a block error is the result
-    and the file is closed with `OP_CLOSE` before it is returned)
+    and the file is closed with `OP_CLOSE` before it is returned; every path
+    that opened the file passes CLOSE before END. The io trace logs
+    `file_open handle=N` and `file_close handle=N` for each file handle, which
+    `tests/test_vm_lazy_io.py` reads to see the closes on every platform)
 - `vm/output.c`
   - the writer of stdout and stderr, but not the only one: `vm/process.c`
     forwards a child's stderr to `err.file` with a blocking `fwrite`

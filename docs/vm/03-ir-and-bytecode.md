@@ -418,8 +418,12 @@ Details that code and tests rely on:
   (`agc_turn_charge`) ends the turn, the step returns `AGC_STEP_YIELD`: the
   native frame stays on the stack and runs again at the task's next turn. So
   `--max-steps`, the turns of other tasks and a cancel reach a pipeline that
-  calls no block. These steps run without `rt->sync`
-  (`agc_stepper.unlocked`): they touch only the run of the calling task.
+  calls no block. Over a list, a range or `Lazy.produce` these steps run
+  without `rt->sync` (`agc_stepper.unlocked`): they touch only the run of the
+  calling task. Over `File.foreach` or `ch.lazy` they take it: they start file
+  jobs through the line reader of `File.each_line`, receive with
+  `agc_channel_receive`, return `AGC_STEP_WAIT` while the task parks, and close
+  the file before every `AGC_STEP_END`.
 - `Range.each`, `Int.times`, `Int.upto` and `Int.downto` are counting native
   frames. Before each callback they charge one step at the call span, the same
   check as `STEP`. They stop by comparing with the last value before adding, so
