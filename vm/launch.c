@@ -235,6 +235,7 @@ void agc_launch_exit(int code) {
 
 void agc_launch_end(agc_vm *vm, agc_outcome outcome) {
   int code = agc_launch_settle(vm, &outcome);
+  agc_output_end(vm);
   agc_launch_exit(code);
 }
 

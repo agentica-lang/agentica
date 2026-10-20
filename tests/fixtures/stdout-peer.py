@@ -23,6 +23,51 @@ def shrink_pipe(fd, size):
         pass
 
 
+def winsock_pair():
+    """A connected pair of TCP sockets on 127.0.0.1 whose writer is not in overlapped mode.
+
+    socket.socketpair() makes overlapped sockets, which a child cannot write with WriteFile (the call behind _write)
+    and so cannot use as a standard handle. WSASocketW without WSA_FLAG_OVERLAPPED makes the kind that a console or
+    an inetd-style parent hands over.
+    """
+    import ctypes
+
+    wsa_socket = ctypes.WinDLL("ws2_32").WSASocketW
+    wsa_socket.restype = ctypes.c_size_t
+    wsa_socket.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint]
+    handle = wsa_socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, None, 0, 0)
+    if handle == (1 << (8 * ctypes.sizeof(ctypes.c_void_p))) - 1:
+        raise OSError("WSASocketW failed: %d" % ctypes.get_last_error())
+    writer = socket.socket(socket.AF_INET, socket.SOCK_STREAM, fileno=handle)
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        writer.connect(listener.getsockname())
+        reader, _ = listener.accept()
+    return reader, writer
+
+
+def stream_socket(size):
+    """A connected socket pair for a standard stream of the VM: (the reader's socket, the writer as a descriptor).
+
+    On Windows a Winsock handle is not a descriptor: the writer becomes a CRT descriptor over its handle, which is what
+    Popen duplicates for the child. SIZE, when given, asks for buffers of that size at both ends (the system may cap
+    it). Elsewhere the pair is a Unix socketpair.
+    """
+    reader, writer = winsock_pair() if os.name == "nt" else socket.socketpair()
+    if size:
+        for end, option in ((reader, socket.SO_RCVBUF), (writer, socket.SO_SNDBUF)):
+            try:
+                end.setsockopt(socket.SOL_SOCKET, option, size)
+            except OSError:
+                pass
+    if os.name != "nt":
+        return reader, writer.detach()
+    import msvcrt
+
+    return reader, msvcrt.open_osfhandle(writer.detach(), 0)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--stdout-file", required=True)
@@ -34,6 +79,9 @@ def main():
     parser.add_argument("--read-after-exit", action="store_true")
     parser.add_argument("--merge", action="store_true")
     parser.add_argument("--socket", action="store_true")
+    parser.add_argument("--error-socket", action="store_true")
+    parser.add_argument("--stdin-socket", action="store_true")
+    parser.add_argument("--stdin-line", default=None)
     parser.add_argument("--pty", action="store_true")
     parser.add_argument("--close-after", type=int, default=0)
     parser.add_argument("--pipe-size", type=int, default=0)
@@ -42,9 +90,10 @@ def main():
     options = parser.parse_args()
     command = options.command[1:] if options.command[:1] == ["--"] else options.command
 
+    read_socket = None
     if options.socket:
-        reader, writer = socket.socketpair()
-        read_fd, write_fd = reader.detach(), writer.detach()
+        read_socket, write_fd = stream_socket(options.pipe_size)
+        read_fd = None
     elif options.pty:
         import pty
 
@@ -52,17 +101,27 @@ def main():
     else:
         read_fd, write_fd = os.pipe()
         shrink_pipe(write_fd, options.pipe_size)
+    error_socket = None
     if options.merge or options.pty:
         error_read, error_write = None, write_fd
+    elif options.error_socket:
+        error_socket, error_write = stream_socket(options.pipe_size)
+        error_read = -1
     else:
         error_read, error_write = os.pipe()
 
     start = time.monotonic()
-    vm = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=write_fd, stderr=error_write, close_fds=True)
+    # --stdin-socket: the socket of stdout is also stdin (inetd style). The peer writes to it only the --stdin-line, a
+    # line sent before the VM starts.
+    stdin = write_fd if options.stdin_socket else subprocess.DEVNULL
+    if options.stdin_line is not None:
+        read_socket.sendall(options.stdin_line.encode() + b"\n")
+    vm = subprocess.Popen(command, stdin=stdin, stdout=write_fd, stderr=error_write, close_fds=True)
     os.close(write_fd)
     if error_read is not None:
         os.close(error_write)
 
+    exited = threading.Event()
     state = {"exit": None, "read_start": None, "status": None, "ticks": 0, "first_error": None}
     error_data = bytearray()
 
@@ -74,11 +133,17 @@ def main():
             state["status"] = vm.wait()
             state["status"] = "timeout"
         state["exit"] = time.monotonic() - start
+        exited.set()
 
     def read_errors():
         time.sleep(options.error_delay)
+        if error_socket and options.read_after_exit:
+            exited.wait()
         while True:
-            data = os.read(error_read, 65536)
+            try:
+                data = error_socket.recv(65536) if error_socket else os.read(error_read, 65536)
+            except OSError:
+                break
             if not data:
                 break
             if state["first_error"] is None:
@@ -101,7 +166,7 @@ def main():
     state["read_start"] = time.monotonic() - start
     while True:
         try:
-            data = os.read(read_fd, options.chunk)
+            data = read_socket.recv(options.chunk) if read_socket else os.read(read_fd, options.chunk)
         except OSError:
             break
         if not data:
@@ -111,9 +176,14 @@ def main():
             break
         if options.pause:
             time.sleep(options.pause)
-    os.close(read_fd)
+    if read_socket:
+        read_socket.close()
+    else:
+        os.close(read_fd)
     for thread in threads:
         thread.join()
+    if error_socket:
+        error_socket.close()
 
     with open(options.stdout_file, "wb") as handle:
         handle.write(out_data)

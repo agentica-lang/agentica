@@ -294,6 +294,8 @@ void agc_output_open(agc_vm *vm, agc_output *out, int fd);
 void agc_output_leave(agc_vm *vm, agc_task *t);
 bool agc_output_busy(agc_vm *vm);
 bool agc_output_failed(const agc_output *out);
+/* The last call before the process exits: each stream with no write in flight ends its target (agc_stdio_end). */
+void agc_output_end(agc_vm *vm);
 void agc_output_close(agc_vm *vm);
 FILE *agc_notice_begin(agc_output *out, agc_notice *n);
 /* VM is the calling thread's context: it owns the stream lock and starts the write. */
