@@ -16,7 +16,8 @@
   can land at any time.
 - [ ] `Crypto` module ([`docs/future/20-crypto.md` section
   20](../future/20-crypto.md#20-crypto-module)), on demand: after TLS on the VM
-  (7h) and `Bytes`; VM only if it lands after 7i.
+  (7h) and `Bytes`; VM only if it lands after 7i. Started: `Crypto.sha256` on
+  `List[Int]` (#455), for the package hash.
 
 ### Enums and pattern matching: implemented
 

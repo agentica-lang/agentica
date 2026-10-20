@@ -10149,5 +10149,86 @@
       "code": "CHECK-REDEFINED-NAME",
       "start": [1, 1]
     }
+  ],
+  "Crypto.sha256 takes a List[Int] and gives a List[Int]; Crypto is a reserved name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  digest: List[Int] = Crypto.sha256([97, 98, 99])",
+        "  empty = Crypto.sha256([])",
+        "  puts(digest.size + empty.size)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Crypto.sha256(\"abc\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 21],
+      "covers": "\"abc\"",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Crypto.sha256([\"a\"])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 22],
+      "covers": "\"a\"",
+      "expected": "Int",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Crypto.sha256()",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "Crypto.sha256()"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Crypto.sha256([1], [2])",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "Crypto.sha256([1], [2])"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s: String = Crypto.sha256([1])",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 15],
+      "covers": "Crypto.sha256([1])",
+      "expected": "String",
+      "actual": "List[Int]"
+    },
+    {
+      "program": [
+        "struct Crypto",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
   ]
 }
