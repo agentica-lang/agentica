@@ -164,8 +164,8 @@
   be started by hand. No job installs Racket (the Racket front end was deleted,
   PR #313), and no step checks or regenerates the frozen `vm/unicode_data.c`
   (its header gives the provenance). The macOS and Windows jobs run the test
-  subset named in `platforms.yml`; the network tests are Linux only until
-  the multiplatform port reaches TCP, TLS and HTTP.
+  subset named in `platforms.yml`, `tests/test_vm_tcp.py` included; the TLS
+  and HTTP tests are Linux only until the multiplatform port reaches them.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
   and git detects the `string-inspect.agc` fixture as binary from its NUL bytes.
   So Windows sees the same sources, spans and output as Linux.

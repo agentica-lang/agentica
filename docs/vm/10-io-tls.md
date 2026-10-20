@@ -82,10 +82,10 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
 
 ### 10.3.1 TCP (as built)
 
-**As built (TCP PR, Linux).** `vm/tcp.c` holds the ten `TCP` builtins.
-`vm/stream.c` holds what they share with `vm/process.c`: the input buffer, the
-write path, the lock-or-timeout helper and the `network:` texts. Other systems
-get no `TCP` builtins.
+**As built (TCP PR).** `vm/tcp.c` holds the ten `TCP` builtins, built on
+Linux, macOS and Windows. `vm/stream.c` holds what they share with
+`vm/process.c`: the input buffer, the write path, the lock-or-timeout helper
+and the `network:` texts. Other systems get no `TCP` builtins.
 
 - **Values.** A `Socket` is a GC value with a registered state and two lock
   records, `reader` and `writer`. `read_line` and `recv_bytes` take the reader
@@ -155,5 +155,25 @@ get no `TCP` builtins.
   `tcp-connect: connection failed` or `tcp-connect: host not found` (and
   `tcp-listen: ...`), with `hostname:` and `port number:` lines and the system
   error.
+- **Platforms.** The code is shared; libuv hides the socket types. What it
+  does not hide:
+  - *Error numbers.* `vm/net_os.h` maps a libuv error to the errno the
+    message shows: the negated code on POSIX, the UCRT's errno on Windows
+    (`ECONNREFUSED` 107, `ECONNRESET` 108), whose `strerror` names it. Texts
+    and numbers differ per system; the message head does not.
+  - *Accept.* On Unix libuv reports one connection and waits for `uv_accept`;
+    on Windows several `AcceptEx` requests can complete first, so each link
+    counts the connections reported and not taken.
+  - *Bind.* libuv sets `SO_REUSEADDR` on Unix listeners and nothing on
+    Windows, where that option would let another socket take a bound port and
+    `SO_EXCLUSIVEADDRUSE` would refuse a port with connections in
+    `TIME_WAIT`. So on Windows a listener on a specific address can bind a
+    port that another program of the same user holds on the wildcard address,
+    where Linux refuses it; two listeners on the same address conflict on
+    every system.
+  - *Refusal.* Windows resends a SYN that a closed port refused before it
+    reports `ECONNREFUSED`, so a refused connect, and a name whose first
+    address refuses (`localhost` to an IPv4-only server), take longer there;
+    the connect timeout covers them.
 - **Fuzzing.** Under `no_files`, `TCP.connect` and `TCP.listen` end the run with
   `RUNTIME-INTERNAL`, and the other TCP builtins need a handle from these two.

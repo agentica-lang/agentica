@@ -102,6 +102,9 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   stream.c        # input buffer and write path shared by processes and TCP (references/vm-net.md)
   tcp.c           # TCP and TLS builtins on libuv handles (references/vm-net.md)
   net.h           # tcp.c connection object for other C modules (references/vm-net.md)
+  net_os.h        # the errno a libuv socket or pipe error shows (references/vm-net.md)
+  net_posix.c     # the POSIX side: the negated libuv code
+  net_windows.c   # the Windows side: libuv code to the UCRT errno
   tls.h           # TLS adapter types (references/vm-net.md)
   tls_openssl.c   # the only file that includes OpenSSL (references/vm-net.md)
   http_parse.h    # HTTP head adapter (references/vm-net.md)

@@ -38,7 +38,10 @@ struct tcp_link {
   uv_connect_t connect;
   net *owner;
   tcp_link *next;
-  bool backlog;
+  /* Connections libuv has reported and uv_accept has not taken. libuv calls the connection callback once per
+     connection: on Unix it holds one accepted socket and waits for uv_accept before it reports another, but on
+     Windows several AcceptEx requests may complete before the first uv_accept, so this is a count, not a flag. */
+  size_t backlog;
 };
 
 /* A request is the data of a job. The builtin fills its arguments; its START step (begin_*, on the I/O thread) takes
@@ -746,7 +749,7 @@ static void begin_tls(net *n, agc_tls *t) {
 }
 
 static net *accept_link(net *l, tcp_link *k, int *rc) {
-  k->backlog = false;
+  k->backlog--;
   net *c = make_net(&l->trace, l->io, NULL, 0, false);
   c->loop = l->loop;
   tcp_link *link = new_link(c);
@@ -814,7 +817,7 @@ static void incoming(uv_stream_t *server, int status) {
     finish(q);
     return;
   }
-  k->backlog = true;
+  k->backlog++;
   serve(n);
   if (n->watch) n->watch(n->watcher);
 }

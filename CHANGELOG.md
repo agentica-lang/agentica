@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The `TCP` builtins run on Windows (and are tested on macOS and Windows as on
+  Linux). A `system error:` line shows the host's errno and text, so its
+  number differs between systems. `TLS` still returns an error on Windows.
+
 - `System.os()` returns the operating system: `"linux"`, `"macos"`, `"windows"`,
   or the lowercase `uname` name on another system.
 

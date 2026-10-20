@@ -4,8 +4,8 @@
  * in a service root (agc_task_service), so no caller's crash, cancel or end
  * reaches it, Task.pending_count and Test.test do not see it, and it owns the
  * jobs channel, which closes when it ends. std/http builds the pool on it.
- * The HttpClient value holds the channel and the options. Linux and macOS,
- * like TCP; a stub table elsewhere. Service layer. Design:
+ * The HttpClient value holds the channel and the options. Linux and macOS
+ * (HTTP is not on Windows yet); a stub table elsewhere. Service layer. Design:
  * docs/vm/10-io-http.md §10.7.1.
  */
 #include "services.h"

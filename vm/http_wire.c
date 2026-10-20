@@ -4,13 +4,13 @@
  * and no state: std/http owns the socket and the deadlines. Heads and body
  * data come through HttpWire.read_head, read_response and read_text in
  * vm/tcp.c, which build their records with agc_http_head_value,
- * agc_http_response_value and agc_http_text_value here. Linux and macOS, like
- * the TCP builtins; a stub table elsewhere. Service layer. Design:
+ * agc_http_response_value and agc_http_text_value here. Built wherever TCP
+ * is (Linux, macOS, Windows); a stub table elsewhere. Service layer. Design:
  * docs/vm/10-io-http.md §10.7.
  */
 #include "http_fields.h"
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
