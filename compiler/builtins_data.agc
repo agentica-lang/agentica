@@ -148,6 +148,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "until_close", type: Types.Type.Bool),
         Model.Named(name: "closes", type: Types.Type.Bool),
         Model.Named(name: "buffered", type: Types.Type.Int),
+        Model.Named(name: "ended", type: Types.Type.Bool),
       ],
     ),
     Model.Record(
@@ -158,6 +159,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "bytes", type: Types.Type.Int),
         Model.Named(name: "valid", type: Types.Type.Bool),
         Model.Named(name: "buffered", type: Types.Type.Int),
+        Model.Named(name: "ended", type: Types.Type.Bool),
       ],
     ),
     Model.Record(
@@ -720,7 +722,7 @@ ROWS_9: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "HttpWire.awaited?",
       effects: [],
-      description: "Internal to std/http: whether a task is parked on the reply channel to take the answer.",
+      description: "Internal to std/http: false once a receiver that parked on reply left without a value.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -928,8 +930,8 @@ ROWS_11: List[Model.Builtin] = [
       effects: ["network"],
       description: (
         "Internal to std/http: read the bytes available, at most max_bytes (0..1048576; 0 does not wait), as " +
-        "UTF-8 text after carry; bytes is 0 at the end of input, valid is false for bytes that are not UTF-8, and " +
-        "buffered counts the input bytes left unread."
+        "UTF-8 text after carry; bytes is 0 at the end of input, valid is false for bytes that are not UTF-8, " +
+        "buffered counts the input bytes left unread, and ended is true once the input has ended or failed."
       ),
       alternatives: [],
     ),

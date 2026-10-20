@@ -512,7 +512,7 @@ void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close);
 void agc_disown(agc_resource *r);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
-bool agc_channel_awaited(agc_vm *vm, const agc_channel *c);
+bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);

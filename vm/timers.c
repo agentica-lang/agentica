@@ -103,8 +103,10 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t) {
 
 /* True when some armed timer is not a service task's: the stall checks wait for those only. A timer is counted as
    armed before it is counted as weak and stops being weak before it stops being armed, and the weak count is read
-   first, so a change in between can only make this true, which delays a stall to the next check. Timers are armed
-   only by running tasks, so the check of several schedulers, which needs every queue quiet, sees no change. */
+   first, so a change in between can only make this true, which delays a stall to the next check. The relaxed loads
+   are enough only because of the two callers: stalled() runs once every run queue is quiet, and timers are armed
+   only by running tasks, so it sees no change; idle_wait uses the answer only to pick alive_required for one wait,
+   where a stale answer costs one more turn of the loop. */
 bool agc_timers_strong(const agc_vm *vm) {
   uint64_t weak = atomic_load_explicit(&vm->rt->timers_weak, memory_order_relaxed);
   return atomic_load_explicit(&vm->rt->timers_armed, memory_order_relaxed) > weak;

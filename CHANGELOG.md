@@ -64,9 +64,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the task that made the client. A call whose task timed out still lets its
   request finish, and the connection is closed, not pooled; a call whose task
   was cancelled while it waited for a connection is never sent. A connection
-  with bytes left after a response is not kept. The client's work now spends
-  the step budget of `--max-steps`. Differences: `docs/vm/10-io-http.md`
-  §10.7.1.
+  with bytes left after a response, or whose input has ended, is not kept. The
+  client's work now spends the step budget of `--max-steps`. Differences:
+  `docs/vm/10-io-http.md` §10.7.1.
 
 - The HTTP server checks a request body as UTF-8 as its bytes arrive: bytes
   that can never be UTF-8 get a 400 at once, before a later chunked framing

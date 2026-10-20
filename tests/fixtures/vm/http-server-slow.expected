@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 2718,
+  "steps": 2743,
   "stdout": [
     "\"slow /slow\"",
     "hanging",

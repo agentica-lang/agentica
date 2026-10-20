@@ -60,9 +60,10 @@ struct request {
      body limit, the rest to put back first (a malloc'd copy, or NULL), and
      where the look for an LF stopped. HttpWire.read_response: the body limit,
      where the look stopped, and whether the request was HEAD. Their cut goes
-     in `cut` (the carry first), with `bytes` and `buffered`. */
+     in `cut` (the carry first), with `bytes`, `buffered` and `ended` (the input
+     had already ended or failed at the cut). */
   uint8_t carry[3], kept;
-  bool head_only;
+  bool head_only, ended;
   uint64_t limit;
   uint8_t *rest;
   size_t rest_len, scanned, bytes, buffered;
@@ -205,6 +206,10 @@ static bool read_ready(net *n, request *q) {
   return agc_inbuf_ready(&n->in, q->kind == REQ_LINE, 1);
 }
 
+/* Whether the end of input or a read error has come (TLS: the TCP FIN, even before close_notify is decided). std/http
+   does not keep such a connection. I/O thread only. */
+static bool input_ended(const net *n) { return n->in.eof || n->in.error || n->raw_eof; }
+
 /* The cut of HttpWire.read_text: the carry, then up to q->count read bytes,
    and the count of bytes left in the input. I/O thread only. */
 static void cut_text(net *n, request *q) {
@@ -219,6 +224,7 @@ static void cut_text(net *n, request *q) {
   if (q->bytes) memcpy(q->cut.data + q->kept, n->in.data + n->in.start, q->bytes);
   agc_inbuf_take(&n->in, q->bytes);
   q->buffered = agc_inbuf_pending(&n->in);
+  q->ended = input_ended(n);
 }
 
 /* The cut of HttpWire.read_head and read_response: the head's bytes when it is whole, else what
@@ -235,18 +241,19 @@ static void cut_head(net *n, request *q) {
   if (q->cut.len) memcpy(q->cut.data, n->in.data + n->in.start, q->cut.len);
   agc_inbuf_take(&n->in, q->cut.len);
   q->buffered = agc_inbuf_pending(&n->in);
+  q->ended = input_ended(n);
 }
 
 /* The values of the two cuts, built on a scheduler from the request alone. */
 static agc_value text_value(agc_vm *vm, const request *q) {
   if (q->bytes == 0 && q->count && q->cut.error)
     return agc_system_error(vm, "error reading from stream port", q->cut.error);
-  return agc_result_value(true, agc_http_text_value(vm, q->cut.data, q->cut.len, q->bytes, q->buffered));
+  return agc_result_value(true, agc_http_text_value(vm, q->cut.data, q->cut.len, q->bytes, q->buffered, q->ended));
 }
 
 static agc_value head_value(agc_vm *vm, const request *q) {
   if (q->cut.len && q->kind == REQ_RESPONSE)
-    return agc_http_response_value(vm, q->cut.data, q->cut.len, q->head_only, q->limit, q->cut.error, q->buffered);
+    return agc_http_response_value(vm, q->cut.data, q->cut.len, q->head_only, q->limit, q->cut.error, q->buffered, q->ended);
   if (q->cut.len) return agc_http_head_value(vm, q->cut.data, q->cut.len, q->limit, q->buffered);
   if (q->cut.error) return agc_system_error(vm, "error reading from stream port", q->cut.error);
   return agc_error_value("network: end of input");

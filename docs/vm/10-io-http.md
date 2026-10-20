@@ -172,8 +172,10 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the
   FIFO. A waiting job is dropped, never sent, when its deadline has passed (its
-  caller has returned the timeout already) or when nobody is parked on its
-  reply channel (its caller was cancelled). When `jobs` is closed, the owner
+  caller has returned the timeout already) or when its caller gave up on the
+  reply channel (`HttpWire.awaited?` is false: a receiver that had parked on it
+  left without a value, by a cancel or a recv timeout; a caller that has not
+  parked yet has not given up). When `jobs` is closed, the owner
   answers every waiting and running job with `http: client is closed`, closes
   the inboxes of the idle workers and ends. An origin with no connection and no
   waiting job is dropped from the owner's map.
@@ -194,10 +196,9 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   `idle_timeout_ms`. The timeout closes the connection and ends the worker. The
   worker closes its inbox before its last look at it, so the owner cannot hand
   a job to a worker that has left: the send fails, and another worker takes the
-  job. When nobody is parked on the reply channel as the worker answers
-  (`HttpWire.awaited?`), the caller was cancelled or gave up, and the worker
-  closes the connection instead of keeping it, as the grammar says of a
-  timed-out call (`docs/grammar/06c-tasks-and-tests.md`).
+  job. When the caller gave up on the reply channel (`HttpWire.awaited?`),
+  the worker closes the connection instead of keeping it, as the grammar says
+  of a timed-out call (`docs/grammar/06c-tasks-and-tests.md`).
 - Retry: a job on a reused connection that fails before any response byte (end
   of input, a read or write error) is retried once on a new connection, within
   the same deadline, if its method is `GET`, `HEAD`, `OPTIONS`, `PUT` or
@@ -216,12 +217,14 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   text as it arrives and must be valid UTF-8.
 - A connection is kept only after a complete exchange with no
   `Connection: close` on either side, a framed body, the whole request written
-  and no byte left after the response: `HttpWire.Response.buffered` (after a
-  head with no body), `HttpWire.Text.buffered` (after the last body read) and,
-  after a chunked body, the bytes of the last framing read and a `read_text`
-  of 0 bytes, which does not wait, must all be 0. Bytes there are a server bug
-  or a response nobody asked for, and the next call must not read them.
-  Header names are lowercased and values are Latin-1.
+  and nothing after the response: `buffered` must be 0 and `ended` false on
+  `HttpWire.Response` (after a head with no body) and `HttpWire.Text` (after
+  the last body read), and after a chunked body on the last framing read and
+  a `read_text` of 0 bytes, which does not wait. Bytes there are a server bug
+  or a response nobody asked for, and the next call must not read them; an
+  input that has already ended (`ended`: the end of input, a TCP FIN under TLS,
+  or a read error) would fail the next call. Header names are lowercased and
+  values are Latin-1.
 - **Over TLS, a close-delimited body must end with `close_notify`.** tcp.c
   records whether the TLS layer closed before the TCP FIN, and `clean_eof?`
   reads it after the end of input. A bare FIN gives `http: truncated HTTP body`.
@@ -287,7 +290,8 @@ HttpWire.local_port(server: HttpServer) -> Int
   `Head` with the answer's `status` and `reason`), `read_text` (up to
   `max_bytes` straight into text, with the UTF-8 check and the carry of an
   unfinished character; `valid` is false for bytes that are not UTF-8, and
-  `buffered` counts the input bytes left; `max_bytes` 0 does not wait) and
+  `buffered` counts the input bytes left and `ended` says the input has ended
+  or failed; `max_bytes` 0 does not wait) and
   `close_write`. `vm/http_server.c` holds the task group, on tcp.c's connection
   object. Header lists are shared with the client in `vm/http_fields.c`.
 - `std/http` reads a request: it waits up to `request_timeout_ms` (the first

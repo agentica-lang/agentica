@@ -60,11 +60,13 @@ struct Reading
 end
 
 # The client's owner task keeps, per origin ("scheme://host:port"), the connections open, the idle workers (the one
-# freed last at the end) and the jobs that wait for a connection, oldest first.
+# freed last at the end) and the jobs that wait for a connection, oldest first from index front: taking one moves
+# front, and the list is compacted now and then, so a long queue costs no copy per job.
 struct Origin
   open: Int
   idle: List[Int]
   waiting: List[HttpWire.Job]
+  front: Int
 end
 
 # busy holds the reply channel of each worker's last job, not the job, so a large body is not kept alive.
@@ -714,12 +716,12 @@ def run_pool(pool: Pool) -> Result[Void]
 end
 
 def origin_of(pool: Pool, key: String) -> Origin
-  return Map.get(pool.origins, key, Origin(open: 0, idle: [], waiting: []))
+  return Map.get(pool.origins, key, Origin(open: 0, idle: [], waiting: [], front: 0))
 end
 
 # An origin with no connection and no waiting job is dropped, so the map does not grow with every host called.
 def with_origin(pool: Pool, key: String, origin: Origin) -> Pool
-  if origin.open == 0 and List.size(origin.waiting) == 0
+  if origin.open == 0 and queued(origin) == 0
     return pool.with(origins: Map.delete(pool.origins, key))
   end
   return pool.with(origins: Map.put(pool.origins, key, origin))
@@ -762,6 +764,7 @@ def place(pool: Pool, job: HttpWire.Job) -> Placed
   id = pool.next_id
   # The first job waits in the new worker's inbox, so no task keeps it (and its body) for the life of the worker.
   inbox: Channel[HttpWire.Job] = Channel.new(1)
+  # A new channel with room for one: this send cannot fail.
   inbox.send(job, 0)
   notice = job.with(head: "", body: "", worker: id, kept: false)
   Task.spawn(&supervise, Worker(id: id, options: pool.options, jobs: pool.jobs, inbox: inbox, notice: notice))
@@ -774,7 +777,7 @@ end
 def freed(pool: Pool, message: HttpWire.Job) -> Pool
   origin = origin_of(pool, message.origin)
   pool = with_origin(pool, message.origin, origin.with(idle: List.append(origin.idle, message.worker)))
-  if List.size(origin.waiting) == 0
+  if queued(origin) == 0
     return pool
   end
   return next_waiting(pool, message.origin)
@@ -797,23 +800,40 @@ def gone(pool: Pool, message: HttpWire.Job) -> Pool
 end
 
 # The oldest waiting job that still has time goes out, if a worker or a slot takes it. The caller of a job past its
-# deadline has returned its timeout already, and nobody parked on the reply means the caller was cancelled, so such a
-# job is dropped, never sent.
+# deadline has returned its timeout already, and a caller that gave up on its reply was cancelled, so such a job is
+# dropped, never sent. A caller that has not parked on its reply yet has not given up.
 def next_waiting(pool: Pool, key: String) -> Pool
   origin = origin_of(pool, key)
-  while List.size(origin.waiting) > 0
-    job = List.at(origin.waiting, 0)
-    rest = List.drop(origin.waiting, 1)
+  while queued(origin) > 0
+    job = List.at(origin.waiting, origin.front)
+    rest = popped(origin)
     if Time.monotonic_ms() < job.deadline and HttpWire.awaited?(job.reply)
-      result = place(with_origin(pool, key, origin.with(waiting: rest)), job)
+      result = place(with_origin(pool, key, rest), job)
       if result.placed
         return result.pool
       end
-      return with_origin(result.pool, key, origin_of(result.pool, key).with(waiting: origin.waiting))
+      kept = origin_of(result.pool, key).with(waiting: origin.waiting, front: origin.front)
+      return with_origin(result.pool, key, kept)
     end
-    origin = origin.with(waiting: rest)
+    origin = rest
   end
   return with_origin(pool, key, origin)
+end
+
+def queued(origin: Origin) -> Int
+  return List.size(origin.waiting) - origin.front
+end
+
+# The origin without its oldest waiting job. The taken jobs are dropped once they are half of the list.
+def popped(origin: Origin) -> Origin
+  front = origin.front + 1
+  if front == List.size(origin.waiting)
+    return origin.with(waiting: [], front: 0)
+  end
+  if front >= 32 and front * 2 >= List.size(origin.waiting)
+    return origin.with(waiting: List.drop(origin.waiting, front), front: 0)
+  end
+  return origin.with(front: front)
 end
 
 # The client is closed: every job still waiting or in flight fails now, and the idle workers close their
@@ -821,7 +841,7 @@ end
 # busy that was answered already ignores the closing answer the same way.
 def shut_pool(pool: Pool) -> Void
   for origin in Map.values(pool.origins)
-    for job in origin.waiting
+    for job in List.drop(origin.waiting, origin.front)
       job.reply.send(error(CLIENT_CLOSED), 0)
     end
   end
@@ -851,10 +871,8 @@ def work(worker: Worker) -> Result[Void]
   socket: Result[Socket] = error("")
   while true
     done = run_job(worker, socket, job)
-    # Nobody parked on the reply: the caller was cancelled or gave up. The connection is closed, not pooled, so a
-    # timed-out call leaves no connection behind (docs/grammar/06c-tasks-and-tests.md). A caller still between its
-    # send and its recv (pre-empted, or on another scheduler) looks gone too; it still gets the answer, and only the
-    # pooling of this connection is lost.
+    # The caller gave up on the reply (cancelled, or its wait timed out): the connection is closed, not pooled, so a
+    # timed-out call leaves no connection behind (docs/grammar/06c-tasks-and-tests.md).
     awaited = HttpWire.awaited?(job.reply)
     job.reply.send(done.answer, 0)
     # The idle wait below keeps job only for its origin and reply.
@@ -1030,8 +1048,9 @@ def read_response(answer: Answer) -> Received
   return failed_read(TIMED_OUT, true)
 end
 
-# A connection is kept only when nothing follows the response in its input: bytes there are a server bug or a
-# response nobody asked for, and the next call must not read them.
+# A connection is kept only when nothing follows the response in its input and the input has not ended: bytes there
+# are a server bug or a response nobody asked for, and the next call must not read them; after an end of input the
+# next call would fail.
 def read_body(answer: Answer, head: HttpWire.Response) -> Received
   whole: Result[Whole] = error("")
   if head.chunked
@@ -1039,7 +1058,7 @@ def read_body(answer: Answer, head: HttpWire.Response) -> Received
   elsif head.until_close
     whole = read_until_close(answer)
   elsif head.length == 0
-    whole = ok(Whole(text: "", kept: head.buffered == 0))
+    whole = ok(Whole(text: "", kept: head.buffered == 0 and not head.ended))
   else
     whole = read_length_body(answer, head.length)
   end
@@ -1071,7 +1090,7 @@ end
 def read_length_body(answer: Answer, length: Int) -> Result[Whole]
   body = Body(pieces: [], carry: [])
   left = length
-  buffered = 0
+  clean = true
   while left > 0
     piece = try more_body(answer, body.carry, smaller(left, TEXT_BYTES))
     if piece.bytes == 0
@@ -1079,9 +1098,9 @@ def read_length_body(answer: Answer, length: Int) -> Result[Whole]
     end
     body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
     left = left - piece.bytes
-    buffered = piece.buffered
+    clean = piece.buffered == 0 and not piece.ended
   end
-  return whole_text(body, buffered == 0)
+  return whole_text(body, clean)
 end
 
 # Bytes read past the end of the body, or still in the input after it, stop the connection from being kept.
@@ -1116,12 +1135,12 @@ def read_chunked_body(answer: Answer) -> Result[Whole]
   return whole_text(body, state.next == List.size(data) and nothing_buffered(answer))
 end
 
-# Whether the socket's input holds no byte now: a read of 0 bytes does not wait.
+# Whether the socket's input holds no byte now and has not ended: a read of 0 bytes does not wait.
 def nothing_buffered(answer: Answer) -> Bool
   case time_left(answer.socket, answer.job.deadline)
     ok(left) ->
       case HttpWire.read_text(answer.socket, 0, [], left)
-        ok(piece) -> return piece.buffered == 0
+        ok(piece) -> return piece.buffered == 0 and not piece.ended
         error(_) -> return false
       end
     error(_) -> return false

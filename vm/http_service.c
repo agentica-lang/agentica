@@ -30,10 +30,11 @@ static agc_value builtin_options(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_as_http_client(vm, args[0])->options;
 }
 
-/* HttpWire.awaited?(reply): a worker asks it before it answers; see agc_channel_awaited. */
+/* HttpWire.awaited?(reply): false once the caller gave up on its reply (agc_channel_abandoned). The owner asks it
+   before it sends a waiting job, and a worker before it pools a connection. */
 static agc_value builtin_awaited(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_bool(agc_channel_awaited(vm, agc_as_channel(vm, args[0])));
+  return agc_bool(!agc_channel_abandoned(vm, agc_as_channel(vm, args[0])));
 }
 
 const agc_builtin agc_http_service_builtins[] = {

@@ -522,11 +522,13 @@ same over `ssl`, and a raw socket server with
   - One worker task per connection, under a supervisor that awaits it as a
     `Result` task (a crash frees the slot and answers `http: connection
     failed`); its idle `Channel.recv` timeout is the idle timer. A worker whose
-    caller is no longer parked on the reply (`HttpWire.awaited?`) closes the
-    connection instead of pooling it, and the owner drops such a waiting job.
-  - A connection is kept only with no byte left after the response (the
-    `buffered` fields of `HttpWire.Response` and `HttpWire.Text`, and a 0-byte
-    `read_text` after a chunked body).
+    caller gave up on the reply (`HttpWire.awaited?`: the channel's
+    `abandoned` flag, set when a parked receiver leaves without a value)
+    closes the connection instead of pooling it, and the owner drops such a
+    waiting job.
+  - A connection is kept only with nothing left after the response (the
+    `buffered` and `ended` fields of `HttpWire.Response` and `HttpWire.Text`,
+    and a 0-byte `read_text` after a chunked body).
   - An idempotent call that fails on a reused connection before any response
     byte is retried once on a new one (`run_job`).
   - A close-delimited body over TLS needs `close_notify`

@@ -122,7 +122,8 @@ ownership of reads.
 `pending_count` returns how many tasks of this run have not ended, not counting
 `main`: tasks waiting to run, the caller when it is not `main`, and tasks
 waiting on a sleep, an await, a channel or I/O. A returned or crashed task is
-not counted, even when nothing awaited it.
+not counted, even when nothing awaited it. The tasks `std/http` starts for an
+`HttpClient` are not counted, and `Test.test` does not see them as leftovers.
 
 `Task.await` halts with RUNTIME-TASK-AWAIT-CYCLE at the await when the awaited
 task, or a task it awaits in turn, is waiting for the caller. A task that awaits
