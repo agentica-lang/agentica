@@ -23,7 +23,9 @@ LINUX = sys.platform.startswith("linux")
 # swaps it for /dev/fd when the program is written.
 FD_ROOT = "/dev/fd" if sys.platform == "darwin" else "/proc/self/fd"
 needs_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
-needs_fd_folder = host_only(WINDOWS, "the open descriptors are counted in a folder that Windows does not have (test_each_line_frees_its_handle_on_every_return_path in test_windows_handle_counts.py counts handles)")
+needs_fd_folder = host_only(
+    WINDOWS, "the open descriptors are counted in a folder that Windows does not have "
+             "(test_each_line_frees_its_handle_on_every_return_path in test_windows_handle_counts.py counts handles)")
 BUFFER_BYTES = 4096
 LINE_COUNT = 1400000
 
