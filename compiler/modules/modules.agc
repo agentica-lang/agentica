@@ -16,10 +16,10 @@ import Failure from "link_failure"
 import Parser from "../syntax/parser"
 import Resolve from "resolve_import"
 import Source from "../syntax/source"
-import SourceFile from "source_file"
+import SourceFile from "../syntax/source_file"
 import Suggest from "../check/suggest"
+import Workspace from "workspace"
 import {BARE_NAMES, RESERVED} from "../catalog/builtins"
-import {IO_TIMEOUT_MS} from "link_env"
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
 ## exported name.
@@ -83,10 +83,11 @@ end
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
 ## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
 export def load(root: String, settings: Env.Settings) -> Result[Loaded]
-  file = Path.resolve(root).unwrap_or(root)
-  text = try root_text(root, file)
+  workspace = settings.workspace
+  file = workspace.resolve_path.call(root).unwrap_or(root)
+  text = try root_text(workspace, root, file)
   program = try parse_source(file, text, 0)
-  key = Path.real(root)
+  key = workspace.real_path.call(root)
   if !key.ok?
     return error(
       Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp),
@@ -273,8 +274,8 @@ def load_file(settings: Env.Settings, walk: Walk, key: String, site: Failure.Sit
 end
 
 # The text of the root file: CHECK-IMPORT-IO at its start with the system's message, or LEX-INVALID-UTF8.
-def root_text(root: String, file: String) -> Result[String]
-  case SourceFile.read(root, IO_TIMEOUT_MS)
+def root_text(workspace: Workspace.Workspace, root: String, file: String) -> Result[String]
+  case workspace.read_text.call(root)
     SourceFile.Read.Text(text) -> return ok(text)
     SourceFile.Read.Invalid(at) -> return error(Failure.from_stage(file, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Unreadable(message) ->

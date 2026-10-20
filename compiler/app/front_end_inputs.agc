@@ -9,6 +9,7 @@
 ## for bootstrap stages, adds `--stdlib DIR`, so the front end reads std/ from
 ## that folder (docs/future/35-self-hosting.md, 35.3).
 
+import Host from "../io/host"
 import Env from "../modules/link_env"
 
 ## What the arguments of the front end are: the settings and the words of the user, or the mistake of whoever started
@@ -49,10 +50,11 @@ export def read(arguments: List[String]) -> Read
   elsif version == ""
     return Read.Broken("--version is required")
   end
-  env = Env.process_env()
+  env = Host.process_env()
+  workspace = Host.workspace()
   words = arguments.drop(at + 1)
   if stdlib == ""
-    return Read.Ready(Env.embedded_settings(env, version, embedded_bdd).with(self_path: self_path), words)
+    return Read.Ready(Env.embedded_settings(workspace, env, version, embedded_bdd).with(self_path: self_path), words)
   end
-  return Read.Ready(Env.settings(stdlib, env).with(version: version, self_path: self_path), words)
+  return Read.Ready(Env.settings(workspace, stdlib, env).with(version: version, self_path: self_path), words)
 end

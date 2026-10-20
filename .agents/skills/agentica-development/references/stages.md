@@ -109,7 +109,7 @@ stage:
     `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`,
     `LEX-INVALID-NUMBER`, `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
     `LEX-HEREDOC-ONE-LINE`, `LEX-INVALID-UTF8` (raised by
-    `compiler/modules/source_file.agc` when a source file is read, not by the
+    `compiler/io/source_reader.agc` when a source file is read, not by the
     lexer: the span is one character at the first byte of the first sequence
     that does not decode)
 

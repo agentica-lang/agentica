@@ -6,8 +6,8 @@ import Diag from "../diagnostics/diagnostic"
 import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
-import SourceFile from "source_file"
-import {IO_TIMEOUT_MS} from "link_env"
+import SourceFile from "../syntax/source_file"
+import Workspace from "workspace"
 
 ## True for the key of a standard module, which no canonical path can look like.
 export def embedded?(key: String) -> Bool
@@ -17,13 +17,14 @@ end
 ## Reads the source of the module with this key: a file, or a std/ module from the provider of the settings (a
 ## stdlib/ folder, or the copy that the binary carries).
 export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
+  workspace = settings.workspace
   if !embedded?(key)
-    return SourceFile.read(key, IO_TIMEOUT_MS)
+    return workspace.read_text.call(key)
   end
   case settings.std
-    Env.StdProvider.Folder(folder) -> return SourceFile.read(Paths.join(folder, std_path(key)), IO_TIMEOUT_MS)
+    Env.StdProvider.Folder(folder) -> return workspace.read_text.call(Paths.join(folder, std_path(key)))
     Env.StdProvider.Embedded ->
-      text = FrontEnd.std_source(std_path(key))
+      text = workspace.std_source.call(std_path(key))
       if text.ok?
         return SourceFile.Read.Text(text.unwrap!)
       end
@@ -49,7 +50,7 @@ export def resolve_import(
     # A relative import of a standard module stays in std/.
     return resolve_import(settings, root_dir, key, key.slice(0, key.length - Paths.last_part(key).length) + file, site)
   end
-  return relative(key, file, site)
+  return relative(settings.workspace, key, file, site)
 end
 
 # The path of the source of a std/ module under stdlib/: the key without its std/.
@@ -59,16 +60,6 @@ end
 
 def io_failure(site: Failure.Site, message: String) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp)
-end
-
-def file?(path: String) -> Bool
-  info = File.stat(path, IO_TIMEOUT_MS)
-  return info.ok? and info.unwrap!.kind != "directory"
-end
-
-def directory?(path: String) -> Bool
-  info = File.stat(path, IO_TIMEOUT_MS)
-  return info.ok? and info.unwrap!.kind == "directory"
 end
 
 # A std/ module exists when the provider has its source. The registry is stdlib/MODULES, which the
@@ -84,8 +75,8 @@ end
 
 def std_exists?(settings: Env.Settings, file: String) -> Bool
   case settings.std
-    Env.StdProvider.Folder(folder) -> return file?(Paths.join(folder, std_path(file)))
-    Env.StdProvider.Embedded -> return FrontEnd.std_source(std_path(file)).ok?
+    Env.StdProvider.Folder(folder) -> return settings.workspace.file_exists.call(Paths.join(folder, std_path(file)))
+    Env.StdProvider.Embedded -> return settings.workspace.std_source.call(std_path(file)).ok?
   end
 end
 
@@ -95,8 +86,8 @@ def library(settings: Env.Settings, root_dir: String, file: String, site: Failur
   rest = file.slice(4, file.length - 4)
   for root in roots
     candidate = Paths.join(root, rest)
-    if file?(candidate)
-      return contained(root, candidate, site)
+    if settings.workspace.file_exists.call(candidate)
+      return contained(settings.workspace, root, candidate, site)
     end
   end
   return error(io_failure(site, "cannot find library module"))
@@ -106,7 +97,7 @@ end
 # folders (none on Windows). Every AGENTICA_PATH entry must be absolute, whether or not it is used. The Windows rules
 # of docs/grammar/05b-modules.md are all here: the ";" separator, drive and UNC roots, and %LOCALAPPDATA%.
 def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) -> Result[List[String]]
-  on_windows = windows?()
+  on_windows = settings.env.windows
   separator = ":"
   if on_windows
     separator = ";"
@@ -128,11 +119,6 @@ def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) 
     return ok(roots)
   end
   return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
-end
-
-# Whether the front end runs on Windows, whose canonical paths use "/" but whose roots may be typed with "\".
-def windows?() -> Bool
-  return System.os() == "windows"
 end
 
 # A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path
@@ -165,9 +151,9 @@ def user_roots(env: Env.Env, on_windows: Bool) -> List[String]
 end
 
 # Links are resolved before the check, so a link out of the root is refused.
-def contained(root: String, candidate: String, site: Failure.Site) -> Result[String]
-  base = Path.real(root)
-  target = Path.real(candidate)
+def contained(workspace: Workspace.Workspace, root: String, candidate: String, site: Failure.Site) -> Result[String]
+  base = workspace.real_path.call(root)
+  target = workspace.real_path.call(candidate)
   if !base.ok? or !target.ok?
     return error(io_failure(site, "cannot resolve import"))
   end
@@ -196,7 +182,7 @@ end
 # The file next to the importing one. A missing last part is accepted and a missing folder is refused
 # (CHECK-IMPORT-IO "cannot resolve import"); a missing file is found by the read ("cannot read import"), which this
 # reports at once.
-def relative(key: String, file: String, site: Failure.Site) -> Result[String]
+def relative(workspace: Workspace.Workspace, key: String, file: String, site: Failure.Site) -> Result[String]
   if file.starts_with?("/") or file.contains?(String.from_code(0))
     return error(io_failure(site, "cannot resolve import"))
   end
@@ -205,11 +191,11 @@ def relative(key: String, file: String, site: Failure.Site) -> Result[String]
   if inner != ""
     folder = Paths.join(folder, inner)
   end
-  parent = Path.real(folder)
-  if !parent.ok? or !directory?(parent.unwrap!)
+  parent = workspace.real_path.call(folder)
+  if !parent.ok? or !workspace.directory_exists.call(parent.unwrap!)
     return error(io_failure(site, "cannot resolve import"))
   end
-  target = Path.real(Paths.join(parent.unwrap!, Paths.last_part(file)))
+  target = workspace.real_path.call(Paths.join(parent.unwrap!, Paths.last_part(file)))
   if !target.ok?
     return error(io_failure(site, "cannot read import"))
   end

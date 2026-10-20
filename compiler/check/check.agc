@@ -1,3 +1,4 @@
+import Host from "../io/host"
 import Env from "../modules/link_env"
 import CheckText from "check_text"
 
@@ -6,7 +7,7 @@ import CheckText from "check_text"
 # `--home=V` and `--local-app-data=V`.
 def main() -> Void
   stdlib = "stdlib"
-  env = Env.process_env()
+  env = Host.process_env()
   for argument in System.args()
     if argument.starts_with?("--stdlib=")
       stdlib = argument.slice(9, argument.length - 9)
@@ -20,7 +21,7 @@ def main() -> Void
       env = env.with(local_app_data: argument.slice(17, argument.length - 17))
     else
       puts("== #{argument}")
-      puts(CheckText.check_text(argument, Env.settings(stdlib, env)))
+      puts(CheckText.check_text(argument, Env.settings(Host.workspace(), stdlib, env)))
     end
   end
 end
