@@ -1,0 +1,31 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 735,
+  "stdout": [
+    "a recipe opens nothing: ok([])",
+    "to the end: ok([\"<1>\", \"<2>\", \"<>\", \"<3>\"])",
+    "twice, read twice: ok(3) ok(3)",
+    "first stops early: ok([\"1\", \"2\"])",
+    "find stops early: ok(\"2\")",
+    "slices: ok([[\"1\", \"2\", \"\"], [\"3\"]])",
+    "  saw 1",
+    "  saw 2",
+    "an error from the block: error(\"stopped at 2\")",
+    "  7 + 1 = 8",
+    "a failed try: error(\"cannot convert \\\"x\\\" to Int\")",
+    "invalid UTF-8: error(\"bytes->string/utf-8: byte string is not a well-formed UTF-8 encoding\\n  byte string: #\\\"\\\\377\\\"\")",
+    "a line over the buffer: error(\"filesystem: line exceeds buffer_bytes\")",
+    "a missing file: error(\"filesystem: path does not refer to a regular file\")",
+    "a bad timeout: error(\"filesystem: timeout must be positive milliseconds\")",
+    "a crash in a task: false",
+    "  parked on 1",
+    "a cancel while parked: error(\"task: timed out\")",
+    "and the file opens again: ok([\"1\"])",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/lazy-file.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":39,\"line\":37},\"start\":{\"column\":38,\"line\":37}},\"spawned_at\":{\"column\":41,\"file\":\"@fixtures/vm/lazy-file.agc\",\"line\":70},\"stack\":[{\"column\":38,\"file\":\"@fixtures/vm/lazy-file.agc\",\"function\":\"block\",\"line\":37},{\"column\":10,\"file\":\"@fixtures/vm/lazy-file.agc\",\"function\":\"divide\",\"line\":37}],\"task\":true}",
+    ""
+  ]
+}

@@ -266,6 +266,11 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     names get the real one: `s.chars` says `s.split("")`, `s.matches?` says
     `contains?`, `to_string` says `to_s`
 
+- **Code:** `CHECK-LAZY-NO-STEP`
+  - **Meaning:** `File.foreach(...).each do ... end` with no step in between,
+    written as one chain;
+    write `File.each_line(path, n, ms) do |line| ... end`
+
 - **Code:** `CHECK-UNUSED-VALUE`
   - **Meaning:** result of a builtin without effects is ignored (`xs.push(1)`
     alone), or of a struct update (`user.with(age: 31)` alone)

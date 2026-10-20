@@ -186,13 +186,24 @@ right after the bootstrap"). The path waits for the owner's answers to
 
 1. The package system ([§45](45-packages.md)). Native packages come after the
    FFI (45.10).
-2. The FFI with the native module header (40.3a, 40.3.1), after the bootstrap
+2. UDP (issue #399), in the core: it needs the event loop, so it is not a
+   native module (see the stable core rule below).
+3. The FFI with the native module header (40.3a, 40.3.1), after the bootstrap
    and the post-bootstrap list of
    [`docs/roadmap/README.md`](../roadmap/README.md). Its first native module is
    chosen when a concrete library asks for it, such as SQLite or a compression
    library.
-3. The JIT (40.3b, roadmap row 9.1). Then measure.
-4. AOT last, and only if measurements ask for it (40.3c).
+4. The JIT (40.3b, roadmap row 9.1). Then measure.
+5. AOT last, and only if measurements ask for it (40.3c).
+
+The core stays small and stable (owner decision, 2026-10-20). It holds the
+language, the VM, the scheduler and the OS primitives that need the event loop:
+files, processes, timers, TCP, TLS and UDP. Extensions are packages written in
+Agentica first; a native module is for a library that only exists in C, C++ or
+Rust. So the C API keeps two rules: a call that may take long runs off the
+scheduler (the compute and I/O kinds of 40.3.1), and native code sees copied
+values and handles, never the GC's objects. After UDP and the FFI land, the
+core changes only for bugs, platforms and speed.
 
 The roadmap rule "std first, C later"
 ([roadmap](../roadmap/README.md#new-library-features-std-first))

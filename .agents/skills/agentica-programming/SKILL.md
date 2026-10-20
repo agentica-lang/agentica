@@ -167,8 +167,9 @@ values, functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
 - `Task.await(task, timeout_ms)` returns `Await[R]` (`Await.Done(v)` or
   `Await.TimedOut`), not `R`; `timeout_ms` is above 0; a timeout does not cancel
   the task.
-- `xs.lazy`, `(1..n).lazy` and `Lazy.produce(seed) do |x| ... end` build a
-  `Lazy` recipe; its steps (`map`, `filter`, `take` ...) run only in a
+- `xs.lazy`, `(1..n).lazy`, `Lazy.produce(seed) do |x| ... end`,
+  `File.foreach(path, n, ms)` and `ch.lazy(ms)` build a `Lazy` recipe; its
+  steps (`map`, `filter`, `take` ...) run only in a
   terminal (`to_a`, `first(n)`, `each`, `reduce`, `find`), which always gives
   a `Result`. No `next`, `yield` or `Enumerator`.
 - `Void` has no value; it is only a function result or completion.
@@ -194,8 +195,9 @@ Read only what the task needs:
 - `references/builtins.md`: a builtin not in the cheat sheet, or an exact
   signature (String, List, Map, Set, Range, Int, Float, IO, System, Time,
   Random).
-- `references/lazy.md`: `Lazy[T]`, an endless source, or the first few results
-  of a long chain of steps.
+- `references/lazy.md`: `Lazy[T]`, an endless source, the lines of a file or
+  the values of a channel through steps, or the first few results of a long
+  chain of steps.
 - `references/examples.md`: a complete program to start from.
 - `references/performance.md`: slow programs, 100,000+ items or about 1 MB,
   hot paths, `AGENTICA_VM_TRACE=profile`.

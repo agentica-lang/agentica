@@ -14,6 +14,19 @@ import T from "types"
 ## Checks target.name(args).
 export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
+  if node.name == "each" and foreach_call?(node.target)
+    return error(
+      State.fail_help(
+        cx,
+        target.st,
+        "CHECK-LAZY-NO-STEP",
+        "File.foreach(...).each with no step in between is File.each_line",
+        node.span,
+        "use File.each_line(path, buffer_bytes, timeout_ms) do |line| ... end; keep File.foreach for a chain " +
+        "with a step, such as .filter do |line| ... end before .each",
+      ),
+    )
+  end
   return method_on(cx, target, node.id, node.target, node.name, node.args, node.span, expected)
 end
 
@@ -196,4 +209,13 @@ def method_names(cx: State.Cx, target: T.Type, kind: String) -> List[String]
     )
   end
   return names
+end
+
+# True for a File.foreach call written directly as the receiver: .each on it is the one job of File.each_line
+# (docs/future/27-iteration-and-concurrency.md 27.4, one way per job). A Lazy held in a variable is not followed.
+def foreach_call?(target: Ast.Expr) -> Bool
+  case target
+    Ast.Expr.Call(call) -> return call.name == "File.foreach"
+    _ -> return false
+  end
 end

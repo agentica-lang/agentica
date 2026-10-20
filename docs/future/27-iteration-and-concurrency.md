@@ -18,10 +18,10 @@ the builtin enum `Await[T]`) is built (roadmap 17c): the owner decided on
 for order step 8.2. 27.4 (`File.each_line` and lazy pipelines) is in two
 steps, decided by the owner on 2026-10-14: step 1 is item 17d at order row
 7.2.1h (built), step 2 is item 17e, renamed `Lazy[T]` by the owner on
-2026-10-20; its PR 1 (lists, ranges and `Lazy.produce`) is built, and its I/O
-sources are PR 2. 27.5 records what was decided against (generators, fibers,
-Agent-style shared state, public locks), so it is not proposed again. This
-section finalizes the earlier channel proposal and
+2026-10-20; its PR 1 (lists, ranges and `Lazy.produce`) and its PR 2 (the I/O
+sources `File.foreach` and `ch.lazy`) are built. 27.5 records what was decided
+against (generators, fibers, Agent-style shared state, public locks), so it is
+not proposed again. This section finalizes the earlier channel proposal and
 answers [section
 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
@@ -93,9 +93,8 @@ own row:
 
 - **Job:** An endless sequence, or a long chain of steps of which only the
   first results are needed
-  - **The one form:** `Lazy[T]` (27.4, step 2): `Lazy.produce`, `xs.lazy` or
-    `(a..b).lazy`, then steps and one terminal; the lines of a file through a
-    `Lazy` wait for PR 2
+  - **The one form:** `Lazy[T]` (27.4, step 2): `Lazy.produce`, `xs.lazy`,
+    `(a..b).lazy`, `File.foreach` or `ch.lazy`, then steps and one terminal
 
 - **Job:** State that several tasks update
   - **The one form:** one owner task that receives messages on a channel (27.5);
@@ -121,8 +120,8 @@ own row:
 
 - **§:** 27.4
   - **Item:** `File.each_line` (step 1) and `Lazy[T]` (step 2)
-  - **Decision:** step 1 built (17d); step 2 PR 1 built, PR 2 (I/O sources)
-    planned (owner, 2026-10-14 and 2026-10-20)
+  - **Decision:** step 1 built (17d); step 2 built in two PRs (owner,
+    2026-10-14 and 2026-10-20)
   - **Where it lives:** step 1 a C builtin; step 2 prelude signatures over C
     builtins (`vm/lazy.c`)
   - **Roadmap:** 17d, 17e
@@ -569,7 +568,7 @@ which is the program's own task.
 memory and adds no type (roadmap 17d, order row 7.2.1h, built). Step 2 is a
 lazy recipe over sources, named `Lazy[T]` by the owner on 2026-10-20 (after
 Ruby's `Enumerator::Lazy`; it was planned as `Stream[T]`), roadmap 17e. Its PR
-1 (lists, ranges and `Lazy.produce`) is built; PR 2 adds the I/O sources.
+1 (lists, ranges and `Lazy.produce`) and PR 2 (the I/O sources) are built.
 
 The owner judged that streaming without loading everything is needed: Python
 iterators and Ruby `yield` cover it, and Agentica's loop and channel forms are
@@ -650,28 +649,68 @@ program needs it.
   (`xs.each_cons(2)`), is `CHECK-UNKNOWN-METHOD` with a help that shows
   `.lazy`.
 
-**Step 2, PR 2 (planned).** The I/O sources, under the same terminal rules:
+**Step 2, PR 2 (built).** The I/O sources, under the same terminal rules:
 
 - `File.foreach(path, buffer_bytes, timeout_ms)`, the lines of a file by path,
-  read with the block buffer of step 1. The file opens when a terminal starts
-  and closes when it returns, whether it reached the end, a step had enough, a
-  callback returned an error or a `try` failed in a block: the guarantee of
-  `File.open` with a block (§25.9), with the terminal call as the block. A
-  `Lazy` that is dropped without a terminal opened nothing. A read error ends
-  the terminal with that error.
+  read with the block buffer of step 1 (`vm/files.c` shares one line reader
+  between `File.each_line` and `File.foreach`). The file opens when a terminal
+  starts and is closed before it returns, whether it reached the end, a step
+  had enough, a callback returned an error or a `try` failed in a block: the
+  guarantee of `File.open` with a block (§25.9), with the terminal call as the
+  block. After a read timeout the handle is released at once, and the OS
+  descriptor closes when the pool read that timed out ends. A crash or a cancel of the task, and `--max-steps`, end the task
+  instead, and the end of the task closes the file it owns. A `Lazy` that is
+  dropped without a terminal opened nothing. A read error (invalid UTF-8, a
+  line over the buffer) ends the terminal with that error; a bad timeout or
+  path is the terminal's error, as for `File.each_line`, and a buffer outside
+  1024..16777216 fails `RUNTIME-INVALID-COUNT` at the argument, when the source
+  is built. The
+  reads are the file jobs of step 1, so a terminal parks and never blocks the
+  scheduler.
 - `ch.lazy(timeout_ms)`, the values of a channel until it is closed and
-  drained. A channel cannot be read twice, so a second terminal goes on where
-  the first stopped; PR 2 decides whether that is allowed. Socket and process
-  lines stay an open question for the same reason.
-- A source with no step before its terminal (`File.foreach(...).each`) is the
-  job of `File.each_line`; whether the checker rejects it, with a help that
-  shows `File.each_line`, is decided in PR 2, as the principle of §25 asks.
+  drained. Each wait for a value obeys the timeout, and a timeout ends the
+  terminal with `error("channel: timed out")`; a negative timeout fails
+  `RUNTIME-INVALID-DURATION` at the argument, when the source is built
+  (`ch.lazy(0)` is valid: it takes only what is already there). A `take_while`
+  consumes the first value its block rejects: the source gave it before the
+  block saw it.
+- A terminal over a file or a channel parks on the file job or the channel. Its
+  steps run unlocked like the others, and take `rt->sync` only around the line
+  reader and the receive (`vm/lazy.c`), so a long `to_a` never holds it; a
+  cancel reaches a parked terminal like any parked task, and `--max-steps` ends
+  the run.
+
+The decisions PR 2 took:
+
+- **A second terminal on `ch.lazy` is allowed, and goes on where the first
+  stopped.** A channel cannot be read twice, so this is the one thing the
+  second terminal can do. Rejecting it would need the checker to follow a
+  `Lazy` value through variables and calls, or a run-time flag on an immutable
+  recipe, and a program that reads a channel in two phases (a header with
+  `first(n)`, then the rest with `each`) is natural. A value a terminal took is
+  consumed even when a later step dropped it or the terminal ended early: an
+  item in a slice not yet given out, or the item whose block returned an error.
+  `take`, `first` and `find` stop the source, so they take no value they do not
+  need, while `take_while` consumes the first value its block rejects. The
+  grammar and the site say so.
+- **`File.foreach(...).each` with no step in between, written as one chain,
+  is `CHECK-LAZY-NO-STEP`,** with a help that shows `File.each_line`. That chain
+  is exactly the job of `File.each_line`, so it fails the one-way principle of
+  §25. The check looks at the chain as written (the receiver of `.each` is the
+  `File.foreach` call); a `Lazy` kept in a variable is not followed. The other
+  terminals stay allowed with no step (`File.foreach(...).first(10)` is the
+  head of a file, which `File.each_line` cannot give), and so does
+  `ch.lazy(t).each`: a loop over `recv` is the only other form, and it is more
+  ceremony, not one form for the job.
+
+Socket and process lines stay an open question for the same reason as the
+second terminal: a stream cannot be read twice.
 
 **Later.** An Elixir-style `transform` (an accumulator, 0 to n items out per
 item in, and a halt), if a program needs it, returns a std builtin struct from
 its block, such as `Lazy.Step(emit: [row], state: key, halt: false)`: the
 language has no tuples (owner, 2026-10-20; §25.12.6), and a struct carries the
-grouped values. It is not in PR 1 or PR 2. Generators stay decided against
+grouped values. It is not built. Generators stay decided against
 (§27.5): a task that sends into a channel is the producer, and a `Lazy` is a
 recipe of fixed steps, not a producer with `yield`.
 
@@ -772,10 +811,9 @@ results.
   synchronization rules for the others are open.
 - **A diagnostic in a task other than `main`** ends only that task;
   `Result.error` stays a normal result.
-- **Handles of a cancelled task** stay open until the end of the run (27.1).
-  Whether a long-running program, such as a server, should close them when the
-  task is cancelled is open. Until then open handles inside the item and do not
-  share them across items.
+- **Handles of a cancelled task** are closed when the task ends (settled by
+  the handle owner rule, `docs/vm/14-core-invariants.md`): open handles inside
+  the item and do not share them across items.
 - **`Process.poll_line(p: Process, timeout_ms: Int) -> Result[String]`** may
   come later, so a loop can alternate requests with polling child output. It is
   not part of the task work, and no application has needed it yet.
@@ -784,9 +822,9 @@ results.
 
 - 17a `Task.map` is built (PR #316); 17b channels, 17c `Task.await`
   with a timeout and 17d `File.each_line` are built (records in §27.1–
-  §27.4 and the grammar). 17e `Lazy[T]` (§27.4, step 2) is two PRs: PR 1
-  (lists, ranges, `Lazy.produce`, the steps and the terminals) is built;
-  PR 2 adds `File.foreach` and `ch.lazy`. `Task.cancel` (27.1, "Public
+  §27.4 and the grammar). 17e `Lazy[T]` (§27.4, step 2) is built in two
+  PRs: PR 1 (lists, ranges, `Lazy.produce`, the steps and the terminals)
+  and PR 2 (`File.foreach` and `ch.lazy`). `Task.cancel` (27.1, "Public
   cancel") is built, by the owner's decision of 2026-10-20.
 - Done when: the site examples run on the VM; timed-out items leave no
   open socket, task or shared handle; the pipeline, await-cycle and
