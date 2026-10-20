@@ -1,8 +1,11 @@
 ## 45. Packages
 
-**Status:** Design, not scheduled: the code waits until after the bootstrap
-(port step 8), except 45-0 (`std/toml`), which may land before it. Asked by the
-owner on 2026-10-15 ("Shall we plan this?").
+**Status:** Designed; it has no roadmap row of its own. On the path to the JIT
+it comes after the native Windows and macOS builds (issue
+[#344](https://github.com/sonic182/agentica/issues/344)) and before the FFI
+([§40.5](40-native-code.md#405-order)). 45-0 (`std/toml`) is done. The phases
+after 45-0 wait for the owner's answers to 45.14. Asked by the owner on
+2026-10-15 ("Shall we plan this?").
 
 Decided by the owner on 2026-10-15:
 
@@ -448,6 +451,12 @@ when the error is a TOML syntax error. AGENTS.md says codes carry a span, so
 needs native code, and the VM cannot load native code today: there is no FFI.
 §40 is planned, and its FFI is a sketch (§40.3a). This design covers pure
 Agentica packages only.
+
+The order is in [§40.5](40-native-code.md#405-order): packages, then the FFI,
+then native packages. Packages are planned as the distribution channel for
+native libraries. A program that needs a C, C++ or Rust library gets it as a
+package, and loading it still needs `--allow-native` (§40.4). How native
+packages are built and hashed is still open (see below).
 
 A native package is a separate topic, after §40. It needs more than an FFI. It
 needs the trust flag of §40.4, and it needs either a build step or prebuilt
