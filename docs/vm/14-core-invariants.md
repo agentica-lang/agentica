@@ -47,15 +47,12 @@ knows (§14.3).
 
 Known exceptions, as built:
 
-- **Windows stdin.** Every stdin kind uses one blocking `_read` in the pool
-  because the Unix poller setup cannot watch Windows console handles. At most
-  one read is in flight, shared by all readers; it can occupy one pool thread
-  indefinitely. Timers and stop signals still run on the loop. Cancelling a
-  reader detaches the job rather than interrupting the OS read. Process exit
-  does not wait for it, but an in-process harness must supply data or EOF before
-  it can close the loop. This is a portability exception, not a pattern for
-  other I/O (§10.2.2, Stdin). With `UV_THREADPOOL_SIZE=1`, a pending stdin read
-  leaves no worker for file I/O; keep spare pool capacity when stdin may wait.
+- **Windows stdin.** The Unix poller cannot watch Windows console handles, so
+  every stdin kind is read by one blocking `_read` on a thread of the VM's own,
+  not in the pool; the task waits on the loop for the read's job, which an async
+  handle ends. At most one read is in flight, shared by all readers. Cancelling
+  a reader detaches the job rather than interrupting the OS read. This is a
+  portability exception, not a pattern for other I/O (§10.2.2, Stdin).
 - **Windows stdout and stderr.** A pipe is written by a libuv pipe handle, one
   write request at a time; a console, and a handle that libuv refuses, by a pool
   job, so the loop never waits for the reader (a console is not written by

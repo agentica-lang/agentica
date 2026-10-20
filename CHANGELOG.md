@@ -54,6 +54,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   parameter is checked.
 - Windows: `pkg/` roots follow the documented rules: `;` in `AGENTICA_PATH`,
   drive and UNC roots, `%LOCALAPPDATA%` for the user root, no system roots.
+- Windows: a read of standard input no longer holds a pool thread, so file
+  calls and other tasks go on while it waits, even with `UV_THREADPOOL_SIZE=1`.
 
 ## [0.5.0-beta.1] - 2026-10-20
 

@@ -48,8 +48,7 @@ end
 
 
 # Windows has named pipes where POSIX has FIFOs, but these tests make FIFOs with os.mkfifo (issue 433); it has no
-# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (issue 435); a stdin read there can keep a
-# pool thread (issue 431, docs/vm/10-io-scheduler.md).
+# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (issue 435).
 no_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
 no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
 no_stdin_path = host_only(WINDOWS, "Windows has no path that names an inherited descriptor or the standard input (/proc/self/fd/N, /dev/stdin)")
@@ -419,7 +418,6 @@ end
     assert output == "1\n0\nok()\n", "the read parks with one descriptor, and the cancel closes it"
 
 
-@known_issue(WINDOWS, 431, "a Windows stdin read can keep a pool thread")
 def test_stdin_waits_on_the_loop_so_file_calls_run_while_a_task_waits_for_input(new_dir, run_vm_bounded):
     root = new_dir()
     path = root / "plain.txt"

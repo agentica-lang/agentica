@@ -1,8 +1,9 @@
 /*
  * The Windows side of the standard output and error streams. vm/output.c owns the ring, the queue of writers and the
  * notices; this file decides how a handle is written (a file or a console by a pool thread, a pipe by a libuv stream),
- * whether two descriptors are one target, does the writes, and makes the in-memory stream of a notice. The Linux and
- * macOS side is vm/stdio_posix.c. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
+ * whether two descriptors are one target, does the writes, makes the in-memory stream of a notice, and reads stdin on a
+ * thread of its own. The Linux and macOS side is vm/stdio_posix.c. Core layer. Design: docs/vm/10-io-scheduler.md
+ * §10.2.2.
  */
 #ifdef _WIN32
 #include "core.h"
@@ -10,6 +11,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <io.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
@@ -45,6 +47,24 @@ struct agc_memstream {
   char *text;
   size_t len, cap;
   bool lost;
+};
+
+/* The stdin reader. The loop side (the async handle, `job` and the start) is used on the I/O thread; the thread
+   waits for `want`, reads into `buf` with `lock` released, and wakes the loop unless `closed`. The thread and the loop
+   side each hold a reference: the thread may stay in a read after the close, until input or EOF comes. */
+struct agc_stdin_reader {
+  uv_async_t wake;
+  uv_mutex_t lock;
+  uv_cond_t asked;
+  uv_thread_t thread;
+  int fd;
+  bool started, async_open, thread_open, want, closed;
+  agc_loop *loop;
+  agc_io_job *job;
+  size_t room, cap;
+  int64_t got;
+  uint8_t *buf;
+  atomic_int refs;
 };
 
 /* How many of the N bytes at DATA end at a character boundary: a UTF-8 sequence cut by the end is left out. */
@@ -265,5 +285,131 @@ bool agc_memstream_take(FILE *file, agc_memstream *c, char **text, size_t *len) 
   ok = ok && !c->lost;
   free(c);
   return ok;
+}
+
+agc_stdin_reader *agc_stdin_new(int fd) {
+  agc_stdin_reader *r = calloc(1, sizeof *r);
+  if (!r) agc_out_of_memory();
+  if (uv_mutex_init(&r->lock) != 0 || uv_cond_init(&r->asked) != 0) agc_internal_abort("cannot make the stdin lock");
+  r->fd = fd;
+  atomic_init(&r->refs, 1);
+  return r;
+}
+
+static void reader_unref(agc_stdin_reader *r) {
+  if (atomic_fetch_sub(&r->refs, 1) != 1) return;
+  if (r->thread_open) CloseHandle(r->thread);
+  uv_cond_destroy(&r->asked);
+  uv_mutex_destroy(&r->lock);
+  free(r->buf);
+  free(r);
+}
+
+/* The thread: one blocking _read per request, in binary mode as before. */
+static void reader_main(void *data) {
+  agc_stdin_reader *r = data;
+  uv_mutex_lock(&r->lock);
+  for (;;) {
+    while (!r->want && !r->closed) uv_cond_wait(&r->asked, &r->lock);
+    if (r->closed) break;
+    size_t room = r->room;
+    if (r->cap < room) {
+      uint8_t *grown = realloc(r->buf, room);
+      if (grown) {
+        r->buf = grown;
+        r->cap = room;
+      } else {
+        room = r->cap;
+      }
+    }
+    uv_mutex_unlock(&r->lock);
+    int n = -1;
+    if (room) {
+      do {
+        n = _read(r->fd, r->buf, (unsigned)room);
+      } while (n < 0 && errno == EINTR);
+    }
+    uv_mutex_lock(&r->lock);
+    r->want = false;
+    r->got = n;
+    /* The close sets `closed` under the lock before it closes the handle, so a send here never reaches a closed one. */
+    if (!r->closed) uv_async_send(&r->wake);
+  }
+  uv_mutex_unlock(&r->lock);
+  reader_unref(r);
+}
+
+/* On the I/O thread: the read is in, so its job ends. The handle keeps the loop alive only while a read is out. */
+static void reader_woken(uv_async_t *wake) {
+  agc_stdin_reader *r = wake->data;
+  uv_mutex_lock(&r->lock);
+  agc_io_job *job = r->want ? NULL : r->job;
+  if (job) r->job = NULL;
+  uv_mutex_unlock(&r->lock);
+  if (!job) return;
+  uv_unref((uv_handle_t *)&r->wake);
+  agc_io_ready(job);
+}
+
+/* On the I/O thread, posted after the job's start, so the wake that ends the job always comes after that start. The
+   thread and its wake are made at the first read; when either cannot be made, the read fails at once. */
+static void reader_go(void *data) {
+  agc_stdin_reader *r = data;
+  if (!r->started) {
+    r->started = true;
+    r->wake.data = r;
+    r->async_open = uv_async_init(agc_loop_uv(r->loop), &r->wake, reader_woken) == 0;
+    if (r->async_open) {
+      uv_unref((uv_handle_t *)&r->wake);
+      atomic_fetch_add(&r->refs, 1);
+      r->thread_open = uv_thread_create(&r->thread, reader_main, r) == 0;
+      if (!r->thread_open) atomic_fetch_sub(&r->refs, 1);
+    }
+  }
+  if (!r->thread_open) {
+    agc_io_job *job = r->job;
+    r->job = NULL;
+    r->got = -1;
+    agc_io_ready(job);
+    return;
+  }
+  uv_ref((uv_handle_t *)&r->wake);
+  uv_mutex_lock(&r->lock);
+  r->want = true;
+  uv_cond_signal(&r->asked);
+  uv_mutex_unlock(&r->lock);
+}
+
+void agc_stdin_read(agc_vm *vm, agc_stdin_reader *r, agc_io_job *job, size_t room) {
+  uv_mutex_lock(&r->lock);
+  r->loop = agc_io_loop(vm);
+  r->job = job;
+  r->room = room;
+  uv_mutex_unlock(&r->lock);
+  agc_io_call(vm, reader_go, r);
+}
+
+int64_t agc_stdin_take(agc_stdin_reader *r, const uint8_t **data) {
+  uv_mutex_lock(&r->lock);
+  int64_t got = r->got;
+  *data = r->buf;
+  uv_mutex_unlock(&r->lock);
+  return got;
+}
+
+static void reader_closed(uv_handle_t *handle) { reader_unref(handle->data); }
+
+/* The thread is told to end; a read it is in is cancelled where Windows can (a pipe), else it ends with its read. */
+void agc_stdin_close(agc_stdin_reader *r) {
+  uv_mutex_lock(&r->lock);
+  r->closed = true;
+  r->job = NULL;
+  uv_cond_signal(&r->asked);
+  uv_mutex_unlock(&r->lock);
+  if (r->thread_open) CancelSynchronousIo(r->thread);
+  if (r->async_open)
+    uv_close((uv_handle_t *)&r->wake, reader_closed);
+  else
+    reader_unref(r);
 }
 #endif

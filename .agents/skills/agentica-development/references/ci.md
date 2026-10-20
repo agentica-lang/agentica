@@ -254,9 +254,10 @@ character reaches the console. A new process group turns Ctrl+C off, so Ctrl+C
 is not sent; libuv reports both events through one console handler
 (`uv_signal_t`).
 
-Piped-input tests do not exercise console input. After changing Windows stdin
-handling, a check on a native Windows terminal (not Wine) is useful but does not
-block a change. Save this as `console-input.agc` in a scratch directory:
+`test_windows_console_stop.py` also types a line into the pseudo console and
+reads it, and keeps a console read waiting with one pool thread while file calls
+run. After changing Windows stdin handling, a check on a native Windows terminal
+(not Wine) is still useful but does not block a change. Save this as `console-input.agc` in a scratch directory:
 
 ```agentica
 def main() -> Void
@@ -270,8 +271,9 @@ end
    `waiting`, type `hello` and Enter. Expect `ok("hello")` and exit 0.
 2. Run it again, wait for `waiting`, then press Ctrl+C without entering text.
    Expect a prompt return, no read-error diagnostic and no surviving VM.
-   libuv handles the signal on the loop even if `_read` remains blocked in
-   the pool; retrying an interrupted `_read` must not be the signal handler.
+   libuv handles the signal on the loop even if `_read` remains blocked on
+   the reader thread; retrying an interrupted `_read` must not be the signal
+   handler.
 
 The fast `test_platform_bootstrap.py` cases separately check binary stdin
 (NUL, CR/LF, Ctrl+Z and 0xff), an empty open pipe while a timer runs and the

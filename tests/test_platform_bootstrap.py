@@ -4,6 +4,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import time
 
 import pytest
 
@@ -155,6 +157,72 @@ def test_pending_standard_input_does_not_block_timers_or_exit(tmp_path, adopt) -
         assert child.wait() == 0, child.stderr_text()
     finally:
         child.close_stdin()
+
+
+# A reader task is cancelled while its read of stdin waits, with one pool thread: a file call still runs, the read
+# stays in flight and its line goes to the next reader, and the EOF then reaches both of two waiting readers once.
+CANCELLED_READER = """\
+def reader(n: Int) -> Int
+  IO.inspect(IO.gets())
+  return n
+end
+
+def main() -> Void
+  r = Task.spawn(&reader, 1)
+  Task.sleep(50)
+  Task.cancel(r)
+  IO.inspect(File.write_text(System.args()[0], "x", 1000))
+  IO.flush()
+  IO.inspect(IO.gets())
+  IO.flush()
+  a = Task.spawn(&reader, 2)
+  b = Task.spawn(&reader, 3)
+  IO.inspect(Task.await(a) + Task.await(b))
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_cancelled_stdin_reader_leaves_its_read_to_the_next_reader_and_eof_reaches_every_waiter(
+    tmp_path, adopt, schedulers
+) -> None:
+    source = tmp_path / "stdin.agc"
+    source.write_text(CANCELLED_READER, encoding="utf-8")
+    # AGENTICA_VM_TEST_MULTICORE lets a test build run more than one scheduler (tests/test_vm_multicore.py).
+    env = vm_environment({"UV_THREADPOOL_SIZE": "1", "AGENTICA_SCHEDULERS": schedulers,
+                          "AGENTICA_VM_TEST_MULTICORE": "1"})
+    child = adopt(Child([binary(), source, tmp_path / "out.txt"], cwd=tmp_path, env=env, stdin=True,
+                        capture_stderr=True))
+    assert child.next_line(scaled(10)) == "ok()", child.stderr_text()
+    child.process.stdin.write(b"late\n")
+    child.process.stdin.flush()
+    assert child.next_line(scaled(10)) == 'ok("late")'
+    time.sleep(0.2)
+    child.close_stdin()
+    assert child.wait(scaled(10)) == 0, child.stderr_text()
+    lines = child.stdout_text().splitlines()
+    assert lines == ['error("IO.gets reached the end of input")'] * 2 + ["5"], lines
+
+
+@pytest.mark.parametrize("kind", ["file", "null"])
+def test_standard_input_from_a_file_or_the_null_device_reads_to_its_end(tmp_path, kind) -> None:
+    source = tmp_path / "stdin.agc"
+    source.write_text(
+        'def main() -> Void\n'
+        '  IO.inspect(IO.read())\n'
+        '  IO.inspect(IO.gets())\n'
+        'end\n',
+        encoding="utf-8",
+    )
+    data = tmp_path / "input.txt"
+    data.write_bytes(b"one\ntwo\n")
+    env = vm_environment({"UV_THREADPOOL_SIZE": "1"})
+    with open(data if kind == "file" else os.devnull, "rb") as stdin:
+        result = subprocess.run([str(binary()), str(source)], cwd=tmp_path, env=env, stdin=stdin,
+                                capture_output=True, timeout=scaled(30))
+    text = '"one\\ntwo\\n"' if kind == "file" else '""'
+    assert (result.returncode, result.stdout.decode()) == (
+        0, '%s\nerror("IO.gets reached the end of input")\n' % text), result.stderr
 
 
 def test_file_locks_are_idempotent_and_released_by_close(tmp_path) -> None:

@@ -143,6 +143,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     float_text_test.c    # Float text forms
     gc_thread_test.c     # threads registered with Boehm
     http_parse_test.c    # HTTP head parser
+    input_test.c         # stdin reads with one pool thread: shared read, EOF, close
     json_test.c          # JSON parser and builtins
     list_test.c          # opaque lists at the 32-way boundaries
     loader_test.c        # loader rules, one assert per rule
