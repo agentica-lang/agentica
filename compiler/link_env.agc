@@ -3,11 +3,13 @@
 
 export IO_TIMEOUT_MS = 10000
 
-## The environment variables the pkg/ search reads. An unset variable is "".
+## The environment variables the pkg/ search reads. An unset variable is "". `local_app_data` is the user data folder
+## of Windows, where XDG_DATA_HOME and HOME are not read.
 export struct Env
   agentica_path: String
   xdg_data_home: String
   home: String
+  local_app_data: String
 end
 
 ## Where the std/ sources come from: the files of a stdlib/ folder (an ordinary run of the front end, with `--stdlib`),
@@ -36,6 +38,7 @@ export def process_env() -> Env
     agentica_path: variable("AGENTICA_PATH"),
     xdg_data_home: variable("XDG_DATA_HOME"),
     home: variable("HOME"),
+    local_app_data: variable("LOCALAPPDATA"),
   )
 end
 

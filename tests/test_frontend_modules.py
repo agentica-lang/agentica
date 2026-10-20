@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import FIXTURES, ROOT, scaled, timeout
+from tests.agentica_test import FIXTURES, ROOT, WINDOWS, scaled, timeout
 from tests.frontend_cases import nested_chains, repeat
 from tests.frontend_support import (
     FROZEN, PytestStageCase, assert_golden, assert_goldens, assert_manifest, fixture_goldens, load_corpus, load_json,
@@ -22,7 +22,8 @@ from tests.frontend_support import (
 MODULE_FIXTURES = FIXTURES / "frontend" / "modules"
 
 # Hermetic: no AGENTICA_PATH, and a user data folder that does not exist.
-DEFAULT_ENV = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"}
+DEFAULT_ENV = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
+               "LOCALAPPDATA": "/nonexistent-agentica-local-app-data"}
 
 # compiler/source_file.agc reads 262144 bytes at a time. The cases put a character, or the start of an invalid
 # sequence, across the edges of the reads.
@@ -37,7 +38,8 @@ def fixture_names():
 
 
 def env_arguments(env):
-    arguments = ["--agentica-path=" + env["AGENTICA_PATH"], "--xdg-data-home=" + env["XDG_DATA_HOME"]]
+    arguments = ["--agentica-path=" + env["AGENTICA_PATH"], "--xdg-data-home=" + env["XDG_DATA_HOME"],
+                 "--local-app-data=" + env["LOCALAPPDATA"]]
     if "HOME" in env:
         arguments.append("--home=" + env["HOME"])
     return arguments
@@ -341,15 +343,18 @@ def test_a_valid_source_file_over_1_mib_links_as_the_root_and_as_an_import(stage
     assert_manifest(outputs, "modules/big.sha256", inputs)
 
 
-def test_the_user_library_root_falls_back_to_home_local_share_agentica_lib(stage):
-    # The HOME-based user root cannot be compared in a hermetic way when the environment is replaced: the linker is
-    # given --home and no usable XDG_DATA_HOME (relative values are ignored).
+def test_the_user_library_root_is_the_home_local_share_or_the_local_app_data_folder(stage):
+    # The user root cannot be compared in a hermetic way when the environment is replaced: the linker is given the
+    # variable that the system reads and no usable XDG_DATA_HOME (relative values are ignored). Elsewhere that is
+    # ~/.local/share/agentica/lib; on Windows HOME is not read, so the root is %LOCALAPPDATA%/agentica/lib.
     directory = stage.temp_dir()
     write_files(directory, {
         "home/.local/share/agentica/lib/homelib.agc": "export def answer() -> Int\n  return 42\nend\n",
+        "local/agentica/lib/homelib.agc": "export def answer() -> Int\n  return 42\nend\n",
         "home-root/root.agc":
             "import Homelib from \"pkg/homelib\"\n\ndef main() -> Void\n  puts(Homelib.answer().to_s)\nend\n"})
-    env = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "relative/data", "HOME": str(directory / "home")}
+    env = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "relative/data", "HOME": str(directory / "home"),
+           "LOCALAPPDATA": str(directory / "local") if WINDOWS else "relative/local"}
     output = stage.link([(env, "home-root/root.agc")], directory)["home-root/root.agc"]
     assert not output.startswith("ERROR"), output
     assert re.search(r'module "[^"]*homelib.agc"', output)
