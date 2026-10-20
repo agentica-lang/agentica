@@ -113,11 +113,16 @@ or receiver attachment. `as` and `from` are contextual in imports, not reserved.
 
 The first existing file wins, and an error in that file does not fall back to
 another root. Empty `AGENTICA_PATH` entries are ignored; a relative entry is
-`CHECK-IMPORT-PATH`. Library paths use forward slashes and reject empty, `.`,
-`..`, backslash and colon components. After symlink resolution, the target must
-stay inside its root. These checks apply to namespaced imports only: imports are
-not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO`. Diagnostics
-inside an embedded module name its source, such as `std/queue.agc`.
+`CHECK-IMPORT-PATH`. A root is absolute when it starts with `/` (on Windows: a
+drive path such as `C:\libs` or `C:/libs`, a UNC path such as
+`\\server\share\libs`, or a path that starts with `/` or `\`; `C:libs` is
+relative). On Windows the other separator is part of the entry, and
+`XDG_DATA_HOME` and `HOME` are not read: an unset or relative `LOCALAPPDATA`
+leaves the user root out. Library paths use forward slashes and reject empty,
+`.`, `..`, backslash and colon components. After symlink resolution, the target
+must stay inside its root. These checks apply to namespaced imports only:
+imports are not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO`.
+Diagnostics inside an embedded module name its source, such as `std/queue.agc`.
 
 #### String queue (`std/queue`)
 

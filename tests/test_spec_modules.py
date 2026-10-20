@@ -11,11 +11,13 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, run, vm_environment
+from tests.agentica_test import cli, run, vm_environment
 from tests.module_support import write_module_files
 
-# No AGENTICA_PATH roots and no user data folder, so only the files of a case resolve.
-HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"}
+# No AGENTICA_PATH roots and no user data folder (XDG_DATA_HOME, or LOCALAPPDATA on Windows), so only the files of a
+# case resolve.
+HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
+            "LOCALAPPDATA": "/nonexistent-agentica-xdg"}
 
 MAIN = "def main() -> Void\nend\n\n"
 
@@ -262,7 +264,6 @@ class TestModuleRules:
         for declaration, checked in zip(declarations, results[3:]):
             self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
 
-    @pytest.mark.skipif(WINDOWS, reason="known-issue: #425 the pkg/ roots ignore the Windows separator, drive paths and LOCALAPPDATA")
     def test_http_wire_is_internal_to_std_http_for_user_files_relative_imports_and_pkg_modules(self):
         call = 'export def go() -> Void\n  HttpWire.options(HttpWire.service(1, 1, 1))\nend\n\n'
         roots = [("root.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n'
