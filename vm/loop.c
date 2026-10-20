@@ -768,7 +768,8 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "start_failed job=%" PRIu64 " kind=%s detached", r->id, j->kind->name);
   if (atomic_load(&j->dropping)) {
     abandon_wait(j);
-    if (data) j->kind->drop(data);
+    /* `drop` runs on the I/O thread (§16.5), which owns what a service's data reaches; at N = 1 that is here. */
+    if (data) call_on(j->loop, j->kind->drop, data);
     close_pending(vm, context);
     release(j);
   } else {
@@ -821,8 +822,7 @@ static void drain(agc_vm *vm) {
     if (!atomic_load(&j->ended) && j->res->native == j) {
       agc_resource *r = j->res;
       if (!atomic_load(&j->detached)) {
-        agc_task *t = r->task;
-        r->task = NULL;
+        agc_task *t = atomic_exchange(&r->task, NULL);
         if (t) agc_task_wake(vm, t, "job");
       } else if (j->detach_seen) {
         /* A job whose DETACH request has not run yet is left alone: that request puts it back on this list. */
@@ -900,6 +900,19 @@ void agc_io_wake(agc_vm *vm) {
 void agc_io_wake_idle(void *vm) { agc_io_wake(vm); }
 
 void agc_io_call(agc_vm *vm, void (*fn)(void *data), void *data) { call_on(loop_of(vm), fn, data); }
+
+void agc_loop_call(agc_loop *loop, void (*fn)(void *data), void *data) { call_on(loop, fn, data); }
+
+agc_loop *agc_io_loop(agc_vm *vm) { return loop_of(vm); }
+
+struct uv_loop_s *agc_loop_uv(agc_loop *loop) {
+  if (!on_io_thread(loop)) agc_internal_abort("a scheduler thread reached the libuv loop");
+  return &loop->uv;
+}
+
+agc_loop *agc_loop_of_uv(struct uv_loop_s *uv) { return (agc_loop *)(void *)((char *)uv - offsetof(agc_loop, uv)); }
+
+bool agc_io_here(agc_vm *vm) { return !vm->rt->loop || on_io_thread(vm->rt->loop); }
 
 #if !defined(_WIN32)
 #define STOP_SIGNALS 3
@@ -1284,16 +1297,13 @@ bool agc_io_share(agc_vm *vm, bool keep) {
   return true;
 }
 
-/* The services that still make their own handles (the rows marked loop_bound) reach the loop here; a scheduler thread
-   must never, since only the I/O thread may call libuv. */
-struct uv_loop_s *agc_io_uv(agc_vm *vm) {
-  agc_loop *loop = loop_of(vm);
-  if (!on_io_thread(loop)) agc_internal_abort("a scheduler thread reached the libuv loop");
-  return &loop->uv;
-}
+/* The services that still make their own handles on the calling scheduler (the rows that agc_program_for_threads
+   refuses) reach the loop here; a scheduler thread must never, since only the I/O thread may call libuv. */
+struct uv_loop_s *agc_io_uv(agc_vm *vm) { return agc_loop_uv(loop_of(vm)); }
 
-static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task, agc_more_fn more, unsigned flags) {
+/* Returns the job without reading r->native after the START is posted: a detached job may be swept by then. */
+static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                      const agc_task *task, agc_more_fn more, unsigned flags) {
   if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   /* A plain deadline is a task timer (vm/timers.c), not a job. */
   if (!kind->work && !kind->external) agc_fail(vm, "RUNTIME-INTERNAL", "a job needs pool work or a wait", 0);
@@ -1339,7 +1349,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
     agc_as_handle(vm, context)->holder = r;
   }
   post(j, REQ_START, timeout_ms);
-  return r;
+  return j;
 }
 
 /* The job is the wait of the task, so the task is marked PARKING before the job exists: the job's completion is
@@ -1347,9 +1357,9 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more) {
   agc_task_parking(vm);
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
+  job *j = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
   agc_task_park(vm, false);
-  return r->native;
+  return j;
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
@@ -1357,7 +1367,7 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 }
 
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
-  return start_job(vm, kind, data, context, -1, NULL, NULL, flags)->native;
+  return start_job(vm, kind, data, context, -1, NULL, NULL, flags);
 }
 
 /* A wait on the loop is over (a service callback): a pool job's work is not, so it is not ended from here. */
@@ -1855,6 +1865,31 @@ void agc_io_thread_signals(void) {}
 void agc_io_call(agc_vm *vm, void (*fn)(void *data), void *data) {
   (void)vm;
   fn(data);
+}
+
+void agc_loop_call(agc_loop *loop, void (*fn)(void *data), void *data) {
+  (void)loop;
+  fn(data);
+}
+
+agc_loop *agc_io_loop(agc_vm *vm) {
+  (void)vm;
+  return NULL;
+}
+
+struct uv_loop_s *agc_loop_uv(agc_loop *loop) {
+  (void)loop;
+  return NULL;
+}
+
+agc_loop *agc_loop_of_uv(struct uv_loop_s *uv) {
+  (void)uv;
+  return NULL;
+}
+
+bool agc_io_here(agc_vm *vm) {
+  (void)vm;
+  return true;
 }
 
 /* Only a task timer (a sleep, a deadline) waits without alive_required, and there is no clock to fire it here. */

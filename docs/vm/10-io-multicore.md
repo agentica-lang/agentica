@@ -163,8 +163,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     every scheduler thread (§16.9, "Threads").
 - **I/O ownership.** Handles stay on the I/O loop. Schedulers request
   operations through its inbox and tasks resume via the global queue, not a
-  handle-owning scheduler (§16.2, §16.4). Pool threads never touch GC memory
-  (§16.1).
+  handle-owning scheduler (§16.2, §16.4). The I/O thread also owns the state
+  that a socket's callbacks touch (buffers, TLS session, request slots), so a
+  socket needs no lock (§16.9). Pool threads never touch GC memory (§16.1).
 - **Stdin.** A handle on the I/O loop like any other. Reads from any scheduler
   are requests. Each read stays whole, because the input keeps a FIFO of waiting
   readers and serves one read at a time. No OS mutex or spinlock is held across
@@ -269,8 +270,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
 - **Order of work.** First the tasks PR, on these split structures, with N=1.
   Then the multicore schedulers item: N>1 with the I/O
   thread running its loop (the inbox itself is built, §16.9), the global run
-  queue, Boehm threads, the TLS and HTTP
-  steps moved into the resumed task's turn (§16.9), and a stress test of the
+  queue, Boehm threads, the TCP and TLS
+  steps as requests to the I/O thread, where TLS crypto stays (§16.2, §16.9),
+  and a stress test of the
   task fixtures with `--schedulers 4`, under TSan when available (`make
   vm-tsan` runs the C tests of the shared code, §16.9). TSan does not
   work with Boehm's stop-the-world, so that run uses an `AGC_NO_GC`-style build

@@ -25,10 +25,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - With the test-only switch `AGENTICA_VM_TEST_MULTICORE=1`, `--schedulers N`
   runs N scheduler threads beside one I/O thread, with standard input and
-  output, files and FIFOs; TCP, TLS, HTTP, `Process`, `Duplex` and `Test.run`
+  output, files, FIFOs, TCP and TLS; HTTP, `Process`, `Duplex` and `Test.run`
   fail with `RUNTIME-INTERNAL` there for now. Without the switch a count above
   1 still exits 2. `make test-multicore` and `make vm-tsan-run` run the
-  programs on four schedulers.
+  programs and the TCP and TLS tests on four schedulers.
 
 - Native Windows regressions for ordinary-file line decoding, lock-owner
   cancellation, unsafe path aliases, depth/read-only removal failures,
@@ -52,6 +52,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   character.
 
 ### Changed
+
+- A plain `TCP.accept` whose task is cancelled after a connection arrived
+  closes that connection (the peer reads end of input) instead of leaving it
+  for the next accept, as TLS accepts already did.
 
 - **Breaking:** on Windows, `Process.spawn_channel` gives the child a pipe per
   direction (read 3, write 4, `AGENTICA_CHANNEL=3,4`), so `channel_close` ends

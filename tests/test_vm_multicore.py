@@ -3,8 +3,9 @@
 More than one scheduler runs only under that test switch until the count is lifted (#345). The goldens of
 tests/fixtures/vm must hold at four schedulers too, except where the order of output between tasks is not fixed (the
 ORDER set) and for the libraries that still call libuv from their scheduler, which a run with several schedulers
-refuses (TCP, TLS, HTTP, Process, Duplex and the Test protocol). The other cases check what threads must keep: whole
-lines, exact sums, timers that fire, the end of the run from any scheduler, standard input and FIFOs, and the switch.
+refuses (HTTP, Process, Duplex and the Test protocol). TCP and TLS post every step to the I/O thread, so their
+fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers that fire, the end of
+the run from any scheduler, standard input and FIFOs, sockets used and closed from several schedulers, and the switch.
 `make test-multicore` runs this module; `make vm-tsan-run` runs it on a ThreadSanitizer build.
 """
 import json
@@ -13,6 +14,7 @@ import re
 import shutil
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 import threading
@@ -24,7 +26,7 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import FIXTURES, ROOT, compile_text, run, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, ROOT, TLS_BUILT, compile_text, run, vm_command, vm_environment
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -37,12 +39,12 @@ RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark
 # which of two tasks finds an await cycle, whether a task has run after a yield or a preemption, the count of tasks
 # still pending),
 # which a run on several threads does not fix.
-ORDER = {"channel-fan-in", "channel-owner-handoff", "channel-returned-order", "logger-tasks",
+ORDER = {"channel-fan-in", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning", "logger-tasks",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
-         "task-file-close", "test-run-task"}
+         "task-file-close", "tcp-tasks", "test-run-task"}
 # Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
 # the parent channel): such a fixture keeps its golden or stops with RUNTIME-INTERNAL.
-LOOP_BOUND = re.compile(r"\b(TCP|TLS|HTTP|HTTPServer|Process|Duplex)\.|\bTest\.run\b")
+LOOP_BOUND = re.compile(r"\b(HTTP|HTTPServer|HttpWire|Process|Duplex)\.|\bTest\.run\b")
 
 
 def vm(bytecode, *flags, args=(), stdin=None, env=None, timeout=None):
@@ -541,10 +543,502 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
             0, "8\n0\nerror(\"filesystem: operation timed out\")\n", "")
 
 
-def test_a_network_call_is_refused_on_several_schedulers(tmp_path):
-    bytecode = program(tmp_path, "net", "def main() -> Void\n  IO.inspect(TCP.listen(\"127.0.0.1\", 0))\nend\n")
+def test_a_process_call_is_refused_on_several_schedulers(tmp_path):
+    bytecode = program(tmp_path, "proc", "def main() -> Void\n"
+                       "  IO.inspect(Process.spawn_channel(\"sh\", [\"-c\", \"exit 0\"], \".\", 5000).ok?)\nend\n")
     result = vm(bytecode, "--json")
     assert diff.outcome((result.code, result.stdout, result.stderr))[3] == "RUNTIME-INTERNAL"
+
+# TCP and TLS run on several schedulers: every step is a request to the I/O thread, which owns each socket (§16.9).
+NET = pytest.mark.skipif(not TLS_BUILT, reason="TCP and TLS are built on Linux and macOS")
+TLS_DIR = str(FIXTURES / "tls")
+
+NET_ECHO = r"""struct Dial
+  port: Int
+  ca: String
+  lines: Int
+end
+
+def open(d: Dial) -> Result[Socket]
+  if d.ca == ""
+    return TCP.connect("127.0.0.1", d.port, 10000)
+  end
+  return TLS.connect("localhost", d.port, d.ca, 10000)
+end
+
+def serve(socket: Socket) -> Int
+  count = 0
+  line = TCP.read_line(socket, 10000)
+  while line.ok?
+    TCP.send(socket, line.unwrap! + "\n", 10000).unwrap!
+    count = count + 1
+    line = TCP.read_line(socket, 10000)
+  end
+  TCP.close(socket)
+  return count
+end
+
+def accept_all(listener: Listener) -> Int
+  servers: List[Task[Int]] = []
+  socket = TCP.accept(listener, 10000)
+  while socket.ok?
+    servers = servers.push(Task.spawn_owning(&serve, socket.unwrap!))
+    socket = TCP.accept(listener, 10000)
+  end
+  total = 0
+  for t in servers
+    total = total + Task.await(t)
+  end
+  return total
+end
+
+def client(d: Dial) -> Int
+  socket = open(d).unwrap!
+  same = 0
+  i = 0
+  while i < d.lines
+    TCP.send(socket, "#{d.port} #{i}\n", 10000).unwrap!
+    if TCP.read_line(socket, 10000).unwrap! == "#{d.port} #{i}"
+      same = same + 1
+    end
+    i = i + 1
+  end
+  TCP.close(socket)
+  return same
+end
+
+def main() -> Void
+  args = System.args()
+  clients = args[0].to_i!
+  lines = args[1].to_i!
+  dir = ""
+  ca = ""
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  if args.size > 2
+    dir = args[2]
+    ca = "#{dir}/ca.pem"
+    TCP.close_listener(listener)
+    listener = TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!
+  end
+  acceptor = Task.spawn(&accept_all, listener)
+  d = Dial(port: TCP.local_port(listener), ca: ca, lines: lines)
+  tasks = (1..clients).to_a.map do |k|
+    Task.spawn(&client, d)
+  end
+  same = 0
+  for t in tasks
+    same = same + Task.await(t)
+  end
+  TCP.close_listener(listener)
+  puts(same)
+  puts(Task.await(acceptor))
+end
+"""
+
+
+@NET
+@RACE
+@pytest.mark.parametrize("clients,lines,secure", [(32, 100, False), (8, 20, True)], ids=["tcp", "tls"])
+def test_echo_clients_on_several_schedulers_get_every_line_back(tmp_path, repeats, clients, lines, secure):
+    # A listener task hands each connection to a server task; every client task sends its lines one by one and
+    # checks each echo. Reads, sends, accepts and connects are issued and resumed on any scheduler.
+    bytecode = program(tmp_path, "echo", NET_ECHO)
+    args = (str(clients), str(lines)) + ((TLS_DIR,) if secure else ())
+    for _ in range(repeats):
+        result = vm(bytecode, args=args)
+        assert (result.code, result.stdout, result.stderr) == (0, "%d\n%d\n" % (clients * lines, clients * lines), "")
+
+
+NET_CANCEL = r"""struct Wait
+  kind: String
+  port: Int
+  ca: String
+end
+
+def big() -> String
+  text = "abcdefgh"
+  round = 0
+  while round < 23
+    text = text + text
+    round = round + 1
+  end
+  return text
+end
+
+def wait(w: Wait) -> Result[String]
+  if w.kind == "accept"
+    listener = try TCP.listen("127.0.0.1", w.port)
+    socket = try TCP.accept(listener, 60000)
+    TCP.close(socket)
+    return ok("accepted")
+  end
+  if w.kind == "handshake"
+    socket = try TLS.connect("localhost", w.port, w.ca, 60000)
+    TCP.close(socket)
+    return ok("handshaken")
+  end
+  socket = try TCP.connect("127.0.0.1", w.port, 60000)
+  if w.kind == "send"
+    try TCP.send(socket, big(), 60000)
+    return ok("sent")
+  end
+  return TCP.read_line(socket, 60000)
+end
+
+def hold(w: Wait) -> Result[String]
+  return wait(w)
+end
+
+def crash(w: Wait) -> Result[Int]
+  Task.spawn(&hold, Wait(kind: "read", port: w.port, ca: w.ca))
+  Task.spawn(&hold, Wait(kind: "send", port: w.port, ca: w.ca))
+  Task.spawn(&hold, Wait(kind: "handshake", port: w.port, ca: w.ca))
+  Task.sleep(50)
+  zero = 0
+  return ok(1 / zero)
+end
+
+def main() -> Void
+  ca = "#{System.args()[0]}/ca.pem"
+  silent = TCP.listen("127.0.0.1", 0).unwrap!
+  port = TCP.local_port(silent)
+  probe = TCP.listen("127.0.0.1", 0).unwrap!
+  free = TCP.local_port(probe)
+  TCP.close_listener(probe)
+  waits = [
+    Wait(kind: "read", port: port, ca: ca),
+    Wait(kind: "send", port: port, ca: ca),
+    Wait(kind: "handshake", port: port, ca: ca),
+    Wait(kind: "accept", port: free, ca: ca),
+    Wait(kind: "read", port: port, ca: ca),
+    Wait(kind: "send", port: port, ca: ca),
+    Wait(kind: "handshake", port: port, ca: ca),
+  ]
+  results = Task.map(waits, 8, 200, &wait)
+  for r in results
+    IO.inspect(r)
+  end
+  owner = Task.spawn(&crash, Wait(kind: "", port: port, ca: ca))
+  case Task.await(owner)
+    ok(n) -> puts(n)
+    error(e) -> puts("owner: #{e}")
+  end
+  again = TCP.listen("127.0.0.1", free)
+  puts(again.ok?)
+  TCP.close_listener(again.unwrap!)
+  TCP.close_listener(silent)
+  tries = 0
+  while Task.pending_count() > 0 && tries < 500
+    Task.sleep(10)
+    tries = tries + 1
+  end
+  puts(Task.pending_count())
+end
+"""
+
+
+@NET
+@RACE
+def test_net_waits_cancelled_from_other_schedulers_end_and_free_their_port(tmp_path, repeats):
+    # Task.map's limit cancels tasks parked in read_line, a 64 MiB send, a TLS handshake that the peer never answers
+    # and an accept; then a crashing owner cancels its children parked the same way. The jobs are cancelled by
+    # whichever scheduler runs the canceller, the run ends, no task is left (the crashed owner's children end on
+    # their own schedulers, so main waits for the count to reach 0), and the accept's port is free again.
+    bytecode = program(tmp_path, "net_cancel", NET_CANCEL)
+    for _ in range(repeats):
+        result = vm(bytecode, args=(TLS_DIR,))
+        lines = result.stdout.splitlines()
+        assert (result.code, lines[:7], lines[8:]) == (0, ['error("task: timed out")'] * 7, ["true", "0"]), result.stderr
+        assert lines[7].startswith("owner: task crashed: RUNTIME-DIVISION-BY-ZERO"), lines[7]
+
+
+NET_DEADLINE = r"""struct Late
+  socket: Socket
+  delay: Int
+end
+
+struct Dial
+  port: Int
+  ca: String
+  deadline: Int
+end
+
+def write_late(l: Late) -> Result[Void]
+  Task.sleep(l.delay)
+  return TCP.send(l.socket, "late\n", 5000)
+end
+
+def race(socket: Socket) -> String
+  got = TCP.read_line(socket, 20)
+  case got
+    ok(line) -> return line
+    error(e) -> return "#{e} then #{TCP.read_line(socket, 1000)}"
+  end
+end
+
+def dial(d: Dial) -> String
+  case TLS.connect("localhost", d.port, d.ca, d.deadline)
+    ok(socket) ->
+      TCP.close(socket)
+      return "ok"
+    error(e) -> return e
+  end
+end
+
+def serve_tls(listener: Listener) -> Int
+  count = 0
+  socket = TCP.accept(listener, 2000)
+  while socket.ok? || socket.message != "network: listener is closed"
+    if socket.ok?
+      TCP.close(socket.unwrap!)
+    end
+    count = count + 1
+    socket = TCP.accept(listener, 2000)
+  end
+  return count
+end
+
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  port = TCP.local_port(listener)
+  seen: Map[String, Int] = {}
+  k = 0
+  while k < 24
+    near = TCP.connect("127.0.0.1", port, 5000).unwrap!
+    far = TCP.accept(listener, 5000).unwrap!
+    writer = Task.spawn(&write_late, Late(socket: far, delay: 14 + k % 12))
+    reader = Task.spawn(&race, near)
+    outcome = Task.await(reader)
+    Task.await(writer)
+    seen = seen.put(outcome, seen.get(outcome, 0) + 1)
+    TCP.close(near)
+    TCP.close(far)
+    k = k + 1
+  end
+  TCP.close_listener(listener)
+  for key in seen.keys
+    puts(key)
+  end
+  puts("--")
+  dir = System.args()[0]
+  secure = TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!
+  server = Task.spawn(&serve_tls, secure)
+  dials: Map[String, Int] = {}
+  k = 1
+  while k <= 24
+    got = Task.await(Task.spawn(&dial, Dial(port: TCP.local_port(secure), ca: "#{dir}/ca.pem", deadline: k)))
+    dials = dials.put(got, dials.get(got, 0) + 1)
+    k = k + 1
+  end
+  TCP.close_listener(secure)
+  Task.await(server)
+  for key in dials.keys
+    puts(key)
+  end
+end
+"""
+
+
+@NET
+@RACE
+def test_net_deadlines_that_pass_during_a_step_give_the_result_or_the_timeout(tmp_path, repeats):
+    # A read whose 20 ms deadline races a writer task that sends at 14 to 25 ms: the line, or the timeout and then a
+    # closed socket, never both. TLS connects whose deadline (1 to 24 ms) falls in the handshake: ok or the timeout.
+    bytecode = program(tmp_path, "net_deadline", NET_DEADLINE)
+    reads = {"late", 'network: operation timed out then error("network: socket is closed")'}
+    dials = {"ok", "network: operation timed out"}
+    for _ in range(repeats):
+        result = vm(bytecode, args=(TLS_DIR,))
+        assert (result.code, result.stderr) == (0, "")
+        first, second = result.stdout.split("--\n")
+        assert set(first.splitlines()) <= reads and set(second.splitlines()) <= dials, result.stdout
+
+
+NET_CLOSE = r"""struct Dial
+  port: Int
+  ca: String
+end
+
+def big() -> String
+  text = "abcdefgh"
+  round = 0
+  while round < 23
+    text = text + text
+    round = round + 1
+  end
+  return text
+end
+
+def read(socket: Socket) -> Result[String]
+  return TCP.read_line(socket, 60000)
+end
+
+def write(socket: Socket) -> Result[Void]
+  return TCP.send(socket, big(), 60000)
+end
+
+def closer(socket: Socket) -> Void
+  Task.sleep(100)
+  TCP.close(socket)
+end
+
+def open(d: Dial) -> Result[Socket]
+  if d.ca == ""
+    return TCP.connect("127.0.0.1", d.port, 5000)
+  end
+  return TLS.connect("localhost", d.port, d.ca, 5000)
+end
+
+def own(listener: Listener) -> Result[Int]
+  Task.sleep(10)
+  zero = 0
+  return ok(1 / zero)
+end
+
+def parked(listener: Listener, ca: String) -> Void
+  dial = Task.spawn(&open, Dial(port: TCP.local_port(listener), ca: ca))
+  far = TCP.accept(listener, 5000).unwrap!
+  near = Task.await(dial).unwrap!
+  reader = Task.spawn(&read, near)
+  writer = Task.spawn(&write, near)
+  Task.spawn(&closer, near)
+  IO.inspect(Task.await(reader))
+  IO.inspect(Task.await(writer))
+  IO.inspect(TCP.read_line(near, 1000))
+  TCP.close(far)
+  TCP.close_listener(listener)
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  parked(TCP.listen("127.0.0.1", 0).unwrap!, "")
+  parked(TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!, "#{dir}/ca.pem")
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  port = TCP.local_port(listener)
+  case Task.await(Task.spawn_owning(&own, listener))
+    ok(n) -> puts(n)
+    error(e) -> puts("owner crashed")
+  end
+  again = TCP.listen("127.0.0.1", port)
+  puts(again.ok?)
+  TCP.close_listener(again.unwrap!)
+end
+"""
+
+
+@NET
+@RACE
+def test_a_close_from_another_scheduler_ends_parked_reads_and_sends(tmp_path, repeats):
+    # On a TCP and on a TLS socket, one task waits in read_line and one in a 64 MiB send that the peer never reads;
+    # a third task closes the socket. Both waits end with the closed error. Then a task that owns a listener crashes,
+    # and the listener's port can be bound again.
+    bytecode = program(tmp_path, "net_close", NET_CLOSE)
+    expected = '\n'.join(['error("network: socket is closed")'] * 6 + ["owner crashed", "true", ""])
+    for _ in range(repeats):
+        result = vm(bytecode, args=(TLS_DIR,))
+        assert (result.code, result.stdout) == (0, expected), result.stderr
+
+
+NET_STOP = r"""def read(socket: Socket) -> Result[String]
+  return TCP.read_line(socket, 60000)
+end
+
+def accept(listener: Listener) -> Result[Socket]
+  return TCP.accept(listener, 60000)
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  plain = TCP.listen("127.0.0.1", 0).unwrap!
+  secure = TLS.listen("127.0.0.1", 0, "#{dir}/server.pem", "#{dir}/server-key.pem").unwrap!
+  puts("#{TCP.local_port(plain)} #{TCP.local_port(secure)}")
+  one = TCP.accept(plain, 10000).unwrap!
+  two = TCP.accept(secure, 10000).unwrap!
+  Task.spawn(&accept, plain)
+  Task.spawn(&read, two)
+  waiting = Task.spawn(&read, one)
+  Task.sleep(50)
+  puts("ready")
+  if System.args()[1] == "exit"
+    Task.sleep(50)
+    System.exit(3)
+  end
+  IO.inspect(Task.await(waiting))
+end
+"""
+
+
+@NET
+@pytest.mark.skipif(not hasattr(signal, "SIGTERM") or sys.platform == "win32", reason="needs POSIX signals")
+@pytest.mark.parametrize("mode", ["signal", "exit"])
+def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path, mode):
+    # A run with a parked accept, a parked TCP read and a parked TLS read gets SIGTERM, or main calls System.exit(3)
+    # on its scheduler: the run ends with the signal or 3, and the peer sees EOF on the TCP socket and close_notify on
+    # the TLS one (a missing close_notify raises SSLEOFError).
+    bytecode = program(tmp_path, "net_stop", NET_STOP)
+    process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, TLS_DIR, mode], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                               text=True)
+    try:
+        plain_port, secure_port = map(int, process.stdout.readline().split())
+        context = ssl.create_default_context(cafile=TLS_DIR + "/ca.pem")
+        with socket.create_connection(("127.0.0.1", plain_port), timeout=30) as plain, \
+                context.wrap_socket(socket.create_connection(("127.0.0.1", secure_port), timeout=30),
+                                    server_hostname="localhost", suppress_ragged_eofs=False) as secure:
+            assert process.stdout.readline() == "ready\n"
+            if mode == "signal":
+                process.send_signal(signal.SIGTERM)
+            out, err = process.communicate(timeout=30)
+            code = -signal.SIGTERM if mode == "signal" else 3
+            assert (process.returncode, out, plain.recv(10), secure.recv(10)) == (code, "", b"", b""), err
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+NET_STALL = r"""def accept(listener: Listener) -> Result[Socket]
+  return TCP.accept(listener, 60000)
+end
+
+def main() -> Void
+  port = System.args()[0].to_i!
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  Task.spawn(&accept, listener)
+  short = TCP.connect("127.0.0.1", port, 5000).unwrap!
+  long = TCP.connect("127.0.0.1", port, 5000).unwrap!
+  IO.inspect(TCP.read_line(short, 300))
+  IO.inspect(TCP.read_line(long, 60000))
+end
+"""
+
+
+@NET
+def test_waits_on_live_connections_are_no_stall_on_several_schedulers(tmp_path):
+    # Every task waits on a socket whose peer holds it open, or on a live listener: the run waits, a read with a
+    # deadline times out, and the other read ends when the peer closes.
+    bytecode = program(tmp_path, "net_stall", NET_STALL)
+    with socket.create_server(("127.0.0.1", 0)) as server:
+        server.settimeout(30)
+        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(server.getsockname()[1])],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   env=vm_environment(MULTICORE), text=True)
+        try:
+            peers = [server.accept()[0], server.accept()[0]]
+            try:
+                process.wait(timeout=0.6)
+            except subprocess.TimeoutExpired:
+                pass
+            assert process.poll() is None
+            for peer in peers:
+                peer.close()
+            out, err = process.communicate(timeout=30)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+    assert (process.returncode, out, err) == (
+        0, 'error("network: operation timed out")\nerror("network: end of input")\n', "")
 
 
 def test_more_schedulers_need_the_switch_and_refuse_the_profile_and_blocking_output(tmp_path):

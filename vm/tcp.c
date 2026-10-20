@@ -1,7 +1,9 @@
 /*
- * The TCP and TLS builtins (Linux only): sockets and listeners over libuv,
- * with the TLS handshake and close_notify through tls.h. Service layer.
- * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1.
+ * The TCP and TLS builtins (Linux and macOS): sockets and listeners over libuv,
+ * with the TLS handshake and close_notify through tls.h. Every `net` belongs to
+ * the I/O thread; a builtin reaches it through a step posted there, and a done
+ * half reads only what that thread copied into the request. Service layer.
+ * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1, docs/vm/16-architecture.md §16.9.
  */
 #include "net.h"
 
@@ -36,29 +38,46 @@ struct tcp_link {
   bool backlog;
 };
 
+/* A request is the data of a job. The builtin fills its arguments; its START step (begin_*, on the I/O thread) takes
+   a count on the net and links it in its slot; `finish` copies the result into it (the fields after `stopped`),
+   unlinks it and readies the job, and from then on the I/O thread does not touch it until `drop_request` frees it. */
 struct request {
   req_kind kind;
   net *n, *child;
   agc_io_job *job;
   request *next;
   size_t count;
+  uint8_t *data;
+  size_t len;
   int error, accept_rc;
-  bool served;
+  bool sends, counted, finished, stopped;
+  bool closed, opened, resolved, tls_failed;
+  int64_t port;
+  int write_status, open_error;
+  agc_inbuf_cut cut;
 };
 
+/* A socket or a listener. Every field belongs to the I/O thread (the builtins post steps to it), with two exceptions:
+   `closed` is atomic, so a builtin can refuse a closed socket at once (a stale false only means its step finds it
+   closed), and `id` is atomic, since the scheduler that adopts an accepted socket names it while the I/O thread may
+   be tracing it. The error fields (`error`, `resolved`, `failure`, `tls_failed`) are not written after the failure
+   that a finished request reported, so its done half may read them. */
 struct agc_conn {
   agc_trace trace;
+  agc_loop *io;
   uv_loop_t *loop;
   uv_getaddrinfo_t dns;
   uv_write_t write_req;
   uv_shutdown_t shutdown;
-  tcp_link *conn, *chosen;
+  tcp_link *conn;
   struct addrinfo *addrs, *next_addr;
   char *host;
   int64_t port;
-  uint64_t id, parent;
+  _Atomic uint64_t id;
+  uint64_t parent;
   size_t users, callbacks;
-  bool listener, resolving, resolved, connected, closed, reading;
+  bool listener, resolving, resolved, connected, reading;
+  _Atomic bool closed;
   int error, write_status;
   uint8_t *write_data;
   agc_inbuf in;
@@ -75,6 +94,12 @@ struct agc_conn {
   agc_conn_watch watch;
   void *watcher;
 };
+
+/* A posted close: release_step runs it on the I/O thread. */
+typedef struct {
+  net *n;
+  const char *why;
+} release_call;
 
 static const char socket_closed[] = "network: socket is closed";
 static const char listener_closed[] = "network: listener is closed";
@@ -119,12 +144,70 @@ static tcp_link *new_link(net *n) {
   return k;
 }
 
-static void ready(const request *q) {
-  if (q && q->job) agc_io_ready(q->job);
+static void remove_request(request **head, request **tail, const request *q) {
+  request *previous = NULL;
+  for (request *k = *head; k; previous = k, k = k->next) {
+    if (k != q) continue;
+    if (previous)
+      previous->next = k->next;
+    else
+      *head = k->next;
+    if (tail && *tail == k) *tail = previous;
+    return;
+  }
 }
 
-static void notify(const net *n, const request *q) {
-  ready(q);
+static void unlink_request(request *q) {
+  net *n = q->n;
+  if (n->opener == q) n->opener = NULL;
+  if (n->reader == q) n->reader = NULL;
+  if (n->writer == q) n->writer = NULL;
+  remove_request(&n->accepts, &n->accepts_tail, q);
+  remove_request(&n->handshakes, NULL, q);
+  if (q->child && q->child->opener == q) q->child->opener = NULL;
+  q->next = NULL;
+}
+
+/* The request is over: its result goes into it (what the done half reads on a scheduler), it leaves its slot, and
+   its job is readied. A read takes its line or bytes out of the input here, so the input buffer stays the I/O
+   thread's. I/O thread only; once finished the request is the job's. */
+static void finish(request *q) {
+  if (!q || q->finished) return;
+  net *n = q->n;
+  const net *c = q->child;
+  q->finished = true;
+  unlink_request(q);
+  q->closed = n->closed;
+  switch (q->kind) {
+    case REQ_CONNECT:
+    case REQ_LISTEN:
+      q->opened = n->conn && !n->closed && (n->listener || (n->connected && (!n->secure || n->handshaken)));
+      q->port = n->port;
+      q->resolved = n->resolved;
+      q->open_error = n->error;
+      q->tls_failed = n->tls_failed;
+      break;
+    case REQ_ACCEPT:
+      if (c) {
+        q->opened = !c->closed && (!c->secure || c->handshaken);
+        q->tls_failed = c->tls_failed;
+      }
+      break;
+    case REQ_LINE:
+      if (!n->closed) agc_inbuf_cut_line(&n->in, &q->cut);
+      break;
+    case REQ_BYTES:
+      if (!n->closed) agc_inbuf_cut_bytes(&n->in, q->count, &q->cut);
+      break;
+    case REQ_SEND:
+      q->write_status = n->write_status;
+      break;
+  }
+  agc_io_ready(q->job);
+}
+
+static void notify(const net *n, request *q) {
+  finish(q);
   if (n->watch) n->watch(n->watcher);
 }
 
@@ -135,7 +218,7 @@ static void drop_links(net *n) {
     next = k->next;
     drop_link(k);
   }
-  n->conn = n->chosen = NULL;
+  n->conn = NULL;
 }
 
 static void goodbye(net *n) {
@@ -164,28 +247,49 @@ static void shut_one(net *n, const char *why) {
   notify(n, n->opener);
   notify(n, n->reader);
   notify(n, n->writer);
-  for (const request *q = n->accepts; q; q = q->next) ready(q);
+  while (n->accepts) finish(n->accepts);
 }
 
+/* A listener's close also closes the connections still in their handshake; closing one finishes its accept, and one
+   closed before leaves its accept to be finished here. */
 static void shut(net *n, const char *why) {
   shut_one(n, why);
-  for (const request *q = n->handshakes; q; q = q->next) shut_one(q->child, why);
+  while (n->handshakes) {
+    request *q = n->handshakes;
+    shut_one(q->child, why);
+    finish(q);
+  }
 }
 
 static void say_goodbye(void *native) { goodbye(native); }
 
-static void release_net(void *native) {
-  net *n = native;
-  shut(n, "exit");
+/* The resource gave its count back: the close and the count, on the I/O thread. */
+static void release_step(void *data) {
+  release_call *call = data;
+  net *n = call->n;
+  shut(n, call->why);
+  free(call);
   n->users--;
   settle(n);
 }
 
-static net *make_net(const agc_trace *trace, uv_loop_t *loop, char *host, int64_t port, bool listener) {
+static void post_release(net *n, const char *why) {
+  release_call *call = malloc(sizeof *call);
+  if (!call) agc_out_of_memory();
+  call->n = n;
+  call->why = why;
+  agc_loop_call(n->io, release_step, call);
+}
+
+/* The registry's release: from the end of the run (on the I/O thread) or from the drop of a detached job's result
+   (on a scheduler), so it is a step. */
+static void release_net(void *native) { post_release(native, "exit"); }
+
+static net *make_net(const agc_trace *trace, agc_loop *io, char *host, int64_t port, bool listener) {
   net *n = calloc(1, sizeof(net));
   if (!n) agc_out_of_memory();
   n->trace = *trace;
-  n->loop = loop;
+  n->io = io;
   n->host = host;
   n->port = port;
   n->listener = listener;
@@ -193,17 +297,16 @@ static net *make_net(const agc_trace *trace, uv_loop_t *loop, char *host, int64_
 }
 
 static net *new_net(agc_vm *vm, char *host, int64_t port, bool listener) {
-  return make_net(&vm->rt->trace, agc_io_uv(vm), host, port, listener);
+  return make_net(&vm->rt->trace, agc_io_loop(vm), host, port, listener);
 }
 
+/* The scheduler's half of a close (the resource, under rt->sync); the net's half is a step. */
 static void disown(agc_vm *vm, agc_resource *r, const char *why) {
   net *n = r->native;
   if (!n) return;
   r->native = NULL;
   agc_unregister(vm, r);
-  shut(n, why);
-  n->users--;
-  settle(n);
+  post_release(n, why);
 }
 
 static void close_net(agc_vm *vm, agc_resource *r, agc_task *ender) {
@@ -211,11 +314,14 @@ static void close_net(agc_vm *vm, agc_resource *r, agc_task *ender) {
   disown(vm, r, "owner");
 }
 
-static agc_resource *own(agc_vm *vm, net *n) {
+/* COUNTED: the resource takes a new count on the net, which only a net that no other thread has seen yet may do (a
+   socket or listener this builtin just made); an accepted socket comes with the count its accept took on the I/O
+   thread, so the counts are not touched here. */
+static agc_resource *own(agc_vm *vm, net *n, bool counted) {
   agc_resource *r = agc_register(vm, n, release_net);
   r->goodbye = say_goodbye;
   agc_own(vm, r, close_net);
-  n->users++;
+  if (counted) n->users++;
   n->id = r->id;
   return r;
 }
@@ -225,31 +331,27 @@ static request *new_request(net *n, req_kind kind) {
   if (!q) agc_out_of_memory();
   q->kind = kind;
   q->n = n;
-  n->users++;
   return q;
 }
 
-static void remove_request(request **head, request **tail, const request *q) {
-  request *previous = NULL;
-  for (request *k = *head; k; previous = k, k = k->next) {
-    if (k != q) continue;
-    if (previous)
-      previous->next = k->next;
-    else
-      *head = k->next;
-    if (tail && *tail == k) *tail = previous;
-    return;
-  }
-}
-
-static void unlink_request(request *q) {
+/* The START step of a request: its count on the net and its slot. */
+static void link_request(request *q, agc_io_job *job) {
   net *n = q->n;
-  if (n->opener == q) n->opener = NULL;
-  if (n->reader == q) n->reader = NULL;
-  if (n->writer == q) n->writer = NULL;
-  remove_request(&n->accepts, &n->accepts_tail, q);
-  remove_request(&n->handshakes, NULL, q);
-  q->next = NULL;
+  q->job = job;
+  q->counted = true;
+  n->users++;
+  if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
+    n->reader = q;
+  } else if (q->kind == REQ_SEND) {
+    n->writer = q;
+  } else if (q->kind != REQ_ACCEPT) {
+    n->opener = q;
+  } else if (n->accepts_tail) {
+    n->accepts_tail->next = q;
+    n->accepts_tail = q;
+  } else {
+    n->accepts = n->accepts_tail = q;
+  }
 }
 
 static void release_child(request *q) {
@@ -262,12 +364,19 @@ static void release_child(request *q) {
   settle(c);
 }
 
+/* The end of a request, on the I/O thread: posted by its done half, or the job's drop. A request whose START never
+   ran (the run ended first) holds nothing on the net. */
 static void drop_request(void *data) {
   request *q = data;
   net *n = q->n;
+  free(q->data);
+  agc_inbuf_cut_free(&q->cut);
+  if (!q->counted) {
+    free(q);
+    return;
+  }
   unlink_request(q);
   release_child(q);
-  if (q->served) n->chosen = NULL;
   free(q);
   n->users--;
   settle(n);
@@ -314,11 +423,12 @@ static agc_value secure_error(agc_vm *vm, const net *n) {
   return tls_failure(vm, n->listener ? "ssl-make-server-context: setup failed" : "ssl-connect: connect failed", f);
 }
 
-static agc_value open_error(agc_vm *vm, const net *n) {
-  bool found = n->resolved;
-  if (n->listener) return net_error(vm, n, found ? "tcp-listen: listen failed" : "tcp-listen: host not found", n->error);
-  return net_error(vm, n, found ? "tcp-connect: connection failed" : "tcp-connect: host not found", n->error);
+static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
+  if (n->listener) return net_error(vm, n, found ? "tcp-listen: listen failed" : "tcp-listen: host not found", err);
+  return net_error(vm, n, found ? "tcp-connect: connection failed" : "tcp-connect: host not found", err);
 }
+
+static agc_value open_error(agc_vm *vm, const net *n) { return open_failure(vm, n, n->resolved, n->error); }
 
 static void read_port(net *n, const tcp_link *k) {
   struct sockaddr_storage address;
@@ -451,6 +561,13 @@ static bool read_ready(net *n, req_kind kind) {
   return n->closed || agc_inbuf_ready(&n->in, kind == REQ_LINE, 1);
 }
 
+/* The reader's line or bytes are in: a line longer than the limit closes the socket, as take does. */
+static void finish_reader(net *n) {
+  request *q = n->reader;
+  finish(q);
+  if (q && q->cut.status == AGC_CUT_OVER) shut(n, "line");
+}
+
 static void tls_read_in(net *n, ssize_t got) {
   if (got > 0) n->heard += (uint64_t)got;
   if (got > 0 && !agc_tls_feed_in(n->tls, n->cipher, (size_t)got)) n->in.error = ENOMEM;
@@ -466,7 +583,7 @@ static void tls_read_in(net *n, ssize_t got) {
   const request *q = n->reader;
   bool done = n->handshaken && q && read_ready(n, q->kind);
   if (got < 0 || n->tls_failed || (n->handshaken && ((!q && !n->watch) || done))) stop_reading(n);
-  if (done) ready(q);
+  if (done) finish_reader(n);
   if (n->watch) n->watch(n->watcher);
 }
 
@@ -484,7 +601,7 @@ static void read_in(uv_stream_t *s, ssize_t got, const uv_buf_t *buf) {
   const request *q = n->reader;
   bool done = q && read_ready(n, q->kind);
   if (got < 0 || (!q && !n->watch) || done) stop_reading(n);
-  if (done) ready(q);
+  if (done) finish_reader(n);
   if (n->watch) n->watch(n->watcher);
 }
 
@@ -514,7 +631,8 @@ static void begin_tls(net *n, agc_tls *t) {
 
 static net *accept_link(net *l, tcp_link *k, int *rc) {
   k->backlog = false;
-  net *c = make_net(&l->trace, l->loop, NULL, 0, false);
+  net *c = make_net(&l->trace, l->io, NULL, 0, false);
+  c->loop = l->loop;
   tcp_link *link = new_link(c);
   *rc = uv_accept((uv_stream_t *)&k->tcp, (uv_stream_t *)&link->tcp);
   if (*rc) {
@@ -528,26 +646,6 @@ static net *accept_link(net *l, tcp_link *k, int *rc) {
   return c;
 }
 
-static bool handshake_accept(net *l, tcp_link *k, request *q) {
-  int rc = 0;
-  net *c = accept_link(l, k, &rc);
-  if (!c) {
-    q->accept_rc = rc;
-    ready(q);
-    shut(l, "accept");
-    return false;
-  }
-  c->secure = true;
-  c->users++;
-  c->opener = q;
-  q->child = c;
-  q->next = l->handshakes;
-  l->handshakes = q;
-  AGC_TRACE(&l->trace, AGC_TRACE_TLS, "tls_handshake socket=0 listener=%" PRIu64 " role=server", l->id);
-  begin_tls(c, agc_tls_server(l->config, &c->failure));
-  return true;
-}
-
 static request *next_accept(net *n) {
   request *q = n->accepts;
   if (!q) return NULL;
@@ -557,19 +655,36 @@ static request *next_accept(net *n) {
   return q;
 }
 
+/* Waiting accepts take the connections in the backlog, here on the I/O thread: the accepted socket travels in the
+   request, which holds a count on it until its done half adopts it. A TLS connection first handshakes, under the
+   accept's deadline, and finishes its accept when the handshake ends. A failed uv_accept closes the listener, since
+   libuv stops watching that link. */
 static void serve(net *n) {
-  while (!n->chosen && n->accepts) {
+  while (n->accepts) {
     tcp_link *k = n->conn;
     while (k && !k->backlog) k = k->next;
     if (!k) return;
     request *q = next_accept(n);
-    if (n->secure) {
-      if (!handshake_accept(n, k, q)) return;
+    int rc = 0;
+    net *c = accept_link(n, k, &rc);
+    if (!c) {
+      q->accept_rc = rc;
+      finish(q);
+      shut(n, "accept");
+      return;
+    }
+    c->users++;
+    q->child = c;
+    if (!n->secure) {
+      finish(q);
       continue;
     }
-    q->served = true;
-    n->chosen = k;
-    ready(q);
+    c->secure = true;
+    c->opener = q;
+    q->next = n->handshakes;
+    n->handshakes = q;
+    AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake socket=0 listener=%" PRIu64 " role=server", n->id);
+    begin_tls(c, agc_tls_server(n->config, &c->failure));
   }
 }
 
@@ -580,7 +695,7 @@ static void incoming(uv_stream_t *server, int status) {
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", n->id, -status);
     request *q = next_accept(n);
     if (q) q->error = status;
-    ready(q);
+    finish(q);
     return;
   }
   k->backlog = true;
@@ -786,71 +901,51 @@ static agc_value take(agc_vm *vm, net *n, req_kind kind, size_t count) {
   return line;
 }
 
-static agc_socket *new_socket(agc_vm *vm, net *n) {
+static agc_socket *new_socket(agc_vm *vm, net *n, bool counted) {
   agc_socket *sk = agc_alloc(sizeof(agc_socket));
-  sk->state = own(vm, n);
+  sk->state = own(vm, n, counted);
   sk->reader = agc_new_lock(vm);
   sk->writer = agc_new_lock(vm);
   return sk;
 }
 
-static agc_value tls_accepted(agc_vm *vm, request *q, const net *l) {
+/* The accepted socket moves from the request to a socket value, with the count the request held: the request no
+   longer closes it when it ends (drop_request). */
+static agc_value adopt(agc_vm *vm, request *q, const net *l) {
   net *c = q->child;
-  if (!c->handshaken || c->closed)
-    return c->tls_failed ? tls_failure(vm, "port->ssl-ports: accept failed", &c->failure) : agc_error_value(socket_closed);
   q->child = NULL;
-  c->opener = NULL;
-  agc_socket *sk = new_socket(vm, c);
-  c->users--;
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_accept listener=%" PRIu64 " socket=%" PRIu64, l->id, c->id);
+  agc_socket *sk = new_socket(vm, c, false);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_accept listener=%" PRIu64 " socket=%" PRIu64, l->id, sk->state->id);
   return ok_value(agc_socket_value(sk));
 }
 
-static agc_value accept_done(agc_vm *vm, request *q, net *l) {
+static agc_value accept_done(agc_vm *vm, request *q, const net *l) {
   if (q->accept_rc) return agc_system_error(vm, "tcp-accept: accept failed", -q->accept_rc);
-  if (l->closed) return agc_error_value(listener_closed);
-  if (q->child) return tls_accepted(vm, q, l);
+  if (q->closed) return agc_error_value(listener_closed);
+  if (q->child && q->opened) return adopt(vm, q, l);
+  if (q->child && q->tls_failed) return tls_failure(vm, "port->ssl-ports: accept failed", &q->child->failure);
+  if (q->child) return agc_error_value(socket_closed);
   if (q->error) return agc_system_error(vm, "tcp-accept: accept failed", -q->error);
-  if (!q->served) return agc_error_value(listener_closed);
-  q->served = false;
-  tcp_link *from = l->chosen;
-  l->chosen = NULL;
-  from->backlog = false;
-  net *c = new_net(vm, NULL, 0, false);
-  tcp_link *k = new_link(c);
-  int rc = uv_accept((uv_stream_t *)&from->tcp, (uv_stream_t *)&k->tcp);
-  if (rc) {
-    drop_link(k);
-    agc_value failed = agc_system_error(vm, "tcp-accept: accept failed", -rc);
-    shut(l, "accept");
-    return failed;
-  }
-  serve(l);
-  c->conn = k;
-  c->connected = true;
-  uv_tcp_nodelay(&k->tcp, 1);
-  agc_socket *sk = new_socket(vm, c);
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_accept listener=%" PRIu64 " socket=%" PRIu64, l->id, c->id);
-  return ok_value(agc_socket_value(sk));
+  return agc_error_value(listener_closed);
 }
 
 static agc_value opened(agc_vm *vm, const request *q, agc_value context) {
-  net *n = q->n;
-  if (n->conn && !n->closed && (n->listener || (n->connected && (!n->secure || n->handshaken)))) {
+  const net *n = q->n;
+  if (q->opened) {
     if (!n->listener) return ok_value(context);
     agc_listener *lv = agc_as_listener(vm, context);
-    lv->port = n->port;
+    lv->port = q->port;
     return ok_value(context);
   }
-  agc_value result = n->tls_failed ? secure_error(vm, n) : open_error(vm, n);
+  agc_value result = q->tls_failed ? secure_error(vm, n) : open_failure(vm, n, q->resolved, q->open_error);
   disown(vm, n->listener ? agc_as_listener(vm, context)->state : agc_as_socket(vm, context)->state, "failed");
   return result;
 }
 
+/* The done half reads the request only (finish filled it), then gives the request back to the I/O thread. */
 static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
   net *n = q->n;
-  unlink_request(q);
   if (q->kind == REQ_SEND) agc_charge(vm, q->count);
   agc_value result;
   if (q->kind == REQ_CONNECT || q->kind == REQ_LISTEN) {
@@ -858,65 +953,78 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   } else if (q->kind == REQ_ACCEPT) {
     result = accept_done(vm, q, n);
   } else if (q->kind == REQ_LINE || q->kind == REQ_BYTES) {
-    result = take(vm, n, q->kind, q->count);
+    if (q->closed)
+      result = agc_error_value(socket_closed);
+    else if (q->kind == REQ_BYTES)
+      result = agc_inbuf_cut_bytes_value(vm, &q->cut);
+    else
+      result = agc_inbuf_cut_line_value(vm, &q->cut, "network: line exceeds 1048576 bytes", "network: end of input");
     agc_charge(vm, agc_value_units(result));
-  } else if (n->closed) {
+  } else if (q->closed) {
     result = agc_error_value(socket_closed);
   } else {
-    result = n->write_status < 0 ? agc_system_error(vm, write_failed, -n->write_status) : ok_value(agc_void());
+    result = q->write_status < 0 ? agc_system_error(vm, write_failed, -q->write_status) : ok_value(agc_void());
   }
-  drop_request(q);
+  agc_loop_call(agc_io_loop(vm), drop_request, q);
   return result;
 }
 
-static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
+/* The timer's stop, on the I/O thread before EXPIRED is published (the kind's `pause`): the request leaves its slot,
+   and a timed-out connect, read or send closes the socket. */
+static void stop_request(void *data) {
   request *q = data;
+  if (q->stopped || !q->counted) return;
+  q->stopped = true;
   unlink_request(q);
+  if (q->kind != REQ_ACCEPT && q->kind != REQ_LISTEN) shut(q->n, "timeout");
+}
+
+/* The timer's `pause` (stop_request) has run already: a task parked on a TCP job is woken by nothing else. */
+static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
+  const request *q = data;
   if (q->kind == REQ_CONNECT) disown(vm, agc_as_socket(vm, context)->state, "timeout");
-  if (q->kind == REQ_LINE || q->kind == REQ_BYTES || q->kind == REQ_SEND) shut(q->n, "timeout");
   return agc_stream_timed_out();
 }
 
+/* On the I/O thread without rt->sync: it stops the request and the net only. A cancelled connect's socket resource is
+   closed by its owner's end (agc_close_owned), on a scheduler. */
 static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
-  const request *q = data;
-  if (!deadline || q->kind == REQ_SEND) return false;
-  if (q->kind == REQ_CONNECT) disown(vm, agc_as_socket(vm, context)->state, "cancel");
+  (void)vm;
+  (void)context;
+  request *q = data;
+  if (!deadline || q->kind == REQ_SEND || !q->counted) return false;
+  unlink_request(q);
+  if (q->kind == REQ_CONNECT) shut(q->n, "cancel");
   return true;
 }
 
-static const agc_io_kind tcp_io = {NULL, request_done, request_expired, drop_request, true, "tcp", request_cancel, true, NULL};
+static const agc_io_kind tcp_io = {NULL,          request_done, request_expired, drop_request, true, "tcp",
+                                   request_cancel, true,        stop_request};
 
-static request *park(agc_vm *vm, net *n, req_kind kind, agc_value context, int64_t timeout) {
-  request *q = new_request(n, kind);
-  if (kind == REQ_LINE || kind == REQ_BYTES) {
-    n->reader = q;
-  } else if (kind == REQ_SEND) {
-    n->writer = q;
-  } else if (kind != REQ_ACCEPT) {
-    n->opener = q;
-  } else if (n->accepts_tail) {
-    n->accepts_tail->next = q;
-    n->accepts_tail = q;
-  } else {
-    n->accepts = n->accepts_tail = q;
-  }
-  q->job = agc_io_start(vm, &tcp_io, q, context, timeout);
-  return q;
+/* Parks the task on the request; BEGIN, its START step, runs on the I/O thread (at once at N = 1). */
+static void park(agc_vm *vm, request *q, agc_value context, int64_t timeout, agc_more_fn begin) {
+  (void)agc_io_start_then(vm, &tcp_io, q, context, timeout, begin);
 }
 
 static void no_network(agc_vm *vm, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "network access is off in this run", span);
 }
 
-static agc_value start_open(agc_vm *vm, net *n, agc_resource *state, agc_value value, int64_t timeout) {
+static bool begin_open(void *data, agc_io_job *job) {
+  request *q = data;
+  net *n = q->n;
+  link_request(q, job);
+  n->loop = agc_loop_uv(n->io);
   int rc = n->secure ? start_setup(n) : resolve(n);
   if (rc) {
     n->error = rc;
-    agc_value result = open_error(vm, n);
-    disown(vm, state, "failed");
-    return result;
+    finish(q);
   }
-  park(vm, n, n->listener ? REQ_LISTEN : REQ_CONNECT, value, timeout);
+  return true;
+}
+
+static agc_value start_open(agc_vm *vm, net *n, agc_value value, int64_t timeout) {
+  park(vm, new_request(n, n->listener ? REQ_LISTEN : REQ_CONNECT), value, timeout, begin_open);
   return agc_void();
 }
 
@@ -948,9 +1056,10 @@ static agc_value open_socket(agc_vm *vm, const agc_value *args, uint32_t span, b
   net *n = new_net(vm, name, port, false);
   n->secure = secure;
   n->ca_file = ca;
-  agc_socket *sk = new_socket(vm, n);
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_connect socket=%" PRIu64 " host=%s port=%" PRId64, n->id, name, port);
-  return start_open(vm, n, sk->state, agc_socket_value(sk), timeout);
+  agc_socket *sk = new_socket(vm, n, true);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_connect socket=%" PRIu64 " host=%s port=%" PRId64, sk->state->id, name,
+            port);
+  return start_open(vm, n, agc_socket_value(sk), timeout);
 }
 
 static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span, bool secure) {
@@ -971,9 +1080,9 @@ static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span,
   n->cert_file = files[0];
   n->key_file = files[1];
   agc_listener *lv = agc_alloc(sizeof(agc_listener));
-  lv->state = own(vm, n);
+  lv->state = own(vm, n, true);
   lv->port = port;
-  return start_open(vm, n, lv->state, agc_listener_value(lv), -1);
+  return start_open(vm, n, agc_listener_value(lv), -1);
 }
 
 static agc_value builtin_connect(agc_vm *vm, agc_value *args, uint32_t span) { return open_socket(vm, args, span, false); }
@@ -988,14 +1097,23 @@ static agc_value builtin_tls_listen(agc_vm *vm, agc_value *args, uint32_t span) 
   return open_listener(vm, args, span, true);
 }
 
+static bool begin_accept(void *data, agc_io_job *job) {
+  request *q = data;
+  link_request(q, job);
+  if (q->n->closed)
+    finish(q);
+  else
+    serve(q->n);
+  return true;
+}
+
 static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   net *n = agc_as_listener(vm, args[0])->state->native;
   int64_t timeout = agc_as_int(vm, args[1]);
   if (!n || n->closed) return agc_error_value(listener_closed);
   if (timeout <= 0) return agc_stream_bad_timeout();
-  park(vm, n, REQ_ACCEPT, args[0], timeout);
-  serve(n);
+  park(vm, new_request(n, REQ_ACCEPT), args[0], timeout, begin_accept);
   return agc_void();
 }
 
@@ -1021,6 +1139,15 @@ static net *live(const agc_socket *sk) {
   return n && !n->closed ? n : NULL;
 }
 
+static bool begin_read(void *data, agc_io_job *job) {
+  request *q = data;
+  net *n = q->n;
+  link_request(q, job);
+  if (!read_ready(n, q->kind)) start_reading(n);
+  if (read_ready(n, q->kind)) finish_reader(n);
+  return true;
+}
+
 static agc_value read_op(agc_vm *vm, const agc_value *args, req_kind kind) {
   size_t count = 0;
   if (kind == REQ_BYTES) {
@@ -1034,11 +1161,11 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, req_kind kind) {
   if (!agc_stream_lock(vm, sk->reader, &timeout, &result)) return result;
   net *n = live(sk);
   if (!n) return agc_error_value(socket_closed);
-  if (read_ready(n, kind)) return take(vm, n, kind, count);
-  request *q = park(vm, n, kind, agc_handle_value(sk->reader), timeout);
+  /* At N = 1 the input is this thread's: what is buffered is taken without a park. */
+  if (agc_io_here(vm) && read_ready(n, kind)) return take(vm, n, kind, count);
+  request *q = new_request(n, kind);
   q->count = count;
-  start_reading(n);
-  if (read_ready(n, kind)) ready(q);
+  park(vm, q, agc_handle_value(sk->reader), timeout, begin_read);
   return agc_void();
 }
 
@@ -1071,15 +1198,34 @@ static void tls_queue(net *n, const uint8_t *data, size_t len) {
   flush(n, tls_wrote);
 }
 
-static agc_value tls_send(agc_vm *vm, net *n, const agc_socket *sk, const uint8_t *data, size_t len, int64_t timeout,
-                          agc_value what) {
-  if (n->write_status < 0) return agc_system_error(vm, write_failed, -n->write_status);
-  if (!n->handshaken) start_reading(n);
-  tls_queue(n, data, len);
-  if (n->write_status < 0) return agc_system_error(vm, write_failed, -n->write_status);
-  if (!n->flushing && !n->plain) return ok_value(agc_void());
-  park(vm, n, REQ_SEND, agc_handle_value(sk->writer), timeout)->count = (size_t)agc_value_units(what);
-  return agc_void();
+/* Starts a send on the I/O thread's side of the socket: 0 when it is out, 1 when it waits for libuv (the writer is
+   told by `wrote` or `flush`), and a libuv error. */
+static int send_now(net *n, const uint8_t *data, size_t len) {
+  if (n->tls) {
+    if (n->write_status < 0) return n->write_status;
+    if (!n->handshaken) start_reading(n);
+    tls_queue(n, data, len);
+    if (n->write_status < 0) return n->write_status;
+    return n->flushing || n->plain ? 1 : 0;
+  }
+  n->write_status = 0;
+  int rc = agc_stream_write((uv_stream_t *)&n->conn->tcp, &n->write_req, &n->write_data, data, len, wrote);
+  if (rc < 0) n->write_status = rc;
+  return rc;
+}
+
+/* A send at N > 1 carries a copy of its bytes and starts here; at N = 1 the builtin started it and the request only
+   waits for its end. */
+static bool begin_send(void *data, agc_io_job *job) {
+  request *q = data;
+  net *n = q->n;
+  link_request(q, job);
+  bool out = !n->closed && q->sends && send_now(n, q->data, q->len) != 1;
+  /* send_now keeps its own copy of what it could not write (tls_queue, agc_stream_write). */
+  free(q->data);
+  q->data = NULL;
+  if (n->closed || out) finish(q);
+  return true;
 }
 
 static agc_value write_op(agc_vm *vm, const agc_value *args, bool text) {
@@ -1101,12 +1247,25 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, bool text) {
   if (!agc_stream_lock(vm, sk->writer, &timeout, &result)) return result;
   net *n = live(sk);
   if (!n) return agc_error_value(socket_closed);
-  if (n->tls) return tls_send(vm, n, sk, data, len, timeout, args[1]);
-  n->write_status = 0;
-  int rc = agc_stream_write((uv_stream_t *)&n->conn->tcp, &n->write_req, &n->write_data, data, len, wrote);
-  if (rc < 0) return agc_system_error(vm, write_failed, -rc);
-  if (rc == 0) return ok_value(agc_void());
-  park(vm, n, REQ_SEND, agc_handle_value(sk->writer), timeout)->count = (size_t)agc_value_units(args[1]);
+  bool here = agc_io_here(vm);
+  if (here) {
+    /* At N = 1 the socket is this thread's: a send that goes out at once returns without a park. */
+    int rc = send_now(n, data, len);
+    if (rc < 0) return agc_system_error(vm, write_failed, -rc);
+    if (rc == 0) return ok_value(agc_void());
+  }
+  request *q = new_request(n, REQ_SEND);
+  q->count = (size_t)agc_value_units(args[1]);
+  if (!here) {
+    q->sends = true;
+    q->len = len;
+    if (len) {
+      q->data = malloc(len);
+      if (!q->data) agc_out_of_memory();
+      memcpy(q->data, data, len);
+    }
+  }
+  park(vm, q, agc_handle_value(sk->writer), timeout, begin_send);
   return agc_void();
 }
 
@@ -1120,13 +1279,14 @@ static agc_value builtin_send_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   return write_op(vm, args, false);
 }
 
-agc_conn *agc_conn_open(const agc_trace *trace, struct uv_loop_s *loop, uint64_t id, const char *host, int64_t port,
+agc_conn *agc_conn_open(const agc_trace *trace, uv_loop_t *loop, uint64_t id, const char *host, int64_t port,
                         agc_tls_config *config, agc_conn_watch watch, void *watcher) {
   size_t len = strlen(host);
   char *name = malloc(len + 1);
   if (!name) agc_out_of_memory();
   memcpy(name, host, len + 1);
-  net *n = make_net(trace, loop, name, port, false);
+  net *n = make_net(trace, agc_loop_of_uv(loop), name, port, false);
+  n->loop = loop;
   n->id = id;
   n->users = 1;
   n->watch = watch;
@@ -1231,7 +1391,7 @@ void agc_net_close(agc_vm *vm, agc_resource *r, const char *why) { disown(vm, r,
    here and the handshake runs on the first read or write, under that
    call's timeout, so a slow client never stalls the accept loop. */
 agc_conn *agc_conn_accept(agc_conn *l) {
-  if (l->closed || l->chosen) return NULL;
+  if (l->closed) return NULL;
   tcp_link *k = l->conn;
   while (k && !k->backlog) k = k->next;
   if (!k) return NULL;
@@ -1241,6 +1401,8 @@ agc_conn *agc_conn_accept(agc_conn *l) {
     AGC_TRACE(&l->trace, AGC_TRACE_IO, "tcp_accept_error listener=%" PRIu64 " error=%d", l->id, -rc);
     return NULL;
   }
+  /* The count that agc_conn_socket's resource then holds, taken here on the I/O thread. */
+  c->users++;
   if (!l->secure) return c;
   c->secure = true;
   c->tls = agc_tls_server(l->config, &c->failure);
@@ -1254,7 +1416,7 @@ agc_conn *agc_conn_accept(agc_conn *l) {
 }
 
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c) {
-  agc_socket *sk = new_socket(vm, c);
+  agc_socket *sk = new_socket(vm, c, false);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_accept listener=%" PRIu64 " socket=%" PRIu64, c->parent, c->id);
   return agc_socket_value(sk);
 }
