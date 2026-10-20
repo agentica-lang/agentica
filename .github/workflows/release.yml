@@ -19,6 +19,7 @@ permissions:
 jobs:
   version:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -38,6 +39,7 @@ jobs:
   linux:
     needs: version
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       ZIG_VERSION: 0.15.2
       ZIG_SHA256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
@@ -115,6 +117,7 @@ jobs:
           - runner: macos-latest
             platform: macos-arm64
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     env:
       # The link target of the binary: clang reads it from the environment and the linker writes it as `minos`, which
       # tools/release-check.sh compares. It does not prove that every object or API is safe on macOS 12, and CI does not
@@ -162,6 +165,7 @@ jobs:
   windows:
     needs: version
     runs-on: windows-2025
+    timeout-minutes: 30
     env:
       AGENTICA_OPENSSL: vendored
       AGENTICA_GC: vendored
@@ -209,6 +213,7 @@ jobs:
   collect:
     needs: [version, linux, macos, windows]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
@@ -228,6 +233,7 @@ jobs:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: [version, collect]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
