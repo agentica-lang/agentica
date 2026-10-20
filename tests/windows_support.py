@@ -64,3 +64,28 @@ def run_vm_with_stdout(
     result = run_vm(bytecode, args=arguments, env=vm_environment(), cwd=root)
     test_case.assertEqual((result.code, result.stdout), (0, expected_stdout))
     return result
+
+
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+
+def process_handle_count(pid: int) -> int:
+    """The number of kernel handles that the process `pid` holds open (GetProcessHandleCount), the Windows counterpart
+    of counting the entries of /proc/self/fd."""
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    kernel32.GetProcessHandleCount.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    kernel32.GetProcessHandleCount.restype = ctypes.c_int
+    kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+    kernel32.CloseHandle.restype = ctypes.c_int
+    process = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
+    if not process:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        count = ctypes.c_uint32()
+        if not kernel32.GetProcessHandleCount(process, ctypes.byref(count)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return count.value
+    finally:
+        kernel32.CloseHandle(process)
