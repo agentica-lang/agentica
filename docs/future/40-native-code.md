@@ -1,11 +1,10 @@
 ## 40. Native code and FFI
 
-**Status:** decided by the owner on 2026-10-20: the package system (§45), then
-the FFI, then the JIT, then AOT if measurements ask for it (40.5). This replaces
-the order of 2026-10-15 ("the FFI before the JIT, right after the bootstrap").
-The owner raised the idea on 2026-10-14: "something like Cython, but for
-Agentica", and "FFI will be needed to use interesting things already done in
-C/C++/Rust". Nothing here is built yet.
+**Status:** decided by the owner on 2026-10-20: packages, then the FFI, then the
+JIT. The order and its reason are in [40.5](#405-order). The owner raised the
+idea on 2026-10-14: "something like Cython, but for Agentica", and "FFI will be
+needed to use interesting things already done in C/C++/Rust". Nothing here is
+built yet.
 
 ### 40.1 Goal
 
@@ -144,12 +143,14 @@ only, immutable inputs, new values through the API, and no GC pointer in
   break memory. So native code needs an explicit flag, such as `--allow-native`,
   as `--allow-run` does for processes
   ([`10-io-processes.md`](../vm/10-io-processes.md)).
-- **Distribution.** The one-binary goal of [§18](18-front-end-language.md) is
-  for simple programs. A program that needs native C, C++ or Rust libraries may
+- **Distribution.** The toolchain stays one binary, `agentica`, with the front
+  end and the VM inside ([§18](18-front-end-language.md)). That is enough for
+  simple programs. A program that needs native C, C++ or Rust libraries may
   ship or load them, and that is acceptable. The package system
-  ([§45](45-packages.md)) is how such libraries get distributed and installed.
-  Loading still needs `--allow-native`. Open: link native modules statically
-  into the binary at build time, or load `.so` files only when the flag is set.
+  ([§45](45-packages.md)) is planned as how such libraries get distributed and
+  installed. Loading still needs `--allow-native`. Open: link native modules
+  statically into the binary at build time, or load `.so` files only when the
+  flag is set.
 - **Multicore.** If more schedulers come
   ([`16-architecture.md`](../vm/16-architecture.md)), the C API must follow its
   rules. The C API is also a new part of the core, so it must pass the entry
@@ -176,11 +177,15 @@ only, immutable inputs, new values through the API, and no GC pointer in
 
 ### 40.5 Order
 
-The owner decided this order on 2026-10-20. This replaces the order of
-2026-10-15 ("the FFI before the JIT, right after the bootstrap").
+The owner decided this order on 2026-10-20: the package system first, then the
+FFI, then the JIT, then AOT if measurements ask for it. The reason: native
+libraries reach a program as packages, so the packages come before the first
+native module. This replaces the order of 2026-10-15 ("the FFI before the JIT,
+right after the bootstrap"). The path waits for the owner's answers to
+[45.14](45-packages.md#4514-open-questions) before the phases after 45-0 start.
 
-1. The package manager ([§45](45-packages.md)). Native packages come after the
-   FFI (45.10). Packages are how native libraries get installed.
+1. The package system ([§45](45-packages.md)). Native packages come after the
+   FFI (45.10).
 2. The FFI with the native module header (40.3a, 40.3.1), after the bootstrap
    and the post-bootstrap list of
    [`docs/roadmap/README.md`](../roadmap/README.md). Its first native module is
