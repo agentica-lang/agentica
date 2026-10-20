@@ -600,9 +600,12 @@ macOS releases were done ahead of this order.
    (row 7.11, §50), and `Task.map` (**done**, 17a, PR #316).
 7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
    7.7), the server measurement (row 9), the package system
-   ([§45](../future/45-packages.md)), the FFI and native module header
-   ([§40](../future/40-native-code.md)), then the JIT (row 9.1). The native
-   Windows and macOS builds are done (release 0.5.0-beta.1).
+   ([§45](../future/45-packages.md)), UDP (row 7.5, issue #399), the FFI and
+   native module header ([§40](../future/40-native-code.md)), then the JIT
+   (row 9.1). The native Windows and macOS builds are done (release
+   0.5.0-beta.1); the gaps Windows still has close first, for the 0.5.0
+   release without beta. UDP closes the networking part of the stable core
+   (below); its design waits for the owner's approval (#399).
 8. After the JIT: the semantic CLI (row 7.2b,
    postponed by the owner on 2026-10-16); signals (row 7.8,
 [§46](../future/46-signals.md#46-signals),
@@ -614,8 +617,19 @@ macOS releases were done ahead of this order.
    [§48.10](../future/48-regex.md#4810-decisions-and-open-questions); the
    formatter needs the heredoc of step 5 and the open questions of
    [§47.9](../future/47-formatter.md#479-open-questions). Also later, in no
-   fixed order: HTTP streaming and `TlsContext` (row 7.4), UDP (row 7.5), the
+   fixed order: HTTP streaming and `TlsContext` (row 7.4), the
    6c evaluation round (row 10) and the Unicode generator.
+
+Stable core (owner decision, 2026-10-20). The C core stays small, safe and
+stable: the language, the VM, the GC, the scheduler, tasks and channels, JSON,
+and the OS primitives that need the event loop (files, processes, timers, TCP,
+TLS and UDP). UDP is in the core, not an extension, because a socket must wait
+without blocking the scheduler, with timeouts and cancel. Everything else is an
+extension: first a package written in Agentica
+([§45](../future/45-packages.md)), and a native module through the FFI
+([§40](../future/40-native-code.md)) only when it needs a library in C, C++ or
+Rust. After UDP and the FFI land, the core changes only for bugs, platforms and
+speed (the JIT).
 
 Designed, not scheduled: dates and times (§41,
 [`docs/future/41-dates-and-times.md`](../future/41-dates-and-times.md)).
