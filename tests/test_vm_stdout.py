@@ -6,7 +6,7 @@ JSON summary: the exit status and when the reader started, the VM exited, and
 the first error byte arrived. Programs that need no peer run with their
 streams on files. The cases run on Linux, macOS and Windows; the few that need
 a Unix descriptor kind (a pty, /dev/full, /dev/stdout) are marked "host-only:"
-with the reason, and the socket case is a known issue on Windows (#440).
+with the reason. On Windows the socket cases use a Winsock socket that is not in overlapped mode.
 """
 import json
 import re
@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, known_issue, run, scaled,
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, run, scaled,
                                  vm_command, vm_environment)
 
 PEER = FIXTURES / "stdout-peer.py"
@@ -25,7 +25,6 @@ FILLER = "x" * 1024
 # full and the end of the run has to wait for a reader that does not come. More rows would keep the program printing.
 STUCK_ROWS = 58
 WINDOWS = TARGET_OS == "windows"
-socket_stdout = known_issue(WINDOWS, 440, "the Python peer hands the VM a socketpair as stdout; a Winsock peer is missing")
 pty_stdout = pytest.mark.skipif(
     WINDOWS, reason="host-only: needs a Unix pseudo terminal; test_windows_console_stop.py has the ConPTY cases")
 dev_stdout = pytest.mark.skipif(
@@ -34,6 +33,13 @@ dev_full = pytest.mark.skipif(
     not sys.platform.startswith("linux") or WINDOWS,
     reason="host-only: needs /dev/full (Linux); a reader that went away is the case of the same name on every system")
 not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
+# The cases that read a socket only after the VM exited check how Windows closes the socket with the process; Wine's
+# sockets are another implementation, so they are not run there.
+not_wine_socket = pytest.mark.skipif(UNDER_WINE, reason="Wine: the close of a socket at exit is not Windows' own")
+# Rows that a socket holds whole once its buffers are SOCKET_BUFFER (Linux caps the size it gives, at 208 KiB by
+# default), so the run ends with every row sent and none read yet.
+SOCKET_ROWS = 100
+SOCKET_BUFFER = 1 << 20
 
 
 ROWS_PROGRAM = """\
@@ -47,6 +53,51 @@ def main() -> Void
     puts("row #{n} #{filler}")
     n += 1
   end
+end
+
+"""
+
+ERROR_ROWS_PROGRAM = ROWS_PROGRAM.replace("puts(", "IO.warn(")
+
+# Reads one line of stdin, which the peer sent before the start, and then prints the rows.
+GETS_ROWS_PROGRAM = ROWS_PROGRAM.replace("def main() -> Void\n", "def main() -> Void\n  IO.warn(IO.gets!())\n")
+
+# A task waits for a line of stdin that never comes while main prints and returns.
+STDIN_WAIT_PROGRAM = """\
+def listen(k: Int) -> Void
+  text = IO.gets!()
+  puts("got #{text}")
+end
+
+def main() -> Void
+  Task.spawn(&listen, 0)
+  Task.sleep(200)
+  n = 0
+  while n < 3
+    puts("row #{n}")
+    n += 1
+  end
+end
+
+"""
+
+# A task that prints until the run ends: main returns while the stream is still full.
+FLOOD_PROGRAM = """\
+def flood(filler: String) -> Void
+  n = 0
+  while true
+    puts("row #{n} #{filler}")
+    n += 1
+  end
+end
+
+def main() -> Void
+  filler = "x"
+  for i in 0..9
+    filler = filler + filler
+  end
+  Task.spawn(&flood, filler)
+  Task.sleep(500)
 end
 
 """
@@ -413,12 +464,82 @@ def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_
     assert b"flush_timeout_ms" not in out, "the warning is dropped, not mixed into the data"
 
 
-@socket_stdout
-def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
+def test_a_socket_as_stdout_that_nobody_reads_yet_does_not_stop_a_timer_task(tmp_path):
     summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "2.0"])
     assert summary["status"] == 0
     assert summary["ticks_before_read"] >= 5, "the ticker ran while stdout was stuck"
     check_rows(lines_of(out), 800)
+
+
+@not_wine_socket
+def test_a_socket_as_stdout_read_only_after_the_exit_gets_every_row(tmp_path):
+    summary, out, err = run_case(tmp_path, "socket_exit", ROWS_PROGRAM % SOCKET_ROWS,
+                                 peer=["--socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    assert summary["read_start"] >= summary["exit"], "the reader started after the exit"
+    check_rows(lines_of(out), SOCKET_ROWS)
+    assert err == ""
+
+
+@not_wine_socket
+def test_a_socket_as_stderr_read_only_after_the_exit_gets_every_row(tmp_path):
+    summary, out, err = run_case(tmp_path, "socket_exit_err", ERROR_ROWS_PROGRAM % SOCKET_ROWS,
+                                 peer=["--error-socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    check_rows(lines_of(err.encode("latin-1")), SOCKET_ROWS)
+    assert summary["first_error_at"] >= summary["exit"], "the reader started after the exit"
+    assert out == b""
+
+
+@not_wine_socket
+def test_a_socket_as_stdout_that_is_full_at_the_end_does_not_hold_the_exit_past_the_flush_limit(tmp_path):
+    summary, _, err = run_case(tmp_path, "socket_full", FLOOD_PROGRAM,
+                               peer=["--socket", "--read-after-exit", "--pipe-size", "4096"],
+                               vm=["--json", "--flush-timeout", "500"])
+    assert summary["status"] == 0
+    assert 0.9 <= summary["exit"] <= 20, "the run waits for the flush limit, not for the reader"
+    assert '"flush_timeout_ms":500' in err
+
+
+@not_wine_socket
+def test_stdout_and_stderr_on_one_socket_read_only_after_the_exit_get_every_row(tmp_path):
+    summary, out, _ = run_case(tmp_path, "socket_exit_merged", ERROR_ROWS_PROGRAM % SOCKET_ROWS,
+                               peer=["--socket", "--merge", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    check_rows(lines_of(out), SOCKET_ROWS)
+
+
+@not_wine_socket
+def test_a_socket_as_stdin_and_stdout_read_only_after_the_exit_gets_every_row(tmp_path):
+    summary, out, _ = run_case(tmp_path, "socket_exit_inetd", ROWS_PROGRAM % SOCKET_ROWS,
+                               peer=["--socket", "--stdin-socket", "--read-after-exit", "--pipe-size",
+                                     str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    check_rows(lines_of(out), SOCKET_ROWS)
+
+
+@not_wine_socket
+def test_a_socket_as_stdin_and_stdout_that_was_read_gets_every_row_after_the_exit(tmp_path):
+    summary, out, err = run_case(tmp_path, "socket_exit_inetd_read", GETS_ROWS_PROGRAM % SOCKET_ROWS,
+                                 peer=["--socket", "--stdin-socket", "--stdin-line", "hello", "--read-after-exit",
+                                       "--pipe-size", str(SOCKET_BUFFER)])
+    assert summary["status"] == 0
+    assert err == "hello\n"
+    check_rows(lines_of(out), SOCKET_ROWS)
+
+
+@not_wine_socket
+def test_a_read_of_a_socket_stdin_in_flight_at_the_end_does_not_hold_the_exit(tmp_path):
+    summary, out, _ = run_case(tmp_path, "socket_stdin_wait", STDIN_WAIT_PROGRAM,
+                               peer=["--socket", "--stdin-socket", "--read-after-exit", "--pipe-size",
+                                     str(SOCKET_BUFFER)],
+                               vm=["--flush-timeout", "500"])
+    assert summary["status"] == 0
+    assert summary["exit"] <= 20, "the exit does not wait for the read"
+    # On Windows the socket is not overlapped, so the writes of stdout wait behind the blocked read of stdin on it and
+    # the rows are lost after the flush limit (docs/vm/10-io-scheduler.md).
+    if not WINDOWS:
+        assert lines_of(out) == ["row 0", "row 1", "row 2"]
 
 
 @not_wine
