@@ -38,7 +38,7 @@ def ws(tmp_path):
 
 
 def environment(ws, **extra):
-    return vm_environment({**HERMETIC, "XDG_CACHE_HOME": str(ws.cache), **extra})
+    return vm_environment({**HERMETIC, **ws.cache_variables, **extra})
 
 
 def check(ws, root="main.agc", **extra):
@@ -247,17 +247,16 @@ def test_a_package_that_is_not_in_the_cache_says_so(ws, tmp_path):
 def test_the_cache_folder_follows_the_environment_of_the_system(ws, tmp_path):
     # Where the cache is: XDG_CACHE_HOME, else ~/.cache, and %LOCALAPPDATA%/agentica/cache on Windows.
     home = tmp_path / "home"
-    (home / ".cache").mkdir(parents=True)
-    ws.cache.rename(home / ".cache")
     if WINDOWS:
-        data = tmp_path / "data"
-        (data / "agentica" / "cache").mkdir(parents=True)
-        (home / ".cache" / "agentica" / "pkg").rename(data / "agentica" / "cache" / "pkg")
+        # ws.cache already holds agentica/cache/pkg, the layout under %LOCALAPPDATA%.
+        data = ws.cache
         # XDG_CACHE_HOME and HOME are not read on Windows.
         problem = check(ws, XDG_CACHE_HOME=str(tmp_path / "nowhere"), HOME=str(home), LOCALAPPDATA=str(data))
         assert problem is None
         assert_at_import(check(ws, HOME=str(home), LOCALAPPDATA="relative"), "CHECK-IMPORT-PACKAGE")
         return
+    (home / ".cache").mkdir(parents=True)
+    ws.cache.rename(home / ".cache")
     assert check(ws, XDG_CACHE_HOME="relative", HOME=str(home)) is None
     assert check(ws, XDG_CACHE_HOME="", HOME=str(home)) is None
     assert_at_import(check(ws, XDG_CACHE_HOME=str(tmp_path / "nowhere"), HOME=str(home)), "CHECK-IMPORT-PACKAGE")

@@ -7,6 +7,8 @@ import hashlib
 import os
 from pathlib import Path
 
+from tests.agentica_test import WINDOWS
+
 COMMIT = "a" * 40
 
 
@@ -43,9 +45,20 @@ class Workspace:
         self.project.mkdir(parents=True)
         self.locked = []
 
+    @property
+    def pkg_root(self):
+        """The cache root: $XDG_CACHE_HOME/agentica/pkg, or %LOCALAPPDATA%/agentica/cache/pkg on Windows. self.cache is
+        the value of the variable that the system reads (`cache_variables`)."""
+        return self.cache / "agentica" / "cache" / "pkg" if WINDOWS else self.cache / "agentica" / "pkg"
+
+    @property
+    def cache_variables(self):
+        """The environment that points the compiler at self.cache: the system reads one of the two variables."""
+        return {"LOCALAPPDATA": str(self.cache)} if WINDOWS else {"XDG_CACHE_HOME": str(self.cache)}
+
     def folder(self, key, commit=COMMIT):
-        """Where the cache keeps one commit of a package (XDG_CACHE_HOME is self.cache)."""
-        return self.cache / "agentica" / "pkg" / host_path(key) / commit
+        """Where the cache keeps one commit of a package."""
+        return self.pkg_root / host_path(key) / commit
 
     def add_package(self, key, version, files, requires=(), commit=COMMIT):
         """Writes the files of a package into the cache and notes its entry for the lock."""
