@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 73,
+  "stdout": [
+    "ok()",
+    "error(\"filesystem: refusing to remove an unsafe Windows path\")",
+    "error(\"filesystem: refusing to remove an unsafe Windows path\")",
+    "true",
+    "ok()",
+    ""
+  ],
+  "stderr": []
+}

@@ -3,9 +3,11 @@
 
 monotonic-peer.py VM BYTECODE  runs `VM -- BYTECODE`, whose program prints two
 Time.monotonic_ns readings around Task.sleep(20), and exits 1 with a message on
-a mismatch. On Linux both clocks are CLOCK_MONOTONIC, so the readings must lie
-between two time.monotonic_ns() readings taken around the run. Standard library
-only.
+a mismatch. The VM reads CLOCK_MONOTONIC on POSIX and QueryPerformanceCounter
+on Windows; Python reads the same counters through time.clock_gettime_ns() and
+time.perf_counter_ns() (time.monotonic() on Windows is GetTickCount64, a coarser
+clock). The readings must lie between two readings of that clock taken around the
+run. Standard library only.
 """
 import subprocess
 import sys
@@ -24,14 +26,21 @@ def fail(message):
     sys.exit(1)
 
 
+# The Python clock that reads the counter the VM reads: clock_gettime(CLOCK_MONOTONIC) on POSIX (vm/numbers.c), which on
+# macOS counts the time the machine slept, unlike time.monotonic_ns (mach_absolute_time); QueryPerformanceCounter on
+# Windows.
+if sys.platform == "win32":
+    clock_ns = time.perf_counter_ns
+else:
+    def clock_ns():
+        return time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+
+
 def main():
-    if sys.platform != "linux":
-        print("skip: the peer needs CLOCK_MONOTONIC (Linux)")
-        return
     vm, bytecode = sys.argv[1], sys.argv[2]
-    before = time.monotonic_ns()
+    before = clock_ns()
     run = subprocess.run([vm, "run", "--", bytecode], capture_output=True, text=True, timeout=60)
-    after = time.monotonic_ns()
+    after = clock_ns()
     if run.returncode != 0:
         fail("the VM exited %d: %s" % (run.returncode, run.stderr))
     lines = run.stdout.split()

@@ -75,8 +75,13 @@ NATIVE_WINDOWS_SCRATCH = (
 )
 WINDOWS = os.environ.get("AGENTICA_TEST_TARGET_OS") == "windows"
 
+# On a native Windows runner of GitHub Actions the scratch must exist (tools/run_remove_actions.py makes it): a missing
+# one is an error of the run, not a reason to skip these cases and still pass.
+if os.environ.get("GITHUB_ACTIONS") == "true" and os.name == "nt" and not NATIVE_WINDOWS_SCRATCH:
+    raise RuntimeError("the native Windows scratch is missing: run this module through make test-remove-actions")
+
 REQUIRES_NATIVE_WINDOWS = pytest.mark.skipif(not NATIVE_WINDOWS_SCRATCH, reason="requires the native Windows VM and scratch")
-REQUIRES_WINDOWS = pytest.mark.skipif(not WINDOWS, reason="requires the Windows VM")
+REQUIRES_WINDOWS = pytest.mark.skipif(not WINDOWS, reason="host-only: Windows path rules exist on Windows only")
 
 
 def run_with_stdout(bytecode, arguments, root, expected_stdout):

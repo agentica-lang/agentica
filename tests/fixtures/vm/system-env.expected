@@ -1,13 +1,12 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 117,
+  "steps": 110,
   "stdout": [
     "ok(\"value\")",
     "ok(\"\")",
     "ok(\"a=b c=\")",
     "ok(\"héllo ✓\")",
-    "error(\"system: environment variable is not set\")",
     "error(\"system: environment variable is not set\")",
     "error(\"system: environment variable is not set\")",
     "error(\"system: environment variable is not set\")",

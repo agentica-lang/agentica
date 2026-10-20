@@ -1,7 +1,13 @@
 name: Platforms
 
-# Pull requests run these jobs only with the `platforms` label (adding it
-# starts a run); pushes to master and manual runs always do.
+# The conformance matrix: the same areas on Linux x86_64, Windows x86_64, macOS Intel and macOS ARM, one job per system,
+# named by platform and architecture (the names of the release packages). Each job builds from bootstrap/stage0.agcb,
+# runs the C tests, the fixed point and then every area of tools/conformance.py, and ends with a report in the job
+# summary that fails when an area has no passed case, a module did not finish, or a case was skipped for a reason that is
+# not on the reviewed list (host-only: pairs in HOST_ONLY_ALLOWED; known-issue: numbers in KNOWN_ISSUES). A last job,
+# `conformance all-systems`, puts the four summaries side by side and fails when a case ran on no system.
+# Pull requests run these jobs only with the `platforms` label (adding it starts a run); pushes to master and manual
+# runs always do.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -9,13 +15,8 @@ on:
     branches: [master]
   workflow_dispatch:
     inputs:
-      os:
-        description: Which platforms to run
-        type: choice
-        options: [both, macos, windows]
-        default: both
       openssl:
-        description: OpenSSL linkage mode for a manual run (pull requests and master use vendored, as the release does)
+        description: OpenSSL linkage mode for a manual run on macOS and Windows (pull requests and master use vendored, as the release does)
         type: choice
         options: [vendored, system]
         default: vendored
@@ -29,46 +30,53 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'platforms' && github.run_id || 'main' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# The runners can be slow: every deadline of the tests is multiplied by this, as in ci.yml (references/ci.md). Linux
+# keeps the 4 as well, so that one number holds on the four systems and a test that needs a longer deadline on a slow
+# macOS or Windows runner is not hidden by a quicker Linux one.
+env:
+  AGENTICA_TEST_TIMEOUT_SCALE: '4'
+
 jobs:
-  embedded-object:
+  conformance:
+    name: conformance ${{ matrix.platform }}
     if: (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, macos-15-intel]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v7
-      - run: sh vm/tools/gen-embedded.sh bootstrap/stage0.agcb stdlib stdlib/MODULES > embedded.s
-      - run: cc -c embedded.s -o embedded.o
-
-  embedded-object-windows:
-    if: (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
-    runs-on: windows-2025
-    timeout-minutes: 10
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+            make: make
+            python: python3
+            shell: bash
+          - platform: windows-x86_64
+            runner: windows-2025
+            make: make
+            python: python
+            shell: msys2 {0}
+          - platform: macos-x86_64
+            runner: macos-15-intel
+            make: gmake
+            python: python3
+            shell: bash
+          - platform: macos-arm64
+            runner: macos-latest
+            make: gmake
+            python: python3
+            shell: bash
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      # Linux builds with the system libgc and OpenSSL, as ci.yml does (ci.yml and the release check the vendored link
+      # there); the other systems link the vendored OpenSSL, as the release does.
+      AGENTICA_OPENSSL: ${{ matrix.platform == 'linux-x86_64' && 'system' || github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
+      CCACHE_DIR: ${{ github.workspace }}/build/ccache
+      PYTHON: ${{ matrix.python }}
+      PLATFORM: ${{ matrix.platform }}
     defaults:
       run:
-        shell: msys2 {0}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: msys2/setup-msys2@v2.33.0
-        with:
-          msystem: UCRT64
-          path-type: inherit
-          update: false
-          install: make mingw-w64-ucrt-x86_64-gcc
-      - run: sh vm/tools/gen-embedded.sh bootstrap/stage0.agcb stdlib stdlib/MODULES > embedded.s
-      - run: gcc -c embedded.s -o embedded.o
-
-  vm-macos:
-    if: inputs.os != 'windows' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
-    runs-on: macos-15-intel
-    timeout-minutes: 30
-    env:
-      AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
-      CCACHE_DIR: ${{ github.workspace }}/build/ccache
+        shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -79,184 +87,38 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: python3 -m pip install poetry==2.1.2
-      - run: poetry install --only test --no-root
-      - if: env.AGENTICA_OPENSSL == 'system'
-        run: brew install make openssl@3 pkg-config ccache
-      - if: env.AGENTICA_OPENSSL == 'vendored'
-        run: brew install make ccache
-      - if: env.AGENTICA_OPENSSL == 'system'
-        run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
-      - run: cc --version
-      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
-      - if: env.AGENTICA_OPENSSL == 'vendored'
-        run: make -s vm-openssl-key > build/openssl-key-release
-      - if: env.AGENTICA_OPENSSL == 'vendored'
-        uses: actions/cache@v6
-        with:
-          path: |
-            build/vm/release/openssl/include
-            build/vm/release/openssl/libssl.a
-            build/vm/release/openssl/libcrypto.a
-            build/vm/release/openssl-flags
-          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
-      - uses: actions/cache/restore@v6
-        with:
-          path: |
-            build/vm/release/uv
-            build/vm/release/libuv.a
-            build/vm/release/third-party-flags
-            build/vm/release/yyjson.o
-            build/vm/release/picohttpparser.o
-            build/vm/gc.o
-            build/vm/gc-flags
-          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/restore@v6
-        with:
-          path: build/ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
-          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
-      - run: make vm-test
-      - name: The vendored OpenSSL is linked statically
-        if: env.AGENTICA_OPENSSL == 'vendored'
-        run: gmake vendored-check
-      - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_platform_bootstrap.py"
-      - name: Destructive filesystem regressions in Actions-owned scratch
-        run: make test-remove-actions
-        env:
-          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-      - run: ccache --show-stats
-      - uses: actions/cache/save@v6
-        with:
-          path: |
-            build/vm/release/uv
-            build/vm/release/libuv.a
-            build/vm/release/third-party-flags
-            build/vm/release/yyjson.o
-            build/vm/release/picohttpparser.o
-            build/vm/gc.o
-            build/vm/gc-flags
-          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/save@v6
-        with:
-          path: build/ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
-
-  vm-macos-latest:
-    if: inputs.os != 'windows' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
-    runs-on: macos-latest
-    timeout-minutes: 30
-    env:
-      AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
-      CCACHE_DIR: ${{ github.workspace }}/build/ccache
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: true
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-      - run: python3 -m pip install poetry==2.1.2
-      - run: poetry install --only test --no-root
-      - if: env.AGENTICA_OPENSSL == 'system'
-        run: brew install make openssl@3 pkg-config ccache
-      - if: env.AGENTICA_OPENSSL == 'vendored'
-        run: brew install make ccache
-      - if: env.AGENTICA_OPENSSL == 'system'
-        run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
-      - run: cc --version
-      - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
-      - if: env.AGENTICA_OPENSSL == 'vendored'
-        run: make -s vm-openssl-key > build/openssl-key-release
-      - if: env.AGENTICA_OPENSSL == 'vendored'
-        uses: actions/cache@v6
-        with:
-          path: |
-            build/vm/release/openssl/include
-            build/vm/release/openssl/libssl.a
-            build/vm/release/openssl/libcrypto.a
-            build/vm/release/openssl-flags
-          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
-      - uses: actions/cache/restore@v6
-        with:
-          path: |
-            build/vm/release/uv
-            build/vm/release/libuv.a
-            build/vm/release/third-party-flags
-            build/vm/release/yyjson.o
-            build/vm/release/picohttpparser.o
-            build/vm/gc.o
-            build/vm/gc-flags
-          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/restore@v6
-        with:
-          path: build/ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
-          restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
-      - run: make vm-test
-      - name: The vendored OpenSSL is linked statically
-        if: env.AGENTICA_OPENSSL == 'vendored'
-        run: gmake vendored-check
-      - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_platform_bootstrap.py"
-      - name: Destructive filesystem regressions in Actions-owned scratch
-        run: make test-remove-actions
-        env:
-          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-      - run: ccache --show-stats
-      - uses: actions/cache/save@v6
-        with:
-          path: |
-            build/vm/release/uv
-            build/vm/release/libuv.a
-            build/vm/release/third-party-flags
-            build/vm/release/yyjson.o
-            build/vm/release/picohttpparser.o
-            build/vm/gc.o
-            build/vm/gc-flags
-          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/save@v6
-        with:
-          path: build/ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
-
-  vm-windows:
-    if: inputs.os != 'macos' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
-    runs-on: windows-2025
-    timeout-minutes: 30
-    env:
-      AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
-      CCACHE_DIR: ${{ github.workspace }}/build/ccache
-    defaults:
-      run:
-        shell: msys2 {0}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          submodules: true
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
+      - run: python3 -m pip install poetry==2.1.2 && poetry install --only test --no-root
+        if: runner.os != 'Windows'
       - run: python -m pip install poetry==2.1.2
+        if: runner.os == 'Windows'
         shell: pwsh
       - run: poetry install --only test --no-root
+        if: runner.os == 'Windows'
         shell: pwsh
       - uses: msys2/setup-msys2@v2.33.0
+        if: runner.os == 'Windows'
         with:
           msystem: UCRT64
           path-type: inherit
           update: false
           install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ccache mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
-      - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
+      - name: Linux packages (system libgc and OpenSSL, ccache), when the image lacks them
+        if: runner.os == 'Linux'
+        run: |
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
+          command -v ccache >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache; }
+      - if: runner.os == 'macOS' && env.AGENTICA_OPENSSL == 'system'
+        run: brew install make openssl@3 pkg-config ccache
+      - if: runner.os == 'macOS' && env.AGENTICA_OPENSSL == 'vendored'
+        run: brew install make ccache
+      - if: runner.os == 'macOS' && env.AGENTICA_OPENSSL == 'system'
+        run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: The toolchain, and the machine is the platform of this job
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version; else cc --version; fi
+          "$PYTHON" --version
+          node --version
+          "$PYTHON" tools/conformance.py host "$PLATFORM"
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
       - if: env.AGENTICA_OPENSSL == 'vendored'
         run: make -s vm-openssl-key > build/openssl-key-release
@@ -285,22 +147,59 @@ jobs:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
-      - run: make vm-test
-      - name: The vendored OpenSSL is linked statically, without msys-2.0.dll
+
+      - name: C tests (builds the VM from the sources)
+        run: make vm-test
+      - name: The vendored OpenSSL is linked statically
         if: env.AGENTICA_OPENSSL == 'vendored'
-        run: make vendored-check
-      - run: make build/vm/release/bootstrap/agentica.exe
-      - name: Bootstrap driver smoke
-        env:
-          AGENTICA_VM_BINARY: build/vm/release/bootstrap/agentica.exe
-        run: poetry run python -m pytest tests/test_platform_bootstrap.py
-      - run: make fixed-point
-      - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py tests/test_process.py tests/test_process_windows.py tests/test_process_bdd.py tests/test_bdd.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_windows_console_stop.py tests/test_platform_bootstrap.py"
-      - name: Destructive filesystem regressions in Actions-owned scratch
-        run: make test-remove-actions PYTHON=python
+        run: ${{ matrix.make }} vendored-check
+      - name: First binary of the bootstrap (linked with stage0) passes the native contracts alone
+        run: ${{ matrix.make }} bootstrap-smoke PYTHON=${{ matrix.python }}
+      - name: Build from bootstrap/stage0.agcb and fixed point (stage2 == stage3, the binary compiles stage2)
+        id: build
+        run: ${{ matrix.make }} fixed-point
+
+      - name: "Area cli: options, diagnostics, run, compile, test, modules, the single binary"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/cli PYTHON=${{ matrix.python }}
+      - name: "Area spec: the rules of the language through check"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/spec PYTHON=${{ matrix.python }}
+      - name: "Area golden: the builtins and the VM against the golden outputs (sampled sweep, set by the make target)"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/golden PYTHON=${{ matrix.python }}
+      - name: "Area library: std modules and the standard streams"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/library PYTHON=${{ matrix.python }}
+      - name: "Area files: files, directories, paths, metadata and locks"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/files PYTHON=${{ matrix.python }}
+      - name: "Area files, destructive cases, in the scratch of this runner"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} test-remove-actions PYTHON=${{ matrix.python }}
         env:
           AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-      - run: ccache --show-stats
+      - name: "Area processes: Process, the private channel, stop signals"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/processes PYTHON=${{ matrix.python }}
+      - name: "Area tasks: tasks, channels and timers"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/tasks PYTHON=${{ matrix.python }}
+      - name: "Area network: TCP, TLS and HTTP against independent peers"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/network PYTHON=${{ matrix.python }}
+      - name: Evidence report (fails when an area has no passed case or a skip has no host-only reason)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-report PYTHON=${{ matrix.python }} CONFORMANCE_PLATFORM=${{ matrix.platform }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        with:
+          name: conformance-${{ matrix.platform }}
+          path: build/conformance/summary.json
+          if-no-files-found: error
+
+      - run: if command -v ccache >/dev/null; then ccache --show-stats; fi
+        if: ${{ !cancelled() }}
       - uses: actions/cache/save@v6
         with:
           path: |
@@ -317,3 +216,23 @@ jobs:
         with:
           path: build/ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+
+  # The four summaries side by side: a case that no system ran (host-only or open gap on all four) proves nothing, and
+  # one job cannot see that.
+  summary:
+    name: conformance all-systems
+    needs: conformance
+    if: ${{ !cancelled() && needs.conformance.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: conformance-*
+          path: build/conformance-all
+      - name: Every case ran on at least one system
+        run: python3 tools/conformance.py merge build/conformance-all

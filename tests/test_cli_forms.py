@@ -11,14 +11,16 @@ keeps that output. A change of the command line on purpose rewrites it with `mak
 `poetry run python -m tests.test_cli_forms freeze`), and the diff of the file is the review. The temp folder and the version are written as <work> and <version>.
 A file that `compile` writes is only noted as written or not (its bytes carry the version)."""
 import json
+import re
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
 from tests.agentica_test import FIXTURES, agentica_version, binary, run, vm_environment
+from tests.vm_diff_support import relocate_windows
 
 FROZEN = FIXTURES / "cli" / "forms.json"
 JOBS = 6
@@ -96,11 +98,17 @@ class Workspace:
         for name, data in BINARY_FILES.items():
             (self.work / name).write_bytes(data)
 
-    def plain(self, text):
-        return text.replace(str(self.work), "<work>").replace(agentica_version(), "<version>")
+    def plain(self, text, escapes=True):
+        # On Windows the folder is typed with backslashes in the arguments and printed with slashes by the binary, or
+        # with doubled backslashes in a JSON string; each spelling becomes <work> and the rest of the path has slashes.
+        if sys.platform == "win32":
+            text = relocate_windows(text, PureWindowsPath(self.work), "<work>", escapes)
+        else:
+            text = text.replace(str(self.work), "<work>")
+        return text.replace(agentica_version(), "<version>")
 
     def key(self, arguments, options):
-        return json.dumps([[self.plain(str(argument)) for argument in arguments], options], sort_keys=True)
+        return json.dumps([[self.plain(str(argument), escapes=False) for argument in arguments], options], sort_keys=True)
 
     def observe(self, arguments, stdin="", cwd=None, outputs=()):
         """What the binary does for the arguments: exit code, stdout, stderr, and which of `outputs` it wrote.

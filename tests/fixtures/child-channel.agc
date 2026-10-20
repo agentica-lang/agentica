@@ -55,7 +55,7 @@ def spawn_shell(script: String, channel: Bool) -> Void
 end
 
 def spawning() -> Void
-  probe = "echo \"${AGENTICA_CHANNEL-unset}\"; if [ -S /proc/self/fd/3 ]; then echo socket; else echo closed; fi"
+  probe = "echo \"${AGENTICA_CHANNEL-unset}\"; if [ -S /dev/fd/3 ]; then echo socket; else echo closed; fi"
   spawn_shell(probe, false)
   spawn_shell(probe, true)
 end

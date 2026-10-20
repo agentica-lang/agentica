@@ -21,7 +21,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli test-distribution release-check release-package release-smoke clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-net vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli conformance conformance-report bootstrap-smoke test-distribution release-check release-package release-smoke clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-net vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -85,6 +85,7 @@ test-py:
 	@if [ -n "$(PY_ISOLATED_SELECTED)" ]; then \
 	  echo "$(PY_ISOLATED_SELECTED) is isolated: run make tests KIND=files (Docker) or make test-remove-actions in CI" >&2; exit 1; \
 	fi
+	@if [ -n "$(JUNIT_DIR)" ]; then mkdir -p "$(JUNIT_DIR)"; fi
 	@if [ -n "$(PY_TESTS)" ]; then \
 	  if command -v $(POETRY) >/dev/null 2>&1; then \
 	    pytest_runner="$(POETRY) run python -m pytest"; \
@@ -102,16 +103,19 @@ test-py:
 
 # `timeout` (coreutils) ends a hung module: exit 124, or 137 when it had to send KILL after the 10 s of grace. Without
 # the command the module runs unguarded; the per-test limit and the job timeout remain.
+# JUNIT_DIR (the conformance targets set it) makes each module write DIR/<module>.xml, which tools/conformance.py reads.
 PYTEST_RUNNER ?= $(POETRY) run python -m pytest
+JUNIT_DIR ?=
+JUNIT_ARG = $(if $(JUNIT_DIR),--junitxml=$(JUNIT_DIR)/$(patsubst test_%.py,test_%,$(notdir $*)).xml)
 py-test/%: FORCE
 	@echo "pytest $*"
 	@if command -v timeout >/dev/null 2>&1; then \
-	  timeout -k 10 $(MODULE_LIMIT) $(PYTEST_RUNNER) "$*"; status=$$?; \
+	  timeout -k 10 $(MODULE_LIMIT) $(PYTEST_RUNNER) "$*" $(JUNIT_ARG); status=$$?; \
 	  if [ $$status -eq 124 ] || [ $$status -eq 137 ]; then \
 	    echo "pytest $*: hung, stopped after $(MODULE_LIMIT) s (the module limit)" >&2; \
 	  fi; \
 	  exit $$status; \
-	else $(PYTEST_RUNNER) "$*"; fi
+	else $(PYTEST_RUNNER) "$*" $(JUNIT_ARG); fi
 
 # The tests that run the product command line on dist/agentica (make test runs them too, with the rest): the options, the
 # diagnostics, the programs, `agentica test`, `agentica run`.
@@ -119,6 +123,32 @@ CLI_TESTS ?= tests/test_cli_forms.py tests/test_examples.py tests/test_filesyste
   tests/test_source_utf8.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_modules.py tests/test_vm_diff_8.py tests/test_single_binary.py
 test-cli: $(PRODUCT)
 	AGENTICA_TEST_EXECUTABLE="$(CURDIR)/$(PRODUCT)" $(MAKE) --no-print-directory test-py TESTS="$(CLI_TESTS)" AGENTICA_TEST_SLOW=
+
+# The conformance matrix (platforms.yml; tools/conformance.py has the areas and the modules of each): every area runs on
+# Linux, Windows, macOS Intel and macOS ARM, and the report fails when an area has no passed case, a module did not
+# finish, or a case was skipped without a "host-only:" reason. conformance-area/NAME runs one area into
+# $(CONFORMANCE_DIR)/NAME; conformance runs all of them (a failed area does not stop the next) and then the report. The
+# tasks area runs its modules one at a time, because its timing cases need the CPU (make vm-task-map).
+CONFORMANCE_DIR ?= build/conformance
+CONFORMANCE_PLATFORM ?=
+# The golden area samples the --max-steps sweep (the full one is the sweep of CI); env.txt records the tier and the sweep
+# that the area really ran with, and the report prints them.
+conformance-area/%: $(PRODUCT) FORCE
+	@rm -rf "$(CONFORMANCE_DIR)/$*"
+	@mkdir -p "$(CONFORMANCE_DIR)/$*"
+	@sweep="$(if $(filter golden,$*),sampled,$(AGENTICA_SWEEP))"; \
+	  echo "slow= sweep=$$sweep" > "$(CONFORMANCE_DIR)/$*/env.txt"; \
+	  AGENTICA_SWEEP="$$sweep" $(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW= JUNIT_DIR="$(CONFORMANCE_DIR)/$*" \
+	  JOBS=$(if $(filter tasks,$*),1,$(JOBS)) TESTS="$(shell $(PYTHON) tools/conformance.py modules $*)"
+
+conformance-report:
+	$(PYTHON) tools/conformance.py report "$(CONFORMANCE_DIR)" $(if $(CONFORMANCE_PLATFORM),--platform $(CONFORMANCE_PLATFORM))
+
+conformance: $(PRODUCT)
+	@status=0; for area in $$($(PYTHON) tools/conformance.py areas); do \
+	  $(MAKE) --no-print-directory conformance-area/$$area || status=1; \
+	done; \
+	$(MAKE) --no-print-directory conformance-report || status=1; exit $$status
 
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
 bench: $(PRODUCT)
@@ -629,6 +659,11 @@ BOOT := $(VM_BUILD)/bootstrap/agentica$(EXE)
 STAGE1_COMPILER ?= $(BOOT)
 STAGE1_NEEDS := $(if $(filter $(BOOT),$(STAGE1_COMPILER)),$(BOOT))
 
+# The first binary of the bootstrap, linked with stage0 (never shipped), passes the native contracts of
+# tests/test_platform_bootstrap.py on its own, before anything it compiled runs (platforms.yml runs it on every system).
+bootstrap-smoke: $(BOOT)
+	AGENTICA_VM_BINARY=$(BOOT) $(MAKE) --no-print-directory test-py TESTS="tests/test_platform_bootstrap.py"
+
 ifneq ($(filter 1,$(GC_STRESS) $(TSAN)),)
 $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS):
 	@echo "$@ is missing: the GC stress and TSan builds link the front end of the release build; run make first" >&2; exit 1
@@ -889,7 +924,7 @@ sweep-full: vm-diff-build
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
-VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_linux.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py
+VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py
 SANITIZE_JOBS ?= 4
 
 # The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only): the lock checks of

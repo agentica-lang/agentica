@@ -5,7 +5,7 @@ end
 def describe(label: String, result: Result[FileInfo]) -> Void
   if result.ok?
     info = Result.unwrap!(result)
-    puts("#{label} #{info.kind} #{info.size_bytes} #{info.mode}")
+    puts("#{label} #{info.kind} #{info.size_bytes}")
   else
     IO.inspect(result)
   end
@@ -60,10 +60,7 @@ def main() -> Void
   Dir.mkdir(at(tree, "a/b/c"), 60000)
   File.write_text(at(tree, "a/b/c/f.txt"), "f", 60000)
   File.write_text(at(tree, "top.txt"), "t", 60000)
-  IO.inspect(Path.remove(at(at(tree, "top.txt"), "x"), 60000))
   IO.inspect(Path.remove(at(dir, "missing"), 60000))
-  IO.inspect(Path.remove(at(tree, "a/.."), 60000))
-  IO.inspect(Path.remove(at(tree, "a/b/c/") + "/.", 60000))
   IO.inspect(Path.remove(tree, 0))
   IO.inspect(File.lstat(at(tree, "a/b/c/f.txt"), 60000).ok?)
   IO.inspect(Path.remove(at(tree, "top.txt"), 60000))

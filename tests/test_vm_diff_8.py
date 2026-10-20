@@ -16,8 +16,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (RUN_TIMEOUT, TESTS, Child, cli, compile_agc, process_alive, scaled, vm_binary,
-                                 vm_command, vm_environment, wait_until)
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
+                                 vm_binary, vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
     check_limited, check_runaway, check_steps, check_sweep, check_text_format, decode, exit_status, execute,
@@ -26,7 +26,18 @@ from tests.vm_diff_support import (
     run_vm_process, runaway_programs, step_allowance, step_limited, style_options, text_code, text_crash_free,
     total_steps, shard_assignment)
 
-LINUX = sys.platform.startswith("linux")
+
+def posix_only(why):
+    """A case about a capability that Windows lacks (POSIX signals, descriptor numbers, shell scripts); the reason names
+    what the Windows counterpart checks."""
+    return pytest.mark.skipif(os.name != "posix", reason="host-only: " + why)
+
+
+def windows_gap(number, why):
+    """A case whose behavior exists on Windows but whose test needs /bin/sh, a POSIX signal or a FIFO: an open issue."""
+    return pytest.mark.skipif(os.name != "posix", reason="known-issue: #%d %s" % (number, why))
+
+
 PLAIN = Fixture()
 ALLOWED = Fixture(allow_run=True)
 
@@ -137,6 +148,7 @@ def test_the_vm_command_line_checks_options_and_stops_parsing_at_the_file(tmp_pa
     assert seeded("7")[1] != seeded("8")[1]
 
 
+@windows_gap(432, "the Windows channel is two pipes, which this Python peer cannot pass to the VM")
 def test_tests_draw_the_same_values_alone_or_with_others(tmp_path):
     tests = compile_program(
         tmp_path, "seeded-tests",
@@ -188,7 +200,7 @@ def test_a_bytecode_file_may_have_a_non_ascii_name_and_a_bad_one_is_rejected(tmp
     assert rejected[2].startswith("agentica run: invalid bytecode: "), rejected[2]
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@windows_gap(434, "the private input of --driver-pid has no Windows test (test_platform_bootstrap.py checks only that the flag names the parent)")
 def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_it(tmp_path):
     bytecode = fixture_bytecode(tmp_path, "calls")
     copy = tmp_path / "driver-copy.agcb"
@@ -213,7 +225,7 @@ def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_
     assert copy.exists()
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@windows_gap(433, "the stuck read needs a named pipe on Windows")
 def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_the_vm_at_exit(tmp_path):
     bytecode = compile_program(
         tmp_path, "fifo-stuck",
@@ -235,7 +247,7 @@ def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_th
         os.close(held)
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@posix_only("#!/bin/sh scripts found through a colon separated PATH; Windows has no #! scripts (test_process.py searches PATH with a copy of node.exe)")
 def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_against_the_working_directory(tmp_path):
     bytecode = compile_program(
         tmp_path, "path-lookup",
@@ -262,7 +274,7 @@ def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_again
         assert run_vm(ALLOWED, bytecode, None, cwd=folder, env={"PATH": search}) == want, search
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@posix_only("SIGTERM; Windows has Ctrl+Break, which test_windows_console_stop.py sends to end the VM, its child and the buffered file")
 def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(adopt, request, tmp_path):
     program = tmp_path / "signal-children.agc"
     program.write_text(
@@ -280,7 +292,7 @@ def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(ado
     assert gone(pid), pid
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@windows_gap(434, "grandchild cleanup after close has no Windows test (test_process_windows.py checks only the raw status of the closed child)")
 def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_own_children(request, tmp_path):
     inner = compile_program(
         tmp_path, "captured-inner",
@@ -307,7 +319,7 @@ def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_
             assert gone(pid), "%s: %s" % (mode, pid)
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@windows_gap(434, "close never waiting and the SIGKILL escalation have no Windows test")
 def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_gets_sigkill_a_second_later(
         request, tmp_path):
     bytecode = compile_program(
@@ -319,7 +331,8 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
         "  pid = Result.unwrap!(Process.read_line(p, 60000))\n  puts(pid)\n  IO.flush()\n"
         "  start = Time.monotonic_ms()\n  Process.close(p)\n  puts(Time.monotonic_ms() - start)\n"
         "  if mode == \"wait\"\n    Task.sleep(1500)\n"
-        "    puts(Result.ok?(File.stat(\"/proc/#{pid}\", 60000)))\n  end\nend\n")
+        "    probe = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"kill -0 #{pid} 2>/dev/null\"], 60000))\n"
+        "    puts(Result.unwrap!(Process.wait(probe, 60000)) == 0)\n    Process.close(probe)\n  end\nend\n")
     traced = "trace off" not in vm(tmp_path, "--version")[1]
     for mode in ["wait", "exit", "quick"]:
         pids = []
@@ -337,7 +350,7 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
             assert re.search(r" io end code=0 signal=0", result[2]), mode
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@windows_gap(434, "the output timeout and invalid UTF-8 output of a captured child have no Windows test")
 def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_utf8_as_ufffd(tmp_path):
     bytecode = compile_program(
         tmp_path, "captured-output",
@@ -350,7 +363,7 @@ def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_u
         (0, "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n", "")
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@windows_gap(437, "a stop signal that arrives while the VM waits for its last child has no Windows test")
 def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child_exits_first(adopt, request, tmp_path):
     bytecode = compile_program(
         tmp_path, "signal-pending",
@@ -371,19 +384,21 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
     assert exit_status(child.wait(RUN_TIMEOUT)) == 128 + signal.SIGTERM
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@posix_only("descriptors inherited by number; Windows inherits handles, which vm/tests/process_test.c checks (a child does not get an inheritable handle of the parent)")
 def test_a_child_does_not_inherit_descriptors_the_vm_inherited(tmp_path):
     bytecode = compile_program(
         tmp_path, "private-fds",
         "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", "
-        "\"if [ -e /proc/self/fd/7 ]; then echo leaked; else echo private; fi\"], 60000))\n"
+        "\"if [ -e /dev/fd/7 ]; then echo leaked; else echo private; fi\"], 60000))\n"
         "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  Process.close(p)\nend\n")
     result = execute(["/bin/sh", "-c", "exec 7</dev/null; exec \"$0\" run --allow-run -- \"$1\"", vm_binary(), bytecode],
                      cwd=tmp_path, env=vm_environment())
     assert result == (0, "private\n", "")
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="host-only: needs a file system that accepts a folder name that is not valid UTF-8 (APFS and NTFS refuse it)")
 def test_relative_file_paths_use_the_raw_bytes_of_a_non_utf8_working_directory(tmp_path):
     bytecode = compile_program(
         tmp_path, "raw-cwd",
@@ -395,7 +410,7 @@ def test_relative_file_paths_use_the_raw_bytes_of_a_non_utf8_working_directory(t
     assert (folder / "a.txt").read_text(encoding="utf-8") == "hi"
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
+@posix_only("passes arguments that are not valid UTF-8, which a Windows command line (UTF-16) cannot carry")
 def test_the_vm_decodes_invalid_utf8_arguments_like_the_original_in_a_utf8_locale(tmp_path):
     program = FIXTURE_DIR / "system-args.agc"
     bytecode = compile_agc(program, tmp_path / "system-args.agcb")
@@ -510,7 +525,6 @@ def no_bytecode(temp, arguments):
 # The product CLI runs programs on the VM with their expected exit code, stdout and diagnostic code.
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
 def test_the_formats_exit_codes_and_diagnostics_of_a_run(tmp_path):
     temp = cli_temp(tmp_path)
     for name in ["calls.agc", "division-by-zero.agc", "linked.agc"]:
@@ -526,7 +540,6 @@ def test_the_formats_exit_codes_and_diagnostics_of_a_run(tmp_path):
                 assert result[0] == 1
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
 def test_options_arguments_and_removed_flags(tmp_path):
     temp = cli_temp(tmp_path)
     calls = cli_fixture("calls.agc")
@@ -553,7 +566,6 @@ def test_options_arguments_and_removed_flags(tmp_path):
     assert agentica(temp, tmp_path, "--max-steps", "0", calls)[0] == 2
 
 
-@pytest.mark.skipif(not LINUX, reason="Linux only")
 def test_standard_input_exit_codes_and_arguments_reach_the_program(tmp_path):
     temp = cli_temp(tmp_path)
     gets = cli_fixture("io-gets.agc")
@@ -582,6 +594,7 @@ def test_compile_exits_1_on_a_diagnostic_and_2_on_an_unwritable_output(tmp_path)
 # What the binary does with its own standard input and its environment.
 
 
+@host_only(WINDOWS, "opens a directory as a descriptor to use as standard input, which Windows refuses")
 def test_a_standard_input_that_cannot_be_read_is_an_internal_error(tmp_path):
     temp = cli_temp(tmp_path)
     gets = cli_fixture("io-gets.agc")

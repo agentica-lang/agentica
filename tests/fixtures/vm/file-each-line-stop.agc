@@ -17,7 +17,7 @@ def put_bytes(dir: String, name: String, bytes: List[Int]) -> String
 end
 
 def open_files() -> Int
-  return Result.unwrap!(Dir.list("/proc/self/fd", 60000)).length
+  return Result.unwrap!(Dir.list(System.args()[1], 60000)).length
 end
 
 def double(n: Int) -> Int
