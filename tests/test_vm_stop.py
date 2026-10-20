@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, cli, compile_agc, host_only, known_issue,
-                                 process_alive, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, kill_process,
+                                 known_issue, process_alive, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
                                  vm_environment, wait_until)
 
 # SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals, so each case that sends one is host-only on Windows, and the
@@ -96,11 +96,18 @@ end
 """ % (("spawn", "", "") if trap == "" else ("spawn_captured", trap, ', "."'))
 
 
+NO_FILE_FLUSH = "a flush that a FIFO holds up; " + FIFO_FILE_REASON
+
+# Standard output that stays stuck on Windows: 50 KiB fit the 64 KiB buffer of the stream whatever the size of the pipe
+# (4 KiB there), so the program reaches "ready" while the pipe is full.
+WINDOWS_STUCK_STDOUT = STUCK_STDOUT.replace("n < 70", "n < 50")
+
+
 def gone_soon(pid):
     """True when the process ends within WAIT_SECONDS; otherwise it is killed so it cannot outlive the test."""
     if wait_until(lambda: not process_alive(pid), WAIT_SECONDS, 0.1):
         return True
-    os.kill(pid, signal.SIGKILL)
+    kill_process(pid)
     return False
 
 
@@ -122,6 +129,30 @@ def launch(adopt, disposition, *argv, **options):
 def check_stopped(pid, path, label):
     assert path.read_text() == "buffered", label
     assert gone_soon(pid), "%s: the child is gone" % label
+
+
+def check_a_driven_vm_with_stuck_standard_output(tmp_path, adopt):
+    """The Windows form of the case below: no file flush waits there, so the flush that a dead driver must not wait for
+    is the one of standard output, a pipe that the test holds and does not read (so it is full, not broken, when the
+    driver dies). The driver is a Python process that starts the VM with --driver-pid, which Windows takes only for a
+    private input: the copy that a VM makes with create_private (an access list that names only its owner)."""
+    from tests.agentica_test import run_vm
+    from tests.test_windows_process_cleanup import COPY_PROGRAM
+    if UNDER_WINE:
+        pytest.skip("Wine gives the pipe 64 KiB, so the rows fit it and nothing is stuck")
+    public = bytecode(WINDOWS_STUCK_STDOUT, tmp_path)
+    code = tmp_path / "driven.agcb"
+    made = run_vm(bytecode(COPY_PROGRAM, tmp_path, "copy-private"), args=[public, code], env=vm_environment(),
+                  cwd=tmp_path)
+    assert (made.code, made.stderr) == (0, ""), made
+    driver = adopt(Child([PYTHON, PEER, "drive-inherited", *vm_command(), "--", code], capture_stderr=True,
+                         read_stdout=False))
+    pid = int(driver.next_stderr_line(WAIT_SECONDS))
+    ready = driver.next_stderr_line(WAIT_SECONDS)
+    assert ready == "ready", ready
+    time.sleep(0.3)
+    driver.process.kill()
+    assert gone_soon(pid), "the VM ends after its driver"
 
 
 def full_fifo(adopt, tmp_path):
@@ -177,8 +208,7 @@ def test_a_second_stop_signal_before_the_children_are_stopped_waits_for_them(tmp
     assert gone_soon(pid), "the child is gone"
 
 
-@host_only(WINDOWS, "a flush that a FIFO holds up; Windows has no FIFO file and the VM refuses a named pipe as a file, so no file "
-                    "flush waits there; test_ctrl_break_with_standard_output_stuck_does_not_wait_for_the_flush_limit and "
+@host_only(WINDOWS, NO_FILE_FLUSH + "; test_ctrl_break_with_standard_output_stuck_does_not_wait_for_the_flush_limit and "
                     "test_two_ctrl_breaks_in_a_row_end_the_run_with_149_and_the_child_is_gone in "
                     "test_windows_console_stop.py check a stop with standard output stuck and a second Ctrl+Break")
 def test_a_second_stop_signal_ends_a_flush_that_cannot_finish_the_first_one_waits_for_it(tmp_path, adopt):
@@ -193,9 +223,9 @@ def test_a_second_stop_signal_ends_a_flush_that_cannot_finish_the_first_one_wait
     assert vm.wait(WAIT_SECONDS) == -signal.SIGTERM
 
 
-@host_only(WINDOWS, "a flush that a FIFO holds up; Windows has no FIFO file and the VM refuses a named pipe as a file, so no file "
-                    "flush waits there (the driver of a driven VM has no Windows test: issue 434)")
 def test_a_driven_vm_whose_driver_died_does_not_wait_for_its_flush(tmp_path, adopt):
+    if WINDOWS:
+        return check_a_driven_vm_with_stuck_standard_output(tmp_path, adopt)
     fifo = full_fifo(adopt, tmp_path)
     driver = adopt(Child([PYTHON, PEER, "drive", *vm_command(), "--", bytecode(STUCK_FLUSH, tmp_path), fifo]))
     pid = int(driver.next_line(WAIT_SECONDS))

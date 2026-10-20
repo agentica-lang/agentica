@@ -109,7 +109,7 @@ Opens a file for streaming.
 - On `SIGINT`, `SIGTERM` or `SIGHUP`: child programs stop first, then files are written, then the program ends by that signal. The run does not wait for a reader of stdout or stderr. A second signal ends it at once, once the children have stopped.
 - Under `agentica`, Ctrl-C reaches the program directly. `agentica` waits 2 seconds, sends `SIGTERM`, waits 2 more, then kills it.
 - A path that reopens one of the program's own internal pipes, or the descriptor behind stdout or stderr (`/proc/self/fd/5`), gives `error("filesystem: path does not refer to a regular file")`. Pipes the program got at start open by path: stdin, stdout, stderr and a shell `<(...)`.
-- Windows: file calls accept only regular files (and folders where a folder is meant). A named pipe or a device is refused at once with an error, and a stream that can wait reaches the program only as standard input, output or error.
+- Windows: no file call waits on a stream. They accept only regular files (and folders where a folder is meant), and a named pipe or a device is refused at once with an error. Streams that can wait reach the program as standard input, output or error, as process pipes and as sockets.
 
 ```agentica {mode="check"}
 def main() -> Void

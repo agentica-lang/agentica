@@ -16,6 +16,7 @@ case below opens such a pipe by each call that waits on the loop for a FIFO, and
 (never as a timeout) and that the VM holds no handle of the pipe afterwards, which a FIFO test checks by the count of
 descriptors.
 """
+import errno
 import os
 from contextlib import ExitStack
 
@@ -212,6 +213,8 @@ def test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of
     bytecode = compile_agc(source, tmp_path / "pipe-file.agcb")
     gate = tmp_path / "gate"
     reach = {root: python_reaches(root) for root in LOOPBACK_ROOTS}
+    if os.environ.get("CI"):
+        assert any(reach.values()), "the runner serves no loopback pipe path, so the case would check only the refusal"
     with ExitStack() as stack:
         cases = [(kind, root, stack.enter_context(NamedPipeServer())) for root in LOOPBACK_ROOTS
                  for kind in PIPE_FILE_KINDS]
@@ -220,7 +223,7 @@ def test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of
             answers = [vm.next_line(WAIT) for _ in cases]
             assert vm.next_line(WAIT) == "refused"
             # Asked while the VM is alive: a handle that a call kept would show as a client that is still connected.
-            states = [pipe.client() for _, _, pipe in cases]
+            states = [pipe.clients() for _, _, pipe in cases]
             gate.write_text("go")
             assert vm.next_line(WAIT) == "true"
             assert vm.wait(WAIT) == 0, vm.stderr_text()
@@ -229,9 +232,12 @@ def test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of
     for (kind, root, _), answer, state in zip(cases, answers, states):
         where = "%s below %s" % (kind, root)
         assert answer.startswith("error(") and "timed out" not in answer, (where, answer)
-        assert state != "connected", "%s: the VM kept the pipe" % where
+        assert "connected" not in state, "%s: the VM kept the pipe: %s" % (where, state)
         if reach[root]:
-            assert state == "gone", "%s: a root that this process opens is reached and let go: %s" % (where, state)
+            # The stat of the call takes one instance and the open another, which gets to probe() and its close: the
+            # error is the ENOTSUP of probe (a busy pipe would say EBUSY), and both instances are let go.
+            assert "errno=%d" % errno.ENOTSUP in answer, (where, answer)
+            assert state.count("gone") >= 2, "%s: the VM reached the pipe and let go of it: %s" % (where, state)
 
 
 @pytest.mark.parametrize("data", (b"a\nb\n", b"a\nstop\nc\n", b"a\n\xff\nb\n", b"a" * 2000 + b"\nshort\n"),

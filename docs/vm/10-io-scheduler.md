@@ -328,6 +328,8 @@ section says how the scheduler and the loop keep them, as built.
   ancestors closes the handle (`agc_own`, `agc_close_owned`). A cancel without a
   crash (a `Test.run` leftover, a `Task.map` timeout) closes it too (24b: the
   close covers every end of a task, a task parked in a stepper included).
+  On Windows no `File` call waits on the loop: `probe` refuses a named pipe or
+  a device with `ENOTSUP` and the call closes it (§14.1; see #474).
 - **End of run: one exit path.** However the run ends (`main` returns,
   `System.exit`, a runtime error, the step limit, a stop signal),
   `agc_launch_settle` in `vm/launch.c` takes the same steps and nothing else

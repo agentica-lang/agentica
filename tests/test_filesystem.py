@@ -21,8 +21,9 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, WINDOWS, Child, cli, compile_agc, host_only, output_lines, run,
-                                 scaled, vm_command, vm_environment)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, ROOT, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
+                                 host_only, output_lines, run, scaled, vm_command, vm_environment)
+from tests.test_vm_stdout import ROWS_PROGRAM, STUCK_ROWS
 
 EXAMPLES = ROOT / "examples"
 STOP_PEER = FIXTURES / "stop-peer.py"
@@ -56,9 +57,7 @@ end
 # every file that is not regular, and path_string refuses the paths that name a pipe directly); it has no
 # /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (test_windows_handle_counts.py lists its
 # pipes and counts its handles instead).
-no_fifo = host_only(
-    WINDOWS, "a FIFO opened as a file that waits on the loop; Windows has no FIFO file and the VM refuses a named pipe "
-             "as a file (test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of_it in test_windows_handle_counts.py checks the refusal)")
+no_fifo = host_only(WINDOWS, "a FIFO opened as a file that waits on the loop; " + FIFO_FILE_REASON)
 no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
 no_stdin_path = host_only(WINDOWS, "Windows has no path that names an inherited descriptor or the standard input (/proc/self/fd/N, /dev/stdin)")
 
@@ -199,31 +198,15 @@ STUCK_FIFO_PROGRAM = r"""def main() -> Void
 end
 """
 
-# The same on Windows, where the stream that a flush waits for is standard output: 58 rows of 1 KiB fit the 64 KiB buffer
-# of the stream, so the program ends while the pipe (4 KiB) is full and the end of the run waits for a reader that does
-# not come.
-STUCK_STDOUT_PROGRAM = r"""def main() -> Void
-  filler = "x"
-  for i in 0..9
-    filler = filler + filler
-  end
-  n = 0
-  while n < 58
-    puts("row #{n} #{filler}")
-    n += 1
-  end
-end
-"""
-
-
 @pytest.fixture
 def stuck_flush(request, new_dir, adopt):
     """(start, done): start(*options, variable=None) runs a program with the options and the AGENTICA_FLUSH_TIMEOUT_MS
     `variable`, whose end must flush into a stream that a reader holds up, and returns (exit code, stdout, stderr).
 
     POSIX: the FIFO of stuck_fifo, which the program writes as a file; stdout is a text, `done`. Windows: the VM does not
-    stream a pipe as a file, so the stream is the program's own standard output, a pipe that nobody reads; stdout
-    is None, and so is `done`.
+    stream a pipe as a file, so the stream is the standard output of tests/test_vm_stdout.py's rows program (58 rows
+    of 1 KiB fit the 64 KiB buffer of the stream, so the program ends while the 4 KiB pipe is full and the end of the
+    run waits for a reader that does not come): a pipe that nobody reads; stdout is None, and so is `done`.
     """
     if not WINDOWS:
         root, fifo = request.getfixturevalue("stuck_fifo")
@@ -237,8 +220,10 @@ def stuck_flush(request, new_dir, adopt):
             return result.code, result.stdout, result.stderr
 
         return start_on_fifo, "main done\n"
+    if UNDER_WINE:
+        pytest.skip("Wine gives the pipe 64 KiB, so the rows fit it and nothing is stuck")
     source = new_dir() / "stuck.agc"
-    source.write_text(STUCK_STDOUT_PROGRAM, encoding="utf-8")
+    source.write_text(ROWS_PROGRAM % STUCK_ROWS, encoding="utf-8")
 
     def start_on_stdout(*options, variable=None):
         env = vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable})
@@ -307,7 +292,10 @@ def test_the_flush_limit_comes_from_the_flag_then_the_variable_and_ends_a_stuck_
     by_flag = start("--json", "--flush-timeout", "200")
     by_variable = start("--json", variable="300")
     flag_wins = start("--json", "--flush-timeout", "250", variable="60000")
-    assert time.monotonic() - began < scaled(20)
+    elapsed = time.monotonic() - began
+    assert elapsed < scaled(20)
+    if WINDOWS:
+        assert elapsed >= 0.8 * (0.2 + 0.3 + 0.25), "each run waits for its limit"
     for (code, stdout, errors), expected in zip((by_flag, by_variable, flag_wins), (200, 300, 250)):
         assert (code, stdout) == (0, done), errors
         assert json.loads(errors)["flush_timeout_ms"] == expected

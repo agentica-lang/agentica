@@ -20,8 +20,8 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, WAIT_SECONDS, WINDOWS, compile_agc, compile_text, host_only, run_vm,
-                                 vm_environment)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, WAIT_SECONDS, WINDOWS, compile_agc, compile_text,
+                                 host_only, run_vm, vm_environment)
 from tests.test_vm_file_lines import start_fifo_peer
 
 EVENT = re.compile(r" io file_(open|close) handle=([0-9]+)$")
@@ -86,10 +86,7 @@ def main() -> Void
 end
 """
 
-FIFO = host_only(
-    WINDOWS, "a FIFO read or written as a file that waits on the loop; Windows has no FIFO file and the VM refuses "
-             "a named pipe as a file (test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of_it "
-             "in test_windows_handle_counts.py checks the refusal)")
+FIFO = host_only(WINDOWS, "a FIFO read or written as a file that waits on the loop; " + FIFO_FILE_REASON)
 
 
 def file_events(trace):

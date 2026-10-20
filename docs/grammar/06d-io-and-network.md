@@ -128,9 +128,10 @@ permissions apply; there is no filesystem permission flag. File operations
 accept regular files and symlinks to them, and also FIFOs, pipes and devices
 that can wait, whose calls wait on the event loop; they reject directories, a
 missing path for a read, and a path that reopens a pipe the VM made for itself.
-On Windows they accept only regular files (and folders where a folder is
-meant): a named pipe or a device is refused at once with an error, and a stream
-that can wait reaches the program only as standard input, output or error.
+On Windows no File call waits on a stream: they accept only regular files
+(and folders where a folder is meant), and a named pipe or a device is refused
+at once with an error. Streams that can wait reach the program there as
+standard input, output or error, as process pipes and as sockets.
 Signatures are in
 [`library/io-and-system/files.md`][agentica-link-2].
 

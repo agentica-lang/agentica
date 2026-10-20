@@ -59,6 +59,11 @@ def known_issue(condition, number, reason):
     return pytest.mark.skipif(condition, reason="known-issue: #%d %s" % (number, reason))
 
 
+# The end of every reason of a case that needs a FIFO as a file on a system without FIFO files.
+FIFO_FILE_REASON = ("Windows has no FIFO file and the VM refuses a named pipe as a file (test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of_it in "
+                    "test_windows_handle_counts.py checks the refusal)")
+
+
 # `make test-multicore` runs whole modules (TCP, TLS, HTTP) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N
 # makes every VM started with vm_environment() run on N schedulers under the test switch. A case whose program still
 # uses a builtin that several schedulers refuse (Process, Duplex) calls one_scheduler() first.

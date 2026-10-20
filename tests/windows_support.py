@@ -105,14 +105,16 @@ PIPE_ROOT = "\\\\.\\pipe\\"
 
 
 class NamedPipeServer:
-    r"""A named pipe that the test makes, with one instance, for a program that tries to open it by a path.
+    r"""A named pipe that the test makes, with a few instances, for a program that tries to open it by a path.
 
     Windows has no FIFO file: a pipe is a server handle that a peer makes, and a client opens it by a name below
-    \\.\pipe\. The server is in no-wait mode, so client() can ask at any time, without blocking, whether a client
-    ever connected and whether it still holds the pipe. Use it as a context manager; the name is unique to the test.
+    \\.\pipe\. Each instance is in no-wait mode, so clients() can ask at any time, without blocking, which instances
+    a client came to and whether it still holds them. A call that first stats the path takes one instance for the
+    stat, so the pipe has more instances than one, and the open that follows can reach the instance of its own.
+    Use it as a context manager; the name is unique to the test.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, instances: int = 4) -> None:
         self.name = "agentica-test-%d-%s" % (os.getpid(), uuid.uuid4().hex)
         self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self._kernel32.CreateNamedPipeW.argtypes = [ctypes.c_wchar_p] + [ctypes.c_uint32] * 6 + [ctypes.c_void_p]
@@ -121,31 +123,39 @@ class NamedPipeServer:
         self._kernel32.ConnectNamedPipe.restype = ctypes.c_int
         self._kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
         self._kernel32.CloseHandle.restype = ctypes.c_int
-        handle = self._kernel32.CreateNamedPipeW(self.path(), PIPE_ACCESS_DUPLEX, PIPE_NOWAIT, 1, 65536, 65536, 0,
-                                                 None)
-        if handle is None or handle == ctypes.c_void_p(-1).value:
-            raise ctypes.WinError(ctypes.get_last_error())
-        self._handle: int | None = handle
+        self._handles: list[int] = []
+        try:
+            for _ in range(instances):
+                handle = self._kernel32.CreateNamedPipeW(self.path(), PIPE_ACCESS_DUPLEX, PIPE_NOWAIT, instances,
+                                                         65536, 65536, 0, None)
+                if handle is None or handle == ctypes.c_void_p(-1).value:
+                    raise ctypes.WinError(ctypes.get_last_error())
+                self._handles.append(handle)
+        except OSError:
+            self.close()
+            raise
 
     def path(self, root: str = PIPE_ROOT) -> str:
         r"""The name of the pipe below `root`, a spelling of the pipe folder (\\localhost\pipe\ is another)."""
         return root + self.name
 
-    def client(self) -> str:
-        """"waiting" (no client came), "connected" (a client holds the pipe) or "gone" (a client came and left)."""
-        assert self._handle is not None
-        if self._kernel32.ConnectNamedPipe(self._handle, None):
-            return "connected"
-        error = ctypes.get_last_error()
+    def clients(self) -> list[str]:
+        """For each instance: "waiting" (no client came), "connected" (a client holds it) or "gone" (one came and left)."""
         states = {ERROR_PIPE_LISTENING: "waiting", ERROR_PIPE_CONNECTED: "connected", ERROR_NO_DATA: "gone"}
-        if error not in states:
-            raise ctypes.WinError(error)
-        return states[error]
+        found = []
+        for handle in self._handles:
+            if self._kernel32.ConnectNamedPipe(handle, None):
+                found.append("connected")
+                continue
+            error = ctypes.get_last_error()
+            if error not in states:
+                raise ctypes.WinError(error)
+            found.append(states[error])
+        return found
 
     def close(self) -> None:
-        if self._handle is not None:
-            self._kernel32.CloseHandle(self._handle)
-            self._handle = None
+        while self._handles:
+            self._kernel32.CloseHandle(self._handles.pop())
 
     def __enter__(self) -> "NamedPipeServer":
         return self
