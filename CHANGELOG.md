@@ -10,6 +10,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The release builds native archives for four systems, each on a runner of
+  its own: `agentica-VERSION-linux-x86_64.tar.gz` (glibc 2.28),
+  `-windows-x86_64.zip` (MSYS2 UCRT64), `-macos-x86_64.tar.gz` and
+  `-macos-arm64.tar.gz` (macOS 12 or newer). Each holds the one program,
+  `LICENSE`, `NOTICE` and the notices of the built-in libraries; `SHA256SUMS`
+  covers the four. The macOS programs have only an ad hoc signature and none
+  is notarized. A release publishes only when all four build and pass the
+  tests of the extracted package, and a manual run uploads artifacts only.
+
 - `System.os()` returns the operating system: `"linux"`, `"macos"`, `"windows"`,
   or the lowercase `uname` name on another system.
 

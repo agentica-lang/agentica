@@ -21,7 +21,20 @@ make
 
 This writes `dist/agentica`, the only program: the VM with the front end and the standard modules inside. A default source build links the system OpenSSL, so `dist/` runs only on machines that have it; the release archive is portable, since its binary has OpenSSL built in. Put that directory on your `PATH`, or call the command by its full path.
 
-The release archive for Linux x86-64 needs none of these tools: it holds the one file `bin/agentica`, and runs on glibc 2.28 or newer.
+### Install a release archive
+
+A release archive needs none of the build tools. It holds the one program (`bin/agentica`, or `bin\agentica.exe` on Windows), `LICENSE`, `NOTICE` and the notices of the libraries built into the program in `licenses/`. Its OpenSSL and Boehm GC are built in, so it needs no other library. Pick the archive of your system from the release page, check it against `SHA256SUMS`, unpack it anywhere (the folder name may have spaces or non-ASCII letters) and put its `bin` folder on your `PATH`, or call the program by its full path.
+
+- **Linux x86-64** (`agentica-VERSION-linux-x86_64.tar.gz`): glibc 2.28 or newer (Debian 10, Ubuntu 18.10, RHEL 8 and newer) on an x86-64 CPU. `sha256sum -c --ignore-missing SHA256SUMS`, then `tar -xzf agentica-VERSION-linux-x86_64.tar.gz`.
+- **macOS Intel** (`agentica-VERSION-macos-x86_64.tar.gz`): macOS 12 or newer on an Intel Mac. `shasum -a 256 -c SHA256SUMS --ignore-missing`, then `tar -xzf agentica-VERSION-macos-x86_64.tar.gz`.
+- **macOS Apple silicon** (`agentica-VERSION-macos-arm64.tar.gz`): macOS 12 or newer on an Apple silicon Mac, unpacked the same way. The program is not an Intel program: it needs no Rosetta.
+- **Windows x86-64** (`agentica-VERSION-windows-x86_64.zip`): Windows 10 or newer, 64-bit; the program depends only on the system DLLs and the Universal C Runtime that Windows 10 includes, so it needs no MSYS2 or Visual C++ redistributable. In PowerShell: `Get-FileHash agentica-VERSION-windows-x86_64.zip` (compare with `SHA256SUMS`), then `Expand-Archive agentica-VERSION-windows-x86_64.zip .`.
+
+The minimum versions are what the programs are built for. CI runs each archive on the current GitHub-hosted runner of its system (Ubuntu, macOS 15 on Intel and on Apple silicon, Windows Server 2025), not on the oldest supported release.
+
+The archives are not signed with a developer identity and are not notarized. The macOS programs carry only the ad hoc signature that Apple silicon requires of every program. A file downloaded with a browser gets a quarantine mark, and macOS then refuses to open the program; remove the mark with `xattr -d com.apple.quarantine bin/agentica` (a download with `curl` has none). Windows SmartScreen may warn about an unsigned program the first time. The checksum file is the only proof of origin for now.
+
+Networking (`TCP`, `TLS` and `std/http`) works on Linux and macOS; the Windows program does not have it yet.
 
 ## Hello, world
 
