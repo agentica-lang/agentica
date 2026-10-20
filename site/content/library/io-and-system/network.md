@@ -135,7 +135,7 @@ end
 
 ## HTTP client
 
-HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`).
+HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`). It works the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
 - Every call is whole: it returns after the whole response arrived. The body is a `String` and must be valid UTF-8; it is not decompressed.
 - Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit.

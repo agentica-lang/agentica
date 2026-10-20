@@ -24,7 +24,7 @@ tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
 
 - The archives are not developer-signed or notarized (macOS programs carry only the ad hoc signature Apple silicon requires). `SHA256SUMS` is the only proof of origin.
 - macOS blocks a browser download: run `xattr -d com.apple.quarantine bin/agentica` (a `curl` download has no mark). Windows SmartScreen may warn once.
-- `TCP` and `TLS` work on Linux, macOS and Windows. `std/http` is not on Windows yet.
+- `TCP`, `TLS` and `std/http` work on Linux, macOS and Windows.
 
 ### Build from source
 

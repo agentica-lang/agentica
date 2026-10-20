@@ -7,19 +7,18 @@ and a client. The certificates are the ones in fixtures/tls. Everything is on
 """
 import json
 import os
+import queue
 import re
+import threading
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, TEST_SCHEDULERS, Child, check_lines, compile_text,
+from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, UNDER_WINE, Child, check_lines, compile_text,
                                  output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
 CERTS = FIXTURES / "tls"
-
-# The HTTPS cases use std/http's client, whose builtins (vm/http_service.c) are stubs on Windows until step 12.
-HTTPS = pytest.mark.skipif(TARGET_OS == "windows", reason="the HTTP client builtins are not on Windows yet (step 12)")
 
 SERVER_PROGRAM = """\
 def serve(socket: Socket) -> Void
@@ -528,7 +527,6 @@ def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path
     assert server.wait() == 0
 
 
-@HTTPS
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
@@ -537,7 +535,6 @@ def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_ge
     assert server.wait() == 0
 
 
-@HTTPS
 def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, adopt):
     server, port = python_server(adopt, "close")
     ca = tmp_path / "ca.pem"
@@ -553,7 +550,6 @@ def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, ado
     assert len(re.findall(r"tls_handshake_done socket=", text)) == 5, text
 
 
-@HTTPS
 def test_close_client_while_a_connection_is_in_its_tls_handshake(tmp_path):
     result = run_text(tmp_path, "close-in-handshake", CLOSE_IN_HANDSHAKE_PROGRAM)
     assert (result.code, result.stdout) == (0, 'error("http: client is closed")\ndone\n'), result.stderr
@@ -611,24 +607,70 @@ def test_a_crashed_owner_cancels_its_tasks_in_a_tls_handshake_and_a_tls_read(tmp
     assert re.search(r" io end code=0 signal=0$", trace.read_text(), re.M)
 
 
-@HTTPS
+class BlockingFile:
+    """A path whose reader blocks until write() is called: a FIFO, or on Windows (which has none) a named pipe.
+
+    The Windows pipe is served by a thread: the VM's open connects to it, and its reads block until write() sends
+    the data and closes the pipe, which the reader sees as the end of the file. The thread is a daemon, so a VM that
+    never opens the pipe does not keep the test alive."""
+
+    def __init__(self, fifo):
+        self._data = queue.Queue()
+        if os.name != "nt":
+            os.mkfifo(fifo)
+            self.path = fifo
+            return
+        import ctypes
+        import _winapi
+        self.path = r"\\.\pipe\agentica-test-%d-%d" % (os.getpid(), id(self))
+        # PIPE_ACCESS_OUTBOUND (2), and PIPE_TYPE_BYTE | PIPE_WAIT (0): _winapi does not name all of them.
+        handle = _winapi.CreateNamedPipe(self.path, 2, 0, 1, 65536, 65536, 0, _winapi.NULL)
+
+        def serve():
+            try:
+                try:
+                    _winapi.ConnectNamedPipe(handle, False)
+                except OSError as error:
+                    # ERROR_PIPE_CONNECTED: the reader opened the pipe before this call.
+                    if error.winerror != 535:
+                        raise
+                _winapi.WriteFile(handle, self._data.get())
+                # Wait until the reader has taken every byte, so closing the pipe cannot drop unread data.
+                flush = ctypes.WinDLL("kernel32", use_last_error=True).FlushFileBuffers
+                flush.argtypes = [ctypes.c_void_p]
+                if not flush(handle):
+                    raise ctypes.WinError(ctypes.get_last_error())
+            finally:
+                _winapi.CloseHandle(handle)
+
+        threading.Thread(target=serve, daemon=True).start()
+
+    def write(self, data):
+        if os.name != "nt":
+            with open(self.path, "wb") as pipe:
+                pipe.write(data)
+            return
+        self._data.put(data)
+
+
+# Under Wine the peer is a Linux Python, which can make only a Linux FIFO, and Wine reads that without blocking (an
+# empty CA file). The native Windows job runs this case on a named pipe.
+@pytest.mark.skipif(UNDER_WINE, reason="Wine does not block on a Linux FIFO; the native Windows job covers it")
 def test_https_waiters_on_a_context_build_one_leaves_and_a_failed_build_is_retried(tmp_path, adopt):
     server, port = python_server(adopt, "close")
-    fifo = tmp_path / "ca-fifo.pem"
-    os.mkfifo(fifo)
+    ca_pipe = BlockingFile(tmp_path / "ca-fifo.pem")
     fixed = tmp_path / "fixed.pem"
     fixed.write_text("not a certificate")
     trace, env = trace_env(tmp_path)
     # The first call times out after `timeout`; the two others then have half of theirs left.
     timeout = str(scaled(8000))
     bytecode = compile_text(WAITERS_PROGRAM, "waiters", tmp_path)
-    vm = adopt(start_vm(bytecode, CERTS, fifo, fixed, port, timeout, env=env))
+    vm = adopt(start_vm(bytecode, CERTS, ca_pipe.path, fixed, port, timeout, env=env))
     try:
         assert vm.next_line() == "network: operation timed out"
     finally:
-        # The build holds the FIFO open for reading; writing it lets the build, and the VM, finish.
-        with open(fifo, "wb") as pipe:
-            pipe.write((CERTS / "ca.pem").read_bytes())
+        # The build holds the pipe open for reading; writing it lets the build, and the VM, finish.
+        ca_pipe.write((CERTS / "ca.pem").read_bytes())
     assert [vm.next_line() for _ in range(4)] == ["ok", "ok", "true", "ok"]
     assert vm.wait() == 0, vm.stderr_text()
     text = trace.read_text()
