@@ -8,13 +8,13 @@ paths. Each case runs the CLI as a child.
 """
 import json
 import os
-import signal
 import time
 from textwrap import dedent
 
 import pytest
 
-from tests.agentica_test import (TESTS, WINDOWS, Child, cli, host_only, process_alive, report_cases, run, scaled,
+from tests.agentica_test import (FIXTURES, PYTHON, TESTS, UNDER_WINE, WINDOWS, Child, agc_literal, cli, host_only, kill_process,
+                                 process_alive, report_cases, run, scaled,
                                  vm_environment, wait_until, write_files)
 
 try:
@@ -40,13 +40,33 @@ def main() -> Void
 end
 """
 
+# Windows has no /bin/sh: the program under test starts the Python peer that prints its pid and waits, and writes the
+# pid to the file the shell writes on the other systems.
+WINDOWS_HOLDER_PROGRAM = f"""def main() -> Void
+  p = Process.spawn({agc_literal(PYTHON)}, [{agc_literal(FIXTURES / "process-peer.py")}, "hold"], {ms(5000)}).unwrap!
+  pid = Process.read_line(p, {ms(5000)}).unwrap!
+  File.write_text("pid.txt", pid, {ms(5000)}).unwrap!
+  puts("ready")
+  IO.flush()
+  line = IO.gets()
+end
+"""
+HOLDER = WINDOWS_HOLDER_PROGRAM if os.name == "nt" else HOLDER_PROGRAM
+not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which starts neither /bin/sh nor a Linux Python")
+# On Windows the killed driver and its tree end in a few seconds, so the case runs in the fast tier, which the Windows job
+# runs; the slow tier runs on Linux only.
+slow_off_windows = pytest.mark.slow if os.name != "nt" else (lambda function: function)
+
 BUFFERED_PROGRAM = "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  line = IO.gets!()\nend\n"
 OUTPUT_PROGRAM = 'def main() -> Void\n  puts("actual")\n  IO.warn("warning")\n  System.exit(3)\nend\n'
 JSON_PROGRAM = 'def main() -> Void\n  puts("{\\"b\\": \\"3\\", \\"a\\": 1}")\nend\n'
 
 
 def processes_mentioning(text):
-    """The pids whose command line contains `text` (Linux /proc)."""
+    """The pids whose command line contains `text` (Linux /proc; the process list of Windows)."""
+    if os.name == "nt":
+        from tests.windows_support import processes_mentioning as windows_processes_mentioning
+        return windows_processes_mentioning(text)
     needle = os.fsencode(str(text))
     found = []
     for entry in os.listdir("/proc"):
@@ -114,7 +134,7 @@ def kill_at_end(cleanup, pids):
     def kill():
         for pid in pids():
             try:
-                os.kill(int(pid), signal.SIGKILL)
+                kill_process(int(pid))
             except (ProcessLookupError, ValueError):
                 pass
     cleanup(kill)
@@ -204,10 +224,10 @@ def test_programs_under_test_wrong_output_literal_input_and_a_json_line_mismatch
         ['"incorrect"', '"actual\\n"'], ['{"a":1,"b":3}', '{"a":1,"b":"3"}']]
 
 
-@host_only(WINDOWS, "the program under test starts /bin/sh and writes its pid with the shell (test_a_failed_scenario_leaves_no_process_of_its_program_behind in test_windows_process_cleanup.py starts a Python child)")
+@not_wine
 def test_a_failed_scenario_leaves_no_process_of_its_program_behind(tmp_path, cleanup):
     directory = suite(tmp_path, {
-        "holder.agc": HOLDER_PROGRAM,
+        "holder.agc": HOLDER,
         "holder.feature": ('Feature: Cleanup\nScenario: held\nGiven the Agentica program "holder.agc"\n'
                            'Then I receive the line "ready" within ' + ms(5000) + ' milliseconds\n'
                            "And the program exits with code 0 within 200 milliseconds\n")})
@@ -343,11 +363,11 @@ def test_a_json_line_of_a_few_hundred_kb_fits_the_step_budget(tmp_path):
     assert json_test(directory / "big.feature")["ok"] is True
 
 
-@pytest.mark.slow
-@host_only(WINDOWS, "the program starts /bin/sh, the processes are read from /proc and the folder is locked with flock (test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and_a_later_run_removes_its_folder in test_windows_process_cleanup.py uses a Python child, the process list of PowerShell and msvcrt.locking)")
+@slow_off_windows
+@not_wine
 def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and_a_later_run_removes_its_folder(tmp_path, cleanup):
     directory = suite(tmp_path, {
-        "holder.agc": HOLDER_PROGRAM,
+        "holder.agc": HOLDER,
         "holder.feature": ('Feature: Killed\nScenario: held\nGiven the Agentica program "holder.agc"\n'
                            'Then I receive the line "ready" within ' + ms(5000) + ' milliseconds\n'
                            "And the program exits with code 0 within " + ms(20000) + " milliseconds\n")})
@@ -355,19 +375,28 @@ def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and
     temporary.mkdir(0o700)
     env = vm_environment({"TMPDIR": temporary})
     # The runner, the VM and the program are not children of the test: kill them if the cleanup under test fails.
-    kill_at_end(cleanup, lambda: processes_mentioning(temporary))
+    pid_file = directory / "pid.txt"
+    kill_at_end(cleanup, lambda: processes_mentioning(temporary) + (
+        [pid_file.read_text().strip()] if pid_file.exists() else []))
     driver = Child(cli() + ["test", "--allow-run", directory / "holder.feature"], env=env)
     cleanup(driver.stop)
-    pid_file = directory / "pid.txt"
     assert wait_until(
         lambda: pid_file.exists() and any(c.isdigit() for c in pid_file.read_text()), scaled(20))
+    if os.name == "nt":
+        # The process list names the runner and the scenario VM by their run folder; without them in the list, the wait
+        # for an empty list after the kill would prove nothing.
+        assert wait_until(lambda: processes_mentioning(temporary), scaled(20), 0.5)
     # Only the driver dies, not its process group: the runner, the VM and the program must follow it.
     driver.process.kill()
-    driver.process.wait()
+    driver.process.wait(scaled(20))
     pid = pid_file.read_text().strip()
     assert wait_until(lambda: not process_alive(pid), scaled(5)), pid
     assert wait_until(lambda: not processes_mentioning(temporary), scaled(20))
     assert len(os.listdir(temporary)) == 1
+    if os.name == "nt":
+        # Windows sweeps only folders a minute old, with locks of its own: the sweep is checked on folders made by hand in
+        # test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_live_one (tests/test_bdd.py).
+        return
     # A later run removes the folder of the dead driver and keeps live, linked and malformed ones.
     live = temporary / "agentica-bdd-0123456789abcdef"
     live.mkdir()

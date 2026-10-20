@@ -35,9 +35,10 @@ and exits 2.
     (the `std/` sources from a folder, so
     the runner is compiled into the run dir) with `--self` naming a shell script
     that fakes the runner when it is asked for `runner.agcb` and runs the real
-binary otherwise
+binary otherwise (on Windows a copy of `node.exe` with a preloaded script, since
+the VM starts only `.exe` and `.com` files there)
     (`front_end_command` in `tests/agentica_test.py`, `fake_binary` in
-`tests/test_bdd_posix.py`, the module of the cases that need POSIX);
+`tests/test_bdd.py`);
   - a missing binary is the driver's `cannot find agentica at PATH`
     infrastructure report in the chosen format.
 - `compiler/bdd/bdd_driver.agc` (the driver, over `compiler/bdd_*.agc`;

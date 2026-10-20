@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (RUN_TIMEOUT, TESTS, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
                                  vm_binary, vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
@@ -350,16 +350,24 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
             assert re.search(r" io end code=0 signal=0", result[2]), mode
 
 
-@host_only(WINDOWS, "the child is /bin/sh with printf (test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_utf8_as_ufffd in test_windows_process_cleanup.py uses a Python child)")
+# The child writes the byte 0xFF to stderr at once and "hi\n" to stdout a second later. Windows has no /bin/sh: a Python
+# child writes the same bytes (without the newline translation of its text streams).
+SHELL_OUTPUT_CHILD = ["/bin/sh", "-c", "printf '\\377' >&2; sleep 1; echo hi"]
+PYTHON_OUTPUT_CHILD = [sys.executable, "-c", "import sys,time;sys.stderr.buffer.write(bytes([255]));sys.stderr.flush();"
+                       "time.sleep(1);sys.stdout.buffer.write(b'hi\\n');sys.stdout.flush()"]
+
+
+@pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which starts neither /bin/sh nor a Linux Python")
 def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_utf8_as_ufffd(tmp_path):
     bytecode = compile_program(
         tmp_path, "captured-output",
-        "def main() -> Void\n"
-        "  p = Result.unwrap!(Process.spawn_captured(\"/bin/sh\", [\"-c\", \"printf '\\\\377' >&2; sleep 1; echo hi\"],"
-        " \".\", 60000))\n  IO.inspect(Process.output(p, 50))\n  out = Result.unwrap!(Process.output(p, 60000))\n"
+        "def main() -> Void\n  args = System.args()\n"
+        "  p = Result.unwrap!(Process.spawn_captured(args[0], [args[1], args[2]], \".\", 60000))\n"
+        "  IO.inspect(Process.output(p, 50))\n  out = Result.unwrap!(Process.output(p, 60000))\n"
         "  puts(\"#{out.stdout.inspect} #{out.stderr.length} #{String.code(out.stderr)} #{out.truncated}\")\n"
         "  Process.close(p)\nend\n")
-    assert run_vm(ALLOWED, bytecode, None, cwd=tmp_path) == \
+    child = PYTHON_OUTPUT_CHILD if os.name == "nt" else SHELL_OUTPUT_CHILD
+    assert run_vm(ALLOWED, bytecode, None, extra=child, cwd=tmp_path) == \
         (0, "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n", "")
 
 

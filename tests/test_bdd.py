@@ -3,23 +3,23 @@
 Each case runs the CLI as a child (`agentica test --json ...`) and compares
 the JSON report: statuses, diagnostic codes, lines, and the text and --ai
 formats. tests/bdd/handlers.agc holds the shared step handlers. The cases that
-need a runner that fails run the front end as an ordinary program with a script
-as the binary it starts again (front_end_command; the cases that need a shell script are in
-tests/test_bdd_posix.py).
+need a runner that fails run the front end as an ordinary program with a stand-in
+for the binary it starts again (front_end_command; fake_binary: a shell script, or on Windows a copy of node.exe).
 """
 import ast
 import contextlib
 import json
 import os
 import re
+import shutil
 import tempfile
 import time
 from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import (ROOT, TESTS, binary, cli, front_end_command, report_cases, run,
-                                 vm_environment, write_files)
+from tests.agentica_test import (ROOT, TESTS, UNDER_WINE, binary, cli, front_end_command, report_cases, run,
+                                 tool, vm_environment, write_files)
 
 # Paths are written with "/" on every system, as the driver reports them (it joins and resolves with "/").
 HANDLERS = (TESTS / "bdd" / "handlers.agc").as_posix()
@@ -387,8 +387,82 @@ def test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_liv
     young = temporary / "agentica-bdd-00112233445566778899aabbccddeeff"
     young.mkdir()
     (young / "lock").write_text("x")
+    # A link to a folder that holds a free lock, and a hexadecimal name with no lock in it, are not run folders: they
+    # stay, and nothing behind the link is touched.
+    outside = scratch / "outside"
+    outside.mkdir()
+    (outside / "lock").write_text("keep")
+    linked = temporary / "agentica-bdd-aaaaaaaaaaaaaaaa"
+    os.symlink(outside, linked, target_is_directory=True)
+    malformed = temporary / "agentica-bdd-00ff"
+    malformed.mkdir()
+    os.utime(malformed, (old, old))
     with held_lock(live / "lock"):
         status, report = bdd.json_test(scratch / "c_test.agc", env={"TMPDIR": temporary})
     assert (status, report["passed"]) == (0, 1)
-    assert sorted(os.listdir(temporary)) == sorted([live.name] + ([young.name] if os.name == "nt" else []))
+    assert sorted(os.listdir(temporary)) == sorted(
+        [live.name, linked.name, malformed.name] + ([young.name] if os.name == "nt" else []))
+    assert (outside / "lock").read_text() == "keep"
+
+
+not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which starts neither a shell script nor node")
+
+
+def fake_binary(directory, script):
+    """The stand-in for the binary that `agentica test` starts again, and the environment it needs: when it is asked to
+    run the runner it prints the given stderr lines and ends with status 3.
+
+    A #!/bin/sh script that runs the real binary for anything else, on POSIX systems. The VM starts only .exe and .com
+    files on Windows, so there it is a copy of node.exe (which needs nothing beside it; a hard link when the system
+    allows it) with a script that NODE_OPTIONS preloads. The driver starts it only for the runner, so it does not
+    start the real binary for anything else."""
+    if os.name != "nt":
+        path = os.path.join(directory, "agentica.sh")
+        with open(path, "w") as binary_script:
+            binary_script.write("#!/bin/sh\ncase \"$*\" in\n*runner.agcb*)\n"
+                                + "".join("  echo '%s' >&2\n" % line for line in script)
+                                + "  exit 3 ;;\nesac\nexec '%s' \"$@\"\n" % binary())
+        os.chmod(path, 0o700)
+        return path, {}
+    fake = Path(directory) / "agentica-fake.exe"
+    node = tool("node")
+    try:
+        os.link(node, fake)
+    except OSError:
+        shutil.copy(node, fake)
+    preload = Path(directory) / "fake-runner.js"
+    preload.write_text("const fs = require('fs');\nfs.writeSync(2, %s.join('\\n') + '\\n');\nprocess.exit(3);\n"
+                       % json.dumps(script), encoding="utf-8")
+    return str(fake), {"NODE_OPTIONS": '--require "%s"' % preload.as_posix()}
+
+
+@not_wine
+def test_a_crashed_runner_is_reported_with_the_error_not_the_last_stack_frame(bdd):
+    directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
+    fake, env = fake_binary(directory, [
+        "runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]",
+        "index 5 is outside a list of length 3",
+        "  = stack, innermost first:",
+        "    main at runner.agc:11:8"])
+    result = bdd.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake, env=env)
+    assert result.code == 2
+    error = json.loads(result.stdout)["files"][0]["error"]
+    assert error["code"] == "RUNTIME-BDD-INFRA"
+    assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", error["message"])
+
+
+@not_wine
+def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_earlier_task_crash(bdd):
+    directory = bdd.suite({"a.feature": "Feature: A\nScenario: a\nThen 1 is fine\n"})
+    fake, env = fake_binary(directory, [
+        "runner.agc:5:9 error[RUNTIME-DIVISION-BY-ZERO] in a task",
+        "division by zero",
+        "runner.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]",
+        "index 5 is outside a list of length 3",
+        "  = stack, innermost first:"])
+    result = bdd.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake, env=env)
+    assert result.code == 2
+    message = file_error(json.loads(result.stdout))["message"]
+    assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", message)
+    assert not re.search("DIVISION-BY-ZERO", message)
 

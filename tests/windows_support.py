@@ -96,7 +96,8 @@ def process_handle_count(pid: int) -> int:
 
 def current_user_sid() -> str:
     """The security identifier of the user that runs the tests, as `S-1-5-21-...`."""
-    identity = subprocess.run(["whoami.exe", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True, check=False)
+    identity = subprocess.run(["whoami.exe", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True,
+                              errors="replace", check=False, timeout=60)
     assert identity.returncode == 0, identity.stderr
     sid = next(csv.reader(identity.stdout.splitlines()))[1]
     assert sid.startswith("S-1-"), sid
@@ -105,7 +106,8 @@ def current_user_sid() -> str:
 
 def icacls(path: str | Path, *arguments: str) -> None:
     """Change the access list of `path` with icacls.exe; the call must succeed."""
-    changed = subprocess.run(["icacls.exe", str(path), *arguments], capture_output=True, text=True, check=False)
+    changed = subprocess.run(["icacls.exe", str(path), *arguments], capture_output=True, text=True,
+                             errors="replace", check=False, timeout=60)
     assert changed.returncode == 0, changed.stdout + changed.stderr
 
 
