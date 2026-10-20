@@ -96,7 +96,7 @@ forwarding wrapper (`def parse(s: String) -> Result[Url.Address]` calling
 drift from the original. The skill teaches the re-export as the canonical form;
 the checker cannot reject a hand-written wrapper, as with `with`.
 
-**Rules**, all in the linker (`compiler/linker.agc`):
+**Rules**, all in the linker (`compiler/modules/linker.agc`):
 
 - The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with
   the help "unknown module alias", decided in the linker. The name must be
@@ -467,18 +467,18 @@ between literals.
 
 **Checker rules:**
 
-- `format` has a catalog entry in `compiler/builtins_data.agc` with a
+- `format` has a catalog entry in `compiler/catalog/builtins_data.agc` with a
   "checker-handled,   variadic" marker: the number of arguments depends on the
   literal, so the   checker checks the call itself, not against a fixed
   signature. The entry is   needed because the linker's `resolve`
-  (`compiler/linker.agc`) keeps a call name   unchanged only when `builtin-ref`
-  finds it, and otherwise adds the module   prefix (`@N::`), so `format` in an
-  imported module would be renamed. The one   entry covers linking, the name
-  reservation (the linker's duplicate check uses   `builtin-ref`) and `agentica
-  help format`. Only the function name is reserved:   a user `def format` is
-`CHECK-REDEFINED-NAME`, a breaking change accepted before 1.0. Variables,
-parameters and fields named `format` stay valid, since `format(...)` is a call
-and a variable is not callable.
+  (`compiler/modules/linker.agc`) keeps a call name   unchanged only when
+  `builtin-ref` finds it, and otherwise adds the module   prefix (`@N::`), so
+  `format` in an imported module would be renamed. The one   entry covers
+  linking, the name reservation (the linker's duplicate check uses
+  `builtin-ref`) and `agentica help format`. Only the function name is reserved:
+  a user `def format` is `CHECK-REDEFINED-NAME`, a breaking change accepted
+  before 1.0. Variables, parameters and fields named `format` stay valid, since
+  `format(...)` is a call and a variable is not callable.
 
 - The first argument must be a plain one-line string literal, without `#{...}`
   and not a heredoc: `CHECK-FORMAT-LITERAL` otherwise, with a help to use

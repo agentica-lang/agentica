@@ -1,4 +1,4 @@
-"""The Agentica parser (compiler/parse.agc) against the frozen output of the original parser.
+"""The Agentica parser (compiler/syntax/parse.agc) against the frozen output of the original parser.
 
 This module compares the Agentica parser with what the original parser printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
@@ -79,7 +79,7 @@ def is_too_deep(text):
 
 
 class ParserStage(PytestStageCase):
-    ENTRY = "parse.agc"
+    ENTRY = "syntax/parse.agc"
 
     def parse_cases(self, cases, *before, flags=()):
         directory = self.temp_dir()

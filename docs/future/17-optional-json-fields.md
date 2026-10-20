@@ -224,13 +224,13 @@ name: set to Ana
   `CHECK-REDEFINED-NAME`. This is a breaking change; say so in the changelog.
 - **Builtin enum path.** `JsonField` reuses the builtin-enum path that
   `JsonValue` adds in §15.2 (10b): the checker's enum table, lowering, and the
-  import linking in `compiler/` for patterns, constructors and the bare
-  nullary forms `JsonField.Absent` and `JsonField.Null` (which arrive as
+  import linking in `compiler/` for patterns, constructors and the bare nullary
+  forms `JsonField.Absent` and `JsonField.Null` (which arrive as
   `type-expression`s). It adds one thing: `JsonField` has a type parameter, so
   its table entry is generic like a user generic enum. For type references,
-  adding `JsonField` to `reserved-type-names` (`compiler/builtins_data.agc`) is what keeps
-  a field type like `age: JsonField[Int]` unchanged when linking
-  an imported module.
+  adding `JsonField` to `reserved-type-names`
+  (`compiler/catalog/builtins_data.agc`) is what keeps a field type like `age:
+  JsonField[Int]` unchanged when linking an imported module.
 - **Encode** (VM only, since 7i deleted the evaluator): a `JsonField` value
   writes nothing for `Absent` (the key is left out), `null` for `Null` and `x`
   for `Value(x)`. Once 10d lands, encode matches `JsonField` before the generic

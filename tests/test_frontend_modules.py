@@ -1,4 +1,4 @@
-"""The Agentica linker (compiler/link.agc) against the frozen output of the original linker.
+"""The Agentica linker (compiler/modules/link.agc) against the frozen output of the original linker.
 
 This module compares the Agentica linker with what the original linker printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the corpus
@@ -25,7 +25,7 @@ MODULE_FIXTURES = FIXTURES / "frontend" / "modules"
 DEFAULT_ENV = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
                "LOCALAPPDATA": "/nonexistent-agentica-local-app-data"}
 
-# compiler/source_file.agc reads 262144 bytes at a time. The cases put a character, or the start of an invalid
+# compiler/modules/source_file.agc reads 262144 bytes at a time. The cases put a character, or the start of an invalid
 # sequence, across the edges of the reads.
 READ_SIZE = 262144
 
@@ -171,7 +171,7 @@ def sizes_text(text, label):
 
 
 class ModulesStage(PytestStageCase):
-    ENTRY = "link.agc"
+    ENTRY = "modules/link.agc"
     STDLIB = True
 
     def link(self, specs, cwd, mode=None, stdlib=None):

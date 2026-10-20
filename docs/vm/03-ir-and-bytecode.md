@@ -1,8 +1,7 @@
 ## 3. IR
 
-The lowerer (`compiler/lowering.agc`) turns the checked program into IR. Each
-stage
-returns data or one diagnostic.
+The lowerer (`compiler/lower/lowering.agc`) turns the checked program into IR.
+Each stage returns data or one diagnostic.
 
 ### 3.1 Types from the checker
 
@@ -183,7 +182,7 @@ typed op still checks its tags at run time (4.2).
 The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
 `HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`) join the struct table
 only when the program names them or a checked type mentions them. Then they
-lower like user structs (`compiler/lower_program.agc`).
+lower like user structs (`compiler/lower/lower_program.agc`).
 
 ### 3.4 Closure conversion
 
@@ -210,27 +209,27 @@ The lowerer and the emitter never raise. Their codes have their own prefixes, so
 they cannot clash with the language codes.
 
 - **Code:** `LOWER-UNSUPPORTED`
-  - **Raised by:** `compiler/lowering.agc`
+  - **Raised by:** `compiler/lower/lowering.agc`
   - **Meaning:** A form or a type the lowerer does not handle yet (`vm_type?` in
-    `compiler/lower_state.agc`). The span is the first such node.
+    `compiler/lower/lower_state.agc`). The span is the first such node.
 
 - **Code:** `LOWER-INTERNAL`
-  - **Raised by:** `compiler/lowering.agc`
+  - **Raised by:** `compiler/lower/lowering.agc`
   - **Meaning:** A failed internal assumption inside the lowerer (a bug), at the
     program span.
 
 - **Code:** `BYTECODE-LIMIT`
-  - **Raised by:** `compiler/bytecode_writer.agc`
+  - **Raised by:** `compiler/bytecode/bytecode_writer.agc`
   - **Meaning:** A function needs more than 65535 registers, or the program has
     more than 65535 structs or variants (4.4).
 
 - **Code:** `BYTECODE-INTERNAL`
-  - **Raised by:** `compiler/bytecode_writer.agc`
+  - **Raised by:** `compiler/bytecode/bytecode_writer.agc`
   - **Meaning:** An impossible IR reaches the writer (a bug), at the program
     span.
 
 A builtin call lowers only when its implementation key is in `VM_BUILTINS`
-(`compiler/lower_tables.agc`). A builtin outside that list is
+(`compiler/lower/lower_tables.agc`). A builtin outside that list is
 `LOWER-UNSUPPORTED` at the
 call span. Today the list covers every catalog key.
 
@@ -331,10 +330,9 @@ behavior.
 
 There are 53 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
-by `OPCODES` in `compiler/bytecode_tables.agc` and `agc_opcode` in `vm/value.h`.
-New opcodes
-are appended at the end. An appended opcode does not bump the format version,
-and an older VM rejects it as unknown.
+by `OPCODES` in `compiler/bytecode/bytecode_tables.agc` and `agc_opcode` in
+`vm/value.h`. New opcodes are appended at the end. An appended opcode does not
+bump the format version, and an older VM rejects it as unknown.
 
 Details that code and tests rely on:
 
@@ -455,14 +453,13 @@ stops with `RUNTIME-STEP-LIMIT`. The optimization items are in
 ### 4.5 Builtin imports
 
 The file lists the builtins it uses as `(key, arity)`. The key is the
-implementation key in `compiler/builtins_data.agc`, not the written name: `puts`
-and
-`IO.puts` both import `"puts"`. Overloads such as `Map.get` and `ok` are
-separate entries by arity. The loader resolves each pair against the C table and
-rejects unknown pairs. There are no internal helper builtins with one exception:
-`__fail_arg(code, index, message)` is a prelude-only builtin (4.7). Its name
-starts with `__`, no program can call it (the checker knows it only in the
-files of the prelude), and the loader rejects a call to it from a function
+implementation key in `compiler/catalog/builtins_data.agc`, not the written
+name: `puts` and `IO.puts` both import `"puts"`. Overloads such as `Map.get` and
+`ok` are separate entries by arity. The loader resolves each pair against the C
+table and rejects unknown pairs. There are no internal helper builtins with one
+exception: `__fail_arg(code, index, message)` is a prelude-only builtin (4.7).
+Its name starts with `__`, no program can call it (the checker knows it only in
+the files of the prelude), and the loader rejects a call to it from a function
 that has no prelude flag. `List.concat`, which the lowerer emits for long list
 literals, is the catalog builtin of that name.
 
@@ -537,10 +534,9 @@ header and the entry.
   them. Each keeps the name the front end gave it (`std/` modules by their
   `std/...` key), so a diagnostic in imported code names that file.
 - Only struct entries can make cycles in the Types section, and they go through
-  the decodable struct records. `compiler/bytecode_types.agc` interns each
-distinct type
-  once, children first. A program without a JSON type argument writes two zero
-  counts.
+  the decodable struct records. `compiler/bytecode/bytecode_types.agc` interns
+  each distinct type once, children first. A program without a JSON type
+  argument writes two zero counts.
 - The Globals section holds only a count because a slot has no bytes of its
   own to read. The loader allocates the slots as zeroed memory inside the
   program, so the collector scans them like constants. It rejects a count above

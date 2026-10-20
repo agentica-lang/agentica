@@ -645,9 +645,9 @@ STAGE_DIR := build/stage
 FRONT_END_SRC := compiler/front_end.agc
 STD_NAMES := $(shell cat stdlib/MODULES)
 STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
-# compiler/agentica.toml is not an input: it holds the style rules for the style test, and compile never reads it.
-STAGE_INPUTS := $(wildcard compiler/*.agc) stdlib/MODULES $(STD_FILES) VERSION
-# The runner and the default step program of `agentica test` (compiler/bdd_driver.agc), compiled at build time with the front
+# Every .agc file under compiler/, in all its folders, is an input. compiler/agentica.toml is not an input: it holds the style rules for the style test, and compile never reads it.
+STAGE_INPUTS := $(sort $(shell find compiler -name '*.agc')) stdlib/MODULES $(STD_FILES) VERSION
+# The runner and the default step program of `agentica test` (compiler/bdd/bdd_driver.agc), compiled at build time with the front
 # end of this build and carried by the binary, so `agentica test` does not compile them on every run. The first binary has
 # none (stage2 does not exist yet): its front end is stage0, whose driver compiles them from the std/ sources on every
 # `agentica test`, as it always did, and its `run --embedded` exits 2 (tests/test_bdd.py).

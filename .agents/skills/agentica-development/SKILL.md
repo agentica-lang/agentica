@@ -21,7 +21,7 @@ says how to work and which reference to read. Load only the references your
 change needs.
 
 - Every language change goes in `compiler/` (`references/frontend.md`). The
-  data files `compiler/builtins_data.agc`, `check_tables.agc`,
+  data files `compiler/catalog/builtins_data.agc`, `check_tables.agc`,
   `unicode_table.agc` and `vm/unicode_data.c` are edited by hand.
 - Read the active phase in `docs/roadmap/` first. Build only what it asks: no
   placeholder modules or nodes for later phases.
@@ -76,31 +76,35 @@ limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
 - One entry per stage: `Lexer.lex`, `Parser.parse`, `Linker.link_file`,
   `Checker.check`, `Lowering.lower`, `Writer.write` (`references/stages.md`).
 - Return the next data or one diagnostic; stop at the first error.
-- Never print or crash. `compiler/cli.agc` prints the diagnostic and exits 1.
+- Never print or crash. `compiler/app/cli.agc` prints the diagnostic and exits
+  1.
 - Thread spans through. A runtime error inside a stage is a bug: make it a
   diagnostic (`*-INTERNAL` for an impossible state).
 
 ## Where new code goes
 
-- Keyword, operator, literal: `compiler/lexer.agc` tables, with a golden
+- Keyword, operator, literal: `compiler/syntax/lexer.agc` tables, with a golden
   (`references/frontend.md`).
-- AST node: `compiler/ast.agc`, the parser, and the passes that walk the tree.
-- Syntax form: `compiler/parser.agc` and `ast.agc`, with a parser golden.
+- AST node: `compiler/syntax/ast.agc`, the parser, and the passes that walk the
+  tree.
+- Syntax form: `compiler/syntax/parser.agc` and `ast.agc`, with a parser golden.
 - Diagnostic code: where the problem is found; prefix `LEX-`, `PARSE-`,
   `CHECK-`, `RUNTIME-`, `LOWER-` or `BYTECODE-` (`references/stages.md`).
-- Builtin: catalog row in `compiler/builtins_data.agc` (golden in
+- Builtin: catalog row in `compiler/catalog/builtins_data.agc` (golden in
   `tests/fixtures/frontend/catalog/`), checker rule, `VM_BUILTINS` in
-  `compiler/lower_tables.agc` (`tests/test_frontend_catalog.py` checks every
-  catalog key), C in `vm/`, a golden (`references/vm-builtins.md`, `vm.md`,
-  `vm-c.md`).
+  `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks
+  every catalog key), C in `vm/`, a golden (`references/vm-builtins.md`,
+  `vm.md`, `vm-c.md`).
 - VM form or opcode: `compiler/lower_*.agc`; `OPCODES` in
-  `compiler/bytecode_tables.agc` = `agc_opcode` in `vm/value.h` (same order);
-  `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`).
-- Pipeline stage: `compiler/<stage>.agc`, wired in `compiler/front_end.agc`,
-  with `tests/test_spec_<area>.py` and `tests/test_frontend_<stage>.py`.
+  `compiler/bytecode/bytecode_tables.agc` = `agc_opcode` in `vm/value.h` (same
+  order); `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`).
+- Pipeline stage: `compiler/<context>/<stage>.agc`, wired in
+  `compiler/app/pipeline.agc`, with `tests/test_spec_<area>.py` and
+  `tests/test_frontend_<stage>.py`.
 - Prelude method (List, Map or String in Agentica): a `Rule.Prelude` row in
-  `compiler/builtins_data.agc`, an entry in `compiler/prelude_data.agc`, and a
-  body in `stdlib/prelude/` (`references/stages.md`, "Compiler prelude").
+  `compiler/catalog/builtins_data.agc`, an entry in
+  `compiler/catalog/prelude_data.agc`, and a body in `stdlib/prelude/`
+  (`references/stages.md`, "Compiler prelude").
 - `std/` module: `stdlib/<name>.agc`, listed in `stdlib/MODULES`, with a doc on
   the module and each export (`references/library-notes.md`).
 - Test: `tests/test_<area>.py` (pytest; legacy unittest modules remain
@@ -136,7 +140,7 @@ limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
   ranges, file modules, methods, interpolation, blocks, hints, enums, functions.
 - `library-notes.md`: a library area (stdio, JSON, tasks, TCP/TLS/HTTP, files,
   processes, Int and Float bits, std/binary) or `stdlib/` style.
-- `bdd.md`: `agentica test`: `compiler/bdd_driver.agc`, `std/bdd`,
+- `bdd.md`: `agentica test`: `compiler/bdd/bdd_driver.agc`, `std/bdd`,
   `stdlib/test/`, step programs and handlers.
 - `vm.md`: any VM work: pipeline, layers, rules, index of `vm-*.md`.
 - `ci.md`: `.github/workflows/`, Makefile, new VM files, peers, fixtures, jscpd,

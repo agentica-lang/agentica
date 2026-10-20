@@ -14,38 +14,49 @@ Each stage takes the previous stage's data and returns its typed outcome
 (data or one diagnostic). For example, `Lexer.lex` returns `Diag.Outcome`; other
 stages may use `Result` with a packed `Problem`. `try` stops at the first error.
 
-- Data: `source.agc`, `token.agc`, `diagnostic.agc`. `source_file.agc` reads
-  files as strict UTF-8, with no size limit (`LEX-INVALID-UTF8` at the first
-  bad byte). `text.agc` holds the quoting and span printing.
-- Lexer: `lexer.agc`, `unicode.agc` and the hand-edited `unicode_table.agc`
-  (graphic ranges, Unicode 17.0). Entries: `lex.agc`, `lex_text.agc`.
-- Parser: `ast.agc`, `parse_base.agc`, `parser.agc`; entries `parse.agc`,
-  `parse_text.agc`.
-- Linker: `modules.agc` (loader; walks imports with an explicit stack in a
-  fixed order), `resolve_import.agc`, `import_path.agc` (`std/`, `pkg/`,
-  relative), `resolve.agc`, `rewrite.agc` (linked name of every name),
-  `linker.agc` (`Linker.link_file`, `Linker.program`), `declarations.agc`
-  (`CHECK-DECL-ORDER`), `suggest.agc` (did-you-mean), `link_env.agc` (`Env` and
-  `Settings`: `stdlib/` and environment, passed in, never read inside),
-  `link_failure.agc`.
-- Catalog: `types.agc`, `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`,
-  the `Rule` enum), `builtins.agc` (lookups), `builtins_data.agc` (hand-edited
-  rows, records, enums, reserved names), `catalog.agc`, `catalog_text.agc`.
-- Checker: `check_register.agc`, `check_stmt.agc`, `check_expr.agc`,
+`compiler/` has one folder per context: `app/`, `syntax/`, `modules/`,
+`check/`, `catalog/`, `lower/`, `bytecode/`, `diagnostics/`, `bdd/` and
+`embedded/`, with `front_end.agc` at the root. A new file goes in the folder of
+its context. Names below are bare; the folder is in each label
+(`references/repo-map.md` has every file). An import inside a folder is the
+bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
+
+- Data: `syntax/source.agc`, `syntax/token.agc`, `diagnostics/diagnostic.agc`.
+  `modules/source_file.agc` reads files as strict UTF-8, with no size limit
+  (`LEX-INVALID-UTF8` at the first bad byte). `syntax/text.agc` holds the
+  quoting and span printing.
+- Lexer (`syntax/`): `lexer.agc`, `unicode.agc` and the hand-edited
+  `unicode_table.agc` (graphic ranges, Unicode 17.0). Entries: `lex.agc`,
+  `lex_text.agc`.
+- Parser (`syntax/`): `ast.agc`, `parse_base.agc`, `parser.agc`; entries
+  `parse.agc`, `parse_text.agc`.
+- Linker (`modules/`, `suggest.agc` in `check/`): `modules.agc` (loader; walks
+  imports with an explicit stack in a fixed order), `resolve_import.agc`,
+  `import_path.agc` (`std/`, `pkg/`, relative), `resolve.agc`, `rewrite.agc`
+  (linked name of every name), `linker.agc` (`Linker.link_file`,
+  `Linker.program`), `declarations.agc` (`CHECK-DECL-ORDER`), `suggest.agc`
+  (did-you-mean), `link_env.agc` (`Env` and `Settings`: `stdlib/` and
+  environment, passed in, never read inside), `link_failure.agc`.
+- Catalog (`catalog/`, `types.agc` in `check/`): `types.agc`,
+  `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`, the `Rule` enum),
+  `builtins.agc` (lookups), `builtins_data.agc` (hand-edited rows, records,
+  enums, reserved names), `catalog.agc`, `catalog_text.agc`.
+- Checker (`check/`): `check_register.agc`, `check_stmt.agc`, `check_expr.agc`,
   `check_call.agc`, `check_method.agc`, `check_rules.agc`, `check_list.agc`,
   `check_collections.agc`, `check_args.agc`, `check_help.agc`,
   `check_names.agc`, `check_flow.agc`, `check_unused.agc`, `check_state.agc`,
   `check_types.agc`,
   `check_failure.agc`, `check_tables.agc` (hand-edited method and help tables),
   `checker.agc` (`Checker.check(linked)`).
-- Lowering: `ir.agc` (IR data), `lower_tables.agc` (`VM_BUILTINS`, operator
-  tables), `lower_state.agc`, `lower_expr.agc`, `lower_data.agc`,
+- Lowering (`lower/`): `ir.agc` (IR data), `lower_tables.agc` (`VM_BUILTINS`,
+  operator tables), `lower_state.agc`, `lower_expr.agc`, `lower_data.agc`,
   `lower_stmt.agc`, `lower_scan.agc`, `lower_const.agc`, `lower_program.agc`,
   `lowering.agc` (`Lowering.lower(linked, checked, catalog)`).
-- Writer: `bytecode_writer.agc` (`Writer.write`), `bytecode_function.agc`,
-  `bytecode_types.agc`, `bytecode_spans.agc`, `bytecode_pool.agc`,
-  `bytecode_bytes.agc`, `bytecode_tables.agc` (`FORMAT_VERSION`, limits,
-  `OPCODES`), `bytecode_failure.agc`, runner `bytecode.agc`.
+- Writer (`bytecode/`): `bytecode_writer.agc` (`Writer.write`),
+  `bytecode_function.agc`, `bytecode_types.agc`, `bytecode_spans.agc`,
+  `bytecode_pool.agc`, `bytecode_bytes.agc`, `bytecode_tables.agc`
+  (`FORMAT_VERSION`, limits, `OPCODES`), `bytecode_failure.agc`, runner
+  `bytecode.agc`.
 
 Order inside a `compiler/` file: imports and module doc, structs and enums,
 exported functions, private functions. Code style follows the speed rules:
@@ -57,12 +68,12 @@ over the input.
 Each stage has a text form that the goldens compare.
 
 ```sh
-dist/agentica compiler/lex.agc file.agc        # lexer tokens: `== path`, then one line per token or ERROR
-dist/agentica compiler/parse.agc file.agc      # parser tree, one node per line
-dist/agentica compiler/link.agc --stdlib=$PWD/stdlib dir/root.agc   # --ids: id ranges per module
-dist/agentica compiler/check.agc --stdlib=$PWD/stdlib file.agc      # types and resolutions
-dist/agentica compiler/lower.agc --stdlib=$PWD/stdlib file.agc      # IR; --burn=N starts N calls deeper
-dist/agentica compiler/bytecode.agc --stdlib=$PWD/stdlib file.agc -o out.agcb  # several `FILE -o OUT` pairs allowed
+dist/agentica compiler/syntax/lex.agc file.agc        # lexer tokens: `== path`, then one line per token or ERROR
+dist/agentica compiler/syntax/parse.agc file.agc      # parser tree, one node per line
+dist/agentica compiler/modules/link.agc --stdlib=$PWD/stdlib dir/root.agc   # --ids: id ranges per module
+dist/agentica compiler/check/check.agc --stdlib=$PWD/stdlib file.agc      # types and resolutions
+dist/agentica compiler/lower/lower.agc --stdlib=$PWD/stdlib file.agc      # IR; --burn=N starts N calls deeper
+dist/agentica compiler/bytecode/bytecode.agc --stdlib=$PWD/stdlib file.agc -o out.agcb  # several `FILE -o OUT` pairs allowed
 ```
 
 Goldens: `tests/fixtures/frontend/<stage>/` (`NAME.input` and `NAME.tokens` for
@@ -148,13 +159,13 @@ touches on purpose and read the diff.
 
 ### Add a keyword or operator
 
-Edit the `compiler/lexer.agc` tables: keywords go in `WORD_ACTIONS` (1, 2 for
-block openers, 3 for `end`); operators go in `OPERATOR_KINDS` and
+Edit the `compiler/syntax/lexer.agc` tables: keywords go in `WORD_ACTIONS` (1, 2
+for block openers, 3 for `end`); operators go in `OPERATOR_KINDS` and
 `SINGLE_LEXEMES` or `PAIR_LEXEMES`, with characters in `CLASSES` (and
 `PAIR_SECONDS` for a new second character). If the parser acts on it, handle it
 in `parser.agc` or `parse_base.agc`. Add a golden in
-`tests/fixtures/frontend/lexer/`; add a spec case in
-`tests/test_spec_<area>.py` if syntax changes.
+`tests/fixtures/frontend/lexer/`; add a spec case in `tests/test_spec_<area>.py`
+if syntax changes.
 
 ### Add an AST node
 
@@ -192,9 +203,9 @@ Add an entry in `OPCODES` in `bytecode_tables.agc` and `agc_opcode` in
 
 ### Add a pipeline stage
 
-Create `compiler/<stage>.agc` with one entry point returning next data or one
-diagnostic. Require only the previous stage's modules; wire it in
-`compiler/pipeline.agc`; add an entry program printing its text form (like
+Create `compiler/<context>/<stage>.agc` with one entry point returning next
+data or one diagnostic. Require only the previous stage's modules; wire it in
+`compiler/app/pipeline.agc`; add an entry program printing its text form (like
 `check.agc`), `tests/test_frontend_<stage>.py` and a spec module. `make test`
 discovers them; CI needs no change.
 
@@ -215,8 +226,8 @@ branch's on the same binary:
 
   ```sh
   mkdir -p /tmp/master-src && git archive origin/master compiler | tar -x -C /tmp/master-src
-  dist/agentica compiler/lex.agc $(git ls-files '*.agc') > /tmp/new.out
-  dist/agentica /tmp/master-src/compiler/lex.agc $(git ls-files '*.agc') > /tmp/old.out
+  dist/agentica compiler/syntax/lex.agc $(git ls-files '*.agc') > /tmp/new.out
+  dist/agentica /tmp/master-src/compiler/syntax/lex.agc $(git ls-files '*.agc') > /tmp/old.out
   cmp /tmp/old.out /tmp/new.out
   ```
 
