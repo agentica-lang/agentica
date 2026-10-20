@@ -1,7 +1,7 @@
 ---
 title: Task
 weight: 1
-description: Start, await (with or without a timeout), pause and count lightweight tasks, map a block over a list with bounded concurrency, hand a handle to a task, and find their crashes.
+description: Start, await (with or without a timeout), pause, cancel and count lightweight tasks, map a block over a list with bounded concurrency, hand a handle to a task, and find their crashes.
 ---
 
 Tasks run functions at the same time. See the tour page [Tasks](/tour/tasks/).
@@ -318,6 +318,43 @@ end
 
 ```output
 21
+```
+
+## Task.cancel
+
+```text
+Task.cancel(task: Task[R]) -> Void
+```
+
+Stops a task you no longer need, and every task it started. It does not wait: the task is marked and the call returns.
+
+- The task runs no more of your code. A sleep, a channel wait, an await or an I/O wait ends at once; a task busy in a loop stops at the end of its current turn.
+- Its handles close as when any task ends, so a channel it owns (from `Task.spawn_owning`) is closed and its receivers get `error("channel: closed")`.
+- Awaiting it gives `error("task: cancelled")` for a `Result` task, and otherwise stops the program with `RUNTIME-TASK-CANCELLED`.
+- Cancelling a task that already ended, or cancelling twice, does nothing.
+- Any task that holds the handle may cancel it, also one it got from a channel. A task that cancels itself, or a task that started it, stops right after the call.
+- A cancel is not a crash: there is no crash report and the exit code does not change.
+
+```agentica
+def keep(inbox: Channel[Int]) -> Result[Int]
+  total = 0
+  while true
+    total += try inbox.recv(60000)
+  end
+  return ok(total)
+end
+
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(4)
+  keeper = Task.spawn(&keep, inbox)
+  inbox.send(5, 1000)
+  Task.cancel(keeper)
+  puts(Task.await(keeper))
+end
+```
+
+```output
+error("task: cancelled")
 ```
 
 ## Task.pending_count

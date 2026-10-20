@@ -20,6 +20,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.TaskAwait -> return check_await(cx, st, site)
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
     Model.Rule.TaskMap -> return check_task_map(cx, st, site)
+    Model.Rule.TaskTarget -> return check_task_target(cx, st, site)
     Model.Rule.ChannelNew -> return check_channel_new(cx, st, site)
     Model.Rule.ChannelSend -> return check_channel_send(cx, st, site)
     Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
@@ -185,6 +186,12 @@ def check_channel_recv(cx: State.Cx, st: State.St, site: State.Site) -> Result[S
   target = try Args.channel_argument(cx, st, site)
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: timeout.st, type: T.Type.Result(T.item(target.type))))
+end
+
+# Task.cancel: argument 0 is a Task[R] of any R.
+def check_task_target(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  target = try Args.task_argument(cx, st, site)
+  return ok(State.Out(st: target.st, type: site.selected.result))
 end
 
 def check_channel_target(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]

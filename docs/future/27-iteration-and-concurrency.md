@@ -36,7 +36,8 @@ one core (the VM runs one scheduler, `docs/vm/10-io-scheduler.md` §10.2.1).
 `reduce` is the accumulator. Channels (27.2) and `Lazy[T]` over lists, ranges
 and `Lazy.produce` (27.4) are built; there is no CPU parallelism.
 `Task.await(task, timeout_ms)` (27.3) bounds a
-wait without stopping the task, and a task cannot be cancelled by the program.
+wait without stopping the task, and `Task.cancel` (27.1) stops a task that the
+program no longer needs.
 
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
 one way to do each thing (its Principle and its test), values stay immutable
@@ -237,15 +238,36 @@ task, at most `limit` at a time, each item with its own timeout, and get one
   - `Task.await` on a cancelled task halts with `RUNTIME-TASK-CANCELLED` at the
     call, for an await made after the cancel and for one already parked on the
     task (built in 20b, `docs/vm/10-io-scheduler.md` §10.2.1, with its C test
-    and diagnostics line). A program can reach it only through a handle that a
-    descendant passed out, which needs a channel, so its program-level tests (in
+    and diagnostics line). Before `Task.cancel` a program could reach it only
+    through a handle that a descendant passed out, which needs a channel, so
+    its program-level tests (in
     `tests/test_vm_task_map.py`, since they depend on an item timing out) came
     with 17a, which has `Task.map`; 17b has a crash-based golden fixture (§27.2,
     "Tests").
-- **No public cancel.** `Task.cancel` is not added: per-item timeouts and
-  channel timeouts cover the known uses, and a cancel call would be a second way
-  to stop work. Section 8 keeps it open until a program needs it. `Task.await`
-  with a timeout (27.3) bounds the wait only and cancels nothing.
+- **Public cancel (built, owner decision of 2026-10-20).**
+  `Task.cancel(task: Task[R]) -> Void` runs the same cancel as a timed-out item
+  on the task it names. The use: a program keeps state in a task, uses it for a
+  while, then drops it, without sending a "stop" message through a channel.
+  - It does not wait. It marks the task and its descendants cancelled and
+    returns. A parked task (sleep, channel, await, I/O) ends at once; a task on
+    a turn of another scheduler, or of a loop with no park, ends at the end of
+    that turn.
+  - Owned handles close as at any end, so an owned channel is closed and its
+    receivers see the close. An await after the cancel gives the cancelled
+    outcome above; so does a timed await.
+  - A task that has ended (returned, crashed or cancelled) is left as it is, so
+    a second cancel does nothing. Any holder of the handle may cancel it, on any
+    scheduler, a handle received on a channel included.
+  - A task that cancels itself or an ancestor is a descendant of the task it
+    names, so it is cancelled with it and stops right after the call (the
+    cancel ends its turn). This is the plain walk with no special case, and
+    the caller runs no more user code either way. No handle reaches `main` (a
+    program gets task handles only from spawns), and the walk leaves `main`
+    alone anyway.
+  - A cancel is not a crash: no unobserved crash report, no change to the exit
+    code. The `sched` trace line of the named task says `at=call`.
+  `Task.await` with a timeout (27.3) still bounds the wait only and cancels
+  nothing.
 - **Limits.** `limit` is 1 to 1024; otherwise `RUNTIME-INVALID-COUNT` at the
   `limit` argument. 1024 bounds the tasks and timers of one call, and matches a
   common open-file limit (`ulimit -n`) and the `--schedulers` cap. `timeout_ms`
@@ -272,7 +294,8 @@ task, at most `limit` at a time, each item with its own timeout, and get one
 - **Effects:** `concurrency`, like `Task.spawn`.
 
 **Why a builtin, not prelude code.** With `Task.spawn` and `Task.await` there
-is no way to wait for whichever item ends first and no way to cancel a task;
+is no way to wait for whichever item ends first, and when 17a landed there was
+no way to cancel a task;
 channels give bounded concurrency but not per-item timeouts (a receive with a
 timeout stops only the waiter, not the work). So it schedules tasks and starts
 timers in the VM, under exception 1 of the std-first rule (time).
@@ -492,7 +515,7 @@ Wait for a task's result, but not longer than `timeout_ms`.
   cancellation), and a later await observes it as it does today. So a program
   can wait a
   bit, do other work, and wait again. Stopping the work is `Task.map`'s per-item
-  timeout; a public `Task.cancel` stays open (see 27.6).
+  timeout or `Task.cancel` (27.1).
 - **A settled task never times out.** The call checks whether the target has
   already settled (ended, or been cancelled, and its owned files closed, handle
   ownership)
@@ -749,9 +772,6 @@ results.
   synchronization rules for the others are open.
 - **A diagnostic in a task other than `main`** ends only that task;
   `Result.error` stays a normal result.
-- **A public `Task.cancel`.** This section cancels only the timed-out items of
-  `Task.map`, and a cancel call would be a second way to stop work; returning
-  from the entrypoint still cancels pending work.
 - **Handles of a cancelled task** stay open until the end of the run (27.1).
   Whether a long-running program, such as a server, should close them when the
   task is cancelled is open. Until then open handles inside the item and do not
@@ -766,7 +786,8 @@ results.
   with a timeout and 17d `File.each_line` are built (records in §27.1–
   §27.4 and the grammar). 17e `Lazy[T]` (§27.4, step 2) is two PRs: PR 1
   (lists, ranges, `Lazy.produce`, the steps and the terminals) is built;
-  PR 2 adds `File.foreach` and `ch.lazy`.
+  PR 2 adds `File.foreach` and `ch.lazy`. `Task.cancel` (27.1, "Public
+  cancel") is built, by the owner's decision of 2026-10-20.
 - Done when: the site examples run on the VM; timed-out items leave no
   open socket, task or shared handle; the pipeline, await-cycle and
   `Await.TimedOut` cases hold; and agents pick `Task.map` for fan-out

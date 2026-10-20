@@ -317,3 +317,20 @@ def test_a_sleep_traces_its_timer_arm_and_fire_under_sched(tmp_path, traced_vm):
     assert arm.group(1) == fire.group(1)
     assert int(arm.group(2)) <= 1
     assert lines.index(arms[0]) < lines.index(fires[0])
+
+
+def test_task_cancel_traces_at_call_on_the_task_it_names_and_a_plain_line_on_a_descendant(tmp_path, traced_vm):
+    vm = traced_vm[0]
+    source = tmp_path / "stop.agc"
+    source.write_text(
+        "def leaf(n: Int) -> Void\n  Task.sleep(n)\nend\n\n"
+        "def top(n: Int) -> Void\n  Task.spawn(&leaf, n)\n  Task.sleep(n)\nend\n\n"
+        "def main() -> Void\n  t = Task.spawn(&top, 600000)\n  Task.sleep(1)\n  Task.cancel(t)\n  puts(\"done\")\nend\n",
+        encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "stop.agcb")
+    path = tmp_path / "stop.trace"
+    status, out, err = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": path})
+    assert (status, out, err) == (0, b"done\n", b"")
+    cancels = [line for line in trace_lines(path) if b" sched cancel task=" in line]
+    assert [re.search(rb" cancel task=([0-9]+)( at=call)?$", line).groups() for line in cancels] == \
+        [(b"3", None), (b"2", b" at=call")], cancels

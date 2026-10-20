@@ -243,6 +243,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.TaskMap -> return "TaskMap"
     Model.Rule.TaskSpawn -> return "TaskSpawn"
     Model.Rule.TaskSpawnOwning -> return "TaskSpawnOwning"
+    Model.Rule.TaskTarget -> return "TaskTarget"
     Model.Rule.TestEq -> return "TestEq"
     Model.Rule.TestResult -> return "TestResult"
     _ -> return "?"

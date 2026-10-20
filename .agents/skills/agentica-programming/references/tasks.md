@@ -7,6 +7,7 @@ Task.await(task: Task[R]) -> R
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
 Task.map(items: List[A], limit: Int, timeout_ms: Int, f: Fn[A, Result[R]]) -> List[Result[R]]
 Task.sleep(milliseconds: Int) -> Void
+Task.cancel(task: Task[R]) -> Void
 Task.pending_count() -> Int
 Task.unobserved_crash() -> Result[String]
 ```
@@ -109,15 +110,44 @@ thread pool, even on one scheduler, so `--seed` does not make a multi-task run
 repeatable. Do not depend on cross-task order.
 
 Sleep accepts nonnegative milliseconds; zero yields and negative values halt
-with RUNTIME-INVALID-DURATION at the argument. There is no `Task.cancel`, and a
-timed await does not cancel; the VM cancels a task only when an ancestor crashes
-or when its `Task.map` item times out. `Task.await` on a cancelled task returns
+with RUNTIME-INVALID-DURATION at the argument. Tasks inherit ports, program
+arguments and contextual services. Cross-task output order is unspecified;
+coordinate ownership of reads.
+
+`Task.cancel(task)` stops a task you no longer need, such as an owner task that
+keeps state, without a "stop" message. It does not wait: it marks the task and
+every task it started (descendants) cancelled and returns. A cancelled task runs
+no more user code. A sleep, a channel wait, an await or an I/O wait ends at
+once; a task in the middle of a long loop stops at the end of its current turn.
+Its handles close as for any task end, so a channel it owns (`spawn_owning`) is
+closed and its receivers get `error("channel: closed")`. Cancelling a task that
+already ended, or cancelling twice, does nothing. Any task that holds the handle
+may cancel it, also one received on a channel. A task that cancels itself, or an
+ancestor of itself, is cancelled too and stops right after the call. A cancel is
+not a crash: no crash report, and the exit code does not change. A timed await
+does not cancel; the VM also cancels a task when an ancestor crashes or when its
+`Task.map` item times out. `Task.await` on a cancelled task returns
 `error("task: cancelled")` when `R` is a `Result`, and otherwise halts with
-RUNTIME-TASK-CANCELLED at the await. A program reaches it when a task sends its
-child's handle over a channel and then crashes: the child is cancelled, and an
-await of it in another task halts. Tasks inherit ports, program arguments and
-contextual services. Cross-task output order is unspecified; coordinate
-ownership of reads.
+RUNTIME-TASK-CANCELLED at the await; give a task you may cancel a `Result`
+return type when something awaits it.
+
+```ruby
+def keep(inbox: Channel[Int]) -> Result[Int]
+  total = 0
+  while true
+    total += try inbox.recv(60000)
+  end
+  return ok(total)
+end
+
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(4)
+  keeper = Task.spawn(&keep, inbox)
+  inbox.send(5, 1000)
+  Task.cancel(keeper)
+  puts(Task.await(keeper))   # error("task: cancelled")
+end
+```
 
 `pending_count` returns how many tasks of this run have not ended, not counting
 `main`: tasks waiting to run, the caller when it is not `main`, and tasks
