@@ -532,6 +532,17 @@ static agc_value builtin_from_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   return agc_result_value(true, agc_string_value(s));
 }
 
+/* The bytes of the String as it is stored: valid UTF-8 by the String invariant, so this is the inverse of from_bytes. */
+static agc_value builtin_to_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  const agc_string *s = agc_as_string(vm, args[0]);
+  if (s->bytes == 0) return vm->rt->empty_list;
+  agc_list_builder out;
+  agc_list_builder_sized(&out, s->bytes);
+  for (size_t k = 0; k < s->bytes; k++) agc_list_builder_push(&out, agc_int((uint8_t)s->data[k]));
+  return agc_list_value(agc_list_builder_finish(&out));
+}
+
 static agc_value to_int(agc_vm *vm, agc_value *args, uint32_t span, bool bang) {
   const agc_string *s = agc_as_string(vm, args[0]);
   int64_t n;
@@ -597,6 +608,7 @@ const agc_builtin agc_string_builtins[] = {
   {"String.code", 1, builtin_code, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"String.from_code", 1, builtin_from_code, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"String.from_bytes", 1, builtin_from_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"String.to_bytes", 1, builtin_to_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"String.to_int", 1, builtin_to_int, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"String.to_int!", 1, builtin_to_int_bang, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"String.to_float", 1, builtin_to_float, AGC_NATIVE_NONE, AGC_COST_SIZE, false},

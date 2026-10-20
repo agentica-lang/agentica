@@ -367,3 +367,23 @@ end
 ok("hi")
 false
 ```
+
+## to_bytes
+
+```text
+String.to_bytes(s: String) -> List[Int]
+```
+
+Encodes the text as UTF-8: a list of integers from 0 to 255. It is the inverse of `String.from_bytes`, and it cannot fail. Use it to send text with `TCP.send_bytes` or to write it with `File.write_bytes`.
+
+```agentica
+def main() -> Void
+  puts(String.to_bytes("hé"))
+  puts(String.from_bytes(String.to_bytes("hé")))
+end
+```
+
+```output
+[104, 195, 169]
+ok("hé")
+```
