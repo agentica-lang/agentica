@@ -1,8 +1,10 @@
 /*
  * The connection object (agc_conn) that tcp.c and the HTTP client and server
  * share: opening with DNS, connect and TLS, watch callbacks, sends, reads and
- * release. Service header: it includes services.h and tls.h. Design:
- * docs/vm/10-io-http.md §10.7.1.
+ * release. Service header: it includes services.h and tls.h. A connection
+ * belongs to the I/O thread: call these there (inline at N = 1), except
+ * agc_conn_socket and agc_conn_error on a scheduler (see each) and
+ * agc_conn_closed anywhere (a hint). Design: docs/vm/10-io-http.md §10.7.1.
  */
 #ifndef AGC_NET_H
 #define AGC_NET_H
@@ -18,6 +20,7 @@ agc_conn *agc_conn_open(const agc_trace *trace, struct uv_loop_s *loop, uint64_t
 void agc_conn_observe(agc_conn *c, agc_conn_watch watch, void *watcher);
 bool agc_conn_ready(const agc_conn *c);
 bool agc_conn_failed(const agc_conn *c);
+/* On a scheduler too, once the failure was reported: the I/O thread no longer writes the error fields. */
 agc_value agc_conn_error(agc_vm *vm, const agc_conn *c);
 int agc_conn_send(agc_conn *c, const uint8_t *data, size_t len);
 bool agc_conn_sent(const agc_conn *c);
@@ -33,6 +36,8 @@ void agc_conn_release(agc_conn *c);
 void agc_conn_retain(agc_conn *c);
 bool agc_conn_closed(const agc_conn *c);
 agc_conn *agc_conn_accept(agc_conn *l);
+/* On a scheduler: the socket value of a connection that agc_conn_accept made and that no step has used yet; the
+   resource takes the count that agc_conn_accept took. */
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c);
 void agc_net_close(agc_vm *vm, agc_resource *r, const char *why);
 agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, const agc_tls_failure *f);

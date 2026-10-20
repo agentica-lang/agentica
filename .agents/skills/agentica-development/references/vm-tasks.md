@@ -16,8 +16,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`docs/vm/16-architecture.md` §16.9, "Threads"). A failure writes
     `*vm->outcome`, the record of that scheduler, never `rt->outcome`
     directly. Programs at N = 4: `tests/test_vm_multicore.py`
-    (`make test-multicore`, `make vm-tsan-run`); whole runs in C:
-    `vm/tests/threads_test.c`.
+    (`make test-multicore`, `make vm-tsan-run`) and the TCP and TLS modules
+    (`make test-multicore-net`, `AGENTICA_VM_TEST_MODULE_SCHEDULERS`); whole
+    runs in C: `vm/tests/threads_test.c`.
 
 - **Path:** `vm/runq.c`
   - **Owns:** The global run queue: a FIFO through `agc_task.next` and one

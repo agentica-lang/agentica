@@ -1,8 +1,7 @@
 /*
- * Runs with several scheduler threads (docs/vm/16-architecture.md §16.9): agc_vm_run with rt->schedulers > 1 starts the
- * schedulers and makes the calling thread the I/O thread. A storm of tasks that yield and meet on a channel; a stall
- * that the I/O thread finds (no program can reach one, since every wait of the language has a deadline); and a
- * failure of main while other tasks spin, which ends the run once. `make vm-tsan` runs it under ThreadSanitizer.
+ * Runs with several scheduler threads (§16.9; agc_vm_run with rt->schedulers > 1): a storm of tasks on a channel, a
+ * stall that the I/O thread finds, main failing beside spinners (the run ends once), and TCP calls issued and resumed
+ * on several schedulers while the I/O thread owns every socket. `make vm-tsan` runs it under ThreadSanitizer.
  */
 #include "../core.h"
 #include "test_program.h"
@@ -15,12 +14,35 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 
-#define MAX_CODE 48
+#define MAX_CODE 96
 #define WORKERS 400
 #define SCRATCH 20
+#define NET_TASKS 8
 
-enum { B_SPAWN, B_SLEEP, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_ADD, B_FOREVER, B_DIE, B_WHERE, B_COUNT };
-enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_COUNT };
+enum {
+  B_SPAWN,
+  B_SLEEP,
+  B_CH_NEW,
+  B_CH_SEND,
+  B_CH_RECV,
+  B_UNWRAP,
+  B_AWAIT,
+  B_LISTEN,
+  B_PORT,
+  B_CONNECT,
+  B_ACCEPT,
+  B_SEND,
+  B_READ,
+  B_CLOSE,
+  B_CLOSE_LISTENER,
+  B_ADD,
+  B_FOREVER,
+  B_DIE,
+  B_WHERE,
+  B_NET_WHERE,
+  B_COUNT
+};
+enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_NET, F_COUNT };
 
 typedef struct {
   agc_function fns[F_COUNT];
@@ -28,7 +50,7 @@ typedef struct {
   uint32_t spans[F_COUNT][MAX_CODE];
   agc_span span_table[8];
   agc_test_source source;
-  agc_value constants[16];
+  agc_value constants[64];
   const agc_builtin *builtins[B_COUNT];
   agc_program program;
 } prog;
@@ -37,7 +59,10 @@ typedef struct {
 static const struct {
   const char *name;
   uint32_t arity;
-} library[] = {{"Task.spawn", 2}, {"Task.sleep", 1}, {"Channel.new", 1}, {"Channel.send", 3}, {"Channel.recv", 2}};
+} library[] = {{"Task.spawn", 2},  {"Task.sleep", 1},     {"Channel.new", 1},       {"Channel.send", 3},
+               {"Channel.recv", 2}, {"Result.unwrap!", 1}, {"Task.await", 1},        {"TCP.listen", 2},
+               {"TCP.local_port", 1}, {"TCP.connect", 3},  {"TCP.accept", 2},        {"TCP.send", 3},
+               {"TCP.read_line", 2}, {"TCP.close", 1},     {"TCP.close_listener", 1}};
 
 static _Atomic int64_t total;
 static FILE *quiet;
@@ -88,17 +113,39 @@ static agc_value test_where(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_bool(bits(seen) >= 2);
 }
 
+/* One bit per scheduler that resumed a task after a TCP read. */
+static _Atomic uint64_t net_seen;
+
+/* Records the scheduler that runs the calling task right after a TCP read ended; true once two different ones have. */
+static agc_value test_net_where(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  uint64_t bit = UINT64_C(1) << (vm->index % 64);
+  return agc_bool(bits(atomic_fetch_or(&net_seen, bit) | bit) >= 2);
+}
+
 static const agc_builtin test_builtins[] = {
   {"Test.add", 1, test_add, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.forever", 1, test_forever, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.die", 1, test_die, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.where", 1, test_where, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.net_where", 1, test_net_where, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 /* The index of the next instruction of F, the target of a jump. */
 static uint32_t here(const prog *p, uint32_t f) { return p->fns[f].count; }
 
-static uint32_t constant(prog *p, int64_t v) { return agc_test_constant(&p->program, p->constants, v); }
+static uint32_t constant(prog *p, int64_t v) {
+  assert(p->program.constant_count < sizeof p->constants / sizeof p->constants[0]);
+  return agc_test_constant(&p->program, p->constants, v);
+}
+
+static uint32_t text_constant(prog *p, const char *text) {
+  assert(p->program.constant_count < sizeof p->constants / sizeof p->constants[0]);
+  uint32_t k = p->program.constant_count++;
+  p->constants[k] = agc_string_value(agc_make_string(text, strlen(text), strlen(text)));
+  return k;
+}
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx) {
   agc_test_emit(&p->fns[f], MAX_CODE, op, a, bx, 1);
@@ -161,6 +208,46 @@ static void new_prog(prog *p) {
   /* spin(_): yields for ever, until the end of the run cancels it. */
   call_int(p, F_SPIN, B_SLEEP, 0);
   emit(p, F_SPIN, AGC_OP_JUMP, 0, 0);
+
+  /* net(listener): a round connects to the listener, accepts one connection (any task's), sends a line on its own
+     socket, reads a line from the accepted one and closes both; rounds go on until Test.net_where has seen two
+     schedulers resume a task after a read. A task connects before it accepts, so there are never more accepts than
+     connections and no round waits for ever; the bytes come from whichever task's connection was taken. */
+  uint32_t top = here(p, F_NET);
+  emit(p, F_NET, AGC_OP_MOVE, SCRATCH, 0);
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_PORT);
+  emit(p, F_NET, AGC_OP_MOVE, SCRATCH + 3, SCRATCH);
+  emit(p, F_NET, AGC_OP_CONST, SCRATCH + 2, text_constant(p, "127.0.0.1"));
+  emit(p, F_NET, AGC_OP_CONST, SCRATCH + 4, constant(p, 10000));
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH + 2, B_CONNECT);
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH + 2, B_UNWRAP);
+  emit(p, F_NET, AGC_OP_MOVE, 2, SCRATCH + 2);
+  emit(p, F_NET, AGC_OP_MOVE, SCRATCH, 0);
+  emit(p, F_NET, AGC_OP_CONST, SCRATCH + 1, constant(p, 10000));
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_ACCEPT);
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_UNWRAP);
+  emit(p, F_NET, AGC_OP_MOVE, 3, SCRATCH);
+  emit(p, F_NET, AGC_OP_MOVE, SCRATCH, 2);
+  emit(p, F_NET, AGC_OP_CONST, SCRATCH + 1, text_constant(p, "x\n"));
+  emit(p, F_NET, AGC_OP_CONST, SCRATCH + 2, constant(p, 10000));
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_SEND);
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_UNWRAP);
+  emit(p, F_NET, AGC_OP_MOVE, SCRATCH, 3);
+  emit(p, F_NET, AGC_OP_CONST, SCRATCH + 1, constant(p, 10000));
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_READ);
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_UNWRAP);
+  call_int(p, F_NET, B_NET_WHERE, 0);
+  emit(p, F_NET, AGC_OP_MOVE, 4, SCRATCH);
+  call_int(p, F_NET, B_ADD, 1);
+  emit(p, F_NET, AGC_OP_MOVE, SCRATCH, 2);
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_CLOSE);
+  emit(p, F_NET, AGC_OP_MOVE, SCRATCH, 3);
+  emit(p, F_NET, AGC_OP_CALL_BUILTIN, SCRATCH, B_CLOSE);
+  uint32_t done = here(p, F_NET);
+  emit(p, F_NET, AGC_OP_JUMP_IF_TRUE, 4, 0);
+  emit(p, F_NET, AGC_OP_JUMP, 0, top);
+  p->code[F_NET][done].b = (uint16_t)here(p, F_NET);
+  emit(p, F_NET, AGC_OP_RETURN, 0, 0);
 }
 
 /* main: the storm. Spawns WORKERS tasks on one channel and receives WORKERS values. */
@@ -240,6 +327,40 @@ static void test_tasks_spread_over_schedulers(void) {
   assert(bits(atomic_load(&schedulers_seen)) >= 2);
 }
 
+/* TCP on four schedulers: main listens and spawns NET_TASKS net tasks, then awaits them and closes the listener. Every
+   step of a socket is a request to the I/O thread; the tasks issue them and are resumed on whichever scheduler runs
+   them, and the run ends once two schedulers have resumed a task after a read. Each round unwraps every result, so a
+   failed step fails the run. Before 3c-2a such a run refused the TCP rows (agc_program_for_threads). */
+static void test_tcp_over_schedulers(void) {
+  prog *p = agc_alloc(sizeof *p);
+  new_prog(p);
+  emit(p, F_MAIN, AGC_OP_CONST, 10, text_constant(p, "127.0.0.1"));
+  emit(p, F_MAIN, AGC_OP_CONST, 11, constant(p, 0));
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_LISTEN);
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_UNWRAP);
+  emit(p, F_MAIN, AGC_OP_MOVE, 1, 10);
+  for (uint32_t k = 0; k < NET_TASKS; k++) {
+    emit(p, F_MAIN, AGC_OP_CLOSURE, 10, F_NET);
+    emit(p, F_MAIN, AGC_OP_MOVE, 11, 1);
+    emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_SPAWN);
+    emit(p, F_MAIN, AGC_OP_MOVE, 2 + k, 10);
+  }
+  for (uint32_t k = 0; k < NET_TASKS; k++) {
+    emit(p, F_MAIN, AGC_OP_MOVE, 10, 2 + k);
+    emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_AWAIT);
+  }
+  emit(p, F_MAIN, AGC_OP_MOVE, 10, 1);
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_CLOSE_LISTENER);
+  emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
+  for (int round = 0; round < 3; round++) {
+    atomic_store(&total, 0);
+    atomic_store(&net_seen, 0);
+    agc_outcome out = run(p, 4);
+    assert(out.kind == AGC_DONE);
+    assert(atomic_load(&total) >= NET_TASKS && bits(atomic_load(&net_seen)) >= 2);
+  }
+}
+
 /* Every worker runs once, whichever scheduler takes it, and main sees every send. */
 static void test_storm(int64_t schedulers) {
   prog *p = agc_alloc(sizeof *p);
@@ -290,6 +411,7 @@ int main(void) {
   test_stall(4);
   test_main_fails_beside_spinners(4);
   test_tasks_spread_over_schedulers();
+  test_tcp_over_schedulers();
   fclose(quiet);
 #endif
   puts("threads tests passed");

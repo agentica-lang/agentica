@@ -81,6 +81,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - the scheduler's `uv_loop_t`, for handle code; aborts off the I/O
         thread, so at N > 1 a libuv step goes through `agc_io_call` and the
         builtins that still call it are refused, `agc_program_for_threads`)
+    - `agc_io_loop`, `agc_loop_call`, `agc_loop_uv`, `agc_loop_of_uv` (
+      - the loop for a service's `malloc`'d state, a step posted to it from a
+        hook with no vm (`release`, `drop`), its `uv_loop_t` on the I/O thread
+        only, and back)
+    - `agc_io_here` (
+      - true where a posted step runs at once (N = 1): the test of a
+        service's fast path)
     - `agc_io_ready` (
       - completes an `external` job from a libuv callback)
     - `agc_io_run_for` (
@@ -101,7 +108,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         the timer closed
       - a START finds `ended` set when the owner ended the job first, and
         starts nothing
-      - the libuv steps are requests (START, EXTEND, CLOSE_TIMER, RELEASE):
+      - the libuv steps are requests (START, CLOSE_TIMER, RELEASE):
         inline on the loop's thread, queued in the inbox from any other
     - `agc_io_start` (
       - one `uv_queue_work` job plus an optional timer per blocking call

@@ -187,29 +187,45 @@ void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof) {
     b->error = (int)-n;
 }
 
-agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over) {
+/* Where the next line read of B ends: a line (DATA, LEN bytes at DATA without the LF and one CR before it, CONSUME
+   bytes to drop), more than LIMIT bytes without an LF (OVER), bytes without an LF that end in a read error (FAILED),
+   or nothing left (END). A final line without an LF is a line at EOF. */
+static agc_cut_status spot_line(agc_inbuf *b, const uint8_t **data, size_t *len, size_t *consume) {
   size_t have = agc_inbuf_pending(b);
-  const uint8_t *data = have ? b->data + b->start : NULL;
+  *data = have ? b->data + b->start : NULL;
   const uint8_t *lf = find_lf(b);
-  size_t len = have, consume = have;
-  *over = false;
+  *len = *consume = have;
   if (lf) {
-    len = (size_t)(lf - data);
-    consume = len + 1;
-    if (len && data[len - 1] == '\r') len--;
-  } else if (have > LIMIT) {
-    *over = true;
-    return agc_error_value(too_long);
-  } else if (b->error) {
-    return agc_system_error(vm, "error reading from stream port", b->error);
-  } else if (have == 0) {
-    return agc_error_value(at_end);
+    *len = (size_t)(lf - *data);
+    *consume = *len + 1;
+    if (*len && (*data)[*len - 1] == '\r') (*len)--;
+    return AGC_CUT_DATA;
   }
-  b->start += consume;
-  b->scanned = 0;
+  if (have > LIMIT) return AGC_CUT_OVER;
+  if (b->error) return AGC_CUT_FAILED;
+  return have == 0 ? AGC_CUT_END : AGC_CUT_DATA;
+}
+
+static agc_value line_value(agc_vm *vm, agc_cut_status status, int error, const uint8_t *data, size_t len,
+                            const char *too_long, const char *at_end) {
+  if (status == AGC_CUT_OVER) return agc_error_value(too_long);
+  if (status == AGC_CUT_FAILED) return agc_system_error(vm, "error reading from stream port", error);
+  if (status == AGC_CUT_END) return agc_error_value(at_end);
   size_t chars;
   if (!agc_utf8_chars(data, len, &chars)) return agc_utf8_error(data, len);
   return agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, len, chars)));
+}
+
+agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over) {
+  const uint8_t *data;
+  size_t len, consume;
+  agc_cut_status status = spot_line(b, &data, &len, &consume);
+  *over = status == AGC_CUT_OVER;
+  if (status == AGC_CUT_DATA) {
+    b->start += consume;
+    b->scanned = 0;
+  }
+  return line_value(vm, status, b->error, data, len, too_long, at_end);
 }
 
 void agc_inbuf_take(agc_inbuf *b, size_t n) {
@@ -217,15 +233,64 @@ void agc_inbuf_take(agc_inbuf *b, size_t n) {
   b->scanned = b->scanned > n ? b->scanned - n : 0;
 }
 
+static agc_value bytes_value(const uint8_t *data, size_t n) {
+  agc_list_builder out;
+  agc_list_builder_sized(&out, n);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&out, agc_int(data[k]));
+  return agc_result_value(true, agc_list_value(agc_list_builder_finish(&out)));
+}
+
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
   if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "error reading from stream port", b->error);
-  agc_list_builder out;
-  agc_list_builder_sized(&out, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&out, agc_int(b->data[b->start + k]));
+  agc_value result = bytes_value(b->data + b->start, n);
   agc_inbuf_take(b, n);
-  return agc_result_value(true, agc_list_value(agc_list_builder_finish(&out)));
+  return result;
+}
+
+static void cut_copy(agc_inbuf_cut *cut, const uint8_t *data, size_t len) {
+  cut->len = len;
+  cut->data = NULL;
+  if (!len) return;
+  cut->data = malloc(len);
+  if (!cut->data) agc_out_of_memory();
+  memcpy(cut->data, data, len);
+}
+
+void agc_inbuf_cut_line(agc_inbuf *b, agc_inbuf_cut *cut) {
+  const uint8_t *data;
+  size_t len, consume;
+  cut->status = spot_line(b, &data, &len, &consume);
+  cut->error = b->error;
+  cut_copy(cut, data, cut->status == AGC_CUT_DATA ? len : 0);
+  if (cut->status != AGC_CUT_DATA) return;
+  b->start += consume;
+  b->scanned = 0;
+}
+
+void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut) {
+  size_t have = agc_inbuf_pending(b);
+  size_t n = have < count ? have : count;
+  cut->error = b->error;
+  cut->status = n == 0 && count > 0 && b->error ? AGC_CUT_FAILED : AGC_CUT_DATA;
+  cut_copy(cut, b->data + b->start, cut->status == AGC_CUT_DATA ? n : 0);
+  if (cut->status == AGC_CUT_DATA) agc_inbuf_take(b, n);
+}
+
+agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const char *too_long, const char *at_end) {
+  return line_value(vm, cut->status, cut->error, cut->data, cut->len, too_long, at_end);
+}
+
+agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut) {
+  if (cut->status == AGC_CUT_FAILED) return agc_system_error(vm, "error reading from stream port", cut->error);
+  return bytes_value(cut->data, cut->len);
+}
+
+void agc_inbuf_cut_free(agc_inbuf_cut *cut) {
+  free(cut->data);
+  cut->data = NULL;
+  cut->len = 0;
 }
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)

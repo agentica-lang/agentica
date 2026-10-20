@@ -4,6 +4,7 @@
  * and poll). The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
  */
 #include "../core.h"
+#include "io_harness.h"
 #include "test_abort.h"
 #include "test_support.h"
 
@@ -23,12 +24,6 @@ typedef struct {
   _Atomic int started, worked;
   int value;
 } gate;
-
-/* What a second thread runs, with the registration the garbage collector needs. */
-typedef struct {
-  void (*fn)(void *arg);
-  void *arg;
-} hop;
 
 typedef struct {
   gate *g;
@@ -143,21 +138,7 @@ static gate *new_gate(void) {
   return g;
 }
 
-static void hop_main(void *arg) {
-  hop *h = arg;
-  assert(agc_gc_thread_enter());
-  h->fn(h->arg);
-  agc_gc_thread_leave();
-}
-
-/* Runs FN on a second thread and waits for it: the thread plays a scheduler, and the loop's thread (the caller) does
-   not touch the VM meanwhile. */
-static void on_thread(void (*fn)(void *arg), void *arg) {
-  hop h = {fn, arg};
-  uv_thread_t thread;
-  assert(uv_thread_create(&thread, hop_main, &h) == 0);
-  assert(uv_thread_join(&thread) == 0);
-}
+#define on_thread agc_test_on_thread
 
 /* The task is running its turn, as a builtin sees it. */
 static void running(void) {
@@ -192,26 +173,11 @@ static int64_t take(agc_task *task) {
   return agc_as_int(&vm, result);
 }
 
-static void settle_loop(void) {
-  bool closed = false;
-  for (int attempt = 0; attempt < 500 && !closed; attempt++) closed = agc_io_close(&vm);
-  assert(closed && vm.rt->loop == NULL);
-}
+static void settle_loop(void) { agc_test_settle_loop(&vm); }
 
-static void pump_until_idle(void) {
-  while (uv_loop_alive(agc_io_uv(&vm))) (void)agc_io_poll(&vm, true);
-}
+static void pump_until_idle(void) { agc_test_pump_until_idle(&vm); }
 
-static void count_timers(uv_handle_t *handle, void *arg) {
-  if (handle->type == UV_TIMER && uv_is_active(handle)) *(uint64_t *)arg += 1;
-}
-
-/* How many job timers are armed on the loop. */
-static uint64_t armed_timers(void) {
-  uint64_t count = 0;
-  uv_walk(agc_io_uv(&vm), count_timers, &count);
-  return count;
-}
+static uint64_t armed_timers(void) { return agc_test_armed_timers(&vm); }
 
 /* The timer wins while the work is still blocked: the task takes the timeout and the job stays, because the work is
    still using its data. The work then ends: its end changes nothing, and the data is dropped once, after it finished. */
@@ -528,8 +494,7 @@ static void start_detached(void *arg) {
 
 static void service_on_thread(void *arg) {
   (void)arg;
-  assert(agc_io_service(&vm));
-  assert(!agc_io_service(&vm));
+  agc_test_service(&vm);
 }
 
 /* A detached job that finishes while a second thread runs the schedulers is ended by a scheduler: the I/O role finds it
@@ -553,10 +518,7 @@ static void test_detached_ends_on_a_scheduler(void) {
   settle_loop();
 }
 
-static void wait_for_hand_over(void) {
-  while (!agc_runq_nudged(vm.rt->runq)) assert(agc_io_poll(&vm, true));
-  assert(agc_runq_take_nudge(vm.rt->runq));
-}
+static void wait_for_hand_over(void) { agc_test_wait_for_hand_over(&vm); }
 
 /* A detached job that is ready twice before a scheduler takes it: its timer fires and it is handed over, then its work
    ends and the drain finds it again, with another job listed behind it. It stays listed once (a second link would cut
@@ -590,6 +552,7 @@ static void test_job_ready_twice_is_listed_once(void) {
 }
 
 static int counted_done, counted_drop;
+static uv_thread_t counted_drop_thread;
 
 static agc_value counted_done_half(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -608,6 +571,7 @@ static agc_value counted_expired(agc_vm *vm, void *data, agc_value context) {
 
 static void counted_drop_half(void *data) {
   free(data);
+  counted_drop_thread = uv_thread_self();
   counted_drop++;
 }
 
@@ -667,10 +631,12 @@ static void test_detach_from_a_scheduler_while_ready(void) {
 
 /* A detached job on a shared loop whose deadline passes while it still waits: a scheduler ends it (agc_io_service),
    finds it busy, and posts its deadline cancel (EXPIRE_CANCEL) instead of ending it. The I/O thread runs the cancel,
-   which stops the wait, and puts the job back on the ready list; a scheduler then ends it with `drop`, once. */
+   which stops the wait, and puts the job back on the ready list; a scheduler then ends it and posts its `drop`, which
+   runs once on the I/O thread (§16.5: what the data reaches, such as a socket, belongs to that thread). */
 static void test_expire_cancel_from_a_scheduler(void) {
   assert(agc_io_share(&vm, false));
   agc_runq_share(vm.rt->runq);
+  uv_thread_t loop_thread = uv_thread_self();
   agc_task *task = vm.task;
   running();
   int *data = malloc(sizeof *data);
@@ -685,7 +651,9 @@ static void test_expire_cancel_from_a_scheduler(void) {
   assert(counted_done == 0 && counted_drop == 0);
   wait_for_hand_over();
   on_thread(service_on_thread, NULL);
-  assert(counted_done == 0 && counted_drop == 1);
+  assert(counted_done == 0 && counted_drop == 0);
+  while (counted_drop == 0) assert(agc_io_poll(&vm, true));
+  assert(counted_drop == 1 && uv_thread_equal(&counted_drop_thread, &loop_thread));
   pump_until_idle();
   settle_loop();
   assert(counted_drop == 1);
