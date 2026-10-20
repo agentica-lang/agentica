@@ -208,6 +208,13 @@ static void shared_strings(agc_vm *vm) {
   agc_string *accent = STR(agc_as_result(vm, call(vm, "String.from_bytes", 1, args))->value);
   assert(accent->bytes == 2 && accent->chars == 1);
 
+  args[0] = str("");
+  assert(agc_as_list(vm, call(vm, "String.to_bytes", 1, args)) == agc_as_list(vm, rt->empty_list));
+  args[0] = agc_string_value(accent);
+  const agc_list *encoded = agc_as_list(vm, call(vm, "String.to_bytes", 1, args));
+  assert(agc_list_len(encoded) == 2 && agc_as_int(vm, agc_list_get(encoded, 0)) == 0xC3 &&
+         agc_as_int(vm, agc_list_get(encoded, 1)) == 0xA9);
+
   args[0] = str("a");
   assert(STR(call(vm, "String.upcase", 1, args)) == rt->chars['A']);
   args[0] = str("Q");

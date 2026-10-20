@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `String.to_bytes(s)`: the UTF-8 bytes of a String as a `List[Int]`, the
+  inverse of `String.from_bytes`.
 - Generic type aliases: `type Matrix[T] = List[List[T]]`, used as
   `Matrix[Int]`, is transparent substitution with no new runtime type.
 - TLS sockets on Windows, with the same checks as on Linux and macOS.
