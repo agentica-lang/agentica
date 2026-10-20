@@ -414,6 +414,21 @@ type:
   - **Help:** break the cycle; aliases expand to the type they name, so `type
     Names = List[String]` is valid
 
+- **Written:** `Matrix` or `Matrix[Int, Int]` for `type Matrix[T] = ...`, or
+  `Names[Int]` for `type Names = ...` (`CHECK-UNKNOWN-TYPE`)
+  - **Help:** the message says how many type arguments the alias expects
+    (`type alias Matrix expects 1 type argument(s), found 2`, or `takes no type
+    arguments`); an alias is never a partial application
+
+- **Written:** `type Box[T, T] = ...` or `type Box[Int] = ...`
+  (`CHECK-REDEFINED-NAME`)
+  - **Help:** a type parameter of an alias, like one of an enum, is not repeated
+    and is not a reserved type name
+
+- **Written:** `enum E[Item] V(Items) end` when `type Items = List[Item]` names
+  a struct `Item` (`CHECK-UNKNOWN-TYPE`)
+  - **Help:** rename the type parameter; it would hide the type the alias names
+
 - **Written:** `Grid(...)` when `Grid` is a type alias (`CHECK-UNKNOWN-TYPE`)
   - **Help:** construct the struct named by the alias, or use a value of the
     aliased builtin type

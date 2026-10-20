@@ -77,6 +77,22 @@ There are also lists, maps, structs, enums and results. Later pages show them.
 
 `type Names = List[String]` gives a long type a short name. It is not a new type. Aliases cannot be constructors or enum patterns, and cycles are rejected.
 
+An alias can take type parameters. `Matrix[Int]` means exactly `List[List[Int]]`, and every parameter needs an argument:
+
+```agentica
+type Matrix[T] = List[List[T]]
+
+def main() -> Void
+  rows: Matrix[Int] = [[1, 2], [3]]
+  plain: List[List[Int]] = rows
+  puts(plain.size)
+end
+```
+
+```output
+2
+```
+
 ## Printing values
 
 `puts` prints any value. Strings print as they are. Other values print in a short, readable form:

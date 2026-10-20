@@ -127,9 +127,12 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       end
       return lines
     Ast.Decl.TypeAlias(node) ->
-      lines = out.push(
-        head(at, role, "type-alias-decl", node.id, node.span, name_attr(node.name) + doc_attr(node.doc)),
-      )
+      attrs = name_attr(node.name)
+      if node.type_parameters.size > 0
+        parameters = node.type_parameters.map do |name| Text.quote(name) end
+        attrs += " type-parameters=#{list_text(parameters)}"
+      end
+      lines = out.push(head(at, role, "type-alias-decl", node.id, node.span, attrs + doc_attr(node.doc)))
       return print_type(lines, child, "target", node.target)
   end
 end

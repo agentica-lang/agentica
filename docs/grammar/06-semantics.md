@@ -273,6 +273,15 @@ builtin, struct, enum or function type, or another alias; a cycle is
 `CHECK-TYPE-ALIAS-CYCLE`. An alias is not a constructor or enum: construct or
 match using the underlying struct or enum name.
 
+A generic alias, `type Matrix[T] = List[List[T]]`, takes one type argument per
+parameter at each use and means the type with the arguments put in
+(`Matrix[Int]` is `List[List[Int]]`). The arguments are never inferred, and a
+wrong count is `CHECK-UNKNOWN-TYPE` at the use. The expanded type is checked
+where the alias is used: an error in the part written in the alias target (a
+`Void` item, a bad key) is reported at the use, and an error in an argument
+(`Index[Float]` for `type Index[K] = Map[K, Int]`) at the argument. A type
+parameter of an enum is never taken for a name in the alias target.
+
 `case value ... end` is a statement. An arm may put one simple statement on the
 arrow line (`1 -> puts("one")`), and more lines of the same arm may follow. A
 pattern is a primitive literal, `_`, `ok(...)` or `error(...)`, or a qualified

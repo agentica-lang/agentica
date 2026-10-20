@@ -60,7 +60,8 @@ def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
         Ast.Decl.TypeAlias(node) ->
           here = found.with(file: module.file)
           try check_new_name(here, st, node.name, node.name_span)
-          found = here.with(aliases: here.aliases.put(node.name, node.target))
+          try check_type_parameters(here, st, node.type_parameters, "type alias", node.span)
+          found = here.with(aliases: here.aliases.put(node.name, node))
         _ -> st = st
       end
     end
@@ -74,7 +75,7 @@ def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
     here = cx.with(file: module.file)
     for decl in module.declarations
       case decl
-        Ast.Decl.TypeAlias(node) -> try Types.resolve_type(here, st, node.target, true)
+        Ast.Decl.TypeAlias(node) -> try Types.resolve_type(Types.alias_scope(here, node), st, node.target, true)
         _ -> st = st
       end
     end
@@ -107,31 +108,51 @@ end
 
 def register_enum_name(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result[State.Cx]
   try check_new_name(cx, st, node.name, node.span)
+  try check_type_parameters(cx, st, node.type_parameters, "enum", node.span)
+  return ok(
+    cx.with(
+      enums: cx.enums.put(node.name, Model.EnumDef(name: node.name, parameters: node.type_parameters, variants: [])),
+    ),
+  )
+end
+
+# CHECK-REDEFINED-NAME when the type parameters of an enum or a generic alias (owner) repeat a name or take a reserved
+# one. Both follow the same rule.
+def check_type_parameters(
+  cx: State.Cx,
+  st: State.St,
+  parameters: List[String],
+  owner: String,
+  span: Source.Span,
+) -> Result[Bool]
   seen: Set[String] = Set.new([])
-  for parameter in node.type_parameters
+  for parameter in parameters
     if seen.include?(parameter)
-      return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate enum type parameter", node.span))
+      return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate #{owner} type parameter", span))
     end
     seen = seen.add(parameter)
   end
-  for parameter in node.type_parameters
+  for parameter in parameters
     if RESERVED.include?(parameter)
       return error(
         State.fail(
           cx,
           st,
           "CHECK-REDEFINED-NAME",
-          "\"#{parameter}\" cannot be used as an enum type parameter",
-          node.span,
+          "\"#{parameter}\" cannot be used as #{article(owner)} #{owner} type parameter",
+          span,
         ),
       )
     end
   end
-  return ok(
-    cx.with(
-      enums: cx.enums.put(node.name, Model.EnumDef(name: node.name, parameters: node.type_parameters, variants: [])),
-    ),
-  )
+  return ok(true)
+end
+
+def article(owner: String) -> String
+  if owner == "enum"
+    return "an"
+  end
+  return "a"
 end
 
 # CHECK-REDEFINED-NAME when a declared type name is reserved or already taken.

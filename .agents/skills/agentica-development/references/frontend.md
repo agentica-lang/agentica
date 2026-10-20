@@ -132,10 +132,13 @@ Text-form notes:
   `ImportDecl` has `alias` and `names`; the linker keeps a `named` table
   (`bind_names`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`). The path-first
   form is `PARSE-UNEXPECTED-TOKEN`.
-- Simple type aliases: `Ast.Decl.TypeAlias`, with the target `TypeRef`. The
-  parser reads contextual `type` only at top level. `check_register.agc`
-  registers alias targets before signatures; `check_types.agc` expands them
-  (`CHECK-TYPE-ALIAS-CYCLE`).
+- Type aliases: `Ast.Decl.TypeAlias`, with the target `TypeRef` and the
+  `type_parameters` of a generic one. The parser reads contextual `type` only
+  at top level. `check_register.agc` registers the aliases before signatures;
+  `check_types.agc` expands them (`CHECK-TYPE-ALIAS-CYCLE`): the arguments
+  first, then the target with only the alias's own parameters in scope, then
+  the arguments put in, as plain substitution (a name in the target is never an
+  enum parameter of the use).
 
 ## Common tasks
 

@@ -168,8 +168,17 @@ alias and is transparent in all type positions. `export type Names = ...` makes
 it available to importing modules, by module alias or by name. It adds no
 runtime type and cannot be constructed or used as an enum pattern. Cycles are
 `CHECK-TYPE-ALIAS-CYCLE`. Errors in expanded types point to the alias use.
-Expansions stop at 1,000 type references with `CHECK-TOO-DEEP`; generic aliases
-are not supported yet.
+Expansions stop at 1,000 type references with `CHECK-TOO-DEEP`.
+
+A generic alias, `type Matrix[T] = List[List[T]]`, is pure substitution:
+`Matrix[Int]` is exactly `List[List[Int]]`. Parameters are type names that
+neither repeat nor take a reserved name (`CHECK-REDEFINED-NAME`) and may go
+unused. A use needs one argument per parameter (`Matrix` or
+`Matrix[Int, Int]` is `CHECK-UNKNOWN-TYPE`); arguments are never inferred.
+Aliases may use other aliases (`type Grid = Matrix[Float]`), also through
+imports (`S.Matrix[Int]`, `import {Matrix} from "m"`). A parameter may be a
+`Map` key in the target; `Index[Float]` fails at the use with
+`CHECK-MAP-KEY-TYPE`.
 
 `Option[T]` is not builtin; declare it as an enum if you need it. Type names
 start with an uppercase letter. Variable, function, and field names start with a
@@ -210,10 +219,11 @@ end
 - Leave a blank line after the `end` of each `def`, `struct`, and `enum` before
   the next declaration (`PARSE-MISSING-BLANK-LINE`).
 - Every parameter and the return type need an annotation.
-- Structs, enums, and functions are top level only. An enum's type parameters
-  apply only to its payloads; there are no generic functions or structs, no user
-  methods, no nested functions, no keyword arguments, and no overloading.
-  Closures are blocks.
+- Structs, enums, and functions are top level only. Only enums and type aliases
+  (`type Matrix[T] = List[List[T]]`) have type parameters; an enum's apply only
+  to its payloads. There are no generic functions or structs, no user methods,
+  no nested functions, no keyword arguments, and no overloading. Closures are
+  blocks.
 - A parameter may end with a default value: `def connect(host: String =
   "localhost", port: Int = 8080, tags: List[String] = [])`. The call may leave
   out any trailing parameters with a default, and fills the others from the

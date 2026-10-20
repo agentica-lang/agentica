@@ -201,7 +201,8 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
   - Title: Type aliases
   - File: [`49-type-aliases.md`](49-type-aliases.md)
   - Status: Planned by the owner on 2026-10-16 (row 7.12):
-    simple transparent aliases (49a), then generic ones (49b); compiler/ only
+    simple transparent aliases (49a) and generic ones (49b), built;
+    compiler/ only
 
 - §: 50
   - Title: Test functions without `main`

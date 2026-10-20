@@ -1,0 +1,6 @@
+type Matrix[T] = List[List[T]]
+
+export type Lookup[K, V] = Map[K, List[V]]
+
+def main() -> Void
+end

@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Generic type aliases: `type Matrix[T] = List[List[T]]`, used as
+  `Matrix[Int]`, is transparent substitution with no new runtime type.
 - TLS sockets on Windows, with the same checks as on Linux and macOS.
 - Windows system trust also reads the CA store for intermediates (never as
   roots).
@@ -46,6 +48,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A cancelled `TCP.accept` or socket read gives up its place at once.
 - A task spawned by a cancelled task starts cancelled.
+- A type alias is read with only its own parameters in scope: an enum type
+  parameter no longer takes the place of a type the alias names
+  (`CHECK-UNKNOWN-TYPE` at the use), and the argument of an unused alias
+  parameter is checked.
 - Windows: `pkg/` roots follow the documented rules: `;` in `AGENTICA_PATH`,
   drive and UNC roots, `%LOCALAPPDATA%` for the user root, no system roots.
 

@@ -145,10 +145,12 @@ export struct EnumDecl
   span: Source.Span
 end
 
+## A type alias, with the type parameters of a generic one (type Matrix[T] = List[List[T]]; empty for type Grid = ...).
 export struct TypeAliasDecl
   id: Int
   name: String
   name_span: Source.Span
+  type_parameters: List[String]
   target: TypeRef
   doc: Optional[String]
   span: Source.Span

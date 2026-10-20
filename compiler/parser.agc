@@ -1880,7 +1880,8 @@ end
 def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
   after_word = try expect_word(e, pos, "type", "")
   after_name = try Base.expect(e, after_word, "type-name", "a type alias name", false)
-  assign = try Base.expect(e, after_name, "assign", "=", false)
+  parameters = try parse_type_parameters(e, after_name)
+  assign = try Base.expect(e, parameters.pos, "assign", "=", false)
   target = try Base.parse_type(e, assign, ids)
   stop = try Base.expect(e, target.pos, "NL", "a newline after the type alias", false)
   node = Ast.Decl.TypeAlias(
@@ -1888,6 +1889,7 @@ def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Str
       id: target.ids,
       name: e.tokens[after_word].lexeme,
       name_span: e.tokens[after_word].span,
+      type_parameters: parameters.names,
       target: target.node,
       doc: doc,
       span: Base.span_from(e, pos, stop),
