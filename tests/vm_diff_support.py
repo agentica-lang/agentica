@@ -511,7 +511,6 @@ KNOWN_ISSUE_FIXTURES = {
     "files-errors.agc": {"darwin": (436, _MACOS_PATHS), "windows": (436, _WINDOWS_PATHS)},
     "process-limits.agc": {"windows": (436, "the program runs /bin/sh")},
     "process-captured-basic.agc": {"windows": (436, "the program runs /bin/pwd")},
-    "file-each-line-stop.agc": {"windows": (435, "the program counts the entries of a folder of open descriptors")},
 }
 
 

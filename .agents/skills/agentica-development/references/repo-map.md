@@ -211,6 +211,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_windows_metadata_and_locks.py  # pytest: Windows metadata values and file locks, on the native Windows runner (references/ci.md)
   test_windows_filesystem_safety.py  # pytest: Windows filesystem mutation regressions, in Docker or Actions scratch (references/ci.md)
   test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
+  test_windows_handle_counts.py  # pytest, native Windows only: no file call reaches the VM's own named pipes, and its handle count stays flat (GetProcessHandleCount); POSIX lists /proc/self/fd
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
   test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; host-only on Windows (references/bdd.md)
