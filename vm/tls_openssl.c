@@ -1,16 +1,16 @@
 /*
- * The TLS adapter over OpenSSL, the only file that includes OpenSSL. Each
- * session uses two memory BIOs, the trust store and the SNI or IP checks are
- * set up here, and OpenSSL errors become our own codes. Adapter layer, behind
- * tls.h. Design: docs/vm/10-io-tls.md §10.3.
+ * The TLS adapter over OpenSSL; only it, tls_trust.c and tls_trust_posix.c
+ * include OpenSSL. Each session uses two memory BIOs, the trust
+ * store and the SNI or IP checks are set up here, and OpenSSL errors become our
+ * own codes. Adapter layer, behind tls.h. Design: docs/vm/10-io-tls.md §10.3.
  */
 #include "tls.h"
+#include "tls_trust.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__linux__) || defined(__APPLE__)
 #include <openssl/bio.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -18,7 +18,6 @@
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
 #include <openssl/x509v3.h>
-#include <unistd.h>
 
 #if OPENSSL_VERSION_NUMBER < 0x30000000L || defined(LIBRESSL_VERSION_NUMBER)
 #error "the VM needs OpenSSL 3.0 or newer (LibreSSL is not supported): install the OpenSSL 3 development files or build with AGENTICA_OPENSSL=vendored"
@@ -41,15 +40,6 @@ typedef struct {
   int sys;
   bool verify, mismatch, version, eof;
 } queued;
-
-static const char *const bundles[] = {
-  "/etc/ssl/certs/ca-certificates.crt",
-  "/etc/pki/tls/certs/ca-bundle.crt",
-  "/etc/ssl/ca-bundle.pem",
-  "/etc/pki/tls/cacert.pem",
-  "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-  "/etc/ssl/cert.pem",
-};
 
 static const int version_reasons[] = {
   SSL_R_UNSUPPORTED_PROTOCOL,     SSL_R_NO_PROTOCOLS_AVAILABLE,     SSL_R_TLSV1_ALERT_PROTOCOL_VERSION,
@@ -115,7 +105,8 @@ static agc_tls_error verify_kind(long result) {
     case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
     case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
     case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE:
-    case X509_V_ERR_CERT_UNTRUSTED: return AGC_TLS_ERR_VERIFY_UNTRUSTED;
+    case X509_V_ERR_CERT_UNTRUSTED:
+    case X509_V_ERR_CERT_REJECTED: return AGC_TLS_ERR_VERIFY_UNTRUSTED;
     default: return AGC_TLS_ERR_VERIFY_FAILED;
   }
 }
@@ -182,14 +173,13 @@ static agc_tls_config *wrap(SSL_CTX *ctx, agc_tls_failure *f) {
   return c;
 }
 
+/* SSL_CERT_FILE, when set, replaces the platform's store (tls_trust.h) on every system; SSL_CERT_DIR adds to either. */
 static void system_trust(SSL_CTX *ctx) {
   const char *file = getenv("SSL_CERT_FILE");
-  if (!file || !*file) {
-    file = NULL;
-    for (size_t k = 0; k < sizeof bundles / sizeof bundles[0] && !file; k++)
-      if (access(bundles[k], R_OK) == 0) file = bundles[k];
-  }
-  if (file && SSL_CTX_load_verify_file(ctx, file) != 1) ERR_clear_error();
+  if (!file || !*file)
+    (void)agc_tls_trust_system(SSL_CTX_get_cert_store(ctx));
+  else if (SSL_CTX_load_verify_file(ctx, file) != 1)
+    ERR_clear_error();
   const char *dir = getenv("SSL_CERT_DIR");
   if (dir && *dir && SSL_CTX_load_verify_dir(ctx, dir) != 1) ERR_clear_error();
 }
@@ -204,7 +194,7 @@ const char *agc_tls_error_name(agc_tls_error code) {
 agc_tls_config *agc_tls_client_config(const char *ca_file, agc_tls_failure *failure) {
   SSL_CTX *ctx = new_ctx(TLS_client_method(), failure);
   if (!ctx) return NULL;
-  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+  SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, agc_tls_trust_verify);
   if (!*ca_file) {
     system_trust(ctx);
   } else if (SSL_CTX_load_verify_file(ctx, ca_file) != 1) {
@@ -237,6 +227,8 @@ void agc_tls_config_free(agc_tls_config *config) {
   SSL_CTX_free(config->ctx);
   free(config);
 }
+
+struct x509_store_st *agc_tls_config_store(agc_tls_config *config) { return SSL_CTX_get_cert_store(config->ctx); }
 
 static agc_tls *new_session(const agc_tls_config *config, agc_tls_failure *f) {
   agc_tls *t = calloc(1, sizeof *t);
@@ -346,102 +338,3 @@ void agc_tls_close(agc_tls *t) {
 const char *agc_tls_protocol(const agc_tls *t) { return SSL_get_version(t->ssl); }
 
 const char *agc_tls_cipher(const agc_tls *t) { return SSL_get_cipher_name(t->ssl); }
-#else
-static void unsupported(agc_tls_failure *f) {
-  f->code = AGC_TLS_ERR_INTERNAL;
-  f->sys = 0;
-  snprintf(f->detail, sizeof f->detail, "%s", "TLS needs Linux or macOS");
-}
-
-const char *agc_tls_version(void) { return NULL; }
-
-const char *agc_tls_error_name(agc_tls_error code) {
-  (void)code;
-  return "internal";
-}
-
-agc_tls_config *agc_tls_client_config(const char *ca_file, agc_tls_failure *failure) {
-  (void)ca_file;
-  unsupported(failure);
-  return NULL;
-}
-
-agc_tls_config *agc_tls_server_config(const char *cert_file, const char *key_file, agc_tls_failure *failure) {
-  (void)cert_file;
-  (void)key_file;
-  unsupported(failure);
-  return NULL;
-}
-
-void agc_tls_config_free(agc_tls_config *config) { (void)config; }
-
-agc_tls *agc_tls_client(agc_tls_config *config, const char *host, agc_tls_failure *failure) {
-  (void)config;
-  (void)host;
-  unsupported(failure);
-  return NULL;
-}
-
-agc_tls *agc_tls_server(agc_tls_config *config, agc_tls_failure *failure) {
-  (void)config;
-  unsupported(failure);
-  return NULL;
-}
-
-void agc_tls_free(agc_tls *t) { (void)t; }
-
-agc_tls_status agc_tls_handshake(agc_tls *t, agc_tls_failure *failure) {
-  (void)t;
-  unsupported(failure);
-  return AGC_TLS_ERROR;
-}
-
-bool agc_tls_feed_in(agc_tls *t, const uint8_t *data, size_t len) {
-  (void)t;
-  (void)data;
-  (void)len;
-  return false;
-}
-
-void agc_tls_feed_eof(agc_tls *t) { (void)t; }
-
-size_t agc_tls_out_peek(agc_tls *t, const uint8_t **data) {
-  (void)t;
-  *data = NULL;
-  return 0;
-}
-
-void agc_tls_out_consume(agc_tls *t, size_t len) {
-  (void)t;
-  (void)len;
-}
-
-agc_tls_status agc_tls_read(agc_tls *t, uint8_t *buf, size_t cap, size_t *got, agc_tls_failure *failure) {
-  (void)t;
-  (void)buf;
-  (void)cap;
-  *got = 0;
-  unsupported(failure);
-  return AGC_TLS_ERROR;
-}
-
-agc_tls_status agc_tls_write(agc_tls *t, const uint8_t *data, size_t len, agc_tls_failure *failure) {
-  (void)t;
-  (void)data;
-  (void)len;
-  unsupported(failure);
-  return AGC_TLS_ERROR;
-}
-
-void agc_tls_close(agc_tls *t) { (void)t; }
-
-const char *agc_tls_protocol(const agc_tls *t) {
-  (void)t;
-  return "";
-}
-
-const char *agc_tls_cipher(const agc_tls *t) {
-  (void)t;
-  return "";
-}
-#endif

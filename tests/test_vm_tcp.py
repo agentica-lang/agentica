@@ -581,7 +581,7 @@ end
 
 
 def test_tls_returns_an_error_where_it_is_not_built(tmp_path):
-    """TCP ships without TLS on Windows: both TLS calls fail cleanly and the run ends normally."""
+    """Windows has TCP but refuses TLS sockets (vm/net_os.h): both TLS calls fail cleanly and the run ends normally."""
     if TLS_BUILT:
         pytest.skip("TLS is built here (tests/test_vm_tls.py)")
     result = run_text(tmp_path, "tls", TLS_PROGRAM)

@@ -144,17 +144,20 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     and the build hold a reference, so `drop_tls` never frees it under a
     handshake
 
-- **Path:** `vm/tls.h`, `vm/tls_openssl.c`
+- **Path:** `vm/tls.h`, `vm/tls_openssl.c`, `vm/tls_trust.h`, `vm/tls_trust.c`,
+  `vm/tls_trust_{posix,darwin,windows}.c`
   - **Owns:** the TLS adapter (`docs/vm/10-io-tls.md` §10.3): our own types
     (`agc_tls_config`, `agc_tls`, status OK, WANT_READ, WANT_WRITE, CLOSED or
     ERROR, `agc_tls_error`, `agc_tls_failure` with code, `errno` and a short
-    detail); `vm/tls_openssl.c` is the only file that includes OpenSSL: init
-    with `OPENSSL_INIT_NO_LOAD_CONFIG \| OPENSSL_INIT_NO_ATEXIT`, TLS 1.2 and
-    security level 2, trust (`SSL_CERT_FILE` or the first readable bundle of a
-    fixed list, `SSL_CERT_DIR` or none; a non-empty `ca_file` replaces them),
-    SNI and `SSL_set1_host` or `X509_VERIFY_PARAM_set1_ip_asc`, two memory BIOs
-    per session, error-queue draining into our codes; stubs that fail with "TLS
-    needs Linux or macOS" elsewhere
+    detail); `vm/tls_openssl.c`, `vm/tls_trust.c` and `vm/tls_trust_posix.c` are
+    the only files that include OpenSSL: init with `OPENSSL_INIT_NO_LOAD_CONFIG
+    \| OPENSSL_INIT_NO_ATEXIT`, TLS 1.2 and security level 2, trust
+    (`SSL_CERT_FILE` or the platform store of `agc_tls_trust_system`,
+    `SSL_CERT_DIR` or none; a non-empty `ca_file` replaces them), SNI and
+    `SSL_set1_host` or `X509_VERIFY_PARAM_set1_ip_asc`, two memory BIOs per
+    session, error-queue draining into our codes; built on every system, while
+    Windows refuses TLS sockets in `tcp.c` (`tls_refused`, from
+    `agc_net_tls_enabled` of `vm/net_os.h`)
 
 - `vm/duplex.c`
   - the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As
@@ -322,7 +325,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `vm/tls_openssl.c` has an `#error` for older versions and LibreSSL.
   - The mode is not remembered: pass `AGENTICA_OPENSSL=vendored` to every make
     command or export it.
-  - `vendored` (only the release) builds the submodule static per build mode:
+  - `vendored` (the release and the Platforms jobs) builds the submodule static
+    per build mode:
     out-of-tree `Configure` in `$(VM_BUILD)/openssl/` with `OSSL_OPTS`
     (`no-shared no-tests no-docs no-apps no-module ... no-deprecated`) and the
     mode's `OSSL_CFLAGS` (release hardening, `-g` for GC stress, clang `-g
@@ -340,8 +344,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - after editing OpenSSL sources by hand, remove `$(VM_BUILD)/openssl`.
   - Init with `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`
   - TLS 1.2 and security level 2 as minimums
-  - trust: `SSL_CERT_FILE` or else the first readable distro bundle, and
-    `SSL_CERT_DIR` or else no directory (a failing system source is skipped)
+  - trust: `SSL_CERT_FILE` or else the platform store (distro bundle, macOS
+    Security framework, Windows Crypt32 ROOT), and `SSL_CERT_DIR` or else no
+    directory (a failing system source is skipped)
+  - the platform store is loaded once per process (`tls_trust.c`,
+    `CRYPTO_THREAD_run_once`) and copied into each context; distrusted
+    certificates (macOS Deny, Windows Disallowed) go in first with a
+    `serverAuth` reject, and the verify callback `agc_tls_trust_verify`
+    rejects a leaf that OpenSSL itself never looks up (it scans the store's
+    in-memory objects under `X509_STORE_lock`, never the by_dir lookup)
   - a non-empty `ca_file` replaces system trust and must load.
   - SNI plus `SSL_set1_host` per connection, `X509_VERIFY_PARAM_set1_ip_asc` (no
     SNI) for IP literals
@@ -350,8 +361,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     thread (the config loads in a libuv pool job).
   - The release (`zig cc`, glibc 2.28) sets `AGENTICA_OPENSSL=vendored` and
     `AGENTICA_GC=vendored`
-  - `readelf -d` must show no `libssl`, `libcrypto` or `libgc`, and `--version`
-    must name the submodule's version.
+  - `make vendored-check` lists the binary's shared libraries (`readelf -d`,
+    `otool -L` or `objdump -p`): no `libssl`, `libcrypto`, `libgc` or
+    `msys-2.0.dll`, and `--version` must name the submodule's version. On
+    Windows a static libcrypto also needs `-lcrypt32 -lgdi32`; on macOS the
+    trust loader needs the Security and CoreFoundation frameworks.
   - `--version` prints the OpenSSL that runs (`OpenSSL_version`), so a system
     build shows the distro's version.
   - `build/vm/flags` records the mode, so switching it relinks.
