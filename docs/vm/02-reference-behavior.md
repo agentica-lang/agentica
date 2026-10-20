@@ -116,6 +116,8 @@ is not repeated here; read the file.
   forms return the same text as an `error(...)` value.
 - `String.from_bytes` checks that every item is 0 to 255, then decodes strictly:
   no surrogates, no overlong forms, no code points above U+10FFFF.
+- `String.to_bytes` returns the stored UTF-8 bytes as a `List[Int]`; the empty
+  String gives the shared empty List. It costs by size, like `from_bytes`.
 
 ### 2.4 Printing values
 
