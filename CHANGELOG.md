@@ -82,6 +82,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   drive and UNC roots, `%LOCALAPPDATA%` for the user root, no system roots.
 - Windows: a read of standard input no longer holds a pool thread, so file
   calls and other tasks go on while it waits, even with `UV_THREADPOOL_SIZE=1`.
+- Windows: a socket given as standard output or error no longer loses the
+  output its reader has not read yet when the run ends.
 
 ## [0.5.0-beta.1] - 2026-10-20
 
