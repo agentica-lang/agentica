@@ -205,7 +205,9 @@ This prints `[ok("page 1"), error("task: timed out"), ok("page 3")]`. The rules:
   its tasks (a grandchild too, even if its parent ended) are cancelled, and a
   `Task.map` it called starts no more items. An operation waiting on I/O is
   detached, not abandoned: it ends on its own, its result is dropped, and it
-  never closes the handle. The handles the item opened are closed when it ends
+  never closes the handle. A `TCP.accept` or a socket read that has taken
+  nothing yet is dropped at once instead, so the next connection or the later
+  bytes go to the next call. The handles the item opened are closed when it ends
   or is cancelled, and an item that ended in time is settled only after its
   regular files are written and closed, so a file it wrote is on disk when the
   call returns; a timed-out item is settled at its deadline, without waiting for

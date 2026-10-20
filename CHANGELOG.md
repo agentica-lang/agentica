@@ -21,6 +21,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The lingering close of `std/http` drops at most 256 KiB of input; a client
   still sending a large body may see a reset instead of the answer.
 
+### Fixed
+
+- A cancelled `TCP.accept` or socket read gives up its place at once.
+- A task spawned by a cancelled task starts cancelled.
+
 ## [0.5.0-beta.1] - 2026-10-20
 
 ### Added

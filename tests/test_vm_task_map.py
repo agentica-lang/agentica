@@ -477,7 +477,7 @@ def test_a_nested_map_in_a_timed_out_item_starts_no_more_items(tmp_path):
     assert lines == ["start 1", TIMED_OUT, "main done"]
 
 
-def test_a_read_in_a_timed_out_item_is_detached_and_its_socket_stays_open(tmp_path, request):
+def test_a_read_in_a_timed_out_item_leaves_the_socket_open_and_its_bytes_unread(tmp_path, request):
     listener = socket.create_server(("127.0.0.1", 0))
     request.addfinalizer(listener.close)
 
@@ -493,8 +493,9 @@ def test_a_read_in_a_timed_out_item_is_detached_and_its_socket_stays_open(tmp_pa
     thread = threading.Thread(target=serve, daemon=True)
     thread.start()
     lines = run_lines(tmp_path, DETACHED_READ_PROGRAM, "detached", str(listener.getsockname()[1]))
-    # The read of the item took "first" and dropped it; the socket was not closed, so main reads the next line.
-    assert lines == [TIMED_OUT, "main reads", 'ok("second")']
+    # The item's read left the reader slot when the item was cancelled (#403), before any byte came, and the socket
+    # was not closed: main reads the first line.
+    assert lines == [TIMED_OUT, "main reads", 'ok("first")']
     thread.join(scaled(10))
 
 

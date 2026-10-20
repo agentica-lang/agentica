@@ -1,8 +1,8 @@
 /*
  * TCP and TLS builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9), against a POSIX
- * peer, in orders set by the calls: a close behind a read's START, the deadline before and after the bytes, a served
- * accept of a cancelled task, a cancelled TLS connect past its deadline, and HttpWire.connect_tls on bad options.
- * `make vm-tsan` runs it under TSan.
+ * peer, in orders set by the calls: a close behind a read's START, the deadline before and after the bytes, an accept
+ * and a read cancelled before anything came, a served accept of a cancelled task, a cancelled TLS connect past its
+ * deadline, and HttpWire.connect_tls on bad options. `make vm-tsan` runs it under TSan.
  */
 #include "../core.h"
 #include "io_harness.h"
@@ -238,24 +238,71 @@ static void detach_task(void *arg) {
   agc_io_detach(&vm, vm.task);
 }
 
-/* A task parked in accept is cancelled (detached); a peer then connects. The I/O thread accepts and makes the child
-   socket, the job ends DONE and goes to a scheduler, whose `done` adopts the child into a socket value that is
-   discarded and closed: the peer reads the end of input. The listener stays open and accepts the next peer. */
-static void test_served_accept_of_a_cancelled_task(void) {
+/* The detached job is handed to a scheduler, which ends it: dropped, or its `done` half run and the result dropped. */
+static void end_detached_job(void) {
+  agc_test_wait_for_hand_over(&vm);
+  on_thread(service_on_thread, NULL);
+}
+
+/* The line the peer FD sends is read back on socket_v: the bytes reached a live read. */
+static void check_line_arrives(int fd) {
+  assert(send(fd, "kept\n", 5, 0) == 5);
+  agc_value line = ok_of(step(call("TCP.read_line", 2, socket_v, agc_int(5000), agc_void(), agc_void())));
+  const agc_string *s = agc_as_string(&vm, line);
+  assert(s->bytes == 4 && memcmp(s->data, "kept", 4) == 0);
+}
+
+/* A listener on the shared loop, and the task parked in an accept on it with a far deadline. */
+static void start_accept(void) {
   assert(agc_io_share(&vm, false));
   agc_runq_share(vm.rt->runq);
   listener = ok_of(step(call("TCP.listen", 2, text("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
   calling accepting = call("TCP.accept", 2, listener, agc_int(60000), agc_void(), agc_void());
   assert(start(&accepting));
+}
+
+/* A task parked in accept is cancelled (detached) before any peer connects. The cancel half on the I/O thread takes
+   the accept out of the listener's queue at once (#403), so the job is dropped without waiting for its deadline, and
+   the peer that connects next is served by the next live accept, not closed by the dead one. */
+static void test_cancelled_accept_leaves_the_queue(void) {
+  start_accept();
   (void)agc_io_poll(&vm, false);
   on_thread(detach_task, NULL);
+  end_detached_job();
   int fd = raw_connect(agc_as_listener(&vm, listener)->port);
-  agc_test_wait_for_hand_over(&vm);
-  on_thread(service_on_thread, NULL);
+  socket_v = ok_of(step(call("TCP.accept", 2, listener, agc_int(5000), agc_void(), agc_void())));
+  check_line_arrives(fd);
+  close_pair(fd);
+}
+
+/* A peer connects and the accept is served (the I/O thread made the child socket) before its task is cancelled. The
+   request has taken the connection, so the cancel leaves it: a scheduler runs `done`, which adopts the child into a
+   socket value that is discarded and closed, and the peer reads the end of input. The listener stays open and
+   accepts the next peer. */
+static void test_served_accept_of_a_cancelled_task(void) {
+  start_accept();
+  int fd = raw_connect(agc_as_listener(&vm, listener)->port);
+  wait_woken();
+  on_thread(detach_task, NULL);
+  end_detached_job();
   wait_eof(fd);
   close(fd);
   fd = raw_connect(agc_as_listener(&vm, listener)->port);
   socket_v = ok_of(step(call("TCP.accept", 2, listener, agc_int(5000), agc_void(), agc_void())));
+  close_pair(fd);
+}
+
+/* A task parked in read_line is cancelled before any byte comes. The read leaves the reader slot at once (#403) and
+   its job's end hands the reader lock on, so the next read takes the line that arrives later: no byte is lost. */
+static void test_cancelled_read_leaves_the_reader_slot(void) {
+  int fd = open_pair();
+  agc_runq_share(vm.rt->runq);
+  calling reading = call("TCP.read_line", 2, socket_v, agc_int(60000), agc_void(), agc_void());
+  assert(start(&reading));
+  (void)agc_io_poll(&vm, false);
+  on_thread(detach_task, NULL);
+  end_detached_job();
+  check_line_arrives(fd);
   close_pair(fd);
 }
 
@@ -319,7 +366,9 @@ int main(void) {
   test_close_queued_behind_a_read();
   test_deadline_before_the_bytes();
   test_bytes_before_the_deadline();
+  test_cancelled_accept_leaves_the_queue();
   test_served_accept_of_a_cancelled_task();
+  test_cancelled_read_leaves_the_reader_slot();
   test_cancelled_tls_connect_past_its_deadline();
   test_connect_tls_with_short_client_options();
 #endif

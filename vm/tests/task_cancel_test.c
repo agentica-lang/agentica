@@ -1,6 +1,7 @@
 /*
  * agc_task_cancel on the real scheduler, including a running task that
- * cancels itself after it took a handle, and a task parked as the caller of Task.map.
+ * cancels itself after it took a handle, a task that spawns (and awaits) in the turn it was cancelled, and a task
+ * parked as the caller of Task.map.
  */
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
@@ -22,12 +23,12 @@
 #include <uv.h>
 
 #define MAX_CODE 64
-#define MAX_FNS 22
+#define MAX_FNS 23
 #define SCRATCH 20
 
-enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CRASH, B_WINDOW, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
+enum { B_SPAWN, B_AWAIT, B_SLEEP, B_MARK, B_CANCEL, B_CHECK, B_IO, B_FINISH, B_SELF, B_IO_SHORT, B_BLOCK, B_POOL, B_GATE, B_SETTLED, B_OWN, B_PRINT, B_DRAIN, B_KEEP, B_CLOSING, B_CLOSE_DONE, B_CRASH, B_WINDOW, B_CANCEL_SPAWN, B_CANCEL_AWAIT, B_CH_NEW, B_CH_SEND, B_CH_RECV, B_AWAIT_TIMED, B_MAP, B_COUNT };
 
-enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP, F_MAP_CLOSING, F_MAP_CRASHING };
+enum { F_MAIN, F_IO, F_SLEEPER, F_AWAITER, F_MARK, F_SELF, F_ITEM, F_PARENT, F_SHORT, F_POOL, F_OWN, F_RECV, F_PRINT, F_KEEP, F_CLOSER, F_FINISH, F_TIMED, F_MAP_ITEM, F_MAP_GROUP, F_MAP_CLOSING, F_MAP_CRASHING, F_SPAWNER, F_AWAIT_SPAWNER };
 
 typedef struct {
   agc_function fns[MAX_FNS];
@@ -352,6 +353,32 @@ static agc_value test_drain(agc_vm *vm, agc_value *args, uint32_t span) {
   return nap_again(vm);
 }
 
+/* The last turn of a task cancelled from another scheduler (#392): the cancel walk over its descendants has run, and
+   the task, still on its turn, spawns. Here the task cancels itself and spawns in the same builtin, so nothing ends
+   the turn between the two. The children take the closure in args[0], one plain and one that is handed the test's
+   handle; both must start cancelled, and the handle must be closed by the child's end. */
+static agc_value test_cancel_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_own(vm, handle, close_handle);
+  agc_task_cancel(vm, vm->task);
+  agc_value seven = agc_int(7);
+  seen[0] = agc_task_spawn_seeded(vm, vm->task, args[0], &seven, 1, span);
+  seen[1] = agc_task_spawn_owning(vm, vm->task, args[0], agc_handle_value(handle), span);
+  self_returned = true;
+  return agc_void();
+}
+
+/* The same last turn, then Task.await of the child that started cancelled: the await fails with
+   RUNTIME-TASK-CANCELLED inside the turn, and the task, being cancelled, must end as cancelled, not crash. */
+static agc_value test_cancel_await(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_task_cancel(vm, vm->task);
+  agc_value seven = agc_int(7);
+  seen[0] = agc_task_spawn_seeded(vm, vm->task, args[0], &seven, 1, span);
+  self_returned = true;
+  const agc_builtin *await = agc_find_builtin((const uint8_t *)"Task.await", 10, 1);
+  agc_value task = agc_task_value(seen[0]);
+  return await->fn(vm, &task, span);
+}
+
 static const agc_builtin test_builtins[] = {
   {"Test.mark", 1, test_mark, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.cancel", 1, test_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true},
@@ -372,6 +399,8 @@ static const agc_builtin test_builtins[] = {
   {"Test.close_done", 1, test_close_done, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.crash", 1, test_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.window", 1, test_window, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.cancel_spawn", 1, test_cancel_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.cancel_await", 1, test_cancel_await, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 static void emit(prog *p, uint32_t f, agc_opcode op, uint32_t a, uint32_t bx, uint32_t span) {
@@ -494,6 +523,16 @@ static void build_tasks(prog *p) {
   call_reg(p, F_MAP_CLOSING, B_CLOSING, 0, 1);
   emit(p, F_MAP_CLOSING, AGC_OP_CONST, 1, ok_one, 1);
   emit(p, F_MAP_CLOSING, AGC_OP_RETURN, 1, 0, 1);
+
+  emit(p, F_SPAWNER, AGC_OP_CLOSURE, 1, F_MARK, 1);
+  call_reg(p, F_SPAWNER, B_CANCEL_SPAWN, 1, 1);
+  call_int(p, F_SPAWNER, B_MARK, 990);
+  finish_fn(p, F_SPAWNER);
+
+  emit(p, F_AWAIT_SPAWNER, AGC_OP_CLOSURE, 1, F_MARK, 1);
+  call_reg(p, F_AWAIT_SPAWNER, B_CANCEL_AWAIT, 1, 1);
+  call_int(p, F_AWAIT_SPAWNER, B_MARK, 989);
+  finish_fn(p, F_AWAIT_SPAWNER);
 
   /* The same, but it crashes before it can return. */
   call_reg(p, F_MAP_CRASHING, B_CLOSING, 0, 1);
@@ -781,6 +820,47 @@ static void run_self(uint32_t fn, int closed) {
 static void test_self_cancel(void) { run_self(F_SELF, 0); }
 
 static void test_self_own(void) { run_self(F_OWN, 1); }
+
+/* A task spawns in the turn in which it was cancelled (#392): each child starts cancelled and never runs (F_MARK
+   would mark 7, or fail on the handle), the handed handle is closed once by the child's end, and the spawner stops
+   after the builtin as a self-cancel does. */
+/* A task awaits the child it spawned in the turn in which it was cancelled: the await fails, and the task ends as
+   cancelled, with no crash recorded or printed (a flag set during the turn wins). */
+static void test_await_after_cancel(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_AWAIT_SPAWNER, 0);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 99);
+  finish_fn(&p, F_MAIN);
+  reset();
+  seen[0] = NULL;
+  agc_vm vm;
+  agc_outcome o = run(&vm, &p);
+  assert(o.kind == AGC_FAILED && strcmp(o.code, "RUNTIME-TASK-CANCELLED") == 0 && o.span == 99);
+  assert(self_returned && mark_count == 0 && cancelled(seen[0]));
+  agc_task *spawner = reg_task(&vm, 0);
+  assert(cancelled(spawner) && !spawner->crashed && vm.rt->crash_count == 0 && !vm.rt->crashes);
+  seen[0] = NULL;
+  assert(agc_io_close(&vm));
+}
+
+static void test_spawn_after_cancel(void) {
+  prog p;
+  new_prog(&p);
+  spawn(&p, F_MAIN, 0, F_SPAWNER, 0);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 99);
+  finish_fn(&p, F_MAIN);
+  reset();
+  seen[0] = seen[1] = NULL;
+  agc_vm vm;
+  agc_outcome o = run(&vm, &p);
+  assert(o.kind == AGC_FAILED && strcmp(o.code, "RUNTIME-TASK-CANCELLED") == 0 && o.span == 99);
+  assert(self_returned && mark_count == 0 && owned_closed == 1);
+  for (int k = 0; k < 2; k++) assert(cancelled(seen[k]) && !seen[k]->parent && !seen[k]->owned);
+  assert(!handle->owner && !vm.rt->main->children);
+  seen[0] = seen[1] = NULL;
+  assert(agc_io_close(&vm));
+}
 
 static void check_keep(agc_vm *vm, int64_t n) {
   agc_task *keeper = reg_task(vm, 0);
@@ -1216,6 +1296,8 @@ int main(void) {
   test_ready_then_await();
   test_self_cancel();
   test_self_own();
+  test_spawn_after_cancel();
+  test_await_after_cancel();
   test_cancel_closes_owned();
   test_closing_task();
   test_children_move();

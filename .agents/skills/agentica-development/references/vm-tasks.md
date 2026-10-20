@@ -133,11 +133,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         it sets `cancelled`, and then by the state the one party that ends the
         task takes it out of the run queue (READY) or claims it (PARKED),
         detaches its job, leaves lock, await and stdin FIFOs and ends
-      - a task on a turn only gets `cancelled`; its scheduler ends it at the
-        end of the turn. Only when it is the canceller's own task does the
-        cancel set `vm->yield`, so it stops after the current builtin; a task
-        that runs on another scheduler finishes its turn first (at most the
-        turn's step budget, §10.2.3)
+      - a task on a turn only gets `cancelled`; its scheduler ends it at the end
+        of the turn. Only when it is the canceller's own task does the
+        cancel set `vm->yield`, so it stops after the current builtin; a
+        task that runs on another scheduler finishes its turn first (at
+        most the turn's step budget, §10.2.3); a task it spawns in that
+        turn starts cancelled (`spawn_child` reads the parent's flag under
+        rt->sync, #392)
       - `Task.await` on a cancelled task halts with `RUNTIME-TASK-CANCELLED` at
         the call
       - `vm/tests/task_cancel_test.c` runs hand-built bytecode with test
