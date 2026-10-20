@@ -347,8 +347,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     Security framework, Windows Crypt32 ROOT plus CA intermediates through
     `agc_tls_trust_add_intermediate_der`, which refuses a self-issued
     certificate so CA never adds an anchor, refuses a cross-signed copy of a
-    store anchor, and adds a CA certificate not valid for server auth
-    rejected; `vm/tests/tls_test.c` tests the rule on every system), and `SSL_CERT_DIR` or else no
+    store anchor and one whose EKU extension excludes server auth, and adds a
+    CA certificate rejected when only its Crypt32 EKU property excludes it; `vm/tests/tls_test.c` tests the rule on every system), and `SSL_CERT_DIR` or else no
     directory (a failing system source is skipped)
   - the platform store is loaded once per process (`tls_trust.c`,
     `CRYPTO_THREAD_run_once`) and copied into each context; distrusted

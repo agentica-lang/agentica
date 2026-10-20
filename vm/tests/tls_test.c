@@ -295,7 +295,9 @@ static void test_rejected(void) {
 
 /* The intermediate-store rule on every system (the Windows CA store uses it): an intermediate completes a chain
  * that still ends at a root, and is never an anchor itself; a self-issued certificate and a cross-signed copy of a
- * store anchor are refused; a rejected intermediate fails the chain even when the peer sends it too. */
+ * store anchor are refused; a rejected intermediate fails the chain even when the peer sends it too. A sibling of
+ * the intermediate whose EKU extension allows only email is refused, so a peer that sends the valid one still
+ * verifies; a plain store copy of that sibling would be taken first and fail the chain. */
 static void test_intermediates(void) {
   X509 *leaf = read_pem(CHAIN "leaf.pem"), *inter = read_pem(CHAIN "intermediate.pem");
   X509_STORE *store = X509_STORE_new();
@@ -318,6 +320,15 @@ static void test_intermediates(void) {
   STACK_OF(X509) *sent = sk_X509_new_null();
   assert(sent && sk_X509_push(sent, inter) > 0);
   assert(verify_sent(rejected, leaf, sent) == X509_V_ERR_CERT_REJECTED);
+  X509_STORE *siblings = X509_STORE_new(), *shadowed = X509_STORE_new();
+  assert(add_pem(siblings, CHAIN "root.pem", false) && add_pem(shadowed, CHAIN "root.pem", false));
+  assert(!add_fixture(siblings, CHAIN "intermediate-email.pem", false, true));
+  assert(!add_fixture(siblings, CHAIN "intermediate-email.pem", true, true));
+  assert(verify_sent(siblings, leaf, sent) == 0);
+  assert(add_pem(shadowed, CHAIN "intermediate-email.pem", false));
+  assert(verify_sent(shadowed, leaf, sent) == X509_V_ERR_INVALID_PURPOSE);
+  X509_STORE_free(shadowed);
+  X509_STORE_free(siblings);
   sk_X509_free(sent);
   X509_STORE_free(rejected);
   X509_free(inter);

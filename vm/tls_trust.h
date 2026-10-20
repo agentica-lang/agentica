@@ -29,10 +29,11 @@ size_t agc_tls_trust_system(struct x509_store_st *store);
 bool agc_tls_trust_add_der(struct x509_store_st *store, const unsigned char *der, size_t len, bool rejected);
 
 /* Like agc_tls_trust_add_der for a certificate from a store of chain certificates (the Windows CA store): it is
- * added as an intermediate only. A self-issued certificate (subject equals issuer) is refused, since OpenSSL would
- * take it as a trust anchor, and so is one with the subject and public key of a self-signed certificate already in
- * `store` (a cross-signed copy of that anchor), which could hide the anchor from chain building. Call it after the
- * anchors are in. */
+ * added as an intermediate only. Refused: a self-issued certificate (subject equals issuer), which OpenSSL would
+ * take as a trust anchor; one whose EKU extension excludes server authentication, which could shadow a valid
+ * sibling with the same subject and key; and one with the subject and public key of a self-signed certificate
+ * already in `store` (a cross-signed copy of that anchor), which could hide the anchor from chain building. Call
+ * it after the anchors are in. */
 bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len,
                                         bool rejected);
 

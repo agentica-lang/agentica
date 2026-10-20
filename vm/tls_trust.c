@@ -112,15 +112,26 @@ static bool stands_for_anchor(X509_STORE *store, X509 *x) {
   return found;
 }
 
+/* Whether the EKU extension of `x` leaves out TLS server authentication (and Netscape SGC), which is what
+ * OpenSSL's ssl_server purpose rejects. No extension allows every use. */
+static bool excludes_server_auth(X509 *x) {
+  return (X509_get_extension_flags(x) & EXFLAG_XKUSAGE) &&
+         !(X509_get_extended_key_usage(x) & (XKU_SSL_SERVER | XKU_SGC));
+}
+
 /* A store certificate with no trust settings is an anchor only when it is self-signed (trust_compat in
  * crypto/x509/x509_trust.c); X509_V_FLAG_PARTIAL_CHAIN stays off, so any other one only helps build a chain that
  * must still end at a root. EXFLAG_SI (subject equals issuer) covers every certificate OpenSSL calls self-signed,
- * so refusing it is what keeps an intermediate store from adding an anchor. A rejected copy carries an explicit
- * reject of serverAuth, as in agc_tls_trust_add_der. */
+ * so refusing it is what keeps an intermediate store from adding an anchor. A certificate whose EKU extension
+ * excludes server authentication is refused too, by the test of OpenSSL's own purpose check (xku_reject in
+ * crypto/x509/v3_purp.c): OpenSSL takes a store copy first, so such a sibling of a valid intermediate (same subject
+ * and key) would fail a chain that the server sends correctly. A rejected copy carries an explicit reject of
+ * serverAuth, as in agc_tls_trust_add_der. */
 bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len,
                                         bool rejected) {
   X509 *x = parse_der(der, len);
-  bool ok = x && !(X509_get_extension_flags(x) & EXFLAG_SI) && !stands_for_anchor(store, x) &&
+  bool ok = x && !(X509_get_extension_flags(x) & EXFLAG_SI) && !excludes_server_auth(x) &&
+            !stands_for_anchor(store, x) &&
             (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
             X509_STORE_add_cert(store, x) == 1;
   X509_free(x);

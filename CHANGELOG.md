@@ -20,8 +20,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   server sends only its own certificate. They are never trusted as roots: a
   CA store certificate whose subject equals its issuer is left out, and a
   chain must still end at a root of the ROOT store. A cross-signed copy of a
-  ROOT certificate in the CA store is left out, and a CA certificate that
-  Windows does not allow for server authentication is rejected.
+  ROOT certificate in the CA store is left out, so is a CA certificate whose
+  EKU extension excludes server authentication, and a CA certificate that an
+  administrator's EKU property bars from server authentication is rejected.
 
 ### Changed
 

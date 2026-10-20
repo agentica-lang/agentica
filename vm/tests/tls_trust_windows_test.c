@@ -142,8 +142,9 @@ static int verify_copy(HCERTSTORE root, HCERTSTORE ca, X509 *leaf) {
 /* chain-leaf.pem is signed by chain-intermediate.pem, which chain-root.pem signs. The peer sends only the leaf, so
  * the chain needs the CA store's intermediate, and still ends at ROOT: the intermediate alone, a self-signed
  * certificate in CA never verifies, and an intermediate whose EKU property excludes server authentication is
- * rejected. A Disallowed copy of the intermediate wins over CA. A cross-signed copy of the ROOT anchor in CA, whose
- * signer is distrusted, is left out, so it cannot hide the anchor. */
+ * rejected, while a sibling whose EKU extension excludes it (chain-intermediate-email.pem) is skipped, so it
+ * cannot shadow the valid one. A Disallowed copy of the intermediate wins over CA. A cross-signed copy of the ROOT
+ * anchor in CA, whose signer is distrusted, is left out, so it cannot hide the anchor. */
 static void test_ca_store(der_cert ca) {
   der_cert root_cert = read_der(CERTS "chain-root.pem"), inter = read_der(CERTS "chain-intermediate.pem");
   der_cert leaf_der = read_der(CERTS "chain-leaf.pem"), server_der = read_der(CERTS "server.pem");
@@ -169,6 +170,14 @@ static void test_ca_store(der_cert ca) {
   agc_tls_trust_copy_stores(with_cross, distrusted, root, crossed);
   assert(verify(with_cross, leaf) == X509_V_OK);
   X509_STORE_free(with_cross);
+  der_cert email = read_der(CERTS "chain-intermediate-email.pem");
+  HCERTSTORE siblings = memory_store();
+  CertFreeCertificateContext(add_to(siblings, email));
+  assert(verify_copy(root, siblings, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY);
+  CertFreeCertificateContext(add_to(siblings, inter));
+  assert(verify_copy(root, siblings, leaf) == X509_V_OK);
+  CertCloseStore(siblings, 0);
+  OPENSSL_free(email.der);
   CertCloseStore(crossed, 0);
   CertCloseStore(distrusted, 0);
   OPENSSL_free(cross.der);

@@ -84,10 +84,15 @@ vendored OpenSSL 3.5 LTS statically, and a default source build links the system
     already in the store (a cross-signed copy of an anchor) is left out too:
     OpenSSL looks issuers up by name and could take the copy instead of the
     anchor, and the store order that decides it is not stable. A `CA`
-    certificate whose valid uses exclude server authentication is added
-    rejected, not skipped: OpenSSL looks in the store first, so a server that
-    sends that intermediate itself still fails with `VERIFY_UNTRUSTED`
-    (`X509_V_ERR_CERT_REJECTED`). A root that
+    certificate whose EKU extension excludes server authentication is left
+    out (on every system, by the test of OpenSSL's purpose check): OpenSSL
+    takes a store copy first, so such a sibling of a valid intermediate (same
+    subject and key) would fail a chain the server sends correctly. A `CA`
+    certificate whose Crypt32 EKU property alone excludes server
+    authentication is added rejected, so a server that sends that
+    intermediate itself still fails with `VERIFY_UNTRUSTED`
+    (`X509_V_ERR_CERT_REJECTED`); it also shadows same-key siblings, which is
+    taken as the administrator's intent. A root that
     Windows would download on demand (automatic root update) is not in the
     store until Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that
     case.

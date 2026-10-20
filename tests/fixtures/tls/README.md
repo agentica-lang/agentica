@@ -30,6 +30,11 @@ use the checked-in files; nothing regenerates them during a test run.
     extension, leaf for `localhost`) for the CA-store tests; no key is kept.
     Added on 2026-10-20 with OpenSSL 3.5.7
 
+- **File:** `chain-intermediate-email.pem`
+  - **What it is:** a sibling of `chain-intermediate.pem` (same subject and
+    key, signed by `chain-root.pem`) whose EKU extension allows only
+    `emailProtection`; no key is kept
+
 - **File:** `chain-cross-signer.pem`, `chain-root-cross.pem`
   - **What it is:** another root, and a cross-signed copy of `chain-root.pem`
     (same subject and key) that it signs; no key is kept
