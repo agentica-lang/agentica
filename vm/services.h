@@ -20,6 +20,18 @@ typedef struct {
   int error;
 } agc_inbuf;
 
+/* A read cut out of an agc_inbuf by the thread that owns the buffer, so that another thread builds its value later
+   (vm/tcp.c: the I/O thread cuts, the done half builds). `data` is malloc'd; the statuses are a line or bytes, a line
+   longer than the limit, a read error, and the end of input. */
+typedef enum { AGC_CUT_DATA, AGC_CUT_OVER, AGC_CUT_FAILED, AGC_CUT_END } agc_cut_status;
+
+typedef struct {
+  agc_cut_status status;
+  int error;
+  uint8_t *data;
+  size_t len;
+} agc_inbuf_cut;
+
 typedef enum {
   AGC_JSON_PARSED, AGC_JSON_CONTROL, AGC_JSON_INVALID, AGC_JSON_EMPTY, AGC_JSON_TRAILING, AGC_JSON_NOT_FINITE
 } agc_json_status;
@@ -75,9 +87,15 @@ bool agc_inbuf_ready(agc_inbuf *b, bool line, size_t count);
 size_t agc_inbuf_want(const agc_inbuf *b, bool line, size_t count);
 uint8_t *agc_inbuf_room(agc_inbuf *b, size_t want);
 void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof);
+bool agc_inbuf_unread(agc_inbuf *b, const uint8_t *data, size_t len);
 agc_value agc_inbuf_line(agc_vm *vm, agc_inbuf *b, const char *too_long, const char *at_end, bool *over);
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
 void agc_inbuf_take(agc_inbuf *b, size_t n);
+void agc_inbuf_cut_line(agc_inbuf *b, agc_inbuf_cut *cut);
+void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut);
+agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const char *too_long, const char *at_end);
+agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut);
+void agc_inbuf_cut_free(agc_inbuf_cut *cut);
 int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t **copy, const uint8_t *data,
                      size_t len, void (*done)(struct uv_write_s *req, int status));
 
@@ -123,6 +141,8 @@ extern const agc_builtin agc_http_builtins[];
 extern const size_t agc_http_builtin_count;
 extern const agc_builtin agc_http_server_builtins[];
 extern const size_t agc_http_server_builtin_count;
+extern const agc_builtin agc_http_wire_builtins[];
+extern const size_t agc_http_wire_builtin_count;
 extern const agc_builtin agc_logger_builtins[];
 extern const size_t agc_logger_builtin_count;
 extern const agc_builtin agc_test_builtins[];

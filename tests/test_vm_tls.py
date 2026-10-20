@@ -10,8 +10,8 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_text, output_lines,
-                                 run, run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, Child, check_lines, compile_text, one_scheduler,
+                                 output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
@@ -358,6 +358,7 @@ def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path
 
 
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
+    one_scheduler()
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
     assert (result.code, result.stdout) == (0, "ok\nok\n"), result.stderr
@@ -403,4 +404,6 @@ def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tm
 
     assert count(r" io end code=0 signal=0$") == 1, text
     assert count(r" tls tls_handshake_done ") == 4
-    assert count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$") == 3
+    # The third is the raw connection, which the accepting task may not reach before main ends on several schedulers.
+    servers = count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$")
+    assert servers in ((2, 3) if TEST_SCHEDULERS else (3,)), text

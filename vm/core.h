@@ -24,6 +24,12 @@ typedef struct {
 
 typedef enum { AGC_NOTICE_QUEUED, AGC_NOTICE_KEPT, AGC_NOTICE_FINAL } agc_notice_mode;
 
+/* What agc_runq_stats reports: the schedulers that spin and that wait now, and the condvar signals sent for tasks. */
+typedef struct {
+  uint32_t spinning, idle;
+  uint64_t signals;
+} agc_runq_counts;
+
 extern const agc_builtin agc_core_builtins[];
 extern const size_t agc_core_builtin_count;
 extern const agc_builtin agc_task_builtins[];
@@ -38,6 +44,9 @@ const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t ar
 /* True for a builtin that only a prelude function may call: its name starts with two underscores
    (docs/future/25-ruby-typed-idioms.md §25.6). The loader refuses a call of one from any other function. */
 bool agc_builtin_prelude_only(const agc_builtin *b);
+/* The program as a run with several schedulers sees it: P, or a copy in which each builtin that still calls libuv
+   from its scheduler fails with RUNTIME-INTERNAL at the call. */
+const agc_program *agc_program_for_threads(const agc_program *p);
 
 bool agc_load(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size);
 bool agc_load_traced(const uint8_t *data, size_t len, agc_program **program, char *error, size_t error_size,
@@ -74,11 +83,38 @@ agc_task *agc_runq_wait(agc_runq *q);
 void agc_runq_end(agc_runq *q);
 /* The same wait with a deadline (an agc_clock_ms value): NULL also when the clock reaches it. */
 agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms);
+/* The spin of an idle scheduler before agc_runq_wait (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"):
+ * agc_runq_spin_setup allows MAX spinners at once for BUDGET_NS each (none until it is called); agc_runq_spin busy-waits
+ * for a task without the lock and returns it, or NULL when none came (then the caller waits). A push skips the condvar
+ * signal while a scheduler spins. agc_runq_stats is for the tests (agc_runq_counts). */
+void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns);
+agc_task *agc_runq_spin(agc_runq *q);
+agc_runq_counts agc_runq_stats(agc_runq *q);
 /* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the
  * test of a busy scheduler at its turn boundary, and agc_runq_take_nudge clears it for the one that runs the work. */
 void agc_runq_nudge(agc_runq *q);
 bool agc_runq_nudged(const agc_runq *q);
 bool agc_runq_take_nudge(agc_runq *q);
+/* The stall check of several schedulers (docs/vm/16-architecture.md §16.9, "Stall"): the queue counts the schedulers
+ * that use it and those that wait in it, calls the on-idle hook when all of them wait, and answers whether all still do
+ * with no work queued (agc_runq_quiet, then agc_runq_still_quiet with the epoch it gave). */
+void agc_runq_add_scheduler(agc_runq *q);
+void agc_runq_drop_scheduler(agc_runq *q);
+void agc_runq_on_idle(agc_runq *q, void (*fn)(void *data), void *data);
+bool agc_runq_quiet(agc_runq *q, uint64_t *epoch);
+bool agc_runq_still_quiet(agc_runq *q, uint64_t epoch);
+/* Scheduler threads, as libuv threads (vm/sync.c): an array of N ids, the start of one with its entry and argument
+ * (false when the system refuses), and its join. */
+void *agc_threads_new(size_t n);
+void agc_threads_free(void *threads);
+bool agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg);
+void agc_thread_join(void *threads, size_t k);
+/* The end of a run with several schedulers (vm/task.c): the first caller of agc_run_over records the end (the
+ * caller's failure, or an end it wrote into its own record) and every caller ends the run queue and wakes the I/O
+ * thread. agc_run_stall is the end of a run where every task waits and nothing can wake one. */
+void agc_run_over(agc_vm *vm);
+void agc_run_over_untasked(agc_vm *vm);
+void agc_run_stall(agc_vm *vm);
 void agc_sync_reset(agc_vm *vm);
 /* Turns on the lock of the resource registry (made here if it does not exist yet); agc_share calls it. */
 void agc_registry_share(agc_vm *vm);
@@ -99,6 +135,8 @@ typedef struct agc_request {
   int kind;
   void *subject;
   int64_t arg;
+  /* A call request (agc_io_call) runs this with `subject`. */
+  void (*call)(void *data);
 } agc_request;
 typedef struct agc_inbox agc_inbox;
 typedef void (*agc_inbox_fn)(void *owner, agc_request *list);
@@ -107,6 +145,7 @@ void agc_inbox_keep(agc_inbox *in, bool keep);
 bool agc_inbox_run(agc_inbox *in);
 void agc_inbox_post(agc_inbox *in, agc_request *entry);
 void agc_inbox_close(agc_inbox *in);
+void agc_inbox_wake(agc_inbox *in);
 
 /* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as
  * AGC_JOB_PENDING and is set once, by the first thread that gets a CAS through (release): the winner owns the wake, a
@@ -132,6 +171,7 @@ static inline bool agc_job_unref(_Atomic int *refs) {
 }
 
 void agc_vm_init(agc_vm *vm, const agc_program *program, FILE *out, FILE *err, int64_t max_steps);
+void agc_vm_init_context(agc_vm *vm, agc_runtime *rt);
 agc_task *agc_new_task(agc_vm *vm);
 void agc_task_call(agc_vm *vm, agc_task *t, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
 void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
@@ -177,11 +217,24 @@ bool agc_io_poll(agc_vm *vm, bool wait);
 /* The work that the I/O role leaves for a scheduler once a second thread runs the schedulers: the end of each detached
  * job (its `done` half). A scheduler calls it when agc_runq_nudged says so, with no task current. Returns whether it ran
  * anything. At N = 1 the drain runs the job itself and the list is always empty. When a `done` half raises (agc_fail),
- * vm->task is left on the scratch task and the caller restores its own. */
+ * vm->task is left on the scratch task, and the failure target calls agc_io_service_reset to give the task back. */
 bool agc_io_service(agc_vm *vm);
+void agc_io_service_reset(agc_vm *vm);
 agc_value agc_io_finish(agc_vm *vm, agc_task *t);
 void agc_io_detach(agc_vm *vm, agc_task *t);
 bool agc_io_share(agc_vm *vm, bool keep);
+/* While ON, the drain hands each ready detached job to a scheduler (agc_io_service) instead of ending it itself.
+ * agc_io_share turns it on; the end of a run with scheduler threads turns it off once they have joined. */
+void agc_io_hand_off(agc_vm *vm, bool on);
+/* The I/O thread of a run with several schedulers (docs/vm/16-architecture.md §16.9, "Threads"): it runs the loop and
+ * the inbox until the run is over, and it ends the run on a stop signal or a stall. */
+void agc_io_serve(agc_vm *vm);
+/* Wakes the I/O thread from any thread (uv_async_send on the inbox). agc_io_wake_idle is the same, as the run queue's
+ * on-idle hook (its argument is the vm). */
+void agc_io_wake(agc_vm *vm);
+void agc_io_wake_idle(void *vm);
+/* Blocks the stop signals on the calling thread, so that only the I/O thread handles them. No-op on Windows. */
+void agc_io_thread_signals(void);
 bool agc_io_close(agc_vm *vm);
 
 void agc_io_watch_stop(agc_vm *vm, int64_t driver);
@@ -215,6 +268,7 @@ bool agc_timers_run(agc_vm *vm);
 uint64_t agc_timers_next_due(const agc_vm *vm);
 
 void agc_input_open(agc_vm *vm, int fd, bool flush_out);
+void agc_input_watch(agc_vm *vm);
 void agc_input_close(agc_vm *vm);
 agc_input_status agc_input_peek(agc_vm *vm, int *byte);
 agc_input_status agc_input_line(agc_vm *vm, agc_string **line);
@@ -227,7 +281,8 @@ bool agc_output_busy(agc_vm *vm);
 bool agc_output_failed(const agc_output *out);
 void agc_output_close(agc_vm *vm);
 FILE *agc_notice_begin(agc_output *out, agc_notice *n);
-void agc_notice_end(agc_notice *n, agc_notice_mode mode);
+/* VM is the calling thread's context: it owns the stream lock and starts the write. */
+void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode);
 
 void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,

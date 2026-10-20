@@ -294,6 +294,20 @@ void agc_trace_message(int fd, const char *text, const char *value, size_t len, 
   errno = saved;
 }
 
+/* The categories that NAMES turns on, with no message for an unknown one (agc_trace_parse reports those). */
+unsigned agc_trace_mask(const char *names) {
+  unsigned mask = 0;
+  if (!AGC_TRACE_BUILD || !names) return 0;
+  for (const char *at = names;;) {
+    const char *end = strchr(at, ',');
+    size_t n = end ? (size_t)(end - at) : strlen(at);
+    if (n) mask |= category_bit(at, n);
+    if (!end) break;
+    at = end + 1;
+  }
+  return mask;
+}
+
 void agc_trace_parse(agc_trace *trace, const char *names, int fd) {
   trace->mask = 0;
   trace->fd = fd;

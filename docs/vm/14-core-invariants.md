@@ -119,9 +119,7 @@ Known exceptions, as built:
   the scheduler's heap. Such a wait has no I/O, so it needs no job, no registry
   slot and no request to the I/O thread (§16.9, "Timers").
 
-No builtin starts its own timer for a timeout. `agc_io_extend` (20c) restarts a
-job's own timer once, so `HttpWire.read_request`'s deadline runs from the
-request's first byte. It is the same timer, not a second one. As built, a few
+No builtin starts its own timer for a timeout. As built, a few
 timers are not job timeouts and stay: a captured child's grace period (§10.4),
 the `HttpClient` pool's idle timer, the end-of-run flush deadline (§14.4), and
 the 3-second `alarm` of the stop signals (`STOP_GRACE_SECONDS` in `vm/loop.c`,

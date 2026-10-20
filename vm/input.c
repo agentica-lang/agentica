@@ -169,10 +169,10 @@ static agc_value read_done(agc_vm *vm, void *data, agc_value context) {
 
 static void read_drop(void *data) { free(data); }
 
-static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL, true};
+static const agc_io_kind read_io = {read_work, read_done, NULL, read_drop, false, "stdin", NULL, true, NULL};
 
 #if defined(__linux__) || defined(__APPLE__)
-static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL, true};
+static const agc_io_kind poll_read_io = {NULL, read_done, NULL, read_drop, true, "stdin", NULL, true, NULL};
 #endif
 #endif
 
@@ -260,6 +260,11 @@ static void watch_stdin(agc_vm *vm, agc_input *in) {
   in->poll_fd = fd;
 }
 
+/* At N > 1 the I/O thread sets up the stdin poller before the schedulers start: the open, the restore of a socket's
+   flags after it and the fallback to the blocking read when it fails then all happen at once on that thread, as they
+   do inline at N = 1. From a scheduler the open would only be posted, after the restore had already run. */
+void agc_input_watch(agc_vm *vm) { watch_stdin(vm, &vm->rt->in); }
+
 void agc_input_close(agc_vm *vm) {
   agc_input *in = &vm->rt->in;
   if (!in->poller) return;
@@ -298,6 +303,8 @@ static int start_read(agc_vm *vm, agc_input *in) {
   return FILL_WAIT;
 }
 
+void agc_input_watch(agc_vm *vm) { (void)vm; }
+
 void agc_input_close(agc_vm *vm) { (void)vm; }
 #else
 static int start_read(agc_vm *vm, agc_input *in) {
@@ -314,6 +321,8 @@ static int start_read(agc_vm *vm, agc_input *in) {
     return -1;
   }
 }
+
+void agc_input_watch(agc_vm *vm) { (void)vm; }
 
 void agc_input_close(agc_vm *vm) { (void)vm; }
 #endif

@@ -92,6 +92,7 @@ typedef struct {
   char name[24];
   uint8_t *data;
   size_t len, cap;
+  bool discard;
 } agc_http_body;
 
 int agc_http_error_code(agc_http_error error);
@@ -107,6 +108,11 @@ agc_http_status agc_http_parse_response_head(const uint8_t *buf, size_t len, agc
                                              agc_http_error *error);
 void agc_http_body_init(agc_http_body *b, agc_http_frame frame, uint64_t length, uint64_t limit);
 agc_http_status agc_http_body_feed(agc_http_body *b, const uint8_t *in, size_t len, size_t *used);
+/* Like feed, but it stops after one run of body bytes, which it reports as
+   in[start, start + count) instead of copying it when discard is set. */
+agc_http_status agc_http_body_step(agc_http_body *b, const uint8_t *in, size_t len, size_t *used, size_t *start,
+                                   size_t *count);
+size_t agc_http_body_skip(agc_http_body *b, size_t n);
 agc_http_status agc_http_body_end(agc_http_body *b);
 void agc_http_body_free(agc_http_body *b);
 

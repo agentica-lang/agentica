@@ -83,6 +83,55 @@ export RECORDS: List[Model.Record] = [
       ],
     ),
     Model.Record(
+      name: "HttpWire.Chunk",
+      fields: [
+        Model.Named(name: "done", type: Types.Type.Bool),
+        Model.Named(name: "next", type: Types.Type.Int),
+        Model.Named(name: "runs", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "state", type: Types.Type.Int),
+        Model.Named(name: "remaining", type: Types.Type.Int),
+        Model.Named(name: "size", type: Types.Type.Int),
+        Model.Named(name: "line", type: Types.Type.Int),
+        Model.Named(name: "block", type: Types.Type.Int),
+        Model.Named(name: "count", type: Types.Type.Int),
+        Model.Named(name: "name", type: Types.Type.String),
+        Model.Named(name: "name_length", type: Types.Type.Int),
+        Model.Named(name: "total", type: Types.Type.Int),
+        Model.Named(name: "limit", type: Types.Type.Int),
+      ],
+    ),
+    Model.Record(
+      name: "HttpWire.Head",
+      fields: [
+        Model.Named(name: "method", type: Types.Type.String),
+        Model.Named(name: "target", type: Types.Type.String),
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header"))),
+        Model.Named(name: "length", type: Types.Type.Int),
+        Model.Named(name: "chunked", type: Types.Type.Bool),
+        Model.Named(name: "expect_continue", type: Types.Type.Bool),
+        Model.Named(name: "buffered", type: Types.Type.Int),
+        Model.Named(name: "status", type: Types.Type.Int),
+        Model.Named(name: "reason", type: Types.Type.String),
+      ],
+    ),
+    Model.Record(
+      name: "HttpWire.Reply",
+      fields: [
+        Model.Named(name: "head", type: Types.Type.String),
+        Model.Named(name: "closes", type: Types.Type.Bool),
+      ],
+    ),
+    Model.Record(
+      name: "HttpWire.Text",
+      fields: [
+        Model.Named(name: "text", type: Types.Type.String),
+        Model.Named(name: "carry", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "bytes", type: Types.Type.Int),
+        Model.Named(name: "valid", type: Types.Type.Bool),
+      ],
+    ),
+    Model.Record(
       name: "LogEvent",
       fields: [
         Model.Named(name: "level", type: Types.Type.Enum("LogLevel", [])),
@@ -633,6 +682,46 @@ ROWS_9: List[Model.Builtin] = [
       description: "Internal to std/http: wait for a free slot and the next connection.",
       alternatives: [],
     ),
+    Model.Builtin(
+      name: "HttpWire.chunk",
+      parameters: [
+        Model.Named(name: "state", type: Types.Type.Struct("HttpWire.Chunk")),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "from", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("HttpWire.Chunk")),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.chunk",
+      effects: [],
+      description: (
+        "Internal to std/http: decode the chunked framing in data from offset from; runs holds the start and " +
+        "length of each piece of body; the error is the answer status and the reason."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.chunk_read",
+      parameters: [
+        Model.Named(name: "state", type: Types.Type.Struct("HttpWire.Chunk")),
+        Model.Named(name: "bytes", type: Types.Type.Int),
+      ],
+      result: Types.Type.Struct("HttpWire.Chunk"),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.chunk_read",
+      effects: [],
+      description: "Internal to std/http: the state after std read bytes of chunk data itself, at most remaining.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.chunked",
+      parameters: [Model.Named(name: "max_body_bytes", type: Types.Type.Int)],
+      result: Types.Type.Struct("HttpWire.Chunk"),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.chunked",
+      effects: [],
+      description: "Internal to std/http: the state that starts a chunked body.",
+      alternatives: [],
+    ),
   ]
 
 ROWS_10: List[Model.Builtin] = [
@@ -673,6 +762,43 @@ ROWS_10: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "HttpWire.close_write",
+      parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.close_write",
+      effects: ["network"],
+      description: "Internal to std/http: close the write side of a socket once its output is sent; reads go on.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.encode_response",
+      parameters: [
+        Model.Named(name: "request", type: Types.Type.Struct("HttpRequest")),
+        Model.Named(name: "response", type: Types.Type.Struct("HttpResponse")),
+        Model.Named(name: "now_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("HttpWire.Reply")),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.encode_response",
+      effects: [],
+      description: (
+        "Internal to std/http: the text of a response head with Content-Length and Date, and whether the " +
+        "connection closes after it, or the reason it cannot be sent."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.error_answer",
+      parameters: [Model.Named(name: "status", type: Types.Type.Int)],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.error_answer",
+      effects: [],
+      description: "Internal to std/http: the error answer with this status, an empty body and Connection: close.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "HttpWire.exchange",
       parameters: [
         Model.Named(name: "client", type: Types.Type.Opaque("HttpClient")),
@@ -705,18 +831,39 @@ ROWS_11: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
-      name: "HttpWire.read_request",
+      name: "HttpWire.read_head",
       parameters: [
         Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
-        Model.Named(name: "first_byte_timeout_ms", type: Types.Type.Int),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+        Model.Named(name: "rest", type: Types.Type.List(Types.Type.Int)),
         Model.Named(name: "max_body_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
       ],
-      result: Types.Type.Result(Types.Type.Struct("HttpRequest")),
+      result: Types.Type.Result(Types.Type.Struct("HttpWire.Head")),
       rule: Model.Rule.Plain,
-      implementation: "HttpWire.read_request",
+      implementation: "HttpWire.read_head",
       effects: ["network"],
-      description: "Internal to std/http: read one whole request, answering protocol errors itself.",
+      description: (
+        "Internal to std/http: put rest back in front of the input, then read and parse the next request head; " +
+        "a bad head has the answer's status and reason (status 0 for a good one)."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.read_text",
+      parameters: [
+        Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+        Model.Named(name: "max_bytes", type: Types.Type.Int),
+        Model.Named(name: "carry", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("HttpWire.Text")),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.read_text",
+      effects: ["network"],
+      description: (
+        "Internal to std/http: read the bytes available, at most max_bytes (1..1048576), as UTF-8 text after carry; " +
+        "bytes is 0 at the end of input, and valid is false for bytes that are not UTF-8."
+      ),
       alternatives: [],
     ),
     Model.Builtin(
@@ -751,6 +898,23 @@ ROWS_11: List[Model.Builtin] = [
 
 ROWS_12: List[Model.Builtin] = [
     Model.Builtin(
+      name: "HttpWire.text",
+      parameters: [
+        Model.Named(name: "carry", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "runs", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.Struct("HttpWire.Text"),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.text",
+      effects: [],
+      description: (
+        "Internal to std/http: the UTF-8 text of carry and the runs of data (start, length pairs); an " +
+        "unfinished last character is the new carry, and valid is false for bytes that are not UTF-8."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "HttpWire.wait",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
       result: Types.Type.Result(Types.Type.Void),
@@ -758,24 +922,6 @@ ROWS_12: List[Model.Builtin] = [
       implementation: "HttpWire.wait",
       effects: ["network"],
       description: "Internal to std/http: wait until the server is closed.",
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "HttpWire.write_response",
-      parameters: [
-        Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
-        Model.Named(name: "request", type: Types.Type.Struct("HttpRequest")),
-        Model.Named(name: "response", type: Types.Type.Struct("HttpResponse")),
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
-      ],
-      result: Types.Type.Result(Types.Type.Bool),
-      rule: Model.Rule.Plain,
-      implementation: "HttpWire.write_response",
-      effects: ["network"],
-      description: (
-        "Internal to std/http: write one whole response to a request with Content-Length; ok(false) when the " +
-        "connection closed after it."
-      ),
       alternatives: [],
     ),
     Model.Builtin(

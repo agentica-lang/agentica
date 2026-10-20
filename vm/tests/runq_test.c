@@ -1,8 +1,8 @@
 /*
- * The global run queue (docs/vm/16-architecture.md §16.3): FIFO order and removal from the middle on one thread (the
- * solo queue, which takes no lock), then the same queue shared by many pushers and poppers on threads, after
- * agc_runq_share. Every pushed task comes out exactly once. Then the blocking pop of an idle scheduler: a waiter gets
- * the task pushed before or after it starts to wait, and agc_runq_end wakes every waiter, now and later.
+ * The global run queue (docs/vm/16-architecture.md §16.3): FIFO order and removal, solo and shared by many threads
+ * (every task comes out once); the blocking pop of an idle scheduler (a waiter gets the push before or after it waits,
+ * agc_runq_end wakes every waiter); and the spin of an idle scheduler (a push that a spinner takes sends no condvar
+ * signal, and no push is lost when a spinner stops).
  */
 #include "../core.h"
 #include "test_support.h"
@@ -17,6 +17,8 @@
 #define PER_PUSHER 2000
 #define TASKS 6000 /* PUSHERS * PER_PUSHER */
 #define WAIT_ROUNDS 300
+/* A spin that only a push, a nudge or the end stops, so the tests order events by state, not by time. */
+#define SPIN_FOREVER_NS UINT64_C(600000000000)
 
 static agc_vm vm;
 static agc_task *tasks[TASKS];
@@ -195,6 +197,141 @@ static void test_end_wakes_everyone(void) {
   assert(agc_runq_wait(q) == NULL);
 }
 
+static agc_vm spun;
+static agc_task *_Atomic spun_task;
+static agc_task *_Atomic spun_waited;
+
+/* An idle scheduler: spins, then waits if the spin found no task. */
+static void spin_then_wait(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  agc_task *t = agc_runq_spin(spun.rt->runq);
+  if (!t) t = agc_runq_wait(spun.rt->runq);
+  atomic_store(&spun_task, t);
+  agc_gc_thread_leave();
+}
+
+static void wait_spun(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  atomic_store(&spun_waited, agc_runq_wait(spun.rt->runq));
+  agc_gc_thread_leave();
+}
+
+/* Waits until SPINNING schedulers spin and IDLE wait on the queue. It polls the counts, which only those threads
+   change, so it waits for a state, not for a time. */
+static void await_counts(agc_runq *q, uint32_t spinning, uint32_t idle) {
+  for (;;) {
+    agc_runq_counts c = agc_runq_stats(q);
+    if (c.spinning == spinning && c.idle == idle) return;
+    uv_sleep(0);
+  }
+}
+
+/* The spin (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"). With no setup a queue never spins. A
+   spinner takes a push and the push sends no signal; a second spinner past spin_max returns at once. A push while one
+   waits and none spins signals once. A spinner that runs out of budget waits, and the push after that wakes it with a
+   signal. A spinner that takes one of two pushes while another scheduler waits leaves the other task to it with one
+   one or two signals for this pair, whichever way the pushes and the spinner's pop fall. The end stops a spinner. */
+static void test_spin(void) {
+  agc_vm_init(&spun, NULL, stdout, stderr, INT64_MAX);
+  agc_runq *q = spun.rt->runq;
+  agc_runq_share(q);
+  assert(agc_runq_spin(q) == NULL);
+  agc_runq_add_scheduler(q);
+  agc_runq_add_scheduler(q);
+  agc_runq_spin_setup(q, 1, SPIN_FOREVER_NS);
+  uv_thread_t spinner, waiter;
+
+  agc_task *a = agc_new_task(&spun);
+  atomic_store(&spun_task, NULL);
+  assert(uv_thread_create(&spinner, spin_then_wait, NULL) == 0);
+  await_counts(q, 1, 0);
+  assert(agc_runq_spin(q) == NULL);
+  uint64_t signals = agc_runq_stats(q).signals;
+  agc_runq_push(q, a);
+  assert(uv_thread_join(&spinner) == 0);
+  assert(atomic_load(&spun_task) == a);
+  assert(agc_runq_stats(q).signals == signals);
+  assert(agc_runq_pop(q) == NULL);
+
+  agc_task *b = agc_new_task(&spun);
+  assert(uv_thread_create(&waiter, wait_spun, NULL) == 0);
+  await_counts(q, 0, 1);
+  agc_runq_push(q, b);
+  assert(uv_thread_join(&waiter) == 0);
+  assert(atomic_load(&spun_waited) == b && agc_runq_stats(q).signals == signals + 1);
+
+  agc_runq_spin_setup(q, 1, 1000);
+  agc_task *c = agc_new_task(&spun);
+  assert(uv_thread_create(&spinner, spin_then_wait, NULL) == 0);
+  await_counts(q, 0, 1);
+  agc_runq_push(q, c);
+  assert(uv_thread_join(&spinner) == 0);
+  assert(atomic_load(&spun_task) == c && agc_runq_stats(q).signals == signals + 2);
+
+  agc_runq_spin_setup(q, 1, SPIN_FOREVER_NS);
+  agc_task *d = agc_new_task(&spun), *e = agc_new_task(&spun);
+  assert(uv_thread_create(&waiter, wait_spun, NULL) == 0);
+  await_counts(q, 0, 1);
+  assert(uv_thread_create(&spinner, spin_then_wait, NULL) == 0);
+  await_counts(q, 1, 1);
+  agc_runq_push(q, d);
+  agc_runq_push(q, e);
+  assert(uv_thread_join(&spinner) == 0 && uv_thread_join(&waiter) == 0);
+  agc_task *got = atomic_load(&spun_task), *other = atomic_load(&spun_waited);
+  assert((got == d && other == e) || (got == e && other == d));
+  /* One signal, or two when the second push signalled after the spinner left and the spinner's pop still saw the
+     waiter idle: a spare signal costs a wake, a missing one would leave the waiter blocked. */
+  uint64_t sent = agc_runq_stats(q).signals - signals;
+  assert((sent == 3 || sent == 4) && agc_runq_pop(q) == NULL);
+
+  atomic_store(&spun_task, a);
+  assert(uv_thread_create(&spinner, spin_then_wait, NULL) == 0);
+  await_counts(q, 1, 0);
+  agc_runq_end(q);
+  assert(uv_thread_join(&spinner) == 0);
+  assert(atomic_load(&spun_task) == NULL);
+}
+
+static agc_vm burst;
+static _Atomic int burst_taken;
+
+/* One idle scheduler of the burst: spins if ARG is non-NULL, else only waits, and takes one task. */
+static void burst_one(void *arg) {
+  assert(agc_gc_thread_enter());
+  agc_runq *q = burst.rt->runq;
+  agc_task *t = arg ? agc_runq_spin(q) : NULL;
+  if (!t) t = agc_runq_wait(q);
+  if (t) atomic_fetch_add(&burst_taken, 1);
+  agc_gc_thread_leave();
+}
+
+/* A burst while one scheduler spins (without end) and WAITERS wait: WAITERS + 1 pushes, each scheduler takes one task.
+   The spinner absorbs the signals of the pushes it sees, so the wake must be passed on by each scheduler that leaves
+   with a task while more are queued (take_waited); without that chain a waiter can stay parked beside a queued task
+   and the join below blocks until the test's deadline. Many rounds, so the pushes fall at different points of the
+   spinner's take. */
+static void test_burst_wakes_every_waiter(uint32_t waiters, int rounds) {
+  for (int round = 0; round < rounds; round++) {
+    agc_vm_init(&burst, NULL, stdout, stderr, INT64_MAX);
+    agc_runq *q = burst.rt->runq;
+    agc_runq_share(q);
+    agc_runq_spin_setup(q, 1, SPIN_FOREVER_NS);
+    for (uint32_t k = 0; k <= waiters; k++) agc_runq_add_scheduler(q);
+    atomic_store(&burst_taken, 0);
+    uv_thread_t threads[4];
+    assert(waiters < 4);
+    for (uint32_t k = 0; k < waiters; k++) assert(uv_thread_create(&threads[k], burst_one, NULL) == 0);
+    await_counts(q, 0, waiters);
+    assert(uv_thread_create(&threads[waiters], burst_one, &burst) == 0);
+    await_counts(q, 1, waiters);
+    for (uint32_t k = 0; k <= waiters; k++) agc_runq_push(q, agc_new_task(&burst));
+    for (uint32_t k = 0; k <= waiters; k++) assert(uv_thread_join(&threads[k]) == 0);
+    assert(atomic_load(&burst_taken) == (int)waiters + 1 && agc_runq_pop(q) == NULL);
+  }
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
@@ -208,6 +345,9 @@ int main(void) {
   test_wait_gets_the_push();
   test_wait_until();
   test_end_wakes_everyone();
+  test_spin();
+  test_burst_wakes_every_waiter(2, 300);
+  test_burst_wakes_every_waiter(3, 300);
   puts("run queue tests passed");
   return 0;
 }

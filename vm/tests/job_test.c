@@ -4,6 +4,7 @@
  * and poll). The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
  */
 #include "../core.h"
+#include "io_harness.h"
 #include "test_abort.h"
 #include "test_support.h"
 
@@ -24,12 +25,6 @@ typedef struct {
   int value;
 } gate;
 
-/* What a second thread runs, with the registration the garbage collector needs. */
-typedef struct {
-  void (*fn)(void *arg);
-  void *arg;
-} hop;
-
 typedef struct {
   gate *g;
   int64_t timeout_ms;
@@ -41,7 +36,7 @@ typedef struct {
 } finishing;
 
 static int dropped, finished_calls, dropped_without_work, more_calls, idle_drops, swift_done_calls;
-static agc_io_job *waiting_job, *last_job;
+static agc_io_job *waiting_job;
 static agc_vm vm;
 
 static void gate_work(void *data) {
@@ -84,7 +79,7 @@ static void gate_drop(void *data) {
   dropped++;
 }
 
-static const agc_io_kind gate_io = {gate_work, gate_done, gate_expired, gate_drop, false, "gate", NULL, false};
+static const agc_io_kind gate_io = {gate_work, gate_done, gate_expired, gate_drop, false, "gate", NULL, false, NULL};
 
 /* The `done` half owns the data it is given, so it frees it; a job that is dropped or expired leaves it to `drop`. */
 static agc_value idle_done(agc_vm *vm, void *data, agc_value context) {
@@ -107,15 +102,15 @@ static void idle_drop(void *data) {
 }
 
 /* A wait on the loop that nothing ends: only its deadline does, so the job always expires. */
-static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, true, "idle", NULL, false};
+static const agc_io_kind idle_io = {NULL, idle_done, idle_expired, idle_drop, true, "idle", NULL, false, NULL};
 
-static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, true, "nap", NULL, false};
+static const agc_io_kind nap_io = {NULL, idle_done, idle_expired, NULL, true, "nap", NULL, false, NULL};
 
 static void quick_work(void *data) {
   ((gate *)data)->value = 7;
 }
 
-static const agc_io_kind more_io = {quick_work, gate_done, gate_expired, gate_drop, false, "more", NULL, false};
+static const agc_io_kind more_io = {quick_work, gate_done, gate_expired, gate_drop, false, "more", NULL, false, NULL};
 
 static void swift_work(void *data) {
   *(int *)data = 1;
@@ -135,7 +130,7 @@ static void swift_drop(void *data) {
 }
 
 /* Pool work that ends at once, for the many-jobs test. */
-static const agc_io_kind swift_io = {swift_work, swift_done, swift_done, swift_drop, false, "swift", NULL, false};
+static const agc_io_kind swift_io = {swift_work, swift_done, swift_done, swift_drop, false, "swift", NULL, false, NULL};
 
 static gate *new_gate(void) {
   gate *g = calloc(1, sizeof *g);
@@ -143,21 +138,7 @@ static gate *new_gate(void) {
   return g;
 }
 
-static void hop_main(void *arg) {
-  hop *h = arg;
-  assert(agc_gc_thread_enter());
-  h->fn(h->arg);
-  agc_gc_thread_leave();
-}
-
-/* Runs FN on a second thread and waits for it: the thread plays a scheduler, and the loop's thread (the caller) does
-   not touch the VM meanwhile. */
-static void on_thread(void (*fn)(void *arg), void *arg) {
-  hop h = {fn, arg};
-  uv_thread_t thread;
-  assert(uv_thread_create(&thread, hop_main, &h) == 0);
-  assert(uv_thread_join(&thread) == 0);
-}
+#define on_thread agc_test_on_thread
 
 /* The task is running its turn, as a builtin sees it. */
 static void running(void) {
@@ -175,7 +156,7 @@ static void park(agc_task *task) {
 static agc_task *park_on(gate *g, int64_t timeout_ms) {
   agc_task *task = vm.task;
   running();
-  last_job = agc_io_start(&vm, &gate_io, g, agc_int(100), timeout_ms);
+  agc_io_start(&vm, &gate_io, g, agc_int(100), timeout_ms);
   park(task);
   return task;
 }
@@ -192,39 +173,11 @@ static int64_t take(agc_task *task) {
   return agc_as_int(&vm, result);
 }
 
-static void settle_loop(void) {
-  bool closed = false;
-  for (int attempt = 0; attempt < 500 && !closed; attempt++) closed = agc_io_close(&vm);
-  assert(closed && vm.rt->loop == NULL);
-}
+static void settle_loop(void) { agc_test_settle_loop(&vm); }
 
-static void pump_until_idle(void) {
-  while (uv_loop_alive(agc_io_uv(&vm))) (void)agc_io_poll(&vm, true);
-}
+static void pump_until_idle(void) { agc_test_pump_until_idle(&vm); }
 
-static void count_timers(uv_handle_t *handle, void *arg) {
-  if (handle->type == UV_TIMER && uv_is_active(handle)) *(uint64_t *)arg += 1;
-}
-
-/* How many job timers are armed on the loop. */
-static uint64_t armed_timers(void) {
-  uint64_t count = 0;
-  uv_walk(agc_io_uv(&vm), count_timers, &count);
-  return count;
-}
-
-static void longest_due(uv_handle_t *handle, void *arg) {
-  if (handle->type != UV_TIMER || !uv_is_active(handle)) return;
-  uint64_t due = uv_timer_get_due_in((uv_timer_t *)handle);
-  if (due > *(uint64_t *)arg) *(uint64_t *)arg = due;
-}
-
-/* The longest time to go of an armed job timer, in milliseconds. */
-static uint64_t latest_due(void) {
-  uint64_t due = 0;
-  uv_walk(agc_io_uv(&vm), longest_due, &due);
-  return due;
-}
+static uint64_t armed_timers(void) { return agc_test_armed_timers(&vm); }
 
 /* The timer wins while the work is still blocked: the task takes the timeout and the job stays, because the work is
    still using its data. The work then ends: its end changes nothing, and the data is dropped once, after it finished. */
@@ -257,16 +210,13 @@ static void test_completion_before_timer(void) {
   finished_calls = 0;
 }
 
-/* A cancel sets the outcome to CANCELLED: a request to move the timer is refused afterwards (the timer keeps its
-   minute), a completion that comes later does not wake the task, and the detached ending takes the result and frees
-   the job. */
+/* A cancel sets the outcome to CANCELLED: a completion that comes later does not wake the task, and the detached
+   ending takes the result and frees the job. */
 static void test_cancel_before_completion(void) {
   gate *g = new_gate();
   agc_task *task = park_on(g, 60000);
   uv_sem_wait(&g->entered);
   agc_io_detach(&vm, task);
-  agc_io_extend(last_job, 1);
-  assert(latest_due() > 30000);
   uv_sem_post(&g->go);
   while (finished_calls == 0) assert(agc_io_poll(&vm, true));
   assert(task->state == AGC_TASK_PARKED && !task->parked);
@@ -276,13 +226,13 @@ static void test_cancel_before_completion(void) {
   task->state = AGC_TASK_RUNNING;
 }
 
-static void extend_later(void *arg) {
-  agc_io_extend(arg, 1);
+static void ready_later(void *arg) {
+  agc_io_ready(arg);
 }
 
-/* Another thread asks to move the timer of a job that waits for a minute. The loop belongs to this thread once the
-   inbox exists, so the request goes through the inbox, wakes the loop, and the timer then fires within the test's
-   deadline. Without the request the job would wait a minute. */
+/* Another thread ends the wait of a job that waits for a minute. The loop belongs to this thread once the inbox
+   exists, so the request goes through the inbox, wakes the loop, and the job ends within the test's deadline.
+   Without the request the job would wait a minute. */
 static void test_request_from_another_thread(void) {
   assert(agc_io_share(&vm, false));
   agc_task *task = vm.task;
@@ -290,10 +240,10 @@ static void test_request_from_another_thread(void) {
   agc_io_job *job = agc_io_start(&vm, &nap_io, NULL, agc_void(), 60000);
   park(task);
   uv_thread_t thread;
-  assert(uv_thread_create(&thread, extend_later, job) == 0);
+  assert(uv_thread_create(&thread, ready_later, job) == 0);
   wait_woken(task);
   assert(uv_thread_join(&thread) == 0);
-  assert(take(task) == -1);
+  assert(take(task) == 1);
   settle_loop();
 }
 
@@ -372,6 +322,51 @@ static void test_more_keeps_the_wait(void) {
   settle_loop();
   assert(finished_calls == 1);
   finished_calls = more_calls = 0;
+}
+
+static bool wait_started, pause_saw_wait;
+
+static bool start_wait(void *data, agc_io_job *job) {
+  (void)data;
+  (void)job;
+  wait_started = true;
+  return true;
+}
+
+static void pause_idle(void *data) {
+  (void)data;
+  pause_saw_wait = wait_started;
+}
+
+/* A wait on the loop whose deadline stops it (`pause`) before EXPIRED is published. */
+static const agc_io_kind paused_io = {NULL, idle_done, idle_expired, idle_drop, true, "paused", NULL, false,
+                                      pause_idle};
+
+static void start_paused(void *arg) {
+  (void)arg;
+  running();
+  int *data = malloc(sizeof *data);
+  assert(data);
+  agc_io_start_then(&vm, &paused_io, data, agc_void(), 0, start_wait);
+}
+
+/* A scheduler starts a wait on the loop with a deadline of 0 ms. Its `more` step starts the wait in the job's START
+   on the loop's thread, before the timer is armed, so the timer, which can only fire after that request, always
+   finds the wait started and pauses it. A wait started by a second request could come after the deadline, and its
+   callback could then run beside `expired`. */
+static void test_wait_starts_before_its_deadline(void) {
+  assert(agc_io_share(&vm, false));
+  agc_task *task = vm.task;
+  wait_started = pause_saw_wait = false;
+  on_thread(start_paused, NULL);
+  park(task);
+  assert(!wait_started);
+  wait_woken(task);
+  assert(wait_started && pause_saw_wait);
+  assert(take(task) == -1);
+  settle_loop();
+  assert(idle_drops == 1);
+  idle_drops = 0;
 }
 
 /* The task gives up the wait on the loop (resumed with the outcome PENDING) and its releases are queued; a service
@@ -491,7 +486,7 @@ static agc_value where_done(agc_vm *vm, void *data, agc_value context) {
   return agc_void();
 }
 
-static const agc_io_kind where_io = {swift_work, where_done, where_done, swift_drop, false, "where", NULL, false};
+static const agc_io_kind where_io = {swift_work, where_done, where_done, swift_drop, false, "where", NULL, false, NULL};
 
 static void start_detached(void *arg) {
   agc_io_detached(&vm, &where_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -499,8 +494,7 @@ static void start_detached(void *arg) {
 
 static void service_on_thread(void *arg) {
   (void)arg;
-  assert(agc_io_service(&vm));
-  assert(!agc_io_service(&vm));
+  agc_test_service(&vm);
 }
 
 /* A detached job that finishes while a second thread runs the schedulers is ended by a scheduler: the I/O role finds it
@@ -524,10 +518,7 @@ static void test_detached_ends_on_a_scheduler(void) {
   settle_loop();
 }
 
-static void wait_for_hand_over(void) {
-  while (!agc_runq_nudged(vm.rt->runq)) assert(agc_io_poll(&vm, true));
-  assert(agc_runq_take_nudge(vm.rt->runq));
-}
+static void wait_for_hand_over(void) { agc_test_wait_for_hand_over(&vm); }
 
 /* A detached job that is ready twice before a scheduler takes it: its timer fires and it is handed over, then its work
    ends and the drain finds it again, with another job listed behind it. It stays listed once (a second link would cut
@@ -560,6 +551,114 @@ static void test_job_ready_twice_is_listed_once(void) {
   finished_calls = swift_done_calls = 0;
 }
 
+static int counted_done, counted_drop;
+static uv_thread_t counted_drop_thread;
+
+static agc_value counted_done_half(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  free(data);
+  counted_done++;
+  return agc_int(1);
+}
+
+static agc_value counted_expired(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return agc_int(-1);
+}
+
+static void counted_drop_half(void *data) {
+  free(data);
+  counted_drop_thread = uv_thread_self();
+  counted_drop++;
+}
+
+/* Stops the wait only at its deadline, as a request whose send cannot be taken back does. */
+static bool cancel_at_deadline(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return deadline;
+}
+
+static const agc_io_kind counted_io = {NULL,  counted_done_half, counted_expired, counted_drop_half, true, "counted",
+                                       NULL,  false,             NULL};
+static const agc_io_kind deadline_cancel_io = {NULL,  counted_done_half, counted_expired, counted_drop_half,
+                                               true,  "deadline",        cancel_at_deadline, false, NULL};
+
+static agc_task *to_detach;
+
+static void detach_on_thread(void *arg) {
+  (void)arg;
+  agc_io_detach(&vm, to_detach);
+}
+
+/* Runs inside uv_run: a scheduler detaches the job after this pass's requests ran and before its drain. */
+static void detach_during_run(uv_timer_t *timer) {
+  on_thread(detach_on_thread, NULL);
+  uv_close((uv_handle_t *)timer, NULL);
+}
+
+/* A job whose wait is over sits on the ready list when a scheduler detaches it. The drain of that pass finds it
+   detached before its DETACH request ran and leaves it alone; the request then puts it back on the list, it is handed
+   to a scheduler, and it ends once: `done` runs (the outcome was DONE first), `drop` never. */
+static void test_detach_from_a_scheduler_while_ready(void) {
+  assert(agc_io_share(&vm, false));
+  agc_task *task = vm.task;
+  running();
+  int *data = malloc(sizeof *data);
+  assert(data);
+  agc_io_job *job = agc_io_start(&vm, &counted_io, data, agc_void(), -1);
+  park(task);
+  agc_io_ready(job);
+  task->state = AGC_TASK_RUNNING;
+  to_detach = task;
+  static uv_timer_t timer;
+  assert(uv_timer_init(agc_io_uv(&vm), &timer) == 0);
+  assert(uv_timer_start(&timer, detach_during_run, 0, 0) == 0);
+  counted_done = counted_drop = 0;
+  assert(agc_io_poll(&vm, false));
+  assert(counted_done == 0 && counted_drop == 0 && !task->parked);
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  assert(counted_done == 1 && counted_drop == 0);
+  pump_until_idle();
+  settle_loop();
+  assert(counted_done == 1 && counted_drop == 0);
+}
+
+/* A detached job on a shared loop whose deadline passes while it still waits: a scheduler ends it (agc_io_service),
+   finds it busy, and posts its deadline cancel (EXPIRE_CANCEL) instead of ending it. The I/O thread runs the cancel,
+   which stops the wait, and puts the job back on the ready list; a scheduler then ends it and posts its `drop`, which
+   runs once on the I/O thread (§16.5: what the data reaches, such as a socket, belongs to that thread). */
+static void test_expire_cancel_from_a_scheduler(void) {
+  assert(agc_io_share(&vm, false));
+  agc_runq_share(vm.rt->runq);
+  uv_thread_t loop_thread = uv_thread_self();
+  agc_task *task = vm.task;
+  running();
+  int *data = malloc(sizeof *data);
+  assert(data);
+  (void)agc_io_start(&vm, &deadline_cancel_io, data, agc_void(), 5);
+  park(task);
+  task->state = AGC_TASK_RUNNING;
+  agc_io_detach(&vm, task);
+  counted_done = counted_drop = 0;
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  assert(counted_done == 0 && counted_drop == 0);
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  assert(counted_done == 0 && counted_drop == 0);
+  while (counted_drop == 0) assert(agc_io_poll(&vm, true));
+  assert(counted_drop == 1 && uv_thread_equal(&counted_drop_thread, &loop_thread));
+  pump_until_idle();
+  settle_loop();
+  assert(counted_drop == 1);
+}
+
 /* The `done` half of the first job raises, as a failing builtin would. */
 static agc_value raising_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
@@ -567,7 +666,7 @@ static agc_value raising_done(agc_vm *vm, void *data, agc_value context) {
   agc_fail(vm, "RUNTIME-INTERNAL", "done raised", 0);
 }
 
-static const agc_io_kind raising_io = {swift_work, raising_done, raising_done, swift_drop, false, "raise", NULL, false};
+static const agc_io_kind raising_io = {swift_work, raising_done, raising_done, swift_drop, false, "raise", NULL, false, NULL};
 
 static void start_raising(void *arg) {
   agc_io_detached(&vm, &raising_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -617,7 +716,7 @@ static void left_drop(void *data) {
   left_drops++;
 }
 
-static const agc_io_kind left_io = {swift_work, where_done, where_done, left_drop, false, "left", NULL, false};
+static const agc_io_kind left_io = {swift_work, where_done, where_done, left_drop, false, "left", NULL, false, NULL};
 
 static void start_left(void *arg) {
   agc_io_detached(&vm, &left_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -656,7 +755,7 @@ static agc_value guarded_done(agc_vm *vm, void *data, agc_value context) {
 }
 
 static const agc_io_kind guarded_io = {swift_work, guarded_done, guarded_done, swift_drop, false, "guarded", NULL,
-                                       false};
+                                       false, NULL};
 
 static void start_guarded(void *arg) {
   agc_io_detached(&vm, &guarded_io, arg, agc_void(), AGC_JOB_QUIET);
@@ -707,7 +806,7 @@ static void test_service_holds_sync(void) {
   settle_loop();
 }
 
-static const agc_io_kind timer_only_io = {NULL, idle_done, idle_expired, NULL, false, "timer", NULL, false};
+static const agc_io_kind timer_only_io = {NULL, idle_done, idle_expired, NULL, false, "timer", NULL, false, NULL};
 
 /* A kind with no work and no wait would be a bare deadline, which is a task timer: start_job refuses it before it
    registers anything. */
@@ -724,8 +823,11 @@ static void test_timer_only_kind_is_refused(void) {
 }
 
 #ifndef _WIN32
-static void extend_after_close(void *arg) {
-  agc_io_extend(arg, 5);
+static void nothing(void *data) { (void)data; }
+
+static void call_after_close(void *arg) {
+  (void)arg;
+  agc_io_call(&vm, nothing, NULL);
 }
 
 /* Child process: closes the inbox while a job is still held by its pool work, then a second thread posts to it. */
@@ -741,7 +843,7 @@ static void post_after_close_child(void) {
   vm.task->parking = false;
   uv_sem_wait(&g->entered);
   assert(!agc_io_close(&vm));
-  on_thread(extend_after_close, job);
+  on_thread(call_after_close, job);
 }
 
 /* A post from another thread after agc_inbox_close has no consumer: it must end the process loudly (SIGABRT), not run
@@ -771,6 +873,7 @@ int main(void) {
   test_start_queued_then_ended_inline();
   test_finish_from_another_thread();
   test_more_keeps_the_wait();
+  test_wait_starts_before_its_deadline();
   test_late_end_after_abandon();
   test_close_runs_queued_requests();
   test_poll_runs_queued_requests();
@@ -778,6 +881,8 @@ int main(void) {
   test_many_jobs_end();
   test_detached_ends_on_a_scheduler();
   test_job_ready_twice_is_listed_once();
+  test_detach_from_a_scheduler_while_ready();
+  test_expire_cancel_from_a_scheduler();
   test_raising_done_on_a_scheduler();
   test_unserviced_job_is_freed_at_the_close();
   test_timer_only_kind_is_refused();

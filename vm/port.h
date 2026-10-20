@@ -28,7 +28,9 @@ struct agc_resource {
   void *native;
   agc_release_fn release, goodbye;
   agc_value context;
-  agc_task *task;
+  /* The task parked on this job. Atomic: the drain (I/O thread) takes it to wake the task while that task, resumed,
+     may clear it in agc_io_finish (a job listed twice: done, then its timer fired before the close). */
+  _Atomic(agc_task *) task;
   agc_resource *holder;
   agc_task *next_owner;
   agc_task *waiters, *waiters_tail;
@@ -47,6 +49,9 @@ typedef struct agc_runq agc_runq;
 typedef struct agc_lock agc_lock;
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
+/* A job's step on the I/O thread: after the pool work of a pool job (true keeps the job waiting on the loop, and
+   agc_io_ready ends it), or, for a wait on the loop, the start of that wait, before the deadline is armed (the result
+   is not used). */
 typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
 typedef struct agc_poller agc_poller;
 typedef struct agc_stdio agc_stdio;
@@ -66,10 +71,18 @@ typedef struct {
   void (*drop)(void *data);
   bool external;
   const char *name;
+  /* Stops the wait (DEADLINE: at the job's deadline, else at a detach). It runs on the I/O thread, with the loop's own
+     `vm` and without rt->sync, so it may only stop waits and handles of its own data (a socket that the data reaches
+     belongs to the I/O thread), never scheduler state such as a resource, its owner's list or a task; true when the
+     wait is stopped and the job can be dropped. */
   bool (*cancel)(agc_vm *vm, void *data, agc_value context, bool deadline);
   /* The halves change state that several schedulers reach: the interpreter runs them with rt->sync held (run_half in
      vm/loop.c). A kind whose halves only build a value from its own data leaves it false. */
   bool locked;
+  /* Stops the wait of the job on the I/O thread when its timer fires, before the outcome says EXPIRED, so that
+     `expired` (on a scheduler) never runs beside a callback of that wait. The same rule as `cancel` holds for what it
+     may touch. NULL when the wait needs no stop. */
+  void (*pause)(void *data);
 } agc_io_kind;
 
 typedef struct {
@@ -281,6 +294,18 @@ typedef struct {
      interpreter takes it around each builtin whose row is marked `shared`. */
   agc_lock *sync;
   bool shared;
+  /* The scheduler threads (docs/vm/16-architecture.md §16.9, "Threads"): `schedulers` is N (1 runs the scheduler on the
+     loop's thread, the default), `scheds` their contexts (GC memory, so the collector sees them) and `threads` their
+     malloc'd ids, of which `started` are running. `over` is set once, by the first agc_run_over: the run is over and
+     rt->outcome holds its end. `entry_done` opens the run queue to the other schedulers once the entry has written the
+     Globals table. `timers_armed` counts the armed task timers of every heap, for the stall check. */
+  int64_t schedulers;
+  struct agc_vm **scheds;
+  void *threads;
+  _Atomic uint32_t started;
+  _Atomic bool over, entry_done;
+  _Atomic uint64_t timers_armed;
+  uint64_t over_task;
 #ifdef __linux__
   locale_t messages_locale;
 #endif
@@ -399,6 +424,26 @@ struct agc_vm {
      any (output.c): agc_sync_reset gives both back after a failure. */
   uint32_t sync_depth;
   agc_lock *stream_lock;
+  /* Where agc_fail, agc_exit and the crash of a task write the failure: rt->outcome for the context that agc_vm_init
+     makes, `own` for each scheduler thread (and the I/O thread while they run), so that two schedulers that fail tasks
+     at once never write the same record. A failure that ends the run is copied to rt->outcome once, by agc_run_over. */
+  agc_outcome *outcome;
+  agc_outcome own;
+  /* The task that agc_io_service replaced with its scratch task (`servicing` is true meanwhile), given back by
+     agc_io_service_reset when a `done` raises. */
+  agc_task *service_saved;
+  bool servicing;
+  /* The scheduler's number: 0 for the one that runs `main` first (docs/vm/16-architecture.md §16.9, "Threads"). */
+  uint32_t index;
+  /* The runnext slot of a scheduler thread (§16.9, "Wakes between schedulers"): a task that this scheduler wakes
+     waits here, not in the global queue, if the slot is free; agc_task_next takes it first, at most RUNNEXT_LIMIT
+     (vm/task.c) times in a row before it looks at the queue. Only this scheduler's thread reads or writes it, so it
+     needs no lock: another scheduler never takes the task, and a cancel from another thread leaves it to
+     agc_task_next. `runnext_on` is set for scheduler threads only, so one scheduler (N = 1) and the I/O thread always
+     use the queue. */
+  agc_task *runnext;
+  uint32_t runnext_runs;
+  bool runnext_on;
   jmp_buf fail, turn;
 };
 
@@ -491,7 +536,22 @@ void agc_task_cancel(agc_vm *vm, agc_task *t);
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
-void agc_io_extend(agc_io_job *j, int64_t timeout_ms);
+/* Runs FN(DATA) on the I/O thread: at once where the caller is that thread (always while one thread plays both roles),
+   else as a request in its inbox, after every request the caller posted before. A libuv step of a service that has no
+   request of its own (the start of a stream write) goes through it. */
+void agc_io_call(agc_vm *vm, void (*fn)(void *data), void *data);
+/* The same for a service that keeps the loop in its malloc'd state (agc_io_loop) and has no vm at hand, as in a
+   `release` or `drop` hook. Steps posted by one thread run in the order they were posted; a service whose builtins
+   hold rt->sync while they post gets the order of those builtins across schedulers. */
+void agc_loop_call(agc_loop *loop, void (*fn)(void *data), void *data);
+agc_loop *agc_io_loop(agc_vm *vm);
+/* The libuv loop, for code that runs on the I/O thread; it aborts on any other thread. */
+struct uv_loop_s *agc_loop_uv(agc_loop *loop);
+/* The loop that owns UV, a libuv loop that agc_loop_uv or agc_io_uv returned. */
+agc_loop *agc_loop_of_uv(struct uv_loop_s *uv);
+/* True where a step posted now runs at once on the calling thread: always while one thread plays both roles
+   (N = 1). A service keeps a fast path that reads its own I/O state under this test only. */
+bool agc_io_here(agc_vm *vm);
 #define AGC_JOB_FLUSH 1u
 #define AGC_JOB_QUIET 2u
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);

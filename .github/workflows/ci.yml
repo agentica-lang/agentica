@@ -144,6 +144,8 @@ jobs:
         run: make test JOBS=6
       - name: The binary tests again with the shared-state locks on
         run: make test-shared
+      - name: The TCP and TLS modules with every VM on four schedulers
+        run: make test-multicore-net
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)
         run: make fixed-point
       - name: The product command line tests on the single binary
@@ -255,5 +257,8 @@ jobs:
       - name: vm-tsan, the threaded C tests under ThreadSanitizer (no libgc)
         if: ${{ !cancelled() && steps.changes.outputs.vm != 'false' }}
         run: make vm-tsan
+      - name: vm-tsan-run, tests/test_vm_multicore.py and the TCP and TLS modules on four schedulers under ThreadSanitizer
+        if: ${{ !cancelled() && steps.changes.outputs.vm != 'false' }}
+        run: make vm-tsan-run
       - if: ${{ steps.changes.outputs.vm != 'false' }}
         run: make -j"$(nproc)" vm-gc-stress JOBS=4
