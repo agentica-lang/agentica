@@ -142,30 +142,29 @@
   - **Runs:** sanitizer build, `vm-test`, differential and bytecode tests, fuzz
     run, GC stress run
 
-- **Job:** macOS (`platforms.yml`)
-  - **Runner:** GitHub-hosted `macos-15-intel` and `macos-latest` (Apple
-    clang, x86-64 and arm64), submodules
-  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and the test
-    subset listed in `platforms.yml`
-
-- **Job:** Windows (`platforms.yml`)
-  - **Runner:** GitHub-hosted `windows-2025`, `msys2/setup-msys2` UCRT64 (gcc,
-    make), submodules
-  - **Runs:** `make vm-test`, `make fixed-point` (the binary) and the test
-    subset listed in `platforms.yml` (the Makefile's `WINDOWS_TEST_MODULES`
-    is the same list, for the local Wine check)
+- **Job:** conformance matrix (`platforms.yml`), one per system:
+  `linux-x86_64`, `windows-x86_64`, `macos-x86_64`, `macos-arm64`
+  - **Runner:** GitHub-hosted `ubuntu-latest` (system libgc and OpenSSL),
+    `windows-2025` (`msys2/setup-msys2` UCRT64: gcc, make), `macos-15-intel`
+    and `macos-latest` (Apple clang); the last three link the vendored
+    OpenSSL; submodules
+  - **Runs:** `make vm-test`, the build from `bootstrap/stage0.agcb` and
+    `make fixed-point`, then the areas of `tools/conformance.py` (command
+    line, language rules, goldens, library, files, processes, tasks,
+    network), and a report that fails when an area has no passed case or a
+    case is skipped without a `host-only:` reason (the Makefile's
+    `WINDOWS_TEST_MODULES` is the list for the local Wine check)
 
 - **Job:** Fuzz (`fuzz.yml`, by hand)
   - **Runner:** GitHub-hosted `ubuntu-latest`, clang
   - **Runs:** sanitizer build, 5 million mutants, random `FUZZ_SEED`
 
 - The Linux jobs run on every pull request that changes more than docs;
-  `platforms.yml` runs on pull requests and pushes to `master`, and either can
-  be started by hand. No job installs Racket (the Racket front end was deleted,
-  PR #313), and no step checks or regenerates the frozen `vm/unicode_data.c`
-  (its header gives the provenance). The macOS and Windows jobs run the test
-  subset named in `platforms.yml`, `tests/test_vm_tcp.py`,
-  `tests/test_vm_tls.py` and `tests/test_vm_http.py` included.
+  `platforms.yml` runs on pull requests that carry the `platforms` label and
+  on pushes to `master`, and either can be started by hand. No job installs
+  Racket (the Racket front end was deleted, PR #313), and no step checks or
+  regenerates the frozen `vm/unicode_data.c` (its header gives the
+  provenance). Every system runs the TCP, TLS and HTTP modules too.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
   and git detects the `string-inspect.agc` fixture as binary from its NUL bytes.
   So Windows sees the same sources, spans and output as Linux.

@@ -14,6 +14,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Windows system trust also reads the CA store for intermediates (never as
   roots).
 - `std/http` (HTTP and HTTPS client and server) runs on Windows.
+- CI runs one conformance matrix on Linux, Windows, macOS Intel and macOS ARM: the
+  build from stage0, the fixed point, the C tests, and the command line, language
+  rules, files, processes, tasks and network tests, with a report of what each
+  system ran and skipped.
 
 ### Changed
 

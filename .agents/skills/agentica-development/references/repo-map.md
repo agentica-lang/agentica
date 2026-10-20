@@ -195,7 +195,8 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_stdlib_prelude.py  # pytest: the prelude table, stdlib/prelude/ files and Python peer agree; no O(n) builtin in a loop
   test_vm_test_protocol.py  # unittest: a Python peer plays a test runner over the child channel (references/vm-tests.md)
   test_vm_child_channel.py  # pytest: the child channel on its own, against a Node peer, on every system (references/vm-tests.md)
-  test_vm_child_channel_linux.py  # pytest: pinned descriptors and a shell child, Linux only (references/vm-tests.md)
+  test_vm_child_channel_posix.py  # pytest: pinned descriptors and a shell child, POSIX systems (Linux and macOS; references/vm-tests.md)
+  test_conformance.py  # pytest: every test module is in an area of tools/conformance.py or excluded with a reason; the report's rules (references/ci.md)
   test_vm_tls.py  # unittest: the VM TLS builtins against independent peers (references/vm-tests.md)
   test_vm_monotonic.py  # unittest: Time.monotonic_ns against Python's clock
   test_vm_bits.py  # unittest: spans of the Int and Float bit builtin errors (references/library-notes.md)
@@ -209,7 +210,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
-  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; not in the Windows job (references/bdd.md)
+  test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; host-only on Windows (references/bdd.md)
   test_bdd_cleanup.py  # pytest: destructive cleanup in the Docker/Actions scratch (references/bdd.md)
   test_bdd_integration.py  # pytest: programs under test, limits, seed, cleanup; slow: large outputs and killed driver (references/bdd.md)
   test_unit_test.py  # unittest: agentica test on *_test.agc files; slow: the test timeout, stderr flood, endless print, flooding listing (references/bdd.md)
@@ -227,6 +228,7 @@ examples/               # small programs per feature; examples/README.md lists t
 tools/
   refreeze.py     # rewrites the frozen front-end goldens from the Agentica stages (references/frontend.md)
   jscpd/          # the pinned copy-paste checker (make dup-check)
+  conformance.py  # the areas and modules of the platforms.yml matrix, the host check and the evidence report (references/ci.md)
   release.py      # release archives: package, smoke (extracted package), collect (references/ci.md)
   release-check.sh  # ELF, Mach-O and PE checks of a release binary (references/ci.md)
 docs/

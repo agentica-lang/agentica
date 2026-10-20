@@ -382,7 +382,7 @@ lowering or bytecode files, the `std/` modules, or CI itself, change:
   `tests/test_vm_stack.py`, `tests/agentica_test.py` (the helper of the
   unittest modules),
   `tests/test_vm_test_protocol.py`, `tests/fixtures/test-protocol-peer.*`,
-  `tests/test_vm_child_channel.py`, `tests/test_vm_child_channel_linux.py`,
+  `tests/test_vm_child_channel.py`, `tests/test_vm_child_channel_posix.py`,
   `tests/fixtures/child-channel*`,
   `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,
   `tests/fixtures/vm/`;
@@ -403,6 +403,52 @@ TRACE=0`, then it checks that `run --version` says `trace off`).
 
 Pull requests and `master` pushes that change only docs, the site or
 Markdown skip the whole CI workflow. A newer push cancels an older run.
+
+## Conformance matrix (`platforms.yml`)
+
+One job per system, named `conformance <platform>`: `linux-x86_64`
+(`ubuntu-latest`, system libgc and OpenSSL), `windows-x86_64` (`windows-2025`,
+MSYS2 UCRT64), `macos-x86_64` (`macos-15-intel`) and `macos-arm64`
+(`macos-latest`); the last three link the vendored OpenSSL, as the release
+does. Each job runs the same steps, so a promise of the language is tested on
+every system or says why not:
+
+1. `make vm-test`, `vendored-check` and `bootstrap-smoke` (the first binary,
+   linked with `bootstrap/stage0.agcb`, passes
+   `tests/test_platform_bootstrap.py` alone), then `make fixed-point` (the
+   build from stage0 and stage2 == stage3).
+2. One step per area of `tools/conformance.py`, `make conformance-area/<area>`
+   (it writes JUnit files under `build/conformance/<area>/`): `cli`, `spec`,
+   `golden` (`AGENTICA_SWEEP=sampled`), `library`, `files` (and then
+   `make test-remove-actions`, the destructive cases in the runner scratch),
+   `processes`, `tasks` (one worker, the timing cases) and `network`.
+3. `make conformance-report`: a table in the job summary and an exit code 1
+   when an area has no passed case, a case failed or did not finish, or a case
+   was skipped for a reason that is not allowed.
+
+The areas are the lists in `tools/conformance.py`. A new `tests/test_*.py` must
+be in an area or in `EXCLUDED` with a reason, or `tests/test_conformance.py`
+fails. Run one area locally with `make conformance-area/files`, all with `make
+conformance`. Not in the matrix: the Docker and Wine groups, the slow tier,
+sanitizers, fuzz and gc-stress (`ci.yml`, `fuzz.yml`), and
+`test_vm_multicore.py` (several schedulers on every system is the next step).
+
+Skip rules, checked by the report:
+
+- A skip that needs one system's capability (POSIX signals, FIFOs, Windows
+  handles) uses `host_only(condition, reason)` of `tests/agentica_test.py`. Its
+  reason starts with `host-only:` and names the capability the other systems
+  lack. It does not hide a Linux habit: `/proc`, `os.killpg`, `fcntl` and a
+  16 KiB pipe are fixed in the test or its peer, so the case runs on macOS and
+  Windows.
+- A tool the test needs (Node, `tomllib`, IPv6) is installed by the workflow,
+  and a missing one fails: `tool()` and `require()` fail when `CI` or
+  `AGENTICA_REQUIRE_VM` is set. A skip for a missing tool fails the report.
+- A product bug that the system has not fixed yet may be skipped with
+  `known-issue: #N reason`; the report lists it under "Open gaps". Remove the
+  skip in the PR that fixes the issue.
+- A test that cannot pass because of a hosted-runner limit is not skipped
+  silently: say so in the PR.
 
 ## Caches and `master` pushes
 
@@ -436,11 +482,9 @@ Markdown skip the whole CI workflow. A newer push cancels an older run.
 
 Actions → Run workflow:
 
-- `platforms.yml` runs `make vm-test`, `make vendored-check`, `make
-  fixed-point` and a test subset on GitHub-hosted macOS (Intel and ARM) and
-  Windows (MSYS2 UCRT64) for pull requests and pushes to `master`, with the
-  vendored OpenSSL (cached by `vm-openssl-key`). A manual dispatch may pick
-  the system OpenSSL instead.
+- `platforms.yml` is the conformance matrix (next section), on pull requests
+  that carry the `platforms` label and on pushes to `master`. A manual
+  dispatch may pick the system OpenSSL instead of the vendored one.
 - `fuzz.yml` fuzzes the sanitizer VM with 5 million mutants and a random
   seed.
 
