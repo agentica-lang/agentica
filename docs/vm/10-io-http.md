@@ -130,13 +130,12 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   `HttpServerOptions`, `Header`, `HttpClient`, `HttpServer`) are global builtin
   names.
 - **`HttpWire` is std-only.** A public raw layer would be a second way to do
-  HTTP. The linker (`compiler/resolve.agc`) gives `CHECK-UNKNOWN-NAME` for a
-  qualified `HttpWire.f` in any module not embedded from `stdlib/`
-  (the std-only modules of `compiler/builtins_data.agc`), and `help` leaves it
-out. The
-  loader does not guard it: a crafted `.agcb` gets nothing `TCP` and `TLS` do
-  not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is a reserved
-  name.
+  HTTP. The linker (`compiler/modules/resolve.agc`) gives `CHECK-UNKNOWN-NAME`
+  for a qualified `HttpWire.f` in any module not embedded from `stdlib/` (the
+  std-only modules of `compiler/catalog/builtins_data.agc`), and `help` leaves
+  it out. The loader does not guard it: a crafted `.agcb` gets nothing `TCP` and
+  `TLS` do not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is
+  a reserved name.
 - **Options.** `HTTP.client` and `HTTP.listen` check every number first:
   positive, `max_connections` at most 65536, `max_body_bytes` at most 64 MiB. A
   bad record is an `error` result.

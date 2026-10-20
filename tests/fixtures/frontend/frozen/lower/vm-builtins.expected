@@ -3,6 +3,7 @@ Channel.closed?
 Channel.new
 Channel.recv
 Channel.send
+Crypto.sha256
 Dir.list
 Dir.mkdir
 Dir.mkdir_private
@@ -188,6 +189,7 @@ String.reverse
 String.slice
 String.split
 String.starts_with?
+String.to_bytes
 String.to_float
 String.to_float!
 String.to_int

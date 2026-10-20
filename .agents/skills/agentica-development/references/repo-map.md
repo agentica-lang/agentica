@@ -5,56 +5,73 @@ short tree is in `AGENTS.md`; read this to find which file owns something.
 
 ```text
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make stage0 refreshes it; references/ci.md)
-compiler/         # the front end in Agentica (§18.3, one stage per PR); lexer, parser, modules, linker, checker, lowering, bytecode writer and BDD driver so far; agentica.toml holds its [style] (lines at most 119 characters)
-  source.agc token.agc diagnostic.agc  # Position and Span, Token and its Value, Diagnostic and Outcome[T]
-  lexer.agc       # lex: String -> Outcome[List[Token]]; 
-  unicode.agc unicode_table.agc  # graphic? and the char write form for LEX-UNEXPECTED-CHAR; the table is hand-edited data (from Racket's `char-graphic?`, Unicode 17.0)
-  source_file.agc # read: a whole file as strict UTF-8 text in chunks, or the place of the first invalid byte; invalid_utf8 is the LEX-INVALID-UTF8 diagnostic
-  lex.agc lex_text.agc  # entry: prints the text form of the tokens of each file argument
-  text.agc        # quote, span_text, diagnostic_line: the shared pieces of both text forms
-  ast.agc         # the AST structs and enums, with a node id on every node
-  parse_base.agc parser.agc  # parse: List[Token] -> Result[Program](parse_base: Env, packed diagnostics, types, patterns; parser: expressions, statements, declarations)
-  parse.agc parse_text.agc  # entry: prints the text form of the tree of each file argument
-  modules.agc     # load: root path -> every module, read in a fixed order (explicit stack), with CHECK-IMPORT-*, CHECK-DECL-ORDER, CHECK-REDEFINED-NAME
-  resolve_import.agc import_path.agc  # std/, pkg/, package and relative import resolution, and the import path rules
-  package_import.agc package_cache.agc package_hash.agc sha256.agc file_probe.agc  # packages (§45, 45a): which imports name a package, ambiguity, the cache folder, the hash check; the cache root and folder of a commit; the hash of the .agc files; SHA-256 in Agentica; file? and directory?
-  project.agc manifest.agc lock.agc toml_read.agc semver.agc  # packages: the nearest agentica.toml and the lock graph checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path; the TOML helpers they share; versions
-  resolve.agc rewrite.agc  # resolve: the linked name of a name; rewrite: the declarations of a file with linked names
-  linker.agc      # link_file: Linking.Done(Linked) | Failed(Failure); program(): the flat Program for the checker
-  declarations.agc suggest.agc link_env.agc link_failure.agc  # declaration helpers and CHECK-DECL-ORDER; did_you_mean; Env and Settings; Site and packed failures with a file
-  types.agc builtin_model.agc builtins.agc builtins_data.agc  # the Type enum; builtin data structs and the Rule enum; Catalog (lookups by name); the rows, edited by hand
-  catalog.agc catalog_text.agc  # entry: prints the text form of the catalog, then the answer to each probe argument
-  link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --xdg-cache-home=, --home=, --local-app-data=, --ids)
-  check_state.agc check_types.agc check_failure.agc  # the checker: Cx and St, type operations and unification, packed Problems with their notes
-  check_register.agc check_stmt.agc check_expr.agc  # declarations and main; functions, blocks, statements, case; expressions and operators (CHECK-TOO-DEEP)
-  check_call.agc check_method.agc  # calls, enum constructors, struct construction and update; methods and fields (Resolved by node id)
-  check_rules.agc check_list.agc check_collections.agc check_args.agc  # the rule of each builtin
-  defaults.agc check_defaults.agc  # default parameter values: the Shape of a function and how a call fills it (shared by the checker and the lowering); CHECK-DEFAULT-ORDER, CHECK-DEFAULT-VALUE and the type of a default
-  check_const.agc const_walk.agc  # module constants: order, CHECK-CONSTANT-CYCLE, the value and type rules; the children and reads of an initializer
-  check_help.agc check_names.agc check_flow.agc check_unused.agc  # help texts, method names, what a body returns, CHECK-UNUSED-VALUE
-  check_tables.agc  # method tables and foreign-name helps as data, edited by hand
-  prelude.agc prelude_data.agc check_prelude.agc  # the compiler prelude (stages.md): read, parse and check the stdlib/prelude/ functions a program calls; the table of prelude rows, by hand; the checker rule of a call of one
-  checker.agc     # check(linked, settings): Checking.Done(Checked: types by node id, resolved, the prelude files and their bodies) | Failed(Problem)
-  check.agc check_text.agc  # entry: prints the text form of checking each root file argument
-  ir.agc lower_tables.agc lower_state.agc  # lowering: the IR as data, the lowering tables, Cx and Fx (the function being lowered)
-  lower_expr.agc lower_data.agc lower_stmt.agc  # expressions and calls; list, map, enum, struct and update chunks; functions, blocks, statements
-  lower_scan.agc lower_const.agc lower_program.agc  # what a function uses; module constants (plan, inlined literals, <start>); struct and enum tables
-  lowering.agc    # lower(linked, checked, catalog): Lowered.Done(Ir.Program) | Failed(Problem), function table
-  lower.agc lower_text.agc  # entry: prints the text form of lowering each root file argument (flags as check.agc, and --burn=N)
-  bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
-  bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
-  bytecode_writer.agc  # write(program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
-  bdd_driver.agc  # the BDD driver (§18.3, port step 7), part of the front end: run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
-  bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file
-  bdd_discover.agc bdd_compile.agc bdd_rundir.agc bdd_runner.agc  # the walk over the test paths; file -> Compiled.Bytes | Rejected(Problem); the temporary directory, lock and sweep; the runner as a captured child and its report file
+compiler/         # the front end in Agentica (§18.3): one folder per context, a new file goes in the folder of its context; agentica.toml holds its [style] (lines at most 119 characters); imports across folders are relative (`../check/types`)
+  front_end.agc  # the entry point of the front end of the single binary (the Makefile builds this file; make's stages build it)
+  app/  # the command line, the pipeline and the replies
+    pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
+    cli.agc  # the command line (§18.3, port step 8a): run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
+    cli_options.agc cli_help.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; the fixed texts; what a command answers; Launch
+    front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2, 8b): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
+  io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
+    host.agc  # workspace(): the real Workspace (read_text, file_exists, directory_exists, real_path, resolve_path, std_source); process_env(): the Env of this process
+    source_reader.agc  # read, read_shown: a whole file as strict UTF-8 text in chunks (the rules are in syntax/source_file.agc)
+    save_file.agc  # a file written in pieces (compile -o)
+  syntax/  # source text, tokens, lexer, parser, AST
+    source_file.agc  # Read (Text | Invalid | Unreadable) and the UTF-8 rules: complete_prefix, replace_invalid, error_position; invalid_utf8 is the LEX-INVALID-UTF8 diagnostic
+    source.agc token.agc  # Position and Span, Token and its Value
+    lexer.agc       # lex: String -> Outcome[List[Token]];
+    unicode.agc unicode_table.agc  # graphic? and the char write form for LEX-UNEXPECTED-CHAR; the table is hand-edited data (from Racket's `char-graphic?`, Unicode 17.0)
+    lex.agc lex_text.agc  # entry: prints the text form of the tokens of each file argument
+    text.agc        # quote, span_text, diagnostic_line: the shared pieces of both text forms
+    ast.agc         # the AST structs and enums, with a node id on every node
+    parse_base.agc parser.agc  # parse: List[Token] -> Result[Program](parse_base: Env, packed diagnostics, types, patterns; parser: expressions, statements, declarations)
+    parse.agc parse_text.agc  # entry: prints the text form of the tree of each file argument
+  modules/  # file reading, import resolution, the linker
+    workspace.agc   # Workspace: the port of the stages to the machine, a record of function values (built in io/host.agc)
+    modules.agc     # load: root path -> every module, read in a fixed order (explicit stack), with CHECK-IMPORT-*, CHECK-DECL-ORDER, CHECK-REDEFINED-NAME
+    resolve_import.agc import_path.agc  # std/, pkg/ and relative import resolution, and the import path rules
+    resolve.agc rewrite.agc  # resolve: the linked name of a name; rewrite: the declarations of a file with linked names
+    linker.agc      # link_file: Linking.Done(Linked) | Failed(Failure); program(): the flat Program for the checker
+    declarations.agc link_env.agc link_failure.agc  # declaration helpers and CHECK-DECL-ORDER; Env and Settings (with the Workspace); Site and packed failures with a file
+    link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --home=, --ids)
+  check/  # the checker, types, suggestions, constants and defaults
+    suggest.agc  # did_you_mean (the linker also calls it)
+    types.agc  # the Type enum (the catalog, lowering and the writer import it)
+    check_state.agc check_types.agc check_failure.agc  # the checker: Cx and St, type operations and unification, packed Problems with their notes
+    check_register.agc check_stmt.agc check_expr.agc  # declarations and main; functions, blocks, statements, case; expressions and operators (CHECK-TOO-DEEP)
+    check_call.agc check_method.agc  # calls, enum constructors, struct construction and update; methods and fields (Resolved by node id)
+    check_rules.agc check_list.agc check_collections.agc check_args.agc  # the rule of each builtin
+    defaults.agc check_defaults.agc  # default parameter values: the Shape of a function and how a call fills it (shared by the checker and the lowering); CHECK-DEFAULT-ORDER, CHECK-DEFAULT-VALUE and the type of a default
+    check_const.agc const_walk.agc  # module constants: order, CHECK-CONSTANT-CYCLE, the value and type rules; the children and reads of an initializer
+    check_help.agc check_names.agc check_flow.agc check_unused.agc  # help texts, method names, what a body returns, CHECK-UNUSED-VALUE
+    check_tables.agc  # method tables and foreign-name helps as data, edited by hand
+    check_prelude.agc  # the checker rule of a call of a prelude function
+    checker.agc     # check(linked, settings): Checking.Done(Checked: types by node id, resolved, the prelude files and their bodies) | Failed(Problem)
+    check.agc check_text.agc  # entry: prints the text form of checking each root file argument
+  catalog/  # the builtin catalog and the compiler prelude
+    builtin_model.agc builtins.agc builtins_data.agc  # builtin data structs and the Rule enum; Catalog (lookups by name); the rows, edited by hand
+    catalog.agc catalog_text.agc  # entry: prints the text form of the catalog, then the answer to each probe argument
+    prelude.agc prelude_data.agc  # the compiler prelude (stages.md): read, parse and check the stdlib/prelude/ functions a program calls; the table of prelude rows, by hand
+  lower/  # the IR and lowering
+    ir.agc lower_tables.agc lower_state.agc  # lowering: the IR as data, the lowering tables, Cx and Fx (the function being lowered)
+    lower_expr.agc lower_data.agc lower_stmt.agc  # expressions and calls; list, map, enum, struct and update chunks; functions, blocks, statements
+    lower_scan.agc lower_const.agc lower_program.agc  # what a function uses; module constants (plan, inlined literals, <start>); struct and enum tables
+    lowering.agc    # lower(linked, checked, catalog): Lowered.Done(Ir.Program) | Failed(Problem), function table
+    lower.agc lower_text.agc  # entry: prints the text form of lowering each root file argument (flags as check.agc, and --burn=N)
+  bytecode/  # the bytecode writer
+    bytecode_tables.agc bytecode_bytes.agc bytecode_pool.agc  # bytecode writer: format constants and opcode numbers, little-endian integers, UTF-8 and chunk lists, interned tables
+    bytecode_spans.agc bytecode_types.agc bytecode_function.agc bytecode_failure.agc  # the span table, the Types and Decodable sections, one function (constants, updates, builtins, labels), BYTECODE- problems
+    bytecode_writer.agc  # write(workspace, root_dir, program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
+    bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc, and `--version=V` for the header)
+  diagnostics/  # the diagnostic record and its plain, JSON and AI text
+    diagnostic.agc  # Diagnostic and Outcome[T]
+    diagnostic_json.agc  # the --json object of a Problem
+    diagnostic_plain.agc diagnostic_ai.agc  # the plain text of a Problem and its --ai text
+  bdd/  # the `agentica test` driver
+    bdd_driver.agc  # the BDD driver (§18.3, port step 7), part of the front end: run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
+    bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file
+    bdd_discover.agc bdd_compile.agc bdd_rundir.agc bdd_runner.agc  # the walk over the test paths; file -> Compiled.Bytes | Rejected(Problem); the temporary directory, lock and sweep; the runner as a captured child and its report file
   embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary
-  diagnostic_json.agc  # the --json object of a Problem
-  diagnostic_plain.agc diagnostic_ai.agc save_file.agc  # the plain text of a Problem and its --ai text; a file written in pieces (compile -o)
-  pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
-  cli.agc  # the command line (§18.3, port step 8a): run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
-  cli_options.agc cli_help.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; the fixed texts; what a command answers; Launch
-  bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc, and `--version=V` for the header)
-  front_end.agc front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2, 8b): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off; make's stages build it
 vm/               # the C11 bytecode VM, linked into dist/agentica; layers in references/vm.md
   value.h         # values and the agc_ value API, shared by all layers (references/vm-core.md)
   port.h          # what services call into the core: park, wake, jobs, handles (references/vm-core.md)
@@ -71,6 +88,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   builtin_tables.c # the list of every builtin table (references/vm-core.md)
   strings.c       # String builtins (references/vm-core.md)
   numbers.c       # Int and Float builtins, bit builtins, Time (references/vm-core.md)
+  crypto.c        # Crypto builtins (Crypto.sha256) on the digest adapter (references/vm-builtins.md)
   random.c        # the xoshiro256** generator (references/vm-core.md)
   json.c          # the JSON parser and builtins (references/vm-core.md)
   json_value.c    # the Json value: nodes, encoder, builders (references/vm-core.md)
@@ -111,6 +129,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   net_windows.c   # the Windows side: libuv code to the UCRT errno
   tls.h           # TLS adapter types (references/vm-net.md)
   tls_openssl.c   # the TLS adapter over OpenSSL (references/vm-net.md)
+  digest.h        # digest adapter: one-shot SHA-256 of a byte buffer
+  digest_openssl.c # the digest adapter over OpenSSL EVP (no openssl.cnf, no atexit, as TLS)
   tls_trust.h     # system trust store: tls_trust.c (once per process, rejected certs, leaf verify callback), loaders tls_trust_posix.c (PEM bundle), tls_trust_darwin.c (Security), tls_trust_windows.c (Crypt32)
   http_parse.h    # HTTP head adapter (references/vm-net.md)
   http_pico.c     # the only file that includes picohttpparser (references/vm-net.md)
@@ -145,6 +165,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     float_text_test.c    # Float text forms
     gc_thread_test.c     # threads registered with Boehm
     http_parse_test.c    # HTTP head parser
+    input_test.c         # stdin reads with one pool thread: shared read, EOF, close
     json_test.c          # JSON parser and builtins
     list_test.c          # opaque lists at the 32-way boundaries
     loader_test.c        # loader rules, one assert per rule
@@ -169,7 +190,6 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
 tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); the lists of references/vm-tests.md say which covers what
   test_spec_<area>.py  # pytest language rules through the CLI (code and span from --json, never message text); shared helpers live in spec_support.py. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.
   test_cli_forms.py  # pytest: CLI goldens; `make goldens` rewrites fixtures/cli/forms.json (references/ci.md)
-  test_spec_packages.py package_support.py  # pytest: package imports, the manifest and the lock through the CLI, with a cache the tests fill by hand; package_support.py has the Python peer of the package hash and the Workspace builder (references/frontend.md)
   test_modules.py  # pytest: programs of several files, pkg roots, JSON and step handlers through the CLI (references/language-notes.md)
   test_examples.py  # pytest: examples/*.agc, rejected fragments, CLI exit codes; slow: malformed algorithm inputs (references/stages.md)
   test_frontend_<lexer|parser|modules|check|lower|catalog|bytecode>.py  # pytest: Agentica stages against frozen outputs and goldens; frontend_support.py and frontend_cases.py hold helpers; test_frontend_refreeze.py covers tools/refreeze.py (references/frontend.md)
@@ -183,6 +203,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_vm_diff_{1..8}.py  # unittest: shards of the golden tests; shard 8 is the VM command line, the product CLI and the process, signal and path cases (references/vm-build.md)
   test_vm_latency.py  # unittest: the latency check, run alone by make vm-latency (references/vm-tasks.md)
   test_vm_task_map.py  # unittest: the timing cases of Task.map, run alone by make vm-task-map (references/vm-tasks.md)
+  test_style_core_purity.py  # the stage folders of compiler/ never call File, Dir, Path (but join), System, Process or FrontEnd (references/frontend.md)
   test_style_line_width.py  # unittest: [style] max_line_width of compiler/agentica.toml and stdlib/agentica.toml (references/frontend.md)
   test_vm_style.py  # unittest: types at the top, no static prototypes, header size (references/vm-c.md)
   test_vm_trace.py  # unittest: traced runs keep exit code, stdout and stderr (references/vm-builtins.md)
@@ -213,6 +234,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   test_windows_metadata_and_locks.py  # pytest: Windows metadata values and file locks, on the native Windows runner (references/ci.md)
   test_windows_filesystem_safety.py  # pytest: Windows filesystem mutation regressions, in Docker or Actions scratch (references/ci.md)
   test_windows_console_stop.py  # pytest, native Windows only: Ctrl+Break exit 149 and a pseudo console as stdout (references/ci.md)
+  test_windows_handle_counts.py  # pytest, native Windows only: no file call reaches the VM's own named pipes, and its handle count stays flat (GetProcessHandleCount); POSIX lists /proc/self/fd
   test_stdlib_docs.py  # unittest: every stdlib module has a module doc and export docs, read from the source text (references/stages.md)
   test_bdd.py  # pytest: agentica test over the CLI: step programs, isolation (references/bdd.md)
   test_bdd_posix.py  # pytest: agentica test cases that need POSIX modes, links and a shell script; host-only on Windows (references/bdd.md)

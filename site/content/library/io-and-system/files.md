@@ -301,6 +301,11 @@ Path.real(path: String) -> Result[String]
 
 Like POSIX `realpath`: the absolute path with every symbolic link resolved and `.`, `..` and repeated separators removed. Unlike `resolve`, it reads the disk, so the path must exist (a missing path, a link loop or a non-directory is an error). Invalid UTF-8 bytes become U+FFFD. It has no timeout; it runs in the file pool and does not stop other tasks.
 
+The system's own rules show through:
+
+- macOS fails a path whose absolute form is 1024 bytes or more, and accepts a `/` after a file (`file/` gives the file); Linux and Windows give an error for it.
+- Windows removes `.` and `..` from the typed text before it follows a link, so `link/..` is the folder that holds the link and `missing/..` is not an error. A name under a file gives ENOENT, the result starts with a drive letter (`/` is the drive of the working directory, such as `C:/`). A path whose absolute form is 260 characters or more is an error, and so is `Dir.mkdir` of one, because the binary does not opt in to long paths.
+
 ```agentica
 def main() -> Void
   puts(Path.real("/"))

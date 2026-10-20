@@ -540,8 +540,8 @@ come after port step 8.
   check and the `CHECK-IMPORT-*` and `PKG-LOCK-*` checks. Packages are stored
   under their logical path (45.8). There is no fetching: the tests fill the
   cache by hand. The import resolution lands in `compiler/` only
-  (`compiler/resolve_import.agc`), after step 8, when the Racket front end is
-  gone. That is consistent with the freeze.
+  (`compiler/modules/resolve_import.agc`), after step 8, when the Racket front
+  end is gone. That is consistent with the freeze.
 - **45b. Fetch and install.** The git fetch of the tag, the commit check, the
   hash check, the cache fill, `install`, and the fetch errors.
 - **45c. Add and update.** `add`, `update`, the `@version` form, the lock writer

@@ -10,6 +10,7 @@ import errno
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -48,8 +49,8 @@ end
 
 
 # Windows has named pipes where POSIX has FIFOs, but these tests make FIFOs with os.mkfifo (issue 433); it has no
-# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (issue 435); a stdin read there can keep a
-# pool thread (issue 431, docs/vm/10-io-scheduler.md).
+# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (test_windows_handle_counts.py lists its
+# pipes and counts its handles instead).
 no_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
 no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
 no_stdin_path = host_only(WINDOWS, "Windows has no path that names an inherited descriptor or the standard input (/proc/self/fd/N, /dev/stdin)")
@@ -419,7 +420,6 @@ end
     assert output == "1\n0\nok()\n", "the read parks with one descriptor, and the cancel closes it"
 
 
-@known_issue(WINDOWS, 431, "a Windows stdin read can keep a pool thread")
 def test_stdin_waits_on_the_loop_so_file_calls_run_while_a_task_waits_for_input(new_dir, run_vm_bounded):
     root = new_dir()
     path = root / "plain.txt"
@@ -438,7 +438,67 @@ end
     assert (code, output) == (0, 'ok()\nok("x")\n'), errors
 
 
-@known_issue(WINDOWS, 435, "the descriptors of the VM are listed in a folder that Windows does not have")
+def next_line_or_stderr(child):
+    """The child's next stdout line; a failure carries what it wrote to stderr so far."""
+    try:
+        return child.next_line(VM_WAIT_SECONDS)
+    except AssertionError as error:
+        raise AssertionError("%s\nstderr: %s" % (error, child.stderr_text())) from None
+
+
+# A reader task is cancelled while its read of stdin waits, with one pool thread: a file call still runs, the read
+# stays in flight and its line goes to the next reader, and the EOF then reaches both of two waiting readers once.
+# The reader warns "reading" in the turn that starts its read: a task cancelled before it runs never runs, so the
+# warning shows the reader ran before the cancel (only a turn that ends between the warning and the read is not ruled
+# out).
+CANCELLED_READER = """\
+def reader(n: Int) -> Int
+  IO.warn("reading")
+  IO.inspect(IO.gets())
+  return n
+end
+
+def main() -> Void
+  r = Task.spawn(&reader, 1)
+  Task.sleep(50)
+  Task.cancel(r)
+  IO.inspect(File.write_text(System.args()[0], "x", 1000))
+  IO.flush()
+  IO.inspect(IO.gets())
+  IO.flush()
+  a = Task.spawn(&reader, 2)
+  b = Task.spawn(&reader, 3)
+  IO.inspect(Task.await(a) + Task.await(b))
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_cancelled_stdin_reader_leaves_its_read_to_the_next_reader_and_eof_reaches_every_waiter(
+    tmp_path, adopt, schedulers
+) -> None:
+    source = tmp_path / "stdin.agc"
+    source.write_text(CANCELLED_READER, encoding="utf-8")
+    # AGENTICA_VM_TEST_MULTICORE lets a test build run more than one scheduler (tests/test_vm_multicore.py).
+    env = vm_environment({"UV_THREADPOOL_SIZE": "1", "AGENTICA_SCHEDULERS": schedulers,
+                          "AGENTICA_VM_TEST_MULTICORE": "1"})
+    bytecode = compile_agc(source, tmp_path / "stdin.agcb")
+    child = adopt(Child([*vm_command(), "--", bytecode, tmp_path / "out.txt"], cwd=tmp_path, env=env, stdin=True,
+                        capture_stderr=True))
+    assert child.next_stderr_line(VM_WAIT_SECONDS) == "reading"
+    assert next_line_or_stderr(child) == "ok()"
+    child.process.stdin.write(b"late\n")
+    child.process.stdin.flush()
+    assert next_line_or_stderr(child) == 'ok("late")'
+    child.close_stdin()
+    assert child.wait(VM_WAIT_SECONDS) == 0, child.stderr_text()
+    lines = child.stdout_text().splitlines()
+    assert lines == ['error("IO.gets reached the end of input")'] * 2 + ["5"], lines
+
+
+@host_only(WINDOWS, "the VM's pipes are reopened through the folder of its descriptors; Windows has none "
+                    "(test_file_calls_cannot_name_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock in "
+                    "test_windows_handle_counts.py lists its pipes)")
 def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(new_dir, run_vm_bounded):
     root = new_dir()
     code, output, errors = run_vm_bounded(root, r"""def main() -> Void
@@ -608,7 +668,15 @@ end
     assert 'ok("linked")' in output
 
 
-@known_issue(WINDOWS, 436, "the Path.real link chains, loops and long paths are compared with POSIX realpath only")
+# The kind of link comes from the disk, so the order of `links` matters: a target must exist before a link to it.
+def symlink(target, path):
+    """A link to `target`; Windows needs to know whether it points at a folder, and keeps the target as typed."""
+    folder = os.path.isdir(os.path.join(os.path.dirname(path), target))
+    if WINDOWS:
+        target = target.replace("/", "\\")
+    os.symlink(target, path, target_is_directory=folder)
+
+
 def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains_loops_and_long_paths(new_dir, os_lines,
                                                                                                      os_peer_lines):
     root = new_dir()
@@ -619,8 +687,8 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
              ("link2", "link1"), ("loop2", "loop1"), ("loop1", "loop2"), ("nowhere", "dangling"), (".", "self"),
              ("/", "slash"), ("link1/file.txt", "file-link")]
     for target, *parts in links:
-        os.symlink(target, root.joinpath(*parts))
-    os.symlink(str(root / "real" / "dir"), root / "abs")
+        symlink(target, root.joinpath(*parts))
+    symlink(str(root / "real" / "dir"), root / "abs")
 
     def repeat(part: str) -> str:
         count = 1500
@@ -636,7 +704,9 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
              directory + "/link1/file.txt", directory + "/link1/../rel",
              "real" + repeat("/dir/.."), "real/dir" + repeat("/../dir")]
     seen = os_lines("real", items, cwd=root)
-    assert seen == os_peer_lines("real", items, cwd=root)
+    peer = os_peer_lines("real", items, cwd=root)
+    # Python answers with backslashes on Windows; the VM writes the slashes that a program types.
+    assert seen == ([line.replace("\\", "/") for line in peer] if WINDOWS else peer)
     table = dict(zip(items, seen))
     real_root = table["."][3:]
 
@@ -645,10 +715,19 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
 
     assert table["link1"] == ok_at("/real/dir")
     assert table["link1/file.txt"] == ok_at("/real/dir/file.txt")
-    assert table["link1/.."] == ok_at("/real")
-    assert table["abs/../rel"] == ok_at("/real/dir/file.txt")
     assert table["real/dir/up"] == ok_at("")
-    assert table["slash"] == "ok:/"
+    if WINDOWS:
+        # The system removes `..` from the typed text before it follows any link, so `link1/..` is the folder that
+        # holds the link, not the parent of its target, and the root link answers the drive.
+        assert table["link1/.."] == ok_at("")
+        assert table["abs/../rel"] == "error"
+        assert table["link2/../rel"] == "error"
+        assert seen[items.index(directory + "/link1/../rel")] == "error"
+        assert table["slash"] == "ok:" + real_root[:3]
+    else:
+        assert table["link1/.."] == ok_at("/real")
+        assert table["abs/../rel"] == ok_at("/real/dir/file.txt")
+        assert table["slash"] == "ok:/"
     assert table["loop1"] == "error"
     assert table["dangling"] == "error"
     assert table["real/dir/file.txt/x"] == "error"
@@ -657,6 +736,52 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
     if sys.platform == "darwin":
         overlong = ["real" + "/dir/.." * 1500, "real/dir" + "/../dir" * 1500]
         assert os_lines("real", overlong, cwd=root) == ["error", "error"]
+
+
+def test_path_real_resolves_a_deep_folder_longer_than_a_small_buffer_where_the_system_allows_one(new_dir, os_lines,
+                                                                                                os_peer_lines):
+    root = new_dir()
+    if WINDOWS:
+        # Windows fails a path whose absolute form is 260 characters or more (the binary has no long-path manifest).
+        # Python makes the folder with the \\?\ prefix, and the VM, given the plain path, cannot reach it.
+        prefix = "\\\\?\\"
+        first = str(root / ("d" * 100))
+        here = prefix + str(root)
+        try:
+            for _ in range(4):
+                here = here + "\\" + "d" * 100
+                os.mkdir(here)
+            seen = os_lines("real", [here[4:], first])
+            assert seen[0] == "error" and seen[1].startswith("ok:"), seen
+        finally:
+            shutil.rmtree(prefix + first, ignore_errors=True)
+        return
+    deep = root.joinpath(*["d" * 100] * 30)
+    if sys.platform == "darwin":
+        # PATH_MAX is 1024 there, so the folder cannot exist and the answer is the error of a missing path.
+        with pytest.raises(OSError) as refused:
+            os.makedirs(deep)
+        assert refused.value.errno == errno.ENAMETOOLONG
+        assert os_lines("real", [str(deep)]) == ["error"]
+        return
+    os.makedirs(deep)
+    assert len(str(deep)) > 3000
+    seen = os_lines("real", [str(deep), str(deep) + "/..", "d" * 100], cwd=deep.parent)
+    assert seen[:2] == os_peer_lines("real", [str(deep), str(deep) + "/.."])
+    assert seen[0].endswith("/" + "/".join(["d" * 100] * 30)) and seen[2] == seen[0]
+
+
+def test_path_real_of_a_file_with_a_trailing_slash_is_an_error_except_on_macos_and_a_child_name_is_always_one(
+        new_dir, os_lines):
+    file = new_dir() / "file.txt"
+    file.write_text("data")
+    plain, slash, child = os_lines("real", [str(file), str(file) + "/", str(file) + "/x"])
+    assert plain.startswith("ok:") and child == "error"
+    if sys.platform == "darwin":
+        # realpath of macOS accepts the slash after a file and answers the file.
+        assert slash.rstrip("/") == plain
+    else:
+        assert slash == "error"
 
 
 @host_only(WINDOWS, "the Windows environment is UTF-16, so it cannot hold bytes that are not UTF-8")

@@ -1,4 +1,4 @@
-"""The Agentica lexer (compiler/lex.agc) against the frozen output of the original lexer.
+"""The Agentica lexer (compiler/syntax/lex.agc) against the frozen output of the original lexer.
 
 This module compares the Agentica lexer with what the original lexer printed once for the same inputs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages), so the comparison survives
@@ -26,7 +26,7 @@ def nested(depth):
 
 
 class LexerStage(PytestStageCase):
-    ENTRY = "lex.agc"
+    ENTRY = "syntax/lex.agc"
 
     def lex(self, files, directory, *, flags=()):
         """Lex the files {path: text} written into `directory`; gives the output of each by its path."""
@@ -56,9 +56,9 @@ def test_the_lexer_matches_the_goldens_of_the_fixtures(lexer_stage):
 
 
 def test_the_unicode_table_is_the_char_graphic_table_of_the_freeze(lexer_stage):
-    # compiler/unicode_table.agc is hand-edited data (its header has the provenance, Unicode 17.0); the ranges
+    # compiler/syntax/unicode_table.agc is hand-edited data (its header has the provenance, Unicode 17.0); the ranges
     # of the original table are frozen in lexer/graphic-ranges.expected.
-    text = (ROOT / "compiler" / "unicode_table.agc").read_text(encoding="utf-8")
+    text = (ROOT / "compiler" / "syntax" / "unicode_table.agc").read_text(encoding="utf-8")
     body = text.split("export GRAPHIC_RANGES = [", 1)[1].split("]", 1)[0]
     numbers = [int(number) for number in re.findall(r"\d+", body)]
     ranges = ["%d %d" % pair for pair in zip(numbers[::2], numbers[1::2])]
@@ -66,7 +66,7 @@ def test_the_unicode_table_is_the_char_graphic_table_of_the_freeze(lexer_stage):
 
 
 def test_invalid_utf8_is_lex_invalid_utf8_at_the_first_bad_byte(lexer_stage, tmp_path):
-    # The file is read by compiler/source_file.agc before the lexer sees it.
+    # The file is read by compiler/io/source_reader.agc before the lexer sees it.
     outputs = lexer_stage.lex({"invalid.agc": b"# caf\xc3\xa9\ndef \xff\n"}, tmp_path)
     lexer_stage.assert_golden(outputs["invalid.agc"], FROZEN / "lexer" / "invalid-utf8.expected")
     assert re.search(r"^ERROR LEX-INVALID-UTF8 11:2:5-12:2:6 ", outputs["invalid.agc"])

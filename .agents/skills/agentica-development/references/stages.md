@@ -14,21 +14,21 @@ an entry program that prints its text form (`lex.agc`, `parse.agc`, `link.agc`,
   diagnostic (`Outcome[T]` or `Result[T]` with a packed diagnostic), stops at
   the first error, and never prints. A failed internal assumption is a
   `*-INTERNAL` diagnostic, never a crash.
-- The diagnostic forms (`compiler/diagnostic_plain.agc`, `diagnostic_ai.agc`,
-  `diagnostic_json.agc`) render a located header, message, source marks/labels,
-  and grounded help from the same data; `vm/diag.c` prints the same forms for
-  runtime errors.
+- The diagnostic forms (`compiler/diagnostics/diagnostic_plain.agc`,
+  `diagnostic_ai.agc`, `diagnostic_json.agc`) render a located header, message,
+  source marks/labels, and grounded help from the same data; `vm/diag.c` prints
+  the same forms for runtime errors.
 
 ## Source and tokens
 
-`compiler/source.agc` holds `Position` (offset, line, column) and `Span`
-(source, start, end). `compiler/token.agc` holds `Token` (kind string, lexeme,
-`Value`, span); `Value` is the decoded literal (`Text`, `Whole`, `Huge`, `Real`)
-or `NoValue`, or a `DocBlock` for a `DOC` token: `text` is the doc lines with
-the `##` markers and one optional space removed, joined by newlines; `next` says
-what the line after the block is: `blank`, `comment`, `eof` or `code`. The lexer
-works this out because the `NL` tokens of a blank line and of a `#` comment line
-look the same.
+`compiler/syntax/source.agc` holds `Position` (offset, line, column) and `Span`
+(source, start, end). `compiler/syntax/token.agc` holds `Token` (kind string,
+lexeme, `Value`, span); `Value` is the decoded literal (`Text`, `Whole`, `Huge`,
+`Real`) or `NoValue`, or a `DocBlock` for a `DOC` token: `text` is the doc lines
+with the `##` markers and one optional space removed, joined by newlines; `next`
+says what the line after the block is: `blank`, `comment`, `eof` or `code`. The
+lexer works this out because the `NL` tokens of a blank line and of a `#`
+comment line look the same.
 
 ### Token kinds
 
@@ -100,17 +100,18 @@ The parser reads the keyword literals from their kind, not from `value`: `true`,
 
 ## Diagnostics
 
-`compiler/diagnostic.agc` holds `Diagnostic` (code, message, span, optional
-expected, actual, callee, signature, labels and help). The codes by stage:
+`compiler/diagnostics/diagnostic.agc` holds `Diagnostic` (code, message, span,
+optional expected, actual, callee, signature, labels and help). The codes by
+stage:
 
 - **Stage:** lexer
   - **Codes:** `LEX-UNEXPECTED-CHAR`, `LEX-UNCLOSED-DELIMITER`,
     `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`,
     `LEX-INVALID-NUMBER`, `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
     `LEX-HEREDOC-ONE-LINE`, `LEX-INVALID-UTF8` (raised by
-    `compiler/source_file.agc` when a source file is read, not by the lexer: the
-    span is one character at the first byte of the first sequence that does not
-    decode)
+    `compiler/io/source_reader.agc` when a source file is read, not by the
+    lexer: the span is one character at the first byte of the first sequence
+    that does not decode)
 
 - **Stage:** parser
   - **Codes:** `PARSE-PIPE-TARGET`, `PARSE-UNEXPECTED-TOKEN`,
@@ -166,13 +167,14 @@ expected, actual, callee, signature, labels and help). The codes by stage:
 
 - **Stage:** lowering (VM)
   - **Codes:** `LOWER-UNSUPPORTED`, `LOWER-INTERNAL`, `BYTECODE-LIMIT`,
-    `BYTECODE-INTERNAL` (`compiler/lowering.agc`,
-    `compiler/bytecode_writer.agc`; see `docs/vm/03-ir-and-bytecode.md` 3.5)
+    `BYTECODE-INTERNAL` (`compiler/lower/lowering.agc`,
+    `compiler/bytecode/bytecode_writer.agc`; see `docs/vm/03-ir-and-bytecode.md`
+    3.5)
 
 Network and protocol failures otherwise return Results; handler and
 producer diagnostics retain their original code and span.
 
-## Lexer (`compiler/lexer.agc`)
+## Lexer (`compiler/syntax/lexer.agc`)
 
 `lex: String -> Outcome[List[Token]]`. One pass over the source:
 
@@ -183,12 +185,12 @@ producer diagnostics retain their original code and span.
 - A final `NL` is synthesized before `EOF` when the file does not end with one.
 - `#` starts a comment that runs to the end of the line.
 - A line whose first non-blank characters are `##` starts a doc block
-  (`compiler/lexer.agc` looks back over blanks to the line break): the lexer
-  reads the consecutive doc lines into one `DOC` token, with the text after `##`
-  and one optional space (`###` keeps its third `#` in the text). A `##` after
-  code on the line is a plain comment. A bare carriage return after a doc line
-  is still `LEX-UNEXPECTED-CHAR`, found by the main loop. The token is emitted
-  inside brackets too; the parser rejects it there.
+  (`compiler/syntax/lexer.agc` looks back over blanks to the line break): the
+  lexer reads the consecutive doc lines into one `DOC` token, with the text
+  after `##` and one optional space (`###` keeps its third `#` in the text). A
+  `##` after code on the line is a plain comment. A bare carriage return after a
+  doc line is still `LEX-UNEXPECTED-CHAR`, found by the main loop. The token is
+  emitted inside brackets too; the parser rejects it there.
 - A lowercase name may end in `?` or `!` regardless of whitespace before `(`;
   `!` followed by `=` stays an operator, so `a!=b` is still `a != b`. The parser
   rejects suffixes on bindings, parameters, and fields. `try` is a keyword.
@@ -213,7 +215,7 @@ producer diagnostics retain their original code and span.
   `import` path (`PARSE-UNEXPECTED-TOKEN`). Spans inside a body lie after the
   spans of the nodes that hold them.
 
-## Syntax tree (`compiler/ast.agc`)
+## Syntax tree (`compiler/syntax/ast.agc`)
 
 Every node is a struct with `span` as the last field and an `id` that is dense
 across the files of a program. `Program` holds the declarations, `docs` (a map
@@ -257,7 +259,7 @@ expr )` produces no node; `Call`/`Construct` store the name as a string;
 `Unary`/`Binary` store the operator as the token kind (`plus`, `and`, `equal`);
 `Absent` is `Optional.Absent`.
 
-## Parser (`compiler/parse_base.agc`, `compiler/parser.agc`)
+## Parser (`compiler/syntax/parse_base.agc`, `compiler/syntax/parser.agc`)
 
 `parse: List[Token] -> Result[Program]`. Recursive descent over the token list,
 with the context (`Env`), a position and the next free node id passed and
@@ -285,15 +287,16 @@ returned:
   chain hangs below the whole chain, so nested chains can build a tree far
   deeper than 1,000 (measured: 1,990 for two nested chains, about 89,000 for
   100). A pass that recurses on the tree needs its own stack or limit.
-- Nesting limit of the checker (`compiler/check_state.agc`, `nesting_limit`,
-  1000): each expression and each statement counts as one level, so it bounds
-  the depth of the tree; beyond the limit is `CHECK-TOO-DEEP` at the node, with
-  help to split the code. Alias expansion also stops after 1,000 type
-  references, so repeated aliases cannot grow exponentially in the checker. The
-  parser limit does not bound the tree (a nested chain hangs below its first
-  link), and the checker needs up to 5 VM frames per level (builtins with the
-  nested call as first argument; 3 for `if`, calls and method chains; 6 for each
-  nested block), about 5,000 of the 10,000 at the limit.
+- Nesting limit of the checker (`compiler/check/check_state.agc`,
+  `nesting_limit`, 1000): each expression and each statement counts as one
+  level, so it bounds the depth of the tree; beyond the limit is
+  `CHECK-TOO-DEEP` at the node, with help to split the code. Alias expansion
+  also stops after 1,000 type references, so repeated aliases cannot grow
+  exponentially in the checker. The parser limit does not bound the tree (a
+  nested chain hangs below its first link), and the checker needs up to 5 VM
+  frames per level (builtins with the nested call as first argument; 3 for `if`,
+  calls and method chains; 6 for each nested block), about 5,000 of the 10,000
+  at the limit.
 - Top level accepts def/struct/enum/type-alias/import, constants (`NAME =
   value`, `ConstDecl`) and exported forms of
   def/struct/enum/type-alias/constant. `type` is contextual: it starts an alias
@@ -329,7 +332,7 @@ returned:
   check counts a `DOC` as the start of a declaration, so a block right after an
   `end` gives `PARSE-MISSING-BLANK-LINE` at its first line.
 
-## Linker (`compiler/modules.agc`, `resolve*.agc`, `rewrite.agc`, `linker.agc`)
+## Linker (`compiler/modules/`)
 
 `link_file` links imports before `check`: `modules.agc` reads the files (with an
 explicit stack), `resolve.agc` and `rewrite.agc` give every name its linked
@@ -356,7 +359,7 @@ table to the linked name of the export (with the same kind check as
 enum in the table into an enum value, and the `visible` list of `.with` also
 takes the targets of the table.
 
-## Checker (`compiler/checker.agc` and the `check_*.agc` files)
+## Checker (`compiler/check/checker.agc` and the `check_*.agc` files)
 
 `check(linked, settings) -> Checking.Done(Checked) | Failed(Problem)`.
 Registration first (`check_register.agc`), then bodies, stopping at the first
@@ -368,10 +371,10 @@ error:
   payloads.
 - Catalogued builtin function names cannot be redefined. `ok` and `error` are
   additionally reserved on locals, parameters, loop variables, and fields.
-- Types are the `Type` enum of `compiler/types.agc`: the primitives, `List`,
-  `Map`, `Set`, `Result` and `Task` of a type, structs and enums by linked name
-  (an enum carries its type arguments), and type variables during payload
-  registration.
+- Types are the `Type` enum of `compiler/check/types.agc`: the primitives,
+  `List`, `Map`, `Set`, `Result` and `Task` of a type, structs and enums by
+  linked name (an enum carries its type arguments), and type variables during
+  payload registration.
 - A piped builtin call that has a method form for its first parameter's type is
   `CHECK-PIPE-METHOD` at the call span (after the call checks, so type and arity
   errors come first). The kind comes from the builtin entry's first parameter;
@@ -456,7 +459,7 @@ each rule, a VM golden for the results and the errors, a step count in
 - The compiler itself must not call a prelude method until
   `bootstrap/stage0.agcb` is refreshed.
 
-## Lowering (`compiler/lowering.agc` and the `lower_*.agc` files)
+## Lowering (`compiler/lower/lowering.agc` and the `lower_*.agc` files)
 
 `lower(linked, checked, catalog) -> Lowered.Done(Ir.Program) | Failed(Problem)`.
 One IR function per function declaration in declaration order, then (with module
@@ -481,7 +484,7 @@ need (`HttpResponse` needs `Header`); the C side finds them by name
 (`agc_builtin_struct`).
 
 A change to the lowering (a bug fix, a builtin name in `VM_BUILTINS`) changes
-`compiler/lower_tables.agc` or the `lower_*.agc` file and a golden in
+`compiler/lower/lower_tables.agc` or the `lower_*.agc` file and a golden in
 `tests/fixtures/frontend/lower/` in the same PR.
 
 ## Bytecode writer implementation
@@ -494,19 +497,18 @@ the program span; multi-span instructions use consecutive entries). It gives the
 reader. `tests/test_frontend_bytecode.py` compares the writer with the frozen
 bytes of the original writer, and its `OPCODES` with `agc_opcode` in
 `vm/value.h`. The version of the header is the `VERSION` file, an input of the
-writer (`Settings` in `compiler/link_env.agc`), never a constant. The file is
-format version 6 (the prelude flag of each function); since version 5, after
-the Updates section the writer writes the Globals count (`u32`, the number of
-slots of the module constants, 0 for a program without any; 44a2). The opcode
+writer (`Settings` in `compiler/modules/link_env.agc`), never a constant. The
+file is format version 6 (the prelude flag of each function); since version 5,
+after the Updates section the writer writes the Globals count (`u32`, the number
+of slots of the module constants, 0 for a program without any; 44a2). The opcode
 list ends with `global` and `global-set`, which the lowering emits for a
 constant read and for `<start>`, then `try-step` (52), the `try` of a block of a
-Lazy method. The IR holds the interned
-struct updates (struct index and updated field indexes, one `STRUCT_WITH`
-operand each). `BYTECODE-LIMIT` (at most 65535 each) for structs, enum variants,
-fields in one struct, payload items in one variant, module constants, JSON field
-types, struct updates and registers in one function, and for more than 1024
-nested List and Map levels in a JSON field type; an impossible IR is
-`BYTECODE-INTERNAL` at the program span.
+Lazy method. The IR holds the interned struct updates (struct index and updated
+field indexes, one `STRUCT_WITH` operand each). `BYTECODE-LIMIT` (at most 65535
+each) for structs, enum variants, fields in one struct, payload items in one
+variant, module constants, JSON field types, struct updates and registers in one
+function, and for more than 1024 nested List and Map levels in a JSON field
+type; an impossible IR is `BYTECODE-INTERNAL` at the program span.
 
 ## Builtin catalog implementation
 
@@ -522,7 +524,7 @@ may stand as statements. `Test.eq` uses the rule `TestEq`: both arguments have
 one type that is a data type (the types with `to_s`, which are the §25.4
 equality set plus `Json`); `TestCase` is an opaque type and `Test` is a reserved
 name. Every entry's implementation key must be in `VM_BUILTINS` of
-`compiler/lower_tables.agc` (`tests/test_frontend_catalog.py` checks the
+`compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks the
 catalog) and run in a golden fixture; do not add test-only exports.
 
 A builtin can have several signatures (alternatives by arity): the checker and
@@ -533,13 +535,14 @@ List.repeat count errors are RUNTIME-INVALID-COUNT at the argument span, with a
 1048576-element cap. List.set reuses RUNTIME-INDEX-OUT-OF-RANGE. Map.delete
 removes both hash storage and insertion-order keys.
 
-## Command line (`compiler/cli.agc` and `cli_*.agc`)
+## Command line (`compiler/app/cli.agc` and `cli_*.agc`)
 
 `run(settings, words, hand_off) -> exit status`; the program is `dist/agentica`.
-`test` runs the BDD driver `compiler/bdd_driver.agc` (`references/bdd.md`). It
-reads the file (a missing file prints one plain line and exits 2), then links,
-checks and lowers it, and hands the bytecode to the VM. A diagnostic is printed
-in the plain form (header, message, source line, caret run) on stderr with exit
+`test` runs the BDD driver `compiler/bdd/bdd_driver.agc` (`references/bdd.md`).
+It reads the file (a missing file prints one plain line and exits 2), then
+links, checks and lowers it, and hands the bytecode to the VM. A diagnostic is
+printed in the plain form (header, message, source line, caret run) on stderr
+with exit
 1. `--dump` pretty-prints the checked tree instead of running it; `--dump-ir`
 prints the lowered program. `compile FILE -o OUT` (first argument only, exactly
 that shape, else usage exit 2) checks, lowers and writes bytecode, and it cannot

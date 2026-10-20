@@ -1,7 +1,7 @@
 # Lowering and bytecode: new forms, opcodes and linked programs
 
-Read before changing `compiler/lower_*.agc`, `compiler/bytecode_*.agc` or adding
-an opcode.
+Read before changing `compiler/lower/*.agc`, `compiler/bytecode/*.agc` or
+adding an opcode.
 
 Read first: `references/vm.md` and `references/vm-c.md`.
 
@@ -11,8 +11,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
    (lowering). When a detail is not written down, decide it, write it into §2
    and pin it with a golden.
-2. `compiler/lower_*.agc`: lower the form. Emit one IR `step` per former AST
-   entry, before the node's children (§3.3). Anything still out of
+2. `compiler/lower/lower_*.agc`: lower the form. Emit one IR `step` per former
+   AST entry, before the node's children (§3.3). Anything still out of
    the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
    miscompile. `vm-type?` says which checked types the VM accepts (the
    scalars, `(Struct name)` and `(Enum name ...)` declared in the program,
@@ -20,12 +20,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 or Void, and
    `Fn` over accepted types with an accepted or Void result); a new
    value type widens it.
-3. New opcode: append it to `OPCODES` in `compiler/bytecode_tables.agc` and to
-   `agc_opcode` in `vm/value.h` at the same position (a test compares them).
-   No opcodes for later PRs. 44a1 relaxed this once, for `GLOBAL` and
+3. New opcode: append it to `OPCODES` in `compiler/bytecode/bytecode_tables.agc`
+   and to `agc_opcode` in `vm/value.h` at the same position (a test compares
+   them). No opcodes for later PRs. 44a1 relaxed this once, for `GLOBAL` and
    `GLOBAL_SET`, which the lowering of 44a2 emits: the loader and interpreter
-   part needed its own `vm-c-critic` review. A PR that does the same says so
-   and names the PR that uses the opcodes.
+   part needed its own `vm-c-critic` review. A PR that does the same says so and
+   names the PR that uses the opcodes.
 4. `vm/loader.c`: validate every operand (register ranges and windows,
    indexes, jump targets, spans). A new file section checks its counts
    against the bytes left and allocates through `load_alloc`, which charges
@@ -44,17 +44,16 @@ or Void, and
 ## Linked programs
 
 Imports never reach the VM. The front end of the binary
-(`compiler/front_end.agc`) links the imports (`compiler/linker.agc`) before
-`check`, so `lower` sees one program whose
-imported declarations carry `@N::` prefixes (display names drop them,
-the bytecode writer uses the display name). The span table names its source
-per span: `lower` collects every `source` a span points to (`note-source!`,
-entry file first), and `vm/diag.c` prints `p->sources[span->source]`, so a
-diagnostic in imported code shows that file (full
-path, or `std/queue.agc` for an embedded module). Block function names use
+(`compiler/front_end.agc`) links the imports (`compiler/modules/linker.agc`)
+before `check`, so `lower` sees one program whose imported declarations carry
+`@N::` prefixes (display names drop them, the bytecode writer uses the display
+name). The span table names its source per span: `lower` collects every `source`
+a span points to (`note-source!`, entry file first), and `vm/diag.c` prints
+`p->sources[span->source]`, so a diagnostic in imported code shows that file
+(full path, or `std/queue.agc` for an embedded module). Block function names use
 only the file's base name, so two imported files may give equal
-`block@m.agc:2:17` names (the `same-basename` fixture); nothing looks
-functions up by name.
+`block@m.agc:2:17` names (the `same-basename` fixture); nothing looks functions
+up by name.
 
 ## Gotchas
 
@@ -70,7 +69,7 @@ functions up by name.
   line code of the entry (`<start>`), which ends with a tail call of `main`,
   and must never call `<start>` or take `&<start>`.
 - How the lowering handles constants (44a2-2). The linked program is flat, so
-  `compiler/lower_const.agc` decides from the call graph: the
+  `compiler/lower/lower_const.agc` decides from the call graph: the
   functions reachable from `main` (calls, `&f`, blocks) keep the constants they
   read, and the constants those read; only kept constants are initialized. A
   scalar literal constant (one literal, or `-` and a number) is a `CONST` at

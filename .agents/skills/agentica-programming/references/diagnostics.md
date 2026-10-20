@@ -339,7 +339,7 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
 - **Code:** `RUNTIME-INVALID-NUMBER`
   - **Meaning:** `String.to_int!` / `String.to_float!` on bad text,
     `Float.to_int!` on NaN or infinity, `Float.from_bits32` outside
-    0..4294967295
+    0..4294967295, a `Crypto.sha256` item outside 0..255
 
 - **Code:** `RUNTIME-INVALID-RANGE`
   - **Meaning:** `Random.int` with `min > max`

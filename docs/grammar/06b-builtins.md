@@ -241,7 +241,17 @@ Expected types flow into these operations for empty collections and Results.
   integers 0 to 255 with no decoding. Counts are 0 to 1048576; zero gives
   `ok([])` without consuming input. `String.from_bytes` decodes strictly as
   UTF-8: invalid, overlong, surrogate and incomplete sequences are errors, never
-  replacement characters.
+  replacement characters. `String.to_bytes(s)` is its inverse: the UTF-8 bytes
+  of `s` as a `List[Int]` of 0 to 255 (`[]` for `""`); it cannot fail, so
+  `String.from_bytes(String.to_bytes(s))` is `ok(s)`.
+- `Crypto.sha256(data)` gives the SHA-256 digest of the bytes in `data` as a
+  `List[Int]` of 32 integers 0 to 255 (`Crypto.sha256([])` starts `[227, 176,
+  196, ...]`, hex `e3b0c442...`). An item outside 0 to 255 is
+  `RUNTIME-INVALID-NUMBER` at the argument. It is built on OpenSSL, takes time
+  in proportion to the list and has no effect label. `Crypto` is a reserved
+  type name. It is the first part of the `Crypto` module of
+  `docs/future/20-crypto.md` §20; until `Bytes` exists, bytes are a
+  `List[Int]`.
 - `IO.eof?()` peeks without consuming and can block until data or EOF arrives.
   Reads have no timeout, and the step budget cannot interrupt blocking I/O.
 - `IO.flush()` flushes stdout only. On Linux, macOS and Windows, a print copies

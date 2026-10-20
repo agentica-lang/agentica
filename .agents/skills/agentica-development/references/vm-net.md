@@ -152,7 +152,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`agc_tls_config`, `agc_tls`, status OK, WANT_READ, WANT_WRITE, CLOSED or
     ERROR, `agc_tls_error`, `agc_tls_failure` with code, `errno` and a short
     detail); `vm/tls_openssl.c`, `vm/tls_trust.c` and `vm/tls_trust_posix.c` are
-    the only files that include OpenSSL: init with `OPENSSL_INIT_NO_LOAD_CONFIG
+    the TLS files that include OpenSSL (the other is the digest adapter
+    `vm/digest_openssl.c`, for `Crypto.sha256`): init with `OPENSSL_INIT_NO_LOAD_CONFIG
     \| OPENSSL_INIT_NO_ATEXIT`, TLS 1.2 and security level 2, trust
     (`SSL_CERT_FILE` or the platform store of `agc_tls_trust_system`,
     `SSL_CERT_DIR` or none; a non-empty `ca_file` replaces them), SNI and

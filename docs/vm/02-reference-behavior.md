@@ -116,6 +116,13 @@ is not repeated here; read the file.
   forms return the same text as an `error(...)` value.
 - `String.from_bytes` checks that every item is 0 to 255, then decodes strictly:
   no surrogates, no overlong forms, no code points above U+10FFFF.
+- `String.to_bytes` returns the stored UTF-8 bytes as a `List[Int]`; the empty
+  String gives the shared empty List. It costs by size, like `from_bytes`.
+- `Crypto.sha256` checks that every item is 0 to 255, else
+  `RUNTIME-INVALID-NUMBER` at the argument, then hashes the bytes with OpenSSL
+  (`vm/digest_openssl.c`, behind `digest.h`) and returns the 32 digest bytes.
+  It charges one turn-cost unit per item (§10.2.1) and runs without the shared
+  lock, since it reads only its argument.
 
 ### 2.4 Printing values
 
@@ -331,7 +338,14 @@ Every failure is an error value. The checks run in this order:
   `filesystem: cannot resolve path` with the path and the OS error text. An
   empty path or one with NUL gives the contract error of `File.stat`. A
   relative path starts at the VM's working directory. The result is decoded
-  per byte like `Dir.list` names.
+  per byte like `Dir.list` names. The system's own rules show through: macOS
+  fails a path whose absolute form is 1024 bytes or more and accepts a `/` after
+  a file; on Windows the system drops `.` and `..` from the typed text before
+  it follows a link (so `link/..` is the folder of the link and `missing/..` is
+  not an error), a name under a file gives ENOENT, the result has the drive of
+  the working directory for `/`, and a path whose absolute form is 260
+  characters or more fails (the binary has no long-path manifest, so
+  `Dir.mkdir` of one fails too).
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2).

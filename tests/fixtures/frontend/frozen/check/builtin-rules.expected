@@ -3,6 +3,7 @@ Channel.closed? ChannelTarget
 Channel.new ChannelNew
 Channel.recv ChannelRecv
 Channel.send ChannelSend
+Crypto.sha256 Plain
 Dir.list Plain
 Dir.mkdir Plain
 Dir.mkdir_private Plain
@@ -189,6 +190,7 @@ String.reverse Plain
 String.slice Plain
 String.split Plain
 String.starts_with? Plain
+String.to_bytes Plain
 String.to_float Plain
 String.to_float! Plain
 String.to_int Plain

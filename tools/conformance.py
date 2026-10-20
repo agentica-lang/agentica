@@ -45,18 +45,15 @@ PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-arm64")
 # lack, so a reader of the report can judge it: "host-only: Windows has no /proc".
 HOST_ONLY = "host-only:"
 
-# A skip for a product bug with an open issue: "known-issue: #431 a stdin read can hold a pool thread on Windows".
+# A skip for a product bug with an open issue: "known-issue: #433 no test for blocking stream files".
 KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
 KNOWN_ISSUES = {
-    431: "Windows: a stdin read can hold a pool thread",
     432: "Windows: no independent peer for the child channel protocol (two pipes at descriptors 3 and 4)",
     433: "Windows: no test for blocking stream files (named pipes instead of FIFOs)",
     434: "Windows: process cleanup and handoff cases are tested with /bin/sh or POSIX signals only",
-    435: "Windows: descriptor leak checks count /proc/self/fd",
-    436: "macOS and Windows: golden fixtures for paths, errno text and processes only run on Linux",
     437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",
     440: "Windows: standard output that is a socket has no test",
 }
@@ -67,7 +64,7 @@ TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier o
 # The modules whose every case needs something that only Windows has.
 WINDOWS_ONLY_MODULES = frozenset({
     "tests/test_process_windows.py", "tests/test_windows_console_stop.py", "tests/test_windows_filesystem_safety.py",
-    "tests/test_windows_metadata_and_locks.py",
+    "tests/test_windows_handle_counts.py", "tests/test_windows_metadata_and_locks.py",
 })
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
@@ -76,8 +73,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_filesystem.py",
-    "tests/test_source_paths.py", "tests/test_spec_packages.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py",
-    "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py",
+    "tests/test_source_paths.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py",
+    "tests/test_vm_file_lines.py", "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py",
 })
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_vm_stdout.py"})
 HOST_ONLY_ALLOWED = {
@@ -108,8 +105,8 @@ AREAS = {
         [
             "tests/test_spec_alias.py", "tests/test_spec_bytecode.py", "tests/test_spec_checker_defaults.py",
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
-            "tests/test_spec_lexer.py", "tests/test_spec_modules.py", "tests/test_spec_packages.py",
-            "tests/test_spec_parser.py", "tests/test_spec_patterns.py",
+            "tests/test_spec_lexer.py", "tests/test_spec_modules.py", "tests/test_spec_parser.py",
+            "tests/test_spec_patterns.py",
         ],
     ),
     "golden": (
@@ -121,17 +118,19 @@ AREAS = {
         ],
     ),
     "library": (
-        "std/ modules and standard streams: binary, toml, prelude, logger, clock, stdout and stderr",
+        "std/ modules and standard streams: binary, toml, prelude, logger, clock, crypto, stdout and stderr",
         [
             "tests/test_std_binary.py", "tests/test_std_toml.py", "tests/test_stdlib_prelude.py",
             "tests/test_vm_logger.py", "tests/test_vm_monotonic.py", "tests/test_vm_stdout.py",
+            "tests/test_vm_crypto.py",
         ],
     ),
     "files": (
         "files, directories, paths, metadata and locks",
         [
             "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_vm_os.py",
-            "tests/test_vm_file_lines.py", "tests/test_vm_lazy_io.py", "tests/test_windows_metadata_and_locks.py",
+            "tests/test_vm_file_lines.py", "tests/test_vm_lazy_io.py", "tests/test_windows_handle_counts.py",
+            "tests/test_windows_metadata_and_locks.py",
         ],
     ),
     "processes": (
@@ -180,9 +179,11 @@ EXCLUDED = {
     "tests/test_frontend_modules.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_parser.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_refreeze.py": "tools/refreeze.py, a developer tool",
+    "tests/test_frontend_workspace.py": "the linker over an in-memory Workspace, the same on every system",
     "tests/test_stdlib_docs.py": "a check of the sources (docs on every export), the same on every system",
     "tests/test_stdlib_modules.py": "a check of stdlib/MODULES, the same on every system",
     "tests/test_style_line_width.py": "a check of the sources (line width), the same on every system",
+    "tests/test_style_core_purity.py": "a check of the sources (the stage folders never call the machine), the same on every system",
     "tests/test_vm_style.py": "a check of the C sources (style), the same on every system",
     "tests/test_timeout_guard.py": "the time limit of the test harness itself",
     "tests/test_vm_trace.py": "VM tracing, a developer tool of the Linux debug builds",

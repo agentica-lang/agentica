@@ -1,4 +1,4 @@
-"""The Agentica bytecode writer (compiler/bytecode.agc) against the frozen output of the original writer.
+"""The Agentica bytecode writer (compiler/bytecode/bytecode.agc) against the frozen output of the original writer.
 
 This module compares the Agentica writer with what the original writer made once for the same programs (frozen in
 tests/fixtures/frontend/frozen/; tools/refreeze.py rewrites them from the Agentica stages): the .agcb bytes of
@@ -19,7 +19,7 @@ from tests.frontend_support import (
     direct_files, stdlib_compiler_sources, write_files)
 
 LIMITS_FIXTURE = FIXTURES / "frontend" / "limits" / "limits.agc"
-TABLES = ROOT / "compiler" / "bytecode_tables.agc"
+TABLES = ROOT / "compiler" / "bytecode" / "bytecode_tables.agc"
 
 # The format version of the .agcb file and its header: the magic and the version as a 32-bit little-endian number.
 FORMAT_VERSION = 6
@@ -64,7 +64,7 @@ def fast_paths():
 
 
 class BytecodeStage(PytestStageCase):
-    ENTRY = "bytecode.agc"
+    ENTRY = "bytecode/bytecode.agc"
     STDLIB = True
 
     def __init__(self, *args, **kwargs):

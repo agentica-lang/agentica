@@ -1,10 +1,11 @@
-import Writer from "../../../../compiler/bytecode_writer"
-import Ir from "../../../../compiler/ir"
-import Source from "../../../../compiler/source"
-import Types from "../../../../compiler/types"
+import Host from "../../../../compiler/io/host"
+import Writer from "../../../../compiler/bytecode/bytecode_writer"
+import Ir from "../../../../compiler/lower/ir"
+import Source from "../../../../compiler/syntax/source"
+import Types from "../../../../compiler/check/types"
 
 # Writes lowered programs that no source file lowers to, to reach the limits of the format and the BYTECODE-INTERNAL
-# paths of compiler/bytecode_writer.agc. tests/frontend-bytecode-test.rkt builds the same programs for the Racket
+# paths of compiler/bytecode/bytecode_writer.agc. tests/frontend-bytecode-test.rkt builds the same programs for the Racket
 # writer and compares what each prints, one line for each name in SCENARIOS.
 #
 # Every program has two files, so that a limit can name the span of a function in the second file (the writer reports
@@ -40,7 +41,7 @@ end
 # What writing a program gives, in one line: the size and a checksum of the bytes, or the code and place of the
 # problem (and the message of a BYTECODE-LIMIT, which is fixed).
 def describe(program: Ir.Program, version: String) -> String
-  case Writer.write(program, version)
+  case Writer.write(Host.workspace(), "", program, version)
     Writer.Written.Done(bytes) ->
       body = bytes.drop(header_size(bytes))
       return "ok #{body.size} #{checksum(body)}"
@@ -98,7 +99,7 @@ def program(
   structs: List[Ir.StructDef], enums: List[Ir.EnumDef], functions: List[Ir.Function], globals: Int
 ) -> Ir.Program
   return Ir.Program(
-    sources: [Ir.SourceFile(file: "a.agc", name: "a.agc", text: "one\n"), Ir.SourceFile(file: "b.agc", name: "b.agc", text: "é\n")],
+    sources: [Ir.SourceFile(file: "a.agc", text: "one\n"), Ir.SourceFile(file: "b.agc", text: "é\n")],
     structs: structs,
     enums: enums,
     functions: functions,

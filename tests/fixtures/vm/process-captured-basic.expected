@@ -1,9 +1,8 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 130,
+  "steps": 115,
   "stdout": [
-    "ok(ProcessOutput(stdout: \"/\\n\", stderr: \"\", truncated: false))",
     "true",
     "error(\"process: executable is unavailable\")",
     "error(\"process: directory is unavailable\")",

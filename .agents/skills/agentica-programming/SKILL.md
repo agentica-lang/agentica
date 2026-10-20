@@ -187,8 +187,9 @@ values, functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
 
 Not in Agentica, and what to write instead: `Map.new` (`{}` with a type),
 `IO.read_all` (`IO.read()`), `s.chars` (`s.split("")`), `s.ord`
-(`String.code(s)`), `s.len` (`s.length`), `s.empty?` (`s.length == 0`),
-`r.is_err?` or `r.error?` (`!r.ok?`), `=~` and `matches?` (no regex builtin).
+(`String.code(s)`), `s.bytes` (`s.to_bytes`), `s.len` (`s.length`), `s.empty?`
+(`s.length == 0`), `r.is_err?` or `r.error?` (`!r.ok?`), `=~` and `matches?`
+(no regex builtin).
 
 ## When to read a reference
 
@@ -198,7 +199,7 @@ Read only what the task needs:
   pattern, block, method or Result, or a core rule not stated here.
 - `references/builtins.md`: a builtin not in the cheat sheet, or an exact
   signature (String, List, Map, Set, Range, Int, Float, IO, System, Time,
-  Random).
+  Random, `Crypto.sha256`).
 - `references/lazy.md`: `Lazy[T]`, an endless source, the lines of a file or
   the values of a channel through steps, writing lines to a file, `try` in a
   step, or the first few results of a long chain of steps.

@@ -118,6 +118,7 @@ static void test_builtin_classes(void) {
   table_marked(agc_http_server_builtins, agc_http_server_builtin_count, true);
   table_marked(agc_string_builtins, agc_string_builtin_count, false);
   table_marked(agc_number_builtins, agc_number_builtin_count, false);
+  table_marked(agc_crypto_builtins, agc_crypto_builtin_count, false);
   table_marked(agc_json_builtins, agc_json_builtin_count, false);
   table_marked(agc_lazy_builtins, agc_lazy_builtin_count, false);
   table_marked(agc_profile_builtins, agc_profile_builtin_count, false);
