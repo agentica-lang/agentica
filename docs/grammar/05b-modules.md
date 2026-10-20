@@ -132,10 +132,10 @@ Diagnostics inside an embedded module name its source, such as `std/queue.agc`.
 A package is a git repository of `.agc` files. A project uses packages when an
 `agentica.toml` (the manifest) is in the folder of the root file or in a folder
 above it; the nearest one counts, and its folder is the project folder. Without
-a manifest nothing changes. Phase 45a reads the manifest and the lock and loads
-packages from a cache that the user filled; fetching (`agentica install`, `add`,
-`update`) is a later phase, so a build never runs git and never uses the
-network. The design is `docs/future/45-packages.md`.
+a manifest nothing changes. A build reads the manifest and the lock and loads
+packages from a cache that the user fills. A build never runs git and never uses
+the network. Fetching and the commands that fill the cache are planned in
+`docs/future/45-packages.md`.
 
 ```toml
 name = "notes"
@@ -173,7 +173,7 @@ import Sqlite from "pkg/sqlite/db"
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
   importing file declares is a package, and it comes first: it shadows a library
   of the same name in `agc_libs/` and the other `pkg/` roots. A name that is not
-  declared is today's `pkg/` library search, unchanged. Since the prefix is
+  declared is the `pkg/` library search above, unchanged. Since the prefix is
   `pkg/`, a package import never clashes with a local file or folder.
 - Which manifest decides: the manifest of the project for the files of the
   project (and of the `pkg/` libraries it loads), the manifest of the package
@@ -190,8 +190,8 @@ import Sqlite from "pkg/sqlite/db"
   `name`, `git`, `tag` or `ref` (as in the manifest), `commit` (40 or 64
   lowercase hex digits; it starts with the `ref`) and `hash` (`sha256:` and 64
   lowercase hex digits). A bad lock is `PKG-LOCK-INVALID`. Every dependency of
-  the manifest must be in the lock with the same `git` (a `.git` at the end does
-  not count) and the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`; the
+  the manifest must be in the lock with the same `git` (with or without a `.git`
+  at the end) and the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`; the
   same check runs on the manifest of every locked package that is in the cache.
   One name with two different sources anywhere in the tree (the project and a
   package, or two packages) is `PKG-SOURCE-CONFLICT`; there are no versions to
@@ -210,11 +210,10 @@ import Sqlite from "pkg/sqlite/db"
   file. A failure about the file as a whole (a lock that is missing, a file that
   cannot be read) has no key: the plain and `--ai` forms show the file name
   alone, and `--json` has no `key_path` and a `range` at line 0, column 0.
-  `AGENTS.md` lists the `PKG-` prefix with `LEX-`, `PARSE-`, `CHECK-`,
-  `RUNTIME-`, `LOWER-` and `BYTECODE-`.
 - The cache holds one folder for each commit:
   `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, from the `git`
-  URL of the lock. `XDG_CACHE_HOME` counts when it is absolute, else `~/.cache`
+  URL of the lock. Two names for one repository are two packages, each with its
+  own lock entry. `XDG_CACHE_HOME` counts when it is absolute, else `~/.cache`
   is used (no cache when `HOME` is unset too). On Windows the folder is
   `%LOCALAPPDATA%/agentica/cache/pkg/` (no cache when it is unset or relative;
   `XDG_CACHE_HOME` and `HOME` are not read). A declared package that is not in
@@ -236,8 +235,6 @@ import Sqlite from "pkg/sqlite/db"
   package pinned by a `ref` it is `pkg/<name>@<first 12 digits of the
   commit>/...`. So the bytes do not depend on the cache folder. Diagnostics
   inside a package name the real file in the cache.
-- `agc_libs/` for `pkg/` imports is searched beside `agentica.toml` when the
-  project has a manifest, else beside the root file.
 
 #### String queue (`std/queue`)
 

@@ -123,10 +123,9 @@ dependencies.
 
 ## Packages (`agentica.toml`)
 
-A package is a git repository of `.agc` files. A project with an
-`agentica.toml` in the folder of the root file (or above it) can import the
-packages it declares. This version only reads the cache: nothing downloads, so
-the cache has to be filled already (`agentica install` comes later).
+A project with an `agentica.toml` in the folder of the root file (or above it)
+can import the packages it declares. Nothing downloads: the cache is filled by
+hand, and a missing package is `CHECK-IMPORT-PACKAGE`.
 
 ```toml
 name = "notes"
@@ -138,43 +137,24 @@ json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
 
 ```ruby
 import Sqlite from "pkg/sqlite/db"
-import Json from "pkg/json5/util/json"
 ```
 
-- A dependency is a local name (a lowercase letter, then lowercase letters,
-  digits, `_` and `-`) and a table with `git` (`https://host/owner/repo`, an
-  optional `.git` at the end; the owner and the repository do not end in `.` and
-  are not Windows device names such as `con`) and exactly one of `tag` (1 to 128
-  letters, digits and `. _ + -`; no `/`, not starting with `.` or `-`) or `ref`
-  (a commit, 7 to 64 lowercase hex digits). Only `git` sources exist: a `path`,
-  a branch or a version range is `PKG-MANIFEST-INVALID`.
-- The import is `pkg/<name>/<module path>` without `.agc`. A declared name is a
-  package and shadows a library of the same name in `agc_libs/` and the other
-  `pkg/` roots; an undeclared name is the `pkg/` search above, unchanged.
-- A file of the project imports the names of the project's manifest. A file of
-  a package imports only the names of its own `agentica.toml` (never out of the
-  package by `../`, never a hidden folder or `agc_libs/`); another `pkg/` name
-  there is `CHECK-IMPORT-PACKAGE`. Its own modules are relative paths.
-- `agentica.lock` (TOML, beside the manifest) has one `[[package]]` for each
-  name of the whole project, direct or not: `name`, `git`, `tag` or `ref`,
-  `commit`, `hash`. A manifest with dependencies and no lock is
-  `PKG-LOCK-MISSING`; a dependency the lock lacks or holds with another source
-  is `PKG-LOCK-STALE`; one name with two sources between the project and its
-  packages is `PKG-SOURCE-CONFLICT`, found in the manifests of all locked
-  packages that are in the cache, imported or not; a bad file is
-  `PKG-MANIFEST-INVALID` or `PKG-LOCK-INVALID`, at a file and key path (a file
-  that is missing or unreadable has no key path and no position). A manifest of
-  a package that is a link or not a regular file is `PKG-SYMLINK`. A build never
-  writes the lock.
-- The cache is `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`
-  (`~/.cache` when `XDG_CACHE_HOME` is not absolute; on Windows
-  `%LOCALAPPDATA%/agentica/cache/pkg/`). A package that is not there is
-  `CHECK-IMPORT-PACKAGE`. When a build first imports a package it hashes its
-  `.agc` files and compares them with the lock: a changed, added or missing
-  file is `PKG-HASH-MISMATCH`.
-- A package file is stored as `pkg/<name>@<tag>/path.agc` (the first 12 digits
-  of the commit for a `ref`), so stack traces do not show the cache folder.
-- `agc_libs/` for `pkg/` is beside `agentica.toml` when there is one.
+- A dependency is a local name (lowercase letters, digits, `_`, `-`) and a table
+  with `git` (`https://host/owner/repo`) and exactly one of `tag` or `ref` (a
+  commit). Only git sources exist; a `path`, a branch or a version range is
+  `PKG-MANIFEST-INVALID`.
+- `pkg/<name>/<module path>` is a declared name, and it comes before the `pkg/`
+  library folders. An undeclared name is the search above.
+- A file of a package imports only the names of its own `agentica.toml`, and
+  its own modules by relative paths inside the package.
+- `agentica.lock` (beside the manifest) lists every package of the project, with
+  its commit and hash. A missing or stale lock is `PKG-LOCK-MISSING` or
+  `PKG-LOCK-STALE`; one name with two sources is `PKG-SOURCE-CONFLICT`; a
+  changed file is `PKG-HASH-MISMATCH`. Bad `agentica.toml` or `agentica.lock`
+  errors are `PKG-MANIFEST-INVALID` or `PKG-LOCK-INVALID`, and they name a file
+  and a key path.
+- The cache is `~/.cache/agentica/pkg/<host>/<owner>/<repo>/<commit>/` (on
+  Windows `%LOCALAPPDATA%\agentica\cache\pkg\`).
 
 ## String queue (`std/queue`)
 
@@ -195,10 +175,8 @@ Push adds at the back; pop removes the oldest value. Pop and peek on an empty
 queue return an error Result. Inputs are never changed: assign the returned
 queue (or `Popped.remaining`). Empty strings and duplicates are valid.
 `QueueState` is a normal exported struct, not an opaque handle. There are no
-user generics and no blocking cross-task queue operations. The implementation
-uses Lists: push, peek, size, empty? and new take near constant time, but pop is
-O(n) because it drops the first item of the list; no constant-time FIFO is
-promised.
+user generics and no blocking cross-task queue operations. `push`, `pop`,
+`peek`, `size` and `empty?` are O(n); no constant-time FIFO is promised.
 
 ## Other standard modules
 

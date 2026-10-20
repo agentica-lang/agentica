@@ -212,7 +212,7 @@ Paths that start with `pkg/` load installed libraries. `import Tools from "pkg/a
 
 ## Packages
 
-A package is a git repository of `.agc` files. A project that has an `agentica.toml` next to its main file (or in a folder above it) can import the packages the file declares. The manifest gives each package a local name, the git URL it comes from and one pin, a `tag` or a `ref` (a commit):
+A package is a git repository of `.agc` files. A project with an `agentica.toml` next to its main file, or in a folder above it, can import the packages the manifest declares. Each dependency has a local name and one pin, a `tag` or a `ref` (a commit):
 
 ```toml
 name = "notes"
@@ -222,17 +222,12 @@ sqlite = { git = "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }
 json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
 ```
 
-The local name is yours; it does not have to match the URL, so moving a repository changes only its `git` line. The URL is `https://host/owner/repo`, and only git sources exist. The import is `pkg/`, the name, and a path inside the repository, without `.agc`:
+Import a package by its local name, then a path inside the repository, without `.agc`:
 
 ```text
 import Sqlite from "pkg/sqlite/db"
-import Json from "pkg/json5/util/json"
 ```
 
-A name that the manifest declares is a package, and it comes before the library folders of `pkg/`. A name that is not declared is searched in those folders, as before. A package imports its own files by relative paths that stay inside the package, and only the packages its own `agentica.toml` declares.
+The local name does not have to match the URL, so moving a repository changes only its `git` line.
 
-The exact commits come from `agentica.lock`, which lists every package of the project, direct or not, with its git URL, tag or ref, commit and the hash of its `.agc` files. A manifest that declares a package needs a lock that agrees with it (`PKG-LOCK-MISSING`, `PKG-LOCK-STALE`), and one name cannot stand for two different sources in one project (`PKG-SOURCE-CONFLICT`); the manifests of all the locked packages that are in the cache are checked before any file is loaded, whether or not an import reaches them. Errors in `agentica.toml` and `agentica.lock` are `PKG-MANIFEST-INVALID` and `PKG-LOCK-INVALID`, and they name the file and the key (for example `dependencies.sqlite.git`) instead of a source line.
-
-The files come from a cache folder, `~/.cache/agentica/pkg/` (`$XDG_CACHE_HOME/agentica/pkg/`, or `%LOCALAPPDATA%\agentica\cache\pkg\` on Windows), with one folder for each commit under `host/owner/repo/`. This version does not download anything: the cache has to be filled already, and a package that is not there is `CHECK-IMPORT-PACKAGE`. The first time a build loads a package, it hashes the `.agc` files and compares the hash with the lock, so a changed file is `PKG-HASH-MISMATCH`.
-
-Import cycles are errors (`CHECK-IMPORT-CYCLE`), and so are missing files (`CHECK-IMPORT-IO`).
+`agentica.lock` holds the exact commit and a hash of each package's `.agc` files. A build checks both, and it never downloads anything. The packages come from a cache folder, `~/.cache/agentica/pkg/`, which you fill yourself. A package that is not in the cache is `CHECK-IMPORT-PACKAGE`. The commands that fill the cache are planned.

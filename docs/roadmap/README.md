@@ -652,9 +652,9 @@ Designed: packages (§45,
 [`docs/future/45-packages.md`](../future/45-packages.md)). It has no row in this
 table. Its first step, the TOML parser `std/toml` (45-0), is a std module and
 landed before the bootstrap (done). It sits on the path to the JIT, before the
-FFI (step 7 above). The owner answered §45.14 on 2026-10-20. 45a (named git
-dependencies: manifest, lock and `pkg/<name>/` imports from the cache) is done;
-45b (fetch and install) is next.
+FFI (step 7 above). The owner answered §45.14 on 2026-10-20. Done: manifest,
+lock and `pkg/<name>/` imports from the cache (45a). Next: fetch and install
+(45b).
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep

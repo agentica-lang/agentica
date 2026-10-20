@@ -41,15 +41,10 @@ bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
   new environment variable gets a `--name=V` flag in `link.agc`, `check.agc`,
   `lower.agc` and `bytecode.agc`, and a value in the hermetic environment of
   the tests), `link_failure.agc`.
-- Packages (`packages/`, §45): `project.agc` finds `agentica.toml` and checks
-  the lock against it once; `manifest.agc`, `lock.agc` and `toml_read.agc`
-  read and validate the two files (`PKG-*-INVALID` at a key path, not a span);
-  `git_source.agc` holds the rules of a name, a git URL, a tag and a ref;
-  `package_import.agc` decides which `pkg/<name>/` imports are packages, reads
-  the package's own manifest and verifies the hash once per package;
-  `package_hash.agc` hashes the `.agc` files with `Crypto.sha256`;
-  `package_cache.agc` places the cache. They read the disk only through the
-  `Workspace` and the environment only through `Env`.
+- Packages (`packages/`, §45): the manifest, the lock, the git source rules, the
+  cache and the package import, all pure. The rules are in
+  `docs/grammar/05b-modules.md`; the file list is in `repo-map.md`. They read
+  the disk only through the `Workspace` and the environment only through `Env`.
 - Catalog (`catalog/`, `types.agc` in `check/`): `types.agc`,
   `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`, the `Rule` enum),
   `builtins.agc` (lookups), `builtins_data.agc` (hand-edited rows, records,

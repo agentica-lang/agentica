@@ -143,21 +143,14 @@ stage:
     `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
     `CHECK-UNREACHABLE-CASE-ARM`, `CHECK-LOOP-CONTROL`, `CHECK-TOO-DEEP`
 
-- **Stage:** packages (`packages/`: `manifest.agc`, `lock.agc`, `project.agc`,
-  `package_import.agc`)
+- **Stage:** packages (`packages/`, `package_import.agc`)
   - **Codes:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
-    `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`,
-    `PKG-SYMLINK` (45a). The manifest, lock, stale and conflict ones are at a
-    key path of a file (`Failure.fail_key`, `Problem.key_path`, `key_path` in
-    `--json`, with `range` at the start of the file); a TOML syntax error is
-    at its line and column; a file that is missing or unreadable is
-    `Failure.fail_file` (no key, `range` at line 0, `Problem.at_source?` false,
-    so the plain and `--ai` forms show the file name alone). The manifests of
-    the locked packages are checked before any file loads
-    (`check_manifests`). The hash and link ones are at the import.
-    `CHECK-IMPORT-PACKAGE` is an import check (`package_import.agc`): a
-    declared package that is not in the cache, or a `pkg/` name that a
-    package file did not declare.
+    `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`.
+    Manifest, lock, stale and conflict errors are at a key path
+    (`Failure.fail_key`, `Problem.key_path`); a TOML syntax error is at its line
+    and column; a missing or unreadable file has no key (`Failure.fail_file`).
+    The manifests of the locked packages are checked before any file loads
+    (`check_manifests`). The hash and link errors are at the import.
 
 - **Stage:** runtime (VM)
   - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,
