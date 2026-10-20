@@ -51,7 +51,9 @@ void agc_input_open(agc_vm *vm, int fd, bool flush_out) {
   in->poll_fd = -1;
   in->poll_tried = in->poll_socket = false;
   in->poller = NULL;
+#ifdef _WIN32
   in->reader = NULL;
+#endif
   in->flush_out = flush_out;
   in->pending_eof = false;
   in->reading = false;
@@ -146,19 +148,19 @@ static void read_end(agc_vm *vm, int64_t got, const uint8_t *data) {
   agc_task_wake_all(vm, &in->waiters, &in->waiters_tail, "stdin");
 }
 
-/* The room of a new read, or 0 when this task waits for the one already in flight. */
-static size_t begin_read(agc_vm *vm, agc_input *in) {
+/* True with the room of a new read in *ROOM, or false when this task waits for the one already in flight. */
+static bool begin_read(agc_vm *vm, agc_input *in, size_t *room) {
   if (in->reading) {
     agc_task_parking(vm);
     agc_sync_assert(vm);
     agc_task_enqueue(&in->waiters, &in->waiters_tail, vm->task);
     agc_task_park(vm, true);
-    return 0;
+    return false;
   }
-  size_t room = read_room(in);
+  *room = read_room(in);
   if (in->flush_out) agc_flush(vm);
   in->reading = true;
-  return room;
+  return true;
 }
 #endif
 
@@ -269,8 +271,8 @@ void agc_input_close(agc_vm *vm) {
 }
 
 static int start_read(agc_vm *vm, agc_input *in) {
-  size_t room = begin_read(vm, in);
-  if (!room) return FILL_WAIT;
+  size_t room;
+  if (!begin_read(vm, in, &room)) return FILL_WAIT;
   read_request *q = calloc(1, sizeof(read_request) + room);
   if (!q) agc_out_of_memory();
   q->room = room;
@@ -293,8 +295,8 @@ static int start_read(agc_vm *vm, agc_input *in) {
 #elif defined(_WIN32)
 /* The reader's thread waits for input, the task waits on the loop for the job (§14.1). */
 static int start_read(agc_vm *vm, agc_input *in) {
-  size_t room = begin_read(vm, in);
-  if (!room) return FILL_WAIT;
+  size_t room;
+  if (!begin_read(vm, in, &room)) return FILL_WAIT;
   if (!in->reader) in->reader = agc_stdin_new(in->fd);
   agc_io_job *job = agc_io_start(vm, &reader_io, in->reader, agc_void(), -1);
   agc_stdin_read(vm, in->reader, job, room);

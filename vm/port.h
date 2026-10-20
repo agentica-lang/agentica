@@ -170,7 +170,9 @@ typedef struct {
   int fd, poll_fd;
   bool flush_out, pending_eof, reading, poll_tried, poll_socket;
   agc_poller *poller;
+#ifdef _WIN32
   agc_stdin_reader *reader;
+#endif
   int got;
   uint8_t *buf;
   size_t start, end, cap, scanned;

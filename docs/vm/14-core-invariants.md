@@ -220,6 +220,9 @@ recorded and acted on right after, and an `alarm` bounds that at 3 seconds. A
 driven VM whose driver is gone takes the immediate path on its first signal.
 `agc_io_close` is only for the in-process harnesses and for the single binary,
 which closes the front end's loop before it runs the program in a new runtime.
+The Windows stdin reader thread (§14.1) is not joined: the close cancels its
+read where Windows can, and a read it cannot cancel stays in `_read` and takes
+the next input, so no later runtime in the process may read that descriptor.
 Children are reaped by libuv's exit callback, never by `waitpid` or a sleep, and
 step 1 runs the loop for the exits (§10.4 Close; row 7.2.1d, first part, done).
 The streams on the loop drain inside the file flush, so the flush limit bounds

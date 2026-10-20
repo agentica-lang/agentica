@@ -20,6 +20,8 @@
 /* The most that one WriteConsoleW call takes, in UTF-16 units, as libuv's own console writer uses (older Windows fails
    for a larger one). A byte of UTF-8 makes at most one unit, so a slice of that many bytes always fits. */
 #define CONSOLE_UNITS 8192
+/* How many times the close of the stdin reader tries to cancel a read that has not ended, 1 ms apart. */
+#define CANCEL_TRIES 10
 
 /* A pipe that libuv writes, one request at a time. libuv writes a pipe that was not opened for overlapped I/O on a
    Windows worker thread and an overlapped one with I/O completion ports; no write waits for a reader on the loop. */
@@ -49,16 +51,18 @@ struct agc_memstream {
   bool lost;
 };
 
-/* The stdin reader. The loop side (the async handle, `job` and the start) is used on the I/O thread; the thread
-   waits for `want`, reads into `buf` with `lock` released, and wakes the loop unless `closed`. The thread and the loop
-   side each hold a reference: the thread may stay in a read after the close, until input or EOF comes. */
+/* The stdin reader. The loop side (the async handle, `job`, `buf` and the start) is used on the I/O thread; the thread
+   waits for `want`, reads into `buf` with `lock` released (`in_read` while it is in _read), and wakes the loop unless
+   `closed`. `buf` grows to the largest read asked for and is kept for the whole run; the done half of a read takes it
+   while the thread waits for the next `want`. The thread and the loop side each hold a reference: the thread may stay
+   in a read after the close, until input or EOF comes. */
 struct agc_stdin_reader {
   uv_async_t wake;
   uv_mutex_t lock;
   uv_cond_t asked;
   uv_thread_t thread;
   int fd;
-  bool started, async_open, thread_open, want, closed;
+  bool started, want, in_read, closed;
   agc_loop *loop;
   agc_io_job *job;
   size_t room, cap;
@@ -298,7 +302,7 @@ agc_stdin_reader *agc_stdin_new(int fd) {
 
 static void reader_unref(agc_stdin_reader *r) {
   if (atomic_fetch_sub(&r->refs, 1) != 1) return;
-  if (r->thread_open) CloseHandle(r->thread);
+  if (r->started) CloseHandle(r->thread);
   uv_cond_destroy(&r->asked);
   uv_mutex_destroy(&r->lock);
   free(r->buf);
@@ -313,23 +317,14 @@ static void reader_main(void *data) {
     while (!r->want && !r->closed) uv_cond_wait(&r->asked, &r->lock);
     if (r->closed) break;
     size_t room = r->room;
-    if (r->cap < room) {
-      uint8_t *grown = realloc(r->buf, room);
-      if (grown) {
-        r->buf = grown;
-        r->cap = room;
-      } else {
-        room = r->cap;
-      }
-    }
+    r->in_read = true;
     uv_mutex_unlock(&r->lock);
-    int n = -1;
-    if (room) {
-      do {
-        n = _read(r->fd, r->buf, (unsigned)room);
-      } while (n < 0 && errno == EINTR);
-    }
+    int n;
+    do {
+      n = _read(r->fd, r->buf, (unsigned)room);
+    } while (n < 0 && errno == EINTR);
     uv_mutex_lock(&r->lock);
+    r->in_read = false;
     r->want = false;
     r->got = n;
     /* The close sets `closed` under the lock before it closes the handle, so a send here never reaches a closed one. */
@@ -352,32 +347,30 @@ static void reader_woken(uv_async_t *wake) {
 }
 
 /* On the I/O thread, posted after the job's start, so the wake that ends the job always comes after that start. The
-   thread and its wake are made at the first read; when either cannot be made, the read fails at once. */
+   thread and its wake are made at the first read; like the lock (agc_stdin_new), they are needed, so a failure to make
+   them ends the process. The buffer grows here, while the thread waits. */
 static void reader_go(void *data) {
   agc_stdin_reader *r = data;
   if (!r->started) {
-    r->started = true;
     r->wake.data = r;
-    r->async_open = uv_async_init(agc_loop_uv(r->loop), &r->wake, reader_woken) == 0;
-    if (r->async_open) {
-      uv_unref((uv_handle_t *)&r->wake);
-      atomic_fetch_add(&r->refs, 1);
-      r->thread_open = uv_thread_create(&r->thread, reader_main, r) == 0;
-      if (!r->thread_open) atomic_fetch_sub(&r->refs, 1);
-    }
+    if (uv_async_init(agc_loop_uv(r->loop), &r->wake, reader_woken) != 0)
+      agc_internal_abort("cannot make the stdin wake");
+    uv_unref((uv_handle_t *)&r->wake);
+    atomic_fetch_add(&r->refs, 1);
+    if (uv_thread_create(&r->thread, reader_main, r) != 0) agc_internal_abort("cannot start the stdin reader");
+    r->started = true;
   }
-  if (!r->thread_open) {
-    agc_io_job *job = r->job;
-    r->job = NULL;
-    r->got = -1;
-    agc_io_ready(job);
-    return;
-  }
-  uv_ref((uv_handle_t *)&r->wake);
   uv_mutex_lock(&r->lock);
+  if (r->cap < r->room) {
+    uint8_t *grown = realloc(r->buf, r->room);
+    if (!grown) agc_out_of_memory();
+    r->buf = grown;
+    r->cap = r->room;
+  }
   r->want = true;
   uv_cond_signal(&r->asked);
   uv_mutex_unlock(&r->lock);
+  uv_ref((uv_handle_t *)&r->wake);
 }
 
 void agc_stdin_read(agc_vm *vm, agc_stdin_reader *r, agc_io_job *job, size_t room) {
@@ -399,17 +392,29 @@ int64_t agc_stdin_take(agc_stdin_reader *r, const uint8_t **data) {
 
 static void reader_closed(uv_handle_t *handle) { reader_unref(handle->data); }
 
-/* The thread is told to end; a read it is in is cancelled where Windows can (a pipe), else it ends with its read. */
+/* The thread is told to end, and a read it is in is cancelled where Windows can (a pipe). A cancel that comes after the
+   thread set `in_read` but before it entered _read does nothing, so it is tried a few times while `in_read` stays set.
+   What is left: a read that Windows cannot cancel (a console on some versions), or a thread that has not entered _read
+   after the tries, stays in _read until input or EOF comes and takes that input; no later runtime in the process may
+   read the descriptor. Such a thread touches nothing of the closed loop and frees the reader when it leaves. */
 void agc_stdin_close(agc_stdin_reader *r) {
   uv_mutex_lock(&r->lock);
   r->closed = true;
   r->job = NULL;
   uv_cond_signal(&r->asked);
   uv_mutex_unlock(&r->lock);
-  if (r->thread_open) CancelSynchronousIo(r->thread);
-  if (r->async_open)
-    uv_close((uv_handle_t *)&r->wake, reader_closed);
-  else
+  if (!r->started) {
     reader_unref(r);
+    return;
+  }
+  for (int attempt = 0; attempt < CANCEL_TRIES; attempt++) {
+    uv_mutex_lock(&r->lock);
+    bool reading = r->in_read;
+    uv_mutex_unlock(&r->lock);
+    if (!reading) break;
+    CancelSynchronousIo(r->thread);
+    uv_sleep(1);
+  }
+  uv_close((uv_handle_t *)&r->wake, reader_closed);
 }
 #endif

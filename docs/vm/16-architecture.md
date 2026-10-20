@@ -38,6 +38,10 @@ enforces it.
   - **What it is:** The main thread after start-up. It runs the only libuv loop.
     It has an inbox of requests from the schedulers (§16.4).
 
+- **Component:** **Windows stdin reader**
+  - **What it is:** One thread of the VM's own that makes the blocking `_read`
+    of stdin on Windows and wakes the I/O thread with an async handle (§14.1).
+
 - **Component:** **libuv thread pool**
   - **What it is:** Bounded blocking work only: regular files and directories,
     DNS, and the TLS setup jobs that load CA, certificate and key files (§14.1).
@@ -95,7 +99,8 @@ enforces it.
 - **The I/O thread moves bytes and builds no GC values.** It reads into and
   writes from `malloc`'d buffers: a job's, and a socket's input buffer
   (`agc_conn.in`), which it owns (§16.11). Stdin is read into a job's buffer
-  and appended to the shared input by the `done` half, on a scheduler. The
+  (on Windows, the reader thread's own buffer) and appended to the shared input
+  by the `done` half, on a scheduler. The
   `done` half of a job, which builds GC values from those bytes, runs on the
   scheduler that resumes the task. TLS crypto runs on the I/O thread, beside
   the socket state it reads and writes (`vm/tcp.c`), so a slow handshake
@@ -819,8 +824,9 @@ a runnext slot and a short spin (§16.9, "Wakes between schedulers").
   (`vm/process.c`) once `drop` runs on the I/O thread, are open. On the polled
   file path, `expired` (`vm/files.c`) moves `o->st->buf` while the I/O thread
   may still run `ready`, `step` and `send_rest`: the poller pause must complete
-  first. Stdin is read into a job's buffer and `read_done` appends it to
-  `rt->in.buf` (GC memory) on a scheduler; how the schedulers lock `rt->in`
+  first. Stdin is read into a job's buffer (on Windows, the reader's buffer,
+  `reader_done`) and `read_end` appends it to `rt->in.buf` (GC memory) on a
+  scheduler; how the schedulers lock `rt->in`
   between them is open.
 - **A libuv step whose result a half needs.** Decided for sockets: `serve`
   (`vm/tcp.c`) calls `uv_accept` on the I/O thread, a TLS child finishes its

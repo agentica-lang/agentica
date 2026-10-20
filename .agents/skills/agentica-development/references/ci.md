@@ -257,7 +257,8 @@ is not sent; libuv reports both events through one console handler
 `test_windows_console_stop.py` also types a line into the pseudo console and
 reads it, and keeps a console read waiting with one pool thread while file calls
 run. After changing Windows stdin handling, a check on a native Windows terminal
-(not Wine) is still useful but does not block a change. Save this as `console-input.agc` in a scratch directory:
+(not Wine) is still useful but does not block a change. Save this as
+`console-input.agc` in a scratch directory:
 
 ```agentica
 def main() -> Void

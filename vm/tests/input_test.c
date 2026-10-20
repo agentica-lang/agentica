@@ -1,8 +1,10 @@
 /*
  * vm/input.c with hand-made tasks and a pipe as stdin, with one pool thread: a waiting read leaves the pool free,
- * readers share the read in flight, EOF reaches each task once, and the loop closes with a read still waiting.
+ * readers share the read in flight, EOF reaches each task once, the loop closes with a read still waiting, and a read
+ * that a scheduler thread starts ends on the loop's thread.
  */
 #include "../core.h"
+#include "io_harness.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -21,6 +23,13 @@
 #define close _close
 #define write _write
 #endif
+
+/* One call of gets on a scheduler thread: the task, and what the call gave. */
+typedef struct {
+  agc_task *task;
+  agc_string *line;
+  agc_input_status status;
+} reader_call;
 
 static agc_vm vm;
 static int pipe_fds[2];
@@ -141,13 +150,39 @@ static void test_the_loop_closes_while_a_read_waits(void) {
   agc_string *line;
   assert(gets_as(a, &line) == AGC_INPUT_WAIT);
   for (int round = 0; round < 20; round++) (void)agc_io_poll(&vm, false);
-  bool closed = false;
-  for (int attempt = 0; attempt < 500 && !closed; attempt++) closed = agc_io_close(&vm);
-  assert(closed && vm.rt->loop == NULL);
-  /* The reader, if it is still in its read, ends with this input; it touches nothing of the closed loop. */
+  agc_test_settle_loop(&vm);
+  /* A reader still in its read ends with this input; it touches nothing of the closed loop. */
   put("late\n");
   close(pipe_fds[1]);
-  uv_sleep(50);
+}
+
+static void gets_then_status(void *arg) {
+  reader_call *c = arg;
+  c->status = gets_as(c->task, &c->line);
+}
+
+/* A scheduler thread starts the read and later takes its line; the loop's thread (the test's) runs the reader's start
+   and its end, which come to it as requests in the order the scheduler posted them. */
+static void test_a_read_started_by_another_thread_ends_on_the_loop(void) {
+  fresh();
+  assert(agc_io_share(&vm, false));
+  agc_input_watch(&vm);
+  reader_call c = {.task = make_task()};
+  agc_test_on_thread(gets_then_status, &c);
+  assert(c.status == AGC_INPUT_WAIT);
+  put("one\n");
+  pump_until_ready(c.task);
+  agc_test_on_thread(gets_then_status, &c);
+  assert(c.status == AGC_INPUT_OK && c.line->bytes == 3 && memcmp(c.line->data, "one", 3) == 0);
+  close(pipe_fds[1]);
+  agc_test_on_thread(gets_then_status, &c);
+  if (c.status == AGC_INPUT_WAIT) {
+    pump_until_ready(c.task);
+    agc_test_on_thread(gets_then_status, &c);
+  }
+  assert(c.status == AGC_INPUT_EOF);
+  agc_test_settle_loop(&vm);
+  close(pipe_fds[0]);
 }
 
 int main(void) {
@@ -161,6 +196,7 @@ int main(void) {
   agc_io_init();
   test_readers_share_a_read_that_leaves_the_pool_free_and_each_gets_eof_once();
   test_the_loop_closes_while_a_read_waits();
+  test_a_read_started_by_another_thread_ends_on_the_loop();
   puts("input tests passed");
   return 0;
 }

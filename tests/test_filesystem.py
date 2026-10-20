@@ -436,6 +436,59 @@ end
     assert (code, output) == (0, 'ok()\nok("x")\n'), errors
 
 
+def next_line_or_stderr(child):
+    """The child's next stdout line; a failure carries what it wrote to stderr so far."""
+    try:
+        return child.next_line(VM_WAIT_SECONDS)
+    except AssertionError as error:
+        raise AssertionError("%s\nstderr: %s" % (error, child.stderr_text())) from None
+
+
+# A reader task is cancelled while its read of stdin waits, with one pool thread: a file call still runs, the read
+# stays in flight and its line goes to the next reader, and the EOF then reaches both of two waiting readers once.
+CANCELLED_READER = """\
+def reader(n: Int) -> Int
+  IO.inspect(IO.gets())
+  return n
+end
+
+def main() -> Void
+  r = Task.spawn(&reader, 1)
+  Task.sleep(50)
+  Task.cancel(r)
+  IO.inspect(File.write_text(System.args()[0], "x", 1000))
+  IO.flush()
+  IO.inspect(IO.gets())
+  IO.flush()
+  a = Task.spawn(&reader, 2)
+  b = Task.spawn(&reader, 3)
+  IO.inspect(Task.await(a) + Task.await(b))
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_cancelled_stdin_reader_leaves_its_read_to_the_next_reader_and_eof_reaches_every_waiter(
+    tmp_path, adopt, schedulers
+) -> None:
+    source = tmp_path / "stdin.agc"
+    source.write_text(CANCELLED_READER, encoding="utf-8")
+    # AGENTICA_VM_TEST_MULTICORE lets a test build run more than one scheduler (tests/test_vm_multicore.py).
+    env = vm_environment({"UV_THREADPOOL_SIZE": "1", "AGENTICA_SCHEDULERS": schedulers,
+                          "AGENTICA_VM_TEST_MULTICORE": "1"})
+    bytecode = compile_agc(source, tmp_path / "stdin.agcb")
+    child = adopt(Child([*vm_command(), "--", bytecode, tmp_path / "out.txt"], cwd=tmp_path, env=env, stdin=True,
+                        capture_stderr=True))
+    assert next_line_or_stderr(child) == "ok()"
+    child.process.stdin.write(b"late\n")
+    child.process.stdin.flush()
+    assert next_line_or_stderr(child) == 'ok("late")'
+    child.close_stdin()
+    assert child.wait(VM_WAIT_SECONDS) == 0, child.stderr_text()
+    lines = child.stdout_text().splitlines()
+    assert lines == ['error("IO.gets reached the end of input")'] * 2 + ["5"], lines
+
+
 @known_issue(WINDOWS, 435, "the descriptors of the VM are listed in a folder that Windows does not have")
 def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(new_dir, run_vm_bounded):
     root = new_dir()
