@@ -350,7 +350,7 @@ const char *agc_tls_cipher(const agc_tls *t) { return SSL_get_cipher_name(t->ssl
 static void unsupported(agc_tls_failure *f) {
   f->code = AGC_TLS_ERR_INTERNAL;
   f->sys = 0;
-  snprintf(f->detail, sizeof f->detail, "%s", "TLS needs Linux");
+  snprintf(f->detail, sizeof f->detail, "%s", "TLS needs Linux or macOS");
 }
 
 const char *agc_tls_version(void) { return NULL; }

@@ -6,6 +6,7 @@
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
 #endif
+#include "net_os.h"
 #include "services.h"
 #include "file_io.h"
 #include "process_os.h"
@@ -394,7 +395,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   } else if (q->kind == REQ_WAIT || q->kind == REQ_OUTPUT) {
     result = waited(vm, p, q->kind);
   } else {
-    result = p->write_status < 0 ? agc_system_error(vm, write_failed, -p->write_status) : ok_void();
+    result = p->write_status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(p->write_status)) : ok_void();
   }
   drop_request(q);
   return result;
@@ -501,7 +502,7 @@ static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
               p->forward_failed ? 1 : 0);
   if (n >= 0) return;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stderr error=%d", (int)p->process.pid,
-            n == UV_EOF ? 0 : (int)-n);
+            n == UV_EOF ? 0 : agc_net_errno((int)n));
   uv_read_stop(s);
   p->err_done = true;
   notify_waits(p);
@@ -538,7 +539,7 @@ static void start_reading(proc *p) {
   if (p->captured || p->reading || p->out_buf.eof || p->out_buf.error) return;
   int rc = uv_read_start((uv_stream_t *)&p->out, alloc_out, read_out);
   if (rc)
-    p->out_buf.error = -rc;
+    p->out_buf.error = agc_net_errno(rc);
   else
     p->reading = true;
 }
@@ -581,7 +582,7 @@ static bool keep(proc *p, agc_inbuf *b, bool *cut, ssize_t n, const uv_buf_t *bu
   if (n >= 0) return false;
   agc_inbuf_got(b, n, n == UV_EOF);
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=%s error=%d", (int)p->process.pid, pipe,
-            n == UV_EOF ? 0 : (int)-n);
+            n == UV_EOF ? 0 : agc_net_errno((int)n));
   return true;
 }
 
@@ -899,7 +900,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   free(cwd);
   if (rc) {
     settle(p);
-    return agc_system_error(vm, "process: cannot run the executable", -rc);
+    return agc_system_error(vm, "process: cannot run the executable", agc_net_errno(rc));
   }
   p->users = 1;
   pr->state = agc_register(vm, p, release_proc);
@@ -972,7 +973,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, uint8_t *data, size
   if (p->in_closed) return agc_error_value("process: stdin is closed");
   p->write_status = 0;
   int rc = agc_stream_write((uv_stream_t *)&p->in, &p->write_req, &p->write_data, data, len, wrote);
-  if (rc < 0) return agc_system_error(vm, write_failed, -rc);
+  if (rc < 0) return agc_system_error(vm, write_failed, agc_net_errno(rc));
   if (rc == 0) return ok_void();
   request *q = new_request(p, REQ_SEND);
   q->count = (size_t)agc_value_units(args[1]);

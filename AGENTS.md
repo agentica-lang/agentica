@@ -35,7 +35,7 @@ benchmarks/         make bench programs and Python twins
                     speed), vm-c-critic (C VM PR review), agentica-dev-workflow
                     (the PR loop: review, fix, CI, merge), documentation-writing
                     (whether and how to change docs), documentation-pruning
-                    (shrinking docs)
+                    (shrinking docs), agentica-release (cutting a release)
 ```
 
 Each of `docs/grammar/`, `docs/future/`, `docs/roadmap/` and `docs/vm/` has a
@@ -94,6 +94,9 @@ phase 13).
 
 - **Task:** taking a PR from branch to merge (reviews, fixes, CI, merge)
   - **Read:** `.agents/skills/agentica-dev-workflow/`
+
+- **Task:** cutting a release or beta (version bump, tag, notes, Pages)
+  - **Read:** `.agents/skills/agentica-release/`
 
 - **Task:** writing or updating docs, a site page, a skill, a CHANGELOG
   entry, a doc comment or a PR body

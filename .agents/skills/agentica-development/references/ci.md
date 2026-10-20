@@ -511,11 +511,11 @@ runs the golden tests with the full sweep (`make vm-diff-test`),
   with a step program and a predefined `Given the Agentica program` step,
   files (write,
   append, read, rename, list, stat, remove), processes (`--allow-run` spawning
-  the packaged binary), and loopback TCP and HTTP. A binary says that it lacks
-  the network builtins with the loader error `invalid bytecode: unknown
-  builtin`: the smoke skips networking only for that message and only off Linux
-  and macOS, so a Linux or macOS binary without them fails. Windows has none
-  until the TCP port lands; then the same test starts running there. TLS is
+  the packaged binary), and loopback TCP and HTTP. TCP must pass on all four.
+  A binary says that it lacks builtins with the loader error `invalid
+  bytecode: unknown builtin`: the smoke skips the HTTP part only for that
+  message and only on Windows, which has TCP but not yet the `std/http`
+  service builtins, so a Linux or macOS binary without them fails. TLS is
   covered by the OpenSSL version line only (it needs certificates).
 - The `collect` job (every run) downloads the artifacts without merging, runs
   `tools/release.py collect` (exactly the four archives of `VERSION`: nothing
@@ -535,25 +535,15 @@ CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 - The `VERSION` file at the repository root (one line, no `v`) is the single
   source of the version. `make version` prints it and the Makefile passes it to
   C as `AGC_VERSION`; `agentica --version` reports it. The Agentica front end
-takes it as an input
-  (`Settings.version`; `--version V` in the arguments of
-`compiler/front_end.agc`),
-  and writes it into each `.agcb` header. Keep it in sync with the Git tag.
+  takes it as an input (`Settings.version`; `--version V` in the arguments of
+  `compiler/front_end.agc`), and writes it into each `.agcb` header. Keep it in
+  sync with the Git tag.
 - Every PR with a user-visible change adds a short entry under `## [Unreleased]`
   in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that
   breaks programs or CLI use with `**Breaking:**`; add the PR number).
-  Internal-only work (CI, refactors, docs) needs none. A release PR renames
-  `[Unreleased]` to `## [X.Y.Z] - DATE`, leaves an empty `[Unreleased]` above
-  it, bumps `VERSION` and fixes the compare links at the bottom.
-- Every minor or patch bump is tagged, and the tag pushed, right away after its
-  PR merges. The bump commit and the annotated tag message are both `release
-  version <tag>`, for example `git tag -a 0.2.0 -m "release version 0.2.0"`.
-- Tag releases with the bare version (`0.2.0`, no `v` prefix).
-  `.github/workflows/release.yml` validates the tag against `VERSION`,
-  builds the four packages (above), and publishes them with `SHA256SUMS` as a
-  GitHub Release with empty notes; a maintainer writes a short summary of the
-  release by hand afterwards (key points and breaking changes, no PR list; the
-  details stay in `CHANGELOG.md`).
+  Internal-only work (CI, refactors, docs) needs none.
+- Cutting a release (the bump PR, the tag, the release notes, the Pages
+  rebuild and the checks after it): `.agents/skills/agentica-release/`.
 
 ## Copy-paste check (jscpd)
 

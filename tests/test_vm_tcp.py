@@ -5,15 +5,18 @@ ports (fragments, resets, silence, ...) and prints their numbers as JSON;
 `clients` connects to a VM server. Everything is on 127.0.0.1 or localhost
 with port 0.
 """
+import errno
 import json
+import os
 import re
 import socket
+import threading
 import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, TEST_SCHEDULERS, WAIT_SECONDS, Child, compile_text, run, run_vm, scaled,
-                                 start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, TARGET_OS, TEST_SCHEDULERS, TLS_BUILT, WAIT_SECONDS, Child, compile_text,
+                                 run, run_vm, scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "tcp-peer.js"
 
@@ -28,6 +31,15 @@ def ipv6_localhost():
         return True
     except OSError:
         return False
+
+
+def require_ipv6():
+    """Skips without IPv6 localhost, but fails in CI, where every runner has it (as for a missing tool)."""
+    if ipv6_localhost():
+        return
+    if os.environ.get("CI"):
+        pytest.fail("no IPv6 localhost on this CI runner")
+    pytest.skip("no IPv6 localhost")
 
 
 CLIENT_PROGRAM = """\
@@ -60,7 +72,13 @@ def main() -> Void
     big = big + big
     round = round + 1
   end
-  IO.inspect(TCP.send(stuck, big, 200))
+  sent = TCP.send(stuck, big, 200)
+  rounds = 1
+  while Result.ok?(sent) && rounds < 16
+    sent = TCP.send(stuck, big, 200)
+    rounds = rounds + 1
+  end
+  IO.inspect(sent)
   IO.inspect(TCP.send(stuck, "x", 1000))
   partial = Result.unwrap!(TCP.connect("127.0.0.1", %d, 5000))
   IO.inspect(TCP.read_line(partial, 5000))
@@ -200,15 +218,18 @@ end
 
 
 
+# The UCRT's errno values for libuv's socket errors on Windows (vm/net_windows.c); elsewhere the host's errno.
+WINDOWS_ERRNO = {"ECONNREFUSED": 107, "ECONNRESET": 108}
+
+
+def system_error(name):
+    """The `system error:` text of the VM for an errno name: the host's number and its strerror text."""
+    code = WINDOWS_ERRNO[name] if TARGET_OS == "windows" else getattr(errno, name)
+    return "system error: %s; errno=%d" % (os.strerror(code), code)
+
+
 REFUSED_HEAD = "tcp-connect: connection failed\n  hostname: 127.0.0.1\n  port number: %d\n"
-RESET = 'error("error reading from stream port\\n  system error: Connection reset by peer; errno=104")\n'
-
-
-
-
-
-
-
+RESET = 'error("error reading from stream port\\n  %s")\n' % system_error("ECONNRESET")
 
 def start_peer(adopt, node):
     """The Node servers: returns (peer, ports); the peer prints events such as `closed watch`."""
@@ -243,7 +264,7 @@ def test_client_reads_fragments_eof_resets_long_lines_and_timeouts_from_node_pee
                              'error("network: operation timed out")\n'
                              'error("network: socket is closed")\n'
                              + RESET +
-                             (REFUSED_HEAD % ports["refused"]) + "  system error: Connection refused; errno=111\n")
+                             (REFUSED_HEAD % ports["refused"]) + "  %s\n" % system_error("ECONNREFUSED"))
 
 
 def test_server_serves_two_node_clients_at_once_one_task_per_connection(tmp_path, adopt, node):
@@ -289,8 +310,7 @@ def test_listener_on_localhost_takes_ipv4_and_ipv6_clients(tmp_path, adopt):
 
 
 def test_listen_on_localhost_fails_when_another_program_holds_the_port_on_ipv6(tmp_path):
-    if not ipv6_localhost():
-        pytest.skip("no IPv6 localhost")
+    require_ipv6()
     # No SO_REUSEADDR, like the original holder: the VM must find the port taken.
     with socket.socket(socket.AF_INET6) as holder:
         holder.bind(("::1", 0))
@@ -307,8 +327,9 @@ def test_two_tasks_writing_to_one_socket_take_the_writer_lock_in_fifo_order(tmp_
     assert (result.code, result.stdout) == (0, "ok()\nok()\nok()\n"), result.stderr
     size = 8 * 2 ** 21
     assert peer.next_line() == "collect a=%d b=%d c=%d" % (size, size, size)
-    # On several schedulers a writer can finish before the next one starts, so none has to wait.
-    if not TEST_SCHEDULERS:
+    # On several schedulers a writer can finish before the next one starts, so none has to wait; Windows takes a
+    # 16 MiB send into its buffers at once, so there too no writer waits.
+    if not TEST_SCHEDULERS and TARGET_OS != "windows":
         assert " io lock_wait " in trace.read_text(), "a writer waited for the lock"
 
 
@@ -326,3 +347,324 @@ def test_main_returns_while_tasks_wait_on_sockets_and_the_peer_sees_every_socket
     assert " io tcp_listen listener=" in text, "listen is traced"
     assert " io tcp_connected socket=" in text, "connect is traced"
     assert peer.next_line() == "closed watch"
+
+
+CANCEL_PROGRAM = """\
+def dial(port: Int) -> Result[Socket]
+  return TCP.connect("127.0.0.1", port, 30000)
+end
+
+def wait_accept(listener: Listener) -> Result[Socket]
+  return TCP.accept(listener, 60000)
+end
+
+def parent(listener: Listener) -> Result[Int]
+  Task.spawn(&dial, %d)
+  Task.spawn_owning(&wait_accept, listener)
+  Task.sleep(0)
+  zero = 0
+  return ok(1 / zero)
+end
+
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  puts(TCP.local_port(listener))
+  puts(Task.await(Task.spawn_owning(&parent, listener)).ok?)
+  # The cancelled tasks end as their parked calls let go, not at once.
+  rounds = 0
+  while Task.pending_count() > 0 && rounds < 500
+    Task.sleep(10)
+    rounds = rounds + 1
+  end
+  puts(Task.pending_count())
+  IO.flush()
+  IO.gets()
+end
+"""
+
+ECHO_SERVER_PROGRAM = """\
+def serve(socket: Socket) -> Void
+  line = TCP.read_line(socket, 20000)
+  while Result.ok?(line)
+    Result.unwrap!(TCP.send(socket, "#{Result.unwrap!(line)}!\\n", 20000))
+    line = TCP.read_line(socket, 20000)
+  end
+  TCP.close(socket)
+end
+
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("%s", 0))
+  puts(TCP.local_port(listener))
+  IO.flush()
+  tasks: List[Task[Void]] = []
+  count = 0
+  while count < %d
+    tasks = List.append(tasks, Task.spawn_owning(&serve, Result.unwrap!(TCP.accept(listener, 20000))))
+    count = count + 1
+  end
+  for task in tasks
+    Task.await(task)
+  end
+  TCP.close_listener(listener)
+  puts("served")
+  IO.flush()
+  IO.gets()
+end
+"""
+
+DIAL_PROGRAM = """\
+struct Call
+  host: String
+  port: Int
+  name: String
+end
+
+def call(c: Call) -> Result[String]
+  socket = try TCP.connect(c.host, c.port, 10000)
+  try TCP.send(socket, "#{c.name}\\n", 10000)
+  reply = TCP.read_line(socket, 10000)
+  TCP.close(socket)
+  return reply
+end
+
+def main() -> Void
+  tasks: List[Task[Result[String]]] = []
+  for k in 0...%d
+    tasks = List.append(tasks, Task.spawn(&call, Call(host: "%s", port: %d, name: "c#{k}")))
+  end
+  for task in tasks
+    IO.inspect(Task.await(task))
+  end
+end
+"""
+
+
+def listener_on(host):
+    """A plain Python listener on HOST, port 0, without SO_REUSEADDR."""
+    server = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET)
+    server.bind((host, 0))
+    server.listen(64)
+    server.settimeout(scaled(20))
+    return server
+
+
+def assert_port_free(host, port):
+    """The port can be bound by a socket without SO_REUSEADDR: nothing holds it. The close runs on the VM's I/O
+    thread, which on several schedulers may be a moment behind the program's output."""
+    deadline = time.monotonic() + scaled(5)
+    while True:
+        with socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET) as probe:
+            try:
+                probe.bind((host, port))
+                return
+            except OSError:
+                if time.monotonic() > deadline:
+                    raise
+        time.sleep(0.05)
+
+
+def test_a_crashed_owner_cancels_its_tasks_and_frees_the_listener_port(tmp_path, adopt):
+    """A crashed parent cancels its task that dials (its connect job may have finished or not) and the one that owns
+    the listener and waits in TCP.accept: the Python peer of the dial sees the socket close (or never sees it), and
+    the listener's port is free while the VM still runs."""
+    with listener_on("127.0.0.1") as peer:
+        trace, env = trace_env(tmp_path)
+        vm = adopt(start_vm(compile_text(CANCEL_PROGRAM % peer.getsockname()[1], "cancel", tmp_path), stdin=True, env=env))
+        port = int(vm.next_line())
+        assert vm.next_line() == "false"
+        assert vm.next_line() == "0"
+        assert_port_free("127.0.0.1", port)
+        peer.settimeout(scaled(2))
+        try:
+            connection, _ = peer.accept()
+        except TimeoutError:
+            connection = None
+        if connection:
+            with connection:
+                connection.settimeout(scaled(10))
+                try:
+                    assert connection.recv(1) == b""
+                except (ConnectionResetError, ConnectionAbortedError):
+                    pass
+        vm.close_stdin()
+        assert vm.wait() == 0, vm.stderr_text()
+    assert re.compile(r" io end code=0 signal=0$", re.M).search(trace.read_text())
+
+
+def fragmented_call(host, port, name, replies):
+    """One client: its line in three writes, the middle one splitting a UTF-8 sequence."""
+    with socket.create_connection((host, port), timeout=scaled(20)) as connection:
+        data = ("%s-ñ\n" % name).encode()
+        cut = data.index(b"\xc3") + 1
+        for piece in (data[:2], data[2:cut], data[cut:]):
+            connection.sendall(piece)
+            time.sleep(0.01)
+        reader = connection.makefile("rb")
+        replies[name] = reader.readline().decode()
+        connection.shutdown(socket.SHUT_WR)
+        replies[name + "/eof"] = reader.read()
+
+
+def serve_python_clients(tmp_path, adopt, host, count):
+    vm = adopt(start_vm(compile_text(ECHO_SERVER_PROGRAM % (host, count), "echo", tmp_path), stdin=True))
+    port = int(vm.next_line())
+    replies = {}
+    threads = [threading.Thread(target=fragmented_call, args=(host, port, "p%d" % k, replies)) for k in range(count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(scaled(30))
+        assert not thread.is_alive(), "a client hung"
+    for k in range(count):
+        assert replies.get("p%d" % k) == "p%d-ñ!\n" % k, replies
+        assert replies.get("p%d/eof" % k) == b"", replies
+    assert vm.next_line() == "served"
+    assert_port_free(host, port)
+    vm.close_stdin()
+    assert vm.wait() == 0, vm.stderr_text()
+
+
+def test_server_serves_simultaneous_fragmented_python_clients_and_frees_its_port(tmp_path, adopt):
+    serve_python_clients(tmp_path, adopt, "127.0.0.1", 12)
+
+
+def python_echo(server, count):
+    """Answers COUNT connections of SERVER at once, one thread each, with `name!`."""
+    def answer(connection):
+        with connection:
+            connection.settimeout(scaled(20))
+            reader = connection.makefile("rb")
+            line = reader.readline()
+            connection.sendall(line.rstrip(b"\n") + b"!\n")
+            reader.read()
+
+    threads = []
+    for _ in range(count):
+        connection, _ = server.accept()
+        thread = threading.Thread(target=answer, args=(connection,))
+        thread.start()
+        threads.append(thread)
+    for thread in threads:
+        thread.join(scaled(30))
+        assert not thread.is_alive(), "a server thread hung"
+
+
+def dial_python_server(tmp_path, host, count):
+    with listener_on(host) as server:
+        peer = threading.Thread(target=python_echo, args=(server, count))
+        peer.start()
+        result = run_text(tmp_path, "dial", DIAL_PROGRAM % (count, host, server.getsockname()[1]))
+        peer.join(scaled(30))
+        assert not peer.is_alive(), "the Python server hung"
+    assert result.code == 0, result.stderr
+    assert result.stdout == "".join('ok("c%d!")\n' % k for k in range(count))
+
+
+def test_simultaneous_client_tasks_talk_to_a_python_server(tmp_path):
+    dial_python_server(tmp_path, "127.0.0.1", 12)
+
+
+def test_ipv6_client_and_server_with_python_peers(tmp_path, adopt):
+    require_ipv6()
+    dial_python_server(tmp_path, "::1", 3)
+    serve_python_clients(tmp_path, adopt, "::1", 3)
+
+
+TLS_PROGRAM = """\
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  IO.inspect(TLS.connect("127.0.0.1", TCP.local_port(listener), "ca.pem", 5000))
+  IO.inspect(TLS.listen("127.0.0.1", 0, "cert.pem", "key.pem"))
+  TCP.close_listener(listener)
+end
+"""
+
+
+def test_tls_returns_an_error_where_it_is_not_built(tmp_path):
+    """TCP ships without TLS on Windows: both TLS calls fail cleanly and the run ends normally."""
+    if TLS_BUILT:
+        pytest.skip("TLS is built here (tests/test_vm_tls.py)")
+    result = run_text(tmp_path, "tls", TLS_PROGRAM)
+    assert result.code == 0, result.stderr
+    assert result.stdout == ('error("ssl-connect: connect failed (TLS needs Linux or macOS)")\n'
+                             'error("ssl-make-server-context: setup failed (TLS needs Linux or macOS)")\n')
+
+
+BACKLOG_PROGRAM = """\
+def wait_accept(listener: Listener) -> Result[Socket]
+  return TCP.accept(listener, 60000)
+end
+
+def parent(listener: Listener) -> Result[Int]
+  Task.spawn(&wait_accept, listener)
+  Task.sleep(0)
+  zero = 0
+  return ok(1 / zero)
+end
+
+def answer(socket: Socket) -> Void
+  Result.unwrap!(TCP.send(socket, "answered\\n", 5000))
+  TCP.close(socket)
+end
+
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  puts(TCP.local_port(listener))
+  IO.flush()
+  IO.gets()
+  count = 0
+  while count < %d
+    answer(Result.unwrap!(TCP.accept(listener, 5000)))
+    count = count + 1
+  end
+  IO.inspect(TCP.accept(listener, 50))
+  puts(Task.await(Task.spawn(&parent, listener)).ok?)
+  IO.flush()
+  IO.gets()
+  TCP.close_listener(listener)
+  IO.inspect(TCP.accept(listener, 1000))
+end
+"""
+
+
+def go(vm):
+    """One line on the program's stdin: its IO.gets returns."""
+    vm.process.stdin.write(b"go\n")
+    vm.process.stdin.flush()
+
+
+def read_reply(client):
+    client.settimeout(scaled(10))
+    try:
+        return client.makefile("rb").readline()
+    except (ConnectionResetError, ConnectionAbortedError):
+        return b""
+
+
+def test_listener_takes_every_connection_that_waited_in_its_backlog(tmp_path, adopt):
+    """N clients are connected before the program calls TCP.accept: N accepts take all N (Windows reports several
+    AcceptEx completions before the first uv_accept). Then, after a timed-out accept and a cancelled one, closing the
+    listener with one connection pending makes the next accept return `listener is closed`.
+
+    The cancelled accept keeps its place until its deadline (`request_cancel` stops a TCP wait only then), so it may
+    take the pending connection and drop it: the client reads the end either way."""
+    count = 16
+    vm = adopt(start_vm(compile_text(BACKLOG_PROGRAM % count, "backlog", tmp_path), stdin=True))
+    port = int(vm.next_line())
+    clients = [socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) for _ in range(count)]
+    try:
+        time.sleep(0.3)
+        go(vm)
+        assert [read_reply(client) for client in clients] == [b"answered\n"] * count
+        assert vm.next_line() == 'error("network: operation timed out")'
+        assert vm.next_line() == "false"
+        pending = socket.create_connection(("127.0.0.1", port), timeout=scaled(10))
+        clients.append(pending)
+        go(vm)
+        assert vm.next_line() == 'error("network: listener is closed")'
+        assert read_reply(pending) == b""
+        vm.close_stdin()
+        assert vm.wait() == 0, vm.stderr_text()
+    finally:
+        for client in clients:
+            client.close()

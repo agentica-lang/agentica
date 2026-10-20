@@ -3,6 +3,7 @@
  * (1 MiB limit), and the stream write and lock helpers. Service layer.
  * Design: docs/vm/10-io-tls.md §10.3.1.
  */
+#include "net_os.h"
 #include "services.h"
 
 #include <stdio.h>
@@ -184,7 +185,7 @@ void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof) {
   else if (eof)
     b->eof = true;
   else if (n < 0)
-    b->error = (int)-n;
+    b->error = agc_net_errno((int)n);
 }
 
 /* Where the next line read of B ends: a line (DATA, LEN bytes at DATA without the LF and one CR before it, CONSUME
