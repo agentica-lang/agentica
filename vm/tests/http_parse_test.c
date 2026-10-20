@@ -82,12 +82,46 @@ static int body(agc_http_frame frame, uint64_t length, uint64_t limit, const cha
   return status == AGC_HTTP_OK ? 200 : agc_http_error_code(out->error);
 }
 
+/* The way std/http decodes (HttpWire.chunk): discard set, step by step, and
+   the decoder copied between pieces as its record is. The runs it reports
+   are gathered into out. */
+static int stepped(const char *s, uint64_t limit, bool one_byte, text *out) {
+  agc_http_body b;
+  agc_http_body_init(&b, AGC_HTTP_FRAME_CHUNKED, 0, limit);
+  b.discard = true;
+  size_t len = strlen(s), at = 0;
+  agc_http_status status = AGC_HTTP_INCOMPLETE;
+  while (status == AGC_HTTP_INCOMPLETE && at < len) {
+    agc_http_body copy = b;
+    size_t piece = one_byte ? 1 : len - at, done = 0;
+    while (status == AGC_HTTP_INCOMPLETE && done < piece) {
+      size_t used, start, count;
+      status = agc_http_body_step(&copy, (const uint8_t *)s + at + done, piece - done, &used, &start, &count);
+      if (count) add(out, s + at + done + start, count);
+      assert(used > 0 || status != AGC_HTTP_INCOMPLETE);
+      done += used;
+    }
+    at += done;
+    b = copy;
+  }
+  assert(b.data == NULL);
+  if (status == AGC_HTTP_INCOMPLETE) status = agc_http_body_end(&b);
+  if (status == AGC_HTTP_OK) assert(b.len == out->len);
+  return status == AGC_HTTP_OK ? 200 : agc_http_error_code(b.error);
+}
+
 static int chunked(const char *s, uint64_t limit) {
   agc_http_body a, b;
   int bulk = body(AGC_HTTP_FRAME_CHUNKED, 0, limit, s, strlen(s), false, true, &a);
   int bytes = body(AGC_HTTP_FRAME_CHUNKED, 0, limit, s, strlen(s), true, true, &b);
   assert(bulk == bytes);
   if (bulk == 200) assert(a.len == b.len && (a.len == 0 || memcmp(a.data, b.data, a.len) == 0));
+  for (int one_byte = 0; one_byte < 2; one_byte++) {
+    text runs = {0};
+    assert(stepped(s, limit, one_byte, &runs) == bulk);
+    if (bulk == 200) assert(runs.len == a.len && (a.len == 0 || memcmp(runs.data, a.data, a.len) == 0));
+    free(runs.data);
+  }
   agc_http_body_free(&a);
   agc_http_body_free(&b);
   return bulk;

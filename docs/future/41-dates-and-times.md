@@ -613,7 +613,7 @@ The vectors fixture may be slow under the `--max-steps` sweep; if so, it goes in
 - A duration type. Plain microseconds (`Int`, the unit of `add_us`) are enough
   for now.
 - Custom formats (a strftime-like form). `format` covers ISO 8601 and RFC 3339.
-- Other text formats: RFC 2822 (mail), and the HTTP date (`vm/http_server.c`
+- Other text formats: RFC 2822 (mail), and the HTTP date (`vm/http_wire.c`
   writes it in C today).
 - ISO week dates (`2026-W42-3`).
 

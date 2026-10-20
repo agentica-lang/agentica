@@ -7,6 +7,8 @@ sockets and http.client (fixtures/http-server-peer.py) and Node http clients
 certificates are the ones in fixtures/tls.
 """
 import json
+import socket
+import time
 
 import pytest
 
@@ -217,7 +219,7 @@ SERVER_PYTHON_LINES = [
     "partial-head none closed bounded",
     "expect-over-limit HTTP/1.1 413 Content Too Large False closed",
     "expect-continue HTTP/1.1 100 Continue 200 POST /expect hello closed",
-    "pipelined ['GET /one ', 'POST /two abc', 'GET /three '] closed",
+    "pipelined ['GET /one ', 'POST /two abc', 'POST /four abc', 'GET /three '] closed",
     "client-chunked 200 POST /chunked abñcd",
     "client-head 200 11 b''",
     "client-again 200 GET /again  True",
@@ -338,3 +340,47 @@ def test_server_against_python_raw_sockets_python_http_client_and_node_http_clie
     assert vm.next_line() == "ok()"
     assert vm.next_line() == "ok()"
     assert vm.stderr_text() == ""
+
+
+def send_in_pieces(port, pieces):
+    """Sends each piece after a pause, so the server reads them apart; returns the status and body."""
+    with socket.create_connection(("127.0.0.1", int(port)), timeout=scaled(10)) as conn:
+        conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        for k, piece in enumerate(pieces):
+            if k:
+                time.sleep(0.05)
+            conn.sendall(piece)
+        conn.shutdown(socket.SHUT_WR)
+        got = b""
+        while chunk := conn.recv(65536):
+            got += chunk
+    top, _, body = got.partition(b"\r\n\r\n")
+    return top.split(b" ")[1].decode(), body.decode()
+
+
+def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
+    """A head or body split across reads gets the same answer as one sent whole: a UTF-8 character split across
+    reads and chunks, a forbidden trailer split mid-name, and heads too large however slowly they arrive."""
+    source = tmp_path / "server.agc"
+    source.write_text(SERVER_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "server.agcb"), CERTS, stdin=True))
+    port = vm.next_line().split()[0]
+    length = b"POST /length HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Length: %d\r\n\r\n"
+    chunked = b"POST /chunked HTTP/1.1\r\nHost: x\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n"
+    assert send_in_pieces(port, [length % 6 + b"ab\xc3", b"\xb1cd"]) == ("200", "POST /length ab\u00f1cd")
+    assert send_in_pieces(port, [chunked + b"5\r\na", b"b\xc3", b"\xb1c\r\n1\r\nd\r\n0\r\n\r\n"]) == (
+        "200", "POST /chunked ab\u00f1cd")
+    assert send_in_pieces(port, [chunked + b"3\r\nab\xc3\r\n", b"2\r\n\xb1c\r\n0\r\n\r\n"]) == (
+        "200", "POST /chunked ab\u00f1c")
+    assert send_in_pieces(port, [length % 3 + b"ab", b"\xc3"])[0] == "400"
+    assert send_in_pieces(port, [chunked + b"3\r\nab", b"\xc3\r\n0\r\n\r\n"])[0] == "400"
+    assert send_in_pieces(port, [chunked + b"0\r\nConte", b"nt-Length: 2\r\n\r\n"])[0] == "400"
+    many = b"GET / HTTP/1.1\r\nHost: x\r\n" + b"".join(b"X-%d: v\r\n" % k for k in range(101)) + b"\r\n"
+    assert send_in_pieces(port, [many[:300], many[300:900], many[900:]])[0] == "431"
+    unended = b"GET /" + b"a" * 80000
+    assert send_in_pieces(port, [unended[k:k + 20000] for k in range(0, len(unended), 20000)])[0] == "431"
+    filler = b"X-Fill: " + b"b" * 4000 + b"\r\n"
+    large = b"GET / HTTP/1.1\r\nHost: x\r\n" + filler * 20
+    assert send_in_pieces(port, [large[k:k + 9000] for k in range(0, len(large), 9000)])[0] == "431"
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"

@@ -6,861 +6,1659 @@ program #6 0:1:1-76:6:1
         value: call #3 53:3:7-70:3:24 name="HttpWir.client" piped=false
           arg: literal #2 68:3:22-69:3:23 value=int:1
   module "std/http.agc"
-    declaration: struct-decl #8 331:7:1-410:13:1 name="@2::Target"
-      field: field-decl #1 347:8:3-362:9:1 name="scheme"
-        type: type-ref #0 355:8:11-361:8:17 name="String"
-      field: field-decl #3 364:9:3-377:10:1 name="host"
-        type: type-ref #2 370:9:9-376:9:15 name="String"
-      field: field-decl #5 379:10:3-389:11:1 name="port"
-        type: type-ref #4 385:10:9-388:10:12 name="Int"
-      field: field-decl #7 391:11:3-406:12:1 name="target"
-        type: type-ref #6 399:11:11-405:11:17 name="String"
-    declaration: struct-decl #18 411:14:1-529:19:1 name="@2::Service"
-      field: field-decl #10 428:15:3-447:16:1 name="server"
-        type: type-ref #9 436:15:11-446:15:21 name="HttpServer"
-      field: field-decl #15 449:16:3-496:17:1 name="handler"
-        type: type-ref #14 458:16:12-495:16:49 name="Fn"
-          arg: type-ref #11 461:16:15-472:16:26 name="HttpRequest"
-          arg: type-ref #13 474:16:28-494:16:48 name="Result"
-            arg: type-ref #12 481:16:35-493:16:47 name="HttpResponse"
-      field: field-decl #17 498:17:3-525:18:1 name="options"
-        type: type-ref #16 507:17:12-524:17:29 name="HttpServerOptions"
-    declaration: function-decl #32 657:21:8-856:30:1 name="@2::client_options"
-      result: type-ref #19 681:21:32-698:21:49 name="HttpClientOptions"
-      body: return-stmt #31 701:22:3-852:29:1
-        value: construct #30 708:22:10-851:28:4 type="HttpClientOptions"
-          arg: named-arg #21 731:23:5-748:23:22 name="timeout_ms"
-            value: literal #20 743:23:17-748:23:22 value=int:30000
-          arg: named-arg #23 754:24:5-776:24:27 name="idle_timeout_ms"
-            value: literal #22 771:24:22-776:24:27 value=int:30000
-          arg: named-arg #25 782:25:5-800:25:23 name="max_connections"
-            value: literal #24 799:25:22-800:25:23 value=int:4
-          arg: named-arg #27 806:26:5-829:26:28 name="max_body_bytes"
-            value: literal #26 822:26:21-829:26:28 value=int:1048576
-          arg: named-arg #29 835:27:5-846:27:16 name="ca_file"
-            value: literal #28 844:27:14-846:27:16 value=string:""
-    declaration: function-decl #61 1113:34:8-1453:44:1 name="@2::client"
-      param: param #35 1124:34:19-1150:34:45 name="options"
-        type: type-ref #34 1133:34:28-1150:34:45 name="HttpClientOptions"
-      result: type-ref #37 1155:34:50-1173:34:68 name="Result"
-        arg: type-ref #36 1162:34:57-1172:34:67 name="HttpClient"
-      body: expr-stmt #48 1176:35:3-1288:36:1
-        value: try-expr #47 1176:35:3-1287:35:114
-          operand: call #46 1180:35:7-1287:35:114 name="@2::check_options" piped=false
-            arg: field-access #39 1194:35:21-1212:35:39 name="timeout_ms"
-              target: name-ref #38 1194:35:21-1201:35:28 name="options"
-            arg: field-access #41 1214:35:41-1237:35:64 name="idle_timeout_ms"
-              target: name-ref #40 1214:35:41-1221:35:48 name="options"
-            arg: field-access #43 1239:35:66-1262:35:89 name="max_connections"
-              target: name-ref #42 1239:35:66-1246:35:73 name="options"
-            arg: field-access #45 1264:35:91-1286:35:113 name="max_body_bytes"
-              target: name-ref #44 1264:35:91-1271:35:98 name="options"
-      body: return-stmt #60 1290:36:3-1449:43:1
-        value: call #59 1297:36:10-1448:42:4 name="HttpWire.client" piped=false
-          arg: field-access #50 1318:37:5-1336:37:23 name="timeout_ms"
-            target: name-ref #49 1318:37:5-1325:37:12 name="options"
-          arg: field-access #52 1342:38:5-1365:38:28 name="idle_timeout_ms"
-            target: name-ref #51 1342:38:5-1349:38:12 name="options"
-          arg: field-access #54 1371:39:5-1394:39:28 name="max_connections"
-            target: name-ref #53 1371:39:5-1378:39:12 name="options"
-          arg: field-access #56 1400:40:5-1422:40:27 name="max_body_bytes"
-            target: name-ref #55 1400:40:5-1407:40:12 name="options"
-          arg: field-access #58 1428:41:5-1443:41:20 name="ca_file"
-            target: name-ref #57 1428:41:5-1435:41:12 name="options"
-    declaration: function-decl #69 1533:46:8-1610:49:1 name="@2::close_client"
-      param: param #64 1550:46:25-1566:46:41 name="pool"
-        type: type-ref #63 1556:46:31-1566:46:41 name="HttpClient"
-      result: type-ref #65 1571:46:46-1575:46:50 name="Void"
-      body: expr-stmt #68 1578:47:3-1606:48:1
-        value: call #67 1578:47:3-1605:47:30 name="HttpWire.close_client" piped=false
-          arg: name-ref #66 1600:47:25-1604:47:29 name="pool"
-    declaration: function-decl #84 1678:51:8-1788:54:1 name="@2::get"
-      param: param #72 1686:51:16-1702:51:32 name="pool"
-        type: type-ref #71 1692:51:22-1702:51:32 name="HttpClient"
-      param: param #74 1704:51:34-1715:51:45 name="url"
-        type: type-ref #73 1709:51:39-1715:51:45 name="String"
-      result: type-ref #76 1720:51:50-1740:51:70 name="Result"
-        arg: type-ref #75 1727:51:57-1739:51:69 name="HttpResponse"
-      body: return-stmt #83 1743:52:3-1784:53:1
-        value: call #82 1750:52:10-1783:52:43 name="@2::request" piped=false
-          arg: name-ref #77 1758:52:18-1762:52:22 name="pool"
-          arg: literal #78 1764:52:24-1769:52:29 value=string:"GET"
-          arg: name-ref #79 1771:52:31-1774:52:34 name="url"
-          arg: list-lit #80 1776:52:36-1778:52:38
-          arg: literal #81 1780:52:40-1782:52:42 value=string:""
-    declaration: function-decl #104 1867:56:8-2023:59:1 name="@2::post"
-      param: param #87 1876:56:17-1892:56:33 name="pool"
-        type: type-ref #86 1882:56:23-1892:56:33 name="HttpClient"
-      param: param #89 1894:56:35-1905:56:46 name="url"
-        type: type-ref #88 1899:56:40-1905:56:46 name="String"
-      param: param #92 1907:56:48-1928:56:69 name="headers"
-        type: type-ref #91 1916:56:57-1928:56:69 name="List"
-          arg: type-ref #90 1921:56:62-1927:56:68 name="Header"
-      param: param #94 1930:56:71-1942:56:83 name="body"
-        type: type-ref #93 1936:56:77-1942:56:83 name="String"
-      result: type-ref #96 1947:56:88-1967:56:108 name="Result"
-        arg: type-ref #95 1954:56:95-1966:56:107 name="HttpResponse"
-      body: return-stmt #103 1970:57:3-2019:58:1
-        value: call #102 1977:57:10-2018:57:51 name="@2::request" piped=false
-          arg: name-ref #97 1985:57:18-1989:57:22 name="pool"
-          arg: literal #98 1991:57:24-1997:57:30 value=string:"POST"
-          arg: name-ref #99 1999:57:32-2002:57:35 name="url"
-          arg: name-ref #100 2004:57:37-2011:57:44 name="headers"
-          arg: name-ref #101 2013:57:46-2017:57:50 name="body"
-    declaration: function-decl #137 2246:63:8-2520:73:1 name="@2::request"
-      param: param #107 2261:64:3-2277:64:19 name="pool"
-        type: type-ref #106 2267:64:9-2277:64:19 name="HttpClient"
-      param: param #109 2281:65:3-2295:65:17 name="method"
-        type: type-ref #108 2289:65:11-2295:65:17 name="String"
-      param: param #111 2299:66:3-2310:66:14 name="url"
-        type: type-ref #110 2304:66:8-2310:66:14 name="String"
-      param: param #114 2314:67:3-2335:67:24 name="headers"
-        type: type-ref #113 2323:67:12-2335:67:24 name="List"
-          arg: type-ref #112 2328:67:17-2334:67:23 name="Header"
-      param: param #116 2339:68:3-2351:68:15 name="body"
-        type: type-ref #115 2345:68:9-2351:68:15 name="String"
-      result: type-ref #118 2358:69:6-2378:69:26 name="Result"
-        arg: type-ref #117 2365:69:13-2377:69:25 name="HttpResponse"
-      body: binding #122 2381:70:3-2408:71:1 name="where"
-        value: try-expr #121 2389:70:11-2407:70:29
-          operand: call #120 2393:70:15-2407:70:29 name="@2::parse_url" piped=false
-            arg: name-ref #119 2403:70:25-2406:70:28 name="url"
-      body: return-stmt #136 2410:71:3-2516:72:1
-        value: call #135 2417:71:10-2515:71:108 name="HttpWire.exchange" piped=false
-          arg: name-ref #123 2435:71:28-2439:71:32 name="pool"
-          arg: field-access #125 2441:71:34-2453:71:46 name="scheme"
-            target: name-ref #124 2441:71:34-2446:71:39 name="where"
-          arg: field-access #127 2455:71:48-2465:71:58 name="host"
-            target: name-ref #126 2455:71:48-2460:71:53 name="where"
-          arg: field-access #129 2467:71:60-2477:71:70 name="port"
-            target: name-ref #128 2467:71:60-2472:71:65 name="where"
-          arg: name-ref #130 2479:71:72-2485:71:78 name="method"
-          arg: field-access #132 2487:71:80-2499:71:92 name="target"
-            target: name-ref #131 2487:71:80-2492:71:85 name="where"
-          arg: name-ref #133 2501:71:94-2508:71:101 name="headers"
-          arg: name-ref #134 2510:71:103-2514:71:107 name="body"
-    declaration: function-decl #169 2598:75:8-2879:85:1 name="@2::header_values"
-      param: param #141 2616:75:26-2637:75:47 name="headers"
-        type: type-ref #140 2625:75:35-2637:75:47 name="List"
-          arg: type-ref #139 2630:75:40-2636:75:46 name="Header"
-      param: param #143 2639:75:49-2651:75:61 name="name"
-        type: type-ref #142 2645:75:55-2651:75:61 name="String"
-      result: type-ref #145 2656:75:66-2668:75:78 name="List"
-        arg: type-ref #144 2661:75:71-2667:75:77 name="String"
-      body: binding #148 2671:76:3-2702:77:1 name="wanted"
-        value: call #147 2680:76:12-2701:76:33 name="String.downcase" piped=false
-          arg: name-ref #146 2696:76:28-2700:76:32 name="name"
-      body: binding #152 2704:77:3-2729:78:1 name="found"
-        type: type-ref #150 2711:77:10-2723:77:22 name="List"
-          arg: type-ref #149 2716:77:15-2722:77:21 name="String"
-        value: list-lit #151 2726:77:25-2728:77:27
-      body: for-stmt #166 2731:78:3-2860:83:1 variable="header"
-        iterable: name-ref #153 2745:78:17-2752:78:24 name="headers"
-        body: if-stmt #165 2757:79:5-2854:82:1
-          branch: if-branch #164 2757:79:5-2846:81:1
-            condition: binary #158 2760:79:8-2798:79:46 op=equal op-span=2789:79:37-2791:79:39
-              left: call #156 2760:79:8-2788:79:36 name="String.downcase" piped=false
-                arg: field-access #155 2776:79:24-2787:79:35 name="name"
-                  target: name-ref #154 2776:79:24-2782:79:30 name="header"
-              right: name-ref #157 2792:79:40-2798:79:46 name="wanted"
-            body: binding #163 2805:80:7-2846:81:1 name="found"
-              value: call #162 2813:80:15-2845:80:47 name="List.append" piped=false
-                arg: name-ref #159 2825:80:27-2830:80:32 name="found"
-                arg: field-access #161 2832:80:34-2844:80:46 name="value"
-                  target: name-ref #160 2832:80:34-2838:80:40 name="header"
-      body: return-stmt #168 2862:83:3-2875:84:1
-        value: name-ref #167 2869:83:10-2874:83:15 name="found"
-    declaration: function-decl #182 3012:88:8-3204:96:1 name="@2::server_options"
-      result: type-ref #171 3036:88:32-3053:88:49 name="HttpServerOptions"
-      body: return-stmt #181 3056:89:3-3200:95:1
-        value: construct #180 3063:89:10-3199:94:4 type="HttpServerOptions"
-          arg: named-arg #173 3086:90:5-3111:90:30 name="request_timeout_ms"
-            value: literal #172 3106:90:25-3111:90:30 value=int:30000
-          arg: named-arg #175 3117:91:5-3139:91:27 name="idle_timeout_ms"
-            value: literal #174 3134:91:22-3139:91:27 value=int:30000
-          arg: named-arg #177 3145:92:5-3165:92:25 name="max_connections"
-            value: literal #176 3162:92:22-3165:92:25 value=int:128
-          arg: named-arg #179 3171:93:5-3194:93:28 name="max_body_bytes"
-            value: literal #178 3187:93:21-3194:93:28 value=int:1048576
-    declaration: function-decl #219 3493:100:8-3872:115:1 name="@2::listen"
-      param: param #185 3507:101:3-3519:101:15 name="host"
-        type: type-ref #184 3513:101:9-3519:101:15 name="String"
-      param: param #187 3523:102:3-3532:102:12 name="port"
-        type: type-ref #186 3529:102:9-3532:102:12 name="Int"
-      param: param #192 3536:103:3-3582:103:49 name="handler"
-        type: type-ref #191 3545:103:12-3582:103:49 name="Fn"
-          arg: type-ref #188 3548:103:15-3559:103:26 name="HttpRequest"
-          arg: type-ref #190 3561:103:28-3581:103:48 name="Result"
-            arg: type-ref #189 3568:103:35-3580:103:47 name="HttpResponse"
-      param: param #194 3586:104:3-3612:104:29 name="options"
-        type: type-ref #193 3595:104:12-3612:104:29 name="HttpServerOptions"
-      result: type-ref #196 3619:105:6-3637:105:24 name="Result"
-        arg: type-ref #195 3626:105:13-3636:105:23 name="HttpServer"
-      body: expr-stmt #207 3640:106:3-3781:112:1
-        value: try-expr #206 3640:106:3-3780:111:4
-          operand: call #205 3644:106:7-3780:111:4 name="@2::check_options" piped=false
-            arg: field-access #198 3663:107:5-3689:107:31 name="request_timeout_ms"
-              target: name-ref #197 3663:107:5-3670:107:12 name="options"
-            arg: field-access #200 3695:108:5-3718:108:28 name="idle_timeout_ms"
-              target: name-ref #199 3695:108:5-3702:108:12 name="options"
-            arg: field-access #202 3724:109:5-3747:109:28 name="max_connections"
-              target: name-ref #201 3724:109:5-3731:109:12 name="options"
-            arg: field-access #204 3753:110:5-3775:110:27 name="max_body_bytes"
-              target: name-ref #203 3753:110:5-3760:110:12 name="options"
-      body: binding #212 3783:112:3-3821:113:1 name="listener"
-        value: try-expr #211 3794:112:14-3820:112:40
-          operand: call #210 3798:112:18-3820:112:40 name="TCP.listen" piped=false
-            arg: name-ref #208 3809:112:29-3813:112:33 name="host"
-            arg: name-ref #209 3815:112:35-3819:112:39 name="port"
-      body: return-stmt #218 3823:113:3-3868:114:1
-        value: call #217 3830:113:10-3867:113:47 name="ok" piped=false
-          arg: call #216 3833:113:13-3866:113:46 name="@2::start" piped=false
-            arg: name-ref #213 3839:113:19-3847:113:27 name="listener"
-            arg: name-ref #214 3849:113:29-3856:113:36 name="handler"
-            arg: name-ref #215 3858:113:38-3865:113:45 name="options"
-    declaration: function-decl #262 3979:117:8-4424:134:1 name="@2::listen_tls"
-      param: param #222 3997:118:3-4009:118:15 name="host"
-        type: type-ref #221 4003:118:9-4009:118:15 name="String"
-      param: param #224 4013:119:3-4022:119:12 name="port"
-        type: type-ref #223 4019:119:9-4022:119:12 name="Int"
-      param: param #226 4026:120:3-4043:120:20 name="cert_file"
-        type: type-ref #225 4037:120:14-4043:120:20 name="String"
-      param: param #228 4047:121:3-4063:121:19 name="key_file"
-        type: type-ref #227 4057:121:13-4063:121:19 name="String"
-      param: param #233 4067:122:3-4113:122:49 name="handler"
-        type: type-ref #232 4076:122:12-4113:122:49 name="Fn"
-          arg: type-ref #229 4079:122:15-4090:122:26 name="HttpRequest"
-          arg: type-ref #231 4092:122:28-4112:122:48 name="Result"
-            arg: type-ref #230 4099:122:35-4111:122:47 name="HttpResponse"
-      param: param #235 4117:123:3-4143:123:29 name="options"
-        type: type-ref #234 4126:123:12-4143:123:29 name="HttpServerOptions"
-      result: type-ref #237 4150:124:6-4168:124:24 name="Result"
-        arg: type-ref #236 4157:124:13-4167:124:23 name="HttpServer"
-      body: expr-stmt #248 4171:125:3-4312:131:1
-        value: try-expr #247 4171:125:3-4311:130:4
-          operand: call #246 4175:125:7-4311:130:4 name="@2::check_options" piped=false
-            arg: field-access #239 4194:126:5-4220:126:31 name="request_timeout_ms"
-              target: name-ref #238 4194:126:5-4201:126:12 name="options"
-            arg: field-access #241 4226:127:5-4249:127:28 name="idle_timeout_ms"
-              target: name-ref #240 4226:127:5-4233:127:12 name="options"
-            arg: field-access #243 4255:128:5-4278:128:28 name="max_connections"
-              target: name-ref #242 4255:128:5-4262:128:12 name="options"
-            arg: field-access #245 4284:129:5-4306:129:27 name="max_body_bytes"
-              target: name-ref #244 4284:129:5-4291:129:12 name="options"
-      body: binding #255 4314:131:3-4373:132:1 name="listener"
-        value: try-expr #254 4325:131:14-4372:131:61
-          operand: call #253 4329:131:18-4372:131:61 name="TLS.listen" piped=false
-            arg: name-ref #249 4340:131:29-4344:131:33 name="host"
-            arg: name-ref #250 4346:131:35-4350:131:39 name="port"
-            arg: name-ref #251 4352:131:41-4361:131:50 name="cert_file"
-            arg: name-ref #252 4363:131:52-4371:131:60 name="key_file"
-      body: return-stmt #261 4375:132:3-4420:133:1
-        value: call #260 4382:132:10-4419:132:47 name="ok" piped=false
-          arg: call #259 4385:132:13-4418:132:46 name="@2::start" piped=false
-            arg: name-ref #256 4391:132:19-4399:132:27 name="listener"
-            arg: name-ref #257 4401:132:29-4408:132:36 name="handler"
-            arg: name-ref #258 4410:132:38-4417:132:45 name="options"
-    declaration: function-decl #270 4475:136:8-4558:139:1 name="@2::local_port"
-      param: param #265 4490:136:23-4508:136:41 name="server"
-        type: type-ref #264 4498:136:31-4508:136:41 name="HttpServer"
-      result: type-ref #266 4513:136:46-4516:136:49 name="Int"
-      body: return-stmt #269 4519:137:3-4554:138:1
-        value: call #268 4526:137:10-4553:137:37 name="HttpWire.local_port" piped=false
-          arg: name-ref #267 4546:137:30-4552:137:36 name="server"
-    declaration: function-decl #279 4624:141:8-4704:144:1 name="@2::wait"
-      param: param #273 4633:141:17-4651:141:35 name="server"
-        type: type-ref #272 4641:141:25-4651:141:35 name="HttpServer"
-      result: type-ref #275 4656:141:40-4668:141:52 name="Result"
-        arg: type-ref #274 4663:141:47-4667:141:51 name="Void"
-      body: return-stmt #278 4671:142:3-4700:143:1
-        value: call #277 4678:142:10-4699:142:31 name="HttpWire.wait" piped=false
-          arg: name-ref #276 4692:142:24-4698:142:30 name="server"
-    declaration: function-decl #287 4821:146:8-4902:149:1 name="@2::close_server"
-      param: param #282 4838:146:25-4856:146:43 name="server"
-        type: type-ref #281 4846:146:33-4856:146:43 name="HttpServer"
-      result: type-ref #283 4861:146:48-4865:146:52 name="Void"
-      body: expr-stmt #286 4868:147:3-4898:148:1
-        value: call #285 4868:147:3-4897:147:32 name="HttpWire.close_server" piped=false
-          arg: name-ref #284 4890:147:25-4896:147:31 name="server"
-    declaration: function-decl #337 4903:150:1-5393:162:1 name="@2::check_options"
-      param: param #290 4921:150:19-4936:150:34 name="timeout_ms"
-        type: type-ref #289 4933:150:31-4936:150:34 name="Int"
-      param: param #292 4938:150:36-4958:150:56 name="idle_timeout_ms"
-        type: type-ref #291 4955:150:53-4958:150:56 name="Int"
-      param: param #294 4960:150:58-4980:150:78 name="max_connections"
-        type: type-ref #293 4977:150:75-4980:150:78 name="Int"
-      param: param #296 4982:150:80-5001:150:99 name="max_body_bytes"
-        type: type-ref #295 4998:150:96-5001:150:99 name="Int"
-      result: type-ref #298 5006:150:104-5018:150:116 name="Result"
-        arg: type-ref #297 5013:150:111-5017:150:115 name="Void"
-      body: if-stmt #318 5021:151:3-5173:154:1
-        branch: if-branch #317 5021:151:3-5167:153:1
-          condition: binary #313 5024:151:6-5110:151:92 op=or op-span=5088:151:70-5090:151:72
-            left: binary #309 5024:151:6-5087:151:69 op=or op-span=5064:151:46-5066:151:48
-              left: binary #305 5024:151:6-5063:151:45 op=or op-span=5040:151:22-5042:151:24
-                left: binary #301 5024:151:6-5039:151:21 op=less-equal op-span=5035:151:17-5037:151:19
-                  left: name-ref #299 5024:151:6-5034:151:16 name="timeout_ms"
-                  right: literal #300 5038:151:20-5039:151:21 value=int:0
-                right: binary #304 5043:151:25-5063:151:45 op=less-equal op-span=5059:151:41-5061:151:43
-                  left: name-ref #302 5043:151:25-5058:151:40 name="idle_timeout_ms"
-                  right: literal #303 5062:151:44-5063:151:45 value=int:0
-              right: binary #308 5067:151:49-5087:151:69 op=less-equal op-span=5083:151:65-5085:151:67
-                left: name-ref #306 5067:151:49-5082:151:64 name="max_connections"
-                right: literal #307 5086:151:68-5087:151:69 value=int:0
-            right: binary #312 5091:151:73-5110:151:92 op=less-equal op-span=5106:151:88-5108:151:90
-              left: name-ref #310 5091:151:73-5105:151:87 name="max_body_bytes"
-              right: literal #311 5109:151:91-5110:151:92 value=int:0
-          body: return-stmt #316 5115:152:5-5167:153:1
-            value: call #315 5122:152:12-5166:152:56 name="error" piped=false
-              arg: literal #314 5128:152:18-5165:152:55 value=string:"http: every option must be positive"
-      body: if-stmt #326 5175:154:3-5272:157:1
-        branch: if-branch #325 5175:154:3-5266:156:1
-          condition: binary #321 5178:154:6-5201:154:29 op=greater op-span=5194:154:22-5195:154:23
-            left: name-ref #319 5178:154:6-5193:154:21 name="max_connections"
-            right: literal #320 5196:154:24-5201:154:29 value=int:65536
-          body: return-stmt #324 5206:155:5-5266:156:1
-            value: call #323 5213:155:12-5265:155:64 name="error" piped=false
-              arg: literal #322 5219:155:18-5264:155:63 value=string:"http: max_connections must be at most 65536"
-      body: if-stmt #334 5274:157:3-5375:160:1
-        branch: if-branch #333 5274:157:3-5369:159:1
-          condition: binary #329 5277:157:6-5302:157:31 op=greater op-span=5292:157:21-5293:157:22
-            left: name-ref #327 5277:157:6-5291:157:20 name="max_body_bytes"
-            right: literal #328 5294:157:23-5302:157:31 value=int:67108864
-          body: return-stmt #332 5307:158:5-5369:159:1
-            value: call #331 5314:158:12-5368:158:66 name="error" piped=false
-              arg: literal #330 5320:158:18-5367:158:65 value=string:"http: max_body_bytes must be at most 67108864"
-      body: return-stmt #336 5377:160:3-5389:161:1
-        value: call #335 5384:160:10-5388:160:14 name="ok" piped=false
-    declaration: function-decl #350 5394:163:1-5522:166:1 name="@2::first_of"
-      param: param #339 5407:163:14-5419:163:26 name="text"
-        type: type-ref #338 5413:163:20-5419:163:26 name="String"
-      param: param #341 5421:163:28-5433:163:40 name="part"
-        type: type-ref #340 5427:163:34-5433:163:40 name="String"
-      result: type-ref #342 5438:163:45-5441:163:48 name="Int"
-      body: return-stmt #349 5444:164:3-5518:165:1
-        value: call #348 5451:164:10-5517:164:76 name="Result.unwrap_or" piped=false
-          arg: call #345 5468:164:27-5495:164:54 name="String.index_of" piped=false
-            arg: name-ref #343 5484:164:43-5488:164:47 name="text"
-            arg: name-ref #344 5490:164:49-5494:164:53 name="part"
-          arg: call #347 5497:164:56-5516:164:75 name="String.length" piped=false
-            arg: name-ref #346 5511:164:70-5515:164:74 name="text"
-    declaration: function-decl #364 5523:167:1-5639:170:1 name="@2::rest_of"
-      param: param #352 5535:167:13-5547:167:25 name="text"
-        type: type-ref #351 5541:167:19-5547:167:25 name="String"
-      param: param #354 5549:167:27-5559:167:37 name="start"
-        type: type-ref #353 5556:167:34-5559:167:37 name="Int"
-      result: type-ref #355 5564:167:42-5570:167:48 name="String"
-      body: return-stmt #363 5573:168:3-5635:169:1
-        value: call #362 5580:168:10-5634:168:64 name="String.slice" piped=false
-          arg: name-ref #356 5593:168:23-5597:168:27 name="text"
-          arg: name-ref #357 5599:168:29-5604:168:34 name="start"
-          arg: binary #361 5606:168:36-5633:168:63 op=minus op-span=5626:168:56-5627:168:57
-            left: call #359 5606:168:36-5625:168:55 name="String.length" piped=false
-              arg: name-ref #358 5620:168:50-5624:168:54 name="text"
-            right: name-ref #360 5628:168:58-5633:168:63 name="start"
-    declaration: function-decl #400 5640:171:1-5880:180:1 name="@2::plain?"
-      param: param #366 5651:171:12-5663:171:24 name="text"
-        type: type-ref #365 5657:171:18-5663:171:24 name="String"
-      param: param #368 5665:171:26-5682:171:43 name="digits_only"
-        type: type-ref #367 5678:171:39-5682:171:43 name="Bool"
-      result: type-ref #369 5687:171:48-5691:171:52 name="Bool"
-      body: for-stmt #397 5694:172:3-5862:178:1 variable="c"
-        iterable: call #372 5703:172:12-5725:172:34 name="String.split" piped=false
-          arg: name-ref #370 5716:172:25-5720:172:29 name="text"
-          arg: literal #371 5722:172:31-5724:172:33 value=string:""
-        body: binding #375 5730:173:5-5752:174:1 name="code"
-          value: call #374 5737:173:12-5751:173:26 name="String.code" piped=false
-            arg: name-ref #373 5749:173:24-5750:173:25 name="c"
-        body: if-stmt #396 5756:174:5-5856:177:1
-          branch: if-branch #395 5756:174:5-5848:176:1
-            condition: binary #392 5759:174:8-5828:174:77 op=or op-span=5783:174:32-5785:174:34
-              left: binary #382 5759:174:8-5782:174:31 op=or op-span=5769:174:18-5771:174:20
-                left: binary #378 5759:174:8-5768:174:17 op=less op-span=5764:174:13-5765:174:14
-                  left: name-ref #376 5759:174:8-5763:174:12 name="code"
-                  right: literal #377 5766:174:15-5768:174:17 value=int:33
-                right: binary #381 5772:174:21-5782:174:31 op=greater op-span=5777:174:26-5778:174:27
-                  left: name-ref #379 5772:174:21-5776:174:25 name="code"
-                  right: literal #380 5779:174:28-5782:174:31 value=int:126
-              right: binary #391 5787:174:36-5827:174:76 op=and op-span=5799:174:48-5802:174:51
-                left: name-ref #383 5787:174:36-5798:174:47 name="digits_only"
-                right: binary #390 5804:174:53-5826:174:75 op=or op-span=5814:174:63-5816:174:65
-                  left: binary #386 5804:174:53-5813:174:62 op=less op-span=5809:174:58-5810:174:59
-                    left: name-ref #384 5804:174:53-5808:174:57 name="code"
-                    right: literal #385 5811:174:60-5813:174:62 value=int:48
-                  right: binary #389 5817:174:66-5826:174:75 op=greater op-span=5822:174:71-5823:174:72
-                    left: name-ref #387 5817:174:66-5821:174:70 name="code"
-                    right: literal #388 5824:174:73-5826:174:75 value=int:57
-            body: return-stmt #394 5835:175:7-5848:176:1
-              value: literal #393 5842:175:14-5847:175:19 value=bool:false
-      body: return-stmt #399 5864:178:3-5876:179:1
-        value: literal #398 5871:178:10-5875:178:14 value=bool:true
-    declaration: function-decl #453 5881:181:1-6202:193:1 name="@2::ipv6?"
-      param: param #402 5891:181:11-5903:181:23 name="text"
-        type: type-ref #401 5897:181:17-5903:181:23 name="String"
-      result: type-ref #403 5908:181:28-5912:181:32 name="Bool"
-      body: if-stmt #411 5915:182:3-5973:185:1
-        branch: if-branch #410 5915:182:3-5967:184:1
-          condition: unary #407 5918:182:6-5949:182:37 op=not op-span=5918:182:6-5921:182:9
-            operand: call #406 5922:182:10-5949:182:37 name="String.contains?" piped=false
-              arg: name-ref #404 5939:182:27-5943:182:31 name="text"
-              arg: literal #405 5945:182:33-5948:182:36 value=string:":"
-          body: return-stmt #409 5954:183:5-5967:184:1
-            value: literal #408 5961:183:12-5966:183:17 value=bool:false
-      body: for-stmt #450 5975:185:3-6184:191:1 variable="c"
-        iterable: call #414 5984:185:12-6006:185:34 name="String.split" piped=false
-          arg: name-ref #412 5997:185:25-6001:185:29 name="text"
-          arg: literal #413 6003:185:31-6005:185:33 value=string:""
-        body: binding #417 6011:186:5-6033:187:1 name="code"
-          value: call #416 6018:186:12-6032:186:26 name="String.code" piped=false
-            arg: name-ref #415 6030:186:24-6031:186:25 name="c"
-        body: if-stmt #449 6037:187:5-6178:190:1
-          branch: if-branch #448 6037:187:5-6170:189:1
-            condition: unary #445 6040:187:8-6150:187:118 op=not op-span=6040:187:8-6043:187:11
-              operand: binary #444 6045:187:13-6149:187:117 op=or op-span=6136:187:104-6138:187:106
-                left: binary #440 6045:187:13-6135:187:103 op=or op-span=6104:187:72-6106:187:74
-                  left: binary #432 6045:187:13-6103:187:71 op=or op-span=6073:187:41-6075:187:43
-                    left: binary #424 6046:187:14-6071:187:39 op=and op-span=6057:187:25-6060:187:28
-                      left: binary #420 6046:187:14-6056:187:24 op=greater-equal op-span=6051:187:19-6053:187:21
-                        left: name-ref #418 6046:187:14-6050:187:18 name="code"
-                        right: literal #419 6054:187:22-6056:187:24 value=int:48
-                      right: binary #423 6061:187:29-6071:187:39 op=less-equal op-span=6066:187:34-6068:187:36
-                        left: name-ref #421 6061:187:29-6065:187:33 name="code"
-                        right: literal #422 6069:187:37-6071:187:39 value=int:58
-                    right: binary #431 6077:187:45-6102:187:70 op=and op-span=6088:187:56-6091:187:59
-                      left: binary #427 6077:187:45-6087:187:55 op=greater-equal op-span=6082:187:50-6084:187:52
-                        left: name-ref #425 6077:187:45-6081:187:49 name="code"
-                        right: literal #426 6085:187:53-6087:187:55 value=int:65
-                      right: binary #430 6092:187:60-6102:187:70 op=less-equal op-span=6097:187:65-6099:187:67
-                        left: name-ref #428 6092:187:60-6096:187:64 name="code"
-                        right: literal #429 6100:187:68-6102:187:70 value=int:70
-                  right: binary #439 6108:187:76-6134:187:102 op=and op-span=6119:187:87-6122:187:90
-                    left: binary #435 6108:187:76-6118:187:86 op=greater-equal op-span=6113:187:81-6115:187:83
-                      left: name-ref #433 6108:187:76-6112:187:80 name="code"
-                      right: literal #434 6116:187:84-6118:187:86 value=int:97
-                    right: binary #438 6123:187:91-6134:187:102 op=less-equal op-span=6128:187:96-6130:187:98
-                      left: name-ref #436 6123:187:91-6127:187:95 name="code"
-                      right: literal #437 6131:187:99-6134:187:102 value=int:102
-                right: binary #443 6139:187:107-6149:187:117 op=equal op-span=6144:187:112-6146:187:114
-                  left: name-ref #441 6139:187:107-6143:187:111 name="code"
-                  right: literal #442 6147:187:115-6149:187:117 value=int:46
-            body: return-stmt #447 6157:188:7-6170:189:1
-              value: literal #446 6164:188:14-6169:188:19 value=bool:false
-      body: return-stmt #452 6186:191:3-6198:192:1
-        value: literal #451 6193:191:10-6197:191:14 value=bool:true
-    declaration: function-decl #459 6203:194:1-6334:197:1 name="@2::bad_url"
-      result: type-ref #455 6220:194:18-6234:194:32 name="Result"
-        arg: type-ref #454 6227:194:25-6233:194:31 name="@2::Target"
-      body: return-stmt #458 6237:195:3-6330:196:1
-        value: call #457 6244:195:10-6329:195:95 name="error" piped=false
-          arg: literal #456 6250:195:16-6328:195:94 value=string:"http: the URL must be http:// or https:// with a host, and without user info"
-    declaration: function-decl #695 6335:198:1-8156:260:1 name="@2::parse_url"
-      param: param #461 6349:198:15-6360:198:26 name="url"
-        type: type-ref #460 6354:198:20-6360:198:26 name="String"
-      result: type-ref #463 6365:198:31-6379:198:45 name="Result"
-        arg: type-ref #462 6372:198:38-6378:198:44 name="@2::Target"
-      body: binding #467 6382:199:3-6411:200:1 name="split"
-        value: call #466 6390:199:11-6410:199:31 name="@2::first_of" piped=false
-          arg: name-ref #464 6399:199:20-6402:199:23 name="url"
-          arg: literal #465 6404:199:25-6409:199:30 value=string:"://"
-      body: binding #473 6413:200:3-6467:201:1 name="scheme"
-        value: call #472 6422:200:12-6466:200:56 name="String.downcase" piped=false
-          arg: call #471 6438:200:28-6465:200:55 name="String.slice" piped=false
-            arg: name-ref #468 6451:200:41-6454:200:44 name="url"
-            arg: literal #469 6456:200:46-6457:200:47 value=int:0
-            arg: name-ref #470 6459:200:49-6464:200:54 name="split"
-      body: if-stmt #489 6469:201:3-6571:204:1
-        branch: if-branch #488 6469:201:3-6565:203:1
-          condition: binary #485 6472:201:6-6543:201:77 op=or op-span=6500:201:34-6502:201:36
-            left: binary #477 6472:201:6-6499:201:33 op=equal op-span=6478:201:12-6480:201:14
-              left: name-ref #474 6472:201:6-6477:201:11 name="split"
-              right: call #476 6481:201:15-6499:201:33 name="String.length" piped=false
-                arg: name-ref #475 6495:201:29-6498:201:32 name="url"
-            right: binary #484 6504:201:38-6542:201:76 op=and op-span=6521:201:55-6524:201:58
-              left: binary #480 6504:201:38-6520:201:54 op=not-equal op-span=6511:201:45-6513:201:47
-                left: name-ref #478 6504:201:38-6510:201:44 name="scheme"
-                right: literal #479 6514:201:48-6520:201:54 value=string:"http"
-              right: binary #483 6525:201:59-6542:201:76 op=not-equal op-span=6532:201:66-6534:201:68
-                left: name-ref #481 6525:201:59-6531:201:65 name="scheme"
-                right: literal #482 6535:201:69-6542:201:76 value=string:"https"
-          body: return-stmt #487 6548:202:5-6565:203:1
-            value: call #486 6555:202:12-6564:202:21 name="@2::bad_url" piped=false
-      body: binding #495 6573:204:3-6604:205:1 name="rest"
-        value: call #494 6580:204:10-6603:204:33 name="@2::rest_of" piped=false
-          arg: name-ref #490 6588:204:18-6591:204:21 name="url"
-          arg: binary #493 6593:204:23-6602:204:32 op=plus op-span=6599:204:29-6600:204:30
-            left: name-ref #491 6593:204:23-6598:204:28 name="split"
-            right: literal #492 6601:204:31-6602:204:32 value=int:3
-      body: binding #502 6606:205:3-6656:206:1 name="rest"
-        value: call #501 6613:205:10-6655:205:52 name="String.slice" piped=false
-          arg: name-ref #496 6626:205:23-6630:205:27 name="rest"
-          arg: literal #497 6632:205:29-6633:205:30 value=int:0
-          arg: call #500 6635:205:32-6654:205:51 name="@2::first_of" piped=false
-            arg: name-ref #498 6644:205:41-6648:205:45 name="rest"
-            arg: literal #499 6650:205:47-6653:205:50 value=string:"#"
-      body: binding #506 6658:206:3-6685:207:1 name="stop"
-        value: call #505 6665:206:10-6684:206:29 name="@2::first_of" piped=false
-          arg: name-ref #503 6674:206:19-6678:206:23 name="rest"
-          arg: literal #504 6680:206:25-6683:206:28 value=string:"/"
-      body: binding #510 6687:207:3-6715:208:1 name="query"
-        value: call #509 6695:207:11-6714:207:30 name="@2::first_of" piped=false
-          arg: name-ref #507 6704:207:20-6708:207:24 name="rest"
-          arg: literal #508 6710:207:26-6713:207:29 value=string:"?"
-      body: if-stmt #517 6717:208:3-6756:211:1
-        branch: if-branch #516 6717:208:3-6750:210:1
-          condition: binary #513 6720:208:6-6732:208:18 op=less op-span=6726:208:12-6727:208:13
-            left: name-ref #511 6720:208:6-6725:208:11 name="query"
-            right: name-ref #512 6728:208:14-6732:208:18 name="stop"
-          body: binding #515 6737:209:5-6750:210:1 name="stop"
-            value: name-ref #514 6744:209:12-6749:209:17 name="query"
-      body: binding #522 6758:211:3-6798:212:1 name="authority"
-        value: call #521 6770:211:15-6797:211:42 name="String.slice" piped=false
-          arg: name-ref #518 6783:211:28-6787:211:32 name="rest"
-          arg: literal #519 6789:211:34-6790:211:35 value=int:0
-          arg: name-ref #520 6792:211:37-6796:211:41 name="stop"
-      body: binding #526 6800:212:3-6829:213:1 name="target"
-        value: call #525 6809:212:12-6828:212:31 name="@2::rest_of" piped=false
-          arg: name-ref #523 6817:212:20-6821:212:24 name="rest"
-          arg: name-ref #524 6823:212:26-6827:212:30 name="stop"
-      body: if-stmt #535 6831:213:3-6903:216:1
-        branch: if-branch #534 6831:213:3-6897:215:1
-          condition: unary #530 6834:213:6-6870:213:42 op=not op-span=6834:213:6-6837:213:9
-            operand: call #529 6838:213:10-6870:213:42 name="String.starts_with?" piped=false
-              arg: name-ref #527 6858:213:30-6864:213:36 name="target"
-              arg: literal #528 6866:213:38-6869:213:41 value=string:"/"
-          body: binding #533 6875:214:5-6897:215:1 name="target"
-            value: interpolation #532 6884:214:14-6896:214:26
+    declaration: const-decl #1 331:7:1-350:8:1 name="@2::READ_BYTES"
+      value: literal #0 344:7:14-349:7:19 value=int:65536
+    declaration: const-decl #3 435:9:1-453:10:1 name="@2::FRAME_BYTES"
+      value: literal #2 449:9:15-452:9:18 value=int:512
+    declaration: const-decl #5 529:11:1-548:12:1 name="@2::SMALL_BODY"
+      value: literal #4 542:11:14-547:11:19 value=int:16384
+    declaration: const-decl #7 548:12:1-569:13:1 name="@2::TEXT_BYTES"
+      value: literal #6 561:12:14-568:12:21 value=int:1048576
+    declaration: const-decl #9 569:13:1-618:14:1 name="@2::BAD_TEXT"
+      value: literal #8 580:13:12-617:13:49 value=string:"400 request body is not valid UTF-8"
+    declaration: const-decl #11 700:15:1-716:16:1 name="@2::ANSWER_MS"
+      value: literal #10 712:15:13-715:15:16 value=int:100
+    declaration: struct-decl #20 717:17:1-796:23:1 name="@2::Target"
+      field: field-decl #13 733:18:3-748:19:1 name="scheme"
+        type: type-ref #12 741:18:11-747:18:17 name="String"
+      field: field-decl #15 750:19:3-763:20:1 name="host"
+        type: type-ref #14 756:19:9-762:19:15 name="String"
+      field: field-decl #17 765:20:3-775:21:1 name="port"
+        type: type-ref #16 771:20:9-774:20:12 name="Int"
+      field: field-decl #19 777:21:3-792:22:1 name="target"
+        type: type-ref #18 785:21:11-791:21:17 name="String"
+    declaration: struct-decl #30 797:24:1-915:29:1 name="@2::Service"
+      field: field-decl #22 814:25:3-833:26:1 name="server"
+        type: type-ref #21 822:25:11-832:25:21 name="HttpServer"
+      field: field-decl #27 835:26:3-882:27:1 name="handler"
+        type: type-ref #26 844:26:12-881:26:49 name="Fn"
+          arg: type-ref #23 847:26:15-858:26:26 name="HttpRequest"
+          arg: type-ref #25 860:26:28-880:26:48 name="Result"
+            arg: type-ref #24 867:26:35-879:26:47 name="HttpResponse"
+      field: field-decl #29 884:27:3-911:28:1 name="options"
+        type: type-ref #28 893:27:12-910:27:29 name="HttpServerOptions"
+    declaration: struct-decl #36 916:30:1-977:34:1 name="@2::Incoming"
+      field: field-decl #32 934:31:3-955:32:1 name="request"
+        type: type-ref #31 943:31:12-954:31:23 name="HttpRequest"
+      field: field-decl #35 957:32:3-973:33:1 name="rest"
+        type: type-ref #34 963:32:9-972:32:18 name="List"
+          arg: type-ref #33 968:32:14-971:32:17 name="Int"
+    declaration: struct-decl #43 978:35:1-1036:39:1 name="@2::Body"
+      field: field-decl #39 992:36:3-1013:37:1 name="pieces"
+        type: type-ref #38 1000:36:11-1012:36:23 name="List"
+          arg: type-ref #37 1005:36:16-1011:36:22 name="String"
+      field: field-decl #42 1015:37:3-1032:38:1 name="carry"
+        type: type-ref #41 1022:37:10-1031:37:19 name="List"
+          arg: type-ref #40 1027:37:15-1030:37:18 name="Int"
+    declaration: struct-decl #52 1037:40:1-1133:46:1 name="@2::Reading"
+      field: field-decl #45 1054:41:3-1069:42:1 name="socket"
+        type: type-ref #44 1062:41:11-1068:41:17 name="Socket"
+      field: field-decl #47 1071:42:3-1091:43:1 name="head"
+        type: type-ref #46 1077:42:9-1090:42:22 name="HttpWire.Head"
+      field: field-decl #49 1093:43:3-1107:44:1 name="deadline"
+        type: type-ref #48 1103:43:13-1106:43:16 name="Int"
+      field: field-decl #51 1109:44:3-1129:45:1 name="max_body_bytes"
+        type: type-ref #50 1125:44:19-1128:44:22 name="Int"
+    declaration: function-decl #66 1261:48:8-1460:57:1 name="@2::client_options"
+      result: type-ref #53 1285:48:32-1302:48:49 name="HttpClientOptions"
+      body: return-stmt #65 1305:49:3-1456:56:1
+        value: construct #64 1312:49:10-1455:55:4 type="HttpClientOptions"
+          arg: named-arg #55 1335:50:5-1352:50:22 name="timeout_ms"
+            value: literal #54 1347:50:17-1352:50:22 value=int:30000
+          arg: named-arg #57 1358:51:5-1380:51:27 name="idle_timeout_ms"
+            value: literal #56 1375:51:22-1380:51:27 value=int:30000
+          arg: named-arg #59 1386:52:5-1404:52:23 name="max_connections"
+            value: literal #58 1403:52:22-1404:52:23 value=int:4
+          arg: named-arg #61 1410:53:5-1433:53:28 name="max_body_bytes"
+            value: literal #60 1426:53:21-1433:53:28 value=int:1048576
+          arg: named-arg #63 1439:54:5-1450:54:16 name="ca_file"
+            value: literal #62 1448:54:14-1450:54:16 value=string:""
+    declaration: function-decl #95 1717:61:8-2057:71:1 name="@2::client"
+      param: param #69 1728:61:19-1754:61:45 name="options"
+        type: type-ref #68 1737:61:28-1754:61:45 name="HttpClientOptions"
+      result: type-ref #71 1759:61:50-1777:61:68 name="Result"
+        arg: type-ref #70 1766:61:57-1776:61:67 name="HttpClient"
+      body: expr-stmt #82 1780:62:3-1892:63:1
+        value: try-expr #81 1780:62:3-1891:62:114
+          operand: call #80 1784:62:7-1891:62:114 name="@2::check_options" piped=false
+            arg: field-access #73 1798:62:21-1816:62:39 name="timeout_ms"
+              target: name-ref #72 1798:62:21-1805:62:28 name="options"
+            arg: field-access #75 1818:62:41-1841:62:64 name="idle_timeout_ms"
+              target: name-ref #74 1818:62:41-1825:62:48 name="options"
+            arg: field-access #77 1843:62:66-1866:62:89 name="max_connections"
+              target: name-ref #76 1843:62:66-1850:62:73 name="options"
+            arg: field-access #79 1868:62:91-1890:62:113 name="max_body_bytes"
+              target: name-ref #78 1868:62:91-1875:62:98 name="options"
+      body: return-stmt #94 1894:63:3-2053:70:1
+        value: call #93 1901:63:10-2052:69:4 name="HttpWire.client" piped=false
+          arg: field-access #84 1922:64:5-1940:64:23 name="timeout_ms"
+            target: name-ref #83 1922:64:5-1929:64:12 name="options"
+          arg: field-access #86 1946:65:5-1969:65:28 name="idle_timeout_ms"
+            target: name-ref #85 1946:65:5-1953:65:12 name="options"
+          arg: field-access #88 1975:66:5-1998:66:28 name="max_connections"
+            target: name-ref #87 1975:66:5-1982:66:12 name="options"
+          arg: field-access #90 2004:67:5-2026:67:27 name="max_body_bytes"
+            target: name-ref #89 2004:67:5-2011:67:12 name="options"
+          arg: field-access #92 2032:68:5-2047:68:20 name="ca_file"
+            target: name-ref #91 2032:68:5-2039:68:12 name="options"
+    declaration: function-decl #103 2137:73:8-2214:76:1 name="@2::close_client"
+      param: param #98 2154:73:25-2170:73:41 name="pool"
+        type: type-ref #97 2160:73:31-2170:73:41 name="HttpClient"
+      result: type-ref #99 2175:73:46-2179:73:50 name="Void"
+      body: expr-stmt #102 2182:74:3-2210:75:1
+        value: call #101 2182:74:3-2209:74:30 name="HttpWire.close_client" piped=false
+          arg: name-ref #100 2204:74:25-2208:74:29 name="pool"
+    declaration: function-decl #118 2282:78:8-2392:81:1 name="@2::get"
+      param: param #106 2290:78:16-2306:78:32 name="pool"
+        type: type-ref #105 2296:78:22-2306:78:32 name="HttpClient"
+      param: param #108 2308:78:34-2319:78:45 name="url"
+        type: type-ref #107 2313:78:39-2319:78:45 name="String"
+      result: type-ref #110 2324:78:50-2344:78:70 name="Result"
+        arg: type-ref #109 2331:78:57-2343:78:69 name="HttpResponse"
+      body: return-stmt #117 2347:79:3-2388:80:1
+        value: call #116 2354:79:10-2387:79:43 name="@2::request" piped=false
+          arg: name-ref #111 2362:79:18-2366:79:22 name="pool"
+          arg: literal #112 2368:79:24-2373:79:29 value=string:"GET"
+          arg: name-ref #113 2375:79:31-2378:79:34 name="url"
+          arg: list-lit #114 2380:79:36-2382:79:38
+          arg: literal #115 2384:79:40-2386:79:42 value=string:""
+    declaration: function-decl #138 2471:83:8-2627:86:1 name="@2::post"
+      param: param #121 2480:83:17-2496:83:33 name="pool"
+        type: type-ref #120 2486:83:23-2496:83:33 name="HttpClient"
+      param: param #123 2498:83:35-2509:83:46 name="url"
+        type: type-ref #122 2503:83:40-2509:83:46 name="String"
+      param: param #126 2511:83:48-2532:83:69 name="headers"
+        type: type-ref #125 2520:83:57-2532:83:69 name="List"
+          arg: type-ref #124 2525:83:62-2531:83:68 name="Header"
+      param: param #128 2534:83:71-2546:83:83 name="body"
+        type: type-ref #127 2540:83:77-2546:83:83 name="String"
+      result: type-ref #130 2551:83:88-2571:83:108 name="Result"
+        arg: type-ref #129 2558:83:95-2570:83:107 name="HttpResponse"
+      body: return-stmt #137 2574:84:3-2623:85:1
+        value: call #136 2581:84:10-2622:84:51 name="@2::request" piped=false
+          arg: name-ref #131 2589:84:18-2593:84:22 name="pool"
+          arg: literal #132 2595:84:24-2601:84:30 value=string:"POST"
+          arg: name-ref #133 2603:84:32-2606:84:35 name="url"
+          arg: name-ref #134 2608:84:37-2615:84:44 name="headers"
+          arg: name-ref #135 2617:84:46-2621:84:50 name="body"
+    declaration: function-decl #171 2850:90:8-3124:100:1 name="@2::request"
+      param: param #141 2865:91:3-2881:91:19 name="pool"
+        type: type-ref #140 2871:91:9-2881:91:19 name="HttpClient"
+      param: param #143 2885:92:3-2899:92:17 name="method"
+        type: type-ref #142 2893:92:11-2899:92:17 name="String"
+      param: param #145 2903:93:3-2914:93:14 name="url"
+        type: type-ref #144 2908:93:8-2914:93:14 name="String"
+      param: param #148 2918:94:3-2939:94:24 name="headers"
+        type: type-ref #147 2927:94:12-2939:94:24 name="List"
+          arg: type-ref #146 2932:94:17-2938:94:23 name="Header"
+      param: param #150 2943:95:3-2955:95:15 name="body"
+        type: type-ref #149 2949:95:9-2955:95:15 name="String"
+      result: type-ref #152 2962:96:6-2982:96:26 name="Result"
+        arg: type-ref #151 2969:96:13-2981:96:25 name="HttpResponse"
+      body: binding #156 2985:97:3-3012:98:1 name="where"
+        value: try-expr #155 2993:97:11-3011:97:29
+          operand: call #154 2997:97:15-3011:97:29 name="@2::parse_url" piped=false
+            arg: name-ref #153 3007:97:25-3010:97:28 name="url"
+      body: return-stmt #170 3014:98:3-3120:99:1
+        value: call #169 3021:98:10-3119:98:108 name="HttpWire.exchange" piped=false
+          arg: name-ref #157 3039:98:28-3043:98:32 name="pool"
+          arg: field-access #159 3045:98:34-3057:98:46 name="scheme"
+            target: name-ref #158 3045:98:34-3050:98:39 name="where"
+          arg: field-access #161 3059:98:48-3069:98:58 name="host"
+            target: name-ref #160 3059:98:48-3064:98:53 name="where"
+          arg: field-access #163 3071:98:60-3081:98:70 name="port"
+            target: name-ref #162 3071:98:60-3076:98:65 name="where"
+          arg: name-ref #164 3083:98:72-3089:98:78 name="method"
+          arg: field-access #166 3091:98:80-3103:98:92 name="target"
+            target: name-ref #165 3091:98:80-3096:98:85 name="where"
+          arg: name-ref #167 3105:98:94-3112:98:101 name="headers"
+          arg: name-ref #168 3114:98:103-3118:98:107 name="body"
+    declaration: function-decl #203 3202:102:8-3483:112:1 name="@2::header_values"
+      param: param #175 3220:102:26-3241:102:47 name="headers"
+        type: type-ref #174 3229:102:35-3241:102:47 name="List"
+          arg: type-ref #173 3234:102:40-3240:102:46 name="Header"
+      param: param #177 3243:102:49-3255:102:61 name="name"
+        type: type-ref #176 3249:102:55-3255:102:61 name="String"
+      result: type-ref #179 3260:102:66-3272:102:78 name="List"
+        arg: type-ref #178 3265:102:71-3271:102:77 name="String"
+      body: binding #182 3275:103:3-3306:104:1 name="wanted"
+        value: call #181 3284:103:12-3305:103:33 name="String.downcase" piped=false
+          arg: name-ref #180 3300:103:28-3304:103:32 name="name"
+      body: binding #186 3308:104:3-3333:105:1 name="found"
+        type: type-ref #184 3315:104:10-3327:104:22 name="List"
+          arg: type-ref #183 3320:104:15-3326:104:21 name="String"
+        value: list-lit #185 3330:104:25-3332:104:27
+      body: for-stmt #200 3335:105:3-3464:110:1 variable="header"
+        iterable: name-ref #187 3349:105:17-3356:105:24 name="headers"
+        body: if-stmt #199 3361:106:5-3458:109:1
+          branch: if-branch #198 3361:106:5-3450:108:1
+            condition: binary #192 3364:106:8-3402:106:46 op=equal op-span=3393:106:37-3395:106:39
+              left: call #190 3364:106:8-3392:106:36 name="String.downcase" piped=false
+                arg: field-access #189 3380:106:24-3391:106:35 name="name"
+                  target: name-ref #188 3380:106:24-3386:106:30 name="header"
+              right: name-ref #191 3396:106:40-3402:106:46 name="wanted"
+            body: binding #197 3409:107:7-3450:108:1 name="found"
+              value: call #196 3417:107:15-3449:107:47 name="List.append" piped=false
+                arg: name-ref #193 3429:107:27-3434:107:32 name="found"
+                arg: field-access #195 3436:107:34-3448:107:46 name="value"
+                  target: name-ref #194 3436:107:34-3442:107:40 name="header"
+      body: return-stmt #202 3466:110:3-3479:111:1
+        value: name-ref #201 3473:110:10-3478:110:15 name="found"
+    declaration: function-decl #216 3616:115:8-3808:123:1 name="@2::server_options"
+      result: type-ref #205 3640:115:32-3657:115:49 name="HttpServerOptions"
+      body: return-stmt #215 3660:116:3-3804:122:1
+        value: construct #214 3667:116:10-3803:121:4 type="HttpServerOptions"
+          arg: named-arg #207 3690:117:5-3715:117:30 name="request_timeout_ms"
+            value: literal #206 3710:117:25-3715:117:30 value=int:30000
+          arg: named-arg #209 3721:118:5-3743:118:27 name="idle_timeout_ms"
+            value: literal #208 3738:118:22-3743:118:27 value=int:30000
+          arg: named-arg #211 3749:119:5-3769:119:25 name="max_connections"
+            value: literal #210 3766:119:22-3769:119:25 value=int:128
+          arg: named-arg #213 3775:120:5-3798:120:28 name="max_body_bytes"
+            value: literal #212 3791:120:21-3798:120:28 value=int:1048576
+    declaration: function-decl #253 4097:127:8-4476:142:1 name="@2::listen"
+      param: param #219 4111:128:3-4123:128:15 name="host"
+        type: type-ref #218 4117:128:9-4123:128:15 name="String"
+      param: param #221 4127:129:3-4136:129:12 name="port"
+        type: type-ref #220 4133:129:9-4136:129:12 name="Int"
+      param: param #226 4140:130:3-4186:130:49 name="handler"
+        type: type-ref #225 4149:130:12-4186:130:49 name="Fn"
+          arg: type-ref #222 4152:130:15-4163:130:26 name="HttpRequest"
+          arg: type-ref #224 4165:130:28-4185:130:48 name="Result"
+            arg: type-ref #223 4172:130:35-4184:130:47 name="HttpResponse"
+      param: param #228 4190:131:3-4216:131:29 name="options"
+        type: type-ref #227 4199:131:12-4216:131:29 name="HttpServerOptions"
+      result: type-ref #230 4223:132:6-4241:132:24 name="Result"
+        arg: type-ref #229 4230:132:13-4240:132:23 name="HttpServer"
+      body: expr-stmt #241 4244:133:3-4385:139:1
+        value: try-expr #240 4244:133:3-4384:138:4
+          operand: call #239 4248:133:7-4384:138:4 name="@2::check_options" piped=false
+            arg: field-access #232 4267:134:5-4293:134:31 name="request_timeout_ms"
+              target: name-ref #231 4267:134:5-4274:134:12 name="options"
+            arg: field-access #234 4299:135:5-4322:135:28 name="idle_timeout_ms"
+              target: name-ref #233 4299:135:5-4306:135:12 name="options"
+            arg: field-access #236 4328:136:5-4351:136:28 name="max_connections"
+              target: name-ref #235 4328:136:5-4335:136:12 name="options"
+            arg: field-access #238 4357:137:5-4379:137:27 name="max_body_bytes"
+              target: name-ref #237 4357:137:5-4364:137:12 name="options"
+      body: binding #246 4387:139:3-4425:140:1 name="listener"
+        value: try-expr #245 4398:139:14-4424:139:40
+          operand: call #244 4402:139:18-4424:139:40 name="TCP.listen" piped=false
+            arg: name-ref #242 4413:139:29-4417:139:33 name="host"
+            arg: name-ref #243 4419:139:35-4423:139:39 name="port"
+      body: return-stmt #252 4427:140:3-4472:141:1
+        value: call #251 4434:140:10-4471:140:47 name="ok" piped=false
+          arg: call #250 4437:140:13-4470:140:46 name="@2::start" piped=false
+            arg: name-ref #247 4443:140:19-4451:140:27 name="listener"
+            arg: name-ref #248 4453:140:29-4460:140:36 name="handler"
+            arg: name-ref #249 4462:140:38-4469:140:45 name="options"
+    declaration: function-decl #296 4583:144:8-5028:161:1 name="@2::listen_tls"
+      param: param #256 4601:145:3-4613:145:15 name="host"
+        type: type-ref #255 4607:145:9-4613:145:15 name="String"
+      param: param #258 4617:146:3-4626:146:12 name="port"
+        type: type-ref #257 4623:146:9-4626:146:12 name="Int"
+      param: param #260 4630:147:3-4647:147:20 name="cert_file"
+        type: type-ref #259 4641:147:14-4647:147:20 name="String"
+      param: param #262 4651:148:3-4667:148:19 name="key_file"
+        type: type-ref #261 4661:148:13-4667:148:19 name="String"
+      param: param #267 4671:149:3-4717:149:49 name="handler"
+        type: type-ref #266 4680:149:12-4717:149:49 name="Fn"
+          arg: type-ref #263 4683:149:15-4694:149:26 name="HttpRequest"
+          arg: type-ref #265 4696:149:28-4716:149:48 name="Result"
+            arg: type-ref #264 4703:149:35-4715:149:47 name="HttpResponse"
+      param: param #269 4721:150:3-4747:150:29 name="options"
+        type: type-ref #268 4730:150:12-4747:150:29 name="HttpServerOptions"
+      result: type-ref #271 4754:151:6-4772:151:24 name="Result"
+        arg: type-ref #270 4761:151:13-4771:151:23 name="HttpServer"
+      body: expr-stmt #282 4775:152:3-4916:158:1
+        value: try-expr #281 4775:152:3-4915:157:4
+          operand: call #280 4779:152:7-4915:157:4 name="@2::check_options" piped=false
+            arg: field-access #273 4798:153:5-4824:153:31 name="request_timeout_ms"
+              target: name-ref #272 4798:153:5-4805:153:12 name="options"
+            arg: field-access #275 4830:154:5-4853:154:28 name="idle_timeout_ms"
+              target: name-ref #274 4830:154:5-4837:154:12 name="options"
+            arg: field-access #277 4859:155:5-4882:155:28 name="max_connections"
+              target: name-ref #276 4859:155:5-4866:155:12 name="options"
+            arg: field-access #279 4888:156:5-4910:156:27 name="max_body_bytes"
+              target: name-ref #278 4888:156:5-4895:156:12 name="options"
+      body: binding #289 4918:158:3-4977:159:1 name="listener"
+        value: try-expr #288 4929:158:14-4976:158:61
+          operand: call #287 4933:158:18-4976:158:61 name="TLS.listen" piped=false
+            arg: name-ref #283 4944:158:29-4948:158:33 name="host"
+            arg: name-ref #284 4950:158:35-4954:158:39 name="port"
+            arg: name-ref #285 4956:158:41-4965:158:50 name="cert_file"
+            arg: name-ref #286 4967:158:52-4975:158:60 name="key_file"
+      body: return-stmt #295 4979:159:3-5024:160:1
+        value: call #294 4986:159:10-5023:159:47 name="ok" piped=false
+          arg: call #293 4989:159:13-5022:159:46 name="@2::start" piped=false
+            arg: name-ref #290 4995:159:19-5003:159:27 name="listener"
+            arg: name-ref #291 5005:159:29-5012:159:36 name="handler"
+            arg: name-ref #292 5014:159:38-5021:159:45 name="options"
+    declaration: function-decl #304 5079:163:8-5162:166:1 name="@2::local_port"
+      param: param #299 5094:163:23-5112:163:41 name="server"
+        type: type-ref #298 5102:163:31-5112:163:41 name="HttpServer"
+      result: type-ref #300 5117:163:46-5120:163:49 name="Int"
+      body: return-stmt #303 5123:164:3-5158:165:1
+        value: call #302 5130:164:10-5157:164:37 name="HttpWire.local_port" piped=false
+          arg: name-ref #301 5150:164:30-5156:164:36 name="server"
+    declaration: function-decl #313 5228:168:8-5308:171:1 name="@2::wait"
+      param: param #307 5237:168:17-5255:168:35 name="server"
+        type: type-ref #306 5245:168:25-5255:168:35 name="HttpServer"
+      result: type-ref #309 5260:168:40-5272:168:52 name="Result"
+        arg: type-ref #308 5267:168:47-5271:168:51 name="Void"
+      body: return-stmt #312 5275:169:3-5304:170:1
+        value: call #311 5282:169:10-5303:169:31 name="HttpWire.wait" piped=false
+          arg: name-ref #310 5296:169:24-5302:169:30 name="server"
+    declaration: function-decl #321 5425:173:8-5506:176:1 name="@2::close_server"
+      param: param #316 5442:173:25-5460:173:43 name="server"
+        type: type-ref #315 5450:173:33-5460:173:43 name="HttpServer"
+      result: type-ref #317 5465:173:48-5469:173:52 name="Void"
+      body: expr-stmt #320 5472:174:3-5502:175:1
+        value: call #319 5472:174:3-5501:174:32 name="HttpWire.close_server" piped=false
+          arg: name-ref #318 5494:174:25-5500:174:31 name="server"
+    declaration: function-decl #371 5507:177:1-5997:189:1 name="@2::check_options"
+      param: param #324 5525:177:19-5540:177:34 name="timeout_ms"
+        type: type-ref #323 5537:177:31-5540:177:34 name="Int"
+      param: param #326 5542:177:36-5562:177:56 name="idle_timeout_ms"
+        type: type-ref #325 5559:177:53-5562:177:56 name="Int"
+      param: param #328 5564:177:58-5584:177:78 name="max_connections"
+        type: type-ref #327 5581:177:75-5584:177:78 name="Int"
+      param: param #330 5586:177:80-5605:177:99 name="max_body_bytes"
+        type: type-ref #329 5602:177:96-5605:177:99 name="Int"
+      result: type-ref #332 5610:177:104-5622:177:116 name="Result"
+        arg: type-ref #331 5617:177:111-5621:177:115 name="Void"
+      body: if-stmt #352 5625:178:3-5777:181:1
+        branch: if-branch #351 5625:178:3-5771:180:1
+          condition: binary #347 5628:178:6-5714:178:92 op=or op-span=5692:178:70-5694:178:72
+            left: binary #343 5628:178:6-5691:178:69 op=or op-span=5668:178:46-5670:178:48
+              left: binary #339 5628:178:6-5667:178:45 op=or op-span=5644:178:22-5646:178:24
+                left: binary #335 5628:178:6-5643:178:21 op=less-equal op-span=5639:178:17-5641:178:19
+                  left: name-ref #333 5628:178:6-5638:178:16 name="timeout_ms"
+                  right: literal #334 5642:178:20-5643:178:21 value=int:0
+                right: binary #338 5647:178:25-5667:178:45 op=less-equal op-span=5663:178:41-5665:178:43
+                  left: name-ref #336 5647:178:25-5662:178:40 name="idle_timeout_ms"
+                  right: literal #337 5666:178:44-5667:178:45 value=int:0
+              right: binary #342 5671:178:49-5691:178:69 op=less-equal op-span=5687:178:65-5689:178:67
+                left: name-ref #340 5671:178:49-5686:178:64 name="max_connections"
+                right: literal #341 5690:178:68-5691:178:69 value=int:0
+            right: binary #346 5695:178:73-5714:178:92 op=less-equal op-span=5710:178:88-5712:178:90
+              left: name-ref #344 5695:178:73-5709:178:87 name="max_body_bytes"
+              right: literal #345 5713:178:91-5714:178:92 value=int:0
+          body: return-stmt #350 5719:179:5-5771:180:1
+            value: call #349 5726:179:12-5770:179:56 name="error" piped=false
+              arg: literal #348 5732:179:18-5769:179:55 value=string:"http: every option must be positive"
+      body: if-stmt #360 5779:181:3-5876:184:1
+        branch: if-branch #359 5779:181:3-5870:183:1
+          condition: binary #355 5782:181:6-5805:181:29 op=greater op-span=5798:181:22-5799:181:23
+            left: name-ref #353 5782:181:6-5797:181:21 name="max_connections"
+            right: literal #354 5800:181:24-5805:181:29 value=int:65536
+          body: return-stmt #358 5810:182:5-5870:183:1
+            value: call #357 5817:182:12-5869:182:64 name="error" piped=false
+              arg: literal #356 5823:182:18-5868:182:63 value=string:"http: max_connections must be at most 65536"
+      body: if-stmt #368 5878:184:3-5979:187:1
+        branch: if-branch #367 5878:184:3-5973:186:1
+          condition: binary #363 5881:184:6-5906:184:31 op=greater op-span=5896:184:21-5897:184:22
+            left: name-ref #361 5881:184:6-5895:184:20 name="max_body_bytes"
+            right: literal #362 5898:184:23-5906:184:31 value=int:67108864
+          body: return-stmt #366 5911:185:5-5973:186:1
+            value: call #365 5918:185:12-5972:185:66 name="error" piped=false
+              arg: literal #364 5924:185:18-5971:185:65 value=string:"http: max_body_bytes must be at most 67108864"
+      body: return-stmt #370 5981:187:3-5993:188:1
+        value: call #369 5988:187:10-5992:187:14 name="ok" piped=false
+    declaration: function-decl #384 5998:190:1-6126:193:1 name="@2::first_of"
+      param: param #373 6011:190:14-6023:190:26 name="text"
+        type: type-ref #372 6017:190:20-6023:190:26 name="String"
+      param: param #375 6025:190:28-6037:190:40 name="part"
+        type: type-ref #374 6031:190:34-6037:190:40 name="String"
+      result: type-ref #376 6042:190:45-6045:190:48 name="Int"
+      body: return-stmt #383 6048:191:3-6122:192:1
+        value: call #382 6055:191:10-6121:191:76 name="Result.unwrap_or" piped=false
+          arg: call #379 6072:191:27-6099:191:54 name="String.index_of" piped=false
+            arg: name-ref #377 6088:191:43-6092:191:47 name="text"
+            arg: name-ref #378 6094:191:49-6098:191:53 name="part"
+          arg: call #381 6101:191:56-6120:191:75 name="String.length" piped=false
+            arg: name-ref #380 6115:191:70-6119:191:74 name="text"
+    declaration: function-decl #398 6127:194:1-6243:197:1 name="@2::rest_of"
+      param: param #386 6139:194:13-6151:194:25 name="text"
+        type: type-ref #385 6145:194:19-6151:194:25 name="String"
+      param: param #388 6153:194:27-6163:194:37 name="start"
+        type: type-ref #387 6160:194:34-6163:194:37 name="Int"
+      result: type-ref #389 6168:194:42-6174:194:48 name="String"
+      body: return-stmt #397 6177:195:3-6239:196:1
+        value: call #396 6184:195:10-6238:195:64 name="String.slice" piped=false
+          arg: name-ref #390 6197:195:23-6201:195:27 name="text"
+          arg: name-ref #391 6203:195:29-6208:195:34 name="start"
+          arg: binary #395 6210:195:36-6237:195:63 op=minus op-span=6230:195:56-6231:195:57
+            left: call #393 6210:195:36-6229:195:55 name="String.length" piped=false
+              arg: name-ref #392 6224:195:50-6228:195:54 name="text"
+            right: name-ref #394 6232:195:58-6237:195:63 name="start"
+    declaration: function-decl #434 6244:198:1-6484:207:1 name="@2::plain?"
+      param: param #400 6255:198:12-6267:198:24 name="text"
+        type: type-ref #399 6261:198:18-6267:198:24 name="String"
+      param: param #402 6269:198:26-6286:198:43 name="digits_only"
+        type: type-ref #401 6282:198:39-6286:198:43 name="Bool"
+      result: type-ref #403 6291:198:48-6295:198:52 name="Bool"
+      body: for-stmt #431 6298:199:3-6466:205:1 variable="c"
+        iterable: call #406 6307:199:12-6329:199:34 name="String.split" piped=false
+          arg: name-ref #404 6320:199:25-6324:199:29 name="text"
+          arg: literal #405 6326:199:31-6328:199:33 value=string:""
+        body: binding #409 6334:200:5-6356:201:1 name="code"
+          value: call #408 6341:200:12-6355:200:26 name="String.code" piped=false
+            arg: name-ref #407 6353:200:24-6354:200:25 name="c"
+        body: if-stmt #430 6360:201:5-6460:204:1
+          branch: if-branch #429 6360:201:5-6452:203:1
+            condition: binary #426 6363:201:8-6432:201:77 op=or op-span=6387:201:32-6389:201:34
+              left: binary #416 6363:201:8-6386:201:31 op=or op-span=6373:201:18-6375:201:20
+                left: binary #412 6363:201:8-6372:201:17 op=less op-span=6368:201:13-6369:201:14
+                  left: name-ref #410 6363:201:8-6367:201:12 name="code"
+                  right: literal #411 6370:201:15-6372:201:17 value=int:33
+                right: binary #415 6376:201:21-6386:201:31 op=greater op-span=6381:201:26-6382:201:27
+                  left: name-ref #413 6376:201:21-6380:201:25 name="code"
+                  right: literal #414 6383:201:28-6386:201:31 value=int:126
+              right: binary #425 6391:201:36-6431:201:76 op=and op-span=6403:201:48-6406:201:51
+                left: name-ref #417 6391:201:36-6402:201:47 name="digits_only"
+                right: binary #424 6408:201:53-6430:201:75 op=or op-span=6418:201:63-6420:201:65
+                  left: binary #420 6408:201:53-6417:201:62 op=less op-span=6413:201:58-6414:201:59
+                    left: name-ref #418 6408:201:53-6412:201:57 name="code"
+                    right: literal #419 6415:201:60-6417:201:62 value=int:48
+                  right: binary #423 6421:201:66-6430:201:75 op=greater op-span=6426:201:71-6427:201:72
+                    left: name-ref #421 6421:201:66-6425:201:70 name="code"
+                    right: literal #422 6428:201:73-6430:201:75 value=int:57
+            body: return-stmt #428 6439:202:7-6452:203:1
+              value: literal #427 6446:202:14-6451:202:19 value=bool:false
+      body: return-stmt #433 6468:205:3-6480:206:1
+        value: literal #432 6475:205:10-6479:205:14 value=bool:true
+    declaration: function-decl #487 6485:208:1-6806:220:1 name="@2::ipv6?"
+      param: param #436 6495:208:11-6507:208:23 name="text"
+        type: type-ref #435 6501:208:17-6507:208:23 name="String"
+      result: type-ref #437 6512:208:28-6516:208:32 name="Bool"
+      body: if-stmt #445 6519:209:3-6577:212:1
+        branch: if-branch #444 6519:209:3-6571:211:1
+          condition: unary #441 6522:209:6-6553:209:37 op=not op-span=6522:209:6-6525:209:9
+            operand: call #440 6526:209:10-6553:209:37 name="String.contains?" piped=false
+              arg: name-ref #438 6543:209:27-6547:209:31 name="text"
+              arg: literal #439 6549:209:33-6552:209:36 value=string:":"
+          body: return-stmt #443 6558:210:5-6571:211:1
+            value: literal #442 6565:210:12-6570:210:17 value=bool:false
+      body: for-stmt #484 6579:212:3-6788:218:1 variable="c"
+        iterable: call #448 6588:212:12-6610:212:34 name="String.split" piped=false
+          arg: name-ref #446 6601:212:25-6605:212:29 name="text"
+          arg: literal #447 6607:212:31-6609:212:33 value=string:""
+        body: binding #451 6615:213:5-6637:214:1 name="code"
+          value: call #450 6622:213:12-6636:213:26 name="String.code" piped=false
+            arg: name-ref #449 6634:213:24-6635:213:25 name="c"
+        body: if-stmt #483 6641:214:5-6782:217:1
+          branch: if-branch #482 6641:214:5-6774:216:1
+            condition: unary #479 6644:214:8-6754:214:118 op=not op-span=6644:214:8-6647:214:11
+              operand: binary #478 6649:214:13-6753:214:117 op=or op-span=6740:214:104-6742:214:106
+                left: binary #474 6649:214:13-6739:214:103 op=or op-span=6708:214:72-6710:214:74
+                  left: binary #466 6649:214:13-6707:214:71 op=or op-span=6677:214:41-6679:214:43
+                    left: binary #458 6650:214:14-6675:214:39 op=and op-span=6661:214:25-6664:214:28
+                      left: binary #454 6650:214:14-6660:214:24 op=greater-equal op-span=6655:214:19-6657:214:21
+                        left: name-ref #452 6650:214:14-6654:214:18 name="code"
+                        right: literal #453 6658:214:22-6660:214:24 value=int:48
+                      right: binary #457 6665:214:29-6675:214:39 op=less-equal op-span=6670:214:34-6672:214:36
+                        left: name-ref #455 6665:214:29-6669:214:33 name="code"
+                        right: literal #456 6673:214:37-6675:214:39 value=int:58
+                    right: binary #465 6681:214:45-6706:214:70 op=and op-span=6692:214:56-6695:214:59
+                      left: binary #461 6681:214:45-6691:214:55 op=greater-equal op-span=6686:214:50-6688:214:52
+                        left: name-ref #459 6681:214:45-6685:214:49 name="code"
+                        right: literal #460 6689:214:53-6691:214:55 value=int:65
+                      right: binary #464 6696:214:60-6706:214:70 op=less-equal op-span=6701:214:65-6703:214:67
+                        left: name-ref #462 6696:214:60-6700:214:64 name="code"
+                        right: literal #463 6704:214:68-6706:214:70 value=int:70
+                  right: binary #473 6712:214:76-6738:214:102 op=and op-span=6723:214:87-6726:214:90
+                    left: binary #469 6712:214:76-6722:214:86 op=greater-equal op-span=6717:214:81-6719:214:83
+                      left: name-ref #467 6712:214:76-6716:214:80 name="code"
+                      right: literal #468 6720:214:84-6722:214:86 value=int:97
+                    right: binary #472 6727:214:91-6738:214:102 op=less-equal op-span=6732:214:96-6734:214:98
+                      left: name-ref #470 6727:214:91-6731:214:95 name="code"
+                      right: literal #471 6735:214:99-6738:214:102 value=int:102
+                right: binary #477 6743:214:107-6753:214:117 op=equal op-span=6748:214:112-6750:214:114
+                  left: name-ref #475 6743:214:107-6747:214:111 name="code"
+                  right: literal #476 6751:214:115-6753:214:117 value=int:46
+            body: return-stmt #481 6761:215:7-6774:216:1
+              value: literal #480 6768:215:14-6773:215:19 value=bool:false
+      body: return-stmt #486 6790:218:3-6802:219:1
+        value: literal #485 6797:218:10-6801:218:14 value=bool:true
+    declaration: function-decl #493 6807:221:1-6938:224:1 name="@2::bad_url"
+      result: type-ref #489 6824:221:18-6838:221:32 name="Result"
+        arg: type-ref #488 6831:221:25-6837:221:31 name="@2::Target"
+      body: return-stmt #492 6841:222:3-6934:223:1
+        value: call #491 6848:222:10-6933:222:95 name="error" piped=false
+          arg: literal #490 6854:222:16-6932:222:94 value=string:"http: the URL must be http:// or https:// with a host, and without user info"
+    declaration: function-decl #729 6939:225:1-8760:287:1 name="@2::parse_url"
+      param: param #495 6953:225:15-6964:225:26 name="url"
+        type: type-ref #494 6958:225:20-6964:225:26 name="String"
+      result: type-ref #497 6969:225:31-6983:225:45 name="Result"
+        arg: type-ref #496 6976:225:38-6982:225:44 name="@2::Target"
+      body: binding #501 6986:226:3-7015:227:1 name="split"
+        value: call #500 6994:226:11-7014:226:31 name="@2::first_of" piped=false
+          arg: name-ref #498 7003:226:20-7006:226:23 name="url"
+          arg: literal #499 7008:226:25-7013:226:30 value=string:"://"
+      body: binding #507 7017:227:3-7071:228:1 name="scheme"
+        value: call #506 7026:227:12-7070:227:56 name="String.downcase" piped=false
+          arg: call #505 7042:227:28-7069:227:55 name="String.slice" piped=false
+            arg: name-ref #502 7055:227:41-7058:227:44 name="url"
+            arg: literal #503 7060:227:46-7061:227:47 value=int:0
+            arg: name-ref #504 7063:227:49-7068:227:54 name="split"
+      body: if-stmt #523 7073:228:3-7175:231:1
+        branch: if-branch #522 7073:228:3-7169:230:1
+          condition: binary #519 7076:228:6-7147:228:77 op=or op-span=7104:228:34-7106:228:36
+            left: binary #511 7076:228:6-7103:228:33 op=equal op-span=7082:228:12-7084:228:14
+              left: name-ref #508 7076:228:6-7081:228:11 name="split"
+              right: call #510 7085:228:15-7103:228:33 name="String.length" piped=false
+                arg: name-ref #509 7099:228:29-7102:228:32 name="url"
+            right: binary #518 7108:228:38-7146:228:76 op=and op-span=7125:228:55-7128:228:58
+              left: binary #514 7108:228:38-7124:228:54 op=not-equal op-span=7115:228:45-7117:228:47
+                left: name-ref #512 7108:228:38-7114:228:44 name="scheme"
+                right: literal #513 7118:228:48-7124:228:54 value=string:"http"
+              right: binary #517 7129:228:59-7146:228:76 op=not-equal op-span=7136:228:66-7138:228:68
+                left: name-ref #515 7129:228:59-7135:228:65 name="scheme"
+                right: literal #516 7139:228:69-7146:228:76 value=string:"https"
+          body: return-stmt #521 7152:229:5-7169:230:1
+            value: call #520 7159:229:12-7168:229:21 name="@2::bad_url" piped=false
+      body: binding #529 7177:231:3-7208:232:1 name="rest"
+        value: call #528 7184:231:10-7207:231:33 name="@2::rest_of" piped=false
+          arg: name-ref #524 7192:231:18-7195:231:21 name="url"
+          arg: binary #527 7197:231:23-7206:231:32 op=plus op-span=7203:231:29-7204:231:30
+            left: name-ref #525 7197:231:23-7202:231:28 name="split"
+            right: literal #526 7205:231:31-7206:231:32 value=int:3
+      body: binding #536 7210:232:3-7260:233:1 name="rest"
+        value: call #535 7217:232:10-7259:232:52 name="String.slice" piped=false
+          arg: name-ref #530 7230:232:23-7234:232:27 name="rest"
+          arg: literal #531 7236:232:29-7237:232:30 value=int:0
+          arg: call #534 7239:232:32-7258:232:51 name="@2::first_of" piped=false
+            arg: name-ref #532 7248:232:41-7252:232:45 name="rest"
+            arg: literal #533 7254:232:47-7257:232:50 value=string:"#"
+      body: binding #540 7262:233:3-7289:234:1 name="stop"
+        value: call #539 7269:233:10-7288:233:29 name="@2::first_of" piped=false
+          arg: name-ref #537 7278:233:19-7282:233:23 name="rest"
+          arg: literal #538 7284:233:25-7287:233:28 value=string:"/"
+      body: binding #544 7291:234:3-7319:235:1 name="query"
+        value: call #543 7299:234:11-7318:234:30 name="@2::first_of" piped=false
+          arg: name-ref #541 7308:234:20-7312:234:24 name="rest"
+          arg: literal #542 7314:234:26-7317:234:29 value=string:"?"
+      body: if-stmt #551 7321:235:3-7360:238:1
+        branch: if-branch #550 7321:235:3-7354:237:1
+          condition: binary #547 7324:235:6-7336:235:18 op=less op-span=7330:235:12-7331:235:13
+            left: name-ref #545 7324:235:6-7329:235:11 name="query"
+            right: name-ref #546 7332:235:14-7336:235:18 name="stop"
+          body: binding #549 7341:236:5-7354:237:1 name="stop"
+            value: name-ref #548 7348:236:12-7353:236:17 name="query"
+      body: binding #556 7362:238:3-7402:239:1 name="authority"
+        value: call #555 7374:238:15-7401:238:42 name="String.slice" piped=false
+          arg: name-ref #552 7387:238:28-7391:238:32 name="rest"
+          arg: literal #553 7393:238:34-7394:238:35 value=int:0
+          arg: name-ref #554 7396:238:37-7400:238:41 name="stop"
+      body: binding #560 7404:239:3-7433:240:1 name="target"
+        value: call #559 7413:239:12-7432:239:31 name="@2::rest_of" piped=false
+          arg: name-ref #557 7421:239:20-7425:239:24 name="rest"
+          arg: name-ref #558 7427:239:26-7431:239:30 name="stop"
+      body: if-stmt #569 7435:240:3-7507:243:1
+        branch: if-branch #568 7435:240:3-7501:242:1
+          condition: unary #564 7438:240:6-7474:240:42 op=not op-span=7438:240:6-7441:240:9
+            operand: call #563 7442:240:10-7474:240:42 name="String.starts_with?" piped=false
+              arg: name-ref #561 7462:240:30-7468:240:36 name="target"
+              arg: literal #562 7470:240:38-7473:240:41 value=string:"/"
+          body: binding #567 7479:241:5-7501:242:1 name="target"
+            value: interpolation #566 7488:241:14-7500:241:26
               part: text "/"
-              part: name-ref #531 6888:214:18-6894:214:24 name="target"
-      body: binding #537 6905:216:3-6922:217:1 name="host"
-        value: name-ref #536 6912:216:10-6921:216:19 name="authority"
-      body: binding #539 6924:217:3-6939:218:1 name="port_text"
-        value: literal #538 6936:217:15-6938:217:17 value=string:""
-      body: if-stmt #623 6941:218:3-7622:242:1
-        branch: if-branch #596 6941:218:3-7393:234:1
-          condition: call #542 6944:218:6-6979:218:41 name="String.starts_with?" piped=false
-            arg: name-ref #540 6964:218:26-6973:218:35 name="authority"
-            arg: literal #541 6975:218:37-6978:218:40 value=string:"["
-          body: binding #546 6984:219:5-7017:220:1 name="close"
-            value: call #545 6992:219:13-7016:219:37 name="@2::first_of" piped=false
-              arg: name-ref #543 7001:219:22-7010:219:31 name="authority"
-              arg: literal #544 7012:219:33-7015:219:36 value=string:"]"
-          body: if-stmt #554 7021:220:5-7089:223:1
-            branch: if-branch #553 7021:220:5-7081:222:1
-              condition: binary #550 7024:220:8-7057:220:41 op=equal op-span=7030:220:14-7032:220:16
-                left: name-ref #547 7024:220:8-7029:220:13 name="close"
-                right: call #549 7033:220:17-7057:220:41 name="String.length" piped=false
-                  arg: name-ref #548 7047:220:31-7056:220:40 name="authority"
-              body: return-stmt #552 7064:221:7-7081:222:1
-                value: call #551 7071:221:14-7080:221:23 name="@2::bad_url" piped=false
-          body: binding #561 7093:223:5-7138:224:1 name="host"
-            value: call #560 7100:223:12-7137:223:49 name="String.slice" piped=false
-              arg: name-ref #555 7113:223:25-7122:223:34 name="authority"
-              arg: literal #556 7124:223:36-7125:223:37 value=int:1
-              arg: binary #559 7127:223:39-7136:223:48 op=minus op-span=7133:223:45-7134:223:46
-                left: name-ref #557 7127:223:39-7132:223:44 name="close"
-                right: literal #558 7135:223:47-7136:223:48 value=int:1
-          body: if-stmt #568 7142:224:5-7192:227:1
-            branch: if-branch #567 7142:224:5-7184:226:1
-              condition: unary #564 7145:224:8-7160:224:23 op=not op-span=7145:224:8-7148:224:11
-                operand: call #563 7149:224:12-7160:224:23 name="@2::ipv6?" piped=false
-                  arg: name-ref #562 7155:224:18-7159:224:22 name="host"
-              body: return-stmt #566 7167:225:7-7184:226:1
-                value: call #565 7174:225:14-7183:225:23 name="@2::bad_url" piped=false
-          body: binding #574 7196:227:5-7234:228:1 name="after"
-            value: call #573 7204:227:13-7233:227:42 name="@2::rest_of" piped=false
-              arg: name-ref #569 7212:227:21-7221:227:30 name="authority"
-              arg: binary #572 7223:227:32-7232:227:41 op=plus op-span=7229:227:38-7230:227:39
-                left: name-ref #570 7223:227:32-7228:227:37 name="close"
-                right: literal #571 7231:227:40-7232:227:41 value=int:1
-          body: if-stmt #595 7238:228:5-7393:234:1
-            branch: if-branch #594 7238:228:5-7385:233:1
-              condition: binary #577 7241:228:8-7252:228:19 op=not-equal op-span=7247:228:14-7249:228:16
-                left: name-ref #575 7241:228:8-7246:228:13 name="after"
-                right: literal #576 7250:228:17-7252:228:19 value=string:""
-              body: if-stmt #589 7259:229:7-7349:232:1
-                branch: if-branch #588 7259:229:7-7339:231:1
-                  condition: binary #585 7262:229:10-7313:229:61 op=or op-span=7275:229:23-7277:229:25
-                    left: binary #580 7262:229:10-7274:229:22 op=equal op-span=7268:229:16-7270:229:18
-                      left: name-ref #578 7262:229:10-7267:229:15 name="after"
-                      right: literal #579 7271:229:19-7274:229:22 value=string:":"
-                    right: unary #584 7278:229:26-7313:229:61 op=not op-span=7278:229:26-7281:229:29
-                      operand: call #583 7282:229:30-7313:229:61 name="String.starts_with?" piped=false
-                        arg: name-ref #581 7302:229:50-7307:229:55 name="after"
-                        arg: literal #582 7309:229:57-7312:229:60 value=string:":"
-                  body: return-stmt #587 7322:230:9-7339:231:1
-                    value: call #586 7329:230:16-7338:230:25 name="@2::bad_url" piped=false
-              body: binding #593 7355:232:7-7385:233:1 name="port_text"
-                value: call #592 7367:232:19-7384:232:36 name="@2::rest_of" piped=false
-                  arg: name-ref #590 7375:232:27-7380:232:32 name="after"
-                  arg: literal #591 7382:232:34-7383:232:35 value=int:1
-        branch: if-branch #622 7395:234:3-7616:241:1
-          condition: call #599 7401:234:9-7433:234:41 name="String.contains?" piped=false
-            arg: name-ref #597 7418:234:26-7427:234:35 name="authority"
-            arg: literal #598 7429:234:37-7432:234:40 value=string:":"
-          body: binding #603 7438:235:5-7471:236:1 name="colon"
-            value: call #602 7446:235:13-7470:235:37 name="@2::first_of" piped=false
-              arg: name-ref #600 7455:235:22-7464:235:31 name="authority"
-              arg: literal #601 7466:235:33-7469:235:36 value=string:":"
-          body: binding #608 7475:236:5-7516:237:1 name="host"
-            value: call #607 7482:236:12-7515:236:45 name="String.slice" piped=false
-              arg: name-ref #604 7495:236:25-7504:236:34 name="authority"
-              arg: literal #605 7506:236:36-7507:236:37 value=int:0
-              arg: name-ref #606 7509:236:39-7514:236:44 name="colon"
-          body: binding #614 7520:237:5-7562:238:1 name="port_text"
-            value: call #613 7532:237:17-7561:237:46 name="@2::rest_of" piped=false
-              arg: name-ref #609 7540:237:25-7549:237:34 name="authority"
-              arg: binary #612 7551:237:36-7560:237:45 op=plus op-span=7557:237:42-7558:237:43
-                left: name-ref #610 7551:237:36-7556:237:41 name="colon"
-                right: literal #611 7559:237:44-7560:237:45 value=int:1
-          body: if-stmt #621 7566:238:5-7616:241:1
-            branch: if-branch #620 7566:238:5-7608:240:1
-              condition: binary #617 7569:238:8-7584:238:23 op=equal op-span=7579:238:18-7581:238:20
-                left: name-ref #615 7569:238:8-7578:238:17 name="port_text"
-                right: literal #616 7582:238:21-7584:238:23 value=string:""
-              body: return-stmt #619 7591:239:7-7608:240:1
-                value: call #618 7598:239:14-7607:239:23 name="@2::bad_url" piped=false
-      body: if-stmt #644 7624:242:3-7759:245:1
-        branch: if-branch #643 7624:242:3-7753:244:1
-          condition: binary #640 7627:242:6-7731:242:110 op=or op-span=7701:242:80-7703:242:82
-            left: binary #635 7627:242:6-7700:242:79 op=or op-span=7674:242:53-7676:242:55
-              left: binary #630 7627:242:6-7673:242:52 op=or op-span=7638:242:17-7640:242:19
-                left: binary #626 7627:242:6-7637:242:16 op=equal op-span=7632:242:11-7634:242:13
-                  left: name-ref #624 7627:242:6-7631:242:10 name="host"
-                  right: literal #625 7635:242:14-7637:242:16 value=string:""
-                right: call #629 7641:242:20-7673:242:52 name="String.contains?" piped=false
-                  arg: name-ref #627 7658:242:37-7667:242:46 name="authority"
-                  arg: literal #628 7669:242:48-7672:242:51 value=string:"@"
-              right: unary #634 7677:242:56-7700:242:79 op=not op-span=7677:242:56-7680:242:59
-                operand: call #633 7681:242:60-7700:242:79 name="@2::plain?" piped=false
-                  arg: name-ref #631 7688:242:67-7692:242:71 name="host"
-                  arg: literal #632 7694:242:73-7699:242:78 value=bool:false
-            right: unary #639 7704:242:83-7731:242:110 op=not op-span=7704:242:83-7707:242:86
-              operand: call #638 7708:242:87-7731:242:110 name="@2::plain?" piped=false
-                arg: name-ref #636 7715:242:94-7724:242:103 name="port_text"
-                arg: literal #637 7726:242:105-7730:242:109 value=bool:true
-          body: return-stmt #642 7736:243:5-7753:244:1
-            value: call #641 7743:243:12-7752:243:21 name="@2::bad_url" piped=false
-      body: binding #646 7761:245:3-7771:246:1 name="port"
-        value: literal #645 7768:245:10-7770:245:12 value=int:80
-      body: if-stmt #653 7773:246:3-7815:249:1
-        branch: if-branch #652 7773:246:3-7809:248:1
-          condition: binary #649 7776:246:6-7793:246:23 op=equal op-span=7783:246:13-7785:246:15
-            left: name-ref #647 7776:246:6-7782:246:12 name="scheme"
-            right: literal #648 7786:246:16-7793:246:23 value=string:"https"
-          body: binding #651 7798:247:5-7809:248:1 name="port"
-            value: literal #650 7805:247:12-7808:247:15 value=int:443
-      body: if-stmt #662 7817:249:3-7907:252:1
-        branch: if-branch #661 7817:249:3-7901:251:1
-          condition: binary #657 7820:249:6-7848:249:34 op=greater op-span=7845:249:31-7846:249:32
-            left: call #655 7820:249:6-7844:249:30 name="String.length" piped=false
-              arg: name-ref #654 7834:249:20-7843:249:29 name="port_text"
-            right: literal #656 7847:249:33-7848:249:34 value=int:5
-          body: return-stmt #660 7853:250:5-7901:251:1
-            value: call #659 7860:250:12-7900:250:52 name="error" piped=false
-              arg: literal #658 7866:250:18-7899:250:51 value=string:"http: the port must be 1..65535"
-      body: if-stmt #670 7909:252:3-7971:255:1
-        branch: if-branch #669 7909:252:3-7965:254:1
-          condition: binary #665 7912:252:6-7927:252:21 op=not-equal op-span=7922:252:16-7924:252:18
-            left: name-ref #663 7912:252:6-7921:252:15 name="port_text"
-            right: literal #664 7925:252:19-7927:252:21 value=string:""
-          body: binding #668 7932:253:5-7965:254:1 name="port"
-            value: call #667 7939:253:12-7964:253:37 name="String.to_int!" piped=false
-              arg: name-ref #666 7954:253:27-7963:253:36 name="port_text"
-      body: if-stmt #682 7973:255:3-8059:258:1
-        branch: if-branch #681 7973:255:3-8053:257:1
-          condition: binary #677 7976:255:6-8000:255:30 op=or op-span=7985:255:15-7987:255:17
-            left: binary #673 7976:255:6-7984:255:14 op=less op-span=7981:255:11-7982:255:12
-              left: name-ref #671 7976:255:6-7980:255:10 name="port"
-              right: literal #672 7983:255:13-7984:255:14 value=int:1
-            right: binary #676 7988:255:18-8000:255:30 op=greater op-span=7993:255:23-7994:255:24
-              left: name-ref #674 7988:255:18-7992:255:22 name="port"
-              right: literal #675 7995:255:25-8000:255:30 value=int:65535
-          body: return-stmt #680 8005:256:5-8053:257:1
-            value: call #679 8012:256:12-8052:256:52 name="error" piped=false
-              arg: literal #678 8018:256:18-8051:256:51 value=string:"http: the port must be 1..65535"
-      body: return-stmt #694 8061:258:3-8152:259:1
-        value: call #693 8068:258:10-8151:258:93 name="ok" piped=false
-          arg: construct #692 8071:258:13-8150:258:92 type="@2::Target"
-            arg: named-arg #684 8078:258:20-8092:258:34 name="scheme"
-              value: name-ref #683 8086:258:28-8092:258:34 name="scheme"
-            arg: named-arg #687 8094:258:36-8121:258:63 name="host"
-              value: call #686 8100:258:42-8121:258:63 name="String.downcase" piped=false
-                arg: name-ref #685 8116:258:58-8120:258:62 name="host"
-            arg: named-arg #689 8123:258:65-8133:258:75 name="port"
-              value: name-ref #688 8129:258:71-8133:258:75 name="port"
-            arg: named-arg #691 8135:258:77-8149:258:91 name="target"
-              value: name-ref #690 8143:258:85-8149:258:91 name="target"
-    declaration: function-decl #722 8157:261:1-8435:266:1 name="@2::start"
-      param: param #697 8167:261:11-8185:261:29 name="listener"
-        type: type-ref #696 8177:261:21-8185:261:29 name="Listener"
-      param: param #702 8187:261:31-8233:261:77 name="handler"
-        type: type-ref #701 8196:261:40-8233:261:77 name="Fn"
-          arg: type-ref #698 8199:261:43-8210:261:54 name="HttpRequest"
-          arg: type-ref #700 8212:261:56-8232:261:76 name="Result"
-            arg: type-ref #699 8219:261:63-8231:261:75 name="HttpResponse"
-      param: param #704 8235:261:79-8261:261:105 name="options"
-        type: type-ref #703 8244:261:88-8261:261:105 name="HttpServerOptions"
-      result: type-ref #705 8266:261:110-8276:261:120 name="HttpServer"
-      body: return-stmt #721 8279:262:3-8431:265:1
-        value: call #720 8286:262:10-8430:264:6 name="HttpWire.server" piped=false
-          arg: name-ref #706 8302:262:26-8310:262:34 name="listener"
-          arg: field-access #708 8312:262:36-8335:262:59 name="max_connections"
-            target: name-ref #707 8312:262:36-8319:262:43 name="options"
-          arg: block-lit #719 8337:262:61-8430:264:6
-            param: block-param #709 8341:262:65-8347:262:71 name="server"
-            body: expr-stmt #718 8353:263:5-8425:264:1
-              value: call #717 8353:263:5-8424:263:76 name="@2::accept_all" piped=false
-                arg: construct #716 8364:263:16-8423:263:75 type="@2::Service"
-                  arg: named-arg #711 8372:263:24-8386:263:38 name="server"
-                    value: name-ref #710 8380:263:32-8386:263:38 name="server"
-                  arg: named-arg #713 8388:263:40-8404:263:56 name="handler"
-                    value: name-ref #712 8397:263:49-8404:263:56 name="handler"
-                  arg: named-arg #715 8406:263:58-8422:263:74 name="options"
-                    value: name-ref #714 8415:263:67-8422:263:74 name="options"
-    declaration: function-decl #748 8436:267:1-8662:275:1 name="@2::accept_all"
-      param: param #724 8451:267:16-8467:267:32 name="service"
-        type: type-ref #723 8460:267:25-8467:267:32 name="@2::Service"
-      result: type-ref #725 8472:267:37-8476:267:41 name="Void"
-      body: while-stmt #747 8479:268:3-8658:274:1
-        condition: literal #726 8485:268:9-8489:268:13 value=bool:true
-        body: case-stmt #746 8494:269:5-8652:273:1
-          value: call #729 8499:269:10-8530:269:41 name="HttpWire.accept" piped=false
-            arg: field-access #728 8515:269:26-8529:269:40 name="server"
-              target: name-ref #727 8515:269:26-8522:269:33 name="service"
-          arm: case-arm #742 8537:270:7-8619:271:1
-            pattern: variant-pattern #730 8537:270:7-8547:270:17 enum="Result" variant="Ok" bindings=["socket"]
-            body: expr-stmt #741 8551:270:21-8619:271:1
-              value: call #740 8551:270:21-8618:270:88 name="HttpWire.spawn" piped=false
-                arg: field-access #732 8566:270:36-8580:270:50 name="server"
-                  target: name-ref #731 8566:270:36-8573:270:43 name="service"
-                arg: name-ref #733 8582:270:52-8588:270:58 name="socket"
-                arg: block-lit #739 8590:270:60-8618:270:88
-                  param: block-param #734 8594:270:64-8595:270:65 name="s"
-                  body: expr-stmt #738 8597:270:67-8614:270:84
-                    value: call #737 8597:270:67-8614:270:84 name="@2::serve" piped=false
-                      arg: name-ref #735 8603:270:73-8604:270:74 name="s"
-                      arg: name-ref #736 8606:270:76-8613:270:83 name="service"
-          arm: case-arm #745 8625:271:7-8644:272:1
-            pattern: variant-pattern #743 8625:271:7-8633:271:15 enum="Result" variant="Err" bindings=[-]
-            body: return-stmt #744 8637:271:19-8644:272:1
-    declaration: function-decl #786 8663:276:1-9074:290:1 name="@2::serve"
-      param: param #750 8673:276:11-8687:276:25 name="socket"
-        type: type-ref #749 8681:276:19-8687:276:25 name="Socket"
-      param: param #752 8689:276:27-8705:276:43 name="service"
-        type: type-ref #751 8698:276:36-8705:276:43 name="@2::Service"
-      result: type-ref #753 8710:276:48-8714:276:52 name="Void"
-      body: binding #756 8717:277:3-8743:278:1 name="options"
-        value: field-access #755 8727:277:13-8742:277:28 name="options"
-          target: name-ref #754 8727:277:13-8734:277:20 name="service"
-      body: binding #759 8745:278:3-8782:279:1 name="wait_ms"
-        value: field-access #758 8755:278:13-8781:278:39 name="request_timeout_ms"
-          target: name-ref #757 8755:278:13-8762:278:20 name="options"
-      body: while-stmt #785 8784:279:3-9070:289:1
-        condition: literal #760 8790:279:9-8794:279:13 value=bool:true
-        body: case-stmt #781 8799:280:5-9026:287:1
-          value: call #767 8804:280:10-8894:280:100 name="HttpWire.read_request" piped=false
-            arg: name-ref #761 8826:280:32-8832:280:38 name="socket"
-            arg: name-ref #762 8834:280:40-8841:280:47 name="wait_ms"
-            arg: field-access #764 8843:280:49-8869:280:75 name="request_timeout_ms"
-              target: name-ref #763 8843:280:49-8850:280:56 name="options"
-            arg: field-access #766 8871:280:77-8893:280:99 name="max_body_bytes"
-              target: name-ref #765 8871:280:77-8878:280:84 name="options"
-          arm: case-arm #777 8901:281:7-8993:285:1
-            pattern: variant-pattern #768 8901:281:7-8912:281:18 enum="Result" variant="Ok" bindings=["request"]
-            body: if-stmt #776 8924:282:9-8993:285:1
-              branch: if-branch #775 8924:282:9-8981:284:1
-                condition: unary #773 8927:282:12-8963:282:48 op=not op-span=8927:282:12-8930:282:15
-                  operand: call #772 8931:282:16-8963:282:48 name="@2::answer" piped=false
-                    arg: name-ref #769 8938:282:23-8944:282:29 name="socket"
-                    arg: name-ref #770 8946:282:31-8953:282:38 name="request"
-                    arg: name-ref #771 8955:282:40-8962:282:47 name="service"
-                body: return-stmt #774 8974:283:11-8981:284:1
-          arm: case-arm #780 8999:285:7-9018:286:1
-            pattern: variant-pattern #778 8999:285:7-9007:285:15 enum="Result" variant="Err" bindings=[-]
-            body: return-stmt #779 9011:285:19-9018:286:1
-        body: binding #784 9030:287:5-9064:288:1 name="wait_ms"
-          value: field-access #783 9040:287:15-9063:287:38 name="idle_timeout_ms"
-            target: name-ref #782 9040:287:15-9047:287:22 name="options"
-    declaration: function-decl #843 9075:291:1-9686:309:1 name="@2::answer"
-      param: param #788 9086:291:12-9100:291:26 name="socket"
-        type: type-ref #787 9094:291:20-9100:291:26 name="Socket"
-      param: param #790 9102:291:28-9122:291:48 name="request"
-        type: type-ref #789 9111:291:37-9122:291:48 name="HttpRequest"
-      param: param #792 9124:291:50-9140:291:66 name="service"
-        type: type-ref #791 9133:291:59-9140:291:66 name="@2::Service"
-      result: type-ref #793 9145:291:71-9149:291:75 name="Bool"
-      body: binding #797 9152:292:3-9197:293:1 name="timeout"
-        value: field-access #796 9162:292:13-9196:292:47 name="request_timeout_ms"
-          target: field-access #795 9162:292:13-9177:292:28 name="options"
-            target: name-ref #794 9162:292:13-9169:292:20 name="service"
-      body: case-stmt #840 9199:293:3-9667:307:1
-        value: invoke #801 9204:293:8-9233:293:37
-          target: field-access #799 9204:293:8-9219:293:23 name="handler"
-            target: name-ref #798 9204:293:8-9211:293:15 name="service"
-          arg: name-ref #800 9225:293:29-9232:293:36 name="request"
-        arm: case-arm #828 9238:294:5-9551:303:1
-          pattern: variant-pattern #802 9238:294:5-9250:294:17 enum="Result" variant="Ok" bindings=["response"]
-          body: case-stmt #827 9260:295:7-9551:303:1
-            value: call #807 9265:295:12-9324:295:71 name="HttpWire.write_response" piped=false
-              arg: name-ref #803 9289:295:36-9295:295:42 name="socket"
-              arg: name-ref #804 9297:295:44-9304:295:51 name="request"
-              arg: name-ref #805 9306:295:53-9314:295:61 name="response"
-              arg: name-ref #806 9316:295:63-9323:295:70 name="timeout"
-            arm: case-arm #811 9333:296:9-9357:297:1
-              pattern: variant-pattern #808 9333:296:9-9341:296:17 enum="Result" variant="Ok" bindings=["keep"]
-              body: return-stmt #810 9345:296:21-9357:297:1
-                value: name-ref #809 9352:296:28-9356:296:32 name="keep"
-            arm: case-arm #826 9365:297:9-9541:302:1
-              pattern: variant-pattern #812 9365:297:9-9379:297:23 enum="Result" variant="Err" bindings=["message"]
-              body: if-stmt #825 9393:298:11-9541:302:1
-                branch: if-branch #824 9393:298:11-9527:301:1
-                  condition: call #815 9396:298:14-9452:298:70 name="String.starts_with?" piped=false
-                    arg: name-ref #813 9416:298:34-9423:298:41 name="message"
-                    arg: literal #814 9425:298:43-9451:298:69 value=string:"http: invalid response: "
-                  body: expr-stmt #818 9465:299:13-9482:300:1
-                    value: call #817 9465:299:13-9481:299:29 name="IO.warn" piped=false
-                      arg: name-ref #816 9473:299:21-9480:299:28 name="message"
-                  body: expr-stmt #823 9494:300:13-9527:301:1
-                    value: call #822 9494:300:13-9526:300:45 name="@2::failed" piped=false
-                      arg: name-ref #819 9501:300:20-9507:300:26 name="socket"
-                      arg: name-ref #820 9509:300:28-9516:300:35 name="request"
-                      arg: name-ref #821 9518:300:37-9525:300:44 name="timeout"
-        arm: case-arm #839 9555:303:5-9661:306:1
-          pattern: variant-pattern #829 9555:303:5-9569:303:19 enum="Result" variant="Err" bindings=["message"]
-          body: expr-stmt #833 9579:304:7-9622:305:1
-            value: call #832 9579:304:7-9621:304:49 name="IO.warn" piped=false
-              arg: interpolation #831 9587:304:15-9620:304:48
+              part: name-ref #565 7492:241:18-7498:241:24 name="target"
+      body: binding #571 7509:243:3-7526:244:1 name="host"
+        value: name-ref #570 7516:243:10-7525:243:19 name="authority"
+      body: binding #573 7528:244:3-7543:245:1 name="port_text"
+        value: literal #572 7540:244:15-7542:244:17 value=string:""
+      body: if-stmt #657 7545:245:3-8226:269:1
+        branch: if-branch #630 7545:245:3-7997:261:1
+          condition: call #576 7548:245:6-7583:245:41 name="String.starts_with?" piped=false
+            arg: name-ref #574 7568:245:26-7577:245:35 name="authority"
+            arg: literal #575 7579:245:37-7582:245:40 value=string:"["
+          body: binding #580 7588:246:5-7621:247:1 name="close"
+            value: call #579 7596:246:13-7620:246:37 name="@2::first_of" piped=false
+              arg: name-ref #577 7605:246:22-7614:246:31 name="authority"
+              arg: literal #578 7616:246:33-7619:246:36 value=string:"]"
+          body: if-stmt #588 7625:247:5-7693:250:1
+            branch: if-branch #587 7625:247:5-7685:249:1
+              condition: binary #584 7628:247:8-7661:247:41 op=equal op-span=7634:247:14-7636:247:16
+                left: name-ref #581 7628:247:8-7633:247:13 name="close"
+                right: call #583 7637:247:17-7661:247:41 name="String.length" piped=false
+                  arg: name-ref #582 7651:247:31-7660:247:40 name="authority"
+              body: return-stmt #586 7668:248:7-7685:249:1
+                value: call #585 7675:248:14-7684:248:23 name="@2::bad_url" piped=false
+          body: binding #595 7697:250:5-7742:251:1 name="host"
+            value: call #594 7704:250:12-7741:250:49 name="String.slice" piped=false
+              arg: name-ref #589 7717:250:25-7726:250:34 name="authority"
+              arg: literal #590 7728:250:36-7729:250:37 value=int:1
+              arg: binary #593 7731:250:39-7740:250:48 op=minus op-span=7737:250:45-7738:250:46
+                left: name-ref #591 7731:250:39-7736:250:44 name="close"
+                right: literal #592 7739:250:47-7740:250:48 value=int:1
+          body: if-stmt #602 7746:251:5-7796:254:1
+            branch: if-branch #601 7746:251:5-7788:253:1
+              condition: unary #598 7749:251:8-7764:251:23 op=not op-span=7749:251:8-7752:251:11
+                operand: call #597 7753:251:12-7764:251:23 name="@2::ipv6?" piped=false
+                  arg: name-ref #596 7759:251:18-7763:251:22 name="host"
+              body: return-stmt #600 7771:252:7-7788:253:1
+                value: call #599 7778:252:14-7787:252:23 name="@2::bad_url" piped=false
+          body: binding #608 7800:254:5-7838:255:1 name="after"
+            value: call #607 7808:254:13-7837:254:42 name="@2::rest_of" piped=false
+              arg: name-ref #603 7816:254:21-7825:254:30 name="authority"
+              arg: binary #606 7827:254:32-7836:254:41 op=plus op-span=7833:254:38-7834:254:39
+                left: name-ref #604 7827:254:32-7832:254:37 name="close"
+                right: literal #605 7835:254:40-7836:254:41 value=int:1
+          body: if-stmt #629 7842:255:5-7997:261:1
+            branch: if-branch #628 7842:255:5-7989:260:1
+              condition: binary #611 7845:255:8-7856:255:19 op=not-equal op-span=7851:255:14-7853:255:16
+                left: name-ref #609 7845:255:8-7850:255:13 name="after"
+                right: literal #610 7854:255:17-7856:255:19 value=string:""
+              body: if-stmt #623 7863:256:7-7953:259:1
+                branch: if-branch #622 7863:256:7-7943:258:1
+                  condition: binary #619 7866:256:10-7917:256:61 op=or op-span=7879:256:23-7881:256:25
+                    left: binary #614 7866:256:10-7878:256:22 op=equal op-span=7872:256:16-7874:256:18
+                      left: name-ref #612 7866:256:10-7871:256:15 name="after"
+                      right: literal #613 7875:256:19-7878:256:22 value=string:":"
+                    right: unary #618 7882:256:26-7917:256:61 op=not op-span=7882:256:26-7885:256:29
+                      operand: call #617 7886:256:30-7917:256:61 name="String.starts_with?" piped=false
+                        arg: name-ref #615 7906:256:50-7911:256:55 name="after"
+                        arg: literal #616 7913:256:57-7916:256:60 value=string:":"
+                  body: return-stmt #621 7926:257:9-7943:258:1
+                    value: call #620 7933:257:16-7942:257:25 name="@2::bad_url" piped=false
+              body: binding #627 7959:259:7-7989:260:1 name="port_text"
+                value: call #626 7971:259:19-7988:259:36 name="@2::rest_of" piped=false
+                  arg: name-ref #624 7979:259:27-7984:259:32 name="after"
+                  arg: literal #625 7986:259:34-7987:259:35 value=int:1
+        branch: if-branch #656 7999:261:3-8220:268:1
+          condition: call #633 8005:261:9-8037:261:41 name="String.contains?" piped=false
+            arg: name-ref #631 8022:261:26-8031:261:35 name="authority"
+            arg: literal #632 8033:261:37-8036:261:40 value=string:":"
+          body: binding #637 8042:262:5-8075:263:1 name="colon"
+            value: call #636 8050:262:13-8074:262:37 name="@2::first_of" piped=false
+              arg: name-ref #634 8059:262:22-8068:262:31 name="authority"
+              arg: literal #635 8070:262:33-8073:262:36 value=string:":"
+          body: binding #642 8079:263:5-8120:264:1 name="host"
+            value: call #641 8086:263:12-8119:263:45 name="String.slice" piped=false
+              arg: name-ref #638 8099:263:25-8108:263:34 name="authority"
+              arg: literal #639 8110:263:36-8111:263:37 value=int:0
+              arg: name-ref #640 8113:263:39-8118:263:44 name="colon"
+          body: binding #648 8124:264:5-8166:265:1 name="port_text"
+            value: call #647 8136:264:17-8165:264:46 name="@2::rest_of" piped=false
+              arg: name-ref #643 8144:264:25-8153:264:34 name="authority"
+              arg: binary #646 8155:264:36-8164:264:45 op=plus op-span=8161:264:42-8162:264:43
+                left: name-ref #644 8155:264:36-8160:264:41 name="colon"
+                right: literal #645 8163:264:44-8164:264:45 value=int:1
+          body: if-stmt #655 8170:265:5-8220:268:1
+            branch: if-branch #654 8170:265:5-8212:267:1
+              condition: binary #651 8173:265:8-8188:265:23 op=equal op-span=8183:265:18-8185:265:20
+                left: name-ref #649 8173:265:8-8182:265:17 name="port_text"
+                right: literal #650 8186:265:21-8188:265:23 value=string:""
+              body: return-stmt #653 8195:266:7-8212:267:1
+                value: call #652 8202:266:14-8211:266:23 name="@2::bad_url" piped=false
+      body: if-stmt #678 8228:269:3-8363:272:1
+        branch: if-branch #677 8228:269:3-8357:271:1
+          condition: binary #674 8231:269:6-8335:269:110 op=or op-span=8305:269:80-8307:269:82
+            left: binary #669 8231:269:6-8304:269:79 op=or op-span=8278:269:53-8280:269:55
+              left: binary #664 8231:269:6-8277:269:52 op=or op-span=8242:269:17-8244:269:19
+                left: binary #660 8231:269:6-8241:269:16 op=equal op-span=8236:269:11-8238:269:13
+                  left: name-ref #658 8231:269:6-8235:269:10 name="host"
+                  right: literal #659 8239:269:14-8241:269:16 value=string:""
+                right: call #663 8245:269:20-8277:269:52 name="String.contains?" piped=false
+                  arg: name-ref #661 8262:269:37-8271:269:46 name="authority"
+                  arg: literal #662 8273:269:48-8276:269:51 value=string:"@"
+              right: unary #668 8281:269:56-8304:269:79 op=not op-span=8281:269:56-8284:269:59
+                operand: call #667 8285:269:60-8304:269:79 name="@2::plain?" piped=false
+                  arg: name-ref #665 8292:269:67-8296:269:71 name="host"
+                  arg: literal #666 8298:269:73-8303:269:78 value=bool:false
+            right: unary #673 8308:269:83-8335:269:110 op=not op-span=8308:269:83-8311:269:86
+              operand: call #672 8312:269:87-8335:269:110 name="@2::plain?" piped=false
+                arg: name-ref #670 8319:269:94-8328:269:103 name="port_text"
+                arg: literal #671 8330:269:105-8334:269:109 value=bool:true
+          body: return-stmt #676 8340:270:5-8357:271:1
+            value: call #675 8347:270:12-8356:270:21 name="@2::bad_url" piped=false
+      body: binding #680 8365:272:3-8375:273:1 name="port"
+        value: literal #679 8372:272:10-8374:272:12 value=int:80
+      body: if-stmt #687 8377:273:3-8419:276:1
+        branch: if-branch #686 8377:273:3-8413:275:1
+          condition: binary #683 8380:273:6-8397:273:23 op=equal op-span=8387:273:13-8389:273:15
+            left: name-ref #681 8380:273:6-8386:273:12 name="scheme"
+            right: literal #682 8390:273:16-8397:273:23 value=string:"https"
+          body: binding #685 8402:274:5-8413:275:1 name="port"
+            value: literal #684 8409:274:12-8412:274:15 value=int:443
+      body: if-stmt #696 8421:276:3-8511:279:1
+        branch: if-branch #695 8421:276:3-8505:278:1
+          condition: binary #691 8424:276:6-8452:276:34 op=greater op-span=8449:276:31-8450:276:32
+            left: call #689 8424:276:6-8448:276:30 name="String.length" piped=false
+              arg: name-ref #688 8438:276:20-8447:276:29 name="port_text"
+            right: literal #690 8451:276:33-8452:276:34 value=int:5
+          body: return-stmt #694 8457:277:5-8505:278:1
+            value: call #693 8464:277:12-8504:277:52 name="error" piped=false
+              arg: literal #692 8470:277:18-8503:277:51 value=string:"http: the port must be 1..65535"
+      body: if-stmt #704 8513:279:3-8575:282:1
+        branch: if-branch #703 8513:279:3-8569:281:1
+          condition: binary #699 8516:279:6-8531:279:21 op=not-equal op-span=8526:279:16-8528:279:18
+            left: name-ref #697 8516:279:6-8525:279:15 name="port_text"
+            right: literal #698 8529:279:19-8531:279:21 value=string:""
+          body: binding #702 8536:280:5-8569:281:1 name="port"
+            value: call #701 8543:280:12-8568:280:37 name="String.to_int!" piped=false
+              arg: name-ref #700 8558:280:27-8567:280:36 name="port_text"
+      body: if-stmt #716 8577:282:3-8663:285:1
+        branch: if-branch #715 8577:282:3-8657:284:1
+          condition: binary #711 8580:282:6-8604:282:30 op=or op-span=8589:282:15-8591:282:17
+            left: binary #707 8580:282:6-8588:282:14 op=less op-span=8585:282:11-8586:282:12
+              left: name-ref #705 8580:282:6-8584:282:10 name="port"
+              right: literal #706 8587:282:13-8588:282:14 value=int:1
+            right: binary #710 8592:282:18-8604:282:30 op=greater op-span=8597:282:23-8598:282:24
+              left: name-ref #708 8592:282:18-8596:282:22 name="port"
+              right: literal #709 8599:282:25-8604:282:30 value=int:65535
+          body: return-stmt #714 8609:283:5-8657:284:1
+            value: call #713 8616:283:12-8656:283:52 name="error" piped=false
+              arg: literal #712 8622:283:18-8655:283:51 value=string:"http: the port must be 1..65535"
+      body: return-stmt #728 8665:285:3-8756:286:1
+        value: call #727 8672:285:10-8755:285:93 name="ok" piped=false
+          arg: construct #726 8675:285:13-8754:285:92 type="@2::Target"
+            arg: named-arg #718 8682:285:20-8696:285:34 name="scheme"
+              value: name-ref #717 8690:285:28-8696:285:34 name="scheme"
+            arg: named-arg #721 8698:285:36-8725:285:63 name="host"
+              value: call #720 8704:285:42-8725:285:63 name="String.downcase" piped=false
+                arg: name-ref #719 8720:285:58-8724:285:62 name="host"
+            arg: named-arg #723 8727:285:65-8737:285:75 name="port"
+              value: name-ref #722 8733:285:71-8737:285:75 name="port"
+            arg: named-arg #725 8739:285:77-8753:285:91 name="target"
+              value: name-ref #724 8747:285:85-8753:285:91 name="target"
+    declaration: function-decl #756 8761:288:1-9039:293:1 name="@2::start"
+      param: param #731 8771:288:11-8789:288:29 name="listener"
+        type: type-ref #730 8781:288:21-8789:288:29 name="Listener"
+      param: param #736 8791:288:31-8837:288:77 name="handler"
+        type: type-ref #735 8800:288:40-8837:288:77 name="Fn"
+          arg: type-ref #732 8803:288:43-8814:288:54 name="HttpRequest"
+          arg: type-ref #734 8816:288:56-8836:288:76 name="Result"
+            arg: type-ref #733 8823:288:63-8835:288:75 name="HttpResponse"
+      param: param #738 8839:288:79-8865:288:105 name="options"
+        type: type-ref #737 8848:288:88-8865:288:105 name="HttpServerOptions"
+      result: type-ref #739 8870:288:110-8880:288:120 name="HttpServer"
+      body: return-stmt #755 8883:289:3-9035:292:1
+        value: call #754 8890:289:10-9034:291:6 name="HttpWire.server" piped=false
+          arg: name-ref #740 8906:289:26-8914:289:34 name="listener"
+          arg: field-access #742 8916:289:36-8939:289:59 name="max_connections"
+            target: name-ref #741 8916:289:36-8923:289:43 name="options"
+          arg: block-lit #753 8941:289:61-9034:291:6
+            param: block-param #743 8945:289:65-8951:289:71 name="server"
+            body: expr-stmt #752 8957:290:5-9029:291:1
+              value: call #751 8957:290:5-9028:290:76 name="@2::accept_all" piped=false
+                arg: construct #750 8968:290:16-9027:290:75 type="@2::Service"
+                  arg: named-arg #745 8976:290:24-8990:290:38 name="server"
+                    value: name-ref #744 8984:290:32-8990:290:38 name="server"
+                  arg: named-arg #747 8992:290:40-9008:290:56 name="handler"
+                    value: name-ref #746 9001:290:49-9008:290:56 name="handler"
+                  arg: named-arg #749 9010:290:58-9026:290:74 name="options"
+                    value: name-ref #748 9019:290:67-9026:290:74 name="options"
+    declaration: function-decl #782 9040:294:1-9266:302:1 name="@2::accept_all"
+      param: param #758 9055:294:16-9071:294:32 name="service"
+        type: type-ref #757 9064:294:25-9071:294:32 name="@2::Service"
+      result: type-ref #759 9076:294:37-9080:294:41 name="Void"
+      body: while-stmt #781 9083:295:3-9262:301:1
+        condition: literal #760 9089:295:9-9093:295:13 value=bool:true
+        body: case-stmt #780 9098:296:5-9256:300:1
+          value: call #763 9103:296:10-9134:296:41 name="HttpWire.accept" piped=false
+            arg: field-access #762 9119:296:26-9133:296:40 name="server"
+              target: name-ref #761 9119:296:26-9126:296:33 name="service"
+          arm: case-arm #776 9141:297:7-9223:298:1
+            pattern: variant-pattern #764 9141:297:7-9151:297:17 enum="Result" variant="Ok" bindings=["socket"]
+            body: expr-stmt #775 9155:297:21-9223:298:1
+              value: call #774 9155:297:21-9222:297:88 name="HttpWire.spawn" piped=false
+                arg: field-access #766 9170:297:36-9184:297:50 name="server"
+                  target: name-ref #765 9170:297:36-9177:297:43 name="service"
+                arg: name-ref #767 9186:297:52-9192:297:58 name="socket"
+                arg: block-lit #773 9194:297:60-9222:297:88
+                  param: block-param #768 9198:297:64-9199:297:65 name="s"
+                  body: expr-stmt #772 9201:297:67-9218:297:84
+                    value: call #771 9201:297:67-9218:297:84 name="@2::serve" piped=false
+                      arg: name-ref #769 9207:297:73-9208:297:74 name="s"
+                      arg: name-ref #770 9210:297:76-9217:297:83 name="service"
+          arm: case-arm #779 9229:298:7-9248:299:1
+            pattern: variant-pattern #777 9229:298:7-9237:298:15 enum="Result" variant="Err" bindings=[-]
+            body: return-stmt #778 9241:298:19-9248:299:1
+    declaration: function-decl #826 9267:303:1-9694:319:1 name="@2::serve"
+      param: param #784 9277:303:11-9291:303:25 name="socket"
+        type: type-ref #783 9285:303:19-9291:303:25 name="Socket"
+      param: param #786 9293:303:27-9309:303:43 name="service"
+        type: type-ref #785 9302:303:36-9309:303:43 name="@2::Service"
+      result: type-ref #787 9314:303:48-9318:303:52 name="Void"
+      body: binding #790 9321:304:3-9347:305:1 name="options"
+        value: field-access #789 9331:304:13-9346:304:28 name="options"
+          target: name-ref #788 9331:304:13-9338:304:20 name="service"
+      body: binding #793 9349:305:3-9386:306:1 name="wait_ms"
+        value: field-access #792 9359:305:13-9385:305:39 name="request_timeout_ms"
+          target: name-ref #791 9359:305:13-9366:305:20 name="options"
+      body: binding #797 9388:306:3-9409:307:1 name="rest"
+        type: type-ref #795 9394:306:9-9403:306:18 name="List"
+          arg: type-ref #794 9399:306:14-9402:306:17 name="Int"
+        value: list-lit #796 9406:306:21-9408:306:23
+      body: while-stmt #825 9411:307:3-9690:318:1
+        condition: literal #798 9417:307:9-9421:307:13 value=bool:true
+        body: case-stmt #821 9426:308:5-9646:316:1
+          value: call #803 9431:308:10-9475:308:54 name="@2::read_request" piped=false
+            arg: name-ref #799 9444:308:23-9450:308:29 name="socket"
+            arg: name-ref #800 9452:308:31-9456:308:35 name="rest"
+            arg: name-ref #801 9458:308:37-9465:308:44 name="wait_ms"
+            arg: name-ref #802 9467:308:46-9474:308:53 name="options"
+          arm: case-arm #817 9482:309:7-9613:314:1
+            pattern: variant-pattern #804 9482:309:7-9494:309:19 enum="Result" variant="Ok" bindings=["incoming"]
+            body: if-stmt #813 9506:310:9-9584:313:1
+              branch: if-branch #812 9506:310:9-9572:312:1
+                condition: unary #810 9509:310:12-9554:310:57 op=not op-span=9509:310:12-9512:310:15
+                  operand: call #809 9513:310:16-9554:310:57 name="@2::answer" piped=false
+                    arg: name-ref #805 9520:310:23-9526:310:29 name="socket"
+                    arg: field-access #807 9528:310:31-9544:310:47 name="request"
+                      target: name-ref #806 9528:310:31-9536:310:39 name="incoming"
+                    arg: name-ref #808 9546:310:49-9553:310:56 name="service"
+                body: return-stmt #811 9565:311:11-9572:312:1
+            body: binding #816 9592:313:9-9613:314:1 name="rest"
+              value: field-access #815 9599:313:16-9612:313:29 name="rest"
+                target: name-ref #814 9599:313:16-9607:313:24 name="incoming"
+          arm: case-arm #820 9619:314:7-9638:315:1
+            pattern: variant-pattern #818 9619:314:7-9627:314:15 enum="Result" variant="Err" bindings=[-]
+            body: return-stmt #819 9631:314:19-9638:315:1
+        body: binding #824 9650:316:5-9684:317:1 name="wait_ms"
+          value: field-access #823 9660:316:15-9683:316:38 name="idle_timeout_ms"
+            target: name-ref #822 9660:316:15-9667:316:22 name="options"
+    declaration: function-decl #921 9958:323:1-10769:342:1 name="@2::read_request"
+      param: param #828 9975:323:18-9989:323:32 name="socket"
+        type: type-ref #827 9983:323:26-9989:323:32 name="Socket"
+      param: param #831 9991:323:34-10006:323:49 name="rest"
+        type: type-ref #830 9997:323:40-10006:323:49 name="List"
+          arg: type-ref #829 10002:323:45-10005:323:48 name="Int"
+      param: param #833 10008:323:51-10021:323:64 name="first_ms"
+        type: type-ref #832 10018:323:61-10021:323:64 name="Int"
+      param: param #835 10023:323:66-10049:323:92 name="options"
+        type: type-ref #834 10032:323:75-10049:323:92 name="HttpServerOptions"
+      result: type-ref #837 10054:323:97-10070:323:113 name="Result"
+        arg: type-ref #836 10061:323:104-10069:323:112 name="@2::Incoming"
+      body: binding #839 10073:324:3-10086:325:1 name="first"
+        value: name-ref #838 10081:324:11-10085:324:15 name="rest"
+      body: if-stmt #860 10088:325:3-10252:331:1
+        branch: if-branch #859 10088:325:3-10246:330:1
+          condition: binary #843 10091:325:6-10112:325:27 op=equal op-span=10108:325:23-10110:325:25
+            left: call #841 10091:325:6-10107:325:22 name="List.size" piped=false
+              arg: name-ref #840 10101:325:16-10106:325:21 name="first"
+            right: literal #842 10111:325:26-10112:325:27 value=int:0
+          body: binding #849 10117:326:5-10165:327:1 name="first"
+            value: try-expr #848 10125:326:13-10164:326:52
+              operand: call #847 10129:326:17-10164:326:52 name="TCP.recv_bytes" piped=false
+                arg: name-ref #844 10144:326:32-10150:326:38 name="socket"
+                arg: literal #845 10152:326:40-10153:326:41 value=int:1
+                arg: name-ref #846 10155:326:43-10163:326:51 name="first_ms"
+          body: if-stmt #858 10169:327:5-10246:330:1
+            branch: if-branch #857 10169:327:5-10238:329:1
+              condition: binary #853 10172:327:8-10193:327:29 op=equal op-span=10189:327:25-10191:327:27
+                left: call #851 10172:327:8-10188:327:24 name="List.size" piped=false
+                  arg: name-ref #850 10182:327:18-10187:327:23 name="first"
+                right: literal #852 10192:327:28-10193:327:29 value=int:0
+              body: return-stmt #856 10200:328:7-10238:329:1
+                value: call #855 10207:328:14-10237:328:44 name="error" piped=false
+                  arg: literal #854 10213:328:20-10236:328:43 value=string:"network: end of input"
+      body: binding #865 10254:331:3-10314:332:1 name="deadline"
+        value: binary #864 10265:331:14-10313:331:62 op=plus op-span=10285:331:34-10286:331:35
+          left: call #861 10265:331:14-10284:331:33 name="Time.monotonic_ms" piped=false
+          right: field-access #863 10287:331:36-10313:331:62 name="request_timeout_ms"
+            target: name-ref #862 10287:331:36-10294:331:43 name="options"
+      body: binding #873 10316:332:3-10386:333:1 name="head"
+        value: try-expr #872 10323:332:10-10385:332:72
+          operand: call #871 10327:332:14-10385:332:72 name="@2::read_head" piped=false
+            arg: name-ref #866 10337:332:24-10343:332:30 name="socket"
+            arg: name-ref #867 10345:332:32-10350:332:37 name="first"
+            arg: name-ref #868 10352:332:39-10360:332:47 name="deadline"
+            arg: field-access #870 10362:332:49-10384:332:71 name="max_body_bytes"
+              target: name-ref #869 10362:332:49-10369:332:56 name="options"
+      body: binding #884 10388:333:3-10494:334:1 name="reading"
+        value: construct #883 10398:333:13-10493:333:108 type="@2::Reading"
+          arg: named-arg #875 10406:333:21-10420:333:35 name="socket"
+            value: name-ref #874 10414:333:29-10420:333:35 name="socket"
+          arg: named-arg #877 10422:333:37-10432:333:47 name="head"
+            value: name-ref #876 10428:333:43-10432:333:47 name="head"
+          arg: named-arg #879 10434:333:49-10452:333:67 name="deadline"
+            value: name-ref #878 10444:333:59-10452:333:67 name="deadline"
+          arg: named-arg #882 10454:333:69-10492:333:107 name="max_body_bytes"
+            value: field-access #881 10470:333:85-10492:333:107 name="max_body_bytes"
+              target: name-ref #880 10470:333:85-10477:333:92 name="options"
+      body: if-stmt #910 10496:334:3-10678:337:1
+        branch: if-branch #909 10496:334:3-10672:336:1
+          condition: binary #899 10499:334:6-10580:334:87 op=and op-span=10558:334:65-10561:334:68
+            left: binary #894 10499:334:6-10557:334:64 op=and op-span=10520:334:27-10523:334:30
+              left: field-access #886 10499:334:6-10519:334:26 name="expect_continue"
+                target: name-ref #885 10499:334:6-10503:334:10 name="head"
+              right: binary #893 10525:334:32-10556:334:63 op=or op-span=10538:334:45-10540:334:47
+                left: field-access #888 10525:334:32-10537:334:44 name="chunked"
+                  target: name-ref #887 10525:334:32-10529:334:36 name="head"
+                right: binary #892 10541:334:48-10556:334:63 op=greater op-span=10553:334:60-10554:334:61
+                  left: field-access #890 10541:334:48-10552:334:59 name="length"
+                    target: name-ref #889 10541:334:48-10545:334:52 name="head"
+                  right: literal #891 10555:334:62-10556:334:63 value=int:0
+            right: binary #898 10562:334:69-10580:334:87 op=equal op-span=10576:334:83-10578:334:85
+              left: field-access #896 10562:334:69-10575:334:82 name="buffered"
+                target: name-ref #895 10562:334:69-10566:334:73 name="head"
+              right: literal #897 10579:334:86-10580:334:87 value=int:0
+          body: expr-stmt #908 10585:335:5-10672:336:1
+            value: try-expr #907 10585:335:5-10671:335:91
+              operand: call #906 10589:335:9-10671:335:91 name="TCP.send" piped=false
+                arg: name-ref #900 10598:335:18-10604:335:24 name="socket"
+                arg: literal #901 10606:335:26-10637:335:57 value=string:"HTTP/1.1 100 Continue\r\n\r\n"
+                arg: try-expr #905 10639:335:59-10670:335:90
+                  operand: call #904 10643:335:63-10670:335:90 name="@2::time_left" piped=false
+                    arg: name-ref #902 10653:335:73-10659:335:79 name="socket"
+                    arg: name-ref #903 10661:335:81-10669:335:89 name="deadline"
+      body: if-stmt #917 10680:337:3-10735:340:1
+        branch: if-branch #916 10680:337:3-10729:339:1
+          condition: field-access #912 10683:337:6-10695:337:18 name="chunked"
+            target: name-ref #911 10683:337:6-10687:337:10 name="head"
+          body: return-stmt #915 10700:338:5-10729:339:1
+            value: call #914 10707:338:12-10728:338:33 name="@2::read_chunked" piped=false
+              arg: name-ref #913 10720:338:25-10727:338:32 name="reading"
+      body: return-stmt #920 10737:340:3-10765:341:1
+        value: call #919 10744:340:10-10764:340:30 name="@2::read_length" piped=false
+          arg: name-ref #918 10756:340:22-10763:340:29 name="reading"
+    declaration: function-decl #972 10884:344:1-11325:357:1 name="@2::read_head"
+      param: param #923 10898:344:15-10912:344:29 name="socket"
+        type: type-ref #922 10906:344:23-10912:344:29 name="Socket"
+      param: param #926 10914:344:31-10929:344:46 name="rest"
+        type: type-ref #925 10920:344:37-10929:344:46 name="List"
+          arg: type-ref #924 10925:344:42-10928:344:45 name="Int"
+      param: param #928 10931:344:48-10944:344:61 name="deadline"
+        type: type-ref #927 10941:344:58-10944:344:61 name="Int"
+      param: param #930 10946:344:63-10965:344:82 name="max_body_bytes"
+        type: type-ref #929 10962:344:79-10965:344:82 name="Int"
+      result: type-ref #932 10970:344:87-10991:344:108 name="Result"
+        arg: type-ref #931 10977:344:94-10990:344:107 name="HttpWire.Head"
+      body: binding #937 10994:345:3-11033:346:1 name="left"
+        value: try-expr #936 11001:345:10-11032:345:41
+          operand: call #935 11005:345:14-11032:345:41 name="@2::time_left" piped=false
+            arg: name-ref #933 11015:345:24-11021:345:30 name="socket"
+            arg: name-ref #934 11023:345:32-11031:345:40 name="deadline"
+      body: case-stmt #971 11035:346:3-11321:356:1
+        value: call #942 11040:346:8-11094:346:62 name="HttpWire.read_head" piped=false
+          arg: name-ref #938 11059:346:27-11065:346:33 name="socket"
+          arg: name-ref #939 11067:346:35-11071:346:39 name="rest"
+          arg: name-ref #940 11073:346:41-11087:346:55 name="max_body_bytes"
+          arg: name-ref #941 11089:346:57-11093:346:61 name="left"
+        arm: case-arm #962 11099:347:5-11241:352:1
+          pattern: variant-pattern #943 11099:347:5-11107:347:13 enum="Result" variant="Ok" bindings=["head"]
+          body: if-stmt #958 11117:348:7-11219:351:1
+            branch: if-branch #957 11117:348:7-11209:350:1
+              condition: binary #947 11120:348:10-11135:348:25 op=greater op-span=11132:348:22-11133:348:23
+                left: field-access #945 11120:348:10-11131:348:21 name="status"
+                  target: name-ref #944 11120:348:10-11124:348:14 name="head"
+                right: literal #946 11134:348:24-11135:348:25 value=int:0
+              body: return-stmt #956 11144:349:9-11209:350:1
+                value: call #955 11151:349:16-11208:349:73 name="error" piped=false
+                  arg: call #954 11157:349:22-11207:349:72 name="@2::refuse" piped=false
+                    arg: name-ref #948 11164:349:29-11170:349:35 name="socket"
+                    arg: field-access #950 11172:349:37-11183:349:48 name="status"
+                      target: name-ref #949 11172:349:37-11176:349:41 name="head"
+                    arg: field-access #952 11185:349:50-11196:349:61 name="reason"
+                      target: name-ref #951 11185:349:50-11189:349:54 name="head"
+                    arg: name-ref #953 11198:349:63-11206:349:71 name="deadline"
+          body: return-stmt #961 11225:351:7-11241:352:1
+            value: call #960 11232:351:14-11240:351:22 name="ok" piped=false
+              arg: name-ref #959 11235:351:17-11239:351:21 name="head"
+        arm: case-arm #970 11245:352:5-11315:355:1
+          pattern: variant-pattern #963 11245:352:5-11259:352:19 enum="Result" variant="Err" bindings=["message"]
+          body: expr-stmt #966 11269:353:7-11287:354:1
+            value: call #965 11269:353:7-11286:353:24 name="TCP.close" piped=false
+              arg: name-ref #964 11279:353:17-11285:353:23 name="socket"
+          body: return-stmt #969 11293:354:7-11315:355:1
+            value: call #968 11300:354:14-11314:354:28 name="error" piped=false
+              arg: name-ref #967 11306:354:20-11313:354:27 name="message"
+    declaration: function-decl #1021 11326:358:1-11694:368:1 name="@2::read_length"
+      param: param #974 11342:358:17-11358:358:33 name="reading"
+        type: type-ref #973 11351:358:26-11358:358:33 name="@2::Reading"
+      result: type-ref #976 11363:358:38-11379:358:54 name="Result"
+        arg: type-ref #975 11370:358:45-11378:358:53 name="@2::Incoming"
+      body: binding #982 11382:359:3-11417:360:1 name="body"
+        value: construct #981 11389:359:10-11416:359:37 type="@2::Body"
+          arg: named-arg #978 11394:359:15-11404:359:25 name="pieces"
+            value: list-lit #977 11402:359:23-11404:359:25
+          arg: named-arg #980 11406:359:27-11415:359:36 name="carry"
+            value: list-lit #979 11413:359:34-11415:359:36
+      body: binding #986 11419:360:3-11446:361:1 name="left"
+        value: field-access #985 11426:360:10-11445:360:29 name="length"
+          target: field-access #984 11426:360:10-11438:360:22 name="head"
+            target: name-ref #983 11426:360:10-11433:360:17 name="reading"
+      body: while-stmt #1015 11448:361:3-11655:366:1
+        condition: binary #989 11454:361:9-11462:361:17 op=greater op-span=11459:361:14-11460:361:15
+          left: name-ref #987 11454:361:9-11458:361:13 name="left"
+          right: literal #988 11461:361:16-11462:361:17 value=int:0
+        body: binding #998 11467:362:5-11537:363:1 name="piece"
+          value: try-expr #997 11475:362:13-11536:362:74
+            operand: call #996 11479:362:17-11536:362:74 name="@2::more_text" piped=false
+              arg: name-ref #990 11489:362:27-11496:362:34 name="reading"
+              arg: field-access #992 11498:362:36-11508:362:46 name="carry"
+                target: name-ref #991 11498:362:36-11502:362:40 name="body"
+              arg: call #995 11510:362:48-11535:362:73 name="@2::smaller" piped=false
+                arg: name-ref #993 11518:362:56-11522:362:60 name="left"
+                arg: const-ref #994 11524:362:62-11534:362:72 name="@2::TEXT_BYTES"
+        body: binding #1009 11541:363:5-11619:364:1 name="body"
+          value: construct #1008 11548:363:12-11618:363:82 type="@2::Body"
+            arg: named-arg #1004 11553:363:17-11597:363:61 name="pieces"
+              value: call #1003 11561:363:25-11597:363:61 name="List.append" piped=false
+                arg: field-access #1000 11573:363:37-11584:363:48 name="pieces"
+                  target: name-ref #999 11573:363:37-11577:363:41 name="body"
+                arg: field-access #1002 11586:363:50-11596:363:60 name="text"
+                  target: name-ref #1001 11586:363:50-11591:363:55 name="piece"
+            arg: named-arg #1007 11599:363:63-11617:363:81 name="carry"
+              value: field-access #1006 11606:363:70-11617:363:81 name="carry"
+                target: name-ref #1005 11606:363:70-11611:363:75 name="piece"
+        body: binding #1014 11623:364:5-11649:365:1 name="left"
+          value: binary #1013 11630:364:12-11648:364:30 op=minus op-span=11635:364:17-11636:364:18
+            left: name-ref #1010 11630:364:12-11634:364:16 name="left"
+            right: field-access #1012 11637:364:19-11648:364:30 name="bytes"
+              target: name-ref #1011 11637:364:19-11642:364:24 name="piece"
+      body: return-stmt #1020 11657:366:3-11690:367:1
+        value: call #1019 11664:366:10-11689:366:35 name="@2::finish" piped=false
+          arg: name-ref #1016 11671:366:17-11678:366:24 name="reading"
+          arg: name-ref #1017 11680:366:26-11684:366:30 name="body"
+          arg: list-lit #1018 11686:366:32-11688:366:34
+    declaration: function-decl #1106 11695:369:1-12575:388:1 name="@2::read_chunked"
+      param: param #1023 11712:369:18-11728:369:34 name="reading"
+        type: type-ref #1022 11721:369:27-11728:369:34 name="@2::Reading"
+      result: type-ref #1025 11733:369:39-11749:369:55 name="Result"
+        arg: type-ref #1024 11740:369:46-11748:369:54 name="@2::Incoming"
+      body: binding #1029 11752:370:3-11773:371:1 name="data"
+        type: type-ref #1027 11758:370:9-11767:370:18 name="List"
+          arg: type-ref #1026 11763:370:14-11766:370:17 name="Int"
+        value: list-lit #1028 11770:370:21-11772:370:23
+      body: binding #1033 11775:371:3-11824:372:1 name="state"
+        value: call #1032 11783:371:11-11823:371:51 name="HttpWire.chunked" piped=false
+          arg: field-access #1031 11800:371:28-11822:371:50 name="max_body_bytes"
+            target: name-ref #1030 11800:371:28-11807:371:35 name="reading"
+      body: binding #1039 11826:372:3-11861:373:1 name="body"
+        value: construct #1038 11833:372:10-11860:372:37 type="@2::Body"
+          arg: named-arg #1035 11838:372:15-11848:372:25 name="pieces"
+            value: list-lit #1034 11846:372:23-11848:372:25
+          arg: named-arg #1037 11850:372:27-11859:372:36 name="carry"
+            value: list-lit #1036 11857:372:34-11859:372:36
+      body: while-stmt #1097 11863:373:3-12511:386:1
+        condition: unary #1042 11869:373:9-11883:373:23 op=not op-span=11869:373:9-11872:373:12
+          operand: field-access #1041 11873:373:13-11883:373:23 name="done"
+            target: name-ref #1040 11873:373:13-11878:373:18 name="state"
+        body: if-stmt #1096 11888:374:5-12505:385:1
+          branch: if-branch #1073 11888:374:5-12228:379:1
+            condition: binary #1046 11891:374:8-11910:374:27 op=greater op-span=11907:374:24-11908:374:25
+              left: field-access #1044 11891:374:8-11906:374:23 name="remaining"
+                target: name-ref #1043 11891:374:8-11896:374:13 name="state"
+              right: literal #1045 11909:374:26-11910:374:27 value=int:0
+            body: binding #1056 12009:376:7-12090:377:1 name="piece"
+              value: try-expr #1055 12017:376:15-12089:376:87
+                operand: call #1054 12021:376:19-12089:376:87 name="@2::more_text" piped=false
+                  arg: name-ref #1047 12031:376:29-12038:376:36 name="reading"
+                  arg: field-access #1049 12040:376:38-12050:376:48 name="carry"
+                    target: name-ref #1048 12040:376:38-12044:376:42 name="body"
+                  arg: call #1053 12052:376:50-12088:376:86 name="@2::smaller" piped=false
+                    arg: field-access #1051 12060:376:58-12075:376:73 name="remaining"
+                      target: name-ref #1050 12060:376:58-12065:376:63 name="state"
+                    arg: const-ref #1052 12077:376:75-12087:376:85 name="@2::TEXT_BYTES"
+            body: binding #1067 12096:377:7-12174:378:1 name="body"
+              value: construct #1066 12103:377:14-12173:377:84 type="@2::Body"
+                arg: named-arg #1062 12108:377:19-12152:377:63 name="pieces"
+                  value: call #1061 12116:377:27-12152:377:63 name="List.append" piped=false
+                    arg: field-access #1058 12128:377:39-12139:377:50 name="pieces"
+                      target: name-ref #1057 12128:377:39-12132:377:43 name="body"
+                    arg: field-access #1060 12141:377:52-12151:377:62 name="text"
+                      target: name-ref #1059 12141:377:52-12146:377:57 name="piece"
+                arg: named-arg #1065 12154:377:65-12172:377:83 name="carry"
+                  value: field-access #1064 12161:377:72-12172:377:83 name="carry"
+                    target: name-ref #1063 12161:377:72-12166:377:77 name="piece"
+            body: binding #1072 12180:378:7-12228:379:1 name="state"
+              value: call #1071 12188:378:15-12227:378:54 name="HttpWire.chunk_read" piped=false
+                arg: name-ref #1068 12208:378:35-12213:378:40 name="state"
+                arg: field-access #1070 12215:378:42-12226:378:53 name="bytes"
+                  target: name-ref #1069 12215:378:42-12220:378:47 name="piece"
+          else:
+            body: binding #1081 12316:381:7-12387:382:1 name="data"
+              value: try-expr #1080 12323:381:14-12386:381:77
+                operand: call #1079 12327:381:18-12386:381:77 name="@2::more_request" piped=false
+                  arg: field-access #1075 12340:381:31-12354:381:45 name="socket"
+                    target: name-ref #1074 12340:381:31-12347:381:38 name="reading"
+                  arg: const-ref #1076 12356:381:47-12367:381:58 name="@2::FRAME_BYTES"
+                  arg: field-access #1078 12369:381:60-12385:381:76 name="deadline"
+                    target: name-ref #1077 12369:381:60-12376:381:67 name="reading"
+            body: binding #1087 12393:382:7-12438:383:1 name="state"
+              value: try-expr #1086 12401:382:15-12437:382:51
+                operand: call #1085 12405:382:19-12437:382:51 name="@2::next_chunk" piped=false
+                  arg: name-ref #1082 12416:382:30-12423:382:37 name="reading"
+                  arg: name-ref #1083 12425:382:39-12430:382:44 name="state"
+                  arg: name-ref #1084 12432:382:46-12436:382:50 name="data"
+            body: binding #1095 12444:383:7-12497:384:1 name="body"
+              value: try-expr #1094 12451:383:14-12496:383:59
+                operand: call #1093 12455:383:18-12496:383:59 name="@2::add_text" piped=false
+                  arg: name-ref #1088 12464:383:27-12471:383:34 name="reading"
+                  arg: name-ref #1089 12473:383:36-12477:383:40 name="body"
+                  arg: name-ref #1090 12479:383:42-12483:383:46 name="data"
+                  arg: field-access #1092 12485:383:48-12495:383:58 name="runs"
+                    target: name-ref #1091 12485:383:48-12490:383:53 name="state"
+      body: return-stmt #1105 12513:386:3-12571:387:1
+        value: call #1104 12520:386:10-12570:386:60 name="@2::finish" piped=false
+          arg: name-ref #1098 12527:386:17-12534:386:24 name="reading"
+          arg: name-ref #1099 12536:386:26-12540:386:30 name="body"
+          arg: call #1103 12542:386:32-12569:386:59 name="List.drop" piped=false
+            arg: name-ref #1100 12552:386:42-12556:386:46 name="data"
+            arg: field-access #1102 12558:386:48-12568:386:58 name="next"
+              target: name-ref #1101 12558:386:48-12563:386:53 name="state"
+    declaration: function-decl #1136 12576:389:1-12849:395:1 name="@2::next_chunk"
+      param: param #1108 12591:389:16-12607:389:32 name="reading"
+        type: type-ref #1107 12600:389:25-12607:389:32 name="@2::Reading"
+      param: param #1110 12609:389:34-12630:389:55 name="state"
+        type: type-ref #1109 12616:389:41-12630:389:55 name="HttpWire.Chunk"
+      param: param #1113 12632:389:57-12647:389:72 name="data"
+        type: type-ref #1112 12638:389:63-12647:389:72 name="List"
+          arg: type-ref #1111 12643:389:68-12646:389:71 name="Int"
+      result: type-ref #1115 12652:389:77-12674:389:99 name="Result"
+        arg: type-ref #1114 12659:389:84-12673:389:98 name="HttpWire.Chunk"
+      body: case-stmt #1135 12677:390:3-12845:394:1
+        value: call #1119 12682:390:8-12712:390:38 name="HttpWire.chunk" piped=false
+          arg: name-ref #1116 12697:390:23-12702:390:28 name="state"
+          arg: name-ref #1117 12704:390:30-12708:390:34 name="data"
+          arg: literal #1118 12710:390:36-12711:390:37 value=int:0
+        arm: case-arm #1124 12717:391:5-12745:392:1
+          pattern: variant-pattern #1120 12717:391:5-12725:391:13 enum="Result" variant="Ok" bindings=["next"]
+          body: return-stmt #1123 12729:391:17-12745:392:1
+            value: call #1122 12736:391:24-12744:391:32 name="ok" piped=false
+              arg: name-ref #1121 12739:391:27-12743:391:31 name="next"
+        arm: case-arm #1134 12749:392:5-12839:393:1
+          pattern: variant-pattern #1125 12749:392:5-12763:392:19 enum="Result" variant="Err" bindings=["problem"]
+          body: return-stmt #1133 12767:392:23-12839:393:1
+            value: call #1132 12774:392:30-12838:392:94 name="error" piped=false
+              arg: call #1131 12780:392:36-12837:392:93 name="@2::refuse_problem" piped=false
+                arg: field-access #1127 12795:392:51-12809:392:65 name="socket"
+                  target: name-ref #1126 12795:392:51-12802:392:58 name="reading"
+                arg: name-ref #1128 12811:392:67-12818:392:74 name="problem"
+                arg: field-access #1130 12820:392:76-12836:392:92 name="deadline"
+                  target: name-ref #1129 12820:392:76-12827:392:83 name="reading"
+    declaration: function-decl #1180 12951:397:1-13284:404:1 name="@2::add_text"
+      param: param #1138 12964:397:14-12980:397:30 name="reading"
+        type: type-ref #1137 12973:397:23-12980:397:30 name="@2::Reading"
+      param: param #1140 12982:397:32-12992:397:42 name="body"
+        type: type-ref #1139 12988:397:38-12992:397:42 name="@2::Body"
+      param: param #1143 12994:397:44-13009:397:59 name="data"
+        type: type-ref #1142 13000:397:50-13009:397:59 name="List"
+          arg: type-ref #1141 13005:397:55-13008:397:58 name="Int"
+      param: param #1146 13011:397:61-13026:397:76 name="runs"
+        type: type-ref #1145 13017:397:67-13026:397:76 name="List"
+          arg: type-ref #1144 13022:397:72-13025:397:75 name="Int"
+      result: type-ref #1148 13031:397:81-13043:397:93 name="Result"
+        arg: type-ref #1147 13038:397:88-13042:397:92 name="@2::Body"
+      body: binding #1154 13046:398:3-13092:399:1 name="piece"
+        value: call #1153 13054:398:11-13091:398:48 name="HttpWire.text" piped=false
+          arg: field-access #1150 13068:398:25-13078:398:35 name="carry"
+            target: name-ref #1149 13068:398:25-13072:398:29 name="body"
+          arg: name-ref #1151 13080:398:37-13084:398:41 name="data"
+          arg: name-ref #1152 13086:398:43-13090:398:47 name="runs"
+      body: if-stmt #1167 13094:399:3-13196:402:1
+        branch: if-branch #1166 13094:399:3-13190:401:1
+          condition: unary #1157 13097:399:6-13112:399:21 op=not op-span=13097:399:6-13100:399:9
+            operand: field-access #1156 13101:399:10-13112:399:21 name="valid"
+              target: name-ref #1155 13101:399:10-13106:399:15 name="piece"
+          body: return-stmt #1165 13117:400:5-13190:401:1
+            value: call #1164 13124:400:12-13189:400:77 name="error" piped=false
+              arg: call #1163 13130:400:18-13188:400:76 name="@2::refuse_problem" piped=false
+                arg: field-access #1159 13145:400:33-13159:400:47 name="socket"
+                  target: name-ref #1158 13145:400:33-13152:400:40 name="reading"
+                arg: const-ref #1160 13161:400:49-13169:400:57 name="@2::BAD_TEXT"
+                arg: field-access #1162 13171:400:59-13187:400:75 name="deadline"
+                  target: name-ref #1161 13171:400:59-13178:400:66 name="reading"
+      body: return-stmt #1179 13198:402:3-13280:403:1
+        value: call #1178 13205:402:10-13279:402:84 name="ok" piped=false
+          arg: construct #1177 13208:402:13-13278:402:83 type="@2::Body"
+            arg: named-arg #1173 13213:402:18-13257:402:62 name="pieces"
+              value: call #1172 13221:402:26-13257:402:62 name="List.append" piped=false
+                arg: field-access #1169 13233:402:38-13244:402:49 name="pieces"
+                  target: name-ref #1168 13233:402:38-13237:402:42 name="body"
+                arg: field-access #1171 13246:402:51-13256:402:61 name="text"
+                  target: name-ref #1170 13246:402:51-13251:402:56 name="piece"
+            arg: named-arg #1176 13259:402:64-13277:402:82 name="carry"
+              value: field-access #1175 13266:402:71-13277:402:82 name="carry"
+                target: name-ref #1174 13266:402:71-13271:402:76 name="piece"
+    declaration: function-decl #1234 13338:406:1-13810:418:1 name="@2::more_text"
+      param: param #1182 13352:406:15-13368:406:31 name="reading"
+        type: type-ref #1181 13361:406:24-13368:406:31 name="@2::Reading"
+      param: param #1185 13370:406:33-13386:406:49 name="carry"
+        type: type-ref #1184 13377:406:40-13386:406:49 name="List"
+          arg: type-ref #1183 13382:406:45-13385:406:48 name="Int"
+      param: param #1187 13388:406:51-13397:406:60 name="most"
+        type: type-ref #1186 13394:406:57-13397:406:60 name="Int"
+      result: type-ref #1189 13402:406:65-13423:406:86 name="Result"
+        arg: type-ref #1188 13409:406:72-13422:406:85 name="HttpWire.Text"
+      body: binding #1196 13426:407:3-13481:408:1 name="left"
+        value: try-expr #1195 13433:407:10-13480:407:57
+          operand: call #1194 13437:407:14-13480:407:57 name="@2::time_left" piped=false
+            arg: field-access #1191 13447:407:24-13461:407:38 name="socket"
+              target: name-ref #1190 13447:407:24-13454:407:31 name="reading"
+            arg: field-access #1193 13463:407:40-13479:407:56 name="deadline"
+              target: name-ref #1192 13463:407:40-13470:407:47 name="reading"
+      body: binding #1204 13483:408:3-13549:409:1 name="piece"
+        value: try-expr #1203 13491:408:11-13548:408:68
+          operand: call #1202 13495:408:15-13548:408:68 name="HttpWire.read_text" piped=false
+            arg: field-access #1198 13514:408:34-13528:408:48 name="socket"
+              target: name-ref #1197 13514:408:34-13521:408:41 name="reading"
+            arg: name-ref #1199 13530:408:50-13534:408:54 name="most"
+            arg: name-ref #1200 13536:408:56-13541:408:61 name="carry"
+            arg: name-ref #1201 13543:408:63-13547:408:67 name="left"
+      body: if-stmt #1217 13551:409:3-13653:412:1
+        branch: if-branch #1216 13551:409:3-13647:411:1
+          condition: unary #1207 13554:409:6-13569:409:21 op=not op-span=13554:409:6-13557:409:9
+            operand: field-access #1206 13558:409:10-13569:409:21 name="valid"
+              target: name-ref #1205 13558:409:10-13563:409:15 name="piece"
+          body: return-stmt #1215 13574:410:5-13647:411:1
+            value: call #1214 13581:410:12-13646:410:77 name="error" piped=false
+              arg: call #1213 13587:410:18-13645:410:76 name="@2::refuse_problem" piped=false
+                arg: field-access #1209 13602:410:33-13616:410:47 name="socket"
+                  target: name-ref #1208 13602:410:33-13609:410:40 name="reading"
+                arg: const-ref #1210 13618:410:49-13626:410:57 name="@2::BAD_TEXT"
+                arg: field-access #1212 13628:410:59-13644:410:75 name="deadline"
+                  target: name-ref #1211 13628:410:59-13635:410:66 name="reading"
+      body: if-stmt #1230 13655:412:3-13787:416:1
+        branch: if-branch #1229 13655:412:3-13781:415:1
+          condition: binary #1221 13658:412:6-13674:412:22 op=equal op-span=13670:412:18-13672:412:20
+            left: field-access #1219 13658:412:6-13669:412:17 name="bytes"
+              target: name-ref #1218 13658:412:6-13663:412:11 name="piece"
+            right: literal #1220 13673:412:21-13674:412:22 value=int:0
+          body: expr-stmt #1225 13679:413:5-13705:414:1
+            value: call #1224 13679:413:5-13704:413:30 name="TCP.close" piped=false
+              arg: field-access #1223 13689:413:15-13703:413:29 name="socket"
+                target: name-ref #1222 13689:413:15-13696:413:22 name="reading"
+          body: return-stmt #1228 13709:414:5-13781:415:1
+            value: call #1227 13716:414:12-13780:414:76 name="error" piped=false
+              arg: literal #1226 13722:414:18-13779:414:75 value=string:"http: connection closed before the request was complete"
+      body: return-stmt #1233 13789:416:3-13806:417:1
+        value: call #1232 13796:416:10-13805:416:19 name="ok" piped=false
+          arg: name-ref #1231 13799:416:13-13804:416:18 name="piece"
+    declaration: function-decl #1288 13811:419:1-14248:433:1 name="@2::finish"
+      param: param #1236 13822:419:12-13838:419:28 name="reading"
+        type: type-ref #1235 13831:419:21-13838:419:28 name="@2::Reading"
+      param: param #1238 13840:419:30-13850:419:40 name="body"
+        type: type-ref #1237 13846:419:36-13850:419:40 name="@2::Body"
+      param: param #1241 13852:419:42-13867:419:57 name="rest"
+        type: type-ref #1240 13858:419:48-13867:419:57 name="List"
+          arg: type-ref #1239 13863:419:53-13866:419:56 name="Int"
+      result: type-ref #1243 13872:419:62-13888:419:78 name="Result"
+        arg: type-ref #1242 13879:419:69-13887:419:77 name="@2::Incoming"
+      body: if-stmt #1258 13891:420:3-14003:423:1
+        branch: if-branch #1257 13891:420:3-13997:422:1
+          condition: binary #1248 13894:420:6-13919:420:31 op=greater op-span=13916:420:28-13917:420:29
+            left: call #1246 13894:420:6-13915:420:27 name="List.size" piped=false
+              arg: field-access #1245 13904:420:16-13914:420:26 name="carry"
+                target: name-ref #1244 13904:420:16-13908:420:20 name="body"
+            right: literal #1247 13918:420:30-13919:420:31 value=int:0
+          body: return-stmt #1256 13924:421:5-13997:422:1
+            value: call #1255 13931:421:12-13996:421:77 name="error" piped=false
+              arg: call #1254 13937:421:18-13995:421:76 name="@2::refuse_problem" piped=false
+                arg: field-access #1250 13952:421:33-13966:421:47 name="socket"
+                  target: name-ref #1249 13952:421:33-13959:421:40 name="reading"
+                arg: const-ref #1251 13968:421:49-13976:421:57 name="@2::BAD_TEXT"
+                arg: field-access #1253 13978:421:59-13994:421:75 name="deadline"
+                  target: name-ref #1252 13978:421:59-13985:421:66 name="reading"
+      body: binding #1261 14005:423:3-14025:424:1 name="head"
+        value: field-access #1260 14012:423:10-14024:423:22 name="head"
+          target: name-ref #1259 14012:423:10-14019:423:17 name="reading"
+      body: binding #1280 14027:424:3-14192:431:1 name="request"
+        value: construct #1279 14037:424:13-14191:430:4 type="HttpRequest"
+          arg: named-arg #1264 14054:425:5-14073:425:24 name="method"
+            value: field-access #1263 14062:425:13-14073:425:24 name="method"
+              target: name-ref #1262 14062:425:13-14066:425:17 name="head"
+          arg: named-arg #1267 14079:426:5-14098:426:24 name="target"
+            value: field-access #1266 14087:426:13-14098:426:24 name="target"
+              target: name-ref #1265 14087:426:13-14091:426:17 name="head"
+          arg: named-arg #1270 14104:427:5-14119:427:20 name="path"
+            value: field-access #1269 14110:427:11-14119:427:20 name="path"
+              target: name-ref #1268 14110:427:11-14114:427:15 name="head"
+          arg: named-arg #1273 14125:428:5-14146:428:26 name="headers"
+            value: field-access #1272 14134:428:14-14146:428:26 name="headers"
+              target: name-ref #1271 14134:428:14-14138:428:18 name="head"
+          arg: named-arg #1278 14152:429:5-14186:429:39 name="body"
+            value: call #1277 14158:429:11-14186:429:39 name="String.join" piped=false
+              arg: field-access #1275 14170:429:23-14181:429:34 name="pieces"
+                target: name-ref #1274 14170:429:23-14174:429:27 name="body"
+              arg: literal #1276 14183:429:36-14185:429:38 value=string:""
+      body: return-stmt #1287 14194:431:3-14244:432:1
+        value: call #1286 14201:431:10-14243:431:52 name="ok" piped=false
+          arg: construct #1285 14204:431:13-14242:431:51 type="@2::Incoming"
+            arg: named-arg #1282 14213:431:22-14229:431:38 name="request"
+              value: name-ref #1281 14222:431:31-14229:431:38 name="request"
+            arg: named-arg #1284 14231:431:40-14241:431:50 name="rest"
+              value: name-ref #1283 14237:431:46-14241:431:50 name="rest"
+    declaration: function-decl #1303 14249:434:1-14329:440:1 name="@2::smaller"
+      param: param #1290 14261:434:13-14267:434:19 name="a"
+        type: type-ref #1289 14264:434:16-14267:434:19 name="Int"
+      param: param #1292 14269:434:21-14275:434:27 name="b"
+        type: type-ref #1291 14272:434:24-14275:434:27 name="Int"
+      result: type-ref #1293 14280:434:32-14283:434:35 name="Int"
+      body: if-stmt #1300 14286:435:3-14314:438:1
+        branch: if-branch #1299 14286:435:3-14308:437:1
+          condition: binary #1296 14289:435:6-14294:435:11 op=less op-span=14291:435:8-14292:435:9
+            left: name-ref #1294 14289:435:6-14290:435:7 name="a"
+            right: name-ref #1295 14293:435:10-14294:435:11 name="b"
+          body: return-stmt #1298 14299:436:5-14308:437:1
+            value: name-ref #1297 14306:436:12-14307:436:13 name="a"
+      body: return-stmt #1302 14316:438:3-14325:439:1
+        value: name-ref #1301 14323:438:10-14324:438:11 name="b"
+    declaration: function-decl #1337 14438:442:1-14745:450:1 name="@2::more_request"
+      param: param #1305 14455:442:18-14469:442:32 name="socket"
+        type: type-ref #1304 14463:442:26-14469:442:32 name="Socket"
+      param: param #1307 14471:442:34-14480:442:43 name="most"
+        type: type-ref #1306 14477:442:40-14480:442:43 name="Int"
+      param: param #1309 14482:442:45-14495:442:58 name="deadline"
+        type: type-ref #1308 14492:442:55-14495:442:58 name="Int"
+      result: type-ref #1312 14500:442:63-14517:442:80 name="Result"
+        arg: type-ref #1311 14507:442:70-14516:442:79 name="List"
+          arg: type-ref #1310 14512:442:75-14515:442:78 name="Int"
+      body: binding #1321 14520:443:3-14593:444:1 name="data"
+        value: try-expr #1320 14527:443:10-14592:443:75
+          operand: call #1319 14531:443:14-14592:443:75 name="TCP.recv_bytes" piped=false
+            arg: name-ref #1313 14546:443:29-14552:443:35 name="socket"
+            arg: name-ref #1314 14554:443:37-14558:443:41 name="most"
+            arg: try-expr #1318 14560:443:43-14591:443:74
+              operand: call #1317 14564:443:47-14591:443:74 name="@2::time_left" piped=false
+                arg: name-ref #1315 14574:443:57-14580:443:63 name="socket"
+                arg: name-ref #1316 14582:443:65-14590:443:73 name="deadline"
+      body: if-stmt #1333 14595:444:3-14723:448:1
+        branch: if-branch #1332 14595:444:3-14717:447:1
+          condition: binary #1325 14598:444:6-14618:444:26 op=equal op-span=14614:444:22-14616:444:24
+            left: call #1323 14598:444:6-14613:444:21 name="List.size" piped=false
+              arg: name-ref #1322 14608:444:16-14612:444:20 name="data"
+            right: literal #1324 14617:444:25-14618:444:26 value=int:0
+          body: expr-stmt #1328 14623:445:5-14641:446:1
+            value: call #1327 14623:445:5-14640:445:22 name="TCP.close" piped=false
+              arg: name-ref #1326 14633:445:15-14639:445:21 name="socket"
+          body: return-stmt #1331 14645:446:5-14717:447:1
+            value: call #1330 14652:446:12-14716:446:76 name="error" piped=false
+              arg: literal #1329 14658:446:18-14715:446:75 value=string:"http: connection closed before the request was complete"
+      body: return-stmt #1336 14725:448:3-14741:449:1
+        value: call #1335 14732:448:10-14740:448:18 name="ok" piped=false
+          arg: name-ref #1334 14735:448:13-14739:448:17 name="data"
+    declaration: function-decl #1362 14856:452:1-15070:460:1 name="@2::time_left"
+      param: param #1339 14870:452:15-14884:452:29 name="socket"
+        type: type-ref #1338 14878:452:23-14884:452:29 name="Socket"
+      param: param #1341 14886:452:31-14899:452:44 name="deadline"
+        type: type-ref #1340 14896:452:41-14899:452:44 name="Int"
+      result: type-ref #1343 14904:452:49-14915:452:60 name="Result"
+        arg: type-ref #1342 14911:452:56-14914:452:59 name="Int"
+      body: binding #1347 14918:453:3-14956:454:1 name="left"
+        value: binary #1346 14925:453:10-14955:453:40 op=minus op-span=14934:453:19-14935:453:20
+          left: name-ref #1344 14925:453:10-14933:453:18 name="deadline"
+          right: call #1345 14936:453:21-14955:453:40 name="Time.monotonic_ms" piped=false
+      body: if-stmt #1358 14958:454:3-15048:458:1
+        branch: if-branch #1357 14958:454:3-15042:457:1
+          condition: binary #1350 14961:454:6-14970:454:15 op=less-equal op-span=14966:454:11-14968:454:13
+            left: name-ref #1348 14961:454:6-14965:454:10 name="left"
+            right: literal #1349 14969:454:14-14970:454:15 value=int:0
+          body: expr-stmt #1353 14975:455:5-14993:456:1
+            value: call #1352 14975:455:5-14992:455:22 name="TCP.close" piped=false
+              arg: name-ref #1351 14985:455:15-14991:455:21 name="socket"
+          body: return-stmt #1356 14997:456:5-15042:457:1
+            value: call #1355 15004:456:12-15041:456:49 name="error" piped=false
+              arg: literal #1354 15010:456:18-15040:456:48 value=string:"network: operation timed out"
+      body: return-stmt #1361 15050:458:3-15066:459:1
+        value: call #1360 15057:458:10-15065:458:18 name="ok" piped=false
+          arg: name-ref #1359 15060:458:13-15064:458:17 name="left"
+    declaration: function-decl #1381 15132:462:1-15302:466:1 name="@2::refuse"
+      param: param #1364 15143:462:12-15157:462:26 name="socket"
+        type: type-ref #1363 15151:462:20-15157:462:26 name="Socket"
+      param: param #1366 15159:462:28-15170:462:39 name="status"
+        type: type-ref #1365 15167:462:36-15170:462:39 name="Int"
+      param: param #1368 15172:462:41-15186:462:55 name="reason"
+        type: type-ref #1367 15180:462:49-15186:462:55 name="String"
+      param: param #1370 15188:462:57-15201:462:70 name="deadline"
+        type: type-ref #1369 15198:462:67-15201:462:70 name="Int"
+      result: type-ref #1371 15206:462:75-15212:462:81 name="String"
+      body: expr-stmt #1377 15215:463:3-15271:464:1
+        value: call #1376 15215:463:3-15270:463:58 name="@2::linger" piped=false
+          arg: name-ref #1372 15222:463:10-15228:463:16 name="socket"
+          arg: call #1374 15230:463:18-15259:463:47 name="HttpWire.error_answer" piped=false
+            arg: name-ref #1373 15252:463:40-15258:463:46 name="status"
+          arg: name-ref #1375 15261:463:49-15269:463:57 name="deadline"
+      body: return-stmt #1380 15273:464:3-15298:465:1
+        value: interpolation #1379 15280:464:10-15297:464:27
+          part: text "http: "
+          part: name-ref #1378 15289:464:19-15295:464:25 name="reason"
+    declaration: function-decl #1401 15403:468:1-15584:471:1 name="@2::refuse_problem"
+      param: param #1383 15422:468:20-15436:468:34 name="socket"
+        type: type-ref #1382 15430:468:28-15436:468:34 name="Socket"
+      param: param #1385 15438:468:36-15453:468:51 name="problem"
+        type: type-ref #1384 15447:468:45-15453:468:51 name="String"
+      param: param #1387 15455:468:53-15468:468:66 name="deadline"
+        type: type-ref #1386 15465:468:63-15468:468:66 name="Int"
+      result: type-ref #1388 15473:468:71-15479:468:77 name="String"
+      body: return-stmt #1400 15482:469:3-15580:470:1
+        value: call #1399 15489:469:10-15579:469:100 name="@2::refuse" piped=false
+          arg: name-ref #1389 15496:469:17-15502:469:23 name="socket"
+          arg: call #1394 15504:469:25-15547:469:68 name="String.to_int!" piped=false
+            arg: call #1393 15519:469:40-15546:469:67 name="String.slice" piped=false
+              arg: name-ref #1390 15532:469:53-15539:469:60 name="problem"
+              arg: literal #1391 15541:469:62-15542:469:63 value=int:0
+              arg: literal #1392 15544:469:65-15545:469:66 value=int:3
+          arg: call #1397 15549:469:70-15568:469:89 name="@2::rest_of" piped=false
+            arg: name-ref #1395 15557:469:78-15564:469:85 name="problem"
+            arg: literal #1396 15566:469:87-15567:469:88 value=int:4
+          arg: name-ref #1398 15570:469:91-15578:469:99 name="deadline"
+    declaration: function-decl #1441 15907:475:1-16211:486:1 name="@2::linger"
+      param: param #1403 15918:475:12-15932:475:26 name="socket"
+        type: type-ref #1402 15926:475:20-15932:475:26 name="Socket"
+      param: param #1405 15934:475:28-15946:475:40 name="text"
+        type: type-ref #1404 15940:475:34-15946:475:40 name="String"
+      param: param #1407 15948:475:42-15961:475:55 name="deadline"
+        type: type-ref #1406 15958:475:52-15961:475:55 name="Int"
+      result: type-ref #1408 15966:475:60-15970:475:64 name="Void"
+      body: binding #1412 15973:476:3-16011:477:1 name="wait"
+        value: binary #1411 15980:476:10-16010:476:40 op=minus op-span=15989:476:19-15990:476:20
+          left: name-ref #1409 15980:476:10-15988:476:18 name="deadline"
+          right: call #1410 15991:476:21-16010:476:40 name="Time.monotonic_ms" piped=false
+      body: if-stmt #1419 16013:477:3-16060:480:1
+        branch: if-branch #1418 16013:477:3-16054:479:1
+          condition: binary #1415 16016:477:6-16032:477:22 op=less op-span=16021:477:11-16022:477:12
+            left: name-ref #1413 16016:477:6-16020:477:10 name="wait"
+            right: const-ref #1414 16023:477:13-16032:477:22 name="@2::ANSWER_MS"
+          body: binding #1417 16037:478:5-16054:479:1 name="wait"
+            value: const-ref #1416 16044:478:12-16053:478:21 name="@2::ANSWER_MS"
+      body: if-stmt #1437 16062:480:3-16187:484:1
+        branch: if-branch #1436 16062:480:3-16181:483:1
+          condition: binary #1428 16065:480:6-16119:480:60 op=or op-span=16076:480:17-16078:480:19
+            left: binary #1422 16065:480:6-16075:480:16 op=equal op-span=16070:480:11-16072:480:13
+              left: name-ref #1420 16065:480:6-16069:480:10 name="text"
+              right: literal #1421 16073:480:14-16075:480:16 value=string:""
+            right: call #1427 16079:480:20-16119:480:60 name="Result.ok?" piped=false
+              arg: call #1426 16090:480:31-16118:480:59 name="TCP.send" piped=false
+                arg: name-ref #1423 16099:480:40-16105:480:46 name="socket"
+                arg: name-ref #1424 16107:480:48-16111:480:52 name="text"
+                arg: name-ref #1425 16113:480:54-16117:480:58 name="wait"
+          body: expr-stmt #1431 16124:481:5-16153:482:1
+            value: call #1430 16124:481:5-16152:481:33 name="HttpWire.close_write" piped=false
+              arg: name-ref #1429 16145:481:26-16151:481:32 name="socket"
+          body: expr-stmt #1435 16157:482:5-16181:483:1
+            value: call #1434 16157:482:5-16180:482:28 name="@2::drain" piped=false
+              arg: name-ref #1432 16163:482:11-16169:482:17 name="socket"
+              arg: name-ref #1433 16171:482:19-16179:482:27 name="deadline"
+      body: expr-stmt #1440 16189:484:3-16207:485:1
+        value: call #1439 16189:484:3-16206:484:20 name="TCP.close" piped=false
+          arg: name-ref #1438 16199:484:13-16205:484:19 name="socket"
+    declaration: function-decl #1475 16212:487:1-16562:502:1 name="@2::drain"
+      param: param #1443 16222:487:11-16236:487:25 name="socket"
+        type: type-ref #1442 16230:487:19-16236:487:25 name="Socket"
+      param: param #1445 16238:487:27-16251:487:40 name="deadline"
+        type: type-ref #1444 16248:487:37-16251:487:40 name="Int"
+      result: type-ref #1446 16256:487:45-16260:487:49 name="Void"
+      body: while-stmt #1474 16263:488:3-16558:501:1
+        condition: literal #1447 16269:488:9-16273:488:13 value=bool:true
+        body: case-stmt #1473 16278:489:5-16552:500:1
+          value: call #1450 16283:489:10-16310:489:37 name="@2::time_left" piped=false
+            arg: name-ref #1448 16293:489:20-16299:489:26 name="socket"
+            arg: name-ref #1449 16301:489:28-16309:489:36 name="deadline"
+          arm: case-arm #1469 16317:490:7-16519:498:1
+            pattern: variant-pattern #1451 16317:490:7-16325:490:15 enum="Result" variant="Ok" bindings=["left"]
+            body: case-stmt #1468 16337:491:9-16519:498:1
+              value: call #1455 16342:491:14-16382:491:54 name="TCP.recv_bytes" piped=false
+                arg: name-ref #1452 16357:491:29-16363:491:35 name="socket"
+                arg: const-ref #1453 16365:491:37-16375:491:47 name="@2::READ_BYTES"
+                arg: name-ref #1454 16377:491:49-16381:491:53 name="left"
+              arm: case-arm #1464 16393:492:11-16478:496:1
+                pattern: variant-pattern #1456 16393:492:11-16401:492:19 enum="Result" variant="Ok" bindings=["data"]
+                body: if-stmt #1463 16417:493:13-16478:496:1
+                  branch: if-branch #1462 16417:493:13-16462:495:1
+                    condition: binary #1460 16420:493:16-16440:493:36 op=equal op-span=16436:493:32-16438:493:34
+                      left: call #1458 16420:493:16-16435:493:31 name="List.size" piped=false
+                        arg: name-ref #1457 16430:493:26-16434:493:30 name="data"
+                      right: literal #1459 16439:493:35-16440:493:36 value=int:0
+                    body: return-stmt #1461 16455:494:15-16462:495:1
+              arm: case-arm #1467 16488:496:11-16507:497:1
+                pattern: variant-pattern #1465 16488:496:11-16496:496:19 enum="Result" variant="Err" bindings=[-]
+                body: return-stmt #1466 16500:496:23-16507:497:1
+          arm: case-arm #1472 16525:498:7-16544:499:1
+            pattern: variant-pattern #1470 16525:498:7-16533:498:15 enum="Result" variant="Err" bindings=[-]
+            body: return-stmt #1471 16537:498:19-16544:499:1
+    declaration: function-decl #1532 16563:503:1-17165:521:1 name="@2::answer"
+      param: param #1477 16574:503:12-16588:503:26 name="socket"
+        type: type-ref #1476 16582:503:20-16588:503:26 name="Socket"
+      param: param #1479 16590:503:28-16610:503:48 name="request"
+        type: type-ref #1478 16599:503:37-16610:503:48 name="HttpRequest"
+      param: param #1481 16612:503:50-16628:503:66 name="service"
+        type: type-ref #1480 16621:503:59-16628:503:66 name="@2::Service"
+      result: type-ref #1482 16633:503:71-16637:503:75 name="Bool"
+      body: binding #1486 16640:504:3-16685:505:1 name="timeout"
+        value: field-access #1485 16650:504:13-16684:504:47 name="request_timeout_ms"
+          target: field-access #1484 16650:504:13-16665:504:28 name="options"
+            target: name-ref #1483 16650:504:13-16657:504:20 name="service"
+      body: case-stmt #1529 16687:505:3-17146:519:1
+        value: invoke #1490 16692:505:8-16721:505:37
+          target: field-access #1488 16692:505:8-16707:505:23 name="handler"
+            target: name-ref #1487 16692:505:8-16699:505:15 name="service"
+          arg: name-ref #1489 16713:505:29-16720:505:36 name="request"
+        arm: case-arm #1517 16726:506:5-17030:515:1
+          pattern: variant-pattern #1491 16726:506:5-16738:506:17 enum="Result" variant="Ok" bindings=["response"]
+          body: case-stmt #1516 16748:507:7-17030:515:1
+            value: call #1496 16753:507:12-16803:507:62 name="@2::write_response" piped=false
+              arg: name-ref #1492 16768:507:27-16774:507:33 name="socket"
+              arg: name-ref #1493 16776:507:35-16783:507:42 name="request"
+              arg: name-ref #1494 16785:507:44-16793:507:52 name="response"
+              arg: name-ref #1495 16795:507:54-16802:507:61 name="timeout"
+            arm: case-arm #1500 16812:508:9-16836:509:1
+              pattern: variant-pattern #1497 16812:508:9-16820:508:17 enum="Result" variant="Ok" bindings=["keep"]
+              body: return-stmt #1499 16824:508:21-16836:509:1
+                value: name-ref #1498 16831:508:28-16835:508:32 name="keep"
+            arm: case-arm #1515 16844:509:9-17020:514:1
+              pattern: variant-pattern #1501 16844:509:9-16858:509:23 enum="Result" variant="Err" bindings=["message"]
+              body: if-stmt #1514 16872:510:11-17020:514:1
+                branch: if-branch #1513 16872:510:11-17006:513:1
+                  condition: call #1504 16875:510:14-16931:510:70 name="String.starts_with?" piped=false
+                    arg: name-ref #1502 16895:510:34-16902:510:41 name="message"
+                    arg: literal #1503 16904:510:43-16930:510:69 value=string:"http: invalid response: "
+                  body: expr-stmt #1507 16944:511:13-16961:512:1
+                    value: call #1506 16944:511:13-16960:511:29 name="IO.warn" piped=false
+                      arg: name-ref #1505 16952:511:21-16959:511:28 name="message"
+                  body: expr-stmt #1512 16973:512:13-17006:513:1
+                    value: call #1511 16973:512:13-17005:512:45 name="@2::failed" piped=false
+                      arg: name-ref #1508 16980:512:20-16986:512:26 name="socket"
+                      arg: name-ref #1509 16988:512:28-16995:512:35 name="request"
+                      arg: name-ref #1510 16997:512:37-17004:512:44 name="timeout"
+        arm: case-arm #1528 17034:515:5-17140:518:1
+          pattern: variant-pattern #1518 17034:515:5-17048:515:19 enum="Result" variant="Err" bindings=["message"]
+          body: expr-stmt #1522 17058:516:7-17101:517:1
+            value: call #1521 17058:516:7-17100:516:49 name="IO.warn" piped=false
+              arg: interpolation #1520 17066:516:15-17099:516:48
                 part: text "http: handler error: "
-                part: name-ref #830 9611:304:39-9618:304:46 name="message"
-          body: expr-stmt #838 9628:305:7-9661:306:1
-            value: call #837 9628:305:7-9660:305:39 name="@2::failed" piped=false
-              arg: name-ref #834 9635:305:14-9641:305:20 name="socket"
-              arg: name-ref #835 9643:305:22-9650:305:29 name="request"
-              arg: name-ref #836 9652:305:31-9659:305:38 name="timeout"
-      body: return-stmt #842 9669:307:3-9682:308:1
-        value: literal #841 9676:307:10-9681:307:15 value=bool:false
-    declaration: function-decl #868 9687:310:1-9927:318:1 name="@2::failed"
-      param: param #845 9698:310:12-9712:310:26 name="socket"
-        type: type-ref #844 9706:310:20-9712:310:26 name="Socket"
-      param: param #847 9714:310:28-9734:310:48 name="request"
-        type: type-ref #846 9723:310:37-9734:310:48 name="HttpRequest"
-      param: param #849 9736:310:50-9748:310:62 name="timeout"
-        type: type-ref #848 9745:310:59-9748:310:62 name="Int"
-      result: type-ref #850 9753:310:67-9757:310:71 name="Void"
-      body: expr-stmt #867 9760:311:3-9923:317:1
-        value: call #866 9760:311:3-9922:316:4 name="HttpWire.write_response" piped=false
-          arg: name-ref #851 9789:312:5-9795:312:11 name="socket"
-          arg: name-ref #852 9801:313:5-9808:313:12 name="request"
-          arg: construct #864 9814:314:5-9904:314:95 type="HttpResponse"
-            arg: named-arg #854 9827:314:18-9838:314:29 name="status"
-              value: literal #853 9835:314:26-9838:314:29 value=int:500
-            arg: named-arg #861 9840:314:31-9893:314:84 name="headers"
-              value: list-lit #860 9849:314:40-9893:314:84
-                element: construct #859 9850:314:41-9892:314:83 type="Header"
-                  arg: named-arg #856 9857:314:48-9875:314:66 name="name"
-                    value: literal #855 9863:314:54-9875:314:66 value=string:"Connection"
-                  arg: named-arg #858 9877:314:68-9891:314:82 name="value"
-                    value: literal #857 9884:314:75-9891:314:82 value=string:"close"
-            arg: named-arg #863 9895:314:86-9903:314:94 name="body"
-              value: literal #862 9901:314:92-9903:314:94 value=string:""
-          arg: name-ref #865 9910:315:5-9917:315:12 name="timeout"
+                part: name-ref #1519 17090:516:39-17097:516:46 name="message"
+          body: expr-stmt #1527 17107:517:7-17140:518:1
+            value: call #1526 17107:517:7-17139:517:39 name="@2::failed" piped=false
+              arg: name-ref #1523 17114:517:14-17120:517:20 name="socket"
+              arg: name-ref #1524 17122:517:22-17129:517:29 name="request"
+              arg: name-ref #1525 17131:517:31-17138:517:38 name="timeout"
+      body: return-stmt #1531 17148:519:3-17161:520:1
+        value: literal #1530 17155:519:10-17160:519:15 value=bool:false
+    declaration: function-decl #1563 17317:524:1-17656:530:1 name="@2::write_response"
+      param: param #1534 17336:524:20-17350:524:34 name="socket"
+        type: type-ref #1533 17344:524:28-17350:524:34 name="Socket"
+      param: param #1536 17352:524:36-17372:524:56 name="request"
+        type: type-ref #1535 17361:524:45-17372:524:56 name="HttpRequest"
+      param: param #1538 17374:524:58-17396:524:80 name="response"
+        type: type-ref #1537 17384:524:68-17396:524:80 name="HttpResponse"
+      param: param #1540 17398:524:82-17410:524:94 name="timeout"
+        type: type-ref #1539 17407:524:91-17410:524:94 name="Int"
+      result: type-ref #1542 17415:524:99-17427:524:111 name="Result"
+        arg: type-ref #1541 17422:524:106-17426:524:110 name="Bool"
+      body: case-stmt #1562 17430:525:3-17652:529:1
+        value: call #1546 17435:525:8-17493:525:66 name="HttpWire.encode_response" piped=false
+          arg: name-ref #1543 17460:525:33-17467:525:40 name="request"
+          arg: name-ref #1544 17469:525:42-17477:525:50 name="response"
+          arg: call #1545 17479:525:52-17492:525:65 name="Time.now_ms" piped=false
+        arm: case-arm #1555 17498:526:5-17575:527:1
+          pattern: variant-pattern #1547 17498:526:5-17507:526:14 enum="Result" variant="Ok" bindings=["reply"]
+          body: return-stmt #1554 17511:526:18-17575:527:1
+            value: call #1553 17518:526:25-17574:526:81 name="@2::send_response" piped=false
+              arg: name-ref #1548 17532:526:39-17538:526:45 name="socket"
+              arg: name-ref #1549 17540:526:47-17547:526:54 name="request"
+              arg: name-ref #1550 17549:526:56-17557:526:64 name="response"
+              arg: name-ref #1551 17559:526:66-17564:526:71 name="reply"
+              arg: name-ref #1552 17566:526:73-17573:526:80 name="timeout"
+        arm: case-arm #1561 17579:527:5-17646:528:1
+          pattern: variant-pattern #1556 17579:527:5-17592:527:18 enum="Result" variant="Err" bindings=["reason"]
+          body: return-stmt #1560 17596:527:22-17646:528:1
+            value: call #1559 17603:527:29-17645:527:71 name="error" piped=false
+              arg: interpolation #1558 17609:527:35-17644:527:70
+                part: text "http: invalid response: "
+                part: name-ref #1557 17636:527:62-17642:527:68 name="reason"
+    declaration: function-decl #1637 17657:531:1-18234:555:1 name="@2::send_response"
+      param: param #1565 17678:532:3-17692:532:17 name="socket"
+        type: type-ref #1564 17686:532:11-17692:532:17 name="Socket"
+      param: param #1567 17696:533:3-17716:533:23 name="request"
+        type: type-ref #1566 17705:533:12-17716:533:23 name="HttpRequest"
+      param: param #1569 17720:534:3-17742:534:25 name="response"
+        type: type-ref #1568 17730:534:13-17742:534:25 name="HttpResponse"
+      param: param #1571 17746:535:3-17767:535:24 name="reply"
+        type: type-ref #1570 17753:535:10-17767:535:24 name="HttpWire.Reply"
+      param: param #1573 17771:536:3-17783:536:15 name="timeout"
+        type: type-ref #1572 17780:536:12-17783:536:15 name="Int"
+      result: type-ref #1575 17790:537:6-17802:537:18 name="Result"
+        arg: type-ref #1574 17797:537:13-17801:537:17 name="Bool"
+      body: binding #1579 17805:538:3-17846:539:1 name="deadline"
+        value: binary #1578 17816:538:14-17845:538:43 op=plus op-span=17836:538:34-17837:538:35
+          left: call #1576 17816:538:14-17835:538:33 name="Time.monotonic_ms" piped=false
+          right: name-ref #1577 17838:538:36-17845:538:43 name="timeout"
+      body: binding #1582 17848:539:3-17869:540:1 name="body"
+        value: field-access #1581 17855:539:10-17868:539:23 name="body"
+          target: name-ref #1580 17855:539:10-17863:539:18 name="response"
+      body: if-stmt #1590 17871:540:3-17919:543:1
+        branch: if-branch #1589 17871:540:3-17913:542:1
+          condition: binary #1586 17874:540:6-17898:540:30 op=equal op-span=17889:540:21-17891:540:23
+            left: field-access #1584 17874:540:6-17888:540:20 name="method"
+              target: name-ref #1583 17874:540:6-17881:540:13 name="request"
+            right: literal #1585 17892:540:24-17898:540:30 value=string:"HEAD"
+          body: binding #1588 17903:541:5-17913:542:1 name="body"
+            value: literal #1587 17910:541:12-17912:541:14 value=string:""
+      body: if-stmt #1621 17921:543:3-18134:549:1
+        branch: if-branch #1604 17921:543:3-18011:545:1
+          condition: binary #1594 17924:543:6-17957:543:39 op=less-equal op-span=17944:543:26-17946:543:28
+            left: call #1592 17924:543:6-17943:543:25 name="String.length" piped=false
+              arg: name-ref #1591 17938:543:20-17942:543:24 name="body"
+            right: const-ref #1593 17947:543:29-17957:543:39 name="@2::SMALL_BODY"
+          body: expr-stmt #1603 17962:544:5-18011:545:1
+            value: try-expr #1602 17962:544:5-18010:544:53
+              operand: call #1601 17966:544:9-18010:544:53 name="TCP.send" piped=false
+                arg: name-ref #1595 17975:544:18-17981:544:24 name="socket"
+                arg: binary #1599 17983:544:26-18000:544:43 op=plus op-span=17994:544:37-17995:544:38
+                  left: field-access #1597 17983:544:26-17993:544:36 name="head"
+                    target: name-ref #1596 17983:544:26-17988:544:31 name="reply"
+                  right: name-ref #1598 17996:544:39-18000:544:43 name="body"
+                arg: name-ref #1600 18002:544:45-18009:544:52 name="timeout"
+        else:
+          body: expr-stmt #1611 18022:546:5-18064:547:1
+            value: try-expr #1610 18022:546:5-18063:546:46
+              operand: call #1609 18026:546:9-18063:546:46 name="TCP.send" piped=false
+                arg: name-ref #1605 18035:546:18-18041:546:24 name="socket"
+                arg: field-access #1607 18043:546:26-18053:546:36 name="head"
+                  target: name-ref #1606 18043:546:26-18048:546:31 name="reply"
+                arg: name-ref #1608 18055:546:38-18062:546:45 name="timeout"
+          body: expr-stmt #1620 18068:547:5-18128:548:1
+            value: try-expr #1619 18068:547:5-18127:547:64
+              operand: call #1618 18072:547:9-18127:547:64 name="TCP.send" piped=false
+                arg: name-ref #1612 18081:547:18-18087:547:24 name="socket"
+                arg: name-ref #1613 18089:547:26-18093:547:30 name="body"
+                arg: try-expr #1617 18095:547:32-18126:547:63
+                  operand: call #1616 18099:547:36-18126:547:63 name="@2::time_left" piped=false
+                    arg: name-ref #1614 18109:547:46-18115:547:52 name="socket"
+                    arg: name-ref #1615 18117:547:54-18125:547:62 name="deadline"
+      body: if-stmt #1633 18136:549:3-18212:553:1
+        branch: if-branch #1632 18136:549:3-18206:552:1
+          condition: field-access #1623 18139:549:6-18151:549:18 name="closes"
+            target: name-ref #1622 18139:549:6-18144:549:11 name="reply"
+          body: expr-stmt #1628 18156:550:5-18185:551:1
+            value: call #1627 18156:550:5-18184:550:33 name="@2::linger" piped=false
+              arg: name-ref #1624 18163:550:12-18169:550:18 name="socket"
+              arg: literal #1625 18171:550:20-18173:550:22 value=string:""
+              arg: name-ref #1626 18175:550:24-18183:550:32 name="deadline"
+          body: return-stmt #1631 18189:551:5-18206:552:1
+            value: call #1630 18196:551:12-18205:551:21 name="ok" piped=false
+              arg: literal #1629 18199:551:15-18204:551:20 value=bool:false
+      body: return-stmt #1636 18214:553:3-18230:554:1
+        value: call #1635 18221:553:10-18229:553:18 name="ok" piped=false
+          arg: literal #1634 18224:553:13-18228:553:17 value=bool:true
+    declaration: function-decl #1662 18235:556:1-18466:564:1 name="@2::failed"
+      param: param #1639 18246:556:12-18260:556:26 name="socket"
+        type: type-ref #1638 18254:556:20-18260:556:26 name="Socket"
+      param: param #1641 18262:556:28-18282:556:48 name="request"
+        type: type-ref #1640 18271:556:37-18282:556:48 name="HttpRequest"
+      param: param #1643 18284:556:50-18296:556:62 name="timeout"
+        type: type-ref #1642 18293:556:59-18296:556:62 name="Int"
+      result: type-ref #1644 18301:556:67-18305:556:71 name="Void"
+      body: expr-stmt #1661 18308:557:3-18462:563:1
+        value: call #1660 18308:557:3-18461:562:4 name="@2::write_response" piped=false
+          arg: name-ref #1645 18328:558:5-18334:558:11 name="socket"
+          arg: name-ref #1646 18340:559:5-18347:559:12 name="request"
+          arg: construct #1658 18353:560:5-18443:560:95 type="HttpResponse"
+            arg: named-arg #1648 18366:560:18-18377:560:29 name="status"
+              value: literal #1647 18374:560:26-18377:560:29 value=int:500
+            arg: named-arg #1655 18379:560:31-18432:560:84 name="headers"
+              value: list-lit #1654 18388:560:40-18432:560:84
+                element: construct #1653 18389:560:41-18431:560:83 type="Header"
+                  arg: named-arg #1650 18396:560:48-18414:560:66 name="name"
+                    value: literal #1649 18402:560:54-18414:560:66 value=string:"Connection"
+                  arg: named-arg #1652 18416:560:68-18430:560:82 name="value"
+                    value: literal #1651 18423:560:75-18430:560:82 value=string:"close"
+            arg: named-arg #1657 18434:560:86-18442:560:94 name="body"
+              value: literal #1656 18440:560:92-18442:560:94 value=string:""
+          arg: name-ref #1659 18449:561:5-18456:561:12 name="timeout"

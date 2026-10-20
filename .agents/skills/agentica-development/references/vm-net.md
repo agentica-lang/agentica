@@ -89,7 +89,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     checks), `agc_http_framing`, and the body decoder
     (`agc_http_body_init/feed/end/free`: Content-Length, chunked with saturating
     sizes and checked trailers, close-delimited, one `malloc`'d buffer within
-    the limit). No recursion
+    the limit). In `discard` mode it only counts: `agc_http_body_step` stops
+    after one run of body bytes, and `agc_http_body_skip` counts chunk data the
+    caller read itself. No recursion
 
 - **Path:** `vm/http_fields.h`, `vm/http_fields.c`
   - **Owns:** what the client and the server share (`agc_http_closes` on a
@@ -100,9 +102,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     names lowercased) and their `List[Header]` (`agc_http_header_list`),
     `agc_http_closes` and `agc_http_error_result`
 
+- **Path:** `vm/http_wire.c`
+  - **Owns:** the `HttpWire` functions std/http's server reads and writes with
+    (Linux and macOS; stubs on Windows): `chunked`, `chunk`, `chunk_read`,
+    `text`, `encode_response` and `error_answer`. No I/O and no state: each
+    takes bytes or a record and returns a std-only record (`HttpWire.Chunk`,
+    `HttpWire.Text`, `HttpWire.Reply`). `chunk` rebuilds the decoder from a
+    `Chunk` and checks every field first (`vm/tests/http_wire_test.c`).
+    `agc_http_head_value` and `agc_http_text_value` build the `Head` and `Text`
+    of the reads in `vm/tcp.c`: `HttpWire.read_head` (the head stays in the
+    input until it is whole, with a scan hint so it is parsed once per line;
+    `rest` goes back in front first, `agc_inbuf_unread`) and
+    `HttpWire.read_text`, next to `HttpWire.close_write`. Each read has its
+    readiness test (`head_ready`), its cut out of the input (`cut_head`,
+    `cut_text`) and the value built from the cut (`head_value`, `text_value`).
+
 - **Path:** `vm/http_server.c`
-  - **Owns:** The `HttpWire` server builtins: request reading, response writing
-    and the server task group (Linux and macOS; stubs on Windows).
+  - **Owns:** The `HttpWire` server task group (Linux and macOS; stubs on
+    Windows).
 
 - **Path:** `vm/http_client.c`
   - **Owns:** `HttpWire.client`, `exchange` and `close_client`
@@ -244,28 +261,31 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     incomplete UTF-8 sequence at the end (`whole_prefix`, up to 3 bytes) unless
     the stream ended or failed, and takes them out with `agc_inbuf_take`
   - the trace line of a spawn has `channel=`
+- `stdlib/http.agc` reads requests and writes responses (§10.7.2)
+  - the first byte through a 1-byte `TCP.recv_bytes` (its own wait), then the
+    head through `HttpWire.read_head`; the order of `docs/vm/10-io-http.md`
+    §10.7.3 (parse errors, `Upgrade` 501, `Expect` 417, the `Content-Length`
+    limit 413, then `100 Continue`, then the body with its UTF-8 check as the
+    bytes arrive) is in `agc_http_head_value`
+  - a `Content-Length` body through `HttpWire.read_text`; a chunked one through
+    `HttpWire.chunk` on 512-byte reads, with chunk data past the framing read
+    by `read_text` and counted by `chunk_read`
+  - every error answer is `HttpWire.error_answer`, then the lingering close
+    (`close_write`, drop input until the peer closes or the deadline, so no
+    reset loses the answer)
+  - bytes past one request stay in the input for the next (a chunked body's
+    last read gives them back as `rest`); TCP reads only while a reader waits,
+    so pipelined bytes cannot pile up
+  - `HttpWire.encode_response` builds the head first (status 200..599, no body
+    on 204 and 304 or for `HEAD`, `Content-Length` and `Transfer-Encoding`
+    managed, a `Date` header; when the request or response says
+    `Connection: close` (`agc_http_list_closes`), the handler's `Connection`
+    headers are dropped for one `Connection: close`) and says whether the
+    connection closes, or gives the reason without writing
 - `vm/http_server.c`
-  - `HttpWire.read_request`, `write_response`, `server`, `accept`, `spawn`,
-    `close_server`, `wait` and `local_port` (`agc_http_server_builtins`, Linux
-    only, a stub table elsewhere; §10.7): a `reader` state machine on an
-    `agc_conn` watch (first byte, head, body, answer) that applies the order of
-    `docs/vm/10-io-http.md` §10.7.3 (parse errors, `Upgrade` 501, `Expect` 417,
-    the `Content-Length` limit 413, then `100 Continue`, then the body and its
-    UTF-8 check), writes every error answer itself, then lingers (`linger`:
-    half-close and drop input until the peer closes or the deadline, so no reset
-    loses the answer)
-  - the deadline is `first_byte_timeout_ms` until the first byte, then
-    `agc_io_extend` restarts it with `timeout_ms`
-  - a finished request pauses reading (`agc_conn_pause`) until the next
-    `read_request`, so pipelined bytes cannot pile up while a response is
-    written.
-  - `write_response` takes the request and the response, builds the whole
-    response first (status 200..599, no body on 204 and 304 or for `HEAD`,
-    `Content-Length` and `Transfer-Encoding` managed, a `Date` header; when the
-    request or response says `Connection: close` (`agc_http_list_closes`), the
-    handler's `Connection` headers are dropped for one `Connection: close`),
-    returns `http: invalid response: ...` without writing when it is bad, else
-    `ok(keep)`, and lingers before a close.
+  - `HttpWire.server`, `accept`, `spawn`, `close_server`, `wait` and
+    `local_port` (`agc_http_server_builtins`, Linux and macOS, a stub table
+    elsewhere; §10.7)
   - The `HttpServer` holds a `server` (listener, open count, `max`, waiting
     `accept` and `wait` jobs poked by the listener watch, a freed slot and the
     close) and a group node (`agc_task_group`) in which `server` starts
@@ -469,7 +489,8 @@ same over `ssl`, and a raw socket server with
   out the new tag inside it, `git add` it, and rerun
   `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/test_vm_http.py`.
 - **HTTP server (20c, in on Linux)**
-  - `vm/http_server.c` on `vm/net.h`, the same parser and `vm/http_fields.c`.
+  - `vm/http_server.c` on `vm/net.h`; `vm/http_wire.c` on the same parser and
+    `vm/http_fields.c`.
   - The `http-server*` fixtures are their own peers (the `std/http` client, or a
     raw `TCP` client for bytes the client cannot send)
   - a side `TCP` listener tells `main` that a handler started, so
