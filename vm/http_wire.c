@@ -1,10 +1,11 @@
 /*
- * The pure HttpWire builtins std/http's server uses: chunked framing, body
- * text, response heads and error answers. No I/O and no state: std/http owns
- * the socket and the deadlines. Heads and body data come through
- * HttpWire.read_head and read_text in vm/tcp.c, which build their records with
- * agc_http_head_value and agc_http_text_value here. Linux and macOS, like the
- * TCP builtins; a stub table elsewhere. Service layer. Design:
+ * The pure HttpWire builtins std/http's client and server use: chunked
+ * framing, body text, request and response heads and error answers. No I/O
+ * and no state: std/http owns the socket and the deadlines. Heads and body
+ * data come through HttpWire.read_head, read_response and read_text in
+ * vm/tcp.c, which build their records with agc_http_head_value,
+ * agc_http_response_value and agc_http_text_value here. Linux and macOS, like
+ * the TCP builtins; a stub table elsewhere. Service layer. Design:
  * docs/vm/10-io-http.md §10.7.
  */
 #include "http_fields.h"
@@ -29,7 +30,9 @@ static const char *const chunk_fields[] = {"done", "next",  "runs", "state",    
                                            "block", "count", "name", "name_length", "total",     "limit"};
 static const char *const text_fields[] = {"text", "carry", "bytes", "valid"};
 static const char *const reply_fields[] = {"head", "closes"};
+static const char *const response_fields[] = {"status", "headers", "length", "chunked", "until_close", "closes"};
 static const char *const framing_headers[] = {"content-length", "transfer-encoding"};
+static const char *const managed_headers[] = {"host", "content-length", "transfer-encoding", "connection"};
 static const char *const week_days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
 static const char *const months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -120,6 +123,15 @@ static size_t count_named(const agc_http_head *head, const char *name, agc_http_
   return n;
 }
 
+static agc_value header_values(agc_vm *vm, const agc_http_head *head) {
+  agc_http_fields fields = {0};
+  agc_http_fields_keep(&fields, head);
+  agc_value headers = agc_http_header_list(vm, &fields);
+  agc_charge(vm, fields.count + agc_http_fields_bytes(&fields) / AGC_COST_BYTES);
+  agc_http_fields_free(&fields);
+  return headers;
+}
+
 static agc_struct *head_record(agc_vm *vm) {
   return agc_new_struct(agc_builtin_struct(vm, "HttpWire.Head", head_fields, 10), 10);
 }
@@ -158,11 +170,7 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
   bool chunked = head.frame == AGC_HTTP_FRAME_CHUNKED;
   if (!chunked && head.length > limit)
     return refused_head(vm, agc_http_error_code(AGC_HTTP_ERR_TOO_LARGE), agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
-  agc_http_fields fields = {0};
-  agc_http_fields_keep(&fields, &head);
-  agc_value headers = agc_http_header_list(vm, &fields);
-  agc_charge(vm, fields.count + agc_http_fields_bytes(&fields) / AGC_COST_BYTES);
-  agc_http_fields_free(&fields);
+  agc_value headers = header_values(vm, &head);
   const uint8_t *query = memchr(head.target.data, '?', head.target.len);
   size_t path_len = query ? (size_t)(query - head.target.data) : head.target.len;
   agc_struct *h = head_record(vm);
@@ -177,6 +185,43 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
   h->fields[8] = agc_int(0);
   h->fields[9] = ascii((const uint8_t *)"", 0);
   return agc_result_value(true, agc_struct_value(h));
+}
+
+/* The HttpWire.Response of the response head at the start of buf, with the
+   framing rules of docs/vm/10-io-http.md §10.7.1: a response to HEAD, a 204
+   and a 304 have no body (one announced on a 204 or 304 stops the connection
+   from being kept), a body that runs to the end of input stops it too, and a
+   Content-Length over limit is an error. An interim (1xx) head comes back as
+   it is: std/http counts those and reads the next head. read_error is the
+   error that ended the input, if any. */
+agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bool head_only, uint64_t limit,
+                                  int read_error) {
+  agc_http_head head;
+  size_t used;
+  agc_http_error error;
+  agc_http_status status = agc_http_parse_response_head(buf, len, &head, &used, &error);
+  if (status == AGC_HTTP_INCOMPLETE && read_error)
+    return agc_system_error(vm, "error reading from stream port", read_error);
+  if (status == AGC_HTTP_INCOMPLETE) return agc_error_value("http: connection closed before the response was complete");
+  if (status == AGC_HTTP_ERROR) return agc_http_error_result("http: ", agc_http_error_text(error));
+  bool closes = agc_http_closes(&head);
+  if (head.status >= 200 && (head_only || head.status == 204 || head.status == 304)) {
+    bool announced = head.frame == AGC_HTTP_FRAME_CHUNKED || (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > 0);
+    if (announced && !head_only) closes = true;
+    head.frame = AGC_HTTP_FRAME_LENGTH;
+    head.length = 0;
+  }
+  if (head.frame == AGC_HTTP_FRAME_CLOSE) closes = true;
+  if (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > limit)
+    return agc_http_error_result("http: ", agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
+  agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Response", response_fields, 6), 6);
+  r->fields[0] = agc_int(head.status);
+  r->fields[1] = header_values(vm, &head);
+  r->fields[2] = agc_int(head.frame == AGC_HTTP_FRAME_LENGTH ? (int64_t)head.length : 0);
+  r->fields[3] = agc_bool(head.frame == AGC_HTTP_FRAME_CHUNKED);
+  r->fields[4] = agc_bool(head.frame == AGC_HTTP_FRAME_CLOSE);
+  r->fields[5] = agc_bool(closes);
+  return agc_result_value(true, agc_struct_value(r));
 }
 
 static agc_struct *chunk_record(agc_vm *vm) {
@@ -423,6 +468,89 @@ static agc_value builtin_encode_response(agc_vm *vm, agc_value *args, uint32_t s
   return result;
 }
 
+static bool text_is(const agc_string *s, const char *text) {
+  return s->bytes == strlen(text) && memcmp(s->data, text, s->bytes) == 0;
+}
+
+/* A host as parse_url leaves it: a name, an IPv4 address or an IPv6 literal
+   without its brackets. */
+static bool host_text(const agc_string *host) {
+  if (host->bytes == 0 || host->bytes > 253) return false;
+  for (size_t k = 0; k < host->bytes; k++) {
+    char ch = host->data[k];
+    bool alnum = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+    if (!alnum && !strchr("-._~:", ch)) return false;
+  }
+  return true;
+}
+
+/* The request head: the request line, Host (an IPv6 literal in brackets, the
+   port only when it is not the scheme's), Content-Length when there is a body
+   or the method is POST, PUT or PATCH, then the caller's headers. */
+static const char *request_head(agc_vm *vm, agc_http_bytes *b, const agc_value *args, bool secure) {
+  const agc_string *host = agc_as_string(vm, args[1]);
+  int64_t port = agc_as_int(vm, args[2]);
+  const agc_string *method = agc_as_string(vm, args[3]);
+  const agc_string *target = agc_as_string(vm, args[4]);
+  const agc_string *body = agc_as_string(vm, args[6]);
+  if (!agc_http_token((const uint8_t *)method->data, method->bytes) || text_is(method, "CONNECT"))
+    return "invalid method";
+  if (target->bytes == 0) return "invalid request target";
+  for (size_t k = 0; k < target->bytes; k++)
+    if ((uint8_t)target->data[k] < 33 || (uint8_t)target->data[k] > 126) return "invalid request target";
+  agc_http_put(b, method->data, method->bytes);
+  agc_http_put_text(b, " ");
+  agc_http_put(b, target->data, target->bytes);
+  agc_http_put_text(b, " HTTP/1.1\r\nHost: ");
+  bool literal = memchr(host->data, ':', host->bytes) != NULL;
+  if (literal) agc_http_put_text(b, "[");
+  agc_http_put(b, host->data, host->bytes);
+  if (literal) agc_http_put_text(b, "]");
+  char number[64];
+  if (port != (secure ? 443 : 80)) {
+    snprintf(number, sizeof number, ":%" PRId64, port);
+    agc_http_put_text(b, number);
+  }
+  agc_http_put_text(b, "\r\n");
+  size_t count = 1;
+  bool post = text_is(method, "POST") || text_is(method, "PUT") || text_is(method, "PATCH");
+  if (body->bytes || post) {
+    snprintf(number, sizeof number, "Content-Length: %zu\r\n", body->bytes);
+    agc_http_put_text(b, number);
+    count++;
+  }
+  const char *bad = agc_http_put_headers(vm, b, agc_as_list(vm, args[5]), managed_headers,
+                                         sizeof managed_headers / sizeof managed_headers[0],
+                                         "Host, Content-Length, Transfer-Encoding and Connection are set by the client", NULL,
+                                         &count);
+  if (bad) return bad;
+  agc_http_put_text(b, "\r\n");
+  return NULL;
+}
+
+/* HttpWire.encode_request(scheme, host, port, method, target, headers, body,
+   max_body_bytes): the request head as text, or the reason the request cannot
+   be sent. std/http sends the body after it. */
+static agc_value builtin_encode_request(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_string *scheme = agc_as_string(vm, args[0]);
+  if (!text_is(scheme, "http") && !text_is(scheme, "https"))
+    return agc_error_value("http: the scheme must be http or https");
+  if (!host_text(agc_as_string(vm, args[1]))) return agc_error_value("http: invalid host");
+  int64_t port = agc_as_int(vm, args[2]);
+  if (port < 1 || port > 65535) return agc_error_value("http: port must be 1..65535");
+  if ((int64_t)agc_as_string(vm, args[6])->bytes > agc_http_max_body(vm, args[7], span))
+    return agc_error_value("http: request body exceeds max_body_bytes");
+  agc_http_bytes out = {0};
+  const char *bad = request_head(vm, &out, args, text_is(scheme, "https"));
+  size_t chars = 0;
+  if (!bad && !agc_utf8_chars(out.data, out.len, &chars)) bad = "invalid request";
+  agc_value result = bad ? agc_http_error_result("http: ", bad)
+                         : agc_result_value(true, agc_string_value(agc_make_string((const char *)out.data, out.len, chars)));
+  agc_charge(vm, out.len / AGC_COST_BYTES);
+  free(out.data);
+  return result;
+}
+
 static agc_value builtin_error_answer(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t code = agc_as_int(vm, args[0]);
   if (code < 100 || code > 599) misuse(vm, "HttpWire.error_answer: the status must be 100..599", span);
@@ -437,6 +565,7 @@ const agc_builtin agc_http_wire_builtins[] = {
   {"HttpWire.chunk", 3, builtin_chunk, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.chunk_read", 2, builtin_chunk_read, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.text", 3, builtin_text, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"HttpWire.encode_request", 8, builtin_encode_request, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.encode_response", 3, builtin_encode_response, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"HttpWire.error_answer", 1, builtin_error_answer, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };

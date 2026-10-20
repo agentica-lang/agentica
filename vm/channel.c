@@ -272,6 +272,15 @@ agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c) {
   return !c->state->owner || c->state->owner == vm->task ? c->state : NULL;
 }
 
+/* Whether a live task is parked on c to receive. std/http asks it before it answers a call: nobody parked means the
+   caller was cancelled or gave up, so the connection is not pooled. */
+bool agc_channel_awaited(agc_vm *vm, const agc_channel *c) {
+  agc_sync_assert(vm);
+  for (const agc_task *t = c->receivers; t; t = t->wait_next)
+    if (agc_task_waiting(t)) return true;
+  return false;
+}
+
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
   agc_sync_assert(vm);
   const agc_channel_wait w = t->channel;

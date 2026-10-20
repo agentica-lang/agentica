@@ -116,9 +116,36 @@ export RECORDS: List[Model.Record] = [
       ],
     ),
     Model.Record(
+      name: "HttpWire.Job",
+      fields: [
+        Model.Named(name: "origin", type: Types.Type.String),
+        Model.Named(name: "scheme", type: Types.Type.String),
+        Model.Named(name: "host", type: Types.Type.String),
+        Model.Named(name: "port", type: Types.Type.Int),
+        Model.Named(name: "method", type: Types.Type.String),
+        Model.Named(name: "head", type: Types.Type.String),
+        Model.Named(name: "body", type: Types.Type.String),
+        Model.Named(name: "deadline", type: Types.Type.Int),
+        Model.Named(name: "reply", type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpResponse")))),
+        Model.Named(name: "worker", type: Types.Type.Int),
+        Model.Named(name: "kept", type: Types.Type.Bool),
+      ],
+    ),
+    Model.Record(
       name: "HttpWire.Reply",
       fields: [
         Model.Named(name: "head", type: Types.Type.String),
+        Model.Named(name: "closes", type: Types.Type.Bool),
+      ],
+    ),
+    Model.Record(
+      name: "HttpWire.Response",
+      fields: [
+        Model.Named(name: "status", type: Types.Type.Int),
+        Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header"))),
+        Model.Named(name: "length", type: Types.Type.Int),
+        Model.Named(name: "chunked", type: Types.Type.Bool),
+        Model.Named(name: "until_close", type: Types.Type.Bool),
         Model.Named(name: "closes", type: Types.Type.Bool),
       ],
     ),
@@ -683,6 +710,18 @@ ROWS_9: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "HttpWire.awaited?",
+      parameters: [
+        Model.Named(name: "reply", type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpResponse")))),
+      ],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.awaited?",
+      effects: [],
+      description: "Internal to std/http: whether a task is parked on the reply channel to take the answer.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "HttpWire.chunk",
       parameters: [
         Model.Named(name: "state", type: Types.Type.Struct("HttpWire.Chunk")),
@@ -726,29 +765,13 @@ ROWS_9: List[Model.Builtin] = [
 
 ROWS_10: List[Model.Builtin] = [
     Model.Builtin(
-      name: "HttpWire.client",
-      parameters: [
-        Model.Named(name: "timeout_ms", type: Types.Type.Int),
-        Model.Named(name: "idle_timeout_ms", type: Types.Type.Int),
-        Model.Named(name: "max_connections", type: Types.Type.Int),
-        Model.Named(name: "max_body_bytes", type: Types.Type.Int),
-        Model.Named(name: "ca_file", type: Types.Type.String),
-      ],
-      result: Types.Type.Result(Types.Type.Opaque("HttpClient")),
+      name: "HttpWire.clean_eof?",
+      parameters: [Model.Named(name: "socket", type: Types.Type.Opaque("Socket"))],
+      result: Types.Type.Bool,
       rule: Model.Rule.Plain,
-      implementation: "HttpWire.client",
+      implementation: "HttpWire.clean_eof?",
       effects: ["network"],
-      description: "Internal to std/http: make a client with its connection pool.",
-      alternatives: [],
-    ),
-    Model.Builtin(
-      name: "HttpWire.close_client",
-      parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
-      result: Types.Type.Void,
-      rule: Model.Rule.Plain,
-      implementation: "HttpWire.close_client",
-      effects: ["network"],
-      description: "Internal to std/http: close a client and its connections.",
+      description: "Internal to std/http: whether the end of input a read reported was clean (TLS: after close_notify).",
       alternatives: [],
     ),
     Model.Builtin(
@@ -769,6 +792,28 @@ ROWS_10: List[Model.Builtin] = [
       implementation: "HttpWire.close_write",
       effects: ["network"],
       description: "Internal to std/http: close the write side of a socket once its output is sent; reads go on.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.encode_request",
+      parameters: [
+        Model.Named(name: "scheme", type: Types.Type.String),
+        Model.Named(name: "host", type: Types.Type.String),
+        Model.Named(name: "port", type: Types.Type.Int),
+        Model.Named(name: "method", type: Types.Type.String),
+        Model.Named(name: "target", type: Types.Type.String),
+        Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header"))),
+        Model.Named(name: "body", type: Types.Type.String),
+        Model.Named(name: "max_body_bytes", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.String),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.encode_request",
+      effects: [],
+      description: (
+        "Internal to std/http: the text of a request head with Host and Content-Length, or the reason the " +
+        "request cannot be sent."
+      ),
       alternatives: [],
     ),
     Model.Builtin(
@@ -799,22 +844,13 @@ ROWS_10: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
-      name: "HttpWire.exchange",
-      parameters: [
-        Model.Named(name: "client", type: Types.Type.Opaque("HttpClient")),
-        Model.Named(name: "scheme", type: Types.Type.String),
-        Model.Named(name: "host", type: Types.Type.String),
-        Model.Named(name: "port", type: Types.Type.Int),
-        Model.Named(name: "method", type: Types.Type.String),
-        Model.Named(name: "target", type: Types.Type.String),
-        Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header"))),
-        Model.Named(name: "body", type: Types.Type.String),
-      ],
-      result: Types.Type.Result(Types.Type.Struct("HttpResponse")),
+      name: "HttpWire.jobs",
+      parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
+      result: Types.Type.Channel(Types.Type.Struct("HttpWire.Job")),
       rule: Model.Rule.Plain,
-      implementation: "HttpWire.exchange",
-      effects: ["network"],
-      description: "Internal to std/http: send one whole request and read the whole response.",
+      implementation: "HttpWire.jobs",
+      effects: [],
+      description: "Internal to std/http: the jobs channel of a client's owner task.",
       alternatives: [],
     ),
   ]
@@ -828,6 +864,16 @@ ROWS_11: List[Model.Builtin] = [
       implementation: "HttpWire.local_port",
       effects: ["network"],
       description: "Internal to std/http: the server's listening port.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.options",
+      parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
+      result: Types.Type.Struct("HttpClientOptions"),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.options",
+      effects: [],
+      description: "Internal to std/http: the options a client was made with.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -845,6 +891,24 @@ ROWS_11: List[Model.Builtin] = [
       description: (
         "Internal to std/http: put rest back in front of the input, then read and parse the next request head; " +
         "a bad head has the answer's status and reason (status 0 for a good one)."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.read_response",
+      parameters: [
+        Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+        Model.Named(name: "head_only", type: Types.Type.Bool),
+        Model.Named(name: "max_body_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("HttpWire.Response")),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.read_response",
+      effects: ["network"],
+      description: (
+        "Internal to std/http: read and parse the next response head, with the framing of a response to HEAD " +
+        "when head_only; an interim (1xx) head comes back as it is."
       ),
       alternatives: [],
     ),
@@ -878,6 +942,26 @@ ROWS_11: List[Model.Builtin] = [
       implementation: "HttpWire.server",
       effects: ["network"],
       description: "Internal to std/http: make a server's task group on a listener and run f, its accept loop, in it.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "HttpWire.service",
+      parameters: [
+        Model.Named(name: "jobs", type: Types.Type.Channel(Types.Type.Struct("HttpWire.Job"))),
+        Model.Named(name: "options", type: Types.Type.Struct("HttpClientOptions")),
+        Model.Named(
+          name: "f",
+          type: Types.Type.Fn([Types.Type.Channel(Types.Type.Struct("HttpWire.Job"))], Types.Type.Void),
+        ),
+      ],
+      result: Types.Type.Opaque("HttpClient"),
+      rule: Model.Rule.Plain,
+      implementation: "HttpWire.service",
+      effects: ["concurrency"],
+      description: (
+        "Internal to std/http: run f(jobs), a client's owner task, outside every caller's task tree, as the owner " +
+        "of jobs; the client keeps options."
+      ),
       alternatives: [],
     ),
     Model.Builtin(

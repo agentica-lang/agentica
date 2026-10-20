@@ -37,6 +37,8 @@ agc_value agc_http_error_result(const char *prefix, const char *reason);
    Result: when the text is not UTF-8, valid is false and text empty. */
 agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t bytes);
 agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered);
+agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bool head_only, uint64_t limit,
+                                  int read_error);
 int64_t agc_http_max_body(agc_vm *vm, agc_value v, uint32_t span);
 
 #endif

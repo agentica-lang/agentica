@@ -263,9 +263,9 @@ class TestModuleRules:
             self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
 
     def test_http_wire_is_internal_to_std_http_for_user_files_relative_imports_and_pkg_modules(self):
-        call = 'export def go() -> Void\n  HttpWire.client(1, 1, 1, 1, "")\nend\n\n'
+        call = 'export def go() -> Void\n  HttpWire.options(HttpWire.service(1, 1, 1))\nend\n\n'
         roots = [("root.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n'
-                              '  HttpWire.close_client(HttpWire.client(1, 1, 1, 1, ""))\nend\n\n'),
+                              '  HttpWire.jobs(HttpWire.service(1, 1, 1))\nend\n\n'),
                  ("lib.agc", 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n'),
                  ("libs/wire.agc", 'import Wire from "pkg/wire"\ndef main() -> Void\n  Wire.go()\nend\n\n')]
         bodies = [("  x = HttpWir.client(1)\n", "CHECK-UNKNOWN-NAME"),

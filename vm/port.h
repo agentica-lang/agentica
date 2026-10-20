@@ -62,8 +62,8 @@ typedef struct agc_native agc_native;
  * the job's owner count goes back before it runs, so a raise leaks nothing. `expired` must never raise: it runs
  * while the job still owns `data` (a pool work may be using it) and the owner's count is given back after it, so a
  * raise would leak the job, and at N > 1 the count cannot go back first because the I/O thread would then `drop`
- * the data under the call. Every `expired` in the tree (task, process, tcp, duplex, files, http_client, http_server,
- * output) only unlinks requests, shuts or closes handles and builds a value, and none calls agc_fail. */
+ * the data under the call. Every `expired` in the tree (task, process, tcp, duplex, files, http_server, output) only
+ * unlinks requests, shuts or closes handles and builds a value, and none calls agc_fail. */
 typedef struct {
   void (*work)(void *data);
   agc_value (*done)(agc_vm *vm, void *data, agc_value context);
@@ -298,13 +298,14 @@ typedef struct {
      loop's thread, the default), `scheds` their contexts (GC memory, so the collector sees them) and `threads` their
      malloc'd ids, of which `started` are running. `over` is set once, by the first agc_run_over: the run is over and
      rt->outcome holds its end. `entry_done` opens the run queue to the other schedulers once the entry has written the
-     Globals table. `timers_armed` counts the armed task timers of every heap, for the stall check. */
+     Globals table. `timers_armed` counts the armed task timers of every heap, for the stall check, and `timers_weak`
+     how many of them belong to service tasks, which the stall check does not wait for (agc_task_service). */
   int64_t schedulers;
   struct agc_vm **scheds;
   void *threads;
   _Atomic uint32_t started;
   _Atomic bool over, entry_done;
-  _Atomic uint64_t timers_armed;
+  _Atomic uint64_t timers_armed, timers_weak;
   uint64_t over_task;
 #ifdef __linux__
   locale_t messages_locale;
@@ -378,7 +379,8 @@ struct agc_task {
   /* Atomic: a canceller on another scheduler sets it while the task runs, and the scheduler reads it at the end of the
      turn, before it publishes PARKED (agc_vm_run). */
   _Atomic bool cancelled;
-  bool crashed, observed, left_children, group, hidden, spawned;
+  /* `service`: the task is under a service root (agc_task_service), and so are all its descendants. */
+  bool crashed, observed, left_children, group, hidden, spawned, service;
   uint32_t spawn_span;
   agc_value result;
   agc_string *crash, *crash_message;
@@ -501,6 +503,7 @@ void agc_own(agc_vm *vm, agc_resource *r, agc_close_fn close);
 void agc_disown(agc_resource *r);
 void agc_unregister(agc_vm *vm, agc_resource *r);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
+bool agc_channel_awaited(agc_vm *vm, const agc_channel *c);
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);
@@ -519,6 +522,7 @@ agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_
 bool agc_task_owns(agc_vm *vm, agc_value handle);
 void agc_task_close_done(agc_vm *vm, agc_task *t);
 agc_task *agc_task_group(agc_vm *vm);
+agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, uint32_t span);
 void agc_task_observe(agc_vm *vm, agc_task *t);
 bool agc_report_unobserved(agc_vm *vm);
 bool agc_task_join(agc_vm *vm, agc_task *target);

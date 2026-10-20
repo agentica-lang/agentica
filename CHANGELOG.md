@@ -53,6 +53,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The HTTP client is now `std/http` code on `TCP` and `TLS` sockets: an owner
+  task per client keeps the per-origin pool and `max_connections`, and one
+  task per connection runs the requests. `vm/http_client.c` is gone. The API,
+  answers and limits do not change; the client's tasks are not counted by
+  `Task.pending_count`, are not `Test.test` leftovers, and survive a crash of
+  the task that made the client. A call whose task timed out still lets its
+  request finish, and the connection is closed, not pooled. Differences:
+  `docs/vm/10-io-http.md` §10.7.1.
+
 - The HTTP server checks a request body as UTF-8 as its bytes arrive: bytes
   that can never be UTF-8 get a 400 at once, before a later chunked framing
   error (which got its own 400 or 413) or the end of input (which got no

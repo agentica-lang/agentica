@@ -291,8 +291,8 @@ section says how the scheduler and the loop keep them, as built.
 - **Thread-pool threads** run only the `work` half, on `malloc` memory.
   `UV_USE_IO_URING` is set to `0` (unless already set) before the loop is made,
   so libuv uses its thread pool and epoll. `SIGINT`, `SIGTERM` and `SIGHUP` are
-  blocked around every pool start, and in the `tcp.c` and `http_client.c`
-  threads, so the stop handler, which may run on any thread, touches only
+  blocked around every pool start, and in the `tcp.c` threads, so the stop
+  handler, which may run on any thread, touches only
   lock-free atomics and async-signal-safe calls.
 - **Pool size.** The VM never sets it. libuv's `UV_THREADPOOL_SIZE` does (there
   is no `AGENTICA_*` variable). It is read once, when the pool is created, so it
@@ -456,14 +456,12 @@ section says how the scheduler and the loop keep them, as built.
   out is closed then. The `expired` half never runs on a detached job, so it
   never closes a handle a task holds. A kind may set a `cancel` half, which ends
   the job early and returns true; no pool kind may have one, since a pool thread
-  may still use the data. `HttpWire.exchange` uses it. An exchange waiting for
-  its TLS setup or a pool slot leaves the queue. One that has sent its request
-  runs to its end, and its connection is then closed, never pooled or retried.
-  For the TCP and process kinds at the deadline, a read, accept or wait leaves
-  its handle without the `expired` half that would close it, a connect closes
-  the socket it was opening, and a send waits for its write callback. A listen
-  has no deadline. A pool job (files, stdin) cannot be stopped, so it ends when
-  its work ends.
+  may still use the data. The waits of `HttpWire.accept` and `HttpWire.wait` use
+  it to leave at once. For the TCP and process kinds at the deadline, a read,
+  accept or wait leaves its handle without the `expired` half that would close
+  it, a connect closes the socket it was opening, and a send waits for its write
+  callback. A listen has no deadline. A pool job (files, stdin) cannot be
+  stopped, so it ends when its work ends.
 - **External jobs.** A kind with `external` set has no `work` half. A libuv
   callback on the loop thread completes it, which puts the job on the ready
   list. A second call does nothing.

@@ -357,7 +357,7 @@ type:
 - **Written:** a `Result[T]` where `T` is expected (`n: Int = s.to_i`)
   - **Help:** a `!` form (`s.to_i!`), `Result.unwrap!`, or `try`
 
-- **Written:** `HttpWire.exchange(...)` or another `HttpWire` call outside
+- **Written:** `HttpWire.service(...)` or another `HttpWire` call outside
   `std/http`
   - **Help:** `import HTTP from "std/http"`, then `HTTP.get`, `HTTP.post` or
     `HTTP.request`

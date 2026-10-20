@@ -103,39 +103,37 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `agc_http_closes` and `agc_http_error_result`
 
 - **Path:** `vm/http_wire.c`
-  - **Owns:** the `HttpWire` functions std/http's server reads and writes with
-    (Linux and macOS; stubs on Windows): `chunked`, `chunk`, `chunk_read`,
-    `text`, `encode_response` and `error_answer`. No I/O and no state: each
-    takes bytes or a record and returns a std-only record (`HttpWire.Chunk`,
-    `HttpWire.Text`, `HttpWire.Reply`). `chunk` rebuilds the decoder from a
-    `Chunk` and checks every field first (`vm/tests/http_wire_test.c`).
-    `agc_http_head_value` and `agc_http_text_value` build the `Head` and `Text`
-    of the reads in `vm/tcp.c`: `HttpWire.read_head` (the head stays in the
-    input until it is whole, with a scan hint so it is parsed once per line;
-    `rest` goes back in front first, `agc_inbuf_unread`) and
-    `HttpWire.read_text`, next to `HttpWire.close_write`. Each read has its
-    readiness test (`head_ready`), its cut out of the input (`cut_head`,
-    `cut_text`) and the value built from the cut (`head_value`, `text_value`).
+  - **Owns:** the `HttpWire` functions std/http's client and server read and
+    write with (Linux and macOS; stubs on Windows): `chunked`, `chunk`,
+    `chunk_read`, `text`, `encode_request`, `encode_response` and
+    `error_answer`. No I/O and no state: each takes bytes or a record and
+    returns a string or a std-only record (`HttpWire.Chunk`, `HttpWire.Text`,
+    `HttpWire.Reply`). `chunk` rebuilds the decoder from a `Chunk` and checks
+    every field first (`vm/tests/http_wire_test.c`). `agc_http_head_value`,
+    `agc_http_response_value` and `agc_http_text_value` build the `Head`,
+    `Response` and `Text` of the reads in `vm/tcp.c`: `HttpWire.read_head` and
+    `read_response` (the head stays in the input until it is whole, with a scan
+    hint so it is parsed once per line; `read_head`'s `rest` goes back in front
+    first, `agc_inbuf_unread`) and `HttpWire.read_text`, next to
+    `HttpWire.close_write` and `clean_eof?`. Each read has its readiness test
+    (`head_ready`), its cut out of the input (`cut_head`, `cut_text`) and the
+    value built from the cut (`head_value`, `text_value`).
 
 - **Path:** `vm/http_server.c`
   - **Owns:** The `HttpWire` server task group (Linux and macOS; stubs on
     Windows).
 
-- **Path:** `vm/http_client.c`
-  - **Owns:** `HttpWire.client`, `exchange` and `close_client`
-    (`agc_http_builtins`, Linux and macOS, a stub table on Windows; §10.7.1): a
-    `malloc`'d `client` per handle with its origins (idle connections, open
-    slots, a FIFO of waiting exchanges), one idle timer and a lazily built
-    `agc_tls_config` (a pool job on the first HTTPS call); each `exchange` parks
-    on an `external` job and moves through config, wait, connect and exchange
-    phases on `agc_conn` watches; a `runnable` queue (`schedule`/`drain`) and
-    callbacks stored in the client avoid both static prototypes and call cycles.
-    GC values (the `HttpResponse`) are built only in `done`. Its `cancel` half
-    (20b): an exchange of a cancelled task that has not sent its request leaves
-    the queue or closes its connection, so its slot passes to the next waiter;
-    one that has sent it runs to its end and is not pooled. Its `goodbye`
-    (`client_goodbye`) sends one TLS close_notify on every idle and active
-    connection when the run ends
+- **Path:** `vm/http_service.c`
+  - **Owns:** `HttpWire.service`, `jobs` and `options`
+    (`agc_http_service_builtins`, Linux and macOS, a stub table on Windows;
+    §10.7.1). `service` runs the client's owner task with `agc_task_service`
+    (`vm/task.c`): a root with no parent, so the client outlives a crash or
+    cancel of its maker, `Task.pending_count` and `Test.test` leave its tasks
+    out, and their timers are weak for the stall check (`rt->timers_weak`). The
+    `HttpClient` value holds the jobs channel and the options. The pool itself
+    (owner, one worker per connection, FIFO, retry) is `stdlib/http.agc`, on
+    `TCP`, `TLS`, `Channel` and `Task`; the workers' sockets are tcp.c sockets,
+    so the end of the run sends their TLS close_notify
 
 - **Path:** `vm/tls.h`, `vm/tls_openssl.c`
   - **Owns:** the TLS adapter (`docs/vm/10-io-tls.md` §10.3): our own types
@@ -474,9 +472,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     since the tests and `make goldens` run from different directories).
   - Certificates come from `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or
     newer for the expired one).
-- **HTTP client (20a, in on Linux)**: `vm/http_client.c` on `vm/net.h`
-  and the parser of `vm/http_parse.h`, called only by `stdlib/http.agc`
-  (the std-only guard). The `http-*` fixtures are their own peers (a TCP
+- **HTTP client (20a, in on Linux)**: `stdlib/http.agc` on `vm/http_service.c`,
+  `vm/http_wire.c` and the reads of `vm/tcp.c` (the std-only guard). The
+  `http-client-service` and `test-client-no-leftover` fixtures hold the service
+  task's rules. The `http-*` fixtures are their own peers (a TCP
   server task in the same program; only `main` prints); the std/http URL
   parser costs about 500 steps per call, so the sweep samples them. Put the
   other cases in `tests/test_vm_http.py`, which starts one Python peer
@@ -516,15 +515,19 @@ same over `ssl`, and a raw socket server with
     connection (handed over with `Task.spawn_owning`), and
     `http-server-owner-cancel` cancels the task that owns one, which frees the
     port.
-  - The client gets its connection from tcp.c through `agc_conn`, never its own
-    socket code.
-  - Idle pooled connections and the idle timer are unreferenced
-    (`agc_conn_hold`), so they never keep a stalled run alive
-  - a connection freed while calls wait is parked first and handed over by a 1
-    ms referenced timer (a narrow guard against late bytes, not a full one).
+  - The client is `stdlib/http.agc` on `TCP`/`TLS` sockets and the
+    `HttpWire` helpers (`encode_request`, `read_response`); no C client code.
+  - Its owner task runs in a service root (`HttpWire.service`,
+    `agc_task_service`): detached, not in `Task.pending_count`, not a Test.test
+    leftover, and its timers are weak, so an idle pool never keeps a stalled run
+    alive.
+  - One worker task per connection; its idle `Channel.recv` timeout is the idle
+    timer. A worker whose caller is no longer parked on the reply
+    (`HttpWire.awaited?`) closes the connection instead of pooling it.
   - An idempotent call that fails on a reused connection before any response
-    byte is retried once on a new one (`retry`).
-  - A close-delimited body over TLS needs `close_notify` (`agc_conn_clean_eof`)
+    byte is retried once on a new one (`run_job`).
+  - A close-delimited body over TLS needs `close_notify`
+    (`HttpWire.clean_eof?`)
   - a bare FIN gives "truncated HTTP body".
 
 Native process regression tests use their own C executable as the child. They

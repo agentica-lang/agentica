@@ -48,7 +48,7 @@ before it moved; the header split moved no line of a `.c` file except the
 - **Layer:** **Services**
   - **Files:** `strings.c`, `numbers.c`, `json.c`, `json_typed.c`, `files.c`,
     `tree.c`, `stream.c`, `duplex.c`, `process.c`, `system.c`, `tcp.c`,
-    `http_fields.c`, `http_client.c`, `http_server.c`, `http_wire.c`,
+    `http_fields.c`, `http_service.c`, `http_server.c`, `http_wire.c`,
     `logger.c`, `testing.c`
   - **May use:** `value.h`, `port.h`, `services.h`, `net.h`, `trace.h`, adapter
     headers, libuv, yyjson (`json.c` only)
@@ -69,7 +69,7 @@ before it moved; the header split moved no line of a `.c` file except the
   - **May use:** everything
 
 `vm/tests/*.c` may use everything. `trace.h` (tracing; `agc_trace_emit` is used
-by `http_client.c`, `process.c` and `tcp.c`) is shared by every layer but the
+by `http_server.c`, `process.c` and `tcp.c`) is shared by every layer but the
 adapters.
 
 Notes on the choices:
@@ -101,7 +101,7 @@ Notes on the choices:
   an OS.
 - **`stream.c` is a service.** It is the kit the stream services share
   (`agc_inbuf_*`, `agc_stream_lock`, `agc_stream_write`); only `duplex.c`,
-  `process.c`, `tcp.c` and `http_client.c` use it.
+  `process.c` and `tcp.c` use it.
 - **`duplex.c` is a service (25c).** It owns the child channel: one
   bidirectional stream per channel end, a line buffer, a reader and a writer
   request, and the two child-side builtins `Process.parent_read_line` and
@@ -129,11 +129,11 @@ Notes on the choices:
   validation, buffers, ownership and pool scheduling. Core files cannot
   include this header or call the adapter. The driver may use libuv directly
   in `launch.c` for executable discovery; `agentica.c` does not include it.
-- **Services may call each other.** `http_client.c` and `http_server.c` use
-  `tcp.c` through `net.h` (`http_server.c` calls `agc_conn_observe`,
-  `agc_conn_retain`, `agc_conn_release`, `agc_conn_closed`, `agc_conn_accept`,
-  `agc_conn_socket` and `agc_net_close`) and `http_fields.c`; `tcp.c` and
-  `http_wire.c` share the body text through `http_fields.h`; `json_typed.c`
+- **Services may call each other.** `http_server.c` uses `tcp.c` through
+  `net.h` (it calls `agc_conn_observe`, `agc_conn_retain`, `agc_conn_release`,
+  `agc_conn_closed`, `agc_conn_accept`, `agc_conn_socket` and `agc_net_close`)
+  and `http_fields.c`; `tcp.c` and `http_wire.c` share the heads and the body
+  text through `http_fields.h`; `json_typed.c`
   uses `json.c`, `json.c` and `testing.c` use `strings.c` helpers. That is fine
   inside a layer.
 
@@ -195,8 +195,12 @@ field of V3, which PR 1 added; it has its own header, `port.h`.
     file close job of an ended task has finished), `agc_task_cancel`,
     `agc_task_observe`, `agc_report_unobserved`, `agc_task_join` (V5)
 
-- **Job:** Task groups (20c, for `http_server.c`)
+- **Job:** Task groups (20c, for `http_server.c` and `http_service.c`)
   - **Functions:** `agc_task_group` (a parent node that never runs),
+    `agc_task_service` (run a task that owns a handle under a root with no
+    parent: no caller's crash, cancel or end reaches it, `Task.pending_count`
+    and `Test.test` leave its tree out, and its timers are weak for the stall
+    check; `HttpWire.service` calls it),
     `agc_task_spawn_in` (spawn under a given parent), `agc_task_cancel` to drop
     a subtree (every cancelled task closes the handles it owns as it ends, so
     there is no separate drop), and three task fields the service sets on its
@@ -386,7 +390,7 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   shape of the trie. Every other file keeps the opaque API, so a site that reads
   the layout outside these files does not compile.
 
-`net.h` (the `agc_conn` API of `tcp.c`, used by `http_client.c`) and
+`net.h` (the `agc_conn` API of `tcp.c`, used by `http_server.c`) and
 `http_fields.h` include `services.h`; `net.h` also includes `tls.h`. `tls.h`,
 `http_parse.h` and `trace.h` keep their content. What named `vm/agc.h` now names
 the header that holds the item: `tests/test_frontend_bytecode.py` reads
@@ -417,7 +421,7 @@ if not. The script fails when:
    `runq.c`, `sync.c` and `inbox.c` (for `uv_mutex_t`, the one mutex type that
    also builds on Windows, and `uv_async_t`, which wakes the loop),
    `stdio_windows.c` and the stream services (`stream.c`, `duplex.c`,
-   `process.c`, `system.c`, `tcp.c`, `http_client.c`). `input.c` and `files.c`
+   `process.c`, `system.c`, `tcp.c`). `input.c` and `files.c`
    put stdin, FIFOs and character devices on loop handles through
    `agc_poller_*` (§15.2) and include no libuv header;
 6. a `.c` file declares an `agc_` name at file scope instead of taking it from a

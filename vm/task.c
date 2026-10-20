@@ -182,7 +182,8 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   t->frame_capacity = 0;
   t->cursor = NULL;
   t->turn_cost = 0;
-  if (!t->group) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
+  /* A service task was counted as done when it was spawned (agc_task_spawn_in). */
+  if (!t->group && !t->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
   while (t->children) {
     agc_task *child = t->children;
     leave_parent(child);
@@ -519,12 +520,14 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
 }
 
 /* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
-   alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not. */
+   alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not, unless every
+   armed timer is a service task's: those only end idle waits that no other task depends on, so the run still stalls
+   when the loop has nothing alive. */
 static bool idle_wait(agc_vm *vm) {
   uint64_t due = agc_timers_next_due(vm);
   if (due == UINT64_MAX) return agc_io_poll(vm, true);
   uint64_t now = agc_clock_ms();
-  return agc_io_run_for(vm, due > now ? due - now : 0, false);
+  return agc_io_run_for(vm, due > now ? due - now : 0, !agc_timers_strong(vm));
 }
 
 /* One turn of T on this scheduler and its end. True when `main` has returned. */
@@ -757,7 +760,10 @@ agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const ag
                             uint32_t span) {
   agc_task *child = agc_new_task(vm);
   child->input_seen = vm->rt->in.eof_seq;
-  child->test = vm->task->test;
+  child->service = parent->service;
+  child->test = child->service ? NULL : vm->task->test;
+  /* Counted as done from the start, so Task.pending_count (made - done) never sees it; finish_task skips it. */
+  if (child->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
   child->spawned = true;
   child->spawn_span = span;
   agc_task_call(vm, child, fn, args, argc, span);
@@ -799,12 +805,37 @@ static agc_resource *owned_by_caller(agc_vm *vm, agc_value handle) {
 
 bool agc_task_owns(agc_vm *vm, agc_value handle) { return owned_by_caller(vm, handle) != NULL; }
 
-agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
+/* The resource that a spawn hands over: a channel nobody owns yet, or a handle the caller owns. */
+static agc_resource *claim(agc_vm *vm, agc_value handle, uint32_t span) {
   agc_resource *r = agc_is(handle, AGC_T_CHANNEL) ? agc_channel_claim(vm, agc_as_channel(vm, handle))
                                                   : owned_by_caller(vm, handle);
   if (!r)
     agc_fail(vm, "RUNTIME-HANDLE-NOT-OWNED", "the calling task does not own this handle, or it is closed", span + 2);
+  return r;
+}
+
+agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
+  agc_resource *r = claim(vm, handle, span);
   agc_task *child = agc_task_spawn_seeded(vm, parent, fn, &handle, 1, span);
+  agc_hand_over(r, child);
+  return child;
+}
+
+/* Runs fn(handle) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
+   root is a node like agc_task_group that never runs, but it has no parent, so no task's crash, cancel or end reaches
+   it, and Test.test finds no leftover under the caller. Its descendants are service tasks: Task.pending_count leaves
+   them out, they are in no test, and their timers do not keep a stalled run waiting (idle_wait). They end by
+   themselves or with the run. The seed comes from the task's id, not from the caller's stream, so making a client
+   does not change the caller's Random values. */
+agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, uint32_t span) {
+  agc_resource *r = claim(vm, handle, span);
+  agc_task *root = agc_alloc(sizeof(agc_task));
+  root->group = true;
+  root->service = true;
+  atomic_store_explicit(&root->state, AGC_TASK_PARKED, memory_order_relaxed);
+  root->result = agc_void();
+  agc_task *child = agc_task_spawn_in(vm, root, fn, &handle, 1, span);
+  agc_random_seed(&child->random, child->id);
   agc_hand_over(r, child);
   return child;
 }

@@ -242,7 +242,7 @@ written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only
 channel call that must wait, and `Task.map`, need the event loop. The event
 loop, files and processes build on Linux, macOS and Windows; TCP, TLS and HTTP
 (client and server) build on Linux and macOS, with stub tables on Windows (the
-guards in `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_client.c`,
+guards in `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_service.c`,
 `vm/http_server.c` and `vm/http_wire.c`).
 
 ### 7.3 Builtin safety and streams

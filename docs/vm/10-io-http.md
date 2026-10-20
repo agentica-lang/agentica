@@ -105,12 +105,12 @@ the tests 10.7.4. Streaming is planned in `docs/future/30-hybrid-http.md`.
   a non-empty body with them is a 500. The request body is read in full before
   the handler runs, so keep-alive needs no "was the body consumed?" rule.
 - **Incoming framing** is complete: chunked request bodies, and chunked or
-  close-delimited response bodies, are decoded in full in C, within the limits.
+  close-delimited response bodies, are decoded in full, within the limits.
 - **Requests the client sends** carry `Content-Length` when the body is not
   empty or the method is `POST`, `PUT` or `PATCH`. The client adds `Host`, and
   refuses user `Host`, `Content-Length`, `Transfer-Encoding` and `Connection`
-  headers, and CR, LF and control bytes. It writes the body while it reads the
-  response, so an early 413 cannot deadlock the call.
+  headers, and CR, LF and control bytes. It writes a large body while it reads
+  the response, so an early 413 cannot deadlock the call.
 - **Pool.** `HttpClient` keeps idle keep-alive connections per scheme, host and
   port, at most `max_connections` per origin. A call waits in FIFO order for a
   free one, within its timeout. A connection is leased for one call, and goes
@@ -144,48 +144,99 @@ out. The
 #### 10.7.1 As built: the client (20a)
 
 ```text
-HttpWire.client(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String) -> Result[HttpClient]
-HttpWire.exchange(client: HttpClient, scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String) -> Result[HttpResponse]
-HttpWire.close_client(client: HttpClient) -> Void
+HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpClientOptions, f: Fn[Channel[HttpWire.Job], Void]) -> HttpClient
+HttpWire.jobs(client: HttpClient) -> Channel[HttpWire.Job]
+HttpWire.options(client: HttpClient) -> HttpClientOptions
+HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String, max_body_bytes: Int) -> Result[String]
+HttpWire.read_response(socket: Socket, head_only: Bool, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Response]
+HttpWire.clean_eof?(socket: Socket) -> Bool
+HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
 ```
 
-- `exchange` reads `timeout_ms` and `max_body_bytes` from the client, since
-  `std/http` cannot read them back from the opaque handle.
-- `vm/http_client.c` (Linux; a stub elsewhere) keeps, per origin, the idle
-  connections, the open slot count and a FIFO of waiting exchanges. Idle
-  connections close after `idle_timeout_ms` (one timer per client) or when the
-  peer closes them.
-- Retry: an exchange that leased an idle connection and then fails before any
-  response byte (EOF, a read or write error) is retried once on a new
-  connection, at the head of the waiters, within the same timeout, if its method
-  is `GET`, `HEAD`, `OPTIONS`, `PUT` or `DELETE`. This covers the race where the
-  server closes an idle keep-alive connection as the request is sent.
-- Connections are tcp.c's (`vm/net.h`), so DNS, connect, TLS and the close rules
-  stay in one place.
-- `exchange` adds `Host` (the port only when it is not the scheme's default; an
-  IPv6 host in brackets) and `Content-Length`, and refuses the user headers
-  listed above. A connection goes back to the pool only after a complete
-  exchange with no `Connection: close` on either side and a framed body. Header
-  names are lowercased, values are Latin-1, and the body must be valid UTF-8.
-- After 204 or 304 the connection is not kept if the response still announced a
-  body. After `HEAD` it is kept, since no body follows a `HEAD` response
-  whatever it announces (RFC 9110 §9.3.2). Bytes already buffered when an
-  exchange ends close the connection. A freed connection goes to the first
-  waiter after a 1 ms timer, so bytes that arrive in that window close it first.
-  This is a narrow guard, not a promise. Idle connections are unreferenced in
-  libuv, so a pool never hides a stalled run.
+- The client is `std/http` code on `TCP`, `TLS`, `Channel` and `Task`.
+  `HttpWire.service` (`vm/http_service.c`) runs `f(jobs)`, the client's owner
+  task, under a service root (`agc_task_service` in `vm/task.c`). No caller's
+  crash, cancel or end reaches it, `Task.pending_count` leaves its tasks out,
+  `Test.test` does not see them as leftovers, and their timers do not keep a
+  stalled run waiting (the stall checks count only the other timers). The owner
+  owns `jobs`, so its end closes the channel. The `HttpClient` value holds the
+  channel and the options; it prints `<HttpClient>`.
+- `HTTP.request` parses the URL and builds the head with `encode_request`
+  (`vm/http_wire.c`), which adds `Host` (the port only when it is not the
+  scheme's default; an IPv6 host in brackets) and `Content-Length`, and refuses
+  the user headers listed above and a body over `max_body_bytes`. It sends a
+  `HttpWire.Job` with a reply channel of its own on `jobs`, and waits for the
+  answer until its deadline, `timeout_ms` after the call, plus 100 ms of grace.
+  `close_client` closes `jobs`, and a later call gets `http: client is closed`.
+- The owner keeps, per origin (scheme, host and port), the open count, the idle
+  workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
+  else to a new worker while fewer than `max_connections` are open, else to the
+  FIFO. A job whose deadline passed while it waited is dropped: its caller has
+  returned the timeout already. When `jobs` is closed, the owner answers every
+  waiting and running job with `http: client is closed`, closes the inboxes of
+  the idle workers and ends.
+- A worker owns one connection, made with `TCP.connect` or `TLS.connect` (with
+  the client's `ca_file`), so DNS, connect, TLS and the close rules stay in
+  tcp.c. It runs a job, answers on the job's reply channel, tells the owner on
+  `jobs` whether it keeps the connection, then waits on its inbox for
+  `idle_timeout_ms`. The timeout closes the connection and ends the worker. The
+  worker closes its inbox before its last look at it, so the owner cannot hand
+  a job to a worker that has left: the send fails, and another worker takes the
+  job. When nobody is parked on the reply channel as the worker answers
+  (`HttpWire.awaited?`), the caller was cancelled or gave up, and the worker
+  closes the connection instead of keeping it, as the grammar says of a
+  timed-out call (`docs/grammar/06c-tasks-and-tests.md`).
+- Retry: a job on a reused connection that fails before any response byte (end
+  of input, a read or write error) is retried once on a new connection, within
+  the same deadline, if its method is `GET`, `HEAD`, `OPTIONS`, `PUT` or
+  `DELETE`. This covers the race where the server closes an idle keep-alive
+  connection as the request is sent.
+- A body over 16 KiB is written by a task of its own while the response is
+  read, so an early 413 is read. A response read after the request failed to
+  go out is the answer; with no response the write error is.
+- `read_response` (`vm/tcp.c`) reads the next response head like `read_head`
+  and applies the framing rules: after `HEAD`, 204 or 304 no body follows (RFC
+  9110 §9.3.2), and a 204 or 304 that still announced one is not kept; a
+  close-delimited body is not kept either; a `Content-Length` over
+  `max_body_bytes` is `http: body exceeds max_body_bytes`. An interim (1xx)
+  head comes back as it is, and `std/http` reads at most 15 of them. The body is
+  read with `read_text`, `chunk` and `text` as on the server, so it goes into
+  text as it arrives and must be valid UTF-8.
+- A connection is kept only after a complete exchange with no
+  `Connection: close` on either side, a framed body, the whole request written
+  and no byte read past the end of a chunked body. Header names are lowercased
+  and values are Latin-1.
 - **Over TLS, a close-delimited body must end with `close_notify`.** tcp.c
-  records whether the TLS layer closed before the TCP FIN. A bare FIN gives
-  `http: truncated HTTP body`. OpenSSL cannot tell the two apart here, since
-  `SSL_OP_IGNORE_UNEXPECTED_EOF` makes a bare FIN look like `close_notify`.
-- One `timeout_ms` covers the call, from the wait for a slot to the last body
+  records whether the TLS layer closed before the TCP FIN, and `clean_eof?`
+  reads it after the end of input. A bare FIN gives `http: truncated HTTP body`.
+  OpenSSL cannot tell the two apart here, since `SSL_OP_IGNORE_UNEXPECTED_EOF`
+  makes a bare FIN look like `close_notify`.
+- One deadline covers the call, from the wait for a connection to the last body
   byte. On timeout the connection is closed and the call returns
-  `network: operation timed out`. `close_client` closes idle connections and
-  fails every call in flight with `http: client is closed`.
-- At the end of the run, the client's goodbye hook sends one non-blocking
-  `close_notify` on each HTTPS connection, idle or in use (§10.2.2).
-- Errors are `http: ` plus the text in `vm/http_body.c` (or `vm/http_client.c`),
-  or the network text of tcp.c.
+  `network: operation timed out`.
+- At the end of the run each worker's HTTPS socket sends one non-blocking
+  `close_notify`, as every tcp.c socket does (§10.2.2).
+- Errors are `http: ` plus the text in `vm/http_parse.h`, the texts of
+  `std/http`, or the network text of tcp.c.
+
+The C client this replaced differs in ways no test sees:
+
+- An idle connection is not watched for a peer close. The retry covers the
+  race.
+- The 1 ms guard before a freed connection went to the next waiter is gone.
+- Bytes still unread in tcp.c's input after a response are not seen. Bytes
+  `std/http` has read past a chunked body are, and they stop the connection
+  from being kept.
+- A cancelled caller only stops waiting: its job runs to its end or its
+  deadline.
+- `TLS.connect` loads the CA file for each connection, so each has its own
+  `SSL_CTX`, where the C client loaded one per client.
+- A body that is not UTF-8 also closes the connection.
+- A job sent just before `close_client`, which the owner has not taken yet,
+  may still run.
+- A response costs three more task turns (the owner twice, the worker's inbox),
+  so small sequential requests are slower and large bodies faster; the numbers
+  are in the PR that made the change.
 
 #### 10.7.2 As built: the server (20c)
 
@@ -394,7 +445,7 @@ and a body that is not UTF-8. A connection that fails is never pooled.
   `Expect: 100-continue`, pipelining and many concurrent clients up to
   `max_connections`. Python and Node are required in CI.
 - **Guards**: a user file, a `pkg/` module and a relative import that call
-  `HttpWire.exchange` each get `CHECK-UNKNOWN-NAME` with the `std/http` help
+  `HttpWire.service` each get `CHECK-UNKNOWN-NAME` with the `std/http` help
   (the `check` spec tests of the modules rules).
 - **Performance** is not a CI gate: `benchmarks/http_bench.py` against
   `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md` (roadmap

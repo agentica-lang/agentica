@@ -1438,7 +1438,7 @@ static bool stalled(agc_vm *vm) {
   uint64_t epoch;
   if (!agc_runq_quiet(rt->runq, &epoch)) return false;
   if (agc_inbox_run(loop->inbox) || loop->ready) return false;
-  if (atomic_load_explicit(&rt->timers_armed, memory_order_relaxed)) return false;
+  if (agc_timers_strong(vm)) return false;
   agc_inbox_keep(loop->inbox, false);
   bool alive = uv_loop_alive(&loop->uv);
   agc_inbox_keep(loop->inbox, true);

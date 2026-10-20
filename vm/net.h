@@ -1,10 +1,10 @@
 /*
- * The connection object (agc_conn) that tcp.c and the HTTP client and server
- * share: opening with DNS, connect and TLS, watch callbacks, sends, reads and
- * release. Service header: it includes services.h and tls.h. A connection
- * belongs to the I/O thread: call these there (inline at N = 1), except
- * agc_conn_socket and agc_conn_error on a scheduler (see each) and
- * agc_conn_closed anywhere (a hint). Design: docs/vm/10-io-http.md §10.7.1.
+ * The connection object (agc_conn) that tcp.c and the HTTP server's group
+ * share: the listener's watch callback, accept, the clean end of input,
+ * half-close and release. Service header: it includes services.h and tls.h.
+ * A connection belongs to the I/O thread: call these there (inline at N = 1),
+ * except agc_conn_socket on a scheduler (see it) and agc_conn_closed anywhere
+ * (a hint). Design: docs/vm/10-io-http.md §10.7.2.
  */
 #ifndef AGC_NET_H
 #define AGC_NET_H
@@ -15,22 +15,8 @@
 typedef struct agc_conn agc_conn;
 typedef void (*agc_conn_watch)(void *watcher);
 
-agc_conn *agc_conn_open(const agc_trace *trace, struct uv_loop_s *loop, uint64_t id, const char *host, int64_t port,
-                        agc_tls_config *config, agc_conn_watch watch, void *watcher);
 void agc_conn_observe(agc_conn *c, agc_conn_watch watch, void *watcher);
-bool agc_conn_ready(const agc_conn *c);
-bool agc_conn_failed(const agc_conn *c);
-/* On a scheduler too, once the failure was reported: the I/O thread no longer writes the error fields. */
-agc_value agc_conn_error(agc_vm *vm, const agc_conn *c);
-int agc_conn_send(agc_conn *c, const uint8_t *data, size_t len);
-bool agc_conn_sent(const agc_conn *c);
-int agc_conn_write_status(const agc_conn *c);
 bool agc_conn_clean_eof(const agc_conn *c);
-void agc_conn_hold(agc_conn *c, bool hold);
-agc_inbuf *agc_conn_input(agc_conn *c);
-void agc_conn_read(agc_conn *c);
-void agc_conn_goodbye(agc_conn *c);
-void agc_conn_shut(agc_conn *c, const char *why);
 void agc_conn_half_close(agc_conn *c);
 void agc_conn_release(agc_conn *c);
 void agc_conn_retain(agc_conn *c);
