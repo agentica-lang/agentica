@@ -28,7 +28,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   output, files, FIFOs, TCP and TLS; HTTP, `Process`, `Duplex` and `Test.run`
   fail with `RUNTIME-INTERNAL` there for now. Without the switch a count above
   1 still exits 2. `make test-multicore` and `make vm-tsan-run` run the
-  programs and the TCP and TLS tests on four schedulers.
+  programs and the TCP and TLS tests on four schedulers. A task that a
+  scheduler wakes runs next on that scheduler (a runnext slot), and an idle
+  scheduler spins for up to 10 µs before it sleeps, so tasks that wake each
+  other do not pay a thread wake and a move to another core for each wake.
 
 - Native Windows regressions for ordinary-file line decoding, lock-owner
   cancellation, unsafe path aliases, depth/read-only removal failures,

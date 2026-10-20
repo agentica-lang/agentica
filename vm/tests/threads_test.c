@@ -1,7 +1,8 @@
 /*
  * Runs with several scheduler threads (§16.9; agc_vm_run with rt->schedulers > 1): a storm of tasks on a channel, a
- * stall that the I/O thread finds, main failing beside spinners (the run ends once), and TCP calls issued and resumed
- * on several schedulers while the I/O thread owns every socket. `make vm-tsan` runs it under ThreadSanitizer.
+ * stall that the I/O thread finds, main failing beside spinners (the run ends once), TCP calls issued and resumed on
+ * several schedulers while the I/O thread owns every socket, and a ping-pong that runnext keeps on one scheduler.
+ * `make vm-tsan` runs it under ThreadSanitizer.
  */
 #include "../core.h"
 #include "test_program.h"
@@ -18,6 +19,7 @@
 #define WORKERS 400
 #define SCRATCH 20
 #define NET_TASKS 8
+#define RALLY 1000
 
 enum {
   B_SPAWN,
@@ -40,9 +42,10 @@ enum {
   B_DIE,
   B_WHERE,
   B_NET_WHERE,
+  B_HOP,
   B_COUNT
 };
-enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_NET, F_COUNT };
+enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_NET, F_PING, F_COUNT };
 
 typedef struct {
   agc_function fns[F_COUNT];
@@ -124,12 +127,25 @@ static agc_value test_net_where(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_bool(bits(atomic_fetch_or(&net_seen, bit) | bit) >= 2);
 }
 
+/* The scheduler of the last Test.hop (UINT32_MAX before the first) and the hops that ran on another one than the hop
+   before. */
+static _Atomic uint32_t last_hop;
+static _Atomic uint32_t moves;
+
+static agc_value test_hop(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  if (atomic_exchange(&last_hop, vm->index) != vm->index) atomic_fetch_add(&moves, 1);
+  return agc_void();
+}
+
 static const agc_builtin test_builtins[] = {
   {"Test.add", 1, test_add, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.forever", 1, test_forever, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.die", 1, test_die, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.where", 1, test_where, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Test.net_where", 1, test_net_where, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Test.hop", 1, test_hop, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 /* The index of the next instruction of F, the target of a jump. */
@@ -184,6 +200,7 @@ static void new_prog(prog *p) {
   agc_test_program(&p->program, &p->source, p->span_table, 8, p->constants, p->builtins, B_COUNT, p->fns, F_COUNT,
                    &p->code[0][0], &p->spans[0][0], MAX_CODE, F_MAIN);
   p->fns[F_WORK].captures = 1;
+  p->fns[F_PING].captures = 2;
   p->program.max_arity = 2;
 
   /* work(k), with the channel captured in r1: add k, yield twice, send k. */
@@ -248,6 +265,29 @@ static void new_prog(prog *p) {
   emit(p, F_NET, AGC_OP_JUMP, 0, top);
   p->code[F_NET][done].b = (uint16_t)here(p, F_NET);
   emit(p, F_NET, AGC_OP_RETURN, 0, 0);
+
+  /* ping(_), with the channel it receives on in r1 and the one it sends on in r2: RALLY times, receive a value, call
+     Test.hop, send a value. */
+  emit(p, F_PING, AGC_OP_CONST, 3, constant(p, 0));
+  emit(p, F_PING, AGC_OP_CONST, 4, constant(p, RALLY));
+  emit(p, F_PING, AGC_OP_CONST, 6, constant(p, 1));
+  uint32_t rally = here(p, F_PING);
+  emit3(p, F_PING, AGC_OP_LT_I, 5, 3, 4);
+  uint32_t rally_exit = here(p, F_PING);
+  emit(p, F_PING, AGC_OP_JUMP_IF_FALSE, 5, 0);
+  emit(p, F_PING, AGC_OP_MOVE, SCRATCH, 1);
+  emit(p, F_PING, AGC_OP_CONST, SCRATCH + 1, constant(p, 30000));
+  emit(p, F_PING, AGC_OP_CALL_BUILTIN, SCRATCH, B_CH_RECV);
+  emit(p, F_PING, AGC_OP_CALL_BUILTIN, SCRATCH, B_UNWRAP);
+  call_int(p, F_PING, B_HOP, 0);
+  emit(p, F_PING, AGC_OP_MOVE, SCRATCH, 2);
+  emit(p, F_PING, AGC_OP_MOVE, SCRATCH + 1, 6);
+  emit(p, F_PING, AGC_OP_CONST, SCRATCH + 2, constant(p, 30000));
+  emit(p, F_PING, AGC_OP_CALL_BUILTIN, SCRATCH, B_CH_SEND);
+  emit3(p, F_PING, AGC_OP_ADD_I, 3, 3, 6);
+  emit(p, F_PING, AGC_OP_JUMP, 0, rally);
+  p->code[F_PING][rally_exit].b = (uint16_t)here(p, F_PING);
+  emit(p, F_PING, AGC_OP_RETURN, 0, 0);
 }
 
 /* main: the storm. Spawns WORKERS tasks on one channel and receives WORKERS values. */
@@ -292,6 +332,34 @@ static void spawning_main(prog *p, uint32_t fn, uint32_t last) {
   }
   call_int(p, F_MAIN, B_SLEEP, 5);
   call_int(p, F_MAIN, last, 0);
+  emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
+}
+
+/* main: two channels of one slot, a ping task (receives on the first, sends on the second) and a pong task (the other
+   way), one value sent on the first channel to start the rally; then it awaits both, or with AWAIT false returns at
+   once and leaves the rally to the end of the run. */
+static void rally_main(prog *p, bool await) {
+  for (uint32_t k = 1; k <= 2; k++) {
+    emit(p, F_MAIN, AGC_OP_CONST, 10, constant(p, 1));
+    emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_CH_NEW);
+    emit(p, F_MAIN, AGC_OP_MOVE, k, 10);
+  }
+  for (uint32_t k = 1; k <= 2; k++) {
+    emit(p, F_MAIN, AGC_OP_MOVE, 10, k);
+    emit(p, F_MAIN, AGC_OP_MOVE, 11, 3 - k);
+    emit(p, F_MAIN, AGC_OP_CLOSURE, 10, F_PING);
+    emit(p, F_MAIN, AGC_OP_CONST, 11, constant(p, 0));
+    emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_SPAWN);
+    emit(p, F_MAIN, AGC_OP_MOVE, 2 + k, 10);
+  }
+  emit(p, F_MAIN, AGC_OP_MOVE, 10, 1);
+  emit(p, F_MAIN, AGC_OP_CONST, 11, constant(p, 1));
+  emit(p, F_MAIN, AGC_OP_CONST, 12, constant(p, 30000));
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_CH_SEND);
+  for (uint32_t k = 1; await && k <= 2; k++) {
+    emit(p, F_MAIN, AGC_OP_MOVE, 10, 2 + k);
+    emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_AWAIT);
+  }
   emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
 }
 
@@ -361,6 +429,30 @@ static void test_tcp_over_schedulers(void) {
   }
 }
 
+/* A rally on four schedulers stays on one of them (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"). Once
+   a send finds the other task PARKED, that task waits in the sender's runnext slot and runs right after the sender
+   parks on its own receive, on the same scheduler, and so does every send after it: the other schedulers never get a
+   task. Only the first sends may move, while the two tasks still start on different schedulers (a task woken on its
+   way to PARKED goes to the global queue). Without the slot every wake goes through the global queue and a woken
+   scheduler, and the rally moves at most hops. With AWAIT false main returns while the rally runs: the run ends with
+   the tasks in a slot or parked, and every scheduler is joined. */
+static void test_rally_stays_on_one_scheduler(void) {
+  prog *p = agc_alloc(sizeof *p);
+  new_prog(p);
+  rally_main(p, true);
+  for (int round = 0; round < 5; round++) {
+    atomic_store(&last_hop, UINT32_MAX);
+    atomic_store(&moves, 0);
+    agc_outcome out = run(p, 4);
+    assert(out.kind == AGC_DONE);
+    assert(atomic_load(&moves) <= 8);
+  }
+  prog *q = agc_alloc(sizeof *q);
+  new_prog(q);
+  rally_main(q, false);
+  for (int round = 0; round < 20; round++) assert(run(q, 4).kind == AGC_DONE);
+}
+
 /* Every worker runs once, whichever scheduler takes it, and main sees every send. */
 static void test_storm(int64_t schedulers) {
   prog *p = agc_alloc(sizeof *p);
@@ -412,6 +504,7 @@ int main(void) {
   test_main_fails_beside_spinners(4);
   test_tasks_spread_over_schedulers();
   test_tcp_over_schedulers();
+  test_rally_stays_on_one_scheduler();
   fclose(quiet);
 #endif
   puts("threads tests passed");

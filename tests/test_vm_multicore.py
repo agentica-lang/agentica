@@ -38,8 +38,9 @@ RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark
 # The output of these fixtures depends on how tasks interleave (prints from several tasks, a race against a deadline,
 # which of two tasks finds an await cycle, whether a task has run after a yield or a preemption, the count of tasks
 # still pending),
-# which a run on several threads does not fix.
-ORDER = {"channel-fan-in", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning", "logger-tasks",
+# which a run on several threads does not fix. channel-owner-ends counts on a yield (Task.sleep(0)) letting a task it
+# spawned send first; a spinning scheduler takes that task at once and runs it beside the yielder.
+ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning", "logger-tasks",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
          "task-file-close", "tcp-tasks", "test-run-task"}
 # Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
@@ -329,6 +330,91 @@ def test_system_exit_in_a_task_ends_a_run_whose_other_schedulers_spin(tmp_path, 
     for _ in range(repeats):
         result = vm(bytecode)
         assert (result.code, result.stdout, result.stderr) == (7, "bye\n", "")
+
+
+RALLIES = """\
+struct Pair
+  ping: Channel[Int]
+  pong: Channel[Int]
+end
+
+def echo(p: Pair) -> Int
+  n = 0
+  while n >= 0
+    case p.ping.recv(2000)
+      ok(v) ->
+        _ = p.pong.send(v + 1, 2000)
+        n += 1
+      error(_) -> return -1
+    end
+  end
+  return n
+end
+
+def play(p: Pair) -> Int
+  i = 0
+  while i >= 0
+    _ = p.ping.send(i, 2000)
+    case p.pong.recv(2000)
+      ok(v) -> i = v
+      error(_) -> return -1
+    end
+  end
+  return i
+end
+
+def pair() -> Pair
+  p = Pair(ping: Channel.new(1), pong: Channel.new(1))
+  _ = Task.spawn(&echo, p)
+  return p
+end
+
+def rally(k: Int) -> Result[Int]
+  return ok(play(pair()))
+end
+
+def doomed(k: Int) -> Result[Int]
+  (1..3).to_a.each do |j|
+    _ = Task.spawn(&play, pair())
+  end
+  Task.sleep(20)
+  return ok(10 / (k - k))
+end
+
+def main() -> Void
+  results = Task.map((1..8).to_a, 8, 50, &rally)
+  timed = 0
+  for r in results
+    if !r.ok?
+      timed += 1
+    end
+  end
+  puts(timed)
+  case Task.await(Task.spawn(&doomed, 1))
+    ok(_) -> puts("ok")
+    error(_) -> puts("crashed")
+  end
+  while Task.pending_count() > 0
+    Task.sleep(1)
+  end
+  puts(Task.pending_count())
+end
+"""
+
+
+@RACE
+def test_tasks_that_wake_each_other_end_when_cancelled_from_any_scheduler(tmp_path, repeats):
+    # Pairs of tasks wake each other for ever, so most of the time one of each pair waits in the runnext slot of the
+    # scheduler that woke it (§16.9, "Wakes between schedulers"). Task.map cancels eight such pairs at their deadline
+    # and a crashing owner cancels three more, from whichever scheduler runs the canceller: every task ends (the pending
+    # count reaches 0) and the run exits normally. The waits have a 2 s deadline because a task cancelled on another
+    # scheduler finishes its turn first: an item that starts only after its deadline (a loaded machine) spawns its echo
+    # after the cancel, and that echo ends at its deadline, not by the cancel.
+    bytecode = program(tmp_path, "rallies", RALLIES)
+    for _ in range(repeats):
+        result = vm(bytecode)
+        assert (result.code, result.stdout) == (0, "8\ncrashed\n0\n")
+        assert result.stderr.count("RUNTIME-DIVISION-BY-ZERO") == 1
 
 
 CRASH = """\
