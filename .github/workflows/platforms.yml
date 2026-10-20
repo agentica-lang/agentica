@@ -37,6 +37,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, macos-15-intel]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - run: sh vm/tools/gen-embedded.sh bootstrap/stage0.agcb stdlib stdlib/MODULES > embedded.s
@@ -45,6 +46,7 @@ jobs:
   embedded-object-windows:
     if: (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: windows-2025
+    timeout-minutes: 10
     defaults:
       run:
         shell: msys2 {0}
@@ -62,6 +64,7 @@ jobs:
   vm-macos:
     if: inputs.os != 'windows' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: macos-15-intel
+    timeout-minutes: 30
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
@@ -143,6 +146,7 @@ jobs:
   vm-macos-latest:
     if: inputs.os != 'windows' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: macos-latest
+    timeout-minutes: 30
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
@@ -224,6 +228,7 @@ jobs:
   vm-windows:
     if: inputs.os != 'macos' && (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
     runs-on: windows-2025
+    timeout-minutes: 30
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}

@@ -11,11 +11,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
+#include <signal.h>
 #include <uv.h>
 
 #include "chan_spawn.h"
 
 #define TOTAL ((size_t)1048576 + 17)
+/* The whole exchange takes well under a second; a run that is still going after this long is stuck (issue #410: one
+   macOS arm64 CI run never finished), so it fails with the state it reached instead of hanging the job. */
+#define DEADLINE_MS 60000
 
 #ifdef _WIN32
 #define fd_read(fd, data, size) _read(fd, data, (unsigned)(size))
@@ -29,10 +33,12 @@ typedef struct {
   uv_pipe_t to, from;
   uv_write_t write;
   uv_shutdown_t shutdown;
+  uv_process_t process;
+  uv_timer_t deadline;
   char data[TOTAL];
   char reply[64];
   size_t reply_size;
-  bool eof, shut;
+  bool written, eof, shut;
 } link_state;
 
 static uv_loop_t loop;
@@ -68,6 +74,19 @@ static void exited(uv_process_t *p, int64_t status, int signal) {
   uv_close((uv_handle_t *)p, NULL);
 }
 
+/* The watchdog: says which step never came (the write, the shutdown, the child's answer and end of file, its exit),
+   kills the child and fails. The timer is unreferenced, so it never keeps a finished run alive. */
+static void expired(uv_timer_t *timer) {
+  link_state *s = timer->data;
+  fprintf(stderr,
+          "pipe pair test: no end after %d ms: written=%d (bytes left %zu) shut=%d reply=%zu bytes eof=%d "
+          "exit_status=%d\n",
+          DEADLINE_MS, s->written, s->shut ? (size_t)0 : uv_stream_get_write_queue_size((uv_stream_t *)&s->to),
+          s->shut, s->reply_size, s->eof, exit_status);
+  if (exit_status == -1) uv_process_kill(&s->process, SIGKILL);
+  exit(1);
+}
+
 static void alloc(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
   link_state *s = h->data;
   (void)suggested;
@@ -96,6 +115,7 @@ static void shutdown_done(uv_shutdown_t *req, int status) {
 static void written(uv_write_t *req, int status) {
   link_state *s = req->data;
   assert(status == 0);
+  s->written = true;
   s->shutdown.data = s;
   assert(uv_shutdown(&s->shutdown, (uv_stream_t *)&s->to, shutdown_done) == 0);
 }
@@ -103,11 +123,14 @@ static void written(uv_write_t *req, int status) {
 static void probe(const char *self) {
   agc_chan_ends ends;
   assert(agc_chan_pair(&ends) == 0);
-  uv_process_t process;
-  assert(chan_spawn(&loop, &process, self, "--child", NULL, &ends, ends.child_count, false, 0, exited) == 0);
-
   link_state *s = calloc(1, sizeof *s);
   assert(s);
+  assert(chan_spawn(&loop, &s->process, self, "--child", NULL, &ends, ends.child_count, false, 0, exited) == 0);
+  assert(uv_timer_init(&loop, &s->deadline) == 0);
+  s->deadline.data = s;
+  assert(uv_timer_start(&s->deadline, expired, DEADLINE_MS, 0) == 0);
+  uv_unref((uv_handle_t *)&s->deadline);
+
   assert(uv_pipe_init(&loop, &s->to, 0) == 0);
   assert(uv_pipe_init(&loop, &s->from, 0) == 0);
   assert(uv_pipe_open(&s->to, ends.write) == 0);
@@ -124,6 +147,8 @@ static void probe(const char *self) {
   uv_buf_t buf = uv_buf_init(s->data, (unsigned)TOTAL);
   assert(uv_write(&s->write, (uv_stream_t *)&s->to, &buf, 1, written) == 0);
   assert(uv_read_start((uv_stream_t *)&s->from, alloc, got) == 0);
+  assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
+  uv_close((uv_handle_t *)&s->deadline, NULL);
   assert(uv_run(&loop, UV_RUN_DEFAULT) == 0);
 
   /* Shutting down the write end ended the child's reads, after every byte; its answer and its exit came back. */
