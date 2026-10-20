@@ -8,45 +8,45 @@ description: Install Agentica, run your first program, check it and read its err
 
 {{% release %}}
 
-Agentica programs run on a bytecode VM written in C. The `agentica` command is one program: a front end written in Agentica itself checks a program and compiles it to bytecode in memory, and the VM runs it in the same process.
+Download the archive of your system, check it against `SHA256SUMS`, unpack it anywhere (spaces and non-ASCII letters are fine) and put its `bin` folder on your `PATH`. It holds one program and needs no other library.
 
-To build from source you need a C11 compiler (gcc or clang) and `make`. On Linux the VM also needs OpenSSL 3, the Boehm GC (libgc 8.2 or newer) and `pkg-config` (Debian and Ubuntu: `libssl-dev libgc-dev pkg-config`); `make AGENTICA_GC=vendored` builds the Boehm GC from its submodule instead, which needs nothing else; `make AGENTICA_OPENSSL=vendored` builds OpenSSL from its submodule instead, which needs Perl 5 and takes a few minutes; pass either setting to every make command, or export it (`export AGENTICA_GC=vendored`). The build runs on Linux, macOS and Windows (MSYS2 UCRT64), and it needs no other language: it starts from the compiled front end checked in as `bootstrap/stage0.agcb`. Get the source with the VM's third-party libraries, and build the `agentica` command:
+| System | Archive | Minimum |
+|---|---|---|
+| Linux x86-64 | `agentica-VERSION-linux-x86_64.tar.gz` | glibc 2.28 |
+| macOS Intel | `agentica-VERSION-macos-x86_64.tar.gz` | macOS 12 |
+| macOS Apple silicon | `agentica-VERSION-macos-arm64.tar.gz` | macOS 12, native (no Rosetta) |
+| Windows x86-64 | `agentica-VERSION-windows-x86_64.zip` | Windows 10 (system DLLs and the UCRT; no MSYS2 or Visual C++ redistributable) |
+
+```sh
+sha256sum -c --ignore-missing SHA256SUMS   # macOS: shasum -a 256 -c ... ; Windows: Get-FileHash
+tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
+```
+
+- The archives are not developer-signed or notarized (macOS programs carry only the ad hoc signature Apple silicon requires). `SHA256SUMS` is the only proof of origin.
+- macOS blocks a browser download: run `xattr -d com.apple.quarantine bin/agentica` (a `curl` download has no mark). Windows SmartScreen may warn once.
+- `TCP` and `TLS` work on Linux, macOS and Windows. `std/http` is not on Windows yet.
+
+### Build from source
+
+Needs a C11 compiler and `make`; on Linux also `libssl-dev`, `libgc-dev` and `pkg-config` (OpenSSL 3, libgc 8.2 or newer). The build starts from the checked-in `bootstrap/stage0.agcb` and needs no other tool. It also runs on macOS and Windows (MSYS2 UCRT64).
 
 ```sh
 git clone https://github.com/sonic182/agentica.git
 cd agentica
 git submodule update --init
-make
+make    # writes dist/agentica
 ```
 
-This writes `dist/agentica`, the only program: the VM with the front end and the standard modules inside. A default source build links the system OpenSSL, so `dist/` runs only on machines that have it; the release archive is portable, since its binary has OpenSSL built in. Put that directory on your `PATH`, or call the command by its full path.
-
-### Install a release archive
-
-A release archive needs none of the build tools. It holds the one program (`bin/agentica`, or `bin\agentica.exe` on Windows), `LICENSE`, `NOTICE` and the notices of the libraries built into the program in `licenses/`. Its OpenSSL and Boehm GC are built in, so it needs no other library. Pick the archive of your system from the release page, check it against `SHA256SUMS`, unpack it anywhere (the folder name may have spaces or non-ASCII letters) and put its `bin` folder on your `PATH`, or call the program by its full path.
-
-- **Linux x86-64** (`agentica-VERSION-linux-x86_64.tar.gz`): glibc 2.28 or newer (Debian 10, Ubuntu 18.10, RHEL 8 and newer) on an x86-64 CPU. `sha256sum -c --ignore-missing SHA256SUMS`, then `tar -xzf agentica-VERSION-linux-x86_64.tar.gz`.
-- **macOS Intel** (`agentica-VERSION-macos-x86_64.tar.gz`): macOS 12 or newer on an Intel Mac. `shasum -a 256 -c SHA256SUMS --ignore-missing`, then `tar -xzf agentica-VERSION-macos-x86_64.tar.gz`.
-- **macOS Apple silicon** (`agentica-VERSION-macos-arm64.tar.gz`): macOS 12 or newer on an Apple silicon Mac, unpacked the same way. The program is not an Intel program: it needs no Rosetta.
-- **Windows x86-64** (`agentica-VERSION-windows-x86_64.zip`): Windows 10 or newer, 64-bit; the program depends only on the system DLLs and the Universal C Runtime that Windows 10 includes, so it needs no MSYS2 or Visual C++ redistributable. In PowerShell: `Get-FileHash agentica-VERSION-windows-x86_64.zip` (compare with `SHA256SUMS`), then `Expand-Archive agentica-VERSION-windows-x86_64.zip .`.
-
-The minimum versions are what the programs are built for. CI runs each archive on the current GitHub-hosted runner of its system (Ubuntu, macOS 15 on Intel and on Apple silicon, Windows Server 2025), not on the oldest supported release.
-
-The archives are not signed with a developer identity and are not notarized. The macOS programs carry only the ad hoc signature that Apple silicon requires of every program. A file downloaded with a browser gets a quarantine mark, and macOS then refuses to open the program; remove the mark with `xattr -d com.apple.quarantine bin/agentica` (a download with `curl` has none). Windows SmartScreen may warn about an unsigned program the first time. The checksum file is the only proof of origin for now.
-
-`TCP` and `TLS` work on Linux, macOS and Windows. `std/http` works on Linux and macOS; it is not on Windows yet.
+- A default build links the system OpenSSL, so `dist/agentica` runs only where it is installed. The release archive is portable.
+- `AGENTICA_GC=vendored` and `AGENTICA_OPENSSL=vendored` build the bundled copies, each on its own (only OpenSSL needs Perl 5 and a few minutes). Pass them to every `make` command, or export them.
 
 ## Hello, world
 
-Save this as `hello.agc`:
-
 ```agentica
-def main() -> Void
+def main() -> Void        # every program starts at main
   puts("Hello, world!")
 end
 ```
-
-Run it:
 
 ```sh
 agentica hello.agc
@@ -55,11 +55,6 @@ agentica hello.agc
 ```output
 Hello, world!
 ```
-
-Every program has one `main() -> Void` function. Running the file calls it.
-`puts` prints a value and a new line.
-
-## Program arguments
 
 Words after the file name reach the program through `System.args()`:
 
@@ -72,44 +67,20 @@ end
 ```
 
 ```sh
-agentica greet.agc Ana Bob
+agentica greet.agc Ana Bob    # prints one greeting per name
 ```
 
-```text
-Hello, Ana!
-Hello, Bob!
-```
+## Check and errors
 
-## Check without running
-
-`agentica check` reads the program and checks its types, but does not run it:
-
-```sh
-agentica check hello.agc
-```
-
-```text
-check ok
-```
-
-Agentica also checks every program before it runs it, so a type error never
-happens halfway through a run.
-
-## Read an error
-
-Here is a program with a mistake. `count` starts as an `Int`, so it cannot
-become a `String` later:
+`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. The checker stops at the first error:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
-  count = 1
-  count = "two"
+  count = 1          # count is an Int
+  count = "two"      # error: a String does not fit
   puts(count)
 end
 ```
-
-The checker stops at the first error. It prints where it is, a stable code in
-brackets, and often a `help` line with the fix:
 
 ```text
 bad.agc:3:11 error[CHECK-TYPE-MISMATCH]
@@ -120,45 +91,14 @@ expected Int, found String
   = help: convert it with String.to_int!(...)
 ```
 
-The exit code is `1` when the program has an error, and `2` when the command is
-wrong or the file cannot be read. Error codes start with the stage that found
-them: `LEX-`, `PARSE-`, `CHECK-` or `RUNTIME-`.
-
-## Errors for tools and agents
-
-`--ai` prints the same error as short labeled lines, and `--json` prints it as
-one JSON object. Both are easy for other programs to read:
-
-```sh
-agentica --json bad.agc
-```
-
-```text
-{"actual":"String","code":"CHECK-TYPE-MISMATCH","expected":"Int","file":"bad.agc","function":"main() -> Void","help":"convert it with String.to_int!(...)","message":"expected Int, found String","range":{"end":{"column":16,"line":3},"start":{"column":11,"line":3}}}
-```
-
-A runtime error also prints the call stack of the task that failed, innermost call first, in all three formats. It shows when the task has more than one frame or is not `main`; a failure directly in `main` has no stack.
-
-```text
-nested.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]
-index 5 is outside a list of length 3
-
-2 |   return xs[i] + 1
-  |             ^
-  = stack, innermost first:
-    pick at nested.agc:2:13
-    load at nested.agc:6:10
-    main at nested.agc:11:8
-```
-
-Each line is a function and the place where it was running: the error for the first line, and the call it waits on for the others. A block shows as `block`. A frame that a tail call replaced is gone, and the frame left ends with `(after a tail call)`. A recursion that repeats the same call is one line with a count, such as `walk at tree.agc:9:12 (9998 times)`. After that, at most 20 lines show: the 15 innermost, a line `... 312 frames not shown ...`, and the 5 outermost. The stack of a task ends with `task spawned at file:line:column`, the place of its `Task.spawn` call. A function name or file path longer than 256 bytes is cut there, at a character boundary, and ends with `...`. With `--ai` the same lines come under `stack:`, and with `--json` they are the `stack` array of the object, plus `stack_omitted` and, for a task, `spawned_at`. A runtime error names each file as you can open it from the working directory (`examples/hello.agc` and `examples/lib/util.agc` for `agentica examples/hello.agc`), and a standard module as `std/queue.agc`. The bytecode stores names relative to the folder of the first file, so it is the same wherever the program was built; `agentica-vm` alone prints those names.
+- Exit code `1`: the program has an error. Exit code `2`: a bad command or an unreadable file.
+- Codes start with `LEX-`, `PARSE-`, `CHECK-` or `RUNTIME-`. A runtime error also prints the call stack. See [Diagnostics](/reference/).
+- `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`.
 
 ## Look up a builtin
 
-`agentica help NAME` prints the signature and a short description of a builtin function. Add `--json` for a JSON object. `agentica help` with no name lists the commands and the builtin namespaces, and `agentica --help` adds the options and a few core rules.
-
 ```sh
-agentica help String.split
+agentica help String.split    # `agentica help` alone lists commands and namespaces
 ```
 
 ```text
@@ -166,31 +106,31 @@ String.split(s: String, separator: String) -> List[String]
 Split text; an empty separator gives characters.
 ```
 
-## Other options
+## Options
 
 | Option | Does |
 |---|---|
-| `--max-steps N` | stops the program after `N` steps (`RUNTIME-STEP-LIMIT`) |
+| `--max-steps N` | stops after `N` steps (`RUNTIME-STEP-LIMIT`) |
 | `--seed N` | makes `Random` repeat the same numbers |
-| `--flush-timeout MS` | waits at most `MS` milliseconds for file data and buffered output to be written at the end of the run; when time runs out, the run still ends and prints a warning. The default is 30000 and the most is 86400000 (24 hours). The environment variable `AGENTICA_FLUSH_TIMEOUT_MS` sets the same value, and the flag wins over it |
-| `--schedulers N` | sets the number of scheduler threads, from 1 to 1024. The environment variable `AGENTICA_SCHEDULERS` sets the same value, and the flag wins over a valid value of it (a bad value of either exits with code 2). This build runs one scheduler, so the default is 1 and a larger number is refused with exit code 2 |
-| `--allow-run` | lets the program start other programs with `Process.spawn` |
-| `--dump` | prints the checked program tree instead of running it |
-| `--dump-ir` | prints the lowered VM IR instead of running the program |
-| `compile FILE -o OUT` | writes the program as VM bytecode; `agentica run -- OUT` runs it |
-| `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode that `compile` wrote, with `--max-steps`, `--seed`, `--flush-timeout`, `--schedulers`, `--allow-run`, `--source-root DIR`, `--ai` or `--json` before the `--`; `run` must be the first word, and `run --version` also lists the libraries the VM links |
+| `--flush-timeout MS` | waits at most `MS` ms for file data and output at the end, then warns. Default 30000, most 86400000. Env `AGENTICA_FLUSH_TIMEOUT_MS` |
+| `--schedulers N` | scheduler threads, 1 to 1024. Env `AGENTICA_SCHEDULERS`. This build runs one; a larger number or a bad value exits with code 2 |
+| `--allow-run` | lets the program start programs with `Process.spawn` |
+| `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
+| `compile FILE -o OUT` | writes VM bytecode |
+| `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
 | `--version` | prints the version |
 
-`agentica test` runs unit test files (`*_test.agc`, see [Test](/library/testing/test/)) and `.feature` specifications (see [BDD](/library/testing/bdd/)) in one report. With no paths it looks in `test/` and `specs/`; `--only TEXT` runs the tests and scenarios whose name contains `TEXT`.
+A flag wins over its environment variable.
+
+## Test
 
 ```sh
-agentica test
-agentica test test/ports_test.agc --only port
+agentica test                                    # test/ and specs/
+agentica test test/ports_test.agc --only port    # only tests whose name has "port"
 ```
 
-Programs run on a bytecode VM.
+Runs `*_test.agc` files ([Test](/library/testing/test/)) and `.feature` specs ([BDD](/library/testing/bdd/)).
 
 ## Next
 
-Take the [language tour](/tour/), starting with
-[values and types](/tour/values-and-types/).
+Take the [language tour](/tour/).

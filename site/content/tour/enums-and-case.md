@@ -6,8 +6,7 @@ description: Enums with and without payloads, generic enums and case pattern mat
 
 ## Declare an enum
 
-An enum is a type with a fixed set of variants. Write a variant with the enum
-name in front.
+An enum is a type with a fixed set of variants. Write a variant with the enum name in front.
 
 ```agentica
 enum Color
@@ -97,7 +96,7 @@ end
 6.0
 ```
 
-Use `_` to ignore a value or every other variant:
+`_` drops a value (see [Variables](/tour/variables/)) or matches every other variant:
 
 ```agentica
 enum Event
@@ -125,8 +124,7 @@ other: Event.Quit
 
 ## Generic enums
 
-An enum can take a type parameter. `Option` is not built in, but it is easy to
-write:
+An enum can take a type parameter. `Option` is not built in, but it is easy to write:
 
 ```agentica
 enum Option[T]
@@ -157,7 +155,7 @@ found 4
 
 ## Enums are recursive
 
-A variant may hold its own enum type, which makes trees and lists:
+A variant can hold its own enum type, as in a tree:
 
 ```agentica
 enum Expr
@@ -183,9 +181,7 @@ end
 
 ## Guards
 
-An arm can carry a guard: `pattern if condition ->`. The condition is a Bool and
-can use the names of the pattern. If it is false, `case` goes on with the next
-arm.
+An arm can carry a guard: `pattern if condition ->`. The condition is a Bool and can use the names of the pattern. If it is false, `case` goes on with the next arm.
 
 ```agentica
 enum Shape
@@ -215,8 +211,7 @@ square
 rect
 ```
 
-A guarded arm may fail, so it never covers a variant. The unguarded arm after it
-does, and the same pattern may come again.
+A guarded arm may fail, so it never covers a variant. The unguarded arm after it does, and the same pattern may come again.
 
 ```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
 def main() -> Void
@@ -229,8 +224,7 @@ end
 
 ## Patterns inside patterns
 
-In a payload position, a pattern can be a literal (also a negative number), a
-name, `_`, or another variant, `ok(...)` or `error(...)`, at any depth.
+In a payload position, a pattern can be a literal (also a negative number), a name, `_`, or another variant, `ok(...)` or `error(...)`, at any depth.
 
 ```agentica
 enum Option[T]
@@ -262,7 +256,4 @@ none
 timed out
 ```
 
-The check for a complete `case` is simple. An arm covers its variant only when it
-has no guard and each position is a name or `_`. An arm with a literal or a
-nested variant may fail, like a guarded arm, so end with `ok(_)`, a variant with
-`_` positions, or `_`.
+An unguarded arm whose positions are only names or `_` covers its variant. Any other arm may fail, so end with `ok(_)`, a variant with `_` positions, or `_`.

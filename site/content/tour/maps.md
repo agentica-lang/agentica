@@ -6,9 +6,7 @@ description: Map literals, reading keys, adding and removing entries.
 
 ## Make a map
 
-A map links keys to values. Keys are `Int` or `String`. All keys have one type,
-and all values have one type: `Map[K, V]`. A map keeps the order in which keys
-were added.
+A map links keys to values. Keys are `Int` or `String`. All keys have one type, and all values have one type: `Map[K, V]`. A map keeps the order in which keys were added.
 
 ```agentica
 def main() -> Void
@@ -52,8 +50,7 @@ end
 3
 ```
 
-`get` with a default never fails. `get` without one gives a
-[Result](/tour/results-and-try/).
+`get` with a default never fails. `get` without one gives a [Result](/tour/results-and-try/).
 
 ```agentica
 def main() -> Void
@@ -74,8 +71,7 @@ true
 
 ## Add, change and remove
 
-`put` gives a new map with the entry added or replaced. `delete` gives a new
-map without the key. The old map does not change.
+`put` gives a new map with the entry added or replaced. `delete` gives a new map without the key. The old map does not change.
 
 ```agentica
 def main() -> Void
@@ -131,6 +127,4 @@ end
 {"a": 3, "b": 1, "c": 1}
 ```
 
-For records with fixed fields of different types, use a
-[struct](/tour/structs/) instead. See the [Map library page](/library/data-structures/map/)
-for every function.
+For fixed fields of different types, use a [struct](/tour/structs/). Every function is on the [Map library page](/library/data-structures/map/).

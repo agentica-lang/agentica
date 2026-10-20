@@ -27,8 +27,7 @@ mild
 
 ## Boolean operators
 
-`and`, `or` and `not` combine `Bool` values. `&&`, `||` and `!` are the same
-operators. `and` and `or` stop early when the left side decides the answer.
+`and`, `or` and `not` (or `&&`, `||`, `!`) combine `Bool` values. `and` and `or` stop early when the left side decides the answer.
 
 ```agentica
 def main() -> Void
@@ -50,7 +49,7 @@ true
 
 ## while
 
-`while` repeats its block while the condition is true.
+`while` repeats its block while the condition holds.
 
 ```agentica
 def main() -> Void
@@ -68,12 +67,15 @@ end
 
 ## for
 
-`for` walks through a list. The loop variable is new and read-only. Name it `_` when the body does not need it.
+`for` walks through a list. The loop variable is read-only. Use `_` to drop it (see [Variables](/tour/variables/)).
 
 ```agentica
 def main() -> Void
   for fruit in ["apple", "pear", "plum"]
     puts(fruit)
+  end
+  for _ in 1..2     # the body does not need the number
+    puts("tick")
   end
 end
 ```
@@ -82,10 +84,11 @@ end
 apple
 pear
 plum
+tick
+tick
 ```
 
-To count, walk through a range: `a..b` includes `b`, `a...b` leaves it out.
-`n.times` runs a block `n` times. See [Range](/library/data-structures/range/) for more.
+To count, walk through a range: `a..b` includes `b`, `a...b` leaves it out. `n.times` runs a block `n` times. See [Range](/library/data-structures/range/) for more.
 
 ```agentica
 def main() -> Void
@@ -108,8 +111,7 @@ round 1
 
 ## break and next
 
-`break` leaves the loop. `next` skips to the next round. Each one stands alone
-on its line.
+`break` leaves the loop. `next` skips to the next round.
 
 ```agentica
 def main() -> Void
@@ -132,9 +134,7 @@ end
 
 ## case on values
 
-`case` picks the first arm whose pattern matches. Patterns can be literals or
-`_`, which matches anything. A `case` on a number, string or `Bool` needs a
-final `_` arm.
+`case` runs the first arm that matches; `_` matches anything. On a number, string or `Bool`, end with a `_` arm.
 
 ```agentica
 def describe(n: Int) -> String
@@ -184,8 +184,7 @@ added
 
 ## Statements, not expressions
 
-`if` and `case` are statements. They do not give a value. Assign inside them,
-or return from a function:
+`if` and `case` give no value. Return from them or assign inside them:
 
 ```agentica
 def sign(n: Int) -> String

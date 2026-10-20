@@ -68,8 +68,7 @@ pattern) is `CHECK-TYPE-MISMATCH`, as with an alias.
 
 A module imported by name counts as imported for the privacy rule of
 `value.with(...)` (section 6): the file may update every exported struct of that
-module, not only the ones it names. Imported names are not re-exported, and
-unused names are not reported.
+module, not only the ones it names. Unused names are not reported.
 
 #### Constants
 
@@ -175,11 +174,9 @@ With the alias `Binary`:
   negative `max` (`read_frame_length` only), an `offset` below zero or above
   `data.size - n`, the first item by index that is not a byte, the `u64` top
   bit, a writer's value outside its type, a payload over `4294967295` items, a
-  frame length above `max`. Messages are lowercase with no final period: `u32 at
-  offset 10 is outside a list of length 12`, `value 300 at index 2 is not a
-  byte`, `u64 at offset 0 does not fit in Int`, `value 70000 does not fit in
-  u16`, `payload of 4294967296 bytes does not fit in a u32 length`, `frame
-  length 70000 is above the limit 65536`, `frame limit -1 is negative`.
+  frame length above `max`. Messages are lowercase with no final period; the
+  examples are in
+  [`binary.md`](../../site/content/library/text-and-data/binary.md).
 - Writers return new lists and no buffer is ever changed. Offset writers into an
   existing list and the compact `Bytes` type are not part of the module. Half
   floats (f16), varints (LEB128), hex and Base64 come later, each when a real

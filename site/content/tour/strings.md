@@ -93,9 +93,9 @@ Usage: tool [options]
 Exit code 0 on success.
 ```
 
-A heredoc is a string for everything else: the escapes and `#{...}` work as in a string literal, a `"` needs no escape, and every line, the last one too, ends with a newline. The rest of the line of `<<~NAME` is code as usual, so a heredoc can be an argument (`puts(<<~TEXT)`) or have a method called on it (`<<~TEXT.upcase`), and two heredocs on a line take their texts one after the other.
+A heredoc is a string: escapes and `#{...}` work, a `"` needs no escape, and every line ends with a newline. The rest of the `<<~NAME` line is code, so `puts(<<~TEXT)` and `<<~TEXT.upcase` work.
 
-A heredoc needs two lines of text or more, otherwise it is `LEX-HEREDOC-ONE-LINE`: write one line as `"text\n"`. Indent the text with spaces; a tab is `LEX-HEREDOC-INDENT`. The name is in capitals. A heredoc cannot be a `case` pattern or an `import` path.
+Two or more text lines are needed (`LEX-HEREDOC-ONE-LINE`; write one line as `"text\n"`). Indent with spaces: a tab is `LEX-HEREDOC-INDENT`. A heredoc cannot be a `case` pattern or an `import` path.
 
 ## Joining strings
 
@@ -153,9 +153,7 @@ end
 a-b--c
 ```
 
-Every method is also a function in the `String` module: `s.upcase` is the same
-as `String.upcase(s)`. See the [String library page](/library/text-and-data/string/) for the
-full list.
+Every method is also a function in the `String` module: `s.upcase` is the same as `String.upcase(s)`. See the [String library page](/library/text-and-data/string/) for the full list.
 
 ## Comparing strings
 
@@ -175,8 +173,7 @@ true
 
 ## Characters
 
-A string cannot be indexed with `[i]`. Use `at` for one character, and `code`
-and `String.from_code` to move between characters and numbers.
+A string cannot be indexed with `[i]`. Use `at` for one character, and `code` and `String.from_code` to move between characters and numbers.
 
 ```agentica
 def main() -> Void

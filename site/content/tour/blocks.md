@@ -6,8 +6,7 @@ description: Blocks with do ... end, closures and passing blocks to your own fun
 
 ## A block
 
-A block is a small function written right after a call, between `do` and
-`end`. Its parameters go between bars.
+A block is a small function written right after a call, between `do` and `end`. Its parameters go between bars.
 
 ```agentica
 def main() -> Void
@@ -69,8 +68,7 @@ end
 
 ## Closures
 
-A block can read the variables around it. It sees their values at the moment
-the block is made.
+A block can read the variables around it. It sees their values at the moment the block is made.
 
 ```agentica
 def main() -> Void
@@ -84,8 +82,7 @@ end
 [3, 6]
 ```
 
-A block cannot assign to an outer variable. Build the value with `map` or
-`reduce`, or use a `for` loop:
+A block cannot assign to an outer variable. Build the value with `map` or `reduce`, or use a `for` loop:
 
 ```agentica {expect="CHECK-CAPTURED-ASSIGNMENT"}
 def main() -> Void
@@ -118,8 +115,7 @@ end
 
 ## Pass a block to your own function
 
-The last parameter of your function must be a `Fn`. The block becomes that
-argument.
+The last parameter of your function must be a `Fn`. The block becomes that argument.
 
 ```agentica
 def twice(value: Int, f: Fn[Int, Int]) -> Int
@@ -138,8 +134,7 @@ end
 
 ## Keep a block
 
-A block always follows a call; there are no standalone lambdas. To keep a block
-in a variable, pass it to a function that returns it:
+A block always follows a call; there are no standalone lambdas. To keep a block in a variable, pass it to a function that returns it:
 
 ```agentica
 def keep(f: Fn[Int, Int]) -> Fn[Int, Int]
@@ -160,8 +155,7 @@ end
 
 ## Annotate when needed
 
-Parameter types come from the call. When the call cannot tell, write the type
-after the name:
+Parameter types come from the call. When the call cannot tell, write the type after the name:
 
 ```agentica
 def main() -> Void
