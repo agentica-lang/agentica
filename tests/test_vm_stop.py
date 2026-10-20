@@ -12,9 +12,10 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, kill_process,
-                                 known_issue, process_alive, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
-                                 vm_environment, wait_until)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
+                                 host_only, kill_process, known_issue, process_alive, run_vm, scaled, start_vm,
+                                 stop_a_vm_that_fills_its_stdout, vm_command, vm_environment, wait_until)
+from tests.windows_support import COPY_PROGRAM
 
 # SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals, so each case that sends one is host-only on Windows, and the
 # reason says which case of tests/test_windows_console_stop.py sends Ctrl+Break for the same behavior. The two cases that
@@ -54,7 +55,9 @@ end
 """
 
 # 70 KiB: more than the 64 KiB that a Linux pipe holds, so the output is stuck there, and less than the 16 KiB pipe of
-# macOS plus the 64 KiB buffer of the VM, so the program still reaches the warning there.
+# macOS plus the 64 KiB buffer of the VM, so the program still reaches the warning there. On Windows 50 KiB fit the
+# 64 KiB buffer of the stream whatever the size of the pipe (4 KiB there), so the program reaches the warning while the
+# pipe is full; more would keep it printing.
 STUCK_STDOUT = """\
 def main() -> Void
   line = "y"
@@ -62,14 +65,14 @@ def main() -> Void
     line = line + line
   end
   n = 0
-  while n < 70
+  while n < %d
     puts(line)
     n += 1
   end
   IO.warn("ready")
   Task.sleep(30000)
 end
-"""
+""" % (50 if WINDOWS else 70)
 
 
 def child_program(trap=""):
@@ -97,10 +100,6 @@ end
 
 
 NO_FILE_FLUSH = "a flush that a FIFO holds up; " + FIFO_FILE_REASON
-
-# Standard output that stays stuck on Windows: 50 KiB fit the 64 KiB buffer of the stream whatever the size of the pipe
-# (4 KiB there), so the program reaches "ready" while the pipe is full.
-WINDOWS_STUCK_STDOUT = STUCK_STDOUT.replace("n < 70", "n < 50")
 
 
 def gone_soon(pid):
@@ -136,23 +135,30 @@ def check_a_driven_vm_with_stuck_standard_output(tmp_path, adopt):
     is the one of standard output, a pipe that the test holds and does not read (so it is full, not broken, when the
     driver dies). The driver is a Python process that starts the VM with --driver-pid, which Windows takes only for a
     private input: the copy that a VM makes with create_private (an access list that names only its owner)."""
-    from tests.agentica_test import run_vm
-    from tests.test_windows_process_cleanup import COPY_PROGRAM
     if UNDER_WINE:
         pytest.skip("Wine gives the pipe 64 KiB, so the rows fit it and nothing is stuck")
-    public = bytecode(WINDOWS_STUCK_STDOUT, tmp_path)
+    public = bytecode(STUCK_STDOUT, tmp_path)
     code = tmp_path / "driven.agcb"
     made = run_vm(bytecode(COPY_PROGRAM, tmp_path, "copy-private"), args=[public, code], env=vm_environment(),
                   cwd=tmp_path)
     assert (made.code, made.stderr) == (0, ""), made
     driver = adopt(Child([PYTHON, PEER, "drive-inherited", *vm_command(), "--", code], capture_stderr=True,
                          read_stdout=False))
-    pid = int(driver.next_stderr_line(WAIT_SECONDS))
+    # The pid of the driver as the driver reports it: the process of a venv's python.exe may be a launcher with the real
+    # interpreter as its child, and the VM must lose its driver, not a job that holds a launcher.
+    driver_pid, pid = (int(word) for word in driver.next_stderr_line(WAIT_SECONDS).split())
     ready = driver.next_stderr_line(WAIT_SECONDS)
     assert ready == "ready", ready
     time.sleep(0.3)
-    driver.process.kill()
-    assert gone_soon(pid), "the VM ends after its driver"
+    assert process_alive(driver_pid) and process_alive(pid)
+    start = time.monotonic()
+    kill_process(driver_pid)
+    # Bounded below the flush limit (30 s), so a VM that waited for its flush would fail.
+    bound = min(scaled(5), 25)
+    if not wait_until(lambda: not process_alive(pid), bound, 0.1):
+        kill_process(pid)
+        pytest.fail("the VM ends within %s s after its driver" % bound)
+    assert time.monotonic() - start < bound
 
 
 def full_fifo(adopt, tmp_path):

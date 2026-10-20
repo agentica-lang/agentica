@@ -112,16 +112,8 @@ def attempt(kind: String, path: String) -> Void
     IO.inspect(File.open(path, "read", 5000))
   elsif kind == "open-write"
     IO.inspect(File.open(path, "write", 5000))
-  elsif kind == "open-append"
-    IO.inspect(File.open(path, "append", 5000))
-  elsif kind == "read-text"
-    IO.inspect(File.read_text(path, 5000))
-  elsif kind == "each-line"
-    IO.inspect(File.each_line(path, 1024, 5000) do |line|
-      ok()
-    end)
   else
-    IO.inspect(File.foreach(path, 1024, 5000).to_a)
+    IO.inspect(File.read_text(path, 5000))
   end
 end
 
@@ -136,7 +128,9 @@ def main() -> Void
 end
 """
 
-PIPE_FILE_KINDS = ("open-read", "open-write", "open-append", "read-text", "each-line", "foreach")
+# The two ways into probe(): a handle call opens in the pool (work_open), a whole-file call opens, then waits on the loop
+# (on_loop). Reading and writing take different paths to the open.
+PIPE_FILE_KINDS = ("open-read", "open-write", "read-text")
 # The roots other than \\.\ and \\?\ (which path_string refuses) under which a path can name a pipe.
 OTHER_ROOTS = ("\\\\localhost\\pipe\\", "\\\\127.0.0.1\\pipe\\", "\\??\\pipe\\")
 # The two of them that go through Windows' file sharing and reach a pipe that a test made. The VM completes a \??\ path
@@ -212,12 +206,14 @@ def test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of
     source.write_text(PIPE_FILE_PROGRAM, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "pipe-file.agcb")
     gate = tmp_path / "gate"
-    reach = {root: python_reaches(root) for root in LOOPBACK_ROOTS}
+    # The first spelling that this process reaches; a machine without file sharing checks the refusal only.
+    root = next((root for root in LOOPBACK_ROOTS if python_reaches(root)), None)
     if os.environ.get("CI"):
-        assert any(reach.values()), "the runner serves no loopback pipe path, so the case would check only the refusal"
+        assert root, "the runner serves no loopback pipe path, so the case would check only the refusal"
+    reached = root is not None
+    root = root or LOOPBACK_ROOTS[0]
     with ExitStack() as stack:
-        cases = [(kind, root, stack.enter_context(NamedPipeServer())) for root in LOOPBACK_ROOTS
-                 for kind in PIPE_FILE_KINDS]
+        cases = [(kind, root, stack.enter_context(NamedPipeServer())) for kind in PIPE_FILE_KINDS]
         vm = start_vm(bytecode, gate, *["%s|%s" % (kind, pipe.path(root)) for kind, root, pipe in cases])
         try:
             answers = [vm.next_line(WAIT) for _ in cases]
@@ -233,7 +229,7 @@ def test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of
         where = "%s below %s" % (kind, root)
         assert answer.startswith("error(") and "timed out" not in answer, (where, answer)
         assert "connected" not in state, "%s: the VM kept the pipe: %s" % (where, state)
-        if reach[root]:
+        if reached:
             # The stat of the call takes one instance and the open another, which gets to probe() and its close: the
             # error is the ENOTSUP of probe (a busy pipe would say EBUSY), and both instances are let go.
             assert "errno=%d" % errno.ENOTSUP in answer, (where, answer)

@@ -198,6 +198,7 @@ STUCK_FIFO_PROGRAM = r"""def main() -> Void
 end
 """
 
+
 @pytest.fixture
 def stuck_flush(request, new_dir, adopt):
     """(start, done): start(*options, variable=None) runs a program with the options and the AGENTICA_FLUSH_TIMEOUT_MS

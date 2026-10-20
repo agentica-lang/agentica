@@ -73,6 +73,20 @@ def run_vm_with_stdout(
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
+# Makes the file at args[1] with create_private, which gives it the access list only the owner has, and copies args[0].
+COPY_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  input = Result.unwrap!(File.open(args[0], "read", 5000))
+  out = Result.unwrap!(File.open(args[1], "create_private", 5000))
+  bytes = Result.unwrap!(File.read_bytes(input, 1048576, 5000))
+  Result.unwrap!(File.write_bytes(out, bytes, 5000))
+  Result.unwrap!(File.close(input, 5000))
+  Result.unwrap!(File.close(out, 5000))
+end
+"""
+
+
 
 def process_handle_count(pid: int) -> int:
     """The number of kernel handles that the process `pid` holds open (GetProcessHandleCount), the Windows counterpart

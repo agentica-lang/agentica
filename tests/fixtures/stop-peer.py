@@ -28,10 +28,10 @@ def drive(command):
 
 def drive_inherited(command):
     # Like drive, but the VM writes to this process's stdout and stderr: a pipe and a pipe that the test holds, and the
-    # test reads only stderr. The pid of the VM goes to stderr. This process stays until it is killed, and the VM's
-    # stdout, which nobody reads, is not broken by its death.
+    # test reads only stderr. The pid of this process and the pid of the VM go to stderr. This process stays until it
+    # is killed, and the VM's stdout, which nobody reads, is not broken by its death.
     vm = subprocess.Popen(command[:2] + ["--driver-pid", str(os.getpid())] + command[2:])
-    print(vm.pid, file=sys.stderr, flush=True)
+    print(os.getpid(), vm.pid, file=sys.stderr, flush=True)
     time.sleep(120)
 
 
