@@ -113,7 +113,7 @@ case "$kind" in
     dlls=$(awk '/DLL Name:/ { print tolower($3) }' <<< "$private" | sort -u)
     echo "$name: imports: $(tr '\n' ' ' <<< "$dlls")"
     [ -n "$dlls" ] || die "objdump found no imported DLLs in $name"
-    allowed='^(kernel32|ntdll|user32|advapi32|ws2_32|iphlpapi|userenv|psapi|dbghelp|ole32|shell32|bcrypt|crypt32|secur32|shlwapi|ucrtbase|synchronization)[.]dll$|^api-ms-win-[a-z0-9-]*[.]dll$'
+    allowed='^(kernel32|ntdll|user32|advapi32|ws2_32|iphlpapi|userenv|psapi|dbghelp|ole32|shell32|bcrypt|crypt32|secur32|shlwapi|ucrtbase)[.]dll$|^api-ms-win-[a-z0-9-]*[.]dll$'
     bad=$(grep -vE "$allowed" <<< "$dlls" || true)
     [ -z "$bad" ] || die "$name imports DLLs that Windows does not provide: $bad"
     "$binary" run --version | grep -q 'libgc ' || die "$name does not report its built-in libgc"

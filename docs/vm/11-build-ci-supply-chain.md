@@ -204,10 +204,14 @@
   its own format: the architecture it holds, which is also the one of the
   machine that built it (a runner that is not what its name says fails), the
   libraries it imports (`otool -L`, `objdump -p`, `readelf -d`), the glibc floor
-  or the Mach-O `minos`, and the hardening of the format. On macOS the program
+  or the Mach-O `minos` (the link target of the final binary: it does not prove
+  that every object or API is safe on macOS 12, and CI does not run macOS 12),
+  and the hardening of the format. On macOS the program
   is stripped and then signed ad hoc, which Apple silicon needs to start it;
   there is no Developer ID signature and no notarization. `make release-package`
-  writes `agentica-VERSION-PLATFORM.(tar.gz|zip)` (`tools/release.py`) and
+  writes `agentica-VERSION-PLATFORM.(tar.gz|zip)` (`tools/release.py`; the
+  same binary gives the same archive bytes, but the binary itself is not
+  reproducible) and
   `make release-smoke` extracts it into a folder with spaces and non-ASCII
   letters outside the checkout, and runs it with a `PATH` of the system folders
   only: version, help, `check`, `compile`, `run`, `std/` imports, `agentica

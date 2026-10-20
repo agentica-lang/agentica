@@ -484,8 +484,9 @@ runs the golden tests with the full sweep (`make vm-diff-test`),
   list is an error with its own message), PIE, BIND_NOW, RELRO, the stack
   protector, FORTIFY, no NEEDED `libgc`, `libssl` or `libcrypto`. Mach-O:
   `lipo -archs` is exactly the one architecture, `file`, `vtool` platform and
-  `minos` equal `MACOSX_DEPLOYMENT_TARGET`, `otool -L` lists libSystem and
-  system paths only, PIE, stack protector, FORTIFY, a valid code signature. PE:
+  `minos` equal `MACOSX_DEPLOYMENT_TARGET` (the link target of the final
+  binary; it does not prove that every object or API is safe on macOS 12, and
+  CI does not run macOS 12), `otool -L` lists libSystem and system paths only, PIE, stack protector, FORTIFY, a valid code signature. PE:
   `objdump -f` is `pei-x86-64`, every imported DLL is a Windows system DLL or
   the Universal C Runtime (never `msys-2.0.dll`, `libgcc_s_seh-1.dll`,
   `libwinpthread-1.dll`, a library of OpenSSL or libgc), and DllCharacteristics
@@ -496,16 +497,19 @@ runs the golden tests with the full sweep (`make vm-diff-test`),
   with `bin/agentica` (`bin/agentica.exe` on Windows), `LICENSE`, `NOTICE` and
   the seven files of `licenses/` (the same set on every platform; the names are
   in `LICENSE_FILES`), then verifies the member list: exactly those files, once
-  each, below one folder. The archive is reproducible (commit time, root
-  owner). A new third-party library adds its license file there.
+  each, below one folder; a link or a device is refused. The archive is
+  reproducible (commit time, root owner): the same binary gives the same
+  bytes. The binary itself is not reproducible. A new third-party library adds
+  its license file there.
 - `tools/release.py smoke` (run it as `python -I`) first compares the packaged
   binary with the checked one, extracts into a folder with spaces and non-ASCII
   letters away from the checkout, and runs the binary there with a `PATH` of the
   system folders only (`/usr/bin:/bin`, or `System32` on Windows): `--version`,
   `run --version`, help, `check` (ok and `CHECK-TYPE-MISMATCH`), running a
   non-ASCII program, `compile` then `run --`, `--seed`, `std/` imports,
-  `agentica test` for unit tests (passing and failing) and for a BDD spec with a step
-  program and a predefined `Given the Agentica program` step, files (write,
+  `agentica test` for unit tests (passing and failing) and for a BDD spec
+  with a step program and a predefined `Given the Agentica program` step,
+  files (write,
   append, read, rename, list, stat, remove), processes (`--allow-run` spawning
   the packaged binary), and loopback TCP and HTTP. A binary says that it lacks
   the network builtins with the loader error `invalid bytecode: unknown
@@ -523,8 +527,8 @@ runs the golden tests with the full sweep (`make vm-diff-test`),
 
 Before merging a change to `release.yml`, the packaging tools or the binary
 format, dispatch a dry run: `gh workflow run release.yml --ref BRANCH`. The
-tags, the version and the CHANGELOG rules are under "Tags, versions and CHANGELOG"
-below. Refresh `bootstrap/stage0.agcb` before cutting a release.
+tags, the version and the CHANGELOG rules are under "Tags, versions and
+CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 
 ### Tags, versions and CHANGELOG
 

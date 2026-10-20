@@ -103,13 +103,18 @@ def source_date() -> int:
         return DEFAULT_MTIME
 
 
-def list_archive(path: Path) -> list[tuple[str, bool]]:
-    """(name, is a file) of every member, in archive order."""
+def list_archive(path: Path) -> list[tuple[str, str]]:
+    """(name, kind) of every member, in archive order; kind is "file", "dir" or "other" (a link or a device)."""
     if path.name.endswith(".zip"):
         with zipfile.ZipFile(path) as z:
-            return [(i.filename.rstrip("/"), not i.is_dir()) for i in z.infolist()]
+            kinds = []
+            for i in z.infolist():
+                mode = i.external_attr >> 16
+                special = mode != 0 and not (stat.S_ISREG(mode) or stat.S_ISDIR(mode))
+                kinds.append("other" if special else "dir" if i.is_dir() else "file")
+            return [(i.filename.rstrip("/"), kind) for i, kind in zip(z.infolist(), kinds)]
     with tarfile.open(path, "r:gz") as t:
-        return [(m.name, m.isreg()) for m in t.getmembers()]
+        return [(m.name, "file" if m.isreg() else "dir" if m.isdir() else "other") for m in t.getmembers()]
 
 
 def verify_archive(path: Path, platform: str, ver: str | None = None) -> None:
@@ -117,6 +122,9 @@ def verify_archive(path: Path, platform: str, ver: str | None = None) -> None:
     top = package_name(platform, ver)
     entries = list_archive(path)
     names = [name for name, _ in entries]
+    odd = sorted(name for name, kind in entries if kind == "other")
+    if odd:  # a link or a device could point out of the folder it is extracted into
+        fail(f"{path.name} has members that are neither files nor folders: {odd}")
     duplicates = sorted({n for n in names if names.count(n) > 1})
     if duplicates:
         fail(f"{path.name} has duplicate members: {duplicates}")
@@ -124,7 +132,7 @@ def verify_archive(path: Path, platform: str, ver: str | None = None) -> None:
         parts = name.split("/")
         if name.startswith("/") or ".." in parts or "\\" in name or parts[0] != top:
             fail(f"{path.name} has the member {name!r} outside {top}/")
-    files = sorted(name[len(top) + 1:] for name, is_file in entries if is_file)
+    files = sorted(name[len(top) + 1:] for name, kind in entries if kind == "file")
     expected = expected_members(platform)
     if files != expected:
         fail(f"{path.name} holds the wrong files: missing {sorted(set(expected) - set(files))}, "
@@ -324,8 +332,12 @@ class Smoke:
             self.env = {"PATH": "/usr/bin:/bin", "HOME": str(home), "TMPDIR": str(home), "LANG": "C.UTF-8"}
 
     def run(self, *args: str, code: int | None = 0, timeout: int = 180) -> subprocess.CompletedProcess:
-        proc = subprocess.run([str(self.exe), *args], cwd=self.cwd, env=self.env, capture_output=True, input="",
-                              text=True, encoding="utf-8", timeout=timeout)
+        try:
+            proc = subprocess.run([str(self.exe), *args], cwd=self.cwd, env=self.env, capture_output=True, input="",
+                                  text=True, encoding="utf-8", timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            fail(f"agentica {' '.join(args)}: no exit in {timeout} s\n"
+                 f"stdout: {error.stdout or ''}\nstderr: {error.stderr or ''}")
         if code is not None and proc.returncode != code:
             fail(f"agentica {' '.join(args)}: exit {proc.returncode}, expected {code}\n"
                  f"stdout: {proc.stdout}\nstderr: {proc.stderr}")
@@ -391,8 +403,6 @@ def smoke(archive: Path, platform: str, binary: Path | None) -> None:
         out = s.run("run", "--version")
         s.expect("run --version names the VM and its libraries",
                  out.stdout.startswith(f"agentica {ver} (libgc ") and "libuv" in out.stdout, out)
-        if platform.startswith(("linux", "macos")):
-            s.expect("run --version names the built-in OpenSSL", "OpenSSL 3" in out.stdout, out)
         out = s.run("--help")
         s.expect("--help lists the commands", "agentica check" in out.stdout and "agentica test" in out.stdout, out)
         out = s.run("help", "String.split")

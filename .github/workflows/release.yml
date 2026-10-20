@@ -116,8 +116,9 @@ jobs:
             platform: macos-arm64
     runs-on: ${{ matrix.runner }}
     env:
-      # The oldest macOS the binary runs on. The compiler reads it from the environment for every object, the static
-      # libraries (libuv, OpenSSL, bdwgc) included. tools/release-check.sh compares it with the binary's `minos`.
+      # The link target of the binary: clang reads it from the environment and the linker writes it as `minos`, which
+      # tools/release-check.sh compares. It does not prove that every object or API is safe on macOS 12, and CI does not
+      # run macOS 12.
       MACOSX_DEPLOYMENT_TARGET: '12.0'
       AGENTICA_OPENSSL: vendored
       AGENTICA_GC: vendored
@@ -231,6 +232,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false  # gh uses GH_TOKEN
       - uses: actions/download-artifact@v4
         with:
           pattern: agentica-*
@@ -248,5 +251,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes "" --draft
+          # A tag with a `-` (0.4.1-beta.1) is a SemVer pre-release.
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes "" --draft "${flags[@]}"
           gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false

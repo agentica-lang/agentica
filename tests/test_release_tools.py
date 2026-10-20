@@ -41,24 +41,56 @@ def test_each_package_holds_the_expected_files_once(archives):
     for platform, path in packed.items():
         assert path.name == f"agentica-{release.version()}-{platform}." + ("zip" if "windows" in platform else "tar.gz")
         top = release.package_name(platform)
-        names = sorted(name for name, is_file in release.list_archive(path) if is_file)
+        names = sorted(name for name, kind in release.list_archive(path) if kind == "file")
         assert names == sorted(f"{top}/{member}" for member in release.expected_members(platform))
     assert "bin/agentica.exe" in release.expected_members("windows-x86_64")
     assert "bin/agentica" in release.expected_members("macos-arm64")
 
 
+def with_member(source, target, info):
+    """Copy a tar archive and add one more member."""
+    with tarfile.open(source) as old, tarfile.open(target, "w:gz") as new:
+        for member in old.getmembers():
+            new.addfile(member, old.extractfile(member))
+        new.addfile(info)
+
+
 def test_a_package_with_an_extra_file_in_bin_is_refused(archives):
     tmp_path, packed = archives
-    path = packed["linux-x86_64"]
     top = release.package_name("linux-x86_64")
     extra = tmp_path / "extra.tar.gz"
-    with tarfile.open(path) as source, tarfile.open(extra, "w:gz") as target:
-        for member in source.getmembers():
-            target.addfile(member, source.extractfile(member))
-        info = tarfile.TarInfo(f"{top}/bin/other")
-        target.addfile(info)
+    with_member(packed["linux-x86_64"], extra, tarfile.TarInfo(f"{top}/bin/other"))
     with pytest.raises(SystemExit):
         release.verify_archive(extra, "linux-x86_64")
+
+
+def test_a_package_with_a_link_or_a_device_is_refused(archives):
+    tmp_path, packed = archives
+    top = release.package_name("linux-x86_64")
+    for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE, tarfile.CHRTYPE):
+        info = tarfile.TarInfo(f"{top}/bin/other")
+        info.type, info.linkname = kind, "agentica"
+        odd = tmp_path / "odd.tar.gz"
+        with_member(packed["linux-x86_64"], odd, info)
+        with pytest.raises(SystemExit):
+            release.verify_archive(odd, "linux-x86_64")
+    link = tmp_path / "link.zip"
+    with zipfile.ZipFile(link, "w") as z:
+        info = zipfile.ZipInfo(f"{release.package_name('windows-x86_64')}/bin/agentica.exe")
+        info.external_attr = 0o120777 << 16
+        z.writestr(info, "agentica")
+    with pytest.raises(SystemExit):
+        release.verify_archive(link, "windows-x86_64")
+
+
+def test_the_same_binary_packs_to_the_same_bytes(tmp_path, monkeypatch):
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", "1700000000")
+    binary = tmp_path / "agentica"
+    binary.write_bytes(b"not a program")
+    for platform in release.PLATFORMS:
+        first = release.package(platform, binary, tmp_path / "one" / platform)
+        second = release.package(platform, binary, tmp_path / "two" / platform)
+        assert first.read_bytes() == second.read_bytes()
 
 
 def test_collect_needs_exactly_the_four_archives(archives):
