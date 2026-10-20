@@ -312,6 +312,15 @@ def tool(name):
     return path
 
 
+def channel_peer(name):
+    """The command that runs the independent peer of the child channel called `name` (a file of tests/fixtures without
+    its extension): the Python one, and on Windows the Node one, since only Node can give a child the two pipes at
+    descriptors 3 and 4 that the Windows channel is (docs/vm/10-io-processes.md, 10.4)."""
+    if os.name == "nt":
+        return [tool("node"), str(FIXTURES / (name + ".js"))]
+    return [PYTHON, str(FIXTURES / (name + ".py"))]
+
+
 def cli():
     """The command that runs Agentica programs: the executable of AGENTICA_TEST_EXECUTABLE, else dist/agentica."""
     executable = os.environ.get("AGENTICA_TEST_EXECUTABLE")

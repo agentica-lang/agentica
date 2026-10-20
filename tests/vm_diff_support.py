@@ -25,12 +25,11 @@ import pytest
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, WINDOWS, TestCase, _kill_and_collect,
+from tests.agentica_test import (FIXTURES, ROOT, RUN_TIMEOUT, WINDOWS, TestCase, _kill_and_collect, channel_peer,
                                  compile_agc, scaled, vm_binary, vm_command, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
-CHANNEL_RUN = FIXTURES / "channel-run.py"
 
 SHARD_COUNT = 8
 EXTRAS_SHARD = 8
@@ -265,9 +264,10 @@ def execute(argv, stdin=b"", stdin_path=None, timeout=RUN_TIMEOUT, cwd=None, env
 def run_vm_process(fixture, options, bytecode, args, timeout=RUN_TIMEOUT, cwd=None, env=None, stdin_path=None):
     """One VM run as (status, stdout, stderr); the status is TIMEOUT when it outlives `timeout` seconds.
 
-    A fixture with a channel runs through tests/fixtures/channel-run.py, which hands the VM a socket as descriptor 3.
+    A fixture with a channel runs through tests/fixtures/channel-run.py, which hands the VM a socket as descriptor 3, or
+    on Windows through channel-run.js, which hands it two pipes at descriptors 3 and 4.
     """
-    prefix = [PYTHON, CHANNEL_RUN, fixture.channel] if fixture.channel else []
+    prefix = [*channel_peer("channel-run"), fixture.channel] if fixture.channel else []
     argv = prefix + [*vm_command(), *options, "--", bytecode, *args]
     return execute(argv, fixture.input, stdin_path, timeout, cwd, vm_environment({**fixture.env, **(env or {})}))
 
@@ -517,9 +517,6 @@ def skip_reason(name):
     gap = KNOWN_ISSUE_FIXTURES.get(name, {}).get(system)
     if gap:
         return "known-issue: #%d %s: %s" % (gap[0], name, gap[1])
-    if Path(FIXTURE_DIR / name).with_suffix(".channel").is_file() and WINDOWS:
-        return ("known-issue: #432 %s: the Windows channel is two pipes, which the Python channel peer cannot give" %
-                name)
     return None
 
 
