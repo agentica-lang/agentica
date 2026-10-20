@@ -85,8 +85,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   not applied. A nonempty `ca_file` still replaces system trust, and
   verification cannot be turned off. The TLS adapter and its tests
   now build on Windows too, and the Platforms CI links the vendored OpenSSL
-  statically on macOS and Windows (no `msys-2.0.dll`); the TCP and TLS
-  builtins on Windows come with the TCP port.
+  statically on macOS and Windows (no `msys-2.0.dll`). TLS sockets on Windows
+  still return the same error; `tests/test_vm_tls.py` now also runs on macOS.
 
 - An HTTP client builds one TLS context (CA file, trust store) for all its
   `https://` connections instead of one per connection, and frees it once the

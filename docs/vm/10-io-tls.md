@@ -1,12 +1,16 @@
 ### 10.3 TLS
 
-`TLS.connect` and `TLS.listen` run on the VM. The release links the vendored
+`TLS.connect` and `TLS.listen` run on the VM, on Linux and macOS. Windows
+builds the adapter and the trust store but refuses TLS sockets: the context
+build fails with `TLS needs Linux or macOS` (`agc_net_tls_enabled`,
+`vm/net_os.h`) until the Windows TLS socket tests pass. The release links the vendored
 OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
 3 (`AGENTICA_OPENSSL`, 10.0). The adapter sets its own minimums and reads no
 `openssl.cnf`, so both builds behave the same.
 
-- **Adapter.** `vm/tls.h` declares our own types only. `vm/tls_openssl.c` is the
-  only file that includes OpenSSL headers. A session uses two memory BIOs, and
+- **Adapter.** `vm/tls.h` declares our own types only. `vm/tls_openssl.c`,
+  `vm/tls_trust.c` and `vm/tls_trust_posix.c` are the only files that include
+  OpenSSL headers. A session uses two memory BIOs, and
   every call returns OK, WANT_READ, WANT_WRITE, CLOSED or ERROR. An error
   carries our code, an `errno` for a system error, and a short detail. OpenSSL's
   error queue is drained in the adapter, and OpenSSL never gets a GC pointer.

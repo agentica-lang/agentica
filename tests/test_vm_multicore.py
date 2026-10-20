@@ -636,7 +636,7 @@ def test_a_process_call_is_refused_on_several_schedulers(tmp_path):
     assert diff.outcome((result.code, result.stdout, result.stderr))[3] == "RUNTIME-INTERNAL"
 
 # TCP and TLS run on several schedulers: every step is a request to the I/O thread, which owns each socket (§16.9).
-NET = pytest.mark.skipif(not TLS_BUILT, reason="TCP and TLS are built on Linux, macOS and Windows")
+NET = pytest.mark.skipif(not TLS_BUILT, reason="TCP and TLS are built on Linux and macOS")
 TLS_DIR = str(FIXTURES / "tls")
 
 NET_ECHO = r"""struct Dial

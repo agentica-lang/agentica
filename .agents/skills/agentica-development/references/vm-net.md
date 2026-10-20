@@ -150,8 +150,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`SSL_CERT_FILE` or the platform store of `agc_tls_trust_system`,
     `SSL_CERT_DIR` or none; a non-empty `ca_file` replaces them), SNI and
     `SSL_set1_host` or `X509_VERIFY_PARAM_set1_ip_asc`, two memory BIOs per
-    session, error-queue draining into our codes; built on every system (the
-    Windows TCP builtins do not exist yet)
+    session, error-queue draining into our codes; built on every system, while
+    Windows refuses TLS sockets in `tcp.c` (`tls_refused`, from
+    `agc_net_tls_enabled` of `vm/net_os.h`)
 
 - `vm/duplex.c`
   - the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As

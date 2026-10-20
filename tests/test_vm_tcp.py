@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, TARGET_OS, TEST_SCHEDULERS, WAIT_SECONDS, Child, compile_text,
+from tests.agentica_test import (FIXTURES, TARGET_OS, TEST_SCHEDULERS, TLS_BUILT, WAIT_SECONDS, Child, compile_text,
                                  run, run_vm, scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "tcp-peer.js"
@@ -568,6 +568,26 @@ def test_ipv6_client_and_server_with_python_peers(tmp_path, adopt):
     require_ipv6()
     dial_python_server(tmp_path, "::1", 3)
     serve_python_clients(tmp_path, adopt, "::1", 3)
+
+
+TLS_PROGRAM = """\
+def main() -> Void
+  listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
+  IO.inspect(TLS.connect("127.0.0.1", TCP.local_port(listener), "ca.pem", 5000))
+  IO.inspect(TLS.listen("127.0.0.1", 0, "cert.pem", "key.pem"))
+  TCP.close_listener(listener)
+end
+"""
+
+
+def test_tls_returns_an_error_where_it_is_not_built(tmp_path):
+    """Windows has TCP but refuses TLS sockets (vm/net_os.h): both TLS calls fail cleanly and the run ends normally."""
+    if TLS_BUILT:
+        pytest.skip("TLS is built here (tests/test_vm_tls.py)")
+    result = run_text(tmp_path, "tls", TLS_PROGRAM)
+    assert result.code == 0, result.stderr
+    assert result.stdout == ('error("ssl-connect: connect failed (TLS needs Linux or macOS)")\n'
+                             'error("ssl-make-server-context: setup failed (TLS needs Linux or macOS)")\n')
 
 
 BACKLOG_PROGRAM = """\
