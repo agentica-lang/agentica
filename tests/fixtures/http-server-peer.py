@@ -2,6 +2,7 @@ import http.client
 import os
 import socket
 import ssl
+import subprocess
 import sys
 import time
 
@@ -223,10 +224,19 @@ def secure(port, certs):
     s.close()
 
 
-def flood():
+def rss_kb(pid):
+    return int(subprocess.run(["ps", "-o", "rss=", "-p", pid], capture_output=True, text=True, check=True).stdout)
+
+
+def flood(vm_pid):
+    # The property is that the server does not buffer pipelined requests it
+    # has not read, so this checks the VM's memory, not the bytes sent: the
+    # kernel or the server's lingering close may accept and drop many bytes
+    # (on macOS more than 256 MB at times, #408).
     s = connect()
     send(s, head(b"GET /big HTTP/1.1"))
     s.recv(4096)
+    before = rss_kb(vm_pid)
     junk = head(b"GET / HTTP/1.1") * 2048
     s.settimeout(0.5)
     total = 0
@@ -235,7 +245,8 @@ def flood():
             total += s.send(junk)
     except (socket.timeout, BrokenPipeError, ConnectionResetError):
         pass
-    print("flood", "bounded" if total < 32 * 1024 * 1024 else "unbounded %d" % total)
+    grown = rss_kb(vm_pid) - before
+    print("flood", "bounded" if grown < 64 * 1024 else "unbounded %d KB after %d bytes" % (grown, total))
     s.close()
 
 
@@ -247,7 +258,7 @@ def main():
     client()
     slots(int(sys.argv[2]))
     secure(int(sys.argv[3]), sys.argv[4])
-    flood()
+    flood(sys.argv[5])
 
 
 main()
