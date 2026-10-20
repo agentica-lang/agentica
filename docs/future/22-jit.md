@@ -9,12 +9,19 @@ multicore rules of `docs/vm/16-architecture.md`. No language change.
 
 - Tier 1 is the interpreter, with a counter per function and per loop (backward
   jump).
-- Tier 2 is a baseline JIT for hot functions, with no speculation at first, so
-  no deoptimization. It emits native code that calls the opcode helpers
-  (`agc_op_concat`, `agc_op_eq`, ... from section 21) and inlines the Int and
-  Float fast paths, register moves and jumps.
-- A later tier, type-specialized code with guards and deoptimization, comes only
-  if profiling asks for it.
+- Tier 2 is a baseline JIT for hot functions, in the style of V8's Sparkplug:
+  one pass over the bytecode, no IR, fixed code per opcode. It has no
+  speculation, so no deoptimization. It emits native code that calls the opcode
+  helpers (`agc_op_concat`, `agc_op_eq`, ... from section 21) and inlines the
+  Int and Float fast paths, register moves and jumps.
+- A later tier comes only if measurements ask for it: an SSA IR built from the
+  bytecode and the checker's types, locals in registers, linear-scan register
+  allocation (the shape of Ruby's ZJIT).
+- Static types are the advantage over Ruby and JavaScript JITs: they need
+  profiles, type guards and side exits back to the interpreter because they do
+  not know the types. Agentica's checker does. If the bytecode keeps the operand
+  types (this `+` is on `Int`), compiled code needs guards only for Int overflow
+  and helper errors.
 
 **Rules:**
 
@@ -26,13 +33,31 @@ multicore rules of `docs/vm/16-architecture.md`. No language change.
 - Black-box parity (`docs/vm/README.md` §1) holds: exit code, stdout, program
   stderr and diagnostic codes do not depend on the tier.
 
-**Code generation** (decided in the JIT PR): copy-and-patch (stencils generated
-at build time with clang, as CPython 3.13 does) or a small hand-written x86-64
-assembler. No LLVM or libgccjit at run time (size, and libgccjit is GPL). x86-64
-Linux first, ARM64 next.
+**Code generation** (decided in the JIT PR). No LLVM or libgccjit at run time
+(size, and libgccjit is GPL). The release ships x86-64 (Linux, Windows,
+macOS) and arm64 (macOS), so the choice must cover both. Options seen in 2026:
 
-**Memory:** W^X: code is mapped RW, written, then `mprotect`ed to RX; never RWX.
-A code cache with a size cap.
+| Option | Gain | Cost |
+| --- | --- | --- |
+| Small hand-written assembler | No dependency | One backend per architecture |
+| sljit (C, BSD; used by PCRE2) | One emitter for x86-64, arm64 and more | A `vm/third_party` submodule (owner approval); no register allocation |
+| Copy-and-patch (CPython) | Very fast compile | Needs clang at build time; CPython gained only 4-12% by 3.15, and was at times slower than its interpreter |
+| MIR (C11, SSA, linear scan) | Real optimizations without LLVM | Larger dependency; release status unclear |
+
+Lessons published by ZJIT (2026): inlining calls to C helpers pays the most;
+spilling VM frame state at every side-effecting operation is expensive; count
+events in compiled code (for example C calls) before choosing what to optimize.
+
+Sources: [Sparkplug](https://v8.dev/blog/sparkplug),
+[ZJIT in Ruby 4.0](https://bernsteinbear.com/blog/launch-zjit/),
+[ZJIT load and store removal](https://railsatscale.com/2026-03-18-how-zjit-removes-redundant-object-loads-and-stores/),
+[PEP 836](https://peps.python.org/pep-0836/),
+[MIR](https://developers.redhat.com/articles/2022/02/16/code-specialization-mir-lightweight-jit-compiler).
+
+**Memory:** W^X: code is written RW, then made RX; never writable and
+executable at once for a thread. Linux uses `mprotect` and Windows
+`VirtualProtect`. macOS arm64 maps `MAP_JIT` pages and switches them per thread
+with `pthread_jit_write_protect_np`. A code cache with a size cap.
 
 **GC:** Boehm scans native stacks conservatively, so JIT frames need no stack
 maps. Constants embedded in code must still stay reachable: each code object

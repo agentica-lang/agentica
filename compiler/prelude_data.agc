@@ -8,10 +8,31 @@ import Types from "types"
 
 ## The builtins that only the prelude may call: the checker does not know them outside a prelude file, and no help or
 ## suggestion lists them.
-export PRELUDE_ONLY = ["__fail_arg"]
+export PRELUDE_ONLY = [
+  "__fail_arg", "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_find", "__lazy_flat_map", "__lazy_group",
+  "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a",
+  "__lazy_with_index",
+]
 
 ## Every prelude function, sorted by name.
 export ROWS: List[Model.PreludeRow] = [
+  Model.PreludeRow(name: "Lazy.chunk_while", module: "lazy", limits: [], selector: "", bodies: {"": "chunk_while"}),
+  Model.PreludeRow(name: "Lazy.drop", module: "lazy", limits: [], selector: "", bodies: {"": "drop"}),
+  Model.PreludeRow(name: "Lazy.drop_while", module: "lazy", limits: [], selector: "", bodies: {"": "drop_while"}),
+  Model.PreludeRow(name: "Lazy.each", module: "lazy", limits: [], selector: "", bodies: {"": "each"}),
+  Model.PreludeRow(name: "Lazy.each_cons", module: "lazy", limits: [], selector: "", bodies: {"": "each_cons"}),
+  Model.PreludeRow(name: "Lazy.each_slice", module: "lazy", limits: [], selector: "", bodies: {"": "each_slice"}),
+  Model.PreludeRow(name: "Lazy.filter", module: "lazy", limits: [], selector: "", bodies: {"": "filter"}),
+  Model.PreludeRow(name: "Lazy.find", module: "lazy", limits: [], selector: "", bodies: {"": "find"}),
+  Model.PreludeRow(name: "Lazy.first", module: "lazy", limits: [], selector: "", bodies: {"": "first"}),
+  Model.PreludeRow(name: "Lazy.flat_map", module: "lazy", limits: [], selector: "", bodies: {"": "flat_map"}),
+  Model.PreludeRow(name: "Lazy.map", module: "lazy", limits: [], selector: "", bodies: {"": "map"}),
+  Model.PreludeRow(name: "Lazy.produce", module: "lazy", limits: [], selector: "", bodies: {"": "produce"}),
+  Model.PreludeRow(name: "Lazy.reduce", module: "lazy", limits: [], selector: "", bodies: {"": "reduce"}),
+  Model.PreludeRow(name: "Lazy.take", module: "lazy", limits: [], selector: "", bodies: {"": "take"}),
+  Model.PreludeRow(name: "Lazy.take_while", module: "lazy", limits: [], selector: "", bodies: {"": "take_while"}),
+  Model.PreludeRow(name: "Lazy.to_a", module: "lazy", limits: [], selector: "", bodies: {"": "to_a"}),
+  Model.PreludeRow(name: "Lazy.with_index", module: "lazy", limits: [], selector: "", bodies: {"": "with_index"}),
   Model.PreludeRow(name: "List.drop_while", module: "list", limits: [], selector: "", bodies: {"": "drop_while"}),
   Model.PreludeRow(name: "List.each_slice", module: "list", limits: [], selector: "", bodies: {"": "each_slice"}),
   Model.PreludeRow(
@@ -26,6 +47,7 @@ export ROWS: List[Model.PreludeRow] = [
     selector: "",
     bodies: {"": "group_by"},
   ),
+  Model.PreludeRow(name: "List.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_list"}),
   Model.PreludeRow(
     name: "List.max_by",
     module: "list",
@@ -73,4 +95,5 @@ export ROWS: List[Model.PreludeRow] = [
   ),
   Model.PreludeRow(name: "Map.each", module: "map", limits: [], selector: "", bodies: {"": "each"}),
   Model.PreludeRow(name: "Map.filter", module: "map", limits: [], selector: "", bodies: {"": "filter"}),
+  Model.PreludeRow(name: "Range.lazy", module: "lazy", limits: [], selector: "", bodies: {"": "from_range"}),
 ]

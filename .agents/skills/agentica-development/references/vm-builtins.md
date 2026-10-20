@@ -67,9 +67,18 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    function is set, the builtin calls `agc_task_stepper(vm, &state->stepper)`
    and returns, and `CALL_BUILTIN` pushes a native frame on the block (the
    builtin's last argument). Each time the frame runs, `step(vm, self, last)`
-   returns `AGC_STEP_CALL` (call the block with `value`), `AGC_STEP_WAIT`
-   (it started a job, so the task parks) or `AGC_STEP_END` (finish with
-   `value`); `last` is the block's result or the finished job's result.
+   returns `AGC_STEP_CALL` (call the block with `value`, or the `fn` the step
+   names; `AGC_STEP_CALL2` passes `second` too), `AGC_STEP_WAIT` (it started
+   a job, so the task parks), `AGC_STEP_YIELD` (only after `agc_step_turn`,
+   which counts a step of the stepper's own work, said the turn is over) or
+   `AGC_STEP_END` (finish with `value`); `last` is the block's result or the
+   finished job's result. A stepper that loops without calling a block
+   (`vm/lazy.c`) counts each item with `agc_step_turn`, charges the rest of
+   its work with `agc_charge` and yields when `agc_turn_charge` says so, so it
+   never holds the scheduler past its turn. Steps run under `rt->sync` unless
+   the stepper sets `unlocked` (it touches only task-owned state); a stepper
+   whose builtin has no block sets `no_block`, else `start_stepper` checks
+   that the last argument is a function.
    Use `List`-style native frames for pure callbacks and a plain blocking
    builtin when there is no block. Every table entry
    has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`,

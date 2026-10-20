@@ -4,6 +4,7 @@ bdd/match.agc
 binary.agc
 http.agc
 logger.agc
+prelude/lazy.agc
 prelude/list.agc
 prelude/map.agc
 queue.agc

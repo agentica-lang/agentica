@@ -9,6 +9,7 @@ export def method_modules() -> Map[String, String]
     "Float": "Float",
     "Int": "Int",
     "Json": "JSON",
+    "Lazy": "Lazy",
     "List": "List",
     "Map": "Map",
     "Range": "Range",

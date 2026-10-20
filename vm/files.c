@@ -1661,9 +1661,9 @@ static agc_value builtin_try_lock(agc_vm *vm, agc_value *args, uint32_t span) {
   return start(vm, o, args[0], timeout);
 }
 
-static agc_step lines_wait(void) { return (agc_step){AGC_STEP_WAIT, agc_void()}; }
+static agc_step lines_wait(void) { return (agc_step){.kind = AGC_STEP_WAIT}; }
 
-static agc_step lines_end(agc_value result) { return (agc_step){AGC_STEP_END, result}; }
+static agc_step lines_end(agc_value result) { return (agc_step){.kind = AGC_STEP_END, .value = result}; }
 
 static file_state *lines_file(agc_vm *vm, const lines *s) {
   const agc_resource *r = agc_as_handle(vm, s->handle);
@@ -1723,7 +1723,7 @@ static agc_step lines_step(agc_vm *vm, agc_stepper *self, agc_value last) {
           agc_value line = agc_void();
           if (lines_take(vm, s, st, found.len, found.consume, &line)) {
             s->phase = LINES_RESUME;
-            return (agc_step){AGC_STEP_CALL, line};
+            return (agc_step){.kind = AGC_STEP_CALL, .value = line};
           }
         }
         break;

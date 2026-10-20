@@ -567,10 +567,12 @@ all, and how it relates to user `Option[T]` and to `JsonField` (§17).
 #### 25.12.6 Destructuring
 
 **What:** `a, b = pair`, block parameters `|(k, v)|`, multiple return values.
-**Why:** `partition`, `zip` and `Map` iteration read better. **Why not now:** it
-needs tuples (roadmap 8's "Later" list). **Open
-questions:** tuple syntax and types, and whether lists can be destructured with
-a length check.
+**Why:** `partition`, `zip` and `Map` iteration read better. **Decided:** there
+are no tuples in the language (owner, 2026-10-20): Ruby has none either and uses
+arrays. A struct carries grouped values of different types (a builtin struct
+where a builtin needs one, such as a future `Lazy.Step`, §27.4), and a list
+carries values of one type. **Open question:** whether lists can be
+destructured with a length check.
 
 #### 25.12.7 Lazy enumerators and generators
 
@@ -578,11 +580,11 @@ a length check.
 streams of unknown length without building lists. **Now in [section
 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):**
 `File.each_line` reads a big file line by line in bounded memory (§27.4, step 1,
-order row 7.2.1h), and a lazy `Stream[T]` is planned for after the prelude of
-the prelude (§27.4, step 2, order step 8.2); generators with `yield`
-(`Enumerator.new`,
-fibers) are decided against (§27.5), since a task that sends into a channel
-(§27.2) is the producer, and `xs.lazy` gets a help.
+order row 7.2.1h), and `Lazy[T]` is built over lists, ranges and
+`Lazy.produce` (§27.4, step 2, PR 1: `xs.lazy.filter do ... end.first(3)`), with
+I/O sources next; generators with `yield` (`Enumerator.new`, fibers, an
+external `next`) are decided against (§27.5), since a task that sends into a
+channel (§27.2) is the producer.
 
 #### 25.12.8 Declarative hygienic macros
 

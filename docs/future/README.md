@@ -101,8 +101,9 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
   - File:
     [`27-iteration-and-concurrency.md`](27-iteration-and-concurrency.md)
   - Status: `Task.map` (17a), channels (17b), `Task.await` with a timeout
-    (17c) and `File.each_line` (17d) built; `Stream[T]` planned (17e, row
-    8.2); generators and shared state decided against
+    (17c), `File.each_line` (17d) and `Lazy[T]` over lists, ranges and
+    `Lazy.produce` (17e, PR 1) built; its I/O sources planned (17e, PR 2);
+    generators and shared state decided against
 
 - §: 28
   - Title: VM metrics

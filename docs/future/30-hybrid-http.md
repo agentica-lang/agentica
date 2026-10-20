@@ -42,12 +42,12 @@ their timeouts, backpressure and close rules; chunks are `String` (UTF-8, split
 only at character boundaries, at most 64 KiB each) until `Bytes` lands (phase
 13, order row 7.2.4), which adds byte streams then.
 
-**Channels are enough; lazy `Stream[T]` is not needed.** An HTTP body is pushed
+**Channels are enough; `Lazy[T]` is not needed.** An HTTP body is pushed
 by I/O and read by another task, at its own speed: that is a bounded channel
 (backpressure when full), with timeouts on each wait, `close` for the end, and
-`closed?` to tell the end from a timeout (§27.2). A lazy stream (§27.4, planned
-there for the lines of a file) is pulled by one consumer through a chain of
-functions in one task; it would add nothing here.
+`closed?` to tell the end from a timeout (§27.2). A `Lazy` (§27.4) is pulled by
+one consumer through a chain of functions in one task; it would add nothing
+here.
 
 **No defaults needed.** Every streaming call has a fixed argument list and takes
 the options of the client or server it runs on, so default parameter values

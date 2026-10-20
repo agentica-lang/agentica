@@ -429,9 +429,14 @@ type:
   - **Help:** a producer task that sends into a channel: `Task.spawn(&produce,
     ch)`, then `ch.recv(timeout_ms)`
 
-- **Written:** `xs.lazy` on a list or a range
-  - **Help:** lists are eager; read a source that is too big for a list in a
-    `while` loop
+- **Written:** a step only `Lazy` has on a list or a range, such as
+  `xs.each_cons(2)`
+  - **Help:** list and range methods are eager; call `.lazy` first:
+    `xs.lazy.each_cons(...)`
+
+- **Written:** a `List` method on a `Lazy`, such as `lz.size`
+  - **Help:** a `Lazy` runs only in a terminal; collect it first with `try
+    lz.to_a` (or `lz.first(n)`)
 
 - **Written:** `Agent.start_link(...)` and other `Agent.` calls
   - **Help:** return values from tasks and combine them with `reduce`, or keep

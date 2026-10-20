@@ -100,6 +100,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   process_posix.c # the POSIX side of process_os.h: every file may run, PATH splits at ':'
   process_windows.c # the Windows side: .exe and .com only, ';' and quoted PATH entries, refused names
   stream.c        # input buffer and write path shared by processes and TCP (references/vm-net.md)
+  lazy.c          # Lazy[T]: recipe nodes and the terminal stepper that pulls one item at a time (docs/future/27 §27.4)
   tcp.c           # TCP and TLS builtins on libuv handles (references/vm-net.md)
   net.h           # tcp.c connection object for other C modules (references/vm-net.md)
   net_os.h        # the errno a libuv socket or pipe error shows (references/vm-net.md)
@@ -220,6 +221,7 @@ tests/            # pytest modules (test_<area>.py; existing unittest.TestCase m
   eval/           # agent evaluation runner, not part of make test (references/bench-eval.md)
 stdlib/                 # std/ modules written in Agentica, embedded in the single binary; MODULES lists them (an explicit registry keyed "std/<path>.agc")
   prelude/list.agc prelude/map.agc  # the compiler prelude: the bodies of List and Map methods (find, group_by ...); not modules, no program imports them (references/stages.md)
+  prelude/lazy.agc  # the typed Lazy methods; each calls a prelude-only __lazy_* builtin of vm/lazy.c
   queue.agc http.agc binary.agc logger.agc toml.agc    # std/queue, std/http, std/binary, std/logger, std/toml
   bdd.agc         # std/bdd: the step API of agentica test (BDD.step, BDD.run, the context, the predefined steps)
   bdd/gherkin.agc bdd/match.agc  # internal to agentica test: Gherkin parsing and step matching; see references/bdd.md

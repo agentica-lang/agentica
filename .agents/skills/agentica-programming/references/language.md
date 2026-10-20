@@ -95,6 +95,10 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
 - **Type:** `Process`
   - **Notes:** opaque child process; inspect prints `<Process>`
 
+- **Type:** `Lazy[T]`
+  - **Notes:** an immutable recipe of steps that a terminal runs; no `==`, no
+    `to_s`; inspect prints `<Lazy>` (`references/lazy.md`)
+
 - **Type:** `List[T]`
   - **Notes:** homogeneous, immutable, indexed from 0
 

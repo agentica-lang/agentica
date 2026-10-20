@@ -38,5 +38,14 @@ def main() -> Void
     end
   end
   total += counts.filter do |key, value| key % 2 == 0 end.size
+  lazy = numbers.lazy.map do |n| n + 1 end.filter do |n| n % 2 == 0 end.with_index do |n, index| n + index end
+  total += lazy.flat_map do |n| [n] end.each_slice(3).each_cons(2).to_a.unwrap!.size
+  middle = (1..2000).lazy.drop_while do |n| n < 10 end.take_while do |n| n < 1990 end.drop(5).take(1900)
+  total += middle.first(1900).unwrap!.size
+  total += numbers.lazy.chunk_while do |a, b| b == a + 1 end.reduce(0) do |sum, chunk| sum + chunk.size end.unwrap!
+  total += Lazy.produce(1) do |n| n + 1 end.find do |n| n == 2000 end.unwrap!
+  if numbers.lazy.each do |n| ok() end.ok?
+    total += 1
+  end
   puts(total)
 end

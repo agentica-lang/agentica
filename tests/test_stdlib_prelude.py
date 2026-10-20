@@ -3,6 +3,7 @@
 Three checks cover the table and source files, avoid quadratic builtin use, and
 compare prelude behavior against Python peers on random lists and strings.
 """
+import itertools
 import json
 import math
 import random
@@ -16,9 +17,9 @@ SLOW_IN_A_LOOP = re.compile(r"\.(concat|take|drop|reverse|sort|sort_by|keys|valu
 LOOP_START = re.compile(r"^(\s*)(for|while)\b")
 
 
-def table_functions() -> dict[str, str]:
-    """Return function names and file stems from compiler/prelude_data.agc rows."""
-    found = {}
+def table_functions() -> set[tuple[str, str]]:
+    """Return (file stem, function name) pairs from compiler/prelude_data.agc rows."""
+    found = set()
     row = re.compile(
         r'Model\.PreludeRow\((?:(?!Model\.PreludeRow\().)*?'
         r'module: "([a-z]+)".*?bodies: (\{[^}]*\})',
@@ -26,16 +27,16 @@ def table_functions() -> dict[str, str]:
     )
     for module, bodies in row.findall(TABLE):
         for name in re.findall(r': "([a-z_]+)"', bodies):
-            found[name] = module
+            found.add((module, name))
     return found
 
 
 def declared_functions():
-    """Return function names and file stems from stdlib/prelude/ source files."""
-    found = {}
+    """Return (file stem, function name) pairs from stdlib/prelude/ source files."""
+    found = set()
     for path in sorted(PRELUDE.glob("*.agc")):
         for name in re.findall(r"^def ([a-z_]+)\(", path.read_text(encoding="utf-8"), flags=re.MULTILINE):
-            found[name] = path.stem
+            found.add((path.stem, name))
     return found
 
 
@@ -212,6 +213,148 @@ def test_methods_agree_with_python_peer_on_random_lists(tmp_path):
         result = run(cli() + [str(path)])
         assert result.code == 0, result.stderr + text
         assert result.stdout.splitlines() == peer_lines(numbers, words, floats, names), text
+
+
+def slices(items, n):
+    """Python peer of Lazy.each_slice: groups of n items, the last one shorter."""
+    group = []
+    for item in items:
+        group.append(item)
+        if len(group) == n:
+            yield group
+            group = []
+    if group:
+        yield group
+
+
+def windows(items, n):
+    """Python peer of Lazy.each_cons: every run of n neighbours."""
+    window = []
+    for item in items:
+        window = (window + [item])[-n:]
+        if len(window) == n:
+            yield list(window)
+
+
+def lazy_peer_lines(numbers, size, count):
+    """Compute the output of lazy_peer_program() with Python generators, one item at a time like the VM."""
+    def naturals():
+        n = 1
+        while True:
+            yield n
+            n += 1
+
+    def chunks(items):
+        group = []
+        for item in items:
+            if group and item != group[-1] + 1:
+                yield group
+                group = []
+            group.append(item)
+        if group:
+            yield group
+
+    doubled = [n * 2 for n in numbers]
+    kept = [n for n in numbers if n % 3 != 0]
+    lines = [
+        show(("ok", doubled)),
+        show(("ok", list(itertools.islice((n for n in naturals() if n % 7 == 3), count)))),
+        show(("ok", list(slices(iter(numbers), size)))),
+        show(("ok", list(windows(iter(numbers), size)))),
+        show(("ok", list(chunks(iter(numbers))))),
+        show(("ok", [n * i for i, n in enumerate(kept)])),
+        show(("ok", list(itertools.islice((x for n in numbers for x in (n, -n)), count)))),
+        show(("ok", list(itertools.dropwhile(lambda n: n < 5, numbers[count:])))),
+        show(("ok", list(itertools.takewhile(lambda n: n < 5, numbers)))),
+        show(("ok", sum(numbers))),
+    ]
+    found = next((n for n in numbers if n > 9), None)
+    lines.append(show(("ok", found) if found is not None else ("error", "not found")))
+    return lines
+
+
+def lazy_peer_program(numbers, size, count):
+    """Build one Agentica program of Lazy pipelines whose output is checked against lazy_peer_lines()."""
+    return """\
+def main() -> Void
+  numbers: List[Int] = [{numbers}]
+  puts(numbers.lazy.map do |n| n * 2 end.to_a.to_s)
+  puts(Lazy.produce(1) do |n| n + 1 end.filter do |n| n % 7 == 3 end.first({count}).to_s)
+  puts(numbers.lazy.each_slice({size}).to_a.to_s)
+  puts(numbers.lazy.each_cons({size}).to_a.to_s)
+  puts(numbers.lazy.chunk_while do |a, b| b == a + 1 end.to_a.to_s)
+  puts(numbers.lazy.filter do |n| n % 3 != 0 end.with_index do |n, i| n * i end.to_a.to_s)
+  puts(numbers.lazy.flat_map do |n| [n, -n] end.take({count}).to_a.to_s)
+  puts(numbers.lazy.drop({count}).drop_while do |n| n < 5 end.to_a.to_s)
+  puts(numbers.lazy.take_while do |n| n < 5 end.to_a.to_s)
+  puts(numbers.lazy.reduce(0) do |total, n| total + n end.to_s)
+  puts(numbers.lazy.find do |n| n > 9 end.to_s)
+end
+""".format(numbers=", ".join(map(literal, numbers)), size=size, count=count)
+
+
+def test_lazy_agrees_with_python_generators_on_random_lists(tmp_path):
+    random.seed(1727)
+    for case in range(6):
+        numbers = [random.randint(-6, 12) for _ in range(random.choice([0, 1, 2, 7, 11]))]
+        size = random.choice([1, 2, 3, 5])
+        count = random.choice([0, 1, 3, 8])
+        path = tmp_path / ("lazy%d.agc" % case)
+        text = lazy_peer_program(numbers, size, count)
+        path.write_text(text, encoding="utf-8")
+        result = run(cli() + [str(path)])
+        assert result.code == 0, result.stderr + text
+        assert result.stdout.splitlines() == lazy_peer_lines(numbers, size, count), text
+
+
+def composed_peer_lines(numbers, size, count):
+    """Expected output of composed_peer_program(): two or three steps in a row, as Python generators."""
+    def chunks(items):
+        group = []
+        for item in items:
+            if group and item < group[-1]:
+                yield group
+                group = []
+            group.append(item)
+        if group:
+            yield group
+
+    take = itertools.islice
+    return [
+        show(("ok", list(slices(itertools.takewhile(lambda n: n < 9, numbers), size)))),
+        show(("ok", list(take(slices(iter(numbers), size), count)))),
+        show(("ok", list(windows((x for n in numbers for x in (n, n + 1)), size)))),
+        show(("ok", list(chunks(take(numbers, count))))),
+        show(("ok", list(take(windows(slices(iter(numbers), 2), 2), count)))),
+    ]
+
+
+def composed_peer_program(numbers, size, count):
+    """Build one Agentica program of composed Lazy steps, checked against composed_peer_lines()."""
+    return """\
+def main() -> Void
+  numbers: List[Int] = [{numbers}]
+  puts(numbers.lazy.take_while do |n| n < 9 end.each_slice({size}).to_a.to_s)
+  puts(numbers.lazy.each_slice({size}).take({count}).to_a.to_s)
+  puts(numbers.lazy.flat_map do |n| [n, n + 1] end.each_cons({size}).to_a.to_s)
+  puts(numbers.lazy.take({count}).chunk_while do |a, b| b >= a end.to_a.to_s)
+  puts(numbers.lazy.each_slice(2).each_cons(2).first({count}).to_s)
+end
+""".format(numbers=", ".join(map(literal, numbers)), size=size, count=count)
+
+
+def test_composed_lazy_steps_agree_with_python_generators(tmp_path):
+    random.seed(4121)
+    for case in range(6):
+        numbers = [random.randint(-6, 12) for _ in range(random.choice([0, 1, 2, 7, 11]))]
+        size = random.choice([1, 2, 3])
+        count = random.choice([0, 1, 3, 8])
+        path = tmp_path / ("composed%d.agc" % case)
+        text = composed_peer_program(numbers, size, count)
+        path.write_text(text, encoding="utf-8")
+        result = run(cli() + [str(path)])
+        assert result.code == 0, result.stderr + text
+        assert result.stdout.splitlines() == composed_peer_lines(numbers, size, count), text
 
 
 def test_compare_agrees_with_python_code_point_order(tmp_path):
