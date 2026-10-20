@@ -315,7 +315,8 @@ def tool(name):
 def channel_peer(name):
     """The command that runs the independent peer of the child channel called `name` (a file of tests/fixtures without
     its extension): the Python one, and on Windows the Node one, since only Node can give a child the two pipes at
-    descriptors 3 and 4 that the Windows channel is (docs/vm/10-io-processes.md, 10.4)."""
+    descriptors 3 and 4 that the Windows channel is (docs/vm/10-io-processes.md, 10.4). The choice follows the host: a
+    Windows build run under Wine on Linux has no peer (the cases skip with `UNDER_WINE`, which sees the target)."""
     if os.name == "nt":
         return [tool("node"), str(FIXTURES / (name + ".js"))]
     return [PYTHON, str(FIXTURES / (name + ".py"))]

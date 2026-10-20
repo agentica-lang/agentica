@@ -148,6 +148,7 @@ def test_the_vm_command_line_checks_options_and_stops_parsing_at_the_file(tmp_pa
     assert seeded("7")[1] != seeded("8")[1]
 
 
+@pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which a Linux peer cannot give two pipes")
 def test_tests_draw_the_same_values_alone_or_with_others(tmp_path):
     tests = compile_program(
         tmp_path, "seeded-tests",

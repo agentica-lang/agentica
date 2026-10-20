@@ -8,7 +8,7 @@
 // when it asks for two extra pipes.
 "use strict";
 const fs = require("fs");
-const { MARKER, launch } = require("./child_channel.js");
+const { MARKER, launch, writeAll } = require("./child_channel.js");
 
 // ---- the parent side: this program drives a VM that is the child ----
 
@@ -93,14 +93,6 @@ function readLine(fd) {
     if (n === 0) return null;
     bytes.push(one[0]);
     if (one[0] === 10) return Buffer.from(bytes);
-  }
-}
-
-function writeAll(fd, data) {
-  let buffer = Buffer.from(data);
-  while (buffer.length > 0) {
-    const n = fs.writeSync(fd, buffer);
-    buffer = buffer.subarray(n);
   }
 }
 

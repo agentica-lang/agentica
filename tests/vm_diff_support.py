@@ -25,8 +25,8 @@ import pytest
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
-from tests.agentica_test import (FIXTURES, ROOT, RUN_TIMEOUT, WINDOWS, TestCase, _kill_and_collect, channel_peer,
-                                 compile_agc, scaled, vm_binary, vm_command, vm_environment)
+from tests.agentica_test import (FIXTURES, ROOT, RUN_TIMEOUT, UNDER_WINE, WINDOWS, TestCase, _kill_and_collect,
+                                 channel_peer, compile_agc, scaled, vm_binary, vm_command, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
@@ -508,7 +508,8 @@ KNOWN_ISSUE_FIXTURES = {}
 
 
 def skip_reason(name):
-    """Why this system does not run the golden of the fixture, or None: a "host-only:" or "known-issue:" text."""
+    """Why this system does not run the golden of the fixture, or None: a "host-only:" or "known-issue:" text (under Wine,
+    a plain one for the channel fixtures)."""
     family = VARIANT_FAMILY.search(name)
     if family and (family.group(1) == "windows") != WINDOWS:
         return "host-only: %s holds the answers of %s" % (name, "Windows" if family.group(1) == "windows"
@@ -517,6 +518,8 @@ def skip_reason(name):
     gap = KNOWN_ISSUE_FIXTURES.get(name, {}).get(system)
     if gap:
         return "known-issue: #%d %s: %s" % (gap[0], name, gap[1])
+    if UNDER_WINE and Path(FIXTURE_DIR / name).with_suffix(".channel").is_file():
+        return "%s: Wine runs the Windows binary, which a Linux peer cannot give the two pipes of its channel" % name
     return None
 
 

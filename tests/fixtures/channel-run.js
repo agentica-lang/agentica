@@ -1,5 +1,5 @@
-// Runs a command as a child that owns a channel, the Node twin of channel-run.py for Windows (where Python cannot give a
-// child two pipes at descriptors 3 and 4): node channel-run.js FEED COMMAND...
+// Runs a command as a child that owns a channel, the Node twin of channel-run.py for Windows (where Python cannot
+// give a child two pipes at descriptors 3 and 4): node channel-run.js FEED COMMAND...
 //
 // FEED is a file of lines. The peer sends the first line to the channel, and each line the child answers brings the
 // next one; after the last line it closes its end, so the child reads the end of its input. The stdout of the
@@ -9,26 +9,12 @@
 // the one of this program.
 "use strict";
 const fs = require("fs");
-const { launch, watchdog } = require("./child_channel.js");
+const { launch, watchdog, writeAll } = require("./child_channel.js");
 
 const PREFIX = Buffer.from("channel> ");
 const NEWLINE = Buffer.from("\n");
 
-// Writes all of the data to the descriptor, waiting when a pipe is full; a synchronous write keeps the order of the
-// calls whatever the stream does.
-function put(data) {
-  let rest = Buffer.from(data);
-  while (rest.length > 0) {
-    try {
-      rest = rest.subarray(fs.writeSync(1, rest));
-    } catch (error) {
-      if (error.code === "EAGAIN") continue;
-      throw error;
-    }
-  }
-}
-
-async function main() {
+async function main(peers) {
   const [feedFile, ...command] = process.argv.slice(2);
   const pending = fs
     .readFileSync(feedFile)
@@ -38,6 +24,7 @@ async function main() {
     .map((line) => Buffer.from(line + "\n", "latin1"));
   watchdog(100000);
   const peer = launch(command, { stdin: "inherit", stderr: "inherit", stdout: "file" });
+  peers.push(peer);
 
   // The input of the child ends after the last line, once the write is done: a destroy would drop what is queued.
   let closed = false;
@@ -55,8 +42,8 @@ async function main() {
     buffer = Buffer.concat([buffer, chunk]);
     for (let at = buffer.indexOf(10); at >= 0; at = buffer.indexOf(10)) {
       // The stdout written before the record, and then the record.
-      put(peer.takeStdout());
-      put(Buffer.concat([PREFIX, buffer.subarray(0, at), NEWLINE]));
+      writeAll(1, peer.takeStdout());
+      writeAll(1, Buffer.concat([PREFIX, buffer.subarray(0, at), NEWLINE]));
       buffer = buffer.subarray(at + 1);
       feed();
     }
@@ -64,13 +51,16 @@ async function main() {
   feed();
 
   const code = await peer.exited;
-  put(peer.takeStdout());
-  if (buffer.length > 0) put(Buffer.concat([PREFIX, buffer, NEWLINE]));
+  writeAll(1, peer.takeStdout());
+  if (buffer.length > 0) writeAll(1, Buffer.concat([PREFIX, buffer, NEWLINE]));
   peer.close();
   process.exitCode = code === null ? 128 + 9 : code;
 }
 
-main().catch((error) => {
+// The VM that main started, for the catch below.
+const started = [];
+main(started).catch((error) => {
   console.error(error);
+  for (const peer of started) peer.child.kill();
   process.exitCode = 1;
 });

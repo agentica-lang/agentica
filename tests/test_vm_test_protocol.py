@@ -1,9 +1,12 @@
 """The child-channel protocol of `--agentica-test`, driven by an independent peer."""
 import json
 
-from tests.agentica_test import FIXTURES, channel_peer, compile_agc, run, vm_binary
+import pytest
+
+from tests.agentica_test import FIXTURES, UNDER_WINE, channel_peer, compile_agc, run, vm_binary
 
 
+@pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which a Linux peer cannot give two pipes")
 def test_peer_drives_a_test_file_over_the_child_channel(tmp_path):
     """Check indexes, records, free stdin and stdout.
 
