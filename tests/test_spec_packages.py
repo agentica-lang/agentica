@@ -11,30 +11,42 @@ from pathlib import Path
 import pytest
 
 from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, run, vm_environment
-from tests.package_support import COMMIT, Workspace, package_hash
+from tests.package_support import COMMIT, Workspace, dependency, package_hash
 
 # No AGENTICA_PATH roots and no user data folder, so only what a case builds resolves; the cache is each case's own.
 HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
             "LOCALAPPDATA": "/nonexistent-agentica-xdg"}
 
-GREET = ('import Shout from "util/shout"\nimport Tools from "gitlab.com/team/tools/bang"\n\n'
+GREETER_GIT = "https://github.com/owner/greeter.git"
+TOOLS_GIT = "https://gitlab.com/team/tools"
+# The project depends on `greeter` (a tag), which depends on `tools` (a ref), as its own manifest says.
+GREETER = dependency(GREETER_GIT, tag="v1.2.3")
+TOOLS = dependency(TOOLS_GIT, ref="bbbbbbb")
+TOOLS_COMMIT = "b" * 40
+
+GREET = ('import Shout from "util/shout"\nimport Tools from "pkg/tools/bang"\n\n'
          'export def hello(name: String) -> String\n  return Shout.shout("hello #{name}") + Tools.bang()\nend\n')
 SHOUT = "export def shout(text: String) -> String\n  return text.upcase\nend\n"
 BANG = 'export def bang() -> String\n  return "!"\nend\n'
-MAIN = 'import Greet from "owner/repo/greet"\n\ndef main() -> Void\n  puts(Greet.hello("ana"))\nend\n'
+ONE = "export def one() -> Int\n  return 1\nend\n"
+MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Greet.hello("ana"))\nend\n'
+
+
+def build(base):
+    """A workspace whose project depends on greeter, which depends on tools: both are in the cache and the lock."""
+    workspace = Workspace(base)
+    workspace.add_package("tools", TOOLS_GIT, {"bang.agc": BANG}, ref="bbbbbbb", commit=TOOLS_COMMIT)
+    workspace.add_package("greeter", GREETER_GIT, {"greet.agc": GREET, "util/shout.agc": SHOUT}, tag="v1.2.3",
+                          dependencies={"tools": TOOLS})
+    workspace.write_manifest({"greeter": GREETER})
+    workspace.write_lock()
+    (workspace.project / "main.agc").write_text(MAIN, encoding="utf-8")
+    return workspace
 
 
 @pytest.fixture
 def ws(tmp_path):
-    """A project that depends on owner/repo, which depends on gitlab.com/team/tools: both are in the cache."""
-    workspace = Workspace(tmp_path)
-    workspace.add_package("gitlab.com/team/tools", "0.4.1", {"bang.agc": BANG})
-    workspace.add_package("owner/repo", "1.2.3", {"greet.agc": GREET, "util/shout.agc": SHOUT},
-                          requires=["gitlab.com/team/tools@0.4.0"])
-    workspace.write_manifest({"owner/repo": "1.2.0"})
-    workspace.write_lock()
-    (workspace.project / "main.agc").write_text(MAIN, encoding="utf-8")
-    return workspace
+    return build(tmp_path)
 
 
 def environment(ws, **extra):
@@ -68,35 +80,34 @@ def assert_at_import(problem, code, line=1):
     assert "key_path" not in problem
 
 
+def write_main(ws, text):
+    (ws.project / "main.agc").write_text(text + "\ndef main() -> Void\nend\n", encoding="utf-8")
+
+
 def test_a_package_import_runs_from_the_cache_and_stores_logical_paths(ws, tmp_path):
-    # The program imports owner/repo, which imports its own util/shout and its dependency gitlab.com/team/tools.
-    run_result = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
-    assert (run_result.code, run_result.stdout) == (0, "HELLO ANA!\n"), run_result.stderr
-    # The .agcb names each package file by key, version and path, so its bytes do not depend on the cache folder.
+    # The program imports greeter, which imports its own util/shout and its dependency tools by pkg/tools/.
+    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
+    assert (ran.code, ran.stdout) == (0, "HELLO ANA!\n"), ran.stderr
+    # The .agcb names each package file by name, version and path, so its bytes do not depend on the cache folder.
     built = []
     for index in range(2):
-        other = Workspace(tmp_path / ("copy%d" % index))
-        other.add_package("gitlab.com/team/tools", "0.4.1", {"bang.agc": BANG})
-        other.add_package("owner/repo", "1.2.3", {"greet.agc": GREET, "util/shout.agc": SHOUT},
-                          requires=["gitlab.com/team/tools@0.4.0"])
-        other.write_manifest({"owner/repo": "1.2.0"})
-        other.write_lock()
-        (other.project / "main.agc").write_text(MAIN, encoding="utf-8")
+        other = build(tmp_path / ("copy%d" % index))
         output = tmp_path / ("out%d.agcb" % index)
         result = run(cli() + ["compile", str(other.project / "main.agc"), "-o", str(output)], cwd=other.base,
                      env=environment(other))
         assert result.code == 0, result.stderr
         built.append(output.read_bytes())
     assert built[0] == built[1]
-    for name in [b"owner/repo@1.2.3/greet.agc", b"owner/repo@1.2.3/util/shout.agc",
-                 b"gitlab.com/team/tools@0.4.1/bang.agc", b"main.agc"]:
+    # A tag names the version; a ref names the first 12 digits of the commit.
+    for name in [b"pkg/greeter@v1.2.3/greet.agc", b"pkg/greeter@v1.2.3/util/shout.agc",
+                 b"pkg/tools@bbbbbbbbbbbb/bang.agc", b"main.agc"]:
         assert name in built[0]
     assert str(tmp_path).encode() not in built[0]
 
 
-def test_the_hash_covers_the_agc_files_only_and_matches_a_second_implementation(ws, tmp_path):
+def test_the_hash_covers_the_agc_files_only_and_matches_a_second_implementation(ws):
     # Non-.agc files, a hidden folder and the agc_libs folder of the package are not hashed: adding them changes nothing.
-    folder = ws.folder("owner/repo")
+    folder = ws.folder(GREETER_GIT)
     (folder / "README.md").write_text("not code", encoding="utf-8")
     (folder / ".git").mkdir()
     (folder / ".git" / "x.agc").write_text("junk", encoding="utf-8")
@@ -105,31 +116,63 @@ def test_the_hash_covers_the_agc_files_only_and_matches_a_second_implementation(
     assert check(ws) is None
     # A package of many files, a name that is not ASCII and a file larger than the 256 KiB the hash reads at a time:
     # the lock holds the hash that Python computed, so the two implementations agree on it.
-    big = {"core.agc": "export def one() -> Int\n  return 1\nend\n", "módulo/x.agc": "# é\n",
-           "a.agc": "# a\n", "a/b.agc": "# b\n", "big.agc": "# " + "x" * 300000 + "\n"}
+    big = {"core.agc": ONE, "módulo/x.agc": "# é\n", "a.agc": "# a\n", "a/b.agc": "# b\n",
+           "big.agc": "# " + "x" * 300000 + "\n"}
     big.update({"part%02d.agc" % number: "# %d\n" % number for number in range(40)})
-    ws.add_package("big/pack", "1.0.0", big)
-    ws.write_manifest({"owner/repo": "1.2.0", "big/pack": "1.0.0"})
+    ws.add_package("big", "https://github.com/big/pack", big)
+    ws.write_manifest({"greeter": GREETER, "big": dependency("https://github.com/big/pack", tag="v1.0.0")})
     ws.write_lock()
     (ws.project / "big.agc").write_text(
-        'import Core from "big/pack/core"\n\ndef main() -> Void\n  puts(Core.one())\nend\n', encoding="utf-8")
+        'import Core from "pkg/big/core"\n\ndef main() -> Void\n  puts(Core.one())\nend\n', encoding="utf-8")
     assert check(ws, "big.agc") is None
-    assert package_hash(ws.folder("big/pack")).startswith("sha256:")
+    assert package_hash(ws.folder("https://github.com/big/pack")).startswith("sha256:")
 
+
+def deps(line):
+    return '[dependencies]\n%s\n' % line
+
+
+SOURCE = 'git = "https://github.com/owner/repo"'
 
 MANIFEST_CASES = [
     ("an unknown key", 'colour = "red"\n', "colour"),
-    ("a key that is not lowercase", '[dependencies]\n"Owner/Repo" = "1.0.0"\n', "dependencies.Owner/Repo"),
-    ("GitHub written with its host", '[dependencies]\n"github.com/owner/repo" = "1.0.0"\n',
-     "dependencies.github.com/owner/repo"),
-    ("a reserved first part", '[dependencies]\n"std/queue" = "1.0.0"\n', "dependencies.std/queue"),
-    ("a minimum that is not a version", '[dependencies]\n"owner/repo" = "1.x"\n', "dependencies.owner/repo"),
-    ("a dependency that is not a string", '[dependencies]\n"owner/repo" = 1\n', "dependencies.owner/repo"),
-    ("a name that is not a key", 'name = "Not A Key"\n', "name"),
-    ("a version that is not semver", 'version = "1.2"\n', "version"),
+    ("the old version key", 'version = "1.0.0"\n', "version"),
+    ("a name that is not a package name", 'name = "Not A Name"\n', "name"),
+    ("a table where a string goes", 'name = { a = 1 }\n', "name"),
+    ("a dependency name with capitals", deps('Sqlite = { %s, tag = "v1" }' % SOURCE), "dependencies.Sqlite"),
+    ("a dependency name that is an owner/repo", deps('"owner/repo" = { %s, tag = "v1" }' % SOURCE),
+     "dependencies.owner/repo"),
+    ("a dependency name that starts with a digit", deps('"1x" = { %s, tag = "v1" }' % SOURCE), "dependencies.1x"),
+    ("a dependency that is a string", deps('sqlite = "1.0.0"'), "dependencies.sqlite"),
+    ("a dependency with no git", deps('sqlite = { tag = "v1" }'), "dependencies.sqlite"),
+    ("a source that is a path", deps('sqlite = { path = "../x" }'), "dependencies.sqlite.path"),
+    ("a branch", deps('sqlite = { %s, branch = "main" }' % SOURCE), "dependencies.sqlite.branch"),
+    ("a version range", deps('sqlite = { %s, version = "^1" }' % SOURCE), "dependencies.sqlite.version"),
+    ("neither a tag nor a ref", deps('sqlite = { %s }' % SOURCE), "dependencies.sqlite"),
+    ("both a tag and a ref", deps('sqlite = { %s, tag = "v1", ref = "abcdef0" }' % SOURCE), "dependencies.sqlite"),
+    ("a tag that is not a string", deps('sqlite = { %s, tag = 1 }' % SOURCE), "dependencies.sqlite.tag"),
+    ("a tag with a slash", deps('sqlite = { %s, tag = "rel/1" }' % SOURCE), "dependencies.sqlite.tag"),
+    ("a ref that is too short", deps('sqlite = { %s, ref = "abc" }' % SOURCE), "dependencies.sqlite.ref"),
+    ("a ref in capitals", deps('sqlite = { %s, ref = "ABCDEF0" }' % SOURCE), "dependencies.sqlite.ref"),
+    ("a git URL over http", deps('sqlite = { git = "http://github.com/o/r", tag = "v1" }'), "dependencies.sqlite.git"),
+    ("a git URL for ssh", deps('sqlite = { git = "git@github.com:o/r.git", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git URL with a port", deps('sqlite = { git = "https://github.com:8443/o/r", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git URL with a user", deps('sqlite = { git = "https://me@github.com/o/r", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git URL with a host in capitals", deps('sqlite = { git = "https://GitHub.com/o/r", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git URL with one part", deps('sqlite = { git = "https://github.com/owner", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git URL with three parts", deps('sqlite = { git = "https://github.com/a/b/c", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git URL with a slash at the end", deps('sqlite = { git = "https://github.com/o/r/", tag = "v1" }'),
+     "dependencies.sqlite.git"),
+    ("a git URL with a query", deps('sqlite = { git = "https://github.com/o/r?x=1", tag = "v1" }'),
+     "dependencies.sqlite.git"),
     ("an unknown style key", '[style]\ncolour = 1\n', "style.colour"),
     ("a style width that is not positive", '[style]\nmax_line_width = 0\n', "style.max_line_width"),
-    ("a table where a string goes", 'name = { a = 1 }\n', "name"),
 ]
 
 
@@ -137,6 +180,19 @@ MANIFEST_CASES = [
 def test_a_bad_manifest_names_the_file_and_the_key_path(ws, what, text, key_path):
     (ws.project / "agentica.toml").write_text(text, encoding="utf-8")
     assert_at_key(check(ws), "PKG-MANIFEST-INVALID", ws.project / "agentica.toml", key_path)
+
+
+def test_every_good_form_of_a_dependency_is_accepted(ws):
+    forms = {"sqlite": dependency("https://github.com/owner/sqlite-ac", tag="v1.2.0"),
+             "json5": dependency("https://gitlab.com/someone/json5.git", ref="3f2a9c1"),
+             "a_b-2": dependency("https://git.example.org/Some.Owner/Repo_1", tag="1.0+build.5")}
+    for name, entry in forms.items():
+        commit = "3f2a9c1" + "0" * 33 if "ref" in entry else COMMIT
+        ws.add_package(name, entry["git"], {"x.agc": ONE}, tag=entry.get("tag"), ref=entry.get("ref"), commit=commit)
+    ws.write_manifest(forms)
+    ws.write_lock()
+    (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
+    assert check(ws, "plain.agc") is None
 
 
 def test_a_toml_syntax_error_in_the_manifest_has_a_line_and_column(ws):
@@ -160,15 +216,7 @@ def test_the_manifest_is_found_above_the_root_file_and_a_project_with_no_depende
     assert check(ws, "plain.agc") is None
 
 
-def lock_edit(change):
-    return lambda ws: ws.write_lock(change)
-
-
-def drop(key):
-    return lambda entries: [entry.pop(key) for entry in entries if entry["name"] == "owner/repo"]
-
-
-def set_field(key, value, name="owner/repo"):
+def set_field(key, value, name="greeter"):
     def edit(entries):
         for entry in entries:
             if entry["name"] == name:
@@ -176,53 +224,105 @@ def set_field(key, value, name="owner/repo"):
     return edit
 
 
-# (what, edit of the lock entries, code, file of the report, key path); entries are sorted by name, so the package
-# gitlab.com/team/tools is entry 0 and owner/repo is entry 1.
+def drop(key, name="greeter"):
+    def edit(entries):
+        for entry in entries:
+            if entry["name"] == name:
+                entry.pop(key, None)
+    return edit
+
+
+def both(first, second):
+    return lambda entries: (first(entries), second(entries))
+
+
+# (what, edit of the lock entries, key path); entries are sorted by name, so greeter is entry 0 and tools entry 1.
 LOCK_CASES = [
-    ("a package with no hash", drop("hash"), "PKG-LOCK-INVALID", "agentica.lock", "package[1].hash"),
-    ("a hash that is not a hash", set_field("hash", "sha256:abc"), "PKG-LOCK-INVALID", "agentica.lock",
-     "package[1].hash"),
-    ("a commit that is not a commit", set_field("commit", "main"), "PKG-LOCK-INVALID", "agentica.lock",
-     "package[1].commit"),
-    ("a version that is not semver", set_field("version", "one"), "PKG-LOCK-INVALID", "agentica.lock",
-     "package[1].version"),
-    ("a requirement that is not key@minimum", set_field("requires", ["gitlab.com/team/tools"]), "PKG-LOCK-INVALID",
-     "agentica.lock", "package[1].requires[0]"),
-    ("a package locked twice", set_field("name", "gitlab.com/team/tools"), "PKG-LOCK-INVALID", "agentica.lock",
-     "package[1].name"),
-    ("a locked version below a minimum of the manifest", set_field("version", "1.1.0"), "PKG-LOCK-STALE",
-     "agentica.toml", "dependencies.owner/repo"),
-    ("a locked version below a minimum of another package", set_field("version", "0.3.0", "gitlab.com/team/tools"),
-     "PKG-LOCK-STALE", "agentica.lock", "package[1].requires[0]"),
-    ("a requirement that the lock does not hold", set_field("requires", ["acme/other@1.0.0"]), "PKG-LOCK-STALE",
-     "agentica.lock", "package[1].requires[0]"),
-    ("another major than the manifest asks for", set_field("version", "2.0.0"), "PKG-MAJOR-CONFLICT", "agentica.toml",
-     "dependencies.owner/repo"),
+    ("a package with no hash", drop("hash"), "package[0].hash"),
+    ("a hash that is not a hash", set_field("hash", "sha256:abc"), "package[0].hash"),
+    ("a hash in capitals", set_field("hash", "sha256:" + "A" * 64), "package[0].hash"),
+    ("a commit that is not a commit", set_field("commit", "main"), "package[0].commit"),
+    ("a commit that does not start with the ref", set_field("commit", "c" * 40, "tools"), "package[1].commit"),
+    ("a package with no git", drop("git"), "package[0].git"),
+    ("a git URL that is not https", set_field("git", "git@github.com:o/r.git"), "package[0].git"),
+    ("a package with no tag and no ref", drop("tag"), "package[0]"),
+    ("a package with a tag and a ref", set_field("ref", "abcdef0"), "package[0]"),
+    ("a tag that is not a tag", set_field("tag", "a/b"), "package[0].tag"),
+    ("a name that is not a package name", set_field("name", "Greeter"), "package[0].name"),
+    ("a package locked twice", set_field("name", "tools"), "package[1].name"),
+    ("a key the lock does not know", set_field("requires", []), "package[0].requires"),
 ]
 
 
-@pytest.mark.parametrize("what, edit, code, file, key_path", LOCK_CASES, ids=[case[0] for case in LOCK_CASES])
-def test_a_lock_that_is_bad_or_stale_names_the_file_and_the_key_path(ws, what, edit, code, file, key_path):
+@pytest.mark.parametrize("what, edit, key_path", LOCK_CASES, ids=[case[0] for case in LOCK_CASES])
+def test_a_bad_lock_names_the_file_and_the_key_path(ws, what, edit, key_path):
     ws.write_lock(edit)
-    assert_at_key(check(ws), code, ws.project / file, key_path)
+    assert_at_key(check(ws), "PKG-LOCK-INVALID", ws.project / "agentica.lock", key_path)
 
 
-def test_the_lock_must_hold_every_dependency_of_the_manifest(ws):
-    ws.write_manifest({"owner/repo": "1.2.0", "owner/other": "1.0.0"})
-    assert_at_key(check(ws), "PKG-LOCK-STALE", ws.project / "agentica.toml", "dependencies.owner/other")
+def test_a_lock_of_another_format_is_invalid(ws):
     (ws.project / "agentica.lock").write_text("version = 2\n", encoding="utf-8")
     assert_at_key(check(ws), "PKG-LOCK-INVALID", ws.project / "agentica.lock", "version")
 
 
+STALE_CASES = [
+    ("the lock has another tag", set_field("tag", "v1.2.4"), {}),
+    ("the lock has another git URL", set_field("git", "https://github.com/owner/other.git"), {}),
+    ("the lock pins a ref where the manifest has a tag", both(drop("tag"), set_field("ref", "aaaaaaa")), {}),
+    ("the lock lacks a dependency of the manifest", lambda entries: entries.pop(0), {}),
+    ("the manifest has a dependency that the lock lacks", None, {"extra": dependency("https://github.com/o/r", ref="abcdef0")}),
+]
+
+
+@pytest.mark.parametrize("what, edit, extra", STALE_CASES, ids=[case[0] for case in STALE_CASES])
+def test_a_lock_that_differs_from_the_manifest_is_stale(ws, what, edit, extra):
+    if extra:
+        ws.write_manifest({"greeter": GREETER, **extra})
+        expected = "dependencies.extra"
+    else:
+        ws.write_lock(edit)
+        expected = "dependencies.greeter"
+    assert_at_key(check(ws), "PKG-LOCK-STALE", ws.project / "agentica.toml", expected)
+
+
+def test_the_same_spelling_of_a_git_URL_with_or_without_dot_git_is_one_source(ws):
+    ws.write_manifest({"greeter": dependency(GREETER_GIT[:-4], tag="v1.2.3")})
+    assert check(ws) is None
+
+
+def test_one_name_with_two_sources_in_the_tree_is_a_conflict(ws):
+    # The manifest of greeter, in the cache, asks for another tag of tools than the lock (and the project) has.
+    manifest = ws.folder(GREETER_GIT) / "agentica.toml"
+    manifest.write_text('[dependencies]\ntools = { git = "%s", tag = "v9.9.9" }\n' % TOOLS_GIT, encoding="utf-8")
+    assert_at_key(check(ws), "PKG-SOURCE-CONFLICT", manifest, "dependencies.tools")
+    # The same name from another repository.
+    manifest.write_text('[dependencies]\ntools = { git = "https://gitlab.com/else/tools", ref = "bbbbbbb" }\n',
+                        encoding="utf-8")
+    assert_at_key(check(ws), "PKG-SOURCE-CONFLICT", manifest, "dependencies.tools")
+    # A name that the lock does not hold at all is a lock that does not cover the tree.
+    manifest.write_text('[dependencies]\nmore = { git = "https://gitlab.com/else/more", ref = "bbbbbbb" }\n',
+                        encoding="utf-8")
+    assert_at_key(check(ws), "PKG-LOCK-STALE", manifest, "dependencies.more")
+    # The manifest of a package is checked like the project's: an unknown key is PKG-MANIFEST-INVALID in its file.
+    manifest.write_text('colour = "red"\n', encoding="utf-8")
+    assert_at_key(check(ws), "PKG-MANIFEST-INVALID", manifest, "colour")
+
+
+def test_the_project_and_a_package_may_declare_one_name_with_the_same_source(ws):
+    # The project asks for tools too, with the source the lock and greeter's manifest hold: not a conflict.
+    ws.write_manifest({"greeter": GREETER, "tools": TOOLS})
+    assert check(ws) is None
+
+
 def test_a_cache_that_does_not_match_the_lock_is_refused_when_the_package_is_loaded(ws):
-    greet = ws.folder("owner/repo") / "greet.agc"
+    greet = ws.folder(GREETER_GIT) / "greet.agc"
     original = greet.read_bytes()
     greet.write_bytes(original + b"# changed\n")
     assert_at_import(check(ws), "PKG-HASH-MISMATCH")
     greet.write_bytes(original)
     assert check(ws) is None
     # A new .agc file changes the listing, so it changes the hash too.
-    (ws.folder("owner/repo") / "extra.agc").write_text("# new\n", encoding="utf-8")
+    (ws.folder(GREETER_GIT) / "extra.agc").write_text("# new\n", encoding="utf-8")
     assert_at_import(check(ws), "PKG-HASH-MISMATCH")
     # The hash is checked for what a build loads: a file that imports nothing from the package never pays for it.
     (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
@@ -231,7 +331,7 @@ def test_a_cache_that_does_not_match_the_lock_is_refused_when_the_package_is_loa
 
 @pytest.mark.skipif(not POSIX_PYTHON, reason="host-only: a symbolic link needs no privilege on POSIX only")
 def test_a_symbolic_link_among_the_agc_files_of_a_package_is_refused(ws):
-    folder = ws.folder("owner/repo")
+    folder = ws.folder(GREETER_GIT)
     (folder / "linked.agc").symlink_to(folder / "greet.agc")
     assert_at_import(check(ws), "PKG-SYMLINK")
 
@@ -264,77 +364,49 @@ def test_the_cache_folder_follows_the_environment_of_the_system(ws, tmp_path):
     assert check(ws, XDG_CACHE_HOME="relative", HOME=str(home), LOCALAPPDATA=str(tmp_path / "nowhere")) is None
 
 
-def test_a_package_is_written_one_way_and_a_clash_with_a_relative_path_is_ambiguous(ws):
-    root = ws.project / "main.agc"
-    cases = [
-        ('import G from "github.com/owner/repo/greet"\n', "CHECK-IMPORT-PATH"),
-        ('import G from "owner/repo"\n', "CHECK-IMPORT-PATH"),
-        ('import G from "owner/repo/../repo/greet"\n', "CHECK-IMPORT-PATH"),
-        ('import G from "owner/repo/missing"\n', "CHECK-IMPORT-IO"),
-        # A package that the manifest does not declare is an ordinary relative path, as before.
-        ('import G from "gitlab.com/team/tools/bang"\n', "CHECK-IMPORT-IO"),
-    ]
-    for line, code in cases:
-        root.write_text(line + "\ndef main() -> Void\nend\n", encoding="utf-8")
-        assert_at_import(check(ws), code)
-    # The folder or the file beside the importing file that the path also names.
-    root.write_text(MAIN, encoding="utf-8")
-    for relative in ["owner/repo/greet.agc", "owner/repo/other.agc"]:
-        path = ws.project / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("# a local file\n", encoding="utf-8")
-        assert_at_import(check(ws), "CHECK-IMPORT-AMBIGUOUS")
-        path.unlink()
-        path.parent.rmdir()
-        path.parent.parent.rmdir()
-    assert check(ws) is None
-
-
-def test_an_undeclared_name_in_the_project_stays_a_relative_path(ws):
-    # `other/thing` is no key of the manifest, so the folder beside the file is imported as it always was.
-    (ws.project / "other").mkdir()
-    (ws.project / "other" / "thing.agc").write_text("export def one() -> Int\n  return 1\nend\n", encoding="utf-8")
-    (ws.project / "local.agc").write_text(
-        'import Thing from "other/thing"\n\ndef main() -> Void\n  puts(Thing.one())\nend\n', encoding="utf-8")
-    assert check(ws, "local.agc") is None
-
-
-# A line that a package file adds at its top, and the code of the report. The report is in the package file.
-PACKAGE_IMPORT_CASES = [
-    ("an import that leaves the package", 'import X from "../outside"\n', "CHECK-IMPORT-PATH"),
-    ("an import of a hidden folder", 'import X from ".hidden/x"\n', "CHECK-IMPORT-PATH"),
-    ("an import of agc_libs", 'import X from "agc_libs/x"\n', "CHECK-IMPORT-PATH"),
-    ("a package it did not declare", 'import X from "acme/other/x"\n', "CHECK-IMPORT-IO"),
-    ("a package of the project it does not require", 'import X from "owner/repo/util/shout"\n', "CHECK-IMPORT-IO"),
+IMPORT_CASES = [
+    ("a package named with no module", 'import G from "pkg/greeter"\n', "CHECK-IMPORT-PATH"),
+    ("a dot dot part", 'import G from "pkg/greeter/../greeter/greet"\n', "CHECK-IMPORT-PATH"),
+    ("a module the package lacks", 'import G from "pkg/greeter/missing"\n', "CHECK-IMPORT-IO"),
+    ("the old owner/repo form", 'import G from "owner/greeter/greet"\n', "CHECK-IMPORT-IO"),
+    ("the old host form", 'import G from "github.com/owner/greeter/greet"\n', "CHECK-IMPORT-IO"),
 ]
 
 
-@pytest.mark.parametrize("what, line, code", PACKAGE_IMPORT_CASES, ids=[case[0] for case in PACKAGE_IMPORT_CASES])
-def test_a_package_file_may_import_only_inside_itself_and_what_the_lock_says_it_requires(ws, what, line, code):
-    # The package is built again with the added import, and the lock is made for it.
-    ws.add_package("owner/repo", "1.2.3", {"greet.agc": line + GREET, "util/shout.agc": SHOUT,
-                                            ".hidden/x.agc": SHOUT, "agc_libs/x.agc": SHOUT},
-                   requires=["gitlab.com/team/tools@0.4.0"], commit="b" * 40)
-    ws.locked = [entry for entry in ws.locked if entry["commit"] != COMMIT or entry["name"] != "owner/repo"]
-    ws.write_lock()
-    problem = check(ws)
-    assert problem["code"] == code
-    assert Path(problem["file"]) == ws.folder("owner/repo", "b" * 40) / "greet.agc"
-    assert start(problem) == (1, 1)
+@pytest.mark.parametrize("what, line, code", IMPORT_CASES, ids=[case[0] for case in IMPORT_CASES])
+def test_a_package_import_is_pkg_name_and_a_module(ws, what, line, code):
+    write_main(ws, line)
+    assert_at_import(check(ws), code)
 
 
-def test_the_root_may_import_only_its_direct_dependencies(ws):
-    # gitlab.com/team/tools is in the lock because owner/repo requires it, but the manifest does not declare it.
-    (ws.project / "main.agc").write_text(
-        'import Tools from "gitlab.com/team/tools/bang"\n\ndef main() -> Void\n  puts(Tools.bang())\nend\n',
-        encoding="utf-8")
+def test_an_undeclared_name_falls_back_to_the_pkg_roots_and_the_project_cannot_reach_a_transitive_package(ws):
+    # tools is in the lock because greeter needs it, but the manifest of the project does not declare it, so
+    # pkg/tools/ is today's library search: nothing there.
+    write_main(ws, 'import Tools from "pkg/tools/bang"\n')
     assert_at_import(check(ws), "CHECK-IMPORT-IO")
+    (ws.project / "agc_libs" / "tools").mkdir(parents=True)
+    (ws.project / "agc_libs" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
+    assert check(ws) is None
+
+
+def test_a_declared_name_shadows_a_library_of_the_same_name(ws):
+    # agc_libs/greeter/greet.agc exists, but the manifest declares greeter, so the package is the one that loads.
+    (ws.project / "agc_libs" / "greeter").mkdir(parents=True)
+    (ws.project / "agc_libs" / "greeter" / "greet.agc").write_text(
+        'export def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
+    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
+    assert (ran.code, ran.stdout) == (0, "HELLO ANA!\n"), ran.stderr
+    # Undeclared, the same import is the library.
+    ws.write_manifest({"tools": TOOLS})
+    ws.write_lock()
+    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
+    assert (ran.code, ran.stdout) == (0, "library\n"), ran.stderr
 
 
 def test_the_manifest_directory_holds_agc_libs_when_there_is_a_manifest(ws):
     # pkg/ libraries are searched in agc_libs/ beside agentica.toml, even for a root file in a folder below it.
     (ws.project / "agc_libs").mkdir()
-    (ws.project / "agc_libs" / "tool.agc").write_text("export def one() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (ws.project / "agc_libs" / "tool.agc").write_text(ONE, encoding="utf-8")
     (ws.project / "src").mkdir()
     (ws.project / "src" / "use.agc").write_text(
         'import Tool from "pkg/tool"\n\ndef main() -> Void\n  puts(Tool.one())\nend\n', encoding="utf-8")
@@ -343,3 +415,33 @@ def test_the_manifest_directory_holds_agc_libs_when_there_is_a_manifest(ws):
     (ws.project / "agc_libs" / "tool.agc").rename(ws.project / "src" / "agc_libs" / "tool.agc")
     assert_at_import(check(ws, "src/use.agc"), "CHECK-IMPORT-IO")
     assert os.path.exists(ws.project / "src" / "agc_libs" / "tool.agc")
+
+
+# A line that a package file adds at its top, and the code of the report. The report is in the package file.
+PACKAGE_IMPORT_CASES = [
+    ("an import that leaves the package", 'import X from "../outside"\n', "CHECK-IMPORT-PATH"),
+    ("an import of a hidden folder", 'import X from ".hidden/x"\n', "CHECK-IMPORT-PATH"),
+    ("an import of agc_libs", 'import X from "agc_libs/x"\n', "CHECK-IMPORT-PATH"),
+    ("a package it did not declare", 'import X from "pkg/other/x"\n', "CHECK-IMPORT-PACKAGE"),
+    ("itself by name", 'import X from "pkg/greeter/util/shout"\n', "CHECK-IMPORT-PACKAGE"),
+    ("a package of the project that it does not declare", 'import X from "pkg/greeter2/x"\n',
+     "CHECK-IMPORT-PACKAGE"),
+]
+
+
+@pytest.mark.parametrize("what, line, code", PACKAGE_IMPORT_CASES, ids=[case[0] for case in PACKAGE_IMPORT_CASES])
+def test_a_package_file_may_import_only_inside_itself_and_what_its_manifest_declares(ws, what, line, code):
+    # The package is built again with the added import, as another commit, and the lock is made for it.
+    ws.locked = [entry for entry in ws.locked if entry["name"] != "greeter"]
+    ws.add_package("greeter", GREETER_GIT, {"greet.agc": line + GREET, "util/shout.agc": SHOUT, ".hidden/x.agc": SHOUT,
+                                            "agc_libs/x.agc": SHOUT}, tag="v1.2.3", dependencies={"tools": TOOLS},
+                   commit="c" * 40)
+    ws.write_lock()
+    # The project declares greeter2 as well, and pkg/ libraries exist, so only the manifest of the package decides.
+    ws.write_manifest({"greeter": GREETER})
+    (ws.project / "agc_libs" / "other").mkdir(parents=True)
+    (ws.project / "agc_libs" / "other" / "x.agc").write_text(ONE, encoding="utf-8")
+    problem = check(ws)
+    assert problem["code"] == code
+    assert Path(problem["file"]) == ws.folder(GREETER_GIT, "c" * 40) / "greet.agc"
+    assert start(problem) == (1, 1)

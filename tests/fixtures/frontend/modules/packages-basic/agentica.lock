@@ -1,0 +1,15 @@
+version = 1
+
+[[package]]
+name = "greeter"
+git = "https://github.com/owner/greeter.git"
+tag = "v1.2.3"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+hash = "sha256:1239aeba973409210caec6a10934ff649e11538d7d19d851d12336ce73442023"
+
+[[package]]
+name = "tools"
+git = "https://gitlab.com/team/tools"
+ref = "aaaaaaa"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+hash = "sha256:eec2c68b7df0c482a0dea7a004eb74dba2da04661165ad27d0e735be2534766f"

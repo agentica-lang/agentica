@@ -4,6 +4,7 @@ There is no fetching yet, so a test fills the package cache itself. `package_has
 again with hashlib and os.walk, as a second implementation to check the Agentica one against.
 """
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -30,9 +31,31 @@ def package_hash(folder):
     return "sha256:" + digest.hexdigest()
 
 
-def host_path(key):
-    """The part of the cache path for a key: GitHub keys have no host, so they get github.com."""
-    return key if "." in key.split("/")[0] else "github.com/" + key
+def cache_path(git):
+    """The part of the cache path for a git URL: host/owner/repo, with no scheme and no .git."""
+    rest = git[len("https://"):]
+    return rest[:-len(".git")] if rest.endswith(".git") else rest
+
+
+def dependency(git, tag=None, ref=None):
+    """A dependency of a manifest, as the inline table the manifest writes."""
+    entry = {"git": git}
+    if tag is not None:
+        entry["tag"] = tag
+    if ref is not None:
+        entry["ref"] = ref
+    return entry
+
+
+def inline_table(entry):
+    return "{ " + ", ".join('%s = "%s"' % pair for pair in entry.items()) + " }"
+
+
+def manifest_text(dependencies, extra=""):
+    """The text of an agentica.toml with these {name: dependency} entries and any text after them."""
+    text = 'name = "app"\n\n[dependencies]\n'
+    text += "".join("%s = %s\n" % (name, inline_table(entry)) for name, entry in dependencies.items())
+    return text + extra
 
 
 class Workspace:
@@ -56,19 +79,24 @@ class Workspace:
         """The environment that points the compiler at self.cache: the system reads one of the two variables."""
         return {"LOCALAPPDATA": str(self.cache)} if WINDOWS else {"XDG_CACHE_HOME": str(self.cache)}
 
-    def folder(self, key, commit=COMMIT):
+    def folder(self, git, commit=COMMIT):
         """Where the cache keeps one commit of a package."""
-        return self.pkg_root / host_path(key) / commit
+        return self.pkg_root / cache_path(git) / commit
 
-    def add_package(self, key, version, files, requires=(), commit=COMMIT):
-        """Writes the files of a package into the cache and notes its entry for the lock."""
-        folder = self.folder(key, commit)
-        for name, text in files.items():
-            path = folder / name
+    def add_package(self, name, git, files, tag=None, ref=None, dependencies=None, commit=COMMIT):
+        """Writes the files of a package into the cache, with the agentica.toml that declares `dependencies` when
+        there are any, and notes its entry for the lock. A package is pinned by `tag`, or by `ref` when it has no tag."""
+        folder = self.folder(git, commit)
+        for relative, text in files.items():
+            path = folder / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(text if isinstance(text, bytes) else text.encode("utf-8"))
-        entry = {"name": key, "version": version, "source": "https://%s.git" % host_path(key), "commit": commit,
-                 "hash": package_hash(folder), "requires": list(requires)}
+        if dependencies is not None:
+            (folder / "agentica.toml").write_text(manifest_text(dependencies), encoding="utf-8")
+        if tag is None and ref is None:
+            tag = "v1.0.0"
+        entry = {"name": name, "git": git, "commit": commit, "hash": package_hash(folder)}
+        entry.update({"tag": tag} if ref is None else {"ref": ref})
         self.locked.append(entry)
         return entry
 
@@ -80,15 +108,12 @@ class Workspace:
         text = "version = 1\n"
         for entry in entries:
             text += "\n[[package]]\n"
-            for key in ["name", "version", "source", "commit", "hash"]:
+            order = ["name", "git", "tag", "ref", "commit", "hash"]
+            for key in order + [key for key in entry if key not in order]:
                 if key in entry:
-                    text += '%s = "%s"\n' % (key, entry[key])
-            if "requires" in entry:
-                text += "requires = [%s]\n" % ", ".join('"%s"' % item for item in entry["requires"])
+                    text += "%s = %s\n" % (key, json.dumps(entry[key]))
         (self.project / "agentica.lock").write_text(text, encoding="utf-8")
 
     def write_manifest(self, dependencies, extra=""):
-        """Writes agentica.toml with these {key: minimum} dependencies and any text after them."""
-        text = 'name = "me/app"\nversion = "0.1.0"\n\n[dependencies]\n'
-        text += "".join('"%s" = "%s"\n' % pair for pair in dependencies.items())
-        (self.project / "agentica.toml").write_text(text + extra, encoding="utf-8")
+        """Writes agentica.toml with these {name: dependency} entries and any text after them."""
+        (self.project / "agentica.toml").write_text(manifest_text(dependencies, extra), encoding="utf-8")
