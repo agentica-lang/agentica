@@ -331,10 +331,11 @@ HttpWire.local_port(server: HttpServer) -> Int
   deadline, or within 100 ms when that has passed. The write side is then shut
   (`close_write`), and input is read and dropped until the peer closes, the
   deadline, or 256 KiB (`DRAIN_BYTES`, as in Go's net/http), whichever comes
-  first, so unread request bytes cannot turn the close into a reset that loses
-  the answer, and a peer that keeps sending cannot hold the server reading.
-  The read returns `error("http: <reason>")`. EOF before the
-  first byte is `network: end of input`. EOF mid-request is
+  first. This way unread request bytes cannot turn the close into a reset that
+  loses the answer, and a peer that keeps sending cannot hold the server
+  reading. A peer that is still sending a large body after the limit may see a
+  reset instead of the answer. The read returns `error("http: <reason>")`. EOF
+  before the first byte is `network: end of input`. EOF mid-request is
   `http: connection closed before the request was complete`. The deadline
   returns `network: operation timed out` with no answer. TCP reads only while
   a reader waits, so pipelined bytes cannot grow the buffer past one read.

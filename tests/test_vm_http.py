@@ -409,8 +409,10 @@ def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte
         try:
             while time.monotonic() - started < 1.5:
                 sent += conn.send(junk)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
+        except OSError:
+            # Reset, aborted or broken pipe, depending on the system. A send timeout would also land here, so the
+            # time is checked too.
+            assert time.monotonic() - started < 1.5, "the server cut the peer off only after %d bytes" % sent
         else:
             pytest.fail("the server kept reading for %d bytes" % sent)
         # Loopback buffers hold a few MB at most; an unbounded drain reads about 130 MB/s.
