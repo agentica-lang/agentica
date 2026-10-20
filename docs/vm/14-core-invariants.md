@@ -146,7 +146,13 @@ cancelled: the spawn reads the flag of the parent (or of the task that owns the
 groups above it) under `rt->sync`, which the walk holds too, and ends the child
 before it runs (`spawn_child` in `vm/task.c`, #392). A handle handed to the
 child is moved first, so the child's end closes it. Cancel reaches every
-descendant.
+descendant. An end hook set after the spawn (`Task.map`'s items,
+`HttpWire.spawn`) may not run for such a child, which may have ended already; a
+handed file's close can delay that end through `closing`. Its caller is
+cancelled too, so nothing waits for the hook. A turn that fails with a
+diagnostic that is not fatal in a task already cancelled (such as
+`Task.await` of that child) ends the task as cancelled, not as a crash: a flag
+set during the turn wins.
 
 A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its
 `cancel` half. A wait that has taken nothing yet leaves its queue at once, on

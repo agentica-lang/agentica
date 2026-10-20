@@ -1242,7 +1242,9 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
    HTTP server's waiter does (#403): the next connection goes to a live accept, and the bytes stay in the input for the
    next read, whose reader lock the job's end hands on. An accept in its TLS handshake leaves too, and drop_request
    closes its connection. A request that `finish` already filled keeps its result: its done half runs and the result
-   is dropped, so a served accept's socket is closed. A connect or a listen waits for its owner's close. */
+   is dropped, so a served accept's socket is closed. A connect or a listen waits for its owner's close. A read or an
+   accept takes its data only in `finish`, and `q->finished` and the slots are written only on the I/O thread, where
+   this runs, so "has taken nothing" is exactly `!q->finished`. */
 static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
   (void)vm;
   (void)context;

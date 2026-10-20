@@ -1,8 +1,8 @@
 /*
  * TCP and TLS builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9), against a POSIX
  * peer, in orders set by the calls: a close behind a read's START, the deadline before and after the bytes, an accept
- * and a read cancelled before anything came, a served accept of a cancelled task, a cancelled TLS connect past its deadline, and HttpWire.connect_tls on bad options.
- * `make vm-tsan` runs it under TSan.
+ * and a read cancelled before anything came, a served accept of a cancelled task, a cancelled TLS connect past its
+ * deadline, and HttpWire.connect_tls on bad options. `make vm-tsan` runs it under TSan.
  */
 #include "../core.h"
 #include "io_harness.h"

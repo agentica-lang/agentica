@@ -524,7 +524,8 @@ agc_task *agc_task_next(agc_vm *vm) {
    reads the state; the scheduler stores the state with the commit and reads the flag), so all four accesses are
    sequentially consistent: with weaker orders both sides could read the old value and nobody would end the task. A
    cancel that loses to a normal end (cancel_one finds the task DONE) changes nothing: the task keeps its own result. A
-   flag set during the turn wins, even when the turn returned. Returns true when `main` has returned. */
+   flag set during the turn wins, even when the turn returned or failed (a failure that is not fatal). Returns true
+   when `main` has returned. */
 bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   trace_turn(vm, t, r, ran);
   trace_gc(vm, "turn");
@@ -532,7 +533,16 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
   if (!ran) {
     if (fatal(vm, t)) longjmp(vm->fail, 1);
     agc_sync_take(vm);
-    crash(vm, t);
+    /* A task cancelled during its turn ends as cancelled even when the turn failed: the failure may come from the
+       cancel itself (Task.await of a child that the walk ended, or that started cancelled), and a task the cancel
+       has reached does not report a crash. */
+    if (atomic_load_explicit(&t->cancelled, memory_order_acquire)) {
+      AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64 " failed=%s", t->id, vm->outcome->code);
+      vm->outcome->kind = AGC_DONE;
+      end_cancelled(vm, t);
+    } else {
+      crash(vm, t);
+    }
     agc_sync_drop(vm);
   } else if (atomic_load_explicit(&t->cancelled, memory_order_acquire)) {
     end_cancelled_locked(vm, t);
@@ -830,7 +840,8 @@ static agc_task *spawn_child(agc_vm *vm, agc_task *parent, agc_value fn, const a
     enqueue(vm, child);
     return child;
   }
-  /* The child of a cancelled task starts cancelled: it never runs, and Task.await on it reports the cancel. */
+  /* The child of a cancelled task starts cancelled: it never runs, and Task.await on it reports the cancel. It is
+     counted as made (agc_new_task) and left to finish_task to count as done, like any other end, on purpose. */
   atomic_store_explicit(&child->cancelled, true, memory_order_seq_cst);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64 " at=spawn", child->id);
   end_cancelled(vm, child);

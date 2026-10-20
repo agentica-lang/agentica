@@ -419,7 +419,7 @@ def test_tasks_that_wake_each_other_end_when_cancelled_from_any_scheduler(tmp_pa
 
 SPAWNS_AFTER_CANCEL = """\
 def sleeper(k: Int) -> Int
-  Task.sleep(30000)
+  %s
   return k
 end
 
@@ -430,7 +430,7 @@ def spawner(k: Int) -> Result[Int]
     while i < 150
       i += 1
     end
-    Task.spawn(&sleeper, n)
+    %s
     n += 1
   end
   return ok(n)
@@ -448,14 +448,22 @@ end
 """
 
 
+# The child sleeps and is left alone, or returns at once and is awaited: the await of a child that started cancelled
+# fails in the cancelled task's last turn, which then ends as cancelled, not as a crash.
+SPAWN_FORMS = {"spawn": ("Task.sleep(30000)", "Task.spawn(&sleeper, n)"),
+               "await": ("", "Task.await(Task.spawn(&sleeper, n))")}
+
+
 @RACE
-def test_a_task_cancelled_on_another_scheduler_spawns_only_cancelled_children(tmp_path, repeats):
+@pytest.mark.parametrize("form", sorted(SPAWN_FORMS))
+def test_a_task_cancelled_on_another_scheduler_spawns_only_cancelled_children(tmp_path, repeats, form):
     # Three items spawn a sleeper every few hundred steps, so they run nearly all the time (few children wait ahead of
     # them in the queue), and when Task.map cancels them at their 20 ms deadline one is almost always in a turn on another
     # scheduler, which it finishes before the cancel takes effect (§10.2.3). The sleepers spawned in that last turn,
     # after the cancel walk over the item's children, start cancelled (#392): no task is left. Before, they slept their
-    # 30 s and the pending count stayed above 0 (the race was hit in 20 of 20 traced runs).
-    bytecode = program(tmp_path, "spawns_after_cancel", SPAWNS_AFTER_CANCEL)
+    # 30 s and the pending count stayed above 0 (the race was hit in 20 of 20 traced runs). In the await form the
+    # task then failed with RUNTIME-TASK-CANCELLED as a crash, and the run exited 1.
+    bytecode = program(tmp_path, "spawns_after_cancel", SPAWNS_AFTER_CANCEL % SPAWN_FORMS[form])
     for _ in range(repeats):
         result = vm(bytecode)
         timed_out = ", ".join(['error("task: timed out")'] * 3)
