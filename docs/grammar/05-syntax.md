@@ -230,6 +230,16 @@ positional value such as `user.with(31)` are `PARSE-UNEXPECTED-TOKEN`, with help
 that shows the form: `value.with(age: 31)`. Like a call, the update is a link of
 a chain (`a.with(x: 1).with(y: 2)`), and a `do` block cannot follow it.
 
+A method chain may span lines: a line whose first token is `.` followed by a
+name continues the line before (§4), also after a `do ... end` block:
+
+```ruby
+lines = File.foreach("ledger.csv", 65536, TIMEOUT_MS)
+  .drop(1)
+  .map do |line| parse(line) end
+  .filter(&big_expense?)
+```
+
 `x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first argument of
 the call on the right. The right side is a call with parentheses, `name(args)`
 or `Alias.name(args)` (a user function, an imported function or a builtin),
@@ -248,7 +258,8 @@ f()` is `f(a + 1)`, `x |> f() == y` is `f(x) == y`, and `x |> f() |> g()` is
 The call keeps its normal order of evaluation (the left value first, then the
 other arguments) and its normal diagnostics: the piped argument's span is the
 left expression's span. A chain over several lines goes in parentheses, one step
-per line.
+per line (a leading `.name` line continues a line without parentheses, but a
+leading `|>` does not).
 
 `a..b` and `a...b` have the lowest precedence and do not chain: `1..2..3` is
 `PARSE-UNEXPECTED-TOKEN` at the second operator, and `0...n + 1` is `0...(n +
