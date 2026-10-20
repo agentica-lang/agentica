@@ -242,9 +242,13 @@ static void end_cancelled_locked(agc_vm *vm, agc_task *t) {
      and ends it. If it is not there, the pusher or a scheduler that popped it ends it: agc_task_next checks the flag.
    - A PARKED task is claimed by a CAS (agc_task_claim), the same race as a waker's. The winner owns it. A loser looks
      at the state again: a waker made it READY. */
-static void cancel_one(agc_vm *vm, agc_task *t) {
+static void cancel_one(agc_vm *vm, agc_task *t, const char *why) {
   atomic_store_explicit(&t->cancelled, true, memory_order_seq_cst);
-  if (!t->group) AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64, t->id);
+  /* Two calls, not one with a "%s" for " at=": the trace escaper quotes a text value that holds a space or '='. */
+  if (!t->group && why)
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64 " at=%s", t->id, why);
+  else if (!t->group)
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64, t->id);
   for (;;) {
     switch (atomic_load_explicit(&t->state, memory_order_seq_cst)) {
     case AGC_TASK_RUNNING:
@@ -274,8 +278,9 @@ static void cancel_one(agc_vm *vm, agc_task *t) {
 }
 
 /* Children before parents, so each cancelled task has no live child left
-   to move; a running task only gets its flag and ends after its builtin. */
-void agc_task_cancel(agc_vm *vm, agc_task *root) {
+   to move; a running task only gets its flag and ends after its builtin. `why`, when set, is the at= reason of the
+   root's trace line. */
+static void cancel_tree(agc_vm *vm, agc_task *root, const char *why) {
   agc_sync_assert(vm);
   if (root == vm->rt->main || root->state == AGC_TASK_DONE || root->cancelled) return;
   agc_task *t = root;
@@ -288,13 +293,15 @@ void agc_task_cancel(agc_vm *vm, agc_task *root) {
       continue;
     }
     agc_task *up = t->parent;
-    cancel_one(vm, t);
+    cancel_one(vm, t, t == root ? why : NULL);
     count++;
     if (t == root) break;
     t = up;
   }
   if (vm->task && executing(vm->task)) agc_charge(vm, count);
 }
+
+void agc_task_cancel(agc_vm *vm, agc_task *root) { cancel_tree(vm, root, NULL); }
 
 /* The task takes the result of its job. agc_io_finish takes rt->sync itself for the parts that change shared lists (the
    hand-on of a handle's lock, a close) and for the halves of a kind marked `locked`; the rest, such as the text of a
@@ -1052,6 +1059,16 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* Task.cancel: marks the task and its descendants cancelled and returns at once; it never waits. A task that has
+   ended, or was cancelled, is left as it is. A task may cancel itself or an ancestor (it is then a descendant of the
+   root and is cancelled too): cancel_one sets `yield` for the caller's own task, so it stops after this call. No
+   handle reaches main (a program gets handles only from spawns), and the walk refuses it anyway. */
+static agc_value builtin_cancel(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  cancel_tree(vm, agc_as_task(vm, args[0]), "call");
+  return agc_void();
+}
+
 static agc_value builtin_pending_count(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
@@ -1076,6 +1093,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.await_result", 2, builtin_await_timeout_result, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.cancel", 1, builtin_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

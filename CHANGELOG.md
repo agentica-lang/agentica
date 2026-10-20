@@ -16,6 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/http` (HTTP and HTTPS client and server) runs on Windows.
 - `Lazy[T]`: lazy pipelines over lists, ranges and `Lazy.produce`
   (`xs.lazy.filter do ... end.first(3)`); terminals return a `Result`.
+- `Task.cancel(task)` cancels a task and its descendants without waiting.
 - A line that starts with `.name` continues the line before it, so a method
   chain can span lines without parentheses (`|>` chains still need them).
 

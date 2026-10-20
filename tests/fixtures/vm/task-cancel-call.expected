@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 2168,
+  "stdout": [
+    "sleeper ready 1",
+    "sleeper: task: cancelled",
+    "sleeper again: task: cancelled",
+    "listener: task: cancelled",
+    "the value stays in the channel: 9",
+    "spinner ready 3",
+    "spinner: task: cancelled",
+    "quick: ok 42",
+    "quick after cancel: ok 42",
+    "main returns",
+    ""
+  ],
+  "stderr": []
+}

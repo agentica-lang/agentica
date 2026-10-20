@@ -62,6 +62,7 @@ export enum Rule
   TaskMap
   TaskSpawn
   TaskSpawnOwning
+  TaskTarget
   TestEq
   TestResult
 end

@@ -3472,6 +3472,19 @@ ROWS_50: List[Model.Builtin] = [
       ],
     ),
     Model.Builtin(
+      name: "Task.cancel",
+      parameters: [Model.Named(name: "task", type: Types.Type.Task(Types.Type.Var("R")))],
+      result: Types.Type.Void,
+      rule: Model.Rule.TaskTarget,
+      implementation: "Task.cancel",
+      effects: ["concurrency"],
+      description: (
+        "Cancel a task and its descendants without waiting: each runs at most the rest of its current turn and " +
+        "closes what it owns; does nothing for a task that has ended; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Task.map",
       parameters: [
         Model.Named(name: "items", type: Types.Type.List(Types.Type.Var("A"))),
