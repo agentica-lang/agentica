@@ -292,7 +292,7 @@ def test_a_line_longer_than_the_buffer_reaches_a_console_with_no_character_cut_i
     assert text.rfind("cut end") > text.rfind("€é"), text[-400:]
 
 
-def test_a_second_ctrl_break_before_the_children_are_stopped_still_ends_the_run_with_149(tmp_path, adopt):
+def test_two_ctrl_breaks_in_a_row_end_the_run_with_149_and_the_child_is_gone(tmp_path, adopt):
     _, vm, pid = start_with_child(tmp_path, adopt)
     vm.process.send_signal(signal.CTRL_BREAK_EVENT)
     time.sleep(0.1)

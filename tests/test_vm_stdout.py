@@ -5,7 +5,8 @@ socket, a pty or a merged pipe, reads them slowly (or never), and prints a
 JSON summary: the exit status and when the reader started, the VM exited, and
 the first error byte arrived. Programs that need no peer run with their
 streams on files. The cases run on Linux, macOS and Windows; the few that need
-a Unix descriptor kind (a socket, a pty, /dev/full, /dev/stdout) are marked "host-only:" with the reason.
+a Unix descriptor kind (a pty, /dev/full, /dev/stdout) are marked "host-only:"
+with the reason, and the socket case is a known issue on Windows (#440).
 """
 import json
 import re
@@ -14,8 +15,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, run, scaled, vm_command,
-                                 vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, known_issue, run, scaled,
+                                 vm_command, vm_environment)
 
 PEER = FIXTURES / "stdout-peer.py"
 PEER_LIMIT = scaled(90)
@@ -24,8 +25,7 @@ FILLER = "x" * 1024
 # full and the end of the run has to wait for a reader that does not come. More rows would keep the program printing.
 STUCK_ROWS = 58
 WINDOWS = TARGET_OS == "windows"
-socket_stdout = pytest.mark.skipif(
-    WINDOWS, reason="host-only: the peer gives the VM a socketpair as stdout, which a Windows child cannot use as a stream")
+socket_stdout = known_issue(WINDOWS, 440, "the Python peer hands the VM a socketpair as stdout; a Winsock peer is missing")
 pty_stdout = pytest.mark.skipif(
     WINDOWS, reason="host-only: needs a Unix pseudo terminal; test_windows_console_stop.py has the ConPTY cases")
 dev_stdout = pytest.mark.skipif(

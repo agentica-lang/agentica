@@ -52,7 +52,7 @@ end
 # pool thread (issue 431, docs/vm/10-io-scheduler.md).
 no_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
 no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
-no_stdin_path = host_only(WINDOWS, "Windows has no /dev/stdin and its Python cannot pass a descriptor number to the VM")
+no_stdin_path = host_only(WINDOWS, "Windows has no path that names an inherited descriptor or the standard input (/proc/self/fd/N, /dev/stdin)")
 
 
 def literal(text):

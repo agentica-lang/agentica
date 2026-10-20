@@ -163,7 +163,7 @@ def test_an_outside_sigalrm_keeps_its_default_action(tmp_path, adopt):
     assert vm.wait(WAIT_SECONDS) == -signal.SIGALRM
 
 
-@host_only(WINDOWS, "SIGTERM and a shell child that traps it; test_a_second_ctrl_break in test_windows_console_stop.py sends Ctrl+Break twice")
+@host_only(WINDOWS, "SIGTERM and a shell child that traps it; Windows has no SIGTERM to ignore, so test_two_ctrl_breaks_in_a_row in test_windows_console_stop.py checks only that two breaks still end the run with 149 and stop the child")
 def test_a_second_stop_signal_before_the_children_are_stopped_waits_for_them(tmp_path, adopt):
     path = tmp_path / "out.txt"
     code = bytecode(child_program("trap '' TERM; "), tmp_path)
