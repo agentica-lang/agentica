@@ -33,7 +33,7 @@ Expand-Archive agentica-VERSION-windows-x86_64.zip .
 - macOS refuses a browser download with a quarantine mark. Remove it with `xattr -d com.apple.quarantine bin/agentica`. A `curl` download has no mark.
 - Windows SmartScreen may warn the first time.
 
-`TCP` works on Linux, macOS and Windows. `TLS` and `std/http` work on Linux and macOS; on Windows a `TLS` call returns an error and `std/http` is not there yet.
+`TCP` and `TLS` work on Linux, macOS and Windows. `std/http` works on Linux and macOS; it is not on Windows yet.
 
 ### Build from source
 

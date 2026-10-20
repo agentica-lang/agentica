@@ -151,9 +151,8 @@ The vendored build:
   Platforms jobs link the vendored OpenSSL statically on macOS (Intel and
   ARM) and Windows, and `make vendored-check` fails if the binary loads
   OpenSSL, libgc or `msys-2.0.dll`. The TLS adapter and the native trust
-  stores (10.3) build on every system. Windows has TCP, but refuses TLS
-  sockets (`agc_net_tls_enabled` in `vm/net_os.h`) until its TLS socket tests
-  pass.
+  stores (10.3) build on every system, and TLS sockets run on every system
+  over TCP.
 
 ### 10.1 Event loop: libuv, not libevent
 

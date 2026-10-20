@@ -1030,21 +1030,10 @@ static int resolve(net *n) {
   return rc;
 }
 
-/* A system with TLS sockets off (net_os.h) fails the context build with this detail, as the TLS stub once did. */
-static bool tls_refused(agc_tls_failure *f) {
-  if (agc_net_tls_enabled()) return false;
-  f->code = AGC_TLS_ERR_INTERNAL;
-  f->sys = 0;
-  snprintf(f->detail, sizeof f->detail, "%s", "TLS needs Linux or macOS");
-  return true;
-}
-
 static void setup_work(uv_work_t *w) {
   net *n = NET(w, setup);
-  if (tls_refused(&n->failure)) n->config = NULL;
-  else
-    n->config = n->listener ? agc_tls_server_config(n->cert_file, n->key_file, &n->failure)
-                            : agc_tls_client_config(n->ca_file, &n->failure);
+  n->config = n->listener ? agc_tls_server_config(n->cert_file, n->key_file, &n->failure)
+                          : agc_tls_client_config(n->ca_file, &n->failure);
 }
 
 /* A context build for N is over: its open fails with the build's failure (in n->failure), or goes on to DNS. I/O
@@ -1091,7 +1080,7 @@ static int start_setup(net *n) {
 
 static void shared_work(uv_work_t *w) {
   tls_shared *s = (tls_shared *)(void *)((char *)w - offsetof(tls_shared, work));
-  s->built = tls_refused(&s->failure) ? NULL : agc_tls_client_config(s->ca_file, &s->failure);
+  s->built = agc_tls_client_config(s->ca_file, &s->failure);
 }
 
 /* The client's context is built (or failed): every net that waited goes on, as after its own build. The build's

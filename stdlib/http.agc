@@ -13,6 +13,9 @@ TEXT_BYTES = 1048576
 BAD_TEXT = "400 request body is not valid UTF-8"
 # The least time an error answer gets to be sent, even past the request deadline.
 ANSWER_MS = 100
+# The most input the lingering close reads and drops (as Go's net/http does). It is enough for a peer that sent a
+# request in flight when the answer left, and it stops a peer from making the server read for the whole deadline.
+DRAIN_BYTES = 262144
 # The client's jobs channel holds this many messages before a sender waits.
 CLIENT_JOBS = 1024
 # The owner task has no deadline of its own: a timeout of its wait only starts the next one.
@@ -589,9 +592,10 @@ def refuse_problem(socket: Socket, problem: String, deadline: Int) -> String
   return refuse(socket, String.to_int!(String.slice(problem, 0, 3)), rest_of(problem, 4), deadline)
 end
 
-# Sends text, closes the write side, and reads and drops input until the peer closes or deadline, so unread request
-# bytes cannot turn the close into a reset that loses the answer. Then it closes the socket. The answer gets at least
-# ANSWER_MS even when the deadline has passed; only the drain is bound by the deadline.
+# Sends text, closes the write side, and reads and drops input until the peer closes, deadline, or DRAIN_BYTES bytes,
+# so unread request bytes cannot turn the close into a reset that loses the answer. Then it closes the socket. The
+# answer gets at least ANSWER_MS even when the deadline has passed; only the drain is bound by the deadline and the
+# byte limit.
 def linger(socket: Socket, text: String, deadline: Int) -> Void
   wait = deadline - Time.monotonic_ms()
   if wait < ANSWER_MS
@@ -605,14 +609,20 @@ def linger(socket: Socket, text: String, deadline: Int) -> Void
 end
 
 def drain(socket: Socket, deadline: Int) -> Void
-  while true
+  rest = DRAIN_BYTES
+  while rest > 0
+    most = READ_BYTES
+    if rest < most
+      most = rest
+    end
     case time_left(socket, deadline)
       ok(left) ->
-        case TCP.recv_bytes(socket, READ_BYTES, left)
+        case TCP.recv_bytes(socket, most, left)
           ok(data) ->
             if List.size(data) == 0
               return
             end
+            rest = rest - List.size(data)
           error(_) -> return
         end
       error(_) -> return

@@ -342,6 +342,14 @@ def test_server_against_python_raw_sockets_python_http_client_and_node_http_clie
     assert vm.stderr_text() == ""
 
 
+def start_server(tmp_path, adopt):
+    """Starts SERVER_PROGRAM; returns the VM child and its plain port."""
+    source = tmp_path / "server.agc"
+    source.write_text(SERVER_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "server.agcb"), CERTS, stdin=True))
+    return vm, vm.next_line().split()[0]
+
+
 def send_in_pieces(port, pieces):
     """Sends each piece after a pause, so the server reads them apart; returns the status and body."""
     with socket.create_connection(("127.0.0.1", int(port)), timeout=scaled(10)) as conn:
@@ -361,10 +369,7 @@ def send_in_pieces(port, pieces):
 def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
     """A head or body split across reads gets the same answer as one sent whole: a UTF-8 character split across
     reads and chunks, a forbidden trailer split mid-name, and heads too large however slowly they arrive."""
-    source = tmp_path / "server.agc"
-    source.write_text(SERVER_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "server.agcb"), CERTS, stdin=True))
-    port = vm.next_line().split()[0]
+    vm, port = start_server(tmp_path, adopt)
     length = b"POST /length HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Length: %d\r\n\r\n"
     chunked = b"POST /chunked HTTP/1.1\r\nHost: x\r\nConnection: close\r\nTransfer-Encoding: chunked\r\n\r\n"
     assert send_in_pieces(port, [length % 6 + b"ab\xc3", b"\xb1cd"]) == ("200", "POST /length ab\u00f1cd")
@@ -382,5 +387,35 @@ def test_server_reads_requests_that_arrive_in_pieces(tmp_path, adopt):
     filler = b"X-Fill: " + b"b" * 4000 + b"\r\n"
     large = b"GET / HTTP/1.1\r\nHost: x\r\n" + filler * 20
     assert send_in_pieces(port, [large[k:k + 9000] for k in range(0, len(large), 9000)])[0] == "431"
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+
+
+def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte_limit(tmp_path, adopt):
+    """After a 413 the server drops input only up to a limit, so a peer that keeps sending is cut off long before
+    the request deadline (2 s in SERVER_PROGRAM) and cannot make the server read for all of it."""
+    vm, port = start_server(tmp_path, adopt)
+    with socket.create_connection(("127.0.0.1", int(port)), timeout=scaled(10)) as conn:
+        conn.sendall(b"POST /x HTTP/1.1\r\nHost: x\r\nContent-Length: 999999\r\n\r\n")
+        answer = b""
+        while b"\r\n\r\n" not in answer:
+            more = conn.recv(4096)
+            assert more, "the answer arrives before the server closes"
+            answer += more
+        assert answer.split(b" ")[1] == b"413"
+        junk = b"x" * 65536
+        sent = 0
+        started = time.monotonic()
+        try:
+            while time.monotonic() - started < 1.5:
+                sent += conn.send(junk)
+        except OSError:
+            # Reset, aborted or broken pipe, depending on the system. A send timeout would also land here, so the
+            # time is checked too.
+            assert time.monotonic() - started < 1.5, "the server cut the peer off only after %d bytes" % sent
+        else:
+            pytest.fail("the server kept reading for %d bytes" % sent)
+        # Loopback buffers hold a few MB at most; an unbounded drain reads about 130 MB/s.
+        assert sent < 64 * 1024 * 1024
     vm.close_stdin()
     assert vm.wait() == 0, "the VM server finishes"

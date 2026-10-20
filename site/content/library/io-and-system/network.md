@@ -141,13 +141,13 @@ TLS sockets and listeners use the same `TCP` functions, with the same limits and
 - An empty `ca_file` uses the system's trusted certificates:
   - Linux: the CA bundle.
   - macOS: the system roots and the Keychain trust settings.
-  - Windows: the ROOT certificate store.
+  - Windows: the ROOT certificate store. Intermediates from its CA store help build a chain but are never trusted as roots.
   - Everywhere: certificates the system distrusts are rejected, and the store is read once per process.
   - `SSL_CERT_FILE` replaces the system store. `SSL_CERT_DIR` adds a directory of certificates.
 - A nonempty `ca_file` is a PEM file that replaces them.
 - `TLS.listen` takes PEM files for the certificate chain and the private key. It fails when a file is bad or the key does not match.
 - A peer that closes without TLS's closing message ends the stream like EOF.
-- TLS sockets are not available on Windows yet. `TLS.connect` and `TLS.listen` return an error there.
+- TLS works the same on Linux, macOS and Windows.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -332,6 +332,7 @@ Handler errors:
   - 431: headers too long or too many.
   - 501: `CONNECT` or `Upgrade`.
   - 505: not `HTTP/1.1`.
+- After a bad request the server reads and drops up to 256 KiB of the peer's remaining input (until the peer closes or the request deadline), so the answer is not lost to a reset. A peer that keeps sending is cut off at that limit, and a client still sending a large body after a 413 may see a connection reset instead of the answer.
 - Each connection can hold about four times `max_body_bytes` in memory. So when you raise `max_body_bytes`, lower `max_connections`.
 
 ### HTTP.wait and HTTP.close_server

@@ -8,8 +8,30 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `TLS.connect` and `TLS.listen` run on Windows, with the same checks as on
+  Linux and macOS (SNI, host name and IP checks, explicit CA file, TLS 1.2 or
+  later, the same error texts). They no longer return `TLS needs Linux or
+  macOS`. The HTTP client and server builtins are still not on Windows.
+
+- On Windows, system trust also reads the CA certificate store, as CPython's
+  `ssl.load_default_certs` does: its intermediates complete a chain whose
+  server sends only its own certificate. They are never trusted as roots: a
+  CA store certificate whose subject equals its issuer is left out, and a
+  chain must still end at a root of the ROOT store. A cross-signed copy of a
+  ROOT certificate in the CA store is left out, so is a CA certificate whose
+  EKU extension excludes server authentication, and a CA certificate that an
+  administrator's EKU property bars from server authentication is rejected.
+
 ### Changed
 
+- The lingering close of `std/http` (after an error answer or a closing
+  response) reads and drops at most 256 KiB of input, as well as stopping at
+  the peer's close or the request deadline. A peer that keeps sending can no
+  longer make the server read for the whole deadline; one that is still
+  sending a large body after the limit may see a connection reset instead of
+  the answer.
 - HTTP runs on several schedulers (still behind the test switch
   `AGENTICA_VM_TEST_MULTICORE`). The I/O thread owns the server's listener,
   open count and waiting accepts, and the client in `std/http` runs on TCP and

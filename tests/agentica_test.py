@@ -36,11 +36,6 @@ TARGET_OS = os.environ.get("AGENTICA_TEST_TARGET_OS") or ("windows" if os.name =
 # that stdout and stderr are one pipe (`2>&1`) waits for the native Windows job.
 UNDER_WINE = os.environ.get("AGENTICA_TEST_WINE") == "1"
 
-# TLS sockets (TLS.connect, TLS.listen, HTTPS) are on Linux and macOS; Windows refuses them (vm/net_os.h) until its
-# socket tests pass (step 11, part 2). The TLS adapter itself (vm/tests/tls_test.c) and the OpenSSL line of the long
-# version are on every system.
-TLS_BUILT = TARGET_OS in ("linux", "darwin")
-
 # `make test-multicore` runs whole modules (TCP, TLS, HTTP) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N
 # makes every VM started with vm_environment() run on N schedulers under the test switch. A case whose program still
 # uses a builtin that several schedulers refuse (Process, Duplex) calls one_scheduler() first.

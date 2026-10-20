@@ -50,7 +50,7 @@ The Unicode tables for case mapping and for printing text are not a submodule. T
 
 ## Platforms
 
-The release builds four native archives: Linux x86-64 (glibc 2.28 or newer), macOS Intel and Apple silicon (macOS 12 or newer) and Windows x86-64 (Windows 10 or newer). `TCP` runs and is tested on all three systems. `TLS` and `std/http` are built on Linux and macOS only for now, and a `TLS` call on Windows returns an error.
+The release builds four native archives: Linux x86-64 (glibc 2.28 or newer), macOS Intel and Apple silicon (macOS 12 or newer) and Windows x86-64 (Windows 10 or newer). `TCP` and `TLS` run and are tested on all three systems; `std/http` is built on Linux and macOS only for now.
 
 ## Learn more
 
