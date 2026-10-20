@@ -8,86 +8,9 @@
 // when it asks for two extra pipes.
 "use strict";
 const fs = require("fs");
-const { spawn } = require("child_process");
-
-const MARKER = "AGENTICA_CHANNEL";
-const WINDOWS = process.platform === "win32";
+const { MARKER, launch, writeAll } = require("./child_channel.js");
 
 // ---- the parent side: this program drives a VM that is the child ----
-
-// A line reader over a stream; the line keeps its "\n", and "" is the end of the stream.
-function reader(stream) {
-  let buffer = Buffer.alloc(0);
-  let ended = false;
-  let wake = null;
-  const notify = () => {
-    if (wake) wake();
-  };
-  stream.on("data", (chunk) => {
-    buffer = Buffer.concat([buffer, chunk]);
-    notify();
-  });
-  const finish = () => {
-    ended = true;
-    notify();
-  };
-  stream.on("end", finish);
-  stream.on("close", finish);
-  stream.on("error", finish);
-  return async function line() {
-    for (;;) {
-      const at = buffer.indexOf(10);
-      if (at >= 0) {
-        const text = buffer.subarray(0, at + 1).toString("utf8");
-        buffer = buffer.subarray(at + 1);
-        return text;
-      }
-      if (ended) {
-        const rest = buffer.toString("utf8");
-        buffer = Buffer.alloc(0);
-        return rest;
-      }
-      await new Promise((resolve) => {
-        wake = resolve;
-      });
-      wake = null;
-    }
-  };
-}
-
-// Starts `argv` with a channel (or only the marker, or none) and returns the ways to use it.
-// The marker defaults to the one of this system; null leaves it out.
-function launch(argv, { channel = true, marker = WINDOWS ? "3,4" : "3" } = {}) {
-  const env = Object.assign({}, process.env);
-  delete env[MARKER];
-  if (marker !== null) env[MARKER] = marker;
-  const stdio = ["ignore", "pipe", "pipe"];
-  if (channel) stdio.push("pipe");
-  if (channel && WINDOWS) stdio.push("pipe");
-  const child = spawn(argv[0], argv.slice(1), { stdio, env });
-  const output = [];
-  child.stdout.on("data", (chunk) => output.push(chunk));
-  const errors = [];
-  child.stderr.on("data", (chunk) => errors.push(chunk));
-  const exited = new Promise((resolve) => child.on("close", (code) => resolve(code)));
-  const toChild = channel ? child.stdio[3] : null;
-  const fromChild = channel ? child.stdio[WINDOWS ? 4 : 3] : null;
-  if (toChild) toChild.on("error", () => {});
-  return {
-    child,
-    exited,
-    send: (data) => new Promise((resolve) => toChild.write(data, () => resolve())),
-    // The end of input: a half close of the socket, or on Windows the close of the pipe the child reads.
-    endInput: () => new Promise((resolve) => (WINDOWS ? resolve(toChild.destroy()) : toChild.end(resolve))),
-    line: fromChild ? reader(fromChild) : null,
-    close: () => {
-      if (toChild) toChild.destroy();
-      if (fromChild) fromChild.destroy();
-    },
-    stdout: () => Buffer.concat(output).toString("utf8"),
-    stderr: () => Buffer.concat(errors).toString("utf8"),
-  };
-}
 
 async function finish(peer, started, extra = {}) {
   const timer = setTimeout(() => peer.child.kill("SIGKILL"), 30000);
@@ -170,14 +93,6 @@ function readLine(fd) {
     if (n === 0) return null;
     bytes.push(one[0]);
     if (one[0] === 10) return Buffer.from(bytes);
-  }
-}
-
-function writeAll(fd, data) {
-  let buffer = Buffer.from(data);
-  while (buffer.length > 0) {
-    const n = fs.writeSync(fd, buffer);
-    buffer = buffer.subarray(n);
   }
 }
 

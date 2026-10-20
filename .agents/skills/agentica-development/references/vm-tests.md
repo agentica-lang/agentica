@@ -357,7 +357,10 @@ Read first: `references/vm.md`.
 - **Path:** `tests/test_vm_test_protocol.py`
   - **Owns:** a Python peer (`tests/fixtures/test-protocol-peer.py`, with
     `tests/fixtures/child_channel.py`, which starts the VM with a socket pair as
-    fd 3) plays the runner of a test file
+    fd 3), and on Windows a Node peer (`test-protocol-peer.js` with
+    `child_channel.js`: two pipes at fd 3 and 4, the child's stdout in a file
+    that the peer reads when a record arrives, since two pipes do not keep
+    their order), plays the runner of a test file
     (`tests/fixtures/test-protocol-peer.agc`): the list records, one index at a
     time with the record read before the stdout of that test (`read_available`
     order), the test's own stdin, a record-shaped line printed as plain output,
