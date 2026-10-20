@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 import ctypes
+import os
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -89,3 +92,41 @@ def process_handle_count(pid: int) -> int:
         return count.value
     finally:
         kernel32.CloseHandle(process)
+
+
+def current_user_sid() -> str:
+    """The security identifier of the user that runs the tests, as `S-1-5-21-...`."""
+    identity = subprocess.run(["whoami.exe", "/user", "/fo", "csv", "/nh"], capture_output=True, text=True, check=False)
+    assert identity.returncode == 0, identity.stderr
+    sid = next(csv.reader(identity.stdout.splitlines()))[1]
+    assert sid.startswith("S-1-"), sid
+    return sid
+
+
+def icacls(path: str | Path, *arguments: str) -> None:
+    """Change the access list of `path` with icacls.exe; the call must succeed."""
+    changed = subprocess.run(["icacls.exe", str(path), *arguments], capture_output=True, text=True, check=False)
+    assert changed.returncode == 0, changed.stdout + changed.stderr
+
+
+def processes_mentioning(text: str | Path) -> list[int]:
+    """The ids of the processes whose command line contains `text` (without regard to case or the direction of the
+    slashes), the Windows counterpart of reading /proc/<pid>/cmdline."""
+    system = Path(os.environ["SystemRoot"]) / "System32"
+    listing = subprocess.run(
+        [str(system / "WindowsPowerShell" / "v1.0" / "powershell.exe"), "-NoProfile", "-NonInteractive", "-Command",
+         "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
+         "Get-CimInstance Win32_Process | ForEach-Object { '{0}|{1}' -f $_.ProcessId, $_.CommandLine }"],
+        capture_output=True, check=False, timeout=60)
+    assert listing.returncode == 0, listing.stderr.decode(errors="replace")
+
+    def plain(value: str) -> str:
+        return value.lower().replace("/", "\\")
+
+    needle = plain(str(text))
+    found = []
+    for line in listing.stdout.decode("utf-8", errors="replace").splitlines():
+        number, _, command = line.partition("|")
+        if number.strip().isdigit() and needle in plain(command):
+            found.append(int(number))
+    return found

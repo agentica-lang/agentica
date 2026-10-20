@@ -14,7 +14,7 @@ from textwrap import dedent
 
 import pytest
 
-from tests.agentica_test import (TESTS, WINDOWS, Child, cli, host_only, known_issue, process_alive, report_cases, run, scaled,
+from tests.agentica_test import (TESTS, WINDOWS, Child, cli, host_only, process_alive, report_cases, run, scaled,
                                  vm_environment, wait_until, write_files)
 
 try:
@@ -204,7 +204,7 @@ def test_programs_under_test_wrong_output_literal_input_and_a_json_line_mismatch
         ['"incorrect"', '"actual\\n"'], ['{"a":1,"b":3}', '{"a":1,"b":"3"}']]
 
 
-@known_issue(WINDOWS, 434, "the cleanup of a failed scenario has no Windows test (the holder starts /bin/sh)")
+@host_only(WINDOWS, "the program under test starts /bin/sh and writes its pid with the shell (test_a_failed_scenario_leaves_no_process_of_its_program_behind in test_windows_process_cleanup.py starts a Python child)")
 def test_a_failed_scenario_leaves_no_process_of_its_program_behind(tmp_path, cleanup):
     directory = suite(tmp_path, {
         "holder.agc": HOLDER_PROGRAM,
@@ -344,7 +344,7 @@ def test_a_json_line_of_a_few_hundred_kb_fits_the_step_budget(tmp_path):
 
 
 @pytest.mark.slow
-@known_issue(WINDOWS, 434, "killing the driver has no Windows test (the holder starts /bin/sh, the check reads /proc)")
+@host_only(WINDOWS, "the program starts /bin/sh, the processes are read from /proc and the folder is locked with flock (test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and_a_later_run_removes_its_folder in test_windows_process_cleanup.py uses a Python child, the process list of PowerShell and msvcrt.locking)")
 def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and_a_later_run_removes_its_folder(tmp_path, cleanup):
     directory = suite(tmp_path, {
         "holder.agc": HOLDER_PROGRAM,

@@ -277,7 +277,9 @@ Read first: `references/vm.md`.
     ends (`test_process.py`); a child is gone when its owner ends, the run is
     stopped or the driver of its VM is killed (`test_process_lifecycle.py`); the
     exit pair libuv reports for a stopped child, Windows only
-    (`test_process_windows.py`). `test_process_bdd.py` keeps the `agentica
+    (`test_process_windows.py`); the cleanup and hand-off cases that need
+    `/bin/sh` or signals on POSIX have their Windows counterparts in
+    `test_windows_process_cleanup.py`. `test_process_bdd.py` keeps the `agentica
     test` case, apart because it starts the whole driver (Windows runs it
     natively, not under Wine). The C side is
     `vm/tests/process_test.c`.

@@ -54,7 +54,6 @@ KNOWN_ISSUES = {
     431: "Windows: a stdin read can hold a pool thread",
     432: "Windows: no independent peer for the child channel protocol (two pipes at descriptors 3 and 4)",
     433: "Windows: no test for blocking stream files (named pipes instead of FIFOs)",
-    434: "Windows: process cleanup and handoff cases are tested with /bin/sh or POSIX signals only",
     436: "macOS and Windows: golden fixtures for paths, errno text and processes only run on Linux",
     437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",
     440: "Windows: standard output that is a socket has no test",
@@ -67,6 +66,7 @@ TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier o
 WINDOWS_ONLY_MODULES = frozenset({
     "tests/test_process_windows.py", "tests/test_windows_console_stop.py", "tests/test_windows_filesystem_safety.py",
     "tests/test_windows_handle_counts.py", "tests/test_windows_metadata_and_locks.py",
+    "tests/test_windows_process_cleanup.py",
 })
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
@@ -141,6 +141,7 @@ AREAS = {
             "tests/test_process_windows.py", "tests/test_vm_child_channel.py",
             "tests/test_vm_child_channel_posix.py", "tests/test_vm_stop.py", "tests/test_vm_test_protocol.py",
             "tests/test_platform_bootstrap.py", "tests/test_windows_console_stop.py",
+            "tests/test_windows_process_cleanup.py",
         ],
     ),
     "tasks": (

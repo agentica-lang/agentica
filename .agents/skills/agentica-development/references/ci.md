@@ -257,6 +257,13 @@ is not sent; libuv reports both events through one console handler
 `tests/test_windows_handle_counts.py` also needs native Windows (named pipes and
 `GetProcessHandleCount`), so it runs on the Windows job and Wine skips it.
 
+`tests/test_windows_process_cleanup.py` is the Windows side of the cases that
+start `/bin/sh`, use SIGTERM or SIGKILL, read `/proc`, use chmod or put a shell
+script in place of the binary (those are host-only on Windows and name their
+counterpart): a Python child, the process list of PowerShell, an access list
+(`icacls`) and a copy of `node.exe` with a preloaded script as the binary,
+because the VM starts only `.exe` and `.com` files there. Wine skips it.
+
 Piped-input tests do not exercise console input. After changing Windows stdin
 handling, a check on a native Windows terminal (not Wine) is useful but does not
 block a change. Save this as `console-input.agc` in a scratch directory:
