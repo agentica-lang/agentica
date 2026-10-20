@@ -1,2 +1,4 @@
-# OpenSSL's internal locking is invisible to TSan (system libcrypto is not instrumented), so its calls on pool threads look racy.
-called_from_lib:libcrypto
+# TLS setup builds OpenSSL contexts on pool threads; the system libcrypto's own locking is not instrumented, so TSan
+# sees its accesses as racy. Only stacks through these two functions are suppressed.
+race:agc_tls_client_config
+race:agc_tls_server_config

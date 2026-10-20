@@ -822,8 +822,7 @@ static void drain(agc_vm *vm) {
     if (!atomic_load(&j->ended) && j->res->native == j) {
       agc_resource *r = j->res;
       if (!atomic_load(&j->detached)) {
-        agc_task *t = r->task;
-        r->task = NULL;
+        agc_task *t = atomic_exchange(&r->task, NULL);
         if (t) agc_task_wake(vm, t, "job");
       } else if (j->detach_seen) {
         /* A job whose DETACH request has not run yet is left alone: that request puts it back on this list. */
@@ -1302,8 +1301,9 @@ bool agc_io_share(agc_vm *vm, bool keep) {
    refuses) reach the loop here; a scheduler thread must never, since only the I/O thread may call libuv. */
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return agc_loop_uv(loop_of(vm)); }
 
-static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context,
-                               int64_t timeout_ms, const agc_task *task, agc_more_fn more, unsigned flags) {
+/* Returns the job without reading r->native after the START is posted: a detached job may be swept by then. */
+static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                      const agc_task *task, agc_more_fn more, unsigned flags) {
   if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   /* A plain deadline is a task timer (vm/timers.c), not a job. */
   if (!kind->work && !kind->external) agc_fail(vm, "RUNTIME-INTERNAL", "a job needs pool work or a wait", 0);
@@ -1349,7 +1349,7 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
     agc_as_handle(vm, context)->holder = r;
   }
   post(j, REQ_START, timeout_ms);
-  return r;
+  return j;
 }
 
 /* The job is the wait of the task, so the task is marked PARKING before the job exists: the job's completion is
@@ -1357,9 +1357,9 @@ static agc_resource *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, 
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more) {
   agc_task_parking(vm);
-  agc_resource *r = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
+  job *j = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
   agc_task_park(vm, false);
-  return r->native;
+  return j;
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
@@ -1367,7 +1367,7 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 }
 
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
-  return start_job(vm, kind, data, context, -1, NULL, NULL, flags)->native;
+  return start_job(vm, kind, data, context, -1, NULL, NULL, flags);
 }
 
 /* A wait on the loop is over (a service callback): a pool job's work is not, so it is not ended from here. */

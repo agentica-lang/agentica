@@ -10,8 +10,8 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, Child, check_lines, compile_text, one_scheduler, output_lines,
-                                 run, run_vm, scaled, start_vm, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, Child, check_lines, compile_text, one_scheduler,
+                                 output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
@@ -404,4 +404,6 @@ def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tm
 
     assert count(r" io end code=0 signal=0$") == 1, text
     assert count(r" tls tls_handshake_done ") == 4
-    assert count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$") == 3
+    # The third is the raw connection, which the accepting task may not reach before main ends on several schedulers.
+    servers = count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$")
+    assert servers in ((2, 3) if TEST_SCHEDULERS else (3,)), text

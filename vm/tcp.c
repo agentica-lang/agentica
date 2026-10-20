@@ -969,9 +969,8 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   return result;
 }
 
-/* The timer's stop, on the I/O thread before EXPIRED is published (the kind's `pause`), and again from `expired`,
-   where it does nothing the second time: the request leaves its slot, and a timed-out connect, read or send closes
-   the socket. */
+/* The timer's stop, on the I/O thread before EXPIRED is published (the kind's `pause`): the request leaves its slot,
+   and a timed-out connect, read or send closes the socket. */
 static void stop_request(void *data) {
   request *q = data;
   if (q->stopped || !q->counted) return;
@@ -980,10 +979,9 @@ static void stop_request(void *data) {
   if (q->kind != REQ_ACCEPT && q->kind != REQ_LISTEN) shut(q->n, "timeout");
 }
 
+/* The timer's `pause` (stop_request) has run already: a task parked on a TCP job is woken by nothing else. */
 static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
-  request *q = data;
-  /* Not q->n: a request whose START never ran holds no count, so its net may be gone. */
-  agc_loop_call(agc_io_loop(vm), stop_request, q);
+  const request *q = data;
   if (q->kind == REQ_CONNECT) disown(vm, agc_as_socket(vm, context)->state, "timeout");
   return agc_stream_timed_out();
 }

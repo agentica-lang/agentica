@@ -1040,8 +1040,8 @@ static void work(void *data) {
 
 static void drop(void *data) {
   op *o = data;
-  /* On the I/O thread: release_state's flush cannot stall the loop, since a polled descriptor stays O_NONBLOCK
-     (work_open) and a regular file gets at most one WRITE_BUFFER. */
+  /* On the I/O thread, release_state's flush of a regular file is one blocking write of at most WRITE_BUFFER bytes;
+     only a polled descriptor is non-blocking (work_open), so its flush never waits. */
   if (o->owns_st && o->st) release_state(o->st);
   if (o->poller)
     agc_poller_close(o->poller);

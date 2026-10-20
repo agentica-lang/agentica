@@ -28,7 +28,9 @@ struct agc_resource {
   void *native;
   agc_release_fn release, goodbye;
   agc_value context;
-  agc_task *task;
+  /* The task parked on this job. Atomic: the drain (I/O thread) takes it to wake the task while that task, resumed,
+     may clear it in agc_io_finish (a job listed twice: done, then its timer fired before the close). */
+  _Atomic(agc_task *) task;
   agc_resource *holder;
   agc_task *next_owner;
   agc_task *waiters, *waiters_tail;
