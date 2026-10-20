@@ -47,6 +47,12 @@ knows (§14.3).
 
 Known exceptions, as built:
 
+- **Windows `File` calls.** `probe` in `vm/files.c` returns `ENOTSUP` for
+  anything that is not a regular file, a block device or a directory, and
+  `path_string` refuses the `\\.\`, `\\?\` and `//./` spellings. So a named
+  pipe or a device is refused at once and its handle closed: no `File` call
+  waits on a stream there. The streams that wait reach the VM as sockets,
+  process pipes and the standard streams (see #474).
 - **Windows stdin.** The Unix poller cannot watch Windows console handles, so
   every stdin kind is read by one blocking `_read` on a thread of the VM's own,
   not in the pool; the task waits on the loop for the read's job, which an async

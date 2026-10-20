@@ -11,8 +11,8 @@ File.foreach reads back exactly the lines write_lines wrote, with the bytes Pyth
 --max-steps in the middle of write_lines leaves lines in its buffer: the end of the run writes them and closes the file.
 
 Two cases park the terminal itself on a file read, with a FIFO that tests/fixtures/lines-peer.py holds open: a cancel
-(Task.map's timeout) and a read timeout. A third parks write_lines on a write to such a FIFO and cancels it. They need mkfifo and the peer's FIONREAD; on Windows they are skipped as
-"known-issue:" (#433).
+(Task.map's timeout) and a read timeout. A third parks write_lines on a write to such a FIFO and cancels it. They need mkfifo and the peer's FIONREAD;
+on Windows they are host-only, since the VM refuses a named pipe as a file.
 """
 import os
 import random
@@ -20,8 +20,8 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, WAIT_SECONDS, WINDOWS, compile_agc, compile_text, known_issue, run_vm,
-                                 vm_environment)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, WAIT_SECONDS, WINDOWS, compile_agc, compile_text,
+                                 host_only, run_vm, vm_environment)
 from tests.test_vm_file_lines import start_fifo_peer
 
 EVENT = re.compile(r" io file_(open|close) handle=([0-9]+)$")
@@ -86,7 +86,7 @@ def main() -> Void
 end
 """
 
-FIFO = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
+FIFO = host_only(WINDOWS, "a FIFO read or written as a file that waits on the loop; " + FIFO_FILE_REASON)
 
 
 def file_events(trace):

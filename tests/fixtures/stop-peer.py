@@ -2,6 +2,7 @@ import os
 import signal
 import subprocess
 import sys
+import time
 
 
 def fill(path):
@@ -23,6 +24,15 @@ def drive(command):
     vm.stdout.readline()
     print(vm.pid, flush=True)
     os._exit(0)
+
+
+def drive_inherited(command):
+    # Like drive, but the VM writes to this process's stdout and stderr: a pipe and a pipe that the test holds, and the
+    # test reads only stderr. The pid of this process and the pid of the VM go to stderr. This process stays until it
+    # is killed, and the VM's stdout, which nobody reads, is not broken by its death.
+    vm = subprocess.Popen(command[:2] + ["--driver-pid", str(os.getpid())] + command[2:])
+    print(os.getpid(), vm.pid, file=sys.stderr, flush=True)
+    time.sleep(120)
 
 
 def relay(command, **options):
@@ -50,6 +60,7 @@ if __name__ == "__main__":
     {
         "fill": lambda: fill(sys.argv[2]),
         "drive": lambda: drive(sys.argv[2:]),
+        "drive-inherited": lambda: drive_inherited(sys.argv[2:]),
         "inherit": lambda: inherit(sys.argv[2:]),
         "clean": lambda: relay(sys.argv[2:]),
         "launch": lambda: launch(sys.argv[2], sys.argv[3:]),

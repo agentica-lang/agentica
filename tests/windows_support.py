@@ -6,6 +6,7 @@ import csv
 import ctypes
 import os
 import subprocess
+import uuid
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
@@ -72,6 +73,19 @@ def run_vm_with_stdout(
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
+# Makes the file at args[1] with create_private, which gives it the access list only the owner has, and copies args[0].
+COPY_PROGRAM = """\
+def main() -> Void
+  args = System.args()
+  input = Result.unwrap!(File.open(args[0], "read", 5000))
+  out = Result.unwrap!(File.open(args[1], "create_private", 5000))
+  bytes = Result.unwrap!(File.read_bytes(input, 1048576, 5000))
+  Result.unwrap!(File.write_bytes(out, bytes, 5000))
+  Result.unwrap!(File.close(input, 5000))
+  Result.unwrap!(File.close(out, 5000))
+end
+"""
+
 
 def process_handle_count(pid: int) -> int:
     """The number of kernel handles that the process `pid` holds open (GetProcessHandleCount), the Windows counterpart
@@ -93,6 +107,74 @@ def process_handle_count(pid: int) -> int:
         return count.value
     finally:
         kernel32.CloseHandle(process)
+
+
+ERROR_NO_DATA = 232
+ERROR_PIPE_CONNECTED = 535
+ERROR_PIPE_LISTENING = 536
+PIPE_ACCESS_DUPLEX = 3
+PIPE_NOWAIT = 1
+PIPE_ROOT = "\\\\.\\pipe\\"
+
+
+class NamedPipeServer:
+    r"""A named pipe that the test makes, with a few instances, for a program that tries to open it by a path.
+
+    Windows has no FIFO file: a pipe is a server handle that a peer makes, and a client opens it by a name below
+    \\.\pipe\. Each instance is in no-wait mode, so clients() can ask at any time, without blocking, which instances
+    a client came to and whether it still holds them. A call that first stats the path takes one instance for the
+    stat, so the pipe has more instances than one, and the open that follows can reach the instance of its own.
+    Use it as a context manager; the name is unique to the test.
+    """
+
+    def __init__(self, instances: int = 4) -> None:
+        self.name = "agentica-test-%d-%s" % (os.getpid(), uuid.uuid4().hex)
+        self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._kernel32.CreateNamedPipeW.argtypes = [ctypes.c_wchar_p] + [ctypes.c_uint32] * 6 + [ctypes.c_void_p]
+        self._kernel32.CreateNamedPipeW.restype = ctypes.c_void_p
+        self._kernel32.ConnectNamedPipe.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self._kernel32.ConnectNamedPipe.restype = ctypes.c_int
+        self._kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        self._kernel32.CloseHandle.restype = ctypes.c_int
+        self._handles: list[int] = []
+        try:
+            for _ in range(instances):
+                handle = self._kernel32.CreateNamedPipeW(self.path(), PIPE_ACCESS_DUPLEX, PIPE_NOWAIT, instances,
+                                                         65536, 65536, 0, None)
+                if handle is None or handle == ctypes.c_void_p(-1).value:
+                    raise ctypes.WinError(ctypes.get_last_error())
+                self._handles.append(handle)
+        except OSError:
+            self.close()
+            raise
+
+    def path(self, root: str = PIPE_ROOT) -> str:
+        r"""The name of the pipe below `root`, a spelling of the pipe folder (\\localhost\pipe\ is another)."""
+        return root + self.name
+
+    def clients(self) -> list[str]:
+        """For each instance: "waiting" (no client came), "connected" (a client holds it) or "gone" (one came and left)."""
+        states = {ERROR_PIPE_LISTENING: "waiting", ERROR_PIPE_CONNECTED: "connected", ERROR_NO_DATA: "gone"}
+        found = []
+        for handle in self._handles:
+            if self._kernel32.ConnectNamedPipe(handle, None):
+                found.append("connected")
+                continue
+            error = ctypes.get_last_error()
+            if error not in states:
+                raise ctypes.WinError(error)
+            found.append(states[error])
+        return found
+
+    def close(self) -> None:
+        while self._handles:
+            self._kernel32.CloseHandle(self._handles.pop())
+
+    def __enter__(self) -> "NamedPipeServer":
+        return self
+
+    def __exit__(self, *problem: object) -> None:
+        self.close()
 
 
 def current_user_sid() -> str:

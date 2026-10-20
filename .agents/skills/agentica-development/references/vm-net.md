@@ -439,8 +439,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     thread: it only uses lock-free atomics and async-signal-safe calls.
   - The signal tests in `tests/test_vm_stop.py` (with
     `tests/fixtures/stop-peer.py`: a FIFO filled so a flush cannot end, a dying
-    driver, an inherited pipe) and `tests/test_vm_diff_8.py` signal the driver
-    and the VM with `os.kill` and bound every wait.
+    driver, a driver that holds the VM's stdout pipe unread, an inherited pipe)
+    and `tests/test_vm_diff_8.py` signal the driver and the VM with `os.kill`
+    and bound every wait.
   - Captured children (21a) are what `std/bdd` runs its scenario VMs with: never
     block the VM in their close (only the end-of-run cleanup may wait, bounded),
     and keep the `SIGTERM` first, since the child VM's exit path is what stops

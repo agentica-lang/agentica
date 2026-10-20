@@ -18,7 +18,7 @@ from tests.agentica_test import (FIXTURES, PYTHON, kill_process, run, run_vm, sc
                                  vm_command, vm_environment)
 from tests.test_bdd import assert_unwritable_temporary_is_an_infrastructure_error, bdd  # noqa: F401  (a fixture)
 from tests.test_process_lifecycle import bytecode, gone
-from tests.windows_support import current_user_sid, icacls, without_backup_restore_privileges
+from tests.windows_support import COPY_PROGRAM, current_user_sid, icacls, without_backup_restore_privileges
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="host-only: TerminateProcess, job objects and access lists exist on Windows only")
 
@@ -79,19 +79,6 @@ end
 """
 
 HELLO_PROGRAM = 'def main() -> Void\n  puts("hi")\nend\n'
-
-# Makes the file at args[1] with create_private, which gives it the access list only the owner has, and copies args[0].
-COPY_PROGRAM = """\
-def main() -> Void
-  args = System.args()
-  input = Result.unwrap!(File.open(args[0], "read", 5000))
-  out = Result.unwrap!(File.open(args[1], "create_private", 5000))
-  bytes = Result.unwrap!(File.read_bytes(input, 1048576, 5000))
-  Result.unwrap!(File.write_bytes(out, bytes, 5000))
-  Result.unwrap!(File.close(input, 5000))
-  Result.unwrap!(File.close(out, 5000))
-end
-"""
 
 
 def pids_of(line, request):

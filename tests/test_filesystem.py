@@ -5,6 +5,10 @@ test did in process, against temp directories. The FIFO cases run the VM
 binary directly with a one-thread pool and a 10 s bound; fixtures/fifo-peer.py
 and fixtures/stop-peer.py play the other side of a FIFO or of a pipe, and
 fixtures/os-peer.py gives Python's answers for Path.real and System.env.
+
+Windows has no FIFO file, and the VM does not stream a pipe as a file there (it refuses one, and no path it accepts names
+a pipe), so the FIFO cases are host-only on Windows. The flush limit is the exception: it runs there on a standard
+output that nobody reads. test_windows_handle_counts.py checks the refusal of a named pipe and its released handle.
 """
 import errno
 import json
@@ -17,8 +21,9 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, WINDOWS, Child, cli, compile_agc, host_only, known_issue, output_lines,
-                                 run, scaled, vm_command, vm_environment)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, ROOT, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
+                                 host_only, output_lines, run, scaled, vm_command, vm_environment)
+from tests.test_vm_stdout import ROWS_PROGRAM, STUCK_ROWS
 
 EXAMPLES = ROOT / "examples"
 STOP_PEER = FIXTURES / "stop-peer.py"
@@ -48,10 +53,11 @@ end
 """
 
 
-# Windows has named pipes where POSIX has FIFOs, but these tests make FIFOs with os.mkfifo (issue 433); it has no
+# Windows has named pipes where POSIX has FIFOs, but the VM does not open one as a file (probe() in vm/files.c refuses
+# every file that is not regular, and path_string refuses the paths that name a pipe directly); it has no
 # /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (test_windows_handle_counts.py lists its
 # pipes and counts its handles instead).
-no_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
+no_fifo = host_only(WINDOWS, "a FIFO opened as a file that waits on the loop; " + FIFO_FILE_REASON)
 no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
 no_stdin_path = host_only(WINDOWS, "Windows has no path that names an inherited descriptor or the standard input (/proc/self/fd/N, /dev/stdin)")
 
@@ -184,6 +190,51 @@ def stuck_fifo(new_dir):
     close_reader()
 
 
+# The program of the flush limit on POSIX: the flush at the end of the run waits for a FIFO whose reader does not read.
+STUCK_FIFO_PROGRAM = r"""def main() -> Void
+  f = File.open(System.args()[0], "write", 1000).unwrap!
+  File.write(f, "x", 1000).unwrap!
+  IO.print("main done\n")
+end
+"""
+
+
+@pytest.fixture
+def stuck_flush(request, new_dir, adopt):
+    """(start, done): start(*options, variable=None) runs a program with the options and the AGENTICA_FLUSH_TIMEOUT_MS
+    `variable`, whose end must flush into a stream that a reader holds up, and returns (exit code, stdout, stderr).
+
+    POSIX: the FIFO of stuck_fifo, which the program writes as a file; stdout is a text, `done`. Windows: the VM does not
+    stream a pipe as a file, so the stream is the standard output of tests/test_vm_stdout.py's rows program (58 rows
+    of 1 KiB fit the 64 KiB buffer of the stream, so the program ends while the 4 KiB pipe is full and the end of the
+    run waits for a reader that does not come): a pipe that nobody reads; stdout is None, and so is `done`.
+    """
+    if not WINDOWS:
+        root, fifo = request.getfixturevalue("stuck_fifo")
+        source = root / "stuck.agc"
+        source.write_text(STUCK_FIFO_PROGRAM, encoding="utf-8")
+
+        def start_on_fifo(*options, variable=None):
+            # Each run ends in well under a second when the limit works; 6 s fails a broken limit before the watchdog.
+            result = run(cli() + [*options, source, fifo], timeout=scaled(6),
+                         env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable}))
+            return result.code, result.stdout, result.stderr
+
+        return start_on_fifo, "main done\n"
+    if UNDER_WINE:
+        pytest.skip("Wine gives the pipe 64 KiB, so the rows fit it and nothing is stuck")
+    source = new_dir() / "stuck.agc"
+    source.write_text(ROWS_PROGRAM % STUCK_ROWS, encoding="utf-8")
+
+    def start_on_stdout(*options, variable=None):
+        env = vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable})
+        child = adopt(Child(cli() + [*options, source], env=env, capture_stderr=True, read_stdout=False))
+        code = child.wait(scaled(6))
+        return code, None, child.stderr_text()
+
+    return start_on_stdout, None
+
+
 @no_urandom
 def test_urandom_reads_bytes_directly_and_through_a_symlink(new_dir, run_program):
     alias = new_dir() / "entropy"
@@ -236,29 +287,19 @@ def test_flush_timeout_and_agentica_flush_timeout_ms_need_a_non_negative_integer
     assert code_of(variable="0").code == 0
 
 
-@no_fifo
-def test_the_file_flush_limit_comes_from_the_flag_then_the_variable_and_ends_a_stuck_flush(stuck_fifo):
-    root, fifo = stuck_fifo
-    source = root / "stuck.agc"
-    source.write_text(r"""def main() -> Void
-  f = File.open(System.args()[0], "write", 1000).unwrap!
-  File.write(f, "x", 1000).unwrap!
-  IO.print("main done\n")
-end
-""", encoding="utf-8")
-
-    def start(*arguments, variable=None):
-        # Each run ends in well under a second when the limit works; 6 s fails a broken limit before the watchdog.
-        return run(cli() + [*arguments], timeout=scaled(6), env=vm_environment({"AGENTICA_FLUSH_TIMEOUT_MS": variable}))
-
+def test_the_flush_limit_comes_from_the_flag_then_the_variable_and_ends_a_stuck_flush(stuck_flush):
+    start, done = stuck_flush
     began = time.monotonic()
-    by_flag = start("--json", "--flush-timeout", "200", source, fifo)
-    by_variable = start("--json", source, fifo, variable="300")
-    flag_wins = start("--json", "--flush-timeout", "250", source, fifo, variable="60000")
-    assert time.monotonic() - began < scaled(20)
-    for result, expected in zip((by_flag, by_variable, flag_wins), (200, 300, 250)):
-        assert (result.code, result.stdout) == (0, "main done\n"), result.stderr
-        assert json.loads(result.stderr)["flush_timeout_ms"] == expected
+    by_flag = start("--json", "--flush-timeout", "200")
+    by_variable = start("--json", variable="300")
+    flag_wins = start("--json", "--flush-timeout", "250", variable="60000")
+    elapsed = time.monotonic() - began
+    assert elapsed < scaled(20)
+    if WINDOWS:
+        assert elapsed >= 0.8 * (0.2 + 0.3 + 0.25), "each run waits for its limit"
+    for (code, stdout, errors), expected in zip((by_flag, by_variable, flag_wins), (200, 300, 250)):
+        assert (code, stdout) == (0, done), errors
+        assert json.loads(errors)["flush_timeout_ms"] == expected
 
 
 @no_fifo
