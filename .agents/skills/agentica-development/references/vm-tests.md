@@ -117,7 +117,10 @@ Read first: `references/vm.md`.
 - **Path:** `vm/tests/runq_test.c`
   - **Owns:** The global run queue (`vm/runq.c`): FIFO order and removal from
     the middle on the solo queue, then three pushers against three poppers on
-    libuv threads after `agc_runq_share` (every task comes out exactly once).
+    libuv threads after `agc_runq_share` (every task comes out exactly once);
+    the blocking waits; the spin (`test_spin`: a push that a spinner takes
+    sends no signal, counted by `agc_runq_stats`; a spinner that runs out of
+    budget waits and still gets the push), ordered by the counts, not by time.
 
 - **Path:** `vm/tests/inbox_test.c`
   - **Owns:** The inbox (`vm/inbox.c`): six producers post 20000 requests each
@@ -154,7 +157,10 @@ Read first: `references/vm.md`.
     does `agc_task_commit_park`, 20000 rounds with different timings. The task
     ends in the queue exactly once per round (a dropped wake leaves none, a
     double push leaves two). The single-thread part checks the marks, unpark
-    and a stale wake.
+    and a stale wake, and the runnext slot (`test_runnext`: a local wake, a
+    full slot, `RUNNEXT_LIMIT`, a cancel by the owner and by another
+    scheduler). `threads_test.c` has the whole-run side: a ping-pong on four
+    schedulers stays on one of them.
 
 - **Path:** `vm/tests/test_support.h`
   - **Owns:** `agc_test_deadline(seconds)` (an alarm, so a broken park path
