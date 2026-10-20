@@ -58,7 +58,9 @@ before it moved; the header split moved no line of a `.c` file except the
     (`http_parse.h`), `file_io.c` and `file_windows.c` (`file_io.h`),
     `process_posix.c` and `process_windows.c` (`process_os.h`: command search),
     `duplex_posix.c` and `duplex_windows.c` (`duplex_os.h`: child channel ends),
-    `system_posix.c` and `system_windows.c` (`system_os.h`: the system name)
+    `system_posix.c` and `system_windows.c` (`system_os.h`: the system name),
+    `net_posix.c` and `net_windows.c` (`net_os.h`: the errno of a libuv
+    socket or pipe error)
   - **May use:** their own header, their library, and from `value.h` only the
     memory functions (`agc_alloc`, `agc_alloc_atomic`, `agc_size_add`,
     `agc_size_mul`, `agc_out_of_memory`)
@@ -262,7 +264,8 @@ is no such place, so the plan adds none:
   system family, each guarded whole (`file_io.h` and `file_windows.c`;
   `process_os.h` with `process_posix.c` and `process_windows.c`;
   `duplex_os.h` with `duplex_posix.c` and `duplex_windows.c`;
-  `system_os.h` with `system_posix.c` and `system_windows.c`).
+  `system_os.h` with `system_posix.c` and `system_windows.c`;
+  `net_os.h` with `net_posix.c` and `net_windows.c`).
   Shared functions do not branch on `#ifdef`; older code that still does
   (`file_io.c`, and blocks in `files.c`, `loop.c`, `launch.c`, `process.c`,
   `input.c` and `output.c`) moves behind an adapter when a change adds a
@@ -330,7 +333,8 @@ what it uses (`json_test.c` and `string_test.c` both). What goes where, by name:
   `agc_lock_status`, `struct agc_task`, `struct agc_vm`; `agc_file_id` and
   `agc_file_ids` (`rt->inherited`); and the port functions of §15.2 (among them
   `agc_stack_members`, which builds the stack members of a Json failure record
-  for `testing.c`), with `agc_io_block_stop` off Windows, and
+  for `testing.c`), `agc_io_queue_work` (a pool job with the stop signals
+  blocked off Windows), with `agc_io_block_stop` off Windows, and
   `agc_io_start_then` and the poller functions on Linux, macOS and Windows
   (`port.h` includes `<signal.h>` and `<locale.h>` on Linux and macOS).
 - **`core.h`**: what only the core and the driver call: `agc_builtin_table`;

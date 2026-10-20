@@ -42,7 +42,7 @@ The Unicode tables for case mapping and for printing text are not a submodule: t
 
 ## Platforms
 
-The release builds four native archives: Linux x86-64 (glibc 2.28 or newer), macOS Intel and Apple silicon (macOS 12 or newer) and Windows x86-64 (Windows 10 or newer). Each is built on a runner of its own system, and the workflow unpacks it into a folder with spaces and non-ASCII letters and uses it with a minimal `PATH` before it publishes anything. CI also bootstraps the binary on macOS and Windows and runs the C tests and a subset of the program tests (files, paths, OS calls, processes, the single binary and the bootstrap). The network builtins (`TCP`, `TLS`, `std/http`) are built on Linux and macOS only for now.
+The release builds four native archives: Linux x86-64 (glibc 2.28 or newer), macOS Intel and Apple silicon (macOS 12 or newer) and Windows x86-64 (Windows 10 or newer). Each is built on a runner of its own system, and the workflow unpacks it into a folder with spaces and non-ASCII letters and uses it with a minimal `PATH` before it publishes anything. CI also bootstraps the binary on macOS and Windows and runs the C tests and a subset of the program tests: files, paths, OS calls, processes, the child channel, `agentica test`, TCP, the single binary and the bootstrap. `TCP` runs and is tested on all three systems; `TLS` and `std/http` are built on Linux and macOS only for now, and a `TLS` call on Windows returns an error.
 
 ## Learn more
 
