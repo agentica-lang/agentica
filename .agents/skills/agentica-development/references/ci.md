@@ -365,43 +365,21 @@ golden,
 
 ### When `vm-sanitizers` runs
 
-The first steps of the `test` job (the `changes` step, checkout with
+The first steps of the `vm-sanitizers` job (the `changes` step, checkout with
 `fetch-depth: 2`) diff the pull request merge commit against its base
-(`git diff HEAD^1 HEAD`) and publish the result as job outputs. It runs
-`vm-sanitizers` only when the VM,
-lowering or bytecode files, the `std/` modules, or CI itself, change:
+(`git diff HEAD^1 HEAD`) and publish the result as the job output `c`. The
+job builds and tests only when C code or the build changes:
 
-- `vm/`, `bootstrap/`, `compiler/front_end.agc`, `compiler/app/front_end*`,
-  `compiler/lower/lower*`, `compiler/bytecode/*`, `VERSION`;
-- `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`,
-  `tests/test_vm_tcp.py`,
-  `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,
-  `tests/fixtures/tls-peer.js`, `tests/fixtures/tls-peer.py`,
-  `tests/fixtures/tls/`, `tests/test_vm_http.py`, `tests/fixtures/http-*`,
-  `tests/test_vm_stop.py`, `tests/fixtures/stop-peer.py`,
-  `tests/test_vm_channel.py`, `tests/fixtures/channel-peer.py`,
-  `tests/test_vm_stdout.py`, `tests/fixtures/stdout-peer.py`,
-  `tests/test_vm_logger.py`, `tests/fixtures/logger-peer.*`,
-  `tests/test_vm_monotonic.py`, `tests/fixtures/monotonic-peer.*`,
-  `tests/test_vm_file_lines.py`, `tests/fixtures/lines-peer.py`,
-  `tests/test_vm_os.py`,
-  `tests/test_vm_stack.py`, `tests/agentica_test.py` (the helper of the
-  unittest modules),
-  `tests/test_vm_test_protocol.py`, `tests/fixtures/test-protocol-peer.*`,
-  `tests/test_vm_child_channel.py`, `tests/test_vm_child_channel_posix.py`,
-  `tests/fixtures/child-channel*`,
-  `tests/fixtures/child_channel.py`, `tests/fixtures/channel-run.py`,
-  `tests/fixtures/vm/`;
-- `stdlib/`: every `std/` module written in Agentica, `stdlib/bdd/` too (the
-  pattern is `stdlib/*`; in a shell `case`, `*` also matches `/`);
+- `vm/` (C sources, headers, `vm/tests`, `vm/tools`, `vm/third_party`);
 - the Makefile, `.gitmodules`, `.clang-tidy`, `ci.yml`.
 
-Otherwise it shows as skipped. If the `changes` step does not set its outputs,
-`vm-sanitizers` still
-runs. A manual run always runs it. Front-end changes (checker, AST,
-builtins, `compiler/`) skip `vm-sanitizers` on purpose; the `test` job still
-runs the `vm-diff` golden shards and every CLI test with the real VM. Keep
-that path list in `ci.yml` in step with new VM files.
+Otherwise its steps show as skipped. If the `changes` step does not set its
+outputs, `vm-sanitizers` still runs. A manual run always runs it. Changes to
+`compiler/`, `bootstrap/`, `stdlib/`, `tests/` and `VERSION` skip it on
+purpose: the `test` job still runs the `vm-diff` golden shards and every CLI
+test with the real VM. The `test` job has its own `changes` step with a wider
+path list; no step reads its outputs today. Keep the `vm-sanitizers` list in
+`ci.yml` in step with new C directories.
 
 Only a manual run, or a pull request that changes `vm/trace.*` or
 `vm/tests/trace_test.c`, also runs `make vm-trace-off` (`make vm-test
