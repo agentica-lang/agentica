@@ -303,6 +303,18 @@ HttpWire.local_port(server: HttpServer) -> Int
   or failed; `max_bytes` 0 does not wait) and
   `close_write`. `vm/http_server.c` holds the task group, on tcp.c's connection
   object. Header lists are shared with the client in `vm/http_fields.c`.
+- The I/O thread owns the server's state: the listener, the count of open
+  connections and the queue of waiting `accept` and `wait` calls. A builtin
+  changes it only through a step posted there (`agc_loop_call`, inline at
+  N = 1), and the listener's watch runs there already. `accept` and `wait` are
+  jobs that the I/O thread ends: an accept carries its connection to the done
+  half, which makes the socket on the caller's scheduler. A connection task's
+  end, and a socket that `spawn` does not take, give the room back with a
+  posted step that serves the queue. `close_server` marks the server closed
+  (an atomic flag, so a scheduler refuses at once), then posts the release
+  that ends every waiter and gives up the listener. At N = 1 an accept with a
+  connection ready returns without a job (`agc_io_here`). So the server runs
+  at N > 1 under the same rules as TCP (§16.9), with no lock of its own.
 - `std/http` reads a request: it waits up to `request_timeout_ms` (the first
   request) or `idle_timeout_ms` (later ones) for the first byte. On TLS that
   wait covers the handshake too. Then `request_timeout_ms`

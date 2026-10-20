@@ -11,7 +11,7 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, Child, check_lines, compile_text, one_scheduler,
+from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, Child, check_lines, compile_text,
                                  output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
@@ -475,7 +475,6 @@ def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path
 
 
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
-    one_scheduler()
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
     assert (result.code, result.stdout) == (0, "ok\nok\n"), result.stderr
@@ -484,7 +483,6 @@ def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_ge
 
 
 def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, adopt):
-    one_scheduler()
     server, port = python_server(adopt, "close")
     ca = tmp_path / "ca.pem"
     ca.write_bytes((CERTS / "ca.pem").read_bytes())
@@ -500,7 +498,6 @@ def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, ado
 
 
 def test_close_client_while_a_connection_is_in_its_tls_handshake(tmp_path):
-    one_scheduler()
     result = run_text(tmp_path, "close-in-handshake", CLOSE_IN_HANDSHAKE_PROGRAM)
     assert (result.code, result.stdout) == (0, 'error("http: client is closed")\ndone\n'), result.stderr
 
@@ -549,7 +546,6 @@ def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tm
 
 
 def test_https_waiters_on_a_context_build_one_leaves_and_a_failed_build_is_retried(tmp_path, adopt):
-    one_scheduler()
     server, port = python_server(adopt, "close")
     fifo = tmp_path / "ca-fifo.pem"
     os.mkfifo(fifo)

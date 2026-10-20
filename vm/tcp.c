@@ -1451,8 +1451,15 @@ static bool begin_read(void *data, agc_io_job *job) {
   link_request(q, job);
   /* A closed net's input is gone; drop_request frees the rest. */
   if (q->rest && !n->closed) put_back(n, q);
-  if (!read_ready(n, q)) start_reading(n);
-  if (read_ready(n, q)) finish_reader(n);
+  /* read_ready is asked once per new input: for a head it moves q->scanned past what it looked at, so a second look
+     at the same bytes says "not ready". It is asked again only after start_reading, which may have found the end of
+     input or an error, both of which a head reports as ready. */
+  bool ready = read_ready(n, q);
+  if (!ready) {
+    start_reading(n);
+    ready = read_ready(n, q);
+  }
+  if (ready) finish_reader(n);
   return true;
 }
 
@@ -1732,6 +1739,12 @@ agc_conn *agc_conn_accept(agc_conn *l) {
   }
   AGC_TRACE(&l->trace, AGC_TRACE_TLS, "tls_handshake socket=0 listener=%" PRIu64 " role=server", l->id);
   return c;
+}
+
+void agc_conn_discard(agc_conn *c) {
+  shut(c, "failed");
+  c->users--;
+  settle(c);
 }
 
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c) {

@@ -3,8 +3,8 @@
 More than one scheduler runs only under that test switch until the count is lifted (#345). The goldens of
 tests/fixtures/vm must hold at four schedulers too, except where the order of output between tasks is not fixed (the
 ORDER set) and for the libraries that still call libuv from their scheduler, which a run with several schedulers
-refuses (HTTP, Process, Duplex and the Test protocol). TCP and TLS post every step to the I/O thread, so their
-fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers that fire, the end of
+refuses (Process, Duplex and the Test protocol). TCP, TLS and the HTTP server post every step to the I/O thread, so
+their fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers that fire, the end of
 the run from any scheduler, standard input and FIFOs, sockets used and closed from several schedulers, and the switch.
 `make test-multicore` runs this module; `make vm-tsan-run` runs it on a ThreadSanitizer build.
 """
@@ -45,7 +45,7 @@ ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "chann
          "task-file-close", "tcp-tasks", "test-run-task"}
 # Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
 # the parent channel): such a fixture keeps its golden or stops with RUNTIME-INTERNAL.
-LOOP_BOUND = re.compile(r"\b(HTTP|HTTPServer|HttpWire|Process|Duplex)\.|\bTest\.run\b")
+LOOP_BOUND = re.compile(r"\b(Process|Duplex)\.|\bTest\.run\b")
 
 
 def vm(bytecode, *flags, args=(), stdin=None, env=None, timeout=None):
@@ -1215,3 +1215,121 @@ def test_the_front_end_runs_a_source_file_on_several_schedulers(tmp_path):
     source.write_text(FAN_OUT, encoding="utf-8")
     result = run([vm_command()[0], *FLAGS, str(source)], env=vm_environment(MULTICORE))
     assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % expected_fan_out(), "")
+
+
+# HTTP runs on several schedulers too: the server's state belongs to the I/O thread (vm/http_server.c), and the
+# client in std/http is TCP and TLS sockets, channels and tasks.
+HTTP_LOAD = r"""import HTTP from "std/http"
+
+struct Load
+  pool: HttpClient
+  base: String
+  requests: Int
+end
+
+def handle(request: HttpRequest) -> Result[HttpResponse]
+  if request.path == "/slow"
+    Task.sleep(300)
+  end
+  return ok(HttpResponse(status: 200, headers: [], body: request.path))
+end
+
+def load(l: Load) -> Int
+  same = 0
+  i = 0
+  while i < l.requests
+    r = HTTP.get(l.pool, "#{l.base}/#{i}")
+    if r.ok? && r.unwrap!.body == "/#{i}"
+      same = same + 1
+    end
+    i = i + 1
+  end
+  return same
+end
+
+def slow(l: Load) -> Result[String]
+  response = try HTTP.get(l.pool, l.base + "/slow")
+  return ok(response.body)
+end
+
+def answered(l: Load) -> Bool
+  case HTTP.get(l.pool, l.base + "/slow")
+    ok(response) -> return response.body == "/slow"
+    error(message) -> return message != ""
+  end
+end
+
+# CLIENTS tasks send REQUESTS requests each, beside callers that Task.map cancels at their 50 ms deadline while their
+# requests wait on the server; every request of the load tasks gets its own path back.
+def phase(base: String, ca: String, clients: Int, requests: Int) -> Int
+  pool = HTTP.client(HTTP.client_options().with(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
+  l = Load(pool: pool, base: base, requests: requests)
+  tasks = (1..clients).to_a.map do |k|
+    Task.spawn(&load, l)
+  end
+  cancelled = Task.map([l, l, l, l], 4, 50, &slow)
+  same = 0
+  for t in tasks
+    same = same + Task.await(t)
+  end
+  for c in cancelled
+    if c.ok?
+      same = same - 1000
+    end
+  end
+  HTTP.close_client(pool)
+  return same
+end
+
+def main() -> Void
+  args = System.args()
+  certs = args[0]
+  clients = args[1].to_i!
+  requests = args[2].to_i!
+  ca = certs + "/ca.pem"
+  options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
+  plain = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
+  secure = HTTP.listen_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", &handle, options).unwrap!
+  puts(phase("http://127.0.0.1:#{HTTP.local_port(plain)}", ca, clients, requests))
+  puts(phase("https://localhost:#{HTTP.local_port(secure)}", ca, clients, requests))
+  # The server closes under load: every caller gets its answer or an error, none hangs, and wait returns.
+  pool = HTTP.client(HTTP.client_options().with(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
+  l = Load(pool: pool, base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
+  callers = (1..clients).to_a.map do |k|
+    Task.spawn(&answered, l)
+  end
+  Task.sleep(100)
+  HTTP.close_server(secure)
+  answers = 0
+  for c in callers
+    if Task.await(c)
+      answers = answers + 1
+    end
+  end
+  puts(answers)
+  IO.inspect(HTTP.wait(secure))
+  HTTP.close_client(pool)
+  HTTP.close_server(plain)
+  IO.inspect(HTTP.wait(plain))
+end
+"""
+
+
+@NET
+@RACE
+@pytest.mark.parametrize("schedulers", ["4", "8"])
+def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_a_close(tmp_path, repeats, schedulers):
+    # Many client tasks on one HTTP and one HTTPS server, with cancelled callers and the server closed under load.
+    # Each HTTPS client builds its TLS context once, whichever schedulers its connections start on.
+    bytecode = program(tmp_path, "http_load", HTTP_LOAD)
+    clients, requests = 24, 10
+    for k in range(repeats):
+        trace = tmp_path / ("trace-%d" % k)
+        env = {"AGENTICA_VM_TRACE": "tls", "AGENTICA_VM_TRACE_FILE": str(trace)}
+        result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode, TLS_DIR, str(clients),
+                      str(requests)], env=vm_environment({**MULTICORE, **env}), timeout=120)
+        total = clients * requests
+        assert (result.code, result.stdout, result.stderr) == (0, "%d\n%d\n%d\nok()\nok()\n" % (
+            total, total, clients), "")
+        text = trace.read_text()
+        assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 2, text

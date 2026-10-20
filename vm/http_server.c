@@ -9,24 +9,44 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <inttypes.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 
 #define MAX_CONNECTIONS ((int64_t)65536)
 
 typedef struct waiter waiter;
 
+/* The I/O thread owns `listener`, `open`, `users` and the waiter list: every change is a step there (agc_loop_call,
+   inline at N = 1), so the listener's watch, the accepts and the counts never run beside each other. `max`, `loop`
+   and `trace` are fixed at creation. `closed` is atomic: a scheduler reads it to refuse a closed server at once, and
+   the I/O thread reads it to end the waiters. The struct is freed on the I/O thread when `users` (the resource and
+   each waiter whose START ran) reaches zero. A scheduler reaches it only through the resource's native pointer,
+   under rt->sync, and the resource's release is posted after that pointer is cleared, so no scheduler's step can
+   come after the free. */
 typedef struct {
   agc_conn *listener;
+  agc_loop *loop;
+  agc_trace trace;
   size_t max, open, users;
-  bool closed;
-  waiter *waiters;
+  _Atomic bool closed;
+  waiter *waiters, *waiters_tail;
 } server;
 
+/* An accept (or a wait for the close): queued on the I/O thread in arrival order, ended there with agc_io_ready. An
+   accept that is served carries its connection to the done half, which makes the socket on the task's scheduler. */
 struct waiter {
   server *s;
   agc_io_job *job;
   waiter *next;
+  agc_conn *child;
+  bool accepting, started, linked;
 };
+
+typedef struct {
+  server *s;
+  uint64_t id;
+  bool traced;
+} release_call;
 
 static const char server_closed[] = "http: server is closed";
 
@@ -34,64 +54,156 @@ static void settle(server *s) {
   if (!s->users) free(s);
 }
 
-static void poke(const server *s) {
-  for (const waiter *w = s->waiters; w; w = w->next) agc_io_ready(w->job);
+static void unlink_waiter(waiter *w) {
+  server *s = w->s;
+  waiter *prev = NULL;
+  for (waiter *at = s->waiters; at; prev = at, at = at->next) {
+    if (at != w) continue;
+    if (prev)
+      prev->next = w->next;
+    else
+      s->waiters = w->next;
+    if (s->waiters_tail == w) s->waiters_tail = prev;
+    break;
+  }
+  w->next = NULL;
+  w->linked = false;
 }
 
-static void listener_watch(void *watcher) { poke(watcher); }
+static bool listening(const server *s) { return s->listener && !agc_conn_closed(s->listener); }
 
-static void free_waiter(waiter *w) {
+/* A connection while there is room, counted as open. I/O thread. */
+static agc_conn *take(server *s) {
+  if (atomic_load(&s->closed) || !listening(s) || s->open >= s->max) return NULL;
+  agc_conn *c = agc_conn_accept(s->listener);
+  if (c) s->open++;
+  return c;
+}
+
+/* Ends every waiter the server's state now answers, oldest first: all of them once the server is closed, an accept
+   when the listener is gone or a connection is there for it. I/O thread. */
+static void serve(server *s) {
+  bool closed = atomic_load(&s->closed);
+  for (waiter *w = s->waiters, *next; w; w = next) {
+    next = w->next;
+    if (!closed && !w->accepting) continue;
+    if (!closed && listening(s)) {
+      w->child = take(s);
+      if (!w->child) continue;
+    }
+    unlink_waiter(w);
+    agc_io_ready(w->job);
+  }
+}
+
+static void listener_watch(void *watcher) { serve(watcher); }
+
+/* The end of a waiter, on the I/O thread: posted by its done half, or the job's drop. A connection that no done half
+   took is closed and gives its room back. */
+static void waiter_end(void *data) {
+  waiter *w = data;
   server *s = w->s;
-  for (waiter **at = &s->waiters; *at; at = &(*at)->next) {
-    if (*at != w) continue;
-    *at = w->next;
-    break;
+  if (!w->started) {
+    free(w);
+    return;
+  }
+  if (w->linked) unlink_waiter(w);
+  if (w->child) {
+    agc_conn_discard(w->child);
+    s->open--;
+    serve(s);
   }
   free(w);
   s->users--;
   settle(s);
 }
 
-static agc_value waited(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
-  (void)context;
-  free_waiter(data);
-  return agc_void();
-}
-
-static void waiter_drop(void *data) { free_waiter(data); }
-
-static bool waiter_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
-  (void)vm;
-  (void)data;
-  (void)context;
-  (void)deadline;
+static bool begin_wait(void *data, agc_io_job *job) {
+  waiter *w = data;
+  server *s = w->s;
+  w->job = job;
+  w->started = true;
+  s->users++;
+  if (s->waiters_tail)
+    s->waiters_tail->next = w;
+  else
+    s->waiters = w;
+  s->waiters_tail = w;
+  w->linked = true;
+  serve(s);
   return true;
 }
 
-static const agc_io_kind wait_io = {NULL, waited, waited, waiter_drop, true, "http_server", waiter_cancel, true, NULL};
+static agc_value waited(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  waiter *w = data;
+  agc_value result = agc_result_value(true, agc_void());
+  if (w->child) {
+    result = agc_result_value(true, agc_conn_socket(vm, w->child));
+    w->child = NULL;
+  } else if (w->accepting) {
+    result = agc_error_value(server_closed);
+  }
+  agc_loop_call(w->s->loop, waiter_end, w);
+  return result;
+}
 
-/* accept and wait are retry builtins: the job only wakes the task, which
-   then checks the server again. */
-static void park(agc_vm *vm, server *s) {
+/* On the I/O thread: the waiter leaves the list, so no serve ends a job that is being dropped. */
+static bool waiter_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
+  (void)deadline;
+  waiter *w = data;
+  if (w->linked) unlink_waiter(w);
+  return true;
+}
+
+static const agc_io_kind wait_io = {NULL, waited, waited, waiter_end, true, "http_server", waiter_cancel, true, NULL};
+
+static void park(agc_vm *vm, server *s, bool accepting) {
   waiter *w = calloc(1, sizeof(waiter));
   if (!w) agc_out_of_memory();
   w->s = s;
-  w->next = s->waiters;
-  s->waiters = w;
-  s->users++;
-  w->job = agc_io_start(vm, &wait_io, w, agc_void(), -1);
-  vm->task->retry = true;
+  w->accepting = accepting;
+  (void)agc_io_start_then(vm, &wait_io, w, agc_void(), -1, begin_wait);
 }
 
-static void release_server(void *native) {
-  server *s = native;
-  s->closed = true;
+static void attach_step(void *data) {
+  server *s = data;
+  if (!listening(s)) {
+    s->listener = NULL;
+    return;
+  }
+  agc_conn_retain(s->listener);
+  agc_conn_observe(s->listener, listener_watch, s);
+}
+
+/* The server gives up its listener and its resource's count; every waiter ends. I/O thread. */
+static void release_step(void *data) {
+  release_call *call = data;
+  server *s = call->s;
+  if (call->traced) AGC_TRACE(&s->trace, AGC_TRACE_IO, "http_close server=%" PRIu64 " open=%zu", call->id, s->open);
+  free(call);
+  atomic_store(&s->closed, true);
+  serve(s);
   if (s->listener) agc_conn_release(s->listener);
   s->listener = NULL;
   s->users--;
   settle(s);
 }
+
+static void post_release(server *s, uint64_t id, bool traced) {
+  release_call *call = malloc(sizeof *call);
+  if (!call) agc_out_of_memory();
+  call->s = s;
+  call->id = id;
+  call->traced = traced;
+  atomic_store(&s->closed, true);
+  agc_loop_call(s->loop, release_step, call);
+}
+
+/* The registry's release, at the end of the run: a step, as it may come from any thread. */
+static void release_server(void *native) { post_release(native, 0, false); }
 
 static void shut_server(agc_vm *vm, agc_http_server *hs) {
   agc_resource *r = hs->state;
@@ -99,9 +211,7 @@ static void shut_server(agc_vm *vm, agc_http_server *hs) {
   if (s) {
     r->native = NULL;
     agc_unregister(vm, r);
-    AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "http_close server=%" PRIu64 " open=%zu", r->id, s->open);
-    poke(s);
-    release_server(s);
+    post_release(s, r->id, true);
   }
   agc_net_close(vm, agc_as_listener(vm, hs->listener)->state, "close");
   agc_task_cancel(vm, hs->group);
@@ -114,7 +224,7 @@ static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
 
 static server *open_server(const agc_http_server *hs) {
   server *s = hs->state->native;
-  if (!s || s->closed || !s->listener || agc_conn_closed(s->listener) || hs->group->state == AGC_TASK_DONE) return NULL;
+  if (!s || atomic_load(&s->closed) || hs->group->state == AGC_TASK_DONE) return NULL;
   return s;
 }
 
@@ -125,12 +235,13 @@ static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!s) agc_out_of_memory();
   s->max = (size_t)(max < 1 ? 1 : max > MAX_CONNECTIONS ? MAX_CONNECTIONS : max);
   s->users = 1;
-  agc_conn *l = lv->state->native;
-  if (l && !agc_conn_closed(l)) {
-    s->listener = l;
-    agc_conn_retain(l);
-    agc_conn_observe(l, listener_watch, s);
-  }
+  s->loop = agc_io_loop(vm);
+  s->trace = vm->rt->trace;
+  atomic_init(&s->closed, false);
+  /* The listener's resource is alive (the caller holds it, under rt->sync), so its connection is too until a close
+     that this builtin's step comes before. */
+  s->listener = lv->state->native;
+  agc_loop_call(s->loop, attach_step, s);
   agc_http_server *hs = agc_alloc(sizeof(agc_http_server));
   hs->listener = args[0];
   hs->group = agc_task_group(vm);
@@ -145,27 +256,29 @@ static agc_value builtin_server(agc_vm *vm, agc_value *args, uint32_t span) {
   return value;
 }
 
+/* A connection at once where the I/O state can be read here (N = 1), else a wait that the I/O thread ends. */
 static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_http_server *hs = agc_as_http_server(vm, args[0]);
   server *s = open_server(hs);
   if (!s) return agc_error_value(server_closed);
-  if (s->open < s->max) {
-    agc_conn *c = agc_conn_accept(s->listener);
-    if (c) {
-      s->open++;
-      return agc_result_value(true, agc_conn_socket(vm, c));
-    }
+  if (agc_io_here(vm)) {
+    agc_conn *c = take(s);
+    if (c) return agc_result_value(true, agc_conn_socket(vm, c));
   }
-  park(vm, s);
+  park(vm, s, true);
   return agc_void();
+}
+
+static void give_back_step(void *data) {
+  server *s = data;
+  if (s->open) s->open--;
+  serve(s);
 }
 
 static void give_back(const agc_http_server *hs) {
   server *s = hs->state->native;
-  if (!s) return;
-  if (s->open) s->open--;
-  poke(s);
+  if (s) agc_loop_call(s->loop, give_back_step, s);
 }
 
 static void connection_ended(agc_vm *vm, agc_task *t) {
@@ -177,12 +290,9 @@ static void connection_ended(agc_vm *vm, agc_task *t) {
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_http_server *hs = agc_as_http_server(vm, args[0]);
-  agc_socket *sk = agc_as_socket(vm, args[1]);
-  server *s = open_server(hs);
-  if (!s) {
-    agc_net_close(vm, sk->state, "close");
-    s = hs->state->native;
-    if (s && s->open) s->open--;
+  if (!open_server(hs)) {
+    agc_net_close(vm, agc_as_socket(vm, args[1])->state, "close");
+    give_back(hs);
     return agc_void();
   }
   if (!agc_task_owns(vm, args[1])) give_back(hs);
@@ -202,8 +312,8 @@ static agc_value builtin_close_server(agc_vm *vm, agc_value *args, uint32_t span
 static agc_value builtin_wait(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   server *s = agc_as_http_server(vm, args[0])->state->native;
-  if (!s || s->closed) return agc_result_value(true, agc_void());
-  park(vm, s);
+  if (!s || atomic_load(&s->closed)) return agc_result_value(true, agc_void());
+  park(vm, s, false);
   return agc_void();
 }
 

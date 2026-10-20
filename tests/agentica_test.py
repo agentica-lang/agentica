@@ -40,9 +40,9 @@ UNDER_WINE = os.environ.get("AGENTICA_TEST_WINE") == "1"
 # line names OpenSSL exactly there.
 TLS_BUILT = TARGET_OS in ("linux", "darwin")
 
-# `make test-multicore` runs whole modules (TCP, TLS) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N makes
-# every VM started with vm_environment() run on N schedulers under the test switch. A case whose program still uses a
-# builtin that several schedulers refuse (HTTP, Process) calls one_scheduler() first.
+# `make test-multicore` runs whole modules (TCP, TLS, HTTP) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N
+# makes every VM started with vm_environment() run on N schedulers under the test switch. A case whose program still
+# uses a builtin that several schedulers refuse (Process, Duplex) calls one_scheduler() first.
 TEST_SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_MODULE_SCHEDULERS", "").strip()
 
 
