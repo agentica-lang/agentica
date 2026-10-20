@@ -58,9 +58,9 @@ binary otherwise
     state only for a moment)
   - on Windows the same file differs in these points: the folder is the first
     of `TMPDIR`, `TMP`, `TEMP` that is a folder; the hex is 8 bytes of
-    `Random.int`, 4 of the clock and the process id; the dir has its final name at once (a
-    folder with an open file cannot be renamed, so there is no `-new-` name and
-    no rename); the lock is `LockFileEx`; there is no sticky-bit check (it
+    `Random.int`, 4 of the clock and the process id; the dir has its final
+    name at once (a folder with an open file cannot be renamed, so there is no
+    `-new-` name and no rename); the lock is `LockFileEx`; there is no sticky-bit check (it
     assumes a temporary folder that only the user can modify); the sweep takes a
     dir only when it is a minute old, and closes the lock before removing it
     (a folder with an open file cannot be removed)
