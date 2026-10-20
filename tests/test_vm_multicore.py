@@ -1252,11 +1252,20 @@ def slow(l: Load) -> Result[String]
   return ok(response.body)
 end
 
-def answered(l: Load) -> Bool
-  case HTTP.get(l.pool, l.base + "/slow")
-    ok(response) -> return response.body == "/slow"
-    error(message) -> return message != ""
+# GETs until one fails: the count of answers before the server closed. A wrong body counts as a failure (-1000).
+def until_closed(l: Load) -> Int
+  answers = 0
+  while true
+    case HTTP.get(l.pool, "#{l.base}/#{answers}")
+      ok(response) ->
+        if response.body != "/#{answers}"
+          return -1000
+        end
+        answers = answers + 1
+      error(message) -> return answers
+    end
   end
+  return answers
 end
 
 # CLIENTS tasks send REQUESTS requests each, beside callers that Task.map cancels at their 50 ms deadline while their
@@ -1292,21 +1301,26 @@ def main() -> Void
   secure = HTTP.listen_tls("127.0.0.1", 0, certs + "/server.pem", certs + "/server-key.pem", &handle, options).unwrap!
   puts(phase("http://127.0.0.1:#{HTTP.local_port(plain)}", ca, clients, requests))
   puts(phase("https://localhost:#{HTTP.local_port(secure)}", ca, clients, requests))
-  # The server closes under load: every caller gets its answer or an error, none hangs, and wait returns.
+  # The server closes under load: each caller sends GETs until one fails. Answers came before the close (so it came
+  # during the load), every caller then gets an error (none hangs), and wait returns.
   pool = HTTP.client(HTTP.client_options().with(ca_file: ca, max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
   callers = (1..clients).to_a.map do |k|
-    Task.spawn(&answered, l)
+    Task.spawn(&until_closed, l)
   end
-  Task.sleep(100)
+  Task.sleep(200)
   HTTP.close_server(secure)
   answers = 0
+  wrong = 0
   for c in callers
-    if Task.await(c)
-      answers = answers + 1
+    n = Task.await(c)
+    if n < 0
+      wrong = wrong + 1
+    else
+      answers = answers + n
     end
   end
-  puts(answers)
+  puts("#{answers > 0} #{wrong}")
   IO.inspect(HTTP.wait(secure))
   HTTP.close_client(pool)
   HTTP.close_server(plain)
@@ -1329,7 +1343,51 @@ def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_
         result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode, TLS_DIR, str(clients),
                       str(requests)], env=vm_environment({**MULTICORE, **env}), timeout=120)
         total = clients * requests
-        assert (result.code, result.stdout, result.stderr) == (0, "%d\n%d\n%d\nok()\nok()\n" % (
-            total, total, clients), "")
+        assert (result.code, result.stdout, result.stderr) == (0, "%d\n%d\ntrue 0\nok()\nok()\n" % (
+            total, total), "")
         text = trace.read_text()
         assert len(re.findall(r"tls_config socket=\d+ shared=1", text)) == 2, text
+
+
+# A max_connections = 1 server whose one connection holds the room, with a second connection in the backlog: the
+# accept loop's wait sits in the I/O thread's queue. Two waits for the close that Task.map cancels at their deadline
+# leave the queue (the waiter's cancel, at N > 1 on the I/O thread), the server then closes with the accept still
+# queued (the release ends it), and the backlog connection is closed with the listener, never handed out.
+HTTP_QUEUED = r"""import HTTP from "std/http"
+
+def handle(request: HttpRequest) -> Result[HttpResponse]
+  return ok(HttpResponse(status: 200, headers: [], body: "never"))
+end
+
+def main() -> Void
+  options = HttpServerOptions(request_timeout_ms: 60000, idle_timeout_ms: 60000, max_connections: 1, max_body_bytes: 64)
+  server = HTTP.listen("127.0.0.1", 0, &handle, options).unwrap!
+  port = HTTP.local_port(server)
+  held = TCP.connect("127.0.0.1", port, 5000).unwrap!
+  queued = TCP.connect("127.0.0.1", port, 5000).unwrap!
+  Task.sleep(100)
+  waits = Task.map([server, server], 2, 50) do |s|
+    HTTP.wait(s)
+  end
+  for w in waits
+    puts(w.ok?)
+  end
+  HTTP.close_server(server)
+  IO.inspect(HTTP.wait(server))
+  puts(TCP.read_line(held, 5000).ok?)
+  puts(TCP.read_line(queued, 5000).ok?)
+  TCP.close(held)
+  TCP.close(queued)
+end
+"""
+
+
+@NET
+@RACE
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_http_waits_queued_on_the_io_thread_leave_on_cancel_and_end_at_close(tmp_path, repeats, schedulers):
+    bytecode = program(tmp_path, "http_queued", HTTP_QUEUED)
+    for _ in range(repeats):
+        result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode],
+                     env=vm_environment(MULTICORE), timeout=60)
+        assert (result.code, result.stdout, result.stderr) == (0, "false\nfalse\nok()\nfalse\nfalse\n", "")

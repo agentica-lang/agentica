@@ -533,14 +533,18 @@ static void link_request(request *q, agc_io_job *job) {
   }
 }
 
+void agc_conn_discard(agc_conn *c) {
+  shut(c, "failed");
+  c->users--;
+  settle(c);
+}
+
 static void release_child(request *q) {
   net *c = q->child;
   if (!c) return;
   q->child = NULL;
   c->opener = NULL;
-  shut(c, "failed");
-  c->users--;
-  settle(c);
+  agc_conn_discard(c);
 }
 
 /* The end of a request, on the I/O thread: posted by its done half, or the job's drop. A request whose START never
@@ -1752,12 +1756,6 @@ agc_conn *agc_conn_accept(agc_conn *l) {
   }
   AGC_TRACE(&l->trace, AGC_TRACE_TLS, "tls_handshake socket=0 listener=%" PRIu64 " role=server", l->id);
   return c;
-}
-
-void agc_conn_discard(agc_conn *c) {
-  shut(c, "failed");
-  c->users--;
-  settle(c);
 }
 
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c) {

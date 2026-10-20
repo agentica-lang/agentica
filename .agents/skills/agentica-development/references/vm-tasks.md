@@ -14,16 +14,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     thread as the I/O thread (`agc_io_serve` in `vm/loop.c`), the first end
     recorded once by `agc_run_over`, the threads joined before the exit path
     (`docs/vm/16-architecture.md` §16.9, "Threads"). A failure writes
-    `*vm->outcome`, the record of that scheduler, never `rt->outcome`
-    directly. Programs at N = 4: `tests/test_vm_multicore.py`
-    (`make test-multicore`, `make vm-tsan-run`) and the TCP, TLS and HTTP
-    modules (`make test-multicore-net`, `AGENTICA_VM_TEST_MODULE_SCHEDULERS`);
-    whole
-    runs in C: `vm/tests/threads_test.c`. `agc_task_service` (the
-    `HttpClient`'s tree, `HttpWire.service`) spawns under a root with no
-    parent: its tasks carry `service`, are counted done when spawned (so
-    `Task.pending_count` leaves them out), have no test, and their timers count
-    in `rt->timers_weak`, which the stall checks ignore (`agc_timers_strong`;
+    `*vm->outcome`, the record of that scheduler, never `rt->outcome` directly.
+    Programs at N = 4: `tests/test_vm_multicore.py` (`make test-multicore`,
+    `make vm-tsan-run`) and the TCP, TLS and HTTP modules
+    (`make test-multicore-net`, `AGENTICA_VM_TEST_MODULE_SCHEDULERS`); whole
+    runs in C: `vm/tests/threads_test.c`. `agc_task_service` (the `HttpClient`'s
+    tree, `HttpWire.service`) spawns under a root with no parent: its tasks
+    carry `service`, are counted done when spawned (so `Task.pending_count`
+    leaves them out), have no test, and their timers count in `rt->timers_weak`,
+    which the stall checks ignore (`agc_timers_strong`;
     `test_stall_beside_a_service`).
 
 - **Path:** `vm/runq.c`

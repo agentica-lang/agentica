@@ -20,9 +20,11 @@ typedef struct waiter waiter;
    inline at N = 1), so the listener's watch, the accepts and the counts never run beside each other. `max`, `loop`
    and `trace` are fixed at creation. `closed` is atomic: a scheduler reads it to refuse a closed server at once, and
    the I/O thread reads it to end the waiters. The struct is freed on the I/O thread when `users` (the resource and
-   each waiter whose START ran) reaches zero. A scheduler reaches it only through the resource's native pointer,
-   under rt->sync, and the resource's release is posted after that pointer is cleared, so no scheduler's step can
-   come after the free. */
+   each waiter whose START ran) reaches zero. A step that a scheduler posts with the struct either holds a count (a
+   waiter's START and end) or was posted under rt->sync after reading the resource's native pointer (attach,
+   give_back). shut_server clears that pointer under rt->sync before it posts the release that drops the resource's
+   count, and steps posted under rt->sync reach the I/O thread in the order of the calls, so every such step runs
+   before the release. The registry's release at the end of the run comes after the last builtin. */
 typedef struct {
   agc_conn *listener;
   agc_loop *loop;
@@ -36,6 +38,7 @@ typedef struct {
    accept that is served carries its connection to the done half, which makes the socket on the task's scheduler. */
 struct waiter {
   server *s;
+  agc_loop *loop;
   agc_io_job *job;
   waiter *next;
   agc_conn *child;
@@ -89,7 +92,9 @@ static void serve(server *s) {
     if (!closed && !w->accepting) continue;
     if (!closed && listening(s)) {
       w->child = take(s);
-      if (!w->child) continue;
+      /* No room or no connection waiting: nothing in this loop changes that, and every waiter still to come needs
+         a connection too (a wait for the close is skipped above), so the rest stay queued. */
+      if (!w->child) break;
     }
     unlink_waiter(w);
     agc_io_ready(w->job);
@@ -98,8 +103,10 @@ static void serve(server *s) {
 
 static void listener_watch(void *watcher) { serve(watcher); }
 
-/* The end of a waiter, on the I/O thread: posted by its done half, or the job's drop. A connection that no done half
-   took is closed and gives its room back. */
+/* The end of a waiter, on the I/O thread: posted by its done or expired half, or the job's drop. A connection that
+   no done half took is closed and gives its room back. A readied job's done half runs even when its task is
+   cancelled (the result is then dropped), so that branch is for a job the end of the run sweeps before its task
+   resumed. */
 static void waiter_end(void *data) {
   waiter *w = data;
   server *s = w->s;
@@ -144,8 +151,18 @@ static agc_value waited(agc_vm *vm, void *data, agc_value context) {
   } else if (w->accepting) {
     result = agc_error_value(server_closed);
   }
-  agc_loop_call(w->s->loop, waiter_end, w);
+  agc_loop_call(w->loop, waiter_end, w);
   return result;
+}
+
+/* The jobs have no deadline (park passes -1), so this half does not run today. If it did, the wait could still be
+   on the server's list, so it reads nothing through `w` and leaves the whole end to the I/O thread. */
+static agc_value wait_expired(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  waiter *w = data;
+  agc_loop_call(w->loop, waiter_end, w);
+  return agc_stream_timed_out();
 }
 
 /* On the I/O thread: the waiter leaves the list, so no serve ends a job that is being dropped. */
@@ -158,12 +175,14 @@ static bool waiter_cancel(agc_vm *vm, void *data, agc_value context, bool deadli
   return true;
 }
 
-static const agc_io_kind wait_io = {NULL, waited, waited, waiter_end, true, "http_server", waiter_cancel, true, NULL};
+static const agc_io_kind wait_io = {NULL,          waited, wait_expired, waiter_end, true, "http_server",
+                                    waiter_cancel, true,   NULL};
 
 static void park(agc_vm *vm, server *s, bool accepting) {
   waiter *w = calloc(1, sizeof(waiter));
   if (!w) agc_out_of_memory();
   w->s = s;
+  w->loop = s->loop;
   w->accepting = accepting;
   (void)agc_io_start_then(vm, &wait_io, w, agc_void(), -1, begin_wait);
 }
@@ -270,6 +289,8 @@ static agc_value builtin_accept(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* The count saturates at zero instead of aborting: HttpWire.spawn takes any socket its caller owns, and bytecode can
+   call it with one that no accept counted, whose end still comes here. */
 static void give_back_step(void *data) {
   server *s = data;
   if (s->open) s->open--;

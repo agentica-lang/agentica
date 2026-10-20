@@ -125,7 +125,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`agc_loop_call`), `closed` is atomic, and an accept's done half makes the
     socket from the connection the I/O thread took (§10.7.2). Runs at N > 1:
     the HTTP module is in `make test-multicore-net`, and
-    `tests/test_vm_multicore.py` has a load case with cancels and a close
+    `tests/test_vm_multicore.py` has a load case with cancels and a close.
 
 - **Path:** `vm/http_service.c`
   - **Owns:** `HttpWire.service`, `jobs` and `options`
