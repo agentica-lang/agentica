@@ -130,14 +130,15 @@ none. A parameter may go unused. The arguments are never inferred. An alias
 may use other aliases, generic or not (`type Grid = Matrix[Float]`), and a
 cycle, also through the arguments, is `CHECK-TYPE-ALIAS-CYCLE`. A parameter
 may be a `Map` key or `Set` element in the target; the key rule is judged on
-the expanded type at each use (`CHECK-MAP-KEY-TYPE`, at the argument). The
-target is read where the alias is declared: only its own parameters are in
-scope, so a name in it is never taken for a type parameter of the use. An enum
-type parameter that hides a type the alias names (`struct Item`, `type Items =
-List[Item]`, `enum E[Item] V(Items) end`) is `CHECK-UNKNOWN-TYPE` at the use.
-The argument of an unused parameter is still checked. An exported
-generic alias is used through an import (`S.Matrix[Int]`, or
-`import {Matrix} from "m"`). Like any alias it is neither a constructor nor a
+the expanded type at each use (`CHECK-MAP-KEY-TYPE`, at the argument). A bad
+key written in the target itself (`type B[T] = Map[Float, T]`) is reported at
+the declaration. The target is read where the alias is declared: only its own
+parameters are in scope, so a name in it is never taken for a type parameter of
+the use. An enum type parameter that hides a type the alias names (`struct
+Item`, `type Items = List[Item]`, `enum E[Item] V(Items) end`) is
+`CHECK-UNKNOWN-TYPE` at the use. The argument of an unused parameter is still
+checked. An exported generic alias is used through an import (`S.Matrix[Int]`,
+or `import {Matrix} from "m"`). Like any alias it is neither a constructor nor a
 pattern.
 
 ### Statements and blocks

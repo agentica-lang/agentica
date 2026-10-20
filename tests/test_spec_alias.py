@@ -479,3 +479,25 @@ def test_enum_parameter_does_not_capture_a_name_in_an_alias_target(agentica_chec
         "def main() -> Void\nend\n\n"
     )
     assert_diagnostic(agentica_check(text), "CHECK-UNKNOWN-TYPE", (8, 5))
+
+
+def test_alias_in_a_generic_enum_without_a_name_clash_checks_clean(agentica_check):
+    text = (
+        "type Items = List[Int]\n\n"
+        "enum E[T]\n  V(Items, T)\nend\n\n"
+        "def main() -> Void\n"
+        "  e: E[String] = E.V([1], \"a\")\n"
+        "end\n\n"
+    )
+    assert agentica_check(text) is None
+
+
+def test_alias_parameter_named_like_the_enum_parameter_is_not_a_capture(agentica_check):
+    text = (
+        "type Box[T] = List[T]\n\n"
+        "enum E[T]\n  V(Box[T])\nend\n\n"
+        "def main() -> Void\n"
+        "  e: E[Int] = E.V([1])\n"
+        "end\n\n"
+    )
+    assert agentica_check(text) is None

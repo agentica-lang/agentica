@@ -348,3 +348,18 @@ class TestModuleRules:
                                for name in names])
         for name, (_directory, problem) in zip(names, results):
             assert problem is None
+
+    def test_an_imported_alias_in_a_generic_enum_is_not_captured_by_a_parameter_named_like_a_lib_type(self):
+        # `Item` is a type of lib.agc and the parameter of the enum; the alias target is read in lib.agc, so
+        # neither the named nor the qualified use is a capture.
+        lib = ("struct Item\n  n: Int\nend\n\n"
+               "export type Items = List[Item]\n\n"
+               "export type Box[T] = List[T]\n\n")
+        enum = "enum E[Item]\n  V(Items, Lib.Items, Box[Item], Lib.Box[Item])\nend\n\n"
+        results = self.checks([
+            ({"lib.agc": lib, "root.agc": 'import Lib from "lib"\nimport {Items, Box} from "lib"\n\n' + enum + MAIN},
+             "root.agc", None),
+            ({"lib.agc": lib, "root.agc": 'import {Items} from "lib"\n\nenum E[Item]\n  V(Items)\nend\n\n' + MAIN},
+             "root.agc", None)])
+        for _directory, problem in results:
+            assert problem is None
