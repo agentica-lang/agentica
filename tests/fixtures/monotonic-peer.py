@@ -3,12 +3,11 @@
 
 monotonic-peer.py VM BYTECODE  runs `VM -- BYTECODE`, whose program prints two
 Time.monotonic_ns readings around Task.sleep(20), and exits 1 with a message on
-a mismatch. libuv's clock is CLOCK_MONOTONIC on Linux, mach_absolute_time on
-macOS and QueryPerformanceCounter on Windows; Python reads the same counter
-through time.monotonic_ns() on Linux and macOS and through time.perf_counter_ns()
-on Windows (monotonic() there is GetTickCount64, a coarser clock). The readings
-must lie between two readings of that clock taken around the run. Standard
-library only.
+a mismatch. The VM reads CLOCK_MONOTONIC on POSIX and QueryPerformanceCounter
+on Windows; Python reads the same counters through time.clock_gettime_ns() and
+time.perf_counter_ns() (time.monotonic() on Windows is GetTickCount64, a coarser
+clock). The readings must lie between two readings of that clock taken around the
+run. Standard library only.
 """
 import subprocess
 import sys
@@ -27,8 +26,14 @@ def fail(message):
     sys.exit(1)
 
 
-# The Python clock that reads the counter behind libuv's uv_hrtime on this system.
-clock_ns = time.perf_counter_ns if sys.platform == "win32" else time.monotonic_ns
+# The Python clock that reads the counter the VM reads: clock_gettime(CLOCK_MONOTONIC) on POSIX (vm/numbers.c), which on
+# macOS counts the time the machine slept, unlike time.monotonic_ns (mach_absolute_time); QueryPerformanceCounter on
+# Windows.
+if sys.platform == "win32":
+    clock_ns = time.perf_counter_ns
+else:
+    def clock_ns():
+        return time.clock_gettime_ns(time.CLOCK_MONOTONIC)
 
 
 def main():

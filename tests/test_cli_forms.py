@@ -15,11 +15,12 @@ import re
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
 from tests.agentica_test import FIXTURES, agentica_version, binary, run, vm_environment
+from tests.vm_diff_support import relocate_windows
 
 FROZEN = FIXTURES / "cli" / "forms.json"
 JOBS = 6
@@ -98,12 +99,12 @@ class Workspace:
             (self.work / name).write_bytes(data)
 
     def plain(self, text):
-        # On Windows the folder is typed with backslashes in the arguments and printed with slashes by the binary;
-        # both become <work>, and the rest of such a path is written with slashes, as the golden has it.
-        for form in {str(self.work), self.work.as_posix()}:
-            text = text.replace(form, "<work>")
+        # On Windows the folder is typed with backslashes in the arguments and printed with slashes by the binary, or
+        # with doubled backslashes in a JSON string; each spelling becomes <work> and the rest of the path has slashes.
         if sys.platform == "win32":
-            text = re.sub(r"<work>[\\/][^\s\"':]*", lambda found: found.group(0).replace("\\", "/"), text)
+            text = relocate_windows(text, PureWindowsPath(self.work), "<work>")
+        else:
+            text = text.replace(str(self.work), "<work>")
         return text.replace(agentica_version(), "<version>")
 
     def key(self, arguments, options):

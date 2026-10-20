@@ -163,6 +163,7 @@ def main() -> Void
   end
   IO.inspect(r)
   IO.inspect(wait_for(before, 0))
+  File.write_text(path + ".go", "go", 5000).unwrap!
   h = Result.unwrap!(File.open(path, "read", 5000))
   IO.inspect(File.read_line(h, 5000))
   IO.inspect(File.close(h, 5000))

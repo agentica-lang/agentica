@@ -49,6 +49,8 @@ VM_TURN_STEPS = 2000
 ALLOW_RUN_PREFIX = "process-"
 TMP_TOKEN = "@tmp"
 FIXTURE_TOKEN = "@fixtures/"
+# The folder of the open descriptors of the process, which a fixture lists to count them: /proc/self/fd, or /dev/fd on macOS.
+FD_TOKEN = "@fds"
 
 SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
 if SWEEP_MODE not in ("", "full", "sampled"):
@@ -133,7 +135,10 @@ def _unquote(text):
 
 
 def fixture_arg(argument):
-    """An .args word: "@fixtures/x" is the absolute path of tests/fixtures/x, anything else stays."""
+    """An .args word: "@fixtures/x" is the absolute path of tests/fixtures/x, "@fds" the folder of the open descriptors,
+    anything else stays."""
+    if argument == FD_TOKEN:
+        return "/dev/fd" if sys.platform == "darwin" else "/proc/self/fd"
     if argument.startswith(FIXTURE_TOKEN):
         return str(FIXTURES / argument[len(FIXTURE_TOKEN):])
     return argument
@@ -183,12 +188,14 @@ def relocate_windows(text, folder, token):
     """The same for a Windows folder. The VM prints a path the way it was typed (backslashes, doubled in JSON and in an
     inspected string) and the stored names of a program with slashes, so one path shows the folder in several
     spellings and a tail that mixes both separators. Each spelling of the folder becomes the token, and the rest of
-    that path is written with slashes."""
+    that path is written with slashes. A backslash before n, r, t, u, a quote or another backslash is an escape of
+    the printed text, not a separator, so it ends the path (no fixture names a folder with one of those letters)."""
     native = str(folder)
     forms = sorted({native, native.replace("\\", "\\\\"), folder.as_posix()}, key=len, reverse=True)
-    tail = r"((?:\\\\|[\\/])[^\s\"':,<>|]*)?"
+    name = r"[^\s\"':,<>|\\/]"
+    tail = r"((?:/" + name + r"*|\\{1,2}(?![ntru\"\\])" + name + r"+)*)"
     pattern = re.compile("(?:" + "|".join(re.escape(form) for form in forms) + ")" + tail)
-    return pattern.sub(lambda found: token + (found.group(1) or "").replace("\\\\", "/").replace("\\", "/"), text)
+    return pattern.sub(lambda found: token + found.group(1).replace("\\\\", "/").replace("\\", "/"), text)
 
 
 def unfixture(result):
@@ -487,9 +494,34 @@ def check_sweep(results, limits, full, name, note=""):
     assert finished, "%s finishes under --max-steps %s%s" % (name, limits[-1], note)
 
 
+# Fixtures whose golden output is what Linux answers: the text of an errno, PATH_MAX, the mode bits or a POSIX tool.
+# Another system answers differently with no fault of the VM, and the same behavior is tested there by the case of that
+# system (test_filesystem.py, test_windows_filesystem_safety.py, test_process_windows.py). The reason says what differs.
+_MACOS_PATHS = "macOS has PATH_MAX 1024 and its mkdir and realpath answer other errno values for a path through a file"
+_WINDOWS_PATHS = ("Windows answers ENOENT where Linux says ENOTDIR, has no mode bits, treats // as a UNC prefix and "
+                  "refuses to remove a drive root")
+HOST_ONLY_FIXTURES = {
+    "files-real.agc": {"darwin": _MACOS_PATHS, "windows": _WINDOWS_PATHS},
+    "files-errors.agc": {"darwin": _MACOS_PATHS, "windows": _WINDOWS_PATHS},
+    "files-private.agc": {"windows": _WINDOWS_PATHS},
+    "files-paths.agc": {"windows": _WINDOWS_PATHS},
+    "system-env.agc": {"windows": "Windows environment variable names are not case sensitive"},
+    "process-limits.agc": {"windows": "the program runs /bin/sh, which Windows does not have (test_process_windows.py)"},
+    "process-captured-basic.agc": {"windows": "the program runs /bin/pwd (test_process_windows.py)"},
+}
+
+
+def host_only_reason(name):
+    system = "windows" if WINDOWS else sys.platform
+    return HOST_ONLY_FIXTURES.get(name, {}).get(system)
+
+
 def check_fixture(program, work):
     """The golden test of one fixture: every format, the step count and the --max-steps sweep."""
     name = program.name
+    reason = host_only_reason(name)
+    if reason:
+        pytest.skip("host-only: %s: %s" % (name, reason))
     fixture = Fixture.of(program)
     if fixture.channel and WINDOWS:
         pytest.skip("host-only: the golden peer gives the VM a Unix socket as descriptor 3 (fcntl); the Windows "

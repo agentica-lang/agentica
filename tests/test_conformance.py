@@ -1,9 +1,11 @@
 """tools/conformance.py: every test module is in an area or excluded with a reason, and the report judges evidence."""
 import importlib.util
+from pathlib import PureWindowsPath
 
 import pytest
 
 from tests.agentica_test import ROOT
+from tests.vm_diff_support import relocate_windows
 
 
 def load_conformance():
@@ -91,8 +93,9 @@ def test_a_skip_for_a_product_bug_needs_an_issue_number_and_is_listed_as_an_open
 
 
 def test_the_golden_paths_of_windows_come_back_as_tokens_in_every_spelling_the_vm_prints():
-    from tests.vm_diff_support import relocate_windows
-    from pathlib import PureWindowsPath
     folder = PureWindowsPath("D:/a/_temp/fixtures")
     text = 'D:\\a\\_temp\\fixtures\\vm\\x.agc "D:\\\\a\\\\_temp\\\\fixtures\\\\y" D:/a/_temp/fixtures/z/w.agc:3'
     assert relocate_windows(text, folder, "@fixtures") == '@fixtures/vm/x.agc "@fixtures/y" @fixtures/z/w.agc:3'
+    # The escapes of a printed message end the path: "\\n" is a newline, not a folder named n.
+    printed = 'path: D:/a/_temp/fixtures/missing\\n  system error D:\\a\\_temp\\fixtures/x\\\\n'
+    assert relocate_windows(printed, folder, "@fixtures") == 'path: @fixtures/missing\\n  system error @fixtures/x\\\\n'
