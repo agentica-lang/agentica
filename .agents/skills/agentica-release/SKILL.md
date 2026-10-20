@@ -16,8 +16,8 @@ and report if any check before it fails.
   pre-release.
 - **Beta policy (owner, 2026-10-20):** every release is a beta
   (`X.Y.Z-beta.N`) while Windows lacks a feature that Linux and macOS have
-  (today TLS handshakes and `std/http`). The first release without a suffix
-  comes when Windows matches them. Ask the owner if unsure.
+  (`site/content/vm.md` lists what Windows runs). The first release without a
+  suffix comes when Windows matches them. Ask the owner if unsure.
 - A tag containing `-` is published as a GitHub pre-release
   (`--prerelease` in the `publish` job).
 - The previous version is in `VERSION`, and `git tag --sort=-creatordate`
@@ -53,13 +53,14 @@ Wrap every build in
 - The commit message is `release version <version>`.
 - The PR title is the same. Its body lists the version, the date and the
   stage0 refresh.
-- Take it to merge with `.agents/skills/agentica-dev-workflow/`. CI and
+- Label it `platforms` (Platforms runs on a PR only with that label), and
+  take it to merge with `.agents/skills/agentica-dev-workflow/`. CI and
   Platforms must be green on its head.
 
 ## 2. Tag and publish
 
-After the PR merges, tag its merge commit. You do not need a checkout of
-master:
+Right away after the PR merges, tag its merge commit. You do not need a
+checkout of master:
 
 ```bash
 git fetch origin
@@ -69,18 +70,18 @@ git tag -a <version> -m "release version <version>" "$sha"
 git push origin <version>
 ```
 
-- The tag push starts `release.yml`. Its jobs, in order:
-  1. `version`: checks the tag against `VERSION`.
-  2. `linux`, `macos` (Intel and ARM) and `windows`: build and check each
-     binary, package it, and smoke-test the extracted archive.
-  3. `collect`: requires exactly the four archives and writes `SHA256SUMS`.
-  4. `publish`: creates the release with empty notes. It runs only for a tag
-     push.
+- The tag push starts `release.yml`: it checks the tag against `VERSION`,
+  builds, checks and smoke-tests the four archives, writes `SHA256SUMS`, and
+  `publish` creates the release with empty notes. The job chain is described
+  under "Release" in `.agents/skills/agentica-development/references/ci.md`.
 - Watch the run with one background loop:
   `gh run list --workflow release.yml -L 3`, then `gh run watch <id>`.
 - If a job fails before `publish`, nothing is public yet. Read the log, fix it
   on master with a normal PR, then ask the owner before you delete and re-push
   the tag. Deleting a tag is outward-facing.
+- `publish` creates a draft, then makes it public. If it fails in between, a
+  draft release stays next to the pushed tag: check `gh release list`, and ask
+  the owner before you edit or delete it.
 
 ## 3. Release notes
 
