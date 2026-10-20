@@ -1,4 +1,4 @@
-## The project of a build (docs/future/45-packages.md, 45.5 and 45.6): the manifest agentica.toml that is nearest to
+## The project of a build (docs/grammar/05b-modules.md): the manifest agentica.toml that is nearest to
 ## the root file, going up from its folder, and the lock beside it. A build with no manifest is as before. A manifest
 ## that declares dependencies needs a lock that has every one of them, from the same source and with the same pin: that
 ## is checked here, once, before any file is loaded, and the build never writes the lock. The manifest of each locked

@@ -51,7 +51,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** when an `agentica.toml` is in the folder of the root file or
   above it, `pkg/` searches `agc_libs/` beside that manifest, not beside the
-  root file. Without a manifest nothing changes.
+  root file. The search goes up to the root of the file system, and the manifest
+  is read and checked: an unrelated `agentica.toml` in a shared parent folder
+  (such as `/tmp`) can fail every script below it with `PKG-MANIFEST-INVALID`.
+  Without a manifest nothing changes.
 - **Breaking:** `Lazy` is now a reserved type name.
 - **Breaking:** `Profile` is now a reserved type name.
 - **Breaking:** `Crypto` is now a reserved type name.

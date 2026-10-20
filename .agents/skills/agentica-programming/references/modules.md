@@ -124,8 +124,9 @@ dependencies.
 ## Packages (`agentica.toml`)
 
 A project with an `agentica.toml` in the folder of the root file (or above it)
-can import the packages it declares. Nothing downloads: the cache is filled by
-hand, and a missing package is `CHECK-IMPORT-PACKAGE`.
+can import the packages it declares. Nothing downloads and nothing writes
+`agentica.lock`: write the lock and fill the cache by hand. A declared package
+that is not in the cache is `CHECK-IMPORT-PACKAGE`.
 
 ```toml
 name = "notes"
@@ -139,22 +140,55 @@ json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
 import Sqlite from "pkg/sqlite/db"
 ```
 
-- A dependency is a local name (lowercase letters, digits, `_`, `-`) and a table
-  with `git` (`https://host/owner/repo`) and exactly one of `tag` or `ref` (a
-  commit). Only git sources exist; a `path`, a branch or a version range is
+- A dependency is a local name and a table with `git`
+  (`https://host/owner/repo`) and exactly one of `tag` or `ref` (a commit). A
+  name starts with a lowercase letter, then lowercase letters, digits, `_` and
+  `-`, at most 64 characters (`name` at the top is optional and follows the
+  same rule). Only git sources exist; a `path`, a branch or a version range is
   `PKG-MANIFEST-INVALID`.
-- `pkg/<name>/<module path>` is a declared name, and it comes before the `pkg/`
-  library folders. An undeclared name is the search above.
+- `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared
+  package. A declared name comes before the `pkg/` library folders; an
+  undeclared name is the search above.
 - A file of a package imports only the names of its own `agentica.toml`, and
   its own modules by relative paths inside the package.
-- `agentica.lock` (beside the manifest) lists every package of the project, with
-  its commit and hash. A missing or stale lock is `PKG-LOCK-MISSING` or
-  `PKG-LOCK-STALE`; one name with two sources is `PKG-SOURCE-CONFLICT`; a
-  changed file is `PKG-HASH-MISMATCH`. Bad `agentica.toml` or `agentica.lock`
-  errors are `PKG-MANIFEST-INVALID` or `PKG-LOCK-INVALID`, and they name a file
-  and a key path.
-- The cache is `~/.cache/agentica/pkg/<host>/<owner>/<repo>/<commit>/` (on
-  Windows `%LOCALAPPDATA%\agentica\cache\pkg\`).
+- A manifest with dependencies needs `agentica.lock` beside it. Only the lock
+  of the project is read. It lists every package of the build, direct or not,
+  once per name:
+
+  ```toml
+  version = 1
+
+  [[package]]
+  name = "sqlite"
+  git = "https://github.com/owner/sqlite-ac"
+  tag = "v1.2.0"
+  commit = "<40 or 64 lowercase hex digits>"
+  hash = "sha256:<64 lowercase hex digits>"
+  ```
+
+  `tag` or `ref` is copied from the manifest. A `ref` must be the start of the
+  `commit`. A missing lock is `PKG-LOCK-MISSING`. A dependency that the lock
+  lacks is `PKG-LOCK-STALE`, in the manifest of the project or of a package. A
+  dependency with another repository or pin than the lock is `PKG-LOCK-STALE`
+  in the project manifest and `PKG-SOURCE-CONFLICT` in a package manifest. A
+  bad lock (a `version` other than 1, a name twice, a bad value) is
+  `PKG-LOCK-INVALID`; a bad manifest is `PKG-MANIFEST-INVALID`. Both name a
+  file and a key path.
+- The cache folder of a package is
+  `<cache>/<host>/<owner>/<repo>/<commit>/`, with no `.git` in `<repo>`. Copy
+  the repository files there (its `.agc` files and its `agentica.toml`).
+  `<cache>` is `$XDG_CACHE_HOME/agentica/pkg` when `XDG_CACHE_HOME` is an
+  absolute path, else `~/.cache/agentica/pkg`; on Windows it is
+  `%LOCALAPPDATA%\agentica\cache\pkg`.
+- The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte
+  stream. For each `.agc` file below the package folder, in bytewise order of
+  its path relative to the folder (written with `/`), the stream holds the
+  path, a zero byte, the size in decimal, a zero byte and the file bytes.
+  Hidden folders (at any depth), `agc_libs/` at the root of the package and
+  files that are not `.agc` are left out, so the `agentica.toml` of a package is
+  not hashed. A build hashes a package the first time an import loads it; a
+  difference is `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc` is
+  `PKG-SYMLINK`.
 
 ## String queue (`std/queue`)
 

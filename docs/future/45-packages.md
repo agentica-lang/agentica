@@ -48,20 +48,31 @@ form are decided in 45.14, questions 10 and 11.
 
 **Built.** The manifest is in [05b](../grammar/05b-modules.md), Packages.
 
+- The manifest is the nearest `agentica.toml` going up to the root of the file
+  system, so an unrelated file in a shared parent folder (such as `/tmp`)
+  counts. This is a known, breaking choice (CHANGELOG).
+- A package's `name` is the default local name that `agentica add` (45c)
+  proposes. Nothing checks it against the names that others give it.
+
 **Pending: the `[style]` rule.** `max_line_width` is the longest line allowed,
 in characters (Unicode code points, not bytes). It counts every line, comments
 and doc comments included. With no `max_line_width` there is no limit. A line
 over it is an error, never a warning (section 26). `agentica check` reports it
 as `CHECK-LINE-TOO-LONG`, at the first character past the limit. The code is
 proposed in §47.2 and owned by phase 28 (47c), which moves the check there; the
-owner confirms it. Until then, `tests/test_style_line_width.py` enforces the
-limit. `agentica fmt` does not enforce it: a line it cannot break stays long.
+owner confirms it. `tests/test_style_line_width.py` enforces the limit for
+this repository. `agentica fmt` does not enforce it: a line it cannot break
+stays long.
 
 ### 45.6 Lock and hash
 
 **Built.** The lock layout, the hash rule and the stale checks are in
 [05b](../grammar/05b-modules.md), Packages. Pending: the lock writer (45c,
 45.9).
+
+The lock keeps `git` and the pin as the manifests write them, not the URL after
+a git `url.<base>.insteadOf` rewrite, so the lock does not depend on one
+machine's git config.
 
 ### 45.7 Pins and sources
 
@@ -71,9 +82,8 @@ limit. `agentica fmt` does not enforce it: a line it cannot break stays long.
 - One name, one source, and the error codes: see 05b.
 - A release changes nothing by itself. Only `add` and `update` write the
   lock (45.9).
-- Two names for one repository are two packages, with two lock entries and one
-  cache folder per commit. Two incompatible majors of one library can be used
-  together under two names.
+- Two incompatible majors of one library can be used together under two names
+  (two packages, see 05b).
 - A moved tag: when a fetched tag does not peel to the locked commit, the fetch
   fails with `PKG-TAG-MOVED` (45b). The lock is never changed silently.
 
@@ -83,14 +93,19 @@ The cache layout, the stored names and the hash rule are built (05b). The fetch
 is pending (45b):
 
 - Git runs as the system `git`, so the user's git config, SSH keys and
-  credential helpers apply. The tool has no HTTP client and keeps no tokens.
+  credential helpers apply. The tool has no HTTP client and keeps no tokens. The
+  `git` value is fetched as written; a `url.<base>.insteadOf` setting can send
+  it to SSH, and the lock still keeps the value as written (45.6).
 - The fetch is a depth-1 fetch of the tag `refs/tags/<tag>` (or of the commit,
   for a `ref`) into a bare temporary repository. No working tree is made, so no
   checkout hook runs. The peeled commit must equal the lock's `commit`.
 - The files are read from that commit's tree with `git ls-tree` and
   `git cat-file`, so `.gitattributes` does not change the bytes.
 - The package's `agentica.toml` is read from the commit tree. Only its `.agc`
-  files and that manifest are copied.
+  files and that manifest are copied. The manifest is checked as a manifest, and
+  its `[dependencies]` must agree with the lock when `add` or `update` writes
+  it: a different source is `PKG-SOURCE-CONFLICT`, and a name the lock lacks is
+  added to the lock.
 - Two copied `.agc` paths that differ only in case are `PKG-PATH-COLLISION`, so
   the package works on case-insensitive file systems.
 - A symbolic link or gitlink among the copied files is `PKG-SYMLINK`.
@@ -116,18 +131,27 @@ Pending (45b to 45d). The exact command line is decided in each phase.
   the copies, and the hash check proves they are the locked files. For a
   declared name, the build reads `agc_libs/<name>/` first and the cache second.
   A copy whose hash does not match is an error, never a silent fallback.
-  `vendor` writes only the paths of locked packages.
+  `vendor` writes only the paths of locked packages. It leaves other files in
+  `agc_libs/` alone, the `pkg/` libraries of 05b included. A declared name never
+  reaches the `pkg/` search, because a `pkg/` import would load an unhashed
+  copy.
 - The lock writer sorts the `[[package]]` tables by name and writes their keys
   in the order of 05b, so a rewrite with no change makes no diff.
 - The package commands grant the run permission to their own process (45.14,
   question 8). `agentica FILE` never runs git.
-- Pending codes: `PKG-FETCH`, `PKG-TAG-MOVED` and `PKG-PATH-COLLISION`. The
-  meaning of every code is in the grammar and in the programming skill's
-  diagnostics reference.
+- Pending codes, with the meaning of each:
+  - `PKG-FETCH`: git failed, or the tag or the commit is not in the repository.
+    Git's message goes in the help.
+  - `PKG-TAG-MOVED`: the tag points to another commit than the lock says.
+  - `PKG-PATH-COLLISION`: two copied `.agc` paths differ only in case, in a file
+    or folder name.
+
+  The built codes are in 05b and in the programming skill's diagnostics
+  reference.
 
 ### 45.10 Native code
 
-Packages are pure Agentica for now. A native package, such as a wrapper of the
+Packages are pure Agentica. A native package, such as a wrapper of the
 SQLite C library, needs the FFI (§40.3a), which is still a sketch, and the
 trust flag of §40.4. It also needs a build step, which breaks "no code runs at
 install", or prebuilt binaries with hashes in the lock. Neither option is
@@ -150,6 +174,12 @@ below.
 - Each pending error code gets a test that asserts the code.
 - Round trip (45c): read `agentica.lock` and `agentica.toml`, write them back,
   and compare the bytes.
+- End to end (45b, 45c): `add`, then `install` into an empty cache, then a
+  program imports `pkg/name/mod` and prints.
+- Offline (45b): with the cache filled and no `git` on `PATH`, a build passes.
+  This proves that a build never fetches.
+- Moved tag (45b): a fetched tag that does not peel to the locked commit gives
+  `PKG-TAG-MOVED`.
 
 ### 45.12 Phases
 
@@ -166,7 +196,7 @@ programming skill and the CHANGELOG, because import behavior changes for users.
 ### 45.13 Not now
 
 - A central registry: git hosts already hold the packages.
-- Private registries: git's own login covers private repositories for now.
+- Private registries: git's own login covers private repositories.
 - Publishing commands: a release is a tag.
 - Signatures: the commit and the hash come first. Signed tags can follow.
 - Workspaces and monorepos: one manifest per project in v1.
@@ -185,8 +215,9 @@ decision, then the rejected options.
    is searched first. Rejected: `owner/repo/mod`, which clashes with local
    folders and needs an ambiguity rule; `./` for relative imports, which breaks
    every relative import.
-2. **The `pkg/` roots.** Kept for libraries installed by hand. Rejected:
-   replacing them, which breaks those installs.
+2. **The `pkg/` roots.** Kept for libraries installed by hand; revisit after
+   45c. Rejected: replacing them, which breaks those installs and gains nothing
+   before the manager exists.
 3. **Major versions.** No semver and no major-version rule. One name has one
    source, and two majors can be used under two names. Rejected: semver with
    minimal version selection, a `v2` path segment (it clashes with folders in

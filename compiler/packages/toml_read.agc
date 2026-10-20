@@ -1,4 +1,4 @@
-## Reads the TOML files of a project, agentica.toml and agentica.lock (docs/future/45-packages.md, 45.5 and 45.6), and
+## Reads the TOML files of a project, agentica.toml and agentica.lock (docs/grammar/05b-modules.md), and
 ## reports what is wrong with them as PKG- failures that name the file and the key path (link_failure.agc, fail_key).
 ## The two files share this: the manager lists the keys of a parsed table itself and rejects any it does not know,
 ## because a typed decode would ignore extra keys.

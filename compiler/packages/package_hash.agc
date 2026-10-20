@@ -1,4 +1,4 @@
-## The hash of a package (docs/future/45-packages.md, 45.6). The .agc files of the package folder, with paths relative
+## The hash of a package (docs/grammar/05b-modules.md). The .agc files of the package folder, with paths relative
 ## to it and written with "/", are taken in bytewise order of their paths; for each one the stream holds its path, a
 ## zero byte, its size in decimal, a zero byte and its bytes. The hash is `sha256:` and the SHA-256 of that stream in
 ## hex. Hidden folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named *.agc is refused, as

@@ -1,7 +1,8 @@
 """Hand-made packages for the tests of the manager (docs/future/45-packages.md, phase 45a).
 
-There is no fetching yet, so a test fills the package cache itself. `package_hash` is the hash rule of 45.6 written
-again with hashlib and os.walk, as a second implementation to check the Agentica one against.
+There is no fetching yet, so a test fills the package cache itself. `package_hash` is the hash rule of
+docs/grammar/05b-modules.md written again with hashlib and os.walk, as a second implementation to check the Agentica
+one against.
 """
 import hashlib
 import json
