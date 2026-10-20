@@ -1,13 +1,11 @@
 /*
- * HttpWire.service, jobs, options and awaited?, called only by
- * stdlib/http.agc: the task tree of an HttpClient. service runs f(client),
- * the client's owner task, in a service root (agc_task_service), so no
- * caller's crash, cancel or end reaches it, Task.pending_count and Test.test
- * do not see it, and it owns the jobs channel, which closes when it ends.
- * std/http builds the pool on it. The HttpClient value holds the channel, the
- * options and the TLS context of its https connections (vm/tcp.c:
- * HttpWire.connect_tls, drop_tls). Linux and macOS, like TCP; a stub table
- * elsewhere. Service layer. Design: docs/vm/10-io-http.md §10.7.1.
+ * HttpWire.service, jobs, options and awaited?, for stdlib/http.agc only: the
+ * task tree of an HttpClient. service runs f(client), the owner task, in a
+ * service root (agc_task_service): no caller's crash, cancel or end reaches it,
+ * Task.pending_count and Test.test do not see it, and it owns the jobs channel.
+ * The HttpClient holds the channel, the options and the TLS context of its
+ * https connections (vm/tcp.c). Linux and macOS; a stub table elsewhere.
+ * Service layer. Design: docs/vm/10-io-http.md §10.7.1.
  */
 #include "services.h"
 
