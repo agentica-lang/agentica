@@ -3479,8 +3479,8 @@ ROWS_50: List[Model.Builtin] = [
       implementation: "Task.cancel",
       effects: ["concurrency"],
       description: (
-        "Cancel a task and its descendants without waiting: each runs no more user code and closes what it owns; " +
-        "does nothing for a task that has ended; VM only."
+        "Cancel a task and its descendants without waiting: each runs at most the rest of its current turn and " +
+        "closes what it owns; does nothing for a task that has ended; VM only."
       ),
       alternatives: [],
     ),

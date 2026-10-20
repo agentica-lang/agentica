@@ -1,5 +1,6 @@
 # Task.cancel reaches every descendant: children, grandchildren, and a grandchild whose own parent already ended (it
-# moved up to the root). A channel that a cancelled task owns is closed, so a task parked on a receive sees the close.
+# moved up to the root). `short` is not awaited by main: at N > 1 it may still be in its last turn, so main waits
+# for the pending count to reach 0 before it prints it. A channel that a cancelled task owns is closed, so a task parked on a receive sees the close.
 def report(label: String, r: Result[Int]) -> Void
   case r
     ok(n) -> puts("#{label}: ok #{n}")
@@ -63,5 +64,8 @@ def main() -> Void
   report("owner", Task.await(owner))
   report("reader", Task.await(reader))
   puts("closed? #{mine.closed?}")
+  while Task.pending_count() > 0
+    Task.sleep(1)
+  end
   puts("pending #{Task.pending_count()}")
 end

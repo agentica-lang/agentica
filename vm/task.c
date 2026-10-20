@@ -244,6 +244,7 @@ static void end_cancelled_locked(agc_vm *vm, agc_task *t) {
      at the state again: a waker made it READY. */
 static void cancel_one(agc_vm *vm, agc_task *t, const char *why) {
   atomic_store_explicit(&t->cancelled, true, memory_order_seq_cst);
+  /* Two calls, not one with a "%s" for " at=": the trace escaper quotes a text value that holds a space or '='. */
   if (!t->group && why)
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64 " at=%s", t->id, why);
   else if (!t->group)

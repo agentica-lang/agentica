@@ -20,11 +20,11 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.TaskAwait -> return check_await(cx, st, site)
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
     Model.Rule.TaskMap -> return check_task_map(cx, st, site)
-    Model.Rule.TaskTarget -> return check_task_target(cx, st, site)
+    Model.Rule.TaskTarget -> return check_target(cx, st, site, &Args.task_argument)
     Model.Rule.ChannelNew -> return check_channel_new(cx, st, site)
     Model.Rule.ChannelSend -> return check_channel_send(cx, st, site)
     Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
-    Model.Rule.ChannelTarget -> return check_channel_target(cx, st, site)
+    Model.Rule.ChannelTarget -> return check_target(cx, st, site, &Args.channel_argument)
     _ -> return check_map_rule(cx, st, site, rule)
   end
 end
@@ -188,14 +188,15 @@ def check_channel_recv(cx: State.Cx, st: State.St, site: State.Site) -> Result[S
   return ok(State.Out(st: timeout.st, type: T.Type.Result(T.item(target.type))))
 end
 
-# Task.cancel: argument 0 is a Task[R] of any R.
-def check_task_target(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  target = try Args.task_argument(cx, st, site)
-  return ok(State.Out(st: target.st, type: site.selected.result))
-end
-
-def check_channel_target(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  target = try Args.channel_argument(cx, st, site)
+# A builtin whose one argument is a target of a shape (a Task[R] or a Channel[T] of any item type), checked by
+# `argument`; the call has the type of its row (Task.cancel, Channel.close, Channel.closed?).
+def check_target(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  argument: Fn[State.Cx, State.St, State.Site, Result[State.Out]],
+) -> Result[State.Out]
+  target = try argument.call(cx, st, site)
   return ok(State.Out(st: target.st, type: site.selected.result))
 end
 

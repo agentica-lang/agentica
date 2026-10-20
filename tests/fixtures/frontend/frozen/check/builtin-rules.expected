@@ -210,6 +210,7 @@ TCP.send_bytes Plain
 TLS.connect Plain
 TLS.listen Plain
 Task.await TaskAwait
+Task.cancel TaskTarget
 Task.map TaskMap
 Task.pending_count Plain
 Task.sleep Plain

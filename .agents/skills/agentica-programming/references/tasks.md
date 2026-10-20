@@ -117,8 +117,10 @@ coordinate ownership of reads.
 `Task.cancel(task)` stops a task you no longer need, such as an owner task that
 keeps state, without a "stop" message. It does not wait: it marks the task and
 every task it started (descendants) cancelled and returns. A cancelled task runs
-no more user code. A sleep, a channel wait, an await or an I/O wait ends at
-once; a task in the middle of a long loop stops at the end of its current turn.
+at most the rest of its current turn. A sleep, a channel wait, an await or an
+I/O wait ends at once; a task in the middle of a turn on another scheduler, such
+as a long loop, stops at the end of that turn. So a task in its last turn there
+may end as cancelled even though it reached its return.
 Its handles close as for any task end, so a channel it owns (`spawn_owning`) is
 closed and its receivers get `error("channel: closed")`. Cancelling a task that
 already ended, or cancelling twice, does nothing. Any task that holds the handle
@@ -249,7 +251,7 @@ This prints `[ok("page 1"), error("task: timed out"), ok("page 3")]`. The rules:
   variables and results are immutable and shared without copies.
 - An item may call `Task.map` itself; each call has its own limit, so the limits
   multiply. Starting an item costs one step of `--max-steps`.
-- A task handle that an item passed out through a channel is cancelled with the
+- A task the item started is cancelled with it, also when its handle left the
   item: awaiting it halts with RUNTIME-TASK-CANCELLED unless it returns a
   `Result`.
 

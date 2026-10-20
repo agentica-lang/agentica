@@ -146,7 +146,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         `cancel_tree` with `at=call` on the named task's trace line; it never
         waits, and a task that cancels itself or an ancestor is in the walk and
         stops after the call (`yield`). Fixtures `task-cancel-*` run at N = 1
-        and N = 4; ordering in them comes from channels, never from sleeps
+        and N = 4; their output does not depend on timing (channels order
+        the steps; a `Task.sleep(0)` before a cancel changes nothing printed)
       - `vm/tests/task_cancel_test.c` runs hand-built bytecode with test
         builtins on the real scheduler
       - 17c adds the timed await cases there: a waiter cancelled while it waits

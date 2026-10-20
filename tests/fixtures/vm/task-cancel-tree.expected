@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 209,
+  "steps": 213,
   "stdout": [
     "root: task: cancelled",
     "descendant: task: cancelled",
