@@ -1,22 +1,9 @@
 /*
  * Lazy[T]: an immutable recipe of a source and steps, run one item at a time by a terminal
  * (docs/future/27-iteration-and-concurrency.md §27.4). The prelude (stdlib/prelude/lazy.agc) gives the typed names;
- * the builtins here are prelude-only. Service layer.
- *
- * A recipe is a chain of nodes, each pointing at the one before it, down to the source. Nodes are never changed after
- * they are made, so a Lazy can be shared by tasks on any scheduler and run more than once: every terminal call has its
- * own run state (lazy_run), and its callbacks run on the task that called it.
- *
- * A terminal is a stepper (port.h). It pulls one item from the source and moves it through the stages in order until
- * a stage drops it, holds it in a buffer, or it reaches the terminal; a callback ends the step with AGC_STEP_CALL and
- * the result comes back as `last`. Every item that enters the first stage (from the source, a flat_map list or a
- * flush) costs one step through agc_step_turn, and a step that ran out of turn returns AGC_STEP_YIELD, so an endless
- * source with no callback still meets --max-steps, other tasks' turns and a cancel.
- *
- * The end of the items moves from the source toward the terminal: `ended` counts the stages, from the source, that
- * will give nothing more (the source ran out, a take had its count, a take_while saw false). Once a stage is ended,
- * the next one first gives out what it still holds (the rest of a flat_map list, then the last slice or chunk), and
- * is then ended too. The run is over when every stage is.
+ * the builtins here are prelude-only. Nodes never change after they are made, so a Lazy can be shared by tasks on
+ * any scheduler and run more than once: each terminal call has its own run state, and its callbacks run on the task
+ * that called it. Service layer.
  */
 #include "services.h"
 
@@ -222,7 +209,8 @@ static void lazy_end_at(lazy_run *run, size_t stage) {
 
 static agc_step lazy_finish(lazy_run *run) {
   switch (run->terminal) {
-    case LAZY_TO_A: return lazy_end(agc_result_value(true, agc_list_value(agc_list_from_array(run->out, run->out_len))));
+    case LAZY_TO_A:
+      return lazy_end(agc_result_value(true, agc_list_value(agc_list_from_array(run->out, run->out_len))));
     case LAZY_EACH: return lazy_end(agc_result_value(true, agc_void()));
     case LAZY_REDUCE: return lazy_end(agc_result_value(true, run->acc));
     case LAZY_FIND: break;
@@ -365,6 +353,16 @@ static bool lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
   return true;
 }
 
+/* A terminal is a stepper (port.h). It pulls one item from the source and moves it through the stages in order until
+   a stage drops it, holds it in a buffer, or it reaches the terminal; a callback ends the step with a call and its
+   result comes back as `last`. Every item that enters the first stage (from the source, a flat_map list or a flush)
+   costs one step through agc_step_turn, and a step that ran out of turn returns AGC_STEP_YIELD, so an endless source
+   with no callback still meets --max-steps, other tasks' turns and a cancel.
+
+   The end of the items moves from the source toward the terminal: `ended` counts the stages, from the source, that
+   will give nothing more (the source ran out, a take had its count, a take_while saw false). Once a stage is ended,
+   the next one first gives out what it still holds (the rest of a flat_map list, then the last slice or chunk), and
+   is then ended too. The run is over when every stage is. */
 static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   lazy_run *run = (lazy_run *)self;
   agc_step step;
