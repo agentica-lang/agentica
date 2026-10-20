@@ -22,13 +22,15 @@ import {ENUMS, RECORDS} from "builtins"
 ## access resolved to, by node id (the lowering reads them), and the linked names of the module constants in
 ## initialization order (the lowering reads that too, and does not order them again). prelude is the files of the
 ## compiler prelude that the program calls (prelude.agc), checked with it: the lowering adds them to the files of the
-## program. bodies is the prelude function each call of a prelude builtin runs, by id of the call.
+## program. bodies is the prelude function each call of a prelude builtin runs, by id of the call. step_tries is the
+## id of each `try` in the block of a Lazy method (State.St.step).
 export struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]
   constants: List[String]
   prelude: List[Linker.LinkedModule]
   bodies: Map[Int, String]
+  step_tries: Set[Int]
 end
 
 ## The result of checking: the types, or the first problem.
@@ -108,6 +110,7 @@ def run(linked: Linker.Linked, settings: Env.Settings) -> Result[Checked]
       constants: done.order,
       prelude: attached.modules,
       bodies: attached.st.bodies,
+      step_tries: attached.st.step_tries,
     ),
   )
 end

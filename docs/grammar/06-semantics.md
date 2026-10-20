@@ -526,7 +526,11 @@ total = xs.reduce(0) do |sum, x| sum + x end
   must be a `Result` (`CHECK-TRY-CONTEXT` otherwise). The result type must come
   from the call, so `try` is not available in `map` and `sort_by` blocks. The
   block of `Task.map` gives a `Result[R]` with `R` not known from the call, and
-  `try` works in it, since the outer type is always `Result`.
+  `try` works in it, since the outer type is always `Result`. In a block of a
+  `Lazy` method (a step, `Lazy.produce` or a terminal) `try` works whatever the
+  block's result type: a failed `try` ends the pipeline, and the terminal
+  returns its error (`docs/grammar/06b-builtins.md`, `Lazy[T]`). A block nested
+  in that block follows the rule above.
 - **Capture by value.** A block sees the variables visible where it is written,
   with their values at creation; later outer assignments do not change it.
   Assigning to an outer variable inside a block is `CHECK-CAPTURED-ASSIGNMENT`;

@@ -444,7 +444,9 @@ Read first: `references/vm.md`.
   - **Owns:** `File.foreach` closes its file on every exit path of a terminal
     (`tests/fixtures/vm/lazy-file.agc` under the io trace: no `file_open` while
     another file is open), and the end of a run that `--max-steps` stopped
-    closes it; portable, so the macOS and Windows jobs of `platforms.yml` run it
+    closes it; `write_lines` the same (`lazy-write.agc`), and `File.foreach`
+    reads back byte for byte what `write_lines` wrote; portable, so the macOS
+    and Windows jobs of `platforms.yml` run it
 
 - **Path:** `tests/test_vm_file_lines.py`
   - **Owns:** `File.each_line`: a 10 MB file of short lines streams in order in

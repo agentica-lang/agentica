@@ -1,10 +1,10 @@
 ---
 title: Lazy
 weight: 6
-description: Lazy pipelines over lists, ranges, endless sources, files and channels, run one item at a time by a terminal.
+description: Lazy pipelines over lists, ranges, endless sources, files and channels, run one item at a time by a terminal, with try in the blocks and a terminal that writes a file.
 ---
 
-A `Lazy[T]` is a recipe: a source and the steps after it. Building one does no work. A terminal (`to_a`, `first`, `each`, `reduce`, `find`) runs it, and pulls one item at a time from the source through every step, so no step builds a list of all the items. A step returns a new `Lazy`; the old one is unchanged, and each terminal runs the source again from the start (a channel, which cannot be read twice, goes on where the last terminal stopped).
+A `Lazy[T]` is a recipe: a source and the steps after it. Building one does no work. A terminal (`to_a`, `first`, `each`, `reduce`, `find`, `write_lines`) runs it, and pulls one item at a time from the source through every step, so no step builds a list of all the items. A step returns a new `Lazy`; the old one is unchanged, and each terminal runs the source again from the start (a channel, which cannot be read twice, goes on where the last terminal stopped).
 
 Use a `Lazy` for an endless source, for the lines of a big file or the values of a channel, or when only the first few results of a long chain are needed. For a list you will walk whole, the eager [List](/library/data-structures/list/) methods are the one form.
 
@@ -22,6 +22,8 @@ ok([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]])
 ```
 
 Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. A terminal can be switched out between items, so other tasks keep running; a terminal over a file or a channel parks while it waits, and a cancel reaches it there.
+
+`try` works in every block of a `Lazy` method, whatever the block gives: a failed `try` ends the pipeline at once, and the terminal returns its error ([try in the blocks](#try-in-the-blocks)).
 
 A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. There is no `next`: a `Lazy` is a recipe, not a cursor. A `List` method on a `Lazy`, such as `lz.size`, is `CHECK-UNKNOWN-METHOD` with a help that shows `to_a`; a step only `Lazy` has, such as `xs.each_cons(2)` on a list, shows `.lazy`.
 
@@ -255,4 +257,48 @@ end
 ok(10)
 ok(128)
 error("not found")
+```
+
+## write_lines
+
+```text
+Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]
+```
+
+Writes each item and a line feed to a file, created or truncated, and gives `ok()` at the end. The file opens before the first item is pulled, so a failed open reads nothing, and it is flushed and closed before the terminal returns, whatever ended it: the end of the items, a failed `try` or a failed write. A crash or cancel of the task closes it when the task ends. What was written before an error stays in the file. Lines are buffered and written 64 KiB at a time; `timeout_ms` bounds the open, each write and the close. A bad timeout or path, a failed open, write or close, and a line over 1 MiB end the terminal with that error. A line holding a line feed reads back as two lines with `File.foreach`.
+
+```agentica {mode="check"}
+def amount(line: String) -> Result[Int]
+  return line.split(",")[1].to_i
+end
+
+def main() -> Void
+  done = File.foreach("ledger.csv", 4096, 1000).drop(1).map do |line|
+    "#{try amount(line) * 100}"
+  end.write_lines("cents.txt", 1000)
+  puts(done)
+end
+```
+
+## try in the blocks
+
+A failed `try` in any block of a `Lazy` method (a step, `Lazy.produce`, a terminal) ends the pipeline: no later item is pulled, a file the run opened is closed, and the terminal returns the error. A `try` that succeeds gives its value, so the block still gives a plain item. A block nested in that block, such as the block of a `List.map`, follows the usual rule: `try` there needs a block that returns a `Result` (`CHECK-TRY-CONTEXT`).
+
+```agentica
+def parse(text: String) -> Result[Int]
+  return text.to_i
+end
+
+def main() -> Void
+  words = ["1", "2", "x", "4"]
+  puts(words.lazy.map do |word| try parse(word) * 10 end.first(2))
+  puts(words.lazy.map do |word| try parse(word) * 10 end.to_a)
+  puts(words.lazy.reduce(0) do |sum, word| sum + try parse(word) end)
+end
+```
+
+```output
+ok([10, 20])
+error("cannot convert \"x\" to Int")
+error("cannot convert \"x\" to Int")
 ```

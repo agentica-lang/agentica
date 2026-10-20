@@ -172,7 +172,8 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     Channel[Int] = Channel.new(8)` (see `tasks.md`)
 
 - **Code:** `CHECK-TRY-CONTEXT`
-  - **Meaning:** try in a function not returning Result
+  - **Meaning:** try in a function or block not returning Result (a block of
+    a `Lazy` method accepts any `try`: its failure ends the pipeline)
 
 - **Code:** `CHECK-MISSING-RETURN`
   - **Meaning:** a path without `return` in a non-`Void` function; the help

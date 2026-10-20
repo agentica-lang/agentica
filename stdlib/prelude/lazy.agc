@@ -2,10 +2,11 @@
 ## program imports it. A Lazy is an immutable recipe: a source (a list, a range, Lazy.produce, File.foreach or
 ## ch.lazy) and the steps added after it. The functions here only give the generic signatures; the VM (vm/lazy.c)
 ## builds the recipe and runs it. A step returns a new Lazy and runs nothing. A terminal (to_a, first, each, reduce,
-## find) pulls one item at a time from the source through every step, so no step builds a list of all the items, and
-## an endless source ends as soon as a take, take_while, first or find has what it needs. Two terminals on the same
-## Lazy run the source twice; a channel cannot be read twice, so a second terminal on ch.lazy goes on with the values
-## the first did not take.
+## find, write_lines) pulls one item at a time from the source through every step, so no step builds a list of all the
+## items, and an endless source ends as soon as a take, take_while, first or find has what it needs. Two terminals on
+## the same Lazy run the source twice; a channel cannot be read twice, so a second terminal on ch.lazy goes on with
+## the values the first did not take. A failed `try` in any block of a Lazy method ends the pipeline: the terminal
+## returns its error (the checker marks those `try`s and the lowering emits try-step for them).
 ##
 ## A is the item type and B the type a callback gives. The Int after the Lazy in __lazy_test, __lazy_count and
 ## __lazy_group picks the step; vm/lazy.c reads the same numbers.
@@ -101,4 +102,9 @@ end
 
 def find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]
   return __lazy_find(lazy, f)
+end
+
+# write_lines. The path and timeout are checked when the terminal starts, as for File.foreach: a bad one is its error.
+def write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]
+  return __lazy_write_lines(lazy, path, timeout_ms)
 end

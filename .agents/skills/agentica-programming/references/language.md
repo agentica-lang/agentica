@@ -425,7 +425,9 @@ A block is a function written at the call site as the last argument: `xs.map do
   needs the block to return a Result known from the call (not in `map` or
   `sort_by`), and it ends with `ok(...)`. The block of `Task.map` gives a
   `Result[R]` with `R` taken from the expected type or from the body, and `try`
-  works in it.
+  works in it. In a block of a `Lazy` method `try` always works and the block
+  still gives a plain value: a failed `try` ends the pipeline and the terminal
+  returns its error (`references/lazy.md`).
 - `case`, `while`, and `for` headers may end with an optional `do` (`while !done
   do`, `for x in xs do`); that `do` is never a block. To put a call with a block
   in such a header, wrap it: `case (xs.map do |x| x end) do`.

@@ -1549,6 +1549,8 @@ int main(void) {
 
   static const agc_instr bad_try[] = {{AGC_OP_TRY, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_with_tables(bad_try, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_try_step[] = {{AGC_OP_TRY_STEP, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_try_step, two_spans, 2, 4, "register out of range"));
   static const agc_instr bad_is_ok[] = {{AGC_OP_IS_OK, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_with_tables(bad_is_ok, two_spans, 2, 4, "register out of range"));
   static const agc_instr bad_result_value[] = {{AGC_OP_RESULT_VALUE, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
@@ -1578,6 +1580,13 @@ int main(void) {
   s.registers = 2;
   agc_outcome emptied = run_spec(s, stdout);
   assert(emptied.kind == AGC_FAILED && strcmp(emptied.code, "RUNTIME-INTERNAL") == 0);
+  /* A failed TRY_STEP must return to a Lazy terminal; in main no stepper is below it. */
+  static const agc_instr try_step_in_main[] = {
+    {AGC_OP_STEP, 1, 0, 0},     {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+    {AGC_OP_TRY_STEP, 1, 0, 0}, {AGC_OP_NOT, 0, 0, 0},   {AGC_OP_RETURN, 0, 0, 0}};
+  s.code = try_step_in_main;
+  agc_outcome outside = run_spec(s, stdout);
+  assert(outside.kind == AGC_FAILED && strcmp(outside.code, "RUNTIME-INTERNAL") == 0);
 
   static const agc_instr bad_map_target[] = {{AGC_OP_MAP, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_with_tables(bad_map_target, two_spans, 2, 4, "register out of range"));

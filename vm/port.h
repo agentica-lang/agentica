@@ -113,11 +113,15 @@ typedef agc_step (*agc_step_fn)(agc_vm *vm, agc_stepper *self, agc_value last);
    the registry or the loop only inside a section it locks itself (agc_sync_take ... agc_sync_drop), parks only from
    inside such a section, and returns with the lock dropped; it returns AGC_STEP_WAIT only after such a park (the
    Lazy terminals over a file or a channel, vm/lazy.c). `no_block`: the builtin's last argument
-   is not a block; every call the step makes names its `fn`. Otherwise the last argument must be a function value. */
+   is not a block; every call the step makes names its `fn`. Otherwise the last argument must be a function value.
+   `escaped`: set by the interpreter when a callback of this step returns through a failed TRY_STEP (a `try` in the
+   block of a Lazy method), so the `last` it gets is an error Result that ends the run, not the block's value. Only
+   the Lazy terminals read it, and they clear it. */
 struct agc_stepper {
   agc_step_fn step;
   bool unlocked;
   bool no_block;
+  bool escaped;
 };
 
 typedef struct {

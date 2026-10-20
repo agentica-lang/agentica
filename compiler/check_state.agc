@@ -84,7 +84,9 @@ end
 ## chain being checked, the signature of the function (for the diagnostics) and the nesting depth (CHECK-TOO-DEEP). The
 ## names in scope are one persistent Map: a scope is a snapshot of it, so closing a scope puts the snapshot back and
 ## nothing is ever deleted. bodies is the function of the prelude that each call of a prelude builtin runs, by the id
-## of the call (the lowering reads it).
+## of the call (the lowering reads it). step is true inside the block of a Lazy method, where a failed `try` ends the
+## pipeline instead of returning from the block, and step_tries holds the id of each such `try` (the lowering emits
+## try-step for them).
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -97,6 +99,8 @@ export struct St
   signature: String
   nest: Int
   bodies: Map[Int, String]
+  step: Bool
+  step_tries: Set[Int]
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -121,6 +125,7 @@ end
 
 ## The state at the start of a function: no names, no types.
 export def fresh() -> St
+  no_tries: Set[Int] = Set.new([])
   return St(
     types: [],
     resolved: {},
@@ -133,6 +138,8 @@ export def fresh() -> St
     signature: "",
     nest: 0,
     bodies: {},
+    step: false,
+    step_tries: no_tries,
   )
 end
 

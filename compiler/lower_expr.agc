@@ -378,7 +378,12 @@ def lower_try(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TryExpr, want: Int) ->
   saved = fx.next
   made = Lowering.target(fx, want)
   operand = try lower_expression(cx, made.fx, node.operand, -1, false, false)
-  fx = Lowering.emit_at(operand.fx, "try", [made.slot, operand.slot], node.span)
+  # A try in the block of a Lazy method returns its error to the terminal, which ends the pipeline with it.
+  op = "try"
+  if cx.step_tries.include?(node.id)
+    op = "try-step"
+  end
+  fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.span)
   return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 

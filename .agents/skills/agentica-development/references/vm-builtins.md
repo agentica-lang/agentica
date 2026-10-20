@@ -79,7 +79,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    the stepper sets `unlocked`: it touches shared lists only inside sections
    it locks itself, parks only from inside one, and returns with them closed
    (`resume_stepper` checks the depth). Every `Lazy` terminal sets it; over
-   `File.foreach` or `ch.lazy` it locks the reader and the receive; a stepper
+   `File.foreach`, `ch.lazy` or in `write_lines` it locks the reader, the
+   receive and the writer. `escaped` is set by a failed `TRY_STEP` in a
+   callback (a `try` in a `Lazy` block); only `vm/lazy.c` reads it. A stepper
    whose builtin has no block sets `no_block`, else `start_stepper` checks
    that the last argument is a function.
    Use `List`-style native frames for pure callbacks and a plain blocking

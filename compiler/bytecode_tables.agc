@@ -20,13 +20,13 @@ export OPCODES = {
   "le-f": 26, "concat": 27, "to-text": 28, "inspect": 29, "list": 30, "list-len": 31, "list-get": 32, "struct": 33,
   "field": 34, "enum": 35, "is-variant": 36, "payload": 37, "same": 38, "tail-call": 39, "try": 40, "is-ok": 41,
   "result-value": 42, "map": 43, "map-get": 44, "call-value": 45, "closure": 46, "range": 47, "range-bounds": 48,
-  "struct-with": 49, "global": 50, "global-set": 51,
+  "struct-with": 49, "global": 50, "global-set": 51, "try-step": 52,
 }
 
 ## The opcodes written as their first two operands and a zero.
 export PAIR_OPS = Set.new([
   "move", "neg-i", "neg-f", "not", "to-text", "inspect", "list-len", "try", "is-ok", "result-value", "range-bounds",
-  "call-value",
+  "call-value", "try-step",
 ])
 
 ## The opcodes written as their first operand and two zeros.
@@ -41,5 +41,5 @@ export NEEDS = {
   "const": 1, "jump": 1, "return": 1, "jump-if-false": 2, "jump-if-true": 2, "call-builtin": 2, "struct-with": 3,
   "move": 2, "neg-i": 2, "neg-f": 2, "not": 2, "to-text": 2, "inspect": 2, "list-len": 2, "try": 2, "is-ok": 2,
   "result-value": 2, "range-bounds": 2, "call-value": 2, "call": 2, "tail-call": 2, "closure": 2, "global": 2,
-  "global-set": 2,
+  "global-set": 2, "try-step": 2,
 }

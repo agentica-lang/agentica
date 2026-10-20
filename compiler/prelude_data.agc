@@ -11,7 +11,7 @@ import Types from "types"
 export PRELUDE_ONLY = [
   "__fail_arg", "__lazy_channel", "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find",
   "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce",
-  "__lazy_test", "__lazy_to_a", "__lazy_with_index",
+  "__lazy_test", "__lazy_to_a", "__lazy_with_index", "__lazy_write_lines",
 ]
 
 ## Every prelude function, sorted by name.
@@ -35,6 +35,7 @@ export ROWS: List[Model.PreludeRow] = [
   Model.PreludeRow(name: "Lazy.take_while", module: "lazy", limits: [], selector: "", bodies: {"": "take_while"}),
   Model.PreludeRow(name: "Lazy.to_a", module: "lazy", limits: [], selector: "", bodies: {"": "to_a"}),
   Model.PreludeRow(name: "Lazy.with_index", module: "lazy", limits: [], selector: "", bodies: {"": "with_index"}),
+  Model.PreludeRow(name: "Lazy.write_lines", module: "lazy", limits: [], selector: "", bodies: {"": "write_lines"}),
   Model.PreludeRow(name: "List.drop_while", module: "list", limits: [], selector: "", bodies: {"": "drop_while"}),
   Model.PreludeRow(name: "List.each_slice", module: "list", limits: [], selector: "", bodies: {"": "each_slice"}),
   Model.PreludeRow(

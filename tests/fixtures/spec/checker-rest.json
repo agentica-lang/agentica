@@ -9812,5 +9812,104 @@
       "start": [3, 3],
       "covers": "ch.lazy(10)"
     }
+  ],
+  "A try in a block of a Lazy method ends the pipeline, and write_lines takes a Lazy[String]": [
+    {
+      "program": [
+        "def parse(s: String) -> Result[Int]",
+        "  return s.to_i",
+        "end",
+        "",
+        "def main() -> Void",
+        "  words = [\"1\", \"2\"].lazy",
+        "  nums = words.map do |s|",
+        "    n = try parse(s)",
+        "    n * 2",
+        "  end.filter do |n| try parse(\"#{n}\") > 0 end.take_while do |n| try parse(\"#{n}\") < 9 end",
+        "  more = nums.drop_while do |n| try parse(\"#{n}\") < 1 end.flat_map do |n| [try parse(\"#{n}\")] end",
+        "  indexed = more.with_index do |n, i| try parse(\"#{n + i}\") end.chunk_while do |a, b| try parse(\"#{a}\") < b end",
+        "  puts(indexed.to_a)",
+        "  puts(words.reduce(0) do |sum, s| sum + try parse(s) end)",
+        "  puts(words.find do |s| try parse(s) > 1 end)",
+        "  puts(Lazy.produce(\"1\") do |s| \"#{try parse(s) + 1}\" end.first(3))",
+        "  done = words.each do |s|",
+        "    puts(try parse(s))",
+        "    ok()",
+        "  end",
+        "  written: Result[Void] = words.map do |s| \"#{try parse(s)}\" end.write_lines(\"out.txt\", 1000)",
+        "  puts(done.ok? and written.ok?)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def parse(s: String) -> Result[Int]",
+        "  return s.to_i",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = [\"1\"].lazy.map do |s|",
+        "    [s].map do |t| try parse(t) end",
+        "  end.to_a",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TRY-CONTEXT",
+      "start": [7, 20],
+      "covers": "try parse(t)",
+      "help": true
+    },
+    {
+      "program": [
+        "def parse(s: String) -> Result[Int]",
+        "  return s.to_i",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = [\"1\"].map do |s| try parse(s) end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TRY-CONTEXT",
+      "start": [6, 24],
+      "covers": "try parse(s)"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = [\"1\"].lazy.map do |s| try s.length end.to_a",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 33],
+      "covers": "s.length"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = [1, 2].lazy.write_lines(\"out.txt\", 1000)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 7],
+      "covers": "[1, 2].lazy",
+      "expected": "Lazy[String]",
+      "actual": "Lazy[Int]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = [\"a\"].lazy.write_lines(\"out.txt\", \"1000\")",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 41],
+      "covers": "\"1000\""
+    }
   ]
 }
