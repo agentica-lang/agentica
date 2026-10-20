@@ -6,8 +6,7 @@ description: Split a program into files, export declarations and use the standar
 
 ## One file, one module
 
-Each `.agc` file is a module. `export` makes a function, struct or enum
-visible to other files. Everything else stays private.
+Each `.agc` file is a module. `export` makes a function, struct or enum visible to other files. Everything else stays private.
 
 Save this as `shapes.agc`:
 
@@ -27,7 +26,17 @@ end
 
 ## File layout
 
-Every file lists its declarations in the same order: the module doc and the imports, then constants (see [Constants](/tour/constants/)), then `struct`, `enum` and type alias declarations, then `export def` functions, then private `def` functions. Types may come in any order among themselves. Put a blank line before each declaration after the first, including each type alias. The order is only style, because a function can still call one declared later, but the checker enforces it so every file reads the same way.
+Each file lists its declarations in this order (`CHECK-DECL-ORDER` otherwise):
+
+```text
+# module doc and imports
+# constants (see Constants)
+# struct, enum and type alias, in any order
+# export def
+# def
+```
+
+A blank line goes before each declaration after the first.
 
 A private function before an exported one is `CHECK-DECL-ORDER`:
 
@@ -47,8 +56,7 @@ end
 
 ## Import a file
 
-`import` loads a file and gives it a name, the alias. Use the alias in front of
-every name from that file.
+`import` loads a file and gives it a name, the alias. Use the alias in front of every name from that file.
 
 ```agentica
 import Shapes from "shapes"
@@ -63,9 +71,7 @@ end
 9
 ```
 
-Paths are relative to the importing file and leave out the `.agc` extension:
-`"shapes"` loads `shapes.agc`. Aliases start with an uppercase letter.
-Calling a private function is an error:
+Paths are relative to the importing file and leave out the `.agc` extension: `"shapes"` loads `shapes.agc`. Aliases start with an uppercase letter. Calling a private function is an error:
 
 ```agentica {expect="CHECK-IMPORT-NAME"}
 import Shapes from "shapes"
@@ -77,8 +83,7 @@ end
 
 ## Types and enums from a module
 
-Imported types use the alias too: in annotations, in construction and in
-patterns.
+Imported types use the alias too: in annotations, in construction and in patterns.
 
 ```agentica {file="status.agc"}
 export enum Status
@@ -106,10 +111,7 @@ end
 banned: spam
 ```
 
-A transparent type alias may be exported and imported in the same way. For
-example, `export type Names = List[String]` is used as `S.Names` or imported
-with `import {Names} from "status"`. It stands for `List[String]` everywhere;
-the alias does not provide a constructor or enum variants.
+A transparent type alias may be exported and imported in the same way. For example, `export type Names = List[String]` is used as `S.Names` or imported with `import {Names} from "status"`. It stands for `List[String]` everywhere; the alias does not provide a constructor or enum variants.
 
 ## Import names
 
@@ -149,7 +151,7 @@ end
 banned: spam
 ```
 
-An entry may rename with `as`. The new name keeps the case rule of what it names: types stay capitalized and functions stay lowercase (`CHECK-IMPORT-RENAME` otherwise). Renaming lets two modules that export the same name both be imported, and shortens long names:
+An entry may rename with `as`. A type keeps a capital name and a function a lowercase one (`CHECK-IMPORT-RENAME`). Renaming also lets two modules that export the same name both be imported:
 
 ```agentica
 import {Square as Box, area as box_area} from "shapes"
@@ -173,15 +175,13 @@ def main() -> Void
 end
 ```
 
-An imported name cannot be the name of a declaration in the file, of an alias, of another imported name or of a builtin (`CHECK-REDEFINED-NAME`). Two lines may import from the same path, one with an alias and one with names, but one line does only one of the two. A module imported only by names has no alias.
+An imported name cannot clash with a declaration, an alias, another import or a builtin (`CHECK-REDEFINED-NAME`). A path may appear in two imports, one with an alias and one with names. A module imported only by names has no alias.
 
-Only the root file needs `main`. Imported files have no top-level code, so
-importing a file never runs anything.
+Only the root file needs `main`. Imported files have no top-level code, so importing a file never runs anything.
 
 ## The standard library
 
-Paths that start with `std/` load the standard library that ships with
-Agentica. `std/queue` is a first-in, first-out queue of strings:
+Paths that start with `std/` load the standard library that ships with Agentica. `std/queue` is a first-in, first-out queue of strings:
 
 ```agentica
 import Queue from "std/queue"
@@ -208,11 +208,6 @@ See [Queue](/library/data-structures/queue/) for every function.
 
 ## Other libraries
 
-Paths that start with `pkg/` load installed libraries. `import Tools from
-"pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program,
-then in each directory listed in `AGENTICA_PATH`, then in
-`~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and
-`/usr/share/agentica/lib/`.
+Paths that start with `pkg/` load installed libraries. `import Tools from "pkg/acme/tools"` looks for `acme/tools.agc` in `agc_libs/` next to the main program, then in each directory listed in `AGENTICA_PATH`, then in `~/.local/share/agentica/lib/`, `/usr/local/share/agentica/lib/` and `/usr/share/agentica/lib/`.
 
-Import cycles are errors (`CHECK-IMPORT-CYCLE`), and so are missing files
-(`CHECK-IMPORT-IO`).
+Import cycles are errors (`CHECK-IMPORT-CYCLE`), and so are missing files (`CHECK-IMPORT-IO`).

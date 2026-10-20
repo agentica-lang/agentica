@@ -22,13 +22,11 @@ end
 Hello, Ana!
 ```
 
-Calls always use parentheses, also with no arguments: `main()`, `puts("hi")`.
-Arguments are given by position, and trailing parameters can have default values (see below).
+Calls always use parentheses, also with no arguments: `main()`, `puts("hi")`. Arguments are given by position, and trailing parameters can have default values (see below).
 
 ## return
 
-A function that gives a value must `return` on every path. The last line is
-not returned on its own.
+A function that gives a value must `return` on every path. The last line is not returned on its own.
 
 ```agentica
 def max(a: Int, b: Int) -> Int
@@ -61,8 +59,7 @@ end
 
 ## Void functions
 
-A function that gives nothing returns `Void`. It ends at its last line, or at a
-bare `return`.
+A function that gives nothing returns `Void`. It ends at its last line, or at a bare `return`.
 
 ```agentica
 def report(count: Int) -> Void
@@ -87,7 +84,6 @@ nothing
 ## Order and recursion
 
 Functions can be called before they are defined, and can call themselves.
-Leave a blank line after the `end` of each function.
 
 ```agentica
 def main() -> Void
@@ -106,14 +102,11 @@ end
 120
 ```
 
-A call that is the whole value of a `return`, such as `return factorial(n - 1)` to your own function, reuses the caller's frame and does not count toward the limit of 10000 nested calls. A call inside a bigger expression, such as `return 1 + f(n - 1)`, does count toward that limit, and a call of a builtin uses no frame.
-
-The source text has its own limit: code nested more than 1,000 levels deep (parentheses, blocks, `if` statements, or a chain of more than about 1,000 operators or `.` calls) is refused with `PARSE-TOO-DEEP` before it runs. The type check has a second limit on the depth of the tree (1,000 levels of expressions and statements, `CHECK-TOO-DEEP`), which a deeply nested chain of operators can pass the first one and reach.
+A call that is the whole value of a `return` reuses the caller's frame. Other calls count toward the limit of 10000 nested calls.
 
 ## Many results
 
-A function returns one value. To give back several, return a
-[struct](/tour/structs/).
+A function returns one value. To give back several, return a [struct](/tour/structs/).
 
 ```agentica
 struct MinMax
@@ -138,8 +131,7 @@ end
 
 ## Function values
 
-`&name` is a function as a value. Its type is `Fn[...]`: the parameter types,
-then the result type. Call it with `.call(...)`.
+`&name` is a function as a value. Its type is `Fn[...]`: the parameter types, then the result type. Call it with `.call(...)`.
 
 ```agentica
 def double(n: Int) -> Int
@@ -164,15 +156,13 @@ end
 [2, 4, 6]
 ```
 
-`Fn[Void]` is a function with no parameters that gives nothing. Function values
-can live in lists, maps and struct fields.
+`Fn[Void]` is a function with no parameters that gives nothing. Function values can live in lists, maps and struct fields.
 
-[Blocks](/tour/blocks/) are the short way to write a function value at the
-place where you use it.
+[Blocks](/tour/blocks/) are the short way to write a function value at the place where you use it.
 
 ## Chain calls with |>
 
-`x |> f(a)` means `f(x, a)`: the value on the left becomes the first argument of the call on the right. Use it to chain your own functions from left to right instead of nesting them.
+`x |> f(a)` means `f(x, a)`: the left value becomes the first argument.
 
 ```agentica
 def parse(text: String) -> Result[Int]
@@ -212,9 +202,9 @@ error("negative")
 111
 ```
 
-The right side must be a call with parentheses. It can start with `try`: `x |> try f()` means `try f(x)`. `|>` binds looser than `+` and `-` and tighter than comparisons, so `a + 1 |> f()` is `f(a + 1)`. A chain over several lines goes in parentheses, as in `total` above.
-
-A builtin that has a method form is written with `.`, not `|>`: `s.trim`, not `s |> String.trim()`. The checker reports `CHECK-PIPE-METHOD` and shows the method form.
+- The right side must be a call with parentheses. A multi-line chain goes in parentheses, as `total` above.
+- It may start with `try`: `x |> try f()` means `try f(x)`.
+- A builtin with a method form uses `.`: `s.trim`, not `s |> String.trim()` (`CHECK-PIPE-METHOD`).
 
 ```agentica {expect="CHECK-PIPE-METHOD"}
 def main() -> Void
@@ -225,29 +215,17 @@ end
 
 ## Default parameter values
 
-A parameter can end with `= value`. A call may leave out the parameters that have one, and the default is used.
+A parameter can end with `= value`. A call may leave it out.
+
+- A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `[]`, `{}` or a variant without a payload such as `Level.Info`. Anything else is `CHECK-DEFAULT-VALUE`. Each call gets its own `[]` or `{}`.
+- Parameters with a default go last (`CHECK-DEFAULT-ORDER`). The exception is a last `Fn` parameter, which a block fills.
+- Arguments fill the parameters from the left. A wrong count is `CHECK-ARITY`, such as `expects 1 to 2 arguments`.
 
 ```agentica
 def join(words: List[String], sep: String = ", ") -> String
   return words.join(sep)
 end
 
-def main() -> Void
-  puts(join(["a", "b"]))
-  puts(join(["a", "b"], "-"))
-end
-```
-
-```output
-a, b
-a-b
-```
-
-A default is a constant: a number, a string without `#{...}`, `true`, `false`, `nil`, `[]`, `{}` or an enum variant without a payload such as `Level.Info`. A call, a name or any other expression is `CHECK-DEFAULT-VALUE`. `[]` and `{}` take the type of the parameter, and each call builds its own, so calls never share a value.
-
-Parameters with a default go at the end. A parameter without one after a default is `CHECK-DEFAULT-ORDER`. The one exception is a last `Fn` parameter, which a block fills:
-
-```agentica
 def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void
   f.call("#{path} after #{timeout_ms} ms")
 end
@@ -257,6 +235,8 @@ def show(line: String) -> Void
 end
 
 def main() -> Void
+  puts(join(["a", "b"]))
+  puts(join(["a", "b"], "-"))
   each_line("a.txt") do |line|
     puts(line)
   end
@@ -265,11 +245,11 @@ end
 ```
 
 ```output
+a, b
+a-b
 a.txt after 1000 ms
 b.txt after 50 ms
 ```
-
-Arguments fill the parameters from the left, and the block (or the last argument) always goes to the last `Fn`. A call with too few or too many arguments is `CHECK-ARITY`, and the message gives the range, such as `expects 1 to 2 arguments`. A function value takes every argument: `&join` has type `Fn[List[String], String, String]`.
 
 ```agentica {expect="CHECK-DEFAULT-VALUE"}
 def next_id() -> Int
@@ -287,7 +267,4 @@ end
 
 ## No overloading
 
-A name has one definition. There is no overloading by argument count or type,
-no keyword arguments and no methods on your own types. Functions are top-level
-only; a default value covers the case where you would have wanted a second
-version with fewer arguments.
+A name has one definition: no overloading, no keyword arguments and no methods on your own types. Use a default value instead of a second version.
