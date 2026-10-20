@@ -13,6 +13,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - TLS sockets on Windows, with the same checks as on Linux and macOS.
 - Windows system trust also reads the CA store for intermediates (never as
   roots).
+- `std/http` (HTTP and HTTPS client and server) runs on Windows.
 
 ### Changed
 

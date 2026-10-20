@@ -802,6 +802,8 @@ static void test_service_holds_sync(void) {
   atomic_store(&hammering, false);
   assert(uv_thread_join(&thread) == 0);
   assert(swift_done_calls == GUARDED_JOBS);
+  /* Read after the join: every change is in, and newer clang refuses a global that is only written. */
+  assert(guarded >= GUARDED_JOBS);
   pump_until_idle();
   settle_loop();
 }

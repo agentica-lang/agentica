@@ -64,7 +64,8 @@ line over 1 MiB, which also closes the socket.
 HTTP is a library written in Agentica. Import it with
 `import HTTP from "std/http"`; an `HTTP.` call without the import is
 `CHECK-UNKNOWN-NAME` with a help that shows the import. It has a client
-(this section) and a server (the next one).
+(this section) and a server (the next one). Both work the same on Linux,
+macOS and Windows, over HTTP and HTTPS.
 
 ```text
 HTTP.client_options() -> HttpClientOptions

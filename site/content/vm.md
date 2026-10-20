@@ -45,7 +45,7 @@ The Unicode tables (case mapping, printing) are generated from the Unicode Chara
 
 ## Platforms
 
-The release builds four native archives: Linux x86-64 (glibc 2.28 or newer), macOS Intel and Apple silicon (macOS 12 or newer) and Windows x86-64 (Windows 10 or newer). `TCP` and `TLS` run and are tested on all three systems; `std/http` is built on Linux and macOS only for now.
+The release builds four native archives: Linux x86-64 (glibc 2.28 or newer), macOS Intel and Apple silicon (macOS 12 or newer) and Windows x86-64 (Windows 10 or newer). `TCP`, `TLS` and `std/http` run and are tested on all three systems.
 
 ## Learn more
 
