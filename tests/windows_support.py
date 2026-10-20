@@ -7,6 +7,7 @@ import ctypes
 import os
 import subprocess
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -132,3 +133,44 @@ def processes_mentioning(text: str | Path) -> list[int]:
         if number.strip().isdigit() and needle in plain(command):
             found.append(int(number))
     return found
+
+
+@contextmanager
+def without_backup_restore_privileges():
+    """Prevent the runner's restore privilege from bypassing ACLs in children."""
+    from ctypes import wintypes
+
+    class Luid(ctypes.Structure):
+        _fields_ = [("low", wintypes.DWORD), ("high", wintypes.LONG)]
+
+    class Privileges(ctypes.Structure):
+        _fields_ = [("count", wintypes.DWORD), ("luid", Luid), ("attributes", wintypes.DWORD)]
+
+    kernel32 = kernel32_file_api()
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.LookupPrivilegeValueW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, ctypes.POINTER(Luid)]
+    advapi32.AdjustTokenPrivileges.argtypes = [
+        wintypes.HANDLE, wintypes.BOOL, ctypes.POINTER(Privileges), wintypes.DWORD,
+        ctypes.POINTER(Privileges), ctypes.POINTER(wintypes.DWORD),
+    ]
+    token = wintypes.HANDLE()
+    assert advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x28, ctypes.byref(token))
+    previous = []
+    try:
+        for name in ("SeBackupPrivilege", "SeRestorePrivilege"):
+            requested = Privileges(count=1)
+            assert advapi32.LookupPrivilegeValueW(None, name, ctypes.byref(requested.luid))
+            old = Privileges()
+            size = wintypes.DWORD()
+            assert advapi32.AdjustTokenPrivileges(
+                token, False, ctypes.byref(requested), ctypes.sizeof(old),
+                ctypes.byref(old), ctypes.byref(size),
+            )
+            previous.append(old)
+        yield
+    finally:
+        for old in reversed(previous):
+            assert advapi32.AdjustTokenPrivileges(token, False, ctypes.byref(old), 0, None, None)
+        kernel32.CloseHandle(token)

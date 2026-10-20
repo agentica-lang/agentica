@@ -3,8 +3,9 @@
 Each case runs the CLI as a child (`agentica test --json ...`) and compares
 the JSON report: statuses, diagnostic codes, lines, and the text and --ai
 formats. tests/bdd/handlers.agc holds the shared step handlers. The cases that
-need a runner that fails run the front end as an ordinary program with a stand-in
-for the binary it starts again (front_end_command; fake_binary: a shell script, or on Windows a copy of node.exe).
+need a runner that fails run the front end as an ordinary program with a
+stand-in for the binary it starts again (front_end_command and fake_binary: a
+shell script, or on Windows a copy of node.exe).
 """
 import ast
 import contextlib
@@ -38,6 +39,18 @@ def code_of(item):
 
 def file_error(report):
     return report["files"][0]["error"]
+
+
+def assert_unwritable_temporary_is_an_infrastructure_error(bdd, scratch, temporary, system_text):
+    """`agentica test` with TMPDIR at a folder that cannot be written ends with the infrastructure error that names it
+    and the text of the system for the refusal (`system_text`), and leaves the folder empty."""
+    result = bdd.agentica_test("--json", scratch / "missing.feature", env={"TMPDIR": temporary}, cwd=scratch)
+    assert (result.code, result.stderr) == (2, "")
+    problem = file_error(json.loads(result.stdout))
+    assert problem["code"] == "RUNTIME-BDD-INFRA"
+    assert ("cannot make a private directory in %s" % temporary) in problem["message"]
+    assert system_text in problem["message"]
+    assert os.listdir(temporary) == []
 
 
 def start_line(problem):
@@ -393,6 +406,7 @@ def test_a_run_removes_the_folder_of_an_ended_run_and_leaves_the_folder_of_a_liv
     outside.mkdir()
     (outside / "lock").write_text("keep")
     linked = temporary / "agentica-bdd-aaaaaaaaaaaaaaaa"
+    # Windows needs the right to make symbolic links (Developer Mode or an administrator), as test_filesystem.py does.
     os.symlink(outside, linked, target_is_directory=True)
     malformed = temporary / "agentica-bdd-00ff"
     malformed.mkdir()

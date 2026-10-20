@@ -10,15 +10,15 @@ tests/test_bdd.py). The cases here have no POSIX form, and the POSIX cases they 
 - The input of --driver-pid is private when its access list names only its owner, where POSIX reads mode 600.
 - A temporary folder cannot be written when its access list denies the user, where POSIX uses chmod 0500.
 """
-import json
 import os
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, compile_agc, kill_process, process_alive, run, run_vm, scaled,
-                                 start_vm, vm_binary, vm_command, vm_environment, wait_until)
-from tests.test_bdd import bdd, file_error  # noqa: F401  (bdd is a fixture of that module)
-from tests.windows_support import current_user_sid, icacls
+from tests.agentica_test import (FIXTURES, PYTHON, kill_process, run, run_vm, scaled, start_vm, vm_binary,
+                                 vm_command, vm_environment)
+from tests.test_bdd import assert_unwritable_temporary_is_an_infrastructure_error, bdd  # noqa: F401  (a fixture)
+from tests.test_process_lifecycle import bytecode, gone
+from tests.windows_support import current_user_sid, icacls, without_backup_restore_privileges
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="host-only: TerminateProcess, job objects and access lists exist on Windows only")
 
@@ -94,16 +94,6 @@ end
 """
 
 
-def program(tmp_path, name, text):
-    source = tmp_path / (name + ".agc")
-    source.write_text(text, encoding="utf-8")
-    return compile_agc(source, tmp_path / (name + ".agcb"))
-
-
-def gone(pid):
-    return wait_until(lambda: not process_alive(pid), WAIT, 0.1)
-
-
 def pids_of(line, request):
     """The pids in a line of the program; each is killed when the test ends if it is still there."""
     pids = line.split()
@@ -119,8 +109,8 @@ def pids_of(line, request):
 # is alive, so the end of the run does not do the work of the close.
 @pytest.mark.parametrize("mode", ["close", "timeout"])
 def test_closing_a_captured_vm_child_ends_the_child_and_its_own_child(adopt, request, tmp_path, mode):
-    inner = program(tmp_path, "captured-inner", INNER_PROGRAM)
-    outer = program(tmp_path, "captured-outer", OUTER_PROGRAM)
+    inner = bytecode(INNER_PROGRAM, tmp_path, "captured-inner")
+    outer = bytecode(OUTER_PROGRAM, tmp_path, "captured-outer")
     parent = adopt(start_vm(outer, vm_binary(), inner, mode, PYTHON, PEER, flags=["--allow-run"]))
     pids = pids_of(parent.next_line(WAIT), request)
     assert len(pids) == 2
@@ -138,8 +128,8 @@ def test_closing_a_captured_vm_child_ends_the_child_and_its_own_child(adopt, req
 @pytest.mark.parametrize("then", ["stay", "exit"])
 def test_close_never_waits_for_a_captured_child_and_one_that_ignores_the_console_signals_is_killed(
         adopt, request, tmp_path, child_code, then):
-    bytecode = program(tmp_path, "captured-grace", CLOSE_PROGRAM)
-    vm = adopt(start_vm(bytecode, PYTHON, child_code, then, flags=["--allow-run"]))
+    grace = bytecode(CLOSE_PROGRAM, tmp_path, "captured-grace")
+    vm = adopt(start_vm(grace, PYTHON, child_code, then, flags=["--allow-run"]))
     pid = pids_of(vm.next_line(WAIT), request)[0]
     # A close that waited for the child would end by the 1-second timer of the close: above this bound, which leaves
     # room for a slow runner.
@@ -155,8 +145,8 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_the_console
 # The POSIX case makes the input private with chmod 600, and refuses mode 644 and a symbolic link. Windows has an
 # access list for the owner only (create_private), refuses one that names anyone else, a link and a second name.
 def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_it(tmp_path):
-    hello = program(tmp_path, "hello", HELLO_PROGRAM)
-    copier = program(tmp_path, "copy-private", COPY_PROGRAM)
+    hello = bytecode(HELLO_PROGRAM, tmp_path, "hello")
+    copier = bytecode(COPY_PROGRAM, tmp_path, "copy-private")
     copy = tmp_path / "driver-copy.agcb"
     environment = vm_environment()
 
@@ -202,19 +192,22 @@ def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_
 
 
 # The POSIX case makes the temporary folder read-only with chmod 0500. Windows has no mode bits: an entry that denies
-# the user the right to add files and folders does the same, and holds for an owner and an administrator too.
+# the right to add files and folders does the same. It names the user and Everyone, so no group of an elevated token
+# lets the write through, and the test process gives up the backup and restore privileges that the runner enables:
+# with them, NTFS lets a process create entries in a folder whatever its access list says (the privileges are
+# inherited by the children, the VM among them). The probes show which side failed if the folder is still writable.
 def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error_that_names_it(bdd, request):
     scratch = bdd.make_suite({"nothing.txt": ""}, "agentica-bdd-readonly-")
     temporary = scratch / "tmp"
     temporary.mkdir()
-    sid = "*" + current_user_sid()
-    request.addfinalizer(lambda: icacls(temporary, "/remove:d", sid))
-    icacls(temporary, "/deny", sid + ":(WD,AD)")
-    result = bdd.agentica_test("--json", scratch / "missing.feature", env={"TMPDIR": temporary}, cwd=scratch)
-    assert (result.code, result.stderr) == (2, "")
-    problem = file_error(json.loads(result.stdout))
-    assert problem["code"] == "RUNTIME-BDD-INFRA"
-    assert ("cannot make a private directory in %s" % temporary) in problem["message"]
-    # libuv maps ERROR_ACCESS_DENIED to EPERM, so the text is not "Permission denied" as it is for chmod.
-    assert "Operation not permitted" in problem["message"]
-    assert os.listdir(temporary) == []
+    denied = ["*" + current_user_sid(), "*S-1-1-0"]
+    request.addfinalizer(lambda: [icacls(temporary, "/remove:d", who) for who in denied])
+    with without_backup_restore_privileges():
+        for who in denied:
+            icacls(temporary, "/deny", who + ":(WD,AD)")
+        with pytest.raises(PermissionError):
+            (temporary / "probe-folder").mkdir()
+        with pytest.raises(PermissionError):
+            (temporary / "probe-file").write_text("x")
+        # libuv maps ERROR_ACCESS_DENIED to EPERM, so the text is not "Permission denied" as it is for chmod.
+        assert_unwritable_temporary_is_an_infrastructure_error(bdd, scratch, temporary, "Operation not permitted")
