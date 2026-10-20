@@ -2,7 +2,7 @@
 
 There is no SIGTERM there: libuv ends the child with TerminateProcess (raw exit code 1) and remembers the signal that
 was asked for, and `exited` in vm/process.c records 128 plus it. A program cannot read the status of a child it has
-closed, so the `proc` trace line (raw status and signal) is the observation. The module is in the Windows job only.
+closed, so the `proc` trace line (raw status and signal) is the observation. The other systems skip the module with a host-only reason.
 """
 import os
 import re
@@ -11,7 +11,7 @@ import pytest
 
 from tests.agentica_test import FIXTURES, compile_agc, scaled, start_vm, tool
 
-pytestmark = pytest.mark.skipif(os.name != "nt", reason="needs native Windows")
+pytestmark = pytest.mark.skipif(os.name != "nt", reason="host-only: libuv's Windows job object and handle codes exist on Windows only")
 
 PEER = FIXTURES / "process-peer.js"
 

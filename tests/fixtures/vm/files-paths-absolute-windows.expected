@@ -1,0 +1,30 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 295,
+  "stdout": [
+    "ok(\"//a/b\")",
+    "ok(\"//a/b\")",
+    "ok(\"//a/b//c\")",
+    "ok(\"//a/b/c\")",
+    "\"<drive>/\"",
+    "\"<drive>/a/b/\"",
+    "\"<drive>/a/b\"",
+    "\"<drive>/a\"",
+    "\"<drive>/\"",
+    "\"//a/b\"",
+    "\"<drive>/a/c\"",
+    "\"<drive>/\"",
+    "\"<drive>/a/\"",
+    "\"<drive>/a/b\"",
+    "\"<drive>/a/b/\"",
+    "\"<drive>/tmp/\"",
+    "\"<drive>/a/x/\"",
+    "\"<drive>/c\"",
+    "\"<drive>/é/λ\"",
+    "true",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

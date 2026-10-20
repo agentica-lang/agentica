@@ -10,12 +10,11 @@ import itertools
 import json
 import os
 import re
-import select
 import time
 
 import pytest
 
-from tests.agentica_test import ROOT, Child, agentica_version, cli, run, scaled, vm_environment
+from tests.agentica_test import ROOT, Child, agentica_version, cli, run, scaled, vm_environment, wait_readable
 
 EXAMPLES = ROOT / "examples"
 STEP_BUDGET = "5000000"
@@ -132,7 +131,7 @@ def read_until(child, done, what):
     deadline = time.monotonic() + WAIT_SECONDS
     while not done(data):
         remaining = deadline - time.monotonic()
-        if remaining <= 0 or not select.select([fd], [], [], remaining)[0]:
+        if remaining <= 0 or not wait_readable(fd, remaining):
             raise AssertionError(what)
         chunk = os.read(fd, 1)
         if not chunk:

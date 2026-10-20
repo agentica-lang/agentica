@@ -97,11 +97,12 @@ operating system call differs.
   system. Move the operation behind the adapter header in the same PR, and
   add the new file to the Makefile, `vm/tools/check-layers.sh` and
   `references/repo-map.md`.
-- Tests of the shared behavior go in the Platforms CI subset (add a new test
-  file to the job lists of `platforms.yml`, and on Windows also to
-  `WINDOWS_TEST_MODULES` for the local Wine check), so they
-  run on every system; a test of one system's adapter says so in its name and
-  runs only in that system's job (a skip fails the native Windows gate).
+- Tests of the shared behavior go in an area of `tools/conformance.py` (the
+  conformance matrix of `platforms.yml`; a test module in no area fails
+  `tests/test_conformance.py`), so they run on every system, and on Windows
+  also in `WINDOWS_TEST_MODULES` for the local Wine check. A test of one
+  system's adapter skips elsewhere with `host_only(...)` and a reason that
+  names the capability; any other skip fails the report.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C

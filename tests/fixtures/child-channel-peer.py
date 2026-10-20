@@ -1,7 +1,7 @@
-"""The Linux-only side of the child channel: descriptors pinned to files, FIFOs and devices, and a shell child.
+"""The POSIX side of the child channel: descriptors pinned to files, FIFOs and devices, and a shell child.
 
-They need fcntl, mkfifo, /proc and sh, so they run on Linux only (the others lack /proc); the cases of every system are in
-child-channel-peer.js. Drives the child side of fixtures/child-channel.agc and prints JSON.
+They need fcntl, mkfifo and sh, so they run on Linux and macOS; the cases of every system are in
+child-channel-peer.js. Where /proc exists (Linux) the answer also names the target of descriptor 3. Drives the child side of fixtures/child-channel.agc and prints JSON.
 """
 import json
 import os
@@ -70,7 +70,9 @@ def pinned(vm, bytecode, kind, directory):
         if not more:
             break
         head += more
-    extra = {"head": head.decode(), "target": os.readlink("/proc/%d/fd/3" % child.pid)}
+    extra = {"head": head.decode()}
+    if os.path.isdir("/proc/self/fd"):
+        extra["target"] = os.readlink("/proc/%d/fd/3" % child.pid)
     if kind == "file":
         with open(target, "rb") as written:
             extra["content"] = written.read().decode()

@@ -8,7 +8,6 @@ def main() -> Void
   show("AGC_ENV_EQUALS")
   show("AGC_ENV_UNICODE")
   show("AGC_ENV_UNSET")
-  show("agc_env_set")
   show("AGC_ENV")
   show("AGC_ENV_SET_")
   show("")

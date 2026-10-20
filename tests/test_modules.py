@@ -9,10 +9,11 @@ import itertools
 import json
 import os
 import shutil
+from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import ROOT, cli, report_cases, run, vm_environment
+from tests.agentica_test import ROOT, WINDOWS, cli, report_cases, run, vm_environment
 
 EXAMPLE = ROOT / "examples" / "json-modules.agc"
 
@@ -90,7 +91,9 @@ def test_the_embedded_string_queue_preserves_fifo_and_old_values_without_local_s
     assert (plain.code, plain.stdout, plain.stderr) == (0, expected, "")
 
 
-WINDOWS = os.name == "nt"
+# The AGENTICA_PATH separator and the folder separator of the system under test (a Windows build run under Wine too).
+PATH_SEPARATOR = ";" if WINDOWS else ":"
+SEPARATOR = "\\" if WINDOWS else "/"
 LIBRARY_ROOT = "import Value from \"pkg/value\"\ndef main() -> Void\n  puts(Value.read())\nend\n\n"
 
 
@@ -110,10 +113,10 @@ def test_pkg_roots_search_project_environment_then_user_data_independent_of_cwd(
         "data/agentica/lib/value.agc": library("local")})
     # The same roots, spelled as each system allows: a trailing separator, forward slashes (a drive path on Windows),
     # and both kinds of separator in one entry, with empty entries between and around them.
-    first = str(directory / "first") + os.sep
+    first = str(directory / "first") + SEPARATOR
     second = str(directory / "second").replace("\\", "/")
-    third = str(directory).replace("\\", "/") + os.sep + "third"
-    env = {"AGENTICA_PATH": os.pathsep.join(["", str(directory / "absent"), first, "", second, third, ""]),
+    third = str(directory).replace("\\", "/") + SEPARATOR + "third"
+    env = {"AGENTICA_PATH": PATH_SEPARATOR.join(["", str(directory / "absent"), first, "", second, third, ""]),
            "XDG_DATA_HOME": str(directory / "xdg"), "LOCALAPPDATA": str(directory / "data"),
            "HOME": str(directory / "no-home")}
     # The user root is %LOCALAPPDATA% on Windows and XDG_DATA_HOME elsewhere; each ignores the other variable.
@@ -135,7 +138,7 @@ def test_pkg_roots_take_only_the_absolute_forms_of_the_system(workspace, scratch
     forms = [("C:\\libs", WINDOWS), ("C:/libs", WINDOWS), ("\\\\server\\share\\libs", WINDOWS),
              ("//server/share/libs", True), ("/libs", True), ("C:libs", False), ("libs", False), ("./libs", False)]
     for form, absolute in forms:
-        env = {"AGENTICA_PATH": os.pathsep.join([str(directory / "first"), form])}
+        env = {"AGENTICA_PATH": PATH_SEPARATOR.join([str(directory / "first"), form])}
         out, problem, errors = run_root(scratch, directory, env=env)
         if absolute:
             assert (out, problem) == ("first\n", None), (form, errors)
@@ -150,7 +153,7 @@ def test_pkg_roots_split_the_path_variable_at_the_separator_of_the_system_only(w
     env = {"AGENTICA_PATH": foreign.join([str(directory / "absent"), str(directory / "second")])}
     out, problem, errors = run_root(scratch, directory, env=env)
     assert problem["code"] == "CHECK-IMPORT-IO", errors
-    env = {"AGENTICA_PATH": os.pathsep.join([str(directory / "absent"), str(directory / "second")])}
+    env = {"AGENTICA_PATH": PATH_SEPARATOR.join([str(directory / "absent"), str(directory / "second")])}
     out, problem, errors = run_root(scratch, directory, env=env)
     assert (out, problem) == ("second\n", None), errors
 
@@ -216,7 +219,7 @@ def test_a_runtime_failure_in_a_dependency_keeps_the_original_file_span(workspac
     assert problem is not None, errors
     assert problem["code"] == "RUNTIME-DIVISION-BY-ZERO"
     assert problem["range"]["start"]["line"] == 2
-    assert problem["file"].replace("\\", "/") == (directory / "a.agc").as_posix()
+    assert Path(problem["file"]) == directory / "a.agc"
 
 
 def test_imported_task_callbacks_keep_the_execution_budget(workspace, scratch):
