@@ -102,10 +102,14 @@ export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> Stri
   return renamed_help(cx, kind, name)
 end
 
-# True when Lazy has a step (a method that returns a Lazy) with that name.
+# True when Lazy has a step with that name: a method that takes a Lazy and returns one (not the source produce).
 def lazy_step?(name: String) -> Bool
   entry = ENTRIES.get("Lazy.#{name}")
-  return entry.ok? and T.is(entry.unwrap!.result, "Lazy") and entry.unwrap!.parameters.size > 0
+  if !entry.ok?
+    return false
+  end
+  row = entry.unwrap!
+  return T.is(row.result, "Lazy") and row.parameters.size > 0 and T.is(row.parameters[0].type, "Lazy")
 end
 
 # The builtin of the kind's module with that name whose first parameter has the kind, or "".

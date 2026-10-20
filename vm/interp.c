@@ -484,9 +484,10 @@ static void resume_stepper(agc_vm *vm) {
   agc_frame *frame = &t->frames[t->frame_count - 1];
   agc_native *st = frame->native;
   uint32_t base = frame->base;
-  agc_sync_take(vm);
+  bool locked = !st->stepper->unlocked;
+  if (locked) agc_sync_take(vm);
   agc_step next = st->stepper->step(vm, st->stepper, t->regs[base]);
-  agc_sync_drop(vm);
+  if (locked) agc_sync_drop(vm);
   switch (next.kind) {
     case AGC_STEP_CALL:
     case AGC_STEP_CALL2: {
@@ -644,9 +645,11 @@ static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint3
   st->stepper = t->stepper;
   st->fn = t->regs[base + b->arity - 1];
   t->stepper = NULL;
-  /* A stepper with no block (Lazy's to_a) names the function of each call in its step; a Void fn is checked by
-     call_value, which fails on a step that asks for the block. */
-  if (!agc_is(st->fn, AGC_T_FN)) st->fn = agc_void();
+  /* A stepper with no block (the terminals of Lazy) names the function of each call in its step. */
+  if (st->stepper->no_block)
+    st->fn = agc_void();
+  else
+    agc_as_fn(vm, st->fn);
   push_native(vm, st, base);
 }
 

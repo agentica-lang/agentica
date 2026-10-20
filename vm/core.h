@@ -178,7 +178,6 @@ void agc_task_enter(agc_vm *vm, agc_task *t, uint32_t function);
 void agc_count_step(agc_vm *vm, uint32_t span);
 void agc_task_remove(agc_task **head, agc_task **tail, const agc_task *t);
 void agc_turn_begin(agc_vm *vm);
-bool agc_turn_charge(agc_vm *vm);
 void agc_turn_finish(agc_vm *vm);
 agc_turn_result agc_run_turn(agc_vm *vm);
 

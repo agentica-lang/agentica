@@ -73,8 +73,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    which counts a step of the stepper's own work, said the turn is over) or
    `AGC_STEP_END` (finish with `value`); `last` is the block's result or the
    finished job's result. A stepper that loops without calling a block
-   (`vm/lazy.c`) counts each item with `agc_step_turn`, so it never holds the
-   scheduler past its turn.
+   (`vm/lazy.c`) counts each item with `agc_step_turn`, charges the rest of
+   its work with `agc_charge` and yields when `agc_turn_charge` says so, so it
+   never holds the scheduler past its turn. Steps run under `rt->sync` unless
+   the stepper sets `unlocked` (it touches only task-owned state); a stepper
+   whose builtin has no block sets `no_block`, else `start_stepper` checks
+   that the last argument is a function.
    Use `List`-style native frames for pure callbacks and a plain blocking
    builtin when there is no block. Every table entry
    has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`,

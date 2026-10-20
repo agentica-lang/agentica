@@ -9597,6 +9597,21 @@
       ],
       "covers": "[1].lazy",
       "help": false
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2]",
+        "  puts(xs.produce(1).to_s)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [
+        3,
+        8
+      ],
+      "covers": "xs.produce(1)"
     }
   ]
 }

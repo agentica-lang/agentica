@@ -19,6 +19,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `Lazy` is now a reserved type name.
 - HTTP runs on several schedulers (behind the multicore test switch).
 - The lingering close of `std/http` drops at most 256 KiB of input; a client
   still sending a large body may see a reset instead of the answer.

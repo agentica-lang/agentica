@@ -117,28 +117,30 @@ static agc_value builtin_produce(agc_vm *vm, agc_value *args, uint32_t span) {
   return lazy_source(LAZY_PRODUCE, args[0], args[1]);
 }
 
+/* A step of (lazy, f): map, with_index, flat_map, chunk_while. */
+static agc_value lazy_fn_step(agc_vm *vm, const agc_value *args, lazy_kind kind) {
+  agc_as_fn(vm, args[1]);
+  return lazy_step_node(vm, args[0], kind, args[1], 0);
+}
+
 static agc_value builtin_map(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_as_fn(vm, args[1]);
-  return lazy_step_node(vm, args[0], LAZY_MAP, args[1], 0);
+  return lazy_fn_step(vm, args, LAZY_MAP);
 }
 
 static agc_value builtin_with_index(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_as_fn(vm, args[1]);
-  return lazy_step_node(vm, args[0], LAZY_WITH_INDEX, args[1], 0);
+  return lazy_fn_step(vm, args, LAZY_WITH_INDEX);
 }
 
 static agc_value builtin_flat_map(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_as_fn(vm, args[1]);
-  return lazy_step_node(vm, args[0], LAZY_FLAT_MAP, args[1], 0);
+  return lazy_fn_step(vm, args, LAZY_FLAT_MAP);
 }
 
 static agc_value builtin_chunk_while(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  agc_as_fn(vm, args[1]);
-  return lazy_step_node(vm, args[0], LAZY_CHUNK_WHILE, args[1], 0);
+  return lazy_fn_step(vm, args, LAZY_CHUNK_WHILE);
 }
 
 /* __lazy_test(lazy, kind, f): 0 filter, 1 take_while, 2 drop_while (stdlib/prelude/lazy.agc). */
@@ -356,8 +358,9 @@ static bool lazy_next(agc_vm *vm, lazy_run *run, agc_step *call) {
 /* A terminal is a stepper (port.h). It pulls one item from the source and moves it through the stages in order until
    a stage drops it, holds it in a buffer, or it reaches the terminal; a callback ends the step with a call and its
    result comes back as `last`. Every item that enters the first stage (from the source, a flat_map list or a flush)
-   costs one step through agc_step_turn, and a step that ran out of turn returns AGC_STEP_YIELD, so an endless source
-   with no callback still meets --max-steps, other tasks' turns and a cancel.
+   costs one step through agc_step_turn; each stage it passes without a callback, and each item to_a keeps, charges
+   one unit of turn cost, an each_cons window its size more. A step whose turn ran out returns AGC_STEP_YIELD, so an
+   endless source or a deep recipe with no callback still meets --max-steps, other tasks' turns and a cancel.
 
    The end of the items moves from the source toward the terminal: `ended` counts the stages, from the source, that
    will give nothing more (the source ran out, a take had its count, a take_while saw false). Once a stage is ended,
@@ -375,12 +378,13 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         if (run->ended > run->count) return lazy_finish(run);
         continue;
       }
-      if (agc_step_turn(vm, run->span)) return (agc_step){.kind = AGC_STEP_YIELD};
+      if (agc_step_turn(vm, run->span) || agc_turn_charge(vm)) return (agc_step){.kind = AGC_STEP_YIELD};
     }
     if (run->at == run->count) {
       switch (run->terminal) {
         case LAZY_TO_A:
           lazy_out(run, run->item);
+          agc_charge(vm, 1);
           run->at = 0;
           continue;
         case LAZY_EACH:
@@ -414,8 +418,8 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
         run->at = 0;
         break;
       case LAZY_TAKE:
-        /* A take with nothing left is already ended (here or at the start), so no item reaches it; the test only
-           keeps a hand-made run safe. */
+        /* A take with nothing left is already ended (here or at the start), so no item reaches it; the test is
+           purely defensive. */
         if (s->left == 0) {
           lazy_end_at(run, i);
           run->at = 0;
@@ -455,14 +459,18 @@ static agc_step lazy_step(agc_vm *vm, agc_stepper *self, agc_value last) {
           run->at = 0;
           break;
         }
-        agc_value *window = agc_alloc(agc_size_mul(size, sizeof(agc_value)));
-        for (size_t k = 0; k < size; k++) window[k] = s->items[(s->head + k) % size];
-        run->item = agc_list_value(agc_list_from_array(window, size));
+        agc_list_builder window;
+        agc_list_builder_sized(&window, size);
+        for (size_t k = 0; k < size; k++) agc_list_builder_push(&window, s->items[(s->head + k) % size]);
+        run->item = agc_list_value(agc_list_builder_finish(&window));
+        agc_charge(vm, size);
         run->at++;
         break;
       }
       default: agc_fail(vm, "RUNTIME-INTERNAL", "a Lazy source in the middle of a recipe", run->span);
     }
+    /* Every stage that reaches here passed (or held, or dropped) the item without a callback. */
+    agc_charge(vm, 1);
   }
 }
 
@@ -472,6 +480,9 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   if (terminal != LAZY_TO_A) agc_as_fn(vm, fn);
   lazy_run *run = agc_alloc(sizeof(lazy_run));
   run->stepper.step = lazy_step;
+  /* lazy_step reads immutable nodes and writes only this run, which belongs to the calling task. */
+  run->stepper.unlocked = true;
+  run->stepper.no_block = true;
   run->terminal = terminal;
   run->fn = fn;
   run->acc = acc;
@@ -488,6 +499,7 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
     /* take(0) ends its stage before any item is pulled, so the source is never read (produce never calls f). */
     if (node->kind == LAZY_TAKE && node->count == 0) lazy_end_at(run, i);
   }
+  agc_charge(vm, run->count);
   const lazy_node *source = run->nodes[0];
   if (source->kind == LAZY_LIST) agc_list_cursor_begin(&run->items, agc_as_list(vm, source->value), 0);
   if (source->kind == LAZY_RANGE) run->more = agc_range_bounds(agc_as_range(vm, source->value), &run->next, &run->last);
@@ -511,7 +523,8 @@ static agc_value builtin_find(agc_vm *vm, agc_value *args, uint32_t span) {
   return lazy_start(vm, args[0], LAZY_FIND, args[1], agc_void(), span);
 }
 
-/* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task. */
+/* No row touches state other tasks can reach: a recipe is immutable and a run belongs to the calling task, so no row
+   takes rt->sync, and neither do the terminals' steps (agc_stepper.unlocked); their callbacks run as bytecode. */
 const agc_builtin agc_lazy_builtins[] = {
   {"__lazy_list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"__lazy_range", 1, builtin_range, AGC_NATIVE_NONE, AGC_COST_NONE, false},
