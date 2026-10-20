@@ -10,54 +10,35 @@ surprises. Every error has a stable code, a source position and often a hint
 with the fix.
 
 ```agentica
-struct Item
-  name: String
-  price: Int
-end
+# Prices are in cents, so the math stays exact.
+TAX_PERCENT = 21
 
-enum Size
-  Small
-  Large(Int)
-end
-
-def size_of(item: Item) -> Size
-  if item.price > 4
-    return Size.Large(item.price)
-  end
-  return Size.Small
-end
-
-def parse_price(text: String) -> Result[Int]
-  price = try text.to_i
-  if price < 0
-    return error("negative price: #{price}")
-  end
-  return ok(price)
+## Returns the price with the tax added.
+def with_tax(cents: Int) -> Int
+  return cents + cents * TAX_PERCENT / 100
 end
 
 def main() -> Void
-  items = [Item(name: "tea", price: 3), Item(name: "cake", price: 5)]
-  total = 0
-  for item in items
-    total += item.price
-    case size_of(item)
-      Size.Small -> puts("#{item.name} is cheap")
-      Size.Large(price) -> puts("#{item.name} costs #{price}")
-    end
+  prices = [250, 1_000, 99]
+  # Ranges include both ends: 1..3 is 1, 2, 3.
+  for i in 1..prices.size
+    puts("item #{i}: #{with_tax(prices[i - 1])} cents")
   end
-  puts("total: #{total}")
-  puts(parse_price("-2"))
+  total = prices.map(&with_tax).sum
+  puts("total: #{total} cents")
 end
 ```
 
-Run it with `agentica shop.agc`:
+Run it with `agentica prices.agc`:
 
 ```output
-tea is cheap
-cake costs 5
-total: 8
-error("negative price: -2")
+item 1: 302 cents
+item 2: 1210 cents
+item 3: 119 cents
+total: 1631 cents
 ```
+
+The [language tour](/tour/) covers [structs](/tour/structs/), [enums and `case`](/tour/enums-and-case/) and [`Result`](/tour/results-and-try/).
 
 ## Read next
 
