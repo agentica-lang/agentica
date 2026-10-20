@@ -21,6 +21,7 @@ from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, UNDER_WINE, 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
 ANOTHER_VERSION = "9.9.9"
+STDIN_CAP = 16 * 1024 * 1024
 
 EXIT_THREE = 'def main() -> Void\n  puts("before")\n  System.exit(3)\nend\n'
 TYPE_ERROR = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
@@ -44,6 +45,7 @@ SPAWN = (
     "end\n"
 )
 STD_SOURCE = 'def main() -> Void\n  puts(FrontEnd.std_source("queue.agc").ok?)\nend\n'
+STDIN_BYTES = "def main() -> Void\n  puts(FrontEnd.stdin_bytes().ok?)\nend\n"
 HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off([1], [], []).ok?)\nend\n"
 BROKEN_STD = '\nexport def broken() -> Int\n  return "text"\nend\n'
 INTERLEAVED = (
@@ -227,9 +229,9 @@ def test_run_embedded_starts_a_program_the_binary_carries():
         assert (got.code, got.stdout, got.stderr) == (2, "", message)
 
 
-@pytest.mark.parametrize("name", ("std", "hand_off"))
+@pytest.mark.parametrize("name", ("std", "stdin", "hand_off"))
 def test_a_program_cannot_call_the_front_end_builtins(tmp_path, name):
-    directory = make_suite(tmp_path, {"std.agc": STD_SOURCE, "hand_off.agc": HAND_OFF})
+    directory = make_suite(tmp_path, {"std.agc": STD_SOURCE, "stdin.agc": STDIN_BYTES, "hand_off.agc": HAND_OFF})
     got = agentica(name + ".agc", cwd=directory)
     assert (got.code, got.stdout) == (1, "")
     assert "RUNTIME-FRONT-END-ONLY" in got.stderr
@@ -288,6 +290,22 @@ def test_the_front_end_reports_a_missing_std_source(tmp_path):
     front = front_end(work)
     missing = agentica("--front-end", front, "std", "nothing.agc")
     assert (missing.code, missing.stdout) == (0, "error: no such std source\n")
+
+
+def test_the_front_end_reads_standard_input_whole_and_once(tmp_path):
+    front = front_end(tmp_path)
+    got = agentica("--front-end", front, "stdin", stdin=b"a\r\nb\xff\x00")
+    assert (got.code, got.stdout) == (0, "6 bytes, sum 473\n" * 2)
+    empty = agentica("--front-end", front, "stdin", stdin=b"")
+    assert (empty.code, empty.stdout) == (0, "0 bytes, sum 0\n" * 2)
+
+
+def test_the_front_end_refuses_standard_input_over_the_cap(tmp_path):
+    front = front_end(tmp_path)
+    at_cap = agentica("--front-end", front, "stdin", stdin=b"a" * STDIN_CAP)
+    assert (at_cap.code, at_cap.stdout) == (0, f"{STDIN_CAP} bytes, sum {97 * STDIN_CAP}\n" * 2)
+    over = agentica("--front-end", front, "stdin", stdin=b"a" * (STDIN_CAP + 1))
+    assert (over.code, over.stdout) == (0, "error: standard input is larger than 16777216 bytes\n" * 2)
 
 
 def test_the_hand_off_runs_the_program_in_a_new_runtime(tmp_path):

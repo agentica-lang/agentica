@@ -195,7 +195,8 @@ following
   driver starts children.)
 - A failed read of the standard input of an `agentica` run is the program's own
   error: it reads the real descriptor (`RUNTIME-INTERNAL`, `cannot read
-  standard input`, exit 1). The front end's runtime has no standard input.
+  standard input`, exit 1). The front end's runtime has no standard input stream;
+  `FrontEnd.stdin_bytes` is its only way to read it.
 - Front-end and `LOWER-` diagnostics print as usual (exit 1). `--vm` and
   `--legacy-eval` are unknown switches.
 - There is no VM file to find and no `AGENTICA_VM`: nothing reads the variable,
@@ -279,8 +280,8 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   starts no front end and creates no trace file. `AGENTICA_FLUSH_TIMEOUT_MS` and
   `AGENTICA_SCHEDULERS` are checked before the front end runs, as `agentica run`
   checks them at its start. The front end has no step limit, no standard input
-  (a read gives EOF, so the program keeps the real one) and no channel to a
-  parent process; it has `--allow-run`, because `agentica test` starts the
+  stream (`IO.gets` gives EOF, so the program keeps the real one; only
+  `FrontEnd.stdin_bytes` reads it) and no channel to a parent process; it has `--allow-run`, because `agentica test` starts the
   runner (the user's program never runs in that runtime). If it calls
   `FrontEnd.hand_off` and its run ends with status 0, C retires that runtime:
   the same steps as the end of any run (`agc_launch_settle`: children stopped,
@@ -319,16 +320,23 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   process, so its result is kept in `agc_launch` for both runtimes.
 - **The guarded builtins.** `FrontEnd.hand_off(program: List[Int], options:
   List[String], arguments: List[String]) -> Result[Void]` and
-  `FrontEnd.std_source(path: String) -> Result[String]` (`vm/front_end.c`, in
-  the table list after `Test`). The driver sets `rt->front_end` (an
-  `agc_front_end`) only for the front end it loads itself. Without it, in a user
-  program or in a front end run by `agentica run`, both fail with
+  `FrontEnd.std_source(path: String) -> Result[String]` and
+  `FrontEnd.stdin_bytes() -> Result[List[Int]]` (`vm/front_end.c`, in the table
+  list after `Test`). The driver sets `rt->front_end` (an `agc_front_end`) only
+  for the front end it loads itself. Without it, in a user program or in a front
+  end run by `agentica run`, all three fail with
   `RUNTIME-FRONT-END-ONLY` at the call. `hand_off` copies the bytes (at most
   256 MiB, each 0 to 255) and the words (no character 0) into GC memory,
   records them in the `agc_front_end`, and ends the run with `agc_exit(vm, 0)`;
   it returns an error for a bad byte or word and never for an option, which the
   driver reads after the run. `std_source` returns the text of the embedded
   file at that path in `stdlib/` (`queue.agc`, `bdd/gherkin.agc`), or an error.
+  `stdin_bytes` is the only way the front end gets standard input. The first
+  call reads the real descriptor to its end (blocking, at most 16 MiB; one byte
+  more is an error), and the `agc_front_end` keeps the bytes or the error for
+  the next calls. C reads it on the call, not before the front end starts, so a
+  command that does not call it (`agentica FILE.agc`) leaves standard input to
+  the program.
 - **The loader.** `agc_load_front_end` is `agc_load_traced` without the check of
   the Agentica version in the header (the format version and every other check
   stay). Only `vm/agentica.c` calls it, for the front end; the program that the

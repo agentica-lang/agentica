@@ -1,8 +1,10 @@
 # A front end for tests/test_single_binary.py, run as `agentica --front-end front.agcb WORDS...`. It calls the
-# two FrontEnd builtins directly, so the test sees what the C side does with them.
+# FrontEnd builtins directly, so the test sees what the C side does with them.
 #
 #   inputs               prints the arguments the binary gave it, joined with spaces
 #   std PATH             prints the std/ source at PATH of stdlib/, or the error
+#   stdin                prints the number of bytes of standard input and their sum, or the error, then does it
+#                        again to show that the second call gives the same answer
 #   hand-off FILE.agcb [OPTIONS... -- ARGUMENTS...]
 #                        hands the program in FILE to the VM with the options and the arguments
 #   crash                stops with a runtime error, as the driver of `agentica test` could
@@ -27,6 +29,9 @@ def main() -> Void
     puts(System.args().join(" "))
   elsif words[0] == "std"
     shown(FrontEnd.std_source(words[1]))
+  elsif words[0] == "stdin"
+    shown_stdin(FrontEnd.stdin_bytes())
+    shown_stdin(FrontEnd.stdin_bytes())
   elsif words[0] == "hand-off"
     hand_off(words[1], words.drop(2))
   elsif words[0] == "crash"
@@ -45,6 +50,14 @@ end
 def shown(result: Result[String]) -> Void
   if result.ok?
     IO.print(result.unwrap!)
+  else
+    puts("error: #{result.message}")
+  end
+end
+
+def shown_stdin(result: Result[List[Int]]) -> Void
+  if result.ok?
+    puts("#{result.unwrap!.size} bytes, sum #{result.unwrap!.sum()}")
   else
     puts("error: #{result.message}")
   end

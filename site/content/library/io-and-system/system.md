@@ -116,7 +116,7 @@ true
 
 ## FrontEnd
 
-`FrontEnd.hand_off` and `FrontEnd.std_source` belong to the front end of the `agentica` binary. That binary compiles a program and hands it to the VM. They are not for your programs: a program that calls them stops with `RUNTIME-FRONT-END-ONLY`.
+`FrontEnd.hand_off`, `FrontEnd.std_source` and `FrontEnd.stdin_bytes` belong to the front end of the `agentica` binary. That binary compiles a program and hands it to the VM. They are not for your programs: a program that calls them stops with `RUNTIME-FRONT-END-ONLY`.
 
 ## Time.now_ms
 

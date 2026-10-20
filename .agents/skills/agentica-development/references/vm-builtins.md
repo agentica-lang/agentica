@@ -10,8 +10,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    (today only the `VM_BUILTINS` keys `puts`, `IO.print`, `IO.warn`,
    `IO.inspect`, `IO.gets`, `IO.gets!`, `IO.read`, `IO.read_bytes`, `IO.flush`,
    `IO.eof?`, `System.args`, `System.exit`, `System.env`, `System.pid`,
-   `FrontEnd.hand_off`, `FrontEnd.std_source`, `String.from_int`,
-   `String.from_float`, `ok` (arities 0 and 1), `error`, `Result.ok?`,
+   `FrontEnd.hand_off`, `FrontEnd.std_source`, `FrontEnd.stdin_bytes`,
+   `String.from_int`, `String.from_float`, `ok` (arities 0 and 1), `error`, `Result.ok?`,
    `Result.unwrap!`, `Result.unwrap_or`, `Result.message`, the callback builtins
    `List.map`, `List.filter`, `List.reduce`, `List.each`, `List.any?`,
    `List.all?` and `List.sort_by`, and the range builtins `Range.size`,

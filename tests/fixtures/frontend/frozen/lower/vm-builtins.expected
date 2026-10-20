@@ -30,6 +30,7 @@ Float.to_int
 Float.to_int!
 FrontEnd.hand_off
 FrontEnd.std_source
+FrontEnd.stdin_bytes
 HttpWire.accept
 HttpWire.awaited?
 HttpWire.chunk

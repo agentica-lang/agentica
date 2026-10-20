@@ -264,13 +264,22 @@ typedef struct {
 #define AGC_FRONT_END_MAX_OPTIONS 64
 #define AGC_FRONT_END_MAX_ARGUMENTS 1048576
 
+/* The most bytes of standard input that FrontEnd.stdin_bytes takes. The front end holds them as a List of Int, 16
+ * bytes a byte, so the cap is far below a source file the loader would accept (AGC_MAX_FILE_BYTES). */
+#define AGC_FRONT_END_MAX_STDIN ((size_t)16 * 1024 * 1024)
+
 /* What the front end (the compiler that the binary loads from its own data) shares with the driver: the std/ sources
- * it may read, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
+ * it may read, the standard input it asked for, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
  * it; a user program runs in a runtime without one. The hand-off fields are GC memory the driver reads after the
  * front end's run ends. Design: docs/vm/08-loader-and-cli.md. */
 typedef struct {
   const agc_std_source *std;
   size_t std_count;
+  /* The standard input, read whole by the first FrontEnd.stdin_bytes: the bytes (GC memory), or why it failed. */
+  bool stdin_read;
+  uint8_t *stdin_data;
+  size_t stdin_len;
+  const char *stdin_error;
   bool handed;
   uint8_t *program;
   size_t program_len;
