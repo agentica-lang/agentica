@@ -48,8 +48,9 @@ end
 
 
 # Windows has named pipes where POSIX has FIFOs, but these tests make FIFOs with os.mkfifo (issue 433); it has no
-# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (issue 435); a stdin read there can keep a
-# pool thread (issue 431, docs/vm/10-io-scheduler.md).
+# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (test_windows_handle_counts.py lists its
+# pipes and counts its handles instead); a stdin read there can keep a pool thread (issue 431,
+# docs/vm/10-io-scheduler.md).
 no_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
 no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
 no_stdin_path = host_only(WINDOWS, "Windows has no path that names an inherited descriptor or the standard input (/proc/self/fd/N, /dev/stdin)")
@@ -438,7 +439,7 @@ end
     assert (code, output) == (0, 'ok()\nok("x")\n'), errors
 
 
-@known_issue(WINDOWS, 435, "the descriptors of the VM are listed in a folder that Windows does not have")
+@host_only(WINDOWS, "the VM's pipes are reopened through the folder of its descriptors; Windows has none (test_file_calls_cannot_name_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock in test_windows_handle_counts.py lists its pipes)")
 def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(new_dir, run_vm_bounded):
     root = new_dir()
     code, output, errors = run_vm_bounded(root, r"""def main() -> Void
