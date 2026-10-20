@@ -44,7 +44,8 @@ size_t agc_tls_trust_system(struct x509_store_st *store) {
    * free (Microsoft Learn, CertEnumCertificatesInStore). */
   PCCERT_CONTEXT cert = NULL;
   while ((cert = CertEnumCertificatesInStore(root, cert)) != NULL) {
-    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || cert->cbCertEncoded > LONG_MAX || !server_auth(cert)) continue;
+    if (!(cert->dwCertEncodingType & X509_ASN_ENCODING) || cert->cbCertEncoded > LONG_MAX || !server_auth(cert))
+      continue;
     const unsigned char *der = cert->pbCertEncoded;
     X509 *x = d2i_X509(NULL, &der, (long)cert->cbCertEncoded);
     if (x && X509_STORE_add_cert(store, x) == 1) added++;

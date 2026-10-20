@@ -49,11 +49,11 @@ static bool tls_policy(CFDictionaryRef d) {
   return ssl;
 }
 
-/* The verdict of a certificate's trust settings for TLS server authentication (Apple, SecTrustSettingsCopyTrustSettings).
- * An empty array means "always trust" as a root. A dictionary applies when its policy is TLS. One that also limits
- * the trust to an application, a host name or a key use counts only when it denies, so a narrow grant never becomes
- * a general root and a narrow denial still removes the root. A missing result means TrustRoot; Unspecified gives no
- * verdict. A denial wins over a grant. */
+/* The verdict of a certificate's trust settings for TLS server authentication (Apple documentation of
+ * SecTrustSettingsCopyTrustSettings). An empty array means "always trust" as a root. A dictionary applies when its
+ * policy is TLS. One that also limits the trust to an application, a host name or a key use counts only when it
+ * denies, so a narrow grant never becomes a general root and a narrow denial still removes the root. A missing
+ * result means TrustRoot; Unspecified gives no verdict. A denial wins over a grant. */
 static verdict tls_verdict(CFArrayRef settings) {
   CFIndex n = CFArrayGetCount(settings);
   if (n == 0) return TRUSTED;
@@ -63,14 +63,15 @@ static verdict tls_verdict(CFArrayRef settings) {
     if (!item || CFGetTypeID(item) != CFDictionaryGetTypeID()) continue;
     CFDictionaryRef d = (CFDictionaryRef)item;
     if (!tls_policy(d)) continue;
-    SInt32 result = kSecTrustSettingsResultTrustRoot, use = 0;
-    if (CFDictionaryContainsKey(d, kSecTrustSettingsResult) && !number_is(d, kSecTrustSettingsResult, &result)) continue;
-    if (result == kSecTrustSettingsResultDeny) return DENIED;
+    SInt32 result = (SInt32)kSecTrustSettingsResultTrustRoot, use = 0;
+    if (CFDictionaryContainsKey(d, kSecTrustSettingsResult) && !number_is(d, kSecTrustSettingsResult, &result))
+      continue;
+    if (result == (SInt32)kSecTrustSettingsResultDeny) return DENIED;
     bool narrow = CFDictionaryContainsKey(d, kSecTrustSettingsApplication) ||
                   CFDictionaryContainsKey(d, kSecTrustSettingsPolicyString) ||
                   (number_is(d, kSecTrustSettingsKeyUsage, &use) && use != (SInt32)kSecTrustSettingsKeyUseAny);
-    if (!narrow && (result == kSecTrustSettingsResultTrustRoot || result == kSecTrustSettingsResultTrustAsRoot))
-      v = TRUSTED;
+    bool grant = result == (SInt32)kSecTrustSettingsResultTrustRoot || result == (SInt32)kSecTrustSettingsResultTrustAsRoot;
+    if (grant && !narrow) v = TRUSTED;
   }
   return v;
 }
