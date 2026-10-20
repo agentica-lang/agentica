@@ -3978,6 +3978,99 @@
       "code": "CHECK-REDEFINED-NAME"
     }
   ],
+  "Task.cancel takes a task of any result type and gives Void": [
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  Task.cancel(t)",
+        "  Task.cancel(Task.spawn(&twice, 2))",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  Task.cancel(7)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [7, 15],
+      "covers": "7",
+      "expected": "Task[R]",
+      "actual": "Int"
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  ch: Channel[Int] = Channel.new(1)",
+        "  Task.cancel(ch)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [8, 15],
+      "covers": "ch",
+      "expected": "Task[R]",
+      "actual": "Channel[Int]"
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  done = Task.cancel(t)",
+        "end"
+      ],
+      "code": "CHECK-VOID-VALUE",
+      "start": [7, 10]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  Task.cancel(t, 1)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [7, 3]
+    },
+    {
+      "program": [
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  t = Task.spawn(&twice, 1)",
+        "  t.cancel",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-METHOD",
+      "start": [7, 3]
+    }
+  ],
   "foreign generator, agent, lock and queue names show the Agentica form": [
     {
       "program": [

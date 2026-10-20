@@ -132,13 +132,12 @@ reason here.
 **Rule.** One way: `agc_task_cancel` (20b's core, §10.2.1, Cancellation). It
 knows every place a task can park (§14.1) and takes the task out of each one. A
 new kind of wait adds its case to `agc_task_cancel` and to
-`vm/tests/task_cancel_test.c` in the same PR. A crash (cancellation) and
-`Test.run`'s
-leftovers (a test's tasks) cancel through it. Nothing else cancels a wait. A
-timer, a
-job's completion and a crash also unlink a task, but they end a wait; they do
-not cancel one. `unlink_task` takes a cancelled task out of every wait,
-its timer included (`agc_timers_disarm`).
+`vm/tests/task_cancel_test.c` in the same PR. A crash (cancellation),
+`Test.run`'s leftovers (a test's tasks) and the public `Task.cancel` cancel
+through it. Nothing else cancels a wait. A timer, a job's completion and a crash
+also unlink a task, but they end a wait; they do not cancel one. `unlink_task`
+takes a cancelled task out of every wait, its timer included
+(`agc_timers_disarm`).
 
 A task cancelled from another scheduler finishes its turn first (§10.2.3), after
 the cancel walk over its descendants. A task it spawns in that turn starts

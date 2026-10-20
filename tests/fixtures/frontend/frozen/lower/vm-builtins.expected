@@ -211,6 +211,7 @@ TLS.connect
 TLS.listen
 Task.await
 Task.await_result
+Task.cancel
 Task.map
 Task.pending_count
 Task.sleep

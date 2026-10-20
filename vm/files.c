@@ -13,6 +13,10 @@
 #include "services.h"
 #include "file_io.h"
 
+/* The bounds of buffer_bytes (File.each_line, File.foreach), on every platform: the stub below reads them too. */
+#define MIN_LINE_BUFFER ((int64_t)1024)
+#define MAX_LINE_BUFFER ((int64_t)16777216)
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #ifndef _WIN32
 #include <dirent.h>
@@ -42,8 +46,6 @@
 #define FORM_WIDTH 256
 #define CHUNK ((size_t)65536)
 #define WRITE_BUFFER ((size_t)4096)
-#define MIN_LINE_BUFFER ((int64_t)1024)
-#define MAX_LINE_BUFFER ((int64_t)16777216)
 #define NO_DEADLINE ((int64_t)-1)
 
 typedef enum {
@@ -2007,7 +2009,9 @@ void agc_files_forget(agc_file_ids *ids, int fd) {
 
 void agc_files_close(agc_vm *vm) { (void)vm; }
 
-bool agc_lines_buffer_ok(int64_t buffer_bytes) { return buffer_bytes >= 1024 && buffer_bytes <= 16777216; }
+bool agc_lines_buffer_ok(int64_t buffer_bytes) {
+  return buffer_bytes >= MIN_LINE_BUFFER && buffer_bytes <= MAX_LINE_BUFFER;
+}
 
 agc_line_reader *agc_lines_new(agc_vm *vm, agc_value path, int64_t buffer_bytes, int64_t timeout, uint32_t span) {
   (void)path;

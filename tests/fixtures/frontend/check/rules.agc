@@ -30,6 +30,7 @@ def main() -> Void
   puts(JSON.schema(Reading))
   task = Task.spawn(&square, 4)
   puts(Task.await(task))
+  Task.cancel(task)
   doubled = Task.map([1, 2], 2, 100) do |n|
     twice_n = try twice(n)
     ok(twice_n + 1)

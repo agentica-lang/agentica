@@ -205,7 +205,8 @@ Read only what the task needs:
 - `references/files.md`: files, directories, paths, locks, private files,
   removing or renaming paths or trees.
 - `references/processes.md`: starting programs (`Process`).
-- `references/tasks.md`: concurrency, `Task.map`, timed awaits, `Channel`.
+- `references/tasks.md`: concurrency, `Task.map`, timed awaits, `Task.cancel`,
+  `Channel`.
 - `references/binary.md`: packing or unpacking bytes (`std/binary`).
 - `references/logger.md`: levels, fields, handlers (`std/logger`).
 - `references/network.md`: TCP, TLS, HTTP client or server.
