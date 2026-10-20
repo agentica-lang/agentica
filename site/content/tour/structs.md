@@ -6,8 +6,7 @@ description: Declare records with typed fields, build them, read their fields an
 
 ## Declare a struct
 
-A struct is a record with named, typed fields. Declare it at the top of the
-file.
+A struct is a record with named, typed fields. Declare it at the top of the file.
 
 ```agentica
 struct User
@@ -60,7 +59,7 @@ end
 
 ## Change a field
 
-Fields cannot be assigned. `value.with(...)` is a copy of the struct with some fields changed, and the original stays as it was. Name each field you change, with a value of the field's type:
+Fields cannot be assigned. `value.with(...)` copies the struct with the named fields changed. The original stays as it was.
 
 ```agentica
 struct Account
@@ -85,7 +84,7 @@ Account(owner: "Bob", balance: 15)
 Account(owner: "Bob", balance: 10)
 ```
 
-Change several fields at once, in any order. Every value is computed from the struct as it was before the update, so two fields can swap:
+Every value is computed from the struct before the update, so fields can swap:
 
 ```agentica
 struct Pair
@@ -107,7 +106,7 @@ Pair(left: 2, right: 1, label: "p")
 Pair(left: 0, right: 2, label: "q")
 ```
 
-To change a field of a struct inside a struct, update both levels. Updates also chain:
+For a field inside a struct, update both levels. Updates chain:
 
 ```agentica
 struct Address
@@ -133,7 +132,7 @@ User(name: "Ana", address: Address(city: "Lima", zip: 8))
 User(name: "Bea", address: Address(city: "Quito", zip: 1))
 ```
 
-A function that loops by calling itself can carry its state in a struct and change only what moves:
+A recursive function can carry its state in a struct:
 
 ```agentica
 struct Scan
@@ -159,7 +158,7 @@ end
 4999950000
 ```
 
-`with` needs at least one field, each by name and only once, and a field the struct has:
+`with` needs at least one field. Each must be named, appear once and exist in the struct:
 
 ```agentica {expect="PARSE-UNEXPECTED-TOKEN"}
 struct Point
@@ -197,7 +196,7 @@ def main() -> Void
 end
 ```
 
-A bare `p.with(x: 2)` changes nothing, because values never change, so it is `CHECK-UNUSED-VALUE`. Assign the result: `p = p.with(x: 2)`.
+A bare `p.with(x: 2)` changes nothing, so it is `CHECK-UNUSED-VALUE`. Assign the result: `p = p.with(x: 2)`.
 
 ```agentica {expect="CHECK-UNUSED-VALUE"}
 struct Point
@@ -211,7 +210,7 @@ def main() -> Void
 end
 ```
 
-`with` is not a reserved word. It only means the update after a `.` and before `(`, so a struct can still have a field named `with` (a function-typed field of that name is `CHECK-REDEFINED-NAME`).
+`with` is not reserved: a struct can have a field named `with`, unless that field is a function (`CHECK-REDEFINED-NAME`).
 
 ## Structs in structs and lists
 
@@ -241,7 +240,7 @@ order 7: 8
 
 ## No methods
 
-Structs have fields only. A field can be named `to_s`: `b.to_s` then reads the field, not the text form of `b`. Write functions that take the struct:
+Structs have fields only. A field named `to_s` shadows the text form, so write functions that take the struct:
 
 ```agentica
 struct Rect

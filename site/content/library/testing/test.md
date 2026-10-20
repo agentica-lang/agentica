@@ -4,7 +4,7 @@ weight: 1
 description: Unit tests in the style of ExUnit, with assertions that return a Result.
 ---
 
-`Test` is a builtin module for unit tests; it needs no import. A test file is a program whose `main` calls `Test.run` with a list of tests. Each test is a block that returns `Result[Void]`, and each assertion returns `Result[Void]` too, so `try` stops a test at its first failed assertion. Agentica has no exceptions.
+`Test` is a builtin module for unit tests; it needs no import. A test file is a program whose `main` calls `Test.run` with a list of tests. Each test returns `Result[Void]`, and so does each assertion, so `try` stops a test at its first failed assertion. Agentica has no exceptions.
 
 ```agentica {mode="check"}
 def parse_port(text: String) -> Result[Int]
@@ -39,7 +39,7 @@ end
 Test.test(name: String, body: Fn[Result[Void]]) -> TestCase
 ```
 
-Builds a test from a name and a block. A `TestCase` has no fields; it keeps the name, the block and the place of the `Test.test` call, which is where the test is reported. Names must not be empty and must be different within a file, or `Test.run` fails with `RUNTIME-TEST-NAME` at that `Test.test` call.
+Builds a test from a name and a block. A `TestCase` keeps the name, the block and the place of the call, which is where the test is reported. Names must not be empty and must be unique within a file; otherwise `Test.run` fails with `RUNTIME-TEST-NAME` at that call.
 
 ## Test.run
 
@@ -47,19 +47,28 @@ Builds a test from a name and a block. A `TestCase` has no fields; it keeps the 
 Test.run(tests: List[TestCase]) -> Void
 ```
 
-Serves the test runner and never returns. Call it from `main` itself: in any other task, a test or a task you spawned, it fails with `RUNTIME-TEST-RUN`. Under `agentica test` the runner talks to the file on a channel of its own (see [Process](/library/io-and-system/process/)), so the test's standard input and standard output are its own: `IO.gets` returns the end-of-input error, and anything a test prints, even a line that looks like a record, is only output, shown under a failed test. The channel belongs to `Test.run`: a test or step that calls `Process.parent_read_line` or `Process.parent_send` can break the protocol, and nothing stops it. A file that calls `Test.run` with the `agentica test` arguments but without that channel fails with `RUNTIME-TEST-RUN`. Each test runs in its own task, so a test that crashes fails alone and the next test still runs. Running the file as a normal program prints `run this file with agentica test` on stderr and exits 2. Name the file `*_test.agc` and run it with `agentica test`, which finds test files in `test/` by default, next to `.feature` files, and writes one report: `PASS file / name`, or `FAIL file / name` with the diagnostic and, indented below it, what the test printed. Each test has 30 seconds (`RUNTIME-TEST-TIMEOUT`); a test that exits, passes its step limit or times out ends the file's run, and the tests after it are reported as `NOT RUN`. A file that exits, crashes or never calls `Test.run` before its tests run is a file error that shows what it printed. A test that times out keeps what it printed, up to the 1 MiB limit. A test that prints more than 1 MiB fails at once with `RUNTIME-BDD-OUTPUT-LIMIT`, even when it never ends, and then shows no output. `--only TEXT` runs the tests whose name contains `TEXT`.
+Serves the test runner and never returns. Call it from `main` itself: in any other task it fails with `RUNTIME-TEST-RUN`.
 
-A test fails, in this order, with:
+Under `agentica test`, the runner talks to the file on a channel of its own (see [Process](/library/io-and-system/process/)). A test's standard input and output are its own: `IO.gets` returns the end-of-input error, and anything the test prints, even a line that looks like a record, is only output, shown under a failed test. A test must not call `Process.parent_read_line` or `Process.parent_send`; they belong to the runner, and nothing stops a test from breaking the protocol. A file that calls `Test.run` with the `agentica test` arguments but without that channel fails with `RUNTIME-TEST-RUN`.
 
-- the crash of its task (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-UNWRAP-ERROR`, ...), at the place of the crash; the report shows the call stack of the crash under the diagnostic (`stack` in `--json`), as a halt in a normal program does;
-- its first failed assertion (`RUNTIME-TEST-ASSERTION`), at that assertion, with its expected and actual values;
+- Name the file `*_test.agc`. `agentica test` finds such files in `test/` by default and prints one line per test: `PASS file / name`, or `FAIL file / name` with the diagnostic and the output of the test below it.
+- Each test runs in its own task, so a crash fails only that test. Each test has 30 seconds (`RUNTIME-TEST-TIMEOUT`). A test that exits, hits its step limit or times out ends the file's run, and the tests after it are `NOT RUN`.
+- A file that exits, crashes or never calls `Test.run` is a file error that shows what it printed.
+- A test that times out keeps the output it printed, up to 1 MiB. A test that prints more than 1 MiB fails at once with `RUNTIME-BDD-OUTPUT-LIMIT`, even if it never ends, and shows no output.
+- Run as a normal program, the file prints `run this file with agentica test` on stderr and exits 2.
+- `--only TEXT` runs the tests whose name contains `TEXT`.
+
+A test fails with the first of these that applies:
+
+- the crash of its task (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-UNWRAP-ERROR`, ...), at the crash; the report shows the call stack, as a normal halt does;
+- its first failed assertion (`RUNTIME-TEST-ASSERTION`), with the expected and actual values;
 - the `error(message)` its block returned (`RUNTIME-TEST-ERROR`), at the test;
-- tasks it started and left running (`RUNTIME-TEST-PENDING-TASKS`); they are stopped before the next test;
-- a task it started that crashed and was not awaited (`RUNTIME-TASK-CRASHED`, with the crash text).
+- tasks it started and left running (`RUNTIME-TEST-PENDING-TASKS`), which are stopped before the next test;
+- a crash of a task it started that no await observed (`RUNTIME-TASK-CRASHED`).
 
-A crash outside every test, such as one in a task that `main` started, that nothing awaited fails the whole file.
+A crash outside every test, such as one in a task that `main` started and nothing awaited, fails the whole file.
 
-Each test gets its own random generator, seeded from the run's seed and the test's name, so a test sees the same `Random` values whether it runs alone or with the others.
+Each test gets its own random generator, seeded from the run's seed and the test's name, so a test sees the same `Random` values alone or with the others.
 
 ## Test.eq
 
@@ -67,7 +76,9 @@ Each test gets its own random generator, seeded from the run's seed and the test
 Test.eq(actual: T, expected: T) -> Result[Void]
 ```
 
-Compares two values of the same type. The type comes from the first argument, the actual value, so put it first: `Test.eq(r, error("x"))` works, while `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`, since `error("x")` alone does not say what its `ok` type is. The type must have equality: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Maps are equal in any key order, and a `Json` compares as its JSON text with sorted keys. When the values differ, the test reports `values are not equal` and the error shows both in the `inspect` form, with any `Json` as its JSON text.
+Compares two values of the same type. The type comes from the first argument, so put the actual value first: `Test.eq(r, error("x"))` works, but `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`, since `error("x")` does not say what its `ok` type is. The type must have equality: numbers, `Bool`, `String`, `nil`, ranges, `Json`, and lists, maps, Results, structs and enums made of them. Functions, tasks, handles and two different types are `CHECK-TYPE-MISMATCH`. Maps are equal in any key order, and a `Json` compares as its JSON text with sorted keys.
+
+When the values differ, the test reports `values are not equal`, and the error shows both values in the `inspect` form (a `Json` as its JSON text).
 
 ```agentica
 struct Point
@@ -88,7 +99,7 @@ ok()
 error("expected [1, 3]; actual [1, 2]")
 ```
 
-A failed assertion also counts against the test it runs in, even when its result is not used, so `Test.eq(a, b)` as a statement still fails the test. Outside a test, an assertion only returns its result.
+A failed assertion counts against the test it runs in, even when its result is not used, so `Test.eq(a, b)` as a statement still fails the test. Outside a test, an assertion only returns its result.
 
 ## Test.ok?
 

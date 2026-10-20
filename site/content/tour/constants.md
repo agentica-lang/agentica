@@ -21,7 +21,7 @@ end
 hello: 86400
 ```
 
-The name is capital letters, digits and `_`, at least two characters (`LIMIT`, `MAX_DEPTH`). Another spelling is `PARSE-CONSTANT-NAME`, and the help says which name to use:
+A name is capital letters, digits and `_`, at least two characters (`LIMIT`, `MAX_DEPTH`). Another spelling is `PARSE-CONSTANT-NAME`:
 
 ```agentica {expect="PARSE-CONSTANT-NAME"}
 MaxDepth = 8
@@ -31,7 +31,8 @@ def main() -> Void
 end
 ```
 
-Constants come right after the imports of a file, before types and functions. Constants follow each other with no blank line between them. A type can be written as in a binding (`RATIO: Float = 1.5`), which also gives `[]` and `{}` their type.
+- Constants come after the imports and before types and functions, with no blank line between them.
+- Give a type as in a binding (`RATIO: Float = 1.5`). It also types `[]` and `{}`.
 
 ## Build a table once
 
@@ -59,11 +60,14 @@ end
 fruit drink
 ```
 
-A constant is a value, so everything that works on a value works on it: `PRICES.get(...)`, `PRICES["tea"]`, `FRUITS.size`, `"#{PRICES}"`. A constant may read another one, declared above or below it. A loop (`A` reads `B` and `B` reads `A`) is `CHECK-CONSTANT-CYCLE`.
+- A constant works like any value: `PRICES.get(...)`, `PRICES["tea"]`, `FRUITS.size`.
+- A constant may read another one, above or below it. A loop is `CHECK-CONSTANT-CYCLE`.
 
 ## When a constant is built
 
-A literal such as `WIDTH = 8` is part of the program. Any other constant is built once, before `main` starts, and only if some function that `main` can reach reads it. A constant that nothing reads never runs, so it can never fail. If an initializer fails, the program stops before `main` prints anything:
+- A literal such as `WIDTH = 8` is part of the program.
+- Any other constant is built once, before `main`, and only if a function that `main` can reach reads it. An unread constant never runs.
+- If an initializer fails, the program stops before `main` prints anything:
 
 ```agentica {expect="RUNTIME-INDEX-OUT-OF-RANGE"}
 BAD = [1][5]
@@ -78,7 +82,8 @@ The stack trace names `BAD`.
 
 ## What a constant may hold
 
-The value is built from literals, lists, maps, sets, struct and enum values, operators, other constants and builtins that have no effects (`Set.new`, `map`, `reduce`, `keys` and the rest). A call of one of your own functions, a function value, a `while` loop and a builtin that reads or writes the world are `CHECK-CONSTANT-EXPRESSION`:
+- It may hold literals, lists, maps, sets, struct and enum values, operators, other constants and builtins without effects (`Set.new`, `map`, `reduce`, ...).
+- A call of your own function, a function value, a `while` loop or a builtin that reads or writes the world is `CHECK-CONSTANT-EXPRESSION`:
 
 ```agentica {expect="CHECK-CONSTANT-EXPRESSION"}
 LINE = IO.gets!()
@@ -88,7 +93,8 @@ def main() -> Void
 end
 ```
 
-The value has a data type: numbers, text, lists, maps, sets, ranges, `Result`, structs and enums of those. A channel, a task or a function is `CHECK-CONSTANT-TYPE`. Nothing assigns to a constant, so `LIMIT = 2` inside a function is `PARSE-INVALID-ASSIGNMENT-TARGET`.
+- Its type is numbers, text, lists, maps, sets, ranges, `Result`, or structs and enums of those. A channel, task or function is `CHECK-CONSTANT-TYPE`.
+- Nothing assigns to a constant: `LIMIT = 2` in a function is `PARSE-INVALID-ASSIGNMENT-TARGET`.
 
 ## Share a constant between files
 
@@ -113,4 +119,4 @@ end
 2
 ```
 
-A renamed constant is renamed to another constant name. A constant is not reached through the alias: `Limits.MAX` is `CHECK-IMPORT-NAME`, and the help says to write `import {MAX} from "limits"`.
+A constant is not reached through the alias: `Limits.MAX` is `CHECK-IMPORT-NAME`. Import the name instead: `import {MAX} from "limits"`.
