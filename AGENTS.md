@@ -125,9 +125,12 @@ phase 13).
 - Stages: each takes the previous stage's output and returns data or exactly
   one `diagnostic`; it stops at the first error, never prints, and never lets
   a runtime error of the front end escape: a failure is a diagnostic.
-- Pure core: the stage folders of `compiler/` (`syntax`, `modules`, `check`,
-  `catalog`, `lower`, `bytecode`, `diagnostics`) never call `File`, `Dir`,
-  `Path` (except `Path.join`), `System`, `Process` or `FrontEnd`. They reach the
+- Pure core: every folder of `compiler/` except `io/`, `app/`, `bdd/` and
+  `embedded/` (`syntax`, `modules`, `check`, `catalog`, `lower`, `bytecode`,
+  `diagnostics`) never calls `File`, `Dir`, `Path` (except `Path.join`),
+  `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`, `Time`,
+  `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or `puts`, and never
+  imports `io/`, `app/`, `bdd/` or an impure `std/` module. They reach the
   machine through the `Workspace` record (`modules/workspace.agc`), which
   `io/host.agc` builds and `app/` passes in. `app/`, `bdd/` and `io/` may do
   I/O. `tests/test_style_core_purity.py` enforces it.
