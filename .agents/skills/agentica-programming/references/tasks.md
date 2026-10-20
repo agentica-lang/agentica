@@ -263,6 +263,7 @@ Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 Channel.close(channel: Channel[T]) -> Void
 Channel.closed?(channel: Channel[T]) -> Bool
+Channel.lazy(channel: Channel[T], timeout_ms: Int) -> Lazy[T]   # references/lazy.md
 ```
 
 A channel is a bounded queue that tasks send values into and receive values
@@ -289,6 +290,10 @@ after it. Every call has a timeout: 0 never waits (it tries once), a negative
 value is RUNTIME-INVALID-DURATION at the argument, and there is no wait-forever
 value. Values come out in order, and waiting tasks are served in the order they
 started waiting.
+
+`ch.lazy(timeout_ms)` reads the channel as a `Lazy` until it is closed and
+drained, with steps and one terminal (`references/lazy.md`):
+`jobs.lazy(5000).filter do |n| n > 0 end.reduce(0) do |s, n| s + n end`.
 
 `closed?` is `true` once the channel is closed and every value was received, and
 then it stays `true`. After a `recv` error it tells the end of the stream

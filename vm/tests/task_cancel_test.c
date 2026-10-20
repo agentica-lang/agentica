@@ -821,9 +821,6 @@ static void test_self_cancel(void) { run_self(F_SELF, 0); }
 
 static void test_self_own(void) { run_self(F_OWN, 1); }
 
-/* A task spawns in the turn in which it was cancelled (#392): each child starts cancelled and never runs (F_MARK
-   would mark 7, or fail on the handle), the handed handle is closed once by the child's end, and the spawner stops
-   after the builtin as a self-cancel does. */
 /* A task awaits the child it spawned in the turn in which it was cancelled: the await fails, and the task ends as
    cancelled, with no crash recorded or printed (a flag set during the turn wins). */
 static void test_await_after_cancel(void) {
@@ -844,6 +841,9 @@ static void test_await_after_cancel(void) {
   assert(agc_io_close(&vm));
 }
 
+/* A task spawns in the turn in which it was cancelled (#392): each child starts cancelled and never runs (F_MARK
+   would mark 7, or fail on the handle), the handed handle is closed once by the child's end, and the spawner stops
+   after the builtin as a self-cancel does. */
 static void test_spawn_after_cancel(void) {
   prog p;
   new_prog(&p);

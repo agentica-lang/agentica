@@ -40,7 +40,10 @@ RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark
 # still pending),
 # which a run on several threads does not fix. channel-owner-ends counts on a yield (Task.sleep(0)) letting a task it
 # spawned send first; a spinning scheduler takes that task at once and runs it beside the yielder.
-ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning", "logger-tasks",
+# http-client-close-queued counts on the same yield: on another thread the new worker may connect before
+# close_client runs (the call still gets "http: client is closed", but the server sees a connection).
+ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning",
+         "http-client-close-queued", "logger-tasks",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
          "task-file-close", "tcp-tasks", "test-run-task"}
 # Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
@@ -235,6 +238,66 @@ def test_a_contended_channel_loses_and_repeats_no_value(tmp_path, repeats):
     for _ in range(repeats):
         result = vm(bytecode)
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % (6 * 500 * 501 // 2), "")
+
+
+LAZY_IO = """\
+def producer(ch: Channel[Int]) -> Void
+  for i in 1..500
+    Result.unwrap!(ch.send(i, 60000))
+  end
+end
+
+def consumer(ch: Channel[Int]) -> Int
+  return ch.lazy(60000).filter do |n| n > 0 end.reduce(0) do |sum, n| sum + n end.unwrap!
+end
+
+def lengths(path: String) -> Int
+  return File.foreach(path, 1024, 60000).map do |line| line.length end.reduce(0) do |sum, n| sum + n end.unwrap!
+end
+
+def main() -> Void
+  path = System.args()[0]
+  ch: Channel[Int] = Channel.new(4)
+  producers = (1..6).to_a.map do |k|
+    Task.spawn(&producer, ch)
+  end
+  consumers = (1..3).to_a.map do |k|
+    Task.spawn(&consumer, ch)
+  end
+  readers = (1..4).to_a.map do |k|
+    Task.spawn(&lengths, path)
+  end
+  for p in producers
+    Task.await(p)
+  end
+  ch.close
+  total = 0
+  for c in consumers
+    total = total + Task.await(c)
+  end
+  read = 0
+  for r in readers
+    read = read + Task.await(r)
+  end
+  puts(total)
+  puts(read)
+end
+"""
+
+
+# The steps of a terminal over a channel or a file park and touch channel and task lists, so they take rt->sync
+# (agc_stepper.unlocked is false for them): three ch.lazy consumers lose and repeat no value, and four File.foreach
+# readers each read the whole file, on four schedulers.
+@RACE
+def test_lazy_terminals_over_a_contended_channel_and_a_file_on_four_schedulers(tmp_path, repeats):
+    data = tmp_path / "lines.txt"
+    data.write_text("".join("line %d\n" % k for k in range(2000)), encoding="utf-8")
+    per_reader = sum(len("line %d" % k) for k in range(2000))
+    bytecode = program(tmp_path, "lazy_io", LAZY_IO)
+    for _ in range(repeats):
+        result = vm(bytecode, args=[str(data)])
+        expected = "%d\n%d\n" % (6 * 500 * 501 // 2, 4 * per_reader)
+        assert (result.code, result.stdout, result.stderr) == (0, expected, "")
 
 
 SLEEPERS = """\
