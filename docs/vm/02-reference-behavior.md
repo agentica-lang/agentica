@@ -332,11 +332,13 @@ Every failure is an error value. The checks run in this order:
   empty path or one with NUL gives the contract error of `File.stat`. A
   relative path starts at the VM's working directory. The result is decoded
   per byte like `Dir.list` names. The system's own rules show through: macOS
-  limits a path to 1024 bytes and accepts a `/` after a file; on Windows the
-  system drops `.` and `..` from the typed text before it follows a link (so
-  `link/..` is the folder of the link and `missing/..` is not an error), a name
-  under a file gives ENOENT, the result has a drive letter, and a path over 260
-  characters fails.
+  fails a path whose absolute form is 1024 bytes or more and accepts a `/` after
+  a file; on Windows the system drops `.` and `..` from the typed text before
+  it follows a link (so `link/..` is the folder of the link and `missing/..` is
+  not an error), a name under a file gives ENOENT, the result has the drive of
+  the working directory for `/`, and a path whose absolute form is 260
+  characters or more fails (the binary has no long-path manifest, so
+  `Dir.mkdir` of one fails too).
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2).

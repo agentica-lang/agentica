@@ -30,6 +30,9 @@ def main() -> Void
     long = long + "/" + name
     k += 1
   end
+  # Both lines change once agentica.exe has a longPathAware manifest, and then the answer depends on the
+  # LongPathsEnabled setting. Today the mkdir fails, so Path.real fails because the folder is missing;
+  # tests/test_filesystem.py makes the folder with a \\?\ prefix and asks Path.real for it.
   IO.inspect(Dir.mkdir(long, 60000).ok?)
   IO.inspect(Path.real(long).ok?)
 end

@@ -10,6 +10,7 @@ import errno
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -609,6 +610,7 @@ end
     assert 'ok("linked")' in output
 
 
+# The kind of link comes from the disk, so the order of `links` matters: a target must exist before a link to it.
 def symlink(target, path):
     """A link to `target`; Windows needs to know whether it points at a folder, and keeps the target as typed."""
     folder = os.path.isdir(os.path.join(os.path.dirname(path), target))
@@ -678,10 +680,24 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
         assert os_lines("real", overlong, cwd=root) == ["error", "error"]
 
 
-@host_only(WINDOWS, "files-real-windows.agc holds the Windows answer: a path over MAX_PATH cannot be made or resolved")
 def test_path_real_resolves_a_deep_folder_longer_than_a_small_buffer_where_the_system_allows_one(new_dir, os_lines,
                                                                                                 os_peer_lines):
     root = new_dir()
+    if WINDOWS:
+        # Windows fails a path whose absolute form is 260 characters or more (the binary has no long-path manifest).
+        # Python makes the folder with the \\?\ prefix, and the VM, given the plain path, cannot reach it.
+        prefix = "\\\\?\\"
+        first = str(root / ("d" * 100))
+        here = prefix + str(root)
+        try:
+            for _ in range(4):
+                here = here + "\\" + "d" * 100
+                os.mkdir(here)
+            seen = os_lines("real", [here[4:], first])
+            assert seen[0] == "error" and seen[1].startswith("ok:"), seen
+        finally:
+            shutil.rmtree(prefix + first, ignore_errors=True)
+        return
     deep = root.joinpath(*["d" * 100] * 30)
     if sys.platform == "darwin":
         # PATH_MAX is 1024 there, so the folder cannot exist and the answer is the error of a missing path.

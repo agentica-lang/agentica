@@ -303,8 +303,8 @@ Like POSIX `realpath`: the absolute path with every symbolic link resolved and `
 
 The system's own rules show through:
 
-- macOS limits a path to 1024 bytes and accepts a `/` after a file (`file/` gives the file); Linux and Windows give an error for it.
-- Windows removes `.` and `..` from the typed text before it follows a link, so `link/..` is the folder that holds the link and `missing/..` is not an error. A name under a file gives ENOENT, the result starts with a drive letter (`/` is `C:/`), and a path over 260 characters is an error.
+- macOS fails a path whose absolute form is 1024 bytes or more, and accepts a `/` after a file (`file/` gives the file); Linux and Windows give an error for it.
+- Windows removes `.` and `..` from the typed text before it follows a link, so `link/..` is the folder that holds the link and `missing/..` is not an error. A name under a file gives ENOENT, the result starts with a drive letter (`/` is the drive of the working directory, such as `C:/`). A path whose absolute form is 260 characters or more is an error, and so is `Dir.mkdir` of one, because the binary does not opt in to long paths.
 
 ```agentica
 def main() -> Void
