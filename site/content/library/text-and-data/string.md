@@ -4,8 +4,7 @@ weight: 1
 description: Functions for text. Each one is also a method on String values.
 ---
 
-Strings are Unicode text. Lengths and indexes count characters, not bytes.
-Every function here is also a method: `String.trim(s)` is `s.trim`.
+Strings are Unicode text. Lengths and indexes count characters, not bytes. Every function here is also a method: `String.trim(s)` is `s.trim`.
 
 ## Aliases
 
@@ -84,9 +83,7 @@ end
 String.split(s: String, separator: String) -> List[String]
 ```
 
-Cuts text at each separator. Every part is kept, even an empty one at either
-end or between two separators, so `join` with the same separator gives the text
-back. Empty text gives `[""]`. An empty separator gives the characters.
+Cuts text at each separator. Every part is kept, even an empty one at either end or between two separators, so `join` with the same separator gives the text back. Empty text gives `[""]`. An empty separator gives the characters.
 
 ```agentica
 def main() -> Void
@@ -175,8 +172,7 @@ a+b+c
 String.slice(s: String, start: Int, length: Int) -> String
 ```
 
-Gives `length` characters starting at `start`. A range outside the text stops
-the program.
+Gives `length` characters starting at `start`. A range outside the text stops the program.
 
 ```agentica
 def main() -> Void
@@ -251,8 +247,7 @@ String.code(c: String) -> Int
 String.from_code(n: Int) -> String
 ```
 
-`code` gives the Unicode number of a one-character string. `from_code` goes
-the other way.
+`code` gives the Unicode number of a one-character string. `from_code` goes the other way.
 
 ```agentica
 def main() -> Void
@@ -272,8 +267,7 @@ b
 String.compare(a: String, b: String) -> Int
 ```
 
-Gives `-1`, `0` or `1`, in the order `sort` uses: by code point, so `"B"` comes
-before `"a"`. It is also a method: `a.compare(b)`.
+Gives `-1`, `0` or `1`, in the order `sort` uses: by code point, so `"B"` comes before `"a"`. It is also a method: `a.compare(b)`.
 
 ```agentica
 def main() -> Void
@@ -340,8 +334,7 @@ String.to_int!(s: String) -> Int
 String.to_float!(s: String) -> Float
 ```
 
-Like `to_int` and `to_float`, but give the number itself and stop the program
-on bad text.
+Like `to_int` and `to_float`, but give the number itself and stop the program on bad text.
 
 ```agentica
 def main() -> Void

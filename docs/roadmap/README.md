@@ -487,18 +487,15 @@ after them may run in parallel when needed and keep their relative order.
 - **Order:** 9.1
   - **Next work:** JIT (7m, `docs/future/22-jit.md` §22): required; it comes
     after packages and the FFI
-    ([§40.5](../future/40-native-code.md#405-order)). It follows 7l and 7j, is
-    independent of 7i and of the multicore decision, and comes before multicore
-    (row 11), by the owner's decision of 2026-10-16
+    ([§40.5](../future/40-native-code.md#405-order)). It follows 7l and 7j.
+    JIT code must follow the multicore rules of row 11 (§16)
   - **Outcome:** Hot functions run as native code with the same results
 
 - **Order:** 11
-  - **Next work:** Multicore schedulers (7h item): started now, in parallel
-    with the other work, by the owner's decision of 2026-10-19 (it was after the
-    JIT (9.1) by the decision of 2026-10-16, and before that right after step
-    9); one I/O thread and N scheduler threads, in small PRs that keep N=1
-    unchanged. The front end is decided: self-hosting, in this table from row
-    7.2.7 on ([§18](../future/18-front-end-language.md))
+  - **Next work:** Multicore schedulers (7h item): **built behind a test
+    switch (2026-10-19/20)**: one I/O thread and N scheduler threads, HTTP
+    included (std/http). Still to do: run N > 1 without the switch, and the
+    remaining refused builtins (`docs/vm/16-architecture.md` §16.9)
   - **Outcome:** One I/O thread and N schedulers, N from `--schedulers`
 
 - **Order:** 10
@@ -526,7 +523,7 @@ after them may run in parallel when needed and keep their relative order.
     applications, faster lists (8d) and the VM `IO` library
     (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 6a, done)) goes before MCP;
     round 2 (concurrent programs) needs tasks on the VM (7h) and covers
-    multicore only if the multicore schedulers land (step 11)
+    multicore (row 11)
   - **Outcome:** Honest speed numbers against Ruby and Crystal, and the VM hot
     spots to fix next
 
@@ -570,11 +567,13 @@ PRs, not rows of this table. The release cut right after step 7b was 0.3.0,
 the last one with the Racket front end (owner decision, 2026-10-15).
 
 The owner set this order for the work after the bootstrap on 2026-10-15 and
-revised it on 2026-10-16 and on 2026-10-20 (packages before the FFI,
+revised it on 2026-10-16, 2026-10-19 (multicore moved ahead of the JIT) and
+2026-10-20 (packages before the FFI,
 [§40.5](../future/40-native-code.md#405-order)): the rows that waited for the
 bootstrap come first, then the path to the JIT (row 9.1, which should also speed
 up `agentica test`), and the other features after the JIT. The package system
-and the FFI sit on that path.
+and the FFI sit on that path. Multicore (row 11) and the native Windows and
+macOS releases were done ahead of this order.
 
 1. **Done (2026-10-16, PR #312)**: release 0.4.0, the first release with the
    single binary ([§18.3](../future/18-front-end-language.md#183-port)).
@@ -600,14 +599,11 @@ and the FFI sit on that path.
    §49: 49a done, then generic 49b), test functions without `main`
    (row 7.11, §50), and `Task.map` (**done**, 17a, PR #316).
 7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
-   7.7), the server measurement (row 9), the native Windows and macOS builds
-   (issue [#344](https://github.com/sonic182/agentica/issues/344), no row of
-   its own yet), the package system ([§45](../future/45-packages.md)), the FFI
-   and native module header
-   ([§40](../future/40-native-code.md)), then the JIT (row 9.1). Multicore
-   (row 11) comes after the JIT (owner, 2026-10-16), and the work stops before
-   it for the owner's review.
-8. After the JIT: multicore (row 11, above); the semantic CLI (row 7.2b,
+   7.7), the server measurement (row 9), the package system
+   ([§45](../future/45-packages.md)), the FFI and native module header
+   ([§40](../future/40-native-code.md)), then the JIT (row 9.1). The native
+   Windows and macOS builds are done (release 0.5.0-beta.1).
+8. After the JIT: the semantic CLI (row 7.2b,
    postponed by the owner on 2026-10-16); signals (row 7.8,
 [§46](../future/46-signals.md#46-signals),
    parts 46a to 46d; 46c also lets `agentica test` clean its run directory on

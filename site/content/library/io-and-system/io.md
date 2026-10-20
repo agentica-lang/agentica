@@ -5,11 +5,20 @@ description: Print to standard output and error, and read standard input.
 ---
 
 `puts`, `print`, `gets` and `gets!` can be called without the `IO.` prefix.
-On Linux, macOS and Windows, a print reaches a pipe or file without `IO.flush()`: the VM writes it as soon as the reader takes it. On other systems output is buffered, so call `IO.flush()` when another program waits for your output line by line.
 
-On Linux, macOS and Windows, a read from standard input waits without stopping other tasks. On other systems a read blocks the whole program until input arrives.
+On Linux, macOS and Windows:
 
-On Linux, macOS and Windows, writing to standard output or standard error also waits without stopping other tasks. Each stream keeps up to 64 KiB of output; when a pipe is full, the tasks that print wait their turn, in order, and the other tasks keep running. A print has no timeout, and the text of one print is never split by another print. Output on one stream keeps the order of the calls. When standard output and standard error go to the same terminal or file (for example with `2>&1`), they share one buffer, so `puts` and `IO.warn` appear in the order of the calls. On Windows two descriptors count as the same when they are the same handle object, for example one pipe given to both. When they go to different places, there is no order between them. A crash message from a task waits for room in the same way and is never put in the middle of a print. At the end of the run the program waits, within the flush limit, until the output has been written. On Windows, after a stop signal and for the last error messages, a pipe or console gets one wait of up to 200 ms in all to take what is left, so a reader that never reads cannot hold the exit. On other systems a write blocks the whole program until the reader takes it.
+- A print reaches a pipe or file without `IO.flush()`. The VM writes it as soon as the reader takes it.
+- Reads from standard input, and writes to standard output or error, wait without stopping other tasks.
+- Each stream keeps up to 64 KiB. When a pipe is full, the printing tasks wait their turn, in order.
+- A print has no timeout, and one print is never split by another. Each stream keeps the order of the calls.
+- Standard output and error that go to the same terminal or file (for example with `2>&1`) share one buffer, so `puts` and `IO.warn` keep their order.
+- On Windows, two descriptors are the same when they are the same handle object, such as one pipe given to both. Otherwise there is no order between them.
+- A crash message waits for room the same way, and is never put in the middle of a print.
+- At the end of the run, the program waits, within the flush limit, until the output is written.
+- On Windows, after a stop signal and for the last error messages, a pipe or console gets one wait of up to 200 ms in all. So a reader that never reads cannot hold the exit.
+
+On other systems, output is buffered, so call `IO.flush()` when another program waits for your output line by line. A read from standard input blocks the whole program until input arrives. A write to standard output or error blocks it until the reader takes the text.
 
 ## puts
 
@@ -18,8 +27,7 @@ puts(value: T) -> Void
 IO.puts(value: T) -> Void
 ```
 
-Prints a value and a new line. Strings print as they are; other values print
-as in interpolation.
+Prints a value and a new line. Strings print as they are. Other values print as in interpolation.
 
 ```agentica
 def main() -> Void
@@ -60,8 +68,7 @@ ab
 IO.warn(value: T) -> Void
 ```
 
-Prints a value and a new line to standard error, not standard output. Use it
-for logs.
+Prints a value and a new line to standard error, not standard output. Use it for logs.
 
 ```agentica
 def main() -> Void
@@ -80,7 +87,7 @@ this goes to stdout
 IO.inspect(value: T) -> T
 ```
 
-Prints the debug form of a value and gives the value back.
+Prints the debug form of a value, and gives the value back.
 
 ```agentica
 def main() -> Void
@@ -101,8 +108,7 @@ gets() -> Result[String]
 IO.gets() -> Result[String]
 ```
 
-Reads one line, without its line ending. At the end of input it gives an error
-Result. An empty line is `ok("")`.
+Reads one line, without its line ending. At the end of input it gives an error result. An empty line is `ok("")`.
 
 ```agentica
 def main() -> Void
@@ -129,8 +135,7 @@ gets!() -> String
 IO.gets!() -> String
 ```
 
-Reads one line and stops the program at the end of input. It can drop its
-parentheses.
+Reads one line. It stops the program at the end of input. It can drop its parentheses.
 
 ```agentica
 def main() -> Void
@@ -208,10 +213,9 @@ The last line ends with `\n`, so `split` gives an empty last part.
 IO.read_bytes(count: Int) -> Result[List[Int]]
 ```
 
-Reads up to `count` bytes, from 0 to 1048576. At the end of input it gives
-`ok([])`.
+Reads up to `count` bytes, from 0 to 1048576. At the end of input it gives `ok([])`.
 
-Text reads and byte reads share one input: bytes that one of them takes are not seen by the other.
+Text reads and byte reads share one input. Bytes that one of them takes are not seen by the other.
 
 ```agentica
 def main() -> Void
@@ -236,7 +240,7 @@ ok("hi")
 IO.flush() -> Void
 ```
 
-Sends buffered standard output now. On Linux, macOS and Windows the task waits until the output has reached the pipe or file, so it can wait when the reader is slow. It fails if the reader has gone away.
+Sends buffered standard output now. On Linux, macOS and Windows, the task waits until the output has reached the pipe or file. So it can wait when the reader is slow. It fails if the reader has gone away.
 
 ```agentica
 def main() -> Void

@@ -6,7 +6,7 @@ description: Levels, named handlers and text or JSON lines on stderr with std/lo
 
 `std/logger` is an Elixir-style logger written in Agentica. Import it with `import Logger from "std/logger"`. It has four levels, one global level, handlers that you attach and detach while the program runs, and fields on each call.
 
-The first call of any `Logger` function attaches a handler named `console` that writes text lines to stderr at level `info`. A program that only logs needs no setup.
+The first call of any `Logger` function attaches a handler named `console`. It writes text lines to stderr at level `info`. A program that only logs needs no setup.
 
 ## Levels
 
@@ -21,9 +21,14 @@ Logger.set_level(level: LogLevel) -> Void
 Logger.enabled?(level: LogLevel) -> Bool
 ```
 
-The levels are the builtin enum `LogLevel`: `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`. The function for the last level is `err`, because `error` is a reserved name; the output still says `error`. Each level has one function, and `fields` is optional: it defaults to `{}`, so `Logger.info("started")` and `Logger.info("request done", {"path": "/items"})` are both calls.
+- The levels are the builtin enum `LogLevel`: `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`.
+- The function for the last level is `err`, because `error` is reserved. The output still says `error`.
+- `fields` is optional and defaults to `{}`. So `Logger.info("started")` and `Logger.info("request done", {"path": "/items"})` are both calls.
+- The global level starts at `info`, and `set_level` changes it. Every call checks it first, and a call below it makes no event.
+- Each handler has its own level, and gets only the events at or above it.
+- `enabled?` is true only when the level is at or above the global level and some handler accepts it. Put a costly message inside an `if` on `enabled?`.
 
-The global level is `info` until `set_level` changes it, and every call checks it first: a call below it makes no event. Each handler also has its own level and gets only events at or above it. `enabled?` is true only if the level is at or above the global level and some attached handler would accept it, so a costly message belongs inside an `if`. In the example the console handler is at `info`, so `enabled?` is false for `debug` until a handler at `debug` is attached.
+In the example, the console handler is at `info`. So `enabled?` is false for `debug` until a handler at `debug` is attached.
 
 ```agentica
 import Logger from "std/logger"
@@ -59,9 +64,20 @@ Logger.detach(name: String) -> Result[Void]
 Logger.handlers() -> List[String]
 ```
 
-A handler is a function (`&Logger.stderr_json`) or a block that takes a `LogEvent`. A `LogEvent` has `level: LogLevel`, `message: String`, `fields: Map[String, String]`, `time_ms: Int` (when the event was made) and `task: Int` (the task that logged; `main` is 1). `attach` with a name in use and `detach` with a name not in use return an error.
+A handler is a function (such as `&Logger.stderr_json`) or a block. It takes a `LogEvent`, with these fields:
 
-Handlers run in the order they were attached, synchronously, in the task that logs, so a line is written when the log call returns. An event keeps the handlers it started with, so a handler that detaches another does not change the event in progress. A handler stays attached when the task that attached it ends. A handler error is the error of the task that logged.
+- `level: LogLevel`
+- `message: String`
+- `fields: Map[String, String]`
+- `time_ms: Int`: when the event was made
+- `task: Int`: the task that logged. `main` is 1
+
+`attach` with a name in use, and `detach` with a name not in use, return an error.
+
+- Handlers run in the order they were attached, synchronously, in the task that logs. So a line is written when the log call returns.
+- An event keeps the handlers it started with. A handler that detaches another does not change the event in progress.
+- A handler stays attached when the task that attached it ends.
+- A handler error is the error of the task that logged.
 
 ```agentica
 import Logger from "std/logger"
@@ -94,13 +110,12 @@ Logger.format_json(event: LogEvent) -> String
 Logger.time_text(ms: Int) -> String
 ```
 
-`stderr_text` and `stderr_json` are the built-in handlers. Each writes one line with one `IO.warn` call. `format_text` and `format_json` build the line without writing it, so a handler of your own can use them.
+`stderr_text` and `stderr_json` are the built-in handlers. Each writes one line with one `IO.warn` call. `format_text` and `format_json` build the line without writing it, for your own handler.
 
-The text form is `TIME LEVEL MESSAGE key=value ...`, with the time in UTC and the level in capitals. A message, key or value that is empty, has `=`, a quote, a backslash or a control character, or (for a key or value) a space, is written as a JSON string, so a line is always one line and never looks like a field.
-
-The JSON form is one object per line with the keys `time`, `level` (`debug`, `info`, `warning` or `error`), `msg`, `fields` and `task`. The fields are nested, so a field named `level` never clashes with a fixed key.
-
-`time_text` turns milliseconds since the Unix epoch into the time text, such as `2026-10-12T10:15:02.345Z`. A year outside 0 to 9999 is written with its sign and at least four digits.
+- Text: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC and the level in capitals.
+- A message, key or value is written as a JSON string when it is empty, or has `=`, a quote, a backslash or a control character. A key or value with a space is also written as a JSON string. So a line is always one line, and a value never looks like a field.
+- JSON: one object per line, with the keys `time`, `level` (`debug`, `info`, `warning` or `error`), `msg`, `fields` and `task`. The fields are nested, so a field named `level` never clashes with a fixed key.
+- `time_text` turns milliseconds since the Unix epoch into text such as `2026-10-12T10:15:02.345Z`. A year outside 0 to 9999 is written with its sign and at least four digits.
 
 ```agentica
 import Logger from "std/logger"
@@ -122,7 +137,7 @@ end
 
 ## File output and slow handlers
 
-There is no built-in file handler. A block that appends one line per event does the job, and the `_ =` drops a write error:
+There is no built-in file handler. A block that appends one line per event does the job. The `_ =` drops a write error:
 
 ```agentica {mode="check"}
 import Logger from "std/logger"
@@ -135,7 +150,7 @@ def main() -> Void
 end
 ```
 
-A handler that is slow can hand each event to a task over a `Channel`. The writer is started with `Task.spawn_owning`, so it owns the channel. The run ends in this order: detach the handler, close the channel, await the writer. Without the await, returning from `main` ends the run and the queued lines are lost.
+A slow handler can hand each event to a task over a `Channel`. The writer is started with `Task.spawn_owning`, so it owns the channel. The run ends in this order: detach the handler, close the channel, await the writer. Without the await, returning from `main` ends the run and the queued lines are lost.
 
 ```agentica {mode="check"}
 import Logger from "std/logger"
@@ -172,7 +187,8 @@ end
 
 ## Rules
 
-- `LogEvent` and `LogLevel` are builtin types, and their names are reserved: a struct or enum with either name is `CHECK-REDEFINED-NAME`.
-- The handlers and the global level live in the VM and belong to one run. A child started with `Process.spawn` has its own.
-- There are no flags and no per-task metadata: pass `fields` on each call, as the optional second argument.
-- Log calls are normal code and count against `--max-steps`. A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison, plus the empty map that a call without `fields` passes (about 0.07 µs more than the call alone).
+- `LogEvent` and `LogLevel` are builtin types. Their names are reserved: a struct or enum with either name is `CHECK-REDEFINED-NAME`.
+- Handlers and the global level live in the VM, and belong to one run. A child started with `Process.spawn` has its own.
+- There are no flags and no per-task metadata. Pass `fields` on each call, as the optional second argument.
+- Log calls are normal code, and count against `--max-steps`.
+- A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison. A call without `fields` also passes an empty map, which adds about 0.07 µs.

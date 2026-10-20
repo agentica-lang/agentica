@@ -13,13 +13,9 @@ Arithmetic never mixes `Int` and `Float`. Use these functions to convert.
 | `x.to_s` on a `Float` | `String.from_float(x)` |
 | `x.to_i`, `x.to_i!` on a `Float` | `Float.to_int(x)`, `Float.to_int!(x)` |
 
-The bit functions work on the 64-bit two's complement form of an `Int` (`Int.bit_and`, `Int.shift_left` and the others) and on the IEEE 754 bits of a `Float` (`Float.to_bits` and the others).
-They are methods too: `flags.bit_and(4)`, `x.to_bits`.
-The core has no hex literals, so write masks in decimal (`255`, `65535`).
+The bit functions work on the 64-bit two's complement form of an `Int` (`Int.bit_and`, `Int.shift_left` and the others) and on the IEEE 754 bits of a `Float` (`Float.to_bits` and the others). They are methods too: `flags.bit_and(4)`, `x.to_bits`. The core has no hex literals, so write masks in decimal (`255`, `65535`).
 
-To read numbers from text, see [to_int and to_float](/library/text-and-data/string/#to_int-and-to_float).
-For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see
-[Range](/library/data-structures/range/#times-upto-and-downto).
+To read numbers from text, see [to_int and to_float](/library/text-and-data/string/#to_int-and-to_float). For the loop methods `n.times`, `a.upto(b)` and `a.downto(b)`, see [Range](/library/data-structures/range/#times-upto-and-downto).
 
 ## Float.from_int
 
@@ -46,8 +42,7 @@ end
 Float.to_int(x: Float) -> Result[Int]
 ```
 
-Cuts off the decimals, toward zero. A value that does not fit in an `Int`, or
-that is not a number, gives an error Result.
+Cuts off the decimals, toward zero. A value that does not fit in an `Int`, or that is not a number, gives an error Result.
 
 ```agentica
 def main() -> Void
@@ -69,8 +64,7 @@ false
 Float.to_int!(x: Float) -> Int
 ```
 
-Like `Float.to_int`, but gives the `Int` itself and stops the program on a bad
-value.
+Like `Float.to_int`, but gives the `Int` itself and stops the program on a bad value.
 
 ```agentica
 def main() -> Void
@@ -93,10 +87,7 @@ Int.bit_xor(a: Int, b: Int) -> Int
 Int.bit_not(a: Int) -> Int
 ```
 
-Combine the bits of two numbers, bit by bit.
-They never fail.
-`Int.bit_not(a)` flips every bit and is the same as `-1 - a`.
-A negative number has its sign bit set, so `Int.bit_and(-1, 255)` is `255`.
+Combine the bits of two numbers, bit by bit. They never fail. `Int.bit_not(a)` flips every bit and is the same as `-1 - a`. A negative number has its sign bit set, so `Int.bit_and(-1, 255)` is `255`.
 
 ```agentica
 def main() -> Void
@@ -125,18 +116,10 @@ Int.shift_right(a: Int, count: Int) -> Int
 Int.shift_right_unsigned(a: Int, count: Int) -> Int
 ```
 
-`shift_left` moves the bits up.
-Bits that leave the top are dropped and bit 63 becomes the sign, so it wraps instead of failing: `1.shift_left(63)` is `-9223372036854775808`.
-Multiply (`x * 2`) when you want the overflow check.
-
-`shift_right` is arithmetic: copies of the sign bit come in at the top.
-It is `a / 2^count` rounded down, toward minus infinity, where `/` truncates toward zero.
-
-`shift_right_unsigned` is logical: zeros come in at the top, so it reads `a` as an unsigned 64-bit number.
-`(-1).shift_right_unsigned(64 - n)` is a mask of the low `n` bits for every `n` from 0 to 64.
-
-A count of 64 or more shifts every bit out: `shift_left` and `shift_right_unsigned` give `0`, and `shift_right` gives `0` or `-1` by the sign of `a`.
-A negative count is `RUNTIME-INVALID-COUNT` at the count.
+- `shift_left` moves bits up and wraps: bit 63 becomes the sign, so `1.shift_left(63)` is `-9223372036854775808`. Use `x * 2` for an overflow check.
+- `shift_right` is arithmetic (the sign bit comes in), so it rounds toward minus infinity: `(-7).shift_right(1)` is `-4`.
+- `shift_right_unsigned` is logical (zeros come in): it reads `a` as an unsigned 64-bit number. `(-1).shift_right_unsigned(64 - n)` masks the low `n` bits.
+- A count of 64 or more shifts every bit out: the result is `0`, or `-1` for `shift_right` of a negative `a`. A negative count is `RUNTIME-INVALID-COUNT`.
 
 ```agentica
 def main() -> Void
@@ -177,14 +160,9 @@ Float.to_bits(x: Float) -> Int
 Float.from_bits(bits: Int) -> Float
 ```
 
-`to_bits` gives the IEEE 754 binary64 bits of `x` as an `Int`, so a `Float` with the sign bit set gives a negative `Int`.
-Every NaN gives the one quiet NaN, `9221120237041090560`, so every platform agrees.
-`x.to_bits < 0` tests the sign bit of every value except NaN; test NaN with `x != x`.
-`-0.0 == 0.0` is true, but their bits differ, so `to_bits` tells the two zeros apart.
+`to_bits` gives the IEEE 754 binary64 bits of `x` as an `Int`. Every NaN gives the quiet NaN `9221120237041090560`. `x.to_bits < 0` tests the sign bit of every value except NaN (test NaN with `x != x`), and `to_bits` tells `-0.0` from `0.0`.
 
-`from_bits` takes every `Int` and reads its 64 bits as a binary64.
-Subnormals, infinities and `-0.0` come back exactly, and any NaN pattern gives NaN.
-So `Float.to_bits(Float.from_bits(n)) == n` for every `n` except NaN patterns other than the quiet NaN.
+`from_bits` reads the 64 bits of any `Int` as a binary64; any NaN pattern gives NaN. So `Float.to_bits(Float.from_bits(n)) == n` for every `n` except NaN patterns other than the quiet NaN.
 
 ```agentica
 def main() -> Void
@@ -215,12 +193,9 @@ Float.to_bits32(x: Float) -> Int
 Float.from_bits32(bits: Int) -> Float
 ```
 
-`to_bits32` rounds `x` to binary32, to nearest with ties to even, and gives its 32 bits as an `Int` from 0 to 4294967295.
-A value too large for binary32 becomes infinity with the same sign, a very small one rounds to a subnormal or to zero and keeps its sign, and every NaN gives `2143289344`.
+`to_bits32` rounds `x` to binary32, to nearest with ties to even, and gives its 32 bits as an `Int` from 0 to 4294967295. A value too large for binary32 becomes infinity with the same sign. A very small one rounds to a subnormal or to zero and keeps its sign. Every NaN gives `2143289344`.
 
-`from_bits32` reads 32 bits as a binary32 and widens it to a `Float`, which is always exact.
-Any other `Int` is `RUNTIME-INVALID-NUMBER` at the argument.
-So `Float.to_bits32(Float.from_bits32(n)) == n` for every `n` except NaN patterns other than `2143289344`.
+`from_bits32` reads 32 bits as a binary32 and widens it to a `Float`, which is always exact. Any other `Int` is `RUNTIME-INVALID-NUMBER` at the argument. So `Float.to_bits32(Float.from_bits32(n)) == n` for every `n` except NaN patterns other than `2143289344`.
 
 ```agentica
 def main() -> Void

@@ -169,10 +169,9 @@ Expected types flow into these operations for empty collections and Results.
 - `Int.bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right` and
   `shift_right_unsigned` work on the 64-bit two's complement form of their
   arguments and read the result back the same way. They are methods on `Int`
-  (`flags.bit_and(4)`, `x.shift_left(8)`) with no effects, so an ignored result
-  is `CHECK-UNUSED-VALUE`. The core has no hex literals, so masks are written in
-  decimal. `bit_and`, `bit_or`, `bit_xor` and `bit_not` never fail; `bit_not(a)`
-  is `-1 - a`.
+  (`flags.bit_and(4)`, `x.shift_left(8)`) with no effects. The core has no hex
+  literals, so masks are written in decimal. `bit_and`, `bit_or`, `bit_xor`
+  and `bit_not` never fail; `bit_not(a)` is `-1 - a`.
 - `Int.shift_left(a, n)` is the low 64 bits of `a * 2^n`: bits that leave the
   top are dropped and bit 63 becomes the sign, so `1.shift_left(63)` is
   `-9223372036854775808` and the shift wraps where `*` halts with

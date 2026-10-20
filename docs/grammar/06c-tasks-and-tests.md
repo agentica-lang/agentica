@@ -34,16 +34,16 @@ FIFO or a pipe. Ownership decides who closes a handle, not who may use it:
 caller still owns it, and any task that holds the handle can use it until its
 owner closes it. `Task.spawn_owning(&f, handle)` is the one way to hand a handle
 over. It starts the task as `Task.spawn` does and gives it a handle that the
-caller owns, so the new task closes it when it ends, as a connection task closes
-its socket. A server handed over this way takes its listener with it. The
-argument must be a handle type or a `Channel[T]`, or the checker gives
-`CHECK-NOT-A-HANDLE`; at run time a handle that the caller does not own, that
-was already handed over or that is closed is `RUNTIME-HANDLE-NOT-OWNED` in the
-caller. A crash or an end never closes an `HttpClient`. A `Channel` has no
-opener: it is unowned until `Task.spawn_owning(&f, channel)` gives it to the new
-task, and then it is closed when that task ends, as in [Channels](#channels).
-The first hand-off of an unowned channel is open to any task; after that only
-the owner can hand it on.
+caller owns, so the new task closes it when it ends. A server handed over this
+way takes its listener with it. The argument must be a handle type or a
+`Channel[T]`, or the checker gives `CHECK-NOT-A-HANDLE`; at run time a handle
+that the caller does not own, that was already handed over or that is closed is
+`RUNTIME-HANDLE-NOT-OWNED` in the caller. A crash or an end never closes an
+`HttpClient`. A `Channel` has no opener: it is unowned until
+`Task.spawn_owning(&f, channel)` gives it to the new task, and then it is
+closed when that task ends, as in [Channels](#channels). The first hand-off of
+an unowned channel is open to any task; after that only the owner can hand it
+on.
 
 `Task.await` on a crashed task returns `error(text)` when the result type is a
 Result, where `text` is `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`. For
@@ -280,8 +280,8 @@ All but `new` are also methods: `jobs.send(v, 1000)`, `jobs.recv(1000)`,
   error. So a consumer does not wait for a timeout when its producer died. Any
   task can still call `close` on an owned channel, and the owner's end then does
   nothing more. A channel that is never handed over has no owner and is closed
-  only by `close`. Plain `Task.spawn(&f, jobs)` gives no ownership. A channel
-  with several producers has no owner: use the coordinator.
+  only by `close`. Plain `Task.spawn(&f, jobs)` gives no ownership, and a
+  channel with several producers has no owner.
 - **`closed?`** is `true` when the channel is closed, its buffer is empty and no
   value is reserved for a woken receiver. Once `true` it stays `true`. After a
   `recv` error it tells the end of the stream from a timeout.
@@ -363,8 +363,8 @@ A test fails with the first of these that applies:
    at the test.
 
 After the record, every crash of the test's tasks counts as observed, and its
-running tasks are cancelled before the next test. A runtime error in `main`,
-`RUNTIME-STEP-LIMIT` and `System.exit` in a test still end the whole run.
+running tasks are cancelled before the next test. The run-ending errors above
+still end the whole run, from a test too.
 
 Each test's task has its own `Random` generator, seeded from the run's seed and
 the test's name, so a test sees the same values alone or after other tests.

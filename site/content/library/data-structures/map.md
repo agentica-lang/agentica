@@ -4,8 +4,7 @@ weight: 2
 description: Functions for Map[K, V]. Each one is also a method on maps.
 ---
 
-Maps are immutable and keep the order in which keys were added. Keys are `Int`
-or `String`. Every function here is also a method: `Map.keys(m)` is `m.keys`.
+Maps are immutable and keep the order in which keys were added. Keys are `Int` or `String`. Every function here is also a method: `Map.keys(m)` is `m.keys`.
 
 ## size
 
@@ -23,7 +22,7 @@ end
 2
 ```
 
-`size` reads a count that the map keeps, so it takes the same time for any map size.
+`size` is O(1): the map keeps its count.
 
 ## get
 
@@ -32,8 +31,7 @@ Map.get(map: Map[K, V], key: K) -> Result[V]
 Map.get(map: Map[K, V], key: K, default: V) -> V
 ```
 
-With two arguments, `get` gives a Result: an error when the key is missing.
-With a third argument, it gives the value or the default.
+With two arguments, `get` gives a Result: an error when the key is missing. With a third argument, it gives the value or the default.
 
 ```agentica
 def main() -> Void
@@ -162,8 +160,7 @@ y=2
 Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
 ```
 
-Keeps the entries for which the function gives `true`, in insertion order. Both
-`each` and `filter` take O(n) time.
+Keeps the entries for which the function gives `true`, in insertion order. O(n), like `each`.
 
 ```agentica
 def main() -> Void

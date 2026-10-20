@@ -151,9 +151,9 @@ only, immutable inputs, new values through the API, and no GC pointer in
   installed. Loading still needs `--allow-native`. Open: link native modules
   statically into the binary at build time, or load `.so` files only when the
   flag is set.
-- **Multicore.** If more schedulers come
-  ([`16-architecture.md`](../vm/16-architecture.md)), the C API must follow its
-  rules. The C API is also a new part of the core, so it must pass the entry
+- **Multicore.** Schedulers run in parallel
+  ([`16-architecture.md`](../vm/16-architecture.md)), so the C API must follow
+  its rules. The C API is also a new part of the core, so it must pass the entry
   rule of [`14-core-invariants.md`](../vm/14-core-invariants.md) §14.6.
 - **Step limits and turn costs.** A fast call is charged like a long builtin
   ([`10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1). It cannot be

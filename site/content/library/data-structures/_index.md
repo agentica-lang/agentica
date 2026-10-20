@@ -4,14 +4,12 @@ weight: 1
 description: Lists, maps, sets, queues, ranges and lazy pipelines, and when to use each.
 ---
 
-Pick the form that matches the job.
+- [List](/library/data-structures/list/): values of one type, in order. Walk, sort, map, filter.
+- [Map](/library/data-structures/map/): find a value by key (`Int` or `String`), in insertion order. Lookups and counters.
+- [Set](/library/data-structures/set/): each `Int` or `String` once, in first-added order. Duplicates and membership.
+- [Queue](/library/data-structures/queue/) (`std/queue`): first in, first out, of strings.
+- [Range](/library/data-structures/range/): `0...n` counts without a list. Use it in `for`.
+- [Lazy](/library/data-structures/lazy/): a recipe of steps over a list, a range or an endless source, run one item at a time by a terminal. The first few results, or a source with no end.
+- [Structs](/tour/structs/) and [enums](/tour/enums-and-case/): fixed named fields, or named cases.
 
-- A [List](/library/data-structures/list/) keeps values of one type in order. Use it for a sequence you walk through, sort, map or filter.
-- A [Map](/library/data-structures/map/) finds a value by key. Keys are `Int` or `String`, and the map keeps the order in which keys were added. Use it for lookups and counters.
-- A [Set](/library/data-structures/set/) holds each `Int` or `String` once, in the order it was first added. Use it to remove duplicates and to ask whether a value was seen.
-- A [Queue](/library/data-structures/queue/) (from `std/queue`) is first in, first out, and holds strings. Use it when the oldest value must come out first.
-- A [Range](/library/data-structures/range/) such as `0...n` counts through `Int` values without building a list. Use it in a `for` loop.
-- A [Lazy](/library/data-structures/lazy/) is a recipe of steps over a list, a range or an endless source, run one item at a time by a terminal such as `first` or `to_a`. Use it when only the first few results are needed, or when the source has no end.
-- A struct groups a fixed set of named fields of different types, and an enum is one of a few named cases. Use them when the data has a shape of its own. They are in the tour pages [Structs](/tour/structs/) and [Enums and case](/tour/enums-and-case/).
-
-All values are immutable: every function gives a new value and leaves its input as it was. See the tour pages [Lists](/tour/lists/) and [Maps](/tour/maps/) first if they are new to you.
+All values are immutable. New to these? Read the tour pages [Lists](/tour/lists/) and [Maps](/tour/maps/) first.

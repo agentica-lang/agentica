@@ -671,8 +671,6 @@ Each of these is decided; it gets a help that names the Agentica form.
   - Help: `Enumerator.new(...)` and `Fiber.new(...)` (today
     `CHECK-UNKNOWN-NAME`) show a producer task that sends into a `Channel`
     (`Task.spawn(&produce, ch)`, then `ch.recv(timeout_ms)`). Added by 17b.
-    `xs.lazy` was on this list until the owner made it the source of `Lazy[T]`
-    (2026-10-20).
 - **Elixir `Agent` and other shared mutable accumulators:** `Agent.start_link`,
   `Agent.update` and `Agent.get`, Ruby's `Concurrent::AtomicFixnum`, or a
   counter that blocks change.
