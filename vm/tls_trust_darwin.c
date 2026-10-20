@@ -45,8 +45,8 @@ static bool tls_policy(CFDictionaryRef d) {
  * SecTrustSettingsCopyTrustSettings). An empty array means "always trust". A dictionary applies when its policy is
  * absent or TLS. One that also limits the trust to an application, a host name or a key use counts only when it
  * denies: a narrow grant never becomes a general root (on purpose even when its key uses include certificate
- * signing), and a narrow denial removes the certificate for every host. A missing result means TrustRoot;
- * Unspecified gives no verdict. Any matching denial wins, which is stricter than Apple's first match and fails
+ * signing; a key use that cannot be read counts as narrow), and a narrow denial removes the certificate for every
+ * host. A missing result means TrustRoot; Unspecified gives no verdict. Any matching denial wins, which is stricter than Apple's first match and fails
  * closed. A grant on a non-self-signed certificate (TrustAsRoot) has no effect: without X509_V_FLAG_PARTIAL_CHAIN,
  * OpenSSL only ends a chain at a self-signed certificate. */
 agc_tls_trust_verdict agc_tls_trust_settings_verdict(CFArrayRef settings) {
@@ -64,7 +64,8 @@ agc_tls_trust_verdict agc_tls_trust_settings_verdict(CFArrayRef settings) {
     if (result == (SInt32)kSecTrustSettingsResultDeny) return AGC_TLS_TRUST_DENIED;
     bool narrow = CFDictionaryContainsKey(d, kSecTrustSettingsApplication) ||
                   CFDictionaryContainsKey(d, kSecTrustSettingsPolicyString) ||
-                  (number_is(d, kSecTrustSettingsKeyUsage, &use) && use != (SInt32)kSecTrustSettingsKeyUseAny);
+                  (CFDictionaryContainsKey(d, kSecTrustSettingsKeyUsage) &&
+                   (!number_is(d, kSecTrustSettingsKeyUsage, &use) || use != (SInt32)kSecTrustSettingsKeyUseAny));
     bool grant = result == (SInt32)kSecTrustSettingsResultTrustRoot ||
                  result == (SInt32)kSecTrustSettingsResultTrustAsRoot;
     if (grant && !narrow) v = AGC_TLS_TRUST_ROOT;

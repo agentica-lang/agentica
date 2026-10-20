@@ -346,7 +346,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `CRYPTO_THREAD_run_once`) and copied into each context; distrusted
     certificates (macOS Deny, Windows Disallowed) go in first with a
     `serverAuth` reject, and the verify callback `agc_tls_trust_verify`
-    rejects a leaf that OpenSSL itself never looks up
+    rejects a leaf that OpenSSL itself never looks up (it scans the store's
+    in-memory objects under `X509_STORE_lock`, never the by_dir lookup)
   - a non-empty `ca_file` replaces system trust and must load.
   - SNI plus `SSL_set1_host` per connection, `X509_VERIFY_PARAM_set1_ip_asc` (no
     SNI) for IP literals

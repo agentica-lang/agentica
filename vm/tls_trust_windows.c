@@ -15,10 +15,10 @@
 
 /* CertGetEnhancedKeyUsage with no flags combines the EKU extension and the EKU property. An empty list means every
  * use when the last error is CRYPT_E_NOT_FOUND, and no use when it is 0 (Microsoft Learn, CertGetEnhancedKeyUsage),
- * so the error is cleared before the call that fills the list. */
+ * so the error is cleared before the call that fills the list. A call that fails leaves the root out. */
 bool agc_tls_trust_server_auth(PCCERT_CONTEXT cert) {
   DWORD size = 0;
-  if (!CertGetEnhancedKeyUsage(cert, 0, NULL, &size)) return GetLastError() == (DWORD)CRYPT_E_NOT_FOUND;
+  if (!CertGetEnhancedKeyUsage(cert, 0, NULL, &size)) return false;
   CERT_ENHKEY_USAGE *usage = malloc(size);
   if (!usage) return false;
   bool ok = false;

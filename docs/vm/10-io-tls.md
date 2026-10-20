@@ -38,7 +38,8 @@ OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
     `CRYPTO_THREAD_run_once`, in the first setup pool job that needs it, never
     on the scheduler or I/O thread) and copied into each new context, so a
     trust change while the process runs is not seen. A first load that fails
-    also lasts for the whole process, and verification then fails closed. Its
+    also lasts for the whole process, and verification then fails closed.
+    This holds on every system, Linux included; there is no retry. Its
     certificates are shared, read-only `X509` objects.
   - A certificate the system distrusts is added with an explicit reject of
     `serverAuth` (`X509_add1_reject_object`), before any trusted copy (the

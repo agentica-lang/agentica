@@ -40,24 +40,26 @@ size_t agc_tls_trust_system(struct x509_store_st *store) {
   return added;
 }
 
+/* Only the store's in-memory objects are scanned, under its lock: X509_STORE_CTX_get1_certs would also ask the
+ * lookup methods, which with SSL_CERT_DIR probe files on the I/O thread at every handshake. A store that cannot be
+ * locked fails the chain closed. */
 int agc_tls_trust_verify(int ok, struct x509_store_ctx_st *ctx) {
   if (!ok || X509_STORE_CTX_get_error_depth(ctx) != 0) return ok;
   X509 *leaf = X509_STORE_CTX_get_current_cert(ctx);
-  unsigned long before = ERR_peek_last_error();
-  STACK_OF(X509) *same = leaf ? X509_STORE_CTX_get1_certs(ctx, X509_get_subject_name(leaf)) : NULL;
-  /* OpenSSL 3 returns an empty stack when nothing matches; NULL with a new error is a failed lookup (no memory),
-   * and the chain fails closed. */
-  if (leaf && !same && ERR_peek_last_error() != before) {
+  X509_STORE *store = X509_STORE_CTX_get0_store(ctx);
+  if (!leaf || !store) return ok;
+  if (X509_STORE_lock(store) != 1) {
     ERR_clear_error();
-    X509_STORE_CTX_set_error(ctx, X509_V_ERR_OUT_OF_MEM);
+    X509_STORE_CTX_set_error(ctx, X509_V_ERR_UNSPECIFIED);
     return 0;
   }
+  STACK_OF(X509_OBJECT) *objects = X509_STORE_get0_objects(store);
   bool rejected = false;
-  for (int k = 0; k < sk_X509_num(same) && !rejected; k++) {
-    X509 *x = sk_X509_value(same, k);
-    rejected = X509_cmp(x, leaf) == 0 && X509_check_trust(x, X509_TRUST_SSL_SERVER, 0) == X509_TRUST_REJECTED;
+  for (int k = 0; k < sk_X509_OBJECT_num(objects) && !rejected; k++) {
+    X509 *x = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objects, k));
+    rejected = x && X509_cmp(x, leaf) == 0 && X509_check_trust(x, X509_TRUST_SSL_SERVER, 0) == X509_TRUST_REJECTED;
   }
-  sk_X509_pop_free(same, X509_free);
+  X509_STORE_unlock(store);
   ERR_clear_error();
   if (!rejected) return ok;
   X509_STORE_CTX_set_error(ctx, X509_V_ERR_CERT_REJECTED);

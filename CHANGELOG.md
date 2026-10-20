@@ -78,8 +78,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   Crypt32's ROOT store on Windows.
   Linux keeps its CA bundle search. Certificates the system distrusts (macOS
   Deny settings, the Windows Disallowed store) are rejected, also as an
-  intermediate or the server's own certificate. The store is read once per
-  process. Only the certificates are copied: platform rules beyond them
+  intermediate or the server's own certificate. On every system, Linux
+  included, the store is now read once per process (Linux used to re-read
+  its bundle at every connect): a trust change while a program runs is not
+  seen, and a first load that fails lasts for the whole process (connects
+  that need system trust then fail). Only the certificates are copied: platform rules beyond them
   (Apple's date-based distrust and CT policy, the constraints trustd puts on
   system anchors, Windows NotBefore and disallowed-filetime properties) are
   not applied. A nonempty `ca_file` still replaces system trust, and

@@ -29,8 +29,8 @@ struct x509_store_ctx_st;
 
 /* The verify callback of every client config. OpenSSL looks up rejected copies only for the certificates it takes
  * from the store (roots and intermediates), so a distrusted end-entity certificate sent by the peer would pass;
- * this callback fails the chain with X509_V_ERR_CERT_REJECTED when the store holds that leaf marked rejected.
- * Otherwise it returns `ok` unchanged. */
+ * this callback fails the chain with X509_V_ERR_CERT_REJECTED when the store's in-memory objects hold that leaf
+ * marked rejected (no lookup method is asked, so no file is read). Otherwise it returns `ok` unchanged. */
 int agc_tls_trust_verify(int ok, struct x509_store_ctx_st *ctx);
 
 /* The platform loader, called once by agc_tls_trust_system on a private store, with no other thread inside. */
