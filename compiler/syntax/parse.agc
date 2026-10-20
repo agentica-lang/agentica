@@ -1,5 +1,6 @@
+import SourceReader from "../io/source_reader"
 import ParseText from "parse_text"
-import SourceFile from "../modules/source_file"
+import SourceFile from "source_file"
 import Text from "text"
 
 # An argument `--first-id=N` sets the first node id of the files after it (the default is 0). The argument
@@ -17,7 +18,7 @@ def main() -> Void
       next
     end
     puts("== #{path}")
-    case SourceFile.read(path, 10000)
+    case SourceReader.read(path)
       SourceFile.Read.Text(text) ->
         printed = ParseText.print_from(text, first_id)
         puts(printed.text)

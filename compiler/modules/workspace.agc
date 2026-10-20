@@ -1,0 +1,21 @@
+## The port of the front end to the outside world: the few things the core stages (syntax, modules, check, catalog,
+## lower, bytecode, diagnostics) need from the machine, as a record of function values. There are no interfaces: the
+## core calls `workspace.read_text.call(path)`, and io/host.agc builds the record whose functions touch the disk. A
+## test can build another one over an in-memory tree. Only io/ (and the driving adapters app/ and bdd/) call File,
+## Dir, Path, System, Process or FrontEnd; tests/test_style_core_purity.py enforces it.
+##
+## The environment variables and the host are data, not functions: `Env` in link_env.agc holds them, read once by io/
+## when the program starts and passed in with the settings.
+
+import SourceFile from "../syntax/source_file"
+
+## What the core asks of the machine. Each function takes a path as the front end got it and never raises: a failure
+## is data (`Read.Unreadable`, a `Result` error, `false`).
+export struct Workspace
+  read_text: Fn[String, SourceFile.Read]
+  file_exists: Fn[String, Bool]
+  directory_exists: Fn[String, Bool]
+  real_path: Fn[String, Result[String]]
+  resolve_path: Fn[String, Result[String]]
+  std_source: Fn[String, Result[String]]
+end

@@ -14,7 +14,7 @@ Each stage takes the previous stage's data and returns its typed outcome
 (data or one diagnostic). For example, `Lexer.lex` returns `Diag.Outcome`; other
 stages may use `Result` with a packed `Problem`. `try` stops at the first error.
 
-`compiler/` has one folder per context: `app/`, `syntax/`, `modules/`,
+`compiler/` has one folder per context: `app/`, `io/`, `syntax/`, `modules/`,
 `check/`, `catalog/`, `lower/`, `bytecode/`, `diagnostics/`, `bdd/` and
 `embedded/`, with `front_end.agc` at the root. A new file goes in the folder of
 its context. Names below are bare; the folder is in each label
@@ -22,15 +22,17 @@ its context. Names below are bare; the folder is in each label
 bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
 
 - Data: `syntax/source.agc`, `syntax/token.agc`, `diagnostics/diagnostic.agc`.
-  `modules/source_file.agc` reads files as strict UTF-8, with no size limit
-  (`LEX-INVALID-UTF8` at the first bad byte). `syntax/text.agc` holds the
+  `syntax/source_file.agc` holds the strict UTF-8 rules for a source file
+  (`LEX-INVALID-UTF8` at the first bad byte); `io/source_reader.agc` reads the
+  file with them, with no size limit. `syntax/text.agc` holds the
   quoting and span printing.
 - Lexer (`syntax/`): `lexer.agc`, `unicode.agc` and the hand-edited
   `unicode_table.agc` (graphic ranges, Unicode 17.0). Entries: `lex.agc`,
   `lex_text.agc`.
 - Parser (`syntax/`): `ast.agc`, `parse_base.agc`, `parser.agc`; entries
   `parse.agc`, `parse_text.agc`.
-- Linker (`modules/`, `suggest.agc` in `check/`): `modules.agc` (loader; walks
+- Linker (`modules/`, `suggest.agc` in `check/`): `workspace.agc` (the port),
+  `modules.agc` (loader; walks
   imports with an explicit stack in a fixed order), `resolve_import.agc`,
   `import_path.agc` (`std/`, `pkg/`, relative), `resolve.agc`, `rewrite.agc`
   (linked name of every name), `linker.agc` (`Linker.link_file`,
@@ -57,6 +59,28 @@ bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
   `bytecode_pool.agc`, `bytecode_bytes.agc`, `bytecode_tables.agc`
   (`FORMAT_VERSION`, limits, `OPCODES`), `bytecode_failure.agc`, runner
   `bytecode.agc`.
+
+### Pure core, one port
+
+The stage folders (`syntax`, `modules`, `check`, `catalog`, `lower`,
+`bytecode`, `diagnostics`) are pure: they never call `File`, `Dir`, `Path`
+(`Path.join` is string work and is allowed), `System`, `Process` or
+`FrontEnd`. When a stage needs the machine it calls a function of
+`Workspace` (`modules/workspace.agc`), a record of function values that
+travels in `Env.Settings.workspace`: `read_text`, `file_exists`,
+`directory_exists`, `real_path`, `resolve_path`, `std_source`. The
+environment variables and the host (`windows`) are data in `Env.Env`.
+`io/host.agc` builds the real `Workspace` and `process_env`; a test can build
+a `Workspace` over an in-memory tree. `app/` (the command line), `bdd/` (the
+`agentica test` driver, which runs processes) and `io/` are the only folders
+that do I/O. The entry programs (`syntax/lex.agc`, `syntax/parse.agc`,
+`modules/link.agc`, `check/check.agc`, `lower/lower.agc`,
+`bytecode/bytecode.agc`, `catalog/catalog.agc`) may call `System.args` and
+nothing else of those names. `tests/test_style_core_purity.py` runs the real
+lexer over the stage folders and fails on a call (`Module.name` as tokens, so
+strings, comments and builtin data rows do not count); a new entry program
+needs a line in its `ENTRY_PROGRAMS`. A new need of the machine is a new
+`Workspace` field, built in `io/host.agc`.
 
 Order inside a `compiler/` file: imports and module doc, structs and enums,
 exported functions, private functions. Code style follows the speed rules:

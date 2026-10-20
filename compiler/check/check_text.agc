@@ -9,6 +9,7 @@ import Env from "../modules/link_env"
 import LinkText from "../modules/link_text"
 import Linker from "../modules/linker"
 import Text from "../syntax/text"
+import Workspace from "../modules/workspace"
 import T from "types"
 
 ## The text form of checking the file at path: the linked program of link_text with the type of each checked expression
@@ -20,13 +21,13 @@ import T from "types"
 ## The goldens in tests/fixtures/frontend/check/ hold it.
 export def check_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return LinkText.failure_text(LinkText.root_dir_of(path), failure)
+    Linker.Linking.Failed(failure) -> return LinkText.root_failure_text(settings.workspace, path, failure)
     Linker.Linking.Done(linked) -> return checked_text(linked, settings)
   end
 end
 
 ## The ERROR line of a failure of the checker, with its notes and the file (relative to the folder of the root).
-export def problem_text(root_dir: String, problem: Failure.Problem) -> String
+export def problem_text(workspace: Workspace.Workspace, root_dir: String, problem: Failure.Problem) -> String
   line = Text.diagnostic_line(
     Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help),
   )
@@ -41,7 +42,7 @@ export def problem_text(root_dir: String, problem: Failure.Problem) -> String
     labels = problem.labels.map do |label: Failure.Label| "#{Text.span_text(label.span)} #{Text.quote(label.text)}" end
     line = "#{line} labels=[#{labels.join(", ")}]"
   end
-  return "#{line} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
+  return "#{line} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
 end
 
 ## The text form of a program that checked: what `agentica --dump` prints.
@@ -52,7 +53,7 @@ end
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
   case Checker.check(linked, settings)
     Checker.Checking.Done(checked) -> return program_text(linked, checked)
-    Checker.Checking.Failed(problem) -> return problem_text(linked.root_dir, problem)
+    Checker.Checking.Failed(problem) -> return problem_text(settings.workspace, linked.root_dir, problem)
   end
 end
 

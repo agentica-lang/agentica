@@ -8,7 +8,8 @@
 import Discover from "bdd_discover"
 import {IO_TIMEOUT} from "bdd_files"
 import Opts from "bdd_options"
-import SourceFile from "../modules/source_file"
+import SourceFile from "../syntax/source_file"
+import SourceReader from "../io/source_reader"
 
 # The runner is an ordinary program with a 30 second start, and no limit on its run (each scenario has its own).
 START_TIMEOUT = 30000
@@ -101,7 +102,7 @@ def wait_for(child: Process) -> Result[Int]
 end
 
 def read_report(code: Int, report_file: String) -> Ran
-  case SourceFile.read(report_file, IO_TIMEOUT)
+  case SourceReader.read(report_file)
     SourceFile.Read.Text(text) -> return Ran.Reported(code, text)
     SourceFile.Read.Invalid(_) -> return Ran.Failed("the BDD runner wrote a report that is not UTF-8")
     SourceFile.Read.Unreadable(message) -> return Ran.Failed("the BDD runner wrote no report: #{message}")

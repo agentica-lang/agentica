@@ -14,6 +14,7 @@ import Lowering from "lowering"
 import Source from "../syntax/source"
 import Text from "../syntax/text"
 import Types from "../check/types"
+import Workspace from "../modules/workspace"
 
 ## The text form of lowering the file at path: the IR as lines, or the ERROR line of the first failure of the linker,
 ## the checker or the lowering.
@@ -33,28 +34,28 @@ end
 ## the call depth limit the lowering of a deep tree leaves free.
 export def lower_text_after(path: String, settings: Env.Settings, frames: Int) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return LinkText.failure_text(LinkText.root_dir_of(path), failure)
+    Linker.Linking.Failed(failure) -> return LinkText.root_failure_text(settings.workspace, path, failure)
     Linker.Linking.Done(linked) -> return linked_text(linked, settings, frames)
   end
 end
 
 ## The ERROR line of a problem of the lowering or of the bytecode writer: the line of its diagnostic with
 ## ` file="path"` added.
-export def problem_text(root_dir: String, problem: Failure.Problem) -> String
+export def problem_text(workspace: Workspace.Workspace, root_dir: String, problem: Failure.Problem) -> String
   shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
-  return "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(root_dir, problem.file))}"
+  return "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
 end
 
 ## The text form of a lowered program: what `agentica --dump-ir` prints.
-export def program_text(root_dir: String, program: Ir.Program) -> String
-  return program_lines(root_dir, program).join("\n")
+export def program_text(workspace: Workspace.Workspace, root_dir: String, program: Ir.Program) -> String
+  return program_lines(workspace, root_dir, program).join("\n")
 end
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
   case Checker.check(linked, settings)
-    Checker.Checking.Failed(problem) -> return CheckText.problem_text(linked.root_dir, problem)
+    Checker.Checking.Failed(problem) -> return CheckText.problem_text(settings.workspace, linked.root_dir, problem)
     Checker.Checking.Done(checked) ->
-      return lowered_text(linked, lower_deeper(linked, checked, frames))
+      return lowered_text(settings.workspace, linked, lower_deeper(linked, checked, frames))
   end
 end
 
@@ -67,19 +68,19 @@ def lower_deeper(linked: Linker.Linked, checked: Checker.Checked, frames: Int) -
   return done
 end
 
-def lowered_text(linked: Linker.Linked, lowered: Lowering.Lowered) -> String
+def lowered_text(workspace: Workspace.Workspace, linked: Linker.Linked, lowered: Lowering.Lowered) -> String
   case lowered
-    Lowering.Lowered.Failed(problem) -> return problem_text(linked.root_dir, problem)
-    Lowering.Lowered.Done(program) -> return program_text(linked.root_dir, program)
+    Lowering.Lowered.Failed(problem) -> return problem_text(workspace, linked.root_dir, problem)
+    Lowering.Lowered.Done(program) -> return program_text(workspace, linked.root_dir, program)
   end
 end
 
-def program_lines(root_dir: String, program: Ir.Program) -> List[String]
+def program_lines(workspace: Workspace.Workspace, root_dir: String, program: Ir.Program) -> List[String]
   head = "program #{span_text(0, program.span)} entry=#{program.entry}"
   lines: List[String] = ["#{head} globals=#{program.globals}"]
   index = 0
   for source in program.sources
-    shown = Text.quote(Paths.stored_file(root_dir, source.file))
+    shown = Text.quote(Paths.stored_file(workspace, root_dir, source.file))
     lines = lines.push("source #{index} #{shown} chars=#{source.text.length}")
     index += 1
   end
