@@ -590,7 +590,7 @@ static bool run_task(agc_vm *vm, agc_task *t) {
   agc_turn_begin(vm);
   agc_turn_result r = AGC_TURN_DONE;
   bool ran = run_turn(vm, t, &r);
-  agc_turn_finish(vm);
+  t->steps += agc_turn_finish(vm);
   return agc_task_end_turn(vm, t, r, ran);
 }
 

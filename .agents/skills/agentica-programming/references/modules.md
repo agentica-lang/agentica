@@ -102,10 +102,12 @@ Two prefixes select where a module comes from:
      `~/.local/share/agentica/lib/`;
   4. `/usr/local/share/agentica/lib/`, then `/usr/share/agentica/lib/`.
 
-On Windows, `AGENTICA_PATH` is separated by `;`, the user root is
-`%LOCALAPPDATA%/agentica/lib/` (fallback `~/AppData/Local/agentica/lib/`), and
-there are no default system roots. An unset or relative user-data variable uses
-the fallback directory. Empty `AGENTICA_PATH` entries are ignored; a relative
+On Windows, `AGENTICA_PATH` is separated by `;` and takes drive (`C:\libs`,
+`C:/libs`) and UNC (`\\server\share`) roots, and also `/foo` and `\foo` (from
+the root of the current drive); `C:libs` is relative. The user root is
+`%LOCALAPPDATA%/agentica/lib/` (left out when the variable is unset or
+relative; `XDG_DATA_HOME` and `HOME` are not read), and there are no default
+system roots. Empty `AGENTICA_PATH` entries are ignored; a relative
 entry gives `CHECK-IMPORT-PATH` when resolving a `pkg/` import. The first
 existing file wins, and a read or syntax error in it does not fall back to
 another root.

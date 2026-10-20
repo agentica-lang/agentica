@@ -37,6 +37,8 @@ Time.monotonic_ms() -> Int              # never goes backward; use it for durati
 Time.monotonic_ns() -> Int              # same clock in nanoseconds; same origin as monotonic_ms
 Random.int(min: Int, max: Int) -> Int   # uniform, both ends inclusive; min > max halts (RUNTIME-INVALID-RANGE)
 Random.float() -> Float                 # 0.0 up to, not including, 1.0
+Profile.measure(label: String, block: Fn[T]) -> T   # runs the block once; a section row with the profile on
+Profile.steps() -> Int                  # steps of this task so far; the same on every run (performance.md)
 ```
 
 - `IO.gets` strips LF, CR, or CRLF; a blank line is `ok("")`, not the end.

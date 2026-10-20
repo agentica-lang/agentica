@@ -31,7 +31,8 @@ def refreezing():
 
 # The stages read the environment of the pkg/ search when they are not given the flags; the original writers ran with
 # no AGENTICA_PATH and a user data folder that does not exist, and so do the stages here.
-HERMETIC_ENVIRONMENT = vm_environment({"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"})
+HERMETIC_ENVIRONMENT = vm_environment({"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
+                                       "LOCALAPPDATA": "/nonexistent-agentica-xdg"})
 
 # The default limit of one stage run over a corpus; a case that is big or slow passes its own.
 STAGE_TIMEOUT = scaled(600)

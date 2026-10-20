@@ -45,6 +45,7 @@ export enum Rule
   Ok
   OkVoid
   Prelude
+  ProfileMeasure
   ResultDefault
   ResultMessage
   ResultOk

@@ -69,7 +69,8 @@ the same text twice or move back and forth in it.
 `... agentica run -- FILE.agcb`. Its first line is `total wall_ms= steps=
 calls= builtin_calls= builtin_ms= gc_ms= collections=`, then up to 30 `fn
 calls= steps= name= at=FILE:LINE` rows (a block is `block@FILE:LINE:COL`), up
-to 12 `file` rows and up to 30 `builtin calls= us= name=` rows.
+to 12 `file` rows, up to 30 `builtin calls= us= name=` rows and the
+`section` rows of `Profile.measure` (below).
 `agentica FILE.agc` prints two reports, the front end's first and the
 program's second: the program's `steps` are its own, while `gc_ms` and
 `collections` count the whole process. `AGENTICA_VM_TRACE_FILE=PATH` writes the
@@ -114,6 +115,62 @@ repeats of one form [PR #317]:
 - A `<native>` row is the steps of a range loop such as `(0...n).each`, one
   for each item; the block's own steps are on its `block@` row. A list's
   `each` and `map` add no `<native>` steps.
+
+## Sections, step budgets and flame graphs
+
+`Profile.measure(label) do ... end` gives the block's value (a block of no
+parameters, or `&f`). With `AGENTICA_VM_TRACE=profile` each label adds a row
+`section calls= steps= us= gc_ms= name=LABEL` after the builtin rows, up to 30,
+most steps first. Without the profile it is one block call (one step), so it
+can stay in the code.
+
+- A run keeps 4096 labels; later labels share one `[overflow]` section
+  (frame `measure[overflow]`). Do not build labels from data.
+- Sections are inclusive: an outer section counts the sections inside it. A
+  label inside itself in one task (recursion) counts every call, but its steps
+  and time once, for the outermost call.
+- `steps` are the running task's; `us` and `gc_ms` are wall time, which goes on
+  while the task waits. A block that ends in a runtime error or a cancel counts
+  a call with no steps.
+- A block that uses `try` needs a `Result` type from the call:
+  `r: Result[Int] = Profile.measure("parse") do ... end`; without one, `try` is
+  `CHECK-TRY-CONTEXT`.
+
+`Profile.steps()` is the steps of the running task so far, with or without the
+profile, and the same on every run. Hold code to a budget in a test:
+
+```ruby
+before = Profile.steps()
+parse(text)
+used = Profile.steps() - before
+try Test.assert(used < 50000, "parse took #{used} steps")
+```
+
+Flame graphs: `AGENTICA_PROFILE_FORMAT=folded` with the profile writes folded
+stacks instead of the report, one line per stack: frames from the outermost,
+joined by `;`, a space and the weight in steps. flamegraph.pl, inferno and
+speedscope read it.
+
+```sh
+AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded \
+  AGENTICA_VM_TRACE_FILE=app.folded agentica app.agc
+flamegraph.pl app.folded > app.svg
+```
+
+- Frames: `name@FILE:LINE` for a function, `block@FILE:LINE:COL` for a block,
+  the builtin's name for a native loop or callback (`Int.times`, `List.map`),
+  `measure:LABEL` for a `Profile.measure`.
+- A sample of the running task's stack every 1000 steps, weight 1000;
+  `AGENTICA_PROFILE_SAMPLE=N` sets N (1 counts every step, and the weights add
+  up to the report's `steps`). The file is the same on every run; there is no
+  time weight.
+- `;`, `%` and control bytes in a name are written as `%XX`. At most
+  1,048,576 distinct stacks; the weight of later new stacks goes to one
+  `[truncated]` line, followed by an `agc-trace folded profile full` line.
+- With `agentica FILE.agc` the file has the program's stacks only. Write it to
+  a file: on stderr it mixes with the program's own output.
+- The sampling adds a few percent to a profiled run at N = 1000 and about a
+  fifth at N = 100.
 
 ## Struct updates
 
