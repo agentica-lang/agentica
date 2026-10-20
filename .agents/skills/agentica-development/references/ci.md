@@ -451,25 +451,80 @@ Two more workflows: `site-examples.yml` and `pages.yml` (see
 
 ## Release (`release.yml`)
 
-The release workflow builds `dist/agentica` with a pinned `zig cc` against
-glibc 2.28, with `AGENTICA_OPENSSL: vendored` and `AGENTICA_GC: vendored`
-set for the whole job, from `bootstrap/stage0.agcb` (`make vm-test
-fixed-point CCACHE=`: the embedding and the link have to work with this
-toolchain, and the fixed point runs on the result). It needs only a C toolchain.
-It
-strips the binary, checks the glibc floor with `objdump -T` (an empty list of
-versions is an error with its own message), checks that OpenSSL is linked
-statically (in the build and in the unpacked archive) and that `run
---version` names the submodule's OpenSSL version. It fails when `readelf -d`
-shows a NEEDED `libgc` (in the build and in the unpacked archive). The
-archive holds `bin/agentica` alone (the workflow checks that nothing else is
-in `bin/`), `LICENSE`, `NOTICE` and the third-party licenses in `licenses/`. Its
-test steps are targets: `make vm-diff-test` runs the
-golden tests on the release binary with the full sweep, and `make
-test-distribution` runs the relocated-binary test. A last step unpacks the
-archive and runs an example, `compile` and `run`, and `agentica test`. The
-tags, the version and the CHANGELOG rules are under "Tags, versions and
-CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
+Four native packages, one build job each (`linux`, `macos` with a two-row
+matrix, `windows`), all with `AGENTICA_OPENSSL: vendored` and
+`AGENTICA_GC: vendored`, built from `bootstrap/stage0.agcb` (`make vm-test
+fixed-point`). Each needs only a C toolchain:
+
+- **Package:** `linux-x86_64` (`.tar.gz`)
+  - **Runner and toolchain:** `ubuntu-latest`, pinned `zig cc` against glibc
+    2.28 (`CC` in `GITHUB_ENV`)
+- **Package:** `windows-x86_64` (`.zip`)
+  - **Runner and toolchain:** `windows-2025`, MSYS2 UCRT64 GCC (the shell is
+    `msys2 {0}`, `PYTHON=python`)
+- **Package:** `macos-x86_64` (`.tar.gz`)
+  - **Runner and toolchain:** `macos-15-intel`, Apple clang, `gmake`,
+    `MACOSX_DEPLOYMENT_TARGET=12.0`
+- **Package:** `macos-arm64` (`.tar.gz`)
+  - **Runner and toolchain:** `macos-latest`, the same
+
+Per package, in order: build, strip (macOS: `strip -x` then `codesign --force
+--sign -`, an ad hoc signature that arm64 needs; there is no Developer ID
+signature or notarization, which need credentials), `make release-check`,
+`make release-package`, `make release-smoke`, upload `agentica-PLATFORM`.
+`RELEASE_PLATFORM` (env, from the matrix) names the package; the Makefile
+derives the check format and the architecture from it and
+`tools/release-check.sh` compares that architecture with the machine and with
+the binary, so a runner that is not what its name says fails. The Linux job also
+runs the golden tests with the full sweep (`make vm-diff-test`),
+`make test-distribution` and the examples.
+
+- `tools/release-check.sh elf|macho|pe BINARY ARCH FLOOR` reads the real format
+  with that system's tools. ELF: the glibc floor with `objdump -T` (an empty
+  list is an error with its own message), PIE, BIND_NOW, RELRO, the stack
+  protector, FORTIFY, no NEEDED `libgc`, `libssl` or `libcrypto`. Mach-O:
+  `lipo -archs` is exactly the one architecture, `file`, `vtool` platform and
+  `minos` equal `MACOSX_DEPLOYMENT_TARGET`, `otool -L` lists libSystem and
+  system paths only, PIE, stack protector, FORTIFY, a valid code signature. PE:
+  `objdump -f` is `pei-x86-64`, every imported DLL is a Windows system DLL or
+  the Universal C Runtime (never `msys-2.0.dll`, `libgcc_s_seh-1.dll`,
+  `libwinpthread-1.dll`, a library of OpenSSL or libgc), and DllCharacteristics
+  has ASLR, high-entropy ASLR and DEP. ELF and Mach-O also run `run --version`
+  and compare its OpenSSL with the submodule's `VERSION.dat`; PE checks it names
+  libgc. A change of a floor or of the allowed DLLs is made in that script.
+- `tools/release.py package` writes `agentica-VERSION-PLATFORM.(tar.gz|zip)`
+  with `bin/agentica` (`bin/agentica.exe` on Windows), `LICENSE`, `NOTICE` and
+  the seven files of `licenses/` (the same set on every platform; the names are
+  in `LICENSE_FILES`), then verifies the member list: exactly those files, once
+  each, below one folder. The archive is reproducible (commit time, root
+  owner). A new third-party library adds its license file there.
+- `tools/release.py smoke` (run it as `python -I`) first compares the packaged
+  binary with the checked one, extracts into a folder with spaces and non-ASCII
+  letters away from the checkout, and runs the binary there with a `PATH` of the
+  system folders only (`/usr/bin:/bin`, or `System32` on Windows): `--version`,
+  `run --version`, help, `check` (ok and `CHECK-TYPE-MISMATCH`), running a
+  non-ASCII program, `compile` then `run --`, `--seed`, `std/` imports,
+  `agentica test` for unit tests (passing and failing) and for a BDD spec with a step
+  program and a predefined `Given the Agentica program` step, files (write,
+  append, read, rename, list, stat, remove), processes (`--allow-run` spawning
+  the packaged binary), and loopback TCP and HTTP. A binary says that it lacks
+  the network builtins with the loader error `invalid bytecode: unknown
+  builtin`: the smoke skips networking only for that message and only off Linux
+  and macOS, so a Linux or macOS binary without them fails. Windows has none
+  until the TCP port lands; then the same test starts running there. TLS is
+  covered by the OpenSSL version line only (it needs certificates).
+- The `collect` job (every run) downloads the artifacts without merging, runs
+  `tools/release.py collect` (exactly the four archives of `VERSION`: nothing
+  missing, extra or duplicated; each archive verified) and uploads
+  `SHA256SUMS`. The `publish` job runs only for a tag push (`version` has
+  checked that the tag is `VERSION`), repeats `collect`, compares the sums, runs
+  `sha256sum -c` and creates the GitHub Release with empty notes. A manual
+  `workflow_dispatch` only uploads the artifacts.
+
+Before merging a change to `release.yml`, the packaging tools or the binary
+format, dispatch a dry run: `gh workflow run release.yml --ref BRANCH`. The
+tags, the version and the CHANGELOG rules are under "Tags, versions and CHANGELOG"
+below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 
 ### Tags, versions and CHANGELOG
 
@@ -491,8 +546,7 @@ takes it as an input
   version <tag>`, for example `git tag -a 0.2.0 -m "release version 0.2.0"`.
 - Tag releases with the bare version (`0.2.0`, no `v` prefix).
   `.github/workflows/release.yml` validates the tag against `VERSION`,
-  builds `dist/agentica`, packages it with `LICENSE`, `NOTICE` and the
-  third-party licenses, checks that the archive has them, and publishes a
+  builds the four packages (above), and publishes them with `SHA256SUMS` as a
   GitHub Release with empty notes; a maintainer writes a short summary of the
   release by hand afterwards (key points and breaking changes, no PR list; the
   details stay in `CHANGELOG.md`).
