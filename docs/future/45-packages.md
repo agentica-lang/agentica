@@ -1,7 +1,8 @@
 ## 45. Packages
 
 **Status:** Designed; it has no roadmap row of its own. On the path to the JIT
-it comes after the multiplatform release work and before the FFI
+it comes after the native Windows and macOS builds (issue
+[#344](https://github.com/sonic182/agentica/issues/344)) and before the FFI
 ([§40.5](40-native-code.md#405-order)). 45-0 (`std/toml`) is done. The phases
 after 45-0 wait for the owner's answers to 45.14. Asked by the owner on
 2026-10-15 ("Shall we plan this?").
