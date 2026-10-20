@@ -174,7 +174,7 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
   - Status: Designed; on the path to the JIT before the FFI
     ([§40.5](40-native-code.md#405-order)). Decided by the owner on 2026-10-15:
     `std/toml` first (45-0, done), TOML manifest and lock, `Toml.Value` decode,
-    `owner/repo` imports; the phases after 45-0 wait for the answers in §45.14
+    `owner/repo` imports; §45.14 answered on 2026-10-20, so 45a can start
 
 - §: 46
   - Title: Signals
