@@ -3,9 +3,9 @@
 **Status:** Designed; it has no roadmap row of its own. On the path to the JIT
 it comes after the native Windows and macOS builds (issue
 [#344](https://github.com/sonic182/agentica/issues/344)) and before the FFI
-([§40.5](40-native-code.md#405-order)). 45-0 (`std/toml`) is done. The phases
-after 45-0 wait for the owner's answers to 45.14. Asked by the owner on
-2026-10-15 ("Shall we plan this?").
+([§40.5](40-native-code.md#405-order)). 45-0 (`std/toml`) is done. The owner
+answered the questions of 45.14 on 2026-10-20, so 45a can start. Asked by the
+owner on 2026-10-15 ("Shall we plan this?").
 
 Decided by the owner on 2026-10-15:
 
@@ -15,8 +15,8 @@ Decided by the owner on 2026-10-15:
 - The import form: GitHub with no prefix (`owner/repo/mod`), and every other
   host as a prefix (`host/owner/repo/mod`) (45.3).
 
-Everything else here is a proposal. The open questions in 45.14 need the
-owner's answer before the phases after 45-0 start.
+The owner decided the questions of 45.14 on 2026-10-20. The rest is the
+design that 45a and the later phases build.
 
 ### 45.1 Today
 
@@ -90,8 +90,8 @@ Proposed, with the form above:
 The clash comes from today's rules. `owner/repo/x` names the file
 `owner/repo/x.agc` beside the importing file. A dot in a folder name is legal,
 because 05b checks only the last part of a path. So a folder called
-`gitlab.com` could exist. The manifest rule settles the choice, and 45.14
-question 1 lists the other options.
+`gitlab.com` could exist. The manifest rule settles the choice (45.14
+question 1, decided).
 
 When the rule finds both a declared package and a relative file or folder that
 matches its leading path (the file `owner/repo/x.agc`, or the folder
@@ -109,7 +109,8 @@ its direct keys is its `requires` in the lock (45.6). For the root project, the
 list is its own manifest. The root may import only its own direct dependencies.
 Transitive dependencies are in the lock, and their versions come from there.
 
-Today's `pkg/` roots stay for now. See 45.14 question 2.
+Today's `pkg/` roots stay for libraries installed by hand, and are revisited
+after 45c (45.14 question 2, decided).
 
 ### 45.4 The TOML parser: `std/toml` (phase 45-0)
 
@@ -318,8 +319,9 @@ requires = ["gitlab.com/team/json-tools@0.4.1"]
   locked major is 1 is not a candidate for `add` or `update`. An `add` of a key
   with no locked major takes the newest tag, whatever its major, and that major
   is locked from then on. A minimum of another major for the same key is
-  `PKG-MAJOR-CONFLICT`: two majors of one key cannot be in one build. How a v2
-  gets its key is open (45.14 question 3).
+  `PKG-MAJOR-CONFLICT`: two majors of one key cannot be in one build. A new
+  major is a new repo, so it has its own key, such as `owner/sqlite-ac-v2`
+  (45.14 question 3, decided).
 - **A moved tag.** When the commit of a fetched tag is not the commit in the
   lock, the fetch fails with `PKG-TAG-MOVED`. The lock is never changed
   silently.
@@ -407,12 +409,12 @@ step 8 of §18.3:
   rewrites the lock, and it recomputes MVS over the graph (45.7).
 - `agentica vendor` copies the locked packages into `agc_libs/` (45.8).
 
-The commands start `git`. The VM refuses a process start without
-`--allow-run` ([`10-io-processes.md`](../vm/10-io-processes.md)). The package
-commands grant it to their own run (45.14 question 8). `agentica file.agc`
-never runs git.
+The commands start `git`. The VM refuses a process start without `--allow-run`
+([`10-io-processes.md`](../vm/10-io-processes.md)). The package commands grant
+it to their own run (45.14 question 8, decided). `agentica file.agc` never runs
+git.
 
-Errors use stable codes. The prefix is proposed in 45.14 question 4.
+Errors use stable codes, with the `PKG-` prefix (45.14 question 4, decided).
 
 - `PKG-MANIFEST-INVALID`: `agentica.toml` is not valid TOML, has an unknown
   key, or has a key or version of the wrong form. A TOML syntax error carries
@@ -443,7 +445,8 @@ The last two belong to the import checks, and the rest to the package tool.
 Manifest and lock errors have no source span, so they name the file and the
 key path (for example `dependencies.owner/sqlite-ac`), with the line and column
 when the error is a TOML syntax error. AGENTS.md says codes carry a span, so
-45.14 question 4 covers this.
+45a changes the diagnostic format and AGENTS.md lists the `PKG-` prefix (45.14
+question 4).
 
 ### 45.10 Native code
 
@@ -564,6 +567,9 @@ One line each, as possible later work:
 
 ### 45.14 Open questions
 
+All answered by the owner on 2026-10-20: each question takes its
+recommendation (10 and 12 were decided earlier).
+
 1. **The import form and the ambiguity rule.**
    - Option A: the manifest-declared rule of 45.3. Existing imports keep their
      meaning, and a clash is an error at the import.
@@ -574,15 +580,15 @@ One line each, as possible later work:
      "./models"`. Packages then need no lookup, but every relative import
      changes. This is a breaking change, with a migration of `examples/`,
      `stdlib/`, `tests/` and the docs.
-   - **Recommendation:** A. It keeps every import that works today, and it
+   - **Decided (2026-10-20):** A. It keeps every import that works today, and it
      makes a clash visible.
 
 2. **The fate of today's `pkg/` roots.**
    - Option A: keep them for libraries that are installed by hand, and revisit
      after 45c.
    - Option B: replace them with the package form now.
-   - **Recommendation:** A. Replacing them breaks people who install by hand,
-     and nothing is gained before the manager exists.
+   - **Decided (2026-10-20):** A. Replacing them breaks people who install by
+     hand, and nothing is gained before the manager exists.
 
 3. **Major versions.**
    - Option A: Go's way, a `v2` segment in the path, as `owner/repo/v2/mod`. It
@@ -590,9 +596,9 @@ One line each, as possible later work:
    - Option B: a new repo for each major, as `owner/sqlite-ac-v2`. The key names
      the major, and two majors can be in one build.
    - Option C: one major per build. A second major is an error.
-   - **Recommendation:** B. It needs no new rule in the import form, and it has
-     no clash. (This is separate from the rule of 45.7 that forbids two majors
-     of one key.)
+   - **Decided (2026-10-20):** B. It needs no new rule in the import form, and
+     it has no clash. (This is separate from the rule of 45.7 that forbids two
+     majors of one key.)
 
 4. **Error codes and their prefix.**
    - Option A: a new `PKG-` prefix for the manifest, the lock, fetching, the
@@ -601,36 +607,36 @@ One line each, as possible later work:
      and the key path, not a source span, so the diagnostic format needs a
      small change.
    - Option B: everything under `CHECK-IMPORT-*`.
-   - **Recommendation:** A, with the key path. The format change is small, and
-     it belongs in 45a.
+   - **Decided (2026-10-20):** A, with the key path. The format change is small,
+     and it belongs in 45a.
 
 5. **`dev_dependencies`.**
    - Option A: not in v1. There is one list.
    - Option B: a second table, used only by `*_test.agc` files (phase 25).
-   - **Recommendation:** A. Add B when a test needs a package that the program
-     does not.
+   - **Decided (2026-10-20):** A. Add B when a test needs a package that the
+     program does not.
 
 6. **Data files in a package.**
    - Option A: only `.agc` files are used and hashed.
    - Option B: a `files` list in the manifest adds data files, such as a SQL
      schema, to the hash and to the vendored copy.
-   - **Recommendation:** A. Add B when a package needs one.
+   - **Decided (2026-10-20):** A. Add B when a package needs one.
 
 7. **Hashing at build.**
    - Option A: every build hashes each package it loads, from the cache or from
      `agc_libs/`.
    - Option B: hash at install and vendor only. The build trusts the cache,
      which is read-only.
-   - **Recommendation:** A. It is one rule, and it catches a changed vendored
-     file. 45a measures the cost on the largest package it has.
+   - **Decided (2026-10-20):** A. It is one rule, and it catches a changed
+     vendored file. 45a measures the cost on the largest package it has.
 
 8. **Who may run git.**
    - Option A: the package commands turn on the run grant for their own process.
      The user typed the command, and `agentica file.agc` still cannot run git.
    - Option B: the user passes `--allow-run` to the package commands.
-   - **Recommendation:** A.
+   - **Decided (2026-10-20):** A.
 
-9. **Where `agc_libs/` sits when a manifest exists.** Recommendation: B.
+9. **Where `agc_libs/` sits when a manifest exists.** Decided (2026-10-20): B.
    - Option A: beside the root program, as today.
    - Option B: beside `agentica.toml` when a manifest exists, and beside the
      root program otherwise, as today. The vendored paths are not reachable
@@ -657,7 +663,7 @@ One line each, as possible later work:
     - Option A: an RFC 3339 string in `Text`. A datetime and a string look the
       same, so a round trip writes the datetime in quotes and changes the file.
     - Option B: `DateTime(String)`, which keeps the text as written.
-    - **Recommendation:** B. The text is exact. When §41 lands, the date
+    - **Decided (2026-10-20):** B. The text is exact. When §41 lands, the date
       variants change: TOML's four kinds get one variant each (41.19). That is
       a breaking change of std/toml, and its design waits for §41.
 
