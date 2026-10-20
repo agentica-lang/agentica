@@ -71,6 +71,9 @@ def fixture_cases():
 
 @pytest.mark.parametrize("path,bound", fixture_cases())
 def test_a_fixture_keeps_its_golden_on_four_schedulers(path, bound, tmp_path):
+    reason = diff.skip_reason(path.name)
+    if reason:
+        pytest.skip(reason)
     fixture = diff.Fixture.of(path)
     bytecode = diff.compile_agc(path, tmp_path / (path.stem + ".agcb"))
     root = diff.source_root_options() + FLAGS

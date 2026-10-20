@@ -9,6 +9,8 @@ on purpose, so people and AI agents can write, read and fix programs with few
 surprises. Every error has a stable code, a source position and often a hint
 with the fix.
 
+The project is hosted on [GitHub](https://github.com/sonic182/agentica).
+
 ```agentica
 # Prices are in cents, so the math stays exact.
 TAX_PERCENT = 21

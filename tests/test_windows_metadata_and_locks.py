@@ -181,7 +181,7 @@ def main() -> Void
 end
 """
 
-REQUIRES_WINDOWS_VM = pytest.mark.skipif(TARGET_OS != "windows", reason="requires the native Windows VM")
+REQUIRES_WINDOWS_VM = pytest.mark.skipif(TARGET_OS != "windows", reason="host-only: Windows owner, ACL and exclusive-handle semantics exist on Windows only")
 
 
 def _metadata(bytecode, path, root) -> list[str]:
@@ -363,7 +363,7 @@ def test_empty_crlf_lf_unterminated_and_invalid_utf8(tmp_path, work):
 
 
 @REQUIRES_WINDOWS_VM
-@pytest.mark.skipif(os.name != "nt", reason="exclusive handle probe needs Win32")
+@pytest.mark.skipif(os.name != "nt", reason="host-only: the exclusive handle probe needs Win32")
 def test_each_line_closes_its_file_on_eof_callback_error_and_decode_error(tmp_path, work, adopt):
     box = tmp_path
     bytecode = compile_work_text(work, EACH_LINE_PROGRAM, "windows-each-line")

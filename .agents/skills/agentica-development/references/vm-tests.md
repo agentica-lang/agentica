@@ -369,8 +369,8 @@ Read first: `references/vm.md`.
     input and leaves a mark on Linux and macOS; libuv's job object ends it on
     Windows)
 
-- **Path:** `tests/test_vm_child_channel_linux.py`
-  - **Owns:** the Linux-only cases (`child-channel-peer.py`): descriptor 3 given
+- **Path:** `tests/test_vm_child_channel_posix.py`
+  - **Owns:** the POSIX cases (Linux and macOS) (`child-channel-peer.py`): descriptor 3 given
     to the VM as a regular file, a character device or a write-only FIFO
     (refused, left as it was) or as a read-write FIFO (taken), and a shell
     grandchild that gets neither the marker nor the socket

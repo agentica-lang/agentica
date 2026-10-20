@@ -5,7 +5,8 @@ socket, a pty or a merged pipe, reads them slowly (or never), and prints a
 JSON summary: the exit status and when the reader started, the VM exited, and
 the first error byte arrived. Programs that need no peer run with their
 streams on files. The cases run on Linux, macOS and Windows; the few that need
-a Unix descriptor kind (a socket, a pty, /dev/full, /dev/stdout) are marked.
+a Unix descriptor kind (a pty, /dev/full, /dev/stdout) are marked "host-only:"
+with the reason, and the socket case is a known issue on Windows (#440).
 """
 import json
 import re
@@ -14,8 +15,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, run, scaled, vm_command,
-                                 vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, known_issue, run, scaled,
+                                 vm_command, vm_environment)
 
 PEER = FIXTURES / "stdout-peer.py"
 PEER_LIMIT = scaled(90)
@@ -24,8 +25,14 @@ FILLER = "x" * 1024
 # full and the end of the run has to wait for a reader that does not come. More rows would keep the program printing.
 STUCK_ROWS = 58
 WINDOWS = TARGET_OS == "windows"
-unix_only = pytest.mark.skipif(WINDOWS, reason="needs a descriptor kind that Windows does not have")
-linux_only = pytest.mark.skipif(not sys.platform.startswith("linux") or WINDOWS, reason="needs /dev/full")
+socket_stdout = known_issue(WINDOWS, 440, "the Python peer hands the VM a socketpair as stdout; a Winsock peer is missing")
+pty_stdout = pytest.mark.skipif(
+    WINDOWS, reason="host-only: needs a Unix pseudo terminal; test_windows_console_stop.py has the ConPTY cases")
+dev_stdout = pytest.mark.skipif(
+    WINDOWS, reason="host-only: /dev/stdout and /dev/stderr are Unix paths that Windows does not have")
+dev_full = pytest.mark.skipif(
+    not sys.platform.startswith("linux") or WINDOWS,
+    reason="host-only: needs /dev/full (Linux); a reader that went away is the case of the same name on every system")
 not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
 
 
@@ -406,7 +413,7 @@ def test_a_stuck_stderr_that_is_the_stdout_pipe_drops_the_warning_and_keeps_the_
     assert b"flush_timeout_ms" not in out, "the warning is dropped, not mixed into the data"
 
 
-@unix_only
+@socket_stdout
 def test_a_socket_as_stdout_is_written_on_the_loop(tmp_path):
     summary, out, _ = run_case(tmp_path, "socket", TICKER_PROGRAM % 800, peer=["--socket", "--delay", "2.0"])
     assert summary["status"] == 0
@@ -422,7 +429,7 @@ def test_stdout_and_stderr_on_one_pipe_keep_the_order_of_the_calls_under_a_slow_
     check_alternating(lines_of(out))
 
 
-@unix_only
+@pty_stdout
 def test_stdout_and_stderr_on_one_terminal_keep_the_order_of_the_calls_under_a_slow_reader(tmp_path):
     summary, out, _ = run_case(tmp_path, "terminal", ALTERNATE_PROGRAM,
                                peer=["--delay", "0.5", "--pty", "--chunk", "1024", "--pause", "0.0005"])
@@ -450,7 +457,7 @@ def test_a_crash_notice_waits_for_a_stderr_that_is_full_and_then_arrives_whole(t
     assert len([line for line in lines if re.fullmatch(r"warn [0-9]+ w+", line)]) == 200
 
 
-@linux_only
+@dev_full
 def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(tmp_path):
     status, _, out, _ = run_to_file(tmp_path, "full-stderr", WARN_LAST_PROGRAM, stderr_file="/dev/full")
     assert status == 1
@@ -481,7 +488,7 @@ def test_blocking_stdout_and_stderr_on_one_pipe_the_program_output_comes_before_
     assert re.search(rb"\Abefore\npartial[^\n]*RUNTIME-DIVISION-BY-ZERO", out)
 
 
-@unix_only
+@dev_stdout
 def test_file_calls_on_dev_stdout_and_dev_stderr_still_work_when_they_are_pipes(tmp_path):
     summary, out, err = run_case(tmp_path, "dev-stdout", DEV_STDOUT_PROGRAM)
     assert summary["status"] == 0

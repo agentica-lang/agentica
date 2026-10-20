@@ -16,8 +16,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, Child, cli, compile_agc, output_lines, run, scaled,
-                                 vm_command, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, WINDOWS, Child, cli, compile_agc, host_only, known_issue, output_lines,
+                                 run, scaled, vm_command, vm_environment)
 
 EXAMPLES = ROOT / "examples"
 STOP_PEER = FIXTURES / "stop-peer.py"
@@ -45,6 +45,14 @@ def main() -> Void
   end
 end
 """
+
+
+# Windows has named pipes where POSIX has FIFOs, but these tests make FIFOs with os.mkfifo (issue 433); it has no
+# /dev/urandom and no /dev/stdin; its descriptors are not listed in a folder (issue 435); a stdin read there can keep a
+# pool thread (issue 431, docs/vm/10-io-scheduler.md).
+no_fifo = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
+no_urandom = host_only(WINDOWS, "/dev/urandom does not exist on Windows")
+no_stdin_path = host_only(WINDOWS, "Windows has no path that names an inherited descriptor or the standard input (/proc/self/fd/N, /dev/stdin)")
 
 
 def literal(text):
@@ -175,6 +183,7 @@ def stuck_fifo(new_dir):
     close_reader()
 
 
+@no_urandom
 def test_urandom_reads_bytes_directly_and_through_a_symlink(new_dir, run_program):
     alias = new_dir() / "entropy"
     os.symlink("/dev/urandom", alias)
@@ -226,6 +235,7 @@ def test_flush_timeout_and_agentica_flush_timeout_ms_need_a_non_negative_integer
     assert code_of(variable="0").code == 0
 
 
+@no_fifo
 def test_the_file_flush_limit_comes_from_the_flag_then_the_variable_and_ends_a_stuck_flush(stuck_fifo):
     root, fifo = stuck_fifo
     source = root / "stuck.agc"
@@ -250,6 +260,7 @@ end
         assert json.loads(result.stderr)["flush_timeout_ms"] == expected
 
 
+@no_fifo
 def test_an_await_does_not_wait_for_a_flush_that_a_fifo_reader_holds_up(stuck_fifo):
     root, fifo = stuck_fifo
     source = root / "awaited.agc"
@@ -269,6 +280,7 @@ end
     assert (result.code, result.stdout) == (0, "ok()\nawaited\n"), result.stderr
 
 
+@no_fifo
 def test_fifo_calls_wait_on_the_loop_timed_out_reads_and_parked_tasks_hold_no_pool_thread_at_exit(new_dir, run_vm_bounded):
     root = new_dir()
     fifo = root / "fifo"
@@ -298,6 +310,7 @@ end
     assert out.read_text() == "flushed"
 
 
+@no_fifo
 def test_fifos_stream_on_the_loop_read_line_waits_for_a_writer_task_read_text_reads_to_eof(new_dir, run_vm_bounded):
     root = new_dir()
     first, second = root / "first", root / "second"
@@ -338,6 +351,7 @@ end
     assert (code, output) == (0, 'ok("hello")\nerror("filesystem: end of file")\nok()\n81920\n'), errors
 
 
+@no_fifo
 @pytest.mark.parametrize("mode", ("slow", "close"))
 def test_a_fifo_write_waits_on_the_loop_for_a_slow_reader_and_a_reader_that_leaves_gives_epipe(new_dir, adopt,
                                                                                               run_vm_bounded, mode):
@@ -365,6 +379,7 @@ end
         assert re.search(r'^error\("error writing to stream port.*Broken pipe', output, re.S)
 
 
+@no_fifo
 def test_a_crash_cancels_a_task_parked_on_a_fifo_read_and_frees_its_descriptor(new_dir, run_vm_bounded):
     root = new_dir()
     fifo = root / "fifo"
@@ -404,6 +419,7 @@ end
     assert output == "1\n0\nok()\n", "the read parks with one descriptor, and the cancel closes it"
 
 
+@known_issue(WINDOWS, 431, "a Windows stdin read can keep a pool thread")
 def test_stdin_waits_on_the_loop_so_file_calls_run_while_a_task_waits_for_input(new_dir, run_vm_bounded):
     root = new_dir()
     path = root / "plain.txt"
@@ -422,6 +438,7 @@ end
     assert (code, output) == (0, 'ok()\nok("x")\n'), errors
 
 
+@known_issue(WINDOWS, 435, "the descriptors of the VM are listed in a folder that Windows does not have")
 def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_deadlock(new_dir, run_vm_bounded):
     root = new_dir()
     code, output, errors = run_vm_bounded(root, r"""def main() -> Void
@@ -441,6 +458,7 @@ end
     assert list(dict.fromkeys(lines[:-1])) == ["[false, false]"]
 
 
+@no_stdin_path
 def test_pipes_the_vm_got_at_start_stay_readable_an_inherited_descriptor_and_a_piped_stdin(new_dir, run_vm_bounded):
     root = new_dir()
     program = r"""def main() -> Void
@@ -494,8 +512,9 @@ end
     assert 'ok("alpha\\nbeta\\nend")' in output
     assert 'FileInfo(kind: "file", size_bytes: 14' in output
     assert 'ok(["notes.txt"])' in output
-    assert "ok(%s)" % literal(path) in output
-    assert "ok(%s)" % literal(directory) in output
+    # The VM prints joined and resolved paths with "/" on every system.
+    assert "ok(%s)" % literal(path.as_posix()) in output
+    assert "ok(%s)" % literal(directory.as_posix()) in output
 
 
 def test_invalid_modes_closed_handles_invalid_utf8_and_whole_file_bounds_return_errors(new_dir, run_program):
@@ -589,6 +608,7 @@ end
     assert 'ok("linked")' in output
 
 
+@known_issue(WINDOWS, 436, "the Path.real link chains, loops and long paths are compared with POSIX realpath only")
 def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains_loops_and_long_paths(new_dir, os_lines,
                                                                                                      os_peer_lines):
     root = new_dir()
@@ -639,6 +659,7 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
         assert os_lines("real", overlong, cwd=root) == ["error", "error"]
 
 
+@host_only(WINDOWS, "the Windows environment is UTF-16, so it cannot hold bytes that are not UTF-8")
 def test_system_env_gives_what_pythons_os_environ_gives_decoding_bytes_that_are_not_utf_8_with_u_fffd(os_lines,
                                                                                                       os_peer_lines):
     env = vm_environment()

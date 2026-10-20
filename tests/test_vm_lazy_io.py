@@ -7,14 +7,15 @@ crash and a cancel of the task. Each path opens one file at most, so no handle m
 opens. --max-steps ends the run with the file of the pipeline still open, and the end of the run closes it.
 
 Two cases park the terminal itself on a file read, with a FIFO that tests/fixtures/lines-peer.py holds open: a cancel
-(Task.map's timeout) and a read timeout. They need mkfifo and the peer's FIONREAD, so they run on Linux and macOS only.
+(Task.map's timeout) and a read timeout. They need mkfifo and the peer's FIONREAD; on Windows they are skipped as
+"known-issue:" (#433).
 """
-import os
 import re
 
 import pytest
 
-from tests.agentica_test import FIXTURES, WAIT_SECONDS, compile_agc, compile_text, run_vm, vm_environment
+from tests.agentica_test import (FIXTURES, WAIT_SECONDS, WINDOWS, compile_agc, compile_text, known_issue, run_vm,
+                                 vm_environment)
 from tests.test_vm_file_lines import start_fifo_peer
 
 EVENT = re.compile(r" io file_(open|close) handle=([0-9]+)$")
@@ -47,7 +48,7 @@ def main() -> Void
 end
 """
 
-FIFO = pytest.mark.skipif(os.name == "nt", reason="needs a FIFO and the POSIX peer (mkfifo, FIONREAD)")
+FIFO = known_issue(WINDOWS, 433, "the FIFO cases need a named-pipe peer on Windows")
 
 
 def file_events(trace):

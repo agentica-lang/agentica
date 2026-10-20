@@ -27,6 +27,13 @@ def drained(fd, seconds):
     return queued(fd) == 0
 
 
+def appeared(path, seconds):
+    deadline = time.monotonic() + seconds
+    while not os.path.exists(path) and time.monotonic() < deadline:
+        time.sleep(0.005)
+    return os.path.exists(path)
+
+
 def main():
     path, mode = sys.argv[1], sys.argv[2]
     os.mkfifo(path, 0o600)
@@ -35,7 +42,12 @@ def main():
         os.write(fd, BEFORE[mode])
     print("ready", flush=True)
     for piece in PIECES.get(mode, []):
-        if not drained(fd, 20):
+        if mode == "burst":
+            # The program says when its first reader is closed. FIONREAD cannot tell: on macOS the queue looks empty
+            # while the reader still has a read in flight, and the next piece would be lost with its descriptor.
+            if not appeared(path + ".go", 20):
+                sys.exit(1)
+        elif not drained(fd, 20):
             sys.exit(1)
         os.write(fd, piece)
         time.sleep(0.05)

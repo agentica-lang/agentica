@@ -23,15 +23,14 @@ import unittest
 
 import pytest
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
-from tests.agentica_test import (FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, TestCase, _kill_and_collect, compile_agc, scaled,
-                                 vm_binary, vm_command, vm_environment)
+from tests.agentica_test import (FIXTURES, PYTHON, ROOT, RUN_TIMEOUT, WINDOWS, TestCase, _kill_and_collect,
+                                 compile_agc, scaled, vm_binary, vm_command, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
 CHANNEL_RUN = FIXTURES / "channel-run.py"
-FIXTURES_PREFIX = str(FIXTURES) + "/"
 
 SHARD_COUNT = 8
 EXTRAS_SHARD = 8
@@ -50,6 +49,8 @@ VM_TURN_STEPS = 2000
 ALLOW_RUN_PREFIX = "process-"
 TMP_TOKEN = "@tmp"
 FIXTURE_TOKEN = "@fixtures/"
+# The folder of the open descriptors of the process, which a fixture lists to count them: /proc/self/fd, or /dev/fd on macOS.
+FD_TOKEN = "@fds"
 
 SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
 if SWEEP_MODE not in ("", "full", "sampled"):
@@ -134,7 +135,10 @@ def _unquote(text):
 
 
 def fixture_arg(argument):
-    """An .args word: "@fixtures/x" is the absolute path of tests/fixtures/x, anything else stays."""
+    """An .args word: "@fixtures/x" is the absolute path of tests/fixtures/x, "@fds" the folder of the open descriptors,
+    anything else stays."""
+    if argument == FD_TOKEN:
+        return "/dev/fd" if sys.platform == "darwin" else "/proc/self/fd"
     if argument.startswith(FIXTURE_TOKEN):
         return str(FIXTURES / argument[len(FIXTURE_TOKEN):])
     return argument
@@ -173,13 +177,36 @@ class Fixture:
             allow_run=program.name.startswith(ALLOW_RUN_PREFIX))
 
 
+def relocate(text, folder, token):
+    """`text` with the path of `folder` written as `token` (the golden writes @fixtures and @tmp)."""
+    if os.sep == "/":
+        return text.replace(str(folder) + "/", token + "/") if token != TMP_TOKEN else text.replace(str(folder), token)
+    return relocate_windows(text, PureWindowsPath(folder), token)
+
+
+def relocate_windows(text, folder, token, escapes=True):
+    """The same for a Windows folder. The VM prints a path the way it was typed (backslashes, doubled in JSON and in an
+    inspected string) and the stored names of a program with slashes, so one path shows the folder in several
+    spellings and a tail that mixes both separators. Each spelling of the folder becomes the token, and the rest of
+    that path is written with slashes. In printed text (escapes=True) a backslash before n, r, u, a quote or another
+    backslash is an escape, not a separator, so it ends the path (no fixture names a folder with one of those
+    letters); the text of an argument list has no escapes (escapes=False)."""
+    native = str(folder)
+    forms = sorted({native, native.replace("\\", "\\\\"), folder.as_posix()}, key=len, reverse=True)
+    name = r"[^\s\"':,<>|\\/]"
+    guard = r"(?![nru\"\\])" if escapes else ""
+    tail = r"((?:/" + name + r"*|\\{1,2}" + guard + name + r"+)*)"
+    pattern = re.compile("(?:" + "|".join(re.escape(form) for form in forms) + ")" + tail)
+    return pattern.sub(lambda found: token + found.group(1).replace("\\\\", "/").replace("\\", "/"), text)
+
+
 def unfixture(result):
     status, stdout, stderr = result
-    return status, stdout.replace(FIXTURES_PREFIX, FIXTURE_TOKEN), stderr.replace(FIXTURES_PREFIX, FIXTURE_TOKEN)
+    return status, relocate(stdout, FIXTURES, "@fixtures"), relocate(stderr, FIXTURES, "@fixtures")
 
 
 def untmp(directory, result):
-    return result[0], result[1].replace(str(directory), TMP_TOKEN), result[2].replace(str(directory), TMP_TOKEN)
+    return result[0], relocate(result[1], directory, TMP_TOKEN), relocate(result[2], directory, TMP_TOKEN)
 
 
 # Running the VM -------------------------------------------------------------------------------------------------------
@@ -427,7 +454,7 @@ def text_crash_free(text):
 def check_text_format(on_vm, full, message):
     """A plain or --ai run against the golden of the --json run: same exit and stdout, the same crashes, the same
     program stderr, and the same diagnostic code."""
-    assert tuple(on_vm[:2]) == tuple(full[:2]), message
+    assert tuple(on_vm[:2]) == tuple(full[:2]), "%s\n  got:      %r\n  expected: %r" % (message, on_vm[:2], full[:2])
     stderr, text_crashes, text_summaries = text_crash_free(on_vm[2])
     expected, json_crashes, json_summaries = json_crash_free(full[2])
     assert text_crashes == json_crashes, message
@@ -469,9 +496,47 @@ def check_sweep(results, limits, full, name, note=""):
     assert finished, "%s finishes under --max-steps %s%s" % (name, limits[-1], note)
 
 
+# A fixture named -posix or -windows holds what that family of systems answers (Linux and macOS, or Windows), and the
+# shared fixtures hold the rest, so the other family skips it as host-only: the system gives another answer on purpose
+# (the text of an errno, a drive letter, a case-insensitive environment). The variant fixtures sit next to each other
+# and exist in pairs, or have a Windows counterpart in tests/test_windows_*.py.
+VARIANT_FAMILY = re.compile(r"-(posix|windows)\.agc$")
+
+# Fixtures that hold what Linux answers and that have no variant yet: the behavior exists on the other system, so
+# the case is an open gap (issue 436), not a host-only skip. The reason says what differs.
+_MACOS_PATHS = "PATH_MAX is 1024 on macOS and mkdir and realpath answer other errno values for a path through a file"
+_WINDOWS_PATHS = "Windows answers ENOENT where Linux says ENOTDIR, and prints a drive letter"
+KNOWN_ISSUE_FIXTURES = {
+    "files-real.agc": {"darwin": (436, _MACOS_PATHS), "windows": (436, _WINDOWS_PATHS)},
+    "files-errors.agc": {"darwin": (436, _MACOS_PATHS), "windows": (436, _WINDOWS_PATHS)},
+    "process-limits.agc": {"windows": (436, "the program runs /bin/sh")},
+    "process-captured-basic.agc": {"windows": (436, "the program runs /bin/pwd")},
+    "file-each-line-stop.agc": {"windows": (435, "the program counts the entries of a folder of open descriptors")},
+}
+
+
+def skip_reason(name):
+    """Why this system does not run the golden of the fixture, or None: a "host-only:" or "known-issue:" text."""
+    family = VARIANT_FAMILY.search(name)
+    if family and (family.group(1) == "windows") != WINDOWS:
+        return "host-only: %s holds the answers of %s" % (name, "Windows" if family.group(1) == "windows"
+                                                        else "Linux and macOS")
+    system = "windows" if WINDOWS else sys.platform
+    gap = KNOWN_ISSUE_FIXTURES.get(name, {}).get(system)
+    if gap:
+        return "known-issue: #%d %s: %s" % (gap[0], name, gap[1])
+    if Path(FIXTURE_DIR / name).with_suffix(".channel").is_file() and WINDOWS:
+        return ("known-issue: #432 %s: the Windows channel is two pipes, which the Python channel peer cannot give" %
+                name)
+    return None
+
+
 def check_fixture(program, work):
     """The golden test of one fixture: every format, the step count and the --max-steps sweep."""
     name = program.name
+    reason = skip_reason(name)
+    if reason:
+        pytest.skip(reason)
     fixture = Fixture.of(program)
     bytecode = compile_agc(program, work / (program.stem + ".agcb"))
     full = read_expected(program)
@@ -484,7 +549,8 @@ def check_fixture(program, work):
         fixture, bytecode,
         [style_options("json")] + [style_options(style) for style in text_styles]
         + [limit_options(limit) + style_options("json") for limit in limits], work)
-    assert outcome(results[0]) == full, name
+    seen = outcome(results[0])
+    assert seen == full, "%s\n  got:      %r\n  expected: %r" % (name, seen, full)
     for style, on_vm in zip(text_styles, results[1:]):
         check_text_format(on_vm, full, "%s %s" % (name, style))
     check_sweep(results[1 + len(text_styles):], limits, full, name, sweep_note())

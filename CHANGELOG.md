@@ -20,6 +20,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `Lazy` sources over the lines of a file (closed before the terminal returns)
   and the values of a channel; `File.foreach(...).each` with no step is
   `CHECK-LAZY-NO-STEP` (use `File.each_line`).
+- CI runs one conformance matrix on Linux, Windows and macOS (Intel and ARM),
+  with a report of what each system tested and skipped.
 - `Task.cancel(task)` cancels a task and its descendants without waiting.
 - A line that starts with `.name` continues the line before it, so a method
   chain can span lines without parentheses (`|>` chains still need them).
