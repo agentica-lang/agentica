@@ -771,7 +771,7 @@ ROWS_10: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "HttpWire.clean_eof?",
       effects: ["network"],
-      description: "Internal to std/http: whether the end of input a read reported was clean (TLS: after close_notify).",
+      description: "Internal to std/http: whether the end of input a read reported was clean (TLS: close_notify).",
       alternatives: [],
     ),
     Model.Builtin(

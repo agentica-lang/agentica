@@ -973,7 +973,8 @@ def read_response(answer: Answer) -> Received
             if interim > 0 and message == "network: end of input"
               return failed_read(CUT_SHORT, true)
             end
-            first = message == "network: end of input" or String.starts_with?(message, "error reading from stream port")
+            broken = String.starts_with?(message, "error reading from stream port")
+            first = message == "network: end of input" or broken
             return failed_read(message, interim > 0 or not first)
         end
       error(message) -> return failed_read(message, interim > 0)

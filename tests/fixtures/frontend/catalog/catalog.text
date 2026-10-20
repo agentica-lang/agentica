@@ -71,7 +71,7 @@ builtin HttpWire.chunk_read forms=1
 builtin HttpWire.chunked forms=1
   HttpWire.chunked(max_body_bytes: Int) -> HttpWire.Chunk shape=(Int) -> Struct(HttpWire.Chunk) rule=Plain impl="HttpWire.chunked" effects=[] desc="Internal to std/http: the state that starts a chunked body."
 builtin HttpWire.clean_eof? forms=1
-  HttpWire.clean_eof?(socket: Socket) -> Bool shape=(Opaque(Socket)) -> Bool rule=Plain impl="HttpWire.clean_eof?" effects=["network"] desc="Internal to std/http: whether the end of input a read reported was clean (TLS: after close_notify)."
+  HttpWire.clean_eof?(socket: Socket) -> Bool shape=(Opaque(Socket)) -> Bool rule=Plain impl="HttpWire.clean_eof?" effects=["network"] desc="Internal to std/http: whether the end of input a read reported was clean (TLS: close_notify)."
 builtin HttpWire.close_server forms=1
   HttpWire.close_server(server: HttpServer) -> Void shape=(Opaque(HttpServer)) -> Void rule=Plain impl="HttpWire.close_server" effects=["network"] desc="Internal to std/http: close the listener and cancel the server's tasks."
 builtin HttpWire.close_write forms=1
