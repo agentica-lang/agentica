@@ -208,7 +208,8 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   `agc_gc_thread_enter` (`GC_register_my_thread`) and leave with
   `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once
   after `agc_init`, which also starts the mark threads. The libuv pool threads
-  stay unregistered on purpose, since they never touch GC memory. With N=1 no
+  stay unregistered on purpose, since they never touch GC memory; so does the
+  Windows stdin reader thread, which touches only `malloc` memory. With N=1 no
   one calls `agc_gc_allow_threads`, so no mark thread exists. The runtime
   struct is GC memory (`agc_vm_init` allocates it), reached from the `agc_vm`
   that stays on the main thread's stack for the whole run. The run queue lives

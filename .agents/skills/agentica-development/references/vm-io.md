@@ -53,10 +53,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each
     task gets it once (`input_seen`); a `scanned` offset keeps line search
     linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek;
-    Windows uses one blocking `_read` pool job for every stdin kind, including
-    the console; it occupies one pool thread until data or EOF, cancellation
-    detaches it, and process exit does not wait for it (the explicit exception
-    in §14.1)
+    Windows reads every stdin kind, the console included, with one blocking
+    `_read` on a reader thread of its own (`agc_stdin_*` in
+    `vm/stdio_windows.c`), never in the pool: an `external` job that an async
+    handle ends, the thread and handle made on the I/O thread at the first read;
+    cancellation detaches the job, and the end of the run does not wait for
+    the read (§14.1)
 
 - **Path:** `vm/output.c`
   - **Owns:** The writer of stdout and stderr, with a buffer and a waiting queue
