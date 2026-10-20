@@ -399,17 +399,20 @@ static void work_finished(uv_work_t *req, int status) {
 }
 
 /* The pool threads have the stop signals blocked, so a stop signal is handled on the loop's thread only (unwatch_stop). */
-static int queue_work(agc_loop *loop, job *j) {
+int agc_io_queue_work(struct uv_loop_s *uv, struct uv_work_s *work, void (*run)(struct uv_work_s *work),
+                      void (*after)(struct uv_work_s *work, int status)) {
 #if !defined(_WIN32)
   sigset_t saved;
   agc_io_block_stop(&saved);
 #endif
-  int rc = uv_queue_work(&loop->uv, &j->work, run_work, work_finished);
+  int rc = uv_queue_work(uv, work, run, after);
 #if !defined(_WIN32)
   pthread_sigmask(SIG_SETMASK, &saved, NULL);
 #endif
   return rc;
 }
+
+static int queue_work(agc_loop *loop, job *j) { return agc_io_queue_work(&loop->uv, &j->work, run_work, work_finished); }
 
 /* The deadline of the job's work or wait has passed: the job has timed out. */
 static void timer_fired(uv_timer_t *timer) {

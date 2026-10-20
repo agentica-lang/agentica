@@ -1,14 +1,16 @@
 /*
- * The TCP and TLS builtins (Linux and macOS): sockets and listeners over libuv,
- * with the TLS handshake and close_notify through tls.h. Every `net` belongs to
- * the I/O thread; a builtin reaches it through a step posted there, and a done
- * half reads only what that thread copied into the request. Service layer.
+ * The TCP and TLS builtins (Linux, macOS and Windows): sockets and listeners
+ * over libuv, with the TLS handshake and close_notify through tls.h and the
+ * host's error numbers through net_os.h. Every `net` belongs to the I/O
+ * thread; a builtin reaches it through a step posted there, and a done half
+ * reads only what that thread copied into the request. Service layer.
  * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1, docs/vm/16-architecture.md §16.9.
  */
 #include "http_fields.h"
 #include "net.h"
+#include "net_os.h"
 
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -488,7 +490,8 @@ static agc_value net_error(agc_vm *vm, const net *n, const char *what, int err) 
   char *head = agc_alloc_atomic(size);
   int len = snprintf(head, size, "%s\n  hostname: %s\n  port number: %" PRId64, what, host, n->port);
   if (len < 0) len = 0;
-  if (err > UV_EAI_ADDRFAMILY) return agc_system_error(vm, head, -err);
+  /* getaddrinfo failures (UV_EAI_*, -3000 down to -3014 on every system) have no errno: libuv names them. */
+  if (err > UV_EAI_ADDRFAMILY || err < UV_EAI_PROTOCOL) return agc_system_error(vm, head, agc_net_errno(err));
   const char *reason = uv_strerror(err);
   size_t total = agc_size_add((size_t)len, strlen(reason) + 20);
   char *text = agc_alloc_atomic(total);
@@ -547,13 +550,13 @@ static void stop_reading(net *n) {
 static void handshake_failed(net *n, agc_tls_status status) {
   if (status != AGC_TLS_ERROR) {
     n->failure.code = AGC_TLS_ERR_UNEXPECTED_EOF;
-    n->failure.sys = n->in.error ? n->in.error : n->write_status < 0 ? -n->write_status : 0;
+    n->failure.sys = n->in.error ? n->in.error : n->write_status < 0 ? agc_net_errno(n->write_status) : 0;
     snprintf(n->failure.detail, sizeof n->failure.detail, "%s", "connection closed during handshake");
   }
   n->tls_failed = true;
   stop_reading(n);
   if (n->plain) {
-    n->write_status = -EPROTO;
+    n->write_status = UV_EPROTO;
     notify(n, n->writer);
   }
   AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_handshake_error socket=%" PRIu64 " listener=%" PRIu64 " error=%s detail=%s",
@@ -576,7 +579,7 @@ static void flush(net *n, uv_write_cb wrote) {
     size_t left = n->plain_len - n->plain_at;
     size_t step = left < TLS_CHUNK ? left : TLS_CHUNK;
     if (agc_tls_write(n->tls, n->plain + n->plain_at, step, &n->failure) != AGC_TLS_OK) {
-      n->write_status = -EPROTO;
+      n->write_status = UV_EPROTO;
       break;
     }
     n->plain_at += step;
@@ -671,7 +674,7 @@ static void tls_read_in(net *n, ssize_t got) {
     n->raw_eof = true;
     agc_tls_feed_eof(n->tls);
   } else if (got < 0) {
-    n->in.error = (int)-got;
+    n->in.error = agc_net_errno((int)got);
   }
   if (got < 0)
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_eof socket=%" PRIu64 " error=%d", n->id, got == UV_EOF ? 0 : (int)-got);
@@ -704,7 +707,7 @@ static void start_reading(net *n) {
   if (n->reading || n->in.eof || n->in.error || n->raw_eof) return;
   int rc = uv_read_start((uv_stream_t *)&n->conn->tcp, alloc_in, read_in);
   if (rc)
-    n->in.error = -rc;
+    n->in.error = agc_net_errno(rc);
   else
     n->reading = true;
 }
@@ -976,10 +979,7 @@ static void setup_done(uv_work_t *w, int status) {
 }
 
 static int start_setup(net *n) {
-  sigset_t saved;
-  agc_io_block_stop(&saved);
-  int rc = uv_queue_work(n->loop, &n->setup, setup_work, setup_done);
-  pthread_sigmask(SIG_SETMASK, &saved, NULL);
+  int rc = agc_io_queue_work(n->loop, &n->setup, setup_work, setup_done);
   if (!rc) {
     n->setting_up = true;
     n->callbacks++;
@@ -1023,12 +1023,12 @@ static agc_value adopt(agc_vm *vm, request *q, const net *l) {
 }
 
 static agc_value accept_done(agc_vm *vm, request *q, const net *l) {
-  if (q->accept_rc) return agc_system_error(vm, "tcp-accept: accept failed", -q->accept_rc);
+  if (q->accept_rc) return agc_system_error(vm, "tcp-accept: accept failed", agc_net_errno(q->accept_rc));
   if (q->closed) return agc_error_value(listener_closed);
   if (q->child && q->opened) return adopt(vm, q, l);
   if (q->child && q->tls_failed) return tls_failure(vm, "port->ssl-ports: accept failed", &q->child->failure);
   if (q->child) return agc_error_value(socket_closed);
-  if (q->error) return agc_system_error(vm, "tcp-accept: accept failed", -q->error);
+  if (q->error) return agc_system_error(vm, "tcp-accept: accept failed", agc_net_errno(q->error));
   return agc_error_value(listener_closed);
 }
 
@@ -1070,7 +1070,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   } else if (q->closed) {
     result = agc_error_value(socket_closed);
   } else {
-    result = q->write_status < 0 ? agc_system_error(vm, write_failed, -q->write_status) : ok_value(agc_void());
+    result = q->write_status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(q->write_status)) : ok_value(agc_void());
   }
   agc_loop_call(agc_io_loop(vm), drop_request, q);
   return result;
@@ -1420,7 +1420,7 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, bool text) {
   if (here) {
     /* At N = 1 the socket is this thread's: a send that goes out at once returns without a park. */
     int rc = send_now(n, data, len);
-    if (rc < 0) return agc_system_error(vm, write_failed, -rc);
+    if (rc < 0) return agc_system_error(vm, write_failed, agc_net_errno(rc));
     if (rc == 0) return ok_value(agc_void());
   }
   request *q = new_request(n, REQ_SEND);
