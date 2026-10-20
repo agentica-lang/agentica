@@ -1,6 +1,6 @@
 /*
- * The TLS adapter over OpenSSL; only it, tls_trust.c and tls_trust_posix.c
- * include OpenSSL. Each session uses two memory BIOs, the trust
+ * The TLS adapter over OpenSSL; only it, tls_trust.c, tls_trust_posix.c and
+ * digest_openssl.c include OpenSSL. Each session uses two memory BIOs, the trust
  * store and the SNI or IP checks are set up here, and OpenSSL errors become our
  * own codes. Adapter layer, behind tls.h. Design: docs/vm/10-io-tls.md §10.3.
  */

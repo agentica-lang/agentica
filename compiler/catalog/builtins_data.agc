@@ -218,6 +218,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Await",
     "Bool",
     "Channel",
+    "Crypto",
     "Dir",
     "File",
     "FileHandle",
@@ -351,6 +352,16 @@ ROWS_2: List[Model.Builtin] = [
         "Add a value in order; wait for room up to timeout_ms; error(\"channel: closed\") or error(\"channel: timed " +
         "out\"); VM only."
       ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Crypto.sha256",
+      parameters: [Model.Named(name: "data", type: Types.Type.List(Types.Type.Int))],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Crypto.sha256",
+      effects: [],
+      description: "Hash bytes (each 0..255) with SHA-256 and return the 32 bytes of the digest; VM only.",
       alternatives: [],
     ),
     Model.Builtin(
