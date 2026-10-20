@@ -7,4 +7,6 @@
 
 #ifndef _WIN32
 int agc_net_errno(int uv_error) { return -uv_error; }
+
+bool agc_net_tls_enabled(void) { return true; }
 #endif

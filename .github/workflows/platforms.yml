@@ -15,10 +15,10 @@ on:
         options: [both, macos, windows]
         default: both
       openssl:
-        description: OpenSSL linkage mode for a manual run
+        description: OpenSSL linkage mode for a manual run (pull requests and master use vendored, as the release does)
         type: choice
-        options: [system, vendored]
-        default: system
+        options: [vendored, system]
+        default: vendored
 
 permissions:
   contents: read
@@ -64,7 +64,7 @@ jobs:
     runs-on: macos-15-intel
     env:
       AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
     steps:
       - uses: actions/checkout@v7
@@ -86,6 +86,17 @@ jobs:
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: make -s vm-openssl-key > build/openssl-key-release
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - uses: actions/cache/restore@v6
         with:
           path: |
@@ -103,8 +114,11 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - name: The vendored OpenSSL is linked statically
+        if: env.AGENTICA_OPENSSL == 'vendored'
+        run: gmake vendored-check
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_platform_bootstrap.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions
         env:
@@ -131,7 +145,7 @@ jobs:
     runs-on: macos-latest
     env:
       AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
     steps:
       - uses: actions/checkout@v7
@@ -153,6 +167,17 @@ jobs:
         run: echo "PKG_CONFIG_PATH=$(brew --prefix openssl@3)/lib/pkgconfig" >> "$GITHUB_ENV"
       - run: cc --version
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: make -s vm-openssl-key > build/openssl-key-release
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - uses: actions/cache/restore@v6
         with:
           path: |
@@ -170,8 +195,11 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - name: The vendored OpenSSL is linked statically
+        if: env.AGENTICA_OPENSSL == 'vendored'
+        run: gmake vendored-check
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_platform_bootstrap.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions
         env:
@@ -198,7 +226,7 @@ jobs:
     runs-on: windows-2025
     env:
       AGENTICA_REQUIRE_VM: '1'
-      AGENTICA_OPENSSL: ${{ (github.event_name == 'workflow_dispatch' && inputs.openssl == 'vendored' || github.ref == 'refs/heads/master' && github.event_name != 'pull_request') && 'vendored' || 'system' }}
+      AGENTICA_OPENSSL: ${{ github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
     defaults:
       run:
@@ -225,6 +253,17 @@ jobs:
           install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ccache mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        run: make -s vm-openssl-key > build/openssl-key-release
+      - if: env.AGENTICA_OPENSSL == 'vendored'
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/vm/release/openssl/include
+            build/vm/release/openssl/libssl.a
+            build/vm/release/openssl/libcrypto.a
+            build/vm/release/openssl-flags
+          key: openssl-release-${{ hashFiles('build/openssl-key-release') }}
       - uses: actions/cache/restore@v6
         with:
           path: |
@@ -242,6 +281,9 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
       - run: make vm-test
+      - name: The vendored OpenSSL is linked statically, without msys-2.0.dll
+        if: env.AGENTICA_OPENSSL == 'vendored'
+        run: make vendored-check
       - run: make build/vm/release/bootstrap/agentica.exe
       - name: Bootstrap driver smoke
         env:

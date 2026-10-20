@@ -32,13 +32,18 @@ without it, are skipped. Ports are 1..65535 for connect and 0..65535 for
 listen. A host containing NUL is an error. TLS listeners and sockets use the
 same TCP operations. TLS verifies certificates and hostnames with TLS 1.2 or
 later; there is no way to turn verification off. An empty CA path uses
-system trust (`SSL_CERT_FILE`, else the system CA bundle, plus
+system trust (`SSL_CERT_FILE`, else the system store: the CA bundle on
+Linux, the Security framework's roots plus the Keychain trust settings on
+macOS, the ROOT store on Windows, with
+the certificates the system distrusts rejected; read once per process on
+every system; plus
 `SSL_CERT_DIR`); a nonempty path is a PEM CA file that replaces system
 trust, and a missing or empty file makes the connect fail. An IP address
 host is checked against the certificate's IP addresses. The server takes a
 PEM certificate chain and private key; a bad file or a key that does not
 match fails the listen. A peer that closes without TLS's closing message
-ends the stream like EOF.
+ends the stream like EOF. TLS sockets are not available on Windows yet:
+`TLS.connect` and `TLS.listen` return an error there.
 
 Timeouts are positive milliseconds and cover the whole operation, including
 lock waits. Read and write directions have independent locks; coordinate

@@ -1,4 +1,6 @@
 # TLS setup builds OpenSSL contexts on pool threads; the system libcrypto's own locking is not instrumented, so TSan
-# sees its accesses as racy. Only stacks through these two functions are suppressed.
+# sees its accesses as racy. Only stacks through these two functions are suppressed. The system trust store's X509
+# objects (vm/tls_trust.c) are shared read-only by every context; if TSan reports them in handshake stacks, that is
+# the same uninstrumented locking (their extension cache is filled under the X509 lock), not a VM race.
 race:agc_tls_client_config
 race:agc_tls_server_config
