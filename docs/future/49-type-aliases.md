@@ -1,6 +1,6 @@
 ## 49. Type aliases
 
-**Status:** 49a built; 49b planned (row 7.12). A
+**Status:** 49a and 49b built (row 7.12). A
 type alias gives a long type a short name, written once
 (`type Grid = List[List[Float]]`). The 49a rules are in the grammar: the
 `alias_decl` production and the declaration order in
@@ -25,8 +25,9 @@ export type Pairs[K, V] = List[Map[K, V]]
 - **Parameters.** Type names in brackets, as the parameters of an enum
   (`type_parameters` in section 5). A parameter name follows the enum rule: a
   reserved name is `CHECK-REDEFINED-NAME`.
-- **Every parameter is used.** A parameter that does not appear on the right
-  side is `CHECK-TYPE-ALIAS-PARAM` (a proposed code), at the parameter.
+- **An unused parameter is allowed.** As for enums, and the language does not
+  report unused names. This replaces the earlier plan of a
+  `CHECK-TYPE-ALIAS-PARAM` code; no new code was added.
 - **The count.** A use gives exactly as many type arguments as the alias has.
   A wrong count uses an existing code: `CHECK-UNKNOWN-TYPE`, as an enum with
   the wrong number of arguments gets today (`resolve_generic` in
@@ -39,9 +40,8 @@ export type Pairs[K, V] = List[Map[K, V]]
   or the bare name), and no default type arguments.
 - **The core rule changes.** AGENTS.md's core grammar says "user enums (the
   only user generics)". 49b widens it to "user enums and type aliases", and
-  `docs/grammar/05-syntax.md` says "only enums take type parameters", which
-  changes too. The 49b PR says so. This design does not edit AGENTS.md; that
-  edit lands with 49b.
+  `docs/grammar/05-syntax.md` said "only enums take type parameters"; both
+  changed with 49b.
 
 ### 49.4 What changes where
 

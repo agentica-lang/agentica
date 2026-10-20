@@ -132,7 +132,7 @@ phase 13).
   checked-in data (see its header). These rules are defaults, which a PR may
   relax when following them costs more than it saves; the PR says which rule it
   relaxes and why.
-- Core grammar only (sections 4–6): user enums (the only user generics),
+- Core grammar only (sections 4–6): user enums and type aliases (the only user generics),
   `case`, file modules with explicit imports/exports, builtin `List[T]`,
   `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in `docs/future/`
   until its phase lands. No placeholder files or nodes for later phases.

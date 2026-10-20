@@ -463,12 +463,11 @@ after them may run in parallel when needed and keep their relative order.
     `Test.test` blocks
 
 - **Order:** 7.12
-  - **Next work:** **30a implemented; 30b planned** (design and plan:
-    [§49](../future/49-type-aliases.md#49-type-aliases)): simple transparent
-    aliases (`type Grid = List[List[Float]]`) are compiler-only, with no
-    bytecode or VM change. Next, generic aliases (`type Matrix[T] =
-    List[List[T]]`). Post-bootstrap step 6, before row 7.11 and before the path
-    to the JIT.
+  - **Next work:** **49a and 49b implemented** (design:
+    [§49](../future/49-type-aliases.md#49-type-aliases)): transparent aliases
+    (`type Grid = List[List[Float]]`) and generic ones (`type Matrix[T] =
+    List[List[T]]`) are compiler-only, with no bytecode or VM change.
+    Post-bootstrap step 6, before row 7.11 and before the path to the JIT.
   - **Outcome:** Long types get one name, with no runtime cost
 
 - **Order:** 8.1
@@ -596,7 +595,7 @@ macOS releases were done ahead of this order.
 6. The other rows that waited for the bootstrap: the prelude (row 8.2),
    strict diagnostics (row 7.6), `agentica doc` and `help` (row 22b), the
    44b–44d table rewrites (**done 2026-10-16**), type aliases (row 7.12,
-   §49: 49a done, then generic 49b), test functions without `main`
+   §49: 49a and 49b done), test functions without `main`
    (row 7.11, §50), and `Task.map` (**done**, 17a, PR #316).
 7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
    7.7), the server measurement (row 9), the package system
