@@ -358,10 +358,10 @@ a blank line and a `#` line both give one `NL`. Stray text after `end` is
 
 ## Comments
 
-- `compiler/*.agc`: a `#` comment where the code is complex or a rule is easy to
-  break (name the rule). Each `def`, `struct` or `enum` you add or touch gets a
-  `##` block, as in `stdlib/queue.agc`. The file's first `##` block, followed by
-  a blank line, is its module doc.
+- `compiler/**/*.agc`: a `#` comment where the code is complex or a rule is easy
+  to break (name the rule). Each `def`, `struct` or `enum` you add or touch gets
+  a `##` block, as in `stdlib/queue.agc`. The file's first `##` block, followed
+  by a blank line, is its module doc.
 ## Code style
 
 - Lines are at most 119 characters, comments included (`compiler/agentica.toml`

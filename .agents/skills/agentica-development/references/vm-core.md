@@ -327,7 +327,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     time
 - `vm/diag.c`
   - the plain, `--ai` and `--json` diagnostic formats, the same formats as
-    `compiler/diagnostic_*.agc`
+    `compiler/diagnostics/diagnostic_*.agc`
   - only the code must match
   - a task crash adds ` in a task` (plain, `--ai`) or `"task":true` (`--json`)
   - `agc_crash_text` and the unobserved summary line (`agc_print_unobserved`)

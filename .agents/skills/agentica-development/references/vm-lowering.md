@@ -1,7 +1,7 @@
 # Lowering and bytecode: new forms, opcodes and linked programs
 
-Read before changing `compiler/lower_*.agc`, `compiler/bytecode_*.agc` or adding
-an opcode.
+Read before changing `compiler/lower/*.agc`, `compiler/bytecode/*.agc` or
+adding an opcode.
 
 Read first: `references/vm.md` and `references/vm-c.md`.
 
@@ -11,8 +11,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    behavior) and `docs/vm/03-ir-and-bytecode.md` §3.3
    (lowering). When a detail is not written down, decide it, write it into §2
    and pin it with a golden.
-2. `compiler/lower_*.agc`: lower the form. Emit one IR `step` per former AST
-   entry, before the node's children (§3.3). Anything still out of
+2. `compiler/lower/lower_*.agc`: lower the form. Emit one IR `step` per former
+   AST entry, before the node's children (§3.3). Anything still out of
    the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
    miscompile. `vm-type?` says which checked types the VM accepts (the
    scalars, `(Struct name)` and `(Enum name ...)` declared in the program,

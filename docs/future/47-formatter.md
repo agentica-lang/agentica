@@ -127,11 +127,15 @@ Checked on `origin/master` at `95a45635`:
   row 7.2.7 freezes it: `src/` takes no new syntax. A Racket formatter would be
   a second parser in that frozen tree.
 - Step 8 ports the CLI driver (§18.3), so the subcommand goes into the Agentica
-  CLI. These files are proposed, flat like the other stages in `compiler/`:
-  - `compiler/format.agc`: the driver, text in and text or a diagnostic out;
-  - `compiler/format_comments.agc`: the comment list and its attachment (47.4);
-  - `compiler/format_doc.agc`: the document type and the fit check (47.5);
-  - `compiler/format_layout.agc`: one function per node kind.
+  CLI. These files are proposed, in their own context folder `compiler/format/`
+  (#456):
+  - `compiler/format/format.agc`: the driver, text in and text or a diagnostic
+    out;
+  - `compiler/format/format_comments.agc`: the comment list and its attachment
+    (47.4);
+  - `compiler/format/format_doc.agc`: the document type and the fit check
+    (47.5);
+  - `compiler/format/format_layout.agc`: one function per node kind.
 
 ### 47.4 Comments: the hard part
 
@@ -496,7 +500,7 @@ below; there is no separate roadmap phase file.
 
 - **47a: comments and the side list.** `lex_with_comments` in
   `compiler/syntax/lexer.agc`, the attachment pass in
-  `compiler/format_comments.agc`, with the table of 47.4, and tests of the (node, role) pairs for a set of
+  `compiler/format/format_comments.agc`, with the table of 47.4, and tests of the (node, role) pairs for a set of
   inputs. Plain `lex` and `parse` do not change, so their goldens do not move.
   No user-visible change.
 - **47b: printer and `--check`.** The document type with the pieces of 47.5, the

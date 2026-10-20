@@ -148,13 +148,13 @@ job `timeout-minutes` of the workflow, which must
   deadline of `agentica test`, which has no flag.
 - `dist/agentica` is built before `make test` and `make smoke`, and `make test`
   then starts its test workers in parallel.
-- `smoke` is the example smoke runs
-  (`tests/smoke.sh`, on `dist/agentica`). `dist/agentica` is a real Makefile
-  rule over `compiler/*.agc`, `stdlib/*.agc`, `VERSION`, the VM objects and
-  `bootstrap/stage0.agcb`, and `test`, `test-bdd`, `test-cli` and `smoke` all
-  use it, so a pull never leaves a stale binary and an up-to-date one is not
-  rebuilt. The process, module and distribution tests are ordinary modules of
-  `make test` now (there is no `test-ci`, `test-exe` or second executable).
+- `smoke` is the example smoke runs (`tests/smoke.sh`, on `dist/agentica`).
+  `dist/agentica` is a real Makefile rule over every `.agc` under `compiler/`,
+  `stdlib/*.agc`, `VERSION`, the VM objects and `bootstrap/stage0.agcb`, and
+  `test`, `test-bdd`, `test-cli` and `smoke` all use it, so a pull never leaves
+  a stale binary and an up-to-date one is not rebuilt. The process, module and
+  distribution tests are ordinary modules of `make test` now (there is no
+  `test-ci`, `test-exe` or second executable).
 - `vendored-check` links the VM against the vendored OpenSSL and checks it
   (static, the submodule's version); `vendored-test` adds the TLS and HTTP
   tests on that binary.
@@ -365,8 +365,8 @@ The first steps of the `test` job (the `changes` step, checkout with
 `vm-sanitizers` only when the VM,
 lowering or bytecode files, the `std/` modules, or CI itself, change:
 
-- `vm/`, `bootstrap/`, `compiler/front_end*`, `compiler/lower*`,
-  `compiler/bytecode*`, `VERSION`;
+- `vm/`, `bootstrap/`, `compiler/front_end.agc`, `compiler/app/front_end*`,
+  `compiler/lower/lower*`, `compiler/bytecode/*`, `VERSION`;
 - `tests/test_vm_diff_*`, `tests/vm_diff_support.py`, `tests/test_vm_trace.py`,
   `tests/test_vm_tcp.py`,
   `tests/fixtures/tcp-peer.js`, `tests/test_vm_tls.py`,

@@ -95,7 +95,7 @@ limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
   `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks
   every catalog key), C in `vm/`, a golden (`references/vm-builtins.md`,
   `vm.md`, `vm-c.md`).
-- VM form or opcode: `compiler/lower_*.agc`; `OPCODES` in
+- VM form or opcode: `compiler/lower/lower_*.agc`; `OPCODES` in
   `compiler/bytecode/bytecode_tables.agc` = `agc_opcode` in `vm/value.h` (same
   order); `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`).
 - Pipeline stage: `compiler/<context>/<stage>.agc`, wired in

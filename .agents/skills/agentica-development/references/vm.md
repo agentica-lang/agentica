@@ -114,7 +114,7 @@ still compute wrong values or end with
     HTTP client and server
 
 - **Read:** `references/vm-lowering.md`
-  - **When:** `compiler/lower_*.agc`, `compiler/bytecode_*.agc`, a new form or
+  - **When:** `compiler/lower/*.agc`, `compiler/bytecode/*.agc`, a new form or
     opcode, linked programs, closures, ranges, Results, tail calls
 
 - **Read:** `references/vm-builtins.md`
