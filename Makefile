@@ -272,6 +272,7 @@ vm-golden-check: $(PRODUCT)
 JSCPD ?= tools/jscpd/node_modules/.bin/jscpd
 
 tools/jscpd/node_modules: tools/jscpd/package.json tools/jscpd/package-lock.json
+	@if [ -L $@ ]; then echo "$@ is a symlink: npm ci would empty its target; remove the link (each worktree installs its own)"; exit 1; fi
 	npm ci --prefix tools/jscpd --ignore-scripts --no-audit --no-fund
 	touch $@
 

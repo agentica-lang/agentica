@@ -130,6 +130,9 @@ functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
   Common indentation is removed; interpolation and escapes work as in strings.
   One line is a plain string (`LEX-HEREDOC-ONE-LINE`); indent with spaces
   (`LEX-HEREDOC-INDENT`).
+- A method chain may span lines: a line that starts with `.name` continues
+  the one above (comments allowed between, no blank line); `|>` needs
+  parentheses.
 - Calls take parentheses. Only builtin methods and zero-argument module
   functions drop them: `s.length`, `xs.size`, `IO.gets!`.
 - Values are immutable: `xs = xs.push(4)`, `m = m.put("k", 1)`. A bare
