@@ -118,10 +118,12 @@ def test_a_golden_variant_is_host_only_on_the_other_family_of_systems_only(tmp_p
     assert not conformance.host_only_allowed("windows-x86_64", "tests/test_vm_diff_2.py", reason)
 
 
-def test_a_skip_for_an_open_issue_is_listed_as_an_open_gap_and_the_number_must_be_known(tmp_path):
-    text, ok = evidence(tmp_path, "windows-x86_64", skip_message="known-issue: #432 the channel has no test")
+def test_a_skip_for_an_open_issue_is_listed_as_an_open_gap_and_the_number_must_be_known(tmp_path, monkeypatch):
+    # A made-up open issue: the real list shrinks as the issues close, and may be empty.
+    monkeypatch.setitem(conformance.KNOWN_ISSUES, 99998, "synthetic open issue")
+    text, ok = evidence(tmp_path, "windows-x86_64", skip_message="known-issue: #99998 the channel has no test")
     assert ok, text
-    assert "Open gaps" in text and "#432" in text
+    assert "Open gaps" in text and "#99998" in text
     assert not evidence(tmp_path, "windows-x86_64", skip_message="known-issue: the channel has no test")[1]
     text, ok = evidence(tmp_path, "windows-x86_64", skip_message="known-issue: #99999 not an issue of the list")
     assert not ok and "not in KNOWN_ISSUES" in text

@@ -12,9 +12,9 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, known_issue,
-                                 process_alive, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
-                                 vm_environment, wait_until)
+from tests.agentica_test import (FIXTURES, PYTHON, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, kill_process,
+                                 known_issue, process_alive, scaled, start_vm, stop_a_vm_that_fills_its_stdout,
+                                 vm_command, vm_environment, wait_until)
 from tests.windows_console_support import CHILD as WINDOWS_CHILD, run_on_console
 
 # SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals, so each case that sends one is host-only on Windows, and the
@@ -110,16 +110,6 @@ def gone_soon(pid):
     kill_process(pid)
     return False
 
-
-def kill_process(pid):
-    """Ends the process at once: SIGKILL, or on Windows a TerminateProcess, which any other signal number asks for."""
-    try:
-        os.kill(int(pid), getattr(signal, "SIGKILL", signal.SIGTERM))
-    except ProcessLookupError:
-        pass
-    except OSError:
-        if os.name != "nt":
-            raise  # Windows reports a process that is gone as an OSError (WinError 87 or 5)
 
 
 
@@ -253,19 +243,25 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
         cli_child.wait(WAIT_SECONDS)
         return pid
     pid_file = path.with_name("child.pid")
-    pids = []
-    request.addfinalizer(lambda: [kill_process(pid) for pid in pids])
+
+    def child_pid():
+        text = pid_file.read_text() if pid_file.exists() else ""
+        return int(text) if text.isdigit() else None
+
+    # Whatever fails, the child (it sleeps 60 s) must not outlive the test; run_on_console ends the CLI itself.
+    request.addfinalizer(lambda: child_pid() and kill_process(child_pid()))
 
     def press_ctrl_c(type_text):
-        assert wait_until(lambda: pid_file.exists() and pid_file.read_text().isdigit(), 6 * WAIT_SECONDS, 0.1), \
-            "the child wrote its pid"
-        pids.append(int(pid_file.read_text()))
+        assert wait_until(lambda: child_pid() is not None, 6 * WAIT_SECONDS, 0.1), "the child wrote its pid"
         type_text("\x03")
+        # Checked while the console is open: closing a pseudo console may end what is attached to it, and then a child
+        # that the VM left alive would look gone.
+        assert wait_until(lambda: not process_alive(child_pid()), WAIT_SECONDS, 0.1), "the VM ended the child"
 
     command = cli() + ["--allow-run", source, path, "sleep", PYTHON, WINDOWS_CHILD, pid_file]
     status, shown = run_on_console(command, vm_environment(), WAIT_SECONDS, during=press_ctrl_c)
     assert status == 128 + signal.SIGINT, shown
-    return pids[0]
+    return child_pid()
 
 
 @pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary: no /bin/sh child, no console to press Ctrl+C in")

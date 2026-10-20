@@ -16,8 +16,9 @@ import time
 
 import pytest
 
-from tests.agentica_test import (RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only, process_alive, scaled,
-                                 vm_binary, vm_command, vm_environment, wait_until)
+from tests.agentica_test import (RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc, host_only,
+                                 kill_process, process_alive, scaled, vm_binary, vm_command, vm_environment,
+                                 wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
     check_limited, check_runaway, check_steps, check_sweep, check_text_format, decode, exit_status, execute,
@@ -58,17 +59,9 @@ def gone(pid):
     return wait_until(lambda: not process_alive(pid), scaled(5))
 
 
-# Windows has no SIGKILL: os.kill ends the process (TerminateProcess) with any number that is not a console event.
-KILL = getattr(signal, "SIGKILL", signal.SIGTERM)
-
-
 def kill_alive(pids):
     for pid in pids:
-        if process_alive(pid):
-            try:
-                os.kill(int(pid), KILL)
-            except ProcessLookupError:
-                pass
+        kill_process(pid)
 
 
 def compile_program(work, name, text):
@@ -396,7 +389,7 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
     request.addfinalizer(lambda: kill_alive([pid]))
     assert pid.isdigit(), pid
     time.sleep(0.5)
-    os.kill(int(pid), KILL)
+    kill_process(pid)
     time.sleep(0.3)
     if windows:
         child.process.send_signal(signal.CTRL_BREAK_EVENT)

@@ -74,6 +74,8 @@ if os.name == "nt":
     kernel32.OpenProcess.restype = wintypes.HANDLE
     kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     kernel32.SetConsoleCtrlHandler.argtypes = [ctypes.c_void_p, wintypes.BOOL]
+else:
+    kernel32 = None  # imported by name on every system; only the Windows tests use it
 
 
 def close_handle(handle):
