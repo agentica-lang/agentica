@@ -19,7 +19,8 @@ export def receiver_kind(type: T.Type) -> String
     word == "Json" or
     word == "Int" or
     word == "Range" or
-    word == "Channel"
+    word == "Channel" or
+    word == "Lazy"
   )
     return word
   end
@@ -89,10 +90,22 @@ export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> Stri
     return result_help(cx, name)
   elsif name == "nil?"
     return "values are never nil unless their type is Nil; compare with nil: x == nil"
-  elsif name == "lazy" and (kind == "List" or kind == "Range")
-    return "lists are eager; read a source that is too big for a list in a while loop"
+  elsif (kind == "List" or kind == "Range") and lazy_step?(name) and resolve_method(cx, "List", name) == ""
+    receiver = "xs"
+    if kind == "Range"
+      receiver = "(a..b)"
+    end
+    return "#{kind} methods are eager; #{name} is a step of Lazy: call .lazy first: #{receiver}.lazy.#{name}(...)"
+  elsif kind == "Lazy" and catalog_method(cx, "List", name) != ""
+    return "a Lazy runs only in a terminal; collect it first with try lz.to_a (or lz.first(n)), then call .#{name}"
   end
   return renamed_help(cx, kind, name)
+end
+
+# True when Lazy has a step (a method that returns a Lazy) with that name.
+def lazy_step?(name: String) -> Bool
+  entry = ENTRIES.get("Lazy.#{name}")
+  return entry.ok? and T.is(entry.unwrap!.result, "Lazy") and entry.unwrap!.parameters.size > 0
 end
 
 # The builtin of the kind's module with that name whose first parameter has the kind, or "".

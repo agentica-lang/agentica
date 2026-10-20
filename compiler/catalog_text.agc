@@ -137,6 +137,7 @@ def type_help(word: String) -> Ast.Optional[String]
     "Fn",
     "Task",
     "Channel",
+    "Lazy",
     "Range",
   ].concat(OPAQUE_TYPES.to_a)
   return Suggest.did_you_mean_among(word, RECORDS.keys.concat(ENUMS.keys), shared)
