@@ -9,9 +9,11 @@
 
 #include <openssl/crypto.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
 #include <openssl/objects.h>
 #include <openssl/x509.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/x509v3.h>
 
 /* The process-wide copy of the platform store: written once by load_system under system_once, read-only after.
  * Its X509 objects are shared by every store (reference counted, never changed after loading). Never freed. The
@@ -66,14 +68,71 @@ int agc_tls_trust_verify(int ok, struct x509_store_ctx_st *ctx) {
   return 0;
 }
 
+/* One DER certificate, exactly `len` bytes with nothing after it, or NULL. */
+static X509 *parse_der(const unsigned char *der, size_t len) {
+  if (len > LONG_MAX) return NULL;
+  const unsigned char *p = der;
+  X509 *x = d2i_X509(NULL, &p, (long)len);
+  if (x && p != der + len) {
+    X509_free(x);
+    x = NULL;
+  }
+  return x;
+}
+
 /* OpenSSL's check_trust (crypto/x509/x509_vfy.c) asks X509_check_trust of each chain certificate that came from the
  * store; for the SSL server trust id, an explicit reject of serverAuth answers X509_TRUST_REJECTED
  * (obj_trust in crypto/x509/x509_trust.c), and the chain fails with X509_V_ERR_CERT_REJECTED. */
 bool agc_tls_trust_add_der(struct x509_store_st *store, const unsigned char *der, size_t len, bool rejected) {
-  if (len > LONG_MAX) return false;
-  const unsigned char *p = der;
-  X509 *x = d2i_X509(NULL, &p, (long)len);
-  bool ok = x && p == der + len && (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
+  X509 *x = parse_der(der, len);
+  bool ok = x && (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
+            X509_STORE_add_cert(store, x) == 1;
+  X509_free(x);
+  ERR_clear_error();
+  return ok;
+}
+
+/* Whether `store` already holds a self-signed certificate with the subject and public key of `x`, so `x` is a
+ * cross-signed copy of that anchor. OpenSSL looks an issuer up by subject name and may take the copy, whose own
+ * issuer is often missing or distrusted, instead of the anchor: the chain then fails or not by store order, which
+ * neither Crypt32 nor OpenSSL's sorted object list keeps stable. A store that cannot be locked answers yes, so the
+ * certificate is left out (fail closed). */
+static bool stands_for_anchor(X509_STORE *store, X509 *x) {
+  EVP_PKEY *key = X509_get0_pubkey(x);
+  if (!key || X509_STORE_lock(store) != 1) return true;
+  STACK_OF(X509_OBJECT) *objects = X509_STORE_get0_objects(store);
+  bool found = false;
+  for (int k = 0; k < sk_X509_OBJECT_num(objects) && !found; k++) {
+    X509 *y = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objects, k));
+    found = y && (X509_get_extension_flags(y) & EXFLAG_SS) &&
+            X509_NAME_cmp(X509_get_subject_name(y), X509_get_subject_name(x)) == 0 &&
+            EVP_PKEY_eq(X509_get0_pubkey(y), key) == 1;
+  }
+  X509_STORE_unlock(store);
+  return found;
+}
+
+/* Whether the EKU extension of `x` leaves out TLS server authentication (and Netscape SGC), which is what
+ * OpenSSL's ssl_server purpose rejects. No extension allows every use. */
+static bool excludes_server_auth(X509 *x) {
+  return (X509_get_extension_flags(x) & EXFLAG_XKUSAGE) &&
+         !(X509_get_extended_key_usage(x) & (XKU_SSL_SERVER | XKU_SGC));
+}
+
+/* A store certificate with no trust settings is an anchor only when it is self-signed (trust_compat in
+ * crypto/x509/x509_trust.c); X509_V_FLAG_PARTIAL_CHAIN stays off, so any other one only helps build a chain that
+ * must still end at a root. EXFLAG_SI (subject equals issuer) covers every certificate OpenSSL calls self-signed,
+ * so refusing it is what keeps an intermediate store from adding an anchor. A certificate whose EKU extension
+ * excludes server authentication is refused too, by the test of OpenSSL's own purpose check (xku_reject in
+ * crypto/x509/v3_purp.c): OpenSSL takes a store copy first, so such a sibling of a valid intermediate (same subject
+ * and key) would fail a chain that the server sends correctly. A rejected copy carries an explicit reject of
+ * serverAuth, as in agc_tls_trust_add_der. */
+bool agc_tls_trust_add_intermediate_der(struct x509_store_st *store, const unsigned char *der, size_t len,
+                                        bool rejected) {
+  X509 *x = parse_der(der, len);
+  bool ok = x && !(X509_get_extension_flags(x) & EXFLAG_SI) && !excludes_server_auth(x) &&
+            !stands_for_anchor(store, x) &&
+            (!rejected || X509_add1_reject_object(x, OBJ_nid2obj(NID_server_auth)) == 1) &&
             X509_STORE_add_cert(store, x) == 1;
   X509_free(x);
   ERR_clear_error();

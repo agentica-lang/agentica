@@ -220,22 +220,29 @@ static X509 *read_pem(const char *path) {
   return x;
 }
 
-/* Adds a fixture certificate through the loaders' helper, rejected for serverAuth or trusted. */
-static bool add_pem(X509_STORE *store, const char *path, bool rejected) {
+/* Adds a fixture certificate through a loaders' helper (the intermediate one or not), rejected for serverAuth or
+ * trusted. */
+static bool add_fixture(X509_STORE *store, const char *path, bool rejected, bool intermediate) {
   X509 *x = read_pem(path);
   unsigned char *der = NULL;
   int len = i2d_X509(x, &der);
   assert(len > 0);
-  bool ok = agc_tls_trust_add_der(store, der, (size_t)len, rejected);
+  bool ok = intermediate ? agc_tls_trust_add_intermediate_der(store, der, (size_t)len, rejected)
+                         : agc_tls_trust_add_der(store, der, (size_t)len, rejected);
   OPENSSL_free(der);
   X509_free(x);
   return ok;
 }
 
-/* X509_verify_cert of `leaf` against `store` for a TLS server, with the clients' verify callback; the error, or 0. */
-static int verify(X509_STORE *store, X509 *leaf) {
+static bool add_pem(X509_STORE *store, const char *path, bool rejected) {
+  return add_fixture(store, path, rejected, false);
+}
+
+/* X509_verify_cert of `leaf`, with the certificates the peer also sent (`sent`, or NULL), against `store` for a TLS
+ * server, with the clients' verify callback; the error, or 0. */
+static int verify_sent(X509_STORE *store, X509 *leaf, STACK_OF(X509) *sent) {
   X509_STORE_CTX *ctx = X509_STORE_CTX_new();
-  assert(ctx && X509_STORE_CTX_init(ctx, store, leaf, NULL) == 1);
+  assert(ctx && X509_STORE_CTX_init(ctx, store, leaf, sent) == 1);
   assert(X509_STORE_CTX_set_purpose(ctx, X509_PURPOSE_SSL_SERVER) == 1);
   X509_STORE_CTX_set_verify_cb(ctx, agc_tls_trust_verify);
   int ok = X509_verify_cert(ctx);
@@ -244,6 +251,8 @@ static int verify(X509_STORE *store, X509 *leaf) {
   X509_STORE_CTX_free(ctx);
   return error;
 }
+
+static int verify(X509_STORE *store, X509 *leaf) { return verify_sent(store, leaf, NULL); }
 
 /* A certificate the system distrusts is in the store marked rejected. The test CA trusted verifies server.pem;
  * rejected it gives X509_V_ERR_CERT_REJECTED, also when a trusted copy is added after it (the store keeps the first
@@ -279,6 +288,50 @@ static void test_rejected(void) {
   OPENSSL_free(longer);
   OPENSSL_free(der);
   X509_STORE_free(garbage);
+  X509_free(leaf);
+}
+
+#define CHAIN CERTS "chain-"
+
+/* The intermediate-store rule on every system (the Windows CA store uses it): an intermediate completes a chain
+ * that still ends at a root, and is never an anchor itself; a self-issued certificate and a cross-signed copy of a
+ * store anchor are refused; a rejected intermediate fails the chain even when the peer sends it too. A sibling of
+ * the intermediate whose EKU extension allows only email is refused, so a peer that sends the valid one still
+ * verifies; a plain store copy of that sibling would be taken first and fail the chain. */
+static void test_intermediates(void) {
+  X509 *leaf = read_pem(CHAIN "leaf.pem"), *inter = read_pem(CHAIN "intermediate.pem");
+  X509_STORE *store = X509_STORE_new();
+  assert(add_pem(store, CHAIN "cross-signer.pem", true));
+  assert(add_pem(store, CHAIN "root.pem", false));
+  assert(verify(store, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY);
+  assert(!add_fixture(store, CHAIN "root-cross.pem", false, true));
+  assert(!add_fixture(store, CERTS "ca.pem", false, true));
+  assert(add_fixture(store, CHAIN "intermediate.pem", false, true));
+  assert(verify(store, leaf) == 0);
+  X509_STORE_free(store);
+  X509_STORE *alone = X509_STORE_new();
+  assert(add_fixture(alone, CHAIN "intermediate.pem", false, true));
+  assert(verify(alone, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT);
+  X509_STORE_free(alone);
+  X509_STORE *rejected = X509_STORE_new();
+  assert(add_pem(rejected, CHAIN "root.pem", false));
+  assert(add_fixture(rejected, CHAIN "intermediate.pem", true, true));
+  assert(verify(rejected, leaf) == X509_V_ERR_CERT_REJECTED);
+  STACK_OF(X509) *sent = sk_X509_new_null();
+  assert(sent && sk_X509_push(sent, inter) > 0);
+  assert(verify_sent(rejected, leaf, sent) == X509_V_ERR_CERT_REJECTED);
+  X509_STORE *siblings = X509_STORE_new(), *shadowed = X509_STORE_new();
+  assert(add_pem(siblings, CHAIN "root.pem", false) && add_pem(shadowed, CHAIN "root.pem", false));
+  assert(!add_fixture(siblings, CHAIN "intermediate-email.pem", false, true));
+  assert(!add_fixture(siblings, CHAIN "intermediate-email.pem", true, true));
+  assert(verify_sent(siblings, leaf, sent) == 0);
+  assert(add_pem(shadowed, CHAIN "intermediate-email.pem", false));
+  assert(verify_sent(shadowed, leaf, sent) == X509_V_ERR_INVALID_PURPOSE);
+  X509_STORE_free(shadowed);
+  X509_STORE_free(siblings);
+  sk_X509_free(sent);
+  X509_STORE_free(rejected);
+  X509_free(inter);
   X509_free(leaf);
 }
 
@@ -339,6 +392,7 @@ int main(void) {
   test_garbage();
   test_trust_sources();
   test_rejected();
+  test_intermediates();
   test_rejected_handshake();
   test_system_store();
   puts("tls tests passed");

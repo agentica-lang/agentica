@@ -1,6 +1,7 @@
 /*
  * The Windows trust policy (tls_trust_windows.c) on in-memory Crypt32 stores:
- * the valid uses of a root, and a Disallowed copy that wins over ROOT.
+ * the valid uses of a root, a Disallowed copy that wins over ROOT, and CA
+ * certificates that complete a chain but are never anchors.
  */
 #include "../tls_trust.h"
 
@@ -96,12 +97,12 @@ static void test_copy_stores(der_cert ca) {
   HCERTSTORE disallowed = memory_store(), root = memory_store();
   CertFreeCertificateContext(add_to(root, ca));
   X509_STORE *trusted = X509_STORE_new();
-  agc_tls_trust_copy_stores(trusted, disallowed, root);
+  agc_tls_trust_copy_stores(trusted, disallowed, root, NULL);
   assert(verify(trusted, leaf) == 0);
   X509_STORE_free(trusted);
   CertFreeCertificateContext(add_to(disallowed, ca));
   X509_STORE *rejected = X509_STORE_new();
-  agc_tls_trust_copy_stores(rejected, disallowed, root);
+  agc_tls_trust_copy_stores(rejected, disallowed, root, NULL);
   assert(verify(rejected, leaf) == X509_V_ERR_CERT_REJECTED);
   X509_STORE_free(rejected);
   HCERTSTORE empty = memory_store(), client_only = memory_store();
@@ -110,7 +111,7 @@ static void test_copy_stores(der_cert ca) {
   set_usage(cert, client, 1);
   CertFreeCertificateContext(cert);
   X509_STORE *skipped = X509_STORE_new();
-  agc_tls_trust_copy_stores(skipped, empty, client_only);
+  agc_tls_trust_copy_stores(skipped, empty, client_only, NULL);
   assert(verify(skipped, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY);
   X509_STORE_free(skipped);
   CertCloseStore(empty, 0);
@@ -120,10 +121,93 @@ static void test_copy_stores(der_cert ca) {
   X509_free(leaf);
 }
 
+/* The certificate of a fixture, parsed again from its DER (the caller frees both). */
+static X509 *x509_of(der_cert d) {
+  const unsigned char *p = d.der;
+  X509 *x = d2i_X509(NULL, &p, d.len);
+  assert(x);
+  return x;
+}
+
+/* The verify error of `leaf` against the copy of ROOT `root` and CA `ca` (no Disallowed store). */
+static int verify_copy(HCERTSTORE root, HCERTSTORE ca, X509 *leaf) {
+  X509_STORE *store = X509_STORE_new();
+  assert(store);
+  agc_tls_trust_copy_stores(store, NULL, root, ca);
+  int error = verify(store, leaf);
+  X509_STORE_free(store);
+  return error;
+}
+
+/* chain-leaf.pem is signed by chain-intermediate.pem, which chain-root.pem signs. The peer sends only the leaf, so
+ * the chain needs the CA store's intermediate, and still ends at ROOT: the intermediate alone, a self-signed
+ * certificate in CA never verifies, and an intermediate whose EKU property excludes server authentication is
+ * rejected, while a sibling whose EKU extension excludes it (chain-intermediate-email.pem) is skipped, so it
+ * cannot shadow the valid one. A Disallowed copy of the intermediate wins over CA. A cross-signed copy of the ROOT
+ * anchor in CA, whose signer is distrusted, is left out, so it cannot hide the anchor. */
+static void test_ca_store(der_cert ca) {
+  der_cert root_cert = read_der(CERTS "chain-root.pem"), inter = read_der(CERTS "chain-intermediate.pem");
+  der_cert leaf_der = read_der(CERTS "chain-leaf.pem"), server_der = read_der(CERTS "server.pem");
+  X509 *leaf = x509_of(leaf_der), *server = x509_of(server_der);
+  HCERTSTORE root = memory_store(), cas = memory_store(), none = memory_store();
+  CertFreeCertificateContext(add_to(root, root_cert));
+  assert(verify_copy(root, none, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY);
+  PCCERT_CONTEXT in_ca = add_to(cas, inter);
+  assert(verify_copy(root, cas, leaf) == X509_V_OK);
+  assert(verify_copy(none, cas, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT);
+  HCERTSTORE disallowed = memory_store();
+  CertFreeCertificateContext(add_to(disallowed, inter));
+  X509_STORE *store = X509_STORE_new();
+  agc_tls_trust_copy_stores(store, disallowed, root, cas);
+  assert(verify(store, leaf) == X509_V_ERR_CERT_REJECTED);
+  X509_STORE_free(store);
+  der_cert signer = read_der(CERTS "chain-cross-signer.pem"), cross = read_der(CERTS "chain-root-cross.pem");
+  HCERTSTORE distrusted = memory_store(), crossed = memory_store();
+  CertFreeCertificateContext(add_to(distrusted, signer));
+  CertFreeCertificateContext(add_to(crossed, cross));
+  CertFreeCertificateContext(add_to(crossed, inter));
+  X509_STORE *with_cross = X509_STORE_new();
+  agc_tls_trust_copy_stores(with_cross, distrusted, root, crossed);
+  assert(verify(with_cross, leaf) == X509_V_OK);
+  X509_STORE_free(with_cross);
+  der_cert email = read_der(CERTS "chain-intermediate-email.pem");
+  HCERTSTORE siblings = memory_store();
+  CertFreeCertificateContext(add_to(siblings, email));
+  assert(verify_copy(root, siblings, leaf) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY);
+  CertFreeCertificateContext(add_to(siblings, inter));
+  assert(verify_copy(root, siblings, leaf) == X509_V_OK);
+  CertCloseStore(siblings, 0);
+  OPENSSL_free(email.der);
+  CertCloseStore(crossed, 0);
+  CertCloseStore(distrusted, 0);
+  OPENSSL_free(cross.der);
+  OPENSSL_free(signer.der);
+  LPSTR client[] = {szOID_PKIX_KP_CLIENT_AUTH};
+  set_usage(in_ca, client, 1);
+  assert(verify_copy(root, cas, leaf) == X509_V_ERR_CERT_REJECTED);
+  CertFreeCertificateContext(in_ca);
+  HCERTSTORE self_signed = memory_store();
+  CertFreeCertificateContext(add_to(self_signed, ca));
+  assert(verify_copy(none, self_signed, server) == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY);
+  assert(verify_copy(self_signed, none, server) == X509_V_OK);
+  CertCloseStore(self_signed, 0);
+  CertCloseStore(disallowed, 0);
+  CertCloseStore(none, 0);
+  CertCloseStore(cas, 0);
+  CertCloseStore(root, 0);
+  X509_free(server);
+  X509_free(leaf);
+  OPENSSL_free(server_der.der);
+  OPENSSL_free(leaf_der.der);
+  OPENSSL_free(inter.der);
+  OPENSSL_free(root_cert.der);
+}
+
 int main(void) {
   der_cert ca = read_der(CERTS "ca.pem");
   test_server_auth(ca);
   test_copy_stores(ca);
+  test_ca_store(ca);
   OPENSSL_free(ca.der);
   puts("tls trust windows tests passed");
   return 0;

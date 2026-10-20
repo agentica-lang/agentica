@@ -46,9 +46,9 @@ static bool tls_policy(CFDictionaryRef d) {
  * absent or TLS. One that also limits the trust to an application, a host name or a key use counts only when it
  * denies: a narrow grant never becomes a general root (on purpose even when its key uses include certificate
  * signing; a key use that cannot be read counts as narrow), and a narrow denial removes the certificate for every
- * host. A missing result means TrustRoot; Unspecified gives no verdict. Any matching denial wins, which is stricter than Apple's first match and fails
- * closed. A grant on a non-self-signed certificate (TrustAsRoot) has no effect: without X509_V_FLAG_PARTIAL_CHAIN,
- * OpenSSL only ends a chain at a self-signed certificate. */
+ * host. A missing result means TrustRoot; Unspecified gives no verdict. Any matching denial wins, which is stricter
+ * than Apple's first match and fails closed. A grant on a non-self-signed certificate (TrustAsRoot) has no effect:
+ * without X509_V_FLAG_PARTIAL_CHAIN, OpenSSL only ends a chain at a self-signed certificate. */
 agc_tls_trust_verdict agc_tls_trust_settings_verdict(CFArrayRef settings) {
   CFIndex n = CFArrayGetCount(settings);
   if (n == 0) return AGC_TLS_TRUST_ROOT;
