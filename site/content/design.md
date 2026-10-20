@@ -16,7 +16,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 **Decision.** Strings, lists, maps, structs, enums and results never change in place. Mutable state lives only in handles (tasks, channels, files, sockets, processes), and each handle has one owner task, which decides who closes it.
 
-**Why.** Tasks share immutable values without locks or copies, also across scheduler threads.
+**Why.** Tasks share immutable values without locks or copies, also across scheduler threads once several schedulers open.
 
 ## Garbage collection with Boehm
 
