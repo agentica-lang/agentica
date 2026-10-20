@@ -1,4 +1,4 @@
-## Imports of packages (docs/future/45-packages.md, 45.3 and 45.8). `pkg/<name>/<module>` is a package import when
+## Imports of packages (docs/grammar/05b-modules.md). `pkg/<name>/<module>` is a package import when
 ## <name> is declared by the manifest of the importing file: the manifest of the project for a file of the project, the
 ## manifest of the package for a file of a package. The files come from the cache folder of the commit the lock names,
 ## and the first time a build loads a package, the hash of its .agc files must be the hash in the lock. Before any

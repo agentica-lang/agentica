@@ -1,4 +1,4 @@
-## Where a package comes from (docs/future/45-packages.md, 45.5): a git URL and one pin, a tag or a commit (`ref`). The
+## Where a package comes from (docs/grammar/05b-modules.md): a git URL and one pin, a tag or a commit (`ref`). The
 ## manifest and the lock both write it, and the build compares the two. The rules of the three parts are here, so that
 ## a rule changes in one place. Every check returns "" when the text is fine, else a reason for the diagnostic.
 

@@ -1,4 +1,4 @@
-## Where the files of a package are kept (docs/future/45-packages.md, 45.8): a folder for each commit of each package,
+## Where the files of a package are kept (docs/grammar/05b-modules.md): a folder for each commit of each package,
 ## under the cache root. The build only reads it; filling it is the job of install (a later phase).
 
 import GitSource from "git_source"

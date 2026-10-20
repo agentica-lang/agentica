@@ -116,7 +116,8 @@ Checked on `origin/master` at `95a45635`:
 - Exit codes follow §39: 1 means "fix the file" (a parse error, or `--check`
   found changes), and 2 means "fix the call" (an unknown path or a bad option).
   A usage error is `FMT-USAGE`, a proposal modeled on `QUERY-USAGE`. No other
-  new code is needed. A bad `[style]` value is `PKG-MANIFEST-INVALID` (§45.5).
+  new code is needed. A bad `[style]` value is `PKG-MANIFEST-INVALID`
+  ([05b](../grammar/05b-modules.md), Packages).
 
 ### 47.3 Where it lives
 

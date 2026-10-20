@@ -1,4 +1,4 @@
-## The manifest agentica.toml (docs/future/45-packages.md, 45.5): the project's own name, its direct dependencies and
+## The manifest agentica.toml (docs/grammar/05b-modules.md): the project's own name, its direct dependencies and
 ## the [style] rules. A dependency is a local name and a git source: `sqlite = { git = "https://host/owner/repo", tag =
 ## "v1.2.0" }`, with exactly one of `tag` and `ref`. A failure is PKG-MANIFEST-INVALID, with the file and the key path
 ## (toml_read.agc).

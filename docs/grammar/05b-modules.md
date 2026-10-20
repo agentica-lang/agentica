@@ -131,8 +131,11 @@ Diagnostics inside an embedded module name its source, such as `std/queue.agc`.
 
 A package is a git repository of `.agc` files. A project uses packages when an
 `agentica.toml` (the manifest) is in the folder of the root file or in a folder
-above it; the nearest one counts, and its folder is the project folder. Without
-a manifest nothing changes. A build reads the manifest and the lock and loads
+above it; the nearest one counts, and its folder is the project folder. The
+search goes up to the root of the file system, so an `agentica.toml` in a shared
+parent folder (such as `/tmp`) is read and checked for every script below it,
+and a bad one there is `PKG-MANIFEST-INVALID` for each of them. Without a
+manifest nothing changes. A build reads the manifest and the lock and loads
 packages from a cache that the user fills. A build never runs git and never uses
 the network. Fetching and the commands that fill the cache are planned in
 `docs/future/45-packages.md`.
@@ -154,20 +157,21 @@ import Sqlite from "pkg/sqlite/db"
 
 - The manifest knows `name`, `[dependencies]` and `[style]`. An unknown key at
   any level, a value of the wrong form, or a TOML syntax error is
-  `PKG-MANIFEST-INVALID`. `max_line_width` is read by `agentica check` once
-  phase 28 lands.
+  `PKG-MANIFEST-INVALID`. `name` is optional and follows the rule of a
+  dependency name below. `max_line_width` is an integer of 1 or more.
 - A dependency is a local name and an inline table. The name is the key: a
   lowercase letter, then lowercase letters, digits, `_` and `-`, at most 64
   characters. It is the segment after `pkg/` in an import and has nothing to do
   with the URL, so moving a repository changes only its `git` line. The table
   has `git`, an `https://host/owner/repo` URL (an optional `.git` at the end; a
   lowercase host with no port and no user name; exactly an owner and a
-  repository, neither ending in `.` nor a Windows device name such as `con` or
-  `nul`), and exactly one of `tag` (1 to 128 letters, digits and `. _ + -`; no
-  `/`, and not starting with `.` or `-`) or `ref` (7 to 64 lowercase hex digits
-  of a commit). Only git sources exist: a `path`, a branch, a version range or
-  another key is `PKG-MANIFEST-INVALID`, at the key path
-  (`dependencies.sqlite.path`).
+  repository, each with only letters, digits, `.`, `_` and `-`, not `.`, `..` or
+  starting with `-`, not ending in `.` and not a Windows device name such as
+  `con` or `nul`), and exactly one of `tag` (1 to 128 letters, digits and the
+  characters `.`, `_`, `+` and `-`; no `/`, and not starting with `.` or `-`) or
+  `ref` (7 to 64 lowercase hex digits of a commit). Only git sources exist: a
+  `path`, a branch, a version range or another key is `PKG-MANIFEST-INVALID`, at
+  the key path (`dependencies.sqlite.path`).
 - The import is `pkg/<name>/<module path>`, with no extension:
   `"pkg/sqlite/util/json"` loads `util/json.agc` of the package. `pkg/sqlite`
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
@@ -185,23 +189,28 @@ import Sqlite from "pkg/sqlite/db"
   `../` that leaves it, a hidden folder or `agc_libs/` of the package, are
   `CHECK-IMPORT-PATH`.
 - A manifest that declares a dependency needs `agentica.lock` beside it
-  (`PKG-LOCK-MISSING`). The lock is TOML: `version = 1`, then one `[[package]]`
-  for every package of the build, direct or not, one entry for each name:
-  `name`, `git`, `tag` or `ref` (as in the manifest), `commit` (40 or 64
-  lowercase hex digits; it starts with the `ref`) and `hash` (`sha256:` and 64
-  lowercase hex digits). A bad lock is `PKG-LOCK-INVALID`. Every dependency of
-  the manifest must be in the lock with the same `git` (with or without a `.git`
-  at the end) and the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`; the
-  same check runs on the manifest of every locked package that is in the cache.
-  One name with two different sources anywhere in the tree (the project and a
-  package, or two packages) is `PKG-SOURCE-CONFLICT`; there are no versions to
-  compare and no ranges to solve. Both checks run once for every command that
-  loads code, before any file is read, so a conflict is reported whether or not
-  an import reaches that package. A package that is not in the cache, one whose
-  folder cannot be listed and one whose manifest is not a regular file are left
-  for the import that loads them (so a conflict in them shows only then). A
-  manifest that is a symbolic link, a folder or a pipe is `PKG-SYMLINK` and is
-  never opened. The build never writes the lock.
+  (`PKG-LOCK-MISSING`). Only the lock of the project is read; the
+  `agentica.lock` of a package never is. The lock is TOML: `version = 1` (a
+  missing `version` or any other value is `PKG-LOCK-INVALID`), then one
+  `[[package]]` for every package of the build, direct or not, one entry for
+  each name (a name twice is `PKG-LOCK-INVALID`): `name`, `git`, `tag` or `ref`
+  (as in the manifest), `commit` (40 or 64 lowercase hex digits; it starts with
+  the `ref`) and `hash` (`sha256:` and 64 lowercase hex digits). A bad lock is
+  `PKG-LOCK-INVALID`. Every dependency of the manifest must be in the lock with
+  the same `git` (with or without a `.git` at the end) and the same `tag` or
+  `ref`, or the lock is `PKG-LOCK-STALE`. The same check runs on the manifest of
+  every locked package that is in the cache: a name the lock lacks is
+  `PKG-LOCK-STALE`, and a name with another source than the lock is
+  `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of the
+  manifest in the cache. One name with two different sources anywhere in the
+  tree (the project and a package, or two packages) is `PKG-SOURCE-CONFLICT`;
+  there are no versions to compare and no ranges to solve. Both checks run once
+  for every command that loads code, before any file is read, so a conflict is
+  reported whether or not an import reaches that package. A package that is not
+  in the cache, one whose folder cannot be listed and one whose manifest is not
+  a regular file are left for the import that loads them (so a conflict in them
+  shows only then). A manifest that is a symbolic link, a folder or a pipe is
+  `PKG-SYMLINK` and is never opened. The build never writes the lock.
 - Manifest and lock errors have no source span. They name the file and the key
   path, such as `dependencies.sqlite.git` or `package[1].hash` (`[n]` counts
   from 0); a TOML syntax error has the line and column instead. In the plain

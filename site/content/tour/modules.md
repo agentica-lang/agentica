@@ -230,4 +230,12 @@ import Sqlite from "pkg/sqlite/db"
 
 The local name does not have to match the URL, so moving a repository changes only its `git` line.
 
-`agentica.lock` holds the exact commit and a hash of each package's `.agc` files. A build checks both, and it never downloads anything. The packages come from a cache folder, `~/.cache/agentica/pkg/`, which you fill yourself. A package that is not in the cache is `CHECK-IMPORT-PACKAGE`. The commands that fill the cache are planned.
+A declared name comes before the `pkg/` library folders, so it hides a library of the same name there. A file of a package imports only the packages that its own `agentica.toml` declares.
+
+A manifest that declares dependencies needs an `agentica.lock` beside it. The lock holds the exact commit and a hash of the `.agc` files of every package, direct or not. A build never downloads anything: it finds each package by its commit and checks its hash when an import first loads it.
+
+The packages come from a cache folder, `~/.cache/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, which you fill yourself (on Windows, `%LOCALAPPDATA%\agentica\cache\pkg\`; `XDG_CACHE_HOME` replaces `~/.cache` when it is an absolute path). The commands that fill the cache are planned.
+
+Problems are reported with `PKG-` codes: a bad manifest or lock, a lock that does not match the manifest, one name with two sources, or a package file that changed. A declared package that is not in the cache is `CHECK-IMPORT-PACKAGE`.
+
+Import cycles are errors (`CHECK-IMPORT-CYCLE`), and so are missing files (`CHECK-IMPORT-IO`).
