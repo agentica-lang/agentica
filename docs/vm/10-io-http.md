@@ -329,9 +329,11 @@ HttpWire.local_port(server: HttpServer) -> Int
   Every error answer is `error_answer`: `HTTP/1.1 CODE REASON` with
   `Content-Length: 0` and `Connection: close`. It is sent within the request
   deadline, or within 100 ms when that has passed. The write side is then shut
-  (`close_write`), and input is read and dropped until the peer closes or the
-  deadline, so unread request bytes cannot turn the close into a reset that
-  loses the answer. The read returns `error("http: <reason>")`. EOF before the
+  (`close_write`), and input is read and dropped until the peer closes, the
+  deadline, or 256 KiB (`DRAIN_BYTES`, as in Go's net/http), whichever comes
+  first, so unread request bytes cannot turn the close into a reset that loses
+  the answer, and a peer that keeps sending cannot hold the server reading.
+  The read returns `error("http: <reason>")`. EOF before the
   first byte is `network: end of input`. EOF mid-request is
   `http: connection closed before the request was complete`. The deadline
   returns `network: operation timed out` with no answer. TCP reads only while

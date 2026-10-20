@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The lingering close of `std/http` (after an error answer or a closing
+  response) reads and drops at most 256 KiB of input, as well as stopping at
+  the peer's close or the request deadline. A peer that keeps sending can no
+  longer make the server read for the whole deadline.
 - HTTP runs on several schedulers (still behind the test switch
   `AGENTICA_VM_TEST_MULTICORE`). The I/O thread owns the server's listener,
   open count and waiting accepts, and the client in `std/http` runs on TCP and
