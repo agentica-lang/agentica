@@ -281,8 +281,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `HttpWire.chunk` on 512-byte reads, with chunk data past the framing read
     by `read_text` and counted by `chunk_read`
   - every error answer is `HttpWire.error_answer`, then the lingering close
-    (`close_write`, drop input until the peer closes or the deadline, so no
-    reset loses the answer)
+    (`close_write`, drop input until the peer closes, the deadline or
+    `DRAIN_BYTES` (256 KiB), so no reset loses the answer)
   - bytes past one request stay in the input for the next (a chunked body's
     last read gives them back as `rest`); TCP reads only while a reader waits,
     so pipelined bytes cannot pile up
