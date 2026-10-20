@@ -4,12 +4,11 @@ weight: 2
 description: Send values from one task to another through a bounded queue.
 ---
 
-A channel is a bounded queue. One task sends values into it, and another task receives them. The tour page [Tasks](/tour/tasks/) shows how tasks run.
+A channel is a bounded queue: one task sends values, another receives them. See also [Tasks](/tour/tasks/).
 
-- `Channel[T]` holds values of one type: any type a variable can have, except `Void`.
-- A channel is a handle. Passing it to a function or a task shares the same channel.
-- `Channel` is a reserved name. Channels run on the VM only.
-- `send`, `recv`, `close` and `closed?` can be called as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`. `Channel.new` has no channel to be called on.
+- `Channel[T]` holds values of one type, any type a variable can have except `Void`.
+- A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name. VM only.
+- `send`, `recv`, `close` and `closed?` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
 
 ## Channel.new
 
@@ -17,9 +16,7 @@ A channel is a bounded queue. One task sends values into it, and another task re
 Channel.new(capacity: Int) -> Channel[T]
 ```
 
-Makes a channel that holds `capacity` values, from 1 to 1048576. A capacity outside that range stops the program with `RUNTIME-INVALID-COUNT`. A channel is always bounded: when it is full, a sender waits for a receiver.
-
-`Channel.new` needs an expected type, from an annotation, a parameter, a field or a return type. Without one, the checker stops with `CHECK-EXPECTED-TYPE`.
+Holds `capacity` values, 1 to 1048576, else `RUNTIME-INVALID-COUNT`. It is always bounded: a full channel makes the sender wait. It needs an expected type (annotation, parameter, field or return type), else `CHECK-EXPECTED-TYPE`.
 
 ```agentica {expect="CHECK-EXPECTED-TYPE"}
 def main() -> Void
@@ -44,13 +41,11 @@ false
 Channel.send(channel: Channel[T], value: T, timeout_ms: Int) -> Result[Void]
 ```
 
-Adds the value at the back and gives `ok()`. When the channel is full, the task waits for room, for a close, or for `timeout_ms`.
+Adds the value at the back and gives `ok()`. When full, the task waits for room, a close or `timeout_ms`. The value is not added on:
 
-- `error("channel: closed")` when the channel is closed.
-- `error("channel: timed out")` when the time ran out.
-- In both cases the value is not added.
-- `timeout_ms` is 0 or more. `0` never waits: the call tries once.
-- A negative value stops the program with `RUNTIME-INVALID-DURATION`. No value waits forever.
+- `error("channel: closed")`, or `error("channel: timed out")`.
+
+`timeout_ms` is 0 or more; `0` tries once and never waits. A negative value is `RUNTIME-INVALID-DURATION`. Nothing waits forever.
 
 ```agentica
 def main() -> Void
@@ -73,11 +68,9 @@ channel: timed out
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 ```
 
-Takes the oldest value and gives `ok(value)`. Values come out in the order they went in. When the channel is empty, the task waits for a value, for a close, or for `timeout_ms`.
+Takes the oldest value (first in, first out) and gives `ok(value)`. When empty, the task waits for a value, a close or `timeout_ms`. Waiting tasks are served in the order they started waiting. Errors:
 
-- `error("channel: closed")` once the channel is closed and every value was taken.
-- `error("channel: timed out")` when the time ran out.
-- Waiting tasks are served in the order they started waiting. A value goes straight to the first task that waits for it.
+- `error("channel: closed")` once closed and every value was taken, or `error("channel: timed out")`.
 
 ```agentica
 def main() -> Void
@@ -102,12 +95,10 @@ channel: timed out
 Channel.close(channel: Channel[T]) -> Void
 ```
 
-Closes the channel. Closing again does nothing.
+Closing again does nothing. Waiting senders get the closed error. Receivers get the values left, then the closed error.
 
-- Tasks that wait to send get the closed error.
-- Tasks that wait to receive get the values left, then the closed error. Values sent before the close can still be received.
-- The sending side should close the channel on every path. Receivers should not. If nobody closes it, a receive loop never ends.
-- A channel that a task owns is also closed when that task ends. See [A producer that owns the channel](#a-producer-that-owns-the-channel). Any task can still call `close` on it.
+- The sending side should close on every path, receivers should not. If nobody closes it, a receive loop never ends.
+- An owned channel also closes when its owner ends ([A producer that owns the channel](#a-producer-that-owns-the-channel)).
 
 ```agentica
 def main() -> Void
@@ -132,31 +123,11 @@ channel: closed
 Channel.closed?(channel: Channel[T]) -> Bool
 ```
 
-Gives `true` when the channel is closed and every value was taken. Then it stays `true`. A closed channel that still holds values gives `false`.
-
-After a `recv` error, `closed?` tells the end of the stream (`true`) from a timeout (`false`).
-
-```agentica
-def main() -> Void
-  jobs: Channel[Int] = Channel.new(4)
-  jobs.send(1, 0)
-  jobs.close
-  puts(jobs.closed?)
-  jobs.recv(0)
-  puts(jobs.closed?)
-end
-```
-
-```output
-false
-true
-```
+`true` once the channel is closed and every value was taken, and it stays `true`. A closed channel that still holds values gives `false`. After a `recv` error it tells the end of the stream (`true`) from a timeout (`false`).
 
 ## A producer and a consumer
 
-This is the receive loop. On an error, `closed?` says whether the stream has ended. If not, the error was a timeout, and the loop receives again.
-
-The producer closes the channel on every path. `produce` keeps the sending in its own function, so a `try` that leaves `send_all` early still reaches `jobs.close`.
+The receive loop: on an error, `closed?` says whether the stream ended, else it was a timeout and the loop receives again. The producer closes on every path: `send_all` holds the `try`s, so `produce` always reaches `jobs.close`.
 
 ```agentica
 def send_all(jobs: Channel[Int]) -> Result[Void]
@@ -197,9 +168,7 @@ true
 
 ## A producer that owns the channel
 
-`Task.spawn_owning(&produce, jobs)` starts the task like `Task.spawn`, and makes it the owner of the channel. When that task ends in any way (returns, crashes or is cancelled), the channel closes as by `close`.
-
-The receiver gets the values already sent, then the closed error at once. It does not wait for a timeout when the producer died.
+`Task.spawn_owning(&produce, jobs)` makes the task the owner. When it ends in any way (returns, crashes, cancelled) the channel closes. The receiver gets the values already sent, then the closed error at once, with no timeout wait when the producer died.
 
 ```agentica
 def produce(jobs: Channel[Int]) -> Result[Void]
@@ -234,14 +203,13 @@ false
 
 Ownership rules:
 
-- A channel that was never handed over has no owner. Only `close` closes it.
-- A task that gets the channel from `Task.spawn(&f, jobs)` does not own it.
-- The first `Task.spawn_owning` of a channel can come from any task. After that, only the owner can hand it on. Any other task, or any task once the channel is closed, stops with `RUNTIME-HANDLE-NOT-OWNED` at the channel.
-- A channel has one owner. For several producers, use the next pattern: one coordinator awaits them all, then closes the channel.
+- A channel never handed over has no owner: only `close` closes it. `Task.spawn(&f, jobs)` does not make an owner.
+- The first `Task.spawn_owning` can come from any task. After that only the owner can hand it on; any other task, or any task once it is closed, stops with `RUNTIME-HANDLE-NOT-OWNED`.
+- There is one owner. For several producers, use the next pattern.
 
 ## Several sources
 
-There is no `select`. To merge several sources, send them into one channel of an enum type, with one variant for each kind of event. A coordinator task awaits every source, then closes the channel, so the receive loop ends.
+There is no `select`. Merge sources into one channel of an enum, one variant per kind of event. A coordinator awaits every source, then closes the channel, so the receive loop ends.
 
 ```agentica
 enum Event
@@ -312,7 +280,7 @@ b has nothing
 
 ## State owned by one task
 
-Values are immutable, and tasks share nothing. So state that several tasks update belongs to one owner task. The owner receives messages on a channel, and keeps the state in its own variables. The other tasks send it requests.
+Tasks share nothing, so state that several tasks update belongs to one owner task that receives messages on a channel and keeps the state in its own variables.
 
 ```agentica
 def count(inbox: Channel[Int]) -> Int
@@ -351,7 +319,7 @@ end
 
 ## Waiting on each other
 
-A task that waits on a channel always holds a timer. So tasks that wait for each other, with nothing ever sent, end with timeout errors instead of hanging.
+A task waiting on a channel always holds a timer, so tasks waiting for each other end with timeout errors instead of hanging.
 
 ```agentica
 def wait_for(inbox: Channel[Int]) -> Result[Int]
@@ -369,7 +337,7 @@ end
 channel: timed out
 ```
 
-A task can receive its own handle over a channel. Awaiting it would wait for itself, so the await stops with `RUNTIME-TASK-AWAIT-CYCLE` at the `Task.await`. When the task returns a `Result`, the waiting task gets the crash as an error.
+A task that receives its own handle over a channel and awaits it stops with `RUNTIME-TASK-AWAIT-CYCLE`; for a `Result` task the waiter gets the crash as an error.
 
 ```agentica
 def follow(inbox: Channel[Task[Result[Int]]]) -> Result[Int]

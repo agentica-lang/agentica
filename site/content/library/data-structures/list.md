@@ -4,129 +4,45 @@ weight: 1
 description: Functions for List[T]. Each one is also a method on lists.
 ---
 
-Lists are immutable: every function gives a new list. Each function is also a method: `List.size(xs)` is `xs.size`. `xs.length` is `xs.size`, and `push` is `append`.
+Lists are immutable: every function gives a new list. Each is also a method (`List.size(xs)` is `xs.size`). `xs.length` is `xs.size`, `push` is `append`.
 
-## size
+## Build and read
 
 ```text
 List.size(list: List[T]) -> Int
-```
-
-```agentica
-def main() -> Void
-  puts([1, 2, 3].size)
-end
-```
-
-```output
-3
-```
-
-## at
-
-```text
 List.at(list: List[T], index: Int) -> T
-```
-
-The same as `list[index]`. A bad index stops the program. O(log32 n): at most four steps for a million items.
-
-```agentica
-def main() -> Void
-  puts(["a", "b"].at(1))
-end
-```
-
-```output
-b
-```
-
-## append
-
-```text
 List.append(list: List[T], value: T) -> List[T]
+List.set(list: List[T], index: Int, value: T) -> List[T]
+List.concat(a: List[T], b: List[T]) -> List[T]
+List.repeat(value: T, count: Int) -> List[T]
+List.reverse(list: List[T]) -> List[T]
 ```
 
-Adds a value at the end in near constant time, so n pushes cost O(n).
+- `at` is `list[index]`, and `set` replaces one element. A bad index stops the program. Both are O(log32 n): at most four steps for a million items. A new list shares all but the path to the element.
+- `append` is near constant time, so n appends cost O(n).
+- `concat` takes time in the size of `b` when `b` has 32 items or fewer. A longer `b` copies both lists.
 
 ```agentica
 def main() -> Void
   xs = [1, 2]
-  puts(List.append(xs, 3))
-  puts(xs.push(9))         # xs is still [1, 2]
-end
-```
-
-```output
-[1, 2, 3]
-[1, 2, 9]
-```
-
-## set
-
-```text
-List.set(list: List[T], index: Int, value: T) -> List[T]
-```
-
-Replaces one element. A bad index stops the program. O(log32 n); the new list shares all but the path to the element.
-
-```agentica
-def main() -> Void
-  puts(["a", "b", "c"].set(1, "B"))
-end
-```
-
-```output
-["a", "B", "c"]
-```
-
-## concat
-
-```text
-List.concat(a: List[T], b: List[T]) -> List[T]
-```
-
-If `b` has 32 items or fewer, the time is in the size of `b`; a longer `b` copies both lists.
-
-```agentica
-def main() -> Void
-  puts([1, 2].concat([3]))
-end
-```
-
-```output
-[1, 2, 3]
-```
-
-## repeat
-
-```text
-List.repeat(value: T, count: Int) -> List[T]
-```
-
-```agentica
-def main() -> Void
+  puts(xs.size)                # 2
+  puts(xs.at(1))               # 2, the same as xs[1]
+  puts(xs.push(9))             # xs is still [1, 2]
+  puts(xs.set(0, 7))
+  puts(xs.concat([3]))
   puts(List.repeat("-", 3))
+  puts(xs.reverse)
 end
 ```
 
 ```output
+2
+2
+[1, 2, 9]
+[7, 2]
+[1, 2, 3]
 ["-", "-", "-"]
-```
-
-## reverse
-
-```text
-List.reverse(list: List[T]) -> List[T]
-```
-
-```agentica
-def main() -> Void
-  puts([1, 2, 3].reverse)
-end
-```
-
-```output
-[3, 2, 1]
+[2, 1]
 ```
 
 ## take and drop
@@ -143,7 +59,7 @@ def main() -> Void
   xs = [1, 2, 3, 4]
   puts(xs.take(2))
   puts(xs.drop(2))
-  puts(xs.take(10))
+  puts(xs.take(10))   # a larger count is fine
 end
 ```
 
@@ -192,81 +108,50 @@ end
 ["a", "bb", "ccc"]
 ```
 
-## map
+## map, filter and reduce
 
 ```text
 List.map(list: List[A], f: Fn[A, B]) -> List[B]
+List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
+List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
 ```
+
+`filter` keeps the elements for which the function gives `true`. `reduce` combines from left to right, starting with `initial`.
 
 ```agentica
 def main() -> Void
   puts([1, 2, 3].map do |x| x * 10 end)
-  puts(["a", "b"].map do |s| s.upcase end)
+  puts([1, 2, 3, 4].filter do |x| x % 2 == 1 end)
+  puts([1, 2, 3].reduce(0) do |sum, x| sum + x end)
 end
 ```
 
 ```output
 [10, 20, 30]
-["A", "B"]
-```
-
-## filter
-
-```text
-List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
-```
-
-Keeps the elements for which the function gives `true`.
-
-```agentica
-def main() -> Void
-  puts([1, 2, 3, 4].filter do |x| x % 2 == 1 end)
-end
-```
-
-```output
 [1, 3]
-```
-
-## reduce
-
-```text
-List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
-```
-
-Combines the elements from left to right, starting with `initial`.
-
-```agentica
-def main() -> Void
-  puts([1, 2, 3].reduce(0) do |sum, x| sum + x end)
-  puts(["a", "b"].reduce("") do |text, s| text + s + s end)
-end
-```
-
-```output
 6
-aabb
 ```
 
-## each
+## each and each_with_index
 
 ```text
 List.each(list: List[A], f: Fn[A, Void]) -> Void
+List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
 ```
 
-Runs the function for each element, in order.
+Run the function for each element, in order. The index starts at 0.
 
 ```agentica
 def main() -> Void
-  [1, 2].each do |x|
-    puts("item #{x}")
+  ["a", "b"].each_with_index do |s, i|
+    puts("#{i}: #{s}")
   end
 end
 ```
 
 ```output
-item 1
-item 2
+0: a
+1: b
 ```
 
 ## any? and all?
@@ -312,27 +197,6 @@ ok(8)
 error("not found")
 ```
 
-## each_with_index
-
-```text
-List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
-```
-
-Runs the function with each element and its index, which starts at 0.
-
-```agentica
-def main() -> Void
-  ["a", "b"].each_with_index do |s, i|
-    puts("#{i}: #{s}")
-  end
-end
-```
-
-```output
-0: a
-1: b
-```
-
 ## flat_map
 
 ```text
@@ -357,7 +221,7 @@ end
 List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
 ```
 
-Gives `[accepted, rejected]`, each in order.
+Gives `[accepted, rejected]`.
 
 ```agentica
 def main() -> Void
@@ -379,7 +243,7 @@ List.take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
 ```
 
-`take_while` keeps the elements before the first `false`; `drop_while` keeps that one and the rest. Neither calls the function after that first `false`.
+`take_while` keeps the elements before the first `false`; `drop_while` keeps that one and the rest. Neither calls the function after it.
 
 ```agentica
 def main() -> Void
@@ -422,7 +286,7 @@ end
 List.group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
 ```
 
-Groups the elements by the key from the function (an `Int` or a `String`). Keys keep their first-appearance order; each group keeps its element order.
+Groups by the key (an `Int` or a `String`). Keys and groups keep their first-appearance order.
 
 ```agentica
 def main() -> Void
@@ -484,7 +348,7 @@ List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]
 List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]
 ```
 
-`ok` with the element of least or greatest key, or `error("the list is empty")`. The key is an `Int`, `Float` or `String`; the function runs once per element. The first element wins a tie. A `NaN` key never wins, unless every key is `NaN`. `String` keys compare with `String.compare`.
+`ok` with the element of least or greatest key, else `error("the list is empty")`. The key is an `Int`, `Float` or `String` (compared with `String.compare`); the function runs once per element. The first element wins a tie, and a `NaN` key never wins unless all are `NaN`.
 
 ```agentica
 def main() -> Void
@@ -503,6 +367,6 @@ ok("pear")
 
 ## Costs and names
 
-These take O(n) time, less when they stop early. They are written in Agentica (`stdlib/prelude/`), so they count the program's steps: `find` 4 steps per element looked at, `sum` 4 per element, `tally` about 10, `min_by` about 20 and `group_by` about 14 per element, not counting your function.
+These are O(n), less when they stop early. They are written in Agentica (`stdlib/prelude/`), so they count `--max-steps` per element, not counting your function: `find` 4, `sum` 4, `tally` about 10, `group_by` about 14, `min_by` about 20.
 
-Each method has one name. `select`, `collect`, `detect`, `inject` and `reject` are `CHECK-UNKNOWN-METHOD`: use `filter`, `map`, `find` and `reduce`, and `xs.filter do |x| !cond end` for `reject`.
+Each method has one name: `select`, `collect`, `detect`, `inject` and `reject` are `CHECK-UNKNOWN-METHOD`. Use `filter`, `map`, `find`, `reduce` and `xs.filter do |x| !cond end`.

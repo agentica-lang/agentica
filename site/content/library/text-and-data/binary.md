@@ -4,9 +4,9 @@ weight: 4
 description: The std/binary module, which reads and writes binary numbers in a list of bytes.
 ---
 
-`std/binary` is part of the standard library. It is written in Agentica itself, on the bit functions of [Int and Float](/library/text-and-data/numbers/). Import it with an alias: `import Binary from "std/binary"`.
+`std/binary` is written in Agentica, on the bit functions of [Int and Float](/library/text-and-data/numbers/). Import it: `import Binary from "std/binary"`.
 
-Binary data is a `List[Int]` with each item in `0 .. 255`, the list that `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes` give. A reader takes the list and a zero-based `offset`. A writer returns a new list of bytes, and `Binary.concat` joins the lists.
+Binary data is a `List[Int]` of bytes (0 to 255), as `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and `Process.read_bytes` give. A reader takes the list and a zero-based `offset`.
 
 ```agentica
 import Binary from "std/binary"
@@ -27,45 +27,29 @@ ok(513)
 ok(1.5)
 ```
 
-`_be` is big-endian (the most significant byte first, the order of networks) and `_le` is little-endian. Signed types use two's complement.
+`_be` is big-endian (network order), `_le` little-endian. Signed types use two's complement.
 
 ## Readers
 
 ```text
-Binary.read_u8(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_i8(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_u16_be(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_u16_le(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_i16_be(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_i16_le(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_u32_be(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_u32_le(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_i32_be(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_i32_le(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_u64_be(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_u64_le(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_i64_be(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_i64_le(data: List[Int], offset: Int) -> Result[Int]
-Binary.read_f32_be(data: List[Int], offset: Int) -> Result[Float]
-Binary.read_f32_le(data: List[Int], offset: Int) -> Result[Float]
-Binary.read_f64_be(data: List[Int], offset: Int) -> Result[Float]
-Binary.read_f64_le(data: List[Int], offset: Int) -> Result[Float]
+Binary.read_<T>(data: List[Int], offset: Int) -> Result[Int]
+Binary.read_<F>(data: List[Int], offset: Int) -> Result[Float]
 ```
 
-A reader reads the bytes of its type at `offset`. It never halts the program: a bad offset or a bad item is an `error(...)` (see Errors below).
+`<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64`, `i64` followed by `_be` or `_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`.
+
+A reader never halts the program: a bad offset or item is an `error(...)` (see Errors).
 
 ```agentica
 import Binary from "std/binary"
 
 def main() -> Void
   data = [1, 2, 3, 4, 255, 254]
-  puts(Binary.read_u8(data, 4))
-  puts(Binary.read_i8(data, 4))
+  puts(Binary.read_u8(data, 4))       # one byte, unsigned
+  puts(Binary.read_i8(data, 4))       # the same byte, signed
   puts(Binary.read_u16_be(data, 0))
   puts(Binary.read_u16_le(data, 0))
   puts(Binary.read_u32_be(data, 0))
-  puts(Binary.read_u32_le(data, 0))
-  puts(Binary.read_i16_be(data, 4))
   puts(Binary.read_i16_le(data, 4))
 end
 ```
@@ -76,42 +60,21 @@ ok(-1)
 ok(258)
 ok(513)
 ok(16909060)
-ok(67305985)
-ok(-2)
 ok(-257)
 ```
 
 ## Writers
 
 ```text
-Binary.write_u8(value: Int) -> Result[List[Int]]
-Binary.write_i8(value: Int) -> Result[List[Int]]
-Binary.write_u16_be(value: Int) -> Result[List[Int]]
-Binary.write_u16_le(value: Int) -> Result[List[Int]]
-Binary.write_i16_be(value: Int) -> Result[List[Int]]
-Binary.write_i16_le(value: Int) -> Result[List[Int]]
-Binary.write_u32_be(value: Int) -> Result[List[Int]]
-Binary.write_u32_le(value: Int) -> Result[List[Int]]
-Binary.write_i32_be(value: Int) -> Result[List[Int]]
-Binary.write_i32_le(value: Int) -> Result[List[Int]]
-Binary.write_u64_be(value: Int) -> Result[List[Int]]
-Binary.write_u64_le(value: Int) -> Result[List[Int]]
-Binary.write_i64_be(value: Int) -> List[Int]
-Binary.write_i64_le(value: Int) -> List[Int]
-Binary.write_f32_be(x: Float) -> List[Int]
-Binary.write_f32_le(x: Float) -> List[Int]
-Binary.write_f64_be(x: Float) -> List[Int]
-Binary.write_f64_le(x: Float) -> List[Int]
+Binary.write_<T>(value: Int) -> Result[List[Int]]
+Binary.write_<T>(value: Int) -> List[Int]
+Binary.write_<F>(x: Float) -> List[Int]
 ```
 
-A writer returns a new list with exactly the bytes of its type. A writer whose value may be outside its type returns a `Result`. The `write_i64_*`, `write_f32_*` and `write_f64_*` writers cannot fail and return a plain list, so a `try` on them is a check error.
+`<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64`, `i64` followed by `_be` or `_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`. A writer returns a new list with exactly the bytes of its type, and never changes a list in place.
 
-The ranges are:
-
-- `u8` `0 .. 255`, `i8` `-128 .. 127`
-- `u16` `0 .. 65535`, `i16` `-32768 .. 32767`
-- `u32` `0 .. 4294967295`, `i32` `-2147483648 .. 2147483647`
-- `u64` `0 .. 9223372036854775807`
+- A writer whose value may be outside its type returns a `Result`. `write_i64_*` and the float writers cannot fail and return a plain list, so a `try` on them is a check error.
+- Ranges: `u8` 0 to 255, `i8` -128 to 127, `u16` 0 to 65535, `i16` -32768 to 32767, `u32` 0 to 4294967295, `i32` -2147483648 to 2147483647, `u64` 0 to 9223372036854775807.
 
 ```agentica
 import Binary from "std/binary"
@@ -119,10 +82,8 @@ import Binary from "std/binary"
 def main() -> Void
   puts(Binary.write_u16_be(513))
   puts(Binary.write_u16_le(513))
-  puts(Binary.write_i16_be(-2))
   puts(Binary.write_u32_be(305419896))
-  puts(Binary.write_u32_le(305419896))
-  puts(Binary.write_i64_be(-1))
+  puts(Binary.write_i64_be(-1))        # a plain list, it cannot fail
   puts(Binary.write_i32_le(-2))
 end
 ```
@@ -130,16 +91,14 @@ end
 ```output
 ok([2, 1])
 ok([1, 2])
-ok([255, 254])
 ok([18, 52, 86, 120])
-ok([120, 86, 52, 18])
 [255, 255, 255, 255, 255, 255, 255, 255]
 ok([254, 255, 255, 255])
 ```
 
 ## Floats
 
-`write_f64_*` and `read_f64_*` use `Float.to_bits` and `Float.from_bits`. `write_f32_*` rounds to the nearest binary32 (`Float.to_bits32`) and never fails; `read_f32_*` widens back exactly. `-0.0`, infinities and subnormals are kept. Every NaN is written as the canonical NaN.
+`f64` uses `Float.to_bits` and `Float.from_bits`. `write_f32_*` rounds to the nearest binary32 (`Float.to_bits32`); `read_f32_*` widens back exactly. `-0.0`, infinities and subnormals are kept, and every NaN is written as the canonical NaN.
 
 ```agentica
 import Binary from "std/binary"
@@ -165,7 +124,7 @@ true
 
 ## u64 and i64
 
-A `u64` above `9223372036854775807` is not an `Int`: `read_u64_*` gives an error for it, and `write_u64_*` rejects a negative value. For all 64 bits, use `read_i64_*` and `write_i64_*` (two's complement).
+A `u64` above `9223372036854775807` is not an `Int`: `read_u64_*` gives an error and `write_u64_*` rejects a negative value. For all 64 bits use `read_i64_*` and `write_i64_*`.
 
 ```agentica
 import Binary from "std/binary"
@@ -192,7 +151,7 @@ ok([127, 255, 255, 255, 255, 255, 255, 255])
 Binary.concat(parts: List[List[Int]]) -> List[Int]
 ```
 
-Joins any number of parts in order, in O(n log k) for n bytes in k parts. Build `parts` with `map`. A loop of `out = List.concat(out, part)` copies the whole output on each pass, which is O(n²) in the output size.
+Joins the parts in order, O(n log k) for n bytes in k parts. Build `parts` with `map`: a loop of `List.concat(out, part)` copies the whole output each pass, O(n²).
 
 ```agentica
 import Binary from "std/binary"
@@ -217,7 +176,7 @@ Binary.frame(payload: List[Int]) -> Result[List[Int]]
 Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
 ```
 
-`frame` puts the 4-byte big-endian length of the payload in front of it. `read_frame_length` reads that length and gives an error above `max`, so a hostile length is rejected before the body is read. Then read the body yourself, in a loop: `TCP.recv_bytes` and `Process.read_bytes` may return fewer bytes than asked.
+`frame` puts the 4-byte big-endian length in front of the payload. `read_frame_length` rejects a length above `max` before the body is read. Read the body yourself in a loop: `TCP.recv_bytes` and `Process.read_bytes` may return fewer bytes than asked.
 
 ```agentica
 import Binary from "std/binary"
@@ -252,7 +211,7 @@ Every problem is an `error(message)`. A function checks these in order and retur
 | `frame` with more than `4294967295` items | `payload of 4294967296 bytes does not fit in a u32 length` |
 | `read_frame_length` above `max` | `frame length 70000 is above the limit 65536` |
 
-The type in a message is the one in the function name. The index in `is not a byte` is the item's position in `data`.
+The type in a message is the one in the function name.
 
 ```agentica
 import Binary from "std/binary"
@@ -275,4 +234,4 @@ error("value 256 does not fit in u8")
 error("value -32769 does not fit in i16")
 ```
 
-Writers return new lists and never change one in place. There is no compact `Bytes` type yet, so a program joins the parts it writes with `Binary.concat`.
+There is no compact `Bytes` type yet: join parts with `Binary.concat`.

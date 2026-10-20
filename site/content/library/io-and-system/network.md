@@ -6,11 +6,9 @@ description: TCP and TLS sockets and the HTTP/1.1 client and server of std/http.
 
 Network functions return a `Result` and take timeouts in milliseconds.
 
-- Sockets, listeners, clients and servers are handles. `IO.inspect` prints only their type, such as `<Socket>` or `<Listener>`. They cannot be compared, and they close when the program ends.
-- Most examples here open real connections, so they are checked but not run.
-- A socket, listener or server belongs to the task that opened it, and closes when that task ends. Open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a task it starts.
-- A timeout covers the whole call, including the wait for another task that uses the same socket.
-- After a read or write timeout, the socket is closed. Later calls fail at once with `network: socket is closed`.
+- Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends. Most examples open real connections, so they are only checked.
+- A handle belongs to the task that opened it and closes when that task ends, so open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
+- A timeout covers the whole call, including the wait for another task using the same socket. After a read or write timeout the socket is closed, and later calls fail at once with `network: socket is closed`.
 
 ## TCP
 
@@ -21,10 +19,7 @@ TCP.listen(host: String, port: Int) -> Result[Listener]
 TCP.local_port(listener: Listener) -> Int
 ```
 
-Listens for connections. Port `0` picks a free port, and `local_port` tells which.
-
-- The listener takes every address the host name stands for, on the same port. `"localhost"` accepts clients of both `127.0.0.1` and `::1`.
-- Ports go from 0 to 65535 here, and from 1 to 65535 in `connect`.
+Port `0` picks a free port, and `local_port` tells which (ports are 0 to 65535 here, 1 to 65535 in `connect`). The listener takes every address the host name stands for: `"localhost"` accepts `127.0.0.1` and `::1`.
 
 ```agentica
 def main() -> Void
@@ -45,16 +40,7 @@ TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
 TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 ```
 
-`connect` opens a connection to a server. `accept` waits for the next client of a listener.
-
-```agentica {mode="check"}
-def main() -> Void
-  socket = TCP.connect("example.com", 80, 5000).unwrap!
-  sent = TCP.send(socket, "HEAD / HTTP/1.0\r\n\r\n", 5000)
-  puts(TCP.read_line(socket, 5000))
-  TCP.close(socket)
-end
-```
+`connect` opens a connection to a server. `accept` waits for the next client of a listener. Both are used in the example below.
 
 ### TCP.send and TCP.read_line
 
@@ -66,11 +52,11 @@ TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 `send` writes text. `read_line` reads one line without its line ending (LF or CRLF).
 
 - A last line without a line ending counts when the other side closes.
-- `read_line` returns an error at the end of input, when the connection breaks (even mid-line), and for a line over 1 MiB. The 1 MiB case also closes the socket.
-- TCP is a byte stream, not messages. One `send` can arrive in several reads, and one `read_line` can cover several sends. A character split between reads is joined before the UTF-8 check.
-- Reading and writing use separate locks. One task can read while another writes to the same socket.
+- `read_line` errors at the end of input, when the connection breaks (even mid-line), and for a line over 1 MiB (which also closes the socket).
+- TCP is a byte stream: one `send` can arrive in several reads and one `read_line` can cover several sends. A character split between reads is joined before the UTF-8 check.
+- Reading and writing use separate locks, so one task can read while another writes.
 
-This program talks to itself. A task runs the server side:
+A program that talks to itself, with a task as the server:
 
 ```agentica
 def echo_once(listener: Listener) -> Result[Void]
@@ -105,16 +91,7 @@ TCP.send_bytes(socket: Socket, bytes: List[Int], timeout_ms: Int) -> Result[Void
 TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[List[Int]]
 ```
 
-Send and receive raw bytes, from 0 to 255. `recv_bytes` gives what has arrived, up to `max_bytes`. It gives `ok([])` when the other side has closed.
-
-```agentica {mode="check"}
-def main() -> Void
-  socket = TCP.connect("127.0.0.1", 7000, 1000).unwrap!
-  sent = TCP.send_bytes(socket, [1, 2, 3], 1000)
-  puts(TCP.recv_bytes(socket, 1024, 1000))
-  TCP.close(socket)
-end
-```
+Raw bytes (0 to 255). `recv_bytes` gives what has arrived, up to `max_bytes`, and `ok([])` when the other side has closed.
 
 ### TCP.close and TCP.close_listener
 
@@ -123,10 +100,7 @@ TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
 ```
 
-Close a socket or a listener. Closing twice is fine.
-
-- The task that opened it closes it when that task ends. Close it yourself only when it must close earlier.
-- To hand a connection to another task, use [`Task.spawn_owning`](/library/concurrency/task/#taskspawn_owning). That task closes it when it ends.
+Closing twice is fine. Close early only when it must not wait for the task to end.
 
 ## TLS
 
@@ -137,15 +111,16 @@ TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Resu
 
 TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
 
-- `TLS.connect` uses TLS 1.2 or later. It always checks the certificate and the host name. An IP address host is checked against the certificate's IP addresses.
-- An empty `ca_file` uses the system's trusted certificates:
-  - Linux: the CA bundle.
-  - macOS: the system roots and the Keychain trust settings.
-  - Windows: the ROOT certificate store. Intermediates from its CA store help build a chain but are never trusted as roots.
-  - Everywhere: certificates the system distrusts are rejected, and the store is read once per process.
-  - `SSL_CERT_FILE` replaces the system store. `SSL_CERT_DIR` adds a directory of certificates.
-- A nonempty `ca_file` is a PEM file that replaces them.
-- `TLS.listen` takes PEM files for the certificate chain and the private key. It fails when a file is bad or the key does not match.
+- `TLS.connect` uses TLS 1.2 or later and always checks the certificate and the host name (an IP address host against the certificate's IP addresses).
+- An empty `ca_file` uses the system's trusted certificates, read once per process, with the ones the system distrusts rejected. `SSL_CERT_FILE` replaces the store, `SSL_CERT_DIR` adds a directory. A nonempty `ca_file` is a PEM file that replaces them.
+
+  | System | Store |
+  |---|---|
+  | Linux | the CA bundle |
+  | macOS | the system roots and Keychain trust settings |
+  | Windows | the ROOT store (intermediates from its CA store help build a chain but are never roots) |
+
+- `TLS.listen` takes PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
 - A peer that closes without TLS's closing message ends the stream like EOF.
 - TLS works the same on Linux, macOS and Windows.
 
@@ -160,14 +135,12 @@ end
 
 ## HTTP client
 
-HTTP is the `std/http` library, written in Agentica. Import it with `import HTTP from "std/http"`. Without the import, `HTTP.get` fails with `CHECK-UNKNOWN-NAME`, and the help shows the import. The library has a client (this section) and a server (the next one).
+HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http"` (without it, `CHECK-UNKNOWN-NAME`).
 
-- Every call is whole: it returns after the whole response has arrived.
-- The body is a `String`, and it must be valid UTF-8.
-- Status codes such as 404 or 500 are normal responses. Errors are `error` results: a bad URL, a refused connection, a timeout, or a body over the limit.
-- `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. `POST`, `PATCH` and the other methods are never retried.
-- The body is not decompressed. `Content-Encoding` stays as the server sent it.
-- Header names must be HTTP tokens. Header values must be Latin-1 text without control characters.
+- Every call is whole: it returns after the whole response arrived. The body is a `String` and must be valid UTF-8; it is not decompressed.
+- Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit.
+- `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
+- Header names must be HTTP tokens, values Latin-1 text without control characters.
 
 ### HTTP.client and HTTP.client_options
 
@@ -177,7 +150,7 @@ HTTP.client(options: HttpClientOptions) -> Result[HttpClient]
 HTTP.close_client(client: HttpClient) -> Void
 ```
 
-A client keeps open connections, and reuses them for the same scheme, host and port. `client_options()` gives the defaults. Build `HttpClientOptions` to change them.
+A client reuses open connections for the same scheme, host and port. `client_options()` gives the defaults; build `HttpClientOptions` to change them.
 
 | Option | Default | Limit |
 |---|---|---|
@@ -187,9 +160,8 @@ A client keeps open connections, and reuses them for the same scheme, host and p
 | `max_body_bytes` | 1 MiB | positive, at most 64 MiB |
 | `ca_file` | `""`: the system's CA certificates | |
 
-- Calls wait in FIFO order for one of the `max_connections` slots.
-- A call still in flight when `close_client` runs fails with `http: client is closed`. Its request is not sent, unless a connection had already started sending it.
-- The client runs as Agentica code in tasks of its own, so it spends the `--max-steps` budget of the run.
+- Calls wait in FIFO order for a `max_connections` slot. A call in flight when `close_client` runs fails with `http: client is closed` (unless a connection had already started sending it).
+- The client runs as Agentica code in its own tasks, so it spends the run's `--max-steps` budget.
 
 ```agentica {mode="check"}
 import HTTP from "std/http"
@@ -211,11 +183,9 @@ HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) 
 HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
 ```
 
-- The `HttpResponse` has `status`, `headers` (names in lowercase) and `body`.
-- `post` sends a text body. `request` takes any method.
-- URLs start with `http://` or `https://`.
-- The client adds `Host` and `Content-Length`. A request may not set them, nor `Transfer-Encoding` or `Connection`.
-- A bracketed host, such as `http://[::1]:8080/`, must look like an IPv6 address (hex digits, `:` and `.`). Any other bracketed host is an error result.
+- `HttpResponse` has `status`, `headers` (names in lowercase) and `body`. `post` sends a text body; `request` takes any method.
+- URLs start with `http://` or `https://`. A bracketed host (`http://[::1]:8080/`) must look like an IPv6 address, else an error result.
+- The client adds `Host` and `Content-Length`; a request may not set them, nor `Transfer-Encoding` or `Connection`.
 
 ```agentica {mode="check"}
 import HTTP from "std/http"
@@ -256,7 +226,7 @@ end
 
 ## HTTP server
 
-The server is part of `std/http` too. A handler takes the whole request and returns the whole response. The server reads requests, calls the handler, and writes the answers. It runs one task per connection, with keep-alive.
+The server is in `std/http` too: a handler takes the whole request and returns the whole response. It runs one task per connection, with keep-alive.
 
 ### HTTP.listen and HTTP.server_options
 
@@ -267,11 +237,10 @@ HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, ha
 HTTP.local_port(server: HttpServer) -> Int
 ```
 
-- `listen` returns at once, and serves in the background. `listen_tls` does the same over TLS, with a PEM certificate and key.
-- Port 0 picks a free port, which `local_port` returns.
-- The `HttpRequest` has `method`, `target` (as sent, with the query), `path` (the target before `?`), `headers` (names in lowercase) and `body` (valid UTF-8).
+- `listen` returns at once and serves in the background; `listen_tls` does the same over TLS with a PEM certificate and key. Port 0 picks a free port (`local_port`).
+- `HttpRequest` has `method`, `target` (as sent, with the query), `path` (before `?`), `headers` (names in lowercase) and `body` (valid UTF-8).
 
-This program serves itself, and fetches its own page:
+A server that fetches its own page:
 
 ```agentica
 import HTTP from "std/http"
@@ -300,40 +269,35 @@ end
 404
 ```
 
-What the server adds:
-
-- `Content-Length`, except on 204 and 304, whose body must be empty.
-- A `Date` header, unless the handler set one.
-- `Connection: close` when the request or the response asked for it.
-- For `HEAD`, the headers without the body.
+The server adds `Content-Length` (not on 204 and 304, whose body must be empty), a `Date` header unless the handler set one, and `Connection: close` when the request or response asked for it. `HEAD` gets the headers without the body.
 
 Handler errors:
 
-- When the handler returns `error(message)`, the client gets a 500 with an empty body. The connection closes, and stderr gets `http: handler error: <message>`.
-- A response that cannot be sent gets the same 500 and close. Such responses have a status outside 200 to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, or a body with 204 or 304. stderr gets `http: invalid response: <reason>`.
-- A runtime error in a handler ends only its connection. The program goes on, but it exits with code 1 at the end, as for any task crash that nothing awaited.
+- A handler returning `error(message)` gives the client a 500 with an empty body and closes the connection. stderr gets `http: handler error: <message>`.
+- A response that cannot be sent gets the same 500 and close, with `http: invalid response: <reason>` on stderr: status outside 200 to 599, a bad header, a `Content-Length` or `Transfer-Encoding` header, or a body with 204 or 304.
+- A runtime error in a handler ends only its connection. The program goes on but exits with code 1 at the end, as for any unawaited task crash.
 
-`server_options()` gives the defaults. The same checks as the client options apply.
+`server_options()` gives the defaults; the same checks as the client options apply.
 
-| Option | Default |
+| Option | Default | Bounds |
+|---|---|---|
+| `request_timeout_ms` | 30 s | the first request on a connection, each whole request from its first byte, and the sending of each response (the handler has no time limit) |
+| `idle_timeout_ms` | 30 s | the wait between requests on a kept connection |
+| `max_connections` | 128 | connections over it wait until one closes |
+| `max_body_bytes` | 1 MiB | each connection can hold about four times this in memory, so lower `max_connections` when you raise it |
+
+Bad requests never reach the handler: the server answers and closes the connection.
+
+| Status | Cause |
 |---|---|
-| `request_timeout_ms` | 30 s |
-| `idle_timeout_ms` | 30 s |
-| `max_connections` | 128 |
-| `max_body_bytes` | 1 MiB |
+| 400 | malformed, or a body that is not UTF-8 |
+| 413 | a body over `max_body_bytes` |
+| 417 | an `Expect` other than `100-continue` |
+| 431 | headers too long or too many |
+| 501 | `CONNECT` or `Upgrade` |
+| 505 | not `HTTP/1.1` |
 
-- `request_timeout_ms` bounds three waits: the first request on a connection, then each whole request from its first byte, then the sending of each response from the moment the handler returns. The handler itself has no time limit.
-- `idle_timeout_ms` bounds the wait between requests on a kept connection.
-- Connections over `max_connections` wait until one closes.
-- Bad requests never reach the handler. The server answers and closes the connection:
-  - 400: malformed, or a body that is not UTF-8.
-  - 413: a body over `max_body_bytes`.
-  - 417: an `Expect` other than `100-continue`.
-  - 431: headers too long or too many.
-  - 501: `CONNECT` or `Upgrade`.
-  - 505: not `HTTP/1.1`.
-- After a bad request the server reads and drops up to 256 KiB of the peer's remaining input (until the peer closes or the request deadline), so the answer is not lost to a reset. A peer that keeps sending is cut off at that limit, and a client still sending a large body after a 413 may see a connection reset instead of the answer.
-- Each connection can hold about four times `max_body_bytes` in memory. So when you raise `max_body_bytes`, lower `max_connections`.
+Before closing, the server reads and drops up to 256 KiB of the peer's remaining input (until the peer closes or the request deadline), so the answer is not lost to a reset. A peer that keeps sending is cut off at that limit, so a client still sending a large body after a 413 may see a connection reset instead.
 
 ### HTTP.wait and HTTP.close_server
 
@@ -342,11 +306,9 @@ HTTP.wait(server: HttpServer) -> Result[Void]
 HTTP.close_server(server: HttpServer) -> Void
 ```
 
-- `close_server` stops accepting, closes every connection, and cancels the running handlers and every task they started. Calling it again does nothing.
-- `wait` returns `ok()` once the server is closed. A program that only serves waits on it.
-- When `main` returns, the server stops with the program.
-- A server belongs to the task that called `HTTP.listen`. When that task ends, the server closes and its port is free. So call `listen` in the task that keeps the server, such as `main`.
-- Each connection belongs to the task that serves it. A crash in a handler closes only its connection.
+- `close_server` stops accepting, closes every connection and cancels the running handlers and their tasks. Calling it again does nothing.
+- `wait` returns `ok()` once the server is closed. A program that only serves waits on it. When `main` returns, the server stops.
+- A server belongs to the task that called `HTTP.listen` and closes (freeing its port) when that task ends, so call `listen` in the task that keeps it, such as `main`. Each connection belongs to the task that serves it.
 
 ```agentica {mode="check"}
 import HTTP from "std/http"
@@ -366,18 +328,10 @@ end
 
 ### Moving from the builtin HTTP module
 
-Earlier versions had a builtin `HTTP` module. Add the import, then use these replacements:
+The old builtin `HTTP` module is gone. Import `std/http`, then:
 
-| Before | Now |
-|---|---|
-| `HTTP.client()` | `HTTP.client(HTTP.client_options())` |
-| `HTTP.text(response.body, timeout)` | `response.body` |
-| `HTTP.read`, `HTTP.trailers`, `HTTP.close_body`, `HTTP.request_stream` | a whole `HTTP.request`; streaming is planned |
-| binary bodies read with `HTTP.read` | no replacement yet: a body that is not UTF-8 is an error |
-| `max_body_bytes` of 64 MiB by default | 1 MiB by default |
-| `timeout_ms` for the response headers | `timeout_ms` for the whole response |
-| a handler `def handle(request: Request, writer: HttpWriter) -> Void` | `def handle(request: HttpRequest) -> Result[HttpResponse]` |
-| `HTTP.respond(writer, status, headers, text, timeout)` | `return ok(HttpResponse(status: status, headers: headers, body: text))` |
-| `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish` | one whole `HttpResponse`; streaming responses are planned |
-| `header_timeout_ms` in `HttpServerOptions` | `request_timeout_ms` |
-| `Request`, `Response`, `HttpBody`, `HttpWriter` | `HttpRequest` and `HttpResponse`; the others are gone |
+- `HTTP.client()` is `HTTP.client(HTTP.client_options())`. `HTTP.text(response.body, t)` is `response.body` (a body that is not UTF-8 is an error).
+- `HTTP.read`, `trailers`, `close_body` and `request_stream` become a whole `HTTP.request`. Streaming is planned.
+- A handler `(request: Request, writer: HttpWriter) -> Void` becomes `(request: HttpRequest) -> Result[HttpResponse]`. `HTTP.respond`, `begin`, `write`, `write_bytes` and `finish` become `return ok(HttpResponse(status: status, headers: headers, body: text))`.
+- `header_timeout_ms` is `request_timeout_ms`, and `timeout_ms` now covers the whole response. `max_body_bytes` defaults to 1 MiB (was 64 MiB).
+- `Request`, `Response`, `HttpBody` and `HttpWriter` are gone: use `HttpRequest` and `HttpResponse`.

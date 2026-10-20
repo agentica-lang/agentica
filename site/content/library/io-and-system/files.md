@@ -6,13 +6,11 @@ description: Read and write files, list and create directories, and build paths.
 
 Every file function takes a timeout in milliseconds and returns a `Result`.
 
-- Text is UTF-8. One call reads or writes at most 1 MiB.
-- Programs use the file permissions of the user who runs them.
-- Regular files use a pool of 4 threads, shared with DNS lookups and TLS certificate loading. Later calls wait for a free thread when many run at once.
-- To raise the pool size (at most 1024), set `UV_THREADPOOL_SIZE` before the program starts, as in `UV_THREADPOOL_SIZE=16 agentica app.agc`. Setting it later has no effect.
-- Pipes, FIFOs and terminals skip the pool. They wait on the event loop, so their timeout always ends the wait. `File.read_text` of a pipe reads until the writer closes it.
+- Text is UTF-8. One call reads or writes at most 1 MiB. Files have the permissions of the user who runs the program.
+- Regular files use a pool of 4 threads, shared with DNS lookups and TLS certificate loading, so calls wait for a free thread when many run. Raise it (at most 1024) before the program starts: `UV_THREADPOOL_SIZE=16 agentica app.agc`.
+- Pipes, FIFOs and terminals skip the pool and wait on the event loop, so their timeout always ends the wait. `File.read_text` of a pipe reads until the writer closes it.
 
-The examples on this page touch the disk, so they are checked but not run here, except the one of `Path.real`.
+The examples touch the disk, so they are only checked here, except `Path.real`.
 
 ## File.write_text
 
@@ -41,13 +39,6 @@ File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 
 Adds text at the end of a file. It creates the file when it is missing.
 
-```agentica {mode="check"}
-def main() -> Void
-  r = File.append_text("log.txt", "started\n", 1000)
-  puts(r.ok?)
-end
-```
-
 ## File.read_text
 
 ```text
@@ -71,13 +62,10 @@ end
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
 ```
 
-Gives a `FileInfo` with `kind` (`"file"` or `"directory"`), `size_bytes`, `modified_seconds`, `mode`, and the owner as `user_id` and `group_id`. A symbolic link is followed.
+Gives a `FileInfo`: `kind` (`"file"` or `"directory"`), `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
 
-- `mode` is the permission bits as an `Int`, with the setuid, setgid and sticky bits. A file with mode `rw-------` has `mode` 384 (octal 600).
-- On Windows there are no Unix permission bits and no Unix owner ids:
-  - `mode` carries only the read-only attribute: 438 (octal 666) for a writable object, 292 (octal 444) when the attribute is set. No setuid, setgid or sticky bit appears.
-  - `user_id` and `group_id` are always 0. A 0 is not the owner.
-  - `mode` says nothing about the ACL or DACL. Use the file's own security settings for that.
+- `mode` is the permission bits as an `Int`, with setuid, setgid and sticky: `rw-------` is 384 (octal 600).
+- Windows has no Unix bits or owner ids: `mode` is only the read-only attribute (438 writable, 292 read-only; it says nothing about the ACL), and `user_id` and `group_id` are always 0, which is not the owner.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -92,17 +80,7 @@ end
 File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo]
 ```
 
-Like `File.stat`, but a symbolic link is not followed. Its `kind` is `"link"`, its `size_bytes` is the length of the link text, and the other fields are the link's own. Use it to tell a link from what it names. VM only.
-
-```agentica {mode="check"}
-def main() -> Void
-  info = File.lstat("current", 1000).unwrap!
-  if info.kind == "link"
-    target = File.stat("current", 1000).unwrap!
-    puts("a link to a #{target.kind}")
-  end
-end
-```
+Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size_bytes` is the length of the link text, the other fields are the link's own. VM only.
 
 ## File.open and File.close
 
@@ -120,36 +98,17 @@ Opens a file for streaming.
 | `"append"` | write at the end of the file |
 | `"create_private"` | VM only: a new file that only you can read and write |
 
-`"create_private"` opens a new file for writing. It fails when the path exists, including a link that points nowhere. It never follows a link, so another user cannot make it write somewhere else.
-
-- Unix: mode 0600, less where the umask clears bits.
-- Windows: no mode. The file gets a protected DACL that grants only the current user. Creation fails unless the opened object has that owner and DACL.
+`"create_private"` fails when the path exists (a dangling link too) and never follows a link, so another user cannot redirect the write. Unix: mode 0600, less where the umask clears bits. Windows: a protected DACL that grants only the current user; creation fails unless the opened object has that owner and DACL.
 
 `close` writes pending data. Closing twice is fine.
 
-Tasks:
-
-- A file belongs to the task that opened it. It closes, with its data written, when that task ends.
-- `Task.await` of that task returns after a regular file's data is written. So a parent that awaits a helper reads everything the helper wrote. The await does not wait for a flush to a FIFO or a pipe.
-- A file that a helper opens and returns through `Task.await` closes when the helper ends.
-- A `close` on a file that is closing because its task ended waits for that close, and returns its result.
-
-Program end:
-
-- Open files close when the program ends. The run waits until their data is written, and until the output of `puts` and `IO.warn` reaches the pipe or file.
-- The wait is limited. The default is 30 seconds. Set it with `agentica --flush-timeout MS app.agc`, or the environment variable `AGENTICA_FLUSH_TIMEOUT_MS`. The flag wins.
-- When time runs out, the run ends with the same exit code, and stderr gets one line saying file data may not be written. So a write to a FIFO that nobody reads cannot block the end of the program.
-
-Signals:
-
-- On `SIGINT`, `SIGTERM` or `SIGHUP`, running child programs stop first, then files are written, then the program ends by that signal.
-- After a signal, the run does not wait for a reader of standard output or standard error. A second signal ends it at once, once the children have stopped.
-- Under `agentica`, Ctrl-C reaches the program directly. `agentica` waits 2 seconds, then sends `SIGTERM`. It waits 2 more seconds, then kills the program.
-
-Paths:
-
-- A path that reopens one of the program's own internal pipes gives `error("filesystem: path does not refer to a regular file")`. The same goes for the descriptor that standard output or error goes through, such as `/proc/self/fd/5`.
-- Pipes the program got at start can be opened by path: standard input, output and error, and a shell pipe such as `bash`'s `<(...)`.
+- A file belongs to the task that opened it and closes, with its data written, when that task ends (also when a helper opened it and returned it through `Task.await`).
+- `Task.await` of that task returns after a regular file's data is written, so a parent that awaits a helper reads everything it wrote. It does not wait for a flush to a FIFO or a pipe.
+- A `close` on a file already closing because its task ended waits for that close and returns its result.
+- At program end the run waits for open files to be written and for `puts` and `IO.warn` output to reach its pipe or file, at most 30 seconds (`agentica --flush-timeout MS app.agc` or `AGENTICA_FLUSH_TIMEOUT_MS`; the flag wins). When time runs out the exit code stays and stderr gets one line saying file data may not be written, so a FIFO nobody reads cannot block the end.
+- On `SIGINT`, `SIGTERM` or `SIGHUP`: child programs stop first, then files are written, then the program ends by that signal. The run does not wait for a reader of stdout or stderr. A second signal ends it at once, once the children have stopped.
+- Under `agentica`, Ctrl-C reaches the program directly. `agentica` waits 2 seconds, sends `SIGTERM`, waits 2 more, then kills it.
+- A path that reopens one of the program's own internal pipes, or the descriptor behind stdout or stderr (`/proc/self/fd/5`), gives `error("filesystem: path does not refer to a regular file")`. Pipes the program got at start open by path: stdin, stdout, stderr and a shell `<(...)`.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -190,14 +149,11 @@ end
 File.try_lock(handle: FileHandle, timeout_ms: Int) -> Result[Bool]
 ```
 
-Takes an exclusive lock on the open file, without waiting. It gives `ok(true)` when the lock is yours, also when you already hold it on this handle. It gives `ok(false)` when another handle or process holds it.
+Takes an exclusive lock on the open file, without waiting. `ok(true)` means it is yours (also if this handle already holds it), `ok(false)` that another handle or process holds it.
 
-- The lock ends when the handle closes, when the task that opened it ends, or when the program ends, even if killed. A program started with `Process.spawn` does not keep it.
-- Unix: advisory (`flock`). It stops only code that also asks for it.
-- Windows: `LockFileEx` on the whole byte range. The OS also rejects reads and writes through other handles while it is held.
-- Any handle mode works, and a read handle can lock too.
-- Only a regular file can be locked. A pipe, a FIFO or a device such as `/dev/null` is an error.
-- There is no unlock call. Close the handle. VM only.
+- It ends when the handle closes, the opening task ends, or the program ends, even if killed. A `Process.spawn` child does not keep it. There is no unlock call.
+- Unix: advisory (`flock`), so it stops only code that asks too. Windows: `LockFileEx` on the whole range, and the OS rejects reads and writes through other handles.
+- Any handle mode works. Only a regular file can be locked (a pipe, FIFO or `/dev/null` is an error). VM only.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -217,19 +173,7 @@ end
 File.read_line(handle: FileHandle, timeout_ms: Int) -> Result[String]
 ```
 
-Reads one line without its line ending. At the end of the file it gives an error result.
-
-```agentica {mode="check"}
-def main() -> Void
-  file = File.open("notes.txt", "read", 1000).unwrap!
-  line = File.read_line(file, 1000)
-  while line.ok?
-    puts(line.unwrap!)
-    line = File.read_line(file, 1000)
-  end
-  closed = File.close(file, 1000)
-end
-```
+Reads one line without its line ending. At the end of the file it gives an error result. Loop with `while line.ok?`, or use `File.each_line`.
 
 ## File.each_line
 
@@ -237,16 +181,12 @@ end
 File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... end -> Result[Void]
 ```
 
-Reads a file one line at a time, and calls the block with each line, without its line ending. The file is never read whole, so a file larger than memory works.
+Calls the block with each line, without its line ending (LF and CRLF; a last line without one is passed too). The file is never read whole, so a file larger than memory works, and so do FIFOs and pipes. The file closes on every way out.
 
-- The block returns a `Result[Void]`. `ok()` goes on to the next line. An `error(...)` stops the loop, and is the result of `each_line`.
-- `try` works inside the block. `return error(...)` stops early from an `if` or a loop in the block.
-- `buffer_bytes` is the longest line the call accepts, counting the line ending. The range is 1024 to 16777216. A longer line ends the call with `error("filesystem: line exceeds buffer_bytes")`.
-- A value outside the range stops the program with `RUNTIME-INVALID-COUNT` at that argument, before the file opens.
-- `timeout_ms` limits each read, the open and the close, not the whole call. A pipe or FIFO that stays silent for that long ends the call with an error. It must be positive.
-- LF and CRLF are removed. A last line without a line ending is passed too.
-- The text is strict UTF-8. Invalid bytes end the call with an error.
-- The file closes on every way out, including an error from the block. It works on FIFOs and pipes too.
+- The block returns a `Result[Void]`: `ok()` goes on, an `error(...)` stops and is the result. `try` and `return error(...)` work in the block.
+- `buffer_bytes` is the longest line, counting its ending: 1024 to 16777216, else `RUNTIME-INVALID-COUNT` before the file opens. A longer line ends the call with `error("filesystem: line exceeds buffer_bytes")`.
+- `timeout_ms` (positive) limits each read, the open and the close, not the whole call. A silent pipe ends the call with an error.
+- The text is strict UTF-8: invalid bytes end the call with an error.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -307,24 +247,13 @@ Dir.mkdir(path: String, timeout_ms: Int) -> Result[Void]
 
 Creates a directory and any missing parents. An existing directory is fine.
 
-```agentica {mode="check"}
-def main() -> Void
-  puts(Dir.mkdir("build/reports", 1000))
-end
-```
-
 ## Dir.mkdir_private
 
 ```text
 Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Creates one directory that only you can enter. Use it for a scratch directory in a shared place such as `/tmp`.
-
-- Unlike `Dir.mkdir`, it makes no parents.
-- A path that already exists is an error. So success means the directory is new and yours.
-- Unix: mode 0700, less where the umask clears bits. Windows: the owner-and-DACL check of `File.open` applies, with no mode.
-- VM only.
+Creates one directory that only you can enter, for a scratch directory in a shared place such as `/tmp`. It makes no parents, and an existing path is an error, so success means the directory is new and yours. Unix: mode 0700, less where the umask clears bits. Windows: the owner-and-DACL check of `File.open`. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -363,25 +292,13 @@ Path.resolve(path: String) -> Result[String]
 
 `cwd` gives the current directory. `resolve` makes an absolute path, without following links.
 
-```agentica {mode="check"}
-def main() -> Void
-  puts(Path.cwd())
-  puts(Path.resolve("notes.txt"))
-end
-```
-
 ## Path.real
 
 ```text
 Path.real(path: String) -> Result[String]
 ```
 
-Gives the absolute path, with every symbolic link resolved, `.` and `..` removed, and repeated separators collapsed, as POSIX `realpath` does.
-
-- Unlike `resolve`, it reads the disk. The path must exist. A missing path, a loop of links, and a name that is not a directory are errors.
-- A relative path starts at the current directory.
-- Each byte that is not part of a valid UTF-8 sequence becomes U+FFFD in the result.
-- It has no timeout argument. It runs in the file thread pool, and does not stop other tasks.
+Like POSIX `realpath`: the absolute path with every symbolic link resolved and `.`, `..` and repeated separators removed. Unlike `resolve`, it reads the disk, so the path must exist (a missing path, a link loop or a non-directory is an error). Invalid UTF-8 bytes become U+FFFD. It has no timeout; it runs in the file pool and does not stop other tasks.
 
 ```agentica
 def main() -> Void
@@ -401,17 +318,13 @@ false
 Path.remove(path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Deletes what is at the path: a file, a symbolic link, or a directory with everything in it. A path that is not there gives `ok()`.
+Deletes a file, a symbolic link, or a directory with everything in it. A missing path gives `ok()`. VM only.
 
-- It never follows a symbolic link. A link given as the path is deleted itself. A link inside a directory is deleted as a link, and what it names is left alone.
-- It refuses a filesystem root, a trailing separator, `.`, and `..` (also as the final part of `dir/..`).
-- It refuses a tree more than 128 levels deep. That tree is left partly deleted.
-- `"link/"` (a link with a trailing separator) and `"file/child"` (a path under a file) are errors. Both give `Not a directory`, on purpose, so `"link/"` never reports `ok()`.
-- A failed call keeps what it already deleted. The error names the path, or the entry that failed inside the tree, with the system error.
-- A timeout gives an error, but does not stop a removal that has started. The removal runs until it ends.
-- Unix: crosses mount points, as `rm -rf` does.
-- Windows: removes reparse-point entries such as junctions themselves, without traversing them. Drive and UNC paths use native syntax, and drive or share roots are refused. Paths with alternate-data-stream syntax, or a component that ends in a dot or a space, are refused to avoid Win32 aliases.
-- VM only.
+- It never follows a link: a link is deleted itself, and what it names is left alone.
+- It refuses a filesystem root, a trailing separator, `.` and `..` (also as the end of `dir/..`), and a tree more than 128 levels deep (left partly deleted).
+- `"link/"` and `"file/child"` give `Not a directory`, on purpose, so `"link/"` never reports `ok()`.
+- A failed call keeps what it already deleted; the error names the failing entry with the system error. A timeout gives an error but the started removal runs to its end.
+- Unix crosses mount points, as `rm -rf` does. Windows removes junctions and other reparse points themselves without traversing them, refuses drive or share roots, alternate-data-stream syntax and components ending in a dot or space.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -428,10 +341,9 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 
 Renames a file, a symbolic link or a directory to a path that does not exist yet, in one step.
 
-- It never replaces anything. When `to` exists, even as an empty directory, the call fails and nothing changes. So two programs that race for a name have exactly one winner.
-- A symbolic link moves as a link. What it names is left alone.
-- Both paths must be on the same file system. There is no copy and delete fallback across volumes.
-- Linux, macOS and Windows use native no-replace operations. VM only.
+- It never replaces anything: when `to` exists (even an empty directory) the call fails and nothing changes, so two programs racing for a name have exactly one winner.
+- A symbolic link moves as a link.
+- Both paths must be on one file system; there is no copy fallback. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void

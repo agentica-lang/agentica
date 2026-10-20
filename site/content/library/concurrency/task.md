@@ -4,7 +4,7 @@ weight: 1
 description: Start, await (with or without a timeout), pause and count lightweight tasks, map a block over a list with bounded concurrency, hand a handle to a task, and find their crashes.
 ---
 
-Tasks run functions at the same time in one program. The tour page [Tasks](/tour/tasks/) shows how to use them.
+Tasks run functions at the same time. See the tour page [Tasks](/tour/tasks/).
 
 ## Task.spawn
 
@@ -14,11 +14,9 @@ Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 
 Starts `function(argument)` in a new task and returns its `Task` handle.
 
-- A file, socket, listener, process or server belongs to the task that opened it. It closes when that task ends: returns, crashes or is cancelled.
-- `Task.await` of an ended task returns after its regular files are written and closed. It does not wait for a flush to a FIFO or a pipe.
-- `Task.spawn` moves nothing. A handle in the argument, or in a struct or list in it, stays with the caller.
-- A handle that a helper opens and returns through `Task.await` closes when the helper ends. Open a long-lived handle in the task that keeps it.
-- To give a handle to the new task, use `Task.spawn_owning`.
+- A file, socket, listener, process or server belongs to the task that opened it and closes when that task ends (returns, crashes or is cancelled). So open a long-lived handle in the task that keeps it, not in a helper.
+- `Task.await` of an ended task returns after its regular files are written and closed (not a flush to a FIFO or a pipe).
+- `Task.spawn` moves nothing: a handle in the argument, or in a struct or list in it, stays with the caller. To give it away, use `Task.spawn_owning`.
 
 ```agentica
 def greet(name: String) -> String
@@ -41,13 +39,12 @@ hi Ana
 Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 ```
 
-Starts `function(handle)` like `Task.spawn`, and gives `handle` to the new task in the same call.
+Starts `function(handle)` like `Task.spawn` and gives `handle` to the new task in the same call.
 
-- The caller must own the handle. It can still use the handle while the new task runs.
-- A server loop gives each accepted connection to its own task, so a crash closes only that connection. A server handed over this way takes its listener along and keeps serving after the task that made it has ended.
-- A [Channel](/library/concurrency/channel/) can be handed over too. A channel has no opener, so its first hand-off can come from any task. The channel closes when the new task ends (see [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel)). Until then, only the new task can hand it on. Any task can still call `Channel.close`.
-- The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`. Any other type, such as an `Int`, a struct that holds a socket or an `HttpClient`, is `CHECK-NOT-A-HANDLE` at the argument.
-- If the caller does not own the handle, it was already handed over, or it is closed, the caller stops with `RUNTIME-HANDLE-NOT-OWNED` at the handle. No task is made.
+- The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`. Anything else (an `Int`, a struct that holds a socket, an `HttpClient`) is `CHECK-NOT-A-HANDLE`.
+- The caller must own the handle, and can still use it while the new task runs. Otherwise (not owned, already handed over, closed) the caller stops with `RUNTIME-HANDLE-NOT-OWNED` and no task is made.
+- A server loop can give each accepted connection to its own task, so a crash closes only that connection. A handed-over server takes its listener along and keeps serving after its creator ends.
+- A [Channel](/library/concurrency/channel/) has no opener, so any task can make the first hand-off. It closes when the new task ends (see [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel)). Until then only that task can hand it on; any task can call `Channel.close`.
 
 ```agentica
 def echo(socket: Socket) -> Result[String]
@@ -76,7 +73,7 @@ ok("hello")
 error("network: end of input")
 ```
 
-The last line shows the rule: `echo` returned without closing the connection. Its end closed it, so the client reads the end of the input.
+`echo` never closes the connection. Its end does, so the client reads the end of the input.
 
 ## Task.await
 
@@ -86,10 +83,10 @@ Task.await(task: Task[R]) -> R
 
 Waits for the task and gives its result. Waiting again gives the same value.
 
-- A runtime error in a task other than `main` is a crash. It ends only that task. The error goes to stderr, the task's own tasks are cancelled, and the handles it owns are closed.
-- If the task returns a `Result`, awaiting it gives `error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")`. Otherwise the waiting task stops with `RUNTIME-TASK-CRASHED`.
+- A runtime error in a task other than `main` is a crash. It ends only that task: the error goes to stderr, the task's own tasks are cancelled and its handles close.
+- Awaiting a crashed task that returns a `Result` gives `error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")`. For any other type the waiting task stops with `RUNTIME-TASK-CRASHED`.
 - A crash that no await sees makes the run exit with code 1 when `main` returns.
-- An await that would wait for the awaiting task itself, directly or through other tasks, stops with `RUNTIME-TASK-AWAIT-CYCLE` at the `Task.await`. A task can get such a handle through a [Channel](/library/concurrency/channel/).
+- Awaiting yourself, directly or through other tasks (a handle can arrive over a [Channel](/library/concurrency/channel/)), stops with `RUNTIME-TASK-AWAIT-CYCLE`.
 
 ```agentica
 def parse(text: String) -> Result[Int]
@@ -111,44 +108,22 @@ true
 still running
 ```
 
-```agentica
-def add_one(n: Int) -> Int
-  return n + 1
-end
-
-def main() -> Void
-  task = Task.spawn(&add_one, 1)
-  puts(Task.await(task))
-  puts(Task.await(task))
-end
-```
-
-```output
-2
-2
-```
-
 ## Task.await with a timeout
 
 ```text
 Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
 ```
 
-Waits for the task for at most `timeout_ms` milliseconds.
+Waits at most `timeout_ms` milliseconds.
 
-- `Await[R]` is a builtin enum. `Await.Done(value)` holds the result. `Await.TimedOut` means the time ran out first. It has no payload, so write it without parentheses.
-- A `case` must match both variants, or use `_`. The checker rejects a `case` that misses one.
-- `Await` is a reserved name. A struct, enum or import alias cannot use it. `try` does not apply to an `Await`.
-- `timeout_ms` must be above 0. `0` or a negative value stops the program with `RUNTIME-INVALID-DURATION` at the argument.
-- Call it once with the total time you can spare. Do not poll in a loop.
+- `Await[R]` is a builtin enum: `Await.Done(value)` holds the result, `Await.TimedOut` (no payload, no parentheses) means time ran out first.
+- A `case` must match both variants, or use `_`. `Await` is a reserved name, and `try` does not apply to it.
+- `timeout_ms` must be above 0, otherwise `RUNTIME-INVALID-DURATION`. Call it once with the total time you can spare; do not poll.
+- A timeout does not cancel the task. It keeps running, and a later await gives its result. An ended task never times out.
+- If the task crashes or is cancelled first, you get the plain await's outcome: `Await.Done(error(text))` for a `Result` task, otherwise `RUNTIME-TASK-CRASHED` or `RUNTIME-TASK-CANCELLED`. A crash after `Await.TimedOut` does not reach the caller.
+- A timed await skips the cycle check: a task awaiting itself with a timeout gets `Await.TimedOut`, and a plain await of a task that waits with a timeout is not `RUNTIME-TASK-AWAIT-CYCLE`.
 
-A timeout does not cancel the task or stop the caller. The task keeps running, and a later `Task.await(task)` or timed await gives its result. A task that has already ended never times out.
-
-- If the task crashes or is cancelled before the timeout, you get the plain await's outcome. For a task that returns a `Result`, that is `Await.Done(error(text))`. For any other type, the caller stops with `RUNTIME-TASK-CRASHED` or `RUNTIME-TASK-CANCELLED` at the call.
-- A crash after the caller got `Await.TimedOut` does not reach the caller.
-- A timed await skips the cycle check, since it cannot wait forever. A task that awaits its own handle with a timeout gets `Await.TimedOut`, and so do two tasks that await each other with timeouts. A plain `Task.await` of a task that waits with a timeout does not stop with `RUNTIME-TASK-AWAIT-CYCLE`.
-
-In this program the worker waits for a number from a [Channel](/library/concurrency/channel/). The first wait runs out of time. The worker keeps waiting, and the second wait gets its result:
+The worker waits on a [Channel](/library/concurrency/channel/). The first wait runs out of time, the worker keeps waiting, and the second wait gets its result:
 
 ```agentica
 def double(inbox: Channel[Int]) -> Int
@@ -176,7 +151,7 @@ still working
 done 42
 ```
 
-When the task returns a `Result`, `Await.Done` holds that `Result`, so match it in a second `case`. `IO.inspect` shows an `Await` as `Await.Done(ok(25))` or `Await.TimedOut`.
+For a `Result` task, `Await.Done` holds the `Result`: match it in a second `case`.
 
 ```agentica
 def parse(text: String) -> Result[Int]
@@ -202,31 +177,7 @@ parsed 25
 Await.Done(ok(25))
 ```
 
-A task that returns `Void` gives an `Await[Void]`. Match its payload with `_`, as `Result.Ok(_)` is. A name there is `CHECK-VOID-TYPE`.
-
-```agentica
-def finish(inbox: Channel[Int]) -> Void
-  n = inbox.recv(10000).unwrap!
-  puts("finished #{n}")
-end
-
-def main() -> Void
-  inbox: Channel[Int] = Channel.new(1)
-  task = Task.spawn(&finish, inbox)
-  IO.inspect(Task.await(task, 20))
-  inbox.send(7, 1000)
-  case Task.await(task, 10000)
-    Await.Done(_) -> puts("done")
-    Await.TimedOut -> puts("timed out")
-  end
-end
-```
-
-```output
-Await.TimedOut
-finished 7
-done
-```
+A `Void` task gives `Await[Void]`: match its payload with `_` (`Await.Done(_)`). A name there is `CHECK-VOID-TYPE`.
 
 ## Task.map
 
@@ -234,11 +185,10 @@ done
 Task.map(items: List[A], limit: Int, timeout_ms: Int, function: Fn[A, Result[R]]) -> List[Result[R]]
 ```
 
-Runs the function for each item in its own task, at most `limit` at a time. It gives one `Result` per item, in the order of `items`, whatever order the items end in.
+Runs the function for each item in its own task, at most `limit` at a time. It gives one `Result` per item, in the order of `items`.
 
-- Always write `Task.map(...)`. It is never a method, so `xs.map` stays the sequential `List.map`.
-- The function is usually the trailing block. It gives a `Result[R]`, because HTTP requests, files and processes already return `Result`. `try` works in the block, and a block that cannot fail ends with `ok(x)`.
-- A block whose last expression is not a `Result` is `CHECK-TYPE-MISMATCH`. The help shows `ok(...)`.
+- It is never a method: `xs.map` stays the sequential `List.map`.
+- The function is usually the trailing block. It gives a `Result[R]` (`try` works in it; end a block that cannot fail with `ok(x)`). Any other last value is `CHECK-TYPE-MISMATCH`.
 
 ```agentica
 def slow_double(n: Int) -> Result[Int]
@@ -258,11 +208,10 @@ end
 [ok(2), ok(4), ok(6), ok(8)]
 ```
 
-This takes about 200 ms, not 400. Two items run at a time, and each new item starts when one ends (a sliding window, not batches). Items start in input order.
+About 200 ms, not 400: a sliding window of two, not batches. Items start in input order.
 
-- An item's `error(...)` does not stop the others.
-- The call waits for every item. To use each result as soon as it is ready, send it over a [Channel](/library/concurrency/channel/).
-- A runtime error in an item, such as `RUNTIME-DIVISION-BY-ZERO`, crashes only that item. Its slot is `error("task crashed: ...")`.
+- An item's `error(...)` does not stop the others. A runtime error (`RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is `error("task crashed: ...")`.
+- The call waits for every item. To use results as they come, send them over a [Channel](/library/concurrency/channel/).
 
 ```agentica
 def main() -> Void
@@ -286,9 +235,9 @@ failed: cannot convert "x" to Int
 value 20
 ```
 
-`R` comes from the expected type of the call, or else from the block's first value. If that value is `error(...)`, the checker says `CHECK-RESULT-TYPE`. Then annotate the variable: `results: List[Result[Int]] = Task.map(...)`. A function value works too: `Task.map(ids, 8, 5000, &fetch)`.
+`R` comes from the expected type of the call, else from the block's first value. If that is `error(...)`, the checker says `CHECK-RESULT-TYPE`: annotate the variable (`results: List[Result[Int]] = Task.map(...)`). A function value works too: `Task.map(ids, 8, 5000, &fetch)`.
 
-`timeout_ms` is the time one item may take, from the start of its task to its end. It includes the time the item waits to run while other tasks use the CPU. An item that runs out of time is cancelled, and its slot is `error("task: timed out")`. There is no total timeout. A call takes at most about the number of items divided by `limit`, rounded up, times `timeout_ms`.
+`timeout_ms` is per item, from the start of its task to its end, including time spent waiting to run. A slow item is cancelled and its slot is `error("task: timed out")`. There is no total timeout: a call takes at most about `ceil(items / limit) * timeout_ms`.
 
 ```agentica
 def fetch(n: Int) -> Result[String]
@@ -308,21 +257,24 @@ end
 [ok("page 1"), error("task: timed out"), ok("page 3")]
 ```
 
-Cancellation:
+Limits, checked before any item starts (also for an empty list, which gives `[]`):
 
-- A cancelled item runs no more code, and neither do the tasks it started, even a grandchild whose parent has ended. A `Task.map` it called starts no more items. Its handles close, as for any task that ends.
-- An item counts as ended only after its regular files are written and closed. So a file it wrote is on disk when the call returns. A timed-out item is the exception: its slot settles at its deadline, and the call does not wait for its files.
-- I/O in progress is not abandoned. It finishes or times out on its own, and its result is dropped. It never closes the handle, so a timed-out item cannot close a handle that other items share. The connection of a timed-out `HTTP.get` closes when its request ends. It does not go back to the pool.
-- Awaiting a handle to a cancelled task, passed out of an item through a channel, stops with `RUNTIME-TASK-CANCELLED`. If that task returns a `Result`, it gives `error("task: cancelled")`.
+- `limit` is 1 to 1024, otherwise `RUNTIME-INVALID-COUNT`. A `limit` above the list size starts every item at once.
+- `timeout_ms` above 0, otherwise `RUNTIME-INVALID-DURATION`.
 
-Limits: `limit` is 1 to 1024, otherwise `RUNTIME-INVALID-COUNT` at the argument. `timeout_ms` must be above 0, otherwise `RUNTIME-INVALID-DURATION` at the argument. Both are checked before any item starts, even for an empty list, which gives `[]`. A `limit` above the list size starts every item at once.
+Cancellation (a timed-out item):
+
+- It runs no more code, nor do the tasks it started (a `Task.map` it called starts no more items). Its handles close.
+- Its slot settles at the deadline, and the call does not wait for its files. A normal item counts as ended only after its regular files are written and closed.
+- I/O in progress finishes or times out on its own and its result is dropped. It never closes a handle other items share. A timed-out `HTTP.get` connection closes and does not go back to the pool.
+- Awaiting a handle to a cancelled task (passed out through a channel) stops with `RUNTIME-TASK-CANCELLED`, or gives `error("task: cancelled")` for a `Result` task.
 
 Tips:
 
-- `limit` is for I/O. On one core, CPU work gets no faster. A large `limit` makes timeouts likelier, since an item's clock includes its wait to run.
-- Open handles inside the item. Do not share one handle across items: calls on it wait for its lock, so the items run in turn. A handle that many tasks need belongs to one owner task, which the items talk to over a [Channel](/library/concurrency/channel/).
-- Items, captured variables and results are immutable, so they are shared without copies. An item may call `Task.map` too. Each call has its own limit, so the limits multiply.
-- Starting an item costs one `--max-steps` step, and the block costs its own. With `--seed`, each item has its own random generator, split in input order.
+- `limit` is for I/O. CPU work gets no faster on one core, and a large `limit` makes timeouts likelier.
+- Open handles inside the item. A handle shared by items makes them run in turn (its lock). Many tasks needing one handle: give it to one owner task and talk to it over a [Channel](/library/concurrency/channel/).
+- Items, captured variables and results are immutable and shared without copies. An item may call `Task.map`; the limits multiply.
+- Starting an item costs one `--max-steps` step, plus the block's own. With `--seed`, each item gets its own random generator, split in input order.
 
 ## Task.sleep
 
@@ -330,7 +282,7 @@ Tips:
 Task.sleep(milliseconds: Int) -> Void
 ```
 
-Pauses the current task. `0` lets other tasks run. A negative value stops the program.
+Pauses the current task. `0` lets other tasks run; a negative value stops the program.
 
 ```agentica
 def late(label: String) -> String
@@ -374,11 +326,10 @@ end
 Task.pending_count() -> Int
 ```
 
-Gives how many tasks of this run have not ended yet, not counting `main`.
+Gives how many tasks have not ended yet, not counting `main`.
 
-- A task that waits to run, sleeps or waits for another task counts. The task that asks counts too, unless it is `main`.
-- A task that has returned or crashed no longer counts, even when nobody awaited it.
-- The tasks that `std/http` starts for an `HttpClient` never count. `Test.test` does not see them as leftovers.
+- Waiting, sleeping and awaiting tasks count, and so does the asker unless it is `main`. Returned or crashed tasks do not, awaited or not.
+- The tasks `std/http` starts for an `HttpClient` never count.
 - `std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step that leaves tasks running.
 
 ```agentica
@@ -414,9 +365,7 @@ end
 Task.unobserved_crash() -> Result[String]
 ```
 
-Gives `ok(text)` with the first crash of this run that no `Task.await` has seen. When there is none, it gives an error. Asking does not count as seeing a crash.
-
-`std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step whose task crashed.
+Gives `ok(text)` with the first crash that no `Task.await` has seen, else an error. Asking does not count as seeing. `std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step whose task crashed.
 
 ```agentica
 def boom(n: Int) -> Int
