@@ -235,6 +235,9 @@ loop, one global queue and no home scheduler. Multicore is built in steps
     read but never written (the child's environment and `System.env` read it);
   - the stop state `stop` in `vm/loop.c` (lock-free atomics, a pid and the wake
     handle), since a signal handler gets no context (10.2.2, Stop signals).
+  - the system trust store in `vm/tls_trust.c` (a `CRYPTO_ONCE` and the list
+    it fills once, read-only after; 10.3 Trust), which every TLS setup job of
+    every runtime shares, so one load serves the process.
     Already moved out of globals: the `ready` flag of `agc_init` (Boehm's
     `GC_is_init_called` answers instead); the GC-stress counter (`_Atomic`); the
     SipHash keys (`hash_key` in `agc_vm`, set from OS entropy by `vm/launch.c`

@@ -74,6 +74,25 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- TLS system trust uses the platform's own store when `ca_file` is empty and
+  `SSL_CERT_FILE` is not set: the Security framework's roots and Keychain
+  trust settings on macOS (a root the admin or user adds is trusted), and
+  Crypt32's ROOT store on Windows.
+  Linux keeps its CA bundle search. Certificates the system distrusts (macOS
+  Deny settings, the Windows Disallowed store) are rejected, also as an
+  intermediate or the server's own certificate. On every system, Linux
+  included, the store is now read once per process (Linux used to re-read
+  its bundle at every connect): a trust change while a program runs is not
+  seen, and a first load that fails lasts for the whole process (connects
+  that need system trust then fail). Only the certificates are copied: platform rules beyond them
+  (Apple's date-based distrust and CT policy, the constraints trustd puts on
+  system anchors, Windows NotBefore and disallowed-filetime properties) are
+  not applied. A nonempty `ca_file` still replaces system trust, and
+  verification cannot be turned off. The TLS adapter and its tests
+  now build on Windows too, and the Platforms CI links the vendored OpenSSL
+  statically on macOS and Windows (no `msys-2.0.dll`). TLS sockets on Windows
+  still return the same error; `tests/test_vm_tls.py` now also runs on macOS.
+
 - An HTTP client builds one TLS context (CA file, trust store) for all its
   `https://` connections instead of one per connection, and frees it once the
   client is closed and its last connection is gone (a client never closed keeps

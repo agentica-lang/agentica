@@ -9,9 +9,9 @@ obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
 core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c runq.c inbox.c sync.c timers.c task_map.c channel.c loop.c input.c output.c stdio_posix.c stdio_windows.c random.c loader.c builtins.c diag.c trace.c"
 services="strings.c numbers.c json.c json_typed.c files.c tree.c stream.c duplex.c process.c system.c tcp.c http_fields.c http_service.c http_server.c http_wire.c logger.c testing.c front_end.c"
-adapters="tls_openssl.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c duplex_posix.c duplex_windows.c system_posix.c system_windows.c net_posix.c net_windows.c"
+adapters="tls_openssl.c tls_trust.c tls_trust_posix.c tls_trust_darwin.c tls_trust_windows.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c duplex_posix.c duplex_windows.c system_posix.c system_windows.c net_posix.c net_windows.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_main.c"
-headers="value.h port.h core.h services.h net.h http_fields.h tls.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h"
+headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h"
 memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
 inc='^\s*#\s*include\s*["<](\./)?'
 found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
@@ -41,6 +41,7 @@ chain services.h port.h
 chain net.h services.h tls.h
 chain http_fields.h services.h http_parse.h
 chain tls.h
+chain tls_trust.h
 chain http_parse.h
 chain trace.h
 chain launch.h port.h
@@ -55,7 +56,8 @@ if found -n "${inc}core\.h" $services $adapters; then bad "a service or adapter 
 if found -n "$inc(port|services|net|http_fields)\.h" $adapters; then bad "an adapter includes the port or a service header"; fi
 only 'gc\.h' "value.c"
 if found -n --max-depth 2 '^\s*#\s*include\s*"([^"]*/)?list_impl\.h"' --glob '*.c' --glob '*.h' --glob '!/list.c' --glob '!/interp.c' --glob '!/tests/list_test.c' .; then bad "only list.c, interp.c and tests/list_test.c may include list_impl.h"; fi
-only 'openssl/' "tls_openssl.c"
+only 'openssl/' "tls_openssl.c tls_trust.c tls_trust_posix.c"
+only 'tls_trust\.h' "tls_openssl.c tls_trust.c tls_trust_posix.c tls_trust_darwin.c tls_trust_windows.c"
 only 'picohttpparser\.h' "http_pico.c"
 only 'yyjson\.h' "json.c"
 only 'uv\.h' "loop.c runq.c inbox.c sync.c stdio_windows.c stream.c duplex.c process.c system.c tcp.c file_io.c file_windows.c duplex_posix.c duplex_windows.c system_posix.c net_windows.c launch.c"

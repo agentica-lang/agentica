@@ -15,7 +15,7 @@ import subprocess
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, TLS_BUILT, UNDER_WINE, binary, compile_agc,
+from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, UNDER_WINE, binary, compile_agc,
                                  require, run, run_vm, scaled, vm_environment, write_files)
 
 STDLIB = ROOT / "stdlib"
@@ -203,10 +203,9 @@ def test_run_checks_its_command_line_and_names_itself_in_its_messages(tmp_path):
     # The long version line is the VM's (the libraries it links); `agentica --version` is the version alone.
     long = agentica("run", "--version")
     assert long.code == 0
-    # The sanitizer build has no libgc: "(sanitizer build, no libgc, yyjson ...)". The Windows build has no TLS
-    # adapter yet (phase 11), so it does not name OpenSSL.
-    assert re.search(r"^agentica %s \((libgc |sanitizer build, no libgc).*yyjson .*libuv .*%s"
-                     % (re.escape(version()), "OpenSSL " if TLS_BUILT else ""), long.stdout)
+    # The sanitizer build has no libgc: "(sanitizer build, no libgc, yyjson ...)".
+    assert re.search(r"^agentica %s \((libgc |sanitizer build, no libgc).*yyjson .*libuv .*OpenSSL "
+                     % re.escape(version()), long.stdout)
     assert agentica("--version").stdout == version() + "\n"
 
 

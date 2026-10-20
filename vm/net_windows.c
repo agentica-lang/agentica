@@ -61,4 +61,6 @@ int agc_net_errno(int uv_error) {
     default: return EIO;
   }
 }
+/* TLS sockets stay off here: the TLS and HTTPS socket tests do not pass on Windows yet (step 11, part 2). */
+bool agc_net_tls_enabled(void) { return false; }
 #endif

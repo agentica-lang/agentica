@@ -106,7 +106,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   net_posix.c     # the POSIX side: the negated libuv code
   net_windows.c   # the Windows side: libuv code to the UCRT errno
   tls.h           # TLS adapter types (references/vm-net.md)
-  tls_openssl.c   # the only file that includes OpenSSL (references/vm-net.md)
+  tls_openssl.c   # the TLS adapter over OpenSSL (references/vm-net.md)
+  tls_trust.h     # system trust store: tls_trust.c (once per process, rejected certs, leaf verify callback), loaders tls_trust_posix.c (PEM bundle), tls_trust_darwin.c (Security), tls_trust_windows.c (Crypt32)
   http_parse.h    # HTTP head adapter (references/vm-net.md)
   http_pico.c     # the only file that includes picohttpparser (references/vm-net.md)
   http_body.c     # HTTP body decoder (references/vm-net.md)
@@ -157,7 +158,9 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     string_test.c        # String builtins
     task_cancel_test.c   # task cancellation
     text_test.c          # text forms
-    tls_test.c           # TLS adapter
+    tls_test.c           # TLS adapter in memory, trust sources, rejected certificates, system store; every system
+    tls_trust_darwin_test.c  # macOS trust settings verdicts (macOS only)
+    tls_trust_windows_test.c # Windows EKU rule and Disallowed-before-ROOT on memory stores (Windows only)
     trace_test.c         # trace points
 tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); the lists of references/vm-tests.md say which covers what
   test_spec_<area>.py  # pytest language rules through the CLI (code and span from --json, never message text); shared helpers live in spec_support.py. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.
