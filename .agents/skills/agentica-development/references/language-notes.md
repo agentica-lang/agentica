@@ -153,11 +153,12 @@ section for the area you are changing.
   in the binary (`stdlib/MODULES`, `gen-embedded.sh`), with virtual source names
   and no filesystem fallback. Add shipped modules to `stdlib/MODULES`. `pkg/`
   searches entrypoint-local agc_libs, absolute AGENTICA_PATH roots, user data
-  and Unix system data; first existing file wins. Skip missing candidates before
-  normalizing the path (it fails for absent parent directories); validate
-  namespace components and canonical symlink containment. Other paths remain
-  source-relative. No package registry, wildcard imports, module state, cycles,
-  or receiver attachment.
+  and Unix system data (`library_roots` in resolve_import.agc holds the Windows
+  rules: `;`, drive and UNC roots, LOCALAPPDATA, no system roots); first
+  existing file wins. Skip missing candidates before normalizing the path (it
+  fails for absent parent directories); validate namespace components and
+  canonical symlink containment. Other paths remain source-relative. No package
+  registry, wildcard imports, module state, cycles, or receiver attachment.
 - Linking/visibility and cross-file diagnostics are tested through `--json
   check` in the tests/test_spec_*.py modules (the old module test cases) and
   against the frozen goldens in tests/test_frontend_modules.py;

@@ -14,8 +14,10 @@ import pytest
 from tests.agentica_test import cli, run, vm_environment
 from tests.module_support import write_module_files
 
-# No AGENTICA_PATH roots and no user data folder, so only the files of a case resolve.
-HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg"}
+# No AGENTICA_PATH roots and no user data folder (XDG_DATA_HOME, or LOCALAPPDATA on Windows), so only the files of a
+# case resolve.
+HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
+            "LOCALAPPDATA": "/nonexistent-agentica-xdg"}
 
 MAIN = "def main() -> Void\nend\n\n"
 

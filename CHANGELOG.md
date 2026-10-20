@@ -31,6 +31,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A cancelled `TCP.accept` or socket read gives up its place at once.
 - A task spawned by a cancelled task starts cancelled.
+- Windows: `pkg/` roots follow the documented rules: `;` in `AGENTICA_PATH`,
+  drive and UNC roots, `%LOCALAPPDATA%` for the user root, no system roots.
 
 ## [0.5.0-beta.1] - 2026-10-20
 

@@ -103,27 +103,57 @@ def library(settings: Env.Settings, root_dir: String, file: String, site: Failur
 end
 
 # The search roots of pkg/: agc_libs/ next to the root file, AGENTICA_PATH, the user data folder, then the system
-# folders. Every AGENTICA_PATH entry must be absolute, whether or not it is used.
+# folders (none on Windows). Every AGENTICA_PATH entry must be absolute, whether or not it is used. The Windows rules
+# of docs/grammar/05b-modules.md are all here: the ";" separator, drive and UNC roots, and %LOCALAPPDATA%.
 def library_roots(settings: Env.Settings, root_dir: String, site: Failure.Site) -> Result[List[String]]
+  on_windows = windows?()
+  separator = ":"
+  if on_windows
+    separator = ";"
+  end
   configured: List[String] = []
-  for entry in settings.env.agentica_path.split(":")
+  for entry in settings.env.agentica_path.split(separator)
     if entry == ""
       next
     end
-    if !entry.starts_with?("/")
+    if !absolute?(entry, on_windows)
       return error(
         Failure.fail_at(site, "CHECK-IMPORT-PATH", "AGENTICA_PATH roots must be absolute", Diag.Help.NoHelp),
       )
     end
     configured = configured.push(entry)
   end
-  roots = [Paths.join(root_dir, "agc_libs")].concat(configured).concat(user_roots(settings.env))
+  roots = [Paths.join(root_dir, "agc_libs")].concat(configured).concat(user_roots(settings.env, on_windows))
+  if on_windows
+    return ok(roots)
+  end
   return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
 end
 
-# XDG_DATA_HOME when it is absolute, else ~/.local/share. An unset HOME leaves the user root out (the system is
-# not asked for the home folder).
-def user_roots(env: Env.Env) -> List[String]
+# Whether the front end runs on Windows, whose canonical paths use "/" but whose roots may be typed with "\".
+def windows?() -> Bool
+  return System.os() == "windows"
+end
+
+# A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path
+# (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is relative.
+def absolute?(path: String, on_windows: Bool) -> Bool
+  if on_windows
+    return path.starts_with?("\\") or Paths.rooted?(path)
+  end
+  return path.starts_with?("/")
+end
+
+# Elsewhere, XDG_DATA_HOME when it is absolute, else ~/.local/share; an unset HOME leaves the user root out (the
+# system is not asked for the home folder). On Windows, %LOCALAPPDATA% when it is absolute, else no user root:
+# XDG_DATA_HOME and HOME are not read there.
+def user_roots(env: Env.Env, on_windows: Bool) -> List[String]
+  if on_windows
+    if absolute?(env.local_app_data, true)
+      return [Paths.join(env.local_app_data, "agentica/lib")]
+    end
+    return []
+  end
   if env.xdg_data_home.starts_with?("/")
     return [Paths.join(env.xdg_data_home, "agentica/lib")]
   end
