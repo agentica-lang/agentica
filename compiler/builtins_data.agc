@@ -291,6 +291,22 @@ ROWS_1: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Channel.lazy",
+      parameters: [
+        Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("A"))),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Lazy(Types.Type.Var("A")),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: (
+        "Source: the values of the channel until it is closed and drained; each wait for a value obeys timeout_ms, " +
+        "and a timeout ends the terminal with error(\"channel: timed out\"); VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Channel.new",
       parameters: [Model.Named(name: "capacity", type: Types.Type.Int)],
       result: Types.Type.Channel(Types.Type.Var("T")),
@@ -440,6 +456,23 @@ ROWS_4: List[Model.Builtin] = [
       implementation: "File.flush",
       effects: ["filesystem"],
       description: "Flush pending file output.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "File.foreach",
+      parameters: [
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "buffer_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Lazy(Types.Type.String),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: (
+        "Source: the lines of a file, read as File.each_line reads them; the file opens when a terminal starts and " +
+        "closes before it returns; VM only."
+      ),
       alternatives: [],
     ),
     Model.Builtin(
@@ -3690,6 +3723,19 @@ ROWS_53: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "__lazy_channel",
+      parameters: [
+        Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("A"))),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Lazy(Types.Type.Var("A")),
+      rule: Model.Rule.Plain,
+      implementation: "__lazy_channel",
+      effects: [],
+      description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "__lazy_chunk_while",
       parameters: [
         Model.Named(name: "lazy", type: Types.Type.Lazy(Types.Type.Var("A"))),
@@ -3725,6 +3771,20 @@ ROWS_53: List[Model.Builtin] = [
       result: Types.Type.Result(Types.Type.Void),
       rule: Model.Rule.Plain,
       implementation: "__lazy_each",
+      effects: [],
+      description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "__lazy_file",
+      parameters: [
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "buffer_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Lazy(Types.Type.String),
+      rule: Model.Rule.Plain,
+      implementation: "__lazy_file",
       effects: [],
       description: "Internal to the prelude: a step or terminal of Lazy (vm/lazy.c).",
       alternatives: [],

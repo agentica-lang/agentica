@@ -142,7 +142,7 @@ static void stop_waiting(agc_task *t) { t->channel = (agc_channel_wait){0}; }
 static bool resumed(const agc_task *t, const agc_channel *c) { return t->channel.channel == c; }
 
 static void check_timeout(agc_vm *vm, int64_t timeout, uint32_t span) {
-  if (timeout < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", "channel timeout must be nonnegative", span);
+  if (timeout < 0) agc_fail(vm, "RUNTIME-INVALID-DURATION", AGC_CHANNEL_BAD_TIMEOUT, span);
 }
 
 static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, bool sending) {
@@ -210,34 +210,48 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
   return wait(vm, c, t, timeout, true);
 }
 
-static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_channel *c = agc_as_channel(vm, args[0]);
-  int64_t timeout = agc_as_int(vm, args[1]);
-  check_timeout(vm, timeout, span + 2);
+/* The receive of Channel.recv and of a Lazy over a channel (port.h). */
+agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout, agc_value *out) {
+  agc_sync_assert(vm);
   agc_task *t = vm->task;
   bool parked = resumed(t, c);
   if (parked) {
     leave_queue(vm, c, t);
     if (t->channel.reserved) {
-      agc_value v = t->channel.value;
+      *out = t->channel.value;
       stop_waiting(t);
       c->reserved_values--;
       drained(vm, c);
-      return agc_result_value(true, v);
+      return AGC_RECV_VALUE;
     }
   }
   if (c->count > 0) {
     stop_waiting(t);
-    return agc_result_value(true, take(vm, c));
+    *out = take(vm, c);
+    return AGC_RECV_VALUE;
   }
   if (c->closed && c->reserved_values == 0) {
     stop_waiting(t);
-    return closed_error();
+    return AGC_RECV_CLOSED;
   }
   agc_value result = wait(vm, c, t, timeout, false);
   /* Woken by its deadline, the receiver did not park again: it timed out. */
   if (parked && !resumed(t, c)) c->abandoned = true;
-  return result;
+  return agc_is(result, AGC_T_VOID) ? AGC_RECV_WAIT : AGC_RECV_TIMED_OUT;
+}
+
+static agc_value builtin_recv(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_channel *c = agc_as_channel(vm, args[0]);
+  int64_t timeout = agc_as_int(vm, args[1]);
+  check_timeout(vm, timeout, span + 2);
+  agc_value v = agc_void();
+  switch (agc_channel_receive(vm, c, timeout, &v)) {
+    case AGC_RECV_VALUE: return agc_result_value(true, v);
+    case AGC_RECV_CLOSED: return closed_error();
+    case AGC_RECV_TIMED_OUT: return timed_out_error();
+    case AGC_RECV_WAIT: break;
+  }
+  return agc_void();
 }
 
 static void shut(agc_vm *vm, agc_channel *c) {

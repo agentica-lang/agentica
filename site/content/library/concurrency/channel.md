@@ -166,6 +166,8 @@ end
 true
 ```
 
+The same consumer as a [`Lazy`](/library/data-structures/lazy/#chlazy): `jobs.lazy(1000)` gives the values until the channel is closed and drained, and a timeout ends it with an error, so no loop is needed: `jobs.lazy(1000).reduce(0) do |total, n| total + n end` is `ok(15)`.
+
 ## A producer that owns the channel
 
 `Task.spawn_owning(&produce, jobs)` makes the task the owner. When it ends in any way (returns, crashes, cancelled) the channel closes. The receiver gets the values already sent, then the closed error at once, with no timeout wait when the producer died.
