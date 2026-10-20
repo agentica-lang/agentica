@@ -1,0 +1,25 @@
+lines = File.foreach("ledger.csv", 65536, 1000)
+  .drop(1)                                     # header
+  # a comment-only line keeps the chain
+  .map do |line| parse(line) end
+  .filter(&big?)
+
+a = b
+
+  .not_joined
+c = 1
+..3
+d = 1
+.5
+e = f
+  ...g
+h = <<~T
+  one
+  two
+T
+  .upcase
+x = (a
+  .b)
+if a
+  .b
+end

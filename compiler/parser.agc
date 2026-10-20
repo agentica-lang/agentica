@@ -1095,6 +1095,12 @@ def primary_help(e: Base.Env, pos: Int) -> Diag.Help
   if token.kind == "less" and pos > 0 and e.tokens[pos - 1].kind == "less" and adjacent?(e.tokens[pos - 1], token)
     return Base.hint("there is no << operator; add to a list with xs = xs.push(x)")
   end
+  if token.kind == "dot" and Base.kind_at(e, pos + 1) == "name" and pos > 0 and e.tokens[pos - 1].kind == "NL"
+    return Base.hint(
+      "a line that starts with .name continues the expression on the line above, which must end in a value; " +
+      "a blank line ends it",
+    )
+  end
   if token.kind != "divide" and token.kind != "multiply"
     return Diag.Help.NoHelp
   end

@@ -1,0 +1,11 @@
+def main() -> Void
+  lines = File.foreach("ledger.csv", 65536, 1000)
+    .drop(1)                                     # header
+    # a comment-only line keeps the chain
+    .map do |line|
+      parse(line)
+    end
+    .filter(&big?)
+    .with(a: 1)
+  puts(lines)
+end
