@@ -229,7 +229,7 @@ def test_a_cache_that_does_not_match_the_lock_is_refused_when_the_package_is_loa
     assert check(ws, "plain.agc") is None
 
 
-@pytest.mark.skipif(not POSIX_PYTHON, reason="symbolic links need no privilege on POSIX only")
+@pytest.mark.skipif(not POSIX_PYTHON, reason="host-only: a symbolic link needs no privilege on POSIX only")
 def test_a_symbolic_link_among_the_agc_files_of_a_package_is_refused(ws):
     folder = ws.folder("owner/repo")
     (folder / "linked.agc").symlink_to(folder / "greet.agc")

@@ -76,7 +76,7 @@ WINDOWS_ONLY_MODULES = frozenset({
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_filesystem.py",
-    "tests/test_source_paths.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py",
+    "tests/test_source_paths.py", "tests/test_spec_packages.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py",
 })
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_vm_stdout.py"})
@@ -108,8 +108,8 @@ AREAS = {
         [
             "tests/test_spec_alias.py", "tests/test_spec_bytecode.py", "tests/test_spec_checker_defaults.py",
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
-            "tests/test_spec_lexer.py", "tests/test_spec_modules.py", "tests/test_spec_parser.py",
-            "tests/test_spec_patterns.py",
+            "tests/test_spec_lexer.py", "tests/test_spec_modules.py", "tests/test_spec_packages.py",
+            "tests/test_spec_parser.py", "tests/test_spec_patterns.py",
         ],
     ),
     "golden": (
