@@ -167,7 +167,8 @@ phase 13).
   plus its row in the "When to read a reference" table. The skill is
   self-contained and does not read the grammar.
 - A user-visible change adds an entry under `## [Unreleased]` in
-  `CHANGELOG.md`; mark a breaking change `**Breaking:**`.
+  `CHANGELOG.md`: one short line per change, for users (details belong in the
+  PR and docs); mark a breaking change `**Breaking:**`.
 - Do not create new files under `docs/` (the Markdown tree outside Hugo's
   `site/content/`) unless the user asks for them or suggests one and accepts
   it. Record progress and evidence in the PR, the roadmap checklist or the

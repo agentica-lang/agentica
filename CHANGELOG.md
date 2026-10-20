@@ -10,230 +10,52 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- TLS sockets on Windows, with the same checks as on Linux and macOS.
+- Windows system trust also reads the CA store for intermediates (never as
+  roots).
 - `std/http` (HTTP and HTTPS client and server) runs on Windows.
-
-- `TLS.connect` and `TLS.listen` run on Windows, with the same checks as on
-  Linux and macOS (SNI, host name and IP checks, explicit CA file, TLS 1.2 or
-  later, the same error texts). They no longer return `TLS needs Linux or
-  macOS`. The HTTP client and server builtins are still not on Windows.
-
-- On Windows, system trust also reads the CA certificate store, as CPython's
-  `ssl.load_default_certs` does: its intermediates complete a chain whose
-  server sends only its own certificate. They are never trusted as roots: a
-  CA store certificate whose subject equals its issuer is left out, and a
-  chain must still end at a root of the ROOT store. A cross-signed copy of a
-  ROOT certificate in the CA store is left out, so is a CA certificate whose
-  EKU extension excludes server authentication, and a CA certificate that an
-  administrator's EKU property bars from server authentication is rejected.
 
 ### Changed
 
-- The lingering close of `std/http` (after an error answer or a closing
-  response) reads and drops at most 256 KiB of input, as well as stopping at
-  the peer's close or the request deadline. A peer that keeps sending can no
-  longer make the server read for the whole deadline; one that is still
-  sending a large body after the limit may see a connection reset instead of
-  the answer.
-- HTTP runs on several schedulers (still behind the test switch
-  `AGENTICA_VM_TEST_MULTICORE`). The I/O thread owns the server's listener,
-  open count and waiting accepts, and the client in `std/http` runs on TCP and
-  TLS sockets. At N > 1, `HttpWire.read_head` and `HttpWire.read_response` no
-  longer wait for more input when the whole head is already buffered.
+- HTTP runs on several schedulers (behind the multicore test switch).
+- The lingering close of `std/http` drops at most 256 KiB of input; a client
+  still sending a large body may see a reset instead of the answer.
 
 ## [0.5.0-beta.1] - 2026-10-20
 
 ### Added
 
-- The `TCP` builtins run on Windows (and are tested on macOS and Windows as on
-  Linux). A `system error:` line shows the host's errno and text, so its
-  number differs between systems. `TLS` still returns an error on Windows.
-
-- The release builds native archives for four systems, each on a runner of
-  its own: `agentica-VERSION-linux-x86_64.tar.gz` (glibc 2.28),
-  `-windows-x86_64.zip` (MSYS2 UCRT64), `-macos-x86_64.tar.gz` and
-  `-macos-arm64.tar.gz` (macOS 12 or newer). Each holds the one program,
-  `LICENSE`, `NOTICE` and the notices of the built-in libraries; `SHA256SUMS`
-  covers the four. The macOS programs have only an ad hoc signature and none
-  is notarized. A release publishes only when all four build and pass the
-  tests of the extracted package, and a manual run uploads artifacts only.
-
-- `System.os()` returns the operating system: `"linux"`, `"macos"`, `"windows"`,
-  or the lowercase `uname` name on another system.
-
-- `agentica test` runs on Windows: its run folder is made in the first of
-  `TMPDIR`, `TMP` and `TEMP` that is a folder.
-
-- `--schedulers N` and the variable `AGENTICA_SCHEDULERS` set the number of
-  scheduler threads (1 to 1024; the flag wins over a valid variable; a bad
-  value in either exits 2). This is the first step of the multicore VM: the VM
-  still runs one scheduler, so the default is 1 and a larger number exits 2 with
-  a message instead of running as 1 (`agentica test` too). The same step builds
-  Boehm with thread support, makes the task states atomic (with PARKING and
-  WOKEN, taken before a wait is registered), puts ready tasks in a global run
-  queue and reads the scheduler clock without the event loop. With one
-  scheduler the order of tasks does not change.
-
-- With the test-only switch `AGENTICA_VM_TEST_MULTICORE=1`, `--schedulers N`
-  runs N scheduler threads beside one I/O thread, with standard input and
-  output, files, FIFOs, TCP and TLS; HTTP, `Process`, `Duplex` and `Test.run`
-  fail with `RUNTIME-INTERNAL` there for now. Without the switch a count above
-  1 still exits 2. `make test-multicore` and `make vm-tsan-run` run the
-  programs and the TCP and TLS tests on four schedulers. A task that a
-  scheduler wakes runs next on that scheduler (a runnext slot), and an idle
-  scheduler spins for up to 10 µs before it sleeps, so tasks that wake each
-  other do not pay a thread wake and a move to another core for each wake.
-
-- Native Windows regressions for ordinary-file line decoding, lock-owner
-  cancellation, unsafe path aliases, depth/read-only removal failures,
-  preservation of existing rename targets and junction destinations, localhost
-  UNC operations and a confined cross-volume rename fixture.
-
-- `make tests KIND=fast|files|slow|all` runs a whole test group, with
-  `KIND=files` for the destructive filesystem cases, `DOCKER=1` to run a group
-  in the Ubuntu test container (`tools/ubuntu-test.Dockerfile`) and `WINE=1`
-  for the Windows checks under Wine.
-- Docker-backed local reproduction for filesystem removal regressions and
-  native Actions-runner coverage using per-job scratch directories, sentinels
-  and bounded cleanup.
-- `make windows-docker-build` and `make windows-docker-check`: cross-build the
-  Windows VM, then run its C tests and the Windows CI fast Python modules under
-  Wine, without a Windows machine.
-- The Windows CI job sends Ctrl+Break to a VM in its own process group (exit
-  149, children stopped, file data written, a stuck stdout does not hold the
-  exit) and checks standard output and standard error on a pseudo console,
-  including a line longer than the buffer whose first write ends inside a
-  character.
+- Native release archives for Linux x86-64, Windows x86-64, macOS Intel and
+  macOS Apple silicon, with `SHA256SUMS`.
+- `TCP` on Windows and macOS, and `agentica test` on Windows.
+- `System.os()`.
+- `--schedulers N` (`AGENTICA_SCHEDULERS`): the first step of the multicore VM,
+  which still runs one scheduler outside a test switch.
+- Windows test tooling: `make tests KIND=...`, Docker and Wine checks, and
+  native console and Ctrl+Break checks in CI.
 
 ### Changed
 
-- TLS system trust uses the platform's own store when `ca_file` is empty and
-  `SSL_CERT_FILE` is not set: the Security framework's roots and Keychain
-  trust settings on macOS (a root the admin or user adds is trusted), and
-  Crypt32's ROOT store on Windows.
-  Linux keeps its CA bundle search. Certificates the system distrusts (macOS
-  Deny settings, the Windows Disallowed store) are rejected, also as an
-  intermediate or the server's own certificate. On every system, Linux
-  included, the store is now read once per process (Linux used to re-read
-  its bundle at every connect): a trust change while a program runs is not
-  seen, and a first load that fails lasts for the whole process (connects
-  that need system trust then fail). Only the certificates are copied: platform rules beyond them
-  (Apple's date-based distrust and CT policy, the constraints trustd puts on
-  system anchors, Windows NotBefore and disallowed-filetime properties) are
-  not applied. A nonempty `ca_file` still replaces system trust, and
-  verification cannot be turned off. The TLS adapter and its tests
-  now build on Windows too, and the Platforms CI links the vendored OpenSSL
-  statically on macOS and Windows (no `msys-2.0.dll`). TLS sockets on Windows
-  still return the same error; `tests/test_vm_tls.py` now also runs on macOS.
-
-- An HTTP client builds one TLS context (CA file, trust store) for all its
-  `https://` connections instead of one per connection, and frees it once the
-  client is closed and its last connection is gone (a client never closed keeps
-  it until the run ends). The CA file is read once per client, so a change to
-  it reaches new clients only. A new connection costs a handshake only, which
-  brings new-connection HTTPS back to the speed of the old C client (#394).
-
-- The HTTP client is now `std/http` code on `TCP` and `TLS` sockets: an owner
-  task per client keeps the per-origin pool and `max_connections`, and one
-  task per connection runs the requests. `vm/http_client.c` is gone. The API
-  and the answers do not change. The client's tasks are not counted by
-  `Task.pending_count`, are not `Test.test` leftovers, and survive a crash of
-  the task that made the client. A call whose task timed out still lets its
-  request finish, and the connection is closed, not pooled; a call whose task
-  was cancelled while it waited for a connection is never sent. A connection
-  with bytes left after a response, or whose input has ended, is not kept. The
-  client's work now spends the step budget of `--max-steps`. Differences:
-  `docs/vm/10-io-http.md` §10.7.1.
-
-- The HTTP server checks a request body as UTF-8 as its bytes arrive: bytes
-  that can never be UTF-8 get a 400 at once, before a later chunked framing
-  error (which got its own 400 or 413) or the end of input (which got no
-  answer).
-
-- On HTTPS, the HTTP server's wait for a request's first byte
-  (`request_timeout_ms`, later `idle_timeout_ms`) covers the whole TLS
-  handshake, and the request deadline starts at the first decrypted byte. The
-  first raw byte of the handshake used to start the request deadline.
-
-- A plain `TCP.accept` whose task is cancelled after a connection arrived
-  closes that connection (the peer reads end of input) instead of leaving it
-  for the next accept, as TLS accepts already did.
-
-- **Breaking:** on Windows, `Process.spawn_channel` gives the child a pipe per
-  direction (read 3, write 4, `AGENTICA_CHANNEL=3,4`), so `channel_close` ends
-  the child's input. A child that used the duplex pipe on descriptor 3, or a VM
-  older than this release, finds no channel.
-
-- **Breaking:** `_` is a discard wherever a name is bound, including a `for`
-  variable (`for _ in 0...3` with `_ = f()` in the body). Reading `_` was
-  allowed before and is now `CHECK-UNKNOWN-NAME`, and `_: Type = x` is now
-  `PARSE-UNEXPECTED-TOKEN`.
-- `AGENTICA_VM_TRACE=io` no longer prints `kind=sleep` and `kind=lock` job
-  lines for sleeps and deadline waits; `AGENTICA_VM_TRACE=sched` prints
-  `timer_arm` and `timer_fire` for them.
-- A blocking call whose deadline and whose result fall in the same pass of the
-  event loop now takes whichever the loop saw first: if the timer ran first the
-  call times out, where it used to return the result if it had arrived by the
-  time the task ran. The outcome of a job is set once, by the first writer
-  (the base of the multicore VM); with one scheduler the order of tasks does
-  not change.
-- Windows removal opens entries without backup intent, so enabled backup or
-  restore privileges do not bypass ordinary delete ACL checks.
-- Confined Wine tests have a 3 GiB temporary storage limit: a fresh prefix
-  exceeds the previous 1 GiB limit. Other test groups keep their existing cap.
-- Windows `File.stat` documents what it really reports: `mode` carries only the
-  read-only attribute (438 or 292) and `user_id` and `group_id` are always 0, so
-  neither is an owner or an ACL. `create_private` and `mkdir_private` document
-  their Windows owner-and-DACL guarantee instead of a Unix mode.
-- Windows file locks are checked natively: contention across processes, release
-  when the holder process is killed, and release when the owning task or handle
-  ends.
-- Windows filesystem errors preserve cross-device, unsupported-operation,
-  cancellation, timeout, again, fault and character-encoding errors instead of
-  reporting a generic I/O error.
-- `Path.remove` now works on Windows, using native paths and removing
-  reparse-point entries without traversing them.
-- `Path.rename` now works on Windows with native no-replace semantics: an
-  existing destination is preserved.
-- Windows stdin reads run in the I/O pool, keeping tasks and timers responsive.
-  A pending read can occupy one worker until input arrives, but process exit
-  does not wait for it.
-- `File.try_lock` is available on Windows. Unlike Unix advisory locks, Windows
-  locks also prevent reads and writes through other handles while held.
-- Writing to standard output or standard error no longer blocks the whole
-  program on Windows. A print waits in the same queue as on Linux and macOS
-  while the other tasks keep running, with the same 64 KiB buffer per stream,
-  `IO.flush`, `--flush-timeout`, and the order between the two streams when both
-  are given the same pipe (`2>&1`). A pipe is written by libuv without waiting
-  on the loop. A console and a file are written by the I/O pool, so a console
-  that is paused (a selection, Ctrl+S) cannot stop the other tasks; text is
-  converted to UTF-16 for the console. The normal end of the run waits for the
-  output within the flush limit. After a stop signal, and for the last error
-  messages, a pipe, a console or any other handle that may wait for its reader
-  gets one shared wait of up to 200 ms, because Windows has no non-blocking
-  write to try.
+- **Breaking:** `_` is a discard wherever a name is bound; reading `_` is
+  `CHECK-UNKNOWN-NAME`.
+- **Breaking:** on Windows, `Process.spawn_channel` gives the child one pipe per
+  direction (`AGENTICA_CHANNEL=3,4`).
+- TLS system trust uses the macOS and Windows stores, read once per process on
+  every system.
+- The HTTP client is written in `std/http` over `TCP` and `TLS`, and shares one
+  TLS context per client.
+- HTTPS servers time the TLS handshake as part of the wait for a request.
+- Windows: `Path.remove`, `Path.rename`, `File.try_lock` and non-blocking
+  standard input and output.
+- A deadline and a result in the same loop pass resolve in the order the loop
+  saw them.
 
 ### Fixed
 
-- On Windows, `.com` programs run through `Process.spawn` (only `.exe` did),
-  as the documentation said. The VM adds no implicit search of the working
-  directory, but a relative `PATH` entry such as `.` resolves against it.
-  `.bat` and `.cmd` still do not run (that needs `cmd.exe`, an implicit shell),
-  `PATHEXT` is not read, and a request for `x.cmd` or `x.bat` no longer finds a
-  planted `x.cmd.exe`. A Windows name such as `C:foo.exe`, `x.exe:stream`,
-  `tool.exe.` (trailing dot or space), `\\?\C:\x.exe` or a path ending in
-  `.cmd` or `.bat` fails with `executable is unavailable`.
-- On macOS, a socket as standard output no longer stalls every task: a write is
-  checked with `poll` first and cut to what the socket takes.
-- Relative source paths containing a colon no longer gain an absolute source
-  root; Windows drive paths require a letter, colon and separator.
-- The Windows Docker check explicitly requires BuildKit/buildx for the
-  checksum-verified toolchain download and installs its Perl dependency.
-- Repeated `File.try_lock` calls on the same Windows handle succeed, and only
-  lock contention returns `ok(false)`; access failures remain errors.
-- `Process.close` of a child that has already ended, before the VM noticed its
-  exit, no longer fails with `RUNTIME-PROCESS-CLOSE` on Windows, where stopping
-  an ended process reports "no such process". The process tests also run on
-  Windows now.
+- Windows runs `.com` programs and refuses ambiguous executable names.
+- A socket as standard output no longer stalls tasks on macOS.
+- Early UTF-8 errors in HTTP request bodies, closing of a cancelled
+  `TCP.accept`, and Windows file errors, locks and `Process.close`.
 
 ## [0.4.1-beta.1] - 2026-10-17
 

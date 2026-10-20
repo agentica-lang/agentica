@@ -30,7 +30,8 @@ branch such as `release/<version>`. Change only:
 
 1. `VERSION`: the new version, one line.
 2. `CHANGELOG.md`:
-   - rename `## [Unreleased]` to `## [<version>] - <YYYY-MM-DD>`;
+   - rename `## [Unreleased]` to `## [<version>] - <YYYY-MM-DD>`, and trim
+     its entries to one short line each, like the older sections;
    - put an empty `## [Unreleased]` above it;
    - fix the compare links at the bottom: `[unreleased]` compares
      `<version>...HEAD`, and add a line for the new version:
