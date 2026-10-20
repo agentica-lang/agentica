@@ -50,7 +50,18 @@ loop.
   numbers in the PR body. Critics and reviewers do not time.
 - A local pre-commit hook (`.git/hooks/pre-commit`, untracked, installed by
   hand) may run `make dup-check` when `vm/` or `tests/` is staged and block
-  new clones: refactor them. CI's `dup-check` fails on them either way.
+  new clones: refactor them. CI's `dup-check` fails on them either way. Never
+  bypass it (`--no-verify`, `-c core.hooksPath=...`) because of a missing
+  tool; install the tool instead.
+- Untracked folders are per worktree: `tools/jscpd/node_modules` (`make
+  dup-check` runs `npm ci` into it), `.venv`, build output. Never symlink them
+  from the main checkout: `npm ci` empties a symlinked target, and the
+  Makefile refuses one. Tests may use the main checkout's venv read-only
+  through `PYTHON=`.
+- Agents of one session share the scratchpad folder: write a PR body to a
+  file named after the branch (`pr-body-<branch>.md`), never a generic name,
+  and pass the PR number to every `gh pr edit` and `gh pr view`. Repeat both
+  rules in agent prompts.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
 - `AGENTS.md` forbids new files under `docs/`, so plans are not written
