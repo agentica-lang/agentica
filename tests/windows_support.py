@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ctypes
+import os
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -89,3 +91,61 @@ def process_handle_count(pid: int) -> int:
         return count.value
     finally:
         kernel32.CloseHandle(process)
+
+
+ERROR_NO_DATA = 232
+ERROR_PIPE_CONNECTED = 535
+ERROR_PIPE_LISTENING = 536
+PIPE_ACCESS_DUPLEX = 3
+PIPE_NOWAIT = 1
+PIPE_ROOT = "\\\\.\\pipe\\"
+
+
+class NamedPipeServer:
+    r"""A named pipe that the test makes, with one instance, for a program that tries to open it by a path.
+
+    Windows has no FIFO file: a pipe is a server handle that a peer makes, and a client opens it by a name below
+    \\.\pipe\. The server is in no-wait mode, so client() can ask at any time, without blocking, whether a client
+    ever connected and whether it still holds the pipe. Use it as a context manager; the name is unique to the test.
+    """
+
+    def __init__(self) -> None:
+        self.name = "agentica-test-%d-%s" % (os.getpid(), uuid.uuid4().hex)
+        self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._kernel32.CreateNamedPipeW.argtypes = [ctypes.c_wchar_p] + [ctypes.c_uint32] * 6 + [ctypes.c_void_p]
+        self._kernel32.CreateNamedPipeW.restype = ctypes.c_void_p
+        self._kernel32.ConnectNamedPipe.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        self._kernel32.ConnectNamedPipe.restype = ctypes.c_int
+        self._kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        self._kernel32.CloseHandle.restype = ctypes.c_int
+        handle = self._kernel32.CreateNamedPipeW(self.path(), PIPE_ACCESS_DUPLEX, PIPE_NOWAIT, 1, 65536, 65536, 0,
+                                                 None)
+        if handle is None or handle == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        self._handle: int | None = handle
+
+    def path(self, root: str = PIPE_ROOT) -> str:
+        r"""The name of the pipe below `root`, a spelling of the pipe folder (\\localhost\pipe\ is another)."""
+        return root + self.name
+
+    def client(self) -> str:
+        """"waiting" (no client came), "connected" (a client holds the pipe) or "gone" (a client came and left)."""
+        assert self._handle is not None
+        if self._kernel32.ConnectNamedPipe(self._handle, None):
+            return "connected"
+        error = ctypes.get_last_error()
+        states = {ERROR_PIPE_LISTENING: "waiting", ERROR_PIPE_CONNECTED: "connected", ERROR_NO_DATA: "gone"}
+        if error not in states:
+            raise ctypes.WinError(error)
+        return states[error]
+
+    def close(self) -> None:
+        if self._handle is not None:
+            self._kernel32.CloseHandle(self._handle)
+            self._handle = None
+
+    def __enter__(self) -> "NamedPipeServer":
+        return self
+
+    def __exit__(self, *problem: object) -> None:
+        self.close()

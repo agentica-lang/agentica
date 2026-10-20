@@ -45,14 +45,13 @@ PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-arm64")
 # lack, so a reader of the report can judge it: "host-only: Windows has no /proc".
 HOST_ONLY = "host-only:"
 
-# A skip for a product bug with an open issue: "known-issue: #433 no test for blocking stream files".
+# A skip for a product bug with an open issue: "known-issue: #N what has no test".
 KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
 KNOWN_ISSUES = {
     432: "Windows: no independent peer for the child channel protocol (two pipes at descriptors 3 and 4)",
-    433: "Windows: no test for blocking stream files (named pipes instead of FIFOs)",
     434: "Windows: process cleanup and handoff cases are tested with /bin/sh or POSIX signals only",
     437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",
     440: "Windows: standard output that is a socket has no test",
@@ -75,6 +74,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_filesystem.py",
     "tests/test_source_paths.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py",
     "tests/test_vm_file_lines.py", "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py",
+    "tests/test_vm_lazy_io.py",
 })
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_vm_stdout.py"})
 HOST_ONLY_ALLOWED = {

@@ -18,7 +18,8 @@ from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, cli, compile_
 
 # SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals, so each case that sends one is host-only on Windows, and the
 # reason says which case of tests/test_windows_console_stop.py sends Ctrl+Break for the same behavior. The two cases that
-# need a full FIFO and the Ctrl+C through the CLI have no Windows test yet (issues 433 and 437).
+# need a full FIFO are host-only: the VM refuses a named pipe as a file on Windows. The Ctrl+C through the CLI has no
+# Windows test yet (issue 437).
 
 PEER = FIXTURES / "stop-peer.py"
 WAIT_SECONDS = scaled(10)
@@ -176,7 +177,10 @@ def test_a_second_stop_signal_before_the_children_are_stopped_waits_for_them(tmp
     assert gone_soon(pid), "the child is gone"
 
 
-@known_issue(WINDOWS, 433, "the stuck flush needs a full named pipe on Windows")
+@host_only(WINDOWS, "a flush that a FIFO holds up; Windows has no FIFO file and the VM refuses a named pipe as a file, so no file "
+                    "flush waits there; test_ctrl_break_with_standard_output_stuck_does_not_wait_for_the_flush_limit and "
+                    "test_two_ctrl_breaks_in_a_row_end_the_run_with_149_and_the_child_is_gone in "
+                    "test_windows_console_stop.py check a stop with standard output stuck and a second Ctrl+Break")
 def test_a_second_stop_signal_ends_a_flush_that_cannot_finish_the_first_one_waits_for_it(tmp_path, adopt):
     fifo = full_fifo(adopt, tmp_path)
     vm = launch(adopt, "default", "--", bytecode(STUCK_FLUSH, tmp_path), fifo)
@@ -189,7 +193,8 @@ def test_a_second_stop_signal_ends_a_flush_that_cannot_finish_the_first_one_wait
     assert vm.wait(WAIT_SECONDS) == -signal.SIGTERM
 
 
-@known_issue(WINDOWS, 433, "the stuck flush needs a full named pipe on Windows")
+@host_only(WINDOWS, "a flush that a FIFO holds up; Windows has no FIFO file and the VM refuses a named pipe as a file, so no file "
+                    "flush waits there (the driver of a driven VM has no Windows test: issue 434)")
 def test_a_driven_vm_whose_driver_died_does_not_wait_for_its_flush(tmp_path, adopt):
     fifo = full_fifo(adopt, tmp_path)
     driver = adopt(Child([PYTHON, PEER, "drive", *vm_command(), "--", bytecode(STUCK_FLUSH, tmp_path), fifo]))

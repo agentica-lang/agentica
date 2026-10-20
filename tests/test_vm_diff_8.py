@@ -225,7 +225,9 @@ def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_
     assert copy.exists()
 
 
-@windows_gap(433, "the stuck read needs a named pipe on Windows")
+@posix_only("a read of a FIFO that times out; Windows has no FIFO file and the VM refuses a named pipe as a file "
+            "(test_a_named_pipe_is_refused_as_a_file_at_once_and_the_vm_holds_no_handle_of_it "
+            "in test_windows_handle_counts.py checks the refusal)")
 def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_the_vm_at_exit(tmp_path):
     bytecode = compile_program(
         tmp_path, "fifo-stuck",
