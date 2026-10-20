@@ -171,6 +171,10 @@ and the `network:` texts. Other systems get no `TCP` builtins.
     port that another program of the same user holds on the wildcard address,
     where Linux refuses it; two listeners on the same address conflict on
     every system.
+  - *Send buffers.* How many bytes the kernel takes before a send parks is
+    the host's: on the Windows CI runner one 32 MiB send to a peer that does
+    not read returns `ok()` at once, where Linux and macOS park it until the
+    timeout.
   - *Refusal.* Windows resends a SYN that a closed port refused before it
     reports `ECONNREFUSED`, so a refused connect, and a name whose first
     address refuses (`localhost` to an IPv4-only server), take longer there;

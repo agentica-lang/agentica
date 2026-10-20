@@ -63,7 +63,13 @@ def main() -> Void
     big = big + big
     round = round + 1
   end
-  IO.inspect(TCP.send(stuck, big, 200))
+  sent = TCP.send(stuck, big, 200)
+  rounds = 1
+  while Result.ok?(sent) && rounds < 16
+    sent = TCP.send(stuck, big, 200)
+    rounds = rounds + 1
+  end
+  IO.inspect(sent)
   IO.inspect(TCP.send(stuck, "x", 1000))
   partial = Result.unwrap!(TCP.connect("127.0.0.1", %d, 5000))
   IO.inspect(TCP.read_line(partial, 5000))
@@ -313,8 +319,9 @@ def test_two_tasks_writing_to_one_socket_take_the_writer_lock_in_fifo_order(tmp_
     assert (result.code, result.stdout) == (0, "ok()\nok()\nok()\n"), result.stderr
     size = 8 * 2 ** 21
     assert peer.next_line() == "collect a=%d b=%d c=%d" % (size, size, size)
-    # On several schedulers a writer can finish before the next one starts, so none has to wait.
-    if not TEST_SCHEDULERS:
+    # On several schedulers a writer can finish before the next one starts, so none has to wait; Windows takes a
+    # 16 MiB send into its buffers at once, so there too no writer waits.
+    if not TEST_SCHEDULERS and TARGET_OS != "windows":
         assert " io lock_wait " in trace.read_text(), "a writer waited for the lock"
 
 
@@ -355,6 +362,12 @@ def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   puts(TCP.local_port(listener))
   puts(Task.await(Task.spawn_owning(&parent, listener)).ok?)
+  # The cancelled tasks end as their parked calls let go, not at once.
+  rounds = 0
+  while Task.pending_count() > 0 && rounds < 500
+    Task.sleep(10)
+    rounds = rounds + 1
+  end
   puts(Task.pending_count())
   IO.flush()
   IO.gets()
@@ -428,9 +441,18 @@ def listener_on(host):
 
 
 def assert_port_free(host, port):
-    """The port can be bound again at once by a socket without SO_REUSEADDR: nothing holds it."""
-    with socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET) as probe:
-        probe.bind((host, port))
+    """The port can be bound by a socket without SO_REUSEADDR: nothing holds it. The close runs on the VM's I/O
+    thread, which on several schedulers may be a moment behind the program's output."""
+    deadline = time.monotonic() + scaled(5)
+    while True:
+        with socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET) as probe:
+            try:
+                probe.bind((host, port))
+                return
+            except OSError:
+                if time.monotonic() > deadline:
+                    raise
+        time.sleep(0.05)
 
 
 def test_cancel_during_connect_and_accept_closes_both_and_releases_the_port(tmp_path, adopt):
