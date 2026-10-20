@@ -26,6 +26,10 @@ CUT_SHORT = "http: connection closed before the response was complete"
 TRUNCATED = "http: truncated HTTP body"
 TOO_LARGE = "http: body exceeds max_body_bytes"
 BAD_BODY = "http: response body is not valid UTF-8"
+# Texts of the C builtins that std/http matches on (vm/channel.c, vm/tcp.c); each is marked there.
+CHANNEL_CLOSED = "channel: closed"
+END_OF_INPUT = "network: end of input"
+READ_FAILED = "error reading from stream port"
 # The answer of a call whose worker or owner task crashed.
 FAILED = "http: connection failed"
 
@@ -148,7 +152,8 @@ export def client(options: HttpClientOptions) -> Result[HttpClient]
   return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own, options) end)
 end
 
-## Closes the client and its connections. A call still in flight fails.
+## Closes the client and its connections. A call still in flight fails with `http: client is closed`; its request
+## is not sent, unless a connection had already started sending it.
 export def close_client(pool: HttpClient) -> Void
   Channel.close(HttpWire.jobs(pool))
 end
@@ -203,7 +208,7 @@ export def request(
   case HttpWire.jobs(pool).send(job, options.timeout_ms)
     ok(_) -> return wait_reply(reply, deadline)
     error(message) ->
-      if message == "channel: closed"
+      if message == CHANNEL_CLOSED
         return error(CLIENT_CLOSED)
       end
       return error(TIMED_OUT)
@@ -437,7 +442,7 @@ def read_request(socket: Socket, rest: List[Int], first_ms: Int, options: HttpSe
   if List.size(first) == 0
     first = try TCP.recv_bytes(socket, 1, first_ms)
     if List.size(first) == 0
-      return error("network: end of input")
+      return error(END_OF_INPUT)
     end
   end
   deadline = Time.monotonic_ms() + options.request_timeout_ms
@@ -728,7 +733,7 @@ def with_origin(pool: Pool, key: String, origin: Origin) -> Pool
 end
 
 def dispatch(pool: Pool, job: HttpWire.Job) -> Pool
-  if Time.monotonic_ms() >= job.deadline
+  if Time.monotonic_ms() >= job.deadline or not HttpWire.awaited?(job.reply)
     return pool
   end
   result = place(pool, job)
@@ -772,10 +777,11 @@ def place(pool: Pool, job: HttpWire.Job) -> Placed
   return Placed(pool: pool, placed: true)
 end
 
-# The worker is free and keeps its connection: it takes the oldest waiting job, or stays idle. Its entry in busy stays
-# until its next job replaces it: the closing answer to an answered job finds the reply channel full.
+# The worker is free and keeps its connection: it takes the oldest waiting job, or stays idle. Its job is answered,
+# so its entry in busy goes: a reply the caller never read is not kept alive while the worker idles.
 def freed(pool: Pool, message: HttpWire.Job) -> Pool
   origin = origin_of(pool, message.origin)
+  pool = pool.with(busy: Map.delete(pool.busy, message.worker))
   pool = with_origin(pool, message.origin, origin.with(idle: List.append(origin.idle, message.worker)))
   if queued(origin) == 0
     return pool
@@ -837,8 +843,8 @@ def popped(origin: Origin) -> Origin
 end
 
 # The client is closed: every job still waiting or in flight fails now, and the idle workers close their
-# connections. A worker in flight ends when its exchange does; its answer then finds the reply channel full. A job in
-# busy that was answered already ignores the closing answer the same way.
+# connections. A job still in a worker's inbox is not sent: the worker sees the close before it runs a job. A worker
+# in flight ends when its exchange does; its answer then finds the reply channel full.
 def shut_pool(pool: Pool) -> Void
   for origin in Map.values(pool.origins)
     for job in List.drop(origin.waiting, origin.front)
@@ -870,6 +876,13 @@ def work(worker: Worker) -> Result[Void]
   job = try worker.inbox.recv(0)
   socket: Result[Socket] = error("")
   while true
+    # A closed client has answered every job it handed out with CLIENT_CLOSED, this one too, while it could still
+    # wait in the inbox (a receive takes buffered jobs before it reports the close): it is not sent.
+    if worker.jobs.closed?
+      job.reply.send(error(CLIENT_CLOSED), 0)
+      close_socket(socket)
+      return ok()
+    end
     done = run_job(worker, socket, job)
     # The caller gave up on the reply (cancelled, or its wait timed out): the connection is closed, not pooled, so a
     # timed-out call leaves no connection behind (docs/grammar/06c-tasks-and-tests.md).
@@ -973,6 +986,9 @@ def exchange(answer: Answer, reused: Bool) -> Attempt
     TCP.close(socket)
   end
   sent: Result[Void] = ok()
+  # A writer still busy 1 ms after the whole response came means the server answered before it read the body (an
+  # early 413, say). Waiting for the rest until the deadline could keep the connection, but holds the call; closing
+  # gives the answer now and loses only the reuse of this connection.
   case Task.await(writer, 1)
     Await.Done(result) -> sent = result
     Await.TimedOut ->
@@ -1001,12 +1017,12 @@ def finish_exchange(answer: Answer, received: Received, sent: Result[Void], reus
   case received.response
     ok(response) -> return Attempt(answer: ok(response), kept: kept, retry: false)
     error(message) ->
-      lost = message == "network: end of input" or String.starts_with?(message, "error reading from stream port")
+      lost = message == END_OF_INPUT or String.starts_with?(message, READ_FAILED)
       retry = reused and idempotent?(answer.job.method) and not received.started
       case sent
         error(problem) -> return Attempt(answer: error(problem), kept: false, retry: retry)
         ok(_) ->
-          if message == "network: end of input"
+          if message == END_OF_INPUT
             message = CUT_SHORT
           end
           return Attempt(answer: error(message), kept: false, retry: retry and lost)
@@ -1035,11 +1051,11 @@ def read_response(answer: Answer) -> Received
               return failed_read("http: too many interim responses", true)
             end
           error(message) ->
-            if interim > 0 and message == "network: end of input"
+            if interim > 0 and message == END_OF_INPUT
               return failed_read(CUT_SHORT, true)
             end
-            broken = String.starts_with?(message, "error reading from stream port")
-            first = message == "network: end of input" or broken
+            broken = String.starts_with?(message, READ_FAILED)
+            first = message == END_OF_INPUT or broken
             return failed_read(message, interim > 0 or not first)
         end
       error(message) -> return failed_read(message, interim > 0)

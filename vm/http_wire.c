@@ -204,7 +204,7 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
   agc_http_error error;
   agc_http_status status = agc_http_parse_response_head(buf, len, &head, &used, &error);
   if (status == AGC_HTTP_INCOMPLETE && read_error)
-    return agc_system_error(vm, "error reading from stream port", read_error);
+    return agc_system_error(vm, "error reading from stream port", read_error); /* std/http: READ_FAILED */
   if (status == AGC_HTTP_INCOMPLETE) return agc_error_value("http: connection closed before the response was complete");
   if (status == AGC_HTTP_ERROR) return agc_http_error_result("http: ", agc_http_error_text(error));
   bool closes = agc_http_closes(&head);

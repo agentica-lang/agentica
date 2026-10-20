@@ -27,6 +27,7 @@ struct agc_channel {
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
+/* std/http matches on this text (CHANNEL_CLOSED in stdlib/http.agc). */
 static agc_value closed_error(void) { return agc_error_value("channel: closed"); }
 
 static agc_value timed_out_error(void) { return agc_error_value("channel: timed out"); }

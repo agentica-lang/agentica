@@ -244,7 +244,8 @@ static void cut_head(net *n, request *q) {
   q->ended = input_ended(n);
 }
 
-/* The values of the two cuts, built on a scheduler from the request alone. */
+/* The values of the two cuts, built on a scheduler from the request alone. std/http matches on "error reading from
+   stream port" (a prefix) and "network: end of input" of both (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
 static agc_value text_value(agc_vm *vm, const request *q) {
   if (q->bytes == 0 && q->count && q->cut.error)
     return agc_system_error(vm, "error reading from stream port", q->cut.error);

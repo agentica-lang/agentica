@@ -167,7 +167,8 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
   the user headers listed above and a body over `max_body_bytes`. It sends a
   `HttpWire.Job` with a reply channel of its own on `jobs`, and waits for the
   answer until its deadline, `timeout_ms` after the call, plus 100 ms of grace.
-  `close_client` closes `jobs`, and a later call gets `http: client is closed`.
+  `close_client` closes `jobs`, and a later call gets `http: client is closed`
+  (what still runs: the last item of the differences below).
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the
@@ -248,11 +249,13 @@ The C client this replaced differs in ways no test sees:
 - `TLS.connect` loads the CA file for each connection, so each has its own
   `SSL_CTX`, where the C client loaded one per client.
 - A body that is not UTF-8 also closes the connection.
-- A job sent just before `close_client`, which the owner has not taken yet,
-  may still run, and so may a waiting job the owner hands to a worker while it
-  takes the messages buffered before the close: the owner only sees the close
-  once the channel is empty. A sentinel message would not change that, since
-  it comes after those same messages.
+- After `close_client` no request goes out that a worker had not started:
+  every job still on `jobs`, waiting or in a worker's inbox is answered
+  `http: client is closed`, and a worker checks `jobs.closed?` before it runs
+  a job. A request a worker had already started still runs to its end; its
+  caller also gets `http: client is closed`. The owner may still hand jobs to
+  workers while it takes the messages buffered before the close, but those
+  workers then see the close and send nothing.
 - The client's work is bytecode now, so it spends the step budget of
   `--max-steps` (the `http-client` fixture: 2829 steps before, about 5400
   after).
