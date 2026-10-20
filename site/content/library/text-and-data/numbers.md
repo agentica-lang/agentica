@@ -118,7 +118,7 @@ Int.shift_right_unsigned(a: Int, count: Int) -> Int
 
 - `shift_left` moves bits up and wraps: bit 63 becomes the sign, so `1.shift_left(63)` is `-9223372036854775808`. Use `x * 2` for an overflow check.
 - `shift_right` is arithmetic (the sign bit comes in), so it rounds toward minus infinity: `(-7).shift_right(1)` is `-4`.
-- `shift_right_unsigned` is logical (zeros come in). `(-1).shift_right_unsigned(64 - n)` masks the low `n` bits.
+- `shift_right_unsigned` is logical (zeros come in): it reads `a` as an unsigned 64-bit number. `(-1).shift_right_unsigned(64 - n)` masks the low `n` bits.
 - A count of 64 or more shifts every bit out: the result is `0`, or `-1` for `shift_right` of a negative `a`. A negative count is `RUNTIME-INVALID-COUNT`.
 
 ```agentica

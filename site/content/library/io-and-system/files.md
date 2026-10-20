@@ -343,7 +343,7 @@ Renames a file, a symbolic link or a directory to a path that does not exist yet
 
 - It never replaces anything: when `to` exists (even an empty directory) the call fails and nothing changes, so two programs racing for a name have exactly one winner.
 - A symbolic link moves as a link.
-- Both paths must be on one file system; there is no copy fallback. VM only.
+- Both paths must be on one file system; there is no copy fallback. It uses native no-replace operations on Linux, macOS and Windows. VM only.
 
 ```agentica {mode="check"}
 def main() -> Void

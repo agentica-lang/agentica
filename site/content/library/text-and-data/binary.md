@@ -67,13 +67,13 @@ ok(-257)
 
 ```text
 Binary.write_<T>(value: Int) -> Result[List[Int]]
-Binary.write_<T>(value: Int) -> List[Int]
+Binary.write_<I64>(value: Int) -> List[Int]
 Binary.write_<F>(x: Float) -> List[Int]
 ```
 
-`<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64`, `i64` followed by `_be` or `_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`. A writer returns a new list with exactly the bytes of its type, and never changes a list in place.
+`<T>` is `u8` or `i8`, or `u16`, `i16`, `u32`, `i32`, `u64` followed by `_be` or `_le`. `<I64>` is `i64_be` or `i64_le`. `<F>` is `f32` or `f64` followed by `_be` or `_le`. A writer returns a new list with exactly the bytes of its type, and never changes a list in place.
 
-- A writer whose value may be outside its type returns a `Result`. `write_i64_*` and the float writers cannot fail and return a plain list, so a `try` on them is a check error.
+- Only `<T>` writers return a `Result`, since the value may be outside the type. `write_i64_*` and the float writers cannot fail and return a plain list, so a `try` on them is a check error.
 - Ranges: `u8` 0 to 255, `i8` -128 to 127, `u16` 0 to 65535, `i16` -32768 to 32767, `u32` 0 to 4294967295, `i32` -2147483648 to 2147483647, `u64` 0 to 9223372036854775807.
 
 ```agentica

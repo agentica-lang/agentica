@@ -8,6 +8,7 @@ A set holds each value once, in the order first added. Elements are `Int` or `St
 
 - `for` walks a set in order. A set prints as `Set[1, 2]`.
 - There is no `==`; use `a.subset?(b) and b.subset?(a)`.
+- A set can be a struct field, a list item or a map value.
 - A set is not JSON-encodable, so `JSON.encode` refuses it.
 
 ```agentica

@@ -138,4 +138,4 @@ Without the annotation, `r = error("not ready")` is the error `CHECK-RESULT-TYPE
 
 ## ! means it can halt
 
-A name ending in `!` stops the program on failure; a name ending in `?` returns a `Bool`. `to_i` returns a Result; `to_i!` returns the number or halts.
+By convention, a name ending in `!` stops the program on failure; a name ending in `?` returns a `Bool`. `to_i` returns a Result; `to_i!` returns the number or halts.

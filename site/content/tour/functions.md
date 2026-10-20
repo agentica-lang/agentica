@@ -102,7 +102,7 @@ end
 120
 ```
 
-A call that is the whole value of a `return` reuses the caller's frame. Other calls count toward the limit of 10000 nested calls.
+A call that is the whole value of a `return` reuses the caller's frame. Other calls count toward the limit of 10000 nested calls; a call of a builtin uses no frame. The nesting limits of the source (`PARSE-TOO-DEEP`, `CHECK-TOO-DEEP`) are in the [language reference](/reference/).
 
 ## Many results
 

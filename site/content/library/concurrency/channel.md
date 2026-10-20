@@ -68,7 +68,7 @@ channel: timed out
 Channel.recv(channel: Channel[T], timeout_ms: Int) -> Result[T]
 ```
 
-Takes the oldest value (first in, first out) and gives `ok(value)`. When empty, the task waits for a value, a close or `timeout_ms`. Waiting tasks are served in the order they started waiting. Errors:
+Takes the oldest value (first in, first out) and gives `ok(value)`. When empty, the task waits for a value, a close or `timeout_ms`. Waiting tasks are served in the order they started waiting, and a sent value goes straight to the first waiting receiver. Errors:
 
 - `error("channel: closed")` once closed and every value was taken, or `error("channel: timed out")`.
 

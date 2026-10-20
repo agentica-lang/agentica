@@ -381,10 +381,10 @@ for i in 0...3 do
 end
 ```
 
-- `for x in range` yields each `Int` in order. An end before the
-  start is empty, and there is no reverse iteration. Iterating up to the largest
-  `Int` does not overflow. Each iteration costs one step plus its body. The
-  range is evaluated once.
+- `for x in range` yields each `Int` in order. An end before the start is empty,
+  and there is no reverse iteration. Iterating up to the largest `Int` does not
+  overflow. Each iteration costs one step plus its body. The range is evaluated
+  once.
 - `Int.times`, `upto` and `downto` (`n.times(f)`, `a.upto(b, f)`, `a.downto(b,
   f)`) return `Void`. A negative literal receiver needs parentheses: `(-5).times
   do ... end`; `-5.times do ... end` is `-(5.times ...)`, a `CHECK-VOID-VALUE`.

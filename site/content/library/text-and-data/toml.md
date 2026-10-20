@@ -33,7 +33,7 @@ end
 
 ## Reading
 
-`Toml.parse` accepts TOML 1.0 and nothing else: bare, quoted and dotted keys; basic, literal and multi-line strings with all escapes; integers in decimal, hex, octal and binary with `_`; floats with `inf` and `nan` (a magnitude out of range reads as `inf` or zero, as in Python's `tomllib`); booleans; date-times; arrays and inline tables; standard tables, arrays of tables and comments. CRLF counts as one LF, also inside a multi-line string.
+`Toml.parse` accepts TOML 1.0 and nothing else: bare, quoted and dotted keys; basic, literal and multi-line strings with all escapes; integers in decimal, hex, octal and binary with `_`; floats with `inf` and `nan` (a magnitude above the largest float reads as `inf`, one below the smallest as zero, as in Python's `tomllib`); booleans; date-times; arrays and inline tables; standard tables, arrays of tables and comments. CRLF counts as one LF, also inside a multi-line string.
 
 Errors: a duplicate key, a table defined twice, adding to an inline table or a static array, a dotted key that names a `[header]` table (or the reverse), `[[a]]` on a static array or table, control characters in strings and comments, and a lone carriage return.
 

@@ -117,7 +117,7 @@ Task.await(task: Task[R], timeout_ms: Int) -> Await[R]
 Waits at most `timeout_ms` milliseconds.
 
 - `Await[R]` is a builtin enum: `Await.Done(value)` holds the result, `Await.TimedOut` (no payload, no parentheses) means time ran out first.
-- A `case` must match both variants, or use `_`. `Await` is a reserved name, and `try` does not apply to it.
+- A `case` must match both variants, or use `_`. `Await` is reserved (no struct, enum or import alias may use it), and `try` does not apply to it.
 - `timeout_ms` must be above 0, otherwise `RUNTIME-INVALID-DURATION`. Call it once with the total time you can spare; do not poll.
 - A timeout does not cancel the task. It keeps running, and a later await gives its result. An ended task never times out.
 - If the task crashes or is cancelled first, you get the plain await's outcome: `Await.Done(error(text))` for a `Result` task, otherwise `RUNTIME-TASK-CRASHED` or `RUNTIME-TASK-CANCELLED`. A crash after `Await.TimedOut` does not reach the caller.
@@ -264,7 +264,7 @@ Limits, checked before any item starts (also for an empty list, which gives `[]`
 
 Cancellation (a timed-out item):
 
-- It runs no more code, nor do the tasks it started (a `Task.map` it called starts no more items). Its handles close.
+- It runs no more code, nor do the tasks it started, even a grandchild whose parent already ended (a `Task.map` it called starts no more items). Its handles close.
 - Its slot settles at the deadline, and the call does not wait for its files. A normal item counts as ended only after its regular files are written and closed.
 - I/O in progress finishes or times out on its own and its result is dropped. It never closes a handle other items share. A timed-out `HTTP.get` connection closes and does not go back to the pool.
 - Awaiting a handle to a cancelled task (passed out through a channel) stops with `RUNTIME-TASK-CANCELLED`, or gives `error("task: cancelled")` for a `Result` task.
