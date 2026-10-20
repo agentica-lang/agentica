@@ -53,7 +53,6 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 KNOWN_ISSUES = {
     432: "Windows: no independent peer for the child channel protocol (two pipes at descriptors 3 and 4)",
     433: "Windows: no test for blocking stream files (named pipes instead of FIFOs)",
-    437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
