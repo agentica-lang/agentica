@@ -483,9 +483,12 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   builtins post under `rt->sync`, so their steps reach the inbox in the order
   of the calls. At N = 1 the steps run inline, and a read of buffered bytes or
   a send that goes out at once returns without a park (`agc_io_here`).
-  `agc_io_uv` aborts off the I/O thread, and the builtins of HTTP, `Process`,
-  `Duplex` and `Test.run` fail with `RUNTIME-INTERNAL` at N > 1
-  (`agc_program_for_threads`).
+  The HTTP server keeps its state on the I/O thread the same way
+  (`vm/http_server.c`): its accepts and waits are jobs that the I/O thread
+  ends, and a connection's end gives its room back with a posted step. The
+  HTTP client is `std/http` code on those sockets. `agc_io_uv` aborts off the
+  I/O thread, and the builtins of `Process`, `Duplex` and `Test.run` fail with
+  `RUNTIME-INTERNAL` at N > 1 (`agc_program_for_threads`).
 - **An outcome and a count, not flags.** A job has an atomic outcome (PENDING,
   DONE, EXPIRED or CANCELLED) that the first writer sets by CAS
   (`agc_job_settle`, release; `agc_io_finish` reads it with acquire), and an

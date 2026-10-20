@@ -22,6 +22,8 @@ void agc_conn_release(agc_conn *c);
 void agc_conn_retain(agc_conn *c);
 bool agc_conn_closed(const agc_conn *c);
 agc_conn *agc_conn_accept(agc_conn *l);
+/* Closes a connection that agc_conn_accept made and no socket took, and gives back the count accept took. */
+void agc_conn_discard(agc_conn *c);
 /* On a scheduler: the socket value of a connection that agc_conn_accept made and that no step has used yet; the
    resource takes the count that agc_conn_accept took. */
 agc_value agc_conn_socket(agc_vm *vm, agc_conn *c);

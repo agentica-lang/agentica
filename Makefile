@@ -277,8 +277,8 @@ site-serve: site-sass
 # make SANITIZE=1         clang with ASan and UBSan, no libgc: the same binary, built in that mode
 # make TSAN=1             clang with TSan, no libgc (TSan and Boehm's stop-the-world do not mix): for make vm-tsan
 # make vm-tsan            the C tests of the code that threads share (inbox, outcome, run queue, wake, job) under TSan
-# make vm-tsan-run        the programs of tests/test_vm_multicore.py and the TCP and TLS modules on several
-#                         schedulers, on a TSan binary
+# make vm-tsan-run        the programs of tests/test_vm_multicore.py and the TCP, TLS and HTTP modules on
+#                         several schedulers, on a TSan binary
 # Each mode compiles vm/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
@@ -751,9 +751,9 @@ vm-tsan:
 # Programs on several schedulers (tests/test_vm_multicore.py): the test-only switch AGENTICA_VM_TEST_MULTICORE=1 lets
 # --schedulers N run them on N threads. test-multicore runs them on dist/agentica; vm-tsan-run runs them on a TSan
 # binary (no libgc, the front end of the release build), so a race between schedulers or with the I/O thread fails it.
-# Both also run the TCP and TLS modules with every VM on four schedulers (AGENTICA_VM_TEST_MODULE_SCHEDULERS, read by
-# tests/agentica_test.py); test-multicore-net runs only those.
-VM_NET_MODULES := tests/test_vm_tcp.py tests/test_vm_tls.py
+# Both also run the TCP, TLS and HTTP modules with every VM on four schedulers (AGENTICA_VM_TEST_MODULE_SCHEDULERS,
+# read by tests/agentica_test.py); test-multicore-net runs only those.
+VM_NET_MODULES := tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py
 test-multicore: dist/agentica$(EXE)
 	@$(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
 	@$(MAKE) --no-print-directory test-multicore-net

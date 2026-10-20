@@ -533,14 +533,18 @@ static void link_request(request *q, agc_io_job *job) {
   }
 }
 
+void agc_conn_discard(agc_conn *c) {
+  shut(c, "failed");
+  c->users--;
+  settle(c);
+}
+
 static void release_child(request *q) {
   net *c = q->child;
   if (!c) return;
   q->child = NULL;
   c->opener = NULL;
-  shut(c, "failed");
-  c->users--;
-  settle(c);
+  agc_conn_discard(c);
 }
 
 /* The end of a request, on the I/O thread: posted by its done half, or the job's drop. A request whose START never
@@ -1464,8 +1468,15 @@ static bool begin_read(void *data, agc_io_job *job) {
   link_request(q, job);
   /* A closed net's input is gone; drop_request frees the rest. */
   if (q->rest && !n->closed) put_back(n, q);
-  if (!read_ready(n, q)) start_reading(n);
-  if (read_ready(n, q)) finish_reader(n);
+  /* read_ready is asked once per new input: for a head it moves q->scanned past what it looked at, so a second look
+     at the same bytes says "not ready". It is asked again only after start_reading, which may have found the end of
+     input or an error, both of which a head reports as ready. */
+  bool ready = read_ready(n, q);
+  if (!ready) {
+    start_reading(n);
+    ready = read_ready(n, q);
+  }
+  if (ready) finish_reader(n);
   return true;
 }
 

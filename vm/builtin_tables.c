@@ -32,13 +32,11 @@ const size_t agc_builtin_table_count = sizeof agc_builtin_tables / sizeof agc_bu
 
 /* The tables a run with several schedulers refuses. Process, Duplex and the child channel still make their own libuv
    handles and steps on the scheduler that calls them, until those steps are requests to the I/O thread (agc_io_uv
-   aborts off that thread); TCP and TLS post every step there (vm/tcp.c). The HTTP server's group and the client's
-   service task keep their counts and end hooks without a lock until they are made safe there. */
+   aborts off that thread). TCP and TLS post every step there (vm/tcp.c), and so does the HTTP server, whose state the
+   I/O thread owns (vm/http_server.c); the HTTP client is std/http code on those sockets. */
 static bool loop_bound(const agc_builtin *b) {
   static const agc_builtin_table bound[] = {
     {agc_process_builtins, &agc_process_builtin_count}, {agc_duplex_builtins, &agc_duplex_builtin_count},
-    {agc_http_service_builtins, &agc_http_service_builtin_count},
-    {agc_http_server_builtins, &agc_http_server_builtin_count},
   };
   for (size_t k = 0; k < sizeof bound / sizeof bound[0]; k++)
     if (b >= bound[k].entries && b < bound[k].entries + *bound[k].count) return true;

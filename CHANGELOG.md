@@ -8,6 +8,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- HTTP runs on several schedulers (still behind the test switch
+  `AGENTICA_VM_TEST_MULTICORE`). The I/O thread owns the server's listener,
+  open count and waiting accepts, and the client in `std/http` runs on TCP and
+  TLS sockets. At N > 1, `HttpWire.read_head` and `HttpWire.read_response` no
+  longer wait for more input when the whole head is already buffered.
+
 ## [0.5.0-beta.1] - 2026-10-20
 
 ### Added
