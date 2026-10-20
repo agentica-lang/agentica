@@ -219,10 +219,11 @@ end
 - Leave a blank line after the `end` of each `def`, `struct`, and `enum` before
   the next declaration (`PARSE-MISSING-BLANK-LINE`).
 - Every parameter and the return type need an annotation.
-- Structs, enums, and functions are top level only. An enum's type parameters
-  apply only to its payloads; there are no generic functions or structs, no user
-  methods, no nested functions, no keyword arguments, and no overloading.
-  Closures are blocks.
+- Structs, enums, and functions are top level only. Only enums and type aliases
+  (`type Matrix[T] = List[List[T]]`) have type parameters; an enum's apply only
+  to its payloads. There are no generic functions or structs, no user methods,
+  no nested functions, no keyword arguments, and no overloading. Closures are
+  blocks.
 - A parameter may end with a default value: `def connect(host: String =
   "localhost", port: Int = 8080, tags: List[String] = [])`. The call may leave
   out any trailing parameters with a default, and fills the others from the

@@ -258,21 +258,7 @@ def expand_alias(
         ),
       )
     end
-    budget_span = limit_span
-    if seen.size == 0
-      budget_span = ref.span
-    end
-    # The arguments are expanded in the scope of the use, before the target, so an alias in an argument is not taken
-    # for a cycle of this one (Box[Box[Int]]).
-    args: List[TypeRef] = []
-    for arg in ref.args
-      inner = try expand_alias(cx, st, arg, seen, left, limit_span)
-      args = args.push(inner.ref)
-      left = inner.remaining
-    end
-    target = replace_parameters(decl.target, decl.type_parameters, args)
-    expanded = try expand_alias(cx, st, target, seen.push(name), left, budget_span)
-    return ok(Expansion(ref: relocate(expanded.ref, ref.span), remaining: expanded.remaining))
+    return expand_use(cx, st, decl, ref, seen, left, limit_span)
   end
   args: List[TypeRef] = []
   for arg in ref.args
@@ -283,12 +269,66 @@ def expand_alias(
   return ok(Expansion(ref: ref.with(args: args), remaining: left))
 end
 
+# One use of a declared alias: the arguments first, in the scope of the use, so an alias in an argument is not taken
+# for a cycle of this one (Box[Box[Int]]). Then the target, read with only the parameters of the alias in scope, so a
+# name in it is never taken for a type parameter of the use, and given the span of the use. The arguments go in last,
+# in one pass, with the spans they have. seen holds the aliases being expanded around this use.
+def expand_use(
+  cx: State.Cx,
+  st: State.St,
+  decl: Ast.TypeAliasDecl,
+  ref: TypeRef,
+  seen: List[String],
+  remaining: Int,
+  limit_span: Source.Span,
+) -> Result[Expansion]
+  budget_span = limit_span
+  if seen.size == 0
+    budget_span = ref.span
+  end
+  left = remaining
+  args: List[TypeRef] = []
+  argument_refs = 0
+  for arg in ref.args
+    inner = try expand_alias(cx, st, arg, seen, left, limit_span)
+    args = args.push(inner.ref)
+    argument_refs += ref_count(inner.ref)
+    left = inner.remaining
+  end
+  inside = cx.with(type_params: decl.type_parameters)
+  target = try expand_alias(inside, st, decl.target, seen.push(ref.name), left, budget_span)
+  shape = relocate(target.ref, ref.span)
+  try check_capture(cx, st, shape, decl.type_parameters, ref.span)
+  try check_unused_arguments(cx, st, shape, decl.type_parameters, args)
+  result = replace_parameters(shape, decl.type_parameters, args)
+  # An argument used twice is copied, and each copy counts against the limit like a reference written there.
+  left = target.remaining - (ref_count(result) - ref_count(shape) - argument_refs)
+  if left < 0
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-TOO-DEEP",
+        "expanded type contains more than #{State.nesting_limit()} type references",
+        limit_span,
+        "simplify the type or split its aliases",
+      ),
+    )
+  end
+  return ok(Expansion(ref: result, remaining: left))
+end
+
 def alias_arity_text(name: String, decl: Ast.TypeAliasDecl, ref: TypeRef) -> String
   shown = Types.display_name(name)
   if decl.type_parameters.size == 0
     return "type alias #{shown} takes no type arguments"
   end
-  return "type alias #{shown} expects #{decl.type_parameters.size} type argument(s), found #{ref.args.size}"
+  return "type alias #{shown} #{expects_text(decl.type_parameters.size, ref.args.size)}"
+end
+
+# The tail of the arity message of a generic alias or enum.
+def expects_text(expected: Int, found: Int) -> String
+  return "expects #{expected} type argument(s), found #{found}"
 end
 
 # The target of a generic alias with each parameter replaced by its argument. One pass: an argument is not searched
@@ -306,6 +346,73 @@ def replace_parameters(ref: TypeRef, parameters: List[String], args: List[TypeRe
   end
   inner = ref.args.map do |arg: TypeRef| replace_parameters(arg, parameters, args) end
   return ref.with(args: inner)
+end
+
+# CHECK-UNKNOWN-TYPE when the expanded target names a type that a type parameter of the use hides. Reading the name as
+# the parameter would give the alias another meaning than the one it has where it is declared.
+def check_capture(
+  cx: State.Cx,
+  st: State.St,
+  target: TypeRef,
+  parameters: List[String],
+  span: Source.Span,
+) -> Result[Bool]
+  hidden = (
+    target.args.size == 0 and
+    cx.type_params.any? do |item: String| item == target.name end and
+    !parameters.any? do |item: String| item == target.name end
+  )
+  if hidden
+    return error(
+      State.fail_help(
+        cx,
+        st,
+        "CHECK-UNKNOWN-TYPE",
+        "type parameter \"#{Types.display_name(target.name)}\" hides the type of that name which this alias refers to",
+        span,
+        "rename the type parameter",
+      ),
+    )
+  end
+  for arg in target.args
+    try check_capture(cx, st, arg, parameters, span)
+  end
+  return ok(true)
+end
+
+# A parameter that the target does not use drops its argument in the substitution; the argument still has to be a type
+# (Unused[Nope], Unused[Map[List[Int], Int]]). Void stays legal, as in Res[Void].
+def check_unused_arguments(
+  cx: State.Cx,
+  st: State.St,
+  target: TypeRef,
+  parameters: List[String],
+  args: List[TypeRef],
+) -> Result[Bool]
+  index = 0
+  while index < parameters.size
+    if !uses_name?(target, parameters[index])
+      try resolve_expanded(cx, st, args[index], true)
+    end
+    index += 1
+  end
+  return ok(true)
+end
+
+def uses_name?(ref: TypeRef, name: String) -> Bool
+  if ref.args.size == 0
+    return ref.name == name
+  end
+  return ref.args.any? do |arg: TypeRef| uses_name?(arg, name) end
+end
+
+# The number of type references written in the type: the unit of the expansion limit.
+def ref_count(ref: TypeRef) -> Int
+  total = 1
+  for arg in ref.args
+    total += ref_count(arg)
+  end
+  return total
 end
 
 def relocate(ref: TypeRef, span: Source.Span) -> TypeRef
@@ -437,7 +544,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
           cx,
           st,
           "CHECK-UNKNOWN-TYPE",
-          "enum #{Types.display_name(name)} expects #{parameters.size} type argument(s), found #{ref.args.size}",
+          "enum #{Types.display_name(name)} #{expects_text(parameters.size, ref.args.size)}",
           ref.span,
         ),
       )

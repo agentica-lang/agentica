@@ -220,10 +220,6 @@ def test_enum_aliases_are_not_variant_constructors_or_patterns(
             '  a = Account(name: "Ada")\nend\n\n',
             "CHECK-UNKNOWN-TYPE",
         ),
-        (
-            "type Names = List[String]\n\ndef main() -> Void\n  names: Names[Int] = []\nend\n\n",
-            "CHECK-UNKNOWN-TYPE",
-        ),
     ],
 )
 def test_alias_collision_unknown_target_constructor_and_arguments(
@@ -232,6 +228,11 @@ def test_alias_collision_unknown_target_constructor_and_arguments(
     found = agentica_check(text)
     assert found is not None
     assert found["code"] == code
+
+
+def test_plain_alias_takes_no_arguments(agentica_check):
+    text = "type Names = List[String]\n\ndef main() -> Void\n  names: Names[Int] = []\nend\n\n"
+    assert_diagnostic(agentica_check(text), "CHECK-UNKNOWN-TYPE", (4, 10))
 
 
 GENERIC = "type Matrix[T] = List[List[T]]\n\n"
@@ -305,8 +306,10 @@ def test_generic_alias_needs_exactly_its_arguments(use, start, agentica_check):
             "type Box[T] = List[T]\n\ntype Index[K] = Map[K, Int]\n\n"
             "def f(i: Index[Box[Int]]) -> Void\nend\n\n",
             "CHECK-MAP-KEY-TYPE",
-            (5, 10),
+            (5, 16),
         ),
+        ("type B[T] = Map[Float, T]\n\n", "CHECK-MAP-KEY-TYPE", (1, 17)),
+        ("type Ap[F] = F[Int]\n\n", "CHECK-UNKNOWN-TYPE", (1, 14)),
     ],
 )
 def test_generic_alias_declaration_errors(text, code, start, agentica_check):
@@ -335,3 +338,144 @@ def test_generic_enum_aliases_are_not_variant_constructors_or_patterns(
     found = agentica_check(prefix + "def main() -> Void\n" + body + "end\n\n")
     assert_diagnostic(found, code, start)
     assert "Shape[T].Circle" in json.dumps(found)
+
+
+@pytest.mark.parametrize(
+    ("text", "code", "start"),
+    [
+        (
+            "type Index[K] = Map[K, Int]\n\ndef f(i: Index[Float]) -> Void\nend\n\n",
+            "CHECK-MAP-KEY-TYPE",
+            (3, 16),
+        ),
+        (
+            "type S[T] = Set[T]\n\ndef f(s: S[Float]) -> Void\nend\n\n",
+            "CHECK-SET-ELEMENT-TYPE",
+            (3, 12),
+        ),
+        (
+            "type Index[K] = Map[K, Int]\n\nenum E[T]\n  V(Index[T])\nend\n\n",
+            "CHECK-MAP-KEY-TYPE",
+            (4, 11),
+        ),
+        (
+            "type Id[T] = T\n\ndef f(x: Id[Void]) -> Void\nend\n\n",
+            "CHECK-VOID-TYPE",
+            (3, 13),
+        ),
+    ],
+)
+def test_arguments_are_judged_where_the_parameter_lands(text, code, start, agentica_check):
+    found = agentica_check(text + "def main() -> Void\nend\n\n")
+    assert_diagnostic(found, code, start)
+
+
+@pytest.mark.parametrize(
+    ("use", "code", "start"),
+    [
+        ("Unused[Nope]", "CHECK-UNKNOWN-TYPE", (3, 17)),
+        ("Unused[Map[List[Int], Int]]", "CHECK-MAP-KEY-TYPE", (3, 21)),
+    ],
+)
+def test_argument_of_an_unused_parameter_is_still_checked(use, code, start, agentica_check):
+    text = f"type Unused[T] = Int\n\ndef f(x: {use}) -> Void\nend\n\ndef main() -> Void\nend\n\n"
+    assert_diagnostic(agentica_check(text), code, start)
+
+
+def test_argument_of_an_unused_parameter_may_be_void(agentica_check):
+    text = "type Unused[T] = Int\n\ndef f(x: Unused[Void]) -> Void\nend\n\ndef main() -> Void\nend\n\n"
+    assert agentica_check(text) is None
+
+
+def test_generic_alias_in_a_struct_field_a_constant_and_a_lambda(agentica_check):
+    text = (
+        "ORIGIN: Matrix[Int] = [[0]]\n\n"
+        "type Matrix[T] = List[List[T]]\n\n"
+        "type Row[T] = List[T]\n\n"
+        "struct Board\n  cells: Matrix[Int]\nend\n\n"
+        "def main() -> Void\n"
+        "  board = Board(cells: ORIGIN)\n"
+        "  sizes = [[1], [2]].map do |row: Row[Int]| row.size end\n"
+        "  puts(board.cells.size + sizes.size)\n"
+        "end\n\n"
+    )
+    assert agentica_check(text) is None
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "start"),
+    [
+        ("ORIGIN: Matrix[Int] = [[0]]", 'ORIGIN: Matrix[Int] = [["a"]]', (1, 25)),
+        ("Board(cells: ORIGIN)", 'Board(cells: [["a"]])', (12, 26)),
+        ("row: Row[Int]", "row: Row[String]", (13, 11)),
+    ],
+)
+def test_generic_alias_types_are_enforced_in_fields_constants_and_lambdas(
+    old, new, start, agentica_check
+):
+    text = (
+        "ORIGIN: Matrix[Int] = [[0]]\n\n"
+        "type Matrix[T] = List[List[T]]\n\n"
+        "type Row[T] = List[T]\n\n"
+        "struct Board\n  cells: Matrix[Int]\nend\n\n"
+        "def main() -> Void\n"
+        "  board = Board(cells: ORIGIN)\n"
+        "  sizes = [[1], [2]].map do |row: Row[Int]| row.size end\n"
+        "  puts(board.cells.size + sizes.size)\n"
+        "end\n\n"
+    )
+    assert_diagnostic(agentica_check(text.replace(old, new)), "CHECK-TYPE-MISMATCH", start)
+
+
+def test_identity_alias_is_its_argument(agentica_check):
+    text = (
+        "type Id[T] = T\n\n"
+        "def echo(x: Id[Int], names: Id[List[String]]) -> Id[Int]\n"
+        "  return x + names.size\n"
+        "end\n\n"
+        "def main() -> Void\n"
+        '  puts(echo(1, ["a"]))\n'
+        "end\n\n"
+    )
+    assert agentica_check(text) is None
+
+
+def test_chain_of_generic_aliases_is_bounded(agentica_check):
+    aliases = ["type C0[T] = List[T]"]
+    for index in range(1, 1002):
+        aliases.append(f"type C{index}[T] = C{index - 1}[T]")
+    text = "\n\n".join(aliases) + "\n\ndef f(x: C1001[Int]) -> Void\nend\n\ndef main() -> Void\nend\n\n"
+    assert_diagnostic(agentica_check(text), "CHECK-TOO-DEEP", (1001, 16))
+
+
+def test_copies_of_an_argument_count_against_the_expansion_limit(agentica_check):
+    use = "Dup[Int]"
+    for _ in range(11):
+        use = f"Dup[{use}]"
+    text = f"type Dup[T] = Fn[T, T]\n\ndef f(x: {use}) -> Void\nend\n\ndef main() -> Void\nend\n\n"
+    assert_diagnostic(agentica_check(text), "CHECK-TOO-DEEP", (3, 10))
+
+
+def test_parameter_named_like_an_alias_or_a_struct_is_the_parameter(agentica_check):
+    for head in ("type Foo = Int\n\n", "struct Foo\n  n: Int\nend\n\n"):
+        text = (
+            head
+            + "type Box[Foo] = List[Foo]\n\n"
+            + "def main() -> Void\n"
+            + '  a: Box[String] = ["a"]\n'
+            + "  puts(a.size)\n"
+            + "end\n\n"
+        )
+        assert agentica_check(text) is None
+    wrong = "type Foo = Int\n\ntype Box[Foo] = List[Foo]\n\ndef main() -> Void\n  a: Box[String] = [1]\nend\n\n"
+    assert_diagnostic(agentica_check(wrong), "CHECK-TYPE-MISMATCH", (6, 21))
+
+
+def test_enum_parameter_does_not_capture_a_name_in_an_alias_target(agentica_check):
+    text = (
+        "struct Item\n  n: Int\nend\n\n"
+        "type Items = List[Item]\n\n"
+        "enum E[Item]\n  V(Items)\nend\n\n"
+        "def main() -> Void\nend\n\n"
+    )
+    assert_diagnostic(agentica_check(text), "CHECK-UNKNOWN-TYPE", (8, 5))

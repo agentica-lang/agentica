@@ -39,6 +39,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A cancelled `TCP.accept` or socket read gives up its place at once.
 - A task spawned by a cancelled task starts cancelled.
+- A type alias is read with only its own parameters in scope: an enum type
+  parameter no longer takes the place of a type the alias names
+  (`CHECK-UNKNOWN-TYPE` at the use), and the argument of an unused alias
+  parameter is checked.
 
 ## [0.5.0-beta.1] - 2026-10-20
 
