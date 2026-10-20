@@ -17,8 +17,12 @@ struct Player
 end
 
 def main() -> Void
-  players = [Player(name: "Ana", score: 7), Player(name: "Bo", score: 12), Player(name: "Cy", score: 9)]
-  best_first = players.sort_by do |p| 0 - p.score end
+  players = [
+    Player(name: "Ana", score: 7),
+    Player(name: "Bo", score: 12),
+    Player(name: "Cy", score: 9)
+  ]
+  best_first = players.sort_by do |p| -p.score end   # negative key: largest first
   for p in best_first
     puts("#{p.name}: #{p.score}")
   end
