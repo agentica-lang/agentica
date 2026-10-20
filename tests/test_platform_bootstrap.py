@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 
 import pytest
 
@@ -155,6 +156,27 @@ def test_pending_standard_input_does_not_block_timers_or_exit(tmp_path, adopt) -
         assert child.wait() == 0, child.stderr_text()
     finally:
         child.close_stdin()
+
+
+@pytest.mark.parametrize("kind", ["file", "null"])
+def test_standard_input_from_a_file_or_the_null_device_reads_to_its_end(tmp_path, kind) -> None:
+    source = tmp_path / "stdin.agc"
+    source.write_text(
+        'def main() -> Void\n'
+        '  IO.inspect(IO.read())\n'
+        '  IO.inspect(IO.gets())\n'
+        'end\n',
+        encoding="utf-8",
+    )
+    data = tmp_path / "input.txt"
+    data.write_bytes(b"one\ntwo\n")
+    env = vm_environment({"UV_THREADPOOL_SIZE": "1"})
+    with open(data if kind == "file" else os.devnull, "rb") as stdin:
+        result = subprocess.run([str(binary()), str(source)], cwd=tmp_path, env=env, stdin=stdin,
+                                capture_output=True, timeout=scaled(30))
+    text = '"one\\ntwo\\n"' if kind == "file" else '""'
+    assert (result.returncode, result.stdout.decode()) == (
+        0, '%s\nerror("IO.gets reached the end of input")\n' % text), result.stderr
 
 
 def test_file_locks_are_idempotent_and_released_by_close(tmp_path) -> None:

@@ -119,10 +119,10 @@ def test_a_golden_variant_is_host_only_on_the_other_family_of_systems_only(tmp_p
 
 
 def test_a_skip_for_an_open_issue_is_listed_as_an_open_gap_and_the_number_must_be_known(tmp_path):
-    text, ok = evidence(tmp_path, "windows-x86_64", skip_message="known-issue: #431 a stdin read holds a pool thread")
+    text, ok = evidence(tmp_path, "windows-x86_64", skip_message="known-issue: #437 Ctrl+C has no test")
     assert ok, text
-    assert "Open gaps" in text and "#431" in text
-    assert not evidence(tmp_path, "windows-x86_64", skip_message="known-issue: a stdin read holds a pool thread")[1]
+    assert "Open gaps" in text and "#437" in text
+    assert not evidence(tmp_path, "windows-x86_64", skip_message="known-issue: Ctrl+C has no test")[1]
     text, ok = evidence(tmp_path, "windows-x86_64", skip_message="known-issue: #99999 not an issue of the list")
     assert not ok and "not in KNOWN_ISSUES" in text
 
