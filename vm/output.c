@@ -464,6 +464,18 @@ bool agc_output_busy(agc_vm *vm) {
   return busy;
 }
 
+/* A write still in flight (a reader stuck past the flush limit, a stop signal) keeps its stream as it is: on Windows a
+   call on that handle would wait for the write, and the exit must not wait for a reader. held is also true for a pool
+   write that has ended but whose done half has not run yet; that stream is left as it is too, which only costs the
+   shutdown. */
+void agc_output_end(agc_vm *vm) {
+  agc_output *streams[2] = {&vm->rt->out, &vm->rt->err};
+  for (size_t k = 0; k < 2; k++) {
+    agc_output *s = streams[k];
+    if (s->base == s && s->io && !held(s)) agc_stdio_end(s, &vm->rt->in);
+  }
+}
+
 void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   vm->rt->settle_by = 0;
   const agc_output *first = out == &vm->rt->err ? &vm->rt->out : NULL;
@@ -586,6 +598,8 @@ void agc_output_open(agc_vm *vm, agc_output *out, int fd) {
   (void)out;
   (void)fd;
 }
+
+void agc_output_end(agc_vm *vm) { (void)vm; }
 
 void agc_output_close(agc_vm *vm) { (void)vm; }
 
