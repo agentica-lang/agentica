@@ -9,6 +9,7 @@
 #include "../core.h"
 
 #include <assert.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <time.h>
 #include <uv.h>
@@ -36,6 +37,8 @@ typedef struct {
 #endif
 
 static int dropped;
+/* Pool workers that have finished their work; a worker thread adds to it, the test thread reads it. */
+static atomic_int worked;
 
 static void pause_ms(long ms) {
   uv_sleep((unsigned)ms);
@@ -45,6 +48,7 @@ static void slow_work(void *data) {
   task_data *t = data;
   pause_ms(t->sleep_ms);
   t->value = 7;
+  atomic_fetch_add(&worked, 1);
 }
 
 static agc_value finished(agc_vm *vm, void *data, agc_value context) {
@@ -86,6 +90,27 @@ static int64_t run_one(agc_vm *vm, long sleep_ms, int64_t timeout_ms) {
   assert(!task->parked);
   task->state = AGC_TASK_RUNNING;
   return agc_as_int(vm, result);
+}
+
+/* Waits, for about MS milliseconds at most, until COUNT pool workers have finished. The wait is bounded on the work,
+   not a fixed pause: a loaded runner can take well over a job's sleep to finish it (#366). */
+static bool work_done_within(int count, long ms) {
+  for (long waited = 0;; waited += 10) {
+    if (atomic_load(&worked) >= count) return true;
+    if (waited >= ms) return false;
+    pause_ms(10);
+  }
+}
+
+/* Closes VM, trying for about MS milliseconds. A close refuses while a job's pool work is not over on the loop: a
+   worker that still runs, or one that finished but whose after-work callback has not run yet (the worker wakes the
+   loop after it returns). Each try runs the loop, so a later one sees the callback and the job is dropped. */
+static bool close_within(agc_vm *vm, long ms) {
+  for (long waited = 0;; waited += 10) {
+    if (agc_io_close(vm)) return true;
+    if (waited >= ms) return false;
+    pause_ms(10);
+  }
 }
 #endif
 
@@ -247,8 +272,9 @@ int main(void) {
   assert(run_one(&vm, 300, 20) == -1);
   assert(dropped == 0);
   assert(run_one(&vm, 0, 5000) == 107);
-  pause_ms(400);
-  assert(agc_io_close(&vm));
+  /* The close comes after the timed-out job's worker has finished (three workers so far), and drops its result. */
+  assert(work_done_within(3, 5000));
+  assert(close_within(&vm, 5000));
   assert(dropped == 1);
   assert(released == 500);
   assert(vm.rt->loop == NULL);
@@ -258,12 +284,7 @@ int main(void) {
   assert(run_one(&vm, 0, 5000) == 107);
   assert(run_one(&vm, 2000, 20) == -1);
   assert(!agc_io_close(&vm));
-  bool closed = false;
-  for (int attempt = 0; attempt < 500 && !closed; attempt++) {
-    closed = agc_io_close(&vm);
-    if (!closed) pause_ms(10);
-  }
-  assert(closed);
+  assert(close_within(&vm, 5000));
   assert(vm.rt->loop == NULL);
   /* The single binary runs two VMs in one process, one after the other: the second watches the stop signals with a
      wake handle of its own once the first is closed, and both closes settle. */
