@@ -45,6 +45,7 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "value", type: Types.Type.String),
       ],
     ),
+    # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_CA_FILE): keep them in step.
     Model.Record(
       name: "HttpClientOptions",
       fields: [

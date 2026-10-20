@@ -148,10 +148,12 @@ def main() -> Void
   base = "https://localhost:#{System.args()[3]}"
   # The CA file is a FIFO: the context's build blocks until the test writes it. The first call starts the build and
   # waits; the two after it wait behind it. The first one's deadline comes while the build still blocks: it leaves
-  # the waiters, and the build goes on for the other two.
-  pool = Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: System.args()[1], timeout_ms: 3000)))
+  # the waiters, and the build goes on for the other two. The client has one timeout, so the two others start half
+  # of it after the first: each side of the first one's deadline has half the timeout to spare.
+  timeout = String.to_int!(System.args()[4])
+  pool = Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: System.args()[1], timeout_ms: timeout)))
   first = Task.spawn(&get, Call(pool: pool, url: base + "/first"))
-  Task.sleep(1500)
+  Task.sleep(timeout / 2)
   calls = [Task.spawn(&get, Call(pool: pool, url: base + "/a")), Task.spawn(&get, Call(pool: pool, url: base + "/b"))]
   puts(show(Task.await(first)))
   for call in calls
@@ -554,7 +556,10 @@ def test_https_waiters_on_a_context_build_one_leaves_and_a_failed_build_is_retri
     fixed = tmp_path / "fixed.pem"
     fixed.write_text("not a certificate")
     trace, env = trace_env(tmp_path)
-    vm = adopt(start_vm(compile_text(WAITERS_PROGRAM, "waiters", tmp_path), CERTS, fifo, fixed, port, env=env))
+    # The first call times out after `timeout`; the two others then have half of theirs left.
+    timeout = str(scaled(8000))
+    bytecode = compile_text(WAITERS_PROGRAM, "waiters", tmp_path)
+    vm = adopt(start_vm(bytecode, CERTS, fifo, fixed, port, timeout, env=env))
     try:
         assert vm.next_line() == "network: operation timed out"
     finally:

@@ -128,8 +128,9 @@ static const char write_failed[] = "error writing to stream port";
    one frees it, on whatever thread gives it back. An SSL takes its own count on the SSL_CTX (SSL_new), so a session
    never outlives its context. `ca_file` is fixed at creation. The rest belongs to the I/O thread; the pool job writes
    only `built` and `failure`, which libuv hands back to that thread in shared_done. A failed build is not kept: the
-   next connection tries again. A build is never cancelled, even when its last waiter leaves after the client dropped
-   its count: it holds its own count, so it runs to its end and shared_done gives back the last count. */
+   next connection tries again. A queued build is never cancelled, even when every waiter leaves or the client dropped
+   its count: it holds its own count, runs to its end and shared_done gives back the last count. Until then it keeps
+   the loop alive at the end of the run, for as long as reading the CA file takes, as TLS.connect's own setup does. */
 struct tls_shared {
   _Atomic size_t refs;
   char *ca_file;
