@@ -48,7 +48,8 @@ Profile.steps() -> Int                  # steps of this task so far; the same on
   for larger streams.
 - `String.from_bytes` decodes strictly. A byte read can split a UTF-8 character,
   so decode complete sequences only, and switch to text reads only at character
-  boundaries.
+  boundaries. `String.to_bytes(s)` encodes text for `TCP.send_bytes`,
+  `File.write_bytes` and the like.
 - `IO.eof?` does not consume a byte and does not wait for a whole UTF-8
   character. Reads have no timeout; step budgets do not interrupt blocking
   input.
@@ -139,6 +140,7 @@ String.from_code(n: Int) -> String                       # Unicode scalar value;
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
 String.from_bytes(data: List[Int]) -> Result[String]     # strict UTF-8
+String.to_bytes(s: String) -> List[Int]                  # UTF-8 bytes, 0..255; inverse of from_bytes
 String.to_int(s: String) -> Result[Int]                  # signed decimal; overflow is an error
 String.to_float(s: String) -> Result[Float]
 String.to_int!(s: String) -> Int                         # halts on bad text (RUNTIME-INVALID-NUMBER)
