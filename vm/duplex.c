@@ -4,6 +4,7 @@
  * and writes, for a child process that talks to its parent. Service layer.
  * The system part is duplex_os.h. Design: docs/vm/10-io-processes.md §10.4.
  */
+#include "net_os.h"
 #include "services.h"
 #include "file_io.h"
 #include "duplex_os.h"
@@ -158,7 +159,7 @@ static void start_reading(agc_duplex *d) {
   if (d->reading || d->in.eof || d->in.error) return;
   int rc = uv_read_start((uv_stream_t *)&d->rd_pipe, alloc_in, read_in);
   if (rc)
-    d->in.error = -rc;
+    d->in.error = agc_net_errno(rc);
   else
     d->reading = true;
 }
@@ -214,7 +215,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     result = agc_error_value(closed_text);
   } else if (q->sending) {
     agc_charge(vm, q->count);
-    result = d->write_status < 0 ? agc_system_error(vm, write_failed, -d->write_status) : ok_void();
+    result = d->write_status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(d->write_status)) : ok_void();
   } else {
     result = d->overflow && !agc_inbuf_ready(&d->in, true, 0) ? agc_error_value(d->overflow) : take_line(vm, d);
     agc_charge(vm, agc_value_units(result));
@@ -275,7 +276,7 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
   d->write_status = 0;
   int rc = agc_stream_write((uv_stream_t *)&d->wr_pipe, &d->write_req, &d->write_data, (const uint8_t *)text->data,
                             text->bytes, wrote);
-  if (rc < 0) return agc_system_error(vm, write_failed, -rc);
+  if (rc < 0) return agc_system_error(vm, write_failed, agc_net_errno(rc));
   if (rc == 0) return ok_void();
   request *q = new_request(d, true, false);
   q->count = (size_t)agc_value_units(line);

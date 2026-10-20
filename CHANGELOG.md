@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The `TCP` builtins run on Windows (and are tested on macOS and Windows as on
+  Linux). A `system error:` line shows the host's errno and text, so its
+  number differs between systems. `TLS` still returns an error on Windows.
+
 - The release builds native archives for four systems, each on a runner of
   its own: `agentica-VERSION-linux-x86_64.tar.gz` (glibc 2.28),
   `-windows-x86_64.zip` (MSYS2 UCRT64), `-macos-x86_64.tar.gz` and

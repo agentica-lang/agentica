@@ -73,6 +73,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
       - run: python3 -m pip install poetry==2.1.2
       - run: poetry install --only test --no-root
       - if: env.AGENTICA_OPENSSL == 'system'
@@ -115,7 +118,7 @@ jobs:
         if: env.AGENTICA_OPENSSL == 'vendored'
         run: gmake vendored-check
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_platform_bootstrap.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions
         env:
@@ -151,6 +154,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
       - run: python3 -m pip install poetry==2.1.2
       - run: poetry install --only test --no-root
       - if: env.AGENTICA_OPENSSL == 'system'
@@ -193,7 +199,7 @@ jobs:
         if: env.AGENTICA_OPENSSL == 'vendored'
         run: gmake vendored-check
       - run: gmake fixed-point
-      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_platform_bootstrap.py"
+      - run: gmake test TESTS="tests/test_single_binary.py tests/test_filesystem.py tests/test_source_paths.py tests/test_vm_os.py tests/test_process.py tests/test_process_bdd.py tests/test_bdd.py tests/test_bdd_posix.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions
         env:
@@ -232,6 +238,9 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
       - run: python -m pip install poetry==2.1.2
         shell: pwsh
       - run: poetry install --only test --no-root
@@ -281,7 +290,7 @@ jobs:
           AGENTICA_VM_BINARY: build/vm/release/bootstrap/agentica.exe
         run: poetry run python -m pytest tests/test_platform_bootstrap.py
       - run: make fixed-point
-      - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py tests/test_process.py tests/test_process_windows.py tests/test_process_bdd.py tests/test_bdd.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_windows_console_stop.py tests/test_platform_bootstrap.py"
+      - run: make test PYTHON=python TESTS="tests/test_single_binary.py tests/test_source_paths.py tests/test_windows_metadata_and_locks.py tests/test_process.py tests/test_process_windows.py tests/test_process_bdd.py tests/test_bdd.py tests/test_process_lifecycle.py tests/test_vm_child_channel.py tests/test_vm_stdout.py tests/test_vm_tcp.py tests/test_windows_console_stop.py tests/test_platform_bootstrap.py"
       - name: Destructive filesystem regressions in Actions-owned scratch
         run: make test-remove-actions PYTHON=python
         env:

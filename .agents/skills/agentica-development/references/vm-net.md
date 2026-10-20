@@ -37,8 +37,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     timeout check plus `agc_handle_wait`), and the `network:` timeout texts
 
 - **Path:** `vm/tcp.c`
-  - **Owns:** the `TCP` and `TLS` builtins (`agc_tcp_builtins`, Linux and macOS;
-    §10.3.1, TLS in §10.3): one `malloc`'d `net` for a socket or a listener
+  - **Owns:** the `TCP` and `TLS` builtins (`agc_tcp_builtins`; Linux, macOS
+    and Windows, where TLS fails; §10.3.1, TLS in §10.3): one `malloc`'d `net`
+    for a socket or a listener
     (users: the resource and each request; callbacks: a DNS lookup in flight and
     one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its
     `uv_connect_t` that finds the `net` through `owner`), registered when the
@@ -441,20 +442,29 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Golden fixtures with children keep their step counts independent of timing:
     wait for an event (`wait`, a read, `output`) before a call whose result
     depends on it.
-- **TCP (7h, in on Linux)**: `vm/tcp.c`, `docs/vm/10-io-tls.md`
-  §10.3.1. TLS sockets and listeners are the same `net` with
+- **TCP (7h; Linux, macOS, Windows)**: `vm/tcp.c`, `docs/vm/10-io-tls.md`
+  §10.3.1 (its "Platforms" item has the host differences). An errno that
+  reaches `agc_system_error` goes through `agc_net_errno` (`vm/net_os.h`),
+  never a bare `-rc`: Windows libuv codes are not negated errno values. A
+  listener link counts reported connections (`backlog`), since Windows
+  reports several before the first `uv_accept`. `tests/test_vm_tcp.py` runs
+  in the macOS and Windows jobs of `platforms.yml`; its expected `system
+  error:` texts come from `system_error()`.
+  TLS sockets and listeners are the same `net` with
   `secure` set (see TLS below).
   The `tcp-*` fixtures are their own peers (a listener and its client tasks
   in one program) and print only from `main` after its awaits, so output and
   step counts do not depend on timing; `recv_bytes` returns what has
   arrived, so a fixture reads bytes only after the writer is done (await it
-  first). Network tests bind 127.0.0.1 port 0 and use Node peers; no name
-  that needs DNS beyond `/etc/hosts`. A connect timeout has no hermetic test
-  (it needs an address that drops SYNs); it was checked by hand. A fixture
-  that needs a write to stay parked sends one String far bigger than the
-  loopback buffers (64 MiB), never a loop of sends: the number of sends
-  that complete depends on the kernel's buffer sizes, and so would the
-  step count.
+  first). Network tests bind 127.0.0.1 port 0 and use Node or Python peers; no
+  name that needs DNS beyond `/etc/hosts`. A connect timeout has no hermetic
+  test (it needs an address that drops SYNs); it was checked by hand. A golden
+  fixture that needs a write to stay parked sends one String far bigger than
+  the loopback buffers (64 MiB), never a loop of sends: the number of sends
+  that complete depends on the kernel's buffer sizes, and so would the step
+  count. Windows takes even a 32 MiB send whole, so a pytest case (no step
+  counts) that needs a send to time out loops sends, bounded, until one
+  fails (`CLIENT_PROGRAM` in `tests/test_vm_tcp.py`).
 - **TLS (7h, in on Linux)**
   - `TLS.connect` and `TLS.listen` in `vm/tcp.c` on the adapter of `vm/tls.h`
     (`docs/vm/10-io-tls.md` §10.3).

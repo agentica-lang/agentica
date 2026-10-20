@@ -9,7 +9,7 @@ the interpreter of the resulting program.
 This first port covers the compiler driver, regular binary files, UTF-8 paths,
 environment lookup and the process primitives needed by stage0. Windows
 special file streams, locks, rename, recursive removal, asynchronous standard
-I/O and networking remain separate follow-up work. `Path.remove` on Windows
+I/O, TLS and HTTP remain separate follow-up work. `Path.remove` on Windows
 returns an error without deleting anything.
 
 The release (`release.yml`) builds one native archive per system on a runner of

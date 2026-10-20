@@ -34,7 +34,7 @@ The minimum versions are what the programs are built for. CI runs each archive o
 
 The archives are not signed with a developer identity and are not notarized. The macOS programs carry only the ad hoc signature that Apple silicon requires of every program. A file downloaded with a browser gets a quarantine mark, and macOS then refuses to open the program; remove the mark with `xattr -d com.apple.quarantine bin/agentica` (a download with `curl` has none). Windows SmartScreen may warn about an unsigned program the first time. The checksum file is the only proof of origin for now.
 
-Networking (`TCP`, `TLS` and `std/http`) works on Linux and macOS; the Windows program does not have it yet.
+`TCP` works on Linux, macOS and Windows. `TLS` and `std/http` work on Linux and macOS; on Windows a `TLS` call returns an error and `std/http` is not there yet.
 
 ## Hello, world
 

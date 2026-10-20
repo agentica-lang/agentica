@@ -240,10 +240,11 @@ written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only
 `vm/duplex.c`), `Task.pending_count`, `Task.spawn_owning` (24b, `vm/task.c`),
 `Task.map` (17a, `vm/task_map.c`) and the `Channel` builtins (`vm/channel.c`). A
 channel call that must wait, and `Task.map`, need the event loop. The event
-loop, files and processes build on Linux, macOS and Windows; TCP, TLS and HTTP
-(client and server) build on Linux and macOS, with stub tables on Windows (the
-guards in `vm/tcp.c`, `vm/tls_openssl.c`, `vm/http_service.c`,
-`vm/http_server.c` and `vm/http_wire.c`).
+loop, files, processes, TCP and the pure `HttpWire` helpers build on Linux,
+macOS and Windows; TLS and the HTTP service and server build on Linux and
+macOS, with stub tables on Windows (the guards in `vm/tls_openssl.c`,
+`vm/http_service.c` and `vm/http_server.c`), so a TLS call there returns an
+error.
 
 ### 7.3 Builtin safety and streams
 

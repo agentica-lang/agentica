@@ -562,6 +562,11 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
 #if !defined(_WIN32)
 void agc_io_block_stop(sigset_t *saved);
 #endif
+struct uv_work_s;
+/* uv_queue_work with the stop signals blocked while it may start the pool threads, so they inherit the mask and a
+   stop signal reaches the loop's thread only (nothing to block on Windows). */
+int agc_io_queue_work(struct uv_loop_s *uv, struct uv_work_s *work, void (*run)(struct uv_work_s *work),
+                      void (*after)(struct uv_work_s *work, int status));
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more);
