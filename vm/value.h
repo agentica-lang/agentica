@@ -211,7 +211,7 @@ typedef struct {
   bool tls_dropped;
 } agc_http_client;
 
-/* HttpClientOptions as the record of compiler/builtins_data.agc lays it out: timeout_ms, idle_timeout_ms,
+/* HttpClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms, idle_timeout_ms,
    max_connections, max_body_bytes, ca_file. HttpWire.service checks the shape, since the std-only rule lives in the
    front end and bytecode can call the builtin with any struct. */
 #define AGC_HTTP_OPTIONS_FIELDS 5

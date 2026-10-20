@@ -729,13 +729,13 @@ CPU.
 
 With the `exe` runner, `benchmarks/run.py` also times the front end inside
 `dist/agentica` (§18.5): `check` of `examples/hello.agc`, of
-`stdlib/bdd/gherkin.agc` and of `compiler/parser.agc` (both have no `main`, so
-`check` ends with `CHECK-MAIN`, exit 1, after lexing, parsing, linking and
-registering the declarations), of a three-line `main` that imports gherkin (the
-full check of its bodies), and of `compiler/front_end.agc` (the whole front
-end), and one `agentica test` of a one-test file. The heading of the table
-prints the load average, and says "measured under load" when the one-minute
-load is above 2. CI does not gate on these times.
+`stdlib/bdd/gherkin.agc` and of `compiler/syntax/parser.agc` (both have no
+`main`, so `check` ends with `CHECK-MAIN`, exit 1, after lexing, parsing,
+linking and registering the declarations), of a three-line `main` that imports
+gherkin (the full check of its bodies), and of `compiler/front_end.agc` (the
+whole front end), and one `agentica test` of a one-test file. The heading of the
+table prints the load average, and says "measured under load" when the
+one-minute load is above 2. CI does not gate on these times.
 
 ```sh
 python3 benchmarks/run.py --runs 11 --only calls --runners exe
@@ -754,7 +754,7 @@ gherkin 21 MB, parser 34 MB, `front_end.agc` 89 MB).
 |---|---:|---:|
 | `check examples/hello.agc` | 0.0266 | 0.0264 |
 | `check stdlib/bdd/gherkin.agc` | 0.131 | 0.129 |
-| `check compiler/parser.agc` | 0.420 | 0.414 |
+| `check compiler/syntax/parser.agc` | 0.420 | 0.414 |
 | `test` of a file with one unit test | 0.868 | 0.051 |
 | `test` of a feature with two scenarios | 0.930 | 0.112 |
 
@@ -778,7 +778,7 @@ counts do not change from run to run). Totals:
 |---|---:|---:|---:|---:|
 | `check examples/hello.agc` | 27,946 | 1,843 | 2,263 | 7 |
 | `check stdlib/bdd/gherkin.agc` | 2,833,726 | 145,025 | 139,844 | 12 |
-| `check compiler/parser.agc` | 11,153,906 | 565,139 | 551,692 | 16 |
+| `check compiler/syntax/parser.agc` | 11,153,906 | 565,139 | 551,692 | 16 |
 | `check compiler/front_end.agc` | 76,512,688 | 4,402,340 | 3,880,861 | 38 |
 
 For `front_end.agc`, the lexer is 51% of the steps (`lexer.agc` 38.9 M, then
@@ -830,7 +830,7 @@ as much as here, so compare binaries of one configuration.
 | `help` | 25.1 | 18.3 |
 | `examples/hello.agc` (compile and run) | 25.3 | 18.4 |
 | `check stdlib/bdd/gherkin.agc` | 73.9 | 65.4 |
-| `check compiler/parser.agc` | 217.5 | 206.6 |
+| `check compiler/syntax/parser.agc` | 217.5 | 206.6 |
 | `run -- hello.agcb` (372 bytes, no front end) | 3.9 | 3.9 |
 | `--version` | 2.4 | 2.3 |
 | `loader done us` of a hello check (`AGENTICA_VM_TRACE=loader`) | 15.4 | 8.3 |
@@ -929,17 +929,16 @@ Left, in the order of the time it is worth:
 ### Speed pass, second part: the lexer
 
 Before is master (2b5f3f3e, with the profiler of the first part), after is this
-PR, which changes `compiler/lexer.agc` only (the files checked are the ones of
-the merged tree, so both binaries lex and check the same text). Both binaries
-ran alternately (A B A B, 5 rounds of 7 to 9 runs for `hello` and gherkin,
-5 rounds of 3 for `parser.agc`, 3 rounds of 3 for `front_end.agc`, the median
-of the round medians) on an AMD Ryzen 5 3550H (4 cores, 8 threads), Debian 13,
-gcc 14.2.
-**Measured under load**: the load average was 2.1 to 2.5, because another job
-was building on the machine. The steps do not depend on the load. An earlier
-run of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident size went down
-(`front_end.agc` 100.5 to 92.0 MB, gherkin 21.4 to 21.1 MB, `hello` 15.0 to
-14.8 MB).
+PR, which changes `compiler/syntax/lexer.agc` only (the files checked are the
+ones of the merged tree, so both binaries lex and check the same text). Both
+binaries ran alternately (A B A B, 5 rounds of 7 to 9 runs for `hello` and
+gherkin, 5 rounds of 3 for `parser.agc`, 3 rounds of 3 for `front_end.agc`, the
+median of the round medians) on an AMD Ryzen 5 3550H (4 cores, 8 threads),
+Debian 13, gcc 14.2. **Measured under load**: the load average was 2.1 to 2.5,
+because another job was building on the machine. The steps do not depend on the
+load. An earlier run of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident
+size went down (`front_end.agc` 100.5 to 92.0 MB, gherkin 21.4 to 21.1 MB,
+`hello` 15.0 to 14.8 MB).
 
 - **command:** `check examples/hello.agc`
   - **steps before:** 27,946
@@ -957,7 +956,7 @@ run of gherkin at load 1.0 gave 127.0 and 98.5 ms. The resident size went down
   - **s before:** 0.1264
   - **s after:** 0.0993
 
-- **command:** `check compiler/parser.agc`
+- **command:** `check compiler/syntax/parser.agc`
   - **steps before:** 11,153,906
   - **steps after:** 7,420,483
   - **`lexer.agc` steps before:** 6,682,444
@@ -1107,7 +1106,7 @@ included.
 | list-bulk | 0.287 | 0.269 | 0.94 |
 | `check examples/hello.agc` | 0.0281 | 0.0275 | 0.98 |
 | `check stdlib/bdd/gherkin.agc` | 0.102 | 0.080 | 0.78 |
-| `check compiler/parser.agc` | 0.305 | 0.226 | 0.74 |
+| `check compiler/syntax/parser.agc` | 0.305 | 0.226 | 0.74 |
 
 The step counts did not change (`AGENTICA_VM_TRACE=profile` prints the same
 steps, calls and builtin calls on master and here for the benchmarks and for
@@ -1406,11 +1405,11 @@ PR; at ten times the size, where start-up weighs less, it shows +2%. The
 start-up of `hello.agc` (6.1 ms) differs by 0.1 to 0.2 ms; `agc_vm_init` makes
 one object more (the empty String; the empty Set is the empty Map).
 
-The front end does not gain, as the count says: `check compiler/parser.agc`
-allocates 46.25 MB on master and 46.19 MB here (-0.15%), 8 collections on both,
-7,762,160 steps on both. Its time is 0.2292 s against 0.2312 s (+0.9%) and
-0.2276 s against 0.2289 s (+0.6%) in two runs, and `check
-stdlib/bdd/gherkin.agc` 0.0701 s against 0.0705 s (+0.5%): neutral.
+The front end does not gain, as the count says: `check
+compiler/syntax/parser.agc` allocates 46.25 MB on master and 46.19 MB here
+(-0.15%), 8 collections on both, 7,762,160 steps on both. Its time is 0.2292 s
+against 0.2312 s (+0.9%) and 0.2276 s against 0.2289 s (+0.6%) in two runs, and
+`check stdlib/bdd/gherkin.agc` 0.0701 s against 0.0705 s (+0.5%): neutral.
 
 **The link layout hides small differences.** Adding bytes of padding to the
 text of the master binary alone, 64 to 1216 of them, moves the empty loop of
@@ -1427,10 +1426,10 @@ more than one layout before blaming a change.
 Kept: every part of the list above, since each one shows fewer bytes and less
 time in a loop of its own. Tried and dropped:
 
-- **`CONCAT` with an empty side returns the other String.** A loop of
-  `(s + "")` allocates 198 MB before and 6.7 MB after, but real programs do not
-  add empty Strings: `check compiler/parser.agc` allocated 45.89 MB with the
-  change and 45.95 MB without. A branch in the hottest opcode for nothing.
+- **`CONCAT` with an empty side returns the other String.** A loop of `(s + "")`
+  allocates 198 MB before and 6.7 MB after, but real programs do not add empty
+  Strings: `check compiler/syntax/parser.agc` allocated 45.89 MB with the change
+  and 45.95 MB without. A branch in the hottest opcode for nothing.
 - **`filter` and `map` return the shared empty List when nothing is kept.** It
   saves one list of about 40 bytes for each call. The code is in
   `resume_native` of `vm/interp.c`, which `File.each_line` also runs through;

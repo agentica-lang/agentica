@@ -45,13 +45,12 @@ PLATFORMS = ("linux-x86_64", "windows-x86_64", "macos-x86_64", "macos-arm64")
 # lack, so a reader of the report can judge it: "host-only: Windows has no /proc".
 HOST_ONLY = "host-only:"
 
-# A skip for a product bug with an open issue: "known-issue: #431 a stdin read can hold a pool thread on Windows".
+# A skip for a product bug with an open issue: "known-issue: #433 no test for blocking stream files".
 KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
 KNOWN_ISSUES = {
-    431: "Windows: a stdin read can hold a pool thread",
     432: "Windows: no independent peer for the child channel protocol (two pipes at descriptors 3 and 4)",
     433: "Windows: no test for blocking stream files (named pipes instead of FIFOs)",
     437: "Windows: Ctrl+C through the CLI and a signal during a blocked wait have no test",

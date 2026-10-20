@@ -202,7 +202,7 @@ following
   so a value of it changes no run. The binary is the VM; a program that starts
   `agentica` again (the BDD driver) uses the path in `Settings.self_path`.
 - `agentica test` runs in the binary (`docs/bdd.md`). The BDD driver is part of
-  the front end (`compiler/bdd_driver.agc`). It compiles the test files to a
+  the front end (`compiler/bdd/bdd_driver.agc`). It compiles the test files to a
   private run directory, starts the runner with `agentica run --allow-run
   --driver-pid PID --embedded runner -- CONFIG` (`PID` is its own), and the
   runner starts one VM per scenario or test file with the same command. The

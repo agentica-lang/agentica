@@ -28,9 +28,9 @@ diagnostic is an error or it does not exist. There are three reasons:
 
 3. **One diagnostic per stage.** Each stage returns its output or exactly one
    diagnostic, and stops at the first error (`AGENTS.md`, "Conventions"). The
-   diagnostic format has only `error` (`compiler/diagnostic.agc`). Warnings
-   would    need a list of diagnostics next to a successful result, which breaks
-   that    contract for every stage and for `--json`.
+   diagnostic format has only `error` (`compiler/diagnostics/diagnostic.agc`).
+   Warnings would    need a list of diagnostics next to a successful result,
+   which breaks that    contract for every stage and for `--json`.
 
 
 **What the principle covers.** It covers the diagnostics of the language stages:
@@ -60,11 +60,11 @@ with `_` is the one way to keep a name that is unused on purpose (26.2).
 - Each item is its own small PR, in the order 26.1, 26.3, 26.2, 26.4: the two
   small migrations first; 26.2 after 26.3, so a read in dead code never has to
   be counted (26.2, "Code that never runs"); and 26.4 last, because its one
-  explicit discard, `_ = f(...)`, is already there (#381); before 26.2,
-  `sent = f(...)` would silence 26.4 and leave no trace. Each PR comes after 7i
-  (order 7.2), so the Racket evaluator and its tests are gone and need no
-  migration. All four are front end only: the linker (`compiler/linker.agc`)
-  for 26.1, the checker (`compiler/checker.agc`) for 26.2, 26.3 and 26.4; the
+  explicit discard, `_ = f(...)`, is already there (#381); before 26.2, `sent =
+  f(...)` would silence 26.4 and leave no trace. Each PR comes after 7i (order
+  7.2), so the Racket evaluator and its tests are gone and need no migration.
+  All four are front end only: the linker (`compiler/modules/linker.agc`) for
+  26.1, the checker (`compiler/check/checker.agc`) for 26.2, 26.3 and 26.4; the
   bytecode format and the VM do not change.
 
 - Each PR is a breaking change and migrates the repo in the same PR: the
@@ -97,22 +97,22 @@ with `_` is the one way to keep a name that is unused on purpose (26.2).
 
 - **§:** 26.1
   - **Item:** Unused imports
-  - **Stage:** linker (`compiler/linker.agc`)
+  - **Stage:** linker (`compiler/modules/linker.agc`)
   - **New diagnostic code:** `CHECK-UNUSED-IMPORT`
 
 - **§:** 26.2
   - **Item:** Unused variables
-  - **Stage:** checker (`compiler/checker.agc`)
+  - **Stage:** checker (`compiler/check/checker.agc`)
   - **New diagnostic code:** `CHECK-UNUSED-VARIABLE`
 
 - **§:** 26.3
   - **Item:** Unreachable code
-  - **Stage:** checker (`compiler/checker.agc`)
+  - **Stage:** checker (`compiler/check/checker.agc`)
   - **New diagnostic code:** `CHECK-UNREACHABLE-CODE`
 
 - **§:** 26.4
   - **Item:** Ignored `Result` values
-  - **Stage:** checker (`compiler/checker.agc`)
+  - **Stage:** checker (`compiler/check/checker.agc`)
   - **New diagnostic code:** `CHECK-UNUSED-RESULT`
 
 The codes keep the `CHECK-` prefix, also for the linker's code, as the linker's
@@ -145,15 +145,16 @@ the import alias "JsonUtil" is never used
 
 **Why the linker.** The linker is the only stage that sees import aliases. It
 resolves every `Alias.name` of a file through that file's imports (`resolve`,
-`compiler/linker.agc`) and rewrites it to the target's identity (`@N::name`);
-the checker then gets one merged program with no imports left, and rejects any
-import it finds (`CHECK-MODULE-CONTEXT`, `compiler/checker.agc`). So the checker
-cannot tell which alias a name came from, and the linker must decide.
+`compiler/modules/linker.agc`) and rewrites it to the target's identity
+(`@N::name`); the checker then gets one merged program with no imports left, and
+rejects any import it finds (`CHECK-MODULE-CONTEXT`,
+`compiler/check/checker.agc`). So the checker cannot tell which alias a name
+came from, and the linker must decide.
 
 **What counts as a use.** Every place where `resolve` finds the alias in the
-file's imports (the `target` branch of `resolve`, after
-`(hash-ref (hash-ref imports key) alias #f)` at `compiler/linker.agc`; the alias
-is marked there), for any kind of name: a call (`Text.shout(...)`, also without
+file's imports (the `target` branch of `resolve`, after `(hash-ref (hash-ref
+imports key) alias #f)` at `compiler/modules/linker.agc`; the alias is marked
+there), for any kind of name: a call (`Text.shout(...)`, also without
 parentheses), a function value (`&Text.shout`), a type in an annotation, a
 parameter, a field or a JSON type argument (`Models.User`), a construction
 (`Models.User(name: "Ana")`), an enum variant as a value or a pattern
@@ -181,21 +182,21 @@ not in each program that uses it.
 
 **Implementation sketch:**
 
-- `import-decl` (`compiler/ast.agc`) gains an `alias-span` field, filled by the
-  parser from the alias token (`compiler/parser.agc`); today the node has only
-  the span of the whole line.
-- `visit` (`compiler/linker.agc`) keeps, per file, the set of aliases used.
-  `resolve` marks an alias in its `target` branch, when the lookup at `:157`
-  finds it.
+- `import-decl` (`compiler/syntax/ast.agc`) gains an `alias-span` field, filled
+  by the parser from the alias token (`compiler/syntax/parser.agc`); today the
+  node has only the span of the whole line.
+- `visit` (`compiler/modules/linker.agc`) keeps, per file, the set of aliases
+  used. `resolve` marks an alias in its `target` branch, when the lookup at
+  `:157` finds it.
 - After every file is rewritten (the `append-map` that builds the merged
-  `program`, `compiler/linker.agc`), the linker walks the files in link order
-  (the root first) and, in each file, the imports in source order, and fails at
-  the first alias that was never marked.
+  `program`, `compiler/modules/linker.agc`), the linker walks the files in link
+  order (the root first) and, in each file, the imports in source order, and
+  fails at the first alias that was never marked.
 - **A mistyped alias is not an unused import.** In `import Text from "text"`
   with a call `Txet.shout("hi")`, the alias `Text` looks unused, but the real
   mistake is the call. `resolve` sends a two-part function name whose first
   part is not an alias to the checker unchanged, so the checker can report it
-  with its stable code (the comment at `compiler/linker.agc`). So while
+  with its stable code (the comment at `compiler/modules/linker.agc`). So while
   rewriting, `resolve` also records, per file, the two-part function names whose
   first part is not an alias of that file and that are not builtins
   (`builtin-ref`; `IO.inspect` and `String.length` are valid calls of that
@@ -204,9 +205,9 @@ not in each program that uses it.
   "did you mean" help over functions and builtins.
 - **An alias used without its member.** An import alias is never a name on its
   own: the linker already forbids an alias that collides with a declaration of
-  the file or a builtin type name (`compiler/linker.agc`), so a one-part type or
-  enum name equal to an alias is always a mistake, most often a missing member.
-  Two shapes reach `resolve` as one-part names:
+  the file or a builtin type name (`compiler/modules/linker.agc`), so a one-part
+  type or enum name equal to an alias is always a mistake, most often a missing
+  member. Two shapes reach `resolve` as one-part names:
   - a type, construction or type expression: `u: User`, a parameter
     `def show(u: User)`, `User(name: "Ana")` (a `construct`), or `User` alone as
     a value (a `type-expression`), all with `import User from "user"`; these
@@ -315,17 +316,17 @@ captures, since a block can read captured values but never assign them
 - **Compound assignment is not a read.** A read of `x` inside the value of an
   assignment to `x` itself does not count: `x += 1`, `x = x + 1` and   `xs =
   xs.push(v)` alone do not make `x` or `xs` used. The parser already turns   `x
-  += 1` into `x = x + 1` (`parse-compound-assignment`, `compiler/parser.agc`),
-  so both forms get the same answer. This holds in nested blocks too: while the
-  value of `x = ...` is checked, a read of `x` inside a block in that value does
-  not count either, so `xs = xs.map do |v| v + xs.length end` alone leaves `xs`
-  unused. The reason: values are immutable, so the only way the new value of `x`
-  leaves such an assignment is through a later read of `x`. A counter that is
-only incremented, or a list that is only appended to, is lost work, and usually
-a bug (the result was meant to be printed or returned). Rust warns the same way
-(`variable is assigned to, but never used`). A call in such a value still runs;
-if a loop calls a function with effects only to feed its own state (`n =
-tick(n)`), the name is `_n`.
+  += 1` into `x = x + 1` (`parse-compound-assignment`,
+  `compiler/syntax/parser.agc`), so both forms get the same answer. This holds
+  in nested blocks too: while the value of `x = ...` is checked, a read of `x`
+  inside a block in that value does not count either, so `xs = xs.map do |v| v +
+  xs.length end` alone leaves `xs` unused. The reason: values are immutable, so
+  the only way the new value of `x` leaves such an assignment is through a later
+  read of `x`. A counter that is only incremented, or a list that is only
+  appended to, is lost work, and usually a bug (the result was meant to be
+  printed or returned). Rust warns the same way (`variable is assigned to, but
+  never used`). A call in such a value still runs; if a loop calls a function
+  with effects only to feed its own state (`n = tick(n)`), the name is `_n`.
 
 - **Reassignment before any read.** The rule is per variable, not per
   assignment: `x = 1`, then `x = 2`, then `puts(x)` is valid. The first value is
@@ -339,10 +340,10 @@ tick(n)`), the name is `_n`.
 
 **`_` names.** Names that start with `_` and have more after it are already
 valid: `NAME = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }` (`grammar.md`,
-"Literals"; the lexer at `compiler/lexer.agc`). A variable whose name starts
-with `_` (`_count`) is never reported; reading one stays valid. This is the
-opt-out for a name kept on purpose, and it is only about this rule; to drop a
-value, the discard below is the form.
+"Literals"; the lexer at `compiler/syntax/lexer.agc`). A variable whose name
+starts with `_` (`_count`) is never reported; reading one stays valid. This is
+the opt-out for a name kept on purpose, and it is only about this rule; to drop
+a value, the discard below is the form.
 
 **The discard `_`.** Landed in #381 (decided on 2026-10-12, as Go's `_ =` and
 Rust's `let _ =`). A bare `_` binds nothing wherever a name is bound: an
@@ -366,23 +367,23 @@ show why the help matters.
 statement that introduces it (the span `CHECK-SHADOWED-NAME` uses today), the
 block parameter (`block-param` has a span), the `for` variable or the pattern
 binding. The last two have no span of their own today, so `for-stmt`
-(`compiler/ast.agc`) gains a `var-span` field and `variant-pattern`
-(`compiler/ast.agc`) a `binding-spans` field (one span per binding, `_`
-included), filled by the parser (`compiler/parser.agc`, `:351`, `:387`).
+(`compiler/syntax/ast.agc`) gains a `var-span` field and `variant-pattern`
+(`compiler/syntax/ast.agc`) a `binding-spans` field (one span per binding, `_`
+included), filled by the parser (`compiler/syntax/parser.agc`, `:351`, `:387`).
 `bindings` stays a list of names, with `#f` for `_`, so readers such as
-`compiler/lowering.agc` keep working; the positional `match` patterns in
-`rewrite` (`compiler/linker.agc`, `:247`) gain the field. The check runs at the
-end of each function (`check-function`, `compiler/checker.agc`), after its body
-is checked and after its `CHECK-MISSING-RETURN` check, so every other error in
-the function comes first, including the `CHECK-MISSING-RETURN` of the blocks
-inside it (`check-block-body`, `:1207`), which runs when each block ends. It
-reports the unused name whose span starts first in the source (by source
-offset), not the one introduced first: in `ys = xs.map do |v| 1 end`, the block
-parameter `v` is introduced before `ys` (the value is checked before the name is
-introduced), but `ys` starts first, so `ys` is reported. Functions are checked
-in the linked program's order.
+`compiler/lower/lowering.agc` keep working; the positional `match` patterns in
+`rewrite` (`compiler/modules/linker.agc`, `:247`) gain the field. The check runs
+at the end of each function (`check-function`, `compiler/check/checker.agc`),
+after its body is checked and after its `CHECK-MISSING-RETURN` check, so every
+other error in the function comes first, including the `CHECK-MISSING-RETURN` of
+the blocks inside it (`check-block-body`, `:1207`), which runs when each block
+ends. It reports the unused name whose span starts first in the source (by
+source offset), not the one introduced first: in `ys = xs.map do |v| 1 end`, the
+block parameter `v` is introduced before `ys` (the value is checked before the
+name is introduced), but `ys` starts first, so `ys` is reported. Functions are
+checked in the linked program's order.
 
-**Implementation sketch** (`compiler/checker.agc`):
+**Implementation sketch** (`compiler/check/checker.agc`):
 
 - The scope entries stay as they are (`(type . immutable?)`, made by
   `introduce!` at `:340`), since every `lookup` caller reads them with `car` and
@@ -417,7 +418,7 @@ or discard it with _ = TCP.send(...)`;
 - `for` variable: `write for _ in 0...n`.
 - block parameter: `write |_, i|`.
 - pattern binding: `write error(_) to match without binding the value` (the
-  wording of today's help for an empty pattern, `compiler/parser.agc`).
+  wording of today's help for an empty pattern, `compiler/syntax/parser.agc`).
 
 **Tests** (`tests/test_spec_checker.py`): each kind, with its span; a variable
 read only inside a block (valid); `x += 1` alone, `x = x + 1` alone, `xs =
@@ -468,8 +469,8 @@ the checker accepts it.
 `CHECK-UNREACHABLE-CODE`, at the first such statement.
 
 This is a new code, apart from the existing `CHECK-UNREACHABLE-CASE-ARM` (a
-`case` arm that an earlier arm already covers, `compiler/checker.agc`), which
-does not change.
+`case` arm that an earlier arm already covers, `compiler/check/checker.agc`),
+which does not change.
 
 **Terminators**, kept to what the checker already knows:
 
@@ -479,9 +480,9 @@ does not change.
   another `break`).
 
 That is the same idea as the "must return on every path" rule (`returns?`,
-`compiler/checker.agc`, behind `CHECK-MISSING-RETURN`), widened from `return` to
-`break` and `next`, since those end a block too. Like that rule, the analysis
-does not look into loops or calls. These are not terminators:
+`compiler/check/checker.agc`, behind `CHECK-MISSING-RETURN`), widened from
+`return` to `break` and `next`, since those end a block too. Like that rule, the
+analysis does not look into loops or calls. These are not terminators:
 
 - `System.exit(...)` and calls that can halt (`gets!`, `unwrap!`, any `!`
   function): to the checker they are calls with a type, and it has no "never
@@ -498,14 +499,14 @@ that branch is unreachable.
 
 **Where.** In the checker, because the rule needs the block structure that it
 already walks and the same "ends on every path" logic as `returns?`; the linker
-does not look at statements. `check-block` (`compiler/checker.agc`) and the
-statement loop of `check-block-body` (`:1207`, for blocks and lambdas) check
+does not look at statements. `check-block` (`compiler/check/checker.agc`) and
+the statement loop of `check-block-body` (`:1207`, for blocks and lambdas) check
 each statement, then, before the next one, fail if the one just checked is a
 terminator. So errors before the terminator come first, and the unreachable
 statement itself is not checked.
 
 **Today.** The checker accepts code after a `return`, a `break` or an exhaustive
-`if`/`case`: `block-returns?` (`compiler/checker.agc`) is true when any
+`if`/`case`: `block-returns?` (`compiler/check/checker.agc`) is true when any
 statement of the block returns, wherever it is. After this item a terminator can
 only be the last statement of its block, so `block-returns?` may look at the
 last statement only; that is a simplification, not a change in behavior.
@@ -577,11 +578,11 @@ silently; under the strictness principle it becomes an error. Ignoring a
   The helps never suggest a named variable such as `_written = ...`; a `_name`
   is only the opt-out of 26.2 for a name kept on purpose.
 
-**Where.** In the checker, in `check-unused-value!` (`compiler/checker.agc`),
-which every dropped expression already passes through (expression statements in
-`check-statement`, and the last statement of a `Void` block in
-`check-block-body`), with its type. The new check runs before the
-`CHECK-UNUSED-VALUE` one. No other stage changes.
+**Where.** In the checker, in `check-unused-value!`
+(`compiler/check/checker.agc`), which every dropped expression already passes
+through (expression statements in `check-statement`, and the last statement of a
+`Void` block in `check-block-body`), with its type. The new check runs before
+the `CHECK-UNUSED-VALUE` one. No other stage changes.
 
 **Help idea:** as above, with the call's own text in the `try` and `_ =` forms.
 `CHECK-UNUSED-VALUE` (a bare `xs.push(2)`) stays as it is. Since this check runs

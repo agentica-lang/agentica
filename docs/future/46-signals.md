@@ -1016,8 +1016,8 @@ are the default-path cases.
   for the core rule, and a reference file for the detail), and a `CHANGELOG.md`
   entry under `## [Unreleased]`. The entry is marked `**Breaking:**`, since
   `Signal` becomes a reserved builtin name, and it notes the USR1, USR2 and QUIT
-  change. The compiler catalog (`compiler/builtins_data.agc`) is edited by hand
-  in the same PR, and its golden is refreshed with `tools/refreeze.py`.
+  change. The compiler catalog (`compiler/catalog/builtins_data.agc`) is edited
+  by hand in the same PR, and its golden is refreshed with `tools/refreeze.py`.
 - **46b: sending.** The builtins `Process.signal`, `Process.spawn_group`,
   `Process.signal_group` and `System.signal`, with the pidfd probe and
   `--allow-run`. The group close and the end-of-run group kill for group
@@ -1041,7 +1041,7 @@ are the default-path cases.
   `File.lstat`.
 
 The bootstrap question. The compiler catalog exists (port step 4, PR #258).
-`compiler/builtins_data.agc` is generated from `src/builtins.rkt` and
+`compiler/catalog/builtins_data.agc` is generated from `src/builtins.rkt` and
 `src/builtin-types.rkt` by `tools/gen-builtins-data.rkt`, and
 `tests/frontend-catalog-test.rkt` fails when it is stale. So each 46a and 46b PR
 changes the builtin data and regenerates the catalog in the same PR. Row 7.2.7

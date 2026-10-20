@@ -190,6 +190,12 @@ Read first: `references/vm.md`.
     comes first. The channel-waiter cancel case with the real scheduler is in
     `task_cancel_test.c`.
 
+- **Path:** `vm/tests/input_test.c`
+  - **Owns:** `vm/input.c` with hand-made tasks, a pipe as stdin and one pool
+    thread: a waiting read leaves the pool free for other work, a second reader
+    parks behind the read in flight, EOF reaches each waiter once, and the loop
+    closes while a read still waits.
+
 - **Path:** `vm/tests/output_test.c`
   - **Owns:** `vm/output.c` with hand-made tasks and a pipe: the order of small
     prints, writers that wait not being passed by later ones, the ring wrapping,
