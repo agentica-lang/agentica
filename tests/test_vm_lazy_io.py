@@ -8,11 +8,13 @@ opens. --max-steps ends the run with the file of the pipeline still open, and th
 
 tests/fixtures/vm/lazy-write.agc (also a VM golden) does the same for write_lines, and a round trip checks that
 File.foreach reads back exactly the lines write_lines wrote, with the bytes Python writes for the same lines.
+--max-steps in the middle of write_lines leaves lines in its buffer: the end of the run writes them and closes the file.
 
 Two cases park the terminal itself on a file read, with a FIFO that tests/fixtures/lines-peer.py holds open: a cancel
-(Task.map's timeout) and a read timeout. They need mkfifo and the peer's FIONREAD; on Windows they are skipped as
+(Task.map's timeout) and a read timeout. A third parks write_lines on a write to such a FIFO and cancels it. They need mkfifo and the peer's FIONREAD; on Windows they are skipped as
 "known-issue:" (#433).
 """
+import os
 import random
 import re
 
@@ -62,6 +64,25 @@ def main() -> Void
   back = File.foreach(out, 1048576, 60000).to_a.unwrap!
   puts(back.inspect == lines.inspect)
   puts(File.foreach(out, 1048576, 60000).map do |line| line end.write_lines(copy, 60000))
+end
+"""
+
+WRITE_LIMITED = """\
+def main() -> Void
+  puts((1..100000).lazy.map do |n| "line #{n}" end.write_lines(System.args()[0], 60000))
+end
+"""
+
+WRITE_PARKED = """\
+def write_all(path: String) -> Result[Void]
+  return (1..30000).lazy.map do |n| "line #{n}" end.write_lines(path, 60000)
+end
+
+def main() -> Void
+  items = Task.map([System.args()[0]], 1, 300) do |p|
+    write_all(p)
+  end
+  puts(items[0])
 end
 """
 
@@ -136,6 +157,52 @@ def test_a_terminal_parked_on_a_file_read_ends_and_releases_the_file(tmp_path, r
     opened = [handle for kind, handle in events if kind == "open"]
     assert len(opened) == 1, events
     assert ("close", opened[0]) in events, events
+
+
+def lines_upto(count):
+    return "".join("line %d\n" % n for n in range(1, count + 1))
+
+
+def test_max_steps_in_the_middle_of_write_lines_flushes_the_buffered_lines_and_closes_the_file(tmp_path):
+    out = tmp_path / "out.txt"
+    bytecode = compile_text(WRITE_LIMITED, "write_limited", tmp_path)
+    result, events = traced(tmp_path, bytecode, "--max-steps", "2000", args=[str(out)])
+    assert result.code == 1 and "RUNTIME-STEP-LIMIT" in result.stderr, result.stderr
+    assert [kind for kind, _ in events] == ["open", "close"], events
+    # Fewer lines than fill the 64 KiB buffer, so each one written is still buffered when the limit hits: the end of
+    # the run writes them all, whole lines in order.
+    text = out.read_text(encoding="utf-8")
+    count = text.count("\n")
+    assert 0 < count < 100000 and len(text) < 65536, len(text)
+    assert text == lines_upto(count)
+
+
+@FIFO
+def test_a_cancel_while_write_lines_is_parked_on_a_write_closes_the_file(tmp_path, request):
+    # The peer holds the FIFO open and never reads, so the first 64 KiB write job fills the pipe and parks.
+    _, fifo = start_fifo_peer(tmp_path, "idle", request)
+    bytecode = compile_text(WRITE_PARKED, "write_parked", tmp_path)
+    result, events = traced(tmp_path, bytecode, args=[str(fifo)])
+    assert (result.code, result.stdout) == (0, 'error("task: timed out")\n'), result.stderr
+    opened = [handle for kind, handle in events if kind == "open"]
+    assert len(opened) == 1, events
+    assert ("close", opened[0]) in events, events
+    # What reached the pipe is still queued there (the peer holds it open): the first lines, in order, and not all.
+    reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+    try:
+        queued = b""
+        while True:
+            try:
+                piece = os.read(reader, 65536)
+            except BlockingIOError:
+                break
+            if not piece:
+                break
+            queued += piece
+    finally:
+        os.close(reader)
+    expected = lines_upto(30000).encode("utf-8")
+    assert 0 < len(queued) < len(expected) and expected.startswith(queued), len(queued)
 
 
 def test_write_lines_closes_its_file_before_the_next_opens_on_every_exit_path(tmp_path):

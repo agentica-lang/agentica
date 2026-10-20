@@ -201,6 +201,7 @@ static void take_steps(agc_vm *vm, int64_t want) {
     got = left < want ? left : want;
   } while (!atomic_compare_exchange_weak(&vm->rt->steps_left, &left, left - got));
   vm->batch += got;
+  vm->turn_taken += got;
 }
 
 static void end_turn_now(agc_vm *vm) {
@@ -211,29 +212,94 @@ static void end_turn_now(agc_vm *vm) {
 void agc_turn_begin(agc_vm *vm) {
   vm->turn_left = AGC_TURN_STEPS;
   vm->batch = 0;
+  vm->turn_taken = 0;
   vm->turn_cost_used = 0;
   vm->yield = false;
   take_steps(vm, AGC_TURN_STEPS);
   set_counter(vm);
 }
 
-void agc_turn_finish(agc_vm *vm) {
+/* Ends the turn and returns the steps it spent, which the scheduler adds to the task's count. */
+uint64_t agc_turn_finish(agc_vm *vm) {
   sync_budget(vm);
+  uint64_t spent = (uint64_t)(vm->turn_taken - vm->batch);
   if (vm->batch > 0) atomic_fetch_add(&vm->rt->steps_left, vm->batch);
   vm->batch = 0;
+  vm->turn_taken = 0;
   vm->next_stop = vm->stop_set = 0;
+  return spent;
+}
+
+/* The steps the running task has spent: those of its finished turns and those of this one so far. Steps count only
+   STEP instructions and the steps the interpreter and builtins count, so the number is the same on every run of the
+   same work, with or without the profile. */
+uint64_t agc_task_steps(const agc_vm *vm) {
+  int64_t pending = vm->stop_set - vm->next_stop;
+  return vm->task->steps + (uint64_t)(vm->turn_taken - vm->batch + pending);
 }
 
 /* The profile hooks (AGENTICA_VM_TRACE=profile) are out of line and cold. The loop itself is built twice, with and
  * without the hooks (turn_loop), so a run without the profile has the code it had before. */
 #define PROFILE_HOOK __attribute__((noinline, cold))
 
-/* The steps of a STEP, or of one pass of a native loop, go to the function that runs them. */
+/* True when frame AT of T is the native frame that runs STEPPER: a Profile.measure whose block has not returned. */
+bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper) {
+  if (at >= t->frame_count) return false;
+  const agc_native *st = t->frames[at].native;
+  return st && st->kind == AGC_NATIVE_STEPPER && st->stepper == stepper;
+}
+
+/* The name of frame K of T in a folded stack: a function, the builtin of a native frame, or the label of a
+   Profile.measure. A native frame always sits on the function frame whose CALL_BUILTIN started it, and that frame's
+   pc is just past the call, so the builtin's index is read there and the native frame need not keep it. */
+static uint64_t frame_code(const agc_vm *vm, const agc_task *t, uint32_t k) {
+  const agc_frame *frame = &t->frames[k];
+  const agc_native *st = frame->native;
+  if (!st) return AGC_PROFILE_CODE(AGC_PROFILE_FUNCTION, frame->function);
+  if (st->kind == AGC_NATIVE_STEPPER && st->stepper->step == agc_profile_measure_step)
+    return AGC_PROFILE_CODE(AGC_PROFILE_LABEL, agc_profile_measure_label(st->stepper));
+  const agc_program *p = vm->rt->program;
+  const agc_frame *caller = k > 0 ? &t->frames[k - 1] : NULL;
+  if (!caller || caller->native || caller->function >= p->function_count || caller->pc == 0 ||
+      caller->pc > p->functions[caller->function].count)
+    return AGC_PROFILE_CODE(AGC_PROFILE_BUILTIN, UINT32_MAX);
+  const agc_instr *in = &p->functions[caller->function].code[caller->pc - 1];
+  if (in->op != AGC_OP_CALL_BUILTIN) return AGC_PROFILE_CODE(AGC_PROFILE_BUILTIN, UINT32_MAX);
+  return AGC_PROFILE_CODE(AGC_PROFILE_BUILTIN, (uint32_t)in->b | ((uint32_t)in->c << 16));
+}
+
+/* One sample of the folded output: the frames of the running task, outermost first, with WEIGHT steps. A stack deeper
+   than AGC_PROFILE_FRAMES keeps its outer and inner halves around one "..." frame. */
+static void profile_sample(agc_vm *vm, uint64_t weight) {
+  const agc_task *t = vm->task;
+  uint64_t *codes = vm->profile->frames;
+  uint32_t n = t->frame_count, kept = 0, half = AGC_PROFILE_FRAMES / 2;
+  for (uint32_t k = 0; k < n; k++) {
+    if (n > AGC_PROFILE_FRAMES && k == half) {
+      codes[kept++] = AGC_PROFILE_CODE(AGC_PROFILE_CUT, 0);
+      k = n - (AGC_PROFILE_FRAMES - half - 1);
+    }
+    codes[kept++] = frame_code(vm, t, k);
+  }
+  agc_profile_add_stack(vm->profile, codes, kept, weight);
+}
+
+/* The steps of a STEP, or of one pass of a native loop, go to the function that runs them. With folded output, every
+   `every` steps of the run take a sample, weighted by the steps it stands for. */
 static PROFILE_HOOK void profile_steps(agc_vm *vm, int64_t n) {
   const agc_task *t = vm->task;
   if (t->frame_count == 0) return;
+  agc_profile *profile = vm->profile;
   const agc_frame *frame = &t->frames[t->frame_count - 1];
-  vm->profile->steps[frame->native ? vm->profile->functions : frame->function] += (uint64_t)n;
+  profile->steps[frame->native ? profile->functions : frame->function] += (uint64_t)n;
+  if (!profile->every) return;
+  if ((uint64_t)n < profile->left) {
+    profile->left -= (uint64_t)n;
+    return;
+  }
+  uint64_t over = (uint64_t)n - profile->left;
+  profile->left = profile->every - over % profile->every;
+  profile_sample(vm, (1 + over / profile->every) * profile->every);
 }
 
 static PROFILE_HOOK void profile_call(agc_vm *vm, uint32_t function) { vm->profile->calls[function]++; }
@@ -493,11 +559,13 @@ static void resume_stepper(agc_vm *vm) {
     agc_fail(vm, "RUNTIME-INTERNAL", "an unlocked step returned holding rt->sync", st->span);
   switch (next.kind) {
     case AGC_STEP_CALL:
-    case AGC_STEP_CALL2: {
+    case AGC_STEP_CALL2:
+    case AGC_STEP_CALL0: {
       count_step(vm, st->span);
       agc_value args[2] = {next.value, next.second};
       agc_value fn = agc_is(next.fn, AGC_T_VOID) ? st->fn : next.fn;
-      call_value(vm, t, fn, base + 1, args, next.kind == AGC_STEP_CALL2 ? 2 : 1, base, st->span);
+      uint32_t argc = next.kind == AGC_STEP_CALL2 ? 2 : next.kind == AGC_STEP_CALL0 ? 0 : 1;
+      call_value(vm, t, fn, base + 1, args, argc, base, st->span);
       t->turn_cost++;
       apply_cost(vm);
       return;
@@ -640,8 +708,22 @@ static void start_native(agc_vm *vm, agc_native_kind kind, uint32_t base, uint32
   push_native(vm, st, base);
 }
 
+/* The stepper that agc_task_call_block names. Never written: start_stepper only compares its address. */
+static const agc_stepper call_block = {0};
+
+void agc_task_call_block(agc_vm *vm) { vm->task->stepper = (agc_stepper *)(uintptr_t)&call_block; }
+
 static void start_stepper(agc_vm *vm, const agc_builtin *b, uint32_t base, uint32_t span) {
   agc_task *t = vm->task;
+  if (t->stepper == &call_block) {
+    /* The block's frame returns straight to the call's register; the step and the turn cost are a stepper call's. */
+    t->stepper = NULL;
+    count_step(vm, span);
+    call_value(vm, t, t->regs[base + b->arity - 1], base + 1, NULL, 0, base, span);
+    t->turn_cost++;
+    apply_cost(vm);
+    return;
+  }
   agc_native *st = agc_alloc(sizeof(agc_native));
   st->kind = AGC_NATIVE_STEPPER;
   st->span = span;
@@ -670,11 +752,12 @@ static void replace_frame(agc_vm *vm, uint32_t function, uint32_t window, uint32
 
 /* The failed try of a block that a Lazy terminal called (TRY_STEP, docs/vm/03-ir-and-bytecode.md §4.2): the error
    goes back to that terminal as for TRY, marked as an escape, so the terminal ends the pipeline with it instead of
-   taking it as the block's value. The frame below must be the stepper; anything else is bytecode the front end never
-   writes. Out of line, so the loop keeps its shape. */
+   taking it as the block's value. The frame below must be the stepper of a Lazy terminal (agc_stepper.lazy); any other
+   native frame, such as File.each_line, Profile.measure or List.map, is bytecode the front end never writes. Out of
+   line and only on the failure path, so TRY and the loop keep their shape. */
 static __attribute__((noinline, cold)) void mark_escape(agc_vm *vm, agc_task *t, uint32_t span) {
   agc_native *below = t->frame_count >= 2 ? t->frames[t->frame_count - 2].native : NULL;
-  if (!below || below->kind != AGC_NATIVE_STEPPER)
+  if (!below || below->kind != AGC_NATIVE_STEPPER || !below->stepper->lazy)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: try-step outside a Lazy block", span);
   below->stepper->escaped = true;
 }

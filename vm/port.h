@@ -91,11 +91,11 @@ typedef struct {
   agc_native *native;
 } agc_frame;
 
-/* What a stepper asks for next. CALL calls `fn` with `value` (CALL2 with `value` and `second`); a Void `fn` means the
-   builtin's last argument, its block. WAIT parks on the job the step started. YIELD ends the turn between two items
-   of work, so the task can be switched out; a step returns it only when agc_step_turn said the turn is over. END
-   finishes the call with `value`. */
-typedef enum { AGC_STEP_CALL, AGC_STEP_CALL2, AGC_STEP_WAIT, AGC_STEP_YIELD, AGC_STEP_END } agc_step_kind;
+/* What a stepper asks for next. CALL calls `fn` with `value` (CALL2 with `value` and `second`, CALL0 with no
+   argument); a Void `fn` means the builtin's last argument, its block. WAIT parks on the job the step started. YIELD
+   ends the turn between two items of work, so the task can be switched out; a step returns it only when agc_step_turn
+   said the turn is over. END finishes the call with `value`. */
+typedef enum { AGC_STEP_CALL, AGC_STEP_CALL2, AGC_STEP_WAIT, AGC_STEP_YIELD, AGC_STEP_END, AGC_STEP_CALL0 } agc_step_kind;
 
 typedef struct {
   agc_step_kind kind;
@@ -116,12 +116,14 @@ typedef agc_step (*agc_step_fn)(agc_vm *vm, agc_stepper *self, agc_value last);
    is not a block; every call the step makes names its `fn`. Otherwise the last argument must be a function value.
    `escaped`: set by the interpreter when a callback of this step returns through a failed TRY_STEP (a `try` in the
    block of a Lazy method), so the `last` it gets is an error Result that ends the run, not the block's value. Only
-   the Lazy terminals read it, and they clear it. */
+   the Lazy terminals read it, and they clear it. `lazy`: this step is a Lazy terminal, set by vm/lazy.c; a failed
+   TRY_STEP whose frame below is any other native frame is RUNTIME-INTERNAL. */
 struct agc_stepper {
   agc_step_fn step;
   bool unlocked;
   bool no_block;
   bool escaped;
+  bool lazy;
 };
 
 typedef struct {
@@ -420,6 +422,11 @@ struct agc_task {
   agc_channel_wait channel;
   agc_output_wait output;
   agc_timer timer;
+  /* The steps of the turns this task has finished (Profile.steps adds those of the turn that runs), and the innermost
+     Profile.measure of this task that the profile counts (vm/profile.c), or NULL. At the end, so the fields the loop
+     reads keep their offsets. */
+  uint64_t steps;
+  struct agc_measure *measures;
 };
 
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
@@ -430,6 +437,12 @@ typedef struct {
   uint32_t functions, builtins;
   uint64_t start_ns;
   uint64_t *calls, *steps, *builtin_calls, *builtin_ns;
+  /* The sections of Profile.measure, and with folded output (AGENTICA_PROFILE_FORMAT=folded) the stacks sampled every
+     `every` steps, `left` steps from the next sample; `frames` is the scratch stack of a sample (vm/profile.c). */
+  struct agc_profile_sections *sections;
+  struct agc_profile_stacks *stacks;
+  uint64_t every, left;
+  uint64_t *frames;
 } agc_profile;
 
 struct agc_vm {
@@ -464,6 +477,9 @@ struct agc_vm {
   agc_task *runnext;
   uint32_t runnext_runs;
   bool runnext_on;
+  /* The steps this turn took from rt->steps_left: what it spent is turn_taken less what is left of the batch. Kept
+     after the fields the loop reads, so they keep their offsets. */
+  int64_t turn_taken;
   jmp_buf fail, turn;
 };
 
@@ -545,6 +561,10 @@ void agc_task_parking(agc_vm *vm);
 void agc_task_unpark(agc_vm *vm);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);
+/* Asks the interpreter to call the builtin's last argument, a block of no parameters, in place of the builtin's result,
+   with no native frame: the block's value is the call's (Profile.measure with the profile off). The call counts one
+   step, as a stepper's call does. */
+void agc_task_call_block(agc_vm *vm);
 /* Counts one step of a stepper's own work (at span) and returns true when the turn is over: the step must then
    return AGC_STEP_YIELD. --max-steps fails the run here, as for any step. */
 bool agc_step_turn(agc_vm *vm, uint32_t span);

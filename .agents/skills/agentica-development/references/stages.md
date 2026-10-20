@@ -485,10 +485,12 @@ reader. `tests/test_frontend_bytecode.py` compares the writer with the frozen
 bytes of the original writer, and its `OPCODES` with `agc_opcode` in
 `vm/value.h`. The version of the header is the `VERSION` file, an input of the
 writer (`Settings` in `compiler/link_env.agc`), never a constant. The file is
-format version 5: after the Updates section the writer writes the Globals count
-(`u32`, the number of slots of the module constants, 0 for a program without
-any; 44a2), and the opcode list ends with `global` and `global-set`, which the
-lowering emits for a constant read and for `<start>`. The IR holds the interned
+format version 6 (the prelude flag of each function); since version 5, after
+the Updates section the writer writes the Globals count (`u32`, the number of
+slots of the module constants, 0 for a program without any; 44a2). The opcode
+list ends with `global` and `global-set`, which the lowering emits for a
+constant read and for `<start>`, then `try-step` (52), the `try` of a block of a
+Lazy method. The IR holds the interned
 struct updates (struct index and updated field indexes, one `STRUCT_WITH`
 operand each). `BYTECODE-LIMIT` (at most 65535 each) for structs, enum variants,
 fields in one struct, payload items in one variant, module constants, JSON field

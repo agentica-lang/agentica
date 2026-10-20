@@ -671,6 +671,7 @@ static agc_value lazy_start(agc_vm *vm, agc_value recipe, lazy_terminal terminal
   lazy_run *run = agc_alloc(sizeof(lazy_run));
   run->stepper.step = lazy_step;
   run->stepper.no_block = true;
+  run->stepper.lazy = true;
   run->terminal = terminal;
   run->fn = fn;
   run->acc = acc;

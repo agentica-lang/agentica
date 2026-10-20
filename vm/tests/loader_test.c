@@ -11,6 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__linux__) || defined(__APPLE__)
+#include <unistd.h>
+#endif
+
 #ifndef AGC_NO_GC
 #include <gc.h>
 #endif
@@ -61,6 +65,10 @@ typedef struct {
   uint32_t func_count;
   uint32_t main_prelude, helper_prelude;
   uint32_t more_spans;
+  /* A second builtin import (index 1) and an Int constant after the others, when set. */
+  const char *builtin2;
+  uint32_t builtin2_arity;
+  int64_t second_int;
 } spec;
 
 static const agc_instr puts_code[] = {
@@ -122,7 +130,7 @@ static size_t function(buffer *b, const char *name, uint32_t params, uint32_t ca
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0, 0, 0, 0};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0, 0, 0, 0, NULL, 0, 0};
   return s;
 }
 
@@ -149,7 +157,7 @@ static buffer build(spec s) {
     for (int k = 0; k < 5; k++) u32(&b, s.spans[i][k]);
   for (uint32_t i = 0; i < s.more_spans; i++)
     for (int k = 0; k < 5; k++) u32(&b, s.spans[0][k]);
-  u32(&b, 2 + s.extra_voids + (s.extra_kind >= 0) + (s.second_float != 0));
+  u32(&b, 2 + s.extra_voids + (s.extra_kind >= 0) + (s.second_float != 0) + (s.second_int != 0));
   u8(&b, 4);
   u32(&b, 1);
   u32(&b, 0);
@@ -165,6 +173,11 @@ static buffer build(spec s) {
   if (s.extra_kind == 4) {
     u32(&b, (uint32_t)(uint64_t)s.extra_int);
     u32(&b, (uint32_t)((uint64_t)s.extra_int >> 32));
+  }
+  if (s.second_int != 0) {
+    u8(&b, 4);
+    u32(&b, (uint32_t)(uint64_t)s.second_int);
+    u32(&b, (uint32_t)((uint64_t)s.second_int >> 32));
   }
   if (s.tables) {
     memcpy(b.data + b.len, s.tables->data, s.tables->len);
@@ -182,9 +195,13 @@ static buffer build(spec s) {
     u32(&b, 0);
   }
   u32(&b, s.globals);
-  u32(&b, 1);
+  u32(&b, s.builtin2 ? 2 : 1);
   str(&b, s.builtin);
   u32(&b, s.builtin_arity ? s.builtin_arity : 1);
+  if (s.builtin2) {
+    str(&b, s.builtin2);
+    u32(&b, s.builtin2_arity);
+  }
   if (s.func_count) {
     u32(&b, s.func_count);
     for (uint32_t i = 0; i < s.func_count; i++) {
@@ -576,6 +593,56 @@ static spec pair_spec(const agc_instr *first, uint32_t first_count, const agc_in
   s.funcs[0] = (fn_spec){"first", 0, 4, first, zero_spans, first_count, 0};
   s.funcs[1] = (fn_spec){"second", 0, 4, second, zero_spans, second_count, 0};
   return s;
+}
+
+/* TRY_STEP in the block (function 1) of the builtin that main calls: the block makes error(K[2]) and fails through
+   TRY_STEP. Only a Lazy terminal may be the frame below it, so any other builtin is RUNTIME-INTERNAL. */
+static agc_outcome try_step_in_block(const char *builtin, uint32_t arity, const agc_instr *main_code, uint32_t count,
+                                     uint32_t block_params, const char *text, int64_t number) {
+  static const agc_instr block[] = {{AGC_OP_STEP, 1, 0, 0},
+                                    {AGC_OP_CONST, 0, 2, 0},
+                                    {AGC_OP_CALL_BUILTIN, 0, 1, 0},
+                                    {AGC_OP_TRY_STEP, 1, 0, 0},
+                                    {AGC_OP_RETURN, 1, 0, 0}};
+  spec s = base();
+  s.extra_kind = 6;
+  s.extra_string = text;
+  s.second_int = number;
+  s.builtin = builtin;
+  s.builtin_arity = arity;
+  s.builtin2 = "error";
+  s.builtin2_arity = 1;
+  s.more_spans = arity; /* CALL_BUILTIN uses the spans after its own, one per argument */
+  s.func_count = 2;
+  s.funcs[0] = (fn_spec){"main", 0, 4, main_code, zero_spans, count, 0};
+  s.funcs[1] = (fn_spec){"block", block_params, 2, block, zero_spans, 5, 0};
+  return run_spec(s, stdout);
+}
+
+static void try_step_outside_lazy_tests(void) {
+  /* List.map is a native loop, not a stepper. */
+  static const agc_instr map_main[] = {{AGC_OP_STEP, 1, 0, 0},         {AGC_OP_CONST, 1, 2, 0},
+                                       {AGC_OP_LIST, 0, 1, 1},         {AGC_OP_CLOSURE, 1, 1, 0},
+                                       {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  agc_outcome map = try_step_in_block("List.map", 2, map_main, 6, 1, "e", 0);
+  assert(map.kind == AGC_FAILED && strcmp(map.code, "RUNTIME-INTERNAL") == 0);
+#if defined(__linux__) || defined(__APPLE__)
+  /* File.each_line is a stepper, but not a Lazy terminal: its block must not escape. */
+  const char *tmp = getenv("TMPDIR");
+  char path[4096];
+  snprintf(path, sizeof path, "%s/agc-try-step-XXXXXX", tmp && *tmp ? tmp : "/tmp");
+  int fd = mkstemp(path);
+  assert(fd >= 0);
+  assert(write(fd, "x\n", 2) == 2);
+  close(fd);
+  static const agc_instr each_main[] = {{AGC_OP_STEP, 1, 0, 0},     {AGC_OP_CONST, 0, 2, 0},
+                                        {AGC_OP_CONST, 1, 3, 0},    {AGC_OP_CONST, 2, 3, 0},
+                                        {AGC_OP_CLOSURE, 3, 1, 0},  {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+                                        {AGC_OP_RETURN, 0, 0, 0}};
+  agc_outcome each = try_step_in_block("File.each_line", 4, each_main, 7, 1, path, 60000);
+  remove(path);
+  assert(each.kind == AGC_FAILED && strcmp(each.code, "RUNTIME-INTERNAL") == 0);
+#endif
 }
 
 /* The slot is the only reference to its String once the registers are cleared, so it must stay readable across
@@ -1551,6 +1618,14 @@ int main(void) {
   assert(!loads_with_tables(bad_try, two_spans, 2, 4, "register out of range"));
   static const agc_instr bad_try_step[] = {{AGC_OP_TRY_STEP, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_with_tables(bad_try_step, two_spans, 2, 4, "register out of range"));
+  static const agc_instr bad_try_step_source[] = {{AGC_OP_TRY_STEP, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(bad_try_step_source, two_spans, 2, 4, "register out of range"));
+  static const agc_instr wide_try_step[] = {{AGC_OP_TRY_STEP, 0, 65535, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  assert(!loads_with_tables(wide_try_step, two_spans, 2, 4, "register out of range"));
+  static const agc_instr try_step_int[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_TRY_STEP, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+  agc_outcome step_not_result = run_with_tables(try_step_int, confused_spans, 4, stdout);
+  assert(step_not_result.kind == AGC_FAILED && strcmp(step_not_result.code, "RUNTIME-INTERNAL") == 0);
   static const agc_instr bad_is_ok[] = {{AGC_OP_IS_OK, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_with_tables(bad_is_ok, two_spans, 2, 4, "register out of range"));
   static const agc_instr bad_result_value[] = {{AGC_OP_RESULT_VALUE, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
@@ -1587,6 +1662,7 @@ int main(void) {
   s.code = try_step_in_main;
   agc_outcome outside = run_spec(s, stdout);
   assert(outside.kind == AGC_FAILED && strcmp(outside.code, "RUNTIME-INTERNAL") == 0);
+  try_step_outside_lazy_tests();
 
   static const agc_instr bad_map_target[] = {{AGC_OP_MAP, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_with_tables(bad_map_target, two_spans, 2, 4, "register out of range"));

@@ -78,6 +78,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   unicode_data.c  # frozen write-escape ranges and case maps, checked-in data (references/vm-core.md)
   trace.c         # trace points and categories (AGC_TRACE) (references/vm-builtins.md)
   trace.h         # the trace categories (references/vm-builtins.md)
+  profile.c       # the profile trace: counters, report, Profile.measure sections, folded stacks, Profile builtins (references/vm-builtins.md)
   launch.c launch.h  # shared by both runs of agentica.c: the option parser, seeds, a runtime from a program, SIGPIPE, the end of the run and the exit code (references/vm-io.md)
   agentica.c      # the binary's main: `run` (the VM with its flags), else the front end in a first runtime, retired at the hand-off, then the program in a second (references/vm-core.md)
   embedded.h      # the symbols of the generated embedded.s: the front end, the BDD runner and step program, and the std/ sources (references/vm-build.md)

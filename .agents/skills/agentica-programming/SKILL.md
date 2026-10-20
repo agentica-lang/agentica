@@ -201,7 +201,8 @@ Read only what the task needs:
   step, or the first few results of a long chain of steps.
 - `references/examples.md`: a complete program to start from.
 - `references/performance.md`: slow programs, 100,000+ items or about 1 MB,
-  hot paths, `AGENTICA_VM_TRACE=profile`.
+  hot paths, `AGENTICA_VM_TRACE=profile`, `Profile.measure` sections,
+  `Profile.steps` budgets, flame graphs.
 - `references/modules.md`: several files, shared constants, `std/` or `pkg/`.
 - `references/json.md`: JSON. `references/toml.md`: TOML (`std/toml`).
 - `references/files.md`: files, directories, paths, locks, private files,

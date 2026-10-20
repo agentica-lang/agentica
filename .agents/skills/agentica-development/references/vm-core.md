@@ -174,7 +174,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `docs/vm/08-loader-and-cli.md` §9): the `agc_trace`
     struct, category bits, `AGC_TRACE_ON` and `AGC_TRACE`; `agc_trace_parse`,
     `agc_trace_message`, `agc_trace_format` (for the C test) and
-    `agc_trace_emit` (one 512-byte stack line, one `write(2)`)
+    `agc_trace_emit` (one 512-byte stack line, one `write(2)`),
+    `agc_trace_write`
+
+- **Path:** `vm/profile.c`
+  - **Owns:** the profile category (`AGENTICA_VM_TRACE=profile`): its counters,
+    the end-of-run report, the `Profile.measure` sections, the folded stacks
+    (`AGENTICA_PROFILE_FORMAT=folded`) and the `Profile` builtins
 
 - **Path:** `vm/launch.c`, `vm/launch.h`
   - **Owns:** driver code shared by the two runs of the binary (`agentica run`

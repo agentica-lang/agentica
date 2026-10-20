@@ -91,24 +91,95 @@ def test_the_embedded_string_queue_preserves_fifo_and_old_values_without_local_s
     assert (plain.code, plain.stdout, plain.stderr) == (0, expected, "")
 
 
-@pytest.mark.skipif(WINDOWS, reason="known-issue: #425 the pkg/ roots ignore the Windows separator, drive paths and LOCALAPPDATA")
+# The AGENTICA_PATH separator and the folder separator of the system under test (a Windows build run under Wine too).
+PATH_SEPARATOR = ";" if WINDOWS else ":"
+SEPARATOR = "\\" if WINDOWS else "/"
+# A name no real machine has under a system root (/usr/share/agentica/lib on Linux), so a search that runs out of roots
+# ends in CHECK-IMPORT-IO whatever the host has installed.
+PROBE = "pkgroots_probe"
+LIBRARY_ROOT = "import Value from \"pkg/%s/value\"\ndef main() -> Void\n  puts(Value.read())\nend\n\n" % PROBE
+
+
+def library(name):
+    return "export def read() -> String\n  return \"%s\"\nend\n\n" % name
+
+
 def test_pkg_roots_search_project_environment_then_user_data_independent_of_cwd(workspace, scratch):
     directory = workspace({
-        "root.agc": "import Value from \"pkg/value\"\ndef main() -> Void\n  puts(Value.read())\nend\n\n",
-        "agc_libs/value.agc": "export def read() -> String\n  return \"project\"\nend\n\n",
-        "first/value.agc": "import Helper from \"helper\"\nexport def read() -> String\n  return Helper.read()\nend\n\n",
-        "first/helper.agc": "export def read() -> String\n  return \"first\"\nend\n\n",
-        "second/value.agc": "export def read() -> String\n  return \"second\"\nend\n\n",
-        "data/agentica/lib/value.agc": "export def read() -> String\n  return \"user\"\nend\n\n"})
-    env = {"AGENTICA_PATH": os.pathsep.join(str(directory / name) for name in ["absent", "first", "second"]),
-           "XDG_DATA_HOME": str(directory / "data")}
-    for expected, removed in [("project\n", "agc_libs"), ("first\n", "first"), ("second\n", "second"),
-                              ("user\n", None)]:
+        "root.agc": LIBRARY_ROOT,
+        "agc_libs/%s/value.agc" % PROBE: library("project"),
+        "first/%s/value.agc" % PROBE:
+            "import Helper from \"helper\"\nexport def read() -> String\n  return Helper.read()\nend\n\n",
+        "first/%s/helper.agc" % PROBE: library("first"),
+        "second/%s/value.agc" % PROBE: library("second"),
+        "third/%s/value.agc" % PROBE: library("third"),
+        "xdg/agentica/lib/%s/value.agc" % PROBE: library("xdg"),
+        "data/agentica/lib/%s/value.agc" % PROBE: library("local"),
+        "home/.local/share/agentica/lib/%s/value.agc" % PROBE: library("home")})
+    # The same roots, spelled as each system allows: a trailing separator, forward slashes (a drive path on Windows),
+    # and both kinds of separator in one entry, with empty entries between and around them.
+    first = str(directory / "first") + SEPARATOR
+    second = str(directory / "second").replace("\\", "/")
+    third = str(directory).replace("\\", "/") + SEPARATOR + "third"
+    env = {"AGENTICA_PATH": PATH_SEPARATOR.join(["", str(directory / "absent"), first, "", second, third, ""]),
+           "XDG_DATA_HOME": str(directory / "xdg"), "LOCALAPPDATA": str(directory / "data"),
+           "HOME": str(directory / "home")}
+    # The user root is %LOCALAPPDATA% on Windows and XDG_DATA_HOME elsewhere; each ignores the other variable. HOME is
+    # read only when XDG_DATA_HOME is not absolute, so its library is never found here ("home" is never printed).
+    user = "local" if WINDOWS else "xdg"
+    for expected, removed in [("project", "agc_libs"), ("first", "first"), ("second", "second"), ("third", "third"),
+                              (user, "data" if WINDOWS else "xdg"), (None, None)]:
         out, problem, errors = run_root(scratch, directory, env=env)
+        if expected is None:
+            assert problem["code"] == "CHECK-IMPORT-IO", errors
+            break
         assert problem is None, errors
-        assert out == expected
-        if removed:
-            shutil.rmtree(directory / removed)
+        assert out == expected + "\n"
+        shutil.rmtree(directory / removed)
+
+
+def test_the_user_pkg_root_needs_an_absolute_local_app_data_on_windows_and_ignores_it_elsewhere(workspace, scratch):
+    directory = workspace({"root.agc": LIBRARY_ROOT, "xdg/agentica/lib/%s/value.agc" % PROBE: library("xdg"),
+                           "home/.local/share/agentica/lib/%s/value.agc" % PROBE: library("home")})
+    # A relative value would depend on the working directory, so it gives no root; the folder it names exists there.
+    (scratch / "relative" / "agentica" / "lib" / PROBE).mkdir(parents=True)
+    (scratch / "relative" / "agentica" / "lib" / PROBE / "value.agc").write_text(library("relative"), encoding="utf-8")
+    for local_app_data in ["relative", None]:
+        env = {"AGENTICA_PATH": "", "XDG_DATA_HOME": str(directory / "xdg"), "HOME": str(directory / "home"),
+               "LOCALAPPDATA": local_app_data}
+        out, problem, errors = run_root(scratch, directory, env=env)
+        if WINDOWS:
+            assert problem["code"] == "CHECK-IMPORT-IO", (local_app_data, errors)
+        else:
+            assert (out, problem) == ("xdg\n", None), (local_app_data, errors)
+
+
+def test_pkg_roots_take_only_the_absolute_forms_of_the_system(workspace, scratch):
+    directory = workspace({"root.agc": LIBRARY_ROOT, "first/%s/value.agc" % PROBE: library("first")})
+    # The first root has the module, so a form that is accepted is never looked into: an unreachable share is fine.
+    # "\\libs" is from the root of the current drive on Windows and a plain file name elsewhere.
+    forms = [("C:\\libs", WINDOWS), ("C:/libs", WINDOWS), ("\\\\server\\share\\libs", WINDOWS),
+             ("\\\\server\\share", WINDOWS), ("\\libs", WINDOWS), ("//server/share/libs", True), ("/libs", True),
+             ("C:libs", False), ("libs", False), ("./libs", False)]
+    for form, absolute in forms:
+        env = {"AGENTICA_PATH": PATH_SEPARATOR.join([str(directory / "first"), form])}
+        out, problem, errors = run_root(scratch, directory, env=env)
+        if absolute:
+            assert (out, problem) == ("first\n", None), (form, errors)
+        else:
+            assert problem["code"] == "CHECK-IMPORT-PATH", (form, errors)
+
+
+def test_pkg_roots_split_the_path_variable_at_the_separator_of_the_system_only(workspace, scratch):
+    directory = workspace({"root.agc": LIBRARY_ROOT, "second/%s/value.agc" % PROBE: library("second")})
+    foreign = ":" if WINDOWS else ";"
+    # The other system's separator is part of the one entry, which names no folder, so nothing is found.
+    env = {"AGENTICA_PATH": foreign.join([str(directory / "absent"), str(directory / "second")])}
+    out, problem, errors = run_root(scratch, directory, env=env)
+    assert problem["code"] == "CHECK-IMPORT-IO", errors
+    env = {"AGENTICA_PATH": PATH_SEPARATOR.join([str(directory / "absent"), str(directory / "second")])}
+    out, problem, errors = run_root(scratch, directory, env=env)
+    assert (out, problem) == ("second\n", None), errors
 
 
 def test_imports_share_canonical_identities_and_resolve_relative_to_each_file(workspace, scratch):

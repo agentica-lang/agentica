@@ -30,10 +30,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Task.cancel(task)` cancels a task and its descendants without waiting.
 - A line that starts with `.name` continues the line before it, so a method
   chain can span lines without parentheses (`|>` chains still need them).
+- `Profile.measure(label) do ... end` adds section rows to the profile,
+  `Profile.steps()` counts a task's steps, and `AGENTICA_PROFILE_FORMAT=folded`
+  writes flame graph stacks.
 
 ### Changed
 
 - **Breaking:** `Lazy` is now a reserved type name.
+- **Breaking:** `Profile` is now a reserved type name.
 - HTTP runs on several schedulers (behind the multicore test switch).
 - The lingering close of `std/http` drops at most 256 KiB of input; a client
   still sending a large body may see a reset instead of the answer.
@@ -42,6 +46,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - A cancelled `TCP.accept` or socket read gives up its place at once.
 - A task spawned by a cancelled task starts cancelled.
+- Windows: `pkg/` roots follow the documented rules: `;` in `AGENTICA_PATH`,
+  drive and UNC roots, `%LOCALAPPDATA%` for the user root, no system roots.
 
 ## [0.5.0-beta.1] - 2026-10-20
 

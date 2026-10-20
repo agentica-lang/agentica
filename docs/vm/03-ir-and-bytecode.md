@@ -310,8 +310,10 @@ behavior.
     value. `TRY_STEP` (opcode 52) is `TRY` in the block of a `Lazy` method: on
     an error it also sets `escaped` on the stepper of the frame below (4.3), so
     the terminal ends the pipeline with that error instead of taking it as the
-    block's value. The frame below must be a stepper's native frame, else
-    `RUNTIME-INTERNAL`.
+    block's value. The frame below must be the native frame of a `Lazy`
+    terminal (`agc_stepper.lazy`), else `RUNTIME-INTERNAL`: another stepper
+    (`File.each_line`, `Profile.measure`) or a native loop such as `List.map`
+    is refused.
 
 - **Group:** Range
   - **Opcodes:** `RANGE a b c`, `RANGE_BOUNDS a b`
@@ -327,7 +329,7 @@ behavior.
     never
     set is `RUNTIME-INTERNAL`.
 
-There are 52 opcodes. Everything else, including `ok`, `error`, `puts` and every
+There are 53 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `OPCODES` in `compiler/bytecode_tables.agc` and `agc_opcode` in `vm/value.h`.
 New opcodes
@@ -551,6 +553,8 @@ distinct type
   Version 5 added the Globals section (version 4 is the Updates section and
   `STRUCT_WITH`, 15c). Version 6 added the prelude flag of each function
   (4.7). Versions 7 and 8 are reserved by the designs of §42 and §41.
+  Opcode 52 (`TRY_STEP`) did not bump it: an older VM rejects the file as an
+  unknown opcode.
 - The C loader is the only reader of this format. There is no Racket reader, and
   no compatibility shims, with one transitional exception: the loader also
   reads format 5, which has no prelude flag, as long as `bootstrap/stage0.agcb`

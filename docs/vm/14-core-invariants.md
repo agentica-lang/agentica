@@ -98,6 +98,15 @@ Known exceptions, as built:
   stdout or stderr write error) are written with non-blocking writes, and what a
   stuck pipe will not take is dropped, so the exit stays bounded and the exit
   code still reports the result (§10.2.2, Notices).
+- **Release flush of a file handle.** When a file job is dropped before its
+  pool work ran (its timeout, a cancel, or the flush limit at the end of the
+  run), or a handle is released at the end of the run (`release_handles`),
+  `release_state` in `vm/files.c` writes what the handle still buffers with one
+  blocking write on the loop thread. Only a regular file or a device that never
+  waits is written so (a polled descriptor is non-blocking), so the write ends in
+  bounded time. Its size is bounded too: at most 4 KiB (`WRITE_BUFFER`) for a
+  handle of `File.open`, and at most 64 KiB (`CHUNK`) for the handle of
+  `Lazy.write_lines`, which batches its lines into one write job.
 - **Stdout and stderr on one target.** When both descriptors are the same file
   (`st_dev` and `st_ino`: a terminal, `2>&1`; on Windows `CompareObjectHandles`,
   which matches only the same kernel object), they share one buffer and one

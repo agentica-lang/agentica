@@ -9911,5 +9911,209 @@
       "start": [2, 41],
       "covers": "\"1000\""
     }
+  ],
+  "Profile.measure gives the value of a block of no parameters and Profile.steps an Int": [
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n = Profile.measure(\"sum\") do 1 + 2 end",
+        "  r: Result[Int] = Profile.measure(\"parse\") do",
+        "    v = try parse(\"4\")",
+        "    ok(v + n)",
+        "  end",
+        "  m = Profile.measure(\"fn\", &three)",
+        "  s: Int = Profile.steps()",
+        "  puts(n + m + s + r.unwrap_or(0))",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n = Profile.measure(7) do 1 end",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [11, 23],
+      "covers": "7",
+      "expected": "String",
+      "actual": "Int"
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n = Profile.measure(\"x\") do |k| k end",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [11, 28],
+      "covers": "do |k| k end"
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n = Profile.measure(\"x\")",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [11, 7],
+      "covers": "Profile.measure(\"x\")"
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n: Int = Profile.measure(\"x\") do \"text\" end",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [11, 36],
+      "covers": "\"text\"",
+      "expected": "Int",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  r = Profile.measure(\"x\") do",
+        "    v = try parse(\"4\")",
+        "    ok(v)",
+        "  end",
+        "end"
+      ],
+      "code": "CHECK-TRY-CONTEXT",
+      "start": [12, 9],
+      "covers": "try parse(\"4\")"
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def twice(n: Int) -> Int",
+        "  return n * 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n = Profile.measure(\"x\", &twice)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [15, 28],
+      "covers": "&twice"
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  n = Profile.steps(1)",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [11, 7],
+      "covers": "Profile.steps(1)"
+    },
+    {
+      "program": [
+        "def parse(text: String) -> Result[Int]",
+        "  n = try String.to_int(text)",
+        "  return ok(n)",
+        "end",
+        "",
+        "def three() -> Int",
+        "  return 3",
+        "end",
+        "",
+        "def main() -> Void",
+        "  s: String = Profile.steps()",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [11, 15],
+      "covers": "Profile.steps()",
+      "expected": "String",
+      "actual": "Int"
+    },
+    {
+      "program": [
+        "struct Profile",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
   ]
 }

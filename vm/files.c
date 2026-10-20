@@ -428,6 +428,8 @@ static bool write_all(int fd, const uint8_t *data, size_t len, int *err) {
   return true;
 }
 
+/* The release of a handle that was not closed: one blocking write of what it buffers (at most WRITE_BUFFER, or CHUNK
+   for a line writer's handle; §14.1, release flush), then the descriptor is closed. */
 static void release_state(void *native) {
   file_state *st = native;
   int err;
@@ -1059,8 +1061,9 @@ static void work(void *data) {
 
 static void drop(void *data) {
   op *o = data;
-  /* On the I/O thread, release_state's flush of a regular file is one blocking write of at most WRITE_BUFFER bytes;
-     only a polled descriptor is non-blocking (work_open), so its flush never waits. */
+  /* On the I/O thread, release_state's flush of a regular file is one blocking write of at most WRITE_BUFFER bytes, or
+     CHUNK for the handle of a line writer (docs/vm/14-core-invariants.md §14.1, release flush); only a polled
+     descriptor is non-blocking (work_open), so its flush never waits. */
   if (o->owns_st && o->st) release_state(o->st);
   if (o->poller)
     agc_poller_close(o->poller);
@@ -1932,7 +1935,12 @@ agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last
       case WRITER_CLOSE: {
         agc_resource *res = agc_as_handle(vm, w->handle);
         w->phase = WRITER_CLOSED;
-        if (!res->native || res->closing) break;
+        if (!res->native || res->closing) {
+          /* The handle went away under the writer (a write job that timed out takes it, and nothing else can reach
+             it), so what it buffered is lost: never an ok outcome. */
+          if (agc_as_result(vm, w->outcome)->ok) w->outcome = error_of("filesystem: file handle is closed");
+          break;
+        }
         w->phase = WRITER_CLOSING;
         last = close_handle(vm, res, w->handle, w->timeout);
         if (vm->task->parking) return AGC_WRITER_WAIT;
