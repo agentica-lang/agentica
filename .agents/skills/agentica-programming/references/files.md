@@ -40,7 +40,10 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
   made for itself (`/proc/self/fd/N`, `/dev/fd/N`). Pipes the VM received at
   start (stdin, stdout, stderr, or `bash <(...)`) stay readable through
   `/dev/stdout`, `/proc/self/fd/1`, and the like; only the descriptor the VM
-  writes its own stdout or stderr through is refused.
+  writes its own stdout or stderr through is refused. On Windows they accept
+  only regular files (and folders where a folder is meant): a named pipe or a
+  device is refused at once with an error, and a stream that can wait reaches
+  the program only as stdin, stdout or stderr.
 - Modes: `read` needs an existing path that is not a directory; `write` creates
   or truncates; `append` creates or appends; `create_private` creates a new
   write-only file that only you can use and fails if the path exists (a dangling
