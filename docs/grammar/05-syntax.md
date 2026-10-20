@@ -28,7 +28,7 @@ field_decl       = [ DOC, NL ], NAME, ":", type, NL ;
 
 enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
                    variant_decl, { variant_decl }, "end", NL ;
-alias_decl       = "type", TYPE_NAME, "=", type, NL ;
+alias_decl       = "type", TYPE_NAME, [ type_parameters ], "=", type, NL ;
 type_parameters  = "[", TYPE_NAME, { ",", TYPE_NAME }, "]" ;
 variant_decl     = [ DOC, NL ], TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL ;
 
@@ -115,9 +115,24 @@ A type alias is transparent: `type Grid = List[List[Float]]` means exactly
 `List[List[Float]]`, with no new runtime type or conversion. Aliases may name
 builtin, struct, enum and function types, and other aliases; cycles are
 `CHECK-TYPE-ALIAS-CYCLE`. The parser accepts type applications such as
-`List[Int]`. The checker allows them only for supported builtins and declared
-enums; only enums take type parameters, so generic functions, structs and
-aliases are not supported yet.
+`List[Int]`. The checker allows them only for supported builtins, declared
+enums and generic aliases; enums and aliases are the only declarations that
+take type parameters, so generic functions and structs are not supported.
+
+A generic alias, `type Matrix[T] = List[List[T]]`, is pure substitution:
+`Matrix[Int]` means exactly `List[List[Int]]`. The parameters follow the enum
+rules (type names, no repeats, no reserved names:
+`CHECK-REDEFINED-NAME`). A use gives exactly one argument per parameter, and
+a bare `Matrix` is not a partial application; a wrong count is
+`CHECK-UNKNOWN-TYPE` at the use, as for enums, and a non-generic alias takes
+none. A parameter may go unused. The arguments are never inferred. An alias
+may use other aliases, generic or not (`type Grid = Matrix[Float]`), and a
+cycle, also through the arguments, is `CHECK-TYPE-ALIAS-CYCLE`. A parameter
+may be a `Map` key or `Set` element in the target; the key rule is judged on
+the expanded type at each use (`CHECK-MAP-KEY-TYPE`, at the use). An exported
+generic alias is used through an import (`S.Matrix[Int]`, or
+`import {Matrix} from "m"`). Like any alias it is neither a constructor nor a
+pattern.
 
 ### Statements and blocks
 

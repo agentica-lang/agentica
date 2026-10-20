@@ -232,3 +232,106 @@ def test_alias_collision_unknown_target_constructor_and_arguments(
     found = agentica_check(text)
     assert found is not None
     assert found["code"] == code
+
+
+GENERIC = "type Matrix[T] = List[List[T]]\n\n"
+
+
+def test_generic_alias_is_the_expanded_type_and_chains(agentica_check):
+    text = (
+        GENERIC
+        + "type Grid = Matrix[Float]\n\n"
+        + "type Unused[T] = Int\n\n"
+        + "enum Tree[T]\n  Leaf(Matrix[T])\nend\n\n"
+        + "def main() -> Void\n"
+        + "  m: Matrix[Int] = [[1]]\n"
+        + "  plain: List[List[Int]] = m\n"
+        + "  grid: Grid = [[1.5]]\n"
+        + "  nested: Matrix[Matrix[Int]] = [[[[1]]]]\n"
+        + "  tree = Tree.Leaf(plain)\n"
+        + "  puts(plain.size + grid.size + nested.size)\n"
+        + "end\n\n"
+    )
+    assert agentica_check(text) is None
+
+
+def test_exported_generic_alias_imports_by_name_and_qualified_name(
+    tmp_path, agentica_check
+):
+    (tmp_path / "shapes.agc").write_text(
+        "export type Matrix[T] = List[List[T]]\n", encoding="utf-8"
+    )
+    text = (
+        'import Shapes from "shapes"\n'
+        'import {Matrix as M} from "shapes"\n\n'
+        "def main() -> Void\n"
+        "  a: Shapes.Matrix[Int] = [[1]]\n"
+        "  b: M[Int] = a\n"
+        "  puts(b.size)\n"
+        "end\n\n"
+    )
+    assert agentica_check(text) is None
+
+
+@pytest.mark.parametrize(
+    ("use", "start"),
+    [
+        ("Matrix", (3, 10)),
+        ("Matrix[Int, Int]", (3, 10)),
+        ("List[Matrix]", (3, 15)),
+    ],
+)
+def test_generic_alias_needs_exactly_its_arguments(use, start, agentica_check):
+    text = GENERIC + f"def f(m: {use}) -> Void\nend\n\n"
+    assert_diagnostic(agentica_check(text), "CHECK-UNKNOWN-TYPE", start)
+
+
+@pytest.mark.parametrize(
+    ("text", "code", "start"),
+    [
+        ("type Box[T, T] = List[T]\n\n", "CHECK-REDEFINED-NAME", (1, 1)),
+        ("type Box[Int] = List[Int]\n\n", "CHECK-REDEFINED-NAME", (1, 1)),
+        ("type Box[T] = List[U]\n\n", "CHECK-UNKNOWN-TYPE", (1, 20)),
+        ("type Box[T] = List[T][T]\n\n", "PARSE-UNEXPECTED-TOKEN", (1, 22)),
+        ("type Box[] = List[Int]\n\n", "PARSE-UNEXPECTED-TOKEN", (1, 10)),
+        ("type Box[t] = List[Int]\n\n", "PARSE-UNEXPECTED-TOKEN", (1, 10)),
+        ("type Box[T] = List[Box[T]]\n\n", "CHECK-TYPE-ALIAS-CYCLE", (1, 20)),
+        (
+            "type Left[T] = Right[T]\n\ntype Right[T] = Left[List[T]]\n\n",
+            "CHECK-TYPE-ALIAS-CYCLE",
+            (1, 16),
+        ),
+        (
+            "type Box[T] = List[T]\n\ntype Index[K] = Map[K, Int]\n\n"
+            "def f(i: Index[Box[Int]]) -> Void\nend\n\n",
+            "CHECK-MAP-KEY-TYPE",
+            (5, 10),
+        ),
+    ],
+)
+def test_generic_alias_declaration_errors(text, code, start, agentica_check):
+    found = agentica_check(text + "def main() -> Void\nend\n\n")
+    assert_diagnostic(found, code, start)
+
+
+@pytest.mark.parametrize(
+    ("body", "code", "start"),
+    [
+        ("  figure = Figure.Circle(1)\n", "CHECK-UNKNOWN-TYPE", (8, 12)),
+        (
+            "  figure: Figure[Int] = Shape.Circle(1)\n"
+            "  case figure\n"
+            "    Figure.Circle(radius) -> puts(radius)\n"
+            "  end\n",
+            "CHECK-PATTERN-TYPE",
+            (10, 5),
+        ),
+    ],
+)
+def test_generic_enum_aliases_are_not_variant_constructors_or_patterns(
+    body, code, start, agentica_check
+):
+    prefix = "enum Shape[T]\n  Circle(T)\nend\n\ntype Figure[T] = Shape[T]\n\n"
+    found = agentica_check(prefix + "def main() -> Void\n" + body + "end\n\n")
+    assert_diagnostic(found, code, start)
+    assert "Shape[T].Circle" in json.dumps(found)

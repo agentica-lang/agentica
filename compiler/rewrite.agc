@@ -32,7 +32,7 @@ def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
     Ast.Decl.Struct(node) -> return rewrite_struct(cx, node)
     Ast.Decl.Enum(node) -> return rewrite_enum(cx, node)
     Ast.Decl.TypeAlias(node) ->
-      target = try rewrite_type(cx, node.target)
+      target = try rewrite_payload(cx, node.type_parameters, node.target)
       return ok(Ast.Decl.TypeAlias(node.with(name: Resolve.identity(cx, node.name), target: target)))
     Ast.Decl.Constant(node) -> return rewrite_constant(cx, node)
     _ -> return ok(decl)
@@ -82,7 +82,7 @@ def rewrite_enum(cx: Resolve.Context, node: Ast.EnumDecl) -> Result[Ast.Decl]
   return ok(Ast.Decl.Enum(node.with(name: Resolve.identity(cx, node.name), variants: variants)))
 end
 
-# A payload type that is a type parameter of the enum (T) stays as it is.
+# A type that is a type parameter of the enum or generic alias (T) stays as it is, in a payload or an alias target.
 def rewrite_payload(cx: Resolve.Context, parameters: List[String], type: Ast.TypeRef) -> Result[Ast.TypeRef]
   name = type.name
   if type.args.size > 0 or !parameters.any? do |parameter| parameter == type.name end

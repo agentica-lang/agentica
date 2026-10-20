@@ -168,8 +168,17 @@ alias and is transparent in all type positions. `export type Names = ...` makes
 it available to importing modules, by module alias or by name. It adds no
 runtime type and cannot be constructed or used as an enum pattern. Cycles are
 `CHECK-TYPE-ALIAS-CYCLE`. Errors in expanded types point to the alias use.
-Expansions stop at 1,000 type references with `CHECK-TOO-DEEP`; generic aliases
-are not supported yet.
+Expansions stop at 1,000 type references with `CHECK-TOO-DEEP`.
+
+A generic alias, `type Matrix[T] = List[List[T]]`, is pure substitution:
+`Matrix[Int]` is exactly `List[List[Int]]`. Parameters are type names that
+neither repeat nor take a reserved name (`CHECK-REDEFINED-NAME`) and may go
+unused. A use needs one argument per parameter (`Matrix` or
+`Matrix[Int, Int]` is `CHECK-UNKNOWN-TYPE`); arguments are never inferred.
+Aliases may use other aliases (`type Grid = Matrix[Float]`), also through
+imports (`S.Matrix[Int]`, `import {Matrix} from "m"`). A parameter may be a
+`Map` key in the target; `Index[Float]` fails at the use with
+`CHECK-MAP-KEY-TYPE`.
 
 `Option[T]` is not builtin; declare it as an enum if you need it. Type names
 start with an uppercase letter. Variable, function, and field names start with a

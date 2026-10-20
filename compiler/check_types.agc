@@ -38,8 +38,20 @@ export def resolve_all(cx: State.Cx, st: State.St, refs: List[TypeRef]) -> Resul
   return ok(out)
 end
 
+## The context that checks the target of a type alias: the alias's type parameters are in scope as type variables. A
+## parameter may be a Map key or a Set element here (as in the files of the prelude): it stands for any type, so the
+## key rule is judged where the alias is used, on the expanded type.
+export def alias_scope(cx: State.Cx, decl: Ast.TypeAliasDecl) -> State.Cx
+  if decl.type_parameters.size == 0
+    return cx
+  end
+  return cx.with(type_params: decl.type_parameters, prelude: true)
+end
+
+## The type an alias stands for as text; a generic alias prints its parameters (List[List[T]]).
 export def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result[String]
-  target = try resolve_type(cx, st, cx.aliases[name], true)
+  decl = cx.aliases[name]
+  target = try resolve_type(alias_scope(cx, decl), st, decl.target, true)
   return ok(Types.to_text(target))
 end
 
@@ -217,16 +229,9 @@ def expand_alias(
   name = ref.name
   parameter = cx.type_params.any? do |item: String| item == name end
   if !parameter and cx.aliases.has_key?(name)
-    if ref.args.size > 0
-      return error(
-        State.fail(
-          cx,
-          st,
-          "CHECK-UNKNOWN-TYPE",
-          "type alias #{Types.display_name(name)} takes no type arguments",
-          ref.span,
-        ),
-      )
+    decl = cx.aliases[name]
+    if ref.args.size != decl.type_parameters.size
+      return error(State.fail(cx, st, "CHECK-UNKNOWN-TYPE", alias_arity_text(name, decl, ref), ref.span))
     end
     if seen.any? do |entry: String| entry == name end
       cycle = cycle_text(seen, name)
@@ -257,7 +262,16 @@ def expand_alias(
     if seen.size == 0
       budget_span = ref.span
     end
-    expanded = try expand_alias(cx, st, cx.aliases[name], seen.push(name), left, budget_span)
+    # The arguments are expanded in the scope of the use, before the target, so an alias in an argument is not taken
+    # for a cycle of this one (Box[Box[Int]]).
+    args: List[TypeRef] = []
+    for arg in ref.args
+      inner = try expand_alias(cx, st, arg, seen, left, limit_span)
+      args = args.push(inner.ref)
+      left = inner.remaining
+    end
+    target = replace_parameters(decl.target, decl.type_parameters, args)
+    expanded = try expand_alias(cx, st, target, seen.push(name), left, budget_span)
     return ok(Expansion(ref: relocate(expanded.ref, ref.span), remaining: expanded.remaining))
   end
   args: List[TypeRef] = []
@@ -267,6 +281,31 @@ def expand_alias(
     left = expanded.remaining
   end
   return ok(Expansion(ref: ref.with(args: args), remaining: left))
+end
+
+def alias_arity_text(name: String, decl: Ast.TypeAliasDecl, ref: TypeRef) -> String
+  shown = Types.display_name(name)
+  if decl.type_parameters.size == 0
+    return "type alias #{shown} takes no type arguments"
+  end
+  return "type alias #{shown} expects #{decl.type_parameters.size} type argument(s), found #{ref.args.size}"
+end
+
+# The target of a generic alias with each parameter replaced by its argument. One pass: an argument is not searched
+# again, so a parameter name inside an argument (the T of the use) stays.
+def replace_parameters(ref: TypeRef, parameters: List[String], args: List[TypeRef]) -> TypeRef
+  if ref.args.size == 0
+    index = 0
+    while index < parameters.size
+      if parameters[index] == ref.name
+        return args[index]
+      end
+      index += 1
+    end
+    return ref
+  end
+  inner = ref.args.map do |arg: TypeRef| replace_parameters(arg, parameters, args) end
+  return ref.with(args: inner)
 end
 
 def relocate(ref: TypeRef, span: Source.Span) -> TypeRef
