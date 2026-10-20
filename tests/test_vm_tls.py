@@ -11,12 +11,15 @@ import re
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TEST_SCHEDULERS, Child, check_lines, compile_text,
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, TEST_SCHEDULERS, Child, check_lines, compile_text,
                                  output_lines, run, run_vm, scaled, start_vm, vm_environment)
 
 NODE_PEER = FIXTURES / "tls-peer.js"
 PYTHON_PEER = FIXTURES / "tls-peer.py"
 CERTS = FIXTURES / "tls"
+
+# The HTTPS cases use std/http's client, whose builtins (vm/http_service.c) are stubs on Windows until step 12.
+HTTPS = pytest.mark.skipif(TARGET_OS == "windows", reason="the HTTP client builtins are not on Windows yet (step 12)")
 
 SERVER_PROGRAM = """\
 def serve(socket: Socket) -> Void
@@ -474,6 +477,7 @@ def test_client_against_a_python_tls_12_server_closed_with_close_notify(tmp_path
     assert server.wait() == 0
 
 
+@HTTPS
 def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_get_close_notify(tmp_path, adopt):
     server, port = python_server(adopt, "http")
     result = run_text(tmp_path, "https-goodbye", HTTPS_GOODBYE_PROGRAM, stdin=port + "\n")
@@ -482,6 +486,7 @@ def test_main_returns_with_an_idle_and_an_active_https_client_connection_both_ge
     assert server.wait() == 0
 
 
+@HTTPS
 def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, adopt):
     server, port = python_server(adopt, "close")
     ca = tmp_path / "ca.pem"
@@ -497,6 +502,7 @@ def test_an_https_client_builds_its_tls_context_once_and_shares_it(tmp_path, ado
     assert len(re.findall(r"tls_handshake_done socket=", text)) == 5, text
 
 
+@HTTPS
 def test_close_client_while_a_connection_is_in_its_tls_handshake(tmp_path):
     result = run_text(tmp_path, "close-in-handshake", CLOSE_IN_HANDSHAKE_PROGRAM)
     assert (result.code, result.stdout) == (0, 'error("http: client is closed")\ndone\n'), result.stderr
@@ -545,6 +551,7 @@ def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tm
     assert servers in ((2, 3) if TEST_SCHEDULERS else (3,)), text
 
 
+@HTTPS
 def test_https_waiters_on_a_context_build_one_leaves_and_a_failed_build_is_retried(tmp_path, adopt):
     server, port = python_server(adopt, "close")
     fifo = tmp_path / "ca-fifo.pem"

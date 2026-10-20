@@ -26,7 +26,7 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import FIXTURES, ROOT, TLS_BUILT, compile_text, run, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, ROOT, compile_text, run, vm_command, vm_environment
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -636,7 +636,6 @@ def test_a_process_call_is_refused_on_several_schedulers(tmp_path):
     assert diff.outcome((result.code, result.stdout, result.stderr))[3] == "RUNTIME-INTERNAL"
 
 # TCP and TLS run on several schedulers: every step is a request to the I/O thread, which owns each socket (§16.9).
-NET = pytest.mark.skipif(not TLS_BUILT, reason="TCP and TLS are built on Linux and macOS")
 TLS_DIR = str(FIXTURES / "tls")
 
 NET_ECHO = r"""struct Dial
@@ -722,7 +721,6 @@ end
 """
 
 
-@NET
 @RACE
 @pytest.mark.parametrize("clients,lines,secure", [(32, 100, False), (8, 20, True)], ids=["tcp", "tls"])
 def test_echo_clients_on_several_schedulers_get_every_line_back(tmp_path, repeats, clients, lines, secure):
@@ -823,7 +821,6 @@ end
 """
 
 
-@NET
 @RACE
 def test_net_waits_cancelled_from_other_schedulers_end_and_free_their_port(tmp_path, repeats):
     # Task.map's limit cancels tasks parked in read_line, a 64 MiB send, a TLS handshake that the peer never answers
@@ -925,7 +922,6 @@ end
 """
 
 
-@NET
 @RACE
 def test_net_deadlines_that_pass_during_a_step_give_the_result_or_the_timeout(tmp_path, repeats):
     # A read whose 20 ms deadline races a writer task that sends at 14 to 25 ms: the line, or the timeout and then a
@@ -1012,7 +1008,6 @@ end
 """
 
 
-@NET
 @RACE
 def test_a_close_from_another_scheduler_ends_parked_reads_and_sends(tmp_path, repeats):
     # On a TCP and on a TLS socket, one task waits in read_line and one in a 64 MiB send that the peer never reads;
@@ -1054,7 +1049,6 @@ end
 """
 
 
-@NET
 @pytest.mark.skipif(not hasattr(signal, "SIGTERM") or sys.platform == "win32", reason="needs POSIX signals")
 @pytest.mark.parametrize("mode", ["signal", "exit"])
 def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path, mode):
@@ -1099,7 +1093,6 @@ end
 """
 
 
-@NET
 def test_waits_on_live_connections_are_no_stall_on_several_schedulers(tmp_path):
     # Every task waits on a socket whose peer holds it open, or on a live listener: the run waits, a read with a
     # deadline times out, and the other read ends when the peer closes.
@@ -1329,7 +1322,6 @@ end
 """
 
 
-@NET
 @RACE
 @pytest.mark.parametrize("schedulers", ["4", "8"])
 def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_a_close(tmp_path, repeats, schedulers):
@@ -1382,7 +1374,6 @@ end
 """
 
 
-@NET
 @RACE
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_http_waits_queued_on_the_io_thread_leave_on_cancel_and_end_at_close(tmp_path, repeats, schedulers):

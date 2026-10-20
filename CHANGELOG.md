@@ -8,6 +8,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `TLS.connect` and `TLS.listen` run on Windows, with the same checks as on
+  Linux and macOS (SNI, host name and IP checks, explicit CA file, TLS 1.2 or
+  later, the same error texts). They no longer return `TLS needs Linux or
+  macOS`. The HTTP client and server builtins are still not on Windows.
+
+- On Windows, system trust also reads the CA certificate store, as CPython's
+  `ssl.load_default_certs` does: its intermediates complete a chain whose
+  server sends only its own certificate. They are never trusted as roots: a
+  CA store certificate whose subject equals its issuer is left out, and a
+  chain must still end at a root of the ROOT store.
+
 ### Changed
 
 - HTTP runs on several schedulers (still behind the test switch

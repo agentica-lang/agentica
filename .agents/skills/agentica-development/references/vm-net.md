@@ -38,7 +38,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/tcp.c`
   - **Owns:** the `TCP` and `TLS` builtins (`agc_tcp_builtins`; Linux, macOS
-    and Windows, where TLS fails; §10.3.1, TLS in §10.3): one `malloc`'d `net`
+    and Windows; §10.3.1, TLS in §10.3): one `malloc`'d `net`
     for a socket or a listener
     (users: the resource and each request; callbacks: a DNS lookup in flight and
     one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its
@@ -155,9 +155,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`SSL_CERT_FILE` or the platform store of `agc_tls_trust_system`,
     `SSL_CERT_DIR` or none; a non-empty `ca_file` replaces them), SNI and
     `SSL_set1_host` or `X509_VERIFY_PARAM_set1_ip_asc`, two memory BIOs per
-    session, error-queue draining into our codes; built on every system, while
-    Windows refuses TLS sockets in `tcp.c` (`tls_refused`, from
-    `agc_net_tls_enabled` of `vm/net_os.h`)
+    session, error-queue draining into our codes; built and used for sockets
+    on every system
 
 - `vm/duplex.c`
   - the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As
@@ -345,7 +344,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Init with `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`
   - TLS 1.2 and security level 2 as minimums
   - trust: `SSL_CERT_FILE` or else the platform store (distro bundle, macOS
-    Security framework, Windows Crypt32 ROOT), and `SSL_CERT_DIR` or else no
+    Security framework, Windows Crypt32 ROOT plus CA intermediates through
+    `agc_tls_trust_add_intermediate_der`, which refuses a self-issued
+    certificate so CA never adds an anchor), and `SSL_CERT_DIR` or else no
     directory (a failing system source is skipped)
   - the platform store is loaded once per process (`tls_trust.c`,
     `CRYPTO_THREAD_run_once`) and copied into each context; distrusted
@@ -472,7 +473,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   count. Windows takes even a 32 MiB send whole, so a pytest case (no step
   counts) that needs a send to time out loops sends, bounded, until one
   fails (`CLIENT_PROGRAM` in `tests/test_vm_tcp.py`).
-- **TLS (7h, in on Linux)**
+- **TLS (7h; Linux, macOS, Windows)**
   - `TLS.connect` and `TLS.listen` in `vm/tcp.c` on the adapter of `vm/tls.h`
     (`docs/vm/10-io-tls.md` §10.3).
   - A secure `net` first loads its config in a pool job (`start_setup`), then
@@ -498,7 +499,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Keep TLS goldens few and small (now `tls-echo` and `tls-errors`, about 60
     steps each): every run of the `--max-steps` sweep does a handshake.
   - Put other TLS cases in `tests/test_vm_tls.py`, which runs each once, with
-    short timeouts, small payloads and no sleeps.
+    short timeouts, small payloads and no sleeps. It runs in the macOS and
+    Windows jobs of `platforms.yml`; on Windows its HTTPS cases skip (`HTTPS`
+    mark) until the HTTP client builtins are there (step 12). Peers print LF
+    on Windows too (`sys.stdout.reconfigure(newline="\n")`).
   - The `tls-*` fixtures take their certificate directory as `@fixtures/tls` in
     `.args` (`fixture_arg` in `tests/vm_diff_support.py` makes it absolute,
     since the tests and `make goldens` run from different directories).
