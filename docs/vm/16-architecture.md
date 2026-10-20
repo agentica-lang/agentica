@@ -634,6 +634,38 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   the run has stalled, and it ends with the `RUNTIME-INTERNAL` of N = 1. The
   last scheduler to go idle wakes the I/O thread for the check
   (`agc_runq_on_idle`).
+- **Wakes between schedulers.** The run queue stays one global FIFO, with no
+  local queues, no stealing and no thread affinity. Two things keep a wake
+  cheap (`vm/task.c`, `vm/runq.c`):
+  - Each scheduler thread has one runnext slot (`agc_vm.runnext`). A task that a
+    scheduler wakes (`agc_task_wake`: a channel, an await, a timer, a lock
+    hand-on, a detached ending) goes into that scheduler's slot when it is free,
+    and to the global queue when it is full; the slot keeps its task. A spawn
+    and a yield go to the queue, and so does every wake by the I/O thread, and
+    the slot is off at N = 1. `agc_task_next` takes the slot first, at most
+    `RUNNEXT_LIMIT` (3) times in a row, then pops the queue once and resets the
+    count; with the queue empty it takes the slot after all. So two tasks that
+    wake each other run on one core, taking the queue's lock only every fourth
+    pick, with no futex wake. Only the owner thread touches the slot. Another
+    scheduler never takes its task, so it waits for the owner's turn to end. A
+    task in a slot is READY like a queued one: it counts as pending, the owner
+    never spins or waits while its slot is full (so the stall check never sees
+    it idle), a cancel by the owner takes it out of the slot and ends it, and a
+    cancel from another thread leaves it to the owner's `agc_task_next`, as for
+    a popped task. At the end of the run it is left like the queued tasks.
+  - An idle scheduler spins before it waits on the condvar
+    (`agc_runq_spin`): it polls the queue's atomic `work` flag, not the lock,
+    with CPU pauses whose runs double up to 32, for `SPIN_BUDGET_US` (10 µs),
+    and never sleeps. At most half the schedulers (at least one) spin at
+    once; none spin at N = 1. A push reads the count of spinners under the
+    queue's lock and skips the condvar signal while one spins. No wake is
+    lost: a spinner leaves the count before it takes the lock for its wait,
+    so it either sees `work`, finds the task in that wait, or left before the
+    push read the count, which then signals. A spinner may see several pushes
+    that sent no signal, so the wake is chained: any scheduler that leaves a
+    spin or a wait with a task, while more tasks are queued, others wait and
+    none spins, signals one more waiter. Spinners are not idle for the stall
+    check: a scheduler counts as idle only in the condvar wait.
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
   cancel flag, and then the state says who ends the task, and exactly one party
   does. A task on a turn (RUNNING, PARKING or WOKEN) is left to its scheduler,
@@ -727,8 +759,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
 
 ### 16.10 Later iterations
 
-Only if measurements ask for them. The cost of the single global run queue
-for wake-heavy programs is measured in §16.11 ("Wakes between schedulers").
+Only if measurements ask for them. Wakes with the single global run queue use
+a runnext slot and a short spin (§16.9, "Wakes between schedulers").
 
 - **K I/O threads**, K configurable (for example one per 4 to 8 cores). Each
   handle is fixed to one loop when it is created. There is one inbox per I/O
@@ -811,12 +843,3 @@ for wake-heavy programs is measured in §16.11 ("Wakes between schedulers").
   delivered to that thread. Another is `pthread_kill` on the schedulers. Whether
   the flush takes the lock with a limit is open. Streams on the loop do not have
   this problem: no scheduler blocks in a stdout write for them (§10.2.2).
-- **Wakes between schedulers (measured; an optimization for later).** One global
-  run queue keeps the schedulers simple, and CPU work scales with the cores. A
-  program where every step wakes another task pays for it: each wake takes the
-  queue's lock, signals its condvar (a futex wake) and moves the task to another
-  core, so wake-heavy programs are several times slower at N > 1 (roughly 4 to 9
-  times for the channel ping-pong benchmarks); the I/O thread is not the cost.
-  Per-scheduler queues or a LIFO ("runnext") slot for the waker's own scheduler
-  would cut it (§16.10). They are a later optimization, not a condition for 3d
-  or for the default number of schedulers.

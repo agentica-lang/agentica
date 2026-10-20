@@ -24,6 +24,12 @@ typedef struct {
 
 typedef enum { AGC_NOTICE_QUEUED, AGC_NOTICE_KEPT, AGC_NOTICE_FINAL } agc_notice_mode;
 
+/* What agc_runq_stats reports: the schedulers that spin and that wait now, and the condvar signals sent for tasks. */
+typedef struct {
+  uint32_t spinning, idle;
+  uint64_t signals;
+} agc_runq_counts;
+
 extern const agc_builtin agc_core_builtins[];
 extern const size_t agc_core_builtin_count;
 extern const agc_builtin agc_task_builtins[];
@@ -77,6 +83,13 @@ agc_task *agc_runq_wait(agc_runq *q);
 void agc_runq_end(agc_runq *q);
 /* The same wait with a deadline (an agc_clock_ms value): NULL also when the clock reaches it. */
 agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms);
+/* The spin of an idle scheduler before agc_runq_wait (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"):
+ * agc_runq_spin_setup allows MAX spinners at once for BUDGET_NS each (none until it is called); agc_runq_spin busy-waits
+ * for a task without the lock and returns it, or NULL when none came (then the caller waits). A push skips the condvar
+ * signal while a scheduler spins. agc_runq_stats is for the tests (agc_runq_counts). */
+void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns);
+agc_task *agc_runq_spin(agc_runq *q);
+agc_runq_counts agc_runq_stats(agc_runq *q);
 /* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the
  * test of a busy scheduler at its turn boundary, and agc_runq_take_nudge clears it for the one that runs the work. */
 void agc_runq_nudge(agc_runq *q);

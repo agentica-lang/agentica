@@ -437,6 +437,15 @@ struct agc_vm {
   bool servicing;
   /* The scheduler's number: 0 for the one that runs `main` first (docs/vm/16-architecture.md §16.9, "Threads"). */
   uint32_t index;
+  /* The runnext slot of a scheduler thread (§16.9, "Wakes between schedulers"): a task that this scheduler wakes
+     waits here, not in the global queue, if the slot is free; agc_task_next takes it first, at most RUNNEXT_LIMIT
+     (vm/task.c) times in a row before it looks at the queue. Only this scheduler's thread reads or writes it, so it
+     needs no lock: another scheduler never takes the task, and a cancel from another thread leaves it to
+     agc_task_next. `runnext_on` is set for scheduler threads only, so one scheduler (N = 1) and the I/O thread always
+     use the queue. */
+  agc_task *runnext;
+  uint32_t runnext_runs;
+  bool runnext_on;
   jmp_buf fail, turn;
 };
 

@@ -37,7 +37,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends the
     detached jobs that the I/O role handed over. The queue counts its idle
     schedulers for the stall check of the I/O thread (`agc_runq_quiet`,
-    `agc_runq_still_quiet`, `agc_runq_on_idle`).
+    `agc_runq_still_quiet`, `agc_runq_on_idle`). Before it waits, an idle
+    scheduler spins (`agc_runq_spin`, set up by `agc_runq_spin_setup` at
+    N > 1), and a push skips the condvar signal while one spins. A task that a
+    scheduler thread wakes goes to its runnext slot (`agc_vm.runnext`, taken
+    first by `agc_task_next`, `RUNNEXT_LIMIT` in `vm/task.c`; §16.9, "Wakes
+    between schedulers").
 
 - **Path:** `vm/sync.c`
   - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo

@@ -9,6 +9,12 @@
 #include <inttypes.h>
 #include <string.h>
 
+/* Wakes between schedulers (docs/vm/16-architecture.md §16.9): a scheduler runs the task in its runnext slot at most
+   RUNNEXT_LIMIT times in a row before it looks at the global queue, and an idle scheduler spins for SPIN_BUDGET_US
+   before it waits on the queue's condvar. */
+#define RUNNEXT_LIMIT 3u
+#define SPIN_BUDGET_US 10u
+
 /* The state READY means "in the run queue": a task that spawns, yields or is woken is READY before it is pushed. The
    store is sequentially consistent because a cancel of a task that yields is a store-then-load pair like the one at the
    park (cancel_one stores the flag and reads the state; this stores the state and agc_task_next reads the flag): with
@@ -31,7 +37,13 @@ void agc_task_wake(agc_vm *vm, agc_task *t, const char *by) {
       continue;
     if (next == AGC_TASK_READY) {
       AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "wake task=%" PRIu64 " by=%s", t->id, by);
-      agc_runq_push(vm->rt->runq, t);
+      /* A wake by a scheduler thread keeps the task on that scheduler when its slot is free: the waker's turn ends
+         soon, and the task runs next on the same core, with no lock of the queue and no futex wake. A full slot keeps
+         its task; the new one goes to the queue. */
+      if (vm->runnext_on && !vm->runnext)
+        vm->runnext = t;
+      else
+        agc_runq_push(vm->rt->runq, t);
     } else {
       AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "woken task=%" PRIu64 " by=%s", t->id, by);
     }
@@ -241,7 +253,12 @@ static void cancel_one(agc_vm *vm, agc_task *t) {
       if (t == vm->task) vm->yield = true;
       return;
     case AGC_TASK_READY:
-      if (agc_runq_remove(vm->rt->runq, t))
+      /* In the canceller's own runnext slot it is taken out like from the queue; in another scheduler's slot it is
+         left there, and that scheduler's agc_task_next ends it, as for a popped task. */
+      if (vm->runnext == t) {
+        vm->runnext = NULL;
+        end_cancelled(vm, t);
+      } else if (agc_runq_remove(vm->rt->runq, t))
         end_cancelled(vm, t);
       else
         AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel_deferred task=%" PRIu64, t->id);
@@ -463,6 +480,25 @@ static agc_task *admit(agc_vm *vm, agc_task *t) {
   return NULL;
 }
 
+/* The next ready task: the runnext slot first, unless it has run RUNNEXT_LIMIT times in a row; then the global queue
+   gets its look, which resets the count, and an empty queue gives the slot's task after all. So a pair of tasks that
+   wake each other cannot keep the queue waiting, and the slot never loses its task. With one scheduler the slot is
+   always empty and this is the pop. */
+static agc_task *next_ready(agc_vm *vm) {
+  agc_task *slot = vm->runnext;
+  if (slot && vm->runnext_runs < RUNNEXT_LIMIT) {
+    vm->runnext = NULL;
+    vm->runnext_runs++;
+    return slot;
+  }
+  agc_task *t = agc_runq_pop(vm->rt->runq);
+  vm->runnext_runs = 0;
+  if (t || !slot) return t;
+  vm->runnext = NULL;
+  vm->runnext_runs = 1;
+  return slot;
+}
+
 /* The next task to run. A DONE task is dropped (a cancel that raced a waker's push). So is a cancelled one that is not
    running: the canceller could not take it out of the queue because a waker had set READY and not pushed yet, or a
    scheduler had popped it already (cancel_one), so whoever pops it ends it. A cancel that comes after this check
@@ -473,7 +509,7 @@ agc_task *agc_task_next(agc_vm *vm) {
   /* A scheduler holds rt->sync only inside a builtin or an ending, never between turns. */
   if (vm->sync_depth) agc_fail(vm, "RUNTIME-INTERNAL", "rt->sync held between turns", 0);
   for (;;) {
-    agc_task *t = agc_runq_pop(vm->rt->runq);
+    agc_task *t = next_ready(vm);
     if (!t) return NULL;
     if ((t = admit(vm, t))) return t;
   }
@@ -624,8 +660,13 @@ static void sched_turns(agc_vm *vm, void (*thread)(void *arg)) {
       }
       check_stop(vm);
       if (agc_timers_run(vm)) continue;
-      uint64_t due = agc_timers_next_due(vm);
-      t = due == UINT64_MAX ? agc_runq_wait(q) : agc_runq_wait_until(q, due);
+      /* The slot is empty here (agc_task_next takes it whenever the queue is empty), so the spin and the wait never
+         leave a task of this scheduler behind. */
+      t = agc_runq_spin(q);
+      if (!t) {
+        uint64_t due = agc_timers_next_due(vm);
+        t = due == UINT64_MAX ? agc_runq_wait(q) : agc_runq_wait_until(q, due);
+      }
       if (!t || !(t = admit(vm, t))) continue;
     }
     if (run_task(vm, t)) {
@@ -679,11 +720,15 @@ static agc_outcome run_threads(agc_vm *vm) {
     agc_vm *s = agc_alloc(sizeof(agc_vm));
     agc_vm_init_context(s, rt);
     s->index = (uint32_t)k;
+    s->runnext_on = true;
     rt->scheds[k] = s;
   }
   agc_input_watch(vm);
   rt->threads = agc_threads_new(n);
   agc_runq_on_idle(rt->runq, agc_io_wake_idle, vm);
+  /* At most half the schedulers spin, so a burst of wakes still finds some parked to wake and the spin never takes
+     every core. */
+  agc_runq_spin_setup(rt->runq, n / 2 ? (uint32_t)(n / 2) : 1, (uint64_t)SPIN_BUDGET_US * 1000);
   /* The I/O thread's own failures (agc_io_serve) go to its own record too while the schedulers run. */
   vm->outcome = &vm->own;
   agc_task_enter(vm, rt->main, rt->program->entry);

@@ -1,7 +1,8 @@
 /*
  * The wake and the cancel against the park (docs/vm/10-io-multicore.md §10.2.3, docs/vm/16-architecture.md §16.11):
  * threads race the scheduler's agc_task_commit_park and agc_task_end_turn. Per round the task is queued, or ended,
- * exactly once, whichever side sees the flag, and is never left PARKED. A dropped wake or a double queue fails.
+ * exactly once, whichever side sees the flag, and is never left PARKED. A dropped wake or a double queue fails. Then
+ * the runnext slot of a scheduler: a local wake, the limit, and a cancel by its owner and by another scheduler.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -182,6 +183,70 @@ static void test_cancel_ready(void) {
   assert(parked->state == AGC_TASK_DONE && agc_runq_pop(q) == NULL && atomic_load(&vm.rt->tasks_done) == before + 3);
 }
 
+/* A woken task: PARKED, then woken by SCHED (a scheduler thread's context when its runnext_on is set). */
+static void wake_parked(agc_vm *sched, agc_task *t) {
+  atomic_store(&t->state, AGC_TASK_PARKED);
+  agc_task_wake(sched, t, "test");
+  assert(t->state == AGC_TASK_READY);
+}
+
+/* Wakes T on `vm` and takes it back from agc_task_next, N times in a row. */
+static void slot_runs(agc_task *t, int n) {
+  for (int k = 0; k < n; k++) {
+    wake_parked(&vm, t);
+    assert(agc_task_next(&vm) == t);
+  }
+}
+
+/* The runnext slot (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"), on one thread with two scheduler
+   contexts of one runtime. A wake by a scheduler fills its free slot and pushes nothing; a full slot keeps its task
+   and the next wake goes to the queue; a context without the slot (one scheduler, the I/O thread) pushes. The slot
+   runs before the queue, at most three times in a row: the fourth pick takes the queue's task, and with the queue
+   empty the slot's task still runs. A cancel by the owner takes the task out of the slot and ends it at once; a cancel
+   from another scheduler leaves it, and the owner's agc_task_next ends it. */
+static void test_runnext(void) {
+  agc_runq *q = vm.rt->runq;
+  agc_vm other;
+  agc_vm_init_context(&other, vm.rt);
+  vm.task = NULL;
+  vm.runnext_on = other.runnext_on = true;
+  agc_task *a = agc_new_task(&vm), *b = agc_new_task(&vm), *f = agc_new_task(&vm);
+
+  wake_parked(&vm, a);
+  assert(vm.runnext == a && agc_runq_pop(q) == NULL);
+  wake_parked(&vm, b);
+  assert(vm.runnext == a && agc_test_ready_head(q) == b);
+  assert(agc_task_next(&vm) == a && agc_task_next(&vm) == b && agc_task_next(&vm) == NULL);
+
+  agc_runq_push(q, f);
+  slot_runs(a, 3);
+  wake_parked(&vm, a);
+  assert(agc_task_next(&vm) == f && vm.runnext == a);
+  assert(agc_task_next(&vm) == a && vm.runnext == NULL);
+  slot_runs(a, 3);
+  wake_parked(&vm, a);
+  assert(agc_task_next(&vm) == a && agc_task_next(&vm) == NULL);
+
+  vm.runnext_on = false;
+  wake_parked(&vm, b);
+  assert(vm.runnext == NULL && agc_runq_pop(q) == b);
+  vm.runnext_on = true;
+
+  uint64_t before = atomic_load(&vm.rt->tasks_done);
+  agc_task *mine = agc_new_task(&vm);
+  wake_parked(&vm, mine);
+  agc_task_cancel(&vm, mine);
+  assert(mine->state == AGC_TASK_DONE && vm.runnext == NULL && atomic_load(&vm.rt->tasks_done) == before + 1);
+
+  agc_task *theirs = agc_new_task(&vm);
+  wake_parked(&vm, theirs);
+  agc_task_cancel(&other, theirs);
+  assert(theirs->state == AGC_TASK_READY && theirs->cancelled && vm.runnext == theirs);
+  assert(agc_task_next(&vm) == NULL && theirs->state == AGC_TASK_DONE && vm.runnext == NULL);
+  assert(atomic_load(&vm.rt->tasks_done) == before + 2 && agc_runq_pop(q) == NULL);
+  vm.runnext_on = false;
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
@@ -192,6 +257,7 @@ int main(void) {
   test_wake_against_park();
   test_cancel_ready();
   test_cancel_against_park();
+  test_runnext();
   puts("task wake tests passed");
   return 0;
 }
