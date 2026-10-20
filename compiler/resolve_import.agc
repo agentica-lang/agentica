@@ -136,7 +136,8 @@ def windows?() -> Bool
 end
 
 # A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path
-# (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is relative.
+# (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is
+# relative.
 def absolute?(path: String, on_windows: Bool) -> Bool
   if on_windows
     return path.starts_with?("\\") or Paths.rooted?(path)
