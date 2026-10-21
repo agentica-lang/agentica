@@ -430,6 +430,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
           id: block.ids,
           target: call.target,
           name: call.name,
+          name_span: call.name_span,
           args: call.args.push(block.node),
           span: span,
         ),
@@ -437,7 +438,14 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
       return expr_at(node, block.pos, block.ids)
     Ast.Expr.FieldAccess(access) ->
       node = Ast.Expr.MethodCall(
-        Ast.MethodCall(id: block.ids, target: access.target, name: access.name, args: [block.node], span: span),
+        Ast.MethodCall(
+          id: block.ids,
+          target: access.target,
+          name: access.name,
+          name_span: access.name_span,
+          args: [block.node],
+          span: span,
+        ),
       )
       return expr_at(node, block.pos, block.ids)
     _ -> return error(Base.impossible(e, cursor))
@@ -484,14 +492,27 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
           target = Ast.Expr.Invoke(Ast.Invoke(id: args.ids, target: target, args: args.nodes, span: span))
         else
           target = Ast.Expr.MethodCall(
-            Ast.MethodCall(id: args.ids, target: target, name: name, args: args.nodes, span: span),
+            Ast.MethodCall(
+              id: args.ids,
+              target: target,
+              name: name,
+              name_span: e.tokens[cursor + 1].span,
+              args: args.nodes,
+              span: span,
+            ),
           )
         end
         cursor = close
         next_id = args.ids + 1
       else
         target = Ast.Expr.FieldAccess(
-          Ast.FieldAccess(id: next_id, target: target, name: name, span: Base.span_from(e, pos, after_name)),
+          Ast.FieldAccess(
+            id: next_id,
+            target: target,
+            name: name,
+            name_span: e.tokens[cursor + 1].span,
+            span: Base.span_from(e, pos, after_name),
+          ),
         )
         cursor = after_name
         next_id += 1

@@ -73,13 +73,20 @@ the bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
   `doc_model.agc` (the exported items; the doc of an export is on its
   `ExportDecl`), `signature.agc`, `doc_json.agc`, `doc_text.agc`. The command
   is `app/cli_doc.agc`; the tests are `tests/test_spec_doc.py`.
-- Query (`query/`, §39): `agentica outline`. It parses one file and lists its
+- Query (`query/`, §39): `agentica outline` parses one file and lists its
   declarations, private ones too, from the items of `docs/doc_model.agc`:
   `query_options.agc` (`--json`, `--ai`, `--stdin FILE` after the command,
-  `QUERY-USAGE`), `query_files.agc` (the one file, read through the
-  `Workspace`, and the name an answer gives it), `outline.agc`,
-  `outline_json.agc`, `outline_text.agc`. The command is `app/cli_query.agc`;
-  the tests are `tests/test_spec_outline.py`.
+  `QUERY-USAGE`), `query_files.agc` (the one file, read through the `Workspace`,
+  and the name an answer gives it), `outline.agc`, `outline_json.agc`,
+  `outline_text.agc`. `agentica type-at` links and checks the file
+  (`Pipeline.query_file`, `Checker.check_query`: no `CHECK-MAIN`) and answers
+  for a position: `query_position.agc` (`FILE:LINE:COL`, the offset of a
+  position), `at.agc` (the innermost typed expression, a worklist over
+  `check/const_walk.agc`), `definitions.agc`, `type_at.agc`
+  (`QUERY-NO-EXPRESSION`; the type through `Types.to_text_as` and
+  `LinkedModule.aliases`), `type_at_json.agc`, `type_at_text.agc`. The commands
+  are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
+  `tests/test_spec_type_at.py`.
 
 ### Pure core, one port
 

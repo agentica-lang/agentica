@@ -8,8 +8,9 @@
 ##
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
 ##
-## A function, struct, enum, type alias, constant, field and variant also keep the span of its name (`name_span`), for
-## the commands that point at a name (`agentica outline`). parse_text.agc does not print it.
+## A function, struct, enum, type alias, constant, field and variant also keep the span of its name (`name_span`), as
+## do a field access and a method call, for the commands that point at a name (`agentica outline`, `agentica
+## type-at`). parse_text.agc does not print it.
 
 import Source from "source"
 import Types from "types"
@@ -433,19 +434,21 @@ export struct MapLit
   span: Source.Span
 end
 
-## target.name without parentheses.
+## target.name without parentheses. `name_span` is the span of the name after the dot.
 export struct FieldAccess
   id: Int
   target: Expr
   name: String
+  name_span: Source.Span
   span: Source.Span
 end
 
-## target.name(args), with a trailing block as the last argument.
+## target.name(args), with a trailing block as the last argument. `name_span` is the span of the name after the dot.
 export struct MethodCall
   id: Int
   target: Expr
   name: String
+  name_span: Source.Span
   args: List[Expr]
   span: Source.Span
 end

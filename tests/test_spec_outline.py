@@ -6,7 +6,7 @@ import json
 import pytest
 
 from tests.agentica_test import WINDOWS, cli, run, vm_environment
-from tests.span_support import end, items_by_name, start
+from tests.span_support import end, items_by_name, problem, start
 
 # Every kind of declaration, exported or not, an import list and an import that does not exist: `outline` only parses,
 # so the imports cannot make it fail. Line numbers are asserted below.
@@ -59,13 +59,6 @@ def answer(*words, cwd=None, stdin=None):
     result = outline("--json", "outline", *words, cwd=cwd, stdin=stdin)
     assert result.code == 0, result.stderr
     return json.loads(result.stdout)
-
-
-def problem(result, code, status):
-    assert (result.code, result.stdout) == (status, "")
-    diagnostic = json.loads(result.stderr)
-    assert diagnostic["code"] == code
-    return diagnostic
 
 
 def test_items_in_source_order_with_exported_docs_signatures_and_spans(tmp_path):

@@ -1,9 +1,10 @@
 # Asking the compiler about code
 
-`agentica outline FILE` lists what one file declares, so you do not read the
-whole file to learn its signatures. It only lexes and parses the file: its
-imports need not exist, and it needs no `main`. FILE is a source file or a
-`std/` module (`agentica outline std/queue`).
+`agentica outline FILE` and `agentica type-at FILE:LINE:COL` ask the compiler
+about code without reading whole files. `outline` lists what one file declares,
+so you do not read the whole file to learn its signatures. It only lexes and
+parses the file: its imports need not exist, and it needs no `main`. FILE is a
+source file or a `std/` module (`agentica outline std/queue`).
 
 ```sh
 agentica outline src/orders.agc          # one line per declaration
@@ -49,10 +50,63 @@ read with `--stdin` is named `./std/NAME`, never like an embedded module.
 
 Types are written as in the file (`Models.User`).
 
-## Exit codes
+## Exit codes of outline
 
 - 0: the answer.
 - 1: a `LEX-` or `PARSE-` error in the file; fix the file first.
 - 2: `QUERY-USAGE`, at the pseudo-file `<arguments>`: a missing or extra
   argument, an unknown option, `--stdin` without a file, or a path that cannot
   be read. Fix the question.
+
+# The type at a position
+
+`agentica type-at FILE:LINE:COL` gives the checked type of the innermost
+expression at a position, and where what it names is defined. Line and column
+count from 1, in characters, as in a diagnostic, so `outline` and `check`
+positions work as they are.
+
+```sh
+agentica type-at src/orders.agc:22:14
+agentica --json type-at src/orders.agc:22:14
+cat buffer.agc | agentica type-at --stdin src/orders.agc:22:14
+```
+
+```text
+src/orders.agc:22:9-22:19 user.email: String
+src/models.agc:4:3 field email
+```
+
+The first line is the span of the expression, its text and its type; the second,
+if there is one, the name of the definition. On the name of a field or a method
+the expression is the whole access (`user.email`). The file and what it imports
+are linked and checked, but it needs no `main`, so a library file works.
+`--stdin FILE:LINE:COL` takes the text of FILE from standard input (the buffer
+you have not saved); FILE is a path of the disk, never a `std/` module.
+
+A type of another file is written as the file writes it: `Models.User` through
+`import Models from "models"`, a bare name when the file does not import it
+under an alias.
+
+## JSON of type-at
+
+`{version: 1, command: "type-at", position: {file, line, column}, kind, text,
+type, span, definition}`.
+
+- `kind` is `name` when the position is on a name (a variable, a constant, the
+  callee of a call, the field or method after the dot) and `expression`
+  otherwise; `span` is always the whole expression and `text` its source.
+- `definition` is null, or the span of the declaration (`{file, range}`) with
+  `kind` (`function`, `struct`, `enum`, `variant`, `field`, `constant` or
+  `alias`), `name` and `name_span`, the span of the name. It is null for a local
+  (a parameter, a binding, a loop variable or a pattern name) and for a builtin
+  such as `String.upcase`; both still have their type.
+
+## Exit codes of type-at
+
+- 0: the answer.
+- 1: the program has an error (`LEX-`, `PARSE-` or `CHECK-`), in the file or in
+  an import; it is printed as `check` prints it. Fix the program first.
+- 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file) or
+  `QUERY-NO-EXPRESSION`: the position is not on a token of an expression (a
+  blank between tokens, a comment, a keyword, past the end of a line or of the
+  file). Its span is the position. Move onto the expression.

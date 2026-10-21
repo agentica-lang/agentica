@@ -253,13 +253,40 @@ def rewrite_constant_member(
   receiver = Ast.Expr.ConstRef(
     Ast.ConstRef(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)),
   )
+  name_span = member_span(cx, node, length, member)
   if node.args.size == 0 and !node.parenthesized
-    return ok(Ast.Expr.FieldAccess(Ast.FieldAccess(id: node.id, target: receiver, name: member, span: node.span)))
+    return ok(
+      Ast.Expr.FieldAccess(
+        Ast.FieldAccess(id: node.id, target: receiver, name: member, name_span: name_span, span: node.span),
+      ),
+    )
   end
   args = try rewrite_exprs(cx, node.args)
   return ok(
-    Ast.Expr.MethodCall(Ast.MethodCall(id: node.id, target: receiver, name: member, args: args, span: node.span)),
+    Ast.Expr.MethodCall(
+      Ast.MethodCall(id: node.id, target: receiver, name: member, name_span: name_span, args: args, span: node.span),
+    ),
   )
+end
+
+# The span of the member in `NAME.member`: the parser made one name of the call, so the member is found in the text
+# after NAME. Only blanks and the dot lie between them, on one line, so the first occurrence is the member. The span
+# of the call stands in if the text does not hold it.
+def member_span(cx: Resolve.Context, node: Ast.Call, length: Int, member: String) -> Source.Span
+  start = node.span.start
+  after = start.offset + length
+  size = node.span.stop.offset - after
+  if size <= 0 or after + size > cx.me.text.length
+    return node.span
+  end
+  found = cx.me.text.slice(after, size).index_of(member)
+  if !found.ok?
+    return node.span
+  end
+  gap = length + found.unwrap!
+  first = Source.Position(offset: start.offset + gap, line: start.line, column: start.column + gap)
+  last = Source.Position(offset: first.offset + member.length, line: first.line, column: first.column + member.length)
+  return Source.Span(start: first, stop: last)
 end
 
 # The expressions that only rewrite their parts, in the order of their fields.
