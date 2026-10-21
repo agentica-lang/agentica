@@ -173,8 +173,9 @@ Read only what the task needs:
 - `references/processes.md`: starting programs (`Process`).
 - `references/tasks.md`: concurrency, `Task.map`, timed awaits, `Task.cancel`,
   `Channel`.
-- `references/analysis.md`: asking the compiler for diagnostics, an outline or a
-  type from a program, with unsaved buffers (`std/analysis`).
+- `references/analysis.md`: asking the compiler for diagnostics, an outline, a
+  type, a symbol or references from a program, with unsaved buffers
+  (`std/analysis`).
 - `references/binary.md`: packing or unpacking bytes (`std/binary`).
 - `references/logger.md`: levels, fields, handlers (`std/logger`).
 - `references/network.md`: TCP, TLS, HTTP client or server.

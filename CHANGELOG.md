@@ -28,9 +28,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `--stdin` reads a file from standard input.
 - `Std.source(path)` gives the text of a `std/` source that the binary carries,
   such as `"queue.agc"`, to any program.
-- `std/analysis` answers the questions of `check`, `outline` and `type-at` from
-  a program, as plain structs, over a session with unsaved buffers; the command
-  line runs the same code.
+- `std/analysis` answers the questions of `check`, `outline`, `type-at`,
+  `symbol` and `refs` from a program, as plain structs, over a session with
+  unsaved buffers; the command line runs the same code.
 
 ### Changed
 

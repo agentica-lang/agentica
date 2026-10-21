@@ -76,13 +76,12 @@ with a packed `Problem` (`references/stages.md`).
   `tests/test_spec_refs.py`.
 - Analysis (`analysis/`, §39, `std/analysis`): `analysis.agc` is the one
   implementation of `check`, `outline`, `type-at`, `symbol` and `refs` that
-  `app/` and `stdlib/analysis.agc` call (`symbol` and `refs` are not in the
-  library yet; `front.agc` holds the read, link and check they share with `run`
-  and `compile`). It returns the plain structs of `model.agc` (no enum; `""`
-  and empty lists for absent values; `ok` is a reserved field name, so
-  `Checked.passed`), converted in `convert.agc`; the JSON and text printers in
-  `query/` take those structs, so what the CLI prints is what the library
-  returns. A diagnostic is `diagnostics/diagnostic_model.agc`
+  `app/` and `stdlib/analysis.agc` call (`front.agc` holds the read, link and
+  check they share with `run` and `compile`). It returns the plain structs of
+  `model.agc` (no enum; `""` and empty lists for absent values; `ok` is a
+  reserved field name, so `Checked.passed`), converted in `convert.agc`; the
+  JSON and text printers in `query/` take those structs, so what the CLI prints
+  is what the library returns. A diagnostic is `diagnostics/diagnostic_model.agc`
   (`diagnostic_json.agc` writes it, `diagnostic_read.agc` reads it back).
   Unsaved buffers are `modules/overlay.agc` over the Workspace (`check --stdin`
   is one buffer). `stdlib/analysis.agc` compiles the files of `stdlib/CORE` as

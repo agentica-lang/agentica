@@ -1,6 +1,6 @@
 ## The semantic queries, once: `check`, `outline`, `type-at`, `symbol` and `refs` of docs/future/39-semantic-cli.md.
 ## The command line (app/cli.agc, app/cli_query.agc) and `std/analysis` (stdlib/analysis.agc, which embeds this core)
-## both call these functions, so the two cannot drift (`symbol` and `refs` have no function in `std/analysis` yet).
+## both call these functions, so the two cannot drift.
 ## Each one reads its files through the Workspace of the `settings`, which is where an unsaved buffer stands in for a
 ## file (modules/overlay.agc), and gives the data of model.agc or the first problem. What each caller does with them is
 ## its own: the command line prints and sets an exit status, the library returns.
