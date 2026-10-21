@@ -93,7 +93,7 @@ def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offse
   )
 end
 
-# The public builtin that a call, a method call, a field access that names a method or a function value names, or
+# The public builtin that a call, a method call or a field access that names a method names, or
 # Absent. An expression that has a definition names a declaration of the program, never a builtin.
 def builtin_of(
   checked: Checker.Checked,
@@ -105,7 +105,6 @@ def builtin_of(
     Ast.Optional.Absent ->
       case expr
         Ast.Expr.Call(node) -> return public(node.name)
-        Ast.Expr.FunctionRef(node) -> return public(node.name)
         Ast.Expr.MethodCall(node) -> return resolved(checked, node.id)
         Ast.Expr.FieldAccess(node) -> return resolved(checked, node.id)
         _ -> return Ast.Optional.Absent

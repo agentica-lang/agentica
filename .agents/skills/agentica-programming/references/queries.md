@@ -112,7 +112,9 @@ type, span, definition, help}`.
 - `help` is null, except for `kind` `builtin`: then it is the object of
   `agentica help NAME --json` for that builtin (`name`, `signature`,
   `description`, `parameters`, `effects`; `overloads` for a builtin with
-  several forms). `to_s` on an Int answers `String.from_int`.
+  several forms). `to_s` on an Int answers `String.from_int`; `to_s` and
+  `inspect` answer a builtin only where the checker resolves them to one
+  (numbers).
 
 ## Exit codes of type-at
 

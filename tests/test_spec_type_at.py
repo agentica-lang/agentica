@@ -417,6 +417,27 @@ def test_a_builtin_is_answered_with_its_help_object_and_no_definition(program):
     assert answer(("orders.agc", where(ORDERS, "Models.make", 8)), cwd=program)["help"] is None
 
 
+def test_a_pipe_into_a_builtin_is_the_builtin_on_its_right_hand_side(tmp_path):
+    source = "def wrap() -> Result[Int]\n  return 5 |> ok()\nend\n"
+    (tmp_path / "piped.agc").write_text(source, encoding="utf-8")
+    report = answer(("piped.agc", where(source, "ok()", 1)), cwd=tmp_path)
+    line, column = where(source, "ok()")
+    assert (report["kind"], report["type"], report["text"], report["definition"]) == ("builtin", "Result[Int]", "ok()", None)
+    assert report["help"] == cli_help("ok")
+    # The span is the right-hand side, not the whole pipe.
+    assert report["span"]["range"] == {
+        "start": {"line": line, "column": column},
+        "end": {"line": line, "column": column + 4},
+    }
+
+
+def test_a_declaration_of_a_std_module_carries_its_doc_and_signature(program):
+    queue = answer(("orders.agc", where(ORDERS, "Queue.new", 6)), cwd=program)["definition"]
+    assert (queue["file"], queue["kind"], queue["name"]) == ("std/queue.agc", "function", "new")
+    assert queue["signature"] == "new() -> QueueState"
+    assert queue["doc"] == "Returns an empty queue."
+
+
 def test_text_form_of_a_builtin_gives_a_line_with_its_signature(program):
     position = where(ORDERS, "name.upcase", 6)
     result = run(cli() + ["type-at", f"orders.agc:{position[0]}:{position[1]}"], env=vm_environment(), cwd=program)
