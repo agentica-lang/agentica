@@ -309,6 +309,14 @@ def test_a_refresh_before_a_question_gives_the_answer_without_it_and_the_command
     assert got == library(driver, project, command, file, *rest) != ("", "")
 
 
+def test_symbol_and_refs_after_a_refresh_give_the_answers_of_the_command_line(driver, project):
+    where_make = position("orders.agc", ORDERS, "Models.make", 8)
+    got = library(driver, project, "refresh", "orders.agc", "refresh", "models.agc", "refs", *where_make)
+    assert got == command_line(project, "refs", ":".join(where_make)) != ("", "")
+    got = library(driver, project, "refresh", "orders.agc", "refresh", "models.agc", "symbol", "make", "models.agc", "orders.agc")
+    assert got == command_line(project, "symbol", "make", "models.agc", "orders.agc") != ("", "")
+
+
 def test_a_buffer_edit_and_a_close_check_a_root_again_and_a_root_that_does_not_reach_the_file_keeps_its_check(
     driver, project,
 ):
