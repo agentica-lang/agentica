@@ -88,6 +88,11 @@ agc_value agc_stream_bad_timeout(void) { return agc_error_value(bad_timeout); }
 
 agc_value agc_stream_timed_out(void) { return agc_error_value(timed_out); }
 
+agc_value agc_stream_written(agc_vm *vm, int status) {
+  static const char write_failed[] = "error writing to stream port";
+  return status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(status)) : agc_result_value(true, agc_void());
+}
+
 agc_resource *agc_new_lock(agc_vm *vm) {
   agc_resource *lock = agc_alloc(sizeof(agc_resource));
   lock->id = agc_resource_id(vm);
@@ -114,6 +119,10 @@ void agc_inbuf_free(agc_inbuf *b) {
   b->data = NULL;
   b->start = b->end = b->cap = b->scanned = 0;
 }
+
+/* The pending bytes of B, or NULL when there are none: an empty buffer may have no memory, and NULL + 0 is undefined
+   behavior. */
+static const uint8_t *pending_at(const agc_inbuf *b) { return agc_inbuf_pending(b) ? b->data + b->start : NULL; }
 
 static const uint8_t *find_lf(agc_inbuf *b) {
   size_t have = agc_inbuf_pending(b);
@@ -193,7 +202,7 @@ void agc_inbuf_got(agc_inbuf *b, int64_t n, bool eof) {
    or nothing left (END). A final line without an LF is a line at EOF. */
 static agc_cut_status spot_line(agc_inbuf *b, const uint8_t **data, size_t *len, size_t *consume) {
   size_t have = agc_inbuf_pending(b);
-  *data = have ? b->data + b->start : NULL;
+  *data = pending_at(b);
   const uint8_t *lf = find_lf(b);
   *len = *consume = have;
   if (lf) {
@@ -238,7 +247,7 @@ agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
   if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "error reading from stream port", b->error);
-  agc_value result = agc_result_value(true, agc_list_value(agc_list_of_bytes(b->data + b->start, n)));
+  agc_value result = agc_result_value(true, agc_list_value(agc_list_of_bytes(pending_at(b), n)));
   agc_inbuf_take(b, n);
   return result;
 }
@@ -268,7 +277,7 @@ void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut) {
   size_t n = have < count ? have : count;
   cut->error = b->error;
   cut->status = n == 0 && count > 0 && b->error ? AGC_CUT_FAILED : AGC_CUT_DATA;
-  cut_copy(cut, b->data + b->start, cut->status == AGC_CUT_DATA ? n : 0);
+  cut_copy(cut, pending_at(b), cut->status == AGC_CUT_DATA ? n : 0);
   if (cut->status == AGC_CUT_DATA) agc_inbuf_take(b, n);
 }
 

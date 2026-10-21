@@ -460,7 +460,7 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   that drain is the push of §16.4, and it keeps a woken task behind the one
   whose turn just ended.
 - **Services make their own libuv calls**, on the loop's thread. They make
-  handles through `agc_io_uv` (§15.1), for example in `vm/process.c`; the
+  handles through `agc_loop_uv` (§15.1), for example in `vm/process.c`; the
   libuv part of their `done`, `expired`, cancel and
   `drop` halves (for example `request_expired` in `vm/process.c`, the file
   `drop` in `vm/files.c`) and the poller calls of
@@ -490,9 +490,14 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   The HTTP server keeps its state on the I/O thread the same way
   (`vm/http_server.c`): its accepts and waits are jobs that the I/O thread
   ends, and a connection's end gives its room back with a posted step. The
-  HTTP client is `std/http` code on those sockets. `agc_io_uv` aborts off the
-  I/O thread, and the builtins of `Process`, `Duplex` and `Test.run` fail with
-  `RUNTIME-INTERNAL` at N > 1 (`agc_program_for_threads`).
+  HTTP client is `std/http` code on those sockets. Processes and the child
+  channel are requests the same way (`vm/process.c`, `vm/duplex.c`): the I/O
+  thread owns each child's handles, buffers and request slots, and a posted
+  request carries its result, which the done half reads; at N = 1 the steps
+  run inline and the done half reads the child. At N > 1 a spawn, a close and
+  `Process.read_available` park too, and the parent channel of a child run
+  (`Test.run`) opens at the start of the run (`agc_parent_take`). `agc_io_uv`
+  aborts off the I/O thread.
 - **An outcome and a count, not flags.** A job has an atomic outcome (PENDING,
   DONE, EXPIRED or CANCELLED) that the first writer sets by CAS
   (`agc_job_settle`, release; `agc_io_finish` reads it with acquire), and an
@@ -743,9 +748,8 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
     marked, no row of the String, number and JSON tables is, and the core and
     `File` tables are checked by row. `tests/test_vm_shared.py` holds the
     programs for the paths the other modules do not reach.
-    Not yet under the lock: the profiling counters, the I/O thread's side of the
-    handles that N > 1 refuses. A socket needs no lock: the I/O thread owns it
-    ("Services" above). The owner of a stream's
+    Not yet under the lock: the profiling counters. A socket or a child needs no
+    lock: the I/O thread owns it ("Services" above). The owner of a stream's
     lock is the calling thread's context (`agc_notice_end`, `settle` and the
     start of a write take it), not the stream's own `vm`.
 - **The order of PR 3 of issue #345.** 3a (the blocking pop, the cancel by
@@ -819,8 +823,8 @@ a runnext slot and a short spin (§16.9, "Wakes between schedulers").
   read request gets its line or bytes as a `malloc`'d copy cut on the I/O
   thread. At N > 1 a read of bytes that are already buffered still posts a
   request; a lock on the buffer that lets a scheduler take them at once is not
-  built. A process's request slots, which `drop_request` unlinks
-  (`vm/process.c`) once `drop` runs on the I/O thread, are open. On the polled
+  built. A process's request slots are the I/O thread's too (`vm/process.c`).
+  On the polled
   file path, `expired` (`vm/files.c`) moves `o->st->buf` while the I/O thread
   may still run `ready`, `step` and `send_rest`: the poller pause must complete
   first. Stdin is read into a job's buffer (on Windows, the reader's buffer,
@@ -832,7 +836,7 @@ a runnext slot and a short spin (§16.9, "Wakes between schedulers").
 - **Which port function posts each service request** (§15.2). The job
   requests are posted by `agc_io_start` and the finish and detach paths of
   `vm/loop.c`. The steps of TCP and TLS go through the START's `more` step and
-  `agc_loop_call` (§16.9); those of `Process` and `Duplex` have no request yet.
+  `agc_loop_call` (§16.9), and so do those of `Process` and `Duplex`.
 - **stdout and stderr once they park** (row 7.2.1f, decided; built for N = 1).
   The per-stream lock of §10.2.3 cannot be held across a park, so the second
   option is taken: a short lock around each stream's buffer and FIFO, never held

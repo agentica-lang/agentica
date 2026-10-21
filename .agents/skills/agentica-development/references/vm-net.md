@@ -73,7 +73,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     read of buffered bytes or a send that goes out at once returns without a
     park (`agc_io_here`). Tested at N > 1 by `vm/tests/net_test.c` (exact
     orders), `vm/tests/threads_test.c`, the net programs of
-    `tests/test_vm_multicore.py` and `make test-multicore-net`
+    `tests/test_vm_multicore.py` and `make test-multicore-modules`
 
 - **Path:** `vm/net.h`
   - **Owns:** tcp.c's connection object for the HTTP server (`agc_conn`):
@@ -127,7 +127,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     of `accept` and `wait` jobs; builtins change them only by posted steps
     (`agc_loop_call`), `closed` is atomic, and an accept's done half makes the
     socket from the connection the I/O thread took (§10.7.2). Runs at N > 1:
-    the HTTP module is in `make test-multicore-net`, and
+    the HTTP module is in `make test-multicore-modules`, and
     `tests/test_vm_multicore.py` has a load case with cancels and a close.
 
 - **Path:** `vm/http_service.c`
@@ -179,6 +179,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `request_expired` closes the whole channel (`agc_duplex_shut`), so a timeout
     ends the channel and nothing else
   - `ECONNRESET` on a read is the end of input.
+  - With more than one scheduler every read, send and shut is a request whose
+    steps run on the I/O thread (`posted`): the scheduler reads only the
+    request's result, and the parent channel is attached at start.
   - The parent side is used by `process.c` (`agc_duplex_new` over the parent's
     socket end, `agc_duplex_read_line`, `agc_duplex_send`,
     `agc_duplex_close_write`, which ignores a `uv_shutdown` that fails on the
@@ -220,6 +223,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     handle count (close callbacks) reach zero
   - requests park on `external` jobs that pipe, write and exit callbacks ready
     with `agc_io_ready`
+  - the I/O thread owns `proc`; with more than one scheduler every call
+    (spawn, read, write, close, wait) parks on a request whose steps post to
+    the I/O thread, and the result is copied into the request (`finish`)
+    before it is readied; one scheduler keeps the inline fast paths
   - stdout is read only while a reader waits, 4 KiB at a time (more only for a
     bigger `read_bytes`)
   - stderr is forwarded in its read callback

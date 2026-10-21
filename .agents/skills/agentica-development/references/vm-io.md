@@ -26,8 +26,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - **Path:** `vm/process_os.h`, `vm/process_posix.c`, `vm/process_windows.c`
   - **Owns:** The command search rules of `Process.spawn`: what is a path, the
     PATH list split and quotes, the `.exe`/`.com` allowlist (no PATHEXT) and the
-    names that are refused (trailing dot or space, `:` that is not a drive).
-    `process.c` keeps the search loop and the file test.
+    names that are refused (trailing dot or space, `:` that is not a drive),
+    and the read of a child's stdout beside libuv for `Process.read_available`
+    (none on Windows). `process.c` keeps the search loop and the file test.
+    The I/O thread owns a child's handles and buffers: with several schedulers
+    each `Process` and channel call posts its START step and parks, and the
+    done half reads only the request (`docs/vm/16-architecture.md` §16.9).
 
 - **Path:** `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`
   - **Owns:** The ends of a child channel: how the parent makes them (a socket
@@ -81,8 +85,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - returns whether it set it)
     - `agc_io_uv` (
       - the scheduler's `uv_loop_t`, for handle code; aborts off the I/O
-        thread, so at N > 1 a libuv step goes through `agc_io_call` and the
-        builtins that still call it are refused, `agc_program_for_threads`)
+        thread, so at N > 1 a libuv step goes through `agc_io_call`)
     - `agc_io_loop`, `agc_loop_call`, `agc_loop_uv`, `agc_loop_of_uv` (
       - the loop for a service's `malloc`'d state, a step posted to it from a
         hook with no vm (`release`, `drop`), its `uv_loop_t` on the I/O thread

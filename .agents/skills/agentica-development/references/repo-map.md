@@ -121,7 +121,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   system_posix.c  # the POSIX side: the sysname of uname(2), through libuv
   system_windows.c # the Windows side: "Windows_NT"
   process.c       # Process builtins, System.env and System.pid (references/vm-net.md)
-  process_os.h    # command search rules that differ by system (references/vm-io.md)
+  process_os.h    # command search rules and the stdout drain that differ by system (references/vm-io.md)
   process_posix.c # the POSIX side of process_os.h: every file may run, PATH splits at ':'
   process_windows.c # the Windows side: .exe and .com only, ';' and quoted PATH entries, refused names
   stream.c        # input buffer and write path shared by processes and TCP (references/vm-net.md)
@@ -177,6 +177,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
     map_test.c           # persistent maps
     output_test.c        # stdout and stderr writers
     process_test.c       # Process builtins
+    process_threads_test.c # Process and channel steps posted from a scheduler thread: close, cancel and deadline orders
     random_test.c        # the generator
     runq_test.c          # the global run queue
     inbox_test.c         # the inbox: many producers, no lost wake, close

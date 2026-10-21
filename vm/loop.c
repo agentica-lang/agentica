@@ -1289,8 +1289,8 @@ bool agc_io_share(agc_vm *vm, bool keep) {
   return true;
 }
 
-/* The services that still make their own handles on the calling scheduler (the rows that agc_program_for_threads
-   refuses) reach the loop here; a scheduler thread must never, since only the I/O thread may call libuv. */
+/* The libuv loop for code on the I/O thread (agc_loop_uv aborts on any other thread, since only the I/O thread may
+   call libuv). */
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return agc_loop_uv(loop_of(vm)); }
 
 /* Returns the job without reading r->native after the START is posted: a detached job may be swept by then. */

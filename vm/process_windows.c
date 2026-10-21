@@ -1,7 +1,7 @@
 /*
  * Command search rules for Windows. Platform adapter (process_os.h); no VM
  * state or scheduling. Only .exe and .com run, PATH splits at ';' and may
- * quote an entry.
+ * quote an entry, and a child pipe is read only by libuv.
  * Docs: docs/vm/10-io-processes.md, section 10.4.
  */
 #include "process_os.h"
@@ -70,4 +70,13 @@ bool agc_proc_suffix_ok(const char *path) {
 }
 
 const char *const *agc_proc_suffixes(void) { return runnable; }
+
+bool agc_proc_drains(void) { return false; }
+
+int64_t agc_proc_read_now(intptr_t fd, uint8_t *buf, size_t len) {
+  (void)fd;
+  (void)buf;
+  (void)len;
+  return AGC_PROC_NOTHING;
+}
 #endif

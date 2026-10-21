@@ -4,3 +4,7 @@
 # the same uninstrumented locking (their extension cache is filled under the X509 lock), not a VM race.
 race:agc_tls_client_config
 race:agc_tls_server_config
+# A forked child sets `environ` to the child's environment before exec (libuv's uv__process_child_init). The child has
+# only the forking thread, but TSan keeps the parent's history: a scheduler that read `environ` before the fork (the
+# environment copy of the next Process.spawn) looks like a racing thread. Only that function's stack is suppressed.
+race:uv__process_child_init

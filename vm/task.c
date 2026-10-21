@@ -728,7 +728,6 @@ static agc_outcome run_threads(agc_vm *vm) {
     trace_end(vm);
     return rt->outcome;
   }
-  rt->program = agc_program_for_threads(rt->program);
   agc_share(vm);
   if (!agc_io_share(vm, true)) agc_internal_abort("cannot start the I/O thread's inbox");
   agc_gc_allow_threads();
