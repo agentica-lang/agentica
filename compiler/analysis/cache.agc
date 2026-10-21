@@ -153,10 +153,11 @@ def pruned(cache: Cache) -> Cache
   return cache.with(parses: Modules.Parses(kept: kept, top: top))
 end
 
-# What a program is made of apart from the texts: the root folder and, for each module in order, its key, stored name,
-# prefix, package, the keys its aliases name and the names it imports. A change in one of these (a new agentica.toml, a
-# file that appeared and shadows an import) changes what the program means even when no text did. Every piece is
-# written with its length, so two different lists never give one text.
+# What a program is made of apart from the texts: the root folder and, for each module in order, its key, file (the
+# spelling a diagnostic names; two spellings of one file, such as a symlink, share a key), stored name, prefix,
+# package, the keys its aliases name and the names it imports. A change in one of these (a new agentica.toml, a file
+# that appeared and shadows an import) changes what the program means even when no text did. Every piece is written
+# with its length, so two different lists never give one text.
 def fingerprint(loaded: Modules.Loaded) -> String
   parts = [piece(loaded.root_dir)]
   for key in loaded.order
@@ -167,7 +168,7 @@ end
 
 def describe(module: Modules.Module) -> String
   origin = module.origin
-  pieces = [module.key, module.name, module.prefix, origin.package, origin.root, origin.label]
+  pieces = [module.key, module.file, module.name, module.prefix, origin.package, origin.root, origin.label]
   pieces = pieces.push("#{module.aliases.size}")
   for alias in module.aliases.keys.sort
     pieces = pieces.push(alias).push(module.aliases[alias])

@@ -4,6 +4,7 @@ fixtures/analysis/driver.agc) that calls the library, and the CLI with `--json` 
 streams. The driver is compiled once for the module (it compiles the core of the front end with it); each case is a run
 of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
 import json
+import os
 import shutil
 
 import pytest
@@ -365,6 +366,16 @@ def test_a_manifest_that_appears_is_seen_by_the_next_question_though_the_root_is
     assert json.loads(err)["code"] == "PKG-MANIFEST-INVALID"
     assert out.splitlines()[-1] == "same 0"
     assert counted(out, "roots", "checks") == [(1, 1)]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symbolic links need privileges on Windows")
+def test_two_spellings_of_one_file_keep_their_own_name_in_a_cached_diagnostic(driver, project):
+    """real.agc and its link have one key; a root cached under one spelling must not answer for the other."""
+    (project / "link.agc").symlink_to(project / "type_error.agc")
+    for first, second in [("link.agc", "type_error.agc"), ("type_error.agc", "link.agc")]:
+        cached = library(driver, project, "refresh", first, "check", second)
+        assert cached == library(driver, project, "check", second) == command_line(project, "check", second)
+        assert json.loads(cached[1])["file"] != ""
 
 
 def test_at_most_sixteen_roots_are_kept_the_least_recently_refreshed_leaving_first(driver, project):
