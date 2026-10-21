@@ -21,7 +21,7 @@ export VM_BUILTINS = Set.new([
   "Int.shift_right_unsigned", "Float.to_bits", "Float.from_bits", "Float.to_bits32", "Float.from_bits32",
   "Time.now_ms", "Time.monotonic_ms", "Time.monotonic_ns", "Random.int", "Random.float", "JSON.parse", "JSON.encode",
   "JSON.from", "JSON.object", "JSON.array", "JSON.null", "JSON.null?", "JSON.get", "JSON.at", "JSON.string",
-  "JSON.int", "JSON.float", "JSON.bool", "JSON.list", "JSON.decode", "JSON.schema", "File.open", "File.read_bytes",
+  "JSON.int", "JSON.kind", "JSON.float", "JSON.bool", "JSON.list", "JSON.decode", "JSON.schema", "File.open", "File.read_bytes",
   "File.read_line", "File.write", "File.write_bytes", "File.flush", "File.close", "File.each_line", "File.read_text",
   "File.write_text", "File.append_text", "File.stat", "File.lstat", "File.try_lock", "Dir.list", "Dir.mkdir",
   "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove", "Path.rename",

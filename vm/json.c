@@ -376,6 +376,24 @@ static agc_value builtin_float(agc_vm *vm, agc_value *args, uint32_t span) {
   return failure("expected a JSON number representable as a finite Float");
 }
 
+/* Names the kind without encoding: an exact number outside Int (AGC_JSON_BIG) is still "int", so "int" means
+ * JSON.int may succeed and "float" means JSON.float succeeds (parse and JSON.from keep floats finite). */
+static agc_value builtin_kind(agc_vm *vm, agc_value *args, uint32_t span) {
+  const char *name;
+  switch (agc_as_json(vm, args[0])->kind) {
+    case AGC_JSON_NULL: name = "null"; break;
+    case AGC_JSON_BOOL: name = "bool"; break;
+    case AGC_JSON_INT:
+    case AGC_JSON_BIG: name = "int"; break;
+    case AGC_JSON_FLOAT: name = "float"; break;
+    case AGC_JSON_STRING: name = "string"; break;
+    case AGC_JSON_ARRAY: name = "array"; break;
+    case AGC_JSON_OBJECT: name = "object"; break;
+    default: agc_fail(vm, "RUNTIME-INTERNAL", "unknown JSON kind", span);
+  }
+  return agc_string_value(agc_json_ascii(name, strlen(name)));
+}
+
 const agc_builtin agc_json_builtins[] = {
   {"JSON.parse", 1, builtin_parse, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"JSON.encode", 1, builtin_encode, AGC_NATIVE_NONE, AGC_COST_NONE, false},
@@ -388,6 +406,7 @@ const agc_builtin agc_json_builtins[] = {
   {"JSON.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.string", 1, builtin_string, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.int", 1, builtin_int, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.kind", 1, builtin_kind, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.float", 1, builtin_float, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.bool", 1, builtin_bool, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false},

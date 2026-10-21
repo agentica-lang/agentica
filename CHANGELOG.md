@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `JSON.kind(value)`, the kind of a JSON value as a String, without encoding it.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added

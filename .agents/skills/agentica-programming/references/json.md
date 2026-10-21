@@ -6,6 +6,7 @@ JSON.array(items: List[Json]) -> Json
 JSON.from(value: T) -> Json
 JSON.null() -> Json
 JSON.null?(value: Json) -> Bool
+JSON.kind(value: Json) -> String
 JSON.schema(type: T) -> Json
 JSON.decode(s: String, type: T) -> Result[T]
 JSON.parse(s: String) -> Result[Json]
@@ -57,6 +58,10 @@ JSON.list(j: Json) -> Result[List[Json]]
   64-bit integer; `1.0` and `1e0` are not Int. `JSON.float` accepts integers and
   decimal or exponent numbers (binary64 rounding) and rejects overflow. Parsed
   integers may exceed Int bounds until extracted.
+- `JSON.kind` returns `"null"`, `"bool"`, `"int"`, `"float"`, `"string"`,
+  `"array"` or `"object"` and never fails. `1` and `-0` are `"int"` (even
+  beyond Int bounds, where `JSON.int` still errors); `1.0` and `1e2` are
+  `"float"`.
 - `JSON.list` returns elements as `Json` values, including mixed arrays. Null
   stays inside `Json`; there is no null extractor.
 
