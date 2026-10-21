@@ -325,8 +325,9 @@ static void cancel_one(agc_vm *vm, agc_task *t, const char *why) {
 
    A task that this walk held already (stamped with `walk`) is not held again when it shows up among the children of
    `t` after an adoption: it was held by its parent then, and every task that ended since between it and `t` held its
-   own parent right after its cancel_one (only this walk ends tasks while it holds rt->sync, and end hooks do not
-   cancel), so `t` is on its chain already. Climbing the chain again at each level would cost O(depth^2) (#499). */
+   own parent right after its cancel_one, so `t` is on its chain already. A close of an ended task may start a nested
+   walk (an HTTP server cancels its group), but that walk only reaches a subtree this one has not entered, and its
+   own stamp differs. Climbing the chain again at each level would cost O(depth^2) (#499). */
 static void cancel_tree(agc_vm *vm, agc_task *root, const char *why, agc_task *holder) {
   agc_sync_assert(vm);
   if (root == vm->rt->main || root->state == AGC_TASK_DONE) return;

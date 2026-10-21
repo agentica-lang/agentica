@@ -2025,7 +2025,6 @@ def test_handles_held_by_cancelled_descendants_are_closed_when_the_await_of_thei
         assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
 
 
-
 DEEP_CANCEL = r"""struct Level
   depth: Int
   ready: Channel[Int]
@@ -2053,6 +2052,8 @@ def main() -> Void
   ready: Channel[Int] = Channel.new(1)
   root = Task.spawn(&level, Level(depth: System.args()[0].to_i.unwrap!, ready: ready))
   ready.recv(60000).unwrap!
+  # The leaf must be running, not waiting in a run queue: a queued task ends at once and the walk never holds it.
+  Task.sleep(50)
   t0 = Time.monotonic_ms()
   Task.cancel(root)
   puts("cancel #{Time.monotonic_ms() - t0}")
@@ -2070,6 +2071,7 @@ def test_one_cancel_of_a_deep_line_with_a_busy_leaf_costs_linear_time(tmp_path):
     lines = result.stdout.splitlines()
     assert (result.code, lines[1:]) == (0, ["error(\"task: cancelled\")"]), result.stderr
     assert int(lines[0].removeprefix("cancel ")) < scaled(1500), lines[0]
+
 
 NET_STOP = r"""def read(socket: Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
