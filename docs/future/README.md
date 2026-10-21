@@ -139,12 +139,6 @@ small-value sharing.
   - File: [`39-semantic-cli.md`](39-semantic-cli.md)
   - Status: In progress (row 7.2b): `doc` and `outline` built
 
-- §: 40
-  - Title: Native code and FFI
-  - File: [`40-native-code.md`](40-native-code.md)
-  - Status: Decided by the owner on 2026-10-20; the order is in
-    [§40.5](40-native-code.md#405-order)
-
 - §: 41
   - Title: Dates and times
   - File: [`41-dates-and-times.md`](41-dates-and-times.md)
@@ -167,8 +161,8 @@ small-value sharing.
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
   - Status: 45-0 (`std/toml`) and 45a (manifest, lock, `pkg/<name>/`
-    imports from the cache) built; 45b-45d planned. Order:
-    [§40.5](40-native-code.md#405-order). Form: issue #468
+    imports from the cache) built; 45b-45d planned. Order: issue
+    [#534](https://github.com/sonic182/agentica/issues/534). Form: issue #468
 
 - §: 46
   - Title: Signals

@@ -90,9 +90,10 @@ The reasons, in the order of their weight:
   `Int`, so the width is only a convention in the function name, and
   `write_u16_be` checks the range at run time (`value 70000 does not fit in
   u16`). With `UInt16` the range is in the type, and the writer takes the type.
-- **A future FFI (§40).** C has `int32_t`, `uint8_t` and `float`. A native
-  function needs those widths in its signature, and §40 lists the types that
-  need conversions first.
+- **A future FFI** (issue
+  [#534](https://github.com/sonic182/agentica/issues/534)). C has `int32_t`,
+  `uint8_t` and `float`. A native function needs those widths in its signature,
+  and the issue lists the first C types.
 - **Interop.** CBOR's integer major types cover -2^64 to 2^64 - 1
   (`docs/future/16-cbor.md` maps `Int` only). Other systems use `uint64` IDs
   and 32-bit floats in their data.
@@ -460,7 +461,7 @@ conversion.
 - **`Bytes` (§12.5): not added (recommended).** Reason: `List[UInt8]`, with the
   typed storage of step 4, is the compact byte sequence that `Bytes` was meant
   to be, and a second type would double every `*_bytes` builtin. The docs that
-  name `Bytes` as a prerequisite (§12.5, §16, §20, §18.4, §40 and others; `rg -l
+  name `Bytes` as a prerequisite (§12.5, §16, §20, §18.4 and others; `rg -l
   '\bBytes\b'`) are updated when step 3 lands.
 - **Range (§12.1).** Stays `Int` only (recommended). Reason: a range over a
   sized type has no natural end type, and `for` over `Int` is the common loop. A
