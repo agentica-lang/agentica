@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica type-at` gives the `doc` and the `signature` of the definition, and
   answers a builtin (`split` in `xs.split(",")`) with `kind` `builtin` and its
   `help` object, as `agentica help NAME --json` prints it.
+- `agentica type-at` on a local (a parameter, a binding, a `for` variable or a
+  name in a `case` pattern) gives its type and a definition at its binding, on a
+  use and on the binding itself.
 
 ### Changed
 

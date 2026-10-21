@@ -121,9 +121,11 @@ changes only how diagnostics print; answers keep the text form.
   checked type of the innermost expression or name at the position, and the
   definition of what it names, with the `doc` and the `signature` of the
   declaration, so one hover is one process. A builtin answers `kind` `builtin`
-  with its `help` object and no definition. Planned: a type argument
-  (`Models.User` in `List[Models.User]`) with the definition of a type alias;
-  definitions of locals (they have a type and no definition today). `FILE` is
+  with its `help` object and no definition. A local (a parameter of a function
+  or a block, a binding, a `for` variable, a name in a `case` pattern) answers
+  with its type and a definition at its binding, on a use of the name and on the
+  binding itself. Planned: a type argument (`Models.User` in
+  `List[Models.User]`) with the definition of a type alias. `FILE` is
   a path of the disk, never a `std/` module, checked with its imports; it needs
   no `main` (§39.6).
 
@@ -190,7 +192,13 @@ signatures are strings.
   and the item fields and cannot drift. The `type-at` `definition` has the
   `doc` (the whole `##` text or null) and the `signature` of its declaration,
   read from the parsed file, since the linker drops the doc of an `export`; it
-  will carry `kind` `alias` with the answer for a type argument. The top-level
+  will carry `kind` `alias` with the answer for a type argument. A local has a
+  definition too, of `kind` `parameter` (of a function or a block), `local` (an
+  assignment that introduces the name), `loop` (a `for` variable) or `pattern`
+  (a name in a `case` pattern), with the `signature` `name: Type` and no `doc`;
+  its `span` is the parameter or the binding, or the name alone for a `for`
+  variable and a pattern name, and `name_span` is the name at the binding. The
+  top-level
   `kind` of `type-at` is an open set (`expression`, `name`, `builtin`; later
   versions may add values) and a client accepts a value it does not know, so
   `builtin` needed no new `version`. A `builtin` answer has `definition` null

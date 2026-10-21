@@ -3,7 +3,7 @@
 ##
 ## A position must be on a token: a blank between tokens, a comment, the end of a line and anything past the end of the
 ## text hold no expression, even inside the span of one. A local (a parameter, a binding, a loop variable or a pattern
-## name) is answered with its type and no definition; its binding is not recorded yet.
+## name) is answered with its type and a definition at its binding, on a use of the name and on the binding itself.
 
 import CatalogJson from "../catalog/catalog_json"
 import Checker from "../check/checker"
@@ -17,6 +17,7 @@ import State from "../check/check_state"
 import T from "../syntax/types"
 import At from "at"
 import Definitions from "definitions"
+import Locals from "locals"
 import Position from "query_position"
 
 # The characters of a name written in front of the parenthesis of a call: a name, a dot between a module and its
@@ -28,10 +29,11 @@ HEAD_LIMIT = 128
 
 ## What a position is on. `kind` is `builtin` when the position is on the name of a builtin (`split` in
 ## `xs.split(",")`, `puts`), `name` when it is on another name (a variable, a function or type named, the name of a
-## field or method after the dot) and `expression` otherwise; `span` is always the whole expression, so on the name of
-## a field access it is the whole access. `text` is the source text of `span`, `type` the type as the root file writes
-## it, and `definition` the declaration of what the expression names. `builtin` is the catalog row of a `builtin`
-## answer, which has no definition.
+## field or method after the dot, the name where a local is bound) and `expression` otherwise; `span` is always the
+## whole expression, so on the name of a field access it is the whole access, and the name alone on a local. `text` is
+## the source text of `span`, `type` the type as the root file writes it, and `definition` the declaration of what the
+## expression names, or the binding of a local. `builtin` is the catalog row of a `builtin` answer, which has no
+## definition.
 export struct Answer
   kind: String
   span: Source.Span
@@ -51,11 +53,39 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
       if !on_token?(module.text, offset)
         return nothing(asked, here)
       end
-      case At.innermost(module, checked.types, offset)
-        Ast.Optional.Absent -> return nothing(asked, here)
-        Ast.Optional.Present(expr) -> return Diag.Outcome.Done(found(linked, checked, expr, offset))
+      # A local comes first: on the name of a binding, the innermost expression would be the one around it.
+      case Locals.find(module, checked.bound, offset)
+        Ast.Optional.Present(local) -> return Diag.Outcome.Done(local_answer(linked, local))
+        Ast.Optional.Absent -> return expression_answer(linked, checked, asked, offset, here)
       end
   end
+end
+
+def expression_answer(
+  linked: Linker.Linked,
+  checked: Checker.Checked,
+  asked: Position.Asked,
+  offset: Int,
+  here: Source.Span,
+) -> Diag.Outcome[Answer]
+  case At.innermost(linked.modules[0], checked.types, offset)
+    Ast.Optional.Absent -> return nothing(asked, here)
+    Ast.Optional.Present(expr) -> return Diag.Outcome.Done(found(linked, checked, expr, offset))
+  end
+end
+
+# A local, on a use or on its binding: `span` is the name there, and the definition is the binding.
+def local_answer(linked: Linker.Linked, at: Locals.Found) -> Answer
+  module = linked.modules[0]
+  type = T.to_text_as(at.local.type, written_prefixes(linked))
+  return Answer(
+    kind: "name",
+    span: at.site,
+    text: source_text(module.text, at.site),
+    type: type,
+    definition: Ast.Optional.Present(Definitions.of_local(module, at.local, type)),
+    builtin: Ast.Optional.Absent,
+  )
 end
 
 def nothing(asked: Position.Asked, span: Source.Span) -> Diag.Outcome[Answer]

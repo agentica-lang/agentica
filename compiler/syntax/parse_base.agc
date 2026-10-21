@@ -466,7 +466,7 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
       return nested_slot(e, pos, ids)
     end
     advanced = try expect(e, pos, "name", "a pattern binding or _", false)
-    slot = Ast.Slot.Bind(lexeme)
+    slot = Ast.Slot.Bind(lexeme, token.span)
     if lexeme == "_"
       slot = Ast.Slot.Skip
     end

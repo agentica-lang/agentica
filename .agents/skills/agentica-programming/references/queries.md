@@ -98,17 +98,29 @@ type, span, definition, help}`.
 
 - `kind` is `builtin` when the position is on the name of a builtin (`split` in
   `xs.split(",")`, `puts`), `name` when it is on another name (a variable, a
-  constant, the callee of a call, the field or method after the dot) and
-  `expression` otherwise. It is an open set (later versions add values):
+  constant, the callee of a call, the field or method after the dot, the name
+  where a local is bound) and `expression` otherwise. It is an open set (later versions add values):
   accept a value you do not know. `span` is always the whole expression and
   `text` its source.
 - `definition` is null, or the span of the declaration (`{file, range}`) with
-  `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`),
-  `name`, `name_span` (the span of the name), `signature` (`make(name: String)
-  -> User`, `age: Int` for a field, `Circle(Float)` for a variant) and `doc`
-  (the whole `##` text, or null). It is null for a local (a parameter, a
-  binding, a loop variable or a pattern name) and for a builtin; both still
-  have their type.
+  `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; for a
+  local see below), `name`, `name_span` (the span of the name), `signature`
+  (`make(name: String) -> User`, `age: Int` for a field, `Circle(Float)` for a
+  variant) and `doc` (the whole `##` text, or null). It is null for a builtin,
+  which still has its type.
+- A local answers with its type and a `definition` at its binding, on a use of
+  the name and on the binding itself (the answer is then the same on both). Its
+  `kind` is `parameter` (of a function or a block), `local` (the assignment that
+  introduces the name), `loop` (a `for` variable) or `pattern` (a name in a
+  `case` pattern); `signature` is `name: Type` and `doc` null. The top-level
+  `span` and `text` are the name alone. `range` is the whole parameter or
+  binding, and the name alone for `loop` and `pattern`; `name_span` is the name
+  where it is bound, the place to edit. The binding is the one whose scope holds
+  the position, so a name bound in sibling blocks (two `for i` loops, `note` in
+  each branch of an `if`) answers its own, and a use inside a block of a local
+  outside it answers the outer binding. An assignment to a name already bound
+  (`total += 1`) is a use of that binding. A `_` binds nothing and is on no
+  expression. `kind` is an open set: accept a value you do not know.
 - `help` is null, except for `kind` `builtin`: then it is the object of
   `agentica help NAME --json` for that builtin (`name`, `signature`,
   `description`, `parameters`, `effects`; `overloads` for a builtin with
