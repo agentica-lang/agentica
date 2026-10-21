@@ -35,7 +35,7 @@ rules live in `AGENTS.md` and `agentica-development`.
   `make test TESTS="tests/test_<area>.py ..."`, `make site`). Never `make
   test` without `TESTS`, the slow tier, sanitizer sweeps, fuzz or gc-stress
   (CI runs them); `KIND=files` only through Docker.
-- **VM C code or concurrency:** the author reads `vm-c-critic` (its
+- **VM C code or concurrency:** tell the author to read `vm-c-critic` (its
   "Scheduler, tasks and the core rules (§14)" section first) before it builds,
   so the first push has the tests reviewers ask for: cancel from another
   thread, deadlines, stop signals, stalls, exact interleavings in C tests, and

@@ -70,7 +70,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     problem.agc  # the packed Problem with its notes (pack, unpack), which every stage returns as its error
     diagnostic_model.agc diagnostic_json.agc diagnostic_read.agc  # the diagnostic as plain data; its JSON (--json); and back from JSON (Analysis.diagnostic)
   docs/  # `agentica doc` (§32.5): lex and parse one module, then its exported API with the `##` docs (imports only syntax/ and diagnostics/)
-  query/  # the query commands (§39): `outline` parses one file; `type-at`, `refs` and `symbol` link and check (`--partial` answers from the functions that check: partial_at.agc); imports docs/, modules/, check/, catalog/ and syntax/
+  query/  # the query commands (§39): `outline` parses one file; `symbol` parses and links; `type-at` and `refs` link and check (`--partial` answers from the functions that check: partial_at.agc); imports docs/, modules/, check/, catalog/ and syntax/
   bdd/  # the `agentica test` driver
     bdd_driver.agc  # run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
   embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary

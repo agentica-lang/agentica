@@ -13,8 +13,8 @@ on tasks too easy to separate the arms by accuracy, against an untyped Python
 arm. It is not yet shown that agents do better in Agentica than in Python.
 Repeat the comparison with the current language, harder tasks and a typed Python
 arm. A pilot comes first, at order step 7.2.2 (decided by the owner on
-2026-10-13); the full round is order step 10: after the server measurement (7j)
-and the JIT (9.1), and order step 11 (multicore) does not wait for it.
+2026-10-13); the full round has no fixed order (owner, 2026-10-21), and order
+step 11 (multicore) does not wait for it.
 
 - [x] Pilot (order step 7.2.2), done on 2026-10-14 (rounds 9 to 11 of
   `docs/eval.md`): a regression round of the `binary` arm on the VM, and the

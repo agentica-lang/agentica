@@ -2,11 +2,20 @@
 
 `agentica outline FILE`, `type-at FILE:LINE:COL`, `refs NAME|FILE:LINE:COL
 [PATH...]` and `symbol NAME [PATH...]` answer questions about code without
-reading whole files. Each takes `--json` (one object on stdout) and
-`--stdin FILE` (the text on standard input is FILE, saved or not). The text
-form starts with `file:line:column`, like `rg`. Lines and columns count from 1,
-in code points. From a program, `std/analysis` gives the same answers as
-structs (`references/analysis.md`).
+reading whole files. Each takes `--json` (one object on stdout) and `--stdin
+FILE` (the text on standard input is FILE, saved or not; `type-at` and `refs`
+take `--stdin FILE:LINE:COL`, before the position). `--stdin FILE` takes the
+place of the FILE argument (`outline --stdin FILE`, not `outline FILE --stdin
+FILE`); FILE need not exist, but imports are found from its folder, and
+`std/...` is then a path of the disk, not a `std/` module. Options may come
+before the command (`agentica --json refs ...`) or after it. Answers go to
+stdout and diagnostics to stderr; `--ai` changes only how diagnostics print.
+The text form starts with `file:line:column`, like `rg`. Lines and columns
+count from 1, in code points. Every JSON answer has `"version": 1` and
+`"command"`; a field that changes meaning gets a new version, new fields can
+appear within a version (ignore keys you do not know), and types and
+signatures are strings. From a program, `std/analysis` gives the same answers
+as structs (`references/analysis.md`).
 
 Exit codes: 2 is a bad question, 1 a program that does not check.
 
@@ -18,8 +27,8 @@ Exit codes: 2 is a bad question, 1 a program that does not check.
 | `refs`    | any error in the program, or FILE (or every file of PATH) does not link | `QUERY-USAGE`, `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME`, `QUERY-NO-EXPRESSION` |
 
 `QUERY-USAGE` is at `<arguments>` (a missing or extra argument, an unknown
-option, `--stdin` without a file, an unreadable path, a folder with no `*.agc`)
-or at the position (a bad `FILE:LINE:COL`). Errors print as `check` prints them.
+option, `--stdin` without a file, a bad `FILE:LINE:COL`, an unreadable path, a
+folder with no `*.agc`). Errors print as `check` prints them.
 
 ## outline
 
@@ -75,18 +84,25 @@ src/models.agc:4:3 field email
 Line 1: the span of the innermost expression at the position, its text and its
 type. Line 2, if any: the definition. On a builtin, line 2 is `builtin` and its
 signature. On a field or method name the expression is the whole access
-(`user.email`). It checks the file and its imports, but needs no `main`. A type
-of another file is written as the file writes it (`Models.User` through the
-import alias). A type argument (`Models.User` in `List[Models.User]`) is not
-answered yet.
+(`user.email`). It checks the file and its imports, but needs no `main` (a
+`main` with the wrong signature is still `CHECK-MAIN`). A type of another file
+is written as the file writes it (`Models.User` through the import alias); one
+from a module the file does not import is written by its bare name. A type name
+in an annotation (`xs: Models.User`) or in a type argument (`Models.User` in
+`List[Models.User]`) is not answered yet (`QUERY-NO-EXPRESSION`); `refs` lists
+these uses as `type`.
+
+A keyword of an expression (`try`, `do`, `and`, `!`) answers that expression;
+`return`, `end` and `case` are on no expression.
 
 JSON: `{version: 1, command: "type-at", position: {file, line, column}, kind,
 text, type, span, definition, help}`.
 
-- `kind`: `builtin` (on a builtin's name, `split` in `xs.split(",")`), `name`
-  (a variable, constant, callee, field or method name, or the name that binds a
-  local) or `expression`. An open set: accept values you do not know. `span` is
-  always the whole expression; `text` is its source.
+- `kind`: `builtin` (on a builtin's name, `split` in `xs.split(",")`; `to_s`
+  and `inspect` only where the checker resolves them to one, as on a number),
+  `name` (a variable, constant, callee, field or method name, or the name that
+  binds a local) or `expression`. An open set: accept values you do not know.
+  `span` is always the whole expression; `text` is its source.
 - `definition`: null, or `{file, range, kind, name, name_span, signature, doc}`.
   `kind` is `function`, `struct`, `enum`, `variant`, `field` or `constant`
   (`signature` is e.g. `make(name: String) -> User`, `age: Int`,
@@ -143,12 +159,13 @@ skipped}`.
   `references`.
 - `builtin`: the builtin's name (`File.read_text`, `List.map`), else null.
 - `references`: `{kind, function, span}`, FILE's files first, then by position.
-  `kind` is `call`, `value` (`&f`, a constant), `type` (an annotation),
-  `construct` (a struct construction, a `with`, or a variant constructor; the
-  span of a field name for a field), `read` (a field read), `pattern` (a variant
-  in a `case` arm) or `binding` (a use of a local, `x += 1` included).
-  `function` is the enclosing function or null. An open set. No references is an
-  empty list, exit 0.
+  `span` is the name alone (`make` of `Models.make`). `query` is the NAME or the
+  `FILE:LINE:COL` as asked. `kind` is `call`, `value` (`&f`, a constant), `type`
+  (an annotation), `construct` (a struct construction, a `with`, or a variant
+  constructor; the span of a field name for a field), `read` (a field read),
+  `pattern` (a variant in a `case` arm) or `binding` (a use of a local, `x += 1`
+  included). `function` is the enclosing function or null. An open set. No
+  references is an empty list, exit 0.
 - `skipped`: files of `PATH...` that do not link, as for `symbol`.
 
 ## symbol
@@ -179,17 +196,20 @@ folder; default `.`). NAME is written as the code writes it:
 A folder is every `*.agc` file below it, bytewise by path, without hidden
 folders, `agc_libs/` and links. The files link together, so no `main` and no
 type check are needed. A file that does not lex, parse or link is in `skipped`
-and the rest still answer. `--stdin FILE` is searched too, first, and need not
-exist on disk.
+and the rest still answer; the text form prints `skipped FILE: CODE` on stderr
+for each (`refs` too). A file that imports a failing module is skipped with the
+same diagnostic. `--stdin FILE` is searched too, first, and need not exist on
+disk.
 
 JSON: `{version: 1, command: "symbol", query, matches, skipped}`.
 
 - `matches[]`: `{kind, name, module, exported, signature, doc, span,
   name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `constant`,
   `field`, `variant` or `builtin` (an open set). `name` is the name alone;
-  `module` is the file's name. `span` is the declaration (`export` included), so
-  compare `name_span`, not `range`, with a `type-at` definition (its `range`
-  starts after `export`).
+  `module` is the file's name. A `signature` writes its types as the declaring
+  module does. `span` is the declaration (`export` included), so compare
+  `name_span`, not `range`, with a `type-at` definition (its `range` starts
+  after `export`).
 - A field adds `type` and `struct`; a variant adds `payload` and `enum`. A
   builtin has `help` and null `module`, `span`, `name_span` and `doc`.
 - `skipped[]`: `{file, diagnostic}`, the diagnostic being the first problem of
@@ -198,11 +218,11 @@ JSON: `{version: 1, command: "symbol", query, matches, skipped}`.
 ## Partial answers
 
 While you edit, the program often does not check. `type-at --partial` and
-`refs FILE:LINE:COL --partial` (no NAME or PATH) still answer when only some
-functions fail: exit 0, the usual JSON plus `"partial": true` and `diagnostics`
-(the `--json` objects of the failing functions, in program order). A complete
-answer has neither key. In text form each problem is a stderr line `partial
-FILE:LINE:COL: CODE`.
+`refs FILE:LINE:COL --partial` (no NAME or PATH; with one, `QUERY-USAGE`) still
+answer when only some functions fail: exit 0, the usual JSON plus `"partial":
+true` and `diagnostics` (the `--json` objects of the failing functions, in
+program order). A complete answer has neither key. In text form each problem is
+a stderr line `partial FILE:LINE:COL: CODE`.
 
 - `type-at` in a function that checks gives its type and definition. On a name
   in a function that does not check (a call, constructor, variant, type,

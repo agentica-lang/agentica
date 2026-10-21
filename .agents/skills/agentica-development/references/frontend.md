@@ -333,7 +333,7 @@ are `@slow`. `tests/frontend_support.py` is the helper;
   the body or above the block, never between the block and the `def`
   (`PARSE-DETACHED-DOC`).
 - `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`). Compare types
-  with `Types.same`; an enum cannot be compared with `==`.
+  with `Types.same?`; an enum cannot be compared with `==`.
 - `s = s + piece` in a loop is quadratic. Use `push` and `join`.
 - The VM call depth is 10,000 frames. Recurse on the tree only with a bounded
   depth, or use an explicit stack and loops.

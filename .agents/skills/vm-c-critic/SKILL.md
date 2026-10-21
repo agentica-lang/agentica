@@ -154,9 +154,10 @@ a finding.
   `origin/<base>` in a scratch worktree (`git worktree add`, then
   `git submodule update --init` for the `vm/third_party` libraries; the default
   build uses the system OpenSSL), alternate the runs of the two binaries and
-  compare medians (method: `references/bench-eval.md`). The same binary can move
-  20–35 % with code layout alone, so one run proves nothing. Compare peak RSS
-  (`/usr/bin/time -v`) when memory is the claim. Otherwise skip timing.
+  compare medians (method: `references/bench-eval.md` of agentica-development).
+  The same binary can move 20–35 % with code layout alone, so one run proves
+  nothing. Compare peak RSS (`/usr/bin/time -v`) when memory is the claim.
+  Otherwise skip timing.
 
 ### Simplicity and architecture
 
@@ -171,13 +172,14 @@ a finding.
 - Platform code: a new `#ifdef` inside a shared function, two copies of one
   function under `#ifdef`, or one-system flags in a shared struct is a finding
   (flag what the diff adds, not older code). The fix is a platform adapter
-  (`references/vm-c.md`, "Platform code").
-- C style and comments: apply `references/vm-c.md` ("C style"). Its *checked*
-  rules run in `make vm-lint` and `tests/test_vm_style.py`; judge the rest by
-  reading. Flag a comment that narrates obvious code, or commented-out code, as
-  a Nit. Ask for a short `/* */` comment as a Nit where complex code gives no
-  reason (an invariant, a GC or ownership rule, a protocol quirk, a
-  hostile-input check). Do not flag a useful comment.
+  (`references/vm-c.md` of agentica-development, "Platform code").
+- C style and comments: apply `references/vm-c.md` of agentica-development
+  ("C style"). Its *checked* rules run in `make vm-lint` and
+  `tests/test_vm_style.py`; judge the rest by reading. Flag a comment that
+  narrates obvious code, or commented-out code, as a Nit. Ask for a short
+  `/* */` comment as a Nit where complex code gives no reason (an invariant, a
+  GC or ownership rule, a protocol quirk, a hostile-input check). Do not flag a
+  useful comment.
 - Duplication: flag the clones you see and suggest a shared helper; CI runs
   `make dup-check`. Never fix a clone by adding it to the baseline.
 - Builtin tables: a C test may index a table by position, for example

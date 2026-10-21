@@ -28,11 +28,10 @@ Only what is pending, what no home records, and the section numbers that
 
 ### 39.2 Shape
 
-Built. The text and JSON forms are in `queries.md`. Not stated elsewhere: the
-options may come before the command, as for every command; after it they are
-parsed by hand, as `help` and `doc` do. Answers go to stdout and diagnostics
-to stderr, as for `check`. `--ai` changes only how diagnostics print; answers
-keep the text form.
+Built. The text and JSON forms are in `queries.md`. The options may come before
+the command, as for every command; after it they are parsed by hand, as `help`
+and `doc` do. The streams and `--ai` rules are in the programming skill
+(`references/queries.md`).
 
 ### 39.3 Commands
 
@@ -56,10 +55,8 @@ Built. The name forms, `PATH...`, file names and the order of results are in
 
 ### 39.5 JSON
 
-Built. The shapes are in `queries.md`. The compatibility rule is kept here
-because no home states it: every object has `"version": 1` and `"command"`; a
-field that changes meaning gets a new version, and new fields can be added
-within a version. Types and signatures are strings.
+Built. The shapes and the compatibility rule are in the programming skill
+(`references/queries.md`).
 
 ### 39.6 Programs that do not check
 

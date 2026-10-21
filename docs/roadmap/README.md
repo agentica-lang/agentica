@@ -198,7 +198,7 @@ rows after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 7.2b
   - **Next work:** **Built (2026-10-21, issue #506):** the semantic CLI and
-    `std/analysis` ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)),
+    `std/analysis` ([§39](../future/39-semantic-cli.md)),
     front end and CLI only, nothing to run. Open: `type-at` on type names
     (§39.3); the 6c round (row 10) measures the commands (§39.12)
   - **Outcome:** Agents list declarations, find definitions and references
@@ -347,8 +347,8 @@ rows after them may run in parallel when needed and keep their relative order.
 - **Order:** 10
   - **Next work:** Evaluation round: Agentica against typed Python on harder
     tasks (6c), the full round after the pilot of step 7.2.2, with the semantic
-    CLI of row 7.2b (§39.12). It waits until after the bootstrap (row 7.2.7),
-    by the owner's decision of 2026-10-14
+    CLI of row 7.2b (§39.12). The full round has no fixed order (owner,
+    2026-10-21)
   - **Outcome:** Evidence on whether agents do better in Agentica than in typed
     Python
 

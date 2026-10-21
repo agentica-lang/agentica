@@ -166,7 +166,7 @@ end
 
 ## Files and docs
 
-A file has a fixed order: its doc and imports, constants, structs, enums and type aliases, exported functions, then private functions.
+A file has a fixed order: its doc and imports, constants, structs, enums and type aliases, exported functions, then private functions. Sort imports by path. A constant is imported by name (`import {LIMIT} from "limits"`) and the rest through the alias; a file may import one module both ways.
 
 ```agentica {expect="CHECK-DECL-ORDER"}
 # bad
@@ -181,7 +181,7 @@ end
 
 Keep one topic per file, and export only the names that other files use.
 
-A `##` doc says what a function returns. A `#` comment says why the code is the way it is, not what the next line does:
+Document as little as possible (KISS; implicit over explicit). Only public code gets `##`: an exported `def`, `struct` or `enum` (every export of `stdlib/` needs one; `tests/test_stdlib_docs.py` checks it), saying what it returns or is, not how. A private `def` never gets `##`; if it needs a note, use one `#` comment. Comment complex code where its nature needs it. A field or variant gets a note only when its name does not say enough. No doc that repeats the name or the signature. A `#` comment says why the code is the way it is, not what the next line does:
 
 ```agentica {mode="check"}
 # bad
@@ -423,7 +423,7 @@ def main() -> Void
 end
 ```
 
-List every variant in `case` and leave out `_`, so that a new variant fails the check where it must be handled:
+List every variant of a small enum in `case` and leave out `_`, so that a new variant fails the check where it must be handled. A `_` is fine when many variants share one outcome:
 
 ```agentica {mode="check"}
 # bad
