@@ -14,6 +14,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   module with its `##` docs.
 - `agentica outline FILE [--json] [--stdin FILE]` lists the declarations of a
   file, private ones too, with their signatures, docs and spans.
+- `agentica type-at FILE:LINE:COL [--json]` gives the type and the definition at
+  a position of a checked file; `type-at --stdin FILE:LINE:COL` reads the file
+  from standard input.
 
 ### Fixed
 

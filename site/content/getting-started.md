@@ -129,6 +129,19 @@ src/orders.agc:14:1 def round_cents(value: Float) -> Int
 
 It prints each declaration with `file:line:column` first, like `rg`, and private declarations too. `--json` adds the `##` doc and summary, the signature, `exported`, and the span of each declaration and of its name, with the fields and variants. Like `doc`, it only reads the file, so its imports need not exist. A bad question, such as a missing file, is `QUERY-USAGE` and exits 2.
 
+Ask for the type at a position, with the definition of what the expression names:
+
+```sh
+agentica type-at src/orders.agc:22:14    # --json prints one JSON object; --stdin reads the file from standard input
+```
+
+```text
+src/orders.agc:22:9-22:19 user.email: String
+src/models.agc:4:3 field email
+```
+
+Line and column count from 1, in code points (an emoji is one column). A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. In this version a local variable has a type and no definition.
+
 ## Options
 
 | Option | Does |

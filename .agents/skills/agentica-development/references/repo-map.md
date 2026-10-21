@@ -76,9 +76,10 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   docs/  # `agentica doc` (§32.5): lex and parse one module, then its exported API with the `##` docs (imports only syntax/ and diagnostics/)
     doc.agc doc_model.agc signature.agc  # of_text(text) -> Outcome[Module]; the exported items (the doc of an `export` is on its ExportDecl); the signature of each kind, types as written
     doc_json.agc doc_text.agc  # the --json object of §32.5; the Markdown form
-  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too (imports docs/, modules/ and syntax/)
+  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` checks it and answers for a position (imports docs/, modules/, check/ and syntax/)
     query_options.agc query_files.agc  # the words after the command (--json, --ai, --stdin FILE, QUERY-USAGE); the one file, read through the Workspace, and its name in an answer
     outline.agc outline_json.agc outline_text.agc  # of_text(text) -> Outcome[Outline]; the --json object of §39.5; the text form
+    query_position.agc at.agc definitions.agc type_at.agc type_at_json.agc type_at_text.agc  # FILE:LINE:COL and the offset; the innermost typed expression (worklist); the declaration of a name; answer(linked, checked, asked) -> Outcome[Answer] (QUERY-NO-EXPRESSION); the --json object and the text form
   bdd/  # the `agentica test` driver
     bdd_driver.agc  # the BDD driver (§18.3, port step 7), part of the front end: run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
     bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file

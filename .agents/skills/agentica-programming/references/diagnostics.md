@@ -11,7 +11,8 @@ expected Int, found String
 ```
 
 The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
-(while running); `QUERY-` is a mistake in the arguments of `agentica outline`.
+(while running); `QUERY-` is a mistake in the question of `agentica outline` or
+`type-at`.
 With `--json`, the diagnostic that ends the run is the last stderr line; the
 program's own stderr comes before it. Expected process failures
 return error Results. Codes without a row below: `CHECK-VOID-TYPE` and
@@ -231,10 +232,16 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     file is loaded, imported or not
 
 - **Code:** `QUERY-USAGE`
-  - **Meaning:** `agentica outline` was asked a wrong question: a missing or
-    extra argument, an unknown option, `--stdin` without a file, or a path that
-    cannot be read. The file is `<arguments>` at line 1, column 1, and the exit
-    status is 2 (`queries.md`)
+  - **Meaning:** `agentica outline` or `type-at` was asked a wrong question: a
+    missing or extra argument, an unknown option, `--stdin` without a file, a
+    bad `FILE:LINE:COL`, or a path that cannot be read. The file is
+    `<arguments>` at line 1, column 1, and the exit status is 2 (`queries.md`)
+
+- **Code:** `QUERY-NO-EXPRESSION`
+  - **Meaning:** `agentica type-at` was given a position on no token of an
+    expression: a blank between tokens, a comment, a keyword, or past the end of
+    a line or of the file. The span is the position (the end of the line or file
+    when past it); exit status 2. Move the position onto the expression
 
 - **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
   - **Meaning:** the `.agc` files of a package in the cache are not the ones the

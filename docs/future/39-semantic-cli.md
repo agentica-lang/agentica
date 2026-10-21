@@ -1,17 +1,19 @@
 ## 39. Semantic CLI for agents
 
-**Status:** `outline` built; the other commands planned (row 7.2b, after
-`agentica doc`). Agreed with the owner on 2026-10-13: agents program better when
-they can ask the compiler about the code, not only read the docs. The front end
-already builds a linked and checked program with types and spans; four CLI
-commands expose it, JSON first. No language change; front end and CLI only,
-nothing reaches lowering or the VM.
+**Status:** `outline` and the core of `type-at` built (types and definitions at
+a position; `doc`, builtins and locals, `--partial`, `symbol` and `refs` are
+planned) (row 7.2b, after `agentica doc`). Agreed with the owner on 2026-10-13:
+agents program better when they can ask the compiler about the code, not only
+read the docs. The front end already builds a linked and checked program with
+types and spans; four CLI commands expose it, JSON first. No language change;
+front end and CLI only, nothing reaches lowering or the VM.
 
 ```text
 agentica outline FILE [--ai|--json]
 agentica symbol NAME [PATH...] [--ai|--json]
 agentica refs NAME|FILE:LINE:COL [PATH...] [--ai|--json]
 agentica type-at FILE:LINE:COL [--ai|--json]
+agentica type-at --stdin FILE:LINE:COL [--ai|--json]
 ```
 
 The options may also come before the command, as for every command. After the
@@ -58,17 +60,21 @@ Checked against `compiler/` after `agentica doc` (PR #509):
   `compiler/check/check_method.agc:122`) and the lowering reads it; it is not a
   field's struct.
 - `Modules.Module` keeps each module's alias table (`aliases`,
-  `compiler/modules/modules.agc:47`), but `LinkedModule`
-  (`compiler/modules/linker.agc:16`) does not carry it.
-- `Types.display_name` (`compiler/syntax/types.agc:229`) strips the `@N::`
-  prefix, so diagnostics print an imported type as `User`, not `Models.User`.
+  `compiler/modules/modules.agc`), and `LinkedModule`
+  (`compiler/modules/linker.agc`) carries it as `aliases`, alias to module key
+  (`type-at` prints an imported type through it).
+- `Types.display_name` (`compiler/syntax/types.agc`) strips the `@N::` prefix,
+  so diagnostics print an imported type as `User`, not `Models.User`;
+  `Types.to_text_as` takes the map from a prefix to the alias of the asking file
+  and prints `Models.User`.
 - The checker requires exactly one `main() -> Void` (`CHECK-MAIN`,
-  `compiler/check/check_register.agc:28-47`).
-- Some names have no span of their own: a `FieldAccess` and a `MethodCall` span
-  starts at the target (`compiler/syntax/parser.agc:487-494`), and the loop
-  variable of `ForStmt` and the slots of `VariantPattern` hold plain strings
-  (`compiler/syntax/ast.agc`). A function, struct, enum, field, variant,
-  constant and type alias has a `name_span`.
+  `compiler/check/check_register.agc`); `Checker.check_query`
+  (`compiler/check/checker.agc`) checks without that rule and with every other.
+- Some names have no span of their own: the loop variable of `ForStmt` and the
+  slots of `VariantPattern` hold plain strings (`compiler/syntax/ast.agc`). A
+  function, struct, enum, field, variant, constant, type alias, `FieldAccess`
+  and `MethodCall` has a `name_span`; the parser does not print it in
+  `parse_text`.
 - `agentica help NAME [--json]` prints a builtin from the catalog
   (`builtin_json`, `compiler/app/cli_help.agc:83`); an unknown name prints a
   plain line on stderr and exits 2. `agentica test` reports a usage error as the
@@ -146,10 +152,25 @@ changes only how diagnostics print; answers keep the text form.
   empty list, exit 0.
 - **`type-at FILE:LINE:COL`**: the checked type of the innermost expression or
   name whose span contains the position, with that span and its source text. On
-  the name of a field access, it is the whole access (`user.email` above). For a
-  name it also gives the definition's span (a declaration, a field, a variant, a
-  parameter or a local binding). Line and column are 1-based, in the units of
-  diagnostics.
+  the name of a field access, it is the whole access (`user.email` above). It
+  also gives the definition of what the expression names: a function, a struct,
+  an enum, a variant, a field or a constant, with the span of the declaration
+  and of its name. A type argument (`Models.User` in `List[Models.User]`) is
+  answered in a later PR, with the definition of a type alias. The core answers
+  a local (a parameter, a binding or a loop variable) with its type and no
+  definition, and a builtin with its type and no definition; their definitions
+  and docs come later. Line and column are 1-based and count code points, as
+  diagnostics do (an emoji is one column, not two UTF-16 units; the LSP
+  converts). The position must be on a token of an expression: a blank between
+  tokens, a comment, the end of a line, the body text of a heredoc (only its
+  interpolations answer) and a keyword that is part of no expression (`return`,
+  `end`, `case`) are on no expression, even inside the span of one. A keyword
+  that belongs to an expression (`try`, `do`, `and`, `!`) answers that
+  expression. `FILE` is a path of the disk (never a `std/` module), checked
+  with its imports; it needs no `main` (§39.6).
+- **`type-at --stdin FILE:LINE:COL`**: the text of `FILE` is the standard input,
+  as for `check --stdin FILE`; `FILE` need not exist, and its folder resolves
+  the imports. The position stands in for the `FILE` argument.
 
 ### 39.4 Names, paths and files
 
@@ -203,7 +224,7 @@ signatures are strings.
 
 - **A span** is the object
   `{file, range: {start: {line, column}, end: {line, column}}}`.
-  `diagnostic->jsexpr` puts the same two keys, `file` and `range`, at the top
+  `DiagnosticJson.json` puts the same two keys, `file` and `range`, at the top
   level of a diagnostic; a span here is those two keys in an object of their
   own. `file` follows the rule of §39.4.
 - **Types** in a signature are printed as written in their own module (the rule
@@ -235,7 +256,15 @@ skipped: [...]}`,
 - `type-at`:
   `{version, command, position: {file, line, column}, kind, text, type, span,
 definition}`.
-  `kind` is `"expression"` or `"name"`; `definition` is a span or `null`.
+  `kind` is an open set: a client must accept a value it does not know. Today
+  it is `"name"` when the position is on a name (a variable, a constant, a
+  function name, the callee of a call, the field or method after the
+  dot) and `"expression"` otherwise; later PRs add values (such as `"builtin"`)
+  without a new `version`. `span` is always the whole expression and `text` its
+  source. `definition` is `null` or a span with the keys `kind` (`function`,
+  `struct`, `enum`, `variant`, `field` or `constant`; `alias` comes with the
+  answer for a type argument), `name` and `name_span` (a span of the name): the
+  span is the whole declaration, as in `outline`.
 - `skipped`: the roots left out (§39.6), each as `{file, diagnostic}`,
   `diagnostic` being the `--json` diagnostic object.
 
@@ -292,8 +321,8 @@ for as little as they can:
   a checker that recovers from errors, which the front end does not have (each
   stage stops at the first error, AGENTS.md).
 - A queried file does not need `main`: the query checks with the `CHECK-MAIN`
-  rule off (a new `#:require-main? #f` argument to `check`). Everything else is
-  the same checker.
+  rule off (`Checker.check_query`, which shares the loop of `Checker.check`).
+  Everything else is the same checker.
 
 ### 39.7 Diagnostics and exit codes
 
@@ -318,9 +347,11 @@ in the usual three formats.
 
 - **Code:** `QUERY-NO-EXPRESSION`
   - **When:** `type-at` or `refs` at a position outside the file or not on an
-    expression or name
-  - **Span:** the position; past the end of a line, the line's end; past the
-    last line, the end of the file
+    expression or name (between tokens, on a comment, on the body text of a
+    heredoc or on a keyword that is part of no expression)
+  - **Span:** the one character at the position, in `FILE`; past the end of a
+    line, the empty span at the line's end; past the last line, the empty span
+    at the end of the file
 
 - The `<arguments>` span follows `RUNTIME-BDD-USAGE`
   (`compiler/bdd/bdd_report.agc:16-18`): a name typed on the command line has
@@ -330,50 +361,54 @@ in the usual three formats.
   `skipped` roots.
 - Exit 1: the program has an error (a `LEX-`, `PARSE-` or `CHECK-` diagnostic)
   that the command needs to be free of (§39.6), or every root was skipped.
-- Exit 2: every `QUERY-` code, as `help` and `doc` exit 2 for an unknown name.
-  Exit 1 always means "fix the program", exit 2 "fix the question".
+- Exit 2: every `QUERY-` code, as `help` and `doc` exit 2 for an unknown name;
+  so is a position on no expression. Exit 1 always means "fix the program", exit
+  2 "fix the question". A program with an error is checked first: its
+  diagnostic wins over a position that is on no expression.
 - **Alternatives, not chosen:** `CHECK-` codes (the program is fine; the
   question is wrong), and a plain stderr line as `help` prints today (agents
   parse JSON; a diagnostic has a span and a help).
 
 ### 39.8 Linking, checking and performance
 
-- **One link for all roots.** A new linker entry point, `link-programs`, links
-  several roots into one program with shared tables: each module is visited
-  once, whichever root imports it. Every module gets a `@N::` prefix, roots
-  included, so two roots can both declare `main` or `parse`; names print through
-  `display-name` as today. `link-program` keeps its behavior for `check` and
-  runs.
-- **A root is a transaction.** `link-programs` visits one root and resolves and
-  rewrites its modules before the next root. The tables it adds (trees,
-  prefixes, aliases, origins, uses) are kept only if that whole root links; if
-  any step fails, in its own file or in a dependency, they are dropped and the
-  root is skipped. A module that failed is remembered with its diagnostic, so a
-  later root that reaches it is skipped with that diagnostic without linking it
-  again. Modules already linked by an earlier root stay linked.
-- **Aliases.** `link-programs` also returns each module's alias table
-  (`imports`, module key to alias to module key), so `type-at` can print a type
-  through `FILE`'s own aliases.
-- **Origins.** The linker fills a side table, `#:origins`: each linked identity
+- **One link for all roots.** A new linker entry point, `Linker.link_programs`,
+  links several roots into one program with shared tables: each module is
+  visited once, whichever root imports it. Every module gets a `@N::` prefix,
+  roots included, so two roots can both declare `main` or `parse`; names print
+  through `Types.display_name` as today. `Linker.link_file` keeps its behavior
+  for `check` and runs.
+- **A root is a transaction.** `Linker.link_programs` visits one root and
+  resolves and rewrites its modules before the next root. The tables it adds
+  (trees, prefixes, aliases, origins, uses) are kept only if that whole root
+  links; if any step fails, in its own file or in a dependency, they are dropped
+  and the root is skipped. A module that failed is remembered with its
+  diagnostic, so a later root that reaches it is skipped with that diagnostic
+  without linking it again. Modules already linked by an earlier root stay
+  linked.
+- **Aliases.** `LinkedModule.aliases` is each module's alias table (alias to
+  module key), so `type-at` prints a type through `FILE`'s own aliases. The
+  same table is kept for every module of several roots.
+- **Origins.** The linker fills a side table, `origins`: each linked identity
   (`@N::name`) to its module key, its source name and its declaration span. It
-  also fills `#:uses`: each name use (call, value, type, construction, variant)
+  also fills `uses`: each name use (call, value, type, construction, variant)
   to the linked identity it resolves to, with the span of the name. The checker
   never sees module keys, so this table belongs to the linker, which is where
   the names are resolved.
 - **Fields and locals** come from the checker: field reads from the checker's
-  `#:types` entry of each field access's target, which names the struct (§39.1);
-  `check-struct-field` does not change, and local bindings from a new `#:locals`
+  `Checked.types` entry of each field access's target, which names the struct
+  (§39.1; `type-at` reads it this way for the definition of a field);
+  `check_struct_field` does not change, and local bindings from a new `locals`
   table (each use of a parameter or local to its binding span).
 - **Name spans.** For `refs` and `type-at` to point at a name, the parser gives
-  `field-access` and `method-call` a `name-span`, and the `for` loop variable
-  and the `variant-pattern` bindings a span each.
+  `FieldAccess` and `MethodCall` a `name_span` (built), and the `for` loop
+  variable and the `VariantPattern` bindings a span each (planned).
 - **Cost.** One lex and parse of each file, one link of the whole set, and at
   most one check of what §39.6 needs, with no lowering, no bytecode and no VM.
   Shared dependencies are linked and checked once. So a command costs about one
   `agentica check` of the files of `PATH...` together, less when no check is
   needed.
 - No daemon, no cache, no watch mode. Start-up is the single binary's (§18),
-  already much faster than Racket's was.
+  already much faster than the Racket front end's was.
 
 ### 39.9 Builtins and `agentica help`
 
@@ -461,7 +496,11 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
   - `type-at` and the position form of `refs`: an expression, the name of a
     field access, a name with its definition, a local binding, a `for` variable,
     a pattern binding, an imported type printed with its alias, a position
-    between tokens and past the end (`QUERY-NO-EXPRESSION`).
+    between tokens and past the end (`QUERY-NO-EXPRESSION`). Built for
+    `type-at`: everything but the local binding, the `for` variable and the
+    pattern binding, which come with their definitions; also a file without
+    `main`, `--stdin`, a check error (exit 1) and non-ASCII text before the
+    position.
   - `QUERY-USAGE` for each case of §39.7, with the `<arguments>` span.
 - No golden fixtures: nothing runs on the VM.
 
@@ -473,8 +512,8 @@ skill.
 
 ### 39.14 Implementation (row 7.2b)
 
-- One PR per step (26a–26c), in the order of §39.10: `outline`, `type-at`,
-  `--partial`, `symbol`, `refs`.
+- One PR per step (26a–26c), in the order of §39.10: `outline` (built),
+  `type-at` (the core built), `--partial`, `symbol`, `refs`.
 - Done when: an agent can list a file's declarations, find where a name
   is defined, list every reference to a declaration across a program, and
   get the checked type at a position, each in text and in JSON with

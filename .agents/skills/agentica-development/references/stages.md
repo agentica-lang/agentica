@@ -152,14 +152,17 @@ stage:
     The manifests of the locked packages are checked before any file loads
     (`check_manifests`). The hash and link errors are at the import.
 
-- **Stage:** query (`query/`, `agentica outline`)
+- **Stage:** query (`query/`, `agentica outline`, `type-at`)
   - **Codes:** `QUERY-USAGE`, at the pseudo-file `<arguments>` (line 1, column
     1), exit 2: a missing or extra argument, an unknown option, `--stdin`
-    without a file, or an unreadable path. The stage reads the words
-    (`query_options.agc`), picks and names the file (`query_files.agc`) and
-    lists the declarations (`outline.agc`, `outline_json.agc`,
-    `outline_text.agc`). It lexes and parses only, so a lex or parse error of
-    the file keeps its own code and exits 1. It reuses `docs/` for the items.
+    without a file, a bad `FILE:LINE:COL`, or an unreadable path.
+    `QUERY-NO-EXPRESSION`, at the position in the file, exit 2: `type-at` on no
+    token of an expression. The stage reads the words (`query_options.agc`),
+    picks and names the file (`query_files.agc`) and lists the declarations
+    (`outline.agc`, `outline_json.agc`, `outline_text.agc`). `outline` lexes and
+    parses only, so a lex or parse error of the file keeps its own code and
+    exits 1; it reuses `docs/` for the items. `type-at` links and checks, so it
+    can also fail with any `LEX-`, `PARSE-`, `PKG-` or `CHECK-` code, exit 1.
 
 - **Stage:** runtime (VM)
   - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,
@@ -242,9 +245,9 @@ checker, lowering and bytecode see the tree as before.
     `export NAME = ...`, and the linker clears it), `FunctionDecl`, `Param`
     (name, type, `default`: an optional expression, span), `StructDecl`,
     `EnumDecl`, `EnumVariant`, `FieldDecl`, `TypeRef`. A function, struct, enum,
-    constant, field, variant and type alias holds the `name_span` of its name;
-    `parse_text` and the linker text do not print it, so the goldens do not
-    carry it
+    constant, field, variant and type alias holds the `name_span` of its name,
+    as do `FieldAccess` and `MethodCall`; `parse_text` and the linker text do
+    not print it, so the goldens do not carry it
 
 - **Group:** statements
   - **Nodes:** `Binding`, `Return`, `LoopControl`, `ExprStmt`, `IfBranch`,
@@ -259,11 +262,11 @@ checker, lowering and bytecode see the tree as before.
     span), `NamedArg`, `Construct`, `StructUpdate` (target, named args, span,
     `visible`: the linked struct names the file may update, set by the linker;
     the `value.with(f: x)` copy), `ListLit`, `MapLit` (with `MapEntry`),
-    `FieldAccess` (target, name, span, `resolved`), `MethodCall` (target, name,
-    args, span, `resolved`), `TypedTarget` (expression, type; checker-made
-    receiver), `Interpolation` (parts: strings and expressions, span),
-    `BlockLit` (params, body, span) with `BlockParam`, `IndexAccess`, `TryExpr`
-    (operand, span), `Unary`, `Binary`
+    `FieldAccess` (target, name, `name_span`, span, `resolved`), `MethodCall`
+    (target, name, `name_span`, args, span, `resolved`), `TypedTarget`
+    (expression, type; checker-made receiver), `Interpolation` (parts: strings
+    and expressions, span), `BlockLit` (params, body, span) with `BlockParam`,
+    `IndexAccess`, `TryExpr` (operand, span), `Unary`, `Binary`
 
 Design points: one `TypeRef` covers `Int`, `List[Int]`, and `List[List[Int]]`;
 one `Literal` covers integers, floats, strings, booleans, and `nil`; grouping `(
@@ -572,7 +575,8 @@ command/file so program args stay intact. --max-steps accepts a positive integer
 and reaches only the VM. --allow-run enables Process.spawn and, for `test`,
 reaches step handlers and programs under test; check and help need no flag.
 `tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
-`doc` and the query commands (`outline`) are `cli_doc.agc` and `cli_query.agc`:
-the words after the command are read by hand (`query/query_options.agc`), and
-`--stdin FILE` goes through `with_buffer` in `cli.agc`, as `check --stdin` does.
-`reject` takes the exit status: a `QUERY-` problem exits 2, any other 1.
+`doc` and the query commands (`outline`, `type-at`) are `cli_doc.agc` and
+`cli_query.agc`: the words after the command are read by hand
+(`query/query_options.agc`), and `--stdin FILE` (`type-at --stdin
+FILE:LINE:COL`) goes through `with_buffer` in `cli.agc`, as `check --stdin`
+does. `reject` takes the exit status: a `QUERY-` problem exits 2, any other 1.
