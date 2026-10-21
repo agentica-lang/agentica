@@ -6,7 +6,7 @@ import Ast from "../syntax/ast"
 import Help from "check_help"
 import State from "check_state"
 import Source from "../syntax/source"
-import Types from "types"
+import Types from "../syntax/types"
 import {ENUMS, OPAQUE_TYPES} from "../catalog/builtins"
 
 type ResolvedType = Types.Type

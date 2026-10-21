@@ -1,7 +1,7 @@
 ## The text form of lowering, for tests. See lower.agc.
 
 import Builtins from "../catalog/builtins"
-import Failure from "../check/check_failure"
+import Failure from "../diagnostics/problem"
 import CheckText from "../check/check_text"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
@@ -13,7 +13,7 @@ import Linker from "../modules/linker"
 import Lowering from "lowering"
 import Source from "../syntax/source"
 import Text from "../syntax/text"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import Workspace from "../modules/workspace"
 
 ## The text form of lowering the file at path: the IR as lines, or the ERROR line of the first failure of the linker,

@@ -10,7 +10,7 @@ import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import {MAX_TYPE_DEPTH, MAX_U16} from "bytecode_tables"
 import Ir from "../lower/ir"
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## The two sections: the type table (entries in the order they were first needed) and the bytes of the Decodable
 ## section after its count, with the count.

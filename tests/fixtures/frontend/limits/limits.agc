@@ -1,7 +1,7 @@
 import Writer from "../../../../compiler/bytecode/bytecode_writer"
 import Ir from "../../../../compiler/lower/ir"
 import Source from "../../../../compiler/syntax/source"
-import Types from "../../../../compiler/check/types"
+import Types from "../../../../compiler/syntax/types"
 
 # Writes lowered programs that no source file lowers to, to reach the limits of the format and the BYTECODE-INTERNAL
 # paths of compiler/bytecode/bytecode_writer.agc. tests/frontend-bytecode-test.rkt builds the same programs for the Racket

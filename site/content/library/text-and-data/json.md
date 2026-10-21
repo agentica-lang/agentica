@@ -227,6 +227,25 @@ end
 null
 ```
 
+## JSON.kind
+
+```text
+JSON.kind(value: Json) -> String
+```
+
+Names the kind of a `Json` value: `"null"`, `"bool"`, `"int"`, `"float"`, `"string"`, `"array"` or `"object"`. It never fails. A number written without a fraction or exponent, or built from an Int, is `"int"`, even outside 64-bit bounds (then `JSON.int` still errors); any other number is `"float"`.
+
+```agentica
+def main() -> Void
+  data = JSON.parse("[1, 1.0, 1e2, \"x\", null, {}]").unwrap!
+  puts(data.list.unwrap!.map do |item| item.kind end)
+end
+```
+
+```output
+["int", "float", "float", "string", "null", "object"]
+```
+
 ## JSON.null and JSON.null?
 
 ```text

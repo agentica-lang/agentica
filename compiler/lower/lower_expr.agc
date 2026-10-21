@@ -11,11 +11,12 @@ import State from "../check/check_state"
 import ConstWalk from "../check/const_walk"
 import Defaults from "../check/defaults"
 import Ir from "ir"
+import Names from "../syntax/prelude_name"
 import Data from "lower_data"
 import Lowering from "lower_state"
 import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, STRING_OPS, VM_BUILTINS} from "lower_tables"
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {PRELUDE} from "../catalog/builtins"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
@@ -92,7 +93,7 @@ export def lower_call(
   if prelude
     # A builtin written in the prelude is an ordinary call of its function (the checker chose which), and never a tail
     # call: the VM reports a runtime error of the callee at the frame of this call.
-    target = Ir.prelude_name(cx.bodies[node.id])
+    target = Names.prelude_name(cx.bodies[node.id])
   elsif form.ok?
     key = form.unwrap!.implementation
   end

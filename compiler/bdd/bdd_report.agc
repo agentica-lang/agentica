@@ -2,7 +2,7 @@
 ## reports of the tests come from the runner (stdlib/test/runner.agc).
 
 import Opts from "bdd_options"
-import Problems from "../check/check_failure"
+import Problems from "../diagnostics/problem"
 import Diag from "../diagnostics/diagnostic"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Source from "../syntax/source"

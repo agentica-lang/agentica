@@ -9,7 +9,7 @@
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
 
 import Source from "source"
-import Types from "../check/types"
+import Types from "types"
 
 ## A value that may be absent.
 export enum Optional[T]

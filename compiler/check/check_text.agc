@@ -1,6 +1,6 @@
 ## The text form of a check, for tests. See check.agc.
 
-import Failure from "check_failure"
+import Failure from "../diagnostics/problem"
 import State from "check_state"
 import Checker from "checker"
 import Diag from "../diagnostics/diagnostic"
@@ -10,7 +10,7 @@ import LinkText from "../modules/link_text"
 import Linker from "../modules/linker"
 import Text from "../syntax/text"
 import Workspace from "../modules/workspace"
-import T from "types"
+import T from "../syntax/types"
 
 ## The text form of checking the file at path: the linked program of link_text with the type of each checked expression
 ## added at the end of its line (and, when the program has constants, a last line `constant-order ["A","B"]` with the

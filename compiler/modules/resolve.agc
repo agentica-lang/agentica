@@ -9,11 +9,12 @@ import Declarations from "declarations"
 import Diag from "../diagnostics/diagnostic"
 import Env from "link_env"
 import Failure from "link_failure"
+import ImportHelp from "import_help"
 import Modules from "modules"
 import Base from "../syntax/parse_base"
 import Resolve from "resolve_import"
 import Source from "../syntax/source"
-import Suggest from "../check/suggest"
+import Suggest from "../syntax/suggest"
 import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
@@ -234,7 +235,7 @@ def imported(
         site(cx, span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        Suggest.unknown_import_help(target.key, target.public, member, true),
+        ImportHelp.unknown_import_help(target.key, target.public, member, true),
       ),
     )
   end

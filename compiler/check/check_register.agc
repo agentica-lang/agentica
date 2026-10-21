@@ -11,7 +11,7 @@ import Types from "check_types"
 import Defaults from "defaults"
 import Linker from "../modules/linker"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 import {ENTRIES, RESERVED} from "../catalog/builtins"
 
 ## The context with the enums, structs and functions of the program added to the builtin ones.

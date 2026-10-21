@@ -19,9 +19,12 @@ stages may use `Result` with a packed `Problem`. `try` stops at the first error.
 `bdd/` and `embedded/`, with `front_end.agc` at the root. A new file goes in the
 folder of its context. Names below are bare; the folder is in each label
 (`references/repo-map.md` has every file). An import inside a folder is the
-bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
+bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
 
-- Data: `syntax/source.agc`, `syntax/token.agc`, `diagnostics/diagnostic.agc`.
+- Data: `syntax/source.agc`, `syntax/token.agc`, `syntax/types.agc` (the
+  `Type` enum), `diagnostics/diagnostic.agc`, `diagnostics/problem.agc` (the
+  packed `Problem` every stage returns). `syntax/suggest.agc` holds the
+  did-you-mean help that the linker and the checker share.
   `syntax/source_file.agc` holds the strict UTF-8 rules for a source file
   (`LEX-INVALID-UTF8` at the first bad byte); `io/source_reader.agc` reads the
   file with them, with no size limit. `syntax/text.agc` holds the
@@ -31,12 +34,13 @@ bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
   `lex_text.agc`.
 - Parser (`syntax/`): `ast.agc`, `parse_base.agc`, `parser.agc`; entries
   `parse.agc`, `parse_text.agc`.
-- Linker (`modules/`, `suggest.agc` in `check/`): `workspace.agc` (the port),
+- Linker (`modules/`): `workspace.agc` (the port),
   `modules.agc` (loader; walks imports with an explicit stack in a fixed
   order), `resolve_import.agc`, `import_path.agc` (`std/`, `pkg/`, relative),
   `resolve.agc`, `rewrite.agc` (linked name of every name), `linker.agc`
   (`Linker.link_file`, `Linker.program`), `declarations.agc`
-  (`CHECK-DECL-ORDER`), `suggest.agc` (did-you-mean), `link_env.agc` (`Env`
+  (`CHECK-DECL-ORDER`), `import_help.agc` (the help of an unknown import
+  name), `link_env.agc` (`Env`
   and `Settings`: `stdlib/` and environment, passed in, never read inside; a
   new environment variable gets a `--name=V` flag in `link.agc`, `check.agc`,
   `lower.agc` and `bytecode.agc`, and a value in the hermetic environment of
@@ -45,16 +49,15 @@ bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
   cache and the package import, all pure. The rules are in
   `docs/grammar/05b-modules.md`; the file list is in `repo-map.md`. They read
   the disk only through the `Workspace` and the environment only through `Env`.
-- Catalog (`catalog/`, `types.agc` in `check/`): `types.agc`,
-  `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`, the `Rule` enum),
-  `builtins.agc` (lookups), `builtins_data.agc` (hand-edited rows, records,
-  enums, reserved names), `catalog.agc`, `catalog_text.agc`.
+- Catalog (`catalog/`): `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`,
+  the `Rule` enum), `builtins.agc` (lookups), `builtins_data.agc`
+  (hand-edited rows, records, enums, reserved names), `catalog.agc`,
+  `catalog_text.agc`.
 - Checker (`check/`): `check_register.agc`, `check_stmt.agc`, `check_expr.agc`,
   `check_call.agc`, `check_method.agc`, `check_rules.agc`, `check_list.agc`,
   `check_collections.agc`, `check_args.agc`, `check_help.agc`,
   `check_names.agc`, `check_flow.agc`, `check_unused.agc`, `check_state.agc`,
-  `check_types.agc`,
-  `check_failure.agc`, `check_tables.agc` (hand-edited method and help tables),
+  `check_types.agc`, `check_tables.agc` (hand-edited method and help tables),
   `checker.agc` (`Checker.check(linked)`).
 - Lowering (`lower/`): `ir.agc` (IR data), `lower_tables.agc` (`VM_BUILTINS`,
   operator tables), `lower_state.agc`, `lower_expr.agc`, `lower_data.agc`,
@@ -74,8 +77,9 @@ Every folder of `compiler/` except `io/`, `app/`, `bdd/` and `embedded/`
 is pure: it never calls `File`, `Dir`, `Path` (only `Path.join`, which is
 string work), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`,
 `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or a bare `puts`,
-and it never imports `io/`, `app/`, `bdd/` or a `std/` module that is not on
-`PURE_STD_MODULES` in the test (a new std module is forbidden by default).
+and it never imports `io/`, `app/`, `bdd/`, `embedded/` or a `std/` module that
+is not on `PURE_STD_MODULES` in the test (a new std module is forbidden by
+default).
 When a stage needs the machine it calls a function of
 `Workspace` (`modules/workspace.agc`), a record of function values that
 travels in `Env.Settings.workspace`: `read_text`, `file_exists`,
@@ -94,7 +98,10 @@ through `SaveFile`). `tests/test_style_core_purity.py` runs the real lexer
 over the stage folders and fails on a call (`Module.name` as tokens, so
 strings, comments and builtin data rows do not count) or an import; a new
 entry program needs a line in its `ENTRY_PROGRAMS`. A new need of the machine
-is a new `Workspace` field, built in `io/host.agc`.
+is a new `Workspace` field, built in `io/host.agc`. The linker (`modules/`,
+`packages/`) imports no later stage. `catalog/` imports only `syntax/` and
+itself, so every later stage reads it; the code that reads and checks the
+prelude files is `check/prelude_files.agc`.
 
 Order inside a `compiler/` file: imports and module doc, structs and enums,
 exported functions, private functions. Code style follows the speed rules:

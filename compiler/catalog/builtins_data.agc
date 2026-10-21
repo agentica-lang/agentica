@@ -3,7 +3,7 @@
 ## what it prints with a golden.
 
 import Model from "builtin_model"
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## Every builtin, sorted by name.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
@@ -1421,6 +1421,16 @@ ROWS_18: List[Model.Builtin] = [
       implementation: "JSON.int",
       effects: [],
       description: "Extract a signed 64-bit JSON integer; wrong kind or overflow returns an error.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "JSON.kind",
+      parameters: [Model.Named(name: "value", type: Types.Type.Json)],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "JSON.kind",
+      effects: [],
+      description: "Name the JSON kind: null, bool, int, float, string, array or object.",
       alternatives: [],
     ),
     Model.Builtin(

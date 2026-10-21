@@ -1,8 +1,8 @@
 ## The List methods of the compiler prelude (docs/future/25-ruby-typed-idioms.md 25.6). Not a module: no program
 ## imports it. The checker reads a call of xs.find do |x| ... end, picks the function here that the catalog row names,
-## and the compiler adds it to the program (catalog/prelude.agc). A is the element type, B the type a callback gives,
-## K a key that is an Int or a String; the checker has checked the call, so these names stand for the real types. A
-## runtime error of a function here is reported at the call of the program, not in this file.
+## and the compiler adds it to the program (check/prelude_files.agc). A is the element type, B the type a callback
+## gives, K a key that is an Int or a String; the checker has checked the call, so these names stand for the real
+## types. A runtime error of a function here is reported at the call of the program, not in this file.
 ##
 ## Cost: each function is O(n) in the steps of the VM and calls its callback once for each element, from the first to
 ## the last. Nothing here calls concat, take, drop, reverse, sort, sort_by, Map.keys, Map.values or Map.delete inside a

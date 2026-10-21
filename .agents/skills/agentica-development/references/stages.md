@@ -371,7 +371,7 @@ error:
   payloads.
 - Catalogued builtin function names cannot be redefined. `ok` and `error` are
   additionally reserved on locals, parameters, loop variables, and fields.
-- Types are the `Type` enum of `compiler/check/types.agc`: the primitives,
+- Types are the `Type` enum of `compiler/syntax/types.agc`: the primitives,
   `List`, `Map`, `Set`, `Result` and `Task` of a type, structs and enums by
   linked name (an enum carries its type arguments), and type variables during
   payload registration.
@@ -438,9 +438,10 @@ each rule, a VM golden for the results and the errors, a step count in
   the type variables (a block gets the types known so far), checks the limits
   (`CHECK-TYPE-MISMATCH` at the argument that bound the variable) and records
   the body by call id (`St.bodies`, `Checked.bodies`).
-- After the program, `Prelude.attach` reads `std/prelude/<file>.agc` for the
-  files the program used, parses it from the next free node id, keeps the
-  functions called (named `@prelude::file::name`, `Ir.prelude_name`) and checks
+- After the program, `Prelude.attach` (`check/prelude_files.agc`) reads
+  `std/prelude/<file>.agc` for the files the program used, parses it from the
+  next free node id, keeps the functions called (named `@prelude::file::name`
+  by `prelude_name` in `syntax/prelude_name.agc`) and checks
   them with `Cx.prelude` set (a type variable may be a Map key or Set element;
   `__fail_arg` is known). A program that calls no prelude method reads no
   prelude file. `std/prelude/...` is not importable.

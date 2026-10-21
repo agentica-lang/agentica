@@ -9,7 +9,7 @@ import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 import {HANDLES} from "../catalog/builtins"
 
 ## Checks a call of a Task, Channel, Map, Set or Profile builtin by its rule. Any other rule is the caller's.

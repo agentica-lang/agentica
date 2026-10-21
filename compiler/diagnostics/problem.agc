@@ -1,4 +1,4 @@
-## How the checker reports a failure: a diagnostic with the extra notes (expected, actual,
+## How a stage reports a failure: a diagnostic with the extra notes (expected, actual,
 ## callee, signature, labels) and the file it is in. A Result error is a String, so the failure travels packed (pack)
 ## and `try` stops at the first one, as in the parser; unpack reads it back.
 

@@ -1,17 +1,17 @@
 ## The state of the lowering (a state that is passed and returned, not mutated): what is
 ## fixed for the run (Cx), what changes while one function is lowered (Fx), and the small operations on them that every
 ## part of the lowering uses. A lowering function takes Cx and Fx and returns the new Fx with its register (Out), or
-## fails with a packed LOWER- diagnostic (check_failure.agc), so `try` stops at the first one.
+## fails with a packed LOWER- diagnostic (diagnostics/problem.agc), so `try` stops at the first one.
 
 import Ast from "../syntax/ast"
-import Failure from "../check/check_failure"
+import Failure from "../diagnostics/problem"
 import State from "../check/check_state"
 import Defaults from "../check/defaults"
 import Diag from "../diagnostics/diagnostic"
 import Ir from "ir"
-import {PRELUDE_PREFIX} from "ir"
+import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {OPAQUE_TYPES} from "../catalog/builtins"
 
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the
@@ -41,8 +41,8 @@ end
 ## What is fixed while the program is lowered. types and resolved are those of the checker. user_types maps a struct or
 ## enum name (the program's and the builtin ones it uses) to "Struct" or "Enum"; structs the struct info by name;
 ## variants the id of "Enum.Variant"; json_structs the structs JSON.decode may build; functions the index of each
-## declared function; bodies the prelude function each call of a prelude builtin runs, by id of the call (prelude.agc);
-## step_tries the `try` nodes in the blocks of Lazy methods, which lower to try-step;
+## declared function; bodies the prelude function each call of a prelude builtin runs, by id of the call
+## (prelude_files.agc); step_tries the `try` nodes in the blocks of Lazy methods, which lower to try-step;
 ## fills the functions that have default values, by name; reads what a constant read becomes. file
 ## is the file of the function being lowered and index its position in the sources. expression lowers an expression,
 ## and block lowers a block as a function: the cycles between expressions, statements and blocks go through these two

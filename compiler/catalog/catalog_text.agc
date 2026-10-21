@@ -4,9 +4,9 @@
 import Ast from "../syntax/ast"
 import Model from "builtin_model"
 import Builtins from "builtins"
-import Suggest from "../check/suggest"
+import Suggest from "../syntax/suggest"
 import Text from "../syntax/text"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {
   BARE_NAMES, ENTRIES, ENUMS, HANDLES, OPAQUE_TYPES, PRELUDE, PRELUDE_ONLY,
   PUBLIC_NAMES, RECORDS, RESERVED, STD_ONLY,

@@ -1,16 +1,16 @@
 ## The state of the checker (a state that is passed and returned, not mutated): what is fixed for the run
 ## (Cx), what changes while the tree is walked (St), and the small operations on them that every part of the checker
 ## uses. A check function takes Cx and St and returns the new St with its result (Out for an expression), or fails with
-## a packed Problem (check_failure.agc), so `try` stops at the first diagnostic.
+## a packed Problem (diagnostics/problem.agc), so `try` stops at the first diagnostic.
 
 import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
 import Help from "check_help"
-import Failure from "check_failure"
+import Failure from "../diagnostics/problem"
 import Defaults from "defaults"
 import Diag from "../diagnostics/diagnostic"
 import Source from "../syntax/source"
-import Types from "types"
+import Types from "../syntax/types"
 import {PUBLIC_NAMES} from "../catalog/builtins"
 
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was

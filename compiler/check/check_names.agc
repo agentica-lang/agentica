@@ -3,7 +3,7 @@
 ## returns the receiver (to_s on a String).
 
 import State from "check_state"
-import T from "types"
+import T from "../syntax/types"
 import {ENTRIES} from "../catalog/builtins"
 
 ## The kind of a receiver, or "" when its type has no methods in the catalog.

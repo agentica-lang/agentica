@@ -6,24 +6,24 @@
 import Ast from "../syntax/ast"
 import Constants from "check_const"
 import Expr from "check_expr"
-import Failure from "check_failure"
+import Failure from "../diagnostics/problem"
 import Help from "check_help"
 import Register from "check_register"
 import State from "check_state"
 import Statements from "check_stmt"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
-import Prelude from "../catalog/prelude"
-import T from "types"
+import Prelude from "prelude_files"
+import T from "../syntax/types"
 import {ENUMS, RECORDS} from "../catalog/builtins"
 
 ## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that
 ## has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field
 ## access resolved to, by node id (the lowering reads them), and the linked names of the module constants in
 ## initialization order (the lowering reads that too, and does not order them again). prelude is the files of the
-## compiler prelude that the program calls (prelude.agc), checked with it: the lowering adds them to the files of the
-## program. bodies is the prelude function each call of a prelude builtin runs, by id of the call. step_tries is the
-## id of each `try` in the block of a Lazy method (State.St.step).
+## compiler prelude that the program calls (prelude_files.agc), checked with it: the lowering adds them to the files of
+## the program. bodies is the prelude function each call of a prelude builtin runs, by id of the call. step_tries is
+## the id of each `try` in the block of a Lazy method (State.St.step).
 export struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]

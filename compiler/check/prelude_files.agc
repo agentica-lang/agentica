@@ -5,17 +5,18 @@
 ## program like any other: they are lowered with it, in files whose names start with "<prelude>/", which the VM treats
 ## as the prelude (docs/vm/03-ir-and-bytecode.md).
 ##
-## A prelude function is named Ir.prelude_name(module + "::" + name), so it cannot meet a function of the program. The
-## files are not modules: no program imports them (resolve_import.agc), and they call builtins only, never each other.
+## A prelude function is named Names.prelude_name(module + "::" + name), so it cannot meet a function of the program.
+## The files are not modules: no program imports them (resolve_import.agc), and they call builtins only, never each
+## other.
 
 import Ast from "../syntax/ast"
-import Failure from "../check/check_failure"
-import Register from "../check/check_register"
-import State from "../check/check_state"
-import Statements from "../check/check_stmt"
+import Failure from "../diagnostics/problem"
+import Register from "check_register"
+import State from "check_state"
+import Statements from "check_stmt"
 import Diag from "../diagnostics/diagnostic"
-import Ir from "../lower/ir"
-import {PRELUDE_PREFIX} from "../lower/ir"
+import Names from "../syntax/prelude_name"
+import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Lexer from "../syntax/lexer"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
@@ -23,7 +24,7 @@ import Parser from "../syntax/parser"
 import Resolve from "../modules/resolve_import"
 import SourceFile from "../syntax/source_file"
 import Source from "../syntax/source"
-import T from "../check/types"
+import T from "../syntax/types"
 
 ## The prelude files a program needs, added to the program: the state with room for their node ids, and their modules.
 export struct Attached
@@ -97,7 +98,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
     case decl
       Ast.Decl.Function(node) ->
         if functions.any? do |name: String| name == node.name end
-          kept = kept.push(Ast.Decl.Function(node.with(name: Ir.prelude_name("#{module}::#{node.name}"))))
+          kept = kept.push(Ast.Decl.Function(node.with(name: Names.prelude_name("#{module}::#{node.name}"))))
         end
       _ -> kept = kept
     end
@@ -110,7 +111,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
       key: "std/prelude/#{module}.agc",
       file: file,
       name: file,
-      prefix: Ir.prelude_name("#{module}::"),
+      prefix: Names.prelude_name("#{module}::"),
       first_id: first_id,
       next_id: Ast.next_free_id(program),
       text: text,
