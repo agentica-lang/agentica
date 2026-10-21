@@ -181,7 +181,7 @@ end
 
 Keep one topic per file, and export only the names that other files use.
 
-Document as little as possible (KISS; implicit over explicit). Only public code gets `##`: an exported `def`, `struct` or `enum` (every export of `stdlib/` needs one; `tests/test_stdlib_docs.py` checks it), saying what it returns or is, not how. A private `def` never gets `##`; if it needs a note, use one `#` comment. Comment complex code where its nature needs it. A field or variant gets a note only when its name does not say enough. No doc that repeats the name or the signature. A `#` comment says why the code is the way it is, not what the next line does:
+Document as little as possible. Only public code gets a `##` doc: an exported function, struct or enum, saying what it returns or is, not how. A private function never gets `##`; when it needs a note, use one `#` comment. A field or variant gets a note only when its name does not say enough. A `#` comment says why the code is the way it is, not what the next line does:
 
 ```agentica {mode="check"}
 # bad
@@ -203,7 +203,7 @@ end
 ```agentica {mode="check"}
 # good
 ## Returns the sum of the prices, in cents.
-def total(prices: List[Int]) -> Int
+export def total(prices: List[Int]) -> Int
   sum = 0
   for price in prices
     sum += price

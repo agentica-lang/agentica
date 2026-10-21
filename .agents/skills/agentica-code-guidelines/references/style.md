@@ -97,7 +97,7 @@ end
 
 ## Modules and docs
 
-A doc says what the function returns. A comment says why.
+A `##` doc, only on public code, says what it returns or is. A comment says why.
 
 ```ruby
 # bad
@@ -115,7 +115,7 @@ end
 ```ruby
 # good
 ## Returns the sum of the prices, in cents.
-def total(prices: List[Int]) -> Int
+export def total(prices: List[Int]) -> Int
   sum = 0
   for price in prices
     sum += price
@@ -130,7 +130,7 @@ end
 MAX_TRIES = 3
 
 ## Returns true when the client may try again.
-def retry?(tries: Int) -> Bool
+export def retry?(tries: Int) -> Bool
   return tries < MAX_TRIES
 end
 ```
