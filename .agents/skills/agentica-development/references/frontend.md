@@ -77,8 +77,9 @@ Every folder of `compiler/` except `io/`, `app/`, `bdd/` and `embedded/`
 is pure: it never calls `File`, `Dir`, `Path` (only `Path.join`, which is
 string work), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`,
 `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or a bare `puts`,
-and it never imports `io/`, `app/`, `bdd/` or a `std/` module that is not on
-`PURE_STD_MODULES` in the test (a new std module is forbidden by default).
+and it never imports `io/`, `app/`, `bdd/`, `embedded/` or a `std/` module that
+is not on `PURE_STD_MODULES` in the test (a new std module is forbidden by
+default).
 When a stage needs the machine it calls a function of
 `Workspace` (`modules/workspace.agc`), a record of function values that
 travels in `Env.Settings.workspace`: `read_text`, `file_exists`,
