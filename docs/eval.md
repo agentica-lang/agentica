@@ -136,8 +136,8 @@ python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models
 # tag (git worktree add ../agentica-6c TAG) so that master can move on; TAG is
 # the first release with the query-command counts, the skill-nocli arm and
 # --max-cost
-python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 4 --max-cost 1.2
-python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/glm-5p3-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 4 --max-cost 0.8
+python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 1.2
+python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/glm-5p3-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 0.8
 
 # Summarize a finished run, and count the diagnostics the agents saw
 python3 tests/eval/run.py --summarize tests/eval/results/<run directory>
@@ -147,17 +147,17 @@ python3 tests/eval/diagnostics.py
 `--tasks` picks tasks (the default is all twenty). `--arms` picks arms (the
 default is the first five; `skill-nocli` is opt-in). `--arm-tasks
 ARM=TASK,TASK` limits one arm to some of the tasks (full task names, all in
-`--tasks`; repeat the option for another arm). `--max-cost USD` is a cap on
+`--tasks`; repeat the option for another arm). `--max-cost USD` is a soft cap on
 the cost of the round (see "The budget cap"). `--sandbox firejail
 --chroot-root PATH` is the other sandbox; you prepare its rootfs yourself, and
-it needs `mypy` for the typed arm. Docker is the only sandbox tested with the typed arm, the drivers and the
-loopback peers; Firejail is untested for them. The results go to
-`tests/eval/results/`, which is not versioned. Each run directory has a
-`run.json` with the commit, the commit of the last change to the skill, the
-checker version, the model, the arms, and the image name and ID, next to
-`results.jsonl` and `summary.md`. The runner has its own tests:
-`python3 -m unittest discover -s tests/eval -p 'test_*.py'`. These unit tests
-are not part of `make test` or CI.
+it needs `mypy` for the typed arm. Docker is the only sandbox tested with the
+typed arm, the drivers and the loopback peers; Firejail is untested for them.
+The results go to `tests/eval/results/`, which is not versioned. Each run
+directory has a `run.json` with the commit, the commit of the last change to the
+skill, the checker version, the Pi version, the model, the arms, and the image
+name and ID, next to `results.jsonl` and `summary.md`. The runner has its own
+tests: `python3 -m unittest discover -s tests/eval -p 'test_*.py'`. These unit
+tests are not part of `make test` or CI.
 
 `--check-references` is the same as `--agent reference` with the arms `binary`,
 `python` and `typed-python` (the three Agentica arms share one reference). It
@@ -309,12 +309,19 @@ With 3 reps, that is 15 extra runs per model.
 
 ### The budget cap
 
-`--max-cost USD` limits what a round spends; without it there is no cap. Before
-each run starts, the runner adds the cost so far, plus the estimate of that run
-and of every run in flight; if the sum passes the cap, it starts no more runs
-(the runs in flight finish) and `summary.md` and `run.json` get
-`stopped_for_budget` (true) and `runs_skipped`. The estimate is the mean cost
-of the finished runs, never below `--run-cost-estimate` (default $0.01). Cost is
+`--max-cost USD` is a soft cap, not a hard limit; without it there is no cap.
+Before each run starts, the runner adds the cost so far, plus the estimate of
+that run and of every run in flight; if the sum passes the cap, it stops
+starting new runs (the runs in flight finish) and `summary.md` and `run.json`
+get `stopped_for_budget` (true) and `runs_skipped`. Runs already going and
+outlier runs can go past the cap by up to `--jobs` times the costliest run. The
+6c commands use `--jobs 2`, which keeps that overshoot to about $0.1 at the
+costs of rounds 10 and 12 (the costliest run was about $0.03).
+
+The estimate is the highest cost seen so far (never below the mean), and never
+below `--run-cost-estimate` (default $0.01). A run that reports no cost (no
+usage at all, or `cost.total` of 0: a timeout, a 429, an auth error) is charged
+the estimate, stays out of that figure, and prints a `warning:` line. Cost is
 what Pi reports (`cost.total`), so the cap is as good as the price table of the
 model. The runner prints `cost so far: $X of the $Y cap` after every run, and
 `run.json` and `summary.md` end with the total. The cap is per command: for two
@@ -391,9 +398,12 @@ Python solution that ignores the instruction still passes.
   runner has no allow-list for the provider host, so closing the network for the
   agents needs a proxy or firewall that you provide.
 - Rebuild the image if the Dockerfile changed (`docker rmi
-  agentica-eval:local`), and run `--check-references`. The Dockerfile pins Pi 1.3.0 (the rounds up to
-  12 used Pi 1.0.0), so token counts of the 6c round are not strictly
-  comparable with those of earlier rounds; the arms inside the round are.
+  agentica-eval:local`), and run `--check-references`. The Dockerfile pins Pi
+  1.3.0 (the rounds up to 12 used Pi 1.0.0), so token counts of the 6c round
+  are not strictly comparable with those of earlier rounds; the arms inside the
+  round are. A model run probes `pi --version` in the default image and stops
+  when it differs from the Dockerfile's pin (a stale image); `run.json` has
+  `pi_version`.
 - Do not merge anything or change the skill while a round runs.
 - If `/tmp` is a small `tmpfs`, point `TMPDIR` at a directory on disk before you
   start the runner. Each run copies the runtime bundle (about 580 MB) into a

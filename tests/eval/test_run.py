@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -123,7 +124,10 @@ class PrepareTests(unittest.TestCase):
             self.assertTrue(all(position >= 0 for position in positions), positions)
             self.assertEqual(positions, sorted(positions))
             self.assertNotIn("](../", grammar)
-            self.assertNotIn("site/content", grammar)
+            # The reference-style definitions (`[agentica-link-1]: ../../site/content/...`) stay; nothing else may.
+            stray = [line for line in grammar.splitlines()
+                     if "site/content" in line and not re.match(r"\[agentica-link-\d+\]: ", line)]
+            self.assertEqual(stray, [])
 
     def test_grammar_arm_prompt_names_agentica_help(self) -> None:
         self.assertIn("agentica help NAME", run.prompt(Path("/tmp/work"), "grammar"))
@@ -232,11 +236,16 @@ class NoCliArmTests(unittest.TestCase):
                     self.assertEqual(done.returncode, 2)
                     self.assertIn("not available", done.stderr)
                     self.assertEqual(done.stdout, "")
-            for words in (("check", "a.agc"), ("a.agc", "outline"), ("help", "outline"), ("--help",)):
+            for words in (("--max-steps", "5", "outline", "a.agc"), ("--seed", "3", "--json", "refs", "X"),
+                          ("--flush-timeout", "10", "--schedulers", "2", "symbol", "X"), ("--", "type-at", "a.agc:1:1")):
+                with self.subTest(words=words):
+                    self.assertEqual(call(*words).returncode, 2)
+            for words in (("check", "a.agc"), ("a.agc", "outline"), ("help", "outline"), ("--help",),
+                          ("--seed", "5", "a.agc"), ("run", "--", "a.agcb", "refs")):
                 with self.subTest(words=words):
                     done = call(*words)
                     self.assertEqual((done.returncode, done.stdout), (3, "real " + " ".join(words) + "\n"))
-            self.assertEqual(run.refused_queries(root / "work-skill-nocli"), 5)
+            self.assertEqual(run.refused_queries(root / "work-skill-nocli"), 9)
             self.assertEqual(run.refused_queries(root / "work-skill"), 0)
 
 
@@ -304,7 +313,9 @@ class MetricsTests(unittest.TestCase):
 
     def test_query_calls_are_counted_next_to_file_reads_and_checks(self) -> None:
         queries = ("agentica outline a.agc", "agentica --json type-at a.agc:3:5", "dist/agentica symbol Item",
-                   "./bin/agentica refs Item src", "cd /workspace && /workspace/bin/agentica refs Item",
+                   "./bin/agentica refs Item src", "agentica --max-steps 5 outline a.agc",
+                   "agentica --seed 1 --flush-timeout 5 --schedulers 2 --json refs X", "agentica -- symbol X",
+                   "cd /workspace && /workspace/bin/agentica refs Item",
                    "printf x | agentica outline --stdin a.agc", "agentica-real outline a.agc", "time agentica symbol X")
         others = ("agentica check a.agc", "agentica help outline", "agentica a.agc outline", "rg outline a.agc",
                   "agentica outlines", "echo agentica outline")
@@ -436,7 +447,7 @@ class ImageDecisionTests(unittest.TestCase):
                 result = self.validate(checker_probe=[(code, "", "not found"), found])
                 self.assertEqual(self.build.call_count, 1)
                 self.assertIn("rebuilding", self.printed)
-                self.assertEqual(result, {"checker": "mypy 2.3.1 (compiled: yes)", "image_id": "sha256:abc"})
+                self.assertEqual(result, {"checker": "mypy 2.3.1 (compiled: yes)", "image_id": "sha256:abc", "pi": None})
         for first in ((1, "", "crash"), (None, "", "timeout")):
             self.build.reset_mock()
             with self.subTest(first=first), self.assertRaises(SystemExit):
@@ -492,9 +503,10 @@ class MainTests(unittest.TestCase):
 
         validated: list = []
 
-        def fake_validate(image: str, typed: bool = False, agentica: bool = False) -> dict[str, str | None]:
+        def fake_validate(image: str, typed: bool = False, agentica: bool = False,
+                          pi: bool = False) -> dict[str, str | None]:
             validated.append((image, typed, agentica))
-            return {"checker": "mypy 9.9", "image_id": "sha256:feed"}
+            return {"checker": "mypy 9.9", "image_id": "sha256:feed", "pi": "1.3.0" if pi else None}
 
         with (patch.object(run, "ROOT", root), patch.object(run, "EVAL", root / "eval"),
               patch.object(run, "build") as build, patch.object(run, "require_docker"),
@@ -536,6 +548,7 @@ class MainTests(unittest.TestCase):
         self.assertEqual({(agent, tuple(env)) for agent, env, _ in normal_calls}, {("pi", ("FOO",))})
         self.assertEqual(normal_validated, [(run.DEFAULT_IMAGE, True, True)])
         self.assertEqual((normal["agent_network"], normal["pass_env"]), (True, ["FOO"]))
+        self.assertEqual((normal["pi_version"], failing["pi_version"]), ("1.3.0", None))
 
 
     def runtime_root(self, directory: str) -> Path:
@@ -595,9 +608,56 @@ class MainTests(unittest.TestCase):
 
         self.assertEqual([budget.begin(), budget.begin(), budget.begin()], [True, True, False])
         self.assertTrue(budget.stopped)
-        budget.end(None)
-        self.assertEqual(budget.spent, 0.4)
+        self.assertEqual(budget.end(None), (0.4, True))
         self.assertFalse(budget.begin())
+
+    def test_an_outlier_raises_the_estimate_and_runs_without_a_cost_are_charged_it_but_stay_out_of_it(self) -> None:
+        budget = run.Budget(1.1, 0.01)
+        for _ in range(3):
+            self.assertTrue(budget.begin())
+            budget.end(0.01)
+        self.assertEqual(budget.estimate(), 0.01)
+        self.assertTrue(budget.begin())
+        budget.end(0.2)
+        # The highest cost seen, not the mean (0.0575), is the estimate of the next runs.
+        self.assertEqual(budget.estimate(), 0.2)
+        # No cost, a cost of 0 (usage missing) or no row at all: charged 0.2 each, and the estimate stays.
+        for reported in (None, 0.0, -1.0):
+            self.assertTrue(budget.begin())
+            _, charged_estimate = budget.end(reported)
+            self.assertTrue(charged_estimate)
+        self.assertEqual(budget.estimate(), 0.2)
+        self.assertAlmostEqual(budget.spent, 0.03 + 0.2 + 3 * 0.2)
+        # 0.83 + 0.2 fits under 1.1 only once.
+        self.assertEqual([budget.begin(), budget.begin()], [True, False])
+        self.assertTrue(budget.stopped)
+
+    def test_a_run_without_a_cost_prints_a_warning_when_there_is_a_cap(self) -> None:
+        args = Namespace()
+        for cap, warns in ((1.0, True), (None, False)):
+            with self.subTest(cap=cap), patch.object(run, "one_run", return_value={"cost": 0.0}):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    run.budgeted_run(args, run.Budget(cap, 0.01), Path("r"), Path("s"), "t1", "skill", 1)
+                self.assertEqual("warning: t1-skill-1 reported no cost" in out.getvalue(), warns)
+
+
+class PiVersionTests(unittest.TestCase):
+    def ensure(self, image: str, outcome: tuple[int | None, str, str]) -> str | None:
+        with patch.object(run, "probe", return_value=outcome), patch.object(run, "dockerfile_pi_version", return_value="1.3.0"):
+            return run.ensure_pi(image)
+
+    def test_the_default_image_must_have_the_pinned_pi_and_another_image_is_only_recorded(self) -> None:
+        self.assertEqual(self.ensure(run.DEFAULT_IMAGE, (0, "1.3.0\n", "")), "1.3.0")
+        self.assertEqual(self.ensure("custom:1", (0, "pi 1.0.0\n", "")), "1.0.0")
+        self.assertIsNone(self.ensure("custom:1", (127, "", "not found")))
+        for outcome in ((0, "1.0.0\n", ""), (127, "", "not found")):
+            with self.subTest(outcome=outcome), self.assertRaises(SystemExit) as raised:
+                self.ensure(run.DEFAULT_IMAGE, outcome)
+            self.assertIn("docker rmi", str(raised.exception))
+
+    def test_the_dockerfile_pins_a_pi_version(self) -> None:
+        self.assertRegex(run.dockerfile_pi_version() or "", r"^\d+\.\d+\.\d+$")
 
 
 class SummaryTests(unittest.TestCase):

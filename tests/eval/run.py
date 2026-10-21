@@ -36,18 +36,24 @@ CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?m
 MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
 # `agentica [--json|--ai|--partial] outline|type-at|symbol|refs ...`, also through a path (`dist/agentica`) or the
 # renamed binary of the skill-nocli arm (`agentica-real`).
-QUERY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?agentica(?:-real)?\s+(?:--(?:json|ai|partial)\s+)*"
+# Global options may come first: flags, `--` and the four that take a value.
+QUERY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?agentica(?:-real)?\s+"
+                           r"(?:(?:--(?:json|ai|partial|allow-run)|--)\s+"
+                           r"|--(?:max-steps|seed|flush-timeout|schedulers)\s+\S+\s+)*"
                            r"(?:outline|type-at|symbol|refs)(?=\s|$)")
 READ_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:cat|rg|sed|head|grep|tail)(?=\s|$)")
 REFUSED_LOG = ".refused-queries"
 REAL_BINARY = "agentica-real"
-# The wrapper of the skill-nocli arm. It refuses the first non-option word when it names a query command (exit 2, a
-# short stderr line, one line in REFUSED_LOG so the runner can count refusals) and hands everything else to the real
-# binary, with exec so the exit status and the signals are the binary's.
+# The wrapper of the skill-nocli arm. It refuses the first word that is not an option (or the value of one) when it
+# names a query command (exit 2, a short stderr line, one line in REFUSED_LOG so the runner can count refusals) and
+# hands everything else to the real binary, with exec so the exit status and the signals are the binary's.
 QUERY_WRAPPER = """#!/bin/sh
 case $0 in */*) here=${0%/*} ;; *) here=. ;; esac
+skip=0
 for word in "$@"; do
+  if [ "$skip" = 1 ]; then skip=0; continue; fi
   case $word in
+    --max-steps|--seed|--flush-timeout|--schedulers) skip=1 ;;
     -*) ;;
     outline|type-at|symbol|refs)
       echo "$word" >> "$here/@LOG@"
@@ -346,7 +352,27 @@ def ensure_runtime(image: str) -> None:
                          "if it still fails, the VM needs a newer libc or other libraries than the image has.")
 
 
-def validate_docker(image: str, typed: bool = False, agentica: bool = False) -> dict[str, str | None]:
+def dockerfile_pi_version() -> str | None:
+    found = re.search(r"^ARG PI_VERSION=(\S+)", (EVAL / "Dockerfile").read_text(encoding="utf-8"), re.MULTILINE)
+    return found.group(1) if found else None
+
+
+def ensure_pi(image: str) -> str | None:
+    """The Pi version of the image. The default image must match the Dockerfile, so an image built before a bump of
+    PI_VERSION stops the round; an image given with --image is only recorded."""
+    with tempfile.TemporaryDirectory(prefix="agentica-pi-probe-") as directory:
+        code, out, err = probe(image, ["pi", "--version"], Path(directory), 60)
+    found = re.search(r"\d+\.\d+\.\d+\S*", out + err) if code == 0 else None
+    version = found.group(0) if found else None
+    wanted = dockerfile_pi_version()
+    if image == DEFAULT_IMAGE and version != wanted:
+        raise SystemExit(f"{image} has Pi {version or 'that does not run (' + err.strip() + ')'}, but tests/eval/Dockerfile "
+                         f"pins {wanted}. Remove the stale image (docker rmi {image}) and rerun to rebuild it.")
+    return version
+
+
+def validate_docker(image: str, typed: bool = False, agentica: bool = False,
+                    pi: bool = False) -> dict[str, str | None]:
     require_docker()
     if not image_exists(image):
         if image != DEFAULT_IMAGE:
@@ -358,7 +384,7 @@ def validate_docker(image: str, typed: bool = False, agentica: bool = False) -> 
     checker = ensure_checker(image) if typed else None
     if agentica:
         ensure_runtime(image)
-    return {"checker": checker, "image_id": image_id(image)}
+    return {"checker": checker, "image_id": image_id(image), "pi": ensure_pi(image) if pi else None}
 
 
 def child_environment(pass_env: list[str], *, in_chroot: bool, workspace: Path) -> dict[str, str]:
@@ -751,18 +777,24 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
 
 
 class Budget:
-    """The `--max-cost` cap. A run starts only when the cost so far, plus the estimate for this run and for every run
-    in flight, stays under the cap; the first refusal is final, so the round stops starting runs and the ones in
-    flight finish. The estimate is the mean cost of the finished runs, never below `floor`."""
+    """The `--max-cost` cap, a soft one. A run starts only when the cost so far, plus the estimate for this run and
+    for every run in flight, stays under the cap; the first refusal is final, so the round stops starting runs and
+    the ones in flight finish. Those runs, and a run dearer than the estimate, can still pass the cap: by up to
+    `--jobs` times the costliest run.
+
+    The estimate is the highest cost seen so far (which is never below the mean), and never below `floor`. A run
+    that reports no cost (no usage at all, or a cost of 0: a timeout, a 429, an auth error) says nothing about what
+    a run costs, so it is charged the estimate and kept out of that figure."""
 
     def __init__(self, cap: float | None, floor: float) -> None:
         self.cap, self.floor = cap, floor
         self.spent, self.finished, self.in_flight, self.skipped = 0.0, 0, 0, 0
+        self.highest = 0.0
         self.stopped = False
         self.lock = threading.Lock()
 
     def estimate(self) -> float:
-        return max(self.floor, self.spent / self.finished if self.finished else 0.0)
+        return max(self.floor, self.highest)
 
     def begin(self) -> bool:
         with self.lock:
@@ -773,14 +805,18 @@ class Budget:
             self.in_flight += 1
             return True
 
-    def end(self, cost: float | None) -> float:
-        """Add the cost of a finished run; a run that failed before it reported a cost is charged the estimate."""
+    def end(self, cost: float | None) -> tuple[float, bool]:
+        """Add the cost of a finished run. Returns the total and whether the run was charged the estimate because it
+        reported no usable cost (None or not above 0)."""
         with self.lock:
-            charged = self.estimate() if cost is None else cost
+            unknown = cost is None or cost <= 0
+            charged = self.estimate() if unknown else cost
+            if not unknown:
+                self.highest = max(self.highest, charged)
             self.in_flight -= 1
             self.finished += 1
             self.spent += charged
-            return self.spent
+            return self.spent, unknown
 
 
 def budgeted_run(args: argparse.Namespace, budget: Budget, results: Path, scratch: Path,
@@ -789,9 +825,12 @@ def budgeted_run(args: argparse.Namespace, budget: Budget, results: Path, scratc
         return
     cost = None
     try:
-        cost = float(one_run(args, results, scratch, task, arm, rep).get("cost", 0.0))
+        cost = one_run(args, results, scratch, task, arm, rep).get("cost")
     finally:
-        total = budget.end(cost)
+        total, unknown = budget.end(cost)
+        if unknown and budget.cap is not None:
+            print(f"warning: {task}-{arm}-{rep} reported no cost; charged the estimate "
+                  f"${budget.estimate():.4f}", flush=True)
         cap = f" of the ${budget.cap:.2f} cap" if budget.cap is not None else ""
         print(f"cost so far: ${total:.4f}{cap}", flush=True)
 
@@ -812,7 +851,7 @@ def run_info(args: argparse.Namespace, image_info: dict[str, str | None]) -> dic
             "skill_commit": git_output("log", "-1", "--format=%H", "--", ".agents/skills/agentica-programming"),
             "agent": args.agent, "model": args.model or "default", "arms": args.arms, "tasks": args.tasks,
             "reps": args.reps, "timeout": args.timeout, "sandbox": args.sandbox, "image": args.image,
-            "image_id": image_info["image_id"], "checker": image_info["checker"], "pass_env": args.pass_env,
+            "image_id": image_info["image_id"], "checker": image_info["checker"], "pi_version": image_info.get("pi"), "pass_env": args.pass_env,
             "agent_network": AGENT_NETWORK and args.agent != "reference", "arm_tasks": args.arm_tasks,
             "max_cost": args.max_cost,
             "arm_notes": {arm: NOCLI_NOTE for arm in args.arms if arm == "skill-nocli"}}
@@ -868,10 +907,11 @@ def main() -> int:
     parser.add_argument("--arm-tasks", action="append", default=[], metavar="ARM=TASK,TASK",
                         help="run ARM only on these tasks (full names, all in --tasks); repeat for several arms")
     parser.add_argument("--max-cost", type=float, metavar="USD",
-                        help="stop starting runs when the cost so far plus the estimate of the runs in flight and "
-                             "of the next one would pass USD (default: no cap)")
+                        help="soft cap: stop starting new runs when the cost so far plus the estimate of the runs "
+                             "in flight and of the next one would pass USD. Runs already going and outlier runs "
+                             "can go past it by up to --jobs x the costliest run (default: no cap)")
     parser.add_argument("--run-cost-estimate", type=float, default=0.01, metavar="USD",
-                        help="lowest estimate of one run for --max-cost; the mean of the finished runs replaces it "
+                        help="lowest estimate of one run for --max-cost; the highest cost seen so far replaces it "
                              "when higher (default: %(default)s)")
     parser.add_argument("--reps", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=600)
@@ -914,9 +954,9 @@ def main() -> int:
         build()
     if not (ROOT / "dist" / "runtime" / "bin" / "agentica").is_file():
         raise SystemExit("dist/runtime is missing; rerun without --no-build")
-    image_info: dict[str, str | None] = {"checker": None, "image_id": None}
+    image_info: dict[str, str | None] = {"checker": None, "image_id": None, "pi": None}
     if args.sandbox == "docker":
-        image_info = validate_docker(args.image, typed, agentica)
+        image_info = validate_docker(args.image, typed, agentica, args.agent == "pi")
     stamp = time.strftime("%Y%m%d-%H%M%S")
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)
