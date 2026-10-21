@@ -293,10 +293,18 @@ parser.
     them. On a local of a function that checked it is complete. On a field or a
     builtin, which a use is told by the type of its target, it is not answered:
     the first problem, exit 1;
-  - a position that nothing above answers, a file that does not lex, parse or
-    link, and a failure of the declarations (their types, `main`, the constants)
-    are the first problem, exit 1, as without the option. After a failure of the
-    declarations no function is checked, so every answer is from the link;
+  - a file that does not lex, parse or link, and a failure of the declarations
+    (their types, `main`, the constants), are the first problem, exit 1, as
+    without the option: no function is checked, so there is nothing to answer
+    from;
+  - a position on a token of a function that did not check that the link cannot
+    name (a field, a local, a keyword) is the first problem, exit 1. Any other
+    position that nothing answers (a blank, a comment, an import line, a
+    parameter annotation of a function that checked) is
+    `QUERY-NO-EXPRESSION`, exit 2, as in a program that checks, so a caller can
+    tell a bad position from a broken program. Inside a failed function the
+    parse cannot tell a keyword like `end` from an expression, so that case
+    stays the first problem;
   - the text form is the same, a `?` for an unknown type, and one line on stderr
     for each problem: `partial FILE:LINE:COL: CODE`.
 - **Linking each root on its own.** `symbol` and `refs` link the roots one at a

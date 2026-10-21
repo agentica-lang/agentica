@@ -129,8 +129,10 @@ end
 ## `type_at` for a program that may not check (docs/future/39-semantic-cli.md, 39.6, `--partial`). When it checks, the
 ## answer is the one of `type_at`. When a function fails to check, the answer is marked `partial` and holds the
 ## `diagnostics` of those failures: a position in a function that checked gets its type and definition, and a name in
-## one that did not gets its definition after linking and no type (`type` is ""). A position that neither can answer, a
-## file that does not link and one whose declarations do not register are the first problem, as for `type_at`.
+## one that did not gets its definition after linking and no type (`type` is ""). A file that does not link, one whose
+## declarations (their types, `main`, the constants) do not check, and a position in a function that did not check
+## that the link cannot name are the first problem, as for `type_at`; a position on no expression is
+## QUERY-NO-EXPRESSION.
 export def type_at_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
   case partial_front(settings, asked)
     Partly.Unreadable -> return Typed.Unreadable
@@ -139,8 +141,8 @@ export def type_at_partial(settings: Env.Settings, asked: QueryPosition.Asked) -
       if found.problems.size == 0
         return located(settings, asked, found.front)
       end
-      case PartialAt.answer(found.front.linked, found.front.checked, asked)
-        Diag.Outcome.Failed(_) -> return Typed.Rejected(found.problems[0])
+      case PartialAt.answer(found.front.linked, found.front.checked, found.failed, asked)
+        Diag.Outcome.Failed(problem) -> return Typed.Rejected(unanswered(found, asked, problem))
         Diag.Outcome.Done(answered) ->
           marked = typed_model(settings, asked, answered)
           return Typed.Done(marked.with(partial: true, diagnostics: diagnostics(settings, found.problems, asked.file)))
@@ -153,7 +155,8 @@ end
 ## `diagnostics` of those failures; it is complete for a function, struct, enum, alias, constant or variant (the
 ## linker resolves every use, in a function that failed too) and for a local of a function that checked. A field or a
 ## builtin needs the types of every function, so the answer for one is the first problem, as for `refs`; so is a
-## position that names nothing.
+## position in a function that did not check that the link cannot name. Any other position that names nothing is
+## QUERY-NO-EXPRESSION.
 export def refs_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
   case partial_front(settings, asked)
     Partly.Unreadable -> return Referenced.Unreadable
@@ -163,7 +166,7 @@ export def refs_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> R
         return referenced(settings, asked, found.front)
       end
       case Refs.answer(found.front.linked, found.front.checked, asked)
-        Diag.Outcome.Failed(_) -> return Referenced.Rejected(found.problems[0])
+        Diag.Outcome.Failed(problem) -> return Referenced.Rejected(unanswered(found, asked, problem))
         Diag.Outcome.Done(answered) ->
           if Refs.needs_types?(answered)
             return Referenced.Rejected(found.problems[0])
@@ -257,6 +260,15 @@ def partial_front(settings: Env.Settings, asked: QueryPosition.Asked) -> Partly
         Partial.Outcome.Done(found) -> return Partly.Done(found)
       end
   end
+end
+
+# Why a program with failed functions has no answer for a position: its first problem when the position is in a failed
+# function and could name something there, else the position is on no expression.
+def unanswered(found: Partial.Recovered, asked: QueryPosition.Asked, missed: Diag.Diagnostic) -> Problems.Problem
+  if PartialAt.unclear?(found.front.linked, found.failed, asked)
+    return found.problems[0]
+  end
+  return Front.stage_problem(asked.file, missed)
 end
 
 def located(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Checked) -> Typed

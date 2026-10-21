@@ -41,7 +41,6 @@ export def range(part: Model.Region) -> Json
   return JSON.object({"start": position(part.start), "end": position(part.stop)})
 end
 
-# A note that the diagnostic does not have is the empty text.
 ## The `shape` of an answer from a program that does not check (docs/future/39-semantic-cli.md, 39.6): `partial` is
 ## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
 export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]) -> Map[String, Json]
@@ -51,6 +50,7 @@ export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]
   )
 end
 
+# A note that the diagnostic does not have is the empty text.
 def note(fields: Map[String, Json], key: String, text: String) -> Map[String, Json]
   if text == ""
     return fields

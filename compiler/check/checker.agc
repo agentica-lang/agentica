@@ -35,10 +35,19 @@ export struct Checked
   bound: Map[Int, List[T.Type]]
 end
 
-## What `check_recovering` learned: the types of the functions that passed and the problems of those that did not.
+## What `check_recovering` learned: the types of the functions that passed, and the problems of those that did not with
+## their linked names (`failed`, in the same order).
 export struct Recovered
   checked: Checked
   problems: List[Failure.Problem]
+  failed: List[String]
+end
+
+## The result of `check_recovering`: the program as far as it checks, or the one failure that leaves nothing to
+## answer from.
+export enum Recovering
+  Done(Recovered)
+  Failed(Failure.Problem)
 end
 
 ## The result of checking: the types, or the first problem.
@@ -56,27 +65,13 @@ end
 ## problem is kept and the other functions are checked. `checked` holds the types of the functions that passed (those
 ## of a failed function stay Unknown), so a query can answer about the rest; `problems` are the failures in program
 ## order, and the first is the one `check_query` gives. A failure of the registration of the declarations, of the main
-## rule or of the module constants leaves no part that passes: `checked` is `unchecked` and `problems` holds that one
-## failure.
-export def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovered
+## rule or of the module constants leaves no part that passes, so it is the failure, as for `check_query`.
+export def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovering
   result = run(linked, settings, false, true)
   if result.ok?
-    return result.unwrap!
+    return Recovering.Done(result.unwrap!)
   end
-  return Recovered(checked: unchecked(linked), problems: [Failure.unpack(result.message)])
-end
-
-## The checked data of a program nothing was checked in: every type is Unknown and nothing is resolved or bound.
-export def unchecked(linked: Linker.Linked) -> Checked
-  return Checked(
-    types: no_types(ids_of(linked), max_repeat()),
-    resolved: {},
-    constants: [],
-    prelude: [],
-    bodies: {},
-    step_tries: Set.new([]),
-    bound: {},
-  )
+  return Recovering.Failed(Failure.unpack(result.message))
 end
 
 ## Checks a linked program as `check` does, without the rule that it declares a main (CHECK-MAIN): `agentica check` and
@@ -141,6 +136,7 @@ def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool, reco
   cx = done.cx
   st = done.st
   problems: List[Failure.Problem] = []
+  failed: List[String] = []
   for module in linked.modules
     here = cx.with(file: module.file)
     for decl in module.declarations
@@ -151,6 +147,7 @@ def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool, reco
             st = step.unwrap!
           elsif recover
             problems = problems.push(Failure.unpack(step.message))
+            failed = failed.push(node.name)
           else
             return error(step.message)
           end
@@ -168,7 +165,7 @@ def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool, reco
     step_tries: attached.st.step_tries,
     bound: attached.st.bound,
   )
-  return ok(Recovered(checked: checked, problems: problems))
+  return ok(Recovered(checked: checked, problems: problems, failed: failed))
 end
 
 # The number of node ids of the program, with the room the linker took for the receivers of constants (Linked.ids).

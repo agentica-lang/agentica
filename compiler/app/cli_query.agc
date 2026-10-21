@@ -31,11 +31,15 @@ import TypeAtJson from "../query/type_at_json"
 import TypeAtText from "../query/type_at_text"
 
 # The usage line of each query command, given as the help of QUERY-USAGE.
-OUTLINE_USAGE = "usage: agentica outline FILE [--json] [--partial]   or   agentica outline --stdin FILE"
-TYPE_AT_USAGE = (
-  "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " + "agentica type-at --stdin FILE:LINE:COL"
+OUTLINE_USAGE = (
+  "usage: agentica outline FILE [--json] [--partial]   or   " + "agentica outline --stdin FILE [--partial]"
 )
-REFS_USAGE = "usage: agentica refs FILE:LINE:COL [--json] [--partial]   or   agentica refs --stdin FILE:LINE:COL"
+TYPE_AT_USAGE = (
+  "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " + "agentica type-at --stdin FILE:LINE:COL [--partial]"
+)
+REFS_USAGE = (
+  "usage: agentica refs FILE:LINE:COL [--json] [--partial]   or   " + "agentica refs --stdin FILE:LINE:COL [--partial]"
+)
 SYMBOL_USAGE = "usage: agentica symbol NAME [PATH...] [--json] [--stdin FILE]"
 
 ## The usage line of `agentica outline`.

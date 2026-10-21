@@ -89,6 +89,22 @@ export def definition_file(answered: Answer) -> String
   end
 end
 
+## Whether some token of the text holds the character at `offset`. Line breaks and the end are tokens that hold nothing.
+export def on_token?(text: String, offset: Int) -> Bool
+  case Lexer.lex(text)
+    Diag.Outcome.Failed(_) -> return false
+    Diag.Outcome.Done(tokens) ->
+      for token in tokens
+        if token.span.start.offset > offset
+          return false
+        elsif token.kind != "NL" and token.kind != "eof" and At.holds?(token.span, offset)
+          return true
+        end
+      end
+      return false
+  end
+end
+
 def expression_answer(
   linked: Linker.Linked,
   checked: Checker.Checked,
@@ -191,22 +207,6 @@ def source_text(text: String, span: Source.Span) -> String
     return ""
   end
   return text.slice(span.start.offset, size)
-end
-
-# Whether some token of the text holds the character at `offset`. Line breaks and the end are tokens that hold nothing.
-def on_token?(text: String, offset: Int) -> Bool
-  case Lexer.lex(text)
-    Diag.Outcome.Failed(_) -> return false
-    Diag.Outcome.Done(tokens) ->
-      for token in tokens
-        if token.span.start.offset > offset
-          return false
-        elsif token.kind != "NL" and token.kind != "eof" and At.holds?(token.span, offset)
-          return true
-        end
-      end
-      return false
-  end
 end
 
 # Whether the position is on a name: an expression that is a name, or the name part of one that has a name in it.

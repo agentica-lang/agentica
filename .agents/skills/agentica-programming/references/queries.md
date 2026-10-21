@@ -164,9 +164,11 @@ without errors the bytes are those of the command without the option.
   use, those in the functions that failed too. A local of a function that
   checked works. A field or a builtin gives the first problem (exit 1): its uses
   are told by types.
-- A program that does not lex, parse or link, one whose declarations fail
-  (their types, `main`, a constant) and a position that nothing answers are the
-  first problem, exit 1, with or without the option. In text form each problem
+- A program that does not lex, parse or link, and one whose declarations fail
+  (their types, `main`, a constant), are the first problem, exit 1, with or
+  without the option. So is a field, a local or a keyword in a function that
+  did not check; any other position on no expression (a blank, a comment, an
+  import line) is QUERY-NO-EXPRESSION, exit 2, as in a program that checks. In text form each problem
   of a partial answer is a stderr line `partial FILE:LINE:COL: CODE`.
 
 Use it to run `refs --partial` on a function or type again after you edit its
