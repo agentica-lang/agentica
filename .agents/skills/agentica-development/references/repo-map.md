@@ -16,7 +16,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
   analysis/  # the semantic queries, once (§39, `std/analysis`): the CLI and the library both call it, so they cannot drift
     front.agc  # read_root, check_file, query_file, query_cached, refresh, stage_problem, link_problem: read, link and check, shared by the CLI, the BDD driver and the queries
-    analysis.agc  # check, checked, outline, type_at over Env.Settings (the Workspace holds any unsaved buffers): data of model.agc or the first Problem
+    analysis.agc  # check, checked, outline, type_at, refs, symbol over Env.Settings (the Workspace holds any unsaved buffers): data of model.agc or the first Problem
     model.agc convert.agc  # the plain answers (Outline, TypeAt, Checked; no enum) and the conversion from the stages' own types
     cache.agc  # the Cache of a Session: checked roots (16, by last use) and parsed modules; fingerprint, find, remember
     session.agc  # the immutable Session of stdlib/analysis.agc: the settings, the buffers and the cache

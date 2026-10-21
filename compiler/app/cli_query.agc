@@ -105,7 +105,7 @@ export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.An
   if asked.words.size > 0
     name = asked.words[0]
   end
-  case Core.symbol(settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
+  case Core.symbol(Cache.empty(), settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
     Core.Found.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Found.Done(found) ->
       if asked.style == "json"

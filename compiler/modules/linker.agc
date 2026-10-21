@@ -50,7 +50,12 @@ end
 
 ## Links the file at path, with the std/ sources of settings.std and the environment of settings.env.
 export def link_file(path: String, settings: Env.Settings) -> Linking
-  loaded = Modules.load(path, settings)
+  return link_file_with(path, settings, Modules.no_parses())
+end
+
+## Like `link_file`, taking the trees of `parses` for the files whose text is the same (Modules.load_with).
+export def link_file_with(path: String, settings: Env.Settings, parses: Modules.Parses) -> Linking
+  loaded = Modules.load_with(path, settings, parses)
   if loaded.ok?
     return link_loaded(loaded.unwrap!, settings)
   end

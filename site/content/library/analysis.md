@@ -1,10 +1,10 @@
 ---
 title: Code analysis (std)
 weight: 8
-description: The std/analysis module, which answers the questions of check, outline and type-at from a program.
+description: The std/analysis module, which answers the questions of check, outline, type-at, symbol and refs from a program.
 ---
 
-`std/analysis` asks the compiler about code from inside a program: `import Analysis from "std/analysis"`. It answers the questions of `agentica check`, `agentica outline` and `agentica type-at`, and gives the answers as plain structs. The command line runs the same code, so `Analysis.outline_json` and `Analysis.type_at_json` give byte for byte what `agentica --json outline` and `type-at` print, and `Analysis.diagnostic_json` what `--json check` prints on stderr.
+`std/analysis` asks the compiler about code from inside a program: `import Analysis from "std/analysis"`. It answers the questions of `agentica check`, `agentica outline`, `agentica type-at`, `agentica symbol` and `agentica refs`, and gives the answers as plain structs. The command line runs the same code, so `Analysis.outline_json`, `Analysis.type_at_json`, `Analysis.symbols_json` and `Analysis.refs_json` give byte for byte what `agentica --json outline`, `type-at`, `symbol` and `refs` print, and `Analysis.diagnostic_json` what `--json check` prints on stderr.
 
 ```ruby
 Analysis.workspace() -> Analysis.Workspace
@@ -15,9 +15,13 @@ Analysis.refresh(session: Analysis.Session, path: String) -> Analysis.Session
 Analysis.check(session: Analysis.Session, path: String) -> Analysis.Checked
 Analysis.outline(session: Analysis.Session, path: String) -> Result[Analysis.Outline]
 Analysis.type_at(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
+Analysis.symbol(session: Analysis.Session, name: String, paths: List[String]) -> Result[Analysis.Symbols]
+Analysis.refs(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
 Analysis.outline_json(found: Analysis.Outline) -> Json
 Analysis.type_at_json(found: Analysis.TypeAt) -> Json
+Analysis.symbols_json(found: Analysis.Symbols) -> Json
+Analysis.refs_json(found: Analysis.Refs) -> Json
 Analysis.diagnostic_json(found: Analysis.Diagnostic) -> Json
 ```
 
@@ -31,7 +35,7 @@ A session is a value. Tasks may share it and ask it at once, and an `update` in 
 
 `Analysis.refresh(session, path)` returns a session whose cache holds the linked and checked program of the file `path` and the parsed modules it reads. A loop that keeps one session does `update`, then `refresh`, then asks: `check` and `type_at` about `path` then skip parsing and checking.
 
-A question reads the files again, starting at its file, and uses the cache only where the modules and their texts are the ones the cache was made from. A buffer edit, a `close`, a change on the disk, a new file and a removed file all count, and so does a change of `agentica.toml` that changes what an import means. So the answers are the same with or without `refresh`, and a cache that is stale costs time, never a wrong answer. A refresh checks the program again only when one of its modules changed, and it parses only the modules whose text changed; the check is still of the whole program of `path`. A file that cannot be read or linked leaves the cache as it was, and the questions say why.
+`check`, `type_at` and `refs` use the checked program of the cache; `symbol` links each file it searches and uses only the parsed modules. A question reads the files again, starting at its file, and uses the cache only where the modules and their texts are the ones the cache was made from. A buffer edit, a `close`, a change on the disk, a new file and a removed file all count, and so does a change of `agentica.toml` that changes what an import means. So the answers are the same with or without `refresh`, and a cache that is stale costs time, never a wrong answer. A refresh checks the program again only when one of its modules changed, and it parses only the modules whose text changed; the check is still of the whole program of `path`. A file that cannot be read or linked leaves the cache as it was, and the questions say why.
 
 The cache keeps at most 16 checked files, the least recently refreshed leaving first, and the parsed modules that these files reach. It lives in the value: there is no task, channel or lock, so the caller owns the loop. Run one `refresh` at a time per session and store the session it returns. Two refreshes that start from one session give two caches, and keeping one drops the work of the other, which costs time and nothing else. A program that refreshes in a task and meanwhile calls `update` on its own copy adopts the refreshed session only if no `update` or `close` came after it started; otherwise it keeps its own session and asks again later.
 
@@ -42,10 +46,12 @@ The answers are structs of strings, ints, bools and lists, with no enum: the sha
 - `Analysis.check` links and checks the file as `agentica check` does. `Checked.passed` is true when the program has no problem, and `diagnostics` holds the first problem, if any.
 - `Analysis.outline` lists what the file declares, as `agentica outline` does. The file is only parsed.
 - `Analysis.type_at` gives the type and the definition at the position, as `agentica type-at` does. Line and column count from 1.
+- `Analysis.symbol` finds where `name` is declared in the files and folders of `paths` (`.` when the list is empty), as `agentica symbol` does: a folder means every `*.agc` file below it, each file is linked on its own, and the ones that do not link are listed in `Symbols.skipped`. The file of each `Symbol` is `module` ("" for a builtin) and `help` is the JSON of `agentica help NAME --json` for a builtin, JSON null for the others. Every file that has a buffer in the session is searched too, first, as `--stdin FILE` does, whether or not `paths` names it, so a query cannot be scoped to a folder while other buffers are open. The buffers come in the bytewise order of their canonical paths, whatever order they were put in, so the order of `matches` does not depend on the history of `update` calls. Folders are listed on the disk: a folder that exists only as buffers (a buffer `newdir/new.agc` and `paths` `["newdir"]`) is a `QUERY-USAGE` "cannot read"; name the buffer's file, or leave `paths` empty.
+- `Analysis.refs` gives the declaration of the name at the position and every reference to it, as `agentica refs` does: in the file (linked and checked as for `type_at`) and what it imports; a file that only imports it is not seen. `Refs.definition` is empty for a builtin, which `Refs.builtin` names ("" for anything else), and a `Reference` is the `range` of the name in its `file`.
 
 ## Errors
 
-`outline` and `type_at` return a `Result` whose error message is the diagnostic as one JSON object, the form of `--json`, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`, `QUERY-NO-EXPRESSION` for a position that is on no expression, and `QUERY-USAGE` for a file that cannot be read or a position below line 1 or column 1; that diagnostic names the file.
+`outline`, `type_at`, `symbol` and `refs` return a `Result` whose error message is the diagnostic as one JSON object, the form of `--json`, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`, `QUERY-NO-EXPRESSION` for a position that is on no expression, `QUERY-NOT-FOUND` for a `symbol` name that nothing declares, and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For a file of `outline`, `type_at` and `refs` that diagnostic names the file; for `symbol` its `file` is `<arguments>`, as on the command line. The usage `help` line of the command line is missing from `QUERY-USAGE`; `QUERY-NOT-FOUND` keeps its `help` (the files not searched).
 
 ```agentica {mode="check"}
 import Analysis from "std/analysis"

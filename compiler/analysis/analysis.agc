@@ -1,6 +1,6 @@
 ## The semantic queries, once: `check`, `outline`, `type-at`, `symbol` and `refs` of docs/future/39-semantic-cli.md.
 ## The command line (app/cli.agc, app/cli_query.agc) and `std/analysis` (stdlib/analysis.agc, which embeds this core)
-## both call these functions, so the two cannot drift (`symbol` and `refs` have no function in `std/analysis` yet).
+## both call these functions, so the two cannot drift.
 ## Each one reads its files through the Workspace of the `settings`, which is where an unsaved buffer stands in for a
 ## file (modules/overlay.agc), and gives the data of model.agc or the first problem. What each caller does with them is
 ## its own: the command line prints and sets an exit status, the library returns.
@@ -133,14 +133,21 @@ end
 ## `buffer` is the FILE that the Workspace of the `settings` holds as a buffer ("" for none); it is searched first. A
 ## missing name and a path that names no `*.agc` file are QUERY-USAGE with `usage` as the help ("" for none), a name
 ## that nothing declares is QUERY-NOT-FOUND, and when no file links the answer is the first problem of the first one.
-export def symbol(settings: Env.Settings, name: String, paths: List[String], buffer: String, usage: String) -> Found
+export def symbol(
+  cache: Cache.Cache,
+  settings: Env.Settings,
+  name: String,
+  paths: List[String],
+  buffer: String,
+  usage: String,
+) -> Found
   if name == ""
     return Found.Rejected(QueryOptions.refusal("missing NAME", usage))
   end
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
     SymbolPaths.Expanded.Refused(problem) -> return Found.Rejected(problem)
     SymbolPaths.Expanded.Files(roots) ->
-      case Symbol.answer(name, roots, settings)
+      case Symbol.answer(name, roots, settings, cache.parses)
         Symbol.Outcome.Refused(problem) -> return Found.Rejected(problem)
         Symbol.Outcome.Found(found) ->
           named = found.with(matches: found.matches.map do |match: Symbol.Match| shown(settings, match) end)
