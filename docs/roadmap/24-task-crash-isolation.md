@@ -1,11 +1,7 @@
 ## Phase 24: Task crash isolation
 
-The semantics are in the grammar's task section
-([`06c-tasks-and-tests.md`][task-rules]).
-This file is the implementation record. Phase 24 is VM work with a small
-language change: a runtime error in a task other than
-`main` ends only that task. Its place in the order is row 7.1 of the
-[roadmap](README.md). It took one PR, with its own tests and docs.
+VM work with a small language change; its place in the order is row 7.2.1 of
+the [roadmap](README.md).
 
 **Done:** a runtime error in a task other than `main` ends only that
 task (24a); one handle-ownership rule — a handle belongs to the task
