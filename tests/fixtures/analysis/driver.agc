@@ -6,6 +6,7 @@ import Analysis from "std/analysis"
 #   update PATH TEXTFILE   puts the text of TEXTFILE in the buffer of PATH
 #   close PATH             takes the buffer out
 #   check PATH             `{"ok":true}` on stdout, or the diagnostic on stderr
+#   check-all PATH...      the last command: one line on stdout for each PATH, from `check` run in tasks, four at a time
 #   outline PATH           the JSON on stdout, or the diagnostic on stderr
 #   type-at PATH LINE COL  the same
 # An error is printed after Analysis.diagnostic read it and Analysis.diagnostic_json wrote it back, so the output of a
@@ -35,6 +36,9 @@ def main() -> Void
         IO.warn(JSON.encode(Analysis.diagnostic_json(checked.diagnostics[0])))
       end
       at += 2
+    elsif word == "check-all"
+      show_all(session, words.drop(at + 1))
+      at = words.size
     elsif word == "outline"
       show(outlined(session, words[at + 1]))
       at += 2
@@ -63,4 +67,19 @@ end
 def typed(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
   found = try Analysis.type_at(session, path, line, column)
   return ok(Analysis.type_at_json(found))
+end
+
+# Questions of one session, asked from tasks that may run at once: the lines come back in the order of the paths.
+def show_all(session: Analysis.Session, paths: List[String]) -> Void
+  lines = Task.map(paths, 4, 60000) do |path: String|
+    checked = Analysis.check(session, path)
+    line = "{\"ok\":true}"
+    if !checked.passed
+      line = JSON.encode(Analysis.diagnostic_json(checked.diagnostics[0]))
+    end
+    ok(line)
+  end
+  for line in lines
+    puts(line.unwrap!)
+  end
 end

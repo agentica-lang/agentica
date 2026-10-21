@@ -1,5 +1,8 @@
 # Asking the compiler about code
 
+From an Agentica program, `std/analysis` gives the same answers as structs
+(`references/analysis.md`).
+
 `agentica outline FILE` and `agentica type-at FILE:LINE:COL` ask the compiler
 about code without reading whole files. `outline` lists what one file declares,
 so you do not read the whole file to learn its signatures. It only lexes and

@@ -18,9 +18,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   use and on the binding itself.
 - `Std.source(path)` gives the text of a `std/` source that the binary carries,
   such as `"queue.agc"`, to any program.
+- `std/analysis` answers the questions of `check`, `outline` and `type-at` from
+  a program, as plain structs, over a session with unsaved buffers; the command
+  line runs the same code.
 
 ### Changed
 
+- `std/internal/` can be imported only from `std/` modules (`CHECK-IMPORT-IO`),
+  and a `std/` module may use `..` in a relative import that stays in `std/`.
 - `agentica check` no longer requires `main`, so a library file checks clean; a
   `main` with the wrong signature is still `CHECK-MAIN` (also for `type-at`),
   and a run or `compile` of a file with no `main` still reports it, so use one

@@ -12,7 +12,8 @@ VERSION             the version, one line (read by the Makefile)
 compiler/           the front end in Agentica (§18), one folder per context
                     (`ls compiler/`): app (CLI, pipeline), io (the only I/O of
                     the stages), packages (manifest, lock, cache), catalog
-                    (builtins, prelude); front_end.agc is the program the
+                    (builtins, prelude), analysis (the queries that the CLI
+                    and std/analysis share); front_end.agc is the program the
                     binary carries
 Makefile, mk/       the build: the root has the defaults and `help`; mk/*.mk
                     has one file per area (vm, bootstrap, test, vm-test,
@@ -20,7 +21,8 @@ Makefile, mk/       the build: the root has the defaults and `help`; mk/*.mk
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
 vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
                     agentica.c is the main of the binary (`run`, front end, hand-off)
-stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner)
+stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner,
+                    analysis); CORE lists the compiler/ files that std/analysis embeds
 tests/              pytest: test_<area>.py; test_spec_<area>.py are the language
                     rules through the CLI; fixtures/ (goldens, Node/Python peers)
 examples/           small programs per feature (README.md lists them)

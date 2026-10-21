@@ -36,9 +36,9 @@ def project(tmp_path):
     return tmp_path
 
 
-def library(driver, project, *words):
+def library(driver, project, *words, flags=()):
     """The driver's (stdout, stderr) for `words`."""
-    result = run_vm(driver, args=words, cwd=project, env=vm_environment())
+    result = run_vm(driver, *flags, args=words, cwd=project, env=vm_environment())
     assert result.code == 0, result.stderr
     return result.stdout, result.stderr
 
@@ -94,6 +94,16 @@ def test_an_unreadable_file_or_a_bad_position_is_a_query_usage_diagnostic_in_tha
     # `check` does not stop at a missing file: it answers that the program does not pass.
     stdout, stderr = library(driver, project, "check", "nope.agc")
     assert (stdout, json.loads(stderr)["code"]) == ("", "QUERY-USAGE")
+
+
+def test_tasks_ask_one_session_at_once_on_four_schedulers(driver, project):
+    files = ["main.agc", "type_error.agc", "parse_error.agc", "missing_import.agc", "main.agc", "type_error.agc"]
+    expected = ""
+    for file in files:
+        out, err = command_line(project, "check", file)
+        expected += out or err
+    got = library(driver, project, "update", "main.agc", "main.agc", "check-all", *files, flags=("--schedulers", "4"))
+    assert got == (expected, "")
 
 
 def test_a_buffer_gives_the_answers_that_stdin_gives_and_close_gives_the_disk_back(driver, project):
