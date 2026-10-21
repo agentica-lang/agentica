@@ -396,10 +396,13 @@ arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
 innermost expression at a position (line and column from 1, in code points as
 diagnostics count them), its span and source text, and the definition of what it
 names: a function, struct, enum, variant, field or constant, with the span of
-the declaration and of its name. A type argument is answered in a later version.
-A type of another file is written through the import alias of FILE
-(`Models.User`). A local or a builtin has a type and no definition. The `kind`
-of the JSON answer is an open set: a client accepts a value it does not know.
+the declaration and of its name, its signature and its `##` doc (null when it
+has none). A type argument is answered in a later version. A type of another
+file is written through the import alias of FILE (`Models.User`). On the name of
+a builtin (`split` in `xs.split(",")`) the `kind` is `builtin` and `help` holds
+the object of `agentica help NAME --json`; a builtin has no definition, and a
+local has a type and no definition. The `kind` of the JSON answer is an open
+set: a client accepts a value it does not know.
 FILE is a path of the disk, linked and checked with its imports; it needs no
 `main`. `--stdin` before the position (`type-at --stdin FILE:LINE:COL`) takes
 the text of FILE from standard input. An error of the program is its own

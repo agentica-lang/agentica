@@ -1,9 +1,11 @@
 ## The text form of `agentica type-at` (docs/future/39-semantic-cli.md, 39.2): the span of the expression, then its
 ## source text and its type, and a second line for the definition, if there is one. Each line starts with
-## `file:line:column`, like `rg`.
+## `file:line:column`, like `rg`. A builtin has no place: its lines are `builtin` and the signature of each form.
 
 import Ast from "../syntax/ast"
+import Builtins from "../catalog/builtins"
 import Definitions from "definitions"
+import Model from "../catalog/builtin_model"
 import Source from "../syntax/source"
 import TypeAt from "type_at"
 
@@ -12,7 +14,7 @@ export def text(file: String, answered: TypeAt.Answer, definition_file: String) 
   span = answered.span
   head = "#{file}:#{range(span)} #{first_line(answered.text)}: #{answered.type}"
   case answered.definition
-    Ast.Optional.Absent -> return "#{head}\n"
+    Ast.Optional.Absent -> return "#{head}\n#{builtin_lines(answered.builtin)}"
     Ast.Optional.Present(found) ->
       return "#{head}\n#{definition_file}:#{span_start(found.name_span)} #{found.kind} #{found.name}\n"
   end
@@ -34,4 +36,13 @@ def first_line(text: String) -> String
     return "#{lines[0]} ..."
   end
   return text
+end
+
+# One `builtin SIGNATURE` line for each form of the builtin; nothing for an answer that is not a builtin.
+def builtin_lines(builtin: Ast.Optional[Model.Builtin]) -> String
+  case builtin
+    Ast.Optional.Absent -> return ""
+    Ast.Optional.Present(entry) ->
+      return Builtins.signature(entry).split("\n").map do |line: String| "builtin #{line}\n" end.join("")
+  end
 end

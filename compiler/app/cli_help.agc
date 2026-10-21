@@ -3,13 +3,12 @@
 ## of the builtins.
 
 import Ast from "../syntax/ast"
-import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
+import CatalogJson from "../catalog/catalog_json"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 import Suggest from "../syntax/suggest"
-import Types from "../syntax/types"
-import {PRELUDE_ONLY, PUBLIC_NAMES} from "../catalog/builtins"
+import {PUBLIC_NAMES} from "../catalog/builtins"
 
 ## Runs `agentica help` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of it.
 ## A trailing `--json` asks for the JSON form: of the one builtin, or of every public builtin as an array (sorted by
@@ -22,19 +21,19 @@ export def help(words: List[String], style: String) -> Reply.Reply
     rest = rest.take(rest.size - 1)
   end
   if rest.size == 1 and as_json
-    return Reply.printed("#{JSON.encode(catalog_json())}\n")
+    return Reply.printed("#{JSON.encode(CatalogJson.catalog())}\n")
   elsif rest.size == 1
     return Reply.printed("#{Texts.summary_text()}#{namespaces_text()}\n")
   elsif rest.size != 2
     return Reply.failed(2, "usage: agentica help [NAME] [--json]\n")
   end
   name = rest[1]
-  entry = Builtins.lookup(name)
-  if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name) or !entry.ok?
+  entry = CatalogJson.public(name)
+  if !entry.ok?
     return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name)}\n")
   end
   if as_json
-    return Reply.printed("#{JSON.encode(builtin_json(entry.unwrap!))}\n")
+    return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!))}\n")
   end
   return Reply.printed("#{Builtins.signature(entry.unwrap!)}\n#{entry.unwrap!.description}\n")
 end
@@ -70,44 +69,4 @@ def namespaces_text() -> String
       "\"std/bdd\") are not in this catalog.",
     ].join(""),
   ].join("\n")
-end
-
-# Every public builtin, in name order, each as `builtin_json` gives it, so a client reads both forms with one parser.
-def catalog_json() -> Json
-  # `unwrap!` cannot fail: PUBLIC_NAMES are keys of the same ENTRIES that `Builtins.lookup` reads.
-  return JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin_json(Builtins.lookup(name).unwrap!) end)
-end
-
-# The JSON of a builtin: one object for a builtin with one form, else the name, the description and the effects of the
-# first form with the object of each form under `overloads`.
-def builtin_json(entry: Model.Builtin) -> Json
-  if entry.alternatives.size == 0
-    return form_json(entry)
-  end
-  forms = [entry].concat(entry.alternatives)
-  return JSON.object({
-    "name": JSON.from(entry.name),
-    "description": JSON.from(entry.description),
-    "effects": strings(entry.effects),
-    "overloads": JSON.array(forms.map do |form: Model.Builtin| form_json(form) end),
-  })
-end
-
-def form_json(form: Model.Builtin) -> Json
-  parameters = form.parameters.map do |parameter: Model.Named|
-    JSON.object({"name": JSON.from(parameter.name), "type": JSON.from(Types.to_text(parameter.type))})
-  end
-  return JSON.object({
-    "name": JSON.from(form.name),
-    "arity": JSON.from(form.parameters.size),
-    "parameters": JSON.array(parameters),
-    "result": JSON.from(Types.to_text(form.result)),
-    "signature": JSON.from(Builtins.form_signature(form)),
-    "effects": strings(form.effects),
-    "description": JSON.from(form.description),
-  })
-end
-
-def strings(items: List[String]) -> Json
-  return JSON.array(items.map do |item: String| JSON.from(item) end)
 end

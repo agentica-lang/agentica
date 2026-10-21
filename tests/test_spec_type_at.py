@@ -12,11 +12,13 @@ from tests.span_support import end, problem, start
 # The module the cases import: a struct, an enum with a payload and without, a function and a constant.
 MODELS = '''## A user.
 export struct User
+  ## The name.
   name: String
   age: Int
 end
 
 export enum Shape
+  ## A round one.
   Circle(Float)
   Square
 end
@@ -26,6 +28,9 @@ export enum Slot[T]
   Empty
 end
 
+## Makes a user.
+##
+## The age is 3.
 export def make(name: String) -> User
   return User(name: name, age: 3)
 end
@@ -36,6 +41,7 @@ end
 ORDERS = '''import Models from "models"
 import Queue from "std/queue"
 
+## The cap.
 LIMIT = 10
 NAMES = ["a", "b"]
 
@@ -53,6 +59,9 @@ def build(names: List[String]) -> List[Models.User]
   slot = Models.Slot.Full(made)
   count = NAMES
     .size
+  table = {"a": 1}
+  found = table.get("a")
+  puts(count)
   return [made]
 end
 '''
@@ -117,20 +126,23 @@ def test_the_name_of_a_field_access_is_the_whole_access_with_the_field_as_defini
 
 def test_a_method_call_is_a_name_on_its_method_and_a_builtin_has_no_definition(program):
     report = answer(("orders.agc", where(ORDERS, "name.upcase", 6)), cwd=program)
-    assert (report["kind"], report["type"], report["text"]) == ("name", "String", "name.upcase")
+    assert (report["kind"], report["type"], report["text"]) == ("builtin", "String", "name.upcase")
     assert report["definition"] is None
     # A method with a block: the field access `names.map` became the call when the block was attached.
     block = answer(("orders.agc", where(ORDERS, "names.map", 7)), cwd=program)
-    assert (block["kind"], block["type"]) == ("name", "List[String]")
+    assert (block["kind"], block["type"]) == ("builtin", "List[String]")
     assert block["text"].startswith("names.map do |name: String|")
     # A member of a constant keeps the span of its member, whatever blanks stand around the dot.
     constant = answer(("orders.agc", where(ORDERS, "LIMIT. to_s", 8)), cwd=program)
-    assert (constant["kind"], constant["type"], constant["text"]) == ("name", "String", "LIMIT. to_s")
+    # `to_s` on an Int is the builtin that the checker resolved it to.
+    assert (constant["kind"], constant["type"], constant["text"]) == ("builtin", "String", "LIMIT. to_s")
+    assert constant["help"]["name"] == "String.from_int"
     on_receiver = answer(("orders.agc", where(ORDERS, "LIMIT. to_s", 1)), cwd=program)
     assert (on_receiver["kind"], on_receiver["type"], on_receiver["definition"]["kind"]) == ("name", "Int", "constant")
     # A dot that starts the next line: the member is a name on its own line, and the dot before it is not.
     leading = answer(("orders.agc", where(ORDERS, ".size", 1)), cwd=program)
-    assert (leading["kind"], leading["type"], leading["text"]) == ("name", "Int", "NAMES\n    .size")
+    assert (leading["kind"], leading["type"], leading["text"]) == ("builtin", "Int", "NAMES\n    .size")
+    assert leading["help"]["name"] == "List.size"
     assert end(leading["span"]) == where(ORDERS, ".size", 5)
     on_dot = answer(("orders.agc", where(ORDERS, ".size")), cwd=program)
     assert (on_dot["kind"], on_dot["type"]) == ("expression", "Int")
@@ -261,6 +273,12 @@ def test_a_file_without_main_is_answered(program):
     assert answer(("models.agc", where(MODELS, "3)")), cwd=program)["type"] == "Int"
 
 
+def test_a_main_with_a_wrong_signature_is_check_main_at_its_def(program):
+    (program / "wrong.agc").write_text("def main(x: Int) -> Void\nend\n", encoding="utf-8")
+    failed = problem(type_at(("wrong.agc", (1, 1)), cwd=program), "CHECK-MAIN", 1)
+    assert (start(failed), failed["file"]) == ((1, 1), "wrong.agc")
+
+
 def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk(program):
     buffer = "def double(n: Int) -> Int\n  return n * 2\nend\n"
     report = answer(("orders.agc", (2, 12)), "--stdin", cwd=program, stdin=buffer)
@@ -343,5 +361,90 @@ def test_text_form_gives_the_span_the_text_the_type_and_the_definition(program):
     assert result.stdout.split("\n") == [
         f"orders.agc:{line}:{column}-{line}:{column + 8} user.age: Int",
         f"models.agc:{where(MODELS, 'age: Int')[0]}:{where(MODELS, 'age: Int')[1]} field age",
+        "",
+    ]
+
+
+def cli_help(name):
+    """The object of `agentica help NAME --json`."""
+    result = run(cli() + ["help", name, "--json"], env=vm_environment())
+    assert (result.code, result.stderr) == (0, "")
+    return json.loads(result.stdout)
+
+
+def test_a_definition_carries_its_doc_and_signature(program):
+    # A function: the full text of the `##` block on its `export`, blank line included, and its signature.
+    made = answer(("orders.agc", where(ORDERS, "Models.make", 8)), cwd=program)["definition"]
+    assert made["doc"] == "Makes a user.\n\nThe age is 3."
+    assert made["signature"] == "make(name: String) -> User"
+    # A struct, a field, a variant and a constant; what has no `##` text has a null doc, and every kind has a signature.
+    struct = answer(("orders.agc", where(ORDERS, "Models.User(name", 8)), cwd=program)["definition"]
+    assert (struct["doc"], struct["signature"]) == ("A user.", "struct User")
+    undocumented = answer(("orders.agc", where(ORDERS, "user.age", 5)), cwd=program)["definition"]
+    assert (undocumented["kind"], undocumented["doc"], undocumented["signature"]) == ("field", None, "age: Int")
+    variant = answer(("orders.agc", where(ORDERS, "Models.Shape.Circle(1.5)", 14)), cwd=program)["definition"]
+    assert (variant["doc"], variant["signature"]) == ("A round one.", "Circle(Float)")
+    constant = answer(("orders.agc", where(ORDERS, "NAMES\n", 2)), cwd=program)["definition"]
+    assert (constant["doc"], constant["signature"]) == (None, "NAMES")
+    capped = answer(("orders.agc", where(ORDERS, "LIMIT. to_s", 1)), cwd=program)["definition"]
+    assert (capped["doc"], capped["signature"]) == ("The cap.", "LIMIT")
+
+
+def test_the_doc_of_a_field_is_read_from_the_struct_that_the_target_names(program):
+    source = ORDERS + "\ndef label(user: Models.User) -> String\n  return user.name\nend\n"
+    (program / "orders.agc").write_text(source, encoding="utf-8")
+    field = answer(("orders.agc", where(source, "user.name", 6)), cwd=program)["definition"]
+    assert (field["kind"], field["doc"], field["signature"]) == ("field", "The name.", "name: String")
+
+
+def test_a_builtin_is_answered_with_its_help_object_and_no_definition(program):
+    report = answer(("orders.agc", where(ORDERS, "name.upcase", 6)), cwd=program)
+    assert (report["kind"], report["definition"]) == ("builtin", None)
+    # The same object as `agentica help NAME --json`, name included.
+    assert report["help"] == cli_help("String.upcase")
+    assert report["help"]["name"] == "String.upcase"
+    # A builtin with two forms answers with its overloads; the bare function `puts` is a builtin too, on its name only.
+    overloaded = answer(("orders.agc", where(ORDERS, "table.get", 7)), cwd=program)
+    assert (overloaded["kind"], overloaded["help"]) == ("builtin", cli_help("Map.get"))
+    assert [form["arity"] for form in overloaded["help"]["overloads"]] == [2, 3]
+    bare = answer(("orders.agc", where(ORDERS, "puts(count)", 1)), cwd=program)
+    assert (bare["kind"], bare["help"]) == ("builtin", cli_help("puts"))
+    # The receiver and the arguments are expressions of their own, with no help; so is the rest of the call.
+    for position in (where(ORDERS, "table.get", 1), where(ORDERS, '"a")', 1), where(ORDERS, "puts(count)", 4)):
+        other = answer(("orders.agc", position), cwd=program)
+        assert (other["kind"] != "builtin", other["help"]) == (True, None)
+    # An answer that is not a builtin has a null `help`: the key is always there.
+    assert answer(("orders.agc", where(ORDERS, "Models.make", 8)), cwd=program)["help"] is None
+
+
+def test_a_pipe_into_a_builtin_is_the_builtin_on_its_right_hand_side(tmp_path):
+    source = "def wrap() -> Result[Int]\n  return 5 |> ok()\nend\n"
+    (tmp_path / "piped.agc").write_text(source, encoding="utf-8")
+    report = answer(("piped.agc", where(source, "ok()", 1)), cwd=tmp_path)
+    line, column = where(source, "ok()")
+    assert (report["kind"], report["type"], report["text"], report["definition"]) == ("builtin", "Result[Int]", "ok()", None)
+    assert report["help"] == cli_help("ok")
+    # The span is the right-hand side, not the whole pipe.
+    assert report["span"]["range"] == {
+        "start": {"line": line, "column": column},
+        "end": {"line": line, "column": column + 4},
+    }
+
+
+def test_a_declaration_of_a_std_module_carries_its_doc_and_signature(program):
+    queue = answer(("orders.agc", where(ORDERS, "Queue.new", 6)), cwd=program)["definition"]
+    assert (queue["file"], queue["kind"], queue["name"]) == ("std/queue.agc", "function", "new")
+    assert queue["signature"] == "new() -> QueueState"
+    assert queue["doc"] == "Returns an empty queue."
+
+
+def test_text_form_of_a_builtin_gives_a_line_with_its_signature(program):
+    position = where(ORDERS, "name.upcase", 6)
+    result = run(cli() + ["type-at", f"orders.agc:{position[0]}:{position[1]}"], env=vm_environment(), cwd=program)
+    assert (result.code, result.stderr) == (0, "")
+    line, column = where(ORDERS, "name.upcase")
+    assert result.stdout.split("\n") == [
+        f"orders.agc:{line}:{column}-{line}:{column + 11} name.upcase: String",
+        "builtin String.upcase(s: String) -> String",
         "",
     ]

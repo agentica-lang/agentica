@@ -72,7 +72,7 @@ agentica greet.agc Ana Bob    # prints one greeting per name
 
 ## Check and errors
 
-`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. The checker stops at the first error:
+`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. `check` needs no `main`, so a library file passes; running or compiling a file needs `def main() -> Void`. The checker stops at the first error:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
@@ -140,7 +140,7 @@ src/orders.agc:22:9-22:19 user.email: String
 src/models.agc:4:3 field email
 ```
 
-Line and column count from 1, in code points (an emoji is one column). A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. In this version a local variable has a type and no definition.
+Line and column count from 1, in code points (an emoji is one column). A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. With `--json` the definition also has its signature and its `##` doc, and the name of a builtin (`split` in `xs.split(",")`) answers `kind` `builtin` with the object of `agentica help NAME --json` under `help`. In this version a local variable has a type and no definition.
 
 ## Options
 

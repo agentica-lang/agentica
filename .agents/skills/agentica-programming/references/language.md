@@ -41,8 +41,9 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
   dependency order, before `main` starts, and only if `main` can reach a
   function that reads it. An error in an initializer (`BAD = [1][5]`) stops the
   program before `main` with the constant in the stack trace.
-- The root file needs exactly one `def main() -> Void` with no parameters. Only
-  that entrypoint runs.
+- The root file needs exactly one `def main() -> Void` with no parameters to
+  run or compile; `agentica check` accepts a file with no `main`. Only that
+  entrypoint runs.
 - Blocks end with `end`; indentation is for reading only. `#` starts a comment
   to the end of the line.
 - A newline ends a statement. Inside `(...)`, `[...]`, and `{...}` an expression

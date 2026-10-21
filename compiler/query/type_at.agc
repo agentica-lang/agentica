@@ -5,12 +5,15 @@
 ## text hold no expression, even inside the span of one. A local (a parameter, a binding, a loop variable or a pattern
 ## name) is answered with its type and no definition; its binding is not recorded yet.
 
+import CatalogJson from "../catalog/catalog_json"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
+import Model from "../catalog/builtin_model"
 import Source from "../syntax/source"
+import State from "../check/check_state"
 import T from "../syntax/types"
 import At from "at"
 import Definitions from "definitions"
@@ -23,16 +26,19 @@ HEAD_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345
 # The longest name a call head is read from, in characters.
 HEAD_LIMIT = 128
 
-## What a position is on. `kind` is `name` when the position is on a name (a variable, a function or type named, the
-## name of a field or method after the dot) and `expression` otherwise; `span` is always the whole expression, so on
-## the name of a field access it is the whole access. `text` is the source text of `span`, `type` the type as the root
-## file writes it, and `definition` the declaration of what the expression names.
+## What a position is on. `kind` is `builtin` when the position is on the name of a builtin (`split` in
+## `xs.split(",")`, `puts`), `name` when it is on another name (a variable, a function or type named, the name of a
+## field or method after the dot) and `expression` otherwise; `span` is always the whole expression, so on the name of
+## a field access it is the whole access. `text` is the source text of `span`, `type` the type as the root file writes
+## it, and `definition` the declaration of what the expression names. `builtin` is the catalog row of a `builtin`
+## answer, which has no definition.
 export struct Answer
   kind: String
   span: Source.Span
   text: String
   type: String
   definition: Ast.Optional[Definitions.Definition]
+  builtin: Ast.Optional[Model.Builtin]
 end
 
 ## The answer for `asked`, a position in the root file of `linked` (checked as `checked`), or QUERY-NO-EXPRESSION.
@@ -66,17 +72,65 @@ end
 def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offset: Int) -> Answer
   module = linked.modules[0]
   span = Ast.expr_span(expr)
+  definition = Definitions.of_expr(linked.modules, checked.types, expr)
   kind = "expression"
+  builtin: Ast.Optional[Model.Builtin] = Ast.Optional.Absent
   if on_name?(expr, module.text, offset)
     kind = "name"
+    builtin = builtin_of(checked, expr, definition)
+  end
+  case builtin
+    Ast.Optional.Present(_) -> kind = "builtin"
+    Ast.Optional.Absent -> kind = kind
   end
   return Answer(
     kind: kind,
     span: span,
     text: source_text(module.text, span),
     type: T.to_text_as(checked.types[Ast.expr_id(expr)], written_prefixes(linked)),
-    definition: Definitions.of_expr(linked.modules, checked.types, expr),
+    definition: definition,
+    builtin: builtin,
   )
+end
+
+# The public builtin that a call, a method call or a field access that names a method names, or
+# Absent. An expression that has a definition names a declaration of the program, never a builtin.
+def builtin_of(
+  checked: Checker.Checked,
+  expr: Ast.Expr,
+  definition: Ast.Optional[Definitions.Definition],
+) -> Ast.Optional[Model.Builtin]
+  case definition
+    Ast.Optional.Present(_) -> return Ast.Optional.Absent
+    Ast.Optional.Absent ->
+      case expr
+        Ast.Expr.Call(node) -> return public(node.name)
+        Ast.Expr.MethodCall(node) -> return resolved(checked, node.id)
+        Ast.Expr.FieldAccess(node) -> return resolved(checked, node.id)
+        _ -> return Ast.Optional.Absent
+      end
+  end
+end
+
+# The builtin that the checker resolved the method call or field access `id` to. `to_s`, `inspect` and a receiver
+# that stays as it is resolve to no catalog row.
+def resolved(checked: Checker.Checked, id: Int) -> Ast.Optional[Model.Builtin]
+  found = checked.resolved.get(id)
+  if !found.ok?
+    return Ast.Optional.Absent
+  end
+  case found.unwrap!
+    State.Resolved.Call(name, _) -> return public(name)
+    _ -> return Ast.Optional.Absent
+  end
+end
+
+def public(name: String) -> Ast.Optional[Model.Builtin]
+  entry = CatalogJson.public(name)
+  if entry.ok?
+    return Ast.Optional.Present(entry.unwrap!)
+  end
+  return Ast.Optional.Absent
 end
 
 # The text of a span; empty when the span does not lie in the text.

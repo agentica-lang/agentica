@@ -10,8 +10,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica type-at` gives the `doc` and the `signature` of the definition, and
+  answers a builtin (`split` in `xs.split(",")`) with `kind` `builtin` and its
+  `help` object, as `agentica help NAME --json` prints it.
 - `Std.source(path)` gives the text of a `std/` source that the binary carries,
   such as `"queue.agc"`, to any program.
+
+### Changed
+
+- `agentica check` no longer requires `main`, so a library file checks clean; a
+  `main` with the wrong signature is still `CHECK-MAIN` (also for `type-at`),
+  and a run or `compile` of a file with no `main` still reports it, so use one
+  of them to require `main`.
 - **Breaking:** `Std` is a reserved type name.
 
 ## [0.7.0] - 2026-10-21
