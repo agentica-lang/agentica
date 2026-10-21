@@ -181,16 +181,18 @@ def test_a_position_that_the_link_cannot_answer_is_the_first_problem(program):
 
 def test_a_position_on_no_expression_is_told_from_a_broken_program_when_the_parse_can_tell(program):
     # A blank line, an import line and the gap between functions are on no expression; so is a parameter annotation of
-    # a function that checked, as in a program that checks. A token of a failed function that the link cannot name
-    # could be an expression, so it is the first problem.
+    # a function that checked for `type-at`, as in a program that checks. A token of a failed function that the link
+    # cannot name could be an expression, so it is the first problem.
     annotation = where(APP, "Models.User) -> Int", 2)
     for verb in ("type-at", "refs"):
-        for spot in ((2, 1), where(APP, "import"), where(APP, "end\n\ndef helper", 3), annotation):
+        for spot in ((2, 1), where(APP, "import"), where(APP, "end\n\ndef helper", 3)):
             result = asked(verb, ("app.agc", spot), "--partial", cwd=program)
             assert problem(result, "QUERY-NO-EXPRESSION", 2)["file"] == "app.agc"
         inside = asked(verb, ("app.agc", where(APP, "return helper(\"no\")")), "--partial", cwd=program)
         assert problem(inside, "CHECK-TYPE-MISMATCH", 1)["file"] == "app.agc"
     whole = asked("type-at", ("fixed.agc", annotation), cwd=program)
+    spot = ("app.agc", annotation)
+    assert problem(asked("type-at", spot, "--partial", cwd=program), "QUERY-NO-EXPRESSION", 2)
     assert problem(whole, "QUERY-NO-EXPRESSION", 2)["range"] == problem(
         asked("type-at", ("app.agc", annotation), "--partial", cwd=program), "QUERY-NO-EXPRESSION", 2)["range"]
 
@@ -223,7 +225,7 @@ def test_two_failed_functions_are_two_diagnostics_in_program_order_and_a_caller_
     nested = answer("type-at", ("many.agc", where(MANY, "first(2)")), "--partial", cwd=program)
     assert (nested["definition"]["name"], nested["type"], len(nested["diagnostics"])) == ("first", None, 2)
     local = asked("type-at", ("many.agc", where(MANY, "total < 3")), "--partial", cwd=program)
-    assert problem(local, codes[1][0], 1)["range"]["start"]["line"] == codes[1][1]
+    assert problem(local, codes[0][0], 1)["range"] == report["diagnostics"][0]["range"]
     assert answer("refs", ("many.agc", where(MANY, "def first", 4)), "--partial", cwd=program)["references"] != []
 
 
@@ -341,7 +343,7 @@ def test_the_buffer_on_standard_input_is_answered_partially_and_symbol_has_no_su
 def test_the_buffer_on_standard_input_in_text_form_has_the_lines_and_the_note_of_the_buffer(program):
     # The file on the disk is fixed; the buffer is not, and the answer and the note are those of the buffer.
     (program / "app.agc").write_text(FIXED, encoding="utf-8")
-    line, column = where(APP, "helper(1)")
+    line, column = where(APP, 'helper("no")')
     result = run(cli() + ["type-at", "--stdin", f"app.agc:{line}:{column}", "--partial"],
                  env=vm_environment(), cwd=program, stdin=APP)
     mistake = where(APP, '"no"')

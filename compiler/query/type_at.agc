@@ -89,7 +89,8 @@ export def definition_file(answered: Answer) -> String
   end
 end
 
-## Whether some token of the text holds the character at `offset`. Line breaks and the end are tokens that hold nothing.
+## Whether some token of the text holds the character at `offset`. Line breaks and the end are tokens that hold
+## nothing.
 export def on_token?(text: String, offset: Int) -> Bool
   case Lexer.lex(text)
     Diag.Outcome.Failed(_) -> return false

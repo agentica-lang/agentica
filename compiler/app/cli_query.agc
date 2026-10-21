@@ -35,7 +35,8 @@ OUTLINE_USAGE = (
   "usage: agentica outline FILE [--json] [--partial]   or   " + "agentica outline --stdin FILE [--partial]"
 )
 TYPE_AT_USAGE = (
-  "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " + "agentica type-at --stdin FILE:LINE:COL [--partial]"
+  "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " +
+  "agentica type-at --stdin FILE:LINE:COL [--partial]"
 )
 REFS_USAGE = (
   "usage: agentica refs FILE:LINE:COL [--json] [--partial]   or   " + "agentica refs --stdin FILE:LINE:COL [--partial]"
