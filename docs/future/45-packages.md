@@ -6,7 +6,7 @@ lock and the cache imports of 45a) are specified in
 the decisions and what is pending (45b to 45d). It sits on the path to the JIT:
 after the native Windows and macOS builds (issue
 [#344](https://github.com/sonic182/agentica/issues/344)) and before the FFI
-([§40.5](40-native-code.md#405-order)).
+(issue [#534](https://github.com/sonic182/agentica/issues/534)).
 
 Decided by the owner:
 
@@ -152,10 +152,10 @@ Pending (45b to 45d). The exact command line is decided in each phase.
 ### 45.10 Native code
 
 Packages are pure Agentica. A native package, such as a wrapper of the
-SQLite C library, needs the FFI (§40.3a), which is still a sketch, and the
-trust flag of §40.4. It also needs a build step, which breaks "no code runs at
-install", or prebuilt binaries with hashes in the lock. Neither option is
-designed here. The order is in [§40.5](40-native-code.md#405-order).
+SQLite C library, needs the FFI and a native library. The design is in
+[issue #534](https://github.com/sonic182/agentica/issues/534): a prebuilt or
+system library first, with its hash in the lock. Compiling at install, which
+breaks "no code runs at install", comes later and needs its own grant.
 
 ### 45.11 Testing plan
 
@@ -202,7 +202,8 @@ programming skill and the CHANGELOG, because import behavior changes for users.
 - Sources other than git, such as a local path.
 - Typed decoding into structs: `JSON.decode(JSON.encode(j), T)` on the output of
   `Toml.to_json` does it (45.14, question 10).
-- Native packages: §40 first (45.10).
+- Native packages: the FFI first (45.10, issue
+  [#534](https://github.com/sonic182/agentica/issues/534)).
 
 ### 45.14 Open questions
 
@@ -225,9 +226,10 @@ decision, then the rejected options.
    Rejected: all errors under `CHECK-IMPORT-*`.
 5. **`dev_dependencies`.** None in v1; there is one list. Rejected: a second
    table for `*_test.agc` files, which can be added when a test needs it.
-6. **Data files.** Only `.agc` files are used and hashed. The manifest of a
-   package is kept but not hashed. Rejected for v1: a `files` list in the
-   manifest.
+6. **Data files.** Only `.agc` files and native libraries (issue
+   [#534](https://github.com/sonic182/agentica/issues/534)) are used and
+   hashed. The manifest of a package is kept but not hashed. Rejected for v1: a
+   `files` list in the manifest.
 7. **Hashing at build.** Every build hashes each package it loads, so a changed
    vendored file is caught. Rejected: hashing only at install and vendor, which
    trusts the cache.
