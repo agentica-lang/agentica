@@ -98,27 +98,33 @@ if (!site) {
   process.exit(2);
 }
 const grammar = await loadGrammar();
-let blocks = 0;
-for (const file of htmlFiles(site)) {
-  const html = readFileSync(file, "utf8");
-  const out = html.replace(BLOCK, (_match, open, body, close) => {
-    blocks++;
-    const source = decode(body);
-    const colored = render(grammar, source);
-    if (decode(colored) !== source.replace(/\n$/, "")) {
-      console.error(`highlight: ${file}: block ${blocks} changed its text`);
-      process.exit(1);
-    }
-    return `${open} class=language-agentica data-lang=agentica>${colored}${close}`;
-  });
-  if (/class="?agc-code"?/.test(out)) {
-    console.error(`highlight: ${file}: an agentica block has an unexpected shape`);
-    process.exit(1);
-  }
-  if (out !== html) writeFileSync(file, out);
-}
-if (blocks === 0) {
-  console.error(`highlight: no agentica code blocks found in ${site}`);
+function fail(message) {
+  console.error(`highlight: ${message}`);
   process.exit(1);
 }
-console.log(`highlight: ${blocks} agentica code blocks`);
+
+let blocks = 0;
+let spans = 0;
+for (const file of htmlFiles(site)) {
+  const html = readFileSync(file, "utf8");
+  let index = 0;
+  const out = html.replace(BLOCK, (_match, open, body, close) => {
+    blocks++;
+    index++;
+    let source;
+    try {
+      source = decode(body);
+    } catch (error) {
+      fail(`${file}: block ${index}: ${error.message}`);
+    }
+    const colored = render(grammar, source);
+    if (decode(colored) !== source.replace(/\n$/, "")) fail(`${file}: block ${index} changed its text`);
+    spans += colored.split("<span class=").length - 1;
+    return `${open} class=language-agentica data-lang=agentica>${colored}${close}`;
+  });
+  if (/class="?agc-code"?/.test(out)) fail(`${file}: an agentica block has an unexpected shape`);
+  if (out !== html) writeFileSync(file, out);
+}
+if (blocks === 0) fail(`no agentica code blocks found in ${site}`);
+if (spans < blocks) fail(`${blocks} blocks got only ${spans} colored tokens: check the scope names in CLASSES`);
+console.log(`highlight: ${blocks} agentica code blocks, ${spans} colored tokens`);

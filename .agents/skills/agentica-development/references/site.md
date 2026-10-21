@@ -24,8 +24,11 @@ rule that a site page shows.
   when it finds no block. `render-codeblock.html` wraps each block in
   `div.agc-code` for it, without Hugo's highlight options (`linenos`,
   `hl_lines`), and the script fails on a block of another shape or an
-  unknown HTML entity. `make site-serve` skips the script, so there the
-  blocks keep Hugo's Ruby colors.
+  unknown HTML entity, or with fewer colored tokens than blocks.
+  `make site-serve` skips the script, so there the blocks keep Hugo's Ruby
+  colors.
+- To update the grammar, copy `syntaxes/agentica.tmLanguage.json` from
+  agc-tmlanguage, set the `grammar` field to its commit and run `make site`.
 
 ## Version
 
