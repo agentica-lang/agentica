@@ -949,7 +949,7 @@ _Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2, "the sto
 
 /* Dies by SIG now: the default action, raised in this thread with SIG unblocked here (the caller may have blocked
    it). A signal sent to the whole process may be taken later by another thread, and on macOS the _exit(128 + sig)
-   that follows a call would then win. Safe in a signal handler. */
+   that follows a call would then win. */
 void agc_io_die_by(int sig) {
   signal(sig, SIG_DFL);
   sigset_t one;

@@ -176,9 +176,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - a cancelled task that has not settled (still on a turn on another
         scheduler, or ended with a close pending) holds the task the cancel
         reached it through (`hold`: `holder` and one count in its `closing`;
-        `cancel_tree`, and `crash` for its children); `settle` gives the count
-        back, so the end of a crashed or cancelled task is observed only after
-        its cancelled descendants closed their handles (#402))
+        `cancel_tree`, and `crash` for its children); a task held already
+        makes the top of its holder chain hold instead; `settle` gives the
+        count back, so the end of a crashed or cancelled task is observed only
+        after its cancelled descendants closed their handles (#402))
     - and the `Task` builtins (
       - `agc_task_builtins`: spawn with a per-task `Random` split (
         - `agc_task_spawn_seeded`)

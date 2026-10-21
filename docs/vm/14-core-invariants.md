@@ -272,13 +272,17 @@ regular file is a pool job, and the ending task's awaiters wait for it, so what
 a helper wrote to a regular file is on disk when the parent's await returns. A
 flush to a FIFO or a pipe, and a close behind any job that holds the file, are
 not waited for. When the end of a task is observed (its `Task.await` returns, or
-`Task.map` takes its slot), the handles it owned and those of the descendants
-that its crash or cancel reached are closed: a socket, listener, process or
-server is marked closed under `rt->sync`, and at N > 1 its close step reaches
-the I/O thread before any step that the observer posts (#402). A cancelled
-descendant that is still on a turn on another scheduler ends at the end of that
-turn, and until then it holds the task that the cancel reached it through
-(`hold` in `vm/task.c`, a count in `closing`). A server owns its listener:
+`Task.map` takes its result into a slot), the handles it owned and those of the
+descendants that its crash or cancel reached are closed: a socket, listener,
+process or server is marked closed under `rt->sync`, and at N > 1 its close step
+reaches the I/O thread before any step that the observer posts (#402). A
+timed-out item is not observed this way: its slot is written at its deadline,
+before it or its descendants close anything. A cancelled descendant that is
+still on a turn on another scheduler ends at the end of that turn, and until
+then it holds the task that the cancel reached it through (`hold` in
+`vm/task.c`, a count in `closing`). One that an earlier cancel holds already
+(it moved up when its holder ended) is counted through the top of its holder
+chain. A server owns its listener:
 `HttpWire.server` takes the listener off its owner's list, so ending the
 server's owner closes both and a hand-off moves both. `Task.spawn_owning` fails
 with `RUNTIME-HANDLE-NOT-OWNED` when the caller does not own the handle or it is

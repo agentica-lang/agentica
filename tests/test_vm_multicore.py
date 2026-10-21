@@ -1840,7 +1840,13 @@ def test_the_port_of_a_crashed_owner_refuses_a_peer_once_its_await_returns(tmp_p
             process.stdout.close()
 
 
-OWNER_DESCENDANTS = r"""def spin(listener: Listener) -> Result[Int]
+OWNER_DESCENDANTS = r"""struct Ending
+  kind: String
+  up: Channel[Channel[Int]]
+  down: Channel[Channel[Int]]
+end
+
+def spin(listener: Listener) -> Result[Int]
   k = 0
   while k < 50000000
     k = k + 1
@@ -1894,6 +1900,50 @@ def cancel_nested(listener: Listener) -> Result[Int]
   return ok(0)
 end
 
+def spin_channel(inner: Channel[Int]) -> Result[Int]
+  k = 0
+  while k < 50000000
+    k = k + 1
+  end
+  return ok(k)
+end
+
+def hand_on(up: Channel[Channel[Int]]) -> Result[Int]
+  inner: Channel[Int] = Channel.new(1)
+  Task.spawn_owning(&spin_channel, inner)
+  try up.send(inner, 5000)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def ended_middle(e: Ending) -> Result[Channel[Int]]
+  if e.kind.starts_with?("map")
+    results = Task.map([e.up], 1, 20, &hand_on)
+    return e.up.recv(5000)
+  end
+  middle = Task.spawn(&hand_on, e.up)
+  inner = try e.up.recv(5000)
+  Task.cancel(middle)
+  return ok(inner)
+end
+
+def ending(e: Ending) -> Result[Int]
+  inner = try ended_middle(e)
+  try e.down.send(inner, 5000)
+  if e.kind.ends_with?("crash")
+    return crash()
+  end
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def sent(got: Result[Void]) -> String
+  case got
+    ok(_) -> return "sent"
+    error(e) -> return e
+  end
+end
+
 def start(kind: String, listener: Listener) -> Task[Result[Int]]
   case kind
     "crash-busy" -> return Task.spawn_owning(&crash_busy, listener)
@@ -1932,6 +1982,22 @@ def main() -> Void
       round = round + 1
     end
   end
+  for kind in ["map-cancel", "map-crash", "middle-cancel", "middle-crash"]
+    round = 0
+    while round < 100
+      up: Channel[Channel[Int]] = Channel.new(1)
+      down: Channel[Channel[Int]] = Channel.new(1)
+      owner = Task.spawn(&ending, Ending(kind: kind, up: up, down: down))
+      inner = down.recv(5000).unwrap!
+      if kind.ends_with?("cancel")
+        Task.cancel(owner)
+      end
+      Task.await(owner)
+      key = "#{kind}: #{sent(inner.send(1, 1))}"
+      seen = seen.put(key, seen.get(key, 0) + 1)
+      round = round + 1
+    end
+  end
   for key in seen.keys.sort
     puts("#{key} x#{seen.get(key, 0)}")
   end
@@ -1945,10 +2011,15 @@ def test_handles_held_by_cancelled_descendants_are_closed_when_the_await_of_thei
     # crashes or is cancelled. The cancel of a descendant that runs on another scheduler (busy, or just starting its
     # accept) is deferred to the end of its turn, so the owner's end waits for it (hold in vm/task.c): Task.await of
     # the owner returns only once the listener is closed, and the pending connection is never accepted. Without the
-    # hold, about a quarter of the rounds accept it. 100 rounds of each kind per run.
+    # hold, about a quarter of the rounds accept it. The map-* and middle-* kinds cover a descendant that an earlier
+    # cancel holds already: the owner cancels the middle task (or Task.map times out the item) whose child owns a
+    # channel and keeps running, the child moves up to the owner, then the owner crashes or is cancelled. The owner's
+    # end must wait for the child through the top of its holder chain; a send to the child's channel right after the
+    # await must fail. Before that fix about half of those rounds sent. 100 rounds of each kind per run.
     bytecode = program(tmp_path, "owner_descendants", OWNER_DESCENDANTS)
     kinds = ["cancel-busy", "cancel-nested", "crash-busy", "crash-nested", "crash-wait"]
     expected = [f"{kind}: network: listener is closed x100" for kind in kinds]
+    expected += [f"{kind}: channel: closed x100" for kind in ["map-cancel", "map-crash", "middle-cancel", "middle-crash"]]
     for _ in range(repeats):
         result = vm(bytecode, timeout=120)
         assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr

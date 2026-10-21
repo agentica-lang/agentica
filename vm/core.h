@@ -252,7 +252,7 @@ int agc_io_stop_signal(void);
 void agc_io_children_stopped(void);
 #if !defined(_WIN32)
 /* Dies by the stop signal SIG in the calling thread (default action, SIG unblocked, raise); returns only if the
-   signal does not end the process. Safe in a signal handler. */
+   signal does not end the process. */
 void agc_io_die_by(int sig);
 #endif
 void agc_io_goodbye(agc_vm *vm);

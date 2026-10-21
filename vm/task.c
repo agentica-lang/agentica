@@ -200,11 +200,24 @@ void agc_task_close_done(agc_vm *vm, agc_task *t) {
    close or a held task of its own pending) holds `holder`, the task whose end the cancel reached it through: one
    count in the holder's `closing`, given back when `t` settles. So the end of the holder is not observed (Task.await,
    a Task.map end hook) before the owned handles of `t` and of its own cancelled descendants are closed (§14.5). At
-   N = 1 a cancelled task still runs only when it is the canceller's own task. A task holds at most one other. */
+   N = 1 a cancelled task still runs only when it is the canceller's own task.
+
+   A task holds at most one other, so the holders form chains, and a task waits for every task whose chain passes
+   through it. When `t` is held already (an earlier cancel reached it through a task that has since ended, and `t`
+   moved up to `holder`), the top of its chain holds `holder` instead: every task of a chain holds a count of the next,
+   so the top has not settled, and `holder` then waits for `t` through it. No cycle forms, because a holder is always
+   older than the task it holds, on the same line of spawns. Every caller passes the tree parent of `t` (its nearest
+   live ancestor), or the parent of a fresh child, so the tasks between `t` and `holder` on that line have ended. Each
+   link of the chain skipped only tasks that had ended when it was made, so a chain that does not reach the live
+   `holder` stops at a top younger than it. */
 static void hold(agc_vm *vm, agc_task *t, agc_task *holder) {
   agc_sync_assert(vm);
-  if (!holder || t->holder || (t->state == AGC_TASK_DONE && !t->closing)) return;
-  t->holder = holder;
+  if (!holder || (t->state == AGC_TASK_DONE && !t->closing)) return;
+  agc_task *top = t;
+  for (; top->holder; top = top->holder)
+    if (top == holder) return;
+  if (top == holder) return;
+  top->holder = holder;
   holder->closing++;
 }
 
