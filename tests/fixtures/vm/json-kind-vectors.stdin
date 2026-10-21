@@ -7,6 +7,9 @@ false	.	bool
 1	.	int
 1.0	.	float
 -0.0	.	float
+0e0	.	float
+-0e0	.	float
+0.0e5	.	float
 1e2	.	float
 1E-2	.	float
 2.5e+3	.	float

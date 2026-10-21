@@ -406,12 +406,12 @@ const agc_builtin agc_json_builtins[] = {
   {"JSON.at", 2, builtin_at, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.string", 1, builtin_string, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.int", 1, builtin_int, AGC_NATIVE_NONE, AGC_COST_NONE, false},
-  {"JSON.kind", 1, builtin_kind, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.float", 1, builtin_float, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.bool", 1, builtin_bool, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.list", 1, builtin_list, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"JSON.decode", 2, builtin_decode, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"JSON.schema", 1, builtin_schema, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"JSON.kind", 1, builtin_kind, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };
 
 const size_t agc_json_builtin_count = sizeof agc_json_builtins / sizeof agc_json_builtins[0];

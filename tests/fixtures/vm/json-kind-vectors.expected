@@ -1,9 +1,9 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 3160,
+  "steps": 3346,
   "stdout": [
-    "44 vectors ok",
+    "47 vectors ok",
     "int error(\"expected a signed 64-bit JSON integer\")",
     "object",
     "[\"int\", \"float\", \"float\"]",
