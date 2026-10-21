@@ -72,7 +72,7 @@ agentica greet.agc Ana Bob    # prints one greeting per name
 
 ## Check and errors
 
-`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. The checker stops at the first error:
+`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. `check` needs no `main`, so a library file passes; running or compiling a file needs `def main() -> Void`. The checker stops at the first error:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void

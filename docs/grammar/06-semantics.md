@@ -206,7 +206,9 @@ operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a
   returns.
 - `return` without a value completes a `Void` function. A `Nil` function uses
   `return nil`.
-- An executable declares exactly one `main() -> Void` with no parameters.
+- An executable declares exactly one `main() -> Void` with no parameters. A run
+  and `agentica compile` report `CHECK-MAIN` without it; `agentica check` does
+  not need a `main`, but one that is declared must have this signature.
 
 ### Default parameter values
 

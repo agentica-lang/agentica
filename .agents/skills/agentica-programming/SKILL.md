@@ -16,7 +16,8 @@ check a signature with `agentica help NAME`.
 
 ## Check and run
 
-1. Save `program.agc` with exactly one `def main() -> Void`.
+1. Save `program.agc` with exactly one `def main() -> Void` (`check` alone
+   does not need it).
 2. `agentica check F` checks only (`check --stdin F` checks the text on standard
    input as if F held it). `agentica F ARGS` runs (`System.args()`
    returns ARGS). `agentica compile F -o F.agcb`, then `agentica run [FLAGS]

@@ -218,10 +218,18 @@ end
 
 def linked(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
-  case Pipeline.check_file(source, session.settings)
+  case front_of(session, verb, source)
     Pipeline.Front.Rejected(problem) -> return reject(session, problem, source, 1)
     Pipeline.Front.Done(front) -> return checked(session, verb, rest, front)
   end
+end
+
+# `check` accepts a library file: only what is built to run (a run, `compile`) needs a main.
+def front_of(session: Session, verb: String, source: String) -> Pipeline.Front
+  if verb == "check"
+    return Pipeline.query_file(source, session.settings)
+  end
+  return Pipeline.check_file(source, session.settings)
 end
 
 # What is done with a program that checked, in a fixed order.

@@ -63,8 +63,8 @@ export def check_file(path: String, settings: Env.Settings) -> Front
   return front(path, settings, true)
 end
 
-## Links the file at `path` and checks it for a query (`agentica type-at`): every rule of `check_file` except that the
-## program declares `main`, so a library file can be asked about.
+## Links the file at `path` and checks it as `agentica check` and `agentica type-at` do: every rule of `check_file`
+## except that the program declares a `main`, so a library file passes. A `main` that is declared keeps its signature.
 export def query_file(path: String, settings: Env.Settings) -> Front
   return front(path, settings, false)
 end

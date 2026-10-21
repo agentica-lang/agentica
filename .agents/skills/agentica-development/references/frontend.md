@@ -33,7 +33,8 @@ with a packed `Problem` (`references/stages.md`).
 - Query (`query/`, §39): `agentica outline` parses one file and lists its
   declarations, private ones too, from the items of
   `compiler/docs/doc_model.agc`. `agentica type-at` links and checks the file
-  (`Pipeline.query_file`, `Checker.check_query`: no `CHECK-MAIN`) and answers
+  (`Pipeline.query_file`, `Checker.check_query`: a missing `main` is not
+  `CHECK-MAIN`; `agentica check` takes the same entry) and answers
   for a position: `at.agc` finds the innermost typed expression (a worklist over
   `check/const_walk.agc`) and `type_at.agc` prints the type through
   `Types.to_text_as` and `LinkedModule.aliases`. The commands are

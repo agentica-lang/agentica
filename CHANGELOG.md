@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `agentica check` no longer requires `main`, so a library file checks clean; a
+  `main` with the wrong signature is still `CHECK-MAIN`, and a run or `compile`
+  of a file with no `main` still reports it.
+
 ## [0.7.0] - 2026-10-21
 
 ### Added
