@@ -31,10 +31,11 @@ static const char usage[] =
   "  the run uses one scheduler per logical core (at most 1024), or N (1 to 1024), or AGENTICA_SCHEDULERS (the flag "
   "wins); --schedulers 1 runs one task at a time, in a fixed order\n";
 
-/* The std/ sources of the binary, from the index that make wrote. */
+/* The std/ sources of the binary, from the index that make wrote. The rows point only into agc_embedded_data, which
+ * is static, so the array holds no GC pointer and is atomic. */
 static agc_std_source *std_sources(size_t *count) {
   size_t n = (size_t)agc_embedded_index[6];
-  agc_std_source *sources = agc_alloc(agc_size_mul(n ? n : 1, sizeof *sources));
+  agc_std_source *sources = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *sources));
   for (size_t k = 0; k < n; k++) {
     const uint64_t *row = agc_embedded_index + 7 + 3 * k;
     const char *path = (const char *)agc_embedded_data + row[0];

@@ -69,8 +69,9 @@ static agc_value builtin_hand_off(agc_vm *vm, agc_value *args, uint32_t span) {
  * lock at any number of schedulers. */
 static agc_value std_source(agc_vm *vm, agc_value path_value) {
   const agc_runtime *rt = vm->rt;
-  if (!rt->std_count) return agc_error_value("this binary carries no std sources");
+  /* The type check comes first, so a non-String argument fails the same way in every binary. */
   const agc_string *path = agc_as_string(vm, path_value);
+  if (!rt->std_count) return agc_error_value("this binary carries no std sources");
   for (size_t k = 0; k < rt->std_count; k++) {
     const agc_std_source *source = &rt->std[k];
     if (strlen(source->path) != path->bytes || memcmp(source->path, path->data, path->bytes) != 0) continue;

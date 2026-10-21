@@ -10282,6 +10282,36 @@
       ],
       "code": "CHECK-REDEFINED-NAME",
       "start": [1, 1]
+    },
+    {
+      "program": [
+        "TEXT = Std.source(\"queue.agc\")",
+        "",
+        "def main() -> Void",
+        "  puts(TEXT.unwrap_or(\"\").length())",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  Std.source(\"queue.agc\")",
+        "end"
+      ],
+      "code": "CHECK-UNUSED-VALUE",
+      "start": [2, 3],
+      "covers": "Std.source(\"queue.agc\")"
+    },
+    {
+      "program": [
+        "import Std from \"./x\"",
+        "",
+        "def main() -> Void",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
     }
   ]
 }
