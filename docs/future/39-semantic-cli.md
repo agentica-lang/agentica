@@ -1,12 +1,12 @@
 ## 39. Semantic CLI for agents
 
-**Status:** `outline` and `type-at` built (types, definitions with `doc` and
-`signature`, and builtins at a position; locals, `--partial`, `symbol` and
-`refs` are planned), row 7.2b. Agreed with the owner on 2026-10-13: agents
-program better when they can ask the compiler about the code, not only read the
-docs. The front end already builds a linked and checked program with types and
-spans; four CLI commands expose it, JSON first. No language change; front end
-and CLI only, nothing reaches lowering or the VM.
+**Status:** `outline`, `type-at` and `symbol` built (types, definitions with
+`doc` and `signature`, and builtins at a position; locals; the workspace search;
+`--partial` and `refs` are planned), row 7.2b. Agreed with the owner on
+2026-10-13: agents program better when they can ask the compiler about the code,
+not only read the docs. The front end already builds a linked and checked
+program with types and spans; four CLI commands expose it, JSON first. No
+language change; front end and CLI only, nothing reaches lowering or the VM.
 
 ```text
 agentica outline FILE [--ai|--json]
@@ -100,11 +100,13 @@ changes only how diagnostics print; answers keep the text form.
   `FILE` argument (`outline --stdin FILE`, not `outline FILE --stdin FILE`); the
   file need not exist; commands that resolve imports need its folder, `outline`
   does not. With `--stdin`, `std/...` is a path of the disk.
-- **`symbol NAME [PATH...]`**: where a name is defined, with its signature or
-  type. Names are written as in §39.4. A builtin answers with the same object as
-  `agentica help NAME --json`, under `help`, with no span; so one command
-  answers for user code and builtins alike. A bare name can match declarations
-  in several modules: all matches are listed.
+- **`symbol NAME [PATH...]`** (built): where a name is defined, with its
+  signature or type. Names are written as in §39.4. A builtin answers with the
+  same object as `agentica help NAME --json`, under `help`, with no span; so one
+  command answers for user code and builtins alike. A bare name can match
+  declarations in several modules: all matches are listed. A private
+  declaration is found by its bare name only, since no alias reaches it. With
+  `--stdin FILE` the buffer is `FILE`, searched as one more root, the first.
 - **`refs NAME|FILE:LINE:COL [PATH...]`**: every reference to one declaration in
   the modules linked from `PATH...`, each with its span, its kind and the
   function it is in. The definition comes first. The kinds are `call`, `value`
@@ -210,6 +212,12 @@ signatures are strings.
   `"field"` (with `type` and `struct`), `"variant"` (with `payload` and `enum`)
   and `"builtin"` (with `help`, and `span` and `module` set to `null`). `module`
   is the module's file name (§39.4).
+  Built as `{kind, name, module, exported, signature, doc, span, name_span}`:
+  `doc` is the whole `##` text or null, as in `type-at`; `name` is the name
+  alone (`email`), with `struct` or `enum` for a member; a builtin has `module`,
+  `span` and `name_span` null and `doc` null. `span` is the whole declaration,
+  `export` included, as in `outline`; the `range` of a `type-at` definition
+  starts at the keyword after `export`, so compare `name_span`.
 - `refs`:
   `{version, command, query, definition, references: [{kind, function, span}],
 skipped: [...]}`,
@@ -316,6 +324,12 @@ usual three formats.
 
 ### 39.8 Linking, checking and performance
 
+- **Built for `symbol` without it.** `symbol` links each root with
+  `Linker.link_file` and merges the modules by key; a root whose module an
+  earlier root linked is not linked again. A directory costs about one link per
+  file that no other file of it imports (`compiler/`: 11 s for 145 files, 1.9 s
+  for `front_end.agc` alone). `Linker.link_programs`, `origins` and `uses` stay
+  planned for `refs`. The file given with `--stdin` is the first root.
 - **One link for all roots.** A new linker entry point, `Linker.link_programs`,
   links several roots into one program with shared tables: each module is
   visited once, whichever root imports it. Every module gets a `@N::` prefix,

@@ -80,7 +80,12 @@ end
 
 ## The QUERY-USAGE diagnostic with `message`, and `usage` as its help.
 export def refusal(message: String, usage: String) -> Problems.Problem
+  return at_arguments("QUERY-USAGE", message, Diag.Help.Hint(usage))
+end
+
+## A QUERY- diagnostic about the words of the command line, located at the pseudo-file `<arguments>`.
+export def at_arguments(code: String, message: String, help: Diag.Help) -> Problems.Problem
   start = Source.Position(offset: 0, line: 1, column: 1)
   span = Source.Span(start: start, stop: start)
-  return Problems.problem(ARGUMENTS, "", "QUERY-USAGE", message, span, Diag.Help.Hint(usage))
+  return Problems.problem(ARGUMENTS, "", code, message, span, help)
 end

@@ -413,6 +413,22 @@ comment, the body text of a heredoc, a keyword such as `return` that is part of
 no expression) is `QUERY-NO-EXPRESSION` and exits 2, as is a bad position
 (`QUERY-USAGE`).
 
+`agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
+defined in the modules linked from the files under PATH (a file or a folder,
+every `*.agc` file below it; default `.`). NAME is written as the code writes
+it: `total`, `User.email`, `Option.Some`, `Models.User` through an import alias
+of a file of PATH, `std/queue.pop`, or a builtin (`Map.get`). Each match has its
+kind (`function`, `struct`, `enum`, `alias`, `constant`, `field`, `variant` or
+`builtin`), `module`, `exported` (private declarations too), signature, `##`
+doc and spans; a builtin has `help`, the object of `agentica help NAME --json`.
+Only lexing, parsing and linking are needed: each file of PATH is linked on its
+own, and one that does not is listed under `skipped` with its first diagnostic
+while the others still answer (exit 0); if none links, that diagnostic is the
+answer and the exit status is 1. A name that nothing declares is
+`QUERY-NOT-FOUND` and exits 2, as is a mistake in the arguments
+(`QUERY-USAGE`). `--stdin FILE` takes the text of FILE from standard input and
+searches it too.
+
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by
 default, and checking never spends the budget. Exhaustion is

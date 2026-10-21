@@ -109,10 +109,13 @@ stage:
     The manifests of the locked packages are checked before any file loads
     (`check_manifests`). The hash and link errors are at the import.
 
-- **Stage:** query (`query/`, `agentica outline`, `type-at`)
+- **Stage:** query (`query/`, `agentica outline`, `type-at`, `symbol`)
   - **Codes:** `QUERY-USAGE`, at the pseudo-file `<arguments>` (line 1, column
     1), exit 2: a missing or extra argument, an unknown option, `--stdin`
-    without a file, a bad `FILE:LINE:COL`, or an unreadable path.
+    without a file, a bad `FILE:LINE:COL`, an unreadable path, or a folder with
+    no `*.agc` file. `QUERY-NOT-FOUND`, at `<arguments>`, exit 2: `symbol` NAME
+    is in no linked module and no builtin (`symbol` also exits 1 with the first
+    diagnostic when no root links).
     `QUERY-NO-EXPRESSION`, at the position in the file, exit 2: `type-at` on no
     token of an expression. The stage reads the words (`query_options.agc`),
     picks and names the file (`query_files.agc`) and lists the declarations

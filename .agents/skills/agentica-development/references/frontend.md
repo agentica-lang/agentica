@@ -47,8 +47,17 @@ with a packed `Problem` (`references/stages.md`).
   from `Checked.bound` (`State.record_bound`: by the id of a parameter, binding
   or `for` node, and for a pattern by the id of the variant pattern, one type
   for each slot), kept apart from `Checked.types` so the lowering never sees
-  them. The commands are `app/cli_query.agc`; the tests are
-  `tests/test_spec_outline.py` and `tests/test_spec_type_at.py`.
+  them. `agentica symbol NAME [PATH...]` parses and links only:
+  `symbol_paths.agc` expands the paths through `Workspace.list_folder` (the
+  `--stdin` file is the first root), `symbol_link.agc` links each root with
+  `Linker.link_file` and merges the modules by key (a root already linked as a
+  dependency is not linked again; a root that fails is `Skipped`), and
+  `symbol.agc` matches the name against `Model.declared` of
+  `LinkedModule.parsed` for each module (the aliases of the roots and
+  `std/NAME.` qualify exported names) and the builtin catalog. `symbol_json.agc`
+  and `symbol_text.agc` print it, the text through `outline_text.agc`. The
+  commands are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py`,
+  `tests/test_spec_type_at.py` and `tests/test_spec_symbol.py`.
 
 ### Pure core, one port
 
