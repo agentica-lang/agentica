@@ -10,6 +10,7 @@ with the reason. On Windows the socket cases use a Winsock socket that is not in
 """
 import json
 import re
+import subprocess
 import sys
 import time
 
@@ -768,6 +769,65 @@ def test_a_child_that_keeps_writing_stderr_does_not_hold_back_a_warn_of_the_prog
     assert out.count(b"e") == STREAMING_BYTES
     assert int(took.group(1)) < scaled(1000), "the warn took %s ms" % took.group(1).decode()
     assert warn < STREAMING_BYTES // 2, "the warn came after %d bytes of the child" % warn
+
+
+# A task warns records of exactly 64 KiB (the newline included), each one needing the whole ring, until main closes
+# `stop`; a child sleeps 300 ms, then writes FULL_RING_CHILD bytes to its stderr. Both reach one pipe.
+FULL_RING_CHILD = 300_000
+FULL_RING_PROGRAM = """\
+def printer(stop: Channel[Int]) -> Int
+  big = List.repeat("w", 65535).join("")
+  n = 0
+  while !stop.closed?
+    IO.warn(big)
+    n += 1
+  end
+  return n
+end
+
+def main() -> Void
+  stop: Channel[Int] = Channel.new(1)
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys,time; time.sleep(0.3); sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  printer = Task.spawn(&printer, stop)
+  start = Time.monotonic_ms()
+  waited = Process.wait(child, %d)
+  took = Time.monotonic_ms() - start
+  stop.close
+  Task.await(printer, 60000)
+  puts("child #{waited.ok?} took #{took}")
+end
+
+"""
+
+
+@not_wine_child
+@pytest.mark.parametrize("schedulers", [1, 4])
+def test_a_child_moves_on_while_the_program_keeps_warning_records_that_fill_the_whole_ring(tmp_path, schedulers):
+    # The reader counts what it gets instead of keeping it: the printer writes as fast as the pipe is read.
+    limit = scaled(10000)
+    program = FULL_RING_PROGRAM % (agc_literal(PYTHON), FULL_RING_CHILD, limit)
+    bytecode = compile_text(program, "full-ring", tmp_path)
+    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
+    process = subprocess.Popen([*vm_command(), "--allow-run", "--schedulers", str(schedulers), "--", bytecode],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=vm_environment(env))
+    children = 0
+    tail = b""
+    found = None
+    try:
+        while chunk := process.stdout.read1(1 << 16):
+            children += chunk.count(b"e")
+            # The last line of main may come before child bytes that were still queued: it is looked for anywhere.
+            window = tail + chunk
+            found = found or re.search(rb"child (\w+) took (\d+)\n", window)
+            tail = window[-64:]
+        code = process.wait(timeout=PEER_LIMIT)
+    finally:
+        process.kill()
+        process.stdout.close()
+    assert code == 0 and found
+    assert found.group(1) == b"true", "the child was still blocked after %s ms" % found.group(2).decode()
+    assert int(found.group(2)) < scaled(5000), "the child took %s ms" % found.group(2).decode()
+    assert children - found.group(0).count(b"e") == FULL_RING_CHILD
 
 
 @not_wine

@@ -949,6 +949,34 @@ static void test_a_failed_stream_resumes_its_forwarders_and_drops_their_bytes(vo
   close(pipe_fds[1]);
 }
 
+/* A print that needs the whole ring keeps the order of arrival: the child bytes queued before it joined go first, the
+   ones after it wait for it. Without that, prints of exactly CAP bytes made one after another would keep a child's bytes
+   out for good. */
+static void test_child_bytes_queued_before_a_print_that_needs_the_whole_ring_go_first(void) {
+  open_pipe();
+  size_t junk = block_pipe();
+  fresh(pipe_fds[1]);
+  agc_task *a = make_task(), *t = make_task();
+  agc_forward_wait w = {NULL, agc_io_loop(&vm), count_resume, NULL};
+  uint8_t before[1000], after[1000];
+  memset(before, 'f', sizeof before);
+  memset(after, 'g', sizeof after);
+  assert(write_as(a, 'a', CAP, false));
+  assert(agc_output_forward(out(), before, sizeof before, &w));
+  assert(!write_as(t, 't', CAP, false));
+  assert(agc_output_forward(out(), after, sizeof after, &w));
+  read_junk(junk);
+  wait_ready(t);
+  assert(retry(t));
+  pump_until(junk + 2 * CAP + sizeof before + sizeof after);
+  check_run(junk, 'a', CAP);
+  check_run(junk + CAP, 'f', sizeof before);
+  check_run(junk + CAP + sizeof before, 't', CAP);
+  check_run(junk + 2 * CAP + sizeof before, 'g', sizeof after);
+  finish();
+  close_pipe();
+}
+
 /* The tests that fill no pipe, so they run on either kind of write end. */
 static void run_unfilled_pipe_tests(void) {
   test_small_prints_keep_order();
@@ -987,6 +1015,7 @@ int main(void) {
   test_a_final_notice_is_dropped_when_the_pipe_is_stuck();
   test_forwarded_bytes_pause_at_the_bound_and_resume_once_the_queue_drains();
   test_a_failed_stream_resumes_its_forwarders_and_drops_their_bytes();
+  test_child_bytes_queued_before_a_print_that_needs_the_whole_ring_go_first();
 #ifdef _WIN32
   overlapped_end = false;
   run_unfilled_pipe_tests();

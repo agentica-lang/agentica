@@ -216,6 +216,8 @@ typedef struct {
   agc_output *out;
   const agc_string *text;
   size_t done;
+  /* The stream's queue_in when the writer joined the FIFO: the queued bytes before it go ahead of the writer. */
+  uint64_t queue_mark;
   bool newline, flush;
 } agc_output_wait;
 
@@ -251,6 +253,8 @@ struct agc_output {
   uint8_t *notice;
   /* The notice queue: bytes [notice_at, notice_len) of a buffer of notice_cap bytes, kept between uses while small. */
   size_t notice_at, notice_len, notice_cap;
+  /* The bytes that have ever entered the queue; the ones that left it are queue_in minus what is queued. */
+  uint64_t queue_in;
   agc_stdio *io;
   agc_write_mode mode;
   agc_utf8_cut cut;
