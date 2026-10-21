@@ -1,8 +1,11 @@
+## The text form of the lexer output, one token per line.
+
 import Diag from "../diagnostics/diagnostic"
 import Lexer from "lexer"
 import Text from "text"
 import Tokens from "token"
 
+## Returns the tokens of the text, one per line, or the line of the first lexing problem.
 export def lex_text(text: String) -> String
   case Lexer.lex(text)
     Diag.Outcome.Done(tokens) -> return tokens.map do |token| token_line(token) end.join("\n")

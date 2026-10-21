@@ -37,6 +37,7 @@ export def span_of(decl: Ast.Decl) -> Source.Span
   end
 end
 
+## Returns the span of the name of a type alias, and the span of the whole declaration for any other one.
 export def name_span_of(decl: Ast.Decl) -> Source.Span
   case unwrap(decl)
     Ast.Decl.TypeAlias(node) -> return node.name_span
@@ -92,6 +93,7 @@ export def enum?(kind: Kind) -> Bool
   end
 end
 
+## Whether the kind is a type alias.
 export def type_alias?(kind: Kind) -> Bool
   case kind
     Kind.TypeAlias -> return true

@@ -1,3 +1,5 @@
+## Turns the text of a source file into tokens, or into the first lexing diagnostic (LEX- codes).
+
 import Diag from "../diagnostics/diagnostic"
 import Source from "source"
 import Tokens from "token"

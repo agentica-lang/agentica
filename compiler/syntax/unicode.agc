@@ -1,5 +1,8 @@
+## The Unicode rules of the lexer and of the written form of a String: graphic and blank characters.
+
 import {GRAPHIC_RANGES} from "unicode_table"
 
+## Whether the code point is a graphic character, one that a program can write as it is.
 export def graphic?(code: Int) -> Bool
   return in_ranges?(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
 end
@@ -19,10 +22,12 @@ export def hex(value: Int, width: Int) -> String
   return parts.reverse.join("")
 end
 
+## Returns the code as upper-case hexadecimal digits, with at least one.
 export def hex_text(value: Int) -> String
   return hex(value, 1)
 end
 
+## Returns the character literal of the code point, such as `#\tab` or `#\u00E9`.
 export def written(code: Int) -> String
   case code
     0 -> return "#\\nul"
