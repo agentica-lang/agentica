@@ -1,14 +1,16 @@
 /*
- * The FrontEnd builtins (agc_front_end_builtins): the two calls that only the
+ * The FrontEnd builtins (agc_front_end_builtins): the calls that only the
  * front end of the single binary may make. hand_off gives the compiled
  * program to the driver and ends the front end's run; std_source reads a std/
- * source that the binary carries. A user program, or a front end that is run as
- * an ordinary program with `agentica run`, has no agc_front_end in its runtime
- * and fails with RUNTIME-FRONT-END-ONLY. Service layer.
+ * source that the binary carries; stdin_bytes reads standard input, which the
+ * front end's runtime opens only for that call. A user program, or a front end
+ * that is run as an ordinary program with `agentica run`, has no agc_front_end
+ * in its runtime and fails with RUNTIME-FRONT-END-ONLY. Service layer.
  * Design: docs/vm/08-loader-and-cli.md and docs/future/18-front-end-language.md §18.4.
  */
 #include "services.h"
 
+#include <stdio.h>
 #include <string.h>
 
 /* The driver sets rt->front_end only for the front end it loads itself, so this one test is the whole guard. */
@@ -77,9 +79,31 @@ static agc_value builtin_std_source(agc_vm *vm, agc_value *args, uint32_t span) 
   return agc_error_value("no such std source");
 }
 
+/* All of standard input as bytes. The front end's runtime starts with no input stream, so the real descriptor stays
+ * the program's; agc_input_whole opens it on the first call, so only a command that asks (`check --stdin FILE`) reads
+ * it. The bytes come through the one stdin reader (vm/input.c): the task parks while a read is in flight and the
+ * builtin runs again when it ends, so the loop never blocks and a stop signal ends the run as usual. stdin is
+ * in binary mode (agc_launch_init_streams), so no byte changes on Windows. A later call reads on from where this one
+ * stopped: nothing, after the end of a pipe or a file. */
+static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  guarded(vm, span);
+  agc_list *bytes = NULL;
+  agc_input_status status = agc_input_whole(vm, AGC_FRONT_END_MAX_STDIN, &bytes);
+  if (status == AGC_INPUT_WAIT) return agc_void();
+  if (status == AGC_INPUT_FAILED) return agc_error_value("cannot read standard input");
+  if (!bytes) {
+    char message[64];
+    snprintf(message, sizeof message, "standard input is larger than %zu bytes", AGC_FRONT_END_MAX_STDIN);
+    return agc_error_value(message);
+  }
+  return agc_result_value(true, agc_list_value(bytes));
+}
+
 const agc_builtin agc_front_end_builtins[] = {
   {"FrontEnd.hand_off", 3, builtin_hand_off, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
   {"FrontEnd.std_source", 1, builtin_std_source, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"FrontEnd.stdin_bytes", 0, builtin_stdin_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
 };
 
 const size_t agc_front_end_builtin_count = sizeof agc_front_end_builtins / sizeof agc_front_end_builtins[0];

@@ -18,6 +18,16 @@ export enum Read
   Unreadable(String)
 end
 
+## The text of a whole source given as bytes (the standard input of `check --stdin`), by the rules of a file: strict
+## UTF-8, and the place of the first invalid byte when it is not.
+export def decode(data: List[Int]) -> Read
+  decoded = String.from_bytes(data)
+  if decoded.ok?
+    return Read.Text(decoded.unwrap!)
+  end
+  return Read.Invalid(error_position([], data))
+end
+
 ## The LEX-INVALID-UTF8 diagnostic for the invalid byte at `at`: a span of length 1 that starts there.
 export def invalid_utf8(at: Source.Position) -> Diag.Diagnostic
   stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)

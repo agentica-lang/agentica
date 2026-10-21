@@ -10,7 +10,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica check --stdin FILE` checks the text on standard input as if `FILE`
+  held it.
 - `JSON.kind(value)`, the kind of a JSON value as a String, without encoding it.
+
+### Changed
+
+- **Breaking:** `agentica check FILE ... --stdin` is a usage error (exit 2);
+  extra words after `check FILE` used to be ignored.
 
 ## [0.5.0] - 2026-10-21
 

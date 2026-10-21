@@ -18,8 +18,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import (PYTHON, compile_agc, scaled, start_vm, stop_a_vm_that_fills_its_stdout, vm_command,
-                                 vm_environment, wait_until)
+from tests.agentica_test import (PYTHON, binary, compile_agc, scaled, start_vm, stop_a_vm_that_fills_its_stdout,
+                                 vm_command, vm_environment, wait_until)
 from tests.test_vm_stop import FULL_STDOUT  # the same program that fills the pipe on the POSIX systems
 from tests.windows_console_support import CHILD, ESCAPES, WAIT_SECONDS, kernel32, run_on_console
 
@@ -230,3 +230,21 @@ def test_ctrl_break_ends_a_run_whose_task_waits_for_standard_input(tmp_path, ado
     vm.process.send_signal(signal.CTRL_BREAK_EVENT)
     assert vm.wait(WAIT_SECONDS) == 128 + SIGBREAK
     assert time.monotonic() - start < min(scaled(5), 25), "the run does not wait for the read"
+
+
+def test_ctrl_c_ends_check_stdin_while_it_waits_for_input(tmp_path):
+    """`check --stdin` reads the console through the reader thread, so the loop still takes Ctrl+C: the run ends as a
+    stop at once, without waiting for the end of the input and without a read error."""
+    pressed = []
+
+    def press_ctrl_c(type_text):
+        time.sleep(1)
+        pressed.append(time.monotonic())
+        type_text("\x03")
+
+    command = [binary(), "check", "--stdin", tmp_path / "new.agc"]
+    code, shown = run_on_console(command, vm_environment(), WAIT_SECONDS, during=press_ctrl_c)
+    text = ESCAPES.sub("", shown)
+    assert code == 128 + signal.SIGINT, text
+    assert time.monotonic() - pressed[0] < min(scaled(5), 25), "the run does not wait for the read"
+    assert "cannot read standard input" not in text
