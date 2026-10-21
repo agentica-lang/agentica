@@ -24,9 +24,12 @@ export def ai(problem: Problems.Problem, text: String) -> String
     out = out.push("  at: #{problem.file}")
     out = field(out, "key", problem.key_path)
   end
-  out = field(out, "callee", problem.callee)
-  out = field(out, "expected", problem.expected)
-  out = field(out, "actual", problem.actual)
+  out = (
+    out
+    |> field("callee", problem.callee)
+    |> field("expected", problem.expected)
+    |> field("actual", problem.actual)
+  )
   for label in problem.labels
     out = out.push("  label: #{label.span.start.line}:#{label.span.start.column} #{label.text}")
   end

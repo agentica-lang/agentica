@@ -23,15 +23,16 @@ export def skipped_lines(skipped: List[Model.Skipped]) -> String
 end
 
 def match_text(match: Model.Symbol) -> String
-  if match.kind == "builtin"
-    return match.signatures.map do |line: String| "builtin #{line}\n" end.join("")
-  elsif match.kind == "field"
-    head = OutlineText.field_text(match.owner, match.name, match.type)
-    return "#{OutlineText.place(match.module, match.name_range)} #{head}\n"
-  elsif match.kind == "variant"
-    head = OutlineText.variant_text(match.owner, match.signature)
-    return "#{OutlineText.place(match.module, match.name_range)} #{head}\n"
+  case match.kind
+    "builtin" -> return match.signatures.map do |line: String| "builtin #{line}\n" end.join("")
+    "field" ->
+      head = OutlineText.field_text(match.owner, match.name, match.type)
+      return "#{OutlineText.place(match.module, match.name_range)} #{head}\n"
+    "variant" ->
+      head = OutlineText.variant_text(match.owner, match.signature)
+      return "#{OutlineText.place(match.module, match.name_range)} #{head}\n"
+    _ ->
+      head = OutlineText.declaration_text(match.kind, match.exported, match.signature)
+      return "#{OutlineText.place(match.module, match.range)} #{head}\n"
   end
-  head = OutlineText.declaration_text(match.kind, match.exported, match.signature)
-  return "#{OutlineText.place(match.module, match.range)} #{head}\n"
 end

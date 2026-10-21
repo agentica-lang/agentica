@@ -70,20 +70,15 @@ end
 # One driver option with its value. An unknown name or a bad number leaves the options as they are, and the checks of
 # parse find what is missing.
 def option(options: Options, name: String, value: String) -> Options
-  if name == "--vm"
-    return options.with(vm: value)
-  elsif name == "--version"
-    return options.with(version: value)
-  elsif name == "--agentica"
-    return options.with(agentica: options.agentica.push(value))
-  elsif name == "--style"
-    return options.with(style: value)
-  elsif name == "--seed"
-    return options.with(seeded: true, seed: value.to_int.unwrap_or(0))
-  elsif name == "--test-timeout-ms"
-    return options.with(test_timeout_ms: value.to_int.unwrap_or(options.test_timeout_ms))
+  case name
+    "--vm" -> return options.with(vm: value)
+    "--version" -> return options.with(version: value)
+    "--agentica" -> return options.with(agentica: options.agentica.push(value))
+    "--style" -> return options.with(style: value)
+    "--seed" -> return options.with(seeded: true, seed: value.to_int.unwrap_or(0))
+    "--test-timeout-ms" -> return options.with(test_timeout_ms: value.to_int.unwrap_or(options.test_timeout_ms))
+    _ -> return options
   end
-  return options
 end
 
 # The words of the user. The last --json or --ai decides the style of every report, usage errors included, so they are

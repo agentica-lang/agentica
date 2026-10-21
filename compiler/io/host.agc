@@ -84,14 +84,12 @@ def list_folder(path: String) -> Result[List[Workspace.Entry]]
 end
 
 def entry_kind(kind: String) -> Workspace.EntryKind
-  if kind == "directory"
-    return Workspace.EntryKind.Directory
-  elsif kind == "file"
-    return Workspace.EntryKind.File
-  elsif kind == "link"
-    return Workspace.EntryKind.Link
+  case kind
+    "directory" -> return Workspace.EntryKind.Directory
+    "file" -> return Workspace.EntryKind.File
+    "link" -> return Workspace.EntryKind.Link
+    _ -> return Workspace.EntryKind.Other
   end
-  return Workspace.EntryKind.Other
 end
 
 # The whole file, read in chunks of 256 KiB (File.read_bytes gives at most 1 MiB a call).
