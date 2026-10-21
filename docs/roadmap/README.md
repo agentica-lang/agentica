@@ -41,8 +41,8 @@ First batch, as soon as possible:
 
 1. FFI-a: the core of [#534](https://github.com/sonic182/agentica/issues/534)
    (extern blocks, `C.*` types, `resource`, the three call kinds,
-   `Native.wait_readable/wait_writable`, `--allow-native`), with system or
-   local libraries.
+   `Native.wait_readable/wait_writable`, `--deny-native`), with system or
+   local libraries. PR 1 of the split (core calls) is done (#553).
 2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
    bytecode, so unchanged programs skip the front end.
 3. Packages [45b](../future/45-packages.md) (`fetch`), then 45c (`add`,
@@ -69,7 +69,7 @@ Weighed later (no fixed order)
 8. The JIT (row 9.1, [§22](../future/22-jit.md)); it needs 8.1, 7.7 and 9, and
    comes after the FFI. #396 (item 6) goes before it.
 9. [#531](https://github.com/sonic182/agentica/issues/531): `type-at` on type
-   names (row 7.2b).
+   names (row 7.2b). Done in 0.8.1 (#550).
 10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer.
 11. Flaky tests [#528](https://github.com/sonic182/agentica/issues/528) and
     [#382](https://github.com/sonic182/agentica/issues/382).
