@@ -1,5 +1,6 @@
 ## The answers of the stages as the plain data of model.agc: the declarations of `agentica doc`, the outline of a file
-## and the answer of `type-at`. The files an answer names are given by the caller (query_files.agc, `display`).
+## and the answers of `type-at`, `symbol` and `refs`. The files an answer names are given by the caller
+## (query_files.agc, `display`).
 
 import Ast from "../syntax/ast"
 import Builtins from "../catalog/builtins"
@@ -10,6 +11,7 @@ import DocModel from "../docs/doc_model"
 import Model from "model"
 import Outline from "../query/outline"
 import Position from "../query/query_position"
+import Refs from "../query/refs"
 import Symbol from "../query/symbol"
 import SymbolLink from "../query/symbol_link"
 import TypeAt from "../query/type_at"
@@ -19,6 +21,7 @@ OUTLINE_VERSION = 1
 TYPE_AT_VERSION = 1
 CHECKED_VERSION = 1
 SYMBOL_VERSION = 1
+REFS_VERSION = 1
 
 ## The declaration `declared` of a module as plain data.
 export def item(declared: DocModel.Item) -> Model.Item
@@ -117,6 +120,43 @@ export def symbols(query: String, found: Symbol.Answer) -> Model.Symbols
     skipped: found.skipped.map do |left: SymbolLink.Skipped|
       Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))
     end,
+  )
+end
+
+## The answer `found` of `refs` for the position `asked`. `names` gives the name the answer gives each file (a file it
+## does not hold keeps the name the linker gives it).
+export def refs(asked: Position.Asked, found: Refs.Answer, names: Map[String, String]) -> Model.Refs
+  definition: List[Model.Declaration] = []
+  case found.definition
+    Ast.Optional.Present(declared) ->
+      definition = [
+        Model.Declaration(
+          kind: declared.kind,
+          name: declared.name,
+          owner: found.owner,
+          module: names.get(declared.file, declared.file),
+          exported: declared.exported,
+          signature: declared.signature,
+          range: DiagnosticModel.range_of(declared.span),
+          name_range: DiagnosticModel.range_of(declared.name_span),
+        ),
+      ]
+    Ast.Optional.Absent -> definition = definition
+  end
+  return Model.Refs(
+    version: REFS_VERSION,
+    query: "#{asked.file}:#{asked.line}:#{asked.column}",
+    definition: definition,
+    builtin: found.builtin,
+    references: found.references.map do |use: Refs.Reference|
+      Model.Reference(
+        kind: use.kind,
+        function: use.function,
+        file: names.get(use.file, use.file),
+        range: DiagnosticModel.range_of(use.span),
+      )
+    end,
+    skipped: [],
   )
 end
 

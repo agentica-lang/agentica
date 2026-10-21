@@ -1,5 +1,5 @@
-"""Readers of the JSON that `agentica doc`, `outline`, `type-at` and `symbol` print, and the positions they are asked
-about, shared by their tests."""
+"""Readers of the JSON that `agentica doc`, `outline`, `type-at`, `refs` and `symbol` print, and the positions they are
+asked about, shared by their tests."""
 import json
 
 

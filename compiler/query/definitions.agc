@@ -19,7 +19,8 @@ import Locals from "locals"
 ## the file wrote it, and the file (the `file` of its LinkedModule), the whole declaration and its name (for a
 ## local, the binding node and the name; see `of_local`). `doc` is the whole `##` text or Absent; `signature` is the
 ## one line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
-## `Circle(Float)` for a variant.
+## `Circle(Float)` for a variant. `exported` is whether the file exports the declaration, or the struct or enum a field
+## or variant belongs to; a local is not.
 export struct Definition
   kind: String
   name: String
@@ -28,6 +29,7 @@ export struct Definition
   name_span: Source.Span
   doc: Ast.Optional[String]
   signature: String
+  exported: Bool
 end
 
 # A top-level declaration of the linked program and the module it is in.
@@ -40,6 +42,7 @@ end
 struct Described
   doc: Ast.Optional[String]
   signature: String
+  exported: Bool
 end
 
 ## The definition of what `expr` names, or Absent. `types` is `Checked.types`: the struct of a field access is the type
@@ -59,6 +62,22 @@ export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr
   end
 end
 
+## The definition of the top-level declaration with the linked name `name` (a function, struct, enum, alias or
+## constant), or Absent for a builtin, which no file declares.
+export def of_name(modules: List[Linker.LinkedModule], name: String) -> Ast.Optional[Definition]
+  return top_level(modules, name)
+end
+
+## The definition of the field `name` of the struct with the linked name `owner`, or Absent.
+export def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Ast.Optional[Definition]
+  return field(find(modules, owner), name)
+end
+
+## The definition of the variant `name` of the enum with the linked name `owner`, or Absent.
+export def of_variant(modules: List[Linker.LinkedModule], owner: String, name: String) -> Ast.Optional[Definition]
+  return variant(find(modules, owner), name)
+end
+
 ## The definition of a local: the binding site, with `kind` `parameter`, `local`, `loop` or `pattern` (see
 ## Locals.Local), and the name and the type as the file writes it (`total: Int`) for a signature and no doc. `span` is
 ## the binding node when it has one (the whole parameter or assignment), else the name (`loop` and `pattern`);
@@ -70,7 +89,7 @@ export def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text:
     module,
     local.span,
     local.name_span,
-    Described(doc: Ast.Optional.Absent, signature: "#{local.name}: #{type_text}"),
+    Described(doc: Ast.Optional.Absent, signature: "#{local.name}: #{type_text}", exported: false),
   )
 end
 
@@ -185,6 +204,7 @@ def made(
     name_span: name_span,
     doc: said.doc,
     signature: said.signature,
+    exported: said.exported,
   )
 end
 
@@ -200,7 +220,7 @@ def top(
 end
 
 def nothing_said() -> Described
-  return Described(doc: Ast.Optional.Absent, signature: "")
+  return Described(doc: Ast.Optional.Absent, signature: "", exported: false)
 end
 
 # The doc and signature of the top-level declaration with the linked name `linked`, from the parsed file.
@@ -208,7 +228,7 @@ def of_item(module: Linker.LinkedModule, linked: String) -> Described
   name = T.display_name(linked)
   for item in Model.declared(module.parsed, module.text)
     if item.name == name
-      return Described(doc: item.doc, signature: item.signature)
+      return Described(doc: item.doc, signature: item.signature, exported: item.exported)
     end
   end
   return nothing_said()
@@ -223,13 +243,17 @@ def of_member(module: Linker.LinkedModule, owner: String, name: String) -> Descr
         Model.Detail.Struct(fields) ->
           for field in fields
             if field.name == name
-              return Described(doc: field.doc, signature: "#{field.name}: #{field.type}")
+              return Described(doc: field.doc, signature: "#{field.name}: #{field.type}", exported: item.exported)
             end
           end
         Model.Detail.Enum(variants) ->
           for variant in variants
             if variant.name == name
-              return Described(doc: variant.doc, signature: Signature.variant_text(variant.name, variant.payload))
+              return Described(
+                doc: variant.doc,
+                signature: Signature.variant_text(variant.name, variant.payload),
+                exported: item.exported,
+              )
             end
           end
         Model.Detail.Function(_, _) -> return nothing_said()

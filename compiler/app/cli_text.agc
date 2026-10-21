@@ -19,6 +19,8 @@ USAGE = [
   "       agentica [--ai|--json] symbol NAME [PATH...] --stdin <source-file> [--json]",
   "       agentica [--ai|--json] type-at <source-file>:LINE:COL [--json]",
   "       agentica [--ai|--json] type-at --stdin <source-file>:LINE:COL [--json]",
+  "       agentica [--ai|--json] refs <source-file>:LINE:COL [--json]",
+  "       agentica [--ai|--json] refs --stdin <source-file>:LINE:COL [--json]",
   "       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
@@ -48,6 +50,8 @@ SUMMARY = [
   "                                          what they import; --stdin FILE reads one more file from standard input",
   "  agentica type-at FILE:LINE:COL          type and definition of the expression at a position (checks FILE and",
   "                                          its imports, needs no main); --stdin reads FILE from standard input",
+  "  agentica refs FILE:LINE:COL             every reference to the declaration or local named at a position, in FILE",
+  "                                          and what it imports (checks them, needs no main); --stdin as type-at",
   "  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split",
   "  agentica help [--json]                  this summary and the builtin namespaces;",
   "                                          --json prints every builtin as a JSON array",

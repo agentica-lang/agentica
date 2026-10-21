@@ -1,10 +1,11 @@
-## The semantic queries, once: `check`, `outline`, `type-at` and `symbol` of docs/future/39-semantic-cli.md. The
-## command line (app/cli.agc, app/cli_query.agc) and `std/analysis` (stdlib/analysis.agc, which embeds this core) both
-## call these functions, so the two cannot drift (`symbol` has no function in `std/analysis` yet). Each one reads its
-## files through the Workspace of the `settings`, which is where an unsaved buffer stands in for a file
-## (modules/overlay.agc), and gives the data of model.agc or the first problem. What each caller does with them is its
-## own: the command line prints and sets an exit status, the library returns.
+## The semantic queries, once: `check`, `outline`, `type-at`, `symbol` and `refs` of docs/future/39-semantic-cli.md.
+## The command line (app/cli.agc, app/cli_query.agc) and `std/analysis` (stdlib/analysis.agc, which embeds this core)
+## both call these functions, so the two cannot drift (`symbol` and `refs` have no function in `std/analysis` yet).
+## Each one reads its files through the Workspace of the `settings`, which is where an unsaved buffer stands in for a
+## file (modules/overlay.agc), and gives the data of model.agc or the first problem. What each caller does with them is
+## its own: the command line prints and sets an exit status, the library returns.
 
+import Ast from "../syntax/ast"
 import Cache from "cache"
 import Convert from "convert"
 import Diag from "../diagnostics/diagnostic"
@@ -17,6 +18,7 @@ import Problems from "../diagnostics/problem"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
+import Refs from "../query/refs"
 import SourceFile from "../syntax/source_file"
 import Symbol from "../query/symbol"
 import SymbolPaths from "../query/symbol_paths"
@@ -44,9 +46,24 @@ export enum Typed
   Rejected(Problems.Problem)
 end
 
+## The references for a position, the file cannot be read, or the first problem (QUERY-NO-EXPRESSION when the
+## position names nothing).
+export enum Referenced
+  Done(Model.Refs)
+  Unreadable
+  Rejected(Problems.Problem)
+end
+
 ## The matches of a `symbol` query, or why there is none.
 export enum Found
   Done(Model.Symbols)
+  Rejected(Problems.Problem)
+end
+
+# The file of a position, linked and checked, the file cannot be read, or the first problem.
+enum Fronted
+  Done(Front.Checked)
+  Unreadable
   Rejected(Problems.Problem)
 end
 
@@ -95,14 +112,20 @@ end
 ## The type and the definition at the position `asked` of a file of the disk (never a `std/` module), linked and
 ## checked with what it imports and without requiring `main`. `cache` only saves work, as for `check`.
 export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
-  case Front.read_root(settings.workspace, asked.file)
-    Front.Root.Unreadable(_) -> return Typed.Unreadable
-    Front.Root.Invalid(problem) -> return Typed.Rejected(problem)
-    Front.Root.Readable ->
-      case Front.query_cached(cache, asked.file, settings)
-        Front.Outcome.Rejected(problem) -> return Typed.Rejected(problem)
-        Front.Outcome.Done(front) -> return located(settings, asked, front)
-      end
+  case position_front(cache, settings, asked)
+    Fronted.Unreadable -> return Typed.Unreadable
+    Fronted.Rejected(problem) -> return Typed.Rejected(problem)
+    Fronted.Done(front) -> return located(settings, asked, front)
+  end
+end
+
+## The declaration of the name at the position `asked` and every reference to it, in the file of the position (linked
+## and checked as for `type_at`) and what it imports; a file that only imports it is not seen. `cache` only saves work.
+export def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+  case position_front(cache, settings, asked)
+    Fronted.Unreadable -> return Referenced.Unreadable
+    Fronted.Rejected(problem) -> return Referenced.Rejected(problem)
+    Fronted.Done(front) -> return referenced(settings, asked, front)
   end
 end
 
@@ -155,6 +178,18 @@ export def refused(message: String, path: String) -> Problems.Problem
   return QueryOptions.refusal(message, "").with(file: path)
 end
 
+def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Fronted
+  case Front.read_root(settings.workspace, asked.file)
+    Front.Root.Unreadable(_) -> return Fronted.Unreadable
+    Front.Root.Invalid(problem) -> return Fronted.Rejected(problem)
+    Front.Root.Readable ->
+      case Front.query_cached(cache, asked.file, settings)
+        Front.Outcome.Rejected(problem) -> return Fronted.Rejected(problem)
+        Front.Outcome.Done(front) -> return Fronted.Done(front)
+      end
+  end
+end
+
 def located(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Checked) -> Typed
   case TypeAt.answer(front.linked, front.checked, asked)
     Diag.Outcome.Failed(problem) -> return Typed.Rejected(Front.stage_problem(asked.file, problem))
@@ -163,6 +198,29 @@ def located(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Che
       home = QueryFiles.display(settings, TypeAt.definition_file(found), true)
       return Typed.Done(Convert.type_at(name, asked, found, home))
   end
+end
+
+def referenced(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Checked) -> Referenced
+  case Refs.answer(front.linked, front.checked, asked)
+    Diag.Outcome.Failed(problem) -> return Referenced.Rejected(Front.stage_problem(asked.file, problem))
+    Diag.Outcome.Done(found) -> return Referenced.Done(Convert.refs(asked, found, file_names(settings, found)))
+  end
+end
+
+# The name that the answer gives each file it mentions.
+def file_names(settings: Env.Settings, found: Refs.Answer) -> Map[String, String]
+  files: List[String] = found.references.map do |use: Refs.Reference| use.file end
+  case found.definition
+    Ast.Optional.Present(declared) -> files = files.push(declared.file)
+    Ast.Optional.Absent -> files = files
+  end
+  names: Map[String, String] = {}
+  for file in files
+    if !names.has_key?(file)
+      names = names.put(file, QueryFiles.display(settings, file, true))
+    end
+  end
+  return names
 end
 
 # The match with the name its answer gives its file; a builtin has none.

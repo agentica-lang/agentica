@@ -55,21 +55,32 @@ with a packed `Problem` (`references/stages.md`).
   `symbol.agc` matches the name against `Model.declared` of
   `LinkedModule.parsed` for each module (the aliases of the roots and
   `std/NAME.` qualify exported names) and the builtin catalog. `symbol_json.agc`
-  and `symbol_text.agc` print it, the text through `outline_text.agc`. The
+  and `symbol_text.agc` print it, the text through `outline_text.agc`.
+  `agentica refs` (the position form) answers from the same linked and
+  checked file: a local by `Locals.uses`, a sweep of its function with the
+  scopes of `locals.agc`; anything else by `sites.agc`, which lists every place
+  of a module that names a function, type, field, variant, constant or builtin
+  (one pass, a worklist over `check/const_walk.agc`). The names are the linked
+  names (`@N::name`), a field is the pair of the struct that `Checked.types`
+  gives the target and its name, a builtin method is `Checked.resolved`; the
+  tree has no span for the name inside a call or a pattern, so `written` reads
+  the dotted name from the text. `refs.agc` picks the site that holds the
+  position and keeps the sites of its target in every linked module. The
   commands are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py`,
-  `tests/test_spec_type_at.py` and `tests/test_spec_symbol.py`.
+  `tests/test_spec_type_at.py`, `tests/test_spec_symbol.py` and
+  `tests/test_spec_refs.py`.
 - Analysis (`analysis/`, §39, `std/analysis`): `analysis.agc` is the one
-  implementation of `check`, `outline`, `type-at` and `symbol` that `app/` and
-  `stdlib/analysis.agc` call (`symbol` is not in the library yet; `front.agc`
-  holds the read, link and check they share with `run` and `compile`). It
-  returns the plain structs of `model.agc` (no enum; `""` and empty lists for
-  absent values; `ok` is a reserved field name, so `Checked.passed`), converted
-  in `convert.agc`; the JSON and text printers in `query/` take those structs,
-  so what the CLI prints is what the library returns. A diagnostic is
-  `diagnostics/diagnostic_model.agc` (`diagnostic_json.agc` writes it,
-  `diagnostic_read.agc` reads it back). Unsaved buffers are
-  `modules/overlay.agc` over the Workspace (`check --stdin` is one buffer).
-  `stdlib/analysis.agc` compiles the files of `stdlib/CORE` as
+  implementation of `check`, `outline`, `type-at`, `symbol` and `refs` that
+  `app/` and `stdlib/analysis.agc` call (`symbol` and `refs` are not in the
+  library yet; `front.agc` holds the read, link and check they share with `run`
+  and `compile`). It returns the plain structs of `model.agc` (no enum; `""`
+  and empty lists for absent values; `ok` is a reserved field name, so
+  `Checked.passed`), converted in `convert.agc`; the JSON and text printers in
+  `query/` take those structs, so what the CLI prints is what the library
+  returns. A diagnostic is `diagnostics/diagnostic_model.agc`
+  (`diagnostic_json.agc` writes it, `diagnostic_read.agc` reads it back).
+  Unsaved buffers are `modules/overlay.agc` over the Workspace (`check --stdin`
+  is one buffer). `stdlib/analysis.agc` compiles the files of `stdlib/CORE` as
   `std/internal/compiler/`, which only std modules may import
   (`resolve_import.agc`; `..` is allowed in a std module while the path stays in
   `std/`). Anything the library needs to import must be in `stdlib/CORE`.
