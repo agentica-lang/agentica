@@ -2,6 +2,22 @@
 
 $narrow: vars.$narrow;
 
+// Applies its content to :root when the page is dark: an explicit choice
+// (data-theme="dark", set by the head script and theme.js) or, with no choice,
+// the system preference. data-theme="light" wins over the system preference.
+// The content is declarations or nested rules, so one block feeds both rules.
+@mixin dark {
+  :root[data-theme="dark"] {
+    @content;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      @content;
+    }
+  }
+}
+
 :root {
   --bg: #ffffff;
   --fg: #1f2328;
@@ -29,26 +45,33 @@ $narrow: vars.$narrow;
   --sidebar-width: 16rem;
   --layout-width: 80rem;
   --content-width: 50rem;
+  color-scheme: light dark;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1217;
-    --fg: #e6edf3;
-    --muted: #9198a1;
-    --border: #2d333b;
-    --accent: #ff7b72;
-    --link: #6cb6ff;
-    --code-bg: #161b22;
-    --mark-bg: #2a1a1c;
-    --shadow: 0 6px 18px rgb(0 0 0 / 45%);
-    --search-hit-bg: #5c4a00;
-    --search-hit-fg: #fff8d6;
-    --syn-keyword: #ff7b72;
-    --syn-string: #a5d6ff;
-    --syn-number: #79c0ff;
-    --syn-name: #d2a8ff;
-    --syn-type: #ffa657;
-    --syn-comment: #8b949e;
-  }
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+@include dark {
+  --bg: #0f1217;
+  --fg: #e6edf3;
+  --muted: #9198a1;
+  --border: #2d333b;
+  --accent: #ff7b72;
+  --link: #6cb6ff;
+  --code-bg: #161b22;
+  --mark-bg: #2a1a1c;
+  --shadow: 0 6px 18px rgb(0 0 0 / 45%);
+  --search-hit-bg: #5c4a00;
+  --search-hit-fg: #fff8d6;
+  --syn-keyword: #ff7b72;
+  --syn-string: #a5d6ff;
+  --syn-number: #79c0ff;
+  --syn-name: #d2a8ff;
+  --syn-type: #ffa657;
+  --syn-comment: #8b949e;
 }

@@ -64,3 +64,60 @@
     display: block;
   }
 }
+
+// The theme button needs the room: the footer and the release link still show the version.
+@media (max-width: 30rem) {
+  .version {
+    display: none;
+  }
+}
+
+.theme-toggle {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--code-bg);
+  color: var(--fg);
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 2px;
+  }
+
+  .icon {
+    display: inline-flex;
+  }
+
+  .icon-sun {
+    display: none;
+  }
+
+  svg {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+}
+
+.js .theme-toggle {
+  display: inline-flex;
+}
+
+// The button shows the theme it switches to: the moon on a light page, the sun on a dark one.
+@include dark {
+  .theme-toggle {
+    .icon-moon {
+      display: none;
+    }
+
+    .icon-sun {
+      display: inline-flex;
+    }
+  }
+}

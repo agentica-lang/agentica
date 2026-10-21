@@ -14,7 +14,7 @@
   {{- with .OutputFormats.Get "markdown" }}
   <link rel="{{ .Rel }}" type="{{ .MediaType.Type }}" href="{{ .Permalink }}">
   {{- end }}
-  <script>document.documentElement.classList.add("js")</script>
+  <script>document.documentElement.classList.add("js");try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body>
   {{ partial "header.html" . }}
@@ -25,6 +25,9 @@
     </main>
   </div>
   {{ partial "footer.html" . }}
+  {{- with resources.Get "js/theme.js" | js.Build (dict "minify" true "targetPath" "js/theme.js") | fingerprint }}
+  <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
+  {{- end }}
   {{- with resources.Get "js/nav.js" | js.Build (dict "minify" true "targetPath" "js/nav.js" "params" (dict "narrow" site.Params.narrow)) | fingerprint }}
   <script src="{{ .RelPermalink }}" integrity="{{ .Data.Integrity }}" crossorigin="anonymous" defer></script>
   {{- end }}
