@@ -154,14 +154,20 @@ changes only how diagnostics print; answers keep the text form.
   name whose span contains the position, with that span and its source text. On
   the name of a field access, it is the whole access (`user.email` above). It
   also gives the definition of what the expression names: a function, a struct,
-  an enum, a variant, a field, a constant or a type alias, with the span of the
-  declaration and of its name. The core answers a local (a parameter, a binding
-  or a loop variable) with its type and no definition, and a builtin with its
-  type and no definition; their definitions and docs come later. Line and column
-  are 1-based, in the units of diagnostics. The position must be on a token: a
-  blank between tokens, a comment, a keyword and the end of a line are on no
-  expression, even inside the span of one. `FILE` is a path of the disk (never a
-  `std/` module), checked with its imports; it needs no `main` (§39.6).
+  an enum, a variant, a field or a constant, with the span of the declaration
+  and of its name. A type argument (`Models.User` in `List[Models.User]`) is
+  answered in a later PR, with the definition of a type alias. The core answers
+  a local (a parameter, a binding or a loop variable) with its type and no
+  definition, and a builtin with its type and no definition; their definitions
+  and docs come later. Line and column are 1-based and count code points, as
+  diagnostics do (an emoji is one column, not two UTF-16 units; the LSP
+  converts). The position must be on a token of an expression: a blank between
+  tokens, a comment, the end of a line, the body text of a heredoc (only its
+  interpolations answer) and a keyword that is part of no expression (`return`,
+  `end`, `case`) are on no expression, even inside the span of one. A keyword
+  that belongs to an expression (`try`, `do`, `and`, `!`) answers that
+  expression. `FILE` is a path of the disk (never a `std/` module), checked
+  with its imports; it needs no `main` (§39.6).
 - **`type-at --stdin FILE:LINE:COL`**: the text of `FILE` is the standard input,
   as for `check --stdin FILE`; `FILE` need not exist, and its folder resolves
   the imports. The position stands in for the `FILE` argument.
@@ -250,13 +256,15 @@ skipped: [...]}`,
 - `type-at`:
   `{version, command, position: {file, line, column}, kind, text, type, span,
 definition}`.
-  `kind` is `"name"` when the position is on a name (a variable, a constant, a
-  function or type that is named, the callee of a call, the field or method
-  after the dot) and `"expression"` otherwise; `span` is always the whole
-  expression and `text` its source. `definition` is `null` or a span with the
-  keys `kind` (`function`, `struct`, `enum`, `variant`, `field`, `constant` or
-  `alias`), `name` and `name_span` (a span of the name): the span is the whole
-  declaration, as in `outline`.
+  `kind` is an open set: a client must accept a value it does not know. Today
+  it is `"name"` when the position is on a name (a variable, a constant, a
+  function name, the callee of a call, the field or method after the
+  dot) and `"expression"` otherwise; later PRs add values (such as `"builtin"`)
+  without a new `version`. `span` is always the whole expression and `text` its
+  source. `definition` is `null` or a span with the keys `kind` (`function`,
+  `struct`, `enum`, `variant`, `field` or `constant`; `alias` comes with the
+  answer for a type argument), `name` and `name_span` (a span of the name): the
+  span is the whole declaration, as in `outline`.
 - `skipped`: the roots left out (§39.6), each as `{file, diagnostic}`,
   `diagnostic` being the `--json` diagnostic object.
 
@@ -339,7 +347,8 @@ in the usual three formats.
 
 - **Code:** `QUERY-NO-EXPRESSION`
   - **When:** `type-at` or `refs` at a position outside the file or not on an
-    expression or name (between tokens, on a comment or a keyword)
+    expression or name (between tokens, on a comment, on the body text of a
+    heredoc or on a keyword that is part of no expression)
   - **Span:** the one character at the position, in `FILE`; past the end of a
     line, the empty span at the line's end; past the last line, the empty span
     at the end of the file

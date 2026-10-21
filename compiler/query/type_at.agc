@@ -109,6 +109,7 @@ def on_name?(expr: Ast.Expr, text: String, offset: Int) -> Bool
   case expr
     Ast.Expr.Name(_) -> return true
     Ast.Expr.ConstRef(_) -> return true
+    # Not reached yet: no type is recorded for a TypeName (see Definitions.of_expr), so it is never the answer.
     Ast.Expr.TypeName(_) -> return true
     Ast.Expr.FunctionRef(_) -> return true
     Ast.Expr.FieldAccess(node) -> return At.holds?(node.name_span, offset)

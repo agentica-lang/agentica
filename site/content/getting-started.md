@@ -140,7 +140,7 @@ src/orders.agc:22:9-22:19 user.email: String
 src/models.agc:4:3 field email
 ```
 
-Line and column count from 1. A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. In this version a local variable has a type and no definition.
+Line and column count from 1, in code points (an emoji is one column). A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. In this version a local variable has a type and no definition.
 
 ## Options
 

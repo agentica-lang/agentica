@@ -85,7 +85,9 @@ you have not saved); FILE is a path of the disk, never a `std/` module.
 
 A type of another file is written as the file writes it: `Models.User` through
 `import Models from "models"`, a bare name when the file does not import it
-under an alias.
+under an alias. Line and column count code points (an emoji is one column; an
+editor that counts UTF-16 units converts). A type argument (`Models.User` in
+`List[Models.User]`) is not answered yet.
 
 ## JSON of type-at
 
@@ -94,10 +96,12 @@ type, span, definition}`.
 
 - `kind` is `name` when the position is on a name (a variable, a constant, the
   callee of a call, the field or method after the dot) and `expression`
-  otherwise; `span` is always the whole expression and `text` its source.
+  otherwise. It is an open set (later versions add values such as `builtin`):
+  accept a value you do not know. `span` is always the whole expression and
+  `text` its source.
 - `definition` is null, or the span of the declaration (`{file, range}`) with
-  `kind` (`function`, `struct`, `enum`, `variant`, `field`, `constant` or
-  `alias`), `name` and `name_span`, the span of the name. It is null for a local
+  `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`),
+  `name` and `name_span`, the span of the name. It is null for a local
   (a parameter, a binding, a loop variable or a pattern name) and for a builtin
   such as `String.upcase`; both still have their type.
 
@@ -108,5 +112,7 @@ type, span, definition}`.
   an import; it is printed as `check` prints it. Fix the program first.
 - 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file) or
   `QUERY-NO-EXPRESSION`: the position is not on a token of an expression (a
-  blank between tokens, a comment, a keyword, past the end of a line or of the
-  file). Its span is the position. Move onto the expression.
+  blank between tokens, a comment, a keyword that is part of no expression such
+  as `return`, `end` or `case`, the body text of a heredoc, past the end of a
+  line or of the file). Its span is the position. Move onto the expression; a
+  keyword of an expression (`try`, `do`, `and`, `!`) answers that expression.

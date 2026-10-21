@@ -270,8 +270,9 @@ def rewrite_constant_member(
 end
 
 # The span of the member in `NAME.member`: the parser made one name of the call, so the member is found in the text
-# after NAME. Only blanks and the dot lie between them, on one line, so the first occurrence is the member. The span
-# of the call stands in if the text does not hold it.
+# after NAME. Only blanks and the dot lie between them, so the first occurrence is the member; a line break may stand
+# before the dot (`NAME\n  .member`), so the line and the column come from the text, not from the start of the call.
+# The span of the call stands in if the text does not hold the member.
 def member_span(cx: Resolve.Context, node: Ast.Call, length: Int, member: String) -> Source.Span
   start = node.span.start
   after = start.offset + length
@@ -283,10 +284,27 @@ def member_span(cx: Resolve.Context, node: Ast.Call, length: Int, member: String
   if !found.ok?
     return node.span
   end
-  gap = length + found.unwrap!
-  first = Source.Position(offset: start.offset + gap, line: start.line, column: start.column + gap)
+  first = member_position(cx.me.text, after, found.unwrap!, start.line, start.column + length)
   last = Source.Position(offset: first.offset + member.length, line: first.line, column: first.column + member.length)
   return Source.Span(start: first, stop: last)
+end
+
+# The position `gap` characters after `from`, where `from` is at `line` and `column`: each line break in between moves
+# the line on and puts the column back to 1 after the break.
+def member_position(text: String, from: Int, gap: Int, line: Int, column: Int) -> Source.Position
+  at = from
+  row = line
+  col = column
+  while at < from + gap
+    if text.at(at) == "\n"
+      row += 1
+      col = 1
+    else
+      col += 1
+    end
+    at += 1
+  end
+  return Source.Position(offset: from + gap, line: row, column: col)
 end
 
 # The expressions that only rewrite their parts, in the order of their fields.

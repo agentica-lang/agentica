@@ -1,5 +1,5 @@
 ## Where the declaration of an expression is (docs/future/39-semantic-cli.md, 39.3): the function a call names, the
-## variant of an enum constructor, the struct of a construction, the field of a field access, a constant, an alias. The
+## variant of an enum constructor, the struct of a construction, the field of a field access, a constant. The
 ## names of the linked program are unique (`@N::name` for a file that is not the root), so one scan of its declarations
 ## finds the declaration. A builtin and a local have no declaration here, so they have no definition.
 
@@ -8,8 +8,9 @@ import Linker from "../modules/linker"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 
-## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field`, `alias` or `constant`), its name
-## as the file wrote it, and the file (the `file` of its LinkedModule), the whole declaration and its name.
+## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `alias` is for a
+## type argument, which no answer gives yet), its name as the file wrote it, and the file (the `file` of its
+## LinkedModule), the whole declaration and its name.
 export struct Definition
   kind: String
   name: String
@@ -31,6 +32,8 @@ export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr
     Ast.Expr.Call(node) -> return top_level(modules, node.name)
     Ast.Expr.FunctionRef(node) -> return top_level(modules, node.name)
     Ast.Expr.Construct(node) -> return top_level(modules, node.type_name)
+    # Not reached yet: the checker records no type for a TypeName (a type argument), so `type-at` skips it. The arm
+    # waits for a later PR that answers a type argument; it is also the only way to an `alias` definition.
     Ast.Expr.TypeName(node) -> return top_level(modules, node.name)
     Ast.Expr.ConstRef(node) -> return top_level(modules, node.name)
     Ast.Expr.EnumConstructor(node) -> return variant(find(modules, node.enum_name), node.variant_name)

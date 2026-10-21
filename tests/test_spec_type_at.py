@@ -2,6 +2,7 @@
 (docs/future/39-semantic-cli.md, 39.3 to 39.7). The cases read the JSON form and assert the type, the kind, the spans,
 the codes and the exit codes, never message text; one case reads the text form."""
 import json
+import os
 
 import pytest
 
@@ -20,6 +21,11 @@ export enum Shape
   Square
 end
 
+export enum Slot[T]
+  Full(T)
+  Empty
+end
+
 export def make(name: String) -> User
   return User(name: name, age: 3)
 end
@@ -31,6 +37,7 @@ ORDERS = '''import Models from "models"
 import Queue from "std/queue"
 
 LIMIT = 10
+NAMES = ["a", "b"]
 
 def total(user: Models.User) -> Int
   return user.age + 1
@@ -42,6 +49,10 @@ def build(names: List[String]) -> List[Models.User]
   upper = names.map do |name: String| name.upcase end
   fixed = LIMIT. to_s
   pile = Queue.new()
+  built = Models.User(name: "n", age: 1)
+  slot = Models.Slot.Full(made)
+  count = NAMES
+    .size
   return [made]
 end
 '''
@@ -117,6 +128,12 @@ def test_a_method_call_is_a_name_on_its_method_and_a_builtin_has_no_definition(p
     assert (constant["kind"], constant["type"], constant["text"]) == ("name", "String", "LIMIT. to_s")
     on_receiver = answer(("orders.agc", where(ORDERS, "LIMIT. to_s", 1)), cwd=program)
     assert (on_receiver["kind"], on_receiver["type"], on_receiver["definition"]["kind"]) == ("name", "Int", "constant")
+    # A dot that starts the next line: the member is a name on its own line, and the dot before it is not.
+    leading = answer(("orders.agc", where(ORDERS, ".size", 1)), cwd=program)
+    assert (leading["kind"], leading["type"], leading["text"]) == ("name", "Int", "NAMES\n    .size")
+    assert end(leading["span"]) == where(ORDERS, ".size", 5)
+    on_dot = answer(("orders.agc", where(ORDERS, ".size")), cwd=program)
+    assert (on_dot["kind"], on_dot["type"]) == ("expression", "Int")
 
 
 def test_a_call_to_a_user_function_has_the_function_as_definition(program):
@@ -154,6 +171,49 @@ def test_an_imported_type_is_written_through_the_alias_of_the_file(program):
     assert (own["type"], own["definition"]["kind"]) == ("User", "struct")
 
 
+def test_a_constant_and_a_struct_have_their_declaration_as_definition(program):
+    constant = answer(("orders.agc", where(ORDERS, "NAMES\n", 2)), cwd=program)
+    assert (constant["kind"], constant["type"], constant["text"]) == ("name", "List[String]", "NAMES")
+    declared = constant["definition"]
+    assert (declared["kind"], declared["name"], declared["file"]) == ("constant", "NAMES", "orders.agc")
+    assert start(declared["name_span"]) == where(ORDERS, "NAMES = ")
+    assert end(declared["name_span"]) == where(ORDERS, "NAMES = ", 5)
+    # A construction through the alias of the import names the struct, whose type is written with that alias.
+    built = answer(("orders.agc", where(ORDERS, "Models.User(name", 8)), cwd=program)
+    assert (built["kind"], built["type"]) == ("name", "Models.User")
+    struct = built["definition"]
+    assert (struct["kind"], struct["name"], struct["file"]) == ("struct", "User", "models.agc")
+    assert start(struct["name_span"]) == where(MODELS, "User\n")
+    assert start(struct) == where(MODELS, "struct User")
+
+
+def test_a_generic_enum_of_an_imported_file_is_written_through_the_alias_in_its_arguments(program):
+    report = answer(("orders.agc", where(ORDERS, "Models.Slot.Full", 13)), cwd=program)
+    assert (report["type"], report["text"]) == ("Models.Slot[Models.User]", "Models.Slot.Full(made)")
+    variant = report["definition"]
+    assert (variant["kind"], variant["name"], variant["file"]) == ("variant", "Full", "models.agc")
+
+
+def test_an_absolute_path_with_a_drive_colon_is_the_file_and_is_answered_back(program):
+    file = str(program / "orders.agc")
+    line, column = where(ORDERS, "user.age", 5)
+    report = answer((file, (line, column)), cwd=program)
+    assert (report["kind"], report["type"], report["text"]) == ("name", "Int", "user.age")
+    # The files of the answer are printed as `check` prints them (relative to the folder when below it), so they are
+    # not compared whole; the import of the file is found beside it all the same.
+    assert (report["position"]["line"], report["position"]["column"]) == (line, column)
+    assert report["position"]["file"].endswith("orders.agc") and report["span"]["file"].endswith("orders.agc")
+    assert (report["definition"]["name"], report["definition"]["file"].endswith("models.agc")) == ("age", True)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="host-only: Windows forbids a colon in a file name")
+def test_a_file_name_with_a_colon_is_the_file_since_the_last_two_colons_end_it(tmp_path):
+    (tmp_path / "a:b.agc").write_text("def f() -> Int\n  return 12\nend\n", encoding="utf-8")
+    report = answer(("a:b.agc", (2, 10)), cwd=tmp_path)
+    assert (report["type"], report["text"], report["position"]["file"]) == ("Int", "12", "a:b.agc")
+    assert report["span"]["file"] == "a:b.agc"
+
+
 def test_a_position_that_is_on_no_expression_is_query_no_expression_at_the_position(program):
     cases = {
         "a blank between tokens": (where(ORDERS, "user.age + 1", 8), 1),
@@ -170,13 +230,28 @@ def test_a_position_that_is_on_no_expression_is_query_no_expression_at_the_posit
         }, label
 
 
+def test_a_keyword_of_an_expression_answers_it_and_a_heredoc_body_only_by_its_interpolation(tmp_path):
+    source = ("def f(n: Int, flag: Bool, r: Result[Int]) -> Result[String]\n  v = try r\n  w = !flag\n  both = flag and flag\n"
+              "  text = <<~TXT\n    hello #{n} world\n    second\n  TXT\n  return ok(text)\nend\n")
+    (tmp_path / "k.agc").write_text(source, encoding="utf-8")
+    on_try = answer(("k.agc", where(source, "try r")), cwd=tmp_path)
+    assert (on_try["text"], on_try["type"]) == ("try r", "Int")
+    assert answer(("k.agc", where(source, "and flag", 1)), cwd=tmp_path)["text"] == "flag and flag"
+    assert answer(("k.agc", where(source, "!flag")), cwd=tmp_path)["text"] == "!flag"
+    for needle in ("return ok", "end\n", "hello", "second"):
+        problem(type_at(("k.agc", where(source, needle)), cwd=tmp_path), "QUERY-NO-EXPRESSION", 2)
+    interpolated = answer(("k.agc", where(source, "#{n}", 2)), cwd=tmp_path)
+    assert (interpolated["text"], interpolated["type"]) == ("n", "Int")
+
+
 def test_past_the_end_of_a_line_or_of_the_file_the_span_is_that_end(program):
     last = ORDERS.count("\n")
+    row = where(ORDERS, "user.age + 1")[0]
     line_end = len("  return user.age + 1") + 1
-    after_line = problem(type_at(("orders.agc", (7, line_end + 5)), cwd=program), "QUERY-NO-EXPRESSION", 2)
-    assert after_line["range"]["start"] == after_line["range"]["end"] == {"line": 7, "column": line_end}
-    on_break = problem(type_at(("orders.agc", (7, line_end)), cwd=program), "QUERY-NO-EXPRESSION", 2)
-    assert on_break["range"]["start"] == {"line": 7, "column": line_end}
+    after_line = problem(type_at(("orders.agc", (row, line_end + 5)), cwd=program), "QUERY-NO-EXPRESSION", 2)
+    assert after_line["range"]["start"] == after_line["range"]["end"] == {"line": row, "column": line_end}
+    on_break = problem(type_at(("orders.agc", (row, line_end)), cwd=program), "QUERY-NO-EXPRESSION", 2)
+    assert on_break["range"]["start"] == {"line": row, "column": line_end}
     after_file = problem(type_at(("orders.agc", (last + 40, 3)), cwd=program), "QUERY-NO-EXPRESSION", 2)
     # The text ends with a line feed, so the end of the file is the empty last line.
     assert after_file["range"]["start"] == after_file["range"]["end"] == {"line": last + 1, "column": 1}
