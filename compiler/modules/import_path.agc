@@ -5,6 +5,7 @@ import Ast from "../syntax/ast"
 import Declarations from "declarations"
 import Diag from "../diagnostics/diagnostic"
 import Failure from "link_failure"
+import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Unicode from "../syntax/unicode"
 import Workspace from "workspace"
 
@@ -93,7 +94,7 @@ end
 ## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
 ## links), so it is made canonical first, as the key of a loaded file is.
 export def stored_file(workspace: Workspace.Workspace, root_dir: String, file: String) -> String
-  if file.starts_with?("std/") or file.starts_with?("<prelude>/")
+  if file.starts_with?("std/") or file.starts_with?(PRELUDE_PREFIX)
     return file
   end
   real = workspace.real_path.call(file)
