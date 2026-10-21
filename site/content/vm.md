@@ -1,6 +1,6 @@
 ---
 title: The Aurora VM
-weight: 5
+weight: 6
 description: How Agentica runs your program, the bytecode VM called Aurora, and the libraries it is built on.
 ---
 
