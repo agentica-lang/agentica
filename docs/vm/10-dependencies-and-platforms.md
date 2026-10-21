@@ -64,7 +64,8 @@ architecture, a library outside that list or missing hardening.
     shallow, tag `openssl-3.5.9`. Linked statically in the release
     (`AGENTICA_OPENSSL=vendored`, 10.0). The default, `system`, links the system
     OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes
-    building OpenSSL. Only `vm/tls_openssl.c` includes OpenSSL headers (10.3).
+    building OpenSSL. Only the OpenSSL adapter files (`vm/tls_openssl.c`,
+    `vm/digest_openssl.c`, `vm/tls_trust*.c`) include OpenSSL headers (10.3).
 
 **License rule.** Vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib, Apache-2.0 or similarly permissive. No copyleft. Its license
