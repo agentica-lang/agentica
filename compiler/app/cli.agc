@@ -454,6 +454,7 @@ def test(session: Session, words: List[String]) -> Int
     Opts.Parsed.Broken(message) ->
       return emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))
     Opts.Parsed.Usage(message, shown) -> return finish(Report.usage(message, shown))
+    Opts.Parsed.Refused(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
     Opts.Parsed.Ready(ready) -> return finish(Driver.run(ready, session.settings))
   end
 end

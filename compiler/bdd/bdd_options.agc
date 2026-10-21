@@ -22,10 +22,12 @@ export struct Options
 end
 
 ## What the arguments are: options to run with; a usage error of the user (RUNTIME-BDD-USAGE, with the options read so
-## far, which say how to report it); or a mistake in the driver options, which is a bug of the caller.
+## far, which say how to report it); a flag that `agentica test` refuses, as it does in front of `test`; or a mistake
+## in the driver options, which is a bug of the caller.
 export enum Parsed
   Ready(Options)
   Usage(String, Options)
+  Refused(String)
   Broken(String)
 end
 
@@ -107,6 +109,8 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       at += 2
     elsif word == "--json" or word == "--ai"
       at += 1
+    elsif word == "--deny-run" or word == "--deny-native"
+      return Parsed.Refused("test does not take #{word} yet")
     elsif word.starts_with?("--")
       return Parsed.Usage("unknown option #{word}", shown)
     else

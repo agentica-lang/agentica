@@ -227,5 +227,7 @@ def test_other_systems_refuse_extern_at_load(tmp_path):
 
 @pytest.mark.parametrize("flag", ["--deny-native", "--deny-run"])
 def test_test_refuses_deny_native(tmp_path, flag):
-    result = agentica(flag, "test", cwd=tmp_path)
-    assert result.code == 2
+    # In front of `test` or after it, the same refusal: no report, exit 2.
+    for words in ([flag, "test"], ["test", flag], ["--json", "test", flag]):
+        result = agentica(*words, cwd=tmp_path)
+        assert (result.code, result.stdout) == (2, ""), words
