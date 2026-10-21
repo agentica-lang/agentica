@@ -150,7 +150,8 @@ type, span, definition, help}`.
 ## Partial answers
 
 While you edit, the program often does not check. `type-at --partial` and `refs
---partial` answer anyway when only some functions fail to check: exit 0, the
+FILE:LINE:COL --partial` (no NAME or PATH) answer anyway when only some
+functions fail to check: exit 0, the
 usual JSON plus `"partial": true` and `diagnostics` (the `--json` objects of the
 functions that failed, in program order). A complete answer has neither key, so
 without errors the bytes are those of the command without the option.
@@ -205,7 +206,7 @@ NAME is written as the code writes it:
 - `Map.get`, `puts`: a builtin, with the `help` object and no place.
 
 A folder is every `*.agc` file below it, in bytewise order of the path, without
-hidden folders, `agc_libs/` and links. The files are linked on their own, so the
+hidden folders, `agc_libs/` and links. The files are linked together, so the
 answer needs no `main` and no type check; a file that does not lex, parse or
 link is under `skipped` and the rest still answer. Matches come in the order the
 files were linked, then by position. `--stdin FILE` is the text of FILE (it need
@@ -240,18 +241,24 @@ declaration as `outline` prints it (`field`, `variant`); each skipped file is
 
 # References to a name
 
-`agentica refs FILE:LINE:COL` lists every use of the declaration that the name
-at a position stands for, in FILE and the files it imports. Run it before you
-change a field, a variant or a function, and keep the list: it tells
-`Models.User` from a local `User`, and a field `name` of one struct from that of
-another, which `rg` cannot. Positions, `--stdin FILE:LINE:COL`, `file` names and
-the exit codes are those of `type-at`; the program is checked (exit 1 on an
-error), and a use in a file that only imports FILE is not seen, so ask from the
-file that links everything you change.
+`agentica refs NAME|FILE:LINE:COL [PATH...]` lists every use of a declaration,
+named or found by the name at a position. Run it before you change a field, a
+variant or a function, and keep the list: it tells `Models.User` from a local
+`User`, and a field `name` of one struct from that of another, which `rg`
+cannot. Positions, `--stdin FILE:LINE:COL`, `file` names and the exit codes are
+those of `type-at`; the program is checked (exit 1 on an error).
+
+The files searched are linked together with what they import, so a use in a
+file that only imports the declaration is found if that file is among them.
+`PATH...` are files or folders, as for `symbol`. A NAME searches `PATH...`
+(default `.`). A position links FILE and `PATH...`, and FILE alone when there is
+no PATH, so pass the folder that holds the uses (`agentica refs
+src/models.agc:4:3 src/`).
 
 ```sh
-agentica refs src/orders.agc:22:14
-agentica --json refs src/orders.agc:22:14
+agentica refs Models.User.email src/
+agentica refs src/orders.agc:22:14 src/
+agentica --json refs src/orders.agc:22:14 src/
 ```
 
 ```text
@@ -268,20 +275,28 @@ struct, enum, variant, field, constant, type alias, local, parameter or builtin
 work; two names that look alike but are different declarations are never mixed
 (the `i` of two loops, the `note` of two branches of an `if`).
 
+NAME is written as for `symbol` and is resolved the same way, but it must
+select one declaration: `total` or `Models.total` that two files declare is
+QUERY-AMBIGUOUS-NAME, and the help lists each candidate as `FILE:LINE:COL`, to
+paste as the position form. A builtin (`puts`, `List.map`) is a name too.
+
 A position on the module alias of `Models.total(u)` selects the function
-`total`, not the module `Models`. A position on a name in an import line is
-QUERY-NO-EXPRESSION: an import is not a reference, so ask from a use or from the
-declaration.
+`total`, not the module `Models`. A position on a name of an import list
+(`make` of `import {make as create} from "models"`, `create` too) selects the
+imported declaration. A position on a module alias or a path in an import line
+is QUERY-NO-EXPRESSION: a module is not a declaration.
 
 `{version: 1, command: "refs", query, definition, builtin, references,
 skipped}`.
 
-- `definition` is null for a builtin, else
-  `{kind, name, module, exported, signature, span, name_span}`: `kind` as in
-  `type-at` (a local is `parameter`, `local`, `loop` or `pattern`), `span` the
-  whole declaration and `name_span` the name; a field adds `struct`, a variant
-  `enum`. The definition is not in `references`.
-- `builtin` is the name of the builtin (`File.read`, `List.map`), else null.
+- `definition` is null for a builtin, else the object of a `symbol` match
+  (`{kind, name, module, exported, signature, doc, span, name_span}`, a field
+  adds `type` and `struct`, a variant `payload` and `enum`); `span` is the
+  whole declaration, `export` included, and `name_span` the name. A local is
+  `parameter`, `local`, `loop` or `pattern`, with no doc. The definition is not
+  in `references`.
+- `builtin` is the name of the builtin (`File.read_text`, `List.map`), else
+  null.
 - `references`: `{kind, function, span}`, files in the order they were linked
   (FILE first), then by position. `kind` is `call`, `value` (`&f`, a constant),
   `type` (an annotation), `construct` (a struct construction, a `with`, or a
@@ -290,13 +305,16 @@ skipped}`.
   local, `x += 1` included). `function` is the enclosing function or null. It is
   an open set: accept a value you do not know. An empty list is an answer, exit
   0.
-- `skipped` is always `[]` for now.
+- `skipped[]`: the files of `PATH...` left out, as for `symbol`. In the text
+  form each is `skipped FILE: CODE` on stderr.
 
 ## Exit codes of refs
 
 - 0: the answer.
-- 1: the program has an error; fix it first, or ask with `--partial` for a
-  function, type or variant.
-- 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file, a name in place
-  of a position) or `QUERY-NO-EXPRESSION`: the position is on no name, or on a
-  name in an import line.
+- 1: the program has an error, or FILE (or every file of `PATH...`) does not
+  link; fix it first, or ask with `--partial` for a function, type or variant
+  (function and type uses need no check in the full design, but this version
+  always checks).
+- 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file or path, a missing
+  NAME), `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` or `QUERY-NO-EXPRESSION`:
+  the position is on no name, or on a module alias or a path in an import line.

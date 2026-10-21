@@ -37,7 +37,7 @@ end
 
 ## A file of the program once it is loaded. named maps each local name of an import list to what it names. name is the
 ## path the file is stored under (Paths.stored_name, or `pkg/name@version/path` for a file of a package), and origin
-## the package it belongs to.
+## the package it belongs to. imports lists the keys of the files it imports, in the order of its import lines.
 export struct Module
   key: String
   file: String
@@ -52,6 +52,7 @@ export struct Module
   aliases: Map[String, String]
   paths: Map[String, String]
   named: Map[String, Named]
+  imports: List[String]
 end
 
 ## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a
@@ -89,6 +90,7 @@ struct Frame
   paths: Map[String, String]
   named: Map[String, Named]
   imports: List[Ast.ImportDecl]
+  imported: List[String]
   next: Int
   pending: String
 end
@@ -104,6 +106,7 @@ struct Walk
   kept: Map[String, Kept]
   root_dir: String
   build: Resolve.Build
+  prefixed: Bool
 end
 
 # A file that was read and parsed, ready to join the walk.
@@ -120,6 +123,22 @@ end
 struct Collected
   names: Map[String, Declarations.Kind]
   public: Map[String, Declarations.Kind]
+end
+
+## One root of load_roots: the path as it was given, the key of its file, the folder of the root and, when it did not
+## load, why (a packed failure read back, link_failure.agc).
+export struct Entry
+  typed: String
+  key: String
+  root_dir: String
+  failure: Ast.Optional[Failure.Failure]
+end
+
+## What load_roots gave: every module of the roots that loaded, and one Entry for each root, in the order given. The
+## modules of a root that failed are not in `loaded`.
+export struct Roots
+  loaded: Loaded
+  entries: List[Entry]
 end
 
 # A tree for a file, from the Kept files or from the parser, and whether the parser made it.
@@ -144,7 +163,68 @@ end
 ## file that appeared, vanished or changed since the earlier walk is met, and the walk fails or differs as it would
 ## without `parses`.
 export def load_with(root: String, settings: Env.Settings, parses: Parses) -> Result[Loaded]
+  finished = try load_root(settings, empty_walk(false, parses), root)
+  return ok(
+    Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir, parsed: finished.parsed),
+  )
+end
+
+## Loads several roots into one set of modules: a file that two roots reach is read, parsed and entered once, and every
+## module, the roots too, gets the prefix "@N::". Each root is a transaction: the walk of a root that fails is dropped
+## as a whole, so none of its modules stays, and the next root starts from the walk before it. A root whose file an
+## earlier root already loaded adds nothing. `parses` is taken as `load_with` takes it.
+export def load_roots(roots: List[String], settings: Env.Settings, parses: Parses) -> Roots
+  walk = empty_walk(true, parses)
+  entries: List[Entry] = []
+  for root in roots
+    key = settings.workspace.real_path.call(root).unwrap_or(root)
+    loaded = load_root(settings, walk, root)
+    if loaded.ok?
+      walk = loaded.unwrap!
+      entries = entries.push(
+        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: Ast.Optional.Absent),
+      )
+    else
+      failure = Failure.unpack_failure(loaded.message)
+      entries = entries.push(
+        Entry(typed: root, key: key, root_dir: walk.root_dir, failure: Ast.Optional.Present(failure)),
+      )
+    end
+  end
+  return Roots(
+    loaded: Loaded(order: walk.order, modules: walk.done, root_dir: walk.root_dir, parsed: walk.parsed),
+    entries: entries,
+  )
+end
+
+# The walk before any file, over the trees of `parses`. `prefixed` is true when the root files get a "@N::" prefix too
+# (load_roots); load keeps the names of its one root.
+def empty_walk(prefixed: Bool, parses: Parses) -> Walk
+  build = Resolve.Build(libs_dir: "", scope: Packages.scope_of(Project.Project.Bare))
+  return Walk(
+    stack: [],
+    seen: {},
+    done: {},
+    order: [],
+    next_id: parses.top,
+    parsed: 0,
+    kept: parses.kept,
+    root_dir: "",
+    build: build,
+    prefixed: prefixed,
+  )
+end
+
+# Loads `root` and its imports into `walk`. The root is parsed from the next free id of the files before it (or taken
+# from the kept trees), and its folder and packages are its own: the project is found from the root file. A root that
+# `walk` holds already adds nothing.
+def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   workspace = settings.workspace
+  known = workspace.real_path.call(root)
+  if known.ok? and walk.done.has_key?(known.unwrap!)
+    # The folder is this root's own, not that of the root whose walk loaded the file.
+    return ok(walk.with(root_dir: Paths.directory_of(known.unwrap!)))
+  end
   file = workspace.resolve_path.call(root).unwrap_or(root)
   text = try root_text(workspace, root, file)
   key = workspace.real_path.call(root)
@@ -155,22 +235,11 @@ export def load_with(root: String, settings: Env.Settings, parses: Parses) -> Re
       Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp),
     )
   end
-  taken = try take(parses.kept, parses.top, key.unwrap!, file, text)
+  taken = try take(walk.kept, walk.next_id, key.unwrap!, file, text)
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
   scope = try Packages.check_manifests(workspace, settings.env, Packages.scope_of(project))
   build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)
-  empty = Walk(
-    stack: [],
-    seen: {},
-    done: {},
-    order: [],
-    next_id: parses.top,
-    parsed: 0,
-    kept: parses.kept,
-    root_dir: root_dir,
-    build: build,
-  )
   first = Parsed(
     key: key.unwrap!,
     file: file,
@@ -180,11 +249,8 @@ export def load_with(root: String, settings: Env.Settings, parses: Parses) -> Re
     name: Paths.stored_name(root_dir, key.unwrap!),
     origin: Packages.project_origin(),
   )
-  walk = try enter(settings, empty, first, taken.fresh)
-  finished = try run(settings, walk)
-  return ok(
-    Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir, parsed: finished.parsed),
-  )
+  entered = try enter(settings, walk.with(root_dir: root_dir, build: build), first, taken.fresh)
+  return run(settings, entered)
 end
 
 # The tree of the file `key` with `text`: the kept one when its text is the same, and else the parse from `next_id`.
@@ -233,7 +299,12 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
 end
 
 def finish(walk: Walk, frame: Frame) -> Walk
-  module = frame.module.with(aliases: frame.aliases, paths: frame.paths, named: frame.named)
+  module = frame.module.with(
+    aliases: frame.aliases,
+    paths: frame.paths,
+    named: frame.named,
+    imports: frame.imported,
+  )
   return walk.with(
     stack: walk.stack.take(walk.stack.size - 1),
     seen: walk.seen.put(module.key, 0),
@@ -268,7 +339,8 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
     aliases = aliases.put(alias, target)
     paths = paths.put(alias, decl.path)
   end
-  with_frame = replace_top(walk, after_read(frame.with(paths: paths), aliases, target, decl))
+  noted = frame.with(paths: paths, imported: frame.imported.push(target))
+  with_frame = replace_top(walk, after_read(noted, aliases, target, decl))
   # The packages loaded so far are kept whether or not this file is new.
   known = with_frame.with(build: with_frame.build.with(scope: found.scope))
   state = walk.seen.get(target, -1)
@@ -418,7 +490,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
   collected = try collect(settings, parsed.file, program.declarations)
   count = walk.seen.size + 1
   prefix = "@#{count}::"
-  if walk.order.size == 0
+  if walk.order.size == 0 and !walk.prefixed
     prefix = ""
   end
   module = Module(
@@ -435,6 +507,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     aliases: {},
     paths: {},
     named: {},
+    imports: [],
   )
   frame = Frame(
     module: module,
@@ -442,6 +515,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     paths: {},
     named: {},
     imports: Declarations.imports_of(program.declarations),
+    imported: [],
     next: 0,
     pending: "",
   )

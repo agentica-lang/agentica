@@ -75,6 +75,7 @@ query/query_options.agc
 query/query_position.agc
 query/refs.agc
 query/refs_json.agc
+query/refs_name.agc
 query/sites.agc
 query/symbol.agc
 query/symbol_json.agc

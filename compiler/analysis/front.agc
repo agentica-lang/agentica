@@ -104,6 +104,11 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
   end
 end
 
+## Checks `linked`, a program that `Linker.link_programs` made from several files, as `query_file` does.
+export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome
+  return check(linked, settings, false)
+end
+
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> return Outcome.Rejected(link_problem(failure))

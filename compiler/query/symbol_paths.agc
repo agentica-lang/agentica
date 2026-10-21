@@ -51,16 +51,28 @@ export def expand(
   if buffer != ""
     roots = [root_of(workspace, buffer)]
   end
+  return with_paths(workspace, roots, asked, usage)
+end
+
+## The roots of the position form of `refs`: `file`, the file of the position, first, then the files of `paths`, which
+## may be none (the folder `.` is not a default here: the file alone is linked).
+export def expand_from(workspace: Workspace.Workspace, file: String, paths: List[String], usage: String) -> Expanded
+  return with_paths(workspace, [root_of(workspace, file)], paths, usage)
+end
+
+# `roots` and then the files of `asked`, in order and without repeats.
+def with_paths(workspace: Workspace.Workspace, roots: List[Root], asked: List[String], usage: String) -> Expanded
+  found = roots
   for path in asked
     case files_of(workspace, trimmed(path), usage)
       Listed.Refused(problem) -> return Expanded.Refused(problem)
       Listed.Files(typed) ->
         for file in typed
-          roots = with_root(roots, root_of(workspace, file))
+          found = with_root(found, root_of(workspace, file))
         end
     end
   end
-  return Expanded.Files(roots)
+  return Expanded.Files(found)
 end
 
 def files_of(workspace: Workspace.Workspace, path: String, usage: String) -> Listed

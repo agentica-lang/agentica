@@ -31,9 +31,10 @@ check a signature with `agentica help NAME`.
 5. `agentica help NAME` (`--json` too) prints a signature; `agentica help` lists
    namespaces; unknown names exit 2. `agentica doc PATH` prints the exported API
    of a file or a `std/` module. `agentica outline FILE`, `agentica type-at
-   FILE:LINE:COL`, `agentica refs FILE:LINE:COL` and `agentica symbol NAME
-   [PATH...]` query code without reading it (`references/queries.md`);
-   `type-at` and `refs` take `--partial` while the code does not check.
+   FILE:LINE:COL`, `agentica refs NAME|FILE:LINE:COL [PATH...]` and `agentica
+   symbol NAME [PATH...]` query code without reading it
+   (`references/queries.md`); `type-at` and `refs FILE:LINE:COL` take
+   `--partial` while the code does not check.
    Flags: `--allow-run` (for `Process.spawn`), `--seed N`, `--max-steps N`,
    `--json`.
 

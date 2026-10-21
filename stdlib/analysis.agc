@@ -101,9 +101,6 @@ export type Skipped = Model.Skipped
 ## The answer of `symbol`.
 export type Symbols = Model.Symbols
 
-## The declaration that `refs` found.
-export type Declaration = Model.Declaration
-
 ## One use of a declaration.
 export type Reference = Model.Reference
 
@@ -188,7 +185,7 @@ export def type_at(session: Session, path: String, line: Int, column: Int) -> Re
 end
 
 ## Returns where `name` is declared in the modules linked from the files and folders of `paths`, as `agentica symbol`
-## answers (`.` when `paths` is empty). A folder means every `*.agc` file below it. Each file is linked on its own, and
+## answers (`.` when `paths` is empty). A folder means every `*.agc` file below it. The files are linked together, and
 ## the ones that do not link are in `skipped`. Every file with a buffer in the session is searched first, as `--stdin`
 ## does, whether or not `paths` names it (so a query cannot be scoped to a folder while other buffers are open), in the
 ## bytewise order of their canonical paths, whatever order the buffers were put in; a path of `paths` that a buffer

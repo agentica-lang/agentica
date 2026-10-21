@@ -19,12 +19,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica type-at` on a local (a parameter, a binding, a `for` variable or a
   name in a `case` pattern) gives its type and a definition at its binding, on a
   use and on the binding itself.
-- `agentica refs FILE:LINE:COL [--json]` lists every reference to the name at a
-  position (a function, type, field, variant, constant, local or builtin) in the
-  file and what it imports; `--stdin` reads the file from standard input.
+- `agentica refs NAME|FILE:LINE:COL [PATH...] [--json]` lists every reference to
+  a name or to the name at a position (a function, type, field, variant,
+  constant, local or builtin) in the files of PATH and what they import; a
+  position on a name of an import list selects the imported declaration, and a
+  name that is ambiguous or unknown is `QUERY-AMBIGUOUS-NAME` or
+  `QUERY-NOT-FOUND`. The `definition` has the fields of a `symbol` match.
+  `--stdin` reads a file from standard input.
 - `agentica type-at` and `agentica refs` take `--partial`: a program in which
   some functions do not check is still answered (`"partial": true` and the
   `diagnostics` in the JSON), from the functions that check and from the link.
+  For `refs` it goes with a position and no PATH.
 - `Std.source(path)` gives the text of a `std/` source that the binary carries,
   such as `"queue.agc"`, to any program.
 - `std/analysis` answers the questions of `check`, `outline`, `type-at`,

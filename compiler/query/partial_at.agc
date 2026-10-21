@@ -85,7 +85,7 @@ def named(
   case Refs.innermost(sites, offset)
     Ast.Optional.Absent -> return missed
     Ast.Optional.Present(site) ->
-      definition = Refs.defined(linked.modules, site.target)
+      definition = Refs.definition_of(linked.modules, site.target)
       return Diag.Outcome.Done(
         TypeAt.Answer(
           kind: kind_of(definition, site),

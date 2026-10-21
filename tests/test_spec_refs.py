@@ -1,7 +1,9 @@
-"""`agentica refs` through the product CLI: the references to the name at a position of a checked program
-(docs/future/39-semantic-cli.md, 39.3 to 39.7). The cases read the JSON form and assert kinds, spans, files, functions,
-the codes and the exit codes, never message text; one case reads the text form."""
+"""`agentica refs` through the product CLI: the references to a name, or to the name at a position, in a checked program
+linked from FILE and the PATH... of the command (docs/future/39-semantic-cli.md, 39.3 to 39.7). The cases read the JSON
+form and assert kinds, spans, files, functions, the codes and the exit codes, never message text; one case reads the
+text form."""
 import json
+import re
 
 import pytest
 
@@ -108,6 +110,23 @@ def answer(position, *words, cwd, stdin=None):
     return json.loads(result.stdout)
 
 
+def ask(*words, cwd, stdin=None, style="--json"):
+    """`agentica refs WORDS...` as typed: a name or a position first, then the paths."""
+    return run(cli() + [style, "refs", *words], env=vm_environment(), cwd=cwd, stdin=stdin)
+
+
+def told(*words, cwd, stdin=None):
+    result = ask(*words, cwd=cwd, stdin=stdin)
+    assert (result.code, result.stderr) == (0, "")
+    return json.loads(result.stdout)
+
+
+def spot(file, source, needle, inside=0, nth=1):
+    """The `FILE:LINE:COL` word of a position found by text."""
+    line, column = where(source, needle, inside, nth)
+    return f"{file}:{line}:{column}"
+
+
 def places(report):
     """The references as (file, line, column, kind, function), in the order of the answer."""
     return [(found["span"]["file"], *start(found["span"]), found["kind"], found["function"])
@@ -134,7 +153,8 @@ def test_a_function_has_its_calls_and_values_through_every_way_to_name_it(progra
         "function", "make", "models.agc", True)
     assert definition["signature"] == "make(name: String) -> User"
     assert start(definition["name_span"]) == where(MODELS, "make(name")
-    assert start(definition["span"]) == where(MODELS, "def make")
+    # The span is the whole declaration, `export` included, as `symbol` and `outline` give it.
+    assert start(definition["span"]) == where(MODELS, "export def make")
     # Through the alias (`Models.make`), through a pipe and through a name imported `as create`; the definition is not
     # one of the references, and each reference is the name alone.
     line_a, col_a = where(ORDERS, "Models.make(", 7)
@@ -347,8 +367,8 @@ def test_a_position_on_no_name_is_query_no_expression_at_the_position(program):
 def test_a_check_error_is_exit_1_with_its_code_and_a_mistake_in_the_words_is_query_usage(program):
     (program / "bad.agc").write_text('def f() -> Int\n  return "x"\nend\n', encoding="utf-8")
     assert problem(refs(("bad.agc", (2, 10)), cwd=program), "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
-    for words in ([], ["orders.agc"], ["orders.agc:3"], ["orders.agc:0:3"], ["orders.agc:3:4", "extra"],
-                  ["--stdin"], ["--unknown", "orders.agc:3:4"], ["absent.agc:1:1"], ["total"]):
+    for words in ([], [""], ["orders.agc:3"], ["orders.agc:0:3"], ["orders.agc:3:4", "extra"], ["total", "absent"],
+                  ["--stdin"], ["--unknown", "orders.agc:3:4"], ["absent.agc:1:1"], ["--stdin", "a.agc:1"]):
         result = run(cli() + ["--json", "refs", *words], env=vm_environment(), cwd=program, stdin="")
         diagnostic = problem(result, "QUERY-USAGE", 2)
         assert diagnostic["file"] == "<arguments>", words
@@ -359,3 +379,236 @@ def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk(program):
     report = answer(("orders.agc", (2, 10)), "--stdin", cwd=program, stdin=buffer)
     assert (report["definition"]["kind"], places(report)) == ("parameter", [("orders.agc", 2, 10, "binding", "double")])
     assert (program / "orders.agc").read_text(encoding="utf-8") == ORDERS
+
+
+def as_set(report):
+    """The definition, the builtin and the references in a fixed order: the order of the references follows the files as
+    they were linked, which depends on the file the question starts from."""
+    ordered = sorted(report["references"], key=lambda found: (found["span"]["file"], start(found["span"])))
+    return report["definition"], report["builtin"], ordered
+
+
+def symbol_match(name, *paths, cwd):
+    result = run(cli() + ["--json", "symbol", name, *paths], env=vm_environment(), cwd=cwd)
+    assert (result.code, result.stderr) == (0, "")
+    matches = json.loads(result.stdout)["matches"]
+    assert len(matches) == 1, name
+    return matches[0]
+
+
+# A name, and a position of the same declaration: the file, the text to look for and how far into it.
+DECLARATIONS = [
+    ("Models.make", "orders.agc", ORDERS, "Models.make", 8),
+    ("make", "orders.agc", ORDERS, "Models.make", 8),
+    ("Models.User", "orders.agc", ORDERS, "Models.User", 8),
+    ("User", "orders.agc", ORDERS, "Models.User", 8),
+    ("User.age", "orders.agc", ORDERS, "user.age", 5),
+    ("Models.User.age", "orders.agc", ORDERS, "user.age", 5),
+    ("Pet.name", "orders.agc", ORDERS, "pet.name", 4),
+    ("Models.Shape.Circle", "orders.agc", ORDERS, "Models.Shape.Circle(radius)", 14),
+    ("Shape.Square", "orders.agc", ORDERS, "Models.Shape.Square", 14),
+    ("Models.Shape", "orders.agc", ORDERS, "Models.Shape.Square", 8),
+    ("LIMIT", "orders.agc", ORDERS, "+ LIMIT", 2),
+    ("unused", "models.agc", MODELS, "unused", 2),
+]
+
+
+def test_a_name_selects_what_its_position_selects_and_the_definition_is_the_match_of_symbol(program):
+    for name, file, source, needle, inside in DECLARATIONS:
+        by_name = told(name, ".", cwd=program)
+        by_position = told(spot(file, source, needle, inside), ".", cwd=program)
+        assert as_set(by_name) == as_set(by_position), name
+        assert by_name["query"] == name
+        # The definition has the fields of a `symbol` match, `doc` and the type of a field or the payload of a variant
+        # included, and is that match.
+        assert by_name["definition"] == symbol_match(name, ".", cwd=program), name
+    assert told("User", cwd=program)["definition"]["doc"] == "A user."
+    age = told("User.age", cwd=program)["definition"]
+    assert (age["struct"], age["type"], age["signature"]) == ("User", "Int", "age: Int")
+    circle = told("Shape.Circle", cwd=program)["definition"]
+    assert (circle["enum"], circle["payload"]) == ("Shape", ["Float"])
+    # A local has the same fields; its kind is the binding's and it has no doc.
+    local = answer(("orders.agc", where(ORDERS, "user: Models.User", 1)), cwd=program)["definition"]
+    assert (local["kind"], local["doc"], local["exported"]) == ("parameter", None, False)
+    assert set(local) == set(told("make", cwd=program)["definition"])
+
+
+def test_a_name_lists_the_uses_in_every_file_of_the_paths_and_the_text_form_reads_like_the_position_form(program):
+    report = told("Models.User.age", cwd=program)
+    assert places(report) == [
+        ("models.agc", *where(MODELS, "age: 3"), "construct", "make"),
+        ("orders.agc", *where(ORDERS, "user.age", 5), "read", "total"),
+        ("orders.agc", *where(ORDERS, "with(age", 5), "construct", "build"),
+        ("report.agc", *where(REPORT, "user.age", 5), "read", "render"),
+    ]
+    text = ask("Models.User.age", cwd=program, style="--ai")
+    assert (text.code, text.stderr) == (0, "")
+    age = where(MODELS, "age: Int")
+    assert text.stdout.split("\n")[0] == f"models.agc:{age[0]}:{age[1]} definition field User.age: Int"
+    assert len(text.stdout.split("\n")) == 6
+
+
+def test_paths_link_more_files_so_a_file_that_only_imports_the_target_is_seen(program):
+    position = spot("models.agc", MODELS, "struct User", 7)
+    alone = told(position, cwd=program)
+    assert {found[0] for found in places(alone)} == {"models.agc"}
+    # `orders.agc` imports `models.agc`; `report.agc` imports both.
+    with_orders = told(position, "orders.agc", cwd=program)
+    assert {found[0] for found in places(with_orders)} == {"models.agc", "orders.agc"}
+    everything = told(position, ".", cwd=program)
+    assert {found[0] for found in places(everything)} == {"models.agc", "orders.agc", "report.agc"}
+    report_only = told(position, "report.agc", cwd=program)
+    assert as_set(report_only) == as_set(everything)
+    assert [found for found in places(everything) if found[0] == "report.agc"] == [
+        ("report.agc", *where(REPORT, "Models.User", 7), "type", "render")]
+    # The file of the position comes first, then the others in the order they were linked; a file is listed once.
+    assert places(everything)[0][0] == "models.agc"
+    from_orders = told(spot("orders.agc", ORDERS, "Models.User", 8), ".", cwd=program)
+    assert [found[0] for found in places(from_orders)][:2] == ["orders.agc", "orders.agc"]
+    assert len(set(places(everything))) == len(places(everything))
+    assert (everything["skipped"], everything["builtin"]) == ([], None)
+
+
+def test_with_paths_every_span_asked_back_gives_the_same_set(program):
+    for name in ("Models.make", "Models.User", "User.age", "Shape.Circle", "Models.Shape", "LIMIT"):
+        report = told(name, ".", cwd=program)
+        spans = [found["span"] for found in report["references"]] + [report["definition"]["name_span"]]
+        assert len(spans) > 2, name
+        for span in spans:
+            line, column = start(span)
+            again = told(f"{span['file']}:{line}:{column}", ".", cwd=program)
+            assert as_set(again) == as_set(report), (name, span["file"], line, column)
+
+
+def test_a_path_that_does_not_link_is_skipped_and_the_file_of_the_position_must_link(program):
+    (program / "broken.agc").write_text("export def broken(\n", encoding="utf-8")
+    position = spot("models.agc", MODELS, "export def make", 11)
+    for report in (told(position, ".", cwd=program), told("make", ".", cwd=program)):
+        assert [(left["file"], left["diagnostic"]["code"]) for left in report["skipped"]] == [
+            ("broken.agc", "LEX-UNCLOSED-DELIMITER")]
+        assert report["definition"]["name"] == "make" and len(report["references"]) == 3
+    text = ask("make", ".", cwd=program, style="--ai")
+    assert (text.code, text.stderr.strip()) == (0, "skipped broken.agc: LEX-UNCLOSED-DELIMITER")
+    # The file of the position is a root of its own: when it does not link there is nothing to ask about.
+    broken = problem(ask("broken.agc:1:1", ".", cwd=program), "LEX-UNCLOSED-DELIMITER", 1)
+    assert broken["file"] == "broken.agc"
+    # So is a name when every file is left out.
+    lonely = program / "lonely"
+    lonely.mkdir()
+    (lonely / "only.agc").write_text("export def only(\n", encoding="utf-8")
+    assert problem(ask("only", "lonely", cwd=program), "LEX-UNCLOSED-DELIMITER", 1)["file"] == "lonely/only.agc"
+    # A file that links but whose dependency does not is skipped with that file's diagnostic.
+    (program / "needy.agc").write_text('import Gone from "./gone"\n\ndef needy() -> Int\n  return 1\nend\n',
+                                       encoding="utf-8")
+    report = told("make", ".", cwd=program)
+    assert sorted((left["file"], left["diagnostic"]["code"]) for left in report["skipped"]) == [
+        ("broken.agc", "LEX-UNCLOSED-DELIMITER"), ("lonely/only.agc", "LEX-UNCLOSED-DELIMITER"),
+        ("needy.agc", "CHECK-IMPORT-IO")]
+
+
+def test_a_name_that_nothing_declares_is_not_found_and_one_that_several_declarations_answer_to_is_ambiguous(tmp_path):
+    for name, text in (("one.agc", "export def shared() -> Int\n  return 1\nend\n"),
+                       ("two.agc", "export def shared() -> Int\n  return 2\nend\n"),
+                       ("use_one.agc", 'import M from "one"\n\ndef a() -> Int\n  return M.shared()\nend\n'),
+                       ("use_two.agc", 'import M from "two"\n\ndef b() -> Int\n  return M.shared()\nend\n')):
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    missing = problem(ask("sharedd", cwd=tmp_path), "QUERY-NOT-FOUND", 2)
+    assert missing["file"] == "<arguments>" and missing["help"]
+    assert missing["range"] == {"start": {"line": 1, "column": 1}, "end": {"line": 1, "column": 1}}
+    for name in ("shared", "M.shared"):
+        ambiguous = problem(ask(name, cwd=tmp_path), "QUERY-AMBIGUOUS-NAME", 2)
+        assert ambiguous["file"] == "<arguments>"
+        assert ambiguous["range"] == {"start": {"line": 1, "column": 1}, "end": {"line": 1, "column": 1}}
+        # The help names each candidate as FILE:LINE:COL, which is the position form.
+        candidates = re.findall(r"[\w./]+:\d+:\d+", ambiguous["help"])
+        assert candidates == ["one.agc:1:12", "two.agc:1:12"], name
+        found = [told(candidate, ".", cwd=tmp_path) for candidate in candidates]
+        assert [report["definition"]["module"] for report in found] == ["one.agc", "two.agc"]
+        assert [[use["span"]["file"] for use in report["references"]] for report in found] == [
+            ["use_one.agc"], ["use_two.agc"]]
+    # The paths decide which declarations a name sees.
+    assert told("M.shared", "one.agc", "use_one.agc", cwd=tmp_path)["definition"]["module"] == "one.agc"
+    assert problem(ask("M.shared", "one.agc", "use_one.agc", "use_two.agc", cwd=tmp_path),
+                   "QUERY-AMBIGUOUS-NAME", 2)
+    # Two files that declare `main` do not mix: every module has its own prefix.
+    (tmp_path / "a.agc").write_text("def main() -> Void\n  main()\nend\n", encoding="utf-8")
+    (tmp_path / "b.agc").write_text('def main() -> Void\n  puts("b")\n  main()\nend\n', encoding="utf-8")
+    mains = told("a.agc:1:6", "b.agc", cwd=tmp_path)
+    assert places(mains) == [("a.agc", 2, 3, "call", "main")]
+    assert places(told("b.agc:1:6", "a.agc", cwd=tmp_path)) == [("b.agc", 3, 3, "call", "main")]
+    assert problem(ask("main", "a.agc", "b.agc", cwd=tmp_path), "QUERY-AMBIGUOUS-NAME", 2)
+
+
+def test_a_builtin_is_found_by_name_with_no_definition(program):
+    for name, needle, inside in (("puts", "puts(i)", 1), ("List.map", "names.map", 7)):
+        by_name = told(name, "orders.agc", cwd=program)
+        assert (by_name["definition"], by_name["builtin"]) == (None, name)
+        assert as_set(by_name) == as_set(told(spot("orders.agc", ORDERS, needle, inside), cwd=program))
+    nothing = told("File.read_text", ".", cwd=program)
+    assert (nothing["definition"], nothing["builtin"], nothing["references"]) == (None, "File.read_text", [])
+    assert problem(ask("Nope.read", ".", cwd=program), "QUERY-NOT-FOUND", 2)
+
+
+def test_a_std_module_is_named_with_its_std_path_or_through_the_alias_of_a_file(program):
+    (program / "queued.agc").write_text(
+        'import Q from "std/queue"\n\ndef fresh() -> Int\n  q = Q.new()\n  return Q.size(q)\nend\n', encoding="utf-8")
+    through_path = told("std/queue.new", "queued.agc", cwd=program)
+    assert (through_path["definition"]["module"], through_path["definition"]["kind"]) == ("std/queue.agc", "function")
+    assert ("queued.agc", 4, 9, "call", "fresh") in places(through_path)
+    assert as_set(told("Q.new", "queued.agc", cwd=program)) == as_set(through_path)
+    assert as_set(told("queued.agc:4:9", cwd=program)) == as_set(through_path)
+    field = told("std/queue.QueueState.items", "queued.agc", cwd=program)
+    assert (field["definition"]["kind"], field["definition"]["struct"]) == ("field", "QueueState")
+
+
+def test_a_position_on_a_name_of_an_import_list_selects_the_imported_declaration(program):
+    expected = told("make", ".", cwd=program)
+    for needle, inside in (("make as create", 0), ("make as create", 3), ("create}", 2)):
+        report = told(spot("orders.agc", ORDERS, needle, inside), cwd=program)
+        assert as_set(report)[:2] == as_set(expected)[:2], (needle, inside)
+        assert places(report)[0][0] == "orders.agc" or report["references"] == []
+    constant = told(spot("orders.agc", ORDERS, "{LIMIT", 2), ".", cwd=program)
+    assert as_set(constant) == as_set(told("LIMIT", ".", cwd=program))
+    assert constant["definition"]["kind"] == "constant"
+    # An alias names a module and the path is text: neither is a declaration.
+    for needle, inside in (("Models from", 1), ('"models"', 2), ("from", 1), ("import", 2)):
+        diagnostic = problem(refs(("orders.agc", where(ORDERS, needle, inside)), cwd=program), "QUERY-NO-EXPRESSION", 2)
+        assert diagnostic["file"] == "orders.agc", needle
+
+
+def test_a_check_error_of_a_path_is_exit_1_and_the_standard_input_stands_for_a_file_of_the_paths(program):
+    (program / "bad.agc").write_text('def f() -> Int\n  return "x"\nend\n', encoding="utf-8")
+    assert problem(ask("make", ".", cwd=program), "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
+    assert problem(ask(spot("models.agc", MODELS, "export def make", 11), "bad.agc", cwd=program),
+                   "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
+    (program / "bad.agc").unlink()
+    # A buffer for `models.agc`: it is searched first, the disk is not written.
+    buffer = MODELS + "\nexport def fresh() -> Int\n  return 1\nend\n"
+    report = told("fresh", "orders.agc", "--stdin", "models.agc", cwd=program, stdin=buffer)
+    assert (report["definition"]["module"], report["definition"]["name"], report["references"]) == (
+        "models.agc", "fresh", [])
+    assert start(report["definition"]["name_span"]) == where(buffer, "fresh")
+    by_position = told("--stdin", spot("orders.agc", ORDERS, "Models.make", 8), "models.agc", cwd=program,
+                       stdin=ORDERS + "\ndef extra() -> Int\n  return total(Models.make(\"z\"))\nend\n")
+    assert by_position["definition"]["name"] == "make"
+    assert (program / "models.agc").read_text(encoding="utf-8") == MODELS
+
+
+def test_a_main_of_a_root_keeps_its_signature_and_one_of_an_imported_file_is_not_checked(tmp_path):
+    (tmp_path / "bad.agc").write_text('def main(x: Int) -> Void\n  puts("a")\nend\n', encoding="utf-8")
+    (tmp_path / "other.agc").write_text("def other() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (tmp_path / "user.agc").write_text('import L from "lib"\n\ndef f() -> Int\n  return L.g()\nend\n', encoding="utf-8")
+    (tmp_path / "lib.agc").write_text(
+        "export def main(x: Int) -> Int\n  return x\nend\n\nexport def g() -> Int\n  return 1\nend\n", encoding="utf-8")
+    # The root of a position, alone or with other roots, is checked as `type-at` checks it.
+    for words in (["bad.agc:1:5"], ["bad.agc:1:5", "other.agc"], ["other.agc:1:5", "bad.agc"]):
+        diagnostic = problem(ask(*words, cwd=tmp_path), "CHECK-MAIN", 1)
+        assert (diagnostic["file"], diagnostic["range"]["start"]) == ("bad.agc", {"line": 1, "column": 1}), words
+    assert told("user.agc:3:5", cwd=tmp_path)["definition"]["name"] == "f"
+
+
+def test_a_file_name_is_not_found_with_a_hint_and_partial_goes_with_a_position_alone(program):
+    hinted = problem(ask("models.agc", cwd=program), "QUERY-NOT-FOUND", 2)
+    assert "models.agc:LINE:COL" in hinted["help"]
+    for words in (["total", "--partial"], [spot("orders.agc", ORDERS, "total"), "models.agc", "--partial"]):
+        assert problem(ask(*words, cwd=program), "QUERY-USAGE", 2)["file"] == "<arguments>", words
