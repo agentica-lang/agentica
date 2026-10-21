@@ -290,7 +290,8 @@ Read first: `references/vm.md`.
 - To hold the CPU past a deadline, use a builtin that does not yield, such as a
   plain `List.sort` of a big list (turn cost n·⌈log2 n⌉). `sort_by` with a block
   is resumable and can be switched out between its block calls
-  (`docs/vm/10-io-scheduler.md` §4.3), so it cannot hold a deadline.
+  (`docs/vm/10-io-scheduler.md` §10.2.1, "Builtins"), so it cannot hold a
+  deadline.
 - `socketserver` (and so `ThreadingHTTPServer`) listens with
   `request_queue_size = 5`. A test that opens more concurrent connections sets
   `request_queue_size = 32` on its server class (`tests/test_vm_task_map.py`).

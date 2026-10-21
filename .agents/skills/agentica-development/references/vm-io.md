@@ -258,6 +258,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     descriptor `vm/output.c` reopened for stdout or stderr.
   - A child run with `--allow-run` can still open `/proc/<VM pid>/fd/N`: the
     check covers the program's own file calls only.
+  - `owns_st` marks the request that frees the file state: open, close, or a
+    handle request after its timeout.
   - the owner-only and lock builtins of the BDD driver port, all pool jobs in
     `work`:
     - `File.open(path, "create_private")` is `OP_OPEN_CREATE`, which
@@ -269,26 +271,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       `FS_MKDIR` error)
     - `File.try_lock` (`OP_TRY_LOCK`) is `flock(LOCK_EX | LOCK_NB)` on the
       handle's `st->fd` after the handle's own lock wait (`blocked`);
-`open_state`
-      is `usable` without the direction check; a handle with a poller (pipe,
-      FIFO) is refused at once, and any other kind that `fstat` in the job says
-      is not a regular file (a device) is `FS_NOT_LOCKABLE`; `done` returns
-      `ok(true)` or `ok(false)`
+      `open_state` is `usable` without the direction check; a handle with a
+      poller (pipe, FIFO) is refused at once, and any other kind that `fstat` in
+      the job says is not a regular file (a device) is `FS_NOT_LOCKABLE`; `done`
+      returns `ok(true)` or `ok(false)`
     - `Path.remove` (`OP_REMOVE`): `unlink` (repeated on `EINTR`), a missing
       path is success, and `EISDIR` calls `agc_remove_tree` (`vm/tree.c`), whose
       negative returns `AGC_TREE_TOO_DEEP` and `AGC_TREE_REFUSED` become
       `FS_TREE_DEEP` and `FS_REFUSED`; a failure inside the tree comes with the
       path of the failed entry (`failed`), which replaces `o->path` in the error
-    - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with
-      `RENAME_NOREPLACE` (macOS: `renameatx_np` with `RENAME_EXCL`); Windows
-      uses `MoveFileExW` with no flags, which fails if the destination exists;
-      there is no cross-volume copy fallback. The second path is `op.to`; the error is
+    - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with `RENAME_NOREPLACE`
+      (macOS: `renameatx_np` with `RENAME_EXCL`); Windows uses `MoveFileExW`
+      with no flags, which fails if the destination exists; there is no
+      cross-volume copy fallback. The second path is `op.to`; the error is
       `FS_RENAME` with both paths
   - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the
-    job
-    has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`, `filesystem:
-    cannot resolve path` with the path and the OS error text, and the result is
-    decoded with `lossy`, one U+FFFD per bad byte)
+    job has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`,
+    `filesystem: cannot resolve path` with the path and the OS error text, and
+    the result is decoded with `lossy`, one U+FFFD per bad byte)
   - `File.each_line` (7.2.1h) and `File.foreach` (17e) share one line reader,
     `agc_line_reader` (`agc_lines_new`, `agc_lines_next`, `agc_lines_stop` in
     `services.h`), a state machine with
@@ -410,27 +410,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - Stdout and stderr: only `vm/output.c` writes them; `vm/process.c` hands a
   child's stderr to `agc_output_forward` and stops reading the pipe while the
-  stream's queue is full. `agc_vm_init` leaves
-  both on the blocking `FILE *` it was given (`base` is null), so the C tests
-and
-  the fuzzer never depend on the loop; `agc_launch_vm` (`vm/launch.c`) calls
-`agc_output_open`
-  after `agc_input_open`. Never `fwrite` to `vm->rt->out.file` or
-  `err.file` from builtin code: use `agc_write`, which parks the task and
-  expects to be run again, so a builtin must work out its text before the
-  call (and pass no text when `agc_output_waiting` says its text already waits)
-  and not touch state after it that a second run would repeat. Text the
-  VM itself prints goes through `agc_notice_begin` and `agc_notice_end`.
-- Stdin and arguments: only `vm/input.c` reads fd 0; `agc_vm_init` leaves
-  the input closed (`fd = -1`, always EOF) and `System.args` empty, and
+  stream's queue is full. `agc_vm_init` leaves both on the blocking `FILE *` it
+  was given (`base` is null), so the C tests and the fuzzer never depend on the
+  loop; `agc_launch_vm` (`vm/launch.c`) calls `agc_output_open` after
+  `agc_input_open`. Never `fwrite` to `vm->rt->out.file` or `err.file` from
+  builtin code: use `agc_write`, which parks the task and expects to be run
+  again, so a builtin must work out its text before the call (and pass no text
+  when `agc_output_waiting` says its text already waits) and not touch state
+  after it that a second run would repeat. Text the VM itself prints goes
+  through `agc_notice_begin` and `agc_notice_end`.
+- Stdin and arguments: only `vm/input.c` reads fd 0; `agc_vm_init` leaves the
+  input closed (`fd = -1`, always EOF) and `System.args` empty, and
   `agc_launch_vm` opens fd 0 (not for the front end of the single binary, which
-reads nothing) and fills `vm->rt->args`, so the C tests and the
-  fuzzer never block on stdin. Stdin text decodes each invalid byte to
-  U+FFFD (Racket ports); arguments decode each invalid byte to `?` and an
-  incomplete sequence at the end to one `?` (Racket in a UTF-8 locale,
-  through glibc `iconv`); the diff test checks this with `LC_ALL=C.UTF-8`.
-  The driver copies a non-file stdin into the VM with a thread that
-  it kills once the VM exits.
+  reads nothing) and fills `vm->rt->args`, so the C tests and the fuzzer never
+  block on stdin. Stdin text decodes each invalid byte to U+FFFD (Racket ports);
+  arguments decode each invalid byte to `?` and an incomplete sequence at the
+  end to one `?` (Racket in a UTF-8 locale, through glibc `iconv`); the diff
+  test checks this with `LC_ALL=C.UTF-8`. The driver copies a non-file stdin
+  into the VM with a thread that it kills once the VM exits.
 
 ## Native Windows files
 

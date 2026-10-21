@@ -110,10 +110,10 @@ rule that a site page shows.
 ## Examples are tests
 
 Every `agentica` code block in `site/content` must be a complete program.
-`tests/test_site_examples.py` checks each one and runs it with the CLI (stdin from an
-optional `input` block right after it), and compares stdout with the
-`output` block that follows. `make test` runs the `SMOKE_PAGES` of that file
-as a smoke; the whole site runs in the slow tier (`make test-slow`).
+`tests/test_site_examples.py` checks each one and runs it with the CLI (stdin
+from an optional `input` block right after it), and compares stdout with the
+`output` block that follows. `make test` runs the `SMOKE_PAGES` of that file as
+a smoke; the whole site runs in the slow tier (`make test-slow`).
 `.github/workflows/site-examples.yml` runs the slow tier of this file alone on
 pull requests that change only `site/content` (CI skips those).
 

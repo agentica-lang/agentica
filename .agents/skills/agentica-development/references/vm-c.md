@@ -31,15 +31,14 @@ Read first: `references/vm.md` (the trust model and the layers).
   levels) is allowed with `// NOLINT(misc-no-recursion)` on the function line.
 - Size arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's
   index and size sums use `uint64_t`.
-- Every `vm/*.c`, `vm/*.h` and `vm/tests/*.c` file starts with a header
-  comment, except the generated `vm/unicode_data.c`, and a new C file needs
-  one too. A source file's header is about 3 to 8 lines of text (the `/*` and
-  `*/` lines do not count): what the file is, its main functions or builtin
-  family, its layer, and where its design lives in `docs/vm/`, as
-`vm/agentica.c`
-  does. A C test's header is 1 to 4 lines on what it tests. A legal header may
-  come before it. *Checked* by `tests/test_vm_style.py` (3 to 8 lines of text
-  for a source file, 1 to 4 for a C test, the generated file skipped).
+- Every `vm/*.c`, `vm/*.h` and `vm/tests/*.c` file starts with a header comment,
+  except the generated `vm/unicode_data.c`, and a new C file needs one too. A
+  source file's header is about 3 to 8 lines of text (the `/*` and `*/` lines do
+  not count): what the file is, its main functions or builtin family, its layer,
+  and where its design lives in `docs/vm/`, as `vm/agentica.c` does. A C test's
+  header is 1 to 4 lines on what it tests. A legal header may come before it.
+  *Checked* by `tests/test_vm_style.py` (3 to 8 lines of text for a source file,
+  1 to 4 for a C test, the generated file skipped).
 - Comments are welcome where the C is complex or not obvious, and they say
   why, not what: an invariant, a subtle ownership or lifetime rule, GC
   reachability (why a pointer is still alive after an allocation), an order

@@ -374,13 +374,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `--max-steps` bounds instructions, not bytes: string ops cost in
   proportion to their size.
 - Strings: `agc_string` keeps the byte and code point counts; build every
-  `String` result with a sizing pass then a fill pass (or one copy), never
-  by repeated concatenation, and search with the KMP finder in
-  `vm/strings.c`, not a naive loop. Racket's `String.trim` is `\s` only
-  (five ASCII bytes); case mapping is the tables plus final sigma
-  (`docs/vm/02-reference-behavior.md` §2.3), and a new contextual case rule must
-come with a
-  generator check, not by hand. Float text goes to `strtod` only after
-  the evaluator's pattern check.
+  `String` result with a sizing pass then a fill pass (or one copy), never by
+  repeated concatenation, and search with the KMP finder in `vm/strings.c`, not
+  a naive loop. Racket's `String.trim` is `\s` only (five ASCII bytes); case
+  mapping is the tables plus final sigma (`docs/vm/02-reference-behavior.md`
+  §2.3), and a new contextual case rule must come with a generator check, not by
+  hand. Float text goes to `strtod` only after the evaluator's pattern check.
 - `string-trim` in `format-diagnostic-ai` trims only ASCII `[ \t\n\f\r]`,
   not Unicode whitespace; the VM matches that.

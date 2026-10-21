@@ -246,14 +246,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`retire` closes the timer and the process handle once the child is gone)
   - the end of the run waits for captured children under one `await_exits` bound
     before it kills them (a second bound waits for the exits)
-  - the child channel (25c, §10.4 "As built (25c)"): `Process.spawn_channel` is
-    `spawn_child` with `channel` true: `agc_chan_pair` (a `uv_socketpair`, or on
-    Windows two `uv_pipe` pairs whose child ends are blocking), stdio slots 3
-    (and 4) that hand the child ends over, and `child_env`, which rebuilds the
-    child environment on every spawn (it removes `AGENTICA_CHANNEL`, removes
-    `UV_USE_IO_URING` when `drop_uring_env`, and adds `AGENTICA_CHANNEL=` with
-    `agc_chan_value()` for a channel spawn only; `AGC_CHANNEL_ENV` is in
-    `vm/services.h`)
+  - the child channel (25c, §10.4 "As built (25c, the child channel)"):
+    `Process.spawn_channel` is `spawn_child` with `channel` true:
+    `agc_chan_pair` (a `uv_socketpair`, or on Windows two `uv_pipe` pairs whose
+    child ends are blocking), stdio slots 3 (and 4) that hand the child ends
+    over, and `child_env`, which rebuilds the child environment on every spawn
+    (it removes `AGENTICA_CHANNEL`, removes `UV_USE_IO_URING` when
+    `drop_uring_env`, and adds `AGENTICA_CHANNEL=` with `agc_chan_value()` for a
+    channel spawn only; `AGC_CHANNEL_ENV` is in `vm/services.h`)
   - the parent end is an `agc_duplex` (`vm/duplex.c`) in `proc.channel`, and the
     `agc_process` has a third pair of lock records, `channel.reader` and
     `channel.writer`
@@ -456,9 +456,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   same over `ssl`, and a raw socket server with canned hostile responses) and
   runs three programs once. Python 3 (standard library only) is required in CI,
   as Node is for TCP: with `CI` set the test fails without it, locally it prints
-a skip. Bumping picohttpparser (`vm/third_party/picohttpparser`): check out the
-new tag inside it, `git add` it, and rerun `vm/tests/http_parse_test.c`, the
-HTTP goldens and `tests/test_vm_http.py`.
+  a skip. Bumping picohttpparser (`vm/third_party/picohttpparser`): check out
+  the new tag inside it, `git add` it, and rerun `vm/tests/http_parse_test.c`,
+  the HTTP goldens and `tests/test_vm_http.py`.
 - **HTTP server (20c; Linux, macOS, Windows)**
   - `vm/http_server.c` on `vm/net.h`; `vm/http_wire.c` on the same parser and
     `vm/http_fields.c`.

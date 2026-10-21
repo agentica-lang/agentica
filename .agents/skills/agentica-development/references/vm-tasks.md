@@ -60,19 +60,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     table says `true` or `false`), a stepper step, the halves of a job whose
     kind says `locked`, and each end of a task; never hold it across a park or
     a turn. Order: sync, a stream's lock, then the inbox's and the run queue's.
-    Held checks: `agc_sync_assert` fails the run when a shared VM reaches
-    one of the checked mutators without the lock (the list is in
+    Held checks: `agc_sync_assert` fails the run when a shared VM reaches one of
+    the checked mutators without the lock (the list is in
     `docs/vm/16-architecture.md` §16.9: the task tree, a channel's waiter
     queues, the logger table, a handle's waiters, holder and `next_owner`,
-    stdin's waiters), and `agc_task_next` fails if a turn ended with it held. `agc_share` turns all of it on;
-    `AGENTICA_VM_TEST_SHARED=1` does it for a whole run on one scheduler (test
-    only): `make test-shared` runs the binary modules that way (CI runs it) and
-    `tests/test_vm_shared.py` has the programs for the rarer paths. A new
-    builtin that touches shared state must set `shared` to true in its row;
-    `vm/tests/sync_test.c` checks that every row of the task, `Task.map`,
-    channel, logger, process, duplex, TCP and HTTP tables is marked, that no
-    row of the String, number and JSON tables is, and chosen rows of the core
-    and `File` tables.
+    stdin's waiters), and `agc_task_next` fails if a turn ended with it held.
+    `agc_share` turns all of it on; `AGENTICA_VM_TEST_SHARED=1` does it for a
+    whole run on one scheduler (test only): `make test-shared` runs the binary
+    modules that way (CI runs it) and `tests/test_vm_shared.py` has the programs
+    for the rarer paths. A new builtin that touches shared state must set
+    `shared` to true in its row; `vm/tests/sync_test.c` checks that every row of
+    the task, `Task.map`, channel, logger, process, duplex, TCP and HTTP tables
+    is marked, that no row of the String, number and JSON tables is, and chosen
+    rows of the core and `File` tables.
 
 - **Path:** `vm/inbox.c`
   - **Owns:** The inbox of the I/O thread (`agc_inbox_open`, `agc_inbox_post`,
@@ -317,21 +317,18 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `Task.map` goldens (`task-map-*`) never race a timeout against work: they
   record step counts and run the `--max-steps` sweep. Its timing cases run
   alone with `make vm-task-map` (`references/vm-tests.md`).
-- Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept
-  out of `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it
-right
+- Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept out of
+  `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it right
   after `make test`). On one scheduler (`AGENTICA_SCHEDULERS=1`), a sleeping
   task and a stdin reader must wake within 250 ms next to CPU, sort and concat
-  tasks, and must not with
-  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only switch that leaves
-  stdout and stderr on the blocking `FILE` fallback, so
+  tasks, and must not with `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only
+  switch that leaves stdout and stderr on the blocking `FILE` fallback, so
   `tests/test_vm_stdout.py` can test that path on Linux) and
-  `AGENTICA_VM_TEST_NO_TURN_COST=1` (a test-only switch that skips turn
-  costs, `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a
-  `FileHandle` in a loop must let `main` close it, and the run must end.
-  Every read from the VM has a 60-second timeout. The test skips when
-  `AGENTICA_VM_BINARY` names another binary. The `task-*` fixtures keep tasks
-  from running side by side where the step-limit span matters, since with
-  several runnable tasks the span depends on the interleaving. Builtins get
-  `vm->task->regs + base`; `Task.spawn` builds the child's frame with
-  `agc_task_call` on the child, never on the caller.
+  `AGENTICA_VM_TEST_NO_TURN_COST=1` (a test-only switch that skips turn costs,
+  `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a `FileHandle` in a loop
+  must let `main` close it, and the run must end. Every read from the VM has a
+  60-second timeout. The test skips when `AGENTICA_VM_BINARY` names another
+  binary. The `task-*` fixtures keep tasks from running side by side where the
+  step-limit span matters, since with several runnable tasks the span depends on
+  the interleaving. Builtins get `vm->task->regs + base`; `Task.spawn` builds
+  the child's frame with `agc_task_call` on the child, never on the caller.

@@ -132,8 +132,9 @@ phase 13).
   relaxes and why.
 - Core grammar only (sections 4–6): user enums and type aliases (the only user
   generics), `case`, file modules with explicit imports/exports, builtin
-  `List[T]`, `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in `docs/future/`
-  until its phase lands. No placeholder files or nodes for later phases.
+  `List[T]`, `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in
+  `docs/future/` until its phase lands. No placeholder files or nodes for later
+  phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
 - Python tests run with pytest (a test-only Poetry dependency) and live in

@@ -62,17 +62,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    whose builtin has no block sets `no_block`, else `start_stepper` checks
    that the last argument is a function.
    Use `List`-style native frames for pure callbacks and a plain blocking
-   builtin when there is no block. Every table entry
-   has a `cost` (`AGC_COST_NONE` or `AGC_COST_SIZE`,
-`docs/vm/10-io-scheduler.md`
-   §10.2.1, "Builtins"): a builtin whose work grows with its input takes
-   `AGC_COST_SIZE` or charges `agc_charge` from inside; never touch
-   `steps_left` for that. CPU work with no wait (`Crypto.sha256`, a sort)
-   stays on the scheduler with that cost; the libuv pool is for blocking
-   calls. State goes in `vm->rt` (shared runtime),
-   `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files`
-   first in file builtins and in `TCP.connect` and `TCP.listen`, so the
-   fuzzer never touches the disk or the network.
+   builtin when there is no block. Every table entry has a `cost`
+   (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm/10-io-scheduler.md` §10.2.1,
+   "Builtins"): a builtin whose work grows with its input takes `AGC_COST_SIZE`
+   or charges `agc_charge` from inside; never touch `steps_left` for that. CPU
+   work with no wait (`Crypto.sha256`, a sort) stays on the scheduler with that
+   cost; the libuv pool is for blocking calls. State goes in `vm->rt` (shared
+   runtime), `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files` first
+   in file builtins and in `TCP.connect` and `TCP.listen`, so the fuzzer never
+   touches the disk or the network.
 
 Rules for the C code:
 
@@ -84,12 +82,12 @@ Rules for the C code:
   span or `span + 1 + i` for argument `i`, with a clear message.
 - Every bounds check on an Int argument uses `__builtin_add_overflow` or
   `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
-- Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d
-  copy, NUL terminated, NULL on an embedded NUL so the caller returns its
-  error message; the caller frees it, usually with its request). Every String
-constructor validates UTF-8
-  or decodes with U+FFFD. Build a String with `agc_make_string` (copies) or
-  `agc_new_string` and fill every byte before it is stored anywhere.
+- Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d copy,
+  NUL terminated, NULL on an embedded NUL so the caller returns its error
+  message; the caller frees it, usually with its request). Every String
+  constructor validates UTF-8 or decodes with U+FFFD. Build a String with
+  `agc_make_string` (copies) or `agc_new_string` and fill every byte before it
+  is stored anywhere.
 - Debug text of a String (`inspect`, and later map-key, `index_of` and
   conversion messages) always goes through `agc_write_form`; never write a
   second escaper.

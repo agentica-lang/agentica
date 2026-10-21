@@ -31,13 +31,14 @@ with a packed `Problem` (`references/stages.md`).
   `ExportDecl`. The command is `app/cli_doc.agc`; the tests are
   `tests/test_spec_doc.py`.
 - Query (`query/`, §39): `agentica outline` parses one file and lists its
-  declarations, private ones too, from the items of `docs/doc_model.agc`.
-  `agentica type-at` links and checks the file (`Pipeline.query_file`,
-  `Checker.check_query`: no `CHECK-MAIN`) and answers for a position: `at.agc`
-  finds the innermost typed expression (a worklist over `check/const_walk.agc`)
-  and `type_at.agc` prints the type through `Types.to_text_as` and
-  `LinkedModule.aliases`. The commands are `app/cli_query.agc`; the tests are
-  `tests/test_spec_outline.py` and `tests/test_spec_type_at.py`.
+  declarations, private ones too, from the items of
+  `compiler/docs/doc_model.agc`. `agentica type-at` links and checks the file
+  (`Pipeline.query_file`, `Checker.check_query`: no `CHECK-MAIN`) and answers
+  for a position: `at.agc` finds the innermost typed expression (a worklist over
+  `check/const_walk.agc`) and `type_at.agc` prints the type through
+  `Types.to_text_as` and `LinkedModule.aliases`. The commands are
+  `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
+  `tests/test_spec_type_at.py`.
 
 ### Pure core, one port
 
@@ -244,9 +245,9 @@ branch's on the same binary:
 `poetry run python tools/refreeze.py` reruns pytest modules
 `tests.test_frontend_<stage>` with `AGENTICA_REFREEZE=1`: a golden mismatch
 rewrites the golden and logs the change. Run it in the Poetry test environment,
-which provides pytest. Flags: `--fast-only` (skip the slow tier), `--stage lower` or
-`--stage lexer,parser`, `--jobs N`. It prints what changed: manifest entries
-(key, sizes, hash prefixes) or a unified diff for a text golden. Other
+which provides pytest. Flags: `--fast-only` (skip the slow tier), `--stage
+lower` or `--stage lexer,parser`, `--jobs N`. It prints what changed: manifest
+entries (key, sizes, hash prefixes) or a unified diff for a text golden. Other
 assertions still fail. It freezes whatever the stage prints, so read `git diff`
 and judge each change. A manifest keeps only hashes; to see an output, run the
 stage by hand.
@@ -340,6 +341,8 @@ a blank line and a `#` line both give one `NL`. Stray text after `end` is
 
 ## Error handling
 
+- A failing test: read the subtest name (a spec case prints its program) and
+  the code the CLI gave.
 - A CLI exit 1 with `file:line:column error[CODE]` and a caret excerpt on
   stderr is a stage diagnostic, not a crash.
 - `*-INTERNAL` or a `RUNTIME-` error with a trace in `compiler/` means a stage
