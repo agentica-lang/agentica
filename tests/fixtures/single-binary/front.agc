@@ -4,7 +4,7 @@
 #   inputs               prints the arguments the binary gave it, joined with spaces
 #   std PATH             prints the std/ source at PATH of stdlib/, or the error
 #   stdin                prints the number of bytes of standard input and their sum, or the error, then does it
-#                        again to show that the second call gives the same answer
+#                        again: the second call reads on from the end
 #   hand-off FILE.agcb [OPTIONS... -- ARGUMENTS...]
 #                        hands the program in FILE to the VM with the options and the arguments
 #   crash                stops with a runtime error, as the driver of `agentica test` could

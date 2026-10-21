@@ -2,10 +2,10 @@
  * The FrontEnd builtins (agc_front_end_builtins): the calls that only the
  * front end of the single binary may make. hand_off gives the compiled
  * program to the driver and ends the front end's run; std_source reads a std/
- * source that the binary carries; stdin_bytes reads the standard input that
- * the front end's runtime does not otherwise have. A user program, or a front end that is run as
- * an ordinary program with `agentica run`, has no agc_front_end in its runtime
- * and fails with RUNTIME-FRONT-END-ONLY. Service layer.
+ * source that the binary carries; stdin_bytes reads standard input, which the
+ * front end's runtime opens only for that call. A user program, or a front end
+ * that is run as an ordinary program with `agentica run`, has no agc_front_end
+ * in its runtime and fails with RUNTIME-FRONT-END-ONLY. Service layer.
  * Design: docs/vm/08-loader-and-cli.md and docs/future/18-front-end-language.md §18.4.
  */
 #include "services.h"
@@ -79,50 +79,25 @@ static agc_value builtin_std_source(agc_vm *vm, agc_value *args, uint32_t span) 
   return agc_error_value("no such std source");
 }
 
-/* All of standard input, read blocking and once: the front end's runtime has no input stream (agc_input_open is for the
- * program that runs after it), so the real descriptor is still the program's, and this is the one place the front end
- * touches it. The front end calls it only for a command that asks (`check --stdin FILE`), so `agentica FILE.agc` leaves
- * the input to the program. stdin is in binary mode (agc_launch_init_streams), so no byte changes on Windows. The bytes
- * or the failure are kept: a second call (the root file is read more than once) gets the same answer. */
-static void read_stdin(agc_front_end *fe) {
-  size_t cap = 65536, len = 0;
-  uint8_t *data = agc_alloc_atomic(cap);
-  fe->stdin_read = true;
-  for (;;) {
-    if (len == cap) {
-      uint8_t *grown = agc_alloc_atomic(cap * 2);
-      memcpy(grown, data, len);
-      data = grown;
-      cap *= 2;
-    }
-    /* One byte past the cap is enough to know that the input is too long. */
-    size_t want = cap - len;
-    if (len + want > AGC_FRONT_END_MAX_STDIN + 1) want = AGC_FRONT_END_MAX_STDIN + 1 - len;
-    size_t got = fread(data + len, 1, want, stdin);
-    len += got;
-    if (len > AGC_FRONT_END_MAX_STDIN) {
-      fe->stdin_error = "standard input is larger than 16777216 bytes"; /* AGC_FRONT_END_MAX_STDIN */
-      return;
-    }
-    if (got < want) {
-      if (ferror(stdin)) fe->stdin_error = "cannot read standard input";
-      break;
-    }
-  }
-  fe->stdin_data = data;
-  fe->stdin_len = len;
-}
-
+/* All of standard input as bytes. The front end's runtime starts with no input stream, so the real descriptor stays
+ * the program's; agc_input_whole opens it on the first call, so only a command that asks (`check --stdin FILE`) reads
+ * it. The bytes come through the one stdin reader (vm/input.c): the task parks while a read is in flight and the
+ * builtin runs again when it ends, so the loop never blocks and a stop signal ends the run as usual. stdin is
+ * in binary mode (agc_launch_init_streams), so no byte changes on Windows. A later call reads on from where this one
+ * stopped: nothing, after the end of a pipe or a file. */
 static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
-  agc_front_end *fe = guarded(vm, span);
-  if (!fe->stdin_read) read_stdin(fe);
-  if (fe->stdin_error) return agc_error_value(fe->stdin_error);
-  if (fe->stdin_len == 0) return agc_result_value(true, vm->rt->empty_list);
-  agc_list_builder out;
-  agc_list_builder_sized(&out, fe->stdin_len);
-  for (size_t k = 0; k < fe->stdin_len; k++) agc_list_builder_push(&out, agc_int(fe->stdin_data[k]));
-  return agc_result_value(true, agc_list_value(agc_list_builder_finish(&out)));
+  guarded(vm, span);
+  agc_list *bytes = NULL;
+  agc_input_status status = agc_input_whole(vm, AGC_FRONT_END_MAX_STDIN, &bytes);
+  if (status == AGC_INPUT_WAIT) return agc_void();
+  if (status == AGC_INPUT_FAILED) return agc_error_value("cannot read standard input");
+  if (!bytes) {
+    char message[64];
+    snprintf(message, sizeof message, "standard input is larger than %zu bytes", AGC_FRONT_END_MAX_STDIN);
+    return agc_error_value(message);
+  }
+  return agc_result_value(true, agc_list_value(bytes));
 }
 
 const agc_builtin agc_front_end_builtins[] = {

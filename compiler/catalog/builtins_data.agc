@@ -758,9 +758,9 @@ ROWS_9: List[Model.Builtin] = [
       implementation: "FrontEnd.stdin_bytes",
       effects: ["process"],
       description: (
-        "Front end only: all of standard input as bytes, read on the first call and kept for the next ones; more " +
-        "than 16 MiB, or a read that fails, is an error. The front end has no input stream otherwise. Any other " +
-        "program fails with RUNTIME-FRONT-END-ONLY."
+        "Front end only: standard input as bytes, read to its end (a later call reads on from there); more than " +
+        "16 MiB, or a read that fails, is an error. The front end has no input stream otherwise. Any other program " +
+        "fails with RUNTIME-FRONT-END-ONLY."
       ),
       alternatives: [],
     ),

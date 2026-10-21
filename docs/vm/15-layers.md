@@ -166,6 +166,10 @@ field of V3, which PR 1 added; it has its own header, `port.h`.
     `agc_poller_close` (a `uv_poll_t` that owns its descriptor; `files.c`, and
     `input.c` in the core)
 
+- **Job:** Read standard input to its end (`FrontEnd.stdin_bytes`)
+  - **Functions:** `agc_input_whole` (`input.c`), so the front end reads
+    through the one stdin reader
+
 - **Job:** Set a timer
   - **Functions:** no own function: an I/O deadline is the job's
     `timeout_ms`, and a wait with only a deadline (`Task.sleep`) is a task

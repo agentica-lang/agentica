@@ -67,7 +67,7 @@ builtin FrontEnd.hand_off forms=1
 builtin FrontEnd.std_source forms=1
   FrontEnd.std_source(path: String) -> Result[String] shape=(String) -> Result(String) rule=Plain impl="FrontEnd.std_source" effects=["process"] desc="Front end only: the text of an embedded std/ source, by its path in stdlib/ such as queue.agc or bdd/gherkin.agc; an unknown path is an error. Any other program fails with RUNTIME-FRONT-END-ONLY."
 builtin FrontEnd.stdin_bytes forms=1
-  FrontEnd.stdin_bytes() -> Result[List[Int]] shape=() -> Result(List(Int)) rule=Plain impl="FrontEnd.stdin_bytes" effects=["process"] desc="Front end only: all of standard input as bytes, read on the first call and kept for the next ones; more than 16 MiB, or a read that fails, is an error. The front end has no input stream otherwise. Any other program fails with RUNTIME-FRONT-END-ONLY."
+  FrontEnd.stdin_bytes() -> Result[List[Int]] shape=() -> Result(List(Int)) rule=Plain impl="FrontEnd.stdin_bytes" effects=["process"] desc="Front end only: standard input as bytes, read to its end (a later call reads on from there); more than 16 MiB, or a read that fails, is an error. The front end has no input stream otherwise. Any other program fails with RUNTIME-FRONT-END-ONLY."
 builtin HttpWire.accept forms=1
   HttpWire.accept(server: HttpServer) -> Result[Socket] shape=(Opaque(HttpServer)) -> Result(Opaque(Socket)) rule=Plain impl="HttpWire.accept" effects=["network"] desc="Internal to std/http: wait for a free slot and the next connection."
 builtin HttpWire.awaited? forms=1

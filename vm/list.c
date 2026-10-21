@@ -299,6 +299,13 @@ agc_list *agc_list_builder_finish(agc_list_builder *b) {
   return b->out;
 }
 
+agc_list *agc_list_of_bytes(const uint8_t *data, size_t n) {
+  agc_list_builder b;
+  agc_list_builder_sized(&b, n);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, agc_int(data[k]));
+  return agc_list_builder_finish(&b);
+}
+
 agc_list *agc_list_from_array(const agc_value *items, size_t n) {
   agc_list_builder b;
   uint32_t kind = n ? kind_of(items[0]) : 0;

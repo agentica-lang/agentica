@@ -2,10 +2,15 @@
 check a buffer that is not saved. Imports, agentica.toml and agc_libs/ resolve from the folder of FILE; every other
 file is read from the disk. The cases run the binary and read the `--json` form: the code, the file and the span."""
 import json
+import os
+import signal
+import subprocess
+import time
 
 import pytest
 
-from tests.agentica_test import binary, run, vm_environment, write_files
+from tests.agentica_test import (POSIX_PYTHON, TARGET_OS, WINDOWS, binary, host_only, run, scaled, vm_environment,
+                                 write_files)
 
 CLEAN = 'def main() -> Void\n  puts("ok")\nend\n'
 # The error is on line 2, columns 12 to 15.
@@ -70,6 +75,9 @@ def test_a_file_that_is_not_on_the_disk_works_and_its_folder_is_the_base_of_the_
     # An absolute path works as well, from any working folder.
     elsewhere = tmp_path / "sub" / ".."
     assert check(elsewhere, USES_UTIL, str(tmp_path / "sub" / "new.agc")).code == 0
+    if TARGET_OS == "windows":
+        # Path.resolve gives backslashes there; the folder of the file is still found.
+        assert check(tmp_path, USES_UTIL, "sub\\new.agc").code == 0
 
 
 def test_an_import_that_is_not_there_and_an_error_in_an_imported_file_are_reported(tmp_path):
@@ -108,6 +116,67 @@ def test_standard_input_over_the_cap_is_a_usage_failure(tmp_path):
     got = check(tmp_path, b"#" * (STDIN_CAP + 1), "new.agc")
     assert (got.code, got.stdout) == (2, "")
     assert got.stderr.startswith("agentica: ")
+
+
+def start_check(work, stdin, **options):
+    """Starts `agentica check --stdin new.agc` in `work` with the descriptor `stdin` as its standard input."""
+    return subprocess.Popen([binary(), "check", "--stdin", "new.agc"], stdin=stdin, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, cwd=work, env=vm_environment(), **options)
+
+
+def default_sigint():
+    """A shell that starts a job in the background makes it ignore SIGINT, and the VM keeps an ignored stop signal
+    ignored: the case wants the default, whoever started pytest."""
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+
+def finish(process):
+    """The exit code and the text of both streams, or a failure (and the process killed) when it does not end."""
+    try:
+        out, err = process.communicate(timeout=scaled(30))
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()
+        raise AssertionError("agentica check --stdin did not end")
+    return process.returncode, out.decode(errors="replace"), err.decode(errors="replace")
+
+
+def test_a_pipe_whose_writer_is_late_is_read_to_its_end(tmp_path):
+    """The read waits on the loop (the reader thread on Windows), and a pipe that is non-blocking, as a parent may
+    leave it, still gives its data once the writer sends it."""
+    read_end, write_end = os.pipe()
+    if POSIX_PYTHON:
+        os.set_blocking(read_end, False)
+    try:
+        process = start_check(tmp_path, read_end)
+    finally:
+        os.close(read_end)
+    try:
+        time.sleep(0.5)
+        os.write(write_end, CLEAN[:10].encode())
+        time.sleep(0.2)
+        os.write(write_end, CLEAN[10:].encode())
+    finally:
+        os.close(write_end)
+    assert finish(process) == (0, "check ok\n", "")
+
+
+@host_only(WINDOWS, "SIGINT; test_ctrl_c_ends_check_stdin_while_it_waits_for_input in test_windows_console_stop.py "
+                    "presses Ctrl+C on a console")
+def test_a_stop_signal_while_the_input_is_pending_ends_the_run_as_a_stop(tmp_path):
+    read_end, write_end = os.pipe()
+    try:
+        process = start_check(tmp_path, read_end, preexec_fn=default_sigint)
+    finally:
+        os.close(read_end)
+    try:
+        time.sleep(1)
+        process.send_signal(signal.SIGINT)
+        code, out, err = finish(process)
+    finally:
+        os.close(write_end)
+    # The VM dies by the signal, as any run does, and says nothing about the input.
+    assert (code, out, err) == (-signal.SIGINT, "", "")
 
 
 @pytest.mark.parametrize("words", (

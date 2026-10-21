@@ -37,11 +37,11 @@ export def take() -> Taken
     return Taken.Failed(bytes.message)
   end
   data = bytes.unwrap!
-  decoded = String.from_bytes(data)
-  if decoded.ok?
-    return Taken.Got(Buffer(read: SourceFile.Read.Text(decoded.unwrap!), shown: decoded.unwrap!))
+  read = SourceFile.decode(data)
+  case read
+    SourceFile.Read.Text(text) -> return Taken.Got(Buffer(read: read, shown: text))
+    _ -> return Taken.Got(Buffer(read: read, shown: SourceFile.replace_invalid(data)))
   end
-  return Taken.Got(Buffer(read: SourceFile.decode(data), shown: SourceFile.replace_invalid(data)))
 end
 
 ## `workspace` with `buffer` as the content of `file`. A read of `file`, or of its absolute or canonical path, gives
@@ -69,13 +69,19 @@ def as_resolver(f: Fn[String, Result[String]]) -> Fn[String, Result[String]]
   return f
 end
 
+# On Windows Path.resolve gives `\` separators, which the path helpers split only on `/`: they are split on a copy
+# with `/`, as Path.join writes them.
 def names_for(workspace: Workspace.Workspace, file: String) -> Names
   absolute = workspace.resolve_path.call(file).unwrap_or(file)
+  slashed = absolute
+  if System.os() == "windows"
+    slashed = absolute.replace("\\", "/")
+  end
   found = workspace.real_path.call(absolute)
   if found.ok?
     return Names(typed: file, absolute: absolute, key: found.unwrap!)
   end
-  folder = Paths.directory_of(absolute)
+  folder = Paths.directory_of(slashed)
   if folder == ""
     folder = "."
   end
@@ -83,7 +89,7 @@ def names_for(workspace: Workspace.Workspace, file: String) -> Names
   if !parent.ok?
     return Names(typed: file, absolute: absolute, key: absolute)
   end
-  return Names(typed: file, absolute: absolute, key: Paths.join(parent.unwrap!, Paths.last_part(absolute)))
+  return Names(typed: file, absolute: absolute, key: Paths.join(parent.unwrap!, Paths.last_part(slashed)))
 end
 
 def answers?(names: Names, path: String) -> Bool

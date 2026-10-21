@@ -58,6 +58,7 @@ void agc_input_open(agc_vm *vm, int fd, bool flush_out) {
   in->pending_eof = false;
   in->reading = false;
   in->got = 0;
+  in->bound = 0;
 }
 
 static _Noreturn void read_failed(agc_vm *vm) {
@@ -90,6 +91,8 @@ static void reserve(agc_input *in, size_t n) {
   } else {
     size_t cap = in->cap ? agc_size_mul(in->cap, 2) : INPUT_CHUNK;
     while (cap < need) cap = agc_size_mul(cap, 2);
+    /* A capped read (agc_input_whole) never needs more than the cap and one byte. */
+    if (in->bound && cap > agc_size_add(used, in->bound)) cap = agc_size_add(used, in->bound);
     uint8_t *buf = agc_alloc_atomic(cap);
     if (used) memcpy(buf, in->buf + in->start, used);
     in->buf = buf;
@@ -100,8 +103,10 @@ static void reserve(agc_input *in, size_t n) {
 }
 
 static size_t read_room(agc_input *in) {
-  reserve(in, INPUT_ROOM);
+  size_t want = in->bound && in->bound < INPUT_ROOM ? in->bound : INPUT_ROOM;
+  reserve(in, want);
   size_t room = in->cap - in->end;
+  if (in->bound && room > in->bound) room = in->bound;
   return room > INPUT_READ_MAX ? INPUT_READ_MAX : room;
 }
 
@@ -428,10 +433,29 @@ agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out) {
     if (r == 0) break;
   }
   size_t n = in->end - in->start < count ? in->end - in->start : count;
-  agc_list_builder b;
-  agc_list_builder_sized(&b, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, agc_int(in->buf[in->start + k]));
+  *out = agc_list_of_bytes(in->buf + in->start, n);
   consume(in, in->start + n);
-  *out = agc_list_builder_finish(&b);
+  return AGC_INPUT_OK;
+}
+
+agc_input_status agc_input_whole(agc_vm *vm, size_t max, agc_list **out) {
+  agc_input *in = &vm->rt->in;
+  if (in->fd < 0) agc_input_open(vm, 0, false);
+  for (;;) {
+    size_t have = in->end - in->start;
+    if (have > max) {
+      *out = NULL;
+      return AGC_INPUT_OK;
+    }
+    in->bound = max + 1 - have;
+    int r = fill(vm);
+    in->bound = 0;
+    if (r == FILL_WAIT) return AGC_INPUT_WAIT;
+    if (r < 0) return AGC_INPUT_FAILED;
+    if (r == 0) break;
+  }
+  size_t n = in->end - in->start;
+  *out = agc_list_of_bytes(n ? in->buf + in->start : NULL, n);
+  consume(in, in->end);
   return AGC_INPUT_OK;
 }

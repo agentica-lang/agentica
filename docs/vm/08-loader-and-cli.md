@@ -104,8 +104,9 @@ byte of a file with a type table, an Updates section or Globals.
   (see "The guarded builtins") and wraps `Workspace.read_text`, `file_exists`
   and `real_path` (`compiler/io/stdin_buffer.agc`), so the linker reads the root
   from the buffer and every other file from the disk. The file need not exist;
-  its folder does for imports. Input over 16 MiB exits 2. `--stdin` with another
-  command, with no file or with two is a usage error (exit 2).
+  its folder does for imports. Input over 16 MiB exits 2. `check --stdin` with
+  no file or with two, `check FILE --stdin` and `compile --stdin` are usage
+  errors (exit 2).
 - `agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS]
   [--schedulers N] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb
   [args...]` runs a compiled program (until step 8d-2 this was the separate
@@ -202,8 +203,8 @@ following
   driver starts children.)
 - A failed read of the standard input of an `agentica` run is the program's own
   error: it reads the real descriptor (`RUNTIME-INTERNAL`, `cannot read
-  standard input`, exit 1). The front end's runtime has no standard input stream;
-  `FrontEnd.stdin_bytes` is its only way to read it.
+  standard input`, exit 1). The front end's runtime opens standard input only
+  when it calls `FrontEnd.stdin_bytes`.
 - Front-end and `LOWER-` diagnostics print as usual (exit 1). `--vm` and
   `--legacy-eval` are unknown switches.
 - There is no VM file to find and no `AGENTICA_VM`: nothing reads the variable,
@@ -287,9 +288,10 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   starts no front end and creates no trace file. `AGENTICA_FLUSH_TIMEOUT_MS` and
   `AGENTICA_SCHEDULERS` are checked before the front end runs, as `agentica run`
   checks them at its start. The front end has no step limit, no standard input
-  stream (`IO.gets` gives EOF, so the program keeps the real one; only
-  `FrontEnd.stdin_bytes` reads it) and no channel to a parent process; it has `--allow-run`, because `agentica test` starts the
-  runner (the user's program never runs in that runtime). If it calls
+  stream until `FrontEnd.stdin_bytes` opens it (before that `IO.gets` gives
+  EOF, so the program keeps the real one) and no channel to a parent process;
+  it has `--allow-run`, because `agentica test` starts the runner (the user's
+  program never runs in that runtime). If it calls
   `FrontEnd.hand_off` and its run ends with status 0, C retires that runtime:
   the same steps as the end of any run (`agc_launch_settle`: children stopped,
   output and files flushed), then the event loop is closed and the heap is
@@ -338,12 +340,14 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   it returns an error for a bad byte or word and never for an option, which the
   driver reads after the run. `std_source` returns the text of the embedded
   file at that path in `stdlib/` (`queue.agc`, `bdd/gherkin.agc`), or an error.
-  `stdin_bytes` is the only way the front end gets standard input. The first
-  call reads the real descriptor to its end (blocking, at most 16 MiB; one byte
-  more is an error), and the `agc_front_end` keeps the bytes or the error for
-  the next calls. C reads it on the call, not before the front end starts, so a
-  command that does not call it (`agentica FILE.agc`) leaves standard input to
-  the program.
+  `stdin_bytes` is the only way the front end gets standard input. It opens
+  the runtime's input stream at the first call and reads it to its end through
+  the one stdin reader (`agc_input_whole`, `vm/input.c`): the task parks while
+  a read is in flight, so the loop does not block and a stop signal ends the
+  run as usual. It keeps at most 16 MiB and one byte; one byte more is an
+  error, with no list built. A later call reads on from where the last one
+  stopped. Nothing reads standard input before the call, so a command that
+  does not call it (`agentica FILE.agc`) leaves it to the program.
 - **The loader.** `agc_load_front_end` is `agc_load_traced` without the check of
   the Agentica version in the header (the format version and every other check
   stay). Only `vm/agentica.c` calls it, for the front end; the program that the

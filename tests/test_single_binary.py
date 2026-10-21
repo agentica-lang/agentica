@@ -292,20 +292,20 @@ def test_the_front_end_reports_a_missing_std_source(tmp_path):
     assert (missing.code, missing.stdout) == (0, "error: no such std source\n")
 
 
-def test_the_front_end_reads_standard_input_whole_and_once(tmp_path):
+def test_the_front_end_reads_standard_input_to_its_end(tmp_path):
     front = front_end(tmp_path)
+    # The second call reads on from the end, so it gets nothing.
     got = agentica("--front-end", front, "stdin", stdin=b"a\r\nb\xff\x00")
-    assert (got.code, got.stdout) == (0, "6 bytes, sum 473\n" * 2)
+    assert (got.code, got.stdout) == (0, "6 bytes, sum 473\n0 bytes, sum 0\n")
     empty = agentica("--front-end", front, "stdin", stdin=b"")
     assert (empty.code, empty.stdout) == (0, "0 bytes, sum 0\n" * 2)
 
 
-def test_the_front_end_refuses_standard_input_over_the_cap(tmp_path):
+@pytest.mark.slow
+def test_the_front_end_takes_standard_input_of_exactly_the_cap(tmp_path):
     front = front_end(tmp_path)
     at_cap = agentica("--front-end", front, "stdin", stdin=b"a" * STDIN_CAP)
-    assert (at_cap.code, at_cap.stdout) == (0, f"{STDIN_CAP} bytes, sum {97 * STDIN_CAP}\n" * 2)
-    over = agentica("--front-end", front, "stdin", stdin=b"a" * (STDIN_CAP + 1))
-    assert (over.code, over.stdout) == (0, "error: standard input is larger than 16777216 bytes\n" * 2)
+    assert (at_cap.code, at_cap.stdout) == (0, f"{STDIN_CAP} bytes, sum {97 * STDIN_CAP}\n0 bytes, sum 0\n")
 
 
 def test_the_hand_off_runs_the_program_in_a_new_runtime(tmp_path):

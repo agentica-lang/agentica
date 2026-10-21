@@ -176,6 +176,8 @@ typedef struct {
   int got;
   uint8_t *buf;
   size_t start, end, cap, scanned;
+  /* The most bytes the next read may add, while agc_input_whole fills to its cap; 0 is no bound. */
+  size_t bound;
   uint64_t eof_seq;
   agc_task *waiters, *waiters_tail;
 } agc_input;
@@ -269,17 +271,12 @@ typedef struct {
 #define AGC_FRONT_END_MAX_STDIN ((size_t)16 * 1024 * 1024)
 
 /* What the front end (the compiler that the binary loads from its own data) shares with the driver: the std/ sources
- * it may read, the standard input it asked for, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
+ * it may read, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
  * it; a user program runs in a runtime without one. The hand-off fields are GC memory the driver reads after the
  * front end's run ends. Design: docs/vm/08-loader-and-cli.md. */
 typedef struct {
   const agc_std_source *std;
   size_t std_count;
-  /* The standard input, read whole by the first FrontEnd.stdin_bytes: the bytes (GC memory), or why it failed. */
-  bool stdin_read;
-  uint8_t *stdin_data;
-  size_t stdin_len;
-  const char *stdin_error;
   bool handed;
   uint8_t *program;
   size_t program_len;
@@ -675,6 +672,11 @@ void agc_stdin_read(agc_vm *vm, agc_stdin_reader *r, agc_io_job *job, size_t roo
 int64_t agc_stdin_take(agc_stdin_reader *r, const uint8_t **data);
 void agc_stdin_close(agc_stdin_reader *r);
 #endif
+/* All of standard input to its end, for FrontEnd.stdin_bytes (vm/input.c, the one stdin reader). A runtime with no
+   input stream (the front end's) opens descriptor 0 at the first call. The task parks while a read is in flight
+   (AGC_INPUT_WAIT: return void, the builtin runs again); a failed read is AGC_INPUT_FAILED. At most MAX + 1 bytes are
+   kept: more than MAX gives AGC_INPUT_OK with *OUT NULL, and no list is built. */
+agc_input_status agc_input_whole(agc_vm *vm, size_t max, agc_list **out);
 
 void agc_charge(agc_vm *vm, uint64_t units);
 void agc_charge_bytes(agc_vm *vm, size_t bytes);
