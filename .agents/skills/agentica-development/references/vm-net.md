@@ -229,7 +229,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     before it is readied; one scheduler keeps the inline fast paths
   - stdout is read only while a reader waits, 4 KiB at a time (more only for a
     bigger `read_bytes`)
-  - stderr is forwarded in its read callback
+  - stderr is forwarded in its read callback through `agc_output_forward`; the
+    read stops while the stderr queue is full and `resume_err` restarts it
   - one close path (`shut`: `SIGKILL`, with no `waitpid` and no sleep anywhere
     in the file; libuv's exit callback `exited` reaps the child and `retire`
     closes its `uv_process_t`; a failed kill in `Process.close` is

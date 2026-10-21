@@ -10,12 +10,13 @@ with the reason. On Windows the socket cases use a Winsock socket that is not in
 """
 import json
 import re
+import subprocess
 import sys
 import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, run, scaled,
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, agc_literal, compile_text, run, scaled,
                                  vm_command, vm_environment)
 
 PEER = FIXTURES / "stdout-peer.py"
@@ -33,6 +34,8 @@ dev_full = pytest.mark.skipif(
     not sys.platform.startswith("linux") or WINDOWS,
     reason="host-only: needs /dev/full (Linux); a reader that went away is the case of the same name on every system")
 not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
+not_wine_child = pytest.mark.skipif(
+    UNDER_WINE, reason="Wine runs the Windows binary, which starts neither /bin/sh nor a Linux Python")
 # The cases that read a socket only after the VM exited check how Windows closes the socket with the process; Wine's
 # sockets are another implementation, so they are not run there.
 not_wine_socket = pytest.mark.skipif(UNDER_WINE, reason="Wine: the close of a socket at exit is not Windows' own")
@@ -585,6 +588,41 @@ def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(tmp_path):
     assert out == "done\n"
 
 
+# A child writes to its stderr, which the VM forwards to its own; LATE is what the program does once the child is done.
+CHILD_STDERR_PROGRAM = """\
+def main() -> Void
+  %s
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * 200000)"], 60000))
+  Process.wait(child, 60000)
+  %s
+end
+
+"""
+
+
+@dev_full
+@not_wine_child
+def test_a_stderr_that_only_a_child_wrote_to_and_cannot_be_written_keeps_the_exit_code_0(tmp_path):
+    program = CHILD_STDERR_PROGRAM % ("", agc_literal(PYTHON), 'puts("done")')
+    status, _, out, _ = run_to_file(tmp_path, "child-full-stderr", program, stderr_file="/dev/full")
+    assert status == 0
+    assert out == "done\n"
+
+
+@not_wine
+@not_wine_child
+@pytest.mark.parametrize("late, status", [("", 0), ('IO.warn("late")', 1)])
+def test_a_stderr_lost_after_the_program_wrote_to_it_fails_the_run_only_if_a_later_write_is_lost(tmp_path, late,
+                                                                                               status):
+    # stderr is the stdout pipe; its reader takes the program's line and goes away, so only the child's bytes fail.
+    early = 'IO.warn("early")\n  Task.sleep(300)'
+    program = CHILD_STDERR_PROGRAM % (early, agc_literal(PYTHON), late)
+    summary, out, _ = run_case(tmp_path, "child-gone", program, peer=["--merge", "--close-after", "6"],
+                               vm=["--allow-run"])
+    assert out.startswith(b"early\n")
+    assert summary["status"] == status
+
+
 def test_a_long_diagnostic_reaches_a_slow_stderr_pipe_whole(tmp_path):
     summary, _, err = run_case(tmp_path, "slow-diagnostic", BIG_UNWRAP_PROGRAM % 17, peer=["--error-delay", "1.0"],
                                vm=["--json"])
@@ -648,3 +686,158 @@ def test_a_crashed_parent_cancels_a_child_waiting_to_print_and_nothing_partial_i
     for n, line in enumerate(lines):
         if line != "C%d %s" % (n, FILLER):
             pytest.fail("line %d is partial or out of order" % n)
+
+
+# A plain child writes FORWARD_BYTES to its stderr, which the VM forwards to its own stderr, while another task waits
+# 200 ms at a time and keeps the slowest wait: a Task.sleep of 100 ms (a scheduler's timer) and a Process.wait on the
+# child that times out after 100 ms (a deadline on the I/O thread).
+FORWARD_BYTES = 2 * 1024 * 1024
+FORWARD_PROGRAM = """\
+def ticker(child: Process) -> Int
+  slowest = 0
+  n = 0
+  while n < 8
+    start = Time.monotonic_ms()
+    Task.sleep(100)
+    Process.wait(child, 100)
+    took = Time.monotonic_ms() - start
+    if took > slowest
+      slowest = took
+    end
+    n += 1
+  end
+  return slowest
+end
+
+def main() -> Void
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  slowest = Task.await(Task.spawn(&ticker, child))
+  puts("slowest #{slowest}")
+  IO.inspect(Process.wait(child, 60000))
+end
+
+""" % (agc_literal(PYTHON), FORWARD_BYTES)
+
+
+@not_wine_child
+@pytest.mark.parametrize("schedulers", [1, 4])
+def test_a_child_stderr_forwarded_to_a_stderr_nobody_reads_yet_does_not_stop_a_timer_task(tmp_path, schedulers):
+    # The reader of the VM's stderr starts only after the ticker is done; the child's 2 MiB then all arrive.
+    delay = scaled(3.0)
+    vm = ["--allow-run", "--schedulers", str(schedulers)]
+    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
+    summary, out, err = run_case(tmp_path, "forward", FORWARD_PROGRAM, peer=["--error-delay", str(delay)], vm=vm,
+                                 env=env)
+    assert summary["status"] == 0
+    lines = lines_of(out)
+    assert lines[1] == "ok(0)"
+    slowest = int(lines[0].split()[1])
+    assert slowest < 200 + scaled(1000), "a wait of 200 ms took %d ms while stderr was stuck" % slowest
+    assert err == "e" * FORWARD_BYTES
+
+
+# A plain child keeps writing to its stderr, which is the stdout pipe of the VM, read slowly. Meanwhile the program
+# warns once and prints how long the warn took; the warn joins the stream between two of the child's chunks.
+STREAMING_BYTES = 8_000_000
+STREAMING_WARN = "w" * 1000
+STREAMING_PROGRAM = """\
+def main() -> Void
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  Task.sleep(300)
+  start = Time.monotonic_ms()
+  IO.warn("%s")
+  puts("took #{Time.monotonic_ms() - start}")
+  IO.inspect(Process.wait(child, 60000))
+end
+
+""" % (agc_literal(PYTHON), STREAMING_BYTES, STREAMING_WARN)
+
+
+@not_wine
+@not_wine_child
+@pytest.mark.parametrize("schedulers", [1, 4])
+def test_a_child_that_keeps_writing_stderr_does_not_hold_back_a_warn_of_the_program(tmp_path, schedulers):
+    # The reader takes 8 KiB every 2 ms, so the child's bytes need about 2 s; the warn waits only for its room.
+    vm = ["--allow-run", "--schedulers", str(schedulers)]
+    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
+    summary, out, _ = run_case(tmp_path, "streaming", STREAMING_PROGRAM, peer=["--merge", "--chunk", "8192",
+                                                                             "--pause", "0.002"], vm=vm, env=env)
+    assert summary["status"] == 0
+    warn = out.find(STREAMING_WARN.encode() + b"\n")
+    took = re.search(rb"took (\d+)\n", out)
+    assert warn >= 0 and took and b"ok(0)\n" in out
+    assert out.count(b"e") == STREAMING_BYTES
+    assert int(took.group(1)) < scaled(1000), "the warn took %s ms" % took.group(1).decode()
+    assert warn < STREAMING_BYTES // 2, "the warn came after %d bytes of the child" % warn
+
+
+# A task warns records of exactly 64 KiB (the newline included), each one needing the whole ring, until main closes
+# `stop`; a child sleeps 300 ms, then writes FULL_RING_CHILD bytes to its stderr. Both reach one pipe.
+FULL_RING_CHILD = 300_000
+FULL_RING_PROGRAM = """\
+def printer(stop: Channel[Int]) -> Int
+  big = List.repeat("w", 65535).join("")
+  n = 0
+  while !stop.closed?
+    IO.warn(big)
+    n += 1
+  end
+  return n
+end
+
+def main() -> Void
+  stop: Channel[Int] = Channel.new(1)
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys,time; time.sleep(0.3); sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  printer = Task.spawn(&printer, stop)
+  start = Time.monotonic_ms()
+  waited = Process.wait(child, %d)
+  took = Time.monotonic_ms() - start
+  stop.close
+  Task.await(printer, 60000)
+  puts("child #{waited.ok?} took #{took}")
+end
+
+"""
+
+
+@not_wine_child
+@pytest.mark.parametrize("schedulers", [1, 4])
+def test_a_child_moves_on_while_the_program_keeps_warning_records_that_fill_the_whole_ring(tmp_path, schedulers):
+    # The reader counts what it gets instead of keeping it: the printer writes as fast as the pipe is read.
+    limit = scaled(10000)
+    program = FULL_RING_PROGRAM % (agc_literal(PYTHON), FULL_RING_CHILD, limit)
+    bytecode = compile_text(program, "full-ring", tmp_path)
+    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
+    process = subprocess.Popen([*vm_command(), "--allow-run", "--schedulers", str(schedulers), "--", bytecode],
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=vm_environment(env))
+    children = 0
+    tail = b""
+    found = None
+    try:
+        while chunk := process.stdout.read1(1 << 16):
+            children += chunk.count(b"e")
+            # The last line of main may come before child bytes that were still queued: it is looked for anywhere.
+            window = tail + chunk
+            found = found or re.search(rb"child (\w+) took (\d+)\n", window)
+            tail = window[-64:]
+        code = process.wait(timeout=PEER_LIMIT)
+    finally:
+        process.kill()
+        process.stdout.close()
+    assert code == 0 and found
+    assert found.group(1) == b"true", "the child was still blocked after %s ms" % found.group(2).decode()
+    assert int(found.group(2)) < scaled(5000), "the child took %s ms" % found.group(2).decode()
+    assert children - found.group(0).count(b"e") == FULL_RING_CHILD
+
+
+@not_wine
+@not_wine_child
+def test_a_reader_that_leaves_once_only_child_bytes_are_pending_keeps_the_exit_code_0(tmp_path):
+    # The warn is written while the child streams; the reader leaves later, at 3 MB, so only the child's bytes are lost.
+    program = STREAMING_PROGRAM.replace('  puts("took #{Time.monotonic_ms() - start}")\n', "").replace(
+        "IO.inspect(Process.wait(child, 60000))", "Process.wait(child, 60000)")
+    summary, out, _ = run_case(tmp_path, "streaming-gone", program, peer=["--merge", "--chunk", "8192", "--pause",
+                                                                          "0.002", "--close-after", "3000000"],
+                               vm=["--allow-run"])
+    assert STREAMING_WARN.encode() + b"\n" in out
+    assert summary["status"] == 0

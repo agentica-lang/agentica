@@ -84,8 +84,11 @@ builtins. Other systems get none.
   returns when the child has exited and its stderr is at EOF. A timed-out read
   or write closes the process. A timed-out `wait` leaves the child running.
 - **Stderr** is read all the time, and each chunk goes to the program's stderr
-  at once, so it keeps its order with `IO.warn`. If that write fails
-  (`/dev/full`, say), the rest is read and dropped, and the child is kept.
+  buffer at once, so it keeps its order with `IO.warn`. While that buffer holds
+  more than 64 KiB, the VM stops reading until it is down to 32 KiB: the child
+  waits on its pipe, and so does `wait`, but nothing else in the VM. If the
+  write fails (`/dev/full`, say), the rest is read and dropped, and the child is
+  kept.
 - **Close.** `Process.close`, a timed-out read or write, the end of the run
   (step 1 of §14.4) and a stop signal share one close: a running child gets
   `SIGKILL`, and libuv's exit callback reaps it (no `waitpid`, no sleep). The

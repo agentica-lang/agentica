@@ -1,5 +1,6 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then
-## does what the first word asks: run a program, `check` it, `compile` it to a file, print `help`, or start the tests.
+## does what the first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a
+## module with `doc`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -21,6 +22,7 @@ import Report from "../bdd/bdd_report"
 import SourceRoot from "../bdd/bdd_source_root"
 import Problems from "../diagnostics/problem"
 import CheckText from "../check/check_text"
+import CliDoc from "cli_doc"
 import Options from "cli_options"
 import Launch from "cli_launch"
 import Help from "cli_help"
@@ -76,6 +78,8 @@ def dispatch(session: Session) -> Int
     return test(session, words.drop(1))
   elsif first == "help"
     return emit(Help.help(words, session.options.style))
+  elsif first == "doc"
+    return doc(session, words)
   elsif first == "run"
     return emit(Reply.failed(2, Texts.run_first_text()))
   end
@@ -98,6 +102,14 @@ def dispatch(session: Session) -> Int
     return emit(Reply.failed(2, Texts.usage_text()))
   end
   return program(session, first, rest)
+end
+
+# `doc PATH`: a complete answer, or the first problem of the module, shown as a problem of PATH.
+def doc(session: Session, words: List[String]) -> Int
+  case CliDoc.run(words, session.options.style, session.settings)
+    CliDoc.Answer.Printed(reply) -> return emit(reply)
+    CliDoc.Answer.Rejected(problem) -> return reject(session, problem, problem.file)
+  end
 end
 
 # `check --stdin FILE`: the text of FILE is the standard input. FILE need not exist, but its folder does: imports and

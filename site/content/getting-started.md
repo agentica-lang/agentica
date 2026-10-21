@@ -106,6 +106,14 @@ String.split(s: String, separator: String) -> List[String]
 Split text; an empty separator gives characters.
 ```
 
+## Read a module's API
+
+```sh
+agentica doc std/queue    # a file path works too; --json prints one JSON object
+```
+
+It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file: the module's imports need not exist. Declarations without `export` are left out.
+
 ## Options
 
 | Option | Does |

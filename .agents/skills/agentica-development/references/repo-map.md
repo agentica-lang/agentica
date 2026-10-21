@@ -10,7 +10,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   app/  # the command line, the pipeline and the replies
     pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
     cli.agc  # the command line (§18.3, port step 8a): run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
-    cli_options.agc cli_help.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; the fixed texts; what a command answers; Launch
+    cli_options.agc cli_help.agc cli_doc.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; doc (reads the file or the std/ source, prints docs/'s model); the fixed texts; what a command answers; Launch
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2, 8b): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
   io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
     host.agc  # workspace(): the real Workspace (read_text, file_exists, directory_exists, real_path, resolve_path, std_source, list_folder, read_bytes); process_env(): the Env of this process
@@ -73,6 +73,9 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     problem.agc  # the packed Problem with its notes (pack, unpack), which every stage returns as its error
     diagnostic_json.agc  # the --json object of a Problem
     diagnostic_plain.agc diagnostic_ai.agc  # the plain text of a Problem and its --ai text
+  docs/  # `agentica doc` (§32.5): lex and parse one module, then its exported API with the `##` docs (imports only syntax/ and diagnostics/)
+    doc.agc doc_model.agc signature.agc  # of_text(text) -> Outcome[Module]; the exported items (the doc of an `export` is on its ExportDecl); the signature of each kind, types as written
+    doc_json.agc doc_text.agc  # the --json object of §32.5; the Markdown form
   bdd/  # the `agentica test` driver
     bdd_driver.agc  # the BDD driver (§18.3, port step 7), part of the front end: run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
     bdd_options.agc bdd_report.agc bdd_files.agc bdd_source_root.agc  # the arguments (driver options, then the user's words); the usage and infrastructure reports; private 0600 writes in pieces; the VM's --source-root of a file
