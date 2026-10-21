@@ -220,8 +220,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         minus tasks done minus `main`: it counts ready, running and parked
         tasks, not tasks that returned or crashed (even unawaited ones),
         `unobserved_crash`)
-  - `agc_task_spawn` (shared by `Task.spawn` and `Test.run`; the child inherits
-    its parent's `test`), `agc_task_observe`
+  - `make_child` and `start_child` (every spawn: the random stream, and a
+    test's own `test` mark, are set between them, before another scheduler can
+    run the child; it inherits its parent's `test`), `agc_task_observe`
   - a crash keeps `crash_code`, `crash_message` and `crash_span` for `Test.run`,
     and `finish_task` sets `left_children` when a task ends with running
     children
@@ -307,11 +308,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     retry builtin whose state (`agc_test_run`) lives on the calling task: it
     reads an index line with `agc_parent_line` (`vm/duplex.c`; the program's
     stdin and stdout are untouched, there is no token), starts the test with
-    `agc_task_spawn` and a seed from the run's seed and the name, waits for it
-    with `agc_task_join`, and on wake builds the record (crash, first note, the
-    block's error, `left_children`, an unobserved crash of the test's tasks),
-    cancels the test's leftover tasks (now the caller's children), observes
-    every crash of the test's tasks, then `deliver` flushes stdout with
+    `agc_task_spawn_test` and a seed from the run's seed and the name, waits for
+    it with `agc_task_join`, and on wake builds the record (crash, first note,
+    the block's error, `left_children`, an unobserved crash of the test's
+    tasks), cancels the test's leftover tasks (now the caller's children),
+    observes every crash of the test's tasks, then `deliver` flushes stdout with
     `agc_drain` and sends the record with `agc_parent_send` before the next
     index is read
   - at the end of the channel and after a list it ends the run like a return

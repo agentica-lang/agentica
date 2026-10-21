@@ -340,6 +340,36 @@ def test_a_thousand_sleepers_all_wake(tmp_path, repeats):
         assert (result.code, result.stdout, result.stderr) == (0, "1000\n", "")
 
 
+DRAWS = """\
+def draw(n: Int) -> Int
+  return Random.int(0, 1000)
+end
+
+def main() -> Void
+  tasks = (1..2000).to_a.map do |k|
+    Task.spawn(&draw, k)
+  end
+  sum = 0
+  for t in tasks
+    sum = sum + Task.await(t)
+  end
+  puts(sum)
+end
+"""
+
+
+@RACE
+def test_a_spawned_task_draws_from_its_own_stream_on_four_schedulers(tmp_path, repeats):
+    # A child's stream is set before another scheduler can run it: a stream not yet set is all zero, and Random.int
+    # never ended on it. With a seed, the draws are those of one scheduler.
+    bytecode = program(tmp_path, "draws", DRAWS)
+    one = run([*vm_command(), "--seed", "3", "--schedulers", "1", "--", bytecode], env=vm_environment())
+    assert (one.code, one.stderr) == (0, "")
+    for _ in range(repeats):
+        result = vm(bytecode, "--seed", "3", timeout=scaled(30))
+        assert (result.code, result.stdout, result.stderr) == (0, one.stdout, "")
+
+
 CANCELS = """\
 def slow(ms: Int) -> Result[Int]
   Task.sleep(ms)

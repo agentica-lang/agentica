@@ -617,9 +617,8 @@ bool agc_step_turn(agc_vm *vm, uint32_t span);
 bool agc_turn_charge(agc_vm *vm);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
-agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
-agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                            uint32_t span);
+/* Spawns the body of one test of Test.run as a child of the caller: the task is its own test, with its own stream. */
+agc_task *agc_task_spawn_test(agc_vm *vm, agc_value fn, uint32_t span, uint64_t seed);
 agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
                                 uint32_t span);
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span);

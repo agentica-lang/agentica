@@ -158,8 +158,8 @@ so zeroed registers are valid values.
   flag of the frame it reuses, and a frame that `CALL` or a native pushes starts
   with the flag clear. Those stores of the flag (one per `TAIL_CALL`, `CALL` and
   native push) are all the stack trace costs while a program runs, plus the span
-  of the spawning call that a task keeps (`spawn_span`, set by
-  `agc_task_spawn_in`).
+  of the spawning call that a task keeps (`spawn_span`, set when the task is
+  spawned).
 - The stack trace is built when the program fails (as built; the shape is in
   [`02-reference-behavior.md`](02-reference-behavior.md)). `agc_fail` and
   `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`)
