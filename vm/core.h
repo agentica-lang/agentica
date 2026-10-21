@@ -250,6 +250,11 @@ bool agc_io_close(agc_vm *vm);
 void agc_io_watch_stop(agc_vm *vm, int64_t driver);
 int agc_io_stop_signal(void);
 void agc_io_children_stopped(void);
+#if !defined(_WIN32)
+/* Dies by the stop signal SIG in the calling thread (default action, SIG unblocked, raise); returns only if the
+   signal does not end the process. */
+void agc_io_die_by(int sig);
+#endif
 void agc_io_goodbye(agc_vm *vm);
 void agc_io_flush_files(agc_vm *vm);
 _Noreturn void agc_stop(agc_vm *vm, int sig);

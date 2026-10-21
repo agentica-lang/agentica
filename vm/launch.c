@@ -222,11 +222,9 @@ void agc_launch_exit(int code) {
   sigset_t saved;
   agc_io_block_stop(&saved);
   int sig = agc_io_stop_signal();
-  if (sig) {
-    signal(sig, SIG_DFL);
-    pthread_sigmask(SIG_SETMASK, &saved, NULL);
-    raise(sig);
-  }
+  /* The stop signals stay blocked from here, so no handler runs after the state was read; agc_io_die_by unblocks
+     SIG alone before it raises it. */
+  if (sig) agc_io_die_by(sig);
   _exit(code);
 #else
   exit(code);

@@ -17,7 +17,6 @@ import signal
 import socket
 import ssl
 import subprocess
-import sys
 import threading
 
 import pytest
@@ -27,8 +26,8 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import (FIXTURES, compile_text, kill_process, process_alive, run, vm_command, vm_environment,
-                                 wait_until)
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, compile_text, host_only, kill_process, known_issue,
+                                 process_alive, run, vm_command, vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -639,7 +638,7 @@ def test_two_tasks_share_standard_input_line_by_line(tmp_path, repeats):
         assert (result.code, result.stdout, result.stderr) == (0, "5000\n", "")
 
 
-@pytest.mark.skipif(fcntl is None, reason="needs fcntl")
+@host_only(fcntl is None, "the blocking flag of a descriptor (fcntl O_NONBLOCK) exists on POSIX only")
 def test_a_socket_as_standard_input_keeps_its_blocking_flag_for_the_parent(tmp_path):
     bytecode = program(tmp_path, "sock", "def main() -> Void\n  IO.inspect(IO.gets())\nend\n")
     ours, theirs = socket.socketpair()
@@ -682,7 +681,7 @@ end
 """
 
 
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs FIFOs")
+@host_only(not hasattr(os, "mkfifo"), "Windows has no FIFO files")
 @RACE
 def test_fifos_are_read_through_the_io_thread(tmp_path, repeats):
     bytecode = program(tmp_path, "fifo", FIFO)
@@ -735,7 +734,7 @@ end
 """
 
 
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="needs FIFOs")
+@host_only(not hasattr(os, "mkfifo"), "Windows has no FIFO files")
 @pytest.mark.parametrize("per_call_ms", [60000, 300], ids=["deadline-never", "deadline-after-cancel"])
 @RACE
 def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms):
@@ -758,23 +757,27 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
 
 
 # Processes, the child channel and the Test protocol run on several schedulers: every libuv step is a request to the
-# I/O thread, which owns each child's handles and buffers (§16.9). The programs use `sh`, so these cases are POSIX.
-POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="the child programs are sh scripts")
+# I/O thread, which owns each child's handles and buffers (§16.9). Most children are Python programs; the cases whose
+# children are sh scripts that need POSIX process ids, descriptor 3 or ps do not run on Windows yet (#486).
+SH_CHILDREN = known_issue(WINDOWS, 486, "the children are sh scripts that need POSIX process ids, descriptor 3 or ps")
+POSIX_SIGNALS = host_only(WINDOWS or not hasattr(signal, "SIGTERM"), "Windows has no POSIX stop signals")
 MULTICORE_CHILDREN = {**MULTICORE, "AGENTICA_SCHEDULERS": SCHEDULERS}
 
 PROC_FAN = r"""def echo(n: Int) -> String
-  p = Process.spawn_captured("sh", ["-c", "read x; echo got-$x; echo err-$x >&2; exit 7"], ".", 5000).unwrap!
-  sent = Process.send(p, "#{n}\n", 5000)
-  line = Process.read_line(p, 5000)
-  status = Process.wait(p, 5000)
-  out = Process.output(p, 5000).unwrap!
+  first = "import sys; x = sys.stdin.readline().strip(); print('got-' + x, flush=True); "
+  script = first + "sys.stderr.write('err-' + x + '\\n'); sys.exit(7)"
+  p = Process.spawn_captured(System.args()[0], ["-c", script], ".", 20000).unwrap!
+  sent = Process.send(p, "#{n}\n", 20000)
+  line = Process.read_line(p, 20000)
+  status = Process.wait(p, 20000)
+  out = Process.output(p, 20000).unwrap!
   Process.close(p)
   return "#{sent} #{line} #{status} #{out.stderr.strip()}"
 end
 
 def plain(n: Int) -> String
-  p = Process.spawn("sh", ["-c", "exit #{n}"], 5000).unwrap!
-  status = Process.wait(p, 5000)
+  p = Process.spawn(System.args()[0], ["-c", "import sys; sys.exit(#{n})"], 20000).unwrap!
+  status = Process.wait(p, 20000)
   Process.close(p)
   return "#{status}"
 end
@@ -796,7 +799,6 @@ end
 """
 
 
-@POSIX_ONLY
 @RACE
 def test_children_of_tasks_on_several_schedulers_send_read_wait_and_close(tmp_path, repeats):
     # Sixteen tasks each run a child: a captured one is sent a line and read, waited for, its stderr kept, and closed;
@@ -805,7 +807,7 @@ def test_children_of_tasks_on_several_schedulers_send_read_wait_and_close(tmp_pa
     expected = "".join('ok() ok("got-%d") ok(7) err-%d\n' % (k, k) for k in range(1, 9))
     expected += "".join("ok(%d)\n" % k for k in range(1, 9))
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run")
+        result = vm(bytecode, "--allow-run", args=(PYTHON,), timeout=120)
         assert (result.code, result.stdout, result.stderr) == (0, expected, "")
 
 
@@ -862,7 +864,7 @@ end
 """
 
 
-@POSIX_ONLY
+@SH_CHILDREN
 @RACE
 def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_its_child(tmp_path, repeats):
     # A read, a wait and a 1 MiB send that the child never reads are parked on one child and cancelled from main:
@@ -878,15 +880,17 @@ def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_i
 
 
 PROC_DEADLINE = r"""def main() -> Void
+  args = System.args()
   waits: Map[String, Int] = {}
   reads: Map[String, Int] = {}
   k = 0
   while k < 16
-    p = Process.spawn("sh", ["-c", "sleep 0.0#{2 + k % 4}; exit 4"], 5000).unwrap!
+    pause = "0.0#{2 + k % 4}"
+    p = Process.spawn(args[0], [args[1], args[2].replace("PAUSE", pause)], 5000).unwrap!
     got = "#{Process.wait(p, 30)}"
     waits = waits.put(got, waits.get(got, 0) + 1)
     Process.close(p)
-    q = Process.spawn_captured("sh", ["-c", "sleep 0.0#{2 + k % 4}; echo hi"], ".", 5000).unwrap!
+    q = Process.spawn_captured(args[0], [args[1], args[3].replace("PAUSE", pause)], ".", 5000).unwrap!
     line = "#{Process.read_line(q, 30)}"
     if line != "ok(\"hi\")"
       line = "#{line} then #{Process.read_line(q, 1000)}"
@@ -906,17 +910,23 @@ end
 """
 
 
-@POSIX_ONLY
+# The children of PROC_DEADLINE: sh where there is one, so they start at once and the race is close; Python on Windows.
+DEADLINE_CHILDREN = ((PYTHON, "-c", "import sys, time; time.sleep(PAUSE); sys.exit(4)",
+                      "import time; time.sleep(PAUSE); print('hi', flush=True)") if WINDOWS else
+                     ("sh", "-c", "sleep PAUSE; exit 4", "sleep PAUSE; echo hi"))
+
+
 @RACE
 def test_process_exits_and_lines_that_race_a_deadline_give_the_result_or_the_timeout(tmp_path, repeats):
     # A wait whose 30 ms deadline races the exit of a child that sleeps 20 to 50 ms: the status or the timeout (a wait
     # that times out leaves the child as it is). A read that races a line the same way: the line, or the timeout,
-    # which closes the child, so the next read finds it closed; never the timeout and then the line.
+    # which closes the child, so the next read finds it closed; never the timeout and then the line. On Windows the
+    # Python children take 50 ms or more to start, so there the case covers only the timeout branch.
     bytecode = program(tmp_path, "proc_deadline", PROC_DEADLINE)
     waits = {"ok(4)", 'error("network: operation timed out")'}
     reads = {'ok("hi")', 'error("network: operation timed out") then error("process: process is closed")'}
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", timeout=60)
+        result = vm(bytecode, "--allow-run", args=DEADLINE_CHILDREN, timeout=60)
         assert (result.code, result.stderr) == (0, "")
         first, second = result.stdout.split("--\n")
         assert set(first.splitlines()) <= waits and set(second.splitlines()) <= reads, result.stdout
@@ -952,8 +962,7 @@ end
 """
 
 
-@pytest.mark.skipif(not hasattr(signal, "SIGTERM") or sys.platform == "win32", reason="needs POSIX signals")
-@pytest.mark.parametrize("mode", ["signal", "exit"])
+@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), pytest.param("exit", marks=SH_CHILDREN)])
 def test_a_stop_signal_or_an_exit_kills_the_children_of_a_run_on_several_schedulers(tmp_path, mode):
     # A plain and a captured child, each with a task parked on it; the run gets SIGTERM, or a task calls
     # System.exit(3) on its scheduler. The run ends with the signal or 3, and both children are gone.
@@ -1043,7 +1052,6 @@ end
 """
 
 
-@POSIX_ONLY
 @RACE
 def test_the_child_channel_between_two_runs_on_several_schedulers(tmp_path, repeats):
     # The parent and its child both run on four schedulers. Four parent tasks send 100 lines on the channel while main
@@ -1081,7 +1089,7 @@ end
 """
 
 
-@POSIX_ONLY
+@SH_CHILDREN
 @RACE
 def test_a_crash_cancels_a_task_inside_process_close_on_another_scheduler(tmp_path, repeats):
     # process-close-cancel without its yield: the closer sends a line to `cat` and then closes the child it owns; the
@@ -1140,7 +1148,7 @@ end
 """.replace("CHILD", CHANNEL_CHILD)
 
 
-@POSIX_ONLY
+@SH_CHILDREN
 @RACE
 def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats):
     # process-channel-close without its 100 ms sleeps: main closes the child once the child has read the first byte of
@@ -1188,7 +1196,7 @@ def marked(mark):
     return [line.split(None, 1)[0] for line in listing.splitlines() if mark in line]
 
 
-@POSIX_ONLY
+@SH_CHILDREN
 @RACE
 def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeats):
     # Three tasks spawn children in a loop while main returns: every child that started is killed by the end of the
@@ -1227,7 +1235,7 @@ def main() -> Void
       Test.eq(total, 204)
     end,
     Test.test("a child process") do
-      p = try Process.spawn_captured("sh", ["-c", "echo hi"], ".", 5000)
+      p = try Process.spawn_captured(PYTHON, ["-c", "print('hi')"], ".", 20000)
       line = try Process.read_line(p, 5000)
       Process.close(p)
       Test.eq(line, "hi")
@@ -1264,11 +1272,10 @@ def same_report(tmp_path, name, text):
     return report
 
 
-@POSIX_ONLY
 def test_agentica_test_runs_a_test_file_on_several_schedulers(tmp_path):
     # `agentica test` with every VM on four schedulers: the runner and the test file speak the Test protocol over the
     # parent channel, and the report is the one of a single scheduler.
-    report = same_report(tmp_path, "units_test.agc", UNITS)
+    report = same_report(tmp_path, "units_test.agc", UNITS.replace("PYTHON", json.dumps(PYTHON)))
     assert [s["status"] for s in report["files"][0]["scenarios"]] == ["passed", "passed", "failed"]
 
 
@@ -1319,7 +1326,6 @@ end
 """
 
 
-@POSIX_ONLY
 def test_agentica_test_observes_task_crashes_and_leftovers_on_several_schedulers(tmp_path):
     # test-assertions and test-crash-observed without their yields: a test waits for its crashing tasks to end, so
     # the crash is seen on any scheduler; a leftover task waits on a channel, so it is pending when its test returns.
@@ -1522,11 +1528,17 @@ def test_net_waits_cancelled_from_other_schedulers_end_and_free_their_port(tmp_p
     # and an accept; then a crashing owner cancels its children parked the same way. The jobs are cancelled by
     # whichever scheduler runs the canceller, the run ends, no task is left (the crashed owner's children end on
     # their own schedulers, so main waits for the count to reach 0), and the accept's port is free again.
+    # Windows takes a 64 MiB send into its buffers at once (as in test_vm_tcp.py), so there the send may end first,
+    # and on Windows this case does not prove that a parked send is cancelled; the other systems do.
     bytecode = program(tmp_path, "net_cancel", NET_CANCEL)
+    timed_out = 'error("task: timed out")'
+    sends = {timed_out, 'ok("sent")'} if WINDOWS else {timed_out}
     for _ in range(repeats):
         result = vm(bytecode, args=(TLS_DIR,))
         lines = result.stdout.splitlines()
-        assert (result.code, lines[:7], lines[8:]) == (0, ['error("task: timed out")'] * 7, ["true", "0"]), result.stderr
+        assert (result.code, lines[0], lines[2:5], lines[6], lines[8:]) == (
+            0, timed_out, [timed_out] * 3, timed_out, ["true", "0"]), result.stderr
+        assert {lines[1], lines[5]} <= sends, result.stdout
         assert lines[7].startswith("owner: task crashed: RUNTIME-DIVISION-BY-ZERO"), lines[7]
 
 
@@ -1715,6 +1727,304 @@ def test_a_close_from_another_scheduler_ends_parked_reads_and_sends(tmp_path, re
         assert (result.code, result.stdout) == (0, expected), result.stderr
 
 
+OWNER_CRASH = r"""def crash() -> Result[Int]
+  zero = 0
+  return ok(1 / zero)
+end
+
+def own_listener(listener: Listener) -> Result[Int]
+  return crash()
+end
+
+def own_socket(socket: Socket) -> Result[Int]
+  return crash()
+end
+
+def own_process(p: Process) -> Result[Int]
+  return crash()
+end
+
+def accepted(got: Result[Socket]) -> String
+  case got
+    ok(socket) ->
+      TCP.close(socket)
+      return "accepted"
+    error(e) -> return e
+  end
+end
+
+def tally(seen: Map[String, Int], label: String, got: String) -> Map[String, Int]
+  key = "#{label}: #{got}"
+  return seen.put(key, seen.get(key, 0) + 1)
+end
+
+def main() -> Void
+  python = System.args()[0]
+  seen: Map[String, Int] = {}
+  round = 0
+  while round < 40
+    listener = TCP.listen("127.0.0.1", 0).unwrap!
+    port = TCP.local_port(listener)
+    waiting = TCP.connect("127.0.0.1", port, 5000).unwrap!
+    Task.await(Task.spawn_owning(&own_listener, listener))
+    seen = tally(seen, "accept", accepted(TCP.accept(listener, 1)))
+    TCP.close(waiting)
+
+    server = TCP.listen("127.0.0.1", 0).unwrap!
+    near = TCP.connect("127.0.0.1", TCP.local_port(server), 5000).unwrap!
+    far = TCP.accept(server, 5000).unwrap!
+    Task.await(Task.spawn_owning(&own_socket, far))
+    seen = tally(seen, "send", "#{TCP.send(far, "x\n", 1000)}")
+    seen = tally(seen, "peer", "#{TCP.read_line(near, 5000)}")
+    TCP.close(near)
+    TCP.close_listener(server)
+
+    child = Process.spawn(python, ["-c", "import time; time.sleep(60)"], 5000).unwrap!
+    Task.await(Task.spawn_owning(&own_process, child))
+    seen = tally(seen, "wait", "#{Process.wait(child, 1000)}")
+    round = round + 1
+  end
+  for key in seen.keys.sort
+    puts("#{key} x#{seen.get(key, 0)}")
+  end
+end
+"""
+
+OWNER_CRASH_PORT = r"""def own(listener: Listener) -> Result[Int]
+  zero = 0
+  return ok(1 / zero)
+end
+
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  port = TCP.local_port(listener)
+  Task.await(Task.spawn_owning(&own, listener))
+  puts("#{port}")
+  IO.gets()
+end
+"""
+
+
+@RACE
+def test_handles_of_a_crashed_owner_are_closed_when_its_await_returns(tmp_path, repeats):
+    # #402: a listener, a socket and a child that a task owns itself are closed by the time the caller's Task.await of
+    # that crashed task returns: the I/O thread runs the close step, posted at the owner's end, before any step that
+    # the woken caller posts. It does not pin the order inside finish_task (the close and the wake both run under
+    # rt->sync, and the FIFO inbox orders the close first either way); the descendant cases below cover the gap that
+    # order did leave. Each run checks 40 rounds of each kind.
+    bytecode = program(tmp_path, "owner_crash", OWNER_CRASH)
+    expected = ['accept: network: listener is closed x40', 'peer: error("network: end of input") x40',
+                'send: error("network: socket is closed") x40', 'wait: error("process: process is closed") x40']
+    for _ in range(repeats):
+        result = vm(bytecode, "--allow-run", args=(PYTHON,), timeout=120)
+        assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
+
+
+@RACE
+def test_the_port_of_a_crashed_owner_refuses_a_peer_once_its_await_returns(tmp_path, repeats):
+    # #402, seen from outside the run: the peer connects as soon as the run prints the port, which the run does after
+    # the await of the listener's crashed owner. The listener is closed by then, so the connection is refused.
+    bytecode = program(tmp_path, "owner_crash_port", OWNER_CRASH_PORT)
+    for _ in range(5 * repeats):
+        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=vm_environment(MULTICORE))
+        try:
+            assert wait_readable(process.stdout.fileno(), 30), "the run printed no port"
+            port = int(process.stdout.readline())
+            with pytest.raises(ConnectionRefusedError):
+                socket.create_connection(("127.0.0.1", port), timeout=5).close()
+            process.stdin.close()
+            assert process.wait(timeout=30) == 0
+        finally:
+            kill_process(process.pid)
+            process.stdout.close()
+
+
+OWNER_DESCENDANTS = r"""struct Ending
+  kind: String
+  up: Channel[Channel[Int]]
+  down: Channel[Channel[Int]]
+end
+
+def spin(listener: Listener) -> Result[Int]
+  k = 0
+  while k < 50000000
+    k = k + 1
+  end
+  return ok(k)
+end
+
+def wait(listener: Listener) -> Result[Int]
+  case TCP.accept(listener, 60000)
+    ok(socket) -> TCP.close(socket)
+    error(e) -> return ok(0)
+  end
+  return ok(1)
+end
+
+def crash() -> Result[Int]
+  zero = 0
+  return ok(1 / zero)
+end
+
+def crash_busy(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&spin, listener)
+  return crash()
+end
+
+def crash_wait(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&wait, listener)
+  return crash()
+end
+
+def cancel_busy(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&spin, listener)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def middle(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&spin, listener)
+  return spin(listener)
+end
+
+def crash_nested(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&middle, listener)
+  Task.sleep(2)
+  return crash()
+end
+
+def cancel_nested(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&middle, listener)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def spin_channel(inner: Channel[Int]) -> Result[Int]
+  k = 0
+  while k < 50000000
+    k = k + 1
+  end
+  return ok(k)
+end
+
+def hand_on(up: Channel[Channel[Int]]) -> Result[Int]
+  inner: Channel[Int] = Channel.new(1)
+  Task.spawn_owning(&spin_channel, inner)
+  try up.send(inner, 5000)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def ended_middle(e: Ending) -> Result[Channel[Int]]
+  if e.kind.starts_with?("map")
+    results = Task.map([e.up], 1, 20, &hand_on)
+    return e.up.recv(5000)
+  end
+  middle = Task.spawn(&hand_on, e.up)
+  inner = try e.up.recv(5000)
+  Task.cancel(middle)
+  return ok(inner)
+end
+
+def ending(e: Ending) -> Result[Int]
+  inner = try ended_middle(e)
+  try e.down.send(inner, 5000)
+  if e.kind.ends_with?("crash")
+    return crash()
+  end
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def sent(got: Result[Void]) -> String
+  case got
+    ok(_) -> return "sent"
+    error(e) -> return e
+  end
+end
+
+def start(kind: String, listener: Listener) -> Task[Result[Int]]
+  case kind
+    "crash-busy" -> return Task.spawn_owning(&crash_busy, listener)
+    "crash-wait" -> return Task.spawn_owning(&crash_wait, listener)
+    "crash-nested" -> return Task.spawn_owning(&crash_nested, listener)
+    "cancel-nested" -> return Task.spawn_owning(&cancel_nested, listener)
+    _ -> return Task.spawn_owning(&cancel_busy, listener)
+  end
+end
+
+def accepted(got: Result[Socket]) -> String
+  case got
+    ok(socket) ->
+      TCP.close(socket)
+      return "accepted"
+    error(e) -> return e
+  end
+end
+
+def main() -> Void
+  seen: Map[String, Int] = {}
+  for kind in ["crash-busy", "crash-wait", "crash-nested", "cancel-busy", "cancel-nested"]
+    round = 0
+    while round < 100
+      listener = TCP.listen("127.0.0.1", 0).unwrap!
+      waiting = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
+      owner = start(kind, listener)
+      if kind.starts_with?("cancel")
+        Task.sleep(2)
+        Task.cancel(owner)
+      end
+      Task.await(owner)
+      key = "#{kind}: #{accepted(TCP.accept(listener, 1))}"
+      seen = seen.put(key, seen.get(key, 0) + 1)
+      TCP.close(waiting)
+      round = round + 1
+    end
+  end
+  for kind in ["map-cancel", "map-crash", "middle-cancel", "middle-crash"]
+    round = 0
+    while round < 100
+      up: Channel[Channel[Int]] = Channel.new(1)
+      down: Channel[Channel[Int]] = Channel.new(1)
+      owner = Task.spawn(&ending, Ending(kind: kind, up: up, down: down))
+      inner = down.recv(5000).unwrap!
+      if kind.ends_with?("cancel")
+        Task.cancel(owner)
+      end
+      Task.await(owner)
+      key = "#{kind}: #{sent(inner.send(1, 1))}"
+      seen = seen.put(key, seen.get(key, 0) + 1)
+      round = round + 1
+    end
+  end
+  for key in seen.keys.sort
+    puts("#{key} x#{seen.get(key, 0)}")
+  end
+end
+"""
+
+
+@RACE
+def test_handles_held_by_cancelled_descendants_are_closed_when_the_await_of_their_ancestor_returns(tmp_path, repeats):
+    # #402, the nested case: the owner hands the listener on to a child (and, nested, the child to a grandchild), then
+    # crashes or is cancelled. The cancel of a descendant that runs on another scheduler (busy, or just starting its
+    # accept) is deferred to the end of its turn, so the owner's end waits for it (hold in vm/task.c): Task.await of
+    # the owner returns only once the listener is closed, and the pending connection is never accepted. Without the
+    # hold, about a quarter of the rounds accept it. The map-* and middle-* kinds cover a descendant that an earlier
+    # cancel holds already: the owner cancels the middle task (or Task.map times out the item) whose child owns a
+    # channel and keeps running, the child moves up to the owner, then the owner crashes or is cancelled. The owner's
+    # end must wait for the child through the top of its holder chain; a send to the child's channel right after the
+    # await must fail. Before that fix about half of those rounds sent. 100 rounds of each kind per run.
+    bytecode = program(tmp_path, "owner_descendants", OWNER_DESCENDANTS)
+    kinds = ["cancel-busy", "cancel-nested", "crash-busy", "crash-nested", "crash-wait"]
+    expected = [f"{kind}: network: listener is closed x100" for kind in kinds]
+    expected += [f"{kind}: channel: closed x100" for kind in ["map-cancel", "map-crash", "middle-cancel", "middle-crash"]]
+    for _ in range(repeats):
+        result = vm(bytecode, timeout=120)
+        assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
+
+
 NET_STOP = r"""def read(socket: Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
@@ -1744,8 +2054,8 @@ end
 """
 
 
-@pytest.mark.skipif(not hasattr(signal, "SIGTERM") or sys.platform == "win32", reason="needs POSIX signals")
-@pytest.mark.parametrize("mode", ["signal", "exit"])
+@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), pytest.param("exit", marks=known_issue(
+    WINDOWS, 489, "System.exit resets the open sockets on Windows"))])
 def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path, mode):
     # A run with a parked accept, a parked TCP read and a parked TLS read gets SIGTERM, or main calls System.exit(3)
     # on its scheduler: the run ends with the signal or 3, and the peer sees EOF on the TCP socket and close_notify on
@@ -1848,8 +2158,8 @@ end
 """
 
 
-@pytest.mark.skipif(not hasattr(os, "mkfifo") or not hasattr(signal, "SIGTERM") or sys.platform == "win32",
-                    reason="needs POSIX signals and FIFOs")
+@host_only(WINDOWS or not hasattr(os, "mkfifo") or not hasattr(signal, "SIGTERM"),
+           "Windows has no POSIX stop signals and no FIFO files")
 def test_a_stop_signal_ends_a_run_with_spinners_and_a_blocked_reader(tmp_path):
     # The I/O thread handles the signal (the schedulers keep it blocked) and ends the run at once, with spinning tasks
     # and a task blocked on a FIFO that is held open and never written.

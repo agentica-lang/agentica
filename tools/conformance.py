@@ -50,7 +50,10 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
-KNOWN_ISSUES: dict[int, str] = {}
+KNOWN_ISSUES: dict[int, str] = {
+    486: "the multicore cases whose children are sh scripts (POSIX process ids, descriptor 3, ps) have no Windows test",
+    489: "System.exit resets the open TCP sockets on Windows instead of closing them",
+}
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
 TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier only", "no cases in this tier")
@@ -63,14 +66,16 @@ WINDOWS_ONLY_MODULES = frozenset({
 })
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
-# is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes and
-# colon names; macOS lacks /dev/full and non-UTF-8 names; the other systems lack the Windows-only modules above.
+# is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
+# descriptor flags and colon names; macOS lacks /dev/full and non-UTF-8 names; the other systems lack the Windows-only
+# modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py",
     "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_spec_packages.py",
     "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_file_lines.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
+    "tests/test_vm_multicore.py",
 })
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_vm_stdout.py"})
 HOST_ONLY_ALLOWED = {
@@ -147,6 +152,10 @@ AREAS = {
         "TCP, TLS and HTTP, client and server, against independent peers",
         ["tests/test_vm_tcp.py", "tests/test_vm_tls.py", "tests/test_vm_http.py"],
     ),
+    "multicore": (
+        "programs on four schedulers: the goldens, races between schedulers, the I/O thread",
+        ["tests/test_vm_multicore.py"],
+    ),
 }
 
 # The destructive filesystem group (make test-remove-actions): it writes one JUnit file, destructive/remove-actions.xml,
@@ -184,7 +193,6 @@ EXCLUDED = {
     "tests/test_vm_style.py": "a check of the C sources (style), the same on every system",
     "tests/test_timeout_guard.py": "the time limit of the test harness itself",
     "tests/test_vm_trace.py": "VM tracing, a developer tool of the Linux debug builds",
-    "tests/test_vm_multicore.py": "programs on several schedulers; step 13b brings them to Windows and macOS",
 }
 
 
