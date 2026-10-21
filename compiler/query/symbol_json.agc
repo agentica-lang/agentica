@@ -21,11 +21,8 @@ export def json(found: Model.Symbols) -> Json
   })
 end
 
-def skipped_json(left: Model.Skipped) -> Json
-  return JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
-end
-
-def match_json(match: Model.Symbol) -> Json
+## The object of one match, which `refs` gives its `definition` as well.
+export def match_json(match: Model.Symbol) -> Json
   if match.kind == "builtin"
     return JSON.object({
       "kind": JSON.from(match.kind),
@@ -56,4 +53,8 @@ def match_json(match: Model.Symbol) -> Json
     return JSON.object(fields.put("payload", written).put("enum", JSON.from(match.owner)))
   end
   return JSON.object(fields)
+end
+
+def skipped_json(left: Model.Skipped) -> Json
+  return JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
 end

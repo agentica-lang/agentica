@@ -113,13 +113,15 @@ stage:
   - **Codes:** `QUERY-USAGE`, at the pseudo-file `<arguments>` (line 1, column
     1), exit 2: a missing or extra argument, an unknown option, `--stdin`
     without a file, a bad `FILE:LINE:COL`, an unreadable path, or a folder with
-    no `*.agc` file. `QUERY-NOT-FOUND`, at `<arguments>`, exit 2: `symbol` NAME
-    is in no linked module and no builtin (`symbol` also exits 1 with the first
-    diagnostic when no root links).
-    `QUERY-NO-EXPRESSION`, at the position in the file, exit 2: `type-at` or
-    `refs` on no token of an expression or name (`refs` also on a name in an
-    import line). The stage reads the words (`query_options.agc`), picks and
-    names the file (`query_files.agc`) and lists the declarations
+    no `*.agc` file. `QUERY-NOT-FOUND`, at `<arguments>`, exit 2: `symbol` or
+    `refs` NAME is in no linked module and no builtin (both also exit 1 with the
+    first diagnostic when no root links). `QUERY-AMBIGUOUS-NAME`, at
+    `<arguments>`, exit 2: a `refs` NAME that more than one declaration answers
+    to (`refs_name.agc`). `QUERY-NO-EXPRESSION`, at the position in the file,
+    exit 2: `type-at` or `refs` on no token of an expression or name (`refs`
+    also on a module alias or a path of an import line). The stage reads the
+    words (`query_options.agc`), picks and names the file (`query_files.agc`)
+    and lists the declarations
     (`outline.agc`, `outline_json.agc`, `outline_text.agc`). `outline` lexes and
     parses only, so a lex or parse error of the file keeps its own code and
     exits 1; it reuses `docs/` for the items. `type-at` and `refs` link and
@@ -300,7 +302,10 @@ help that shows the import of its std module (`import HTTP from "std/http"` for
 module was embedded from `stdlib/`. A user file, a relative import and a `pkg/`
 module all get it. `HttpWire` is also left out of `help`, its JSON and every
 "did you mean". The linked program carries the root file's `docs` and module
-doc; nothing after the parser reads them.
+doc; nothing after the parser reads them. `link_programs` (the query commands)
+links several roots into one program: `load_roots` shares one walk, every module
+gets an `@N::` prefix, and a root whose load or rewrite fails is dropped as a
+whole (`Linker.Left`), so the others still link.
 
 Names imported with `import {a, B as C} from "path"` live in a per-file `named`
 table (local name to the module key and the original name; `bind_names`),

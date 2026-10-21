@@ -18,8 +18,10 @@ import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
 import Refs from "../query/refs"
+import RefsName from "../query/refs_name"
 import SourceFile from "../syntax/source_file"
 import Symbol from "../query/symbol"
+import SymbolLink from "../query/symbol_link"
 import SymbolPaths from "../query/symbol_paths"
 import TypeAt from "../query/type_at"
 
@@ -118,12 +120,71 @@ export def type_at(settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
 end
 
 ## The declaration of the name at the position `asked` and every reference to it, in the file of the position (linked
-## and checked as for `type_at`) and what it imports; a file that only imports it is not seen.
+## and checked as for `type_at`) and what it imports. A file that only imports it is not seen: `refs_at` adds files.
 export def refs(settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
-  case position_front(settings, asked)
-    Fronted.Unreadable -> return Referenced.Unreadable
-    Fronted.Rejected(problem) -> return Referenced.Rejected(problem)
-    Fronted.Done(front) -> return referenced(settings, asked, front)
+  return refs_at(settings, asked, [], "")
+end
+
+## As `refs`, over the file of the position and the files and folders of `paths` too, linked together
+## (`Linker.link_programs`), so a use in any of them is found. A file of `paths` that does not link is left out and
+## listed in `skipped`; the file of the position must link. A path that names no `*.agc` file is QUERY-USAGE with
+## `usage` as the help ("" for none).
+export def refs_at(
+  settings: Env.Settings,
+  asked: QueryPosition.Asked,
+  paths: List[String],
+  usage: String,
+) -> Referenced
+  case Front.read_root(settings.workspace, asked.file)
+    Front.Root.Unreadable(_) -> return Referenced.Unreadable
+    Front.Root.Invalid(problem) -> return Referenced.Rejected(problem)
+    Front.Root.Readable ->
+      case SymbolPaths.expand_from(settings.workspace, asked.file, paths, usage)
+        SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
+        SymbolPaths.Expanded.Files(roots) ->
+          linked = SymbolLink.link(roots, settings)
+          case linked.program
+            Ast.Optional.Absent -> return Referenced.Rejected(linked.skipped[0].problem)
+            Ast.Optional.Present(program) ->
+              # The file of the position is the first root: when it is left out there is nothing to ask about.
+              if program.modules[0].key != roots[0].key
+                return Referenced.Rejected(linked.skipped[0].problem)
+              end
+              case Front.query_linked(program, settings)
+                Front.Outcome.Rejected(problem) -> return Referenced.Rejected(named_in(settings, problem, roots))
+                Front.Outcome.Done(front) -> return referenced(settings, asked, front, linked.skipped)
+              end
+          end
+      end
+  end
+end
+
+## Every reference to the declaration that `name` names in the modules linked from `paths` (`.` when there are none; as
+## for `symbol`, `buffer` is searched first). A name that nothing declares is QUERY-NOT-FOUND and one that several
+## declarations answer to is QUERY-AMBIGUOUS-NAME, with the place of each candidate in the help. A builtin is a name
+## too. The program is checked as for `refs`, so an error of the program is the first problem.
+export def refs_named(
+  settings: Env.Settings,
+  name: String,
+  paths: List[String],
+  buffer: String,
+  usage: String,
+) -> Referenced
+  if name == ""
+    return Referenced.Rejected(QueryOptions.refusal("missing NAME or FILE:LINE:COL", usage))
+  end
+  case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
+    SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
+    SymbolPaths.Expanded.Files(roots) ->
+      linked = SymbolLink.link(roots, settings)
+      case Symbol.search(name, roots, linked)
+        Symbol.Outcome.Refused(problem) -> return Referenced.Rejected(problem)
+        Symbol.Outcome.Found(found) ->
+          case RefsName.pick(name, found.matches, settings)
+            RefsName.Picked.Refused(problem) -> return Referenced.Rejected(problem)
+            RefsName.Picked.One(match) -> return referenced_by_name(settings, name, match, linked, roots)
+          end
+      end
   end
 end
 
@@ -198,11 +259,50 @@ def located(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Che
   end
 end
 
-def referenced(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Checked) -> Referenced
+def referenced(
+  settings: Env.Settings,
+  asked: QueryPosition.Asked,
+  front: Front.Checked,
+  skipped: List[SymbolLink.Skipped],
+) -> Referenced
   case Refs.answer(front.linked, front.checked, asked)
     Diag.Outcome.Failed(problem) -> return Referenced.Rejected(Front.stage_problem(asked.file, problem))
-    Diag.Outcome.Done(found) -> return Referenced.Done(Convert.refs(asked, found, file_names(settings, found)))
+    Diag.Outcome.Done(found) ->
+      query = "#{asked.file}:#{asked.line}:#{asked.column}"
+      return Referenced.Done(Convert.refs(query, found, skipped, file_names(settings, found)))
   end
+end
+
+# The references to the declaration `match` of a name, once the program checks.
+def referenced_by_name(
+  settings: Env.Settings,
+  name: String,
+  match: Symbol.Match,
+  linked: SymbolLink.Linked,
+  roots: List[SymbolPaths.Root],
+) -> Referenced
+  case linked.program
+    Ast.Optional.Absent -> return Referenced.Rejected(linked.skipped[0].problem)
+    Ast.Optional.Present(program) ->
+      case Front.query_linked(program, settings)
+        Front.Outcome.Rejected(problem) -> return Referenced.Rejected(named_in(settings, problem, roots))
+        Front.Outcome.Done(front) ->
+          found = Refs.of_match(front.linked, front.checked, match)
+          return Referenced.Done(Convert.refs(name, found, linked.skipped, file_names(settings, found)))
+      end
+  end
+end
+
+# The problem with a file of the roots named as it was typed: the checker knows a root by its canonical path, and a
+# diagnostic keeps the name as typed (docs/future/39-semantic-cli.md, 39.4), as `named` does for the one file of a
+# check.
+def named_in(settings: Env.Settings, problem: Problems.Problem, roots: List[SymbolPaths.Root]) -> Problems.Problem
+  for root in roots
+    if root?(problem.file, root.typed, settings)
+      return problem.with(file: root.typed)
+    end
+  end
+  return problem
 end
 
 # The name that the answer gives each file it mentions.

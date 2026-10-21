@@ -423,27 +423,38 @@ of a file of PATH, `std/queue.pop`, or a builtin (`Map.get`). Each match has its
 kind (`function`, `struct`, `enum`, `alias`, `constant`, `field`, `variant` or
 `builtin`), `module`, `exported` (private declarations too), signature, `##`
 doc and spans; a builtin has `help`, the object of `agentica help NAME --json`.
-Only lexing, parsing and linking are needed: each file of PATH is linked on its
-own, and one that does not is listed under `skipped` with its first diagnostic
+Only lexing, parsing and linking are needed: the files of PATH are linked
+together, and one that does not link is listed under `skipped` with its first
+diagnostic
 while the others still answer (exit 0); if none links, that diagnostic is the
 answer and the exit status is 1. A name that nothing declares is
 `QUERY-NOT-FOUND` and exits 2, as is a mistake in the arguments
 (`QUERY-USAGE`). `--stdin FILE` takes the text of FILE from standard input and
 searches it too.
 
-`agentica refs FILE:LINE:COL [--json]` lists every reference to the name at the
-position, in FILE and the files it imports: a function, struct, enum, variant,
-field (in a read, a construction and a `with`), constant, type alias, local or
-builtin. The answer has the `definition` (null for a builtin, which `builtin`
-names) and the references, each with its `kind`, the `function` it is in and the
-span of the name. The definition is not a reference. A name is told by what the
-linker and the checker resolved it to, so two fields of one name in two structs,
-or a name bound in two sibling blocks, are never mixed. A position on the name
-in a declaration picks it as well. A position on the module alias of
-`Models.total(u)` selects the function `total`, not the module. A position on a
-name in an import line is `QUERY-NO-EXPRESSION`: an import is not a reference.
-FILE is checked like `type-at`, with the same `--stdin` and exit codes. A use in
-a file that only imports FILE is not seen.
+`agentica refs NAME|FILE:LINE:COL [PATH...] [--json]` lists every reference to a
+declaration: a function, struct, enum, variant, field (in a read, a
+construction and a `with`), constant, type alias, local or builtin. The
+declaration is the one that NAME names, written as for `symbol` and resolved the
+same way, or the one the name at the position stands for. The files are linked
+together: FILE and the files under PATH for a position, the files under PATH
+(default `.`) for a NAME, and everything they import; one that does not link is
+listed under `skipped` and the others still answer, except FILE, which must
+link. The program is checked like `type-at` checks it, with the same exit codes.
+The answer has the `definition` (the `symbol` match; null for a builtin, which
+`builtin` names) and the references, each with its `kind`, the `function` it is
+in and the span of the name. The definition is not a reference. A name is told
+by what the linker and the checker resolved it to, so two fields of one name in
+two structs, or a name bound in two sibling blocks, are never mixed. A NAME that
+nothing declares is `QUERY-NOT-FOUND` and one that several declarations answer
+to is `QUERY-AMBIGUOUS-NAME`, whose help lists each as `FILE:LINE:COL`. A
+position on the name in a declaration picks it as well, and so does one on a
+name of an import list (`make` of `import {make} from "models"`), which selects
+the imported declaration. A position on the module alias of `Models.total(u)`
+selects the function `total`, not the module; one on a module alias or a path of
+an import line is `QUERY-NO-EXPRESSION`. `--stdin FILE:LINE:COL` takes the text
+of FILE from standard input; with a NAME, `--stdin FILE` searches that text as
+one more file, as for `symbol`.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by

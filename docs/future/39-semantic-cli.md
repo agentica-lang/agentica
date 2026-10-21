@@ -2,9 +2,9 @@
 
 **Status:** `outline`, `type-at` and `symbol` built (types, definitions with
 `doc` and `signature`, builtins and locals at a position; the workspace
-search). `refs FILE:LINE:COL` built for the files that `FILE` links; the `NAME`
-form, `PATH...`, `skipped` and answers from a program that does not check
-(§39.6) are planned, as is `--partial`. Row 7.2b. Agreed with the owner on
+search). `refs` built (the position form, the `NAME` form, `PATH...` and
+`skipped`); answers from a program that does not check (§39.6) are planned, as
+is `--partial`. Row 7.2b. Agreed with the owner on
 2026-10-13: agents program better when they can ask the compiler about the
 code, not only read the docs. The front end already builds a linked and checked
 program with types and spans; four CLI commands expose it, JSON first. No
@@ -119,13 +119,16 @@ changes only how diagnostics print; answers keep the text form.
   reference: it names a module, not a declaration. The position form picks the
   declaration of the name at that position, which always resolves to one
   declaration, local bindings included. Builtins work too
-  (`refs File.read src/`), with no definition. No references is not an error: an
-  empty list, exit 0. Built so far: the position form, for `FILE` and what it
-  imports (`PATH...` is not read); a position on the name where a declaration is
-  written picks it too; the program is always checked (exit 1 on an error); a
+  (`refs File.read_text src/`), with no definition. No references is not an
+  error: an empty list, exit 0. A `NAME` is resolved as `symbol` resolves it
+  and must select one declaration (§39.4). The files are `FILE` and `PATH...`
+  for the position form, `PATH...` (default `.`) for a `NAME`, linked together
+  (§39.8). A position on the name where a declaration is written picks it too,
+  and so does one on a name of an import list (`make` or `create` of
+  `import {make as create} from "models"`): it selects the imported declaration.
+  A module alias or a path of an import line is no declaration:
+  `QUERY-NO-EXPRESSION`. The program is always checked (exit 1 on an error); a
   `with` argument is a `construct` and a constant read a `value`.
-  Planned for PR9: a position on an import selects the imported declaration
-  (today it is `QUERY-NO-EXPRESSION`: an import is not a reference).
 - **`type-at FILE:LINE:COL`** (built, `docs/grammar/06b-builtins.md`): the
   checked type of the innermost expression or name at the position, and the
   definition of what it names, with the `doc` and the `signature` of the
@@ -168,7 +171,8 @@ changes only how diagnostics print; answers keep the text form.
 - **`PATH...`** are files or directories. A directory means every `*.agc` file
   under it, recursively, without `agc_libs/` and hidden directories, in bytewise
   order of the path. Arguments keep their order. The default is `.` for `symbol`
-  and `refs`; `type-at` uses `FILE` alone.
+  and the `NAME` form of `refs`; `type-at` and the position form of `refs` use
+  `FILE` alone when no `PATH...` is given.
 - **File names.** The query canonicalizes every file it reads, the files of
   `PATH...` included, and keys modules by the canonical path, so one file has
   one name (the rules of the answer's `file` are in the programming skill,
@@ -224,14 +228,15 @@ signatures are strings.
   declaration, `export` included, as in `outline`; the `range` of a `type-at`
   definition starts at the keyword after `export`, so compare `name_span`.
 - `refs`:
-  `{version, command, query, definition, references: [{kind, function, span}],
-skipped: [...]}`,
-  with `definition` a `symbol` match, or `null` for a builtin. `function` is the
-  name of the enclosing function, or `null` at the top level. Built so far:
-  `query` is the `FILE:LINE:COL` asked, `definition` adds `name_span`, the
-  `struct` of a field or the `enum` of a variant, `builtin` names a builtin
-  (else null), `references` do not hold the definition, a reference `span` is
-  the name alone (`total` of `Models.total`) and `skipped` is empty.
+  `{version, command, query, definition, builtin, references: [{kind, function,
+span}], skipped: [...]}`,
+  with `definition` a `symbol` match (same fields, `symbol_json.agc` prints
+  both), or `null` for a builtin, which `builtin` names (else null). A local is
+  a match of `kind` `parameter`, `local`, `loop` or `pattern`, with `doc` null.
+  `function` is the name of the enclosing function, or `null` at the top level.
+  `query` is the `NAME` or the `FILE:LINE:COL` asked, `references` do not hold
+  the definition, a reference `span` is the name alone (`total` of
+  `Models.total`) and `skipped` is that of `symbol`.
 - `skipped`: the roots left out (§39.6), each as `{file, diagnostic}`,
   `diagnostic` being the `--json` diagnostic object.
 
@@ -333,38 +338,32 @@ usual three formats.
 
 ### 39.8 Linking, checking and performance
 
-- **Built for `symbol` without it.** `symbol` links each root with
-  `Linker.link_file` and merges the modules by key; a root whose module an
-  earlier root linked is not linked again. That saves a link only when the
-  importer sorts before the file it imports; when the imported file sorts first
-  (a chain where each file imports the one before it) every root links its
-  closure, so a directory costs at worst one link of the closure per root (a
-  chain of 60 files takes 1.0 s, 120 files 4.3 s; `compiler/`: 11 s for 145
-  files, 1.9 s for `front_end.agc` alone). `Linker.link_programs` below, or a
-  cache kept between commands, is the real fix; `origins` and `uses` stay
-  planned for `refs`. The file given with `--stdin` is the first root.
-- **One link for all roots.** A new linker entry point, `Linker.link_programs`,
-  links several roots into one program with shared tables: each module is
-  visited once, whichever root imports it. Every module gets a `@N::` prefix,
-  roots included, so two roots can both declare `main` or `parse`; names print
-  through `Types.display_name` as today. `Linker.link_file` keeps its behavior
-  for `check` and runs.
-- **A root is a transaction.** `Linker.link_programs` visits one root and
-  resolves and rewrites its modules before the next root. The tables it adds
-  (trees, prefixes, aliases, origins, uses) are kept only if that whole root
-  links; if any step fails, in its own file or in a dependency, they are dropped
-  and the root is skipped. A module that failed is remembered with its
-  diagnostic, so a later root that reaches it is skipped with that diagnostic
-  without linking it again. Modules already linked by an earlier root stay
-  linked.
+- **One link for all roots.** `Linker.link_programs` links several roots into
+  one program with shared tables: each module is visited once, whichever root
+  imports it. Every module gets a `@N::` prefix, roots included, so two roots
+  can both declare `main` or `parse`; names print through `Types.display_name`
+  as today. The modules come in the order of the roots, and those of one root
+  in the order of its imports, as `Linker.link_file` lists them, so a file that
+  two roots reach comes with the first. `symbol` and `refs` use it. The file
+  given with `--stdin` is the first root. `Linker.link_file` keeps its behavior
+  for `check` and runs. A declared `main` of a root is not checked for its
+  signature in a query that links several roots, since its name has a prefix.
+- **A root is a transaction.** `Linker.link_programs` loads the roots one after
+  the other, then rewrites the modules of each root in turn. The modules a root
+  adds are kept only if that whole root links; if any step fails, in its own
+  file or in a dependency, they are dropped and the root is skipped. A module
+  whose rewrite failed is remembered with its diagnostic, so a later root that
+  reaches it is skipped with that diagnostic without rewriting it again; a file
+  that fails to lex, parse or load is read again by a later root that reaches it
+  and fails the same way. Modules already linked by an earlier root stay linked.
 - **Aliases.** `LinkedModule.aliases` is kept for every module of several
   roots, so `type-at` prints a type through `FILE`'s own aliases.
-- **Origins.** The linker fills a side table, `origins`: each linked identity
-  (`@N::name`) to its module key, its source name and its declaration span. It
-  also fills `uses`: each name use (call, value, type, construction, variant)
-  to the linked identity it resolves to, with the span of the name. The checker
-  never sees module keys, so this table belongs to the linker, which is where
-  the names are resolved.
+- **Origins and uses.** `LinkedModule.named` maps each name of an import list to
+  the linked name it stands for, which lets a position on an import select the
+  declaration. The linker keeps no table of uses: the linked trees already hold
+  every use under its linked identity (`@N::name`), and `query/sites.agc` reads
+  them (§39.1), with the checker's types for fields. A table filled while the
+  names are rewritten would repeat that walk.
 - **Fields and locals** come from the checker: field reads from the checker's
   `Checked.types` entry of each field access's target, which names the struct
   (§39.1; `type-at` reads it this way for the definition of a field);

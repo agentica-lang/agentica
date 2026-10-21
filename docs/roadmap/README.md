@@ -204,7 +204,7 @@ rows after them may run in parallel when needed and keep their relative order.
     ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)), in this
     order: `agentica doc` (row 22b, done), `agentica outline` (done), `agentica
     type-at` (core, docs, builtins and locals done), `agentica symbol` (done),
-    the opt-in `--partial`, `agentica refs` (position form done), JSON first;
+    the opt-in `--partial`, `agentica refs` (done), JSON first;
     front end and CLI only, nothing to run, no LSP; the full 6c round (step 10)
     measures it. The same answers as a library, `std/analysis` (issue #524):
     `Std.source` and the library without a cache are done, the cache is pending

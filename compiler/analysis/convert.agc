@@ -117,35 +117,27 @@ export def symbols(query: String, found: Symbol.Answer) -> Model.Symbols
     version: SYMBOL_VERSION,
     query: query,
     matches: found.matches.map do |match: Symbol.Match| symbol(match) end,
-    skipped: found.skipped.map do |left: SymbolLink.Skipped|
-      Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))
-    end,
+    skipped: found.skipped.map do |left: SymbolLink.Skipped| skipped_of(left) end,
   )
 end
 
-## The answer `found` of `refs` for the position `asked`. `names` gives the name the answer gives each file (a file it
-## does not hold keeps the name the linker gives it).
-export def refs(asked: Position.Asked, found: Refs.Answer, names: Map[String, String]) -> Model.Refs
-  definition: List[Model.Declaration] = []
+## The answer `found` of `refs` for `query`, with the roots left out. `names` gives the name the answer gives each file
+## (a file it does not hold keeps the name the linker gives it).
+export def refs(
+  query: String,
+  found: Refs.Answer,
+  skipped: List[SymbolLink.Skipped],
+  names: Map[String, String],
+) -> Model.Refs
+  definition: List[Model.Symbol] = []
   case found.definition
     Ast.Optional.Present(declared) ->
-      definition = [
-        Model.Declaration(
-          kind: declared.kind,
-          name: declared.name,
-          owner: found.owner,
-          module: names.get(declared.file, declared.file),
-          exported: declared.exported,
-          signature: declared.signature,
-          range: DiagnosticModel.range_of(declared.span),
-          name_range: DiagnosticModel.range_of(declared.name_span),
-        ),
-      ]
+      definition = [symbol(declared.with(file: names.get(declared.file, declared.file)))]
     Ast.Optional.Absent -> definition = definition
   end
   return Model.Refs(
     version: REFS_VERSION,
-    query: "#{asked.file}:#{asked.line}:#{asked.column}",
+    query: query,
     definition: definition,
     builtin: found.builtin,
     references: found.references.map do |use: Refs.Reference|
@@ -156,7 +148,7 @@ export def refs(asked: Position.Asked, found: Refs.Answer, names: Map[String, St
         range: DiagnosticModel.range_of(use.span),
       )
     end,
-    skipped: [],
+    skipped: skipped.map do |left: SymbolLink.Skipped| skipped_of(left) end,
   )
 end
 
@@ -167,6 +159,10 @@ export def text(value: Ast.Optional[String]) -> String
     Ast.Optional.Present(written) -> return written
     Ast.Optional.Absent -> return ""
   end
+end
+
+def skipped_of(left: SymbolLink.Skipped) -> Model.Skipped
+  return Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))
 end
 
 # `alias` is the empty text for an import with a list of names.

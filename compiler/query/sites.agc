@@ -93,14 +93,35 @@ export def of_module(
   return distinct(out.sort_by do |site: Site| site.reach.start.offset end)
 end
 
-# The target of a name that is a top-level declaration or a builtin.
-def named(name: String) -> Target
+## The target of a name that is a top-level declaration (its linked name) or a builtin.
+export def named(name: String) -> Target
   return Target(key: "name|#{name}", kind: "name", owner: "", name: name)
 end
 
-# The target of the field or variant `name` of the struct or enum `owner`.
-def member(kind: String, owner: String, name: String) -> Target
+## The target of the field or variant `name` of the struct or enum `owner` (a linked name); `kind` is `field` or
+## `variant`.
+export def member(kind: String, owner: String, name: String) -> Target
   return Target(key: "#{kind}|#{owner}|#{name}", kind: kind, owner: owner, name: name)
+end
+
+## The target of the imported name that the character at `offset` is on in the import lists of `module`: `make` or
+## `create` of `import {make as create} from "models"`. An import is not a reference, but it names a declaration, which
+## a query can select. Absent elsewhere, an alias import (`import Models from "models"`) included: it names a module.
+export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Optional[Target]
+  for declaration in module.parsed.declarations
+    case declaration
+      Ast.Decl.Import(node) ->
+        for entry in node.names
+          on_name = holds(entry.span, offset) or holds(entry.local_span, offset)
+          linked = module.named.get(entry.local)
+          if on_name and linked.ok?
+            return Ast.Optional.Present(named(linked.unwrap!))
+          end
+        end
+      _ -> next
+    end
+  end
+  return Ast.Optional.Absent
 end
 
 def declaration_names(declaration: Ast.Decl) -> List[String]
@@ -113,6 +134,10 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
     Ast.Decl.Import(_) -> return []
     Ast.Decl.Export(_) -> return []
   end
+end
+
+def holds(span: Source.Span, offset: Int) -> Bool
+  return span.start.offset <= offset and offset < span.stop.offset
 end
 
 # The same name written once is one site: a rewritten `x += 1` or a receiver may carry one span twice.

@@ -225,6 +225,46 @@ def test_a_root_that_does_not_link_is_skipped_with_its_first_diagnostic_and_the_
     problem(symbol("a", "one.agc", cwd=tmp_path), "LEX-UNTERMINATED-STRING", 1)
 
 
+def test_a_chain_of_imports_is_linked_once_and_its_matches_come_in_the_order_the_roots_were_linked(tmp_path):
+    # Each file imports the one before it, which sorts first: every root reaches all the files before it.
+    count = 30
+    for number in range(1, count + 1):
+        previous = f'import Before from "f{number - 1:03d}"\n\n' if number > 1 else ""
+        call = f"Before.step() + 1" if number > 1 else "1"
+        (tmp_path / f"f{number:03d}.agc").write_text(
+            f"{previous}export def step() -> Int\n  return {call}\nend\n", encoding="utf-8")
+    report = answer("step", ".", cwd=tmp_path)
+    assert [m["module"] for m in report["matches"]] == [f"f{number:03d}.agc" for number in range(1, count + 1)]
+    assert report["skipped"] == []
+    # Only the file asked for and what it imports are searched, the file first and then its imports in order.
+    assert [m["module"] for m in answer("step", "f005.agc", cwd=tmp_path)["matches"]] == [
+        f"f{number:03d}.agc" for number in range(5, 0, -1)]
+
+
+def test_a_root_is_a_transaction_the_modules_it_linked_stay_and_a_module_that_failed_fails_every_root_that_reaches_it(
+        tmp_path):
+    (tmp_path / "lib.agc").write_text("export def helper() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (tmp_path / "dep_bad.agc").write_text(
+        'import Lib from "lib"\n\nexport def bad() -> Int\n  return Lib.nothere()\nend\n', encoding="utf-8")
+    for name in ("a_first", "b_second"):
+        (tmp_path / f"{name}.agc").write_text(
+            'import Lib from "lib"\nimport Dep from "dep_bad"\n\ndef %s() -> Int\n  return Lib.helper()\nend\n' % name,
+            encoding="utf-8")
+    (tmp_path / "z_third.agc").write_text(
+        'import Lib from "lib"\n\ndef z_third() -> Int\n  return Lib.helper()\nend\n', encoding="utf-8")
+    report = answer("helper", ".", cwd=tmp_path)
+    # `lib.agc` linked while `a_first` was tried; the root that failed left nothing else behind.
+    assert [m["module"] for m in report["matches"]] == ["lib.agc"]
+    skipped = {item["file"]: item["diagnostic"] for item in report["skipped"]}
+    assert sorted(skipped) == ["a_first.agc", "b_second.agc", "dep_bad.agc"]
+    assert {item["code"] for item in skipped.values()} == {"CHECK-IMPORT-NAME"}
+    assert skipped["a_first.agc"] == skipped["b_second.agc"] and skipped["a_first.agc"]["file"].endswith("dep_bad.agc")
+    assert skipped["dep_bad.agc"]["file"] == "dep_bad.agc"
+    assert answer("z_third", ".", cwd=tmp_path)["matches"][0]["module"] == "z_third.agc"
+    # The skipped roots are not searched.
+    problem(symbol("a_first", ".", cwd=tmp_path), "QUERY-NOT-FOUND", 2)
+
+
 def test_a_folder_names_agc_and_agc_libs_in_any_case_as_the_package_hash_does(tmp_path):
     (tmp_path / "AGC_LIBS").mkdir()
     body = "def pick() -> Int\n  return 1\nend\n"

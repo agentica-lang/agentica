@@ -91,12 +91,14 @@ a file, a bad `FILE:LINE:COL`, or a path that cannot be read. It is located at
 the pseudo-file `<arguments>`, line 1, column 1, and the command exits 2.
 `QUERY-NO-EXPRESSION` is a `type-at` or `refs` position that is on no token of
 an expression (a blank between tokens, a comment, a keyword, past the end of a
-line or of the file), or a `refs` position on a name in an import line (an
-import is not a reference); it is located at the position in the file (the empty
-span at the end of the line or of the file when the position is past it) and
-exits 2. `QUERY-NOT-FOUND` is a `symbol` NAME that no linked module declares and
-the catalog lacks; it is located at `<arguments>`, may carry a "did you mean"
-help, and exits 2. A `LEX-`, `PARSE-` or `CHECK-` error in the queried file
+line or of the file), or a `refs` position on a module alias or a path of an
+import line (a module is not a declaration); it is located at the position in
+the file (the empty span at the end of the line or of the file when the position
+is past it) and exits 2. `QUERY-NOT-FOUND` is a `symbol` or `refs` NAME that no
+linked module declares and the catalog lacks; it is located at `<arguments>`,
+may carry a "did you mean" help, and exits 2. `QUERY-AMBIGUOUS-NAME` is a `refs`
+NAME that more than one declaration answers to; it is located at `<arguments>`,
+its help lists each candidate as `FILE:LINE:COL`, and it exits 2. A `LEX-`, `PARSE-` or `CHECK-` error in the queried file
 exits 1, and wins over a position that is on no expression.
 
 Names and forms from other languages get a `help` that names the Agentica form.

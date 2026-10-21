@@ -4,7 +4,7 @@
 ## signature, the `##` doc and the spans that `outline` and `type-at` give. A name is written as the code writes it:
 ## `total`, `User.email`, `Option.Some`, through the alias a root file imports the module under (`Models.User`),
 ## through `std/MOD.` for a module of the standard library, or as a builtin (`Map.get`, `puts`). Linking is in
-## symbol_link.agc.
+## symbol_link.agc. `agentica refs NAME` takes its name from `search`, so the two commands resolve a name alike.
 
 import BuiltinModel from "../catalog/builtin_model"
 import {PUBLIC_NAMES, form_signature} from "../catalog/builtins"
@@ -66,7 +66,12 @@ end
 ## the answer is the first problem of the first one (an error of the program, exit status 1). A name that nothing
 ## declares is QUERY-NOT-FOUND.
 export def answer(name: String, roots: List[SymbolPaths.Root], settings: Env.Settings) -> Outcome
-  linked = SymbolLink.link(roots, settings)
+  return search(name, roots, SymbolLink.link(roots, settings))
+end
+
+## The matches of `name` in `linked`, the program of `roots` (symbol_link.agc): as `answer`, for a caller that needs
+## the program as well.
+export def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLink.Linked) -> Outcome
   if linked.modules.size == 0
     return Outcome.Refused(linked.skipped[0].problem)
   end
@@ -76,6 +81,34 @@ export def answer(name: String, roots: List[SymbolPaths.Root], settings: Env.Set
     return Outcome.Refused(not_found(name, linked))
   end
   return Outcome.Found(Answer(matches: matches, skipped: linked.skipped))
+end
+
+## The declaration of `module` whose name is written at `name_span`: a top-level declaration, a field or a variant, as
+## `answer` lists it (the `file` is the key of the module). Absent when the span is no declaration's name.
+export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Ast.Optional[Match]
+  at = name_span.start.offset
+  for item in Model.declared(module.parsed, module.text)
+    if item.name_span.start.offset == at
+      return Ast.Optional.Present(item_match(module.key, item))
+    end
+    case item.detail
+      Model.Detail.Struct(fields) ->
+        for field in fields
+          if field.name_span.start.offset == at
+            return Ast.Optional.Present(field_match(module.key, item, field))
+          end
+        end
+      Model.Detail.Enum(variants) ->
+        for variant in variants
+          if variant.name_span.start.offset == at
+            return Ast.Optional.Present(variant_match(module.key, item, variant))
+          end
+        end
+      Model.Detail.Function(_, _) -> next
+      Model.Detail.Plain -> next
+    end
+  end
+  return Ast.Optional.Absent
 end
 
 # The aliases that the files of the roots import each module under, by the key of the module. The same alias can name

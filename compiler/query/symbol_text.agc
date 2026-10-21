@@ -13,7 +13,12 @@ end
 
 ## One line for each file left out, each with a line feed at the end; empty when none was.
 export def skipped_text(found: Model.Symbols) -> String
-  lines = found.skipped.map do |left: Model.Skipped| "skipped #{left.file}: #{left.diagnostic.code}\n" end
+  return skipped_lines(found.skipped)
+end
+
+## The same lines for any answer that lists `skipped` files (`agentica refs` too).
+export def skipped_lines(skipped: List[Model.Skipped]) -> String
+  lines = skipped.map do |left: Model.Skipped| "skipped #{left.file}: #{left.diagnostic.code}\n" end
   return lines.join("")
 end
 
