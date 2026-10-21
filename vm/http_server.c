@@ -332,12 +332,22 @@ static agc_value builtin_close_server(agc_vm *vm, agc_value *args, uint32_t span
   return agc_void();
 }
 
+/* Waits for the close, then for every task of the group to end. The close cancels the group, but a task of it that
+   is in a turn on another scheduler ends only after that turn (N > 1), moved up to the server's owner; without the
+   join, the owner could see it still running after HTTP.wait, and Test.test report it as a leftover. The wait for
+   the close is a retry: its result is dropped and the call runs again to join the group. This shared row runs under
+   rt->sync, as shut_server does, so the group of a closed server is cancelled already. */
 static agc_value builtin_wait(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  server *s = agc_as_http_server(vm, args[0])->state->native;
-  if (!s || atomic_load(&s->closed)) return agc_result_value(true, agc_void());
-  park(vm, s, false);
-  return agc_void();
+  agc_http_server *hs = agc_as_http_server(vm, args[0]);
+  server *s = hs->state->native;
+  if (s && !atomic_load(&s->closed)) {
+    park(vm, s, false);
+    vm->task->retry = true;
+    return agc_void();
+  }
+  if (agc_task_join(vm, hs->group)) return agc_void();
+  return agc_result_value(true, agc_void());
 }
 
 static agc_value builtin_local_port(agc_vm *vm, agc_value *args, uint32_t span) {

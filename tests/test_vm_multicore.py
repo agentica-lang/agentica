@@ -2483,3 +2483,48 @@ def test_http_waits_queued_on_the_io_thread_leave_on_cancel_and_end_at_close(tmp
         result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode],
                      env=vm_environment(), timeout=60)
         assert (result.code, result.stdout, result.stderr) == (0, "false\nfalse\nok()\nfalse\nfalse\n", "")
+
+
+# A handler in a turn on another scheduler when close_server cancels it ends only at the end of that turn; HTTP.wait
+# waits for it, so the test that owns the server finds no task of it still running (RUNTIME-TEST-PENDING-TASKS).
+HTTP_WAIT_BUSY = r"""import HTTP from "std/http"
+
+# Connects to the port in the path to say that it started, then spins until the close of the server cancels it.
+def spin(request: HttpRequest) -> Result[HttpResponse]
+  port = String.to_int!(String.slice(request.path, 1, String.length(request.path) - 1))
+  signal = try TCP.connect("127.0.0.1", port, 5000)
+  n = 0
+  while true
+    n = n + 1
+  end
+  TCP.close(signal)
+  return ok(HttpResponse(status: 200, headers: [], body: "#{n}"))
+end
+
+def main() -> Void
+  Test.run([
+    Test.test("wait returns once a busy handler has ended") do
+      started = try TCP.listen("127.0.0.1", 0)
+      server = try HTTP.listen("127.0.0.1", 0, &spin, HTTP.server_options())
+      socket = try TCP.connect("127.0.0.1", HTTP.local_port(server), 5000)
+      try TCP.send(socket, "GET /#{TCP.local_port(started)} HTTP/1.1\r\nHost: x\r\n\r\n", 5000)
+      signal = try TCP.accept(started, 5000)
+      HTTP.close_server(server)
+      waited = HTTP.wait(server)
+      TCP.close(signal)
+      TCP.close(socket)
+      Test.eq(waited.ok?, true)
+    end
+  ])
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", SCHEDULERS])
+def test_http_wait_returns_after_a_handler_busy_on_another_scheduler_has_ended(tmp_path, schedulers):
+    source = tmp_path / "busy_test.agc"
+    source.write_text(HTTP_WAIT_BUSY, encoding="utf-8")
+    result = run([vm_command()[0], "test", "--json", str(source)],
+                 env=vm_environment({"AGENTICA_SCHEDULERS": schedulers}), timeout=60)
+    report = json.loads(result.stdout)
+    assert (result.code, report["passed"], report["failed"]) == (0, 1, 0), result.stdout
