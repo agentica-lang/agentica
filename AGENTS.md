@@ -14,7 +14,7 @@ compiler/           the front end in Agentica (§18), one folder per context:
                     syntax (lexer, parser), modules (linker), packages
                     (manifest, lock, cache), check, catalog (builtins,
                     prelude), lower, bytecode, diagnostics, docs (`agentica
-                    doc`), bdd, embedded;
+                    doc`), query (`agentica outline`), bdd, embedded;
                     front_end.agc at the root is the program the binary
                     carries
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
@@ -131,20 +131,21 @@ phase 13).
   a runtime error of the front end escape: a failure is a diagnostic.
 - Pure core: every folder of `compiler/` except `io/`, `app/`, `bdd/` and
   `embedded/` (`syntax`, `modules`, `check`, `catalog`, `lower`, `bytecode`,
-  `diagnostics`, `docs`) never calls `File`, `Dir`, `Path` (except `Path.join`),
-  `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`, `Time`,
-  `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or `puts`, and never
-  imports `io/`, `app/`, `bdd/` or an impure `std/` module. They reach the
-  machine through the `Workspace` record (`modules/workspace.agc`), which
-  `io/host.agc` builds and `app/` passes in. `app/`, `bdd/` and `io/` may do
-  I/O. `tests/test_style_core_purity.py` enforces it.
+  `diagnostics`, `docs`, `query`) never calls `File`, `Dir`, `Path` (except
+  `Path.join`), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`,
+  `HttpWire`, `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or
+  `puts`, and never imports `io/`, `app/`, `bdd/` or an impure `std/` module.
+  They reach the machine through the `Workspace` record
+  (`modules/workspace.agc`), which `io/host.agc` builds and `app/` passes in.
+  `app/`, `bdd/` and `io/` may do I/O. `tests/test_style_core_purity.py`
+  enforces it.
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-`, `BYTECODE-`) or by area (`PKG-`: the manifest, the lock
-  and the package cache), and carry a source span. A `PKG-` error about
-  `agentica.toml` or `agentica.lock` carries the file and the key path instead
-  (`key_path` in `--json`; a missing or unreadable file has the file alone).
-  Tests assert the code (and the span, or the file and key path, when it
-  matters), never message text.
+  and the package cache; `QUERY-`: the query commands, exit 2), and carry a
+  source span. A `PKG-` error about `agentica.toml` or `agentica.lock` carries
+  the file and the key path instead (`key_path` in `--json`; a missing or
+  unreadable file has the file alone). Tests assert the code (and the span, or
+  the file and key path, when it matters), never message text.
 - `compiler/` is the front end: every language change (syntax, checker rule,
   builtin row, builtin record or enum entry, message text) goes there, with its
   golden. The files `builtins_data.agc`, `check_tables.agc` and

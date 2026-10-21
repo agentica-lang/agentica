@@ -183,6 +183,7 @@ def test_a_stop_signal_while_the_input_is_pending_ends_the_run_as_a_stop(tmp_pat
     ["check", "--stdin"],
     ["check", "--stdin", "a.agc", "b.agc"],
     ["check", "--stdin", ""],
+    ["check", "--stdin", "--json"],
     ["check", "a.agc", "--stdin"],
     ["compile", "--stdin", "a.agc", "-o", "a.agcb"],
 ))

@@ -84,6 +84,12 @@ that an agent most needs to tell apart are: invalid syntax, unknown name,
 incompatible type, wrong arity, unknown or missing field, missing return, and
 runtime error.
 
+`QUERY-` is the prefix of the query commands (`agentica outline`). A mistake in
+the question is `QUERY-USAGE`: a missing or extra argument, an unknown option,
+`--stdin` without a file, or a path that cannot be read. It is located at the
+pseudo-file `<arguments>`, line 1, column 1, and the command exits 2. A `LEX-`
+or `PARSE-` error in the queried file exits 1.
+
 Names and forms from other languages get a `help` that names the Agentica form.
 A method hint is given only when the suggested method exists for the receiver's
 type:

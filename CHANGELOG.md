@@ -12,9 +12,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `agentica doc PATH [--json]` prints the exported API of a file or a `std/`
   module with its `##` docs.
+- `agentica outline FILE [--json] [--stdin FILE]` lists the declarations of a
+  file, private ones too, with their signatures, docs and spans.
 
 ### Fixed
 
+- `agentica check --stdin --json` is a usage error (exit 2); it used to take
+  `--json` as the file name.
 - A child's stderr no longer stalls the VM when the VM's stderr is not read,
   and it keeps its order with stdout when both go to one pipe (`2>&1`).
 
