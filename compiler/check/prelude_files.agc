@@ -11,9 +11,9 @@
 
 import Ast from "../syntax/ast"
 import Failure from "../diagnostics/problem"
-import Register from "../check/check_register"
-import State from "../check/check_state"
-import Statements from "../check/check_stmt"
+import Register from "check_register"
+import State from "check_state"
+import Statements from "check_stmt"
 import Diag from "../diagnostics/diagnostic"
 import Names from "../syntax/prelude_name"
 import {PRELUDE_PREFIX} from "../syntax/prelude_name"
