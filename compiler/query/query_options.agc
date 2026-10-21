@@ -40,12 +40,12 @@ export def parse(arguments: List[String], style: String, usage: String) -> Parse
     elsif word == "--ai"
       query = query.with(style: "ai")
     elsif word == "--stdin"
-      if query.stdin != "" or at + 1 >= arguments.size or arguments[at + 1] == ""
+      if query.stdin != "" or at + 1 >= arguments.size or !file_name?(arguments[at + 1])
         return Parsed.Refused(refusal("--stdin needs one FILE, once", usage))
       end
       query = query.with(stdin: arguments[at + 1])
       at += 1
-    elsif word.length > 1 and word.starts_with?("-")
+    elsif option?(word)
       return Parsed.Refused(refusal("unknown option #{word}", usage))
     else
       query = query.with(words: query.words.push(word))
@@ -55,9 +55,27 @@ export def parse(arguments: List[String], style: String, usage: String) -> Parse
   return Parsed.Ready(query)
 end
 
+## Whether `word` looks like an option: it starts with "-" and has more than one character. A lone "-" is a file name.
+## `--stdin` refuses such a FILE, so `--stdin --json` does not take the option as the file.
+export def option?(word: String) -> Bool
+  return word.length > 1 and word.starts_with?("-")
+end
+
+## Whether `word` can be the FILE of `--stdin`: not empty and not an option.
+export def file_name?(word: String) -> Bool
+  return word != "" and !option?(word)
+end
+
 ## Whether the problem is about the words of the command line (QUERY-USAGE), which no file holds.
 export def arguments?(problem: Problems.Problem) -> Bool
   return problem.file == ARGUMENTS
+end
+
+## The problem with no place in a text (line 0), for `--ai`, which prints the source line of a place: it shows the file
+## name alone, as the plain form does. The JSON form keeps the span of `refusal`.
+export def unplaced(problem: Problems.Problem) -> Problems.Problem
+  none = Source.Position(offset: 0, line: 0, column: 0)
+  return problem.with(span: Source.Span(start: none, stop: none))
 end
 
 ## The QUERY-USAGE diagnostic with `message`, and `usage` as its help.

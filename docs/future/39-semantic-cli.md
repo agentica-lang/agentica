@@ -125,8 +125,8 @@ changes only how diagnostics print; answers keep the text form.
 - **`--stdin FILE`**, on every command that reads a file: the text of `FILE` is
   the standard input, as for `agentica check --stdin FILE`. It stands in for the
   `FILE` argument (`outline --stdin FILE`, not `outline FILE --stdin FILE`); the
-  file need not exist, but its folder does. With `--stdin`, `std/...` is a path
-  of the disk.
+  file need not exist; commands that resolve imports need its folder, `outline`
+  does not. With `--stdin`, `std/...` is a path of the disk.
 - **`symbol NAME [PATH...]`**: where a name is defined, with its signature or
   type. Names are written as in §39.4. A builtin answers with the same object as
   `agentica help NAME --json`, under `help`, with no span; so one command
@@ -187,7 +187,11 @@ changes only how diagnostics print; answers keep the text form.
   one name. It prints a path relative to the current directory when the file is
   under it, the absolute path otherwise, and `std/MOD.agc` for an embedded
   module. A `FILE` in `FILE:LINE:COL` is canonicalized the same way before it is
-  matched.
+  matched. A diagnostic keeps the name as typed, like `check`; only an answer's
+  `file` is canonical. A symlink answers with its target's name. "Relative" is
+  to the working folder, so from `/` the name has no leading slash. A user file
+  under a `std/` folder read with `--stdin` is named `./std/NAME`, so it never
+  looks like an embedded module.
 - **Result order:** by file, in the order the files were linked, then by
   position.
 

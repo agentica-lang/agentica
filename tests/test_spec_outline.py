@@ -180,6 +180,7 @@ def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk(tmp_path):
 @pytest.mark.parametrize("words", [
     [],  # missing FILE
     ["--stdin"],  # --stdin without FILE
+    ["--stdin", "--json"],  # an option is not the FILE of --stdin
     ["--stdin", "a.agc", "--stdin", "b.agc"],  # --stdin twice
     ["one.agc", "two.agc"],  # extra argument
     ["--stdin", "one.agc", "two.agc"],  # a FILE besides --stdin FILE
@@ -192,6 +193,23 @@ def test_a_mistake_in_the_question_is_query_usage_at_the_arguments(tmp_path, wor
     diagnostic = problem(outline("--json", "outline", *words, cwd=tmp_path, stdin=""), "QUERY-USAGE", 2)
     assert diagnostic["file"] == "<arguments>"
     assert diagnostic["range"] == {"start": {"line": 1, "column": 1}, "end": {"line": 1, "column": 1}}
+
+
+def test_ai_form_of_query_usage_has_no_empty_source_line(tmp_path):
+    result = outline("--ai", "outline", cwd=tmp_path)
+    assert (result.code, result.stdout) == (2, "")
+    lines = result.stderr.split("\n")
+    assert "[QUERY-USAGE]" in lines
+    # The arguments are not a file: no source line, not even an empty one.
+    assert not [line for line in lines if line.startswith("  source:")]
+
+
+def test_a_file_with_crlf_line_ends_keeps_its_spans_and_docs(tmp_path):
+    text = "## Adds.\r\nexport def add(a: Int) -> Int\r\n  return a\r\nend\r\n"
+    (tmp_path / "crlf.agc").write_bytes(text.encode("utf-8"))
+    add = items_by_name(answer("crlf.agc", cwd=tmp_path))["add"]
+    assert (start(add["name_span"]), end(add["name_span"])) == ((2, 12), (2, 15))
+    assert add["doc"] == "Adds."
 
 
 def test_text_form_lists_one_line_per_declaration(tmp_path):

@@ -311,8 +311,8 @@ after them may run in parallel when needed and keep their relative order.
     std/http`, in text or JSON
 
 - **Order:** 7.2b
-  - **Next work:** **Started 2026-10-21** (owner, issue #506). New features, VM-only (cont.), after row 22b, in
-    `compiler/`: the semantic CLI for agents
+  - **Next work:** **Started 2026-10-21** (owner, issue #506). New features,
+    VM-only (cont.), after row 22b, in `compiler/`: the semantic CLI for agents
     ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)), in this
     order: `agentica doc` (row 22b, done), `agentica outline` (done), `agentica
     type-at`, the opt-in `--partial`, `agentica symbol`, `agentica refs`, JSON

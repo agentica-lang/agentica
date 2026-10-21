@@ -25,7 +25,11 @@ Private declarations are listed too (`agentica doc` shows only the exported
 API). `--stdin FILE` stands in for the FILE argument: the text on standard
 input is FILE, whether or not the disk has it, so you can ask about a buffer you
 have not saved. The file is named by its canonical path, relative to the working
-folder when it is below it (`std/NAME.agc` for a `std/` module).
+folder when it is below it (`std/NAME.agc` for a `std/` module). A diagnostic
+keeps the name as typed, like `check`; only an answer's `file` is canonical. A
+symlink answers with its target's name; from `/` the name has no leading slash;
+a file outside the working folder is absolute. A user file under a `std/` folder
+read with `--stdin` is named `./std/NAME`, never like an embedded module.
 
 ## JSON
 

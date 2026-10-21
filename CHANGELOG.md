@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `agentica check --stdin --json` is a usage error (exit 2); it used to take
+  `--json` as the file name.
 - A child's stderr no longer stalls the VM when the VM's stderr is not read,
   and it keeps its order with stdout when both go to one pipe (`2>&1`).
 

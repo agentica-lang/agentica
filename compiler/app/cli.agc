@@ -151,9 +151,10 @@ def query(session: Session, words: List[String]) -> Int
 end
 
 # `check --stdin FILE`: the text of FILE is the standard input. FILE need not exist, but its folder does: imports and
-# agentica.toml resolve from there. Anything but one file name is a usage error, before the input is read.
+# agentica.toml resolve from there. Anything but one file name is a usage error, before the input is read; an option
+# (`check --stdin --json`) is not a file name.
 def check_stdin(session: Session, files: List[String]) -> Int
-  if files.size != 1 or files[0] == ""
+  if files.size != 1 or !QueryOptions.file_name?(files[0])
     return emit(Reply.failed(2, Texts.usage_text()))
   end
   return with_buffer(session, files[0]) do |buffered: Session| program(buffered, "check", files) end
@@ -286,7 +287,9 @@ def reject(session: Session, problem: Problems.Problem, source: String, status: 
     if Problems.at_source?(problem) and !QueryOptions.arguments?(problem)
       text = source_text(session, problem.file, root)
     end
-    if style == "ai"
+    if style == "ai" and QueryOptions.arguments?(problem)
+      IO.warn(Ai.ai(QueryOptions.unplaced(shown), text))
+    elsif style == "ai"
       IO.warn(Ai.ai(shown, text))
     elsif QueryOptions.arguments?(problem)
       IO.warn(Plain.without_source(shown))
