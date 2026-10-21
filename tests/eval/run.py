@@ -19,8 +19,12 @@ ROOT = Path(__file__).resolve().parents[2]
 EVAL = ROOT / "tests" / "eval"
 TASKS = EVAL / "tasks"
 SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
-ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py", "typed-python": "py"}
+ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py", "typed-python": "py", "skill-nocli": "agc"}
 TYPED_ARMS = {"typed-python"}
+SKILL_ARMS = {"skill", "skill-nocli"}
+# Arms that run only when asked for with --arms: the default is the five arms of the early rounds.
+OPT_IN_ARMS = {"skill-nocli"}
+NOCLI_NOTE = "agentica --help and agentica help still name the four query commands; the wrapper only refuses them"
 REFERENCE_ARMS = ["binary", "python", "typed-python"]
 CHECKER = ["mypy", "--strict", "--cache-dir=/dev/null"]
 CHECK_TIMEOUT = 90
@@ -30,6 +34,32 @@ LOOPBACK = re.compile(r"\blocalhost\b|127\.0\.0\.1")
 COMMAND_PREFIX = r"^\s*(?:(?:env|time|timeout\s+(?:-\S+\s+)*\d\S*|\w+=\S*)\s+)*"
 CHECK_COMMAND = re.compile(COMMAND_PREFIX + r"(?:(?:python3?\s+-m\s+)?(?:\S*/)?mypy|(?:\S*/)?agentica\s+check)\b")
 MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\b")
+# `agentica [--json|--ai|--partial] outline|type-at|symbol|refs ...`, also through a path (`dist/agentica`) or the
+# renamed binary of the skill-nocli arm (`agentica-real`).
+QUERY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?agentica(?:-real)?\s+(?:--(?:json|ai|partial)\s+)*"
+                           r"(?:outline|type-at|symbol|refs)(?=\s|$)")
+READ_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:cat|rg|sed|head|grep|tail)(?=\s|$)")
+REFUSED_LOG = ".refused-queries"
+REAL_BINARY = "agentica-real"
+# The wrapper of the skill-nocli arm. It refuses the first non-option word when it names a query command (exit 2, a
+# short stderr line, one line in REFUSED_LOG so the runner can count refusals) and hands everything else to the real
+# binary, with exec so the exit status and the signals are the binary's.
+QUERY_WRAPPER = """#!/bin/sh
+case $0 in */*) here=${0%/*} ;; *) here=. ;; esac
+for word in "$@"; do
+  case $word in
+    -*) ;;
+    outline|type-at|symbol|refs)
+      echo "$word" >> "$here/@LOG@"
+      echo "agentica: '$word' is not available in this evaluation arm" >&2
+      exit 2 ;;
+    *) break ;;
+  esac
+done
+exec "$here/@REAL@" "$@"
+""".replace("@LOG@", REFUSED_LOG).replace("@REAL@", REAL_BINARY)
+# What the skill copy of the skill-nocli arm must not name any more.
+QUERY_MENTION = re.compile(r"queries\.md|analysis\.md|QUERY-|std/analysis|`type-at`|agentica\s+(?:outline|type-at|symbol|refs)\b")
 TYPE_SILENCE = re.compile(r"#\s*mypy:|#\s*type:\s*ignore")
 TYPE_ESCAPE = re.compile(r"\bAny\b|\bcast\(|\bno_type_check\b|\bTYPE_CHECKING\b")
 MISSING_COMMAND = (126, 127)
@@ -41,6 +71,7 @@ SYSTEM_PATH = "/usr/local/bin:/usr/bin:/bin"
 ROOTFS_PATH = f"/workspace/bin:{SYSTEM_PATH}"
 SAFE_ENV = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PYTHONUTF8": "1", "TMPDIR": "/tmp"}
 DEFAULT_IMAGE = "agentica-eval:local"
+DEFAULT_ARMS = [arm for arm in ARMS if arm not in OPT_IN_ARMS]
 
 
 def build() -> None:
@@ -89,9 +120,12 @@ def prepare(work: Path, task: str, arm: str) -> None:
         shutil.copy(start, work / f"start.{ext}")
     if ext == "agc":
         shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
-    if arm == "skill":
+    if arm in SKILL_ARMS:
         (work / "skills").mkdir()
         shutil.copytree(SKILL, work / "skills" / "agentica-programming")
+    if arm == "skill-nocli":
+        strip_query_docs(work / "skills" / "agentica-programming")
+        install_query_wrapper(work / "bin")
     if arm == "grammar":
         (work / "docs").mkdir()
         parts = sorted((ROOT / "docs" / "grammar").glob("*.md"))
@@ -101,6 +135,44 @@ def prepare(work: Path, task: str, arm: str) -> None:
         shutil.copytree(ROOT / "examples", work / "examples")
 
 
+def strip_query_docs(skill: Path) -> None:
+    """Remove the query commands from the copy of the skill the agent gets (never from the repository's skill).
+
+    Drops queries.md and analysis.md, the lines of SKILL.md that point to them, and the QUERY- codes of
+    diagnostics.md. It stops the run when a mention is left, so a skill edit cannot leak the commands unnoticed.
+    """
+    for name in ("queries.md", "analysis.md"):
+        (skill / "references" / name).unlink()
+    core = skill / "SKILL.md"
+    text = core.read_text(encoding="utf-8")
+    text = re.sub(r"^- `references/(?:queries|analysis)\.md`:.*\n(?:  .*\n)*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\s*Questions about\s+code, without reading it:.*?\(`references/queries\.md`\)\.", "", text, flags=re.DOTALL)
+    core.write_text(text, encoding="utf-8")
+    codes = skill / "references" / "diagnostics.md"
+    text = codes.read_text(encoding="utf-8")
+    text = re.sub(r"^- \*\*Code:\*\* `QUERY-.*\n(?:  .*\n)*\n?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"; `QUERY-` is a mistake in the question of.*?`refs`\.", ".", text, flags=re.DOTALL)
+    codes.write_text(text, encoding="utf-8")
+    for path in sorted(skill.rglob("*.md")):
+        found = QUERY_MENTION.search(path.read_text(encoding="utf-8"))
+        if found:
+            raise SystemExit(f"skill-nocli: {path.relative_to(skill)} still mentions the query commands ({found.group(0)!r}); "
+                             "update strip_query_docs")
+
+
+def install_query_wrapper(bin_dir: Path) -> None:
+    """Put the refusing `agentica` in front of the real binary, which keeps its place under another name."""
+    os.replace(bin_dir / "agentica", bin_dir / REAL_BINARY)
+    wrapper = bin_dir / "agentica"
+    wrapper.write_text(QUERY_WRAPPER, encoding="utf-8")
+    wrapper.chmod(0o755)
+
+
+def refused_queries(work: Path) -> int:
+    log = work / "bin" / REFUSED_LOG
+    return len(log.read_text(encoding="utf-8", errors="replace").splitlines()) if log.is_file() else 0
+
+
 def prompt(work: Path, arm: str) -> str:
     ext = ARMS[arm]
     lines = ["Read task.md in the current directory and do what it asks."]
@@ -108,7 +180,7 @@ def prompt(work: Path, arm: str) -> str:
         lines.append(f"The starting program is start.{ext}.")
     if ext == "agc":
         lines.append("Write a complete Agentica program to solution.agc. Run programs with the `agentica` command, which is on your PATH.")
-        if arm == "skill":
+        if arm in SKILL_ARMS:
             lines.append("Use the agentica-programming skill.")
         elif arm == "binary":
             lines.append("The language is Agentica: Ruby-like syntax, statically typed, programs start with `def main() -> Void`. "
@@ -132,13 +204,13 @@ def agent_command(agent: str, work: Path, arm: str, model: str | None, *, in_chr
     workspace = WORKSPACE if in_chroot else work
     if agent == "pi":
         cmd = ["pi", "-p", "--mode", "json", "--no-session", "--no-context-files", "--no-extensions"]
-        cmd += ["--skill", str(workspace / "skills" / "agentica-programming")] if arm == "skill" else ["--no-skills"]
+        cmd += ["--skill", str(workspace / "skills" / "agentica-programming")] if arm in SKILL_ARMS else ["--no-skills"]
         if model:
             cmd += ["--model", model]
         return cmd + [text]
     if agent == "claude":
         cmd = ["claude", "-p", "--output-format", "json", "--no-session-persistence", "--dangerously-skip-permissions", "--strict-mcp-config"]
-        if arm != "skill":
+        if arm not in SKILL_ARMS:
             cmd += ["--disable-slash-commands"]
         else:
             target = work / ".claude" / "skills"
@@ -402,7 +474,9 @@ def run_agent(
             remove_container(container)
 
 
-def command_parts(command: str) -> list[str]:
+def command_parts(command: str, *, split_pipes: bool = True) -> list[str]:
+    """Split a shell line into its commands. With split_pipes=False a pipeline stays whole, so a `| head` filter
+    is not read as a command of its own."""
     parts: list[str] = []
     current: list[str] = []
     quote = ""
@@ -425,6 +499,8 @@ def command_parts(command: str) -> list[str]:
             current = []
             index += 2
             continue
+        elif char == "|" and not split_pipes:
+            current.append(char)
         elif char in ";|\n":
             parts.append("".join(current))
             current = []
@@ -437,6 +513,14 @@ def command_parts(command: str) -> list[str]:
 
 def is_check_command(command: str) -> bool:
     return any(CHECK_COMMAND.match(part) for part in command_parts(command))
+
+
+def is_query_command(command: str) -> bool:
+    return any(QUERY_COMMAND.match(part) for part in command_parts(command))
+
+
+def is_read_command(command: str) -> bool:
+    return any(READ_COMMAND.match(part) for part in command_parts(command, split_pipes=False))
 
 
 def runs_mypy(command: str) -> bool:
@@ -457,7 +541,7 @@ def command_failed(command: str, text: str) -> bool:
 def pi_metrics(out: str) -> dict[str, int | float]:
     m = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "cost": 0.0, "turns": 0,
          "interpreter_runs": 0, "failing_runs": 0, "check_runs": 0, "check_failures": 0,
-         "outside_reads": 0, "net_commands": 0}
+         "outside_reads": 0, "net_commands": 0, "query_runs": 0, "read_runs": 0}
     pending: dict[str, str] = {}
     for line in out.splitlines():
         if not line.startswith("{"):
@@ -481,6 +565,11 @@ def pi_metrics(out: str) -> dict[str, int | float]:
             command = event.get("args", {}).get("command", "")
             if is_net_command(command):
                 m["net_commands"] += 1
+            if event.get("toolName") == "bash":
+                m["query_runs"] += is_query_command(command)
+                m["read_runs"] += is_read_command(command)
+            elif event.get("toolName") == "read":
+                m["read_runs"] += 1
             if event.get("toolName") == "bash" and ("agentica" in command or "python" in command or runs_mypy(command)):
                 m["interpreter_runs"] += 1
                 if is_check_command(command):
@@ -503,7 +592,8 @@ def claude_metrics(out: str) -> dict[str, int | float]:
     usage = data.get("usage", {})
     return {"tokens_in": usage.get("input_tokens", 0), "tokens_out": usage.get("output_tokens", 0),
             "tokens_cached": usage.get("cache_read_input_tokens", 0), "cost": data.get("total_cost_usd", 0.0),
-            "turns": data.get("num_turns", 0), "check_runs": 0, "check_failures": 0}
+            "turns": data.get("num_turns", 0), "check_runs": 0, "check_failures": 0,
+            "query_runs": 0, "read_runs": 0}
 
 
 def hidden_driver(task: str) -> str | None:
@@ -627,7 +717,7 @@ def classify(err: str, ext: str) -> tuple[str, str | None]:
     return "logic", None
 
 
-def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, arm: str, rep: int) -> None:
+def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, arm: str, rep: int) -> dict:
     name = f"{task}-{arm}-{rep}"
     agent_root = (clone_rootfs(args.chroot_root, scratch / f"{name}-agent-root")
                   if args.sandbox == "firejail" else scratch / f"{name}-agent-root")
@@ -645,6 +735,7 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
         row.update(pi_metrics(out))
     elif args.agent == "claude":
         row.update(claude_metrics(out))
+    row["refused_queries"] = refused_queries(work)
     solution = work / f"solution.{ARMS[arm]}"
     row.update(grade(solution, task, arm, args, scratch, name))
     run_dir = results / name
@@ -656,6 +747,53 @@ def one_run(args: argparse.Namespace, results: Path, scratch: Path, task: str, a
         with (results / "results.jsonl").open("a") as handle:
             handle.write(json.dumps(row) + "\n")
         print(f"{name}: {row['status']} {row['passed']}/{row['total']} {seconds}s", flush=True)
+    return row
+
+
+class Budget:
+    """The `--max-cost` cap. A run starts only when the cost so far, plus the estimate for this run and for every run
+    in flight, stays under the cap; the first refusal is final, so the round stops starting runs and the ones in
+    flight finish. The estimate is the mean cost of the finished runs, never below `floor`."""
+
+    def __init__(self, cap: float | None, floor: float) -> None:
+        self.cap, self.floor = cap, floor
+        self.spent, self.finished, self.in_flight, self.skipped = 0.0, 0, 0, 0
+        self.stopped = False
+        self.lock = threading.Lock()
+
+    def estimate(self) -> float:
+        return max(self.floor, self.spent / self.finished if self.finished else 0.0)
+
+    def begin(self) -> bool:
+        with self.lock:
+            if self.cap is not None and (self.stopped or self.spent + self.estimate() * (self.in_flight + 1) > self.cap):
+                self.stopped = True
+                self.skipped += 1
+                return False
+            self.in_flight += 1
+            return True
+
+    def end(self, cost: float | None) -> float:
+        """Add the cost of a finished run; a run that failed before it reported a cost is charged the estimate."""
+        with self.lock:
+            charged = self.estimate() if cost is None else cost
+            self.in_flight -= 1
+            self.finished += 1
+            self.spent += charged
+            return self.spent
+
+
+def budgeted_run(args: argparse.Namespace, budget: Budget, results: Path, scratch: Path,
+                 task: str, arm: str, rep: int) -> None:
+    if not budget.begin():
+        return
+    cost = None
+    try:
+        cost = float(one_run(args, results, scratch, task, arm, rep).get("cost", 0.0))
+    finally:
+        total = budget.end(cost)
+        cap = f" of the ${budget.cap:.2f} cap" if budget.cap is not None else ""
+        print(f"cost so far: ${total:.4f}{cap}", flush=True)
 
 
 def read_rows(results: Path) -> list[dict]:
@@ -675,16 +813,20 @@ def run_info(args: argparse.Namespace, image_info: dict[str, str | None]) -> dic
             "agent": args.agent, "model": args.model or "default", "arms": args.arms, "tasks": args.tasks,
             "reps": args.reps, "timeout": args.timeout, "sandbox": args.sandbox, "image": args.image,
             "image_id": image_info["image_id"], "checker": image_info["checker"], "pass_env": args.pass_env,
-            "agent_network": AGENT_NETWORK and args.agent != "reference"}
+            "agent_network": AGENT_NETWORK and args.agent != "reference", "arm_tasks": args.arm_tasks,
+            "max_cost": args.max_cost,
+            "arm_notes": {arm: NOCLI_NOTE for arm in args.arms if arm == "skill-nocli"}}
 
 
 def summarize(results: Path) -> None:
     rows = read_rows(results)
+    info_file = results / "run.json"
+    info = json.loads(info_file.read_text(encoding="utf-8")) if info_file.is_file() else {}
     groups = {}
     for row in rows:
         groups.setdefault((row["task"], row["arm"]), []).append(row)
-    out = ["| task | arm | runs | pass | cases | tokens | seconds | failing runs | check runs | type escapes | failures |",
-           "|---|---|---|---|---|---|---|---|---|---|---|"]
+    out = ["| task | arm | runs | pass | cases | tokens | seconds | failing runs | check runs | query runs | refused | read runs | type escapes | failures |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for (task, arm), rs in sorted(groups.items()):
         n = len(rs)
         mean = lambda key: round(sum(r.get(key, 0) for r in rs) / n, 1)
@@ -692,10 +834,29 @@ def summarize(results: Path) -> None:
         passes = sum(r["status"] == "pass" for r in rs)
         cases = round(sum(r["passed"] / r["total"] for r in rs) / n * 100)
         kinds = ", ".join(sorted({f"{r['failure']}:{r['code']}" if r["code"] else str(r["failure"]) for r in rs if r["failure"]})) or "-"
-        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {mean('seconds')} | {mean('failing_runs')} | {mean('check_runs')} | {mean('type_escapes')} | {kinds} |")
+        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {mean('seconds')} | {mean('failing_runs')} | {mean('check_runs')} | {mean('query_runs')} | {mean('refused_queries')} | {mean('read_runs')} | {mean('type_escapes')} | {kinds} |")
+    if info.get("cost") is not None:
+        out += ["", f"cost: ${info['cost']:.4f}" + (f" (cap ${info['max_cost']:.2f})" if info.get("max_cost") is not None else "")]
+    out += ["", f"stopped_for_budget: {str(bool(info.get('stopped_for_budget'))).lower()}"
+            + (f" ({info['runs_skipped']} runs not started)" if info.get("stopped_for_budget") else "")]
     text = "\n".join(out) + "\n"
     (results / "summary.md").write_text(text, encoding="utf-8")
     print(text)
+
+
+def parse_arm_tasks(specs: list[str], arms: list[str], tasks: list[str]) -> dict[str, list[str]]:
+    """`ARM=TASK,TASK` options to {arm: [task, ...]}; an unknown arm, or a task outside --tasks, stops the run."""
+    chosen: dict[str, list[str]] = {}
+    for spec in specs:
+        arm, _, names = spec.partition("=")
+        if arm not in arms or not names:
+            raise SystemExit(f"--arm-tasks {spec!r}: expected ARM=TASK,TASK with an ARM in --arms ({' '.join(arms)})")
+        listed = names.split(",")
+        unknown = [name for name in listed if name not in tasks]
+        if unknown:
+            raise SystemExit(f"--arm-tasks {spec!r}: not in --tasks (use full task names): {' '.join(unknown)}")
+        chosen[arm] = listed
+    return chosen
 
 
 def main() -> int:
@@ -703,7 +864,15 @@ def main() -> int:
     parser.add_argument("--agent", choices=["pi", "claude", "reference"], default="pi")
     parser.add_argument("--model")
     parser.add_argument("--tasks", nargs="*", default=sorted(p.name for p in TASKS.iterdir() if p.is_dir()))
-    parser.add_argument("--arms", nargs="*", help=f"default: {' '.join(ARMS)}")
+    parser.add_argument("--arms", nargs="*", help=f"default: {' '.join(DEFAULT_ARMS)}; opt-in: {' '.join(sorted(OPT_IN_ARMS))}")
+    parser.add_argument("--arm-tasks", action="append", default=[], metavar="ARM=TASK,TASK",
+                        help="run ARM only on these tasks (full names, all in --tasks); repeat for several arms")
+    parser.add_argument("--max-cost", type=float, metavar="USD",
+                        help="stop starting runs when the cost so far plus the estimate of the runs in flight and "
+                             "of the next one would pass USD (default: no cap)")
+    parser.add_argument("--run-cost-estimate", type=float, default=0.01, metavar="USD",
+                        help="lowest estimate of one run for --max-cost; the mean of the finished runs replaces it "
+                             "when higher (default: %(default)s)")
     parser.add_argument("--reps", type=int, default=1)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--jobs", type=int, default=1, help="runs in parallel")
@@ -727,7 +896,10 @@ def main() -> int:
     if args.check_references:
         args.agent = "reference"
         args.pass_env = []
-    args.arms = args.arms or (REFERENCE_ARMS if args.check_references else list(ARMS))
+    args.arms = args.arms or (REFERENCE_ARMS if args.check_references else DEFAULT_ARMS)
+    args.arm_tasks = parse_arm_tasks(args.arm_tasks, args.arms, args.tasks)
+    if args.max_cost is not None and args.max_cost <= 0:
+        raise SystemExit("--max-cost must be more than 0")
     typed = any(arm in TYPED_ARMS for arm in args.arms)
     agentica = any(ARMS[arm] == "agc" for arm in args.arms)
     child_environment(args.pass_env, in_chroot=True, workspace=WORKSPACE)
@@ -749,12 +921,17 @@ def main() -> int:
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)
     (results / "run.json").write_text(json.dumps(run_info(args, image_info), indent=2) + "\n", encoding="utf-8")
-    jobs = [(task, arm, rep) for task in args.tasks for arm in args.arms for rep in range(1, args.reps + 1)]
+    jobs = [(task, arm, rep) for task in args.tasks for arm in args.arms
+            if task in args.arm_tasks.get(arm, args.tasks) for rep in range(1, args.reps + 1)]
+    budget = Budget(args.max_cost, args.run_cost_estimate)
     with tempfile.TemporaryDirectory(prefix="agentica-eval-") as scratch_dir:
         scratch = Path(scratch_dir)
         with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            for future in [pool.submit(one_run, args, results, scratch, *job) for job in jobs]:
+            for future in [pool.submit(budgeted_run, args, budget, results, scratch, *job) for job in jobs]:
                 future.result()
+    info = json.loads((results / "run.json").read_text(encoding="utf-8"))
+    info.update(cost=round(budget.spent, 6), stopped_for_budget=budget.stopped, runs_skipped=budget.skipped)
+    (results / "run.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
     summarize(results)
     print(f"results: {results}")
     failed = [row for row in read_rows(results) if row["status"] != "pass"]
