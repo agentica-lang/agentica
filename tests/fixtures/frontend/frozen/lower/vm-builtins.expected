@@ -83,6 +83,7 @@ JSON.float
 JSON.from
 JSON.get
 JSON.int
+JSON.kind
 JSON.list
 JSON.null
 JSON.null?

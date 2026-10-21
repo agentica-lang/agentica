@@ -1,0 +1,17 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 3346,
+  "stdout": [
+    "47 vectors ok",
+    "int error(\"expected a signed 64-bit JSON integer\")",
+    "object",
+    "[\"int\", \"float\", \"float\"]",
+    "null",
+    "[\"object\", \"int\", \"float\"]",
+    "[\"bool\", \"string\", \"array\", \"object\"]",
+    "[\"array\", \"object\", \"array\"]",
+    ""
+  ],
+  "stderr": []
+}

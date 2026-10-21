@@ -351,6 +351,10 @@ and `JSON.encode` give its text. Signatures are in
   kind. `JSON.int` needs an integer within 64-bit bounds, so `1.0` is not an
   Int. `JSON.float` rounds to a finite binary64, and overflow is an error.
   Parsed integers may exceed `Int` until extracted. JSON `null` stays a `Json`.
+- `JSON.kind` names the kind of any `Json` and never fails: `"null"`, `"bool"`,
+  `"int"`, `"float"`, `"string"`, `"array"` or `"object"`. A number written
+  without fraction or exponent, or built from an Int, is `"int"`, even outside
+  64-bit bounds (then `JSON.int` still errors); any other number is `"float"`.
 - `JSON.encode` accepts Int, Float, Bool, String, Nil (as `null`), Json, lists,
   String-keyed maps and structs of those. Results and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`. Untyped empty containers need an annotation. A

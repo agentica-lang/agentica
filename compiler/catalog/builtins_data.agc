@@ -1424,6 +1424,16 @@ ROWS_18: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "JSON.kind",
+      parameters: [Model.Named(name: "value", type: Types.Type.Json)],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "JSON.kind",
+      effects: [],
+      description: "Name the JSON kind: null, bool, int, float, string, array or object.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "JSON.list",
       parameters: [Model.Named(name: "j", type: Types.Type.Json)],
       result: Types.Type.Result(Types.Type.List(Types.Type.Json)),

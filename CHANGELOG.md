@@ -12,6 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `agentica check --stdin FILE` checks the text on standard input as if `FILE`
   held it.
+- `JSON.kind(value)`, the kind of a JSON value as a String, without encoding it.
 - `agentica help --json` with no NAME prints every builtin as one JSON array;
   `agentica --json help` used to print the text summary.
 
