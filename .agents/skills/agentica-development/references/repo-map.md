@@ -39,7 +39,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     project.agc manifest.agc lock.agc  # the nearest agentica.toml and its lock checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path
     git_source.agc toml_read.agc  # the rules of a name, a git URL, a tag and a ref; the TOML helpers the manifest and the lock share
     package_import.agc package_cache.agc package_hash.agc  # which pkg/<name>/ imports are packages, the hash check, the stored name; the cache folder of a commit; the hash of the .agc files (Crypto.sha256)
-  check/  # the checker, types, suggestions, constants and defaults
+  check/  # the checker, suggestions, constants and defaults
     suggest.agc  # did_you_mean (the linker also calls it)
     check_state.agc check_types.agc check_failure.agc  # the checker: Cx and St, type operations and unification, packed Problems with their notes
     check_register.agc check_stmt.agc check_expr.agc  # declarations and main; functions, blocks, statements, case; expressions and operators (CHECK-TOO-DEEP)

@@ -36,7 +36,8 @@ IO_FOLDERS = {"io"}
 APP_FOLDERS = {"app", "bdd"}
 LEXER = COMPILER / "syntax" / "lex.agc"
 # The stages after syntax/. The first stage cannot take a later one as input (syntax/ast once imported check/types; the
-# Type enum now lives in syntax/types.agc). diagnostics/ is shared data, not a stage, so syntax/ may import it.
+# Type enum now lives in syntax/types.agc). diagnostics/ is shared data, not a stage, so syntax/ may import it; today
+# syntax/ takes only diagnostics/diagnostic, since the printers there still import check/check_failure (#472).
 LATER_THAN_SYNTAX = {"modules", "packages", "check", "catalog", "lower", "bytecode"}
 
 OUTSIDE = "an adapter (io/ is for entry programs only, app/ and bdd/ never) or a file outside compiler/"
