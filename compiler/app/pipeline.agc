@@ -60,10 +60,13 @@ end
 
 ## Links the file at `path` and checks it.
 export def check_file(path: String, settings: Env.Settings) -> Front
-  case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return Front.Rejected(link_problem(failure))
-    Linker.Linking.Done(linked) -> return check(linked, settings)
-  end
+  return front(path, settings, true)
+end
+
+## Links the file at `path` and checks it for a query (`agentica type-at`): every rule of `check_file` except that the
+## program declares `main`, so a library file can be asked about.
+export def query_file(path: String, settings: Env.Settings) -> Front
+  return front(path, settings, false)
 end
 
 ## Lowers a checked program and writes its bytes. The header names `settings.version`.
@@ -83,8 +86,22 @@ export def compile(path: String, settings: Env.Settings) -> Compiled
   end
 end
 
-def check(linked: Linker.Linked, settings: Env.Settings) -> Front
-  case Checker.check(linked, settings)
+def front(path: String, settings: Env.Settings, main_required: Bool) -> Front
+  case Linker.link_file(path, settings)
+    Linker.Linking.Failed(failure) -> return Front.Rejected(link_problem(failure))
+    Linker.Linking.Done(linked) -> return check(linked, settings, main_required)
+  end
+end
+
+def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> Front
+  if main_required
+    return checked_front(linked, Checker.check(linked, settings))
+  end
+  return checked_front(linked, Checker.check_query(linked, settings))
+end
+
+def checked_front(linked: Linker.Linked, checking: Checker.Checking) -> Front
+  case checking
     Checker.Checking.Failed(problem) -> return Front.Rejected(problem)
     Checker.Checking.Done(checked) -> return Front.Done(Checked(linked: linked, checked: checked))
   end

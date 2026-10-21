@@ -242,6 +242,13 @@ end
 
 ## The type as the messages print it: Int, List[String], Map[String, Int], Fn[Int, Void], Point, Option[Int].
 export def to_text(type: Type) -> String
+  return to_text_as(type, {})
+end
+
+## The type as `to_text` prints it, except that a struct or an enum of another file is written through the import alias
+## of the file that asks: `written` maps the "@N::" prefix of a linked name to that alias, so `@1::User` prints as
+## `Models.User` (`agentica type-at`). A prefix it does not map prints as the bare name.
+export def to_text_as(type: Type, written: Map[String, String]) -> String
   case type
     Type.Int -> return "Int"
     Type.Float -> return "Float"
@@ -254,16 +261,16 @@ export def to_text(type: Type) -> String
     Type.Unknown -> return "?"
     Type.Opaque(name) -> return name
     Type.Var(name) -> return name
-    Type.Struct(name) -> return display_name(name)
-    Type.Enum(name, args) -> return enum_text(name, args)
-    Type.Result(item) -> return "Result[#{to_text(item)}]"
-    Type.Task(item) -> return "Task[#{to_text(item)}]"
-    Type.Channel(item) -> return "Channel[#{to_text(item)}]"
-    Type.Lazy(item) -> return "Lazy[#{to_text(item)}]"
-    Type.List(item) -> return "List[#{to_text(item)}]"
-    Type.Set(item) -> return "Set[#{to_text(item)}]"
-    Type.Map(key, value) -> return "Map[#{to_text(key)}, #{to_text(value)}]"
-    Type.Fn(params, result) -> return "Fn[#{list_text(params.concat([result]))}]"
+    Type.Struct(name) -> return written_name(name, written)
+    Type.Enum(name, args) -> return enum_text(name, args, written)
+    Type.Result(item) -> return "Result[#{to_text_as(item, written)}]"
+    Type.Task(item) -> return "Task[#{to_text_as(item, written)}]"
+    Type.Channel(item) -> return "Channel[#{to_text_as(item, written)}]"
+    Type.Lazy(item) -> return "Lazy[#{to_text_as(item, written)}]"
+    Type.List(item) -> return "List[#{to_text_as(item, written)}]"
+    Type.Set(item) -> return "Set[#{to_text_as(item, written)}]"
+    Type.Map(key, value) -> return "Map[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
+    Type.Fn(params, result) -> return "Fn[#{list_text_as(params.concat([result]), written)}]"
   end
 end
 
@@ -296,11 +303,28 @@ def debug_list(types: List[Type]) -> String
   return types.map do |type: Type| debug_text(type) end.join(", ")
 end
 
-def enum_text(name: String, args: List[Type]) -> String
+def enum_text(name: String, args: List[Type], written: Map[String, String]) -> String
   if args.size == 0
-    return display_name(name)
+    return written_name(name, written)
   end
-  return "#{display_name(name)}[#{list_text(args)}]"
+  return "#{written_name(name, written)}[#{list_text_as(args, written)}]"
+end
+
+def list_text_as(types: List[Type], written: Map[String, String]) -> String
+  return types.map do |type: Type| to_text_as(type, written) end.join(", ")
+end
+
+# The name with the alias of its file when `written` has one for the prefix of the linked name.
+def written_name(name: String, written: Map[String, String]) -> String
+  bare = display_name(name)
+  if written.size == 0 or bare == name
+    return bare
+  end
+  alias = written.get(name.slice(0, name.length - bare.length), "")
+  if alias == ""
+    return bare
+  end
+  return "#{alias}.#{bare}"
 end
 
 def digit?(character: String) -> Bool

@@ -389,6 +389,22 @@ parses the file, so its imports need not exist. `--stdin FILE` takes the text of
 FILE from standard input. A lex or parse error exits 1; a mistake in the
 arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
 
+`agentica type-at FILE:LINE:COL [--json]` gives the checked type of the
+innermost expression at a position (line and column from 1, in code points as
+diagnostics count them), its span and source text, and the definition of what it
+names: a function, struct, enum, variant, field or constant, with the span of
+the declaration and of its name. A type argument is answered in a later version.
+A type of another file is written through the import alias of FILE
+(`Models.User`). A local or a builtin has a type and no definition. The `kind`
+of the JSON answer is an open set: a client accepts a value it does not know.
+FILE is a path of the disk, linked and checked with its imports; it needs no
+`main`. `--stdin` before the position (`type-at --stdin FILE:LINE:COL`) takes
+the text of FILE from standard input. An error of the program is its own
+diagnostic and exits 1. A position on no token of an expression (a blank, a
+comment, the body text of a heredoc, a keyword such as `return` that is part of
+no expression) is `QUERY-NO-EXPRESSION` and exits 2, as is a bad position
+(`QUERY-USAGE`).
+
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by
 default, and checking never spends the budget. Exhaustion is

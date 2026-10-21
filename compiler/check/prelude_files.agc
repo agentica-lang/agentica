@@ -116,6 +116,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
       next_id: Ast.next_free_id(program),
       text: text,
       declarations: kept,
+      aliases: {},
     ),
   )
 end

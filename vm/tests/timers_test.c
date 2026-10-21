@@ -136,7 +136,7 @@ static void wake_and_resume(void *arg) {
   agc_vm *self = arg;
   assert(agc_gc_thread_enter());
   for (int round = 1; round <= ROUNDS; round++) {
-    while (atomic_load_explicit(&go, memory_order_acquire) < round) {}
+    while (atomic_load_explicit(&go, memory_order_acquire) < round) agc_test_yield();
     for (volatile int k = 0; k < (round * 7) % 31; k++) {}
     agc_sync_take(self);
     agc_task_wake(self, racing, "test");
@@ -177,7 +177,7 @@ static void test_fire_against_wake(void) {
     atomic_store_explicit(&go, round, memory_order_release);
     for (volatile int k = 0; k < (round * 5) % 29; k++) {}
     (void)agc_timers_run(&vm);
-    while (atomic_load_explicit(&finished, memory_order_acquire) < round) {}
+    while (atomic_load_explicit(&finished, memory_order_acquire) < round) agc_test_yield();
     assert(agc_runq_pop(vm.rt->runq) == NULL);
     assert(atomic_load(&racing->state) == AGC_TASK_RUNNING);
     assert(!racing->timer.heap && vm.timers.count == 0);

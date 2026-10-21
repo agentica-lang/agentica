@@ -1,6 +1,7 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then
 ## does what the first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a
-## module with `doc`, list the declarations of a file with `outline`, or start the tests.
+## module with `doc`, list the declarations of a file with `outline`, give the type at a position with `type-at`, or
+## start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -8,7 +9,7 @@
 ## exit status (front_end_cli.agc hands the bytes to C).
 ##
 ## `agentica check --stdin FILE` checks the text on standard input as if FILE held it (io/stdin_buffer.agc); a query
-## command (`outline`) takes `--stdin FILE` the same way.
+## command (`outline`) takes `--stdin FILE` the same way, and `type-at --stdin FILE:LINE:COL` reads FILE from it.
 ##
 ## `agentica run [OPTIONS] -- FILE.agcb [ARGS...]`, which runs a compiled program, is not here: C answers it before it
 ## starts this front end.
@@ -36,6 +37,7 @@ import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Plain from "../diagnostics/diagnostic_plain"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
+import QueryPosition from "../query/query_position"
 import Env from "../modules/link_env"
 import Lowering from "../lower/lowering"
 import LowerText from "../lower/lower_text"
@@ -84,8 +86,8 @@ def dispatch(session: Session) -> Int
     return emit(Help.help(words, session.options.style))
   elsif first == "doc"
     return doc(session, words)
-  elsif first == "outline"
-    return query(session, words.drop(1))
+  elsif first == "outline" or first == "type-at"
+    return query(session, first, words.drop(1))
   elsif first == "run"
     return emit(Reply.failed(2, Texts.run_first_text()))
   end
@@ -112,12 +114,13 @@ end
 
 # `doc PATH`: a complete answer, or the first problem of the module, shown as a problem of PATH.
 def doc(session: Session, words: List[String]) -> Int
-  return answered(session, CliDoc.run(words, session.options.style, session.settings))
+  return answered(session, CliDoc.run(words, session.options.style, session.settings), "")
 end
 
 # What a command gave: print the answer, or reject the first problem of the program. A QUERY- problem is a mistake in
-# the question, exit status 2; any other is a mistake in the program, exit status 1.
-def answered(session: Session, answer: Reply.Answer) -> Int
+# the question, exit status 2; any other is a mistake in the program, exit status 1. `source` is the file as the user
+# typed it ("" for the file of the problem).
+def answered(session: Session, answer: Reply.Answer, source: String) -> Int
   case answer
     Reply.Answer.Printed(reply) -> return emit(reply)
     Reply.Answer.Rejected(problem) ->
@@ -125,27 +128,51 @@ def answered(session: Session, answer: Reply.Answer) -> Int
       if problem.code.starts_with?("QUERY-")
         status = 2
       end
-      return reject(session, problem, problem.file, status)
+      if source == ""
+        return reject(session, problem, problem.file, status)
+      end
+      return reject(session, problem, source, status)
   end
 end
 
-# A query command: the words after its name give the options and the one file. The style may come from them as well as
-# from the options in front of the command.
-def query(session: Session, words: List[String]) -> Int
+# A query command: the words after its name give the options and the one file, or for `type-at` the one position. The
+# style may come from them as well as from the options in front of the command.
+def query(session: Session, verb: String, words: List[String]) -> Int
   usage = CliQuery.outline_usage()
+  if verb == "type-at"
+    usage = CliQuery.type_at_usage()
+  end
   case QueryOptions.parse(words, session.options.style, usage)
-    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem))
+    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
       case QueryFiles.pick(asked, usage)
-        QueryFiles.Picked.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem))
+        QueryFiles.Picked.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
         QueryFiles.Picked.File(file) ->
+          if verb == "type-at"
+            return position(styled, file, asked.stdin != "", usage)
+          end
           if asked.stdin == ""
-            return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings))
+            return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings), file)
           end
           return with_buffer(styled, file) do |buffered: Session|
-            answered(buffered, CliQuery.outline(file, asked.style, true, buffered.settings))
+            answered(buffered, CliQuery.outline(file, asked.style, true, buffered.settings), file)
           end
+      end
+  end
+end
+
+# `type-at FILE:LINE:COL`, or `type-at --stdin FILE:LINE:COL`, where the text of FILE is the standard input.
+def position(session: Session, word: String, buffered: Bool, usage: String) -> Int
+  case QueryPosition.parse(word, usage)
+    QueryPosition.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryPosition.Parsed.Ready(asked) ->
+      style = session.options.style
+      if !buffered
+        return answered(session, CliQuery.type_at(asked, style, session.settings), asked.file)
+      end
+      return with_buffer(session, asked.file) do |read: Session|
+        answered(read, CliQuery.type_at(asked, style, read.settings), asked.file)
       end
   end
 end

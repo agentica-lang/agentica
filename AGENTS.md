@@ -14,7 +14,8 @@ compiler/           the front end in Agentica (§18), one folder per context:
                     syntax (lexer, parser), modules (linker), packages
                     (manifest, lock, cache), check, catalog (builtins,
                     prelude), lower, bytecode, diagnostics, docs (`agentica
-                    doc`), query (`agentica outline`), bdd, embedded;
+                    doc`), query (`agentica outline`, `type-at`), bdd,
+                    embedded;
                     front_end.agc at the root is the program the binary
                     carries
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from

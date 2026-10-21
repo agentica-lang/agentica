@@ -475,10 +475,17 @@ static void close_timer(job *j) {
    EXPIRED with `start_failed` set, the task then fails in agc_io_finish ("cannot queue file work"), and a detached
    job drops its data in end_detached (with a trace line, since nobody else would hear of it). A wait on the loop
    (no pool work) with a `more` step starts its wait here, before the timer is armed, so the deadline always finds
-   the wait started and `pause` can stop it; posted as a second request, the wait could start after the deadline. */
+   the wait started and `pause` can stop it; posted as a second request, the wait could start after the deadline.
+   Once the run is over no task's job starts: agc_io_goodbye and the end's flushes run what is left in the inbox, and a
+   task's START there (a cancelled or abandoned task) would begin work after main returned, such as an open that
+   truncates a file. `detach_seen` is clear only on a task's job before its DETACH runs, which comes after the START;
+   output and flush jobs have no task and still start. The skipped job is `dropping`, so a detached end drops its data
+   instead of running `done` on work that never ran. */
 static void start_pieces(job *j, int64_t timeout_ms) {
   agc_loop *loop = j->loop;
-  if (atomic_load(&j->ended)) {
+  bool late = !j->detach_seen && atomic_load_explicit(&loop->vm->rt->over, memory_order_acquire);
+  if (late) atomic_store(&j->dropping, true);
+  if (late || atomic_load(&j->ended)) {
     if (leave_wait(j)) drop_ref(j);
     return;
   }
@@ -1647,6 +1654,12 @@ static void release_handles(agc_vm *vm) {
 }
 
 void agc_io_goodbye(agc_vm *vm) {
+  /* A close that a scheduler posted after the I/O thread's last pass is still in the inbox: agc_io_serve stops at
+     `over`, which a scheduler sets without the inbox. The resource has already left the registry, so the walk below
+     does not see it; running the close here sends its goodbye (a TLS socket's close_notify) before the exit. The run
+     also handles the other requests left there: DETACH, WAIT_DONE and START (start_pieces skips a task's START once
+     the run is over). */
+  if (vm->rt->loop && vm->rt->loop->inbox) (void)agc_inbox_run(vm->rt->loop->inbox);
   snapshot shot = registry_snapshot(vm);
   for (size_t k = shot.count; k-- > 0;) {
     agc_resource *r = shot.items[k];

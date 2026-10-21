@@ -31,7 +31,8 @@ check a signature with `agentica help NAME`.
    namespaces; `agentica help --json` prints all builtins as an array; unknown
    names exit 2. `agentica doc PATH` (`--json` too) prints the exported API of a
    file or a `std/` module with its `##` docs. `agentica outline FILE` (`--json`
-   too) lists every declaration of one file, private ones too, with spans
+   too) lists every declaration of one file, private ones too, with spans;
+   `agentica type-at FILE:LINE:COL` gives the type and definition at a position
    (`references/queries.md`). Flags: `--allow-run` (for
    `Process.spawn`), `--seed N`, `--max-steps N`, `--json`.
 
@@ -227,8 +228,9 @@ Read only what the task needs:
 - `references/testing.md`: unit tests (`Test.test`, `Test.eq`, `Test.run`).
 - `references/diagnostics.md`: a diagnostic code whose meaning or fix is
   unclear.
-- `references/queries.md`: `agentica outline`, to list a file's declarations,
-  signatures and docs without reading the file.
+- `references/queries.md`: `agentica outline` and `type-at`, to list a file's
+  declarations and signatures, or learn the type and definition at a position,
+  without reading the file.
 
 For style and idiom, use `agentica-code-guidelines`. Online docs:
 `https://sonic182.github.io/agentica/llms.txt` indexes them;

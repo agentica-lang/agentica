@@ -171,13 +171,28 @@ static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
   if (setjmp(vm->fail) == 0) print_outcome(vm, outcome, AGC_NOTICE_KEPT);
 }
 
+/* agc_io_goodbye runs requests left in the inbox, and one may fail (sweep's "a job was freed while held"). vm->fail
+   still points at the run's setjmp, whose frame has returned, so goodbye gets its own target. A failure becomes the
+   outcome of a run that did not fail, else it is printed beside the run's own. */
+static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
+  if (setjmp(vm->fail) == 0) {
+    agc_io_goodbye(vm);
+    return;
+  }
+  agc_sync_reset(vm);
+  if (outcome->kind == AGC_FAILED)
+    announce_outcome(vm, vm->outcome);
+  else
+    *outcome = *vm->outcome;
+}
+
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
    then standard output and the files, then the exit. Nothing else is
    drained: the OS frees descriptors and memory. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_processes_stop(vm);
   agc_io_children_stopped();
-  agc_io_goodbye(vm);
+  say_goodbye(vm, outcome);
   bool stdout_ok = flush_stream(stdout);
   flush_stream(stderr);
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);

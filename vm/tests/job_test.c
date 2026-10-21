@@ -520,6 +520,40 @@ static void test_detached_ends_on_a_scheduler(void) {
 
 static void wait_for_hand_over(void) { agc_test_wait_for_hand_over(&vm); }
 
+static void start_then_cancel(void *arg) {
+  start_gated(arg);
+  agc_io_detach(&vm, vm.task);
+}
+
+/* A cancelled task's START and DETACH are still in the inbox when the run ends, and agc_io_goodbye runs them. The
+   START must start nothing (no pool work, no timer): work begun after main returned could truncate a file before the
+   exit. The job then ends as dropped, without `done`. A START with no task (an output or flush job) still runs. */
+static void test_task_start_after_the_run_is_over(void) {
+  assert(agc_io_share(&vm, false));
+  agc_runq_share(vm.rt->runq);
+  agc_task *task = vm.task;
+  starting s = {new_gate(), 60000};
+  on_thread(start_then_cancel, &s);
+  task->parking = false;
+  task->state = AGC_TASK_RUNNING;
+  atomic_store(&vm.rt->over, true);
+  agc_io_goodbye(&vm);
+  assert(!uv_loop_alive(agc_io_uv(&vm)) && armed_timers() == 0);
+  int *data = calloc(1, sizeof *data);
+  assert(data);
+  swift_done_calls = 0;
+  on_thread(start_detached, data);
+  agc_io_goodbye(&vm);
+  pump_until_idle();
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  pump_until_idle();
+  settle_loop();
+  assert(dropped == 1 && dropped_without_work == 1 && finished_calls == 0 && swift_done_calls == 1);
+  dropped = dropped_without_work = swift_done_calls = 0;
+  atomic_store(&vm.rt->over, false);
+}
+
 /* A detached job that is ready twice before a scheduler takes it: its timer fires and it is handed over, then its work
    ends and the drain finds it again, with another job listed behind it. It stays listed once (a second link would cut
    the list and lose that job), the second ready-list count goes back, each `done` runs once, and the loop closes with
@@ -882,6 +916,7 @@ int main(void) {
   test_instant_job_wakes_its_task();
   test_many_jobs_end();
   test_detached_ends_on_a_scheduler();
+  test_task_start_after_the_run_is_over();
   test_job_ready_twice_is_listed_once();
   test_detach_from_a_scheduler_while_ready();
   test_expire_cancel_from_a_scheduler();
