@@ -6,8 +6,6 @@ gives it the alias `Models`, and `import Util from "../lib/util"` loads
 path, a path ending in `/`, or a last part containing a dot (`"models.rb"`,
 `"."`, `".."`) is `CHECK-IMPORT-PATH`, so a module file name has no dot apart
 from `.agc`: `json.tools.agc` cannot be imported; rename it `json_tools.agc`.
-Writing the path first, as earlier versions did, is `PARSE-UNEXPECTED-TOKEN` at
-the string, with the help `write import Alias from "path"`.
 
 Relative paths resolve from the importing file, not the working directory. Each
 file is linked once. Cycles are `CHECK-IMPORT-CYCLE`, missing or unreadable
@@ -36,8 +34,7 @@ function, struct, enum, type alias and constant can all be imported this way.
 The two forms mix: a file may import a module with an alias and, on another
 line, import names from it, and two lines with the same path are fine (the file
 is loaded once). A module imported only by names has no alias, so `Models.` is
-not available for it. One line does one thing: an alias and a name list are
-never on the same line.
+not available for it.
 
 An entry may rename: `import {greet as hello, User as Account, Names as Labels}
 from "models"` binds local names for those exports. It exists so that two
@@ -61,14 +58,11 @@ names `HttpWire` and `LogRegistry` are reserved too, so they can be neither an
 alias nor an imported name. A name that the module does not export, or that is
 private, is `CHECK-IMPORT-NAME` at the name, with a `did you mean` help over the
 exports only. These checks run when the file is loaded, so they are reported at
-the import, before any use of the name. A path that cannot be loaded is still
-`CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH` or `CHECK-IMPORT-CYCLE` at the import
-line. A name used as the wrong kind (an imported struct as the enum of a
-pattern) is `CHECK-TYPE-MISMATCH`, as with an alias.
+the import, before any use of the name. A name used as the wrong kind (an
+imported struct as the enum of a pattern) is `CHECK-TYPE-MISMATCH`, as with an
+alias.
 
-A module imported by name counts as imported for the privacy rule of
-`value.with(...)` (section 6): the file may update every exported struct of that
-module, not only the ones it names. Unused names are not reported.
+Unused names are not reported.
 
 #### Constants
 
@@ -85,19 +79,13 @@ with a constant of the file, and two constants of the same name are
 `CHECK-REDEFINED-NAME`, as for any declaration. An unexported constant is
 private: importing it is `CHECK-IMPORT-NAME`. A constant is never changed, so
 there is no shared state between modules: the value an importer reads is the
-value the declaring file computed. Only the constants that a function reachable
-from `main` reads (and the constants those read) are set up, before `main` runs;
-a constant nothing reads never runs.
-
-Every file keeps the declaration order of section 5: imports, then constants,
-then types, then `export def`, then private `def`. An imported file out of order
-is `CHECK-DECL-ORDER`, located in that file.
+value the declaring file computed.
 
 Only the root file supplies the executable `main() -> Void`; imported `main`
 functions do not run. Imported calls and tasks share the program's step budget
 and resource ownership. The CLI and `agentica test` use the same loader. There
 are no wildcard imports, package registry, mutable module state, nested modules
-or receiver attachment. `as` and `from` are contextual in imports, not reserved.
+or receiver attachment.
 
 #### Standard library and external libraries
 
@@ -277,13 +265,11 @@ With the alias `Binary`:
   type's range. `Binary.write_i64_{be,le}`, `write_f32_{be,le}` and
   `write_f64_{be,le}` cannot fail and return a plain `List[Int]`. `write_f32_*`
   rounds to binary32; every NaN is written as the canonical NaN
-  (`Float.to_bits`, `Float.to_bits32`). This module is written in Agentica;
-  bit operations and the `Float` bit conversions are `Int` and `Float` builtins,
-  because in Agentica each one is a 64-bit loop or an exact scaling by powers of
-  two with special cases for `-0.0`, NaN and subnormals. Binary data stays a
-  `List[Int]` with each item in `0 .. 255`, like `IO.read_bytes` and
-  `File.read_bytes`. If a compact `Bytes` type ever lands, the API moves to it
-  in the same change as the `*_bytes` builtins.
+  (`Float.to_bits`, `Float.to_bits32`). Bit operations
+  and the `Float` bit conversions are `Int` and `Float` builtins, because in
+  Agentica each one is a 64-bit loop or an exact scaling by powers of two with
+  special cases for `-0.0`, NaN and subnormals. If a compact `Bytes` type ever
+  lands, the API moves to it in the same change as the `*_bytes` builtins.
 - `Binary.concat(parts: List[List[Int]]) -> List[Int]` joins any number of parts
   in order, in O(n log k) for n bytes in k parts. `Binary.frame(payload:
   List[Int]) -> Result[List[Int]]` puts the payload's 4-byte big-endian length

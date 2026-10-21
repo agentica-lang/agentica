@@ -138,7 +138,7 @@ Signatures are in
 - `File.open` modes: `read` (an existing path that is not a directory), `write`
   (creates or truncates), `append` (creates or appends) and `create_private` (a
   new write-only file for the host user alone; any existing entry, a dangling
-  link included, is an error and a link is never followed; VM only). On Unix it
+  link included, is an error and a link is never followed). On Unix it
   is mode 0600, less where the umask clears bits. On Windows the file is made
   with a protected DACL that grants only the current user, and creation fails
   unless the object it opened has that owner and that DACL; there is no mode.
@@ -151,7 +151,7 @@ Signatures are in
   call (close the handle). On Unix the lock is advisory (`flock`): code that
   does not ask for a lock can still access the file. On Windows it locks the
   whole byte range with `LockFileEx`, so the OS also rejects reads and writes
-  through other handles while the lock is held. VM only.
+  through other handles while the lock is held.
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are
   limited to 1 MiB. `read_bytes` takes 1 to 1048576 bytes and gives `ok([])` at
   EOF. `read_line` strips LF or CRLF and accepts a final unterminated line; it
@@ -181,14 +181,14 @@ Signatures are in
   `user_id` and `group_id` are always 0. A 0 there is not the owner, and `mode`
   says nothing about the object's ACL or DACL. `File.lstat` gives the same
   record without following a final symlink: `kind` is `"link"` and the other
-  fields describe the link itself (VM only). `Dir.list` gives immediate entry
+  fields describe the link itself. `Dir.list` gives immediate entry
   names, sorted. `Dir.mkdir` creates parents.
   `Dir.mkdir_private(path, timeout_ms)` creates exactly one directory for the
-  host user alone and fails when the path exists or the parent is missing (VM
-  only): mode 0700 on Unix, less where the umask clears bits; on Windows the
-  same owner-and-DACL rule as `create_private`, with no mode.
+  host user alone and fails when the path exists or the parent is missing: mode
+  0700 on Unix, less where the umask clears bits; on Windows the same
+  owner-and-DACL rule as `create_private`, with no mode.
   `Path.remove(path, timeout_ms)` deletes what is at the path without following
-  symlinks (VM only): a file, a symlink itself, or a directory with everything
+  symlinks: a file, a symlink itself, or a directory with everything
   in it, where a link in the tree is removed as a link and its target is
   untouched. A missing path is `ok()`. A path whose last
   part is a separator, `.` or `..` (also as `dir/..`) is refused, a tree deeper
@@ -209,7 +209,7 @@ Signatures are in
   Linux uses `renameat2` with `RENAME_NOREPLACE`; macOS uses `renameatx_np` with
   `RENAME_EXCL`; Windows uses `MoveFileExW` with no flags, so it neither
   replaces a target nor copies across volumes. There is no copy/delete
-  fallback across volumes (VM only). `Path.resolve` is lexical and does not
+  fallback across volumes. `Path.resolve` is lexical and does not
   resolve symlinks.
 - `Path.real(path)` gives the absolute canonical path with every symlink
   resolved, as POSIX `realpath` does, so the path must exist. A missing path, a
@@ -335,9 +335,7 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   the value of its system and descriptor 3 is a socket, or a FIFO opened for
   reading and writing (on Windows: 3 a pipe that can be read and 4 one that can
   be written); a regular file, a device or a one-way FIFO there is left alone
-  and the program has no channel. These two calls are for runner code such as
-  `Test.run`: a test or step that calls them can break the protocol, and nothing
-  stops it.
+  and the program has no channel.
 
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
 [agentica-link-2]: ../../site/content/library/io-and-system/files.md
