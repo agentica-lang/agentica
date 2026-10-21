@@ -10,15 +10,14 @@ the same object every time a program computes them.
 
 - **Immutable.** No VM path writes to a value after a program can see it. The
   writes in `vm/` all go to fresh objects before they are returned: the text
-  builder (`vm/text.c:124-156`, `:229`), the callback output that `filter`
-  shrinks (`vm/interp.c:306-341`), `String.from_bytes` (`vm/strings.c:479-482`),
-  the loader, and JSON and typed-decode fills. `List.append` and `List.set`
-  copy, then write into the copy (`list_slice`, `vm/builtins.c:145-179`), so
-  `list_slice` itself must keep returning a fresh list; maps are persistent. The
-  rule for later code: only objects from `agc_new_*` are written, and only
-  before they are returned. Any future update in place (the transients of 8d,
-  `docs/vm/10-io-multicore.md` §10.2.3) must treat the shared objects as never
-  unique.
+  builder (`vm/text.c`), the callback output that `filter` shrinks
+  (`vm/interp.c`), `String.from_bytes` (`vm/strings.c`), the loader, and JSON
+  and typed-decode fills. `List.append` and `List.set` copy, then write into the
+  copy (`list_slice`, `vm/builtins.c`), so `list_slice` itself must keep
+  returning a fresh list; maps are persistent. The rule for later code: only
+  objects from `agc_new_*` are written, and only before they are returned. Any
+  future update in place (the transients of 8d, `docs/vm/10-io-multicore.md`
+  §10.2.3) must treat the shared objects as never unique.
 - **No identity.** `==` compares Strings by bytes and does not apply to lists or
   maps (`grammar.md` §6); there is no object id, and printing shows no
   addresses. Sharing cannot change output.
@@ -41,29 +40,16 @@ byte, else a new one; the paths below call it, or read the table. There are no
 `agc_empty_list`, `agc_empty_map` or `agc_empty_set` helpers: one field read
 needs no function.
 
-- **Value:** One-character or empty String
-  - **Paths:** `String.at`, `slice` (a length of 0 returns before any scan),
-    `trim` (it also returns its argument when there is nothing to trim),
-    `from_code`, `from_bytes` (`[]` and one ASCII byte), `upcase` and `downcase`
-    (the empty String is its own result, one ASCII character maps by itself),
-    `reverse` (fewer than two characters is its own result), `join` and
-    `replace` with nothing left, the pieces of `split`, the text of a one-digit
-    number (`to_s`, `"#{3}"`), `Result.message` of `ok`, the strings and keys of
-    `JSON.parse` and `JSON.decode` (`agc_json_parse` takes the vm), and the
-    lines of `IO.gets`, `IO.read`, `File.each_line` and a stream
-
-- **Value:** `[]`
-  - **Paths:** `split("")` of the empty String, `take` of 0, `drop` of
-    everything, `repeat` of 0, `Map.keys`, `Map.values` and `Set.to_a` of an
-    empty collection, `Range.to_a` of an empty range; `reverse` of fewer than
-    two items returns its argument
-
-- **Value:** `Set.new([])`
-  - **Paths:** `Set.new` with no items, `Set.delete` of the last element,
-    `intersection` and `difference` with nothing left
-
-- **Value:** `{}`
-  - **Paths:** `Map.delete` of the last key, and the start of a typed JSON map
+The builtins that return them are the ones that call `agc_small_string` or read
+the table (`rg agc_small_string vm/`): Strings with no bytes or one ASCII byte
+(`String.at`, `slice`, `trim`, `from_code`, `from_bytes`, `upcase`, `downcase`,
+`reverse`, `join`, `replace`, the pieces of `split`, one-digit `to_s`,
+`Result.message` of `ok`, JSON strings and keys, the lines of `IO.gets`,
+`IO.read`, `File.each_line` and a stream); `[]` (empty results of list, map, set
+and range functions, `reverse` of fewer than two items returns its argument);
+`Set.new([])` (`Set.new` with no items, the last `Set.delete`, empty
+`intersection` and `difference`); and `{}` (the last `Map.delete`, the start of
+a typed JSON map).
 
 `Set.new`, the set filters and the typed JSON map start from the shared empty
 value: `agc_map_put` and `agc_map_add_hash` never write their input.

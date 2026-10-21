@@ -17,47 +17,22 @@ rules now.
 
 ### 49.3 Part 49b: generic aliases
 
-```ruby
-type Matrix[T] = List[List[T]]
-export type Pairs[K, V] = List[Map[K, V]]
-```
+The rules are in the grammar (`type_parameters` and "generic alias" in
+[`05-syntax.md`](../grammar/05-syntax.md)). Decisions kept here:
 
-- **Parameters.** Type names in brackets, as the parameters of an enum
-  (`type_parameters` in section 5). A parameter name follows the enum rule: a
-  reserved name is `CHECK-REDEFINED-NAME`.
 - **An unused parameter is allowed.** As for enums, and the language does not
   report unused names. This replaces the earlier plan of a
   `CHECK-TYPE-ALIAS-PARAM` code; no new code was added.
-- **The count.** A use gives exactly as many type arguments as the alias has. A
-  wrong count uses an existing code: `CHECK-UNKNOWN-TYPE`, as an enum with the
-  wrong number of arguments gets today (`resolve_generic` in
+- **The count.** A wrong count uses an existing code: `CHECK-UNKNOWN-TYPE`, as
+  an enum with the wrong number of arguments gets today (`resolve_generic` in
   `compiler/check/check_types.agc`). The checker has no separate code for the
   arity of a type, and this part adds none.
-- **Expansion.** The arguments are substituted for the parameters:
-  `Matrix[Int]` is `List[List[Int]]`. It is still transparent.
 - **Not in 49b.** No higher-kinded parameters (a parameter applied to
   arguments, as `T[Int]`), no partial application (a use with fewer arguments,
   or the bare name), and no default type arguments.
-- **The core rule changes.** AGENTS.md's core grammar says "user enums (the
-  only user generics)". 49b widens it to "user enums and type aliases", and
-  `docs/grammar/05-syntax.md` said "only enums take type parameters"; both
-  changed with 49b.
 
 ### 49.4 What changes where
 
 Only `compiler/` changes: the parser, the linker and the checker. Lowering,
 the bytecode writer and the VM do not change, because a transparent alias
 reaches them as the type it names.
-
-### 49.7 Implementation order
-
-49b is one PR in `compiler/` only, with its own tests and docs (row 7.12,
-post-bootstrap step 6, before row 7.11 and the path to the JIT; it waits for
-nothing). It needs no
-refresh of `bootstrap/stage0.agcb` while `compiler/` does not use aliases. If
-`compiler/` starts to use them, the syntax takes the two steps of
-[§18.2](18-front-end-language.md#182-bootstrap) for new syntax: one PR teaches
-the compiler the syntax and refreshes stage0, and a later PR uses it.
-Done when: a program names a type once with an alias and uses it wherever
-the type can stand, with the same results as the expanded type; and the
-tests of §49.3 pass.

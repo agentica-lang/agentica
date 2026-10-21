@@ -17,12 +17,9 @@ client and server (`std/http`)"), with the migration table in the site's
 design decisions, the client, the server, the errors, the status codes and the
 tests are in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) §10.6 and §10.7;
 task cancellation for `close_server` is in
-[`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1 and §10.2.2;
-and the programs are in the programming skill's `references/network.md` and the
-site's network page. Sections 30.1 to 30.10 moved to those places.
-
-This file keeps what is not built: streaming on channels (20e to 20g, 30.11) and
-what comes later (30.12).
+[`docs/vm/10-io-scheduler.md`](../vm/10-io-scheduler.md) §10.2.1 and §10.2.2.
+This file keeps what is not built: streaming on channels (20e to 20g, 30.11)
+and what comes later (30.12 to 30.13).
 
 **Streaming** is a new feature, VM-only, at order step 7.4 ([the order
 table](../roadmap/README.md#current-implementation-order)): after phase 17
@@ -163,20 +160,17 @@ Agentica code, not a C feature.
 
 ### 30.14 Implementation (row 7.4)
 
-- One PR per item (20e–20g), each with its own tests and docs; 20c-bench
-  records the HTTP benchmark numbers from an idle-machine run
+- One PR per item (20e–20g), each with its own tests and docs; 20c-bench records
+  the HTTP benchmark numbers from an idle-machine run
   (`benchmarks/http_bench.py`).
-- 20e streamed downloads (`HttpStream`, `HTTP.open`); 20f streamed
-  uploads (`HTTP.upload`, fixed length or chunked); 20g streamed
-  responses and SSE (`HttpStreamResponse`, `listen_stream`, `whole`).
-  Tests: goldens plus Node peers (no Python server for chunked uploads);
-  docs: grammar, `references/network.md`, the site network page,
-  `docs/vm/10-io-http.md`, CHANGELOG.
-- Done when: `examples/http_get.agc` and `examples/http_server.agc` run
-  on the VM; every hostile case of §10.6 is rejected with its code;
-  client and server work with Python and Node peers over HTTP and
-  HTTPS; the benchmark check is recorded; and a download bigger than
-  64 MiB, a chunked upload and an SSE stream run through channels with
-  one form for each job.
+- 20e streamed downloads (`HttpStream`, `HTTP.open`); 20f streamed uploads
+  (`HTTP.upload`, fixed length or chunked); 20g streamed responses and SSE
+  (`HttpStreamResponse`, `listen_stream`, `whole`). Tests: goldens plus Node
+  peers (no Python server for chunked uploads).
+- Done when: `examples/http_get.agc` and `examples/http_server.agc` run on the
+  VM; every hostile case of §10.6 is rejected with its code; client and server
+  work with Python and Node peers over HTTP and HTTPS; the benchmark check is
+  recorded; and a download bigger than 64 MiB, a chunked upload and an SSE
+  stream run through channels with one form for each job.
 
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md

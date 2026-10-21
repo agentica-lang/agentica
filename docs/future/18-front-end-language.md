@@ -27,16 +27,14 @@ decision, of the method, and of what remains; live status is in
 
 ### 18.2 Bootstrap
 
-The plan, decided by the owner on 2026-10-14, started at row 7.2.7 (the
-freeze of the Racket front end), after rows 8 and 7.2.4 to 7.2.6. Each stage
-of the port was one PR, checked against the Racket stage over the whole
-corpus, with goldens under `tests/fixtures/frontend/<stage>/`: stage1 (the
-front end in `compiler/`, compiled by Racket, later by
-`bootstrap/stage0.agcb`), stage2 (self-hosted, byte-identical to stage1),
-then Embed (stage2 goes into the binary as data). Determinism is a
-requirement: no timestamps, and source paths relative to the entry file's
-folder. Refresh, fixed-point and format-version rules are in the development
-skill's `references/ci.md`, "The checks of ci.yml…".
+The owner decided the plan on 2026-10-14. Each stage of the port was one PR,
+checked against the Racket stage over the whole corpus, with goldens under
+`tests/fixtures/frontend/<stage>/`: stage1 (the front end in `compiler/`,
+compiled by Racket, later by `bootstrap/stage0.agcb`), stage2 (self-hosted,
+byte-identical to stage1), then Embed (stage2 goes into the binary as data).
+Determinism is a requirement: no timestamps, and source paths relative to the
+entry file's folder. Refresh, fixed-point and format-version rules are in the
+development skill's `references/ci.md`, "The checks of ci.yml…".
 
 ### 18.3 Port
 
@@ -44,8 +42,8 @@ Steps 1 (lexer), 2 (parser, with `PARSE-TOO-DEEP`), 3 (modules and linker),
 4 (builtin catalog and checker, with `CHECK-TOO-DEEP`), 5 (lowering, with
 module constants), 6 (bytecode writer), 7 (BDD driver) and 8 (command line,
 single binary, goldens, the test suite and CI) are done; the per-PR record is
-in the roadmap. Source paths are stored relative to the entry file's folder
-(PR #273). Each stage carries its diagnostics and dumps (`--dump`, `--dump-ir`)
+in the roadmap. Source paths are stored relative to the entry file's folder.
+Each stage carries its diagnostics and dumps (`--dump`, `--dump-ir`)
 so a compiler bug is visible as a runtime error in `compiler/`, reported as an
 internal code with a stack trace (roadmap 14b).
 
@@ -75,17 +73,16 @@ lifetime".
 
 ### 18.6 Order
 
-The port followed the order of [`docs/roadmap/README.md`](../roadmap/README.md);
-its steps are PRs, not rows of that table. What is left is the post-bootstrap
-work listed there: the parser pass of the speed targets, `agentica doc`, and
-the package system, FFI and JIT path ([§40.5](40-native-code.md#405-order)).
+What is left of the port is the post-bootstrap work in
+[`docs/roadmap/README.md`](../roadmap/README.md): the parser pass of the speed
+targets, `agentica doc`, and the package system, FFI and JIT path
+([§40.5](40-native-code.md#405-order)).
 
 ### 18.7 Tests
 
 The suite is Python, standard library only (the repository rules in
 `AGENTS.md`; design and make targets in the development skill's
-`references/ci.md`). The Racket test files and their generators were removed
-with the front end.
+`references/ci.md`).
 
 ### 18.8 Distribution
 
@@ -94,11 +91,10 @@ with `.incbin` carries the compiled front end (stage2) and every `stdlib/`
 source, with the module list in `stdlib/MODULES` and the layout in
 `vm/embedded.h`. `agentica run` runs a compiled `.agcb`; the separate
 `agentica-vm` and the `AGENTICA_VM` override are gone (breaking, in the
-changelog). The BDD runner and default steps (`compiler/embedded/`) are
-embedded too, so `agentica test` compiles nothing on each run. The VM is about
-7 MB and the front end adds about 3.4 MB; the release links the static
-libraries and keeps `LICENSE`, `NOTICE` and `licenses/`, without Racket's or
-Chez Scheme's files.
+changelog). The BDD runner and default steps (`compiler/embedded/`) are embedded
+too, so `agentica test` compiles nothing on each run. The release links the
+static libraries and keeps `LICENSE`, `NOTICE` and `licenses/`, without Racket's
+or Chez Scheme's files.
 
 ### 18.9 Decided against
 

@@ -171,15 +171,13 @@ below.
 - Tests go through the CLI with `--json check`. They assert codes and spans, or
   file and key paths, never message text (AGENTS.md). Git tests need `git`: CI
   installs it and fails if it is missing.
-- Each pending error code gets a test that asserts the code.
-- Round trip (45c): read `agentica.lock` and `agentica.toml`, write them back,
-  and compare the bytes.
-- End to end (45b, 45c): `add`, then `install` into an empty cache, then a
-  program imports `pkg/name/mod` and prints.
-- Offline (45b): with the cache filled and no `git` on `PATH`, a build passes.
-  This proves that a build never fetches.
-- Moved tag (45b): a fetched tag that does not peel to the locked commit gives
-  `PKG-TAG-MOVED`.
+- Each pending error code gets a test that asserts the code. Also: a round trip
+  of `agentica.lock` and `agentica.toml` (read, write back, same bytes; 45c);
+  end to end (45b, 45c: `add`, then `install` into an empty cache, then a
+  program imports `pkg/name/mod` and prints); offline (45b: with the cache
+  filled and no `git` on `PATH`, a build passes, which proves that a build never
+  fetches); moved tag (45b: a fetched tag that does not peel to the locked
+  commit gives `PKG-TAG-MOVED`).
 
 ### 45.12 Phases
 

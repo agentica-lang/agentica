@@ -1,26 +1,19 @@
 ## 48. Regular expressions
 
 **Status:** Decided by the owner on 2026-10-15: a linear-time matcher with no
-backtracking (48.2), std first (48.3), after the bootstrap (§18, port step 8),
-and
-a Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 records
-it. Nothing is
-implemented. The decisions are in 48.10, with four open questions.
+backtracking (48.2), std first (48.3), after the bootstrap (§18, done), and a
+Ruby-style regex literal `/pattern/flags` (48.6). Roadmap row 7.10 records it.
+Nothing is implemented. The decisions are in 48.10, with four open questions.
 
 The Ruby-style `Regex` was a "later utility" in [pending
-roadmap](../roadmap/pending-general-programming-and-mcp.md). The facts in 48.1
-were checked against `origin/master` at 4baf84ec.
+roadmap](../roadmap/pending-general-programming-and-mcp.md).
 
 ### 48.1 Today
 
 - There is no regex: `=~` and `matches?` do not exist
   (`.agents/skills/agentica-programming/SKILL.md`).
-- The String builtins (`src/builtins.rkt`) work on literal text: `length`,
-  `upcase`, `downcase`, `trim`, `split`, `join`, `contains?`, `starts_with?`,
-  `ends_with?`, `replace`, `slice`, `index_of`, `at`, `reverse`, `code`,
-  `from_code`, `from_int`, `from_float`, `from_bytes`, `to_int`, `to_float`,
-  `to_int!` and `to_float!`. Positions count characters, not bytes
-  (`docs/grammar/06b-builtins.md`).
+- The String builtins work on literal text (`agentica help String`). Positions
+  count characters, not bytes (`docs/grammar/06b-builtins.md`).
 - The string escapes are `\"`, `\\`, `\#`, `\n`, `\r` and `\t`
   (`docs/grammar/04-lexical.md`), so `"\d"` is `LEX-INVALID-ESCAPE`. There are
   no raw strings.
@@ -37,36 +30,20 @@ as in RE2 and Go's `regexp`. It has no backtracking, so no input makes it blow
 up. The matcher is ordinary Agentica code (48.3), so each loop charges steps and
 `--max-steps` stops a runaway pattern with `RUNTIME-STEP-LIMIT`.
 
-- **Engine:** Pike VM (decided)
-  - **Kind:** NFA, leftmost-first
-  - **Backrefs and lookaround:** no
-  - **Worst case:** O(n·m·g) per search
-  - **Dependency:** none
-  - **Notes:** Same results as RE2 and Go on the subset
+Not chosen:
 
-- **Engine:** PCRE2
-  - **Kind:** backtracking, optional JIT
-  - **Backrefs and lookaround:** yes
-  - **Worst case:** exponential (ReDoS)
-  - **Dependency:** new `vm/third_party` submodule
-  - **Notes:** Perl syntax, large C code
+- **PCRE2** (backtracking, optional JIT): Perl syntax, backreferences and
+  lookaround, but exponential worst case (ReDoS), a new `vm/third_party`
+  submodule and large C code.
+- **Oniguruma** (Ruby's engine, backtracking): exponential worst case, a new
+  submodule.
+- **POSIX `regcomp`** (libc): leftmost-longest, no backreferences (ERE), but
+  byte-based, and classes and results vary by libc and locale.
 
-- **Engine:** Oniguruma
-  - **Kind:** backtracking
-  - **Backrefs and lookaround:** yes
-  - **Worst case:** exponential
-  - **Dependency:** new submodule
-  - **Notes:** Ruby's engine, many syntaxes
-
-- **Engine:** POSIX `regcomp` (libc)
-  - **Kind:** leftmost-longest
-  - **Backrefs and lookaround:** no (ERE)
-  - **Worst case:** depends on libc
-  - **Dependency:** libc, no submodule
-  - **Notes:** Byte-based; classes and results vary by libc and locale
-
-Each new submodule needs the owner's approval (AGENTS.md). RE2 is C++, so it is
-the reference design, not an option for the C core.
+The Pike VM is an NFA, leftmost-first, with no backreferences or lookaround,
+O(n·m·g) per search and no dependency; it gives the same results as RE2 and Go
+on the subset. Each new submodule needs the owner's approval (AGENTS.md). RE2
+is C++, so it is the reference design, not an option for the C core.
 
 What linear time costs:
 
@@ -85,12 +62,12 @@ What linear time costs:
 
 ### 48.3 Implementation path (std first)
 
-1. Parse the pattern into a tree. Each error carries the character position.
-2. Compile the tree to instructions: `Char`, `Class`, `Any`, `Split` (in
-   priority order), `Jump`, `Save`, `Assert` (`^`, `$`, `\b`) and `Match`.
-3. Run the Pike VM over the code points. Each step keeps one thread list in
-   priority order, with each program counter at most once. A thread that reaches
-   `Match` cuts the lower-priority threads.
+The pattern is parsed into a tree (each error carries the character position),
+compiled to instructions (`Char`, `Class`, `Any`, `Split` in priority order,
+`Jump`, `Save`, `Assert` for `^`, `$` and `\b`, and `Match`), and run by the
+Pike VM over the code points. Each step keeps one thread list in priority
+order, with each program counter at most once. A thread that reaches `Match`
+cuts the lower-priority threads.
 
 **Where:** `stdlib/regex.agc`, embedded as `std/regex` and imported as
 `import Regex from "std/regex"`, as `std/toml` is (§45.4). It is pure
@@ -240,7 +217,7 @@ end
 so no program can make a bad `Regex`. That relies on an exported struct having a
 private field type; 48a checks it.
 
-Four short examples, with the literal of 48.6. A run-time pattern is
+Examples, with the literal of 48.6. A run-time pattern is
 `Regex.compile(text)`, which returns a `Result`:
 
 ```agentica
@@ -250,14 +227,6 @@ def read_year(text: String) -> Result[String]
   found = try Regex.match(text, /(?P<year>\d{4})-\d{2}-\d{2}/)
   year = try Regex.named(found, "year")
   return ok(year.text)
-end
-
-def main() -> Void
-  for line in ["ERROR 42 disk full", "info ok"]
-    if Regex.match?(line, /ERROR (\d+)/)
-      puts(line)
-    end
-  end
 end
 
 def swap_names(text: String) -> Result[String]
@@ -286,14 +255,13 @@ value and stays a `Result`.
 ### 48.6 The regex literal (decided 2026-10-15)
 
 The owner decided that the backslash problem is solved by a Ruby-style literal,
-`/pattern/flags`. It is new syntax, so it comes after the bootstrap, as item 48b
-of phase 29, after 48a. `Regex.compile(String)` stays for patterns built at run
-time. A raw string literal is not planned. The options weighed: (a) `"\\d+"`,
-which doubles every backslash; (b) a raw string `r"..."`, a general text form
-that cannot hold `"`, not planned; (c) `/.../flags`, decided; (d) a heredoc,
-which needs two or more lines and keeps the escapes (heredocs, in the
-grammar), so it does not
-help a one-line pattern.
+`/pattern/flags`. It is new syntax, so it comes as item 48b of phase 29, after
+48a. `Regex.compile(String)` stays for patterns built at run time. A raw string
+literal is not planned. The options weighed: (a) `"\\d+"`, which doubles every
+backslash; (b) a raw string `r"..."`, a general text form that cannot hold `"`,
+not planned; (c) `/.../flags`, decided; (d) a heredoc, which needs two or more
+lines and keeps the escapes (heredocs, in the grammar), so it does not help a
+one-line pattern.
 
 **Body.** The body is the pattern, with no string escapes. The body scanner
 reads a backslash together with the character after it, and stops at an
@@ -363,11 +331,9 @@ The cases:
 - `/x/.match?(text)` is invalid, since structs have no methods. Write
   `Regex.match?(text, /x/)`.
 
-**What the lexers need.** Neither lexer changes before the bootstrap. The freeze
-of row 7.2.7 allows no new syntax in `src/`, so `src/lexer.rkt` does not get the
-literal. After the bootstrap, `compiler/` needs: the previous token (the last
-one emitted), a body scanner and a flag scanner (both in code mode), a token
-kind `regex` with body, flags and span, a parser node, the checker rule and the
+**What the front end needs.** In `compiler/`: the previous token (the last one
+emitted), a body scanner and a flag scanner (both in code mode), a token kind
+`regex` with body, flags and span, a parser node, the checker rule and the
 constant lowering. The grammar changes go to `docs/grammar/04-lexical.md`,
 `06-semantics.md` and `07-diagnostics.md`. The diagnostic code names here and in
 48.5 are proposals until 48b.
@@ -396,21 +362,19 @@ programming skill state these differences next to the literal.
 
 - **Goldens** in `tests/fixtures/vm/regex-*.agc` (`make goldens`): the syntax of
   48.4, leftmost-first alternation, the zero-length rules, templates, `split`,
-  the limits and the round trip of `escape`. Each new fixture gets hand-checked
-  expected output (`docs/vm/README.md` §1).
-- **Python peer** in `tests/test_regex.py` (unittest, standard library only).
-  The peer runs each pattern through `re` with `re.ASCII`, after two mechanical
+  the limits and the round trip of `escape`, with hand-checked expected output
+  (`docs/vm/README.md` §1).
+- **Python peer** in `tests/test_regex.py` (standard library only). The peer
+  runs each pattern through `re` with `re.ASCII`, after two mechanical
   translations: `\z` to `\Z` and `(?<name>` to `(?P<name>`. Patterns that Python
   still rejects, such as mid-pattern flags and `\x{...}`, are not compared; the
   goldens cover them. Whole-match spans are always compared, and group spans
   only outside repetitions (48.4). Zero-length `find_all` and `replace` results
   are compared where Python agrees, and by goldens where it does not.
-- **Slow fuzzer** (`@slow`, run with `AGENTICA_TEST_SLOW=1` by
-  `make test-slow`). It draws patterns from the compared subset only: literals
-  `a`, `b` and `-`, `.`, `[ab]`, `[^a]`, `\d` and `\w` on ASCII texts, named and
-  unnamed groups, alternation, `* + ? {1,2}` and their lazy forms, `^`, `$`,
-  `\b`, and `(?i)` at the start. Texts are random strings of up to 40 characters
-  over `a`, `b`, `A`, space and newline.
+- **Slow fuzzer** (`@slow`). It draws patterns and short ASCII texts from the
+  compared subset only: literals, `.`, classes, `\d` and `\w`, named and
+  unnamed groups, alternation, quantifiers and their lazy forms, `^`, `$`, `\b`,
+  and `(?i)` at the start.
 - **Go rules.** No Go toolchain is in CI, so leftmost-first, the zero-length
   rule and the end-only `$` are pinned by hand-checked goldens. A Go peer needs
   the owner's approval for CI.
@@ -435,18 +399,17 @@ Each item has its own PR, with its own tests and docs, as phase 27 does.
   48.5 about `"#{name}"` and `"${name}"`.
 - **48b: the regex literal (48.6).** The lexer rule, the scanners, the node,
   `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT` and the lowering. `compiler/`
-  only, after the bootstrap. Tests: lexer goldens for each case of 48.6, a
-  golden for each code with its span, and a check that a literal equals
-  `Regex.compile` of its body and mapped flags. Docs:
-  `docs/grammar/04-lexical.md`, `06-semantics.md`, `07-diagnostics.md`, and the
-  programming skill, which shows the literal as the normal form with the Ruby
-  differences.
+  only, after 48a. Tests: lexer goldens for each case of 48.6, a golden for each
+  code with its span, and a check that a literal equals `Regex.compile` of its
+  body and mapped flags. Docs: `docs/grammar/04-lexical.md`, `06-semantics.md`,
+  `07-diagnostics.md`, and the programming skill, which shows the literal as the
+  normal form with the Ruby differences.
 - **48c: C matcher, if measured.** A stepper with the same API and one STEP per
   resume (48.3). The PR records the numbers and the threshold.
 - **48d: Unicode classes and case folding.** `\p{L}`, `\pN`, scripts, and `(?i)`
-  with simple Unicode folding. The tables are generated like
-  `vm/unicode_data.c`, from `vm/tools/gen-unicode.rkt`, which is Racket. Whether
-  that generator stays after the bootstrap is open (§18).
+  with simple Unicode folding. The tables are generated like `vm/unicode_data.c`
+  was, from the pinned UCD files, by an Agentica program (the Racket generator
+  is gone; see the header of `vm/unicode_data.c`).
 
 Not planned: raw string literals.
 
@@ -492,17 +455,8 @@ Not planned: raw string literals.
 
 ### 48.11 Implementation (row 7.10)
 
-- One PR per item, each with its own tests and docs. 48b waits for 48a.
-- 48a `std/regex` (`stdlib/regex.agc`, pure Agentica, no builtin or VM
-  change): goldens, the Python peer, the ReDoS budget test, a benchmark
-  pair; the site page, the programming skill, a CHANGELOG entry.
-- 48b the regex literal `/pattern/flags` (`compiler/` only): the §48.6
-  lexer cases, `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT`, the lexer
-  codes, one literal equals `Regex.compile` of the same body; grammar,
-  site, skill.
-- 48c a C stepper only if the 48a numbers ask for it, behind the same API.
-- 48d Unicode classes and case folding, generated by an Agentica program
-  over the pinned UCD files (like `vm/unicode_data.c`).
-- Done when: a program searches, extracts, replaces and splits text with
-  a pattern, literal or string; no pattern stalls the VM past its step
-  budget; the tests of §48.6 and §48.8 pass.
+One PR per item of 48.9, each with its own tests and docs. 48b waits for 48a.
+
+Done when: a program searches, extracts, replaces and splits text with a
+pattern, literal or string; no pattern stalls the VM past its step budget; the
+tests of §48.6 and §48.8 pass.

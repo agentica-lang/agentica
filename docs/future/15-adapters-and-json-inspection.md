@@ -2,9 +2,7 @@
 
 Small language items for adapters (one interface, several backends), facades,
 and JSON of unknown shape. 15.1 and 15.3 serve adapters; 15.2 reads unknown
-JSON; 15.4 gives enums a JSON form, which typed decoding lacks today. Each lands
-on the VM in the same PR, with the grammar, the programming
-skill, the site docs and tests (row 7.6).
+JSON; 15.4 gives enums a JSON form, which typed decoding lacks today.
 
 ### 15.1 Calling `Fn` fields without `.call`
 
@@ -12,47 +10,6 @@ skill, the site docs and tests (row 7.6).
 struct Storage
   get: Fn[String, Result[String]]
   put: Fn[String, String, Result[Void]]
-end
-
-def getter(f: Fn[String, Result[String]]) -> Fn[String, Result[String]]
-  return f
-end
-
-def putter(f: Fn[String, String, Result[Void]]) -> Fn[String, String, Result[Void]]
-  return f
-end
-
-def valid_name?(name: String) -> Bool
-  allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-  return name != "" and String.split(name, "").all? do |c|
-    String.contains?(allowed, c)
-  end
-end
-
-def disk_storage(dir: String) -> Storage
-  get = getter() do |key|
-    if !valid_name?(key)
-      return error("bad key")
-    end
-    File.read_text("#{dir}/#{key}", 1000)
-  end
-  put = putter() do |key, text|
-    if !valid_name?(key)
-      return error("bad key")
-    end
-    File.write_text("#{dir}/#{key}", text, 1000)
-  end
-  return Storage(get: get, put: put)
-end
-
-def memory_storage(items: Map[String, String]) -> Storage
-  get = getter() do |key|
-    Map.get(items, key)
-  end
-  put = putter() do |key, text|
-    error("read-only")
-  end
-  return Storage(get: get, put: put)
 end
 
 def save_note(store: Storage, name: String, text: String) -> Result[Void]
@@ -95,92 +52,37 @@ end
   with today's help.
 - **Adapter pattern:** a struct of `Fn` fields is the interface; a function such
   as `disk_storage(dir)` is one implementation, and its blocks capture `dir`.
-  Code like `save_note` takes `Storage` and does not know the backend. The disk
-  backend writes files under a directory and checks each key with its own copy
-  of the allow-list check `valid_name?` before it builds a path (the facade's
-  `valid_name?` is private to its module, so the adapter cannot call it from
-  another file; it has its own copy or lives in the same module)
-  (`error("bad key")` otherwise); its tests use a temporary directory. The
-  memory backend is read-only: its map is fixed when it is created, `get` reads
-  it, and `put` returns `error("read-only")`. A test can pass the memory backend
-  to code that only reads, and the program passes the disk one. The two backends
-  live in separate programs; see "Done when" in
-  [§15.6 Implementation](#156-implementation-row-76) below.
-  A block can only be written as the last argument of a call, so each block goes
-  through a small function that returns it (`getter`, `putter` above);
-  standalone lambdas are planned in [section
+  Code like `save_note` takes `Storage` and does not know the backend. A disk
+  backend checks each key with an allow-list before it builds a path
+  (`error("bad key")` otherwise); a private `valid_name?` of another module
+  cannot be called, so the adapter has its own copy or lives in the same module.
+  A memory backend can be read-only (`put` returns `error("read-only")`), so a
+  test passes it to code that only reads. A block can only be written as the
+  last argument of a call, so each block goes through a small function that
+  returns it (for example `getter(f)` returning its `Fn` argument); standalone
+  lambdas are planned in [section
   25.5](25-ruby-typed-idioms.md#255-standalone-lambdas).
 - **Facade pattern:** a file module that exports a few functions and hides the
-  rest. It needs no new syntax:
-
-  ```agentica
-  # users.agc
-  export struct User
-    name: String
-    age: Int
-  end
-
-  export def save_user(dir: String, user: User) -> Result[Void]
-    if !valid_name?(user.name)
-      return error("bad user name")
-    end
-    return File.write_text("#{dir}/#{user.name}.json", JSON.encode(user), 1000)
-  end
-
-  export def load_user(dir: String, name: String) -> Result[User]
-    if !valid_name?(name)
-      return error("bad user name")
-    end
-    text = try File.read_text("#{dir}/#{name}.json", 1000)
-    return JSON.decode(text, User)
-  end
-
-  def valid_name?(name: String) -> Bool
-    allowed = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"
-    return name != "" and String.split(name, "").all? do |c|
-      String.contains?(allowed, c)
-    end
-  end
-  ```
-
-  Callers write `import Users from "users"` and call
-  `Users.load_user(dir, "ana")`; `valid_name?` stays hidden. A facade or adapter
-  must check a name with an allow-list before it uses it in a path, as
-  `valid_name?` does: the name is not empty and has only ASCII letters, digits,
-  `-` and `_`. Otherwise it returns `error(...)`.
+  rest (for example `export def save_user` and `load_user` over a private
+  `valid_name?`). It needs no new syntax. Callers write
+  `import Users from "users"` and call `Users.load_user(dir, "ana")`. A facade
+  or adapter must check a name with an allow-list before it uses it in a path:
+  the name is not empty and has only ASCII letters, digits, `-` and `_`.
+  Otherwise it returns `error(...)`.
 - **Limit:** values are immutable and blocks capture by value, so an in-memory
   adapter cannot change its own data. A memory adapter that writes needs a new
   struct per write (its `put` returns one, for example
   `Fn[String, String, MemoryStorage]`), or, later, blocks that capture a shared
   table (§13).
-- Evaluator: it resolves a struct method call to the field call in the same
-  checker-filled `resolved` slot it uses for builtin methods.
-- VM: no new opcode. The checker records the call as an invoke of the field
-  value, so lowering emits a field read and `call-value`, as for `.call`. It
-  needs `.call` on the VM (7e PR 5e).
+- Compiler only, no new opcode: the checker records the call as an invoke of the
+  field value, so lowering emits a field read and a call of the value, as for
+  `.call`.
 
 ### 15.2 `JSON.kind`
 
-```agentica
-def count_numbers(j: Json) -> Int
-  total = 0
-  case JSON.kind(j)
-    JsonValue.JsonInt(_) -> total = 1
-    JsonValue.JsonBigInt(_) -> total = 1
-    JsonValue.JsonFloat(_) -> total = 1
-    JsonValue.JsonList(items) ->
-      for item in items
-        total = total + count_numbers(item)
-      end
-    JsonValue.JsonObject(fields) ->
-      for key in fields.keys
-        total = total + count_numbers(fields[key])
-      end
-    _ -> total = 0
-  end
-  return total
-end
-```
+Open: the built `JSON.kind(j) -> String` (`docs/grammar/06b-builtins.md`)
+already uses this name, so the enum form below needs another name, or replaces
+it.
 
 - `JSON.kind(j: Json) -> JsonValue`, also the method `j.kind`. It looks one
   level into a `Json` and never fails.
@@ -213,13 +115,12 @@ end
   and `JSON.from` follow the same rule: an `Int` is `JsonInt` and a `Float` is
   `JsonFloat`. So `kind` stays total.
 - **Object order:** the keys of `JsonObject` use the same sorted order as
-  `JSON.decode` into a `Map`: sorted by Unicode code point (typed decode in
-  `src/json-typed.rkt` sorts with `symbol<?`; a byte-wise compare of UTF-8 text
-  gives the same order). The text order is not kept, so `JSON.parse` does not
-  change. The insertion order of an object made with the builder (`JSON.object`)
-  is not kept either: `kind` gives its keys sorted too. Text order may come
-  later if a real program needs it; it would need an ordered object
-  representation in the evaluator.
+  `JSON.decode` into a `Map`: sorted by Unicode code point (a byte-wise compare
+  of UTF-8 text gives the same order). The text order is not kept, so
+  `JSON.parse` does not change. The insertion order of an object made with the
+  builder (`JSON.object`) is not kept either: `kind` gives its keys sorted too.
+  Text order may come later if a real program needs it; it would need an ordered
+  object representation.
 - It works with the existing `case`, the branch check and bindings, with no
   grammar change. Variants are qualified like any enum (`JsonValue.JsonInt(n)`).
   `JsonValue` values are for reading: they have `to_s` and `inspect` like other
@@ -238,67 +139,38 @@ end
   value; `Json` is the only dynamic value, and `kind` covers it.
 - Diagnostics: none new. A non-`Json` argument is `CHECK-TYPE-MISMATCH`; a
   missing variant is `CHECK-NON-EXHAUSTIVE-CASE`.
-- Front end and VM: `JsonValue` is the first builtin enum, so it needs a path
-  in the checker's enum table.
-- Import linking (in `compiler/`): it renames each module's names and rejects
-  unknown aliases, so `JsonValue` needs a path there too, like the existing
-  `Result` exception (`[(and (eq? kind 'enum) (string=? name "Result")) name]`).
-  It covers enum patterns and constructors (`JsonValue.JsonInt(n)`), and the
-  bare nullary form `JsonValue.JsonNull`, which arrives as a `type-expression`
-  and is resolved there. Without it, linking renames these names or rejects them
+- Front end: `JsonValue` is the first builtin enum, so the checker's enum table
+  and the import linking (`compiler/modules`, which renames each module's names
+  and rejects unknown aliases) need a path for it, like the existing `Result`
+  exception. It covers enum patterns and constructors (`JsonValue.JsonInt(n)`)
+  and the bare nullary form `JsonValue.JsonNull`, which arrives as a
+  `type-expression`. Without it, linking renames these names or rejects them
   with `CHECK-IMPORT-NAME`.
-- Planned tests: besides `case` over every variant and the number fixtures
-  below, `JsonValue` used inside an imported module (patterns, a payload
-  constructor and `JsonValue.JsonNull`), checked and run through an `import`.
-- VM: needs the JSON PR (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 7).
-  `JsonValue` is a builtin entry of the enum table with this fixed variant
-  order, so `case` lowers as for user enums. Like a user enum, `JsonValue` is
-  written to the bytecode Enums section only when a program uses it, so the file
-  layout and the opcode meanings do not change and 10b needs no format bump. If
-  the implementation ever needs a fixed index or a layout change, 10b bumps the
-  format version itself (`docs/vm/03-ir-and-bytecode.md` §4). The JSON PR adds
-  no placeholder for it. Numbers in the VM:
+- VM: `JsonValue` is a builtin entry of the enum table with this fixed variant
+  order, so `case` lowers as for user enums. Like a user enum, it is written to
+  the bytecode Enums section only when a program uses it, so the file layout and
+  the opcode meanings do not change; if a fixed index or a layout change is ever
+  needed, 10b bumps the format version itself (`docs/vm/03-ir-and-bytecode.md`
+  §4). Numbers in the VM:
   - The VM Json tree already has a big-integer node kept as decimal text
     (`docs/vm/05-values-execution-builtins.md` §5, Json row). An integer written
     without a fraction or exponent that is outside int64 is that node, and
-    `JSON.kind` maps it to `JsonBigInt` with its exact decimal text.
+    `JSON.kind` maps it to `JsonBigInt` with its exact decimal text
+    (`9223372036854775808` and `-9223372036854775809` are `JsonBigInt`).
   - A number with a fraction or exponent is a double (`JsonFloat`). A non-finite
     one, such as `1e400`, is the existing `JSON number is not finite` error.
   - The rule holds for every JSON builtin that reads the tree, not only `kind`:
-    `JSON.float` on a big integer gives the same float as the evaluator
-    (`exact->inexact`, and the same error when the result is not finite);
-    `JSON.encode` writes it back as its exact decimal text; typed decode treats
-    it as the evaluator does (an `Int` target fails, a `Float` target takes
-    `exact->inexact` of it when that is finite).
-  - `-0` is read as exact 0 by the evaluator, so it is `JsonInt(0)`. `-0.0` has
-    a fraction, so it is a double, but Racket's `read-json` (Racket CS 9.3)
-    drops the sign and reads it as `0.0`, so it is `JsonFloat(0.0)`. The VM must
-    match both.
-  - Planned differential fixtures: `9223372036854775808` and
-    `-9223372036854775809` (both `JsonBigInt`), `-0` (`JsonInt(0)`), `-0.0`
-    (`JsonFloat(0.0)`) and `1e400` (the error).
+    `JSON.float` on a big integer gives the nearest float (an error when the
+    result is not finite); `JSON.encode` writes it back as its exact decimal
+    text; typed decode fails for an `Int` target and, for a `Float` target,
+    takes the float of it when that is finite.
+  - `-0` is read as exact 0, so it is `JsonInt(0)`. `-0.0` has a fraction, so it
+    is a double, but its sign is dropped: `JsonFloat(0.0)`.
 
   `JSON.kind` is a builtin that builds the variant from the parsed node; lists
   and maps hold the child nodes as `Json` values without copying them.
 
 ### 15.3 Generic structs
-
-```agentica
-struct Box[T]
-  value: T
-end
-
-struct Cache[V]
-  items: Map[String, V]
-  limit: Int
-end
-
-def main() -> Void
-  b = Box(value: 1)                                 # Box[Int]
-  puts(b.value + 1)                                 # b.value is Int
-  c: Cache[Int] = Cache(items: {}, limit: 10)
-end
-```
 
 - Same rules as generic enums: `struct Name[T, ...]` declares type parameters;
   their names may not repeat or reuse a reserved type name. Construction infers
@@ -318,19 +190,15 @@ end
   substituted type, so `Box[Int]` has `to_s` and `inspect`, and
   `Box[Fn[Int, Int]]` does not.
 - An imported generic struct is written `M.Box[Int]`, as for enums. Import
-  linking (in `compiler/`) must carry the type parameters through: today its
-  `struct-decl` case rewrites every field type through `resolve`, so a bare `T`
-  would get the module prefix. It needs the same check as `rewrite-enum-type`
-  does for enums (a parameter name with no type arguments stays as it is).
-  Planned test: a generic struct declared in an imported module and used as
-  `M.Box[Int]`.
+  linking (in `compiler/`) must carry the type parameters through: a bare `T` in
+  a field type must not get the module prefix, as for enums (a parameter name
+  with no type arguments stays as it is).
 - Diagnostics reuse the enum codes: a wrong number of type arguments, or a bare
   `Box` in a type, is `CHECK-UNKNOWN-TYPE`; a repeated or reserved parameter
   name is `CHECK-REDEFINED-NAME`; a parameter that cannot be inferred is
   `CHECK-ENUM-TYPE-INFERENCE` (the message names the struct); conflicting field
   types are `CHECK-TYPE-MISMATCH`.
-- `CHECK-ENUM-TYPE-INFERENCE` is reused for structs and keeps its name; 10c adds
-  a note about it to the diagnostics reference of the programming skill.
+- `CHECK-ENUM-TYPE-INFERENCE` is reused for structs and keeps its name.
 - They enable a reusable adapter: `struct Storage[T]` with
   `get: Fn[String, Result[T]]` and `put: Fn[String, T, Result[Void]]`, filled
   once per backend.
@@ -415,11 +283,9 @@ end
                   "values": {"type": "array", "maxItems": 0}},
    "required": ["tag"]}
   ```
-- VM: lands with or after the JSON PR (`docs/vm/12-testing-and-pr-plan.md` §12.2
-  item 7); the type table gets an enum entry with each variant's payload types.
-  If the JSON PR's type table has no enum entry kind, 10d adds it and bumps the
-  format version (`docs/vm/03-ir-and-bytecode.md` §4); the JSON PR adds no
-  placeholder for it.
+- VM: the type table gets an enum entry with each variant's payload types. If
+  the type table has no enum entry kind, 10d adds it and bumps the format
+  version (`docs/vm/03-ir-and-bytecode.md` §4).
 
 ### 15.5 Not planned
 
@@ -436,17 +302,14 @@ name.
 
 ### 15.6 Implementation (row 7.6)
 
-- One PR per item (10a–10e), each with its own tests and docs. 10a needs
-  `.call` on the VM (done); 10b, 10d and 10e, and the JSON part of 10c,
-  need the VM JSON work; 10e also needs 10b. The VM check and the disk
-  example are two separate programs.
+- One PR per item (10a–10e), each with its own tests and docs. 10b, 10d and
+  10e, and the JSON part of 10c, need the VM JSON work; 10e also needs 10b.
 - 10a `Fn` fields without `.call` (§15.1); 10b `JSON.kind` with the
   `JsonValue` enum (§15.2); 10c generic structs (§15.3); 10d JSON for
   enums (§15.4); 10e optional and nullable JSON fields (§17).
-- Done when: two programs run. The VM program has a `Storage` adapter
-  with a read-only memory backend and a walker over unknown JSON, using
-  only builtin library calls (golden check). The disk program uses the
-  same `Storage` shape with a disk backend whose `get` and `put` check
-  each key with an allow-list (`error("bad key")` otherwise, e.g.
-  `../x`), in a temporary directory passed as an argument.
-
+- Done when: two programs run. The VM program has a `Storage` adapter with a
+  read-only memory backend and a walker over unknown JSON, using only builtin
+  library calls (golden check). The disk program uses the same `Storage` shape
+  with a disk backend whose `get` and `put` check each key with an allow-list
+  (`error("bad key")` otherwise, e.g. `../x`), in a temporary directory passed
+  as an argument.

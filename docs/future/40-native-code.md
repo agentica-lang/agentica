@@ -45,8 +45,8 @@ use `extern "C"`. The rules are:
 - It never stores GC pointers in `malloc` memory. This is the VM's existing rule
   ([`16-architecture.md`](../vm/16-architecture.md) §16.5).
 - Conversions come first for `Int`, `Float`, `Bool`, `String`, `List`, `Map` and
-  structs. `Bytes` can follow when the compact type of [section
-  binary data (phase 13) lands.
+  structs. `Bytes` can follow when the compact type of binary data (phase 13)
+  lands.
 
 Each native function declares a call kind, which says where it runs (40.3.1).
 Only its task waits, and the scheduler keeps running. The libuv pool takes only
@@ -104,28 +104,13 @@ The three call kinds:
    library back there. `uv_poll` sets the descriptor non-blocking, so the
    library must accept that. The callback must be short, must not block, and
    builds no GC values (§16.5). If the library can only block, it gets its own
-   thread per handle, with a cancel exit (40.3a). The handle belongs to the task
-   that opened it (§14.5).
+   thread per handle, with a cancel exit (40.3a). The task parks on the handle's
+   job (§14.1); a cancel detaches the job and its cancel half stops the watch
+   (§14.3). The handle belongs to the task that opened it (§14.5).
 
-- **Kind:** Fast
-  - **Runs on:** the scheduler thread, in the task's turn
-  - **Waits how:** does not wait; charged as a long builtin
-  - **Cancel:** none: it runs to its end, as a builtin does
-  - **Internal precedent:** `String.*`, `Int.bit_*` (ordinary builtins)
-
-- **Kind:** Compute
-  - **Runs on:** a compute pool of the VM, not the libuv pool
-  - **Waits how:** the task parks on a job; other tasks run
-  - **Cancel:** a cancel flag, polled by the native code
-  - **Internal precedent:** file work on the libuv pool, which is bounded;
-    compute needs a pool of its own
-
-- **Kind:** I/O
-  - **Runs on:** the I/O thread for a descriptor; a thread per handle for a
-    library that can only block
-  - **Waits how:** the task parks on the handle's job (§14.1)
-  - **Cancel:** the job is detached and its cancel half stops the watch (§14.3)
-  - **Internal precedent:** TCP and HTTP on the loop; `Process.*`
+Internal precedents: a fast call is an ordinary builtin (`String.*`,
+`Int.bit_*`); the I/O kind is like TCP and HTTP on the loop and `Process.*`; the
+libuv pool takes only bounded file work, so compute needs a pool of its own.
 
 A compute pool is a new part of the core, so it must pass the entry rule of
 §14.6: a use case, and an answer for how it waits, times out, is cancelled, ends

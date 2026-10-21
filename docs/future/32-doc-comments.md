@@ -145,16 +145,13 @@ end
 
 ### 32.9 Implementation (row 22b)
 
-- One PR in `compiler/`: `agentica doc PATH [--json]` and
+- `agentica doc` is built. Pending, one PR in `compiler/`:
   `agentica help std/MODULE[.NAME] [--json]`; lex and parse only, from the
-  embedded `stdlib/`; the objects of §32.5 and §32.6; exit 1 for a lex or
-  parse error, 2 for an unknown file, module or name.
-- Tests: Markdown and JSON for a fixture module (documented and
-  undocumented exports, a private declaration left out, fields, variants,
-  an import alias); a file whose import does not exist;
-  `help std/http.get` and `help std/http`; the exit codes and
-  "did you mean".
-- Docs: the `agentica help` paragraph of `docs/grammar/06b-builtins.md`,
+  embedded `stdlib/`; the objects of §32.6; exit 1 for a lex or parse error, 2
+  for an unknown module or name.
+- Tests: `help std/http.get` and `help std/http`, the exit codes and "did you
+  mean". Docs: the `agentica help` paragraph of `docs/grammar/06b-builtins.md`,
   the programming skill, `site/content/getting-started.md`, the development
   skill.
-- Done when: `agentica doc std/http` prints its API, and the doc tests pass.
+- Done when: `agentica help std/http.get` prints its signature and doc, and the
+  doc tests pass.

@@ -10,14 +10,12 @@ Nothing is implemented. The `main` and `Test.run` form of the grammar's
 - A test file is a `*_test.agc` program whose `main` calls `Test.run` with a
   list of `Test.test(name) do ... end` blocks (the grammar's `Test` rules).
 - Every program needs `main() -> Void`: `check_main` in
-  `compiler/check/check_register.agc` reports CHECK-MAIN otherwise. So a test
+  `compiler/check/check_register.agc` reports CHECK-MAIN otherwise, so a test
   file with no `main` is CHECK-MAIN today.
-- `agentica test` decides that a file is a test file by its name:
-  `kind_of` in `compiler/bdd/bdd_discover.agc` returns "tests" for `_test.agc`.
-  Only the driver reads the name; the compiler never does.
-- The driver compiles a test file with `Compile.file`, which reaches
-  `Linker.link_file` through `Pipeline.compile` and `Pipeline.check_file`.
-  Nothing tells the front end that the file is a test.
+- `agentica test` decides that a file is a test file by its name: `kind_of` in
+  `compiler/bdd/bdd_discover.agc` returns "tests" for `_test.agc`. Only the
+  driver reads the name; the compiler never does, and nothing tells the front
+  end that the file is a test.
 
 ### 50.2 Shape
 
@@ -44,20 +42,17 @@ end
   `Test.run([Test.test("parses port", &test_parses_port), ...])`. The test
   name is the function name without `test_`, with `_` turned into spaces.
   - The pass belongs in the linker stage: it runs in
-    `compiler/modules/linker.agc` after `Modules.load` and before `rewrite_all`.
-    The linker owns the declarations of the root file, and `check_main` already
-    reads them from `linked.modules`, so the generated code goes through the
-    same rewrite and the same checker as any code. A pass after the linker would
-    also have to change `Linked`.
+    `compiler/modules/linker.agc` after `Modules.load` and before
+    `rewrite_all`, so the generated code goes through the same rewrite and the
+    same checker as any code. A pass after the linker would also have to change
+    `Linked`.
   - Only functions declared in that file count, not imported ones. A `test_`
     in a comment or a string never counts, because the pass reads
     declarations, not text.
   - The generated nodes take their spans from the test function they stand for,
-    so a diagnostic about them is reported at that function. Their node ids come
-    from the numbering that `Linked.ids` counts (`parser_ids` and `id_count` in
-    `compiler/modules/linker.agc`). The checker sizes its type table from
-    `Linked.ids` (`ids_of` in `compiler/check/checker.agc`), so the generated
-    ids must fall inside it.
+    so a diagnostic about them is reported at that function. Their node ids
+    must fall inside the numbering that `Linked.ids` counts, because the checker
+    sizes its type table from it.
   - The checker then checks the generated code like any code, so a wrong
     signature gets a normal diagnostic at the test function. Proposed codes:
     - `CHECK-TEST-SIGNATURE`: a `test_*` function with parameters, or a
@@ -75,17 +70,11 @@ end
 
 - **How the driver knows it is a test file**: `agentica test` decides by name,
   in the driver only (§50.1). The front end gets that fact as a flag of the
-  compile call, not from the file name inside `compiler/`. The change:
-  `compile_test` in `compiler/bdd/bdd_driver.agc` passes `test_file: true` down
-  through `Compile.file` (`compiler/bdd/bdd_compile.agc`), `Pipeline.compile`
-  and `Pipeline.check_file` (`compiler/app/pipeline.agc`) to `Linker.link_file`
-  (`compiler/modules/linker.agc`). Every other caller passes `false`: `agentica
-  check` and `agentica FILE.agc` (`compiler/app/cli.agc`), the runner and the
-  step program (`compiler/bdd/bdd_driver.agc`),
-  `compiler/bytecode/bytecode.agc`, and the text forms in `check_text.agc`,
-  `lower_text.agc` and `link_text.agc`. So `agentica check` and `agentica
-  FILE.agc` still report CHECK-MAIN for a test file with no `main`. Whether they
-  should set the flag too is for the PR to decide.
+  compile call (`test_file: true`, passed from `compile_test` in
+  `compiler/bdd/bdd_driver.agc` down to `Linker.link_file`), not from the file
+  name inside `compiler/`. Every other caller passes `false`, so `agentica
+  check` and `agentica FILE.agc` still report CHECK-MAIN for a test file with no
+  `main`. Whether they should set the flag too is for the PR to decide.
 
 - **Not in 50a**: a `test` keyword form (`test name() ... end`). It is
   rejected for now by the one-way rule, since `def test_...` needs no new
@@ -93,23 +82,15 @@ end
   out: a loop inside a test covers them today. Either can come later, if the
   need shows.
 
-- **Tests plan**: spec tests through the CLI, as `--json check FILE` with the
-  code and the span, in `tests/test_spec_checker.py`, for each new code.
-  `agentica test` integration in `tests/test_unit_test.py`: a file with only
+- **Tests and docs**: a spec test through the CLI (`--json check FILE`, code and
+  span) for each new code; an `agentica test` integration test (a file with only
   `test_*` functions passes and fails as expected, its names appear in the
-  report, and `--only` selects them. Goldens of the report.
-
-- **Docs plan**: the programming skill's testing reference
-  (`.agents/skills/agentica-programming/references/testing.md`), its
-  diagnostics table (`references/diagnostics.md`), the site testing page
-  (`site/content/library/testing/test.md`), the test-file description in
-  `docs/grammar/06c-tasks-and-tests.md` and the codes in
-  `docs/grammar/07-diagnostics.md` if it lists them, and `CHANGELOG.md` under
-  `[Unreleased]`. `SKILL.md` changes only if it shows the test-file form; it
-  names only the API today. The `main` and `Test.run` form stays documented as
-  valid.
-
-- **stage0**: no refresh needed. `compiler/` does not use the new form.
+  report, `--only` selects them); the programming skill's testing reference and
+  diagnostics table, the site testing page, the test-file description in
+  `docs/grammar/06c-tasks-and-tests.md`, the codes in
+  `docs/grammar/07-diagnostics.md`, and the CHANGELOG. The `main` and
+  `Test.run` form stays documented as valid. No stage0 refresh is needed while
+  `compiler/` does not use the new form.
 
 ### 50.3 Done when
 

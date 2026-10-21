@@ -1,17 +1,16 @@
 ## 25. Ruby typed idioms
 
-**Status:** the built parts are 25.1 (default parameter values, 15a), 25.3
-(struct update `with`, 15c), 25.6 (the compiler prelude and the Enumerable
-methods, 15f), 25.10 (heredocs, 15j), 25.12.1 (`case` guards and nested
-patterns, 15k) and 25.14 (the pipe operator `|>`); their rules live in
-[`docs/grammar/`](../grammar.md) and the programming skill, which are the
-contract. What remains here: 25.2 (re-exports), 25.4 (value equality), 25.5
-(standalone lambdas), 25.9 (`File.open` with a block) and 25.11 (`format`),
-one PR per item, row 7.6 of the [roadmap order](../roadmap/README.md):
-15a after the bootstrap (done); 15b, 15d, 15e, 15i and 15j after phase 16;
-15f and 15k after faster lists (8d). Part B (25.12) lists
-ideas to evaluate later, and Part C (25.13) lists what was decided against, so
-it is not proposed again. Decided by the user on 2026-10-12.
+**Status:** the built parts are 25.1 (default parameter values), 25.3 (struct
+update `with`), 25.6 (the compiler prelude and the Enumerable methods), 25.10
+(heredocs), 25.12.1 (`case` guards and nested patterns) and 25.14 (the pipe
+operator `|>`); their rules live in [`docs/grammar/`](../grammar.md) and the
+programming skill, which are the contract. What remains here, one PR per item
+(row 7.6 of the [roadmap order](../roadmap/README.md)): 25.2 (re-exports, 15b),
+25.4 (value equality, 15d), 25.5 (standalone lambdas, 15e) and 25.9 (`File.open`
+with a block, 15i), after phase 16 (section 26), and 25.11 (`format`, 15k).
+Part B (25.12) lists ideas to evaluate later, and Part C (25.13) lists what was
+decided against, so it is not proposed again. Decided by the user on
+2026-10-12.
 Done when: site examples run on the VM and evaluation confirms agents use
 the forms with the same diagnostic quality as the forms they replace.
 
@@ -64,17 +63,6 @@ export Url.Address
 export Parts.header_value
 ```
 
-```agentica
-import Web from "web"
-
-def main() -> Void
-  case Web.parse("http://localhost:8080/a")
-    ok(address) -> puts(address.host)
-    error(message) -> puts(message)
-  end
-end
-```
-
 **Syntax:**
 
 ```ebnf
@@ -96,17 +84,14 @@ forwarding wrapper (`def parse(s: String) -> Result[Url.Address]` calling
 drift from the original. The skill teaches the re-export as the canonical form;
 the checker cannot reject a hand-written wrapper, as with `with`.
 
-**Rules**, all in the linker (`compiler/modules/linker.agc`):
+**Rules**, all in the linker:
 
 - The alias must be an import of this file: otherwise `CHECK-IMPORT-NAME` with
-  the help "unknown module alias", decided in the linker. The name must be
-  exported by that module (`CHECK-IMPORT-NAME`, with the "did you mean" help
-  that the logger added).
-- Re-exports are resolved after the file's imports are visited. Today the
-  linker's `visit` fills a module's exports before it visits its imports, so
-  this changes the order: the plain exports are filled first, the imports are
-  visited, then the re-exports are added from the imported modules' finished
-  exports.
+  the help "unknown module alias". The name must be exported by that module
+  (`CHECK-IMPORT-NAME`, with the "did you mean" help).
+- Re-exports are resolved after the file's imports are visited: the plain
+  exports are filled first, the imports are visited, then the re-exports are
+  added from the imported modules' finished exports.
 - The name joins this module's exports. The export entry keeps the original
   module's key (its canonical path) and name, not this file's, so the importer
   resolves to the original declaration. It must not collide with a declaration
@@ -131,14 +116,6 @@ the checker cannot reject a hand-written wrapper, as with `with`.
 **Lowering:** none. The linker resolves `Web.parse` to the original declaration
 before the checker runs, so the checker, lowering and the VM see the original
 function. `&Web.parse` is a normal function value.
-
-**Tests:** in `tests/test_spec_modules.py`: a facade over two files; a facade
-that only re-exports (no `CHECK-UNUSED-IMPORT`); a chain of two re-exports; the
-same type through two aliases; an enum's variants; the error cases (unknown
-alias, unknown name, a name that collides with a declaration, a re-export or an
-import alias); a golden fixture. **Docs:** `grammar.md` ("File modules and
-imports": "Imports cannot be re-exported" changes), the programming skill
-(`references/modules.md`), `site/content/tour/modules.md`.
 
 ### 25.4 Value equality for data
 
@@ -208,11 +185,10 @@ and their `!=` forms (the literal on either side) are `CHECK-TYPE-MISMATCH` with
 a help that shows `xs.size == 0` (or `xs.size != 0`). `s == ""` stays valid,
 since `String` equality already exists.
 
-**Already built for `Test.eq`** (phase 25a,
-[`docs/roadmap/25-unit-tests.md`](../roadmap/25-unit-tests.md)): the checker's
-type predicate for the set above plus `Json` (`data-type?`) and the deep compare
-`agc_equal` in `vm/equal.c` (one explicit stack of value pairs, Floats by IEEE
-754, maps by key in any order). This item reuses them for `==` and `!=`.
+**Reuse.** The checker's type predicate for the set above plus `Json`
+(`data-type?`) and the deep compare `agc_equal` in `vm/equal.c` were built for
+`Test.eq` (phase 25a, [`docs/roadmap/25-unit-tests.md`](../roadmap/25-unit-tests.md));
+this item reuses them for `==` and `!=`.
 
 **VM:** the `EQ` and `NE` opcodes compare structs, enums, lists, maps and
 Results by value, with an explicit stack (no C recursion, so deep values cannot
@@ -230,28 +206,7 @@ change to an opcode's meaning bumps it). A new opcode (`EQ_DEEP`) was not
 chosen: the front end and the VM ship together, and one opcode is simpler than
 two.
 
-**Tests:** checker tests for each kind and for a struct with an `Fn` field (code
-and secondary span); `r == error("not found")`, `opt == Option.None`, `xs == []`
-and `[] == xs` (the `.size == 0` help, with the literal on either side), two
-mutually recursive structs `A` and `B` where only `B` has an `Fn` field (both
-`a1 == a2` and `b1 == b2` are rejected), and `error("a") == error("b")` (neither
-side gives a type); golden fixtures for nested structs, lists of structs, maps
-in another order, enums, Results, `ok() == ok()`, a NaN field; a deep recursive
-value for the explicit stack (a `struct Node` with `children: List[Node]`,
-100,000 levels deep, built with a loop); a C test of the opcode, including the
-`RUNTIME-INTERNAL` backstop on an `Fn`. **Docs:** `grammar.md` ("Operators":
-"The core has no list or struct equality" changes; "Maps": "There is no map
-equality" changes; "Result and propagation": "Results have no equality"
-changes), the programming skill, `site/content/tour/structs.md`, `lists.md`,
-`maps.md`, `results-and-try.md` and `enums-and-case.md`,
-`site/content/library/errors/result.md`, `docs/vm/03-ir-and-bytecode.md` §4.2
-(`EQ` and `NE` on these pairs are no longer `RUNTIME-INTERNAL`), and
-`docs/vm/10-io-scheduler.md` §10.2.1 (its "`==` only on scalars, strings and
-ranges" text, and the turn cost of the wider `EQ`).
-
 ### 25.5 Standalone lambdas
-
-Planned here.
 
 ```agentica
 inc = lambda do |x: Int| x + 1 end
@@ -296,25 +251,14 @@ reserved word.
 - Not accepted, each with a help that shows `lambda do |x: Int| ... end`:
   `->(x) { ... }`, `lambda { |x| ... }`, `proc do ... end`, `Proc.new`. The
   `grammar.md` §7 hint row for `fn(x: Int) ...`, `lambda do ... end` and a `do`
-  block with no call changes, and is not removed: `lambda do` leaves it, and
-  `fn(x: Int)` and a `do` block with no call now get a help that shows
-  `lambda do |x: Int| ... end`.
+  block with no call stays, minus `lambda do`; `fn(x: Int)` and a `do` block
+  with no call get a help that shows `lambda do |x: Int| ... end`.
 
 **Lowering:** the same closure as a block passed to a call; no VM change.
 
-**Tests:** parser tests; annotated and expected-type forms; a `lambda` literal
-as the last argument where the last parameter is an `Fn` (`CHECK-BLOCK-TARGET`
-with the trailing-block help), `g.call(1, lambda do |x: Int| x end)` (valid),
-and the valid places (a variable, a field, a list element, a non-last argument,
-a return); `CHECK-BLOCK-TYPE`; `try` with and without an expected type; a lambda
-stored in a struct's `Fn` field and in a `Map[String, Fn[...]]`; a lambda with
-an unused parameter, a statement after `return`, and a dropped `Result` (the
-three section 26 codes); a golden fixture. **Docs:** `grammar.md` ("Blocks and
-closures", the reserved words, the §7 hint row), the programming skill
-(`SKILL.md` and its adapter examples), `site/content/tour/blocks.md` and the
-site's adapter examples, and [section
-15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call),
-whose `getter`/`putter` helpers are replaced by `lambda` once lambdas land.
+Once lambdas land, the `getter`/`putter` helpers of [section
+15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call)
+are replaced by `lambda`.
 
 ### 25.9 `File.open` with a block
 
@@ -373,14 +317,12 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
 - The block's result must be `Result[T]`. `T` comes from the expected type of
   the call if there is one, or else from the body. Unlike `map`, `try` works in
   this block even when `T` is inferred: the outer type is always `Result`, so
-  the checker knows what `try` returns from it. This is a small checker rule for
-  builtins whose block result is `Result[T]` with `T` inferred. The first of
-  `Task.map` ([section 27.1](27-iteration-and-concurrency.md#271-taskmap),
-  roadmap 17a) and this item adds it, and the other reuses it. `try` in a block
-  with a fixed `Result` type already works (`Test.test`, and `File.each_line`,
-  [section
-  27.4](27-iteration-and-concurrency.md#274-streams-fileeachline-and-streamt),
-  roadmap 17d, which added only the completion-value check and its help).
+  the checker knows what `try` returns from it. This is the small checker rule
+  that `Task.map` ([section
+  27.1](27-iteration-and-concurrency.md#271-taskmap)) already added for builtins
+  whose block result is `Result[T]` with `T` inferred; this item reuses it. `try`
+  in a block with a fixed `Result` type already works (`Test.test`,
+  `File.each_line`).
 - The strict rules of [section
   26](26-strict-diagnostics.md#26-strict-diagnostics) hold in the block: an
   unused handle parameter is `CHECK-UNUSED-VARIABLE` (`do |_|`), a statement
@@ -394,21 +336,8 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
 **Lowering:** lowering expands the call into the existing `File.open`, a call
 to the block's closure, `File.close` and the branches above. The block form
 needs no new builtin and no VM change; the only VM change of this item is the
-appended `File.eof?` builtin. It is a lowering, not a prelude function, because
-25.9 lands at order step 7.6, before the prelude (8.2); a plain `std/` function
-cannot do it either, since it would have to be generic in `T`.
-
-**Tests:** golden fixtures on temporary files: read and write with `ok`;
-`File.eof?` on an empty file, at the end, before a final line without a newline,
-and on a closed or write-only handle; an early `error`; a failed `try`; a failed
-open (block not run); the handle used after the block; checker tests for the
-three section 26 codes inside the block. A failing close is hard to cause from a
-test (it needs a full disk), so a test of the lowered code checks that each of
-the four outcomes (block `ok` or `error`, close `ok` or `error`) gives the
-result above. **Docs:** `grammar.md` ("Files and paths", with `File.eof?`), the
-programming skill (`references/files.md`, which teaches the block form as
-canonical, and says that `File.eof?` returns `Result[Bool]`, unlike `IO.eof?`,
-so the loop needs `try`), `site/content/library/io-and-system/files.md`.
+appended `File.eof?` builtin. It is a lowering, not a `std/` function, since
+that would have to be generic in `T`.
 
 ### 25.11 `format`
 
@@ -468,17 +397,16 @@ between literals.
 **Checker rules:**
 
 - `format` has a catalog entry in `compiler/catalog/builtins_data.agc` with a
-  "checker-handled,   variadic" marker: the number of arguments depends on the
-  literal, so the   checker checks the call itself, not against a fixed
-  signature. The entry is   needed because the linker's `resolve`
-  (`compiler/modules/linker.agc`) keeps a call name   unchanged only when
-  `builtin-ref` finds it, and otherwise adds the module   prefix (`@N::`), so
-  `format` in an imported module would be renamed. The one   entry covers
-  linking, the name reservation (the linker's duplicate check uses
-  `builtin-ref`) and `agentica help format`. Only the function name is reserved:
-  a user `def format` is `CHECK-REDEFINED-NAME`, a breaking change accepted
-  before 1.0. Variables, parameters and fields named `format` stay valid, since
-  `format(...)` is a call and a variable is not callable.
+  "checker-handled, variadic" marker: the number of arguments depends on the
+  literal, so the checker checks the call itself, not against a fixed
+  signature. The entry is needed because the linker keeps a call name unchanged
+  only when `builtin-ref` finds it, and otherwise adds the module prefix
+  (`@N::`), so `format` in an imported module would be renamed. The one entry
+  covers linking, the name reservation (the linker's duplicate check uses
+  `builtin-ref`) and `agentica help format`. Only the function name is
+  reserved: a user `def format` is `CHECK-REDEFINED-NAME`, a breaking change
+  accepted before 1.0. Variables, parameters and fields named `format` stay
+  valid, since `format(...)` is a call and a variable is not callable.
 
 - The first argument must be a plain one-line string literal, without `#{...}`
   and not a heredoc: `CHECK-FORMAT-LITERAL` otherwise, with a help to use
@@ -501,10 +429,9 @@ between literals.
   (name, signature, effects: none, description), with the arity given as "2 or
   more" (a format with no conversion is rejected).
 
-**Where the code lives.** It waits for 8d with the compiler prelude. By the
-std-first rule, padding, decimal and hex text are Agentica code in a prelude
-file, `stdlib/prelude/format.agc` (the design is in the development skill's
-`references/stages.md`).
+**Where the code lives.** By the std-first rule, padding, decimal and hex text
+are Agentica code in the compiler prelude, `stdlib/prelude/format.agc` (the
+design is in the development skill's `references/stages.md`).
 One part is a builtin under exception 5 of the rule:
 `__float_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise
 `RUNTIME-INVALID-COUNT`; NaN and the infinities give Ruby's `NaN`, `Inf` and
@@ -527,20 +454,6 @@ string is parsed at run time. For each `%s` argument, lowering emits the
 `String` to the prelude padding function. A `%s` argument without `to_s` (an
 `Fn`, a task, a handle) is `CHECK-TYPE-MISMATCH` at the argument, with a
 secondary span on its conversion. No VM change other than the new builtin.
-
-**Tests:** checker tests for each code with spans inside the literal; `format`
-called inside an imported module and inside a `std/` module (the linker keeps
-the name); the one-way help for `format("%s is %d", ...)` and for a string with
-no conversion, and `x.to_fixed(2)` (`CHECK-UNKNOWN-METHOD`); golden fixtures for
-every type, flag, width and precision, negative numbers, the smallest `Int`, NaN
-and the infinities, `%%`; `__float_fixed`, through `format("%.Nf", x)` (NaN and
-the infinities included), against vectors from a checked-in Python script
-(standard library only), including halfway cases such as `0.125` and `2.675`.
-**Docs:** `grammar.md` (builtin functions, §7 hints), the programming skill
-(`references/builtins.md`, and `references/diagnostics.md` for the new codes),
-`site/content/library/text-and-data/string.md` and `numbers.md`, and
-`docs/vm/03-ir-and-bytecode.md` §4.5 ("There are no internal helper builtins"
-gains `__float_fixed`).
 
 ### 25.12 To evaluate later (Part B)
 
@@ -579,12 +492,11 @@ destructured with a length check.
 **What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:**
 streams of unknown length without building lists. **Now in [section
 27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):**
-`File.each_line` reads a big file line by line in bounded memory (§27.4, step 1,
-order row 7.2.1h), and `Lazy[T]` is built over lists, ranges,
-`Lazy.produce`, `File.foreach` and `ch.lazy` (§27.4, step 2:
-`xs.lazy.filter do ... end.first(3)`); generators with `yield` (`Enumerator.new`, fibers, an
-external `next`) are decided against (§27.5), since a task that sends into a
-channel (§27.2) is the producer.
+`File.each_line` reads a big file line by line in bounded memory (§27.4, step
+1), and `Lazy[T]` is built over lists, ranges, `Lazy.produce`, `File.foreach`
+and `ch.lazy` (§27.4, step 2: `xs.lazy.filter do ... end.first(3)`); generators
+with `yield` (`Enumerator.new`, fibers, an external `next`) are decided against
+(§27.5), since a task that sends into a channel (§27.2) is the producer.
 
 #### 25.12.8 Declarative hygienic macros
 
@@ -639,9 +551,8 @@ one exists.
   reserved word, so `unless c` is a name followed by more tokens. The parser
   picks the help when a statement starts with the name `unless` and more of the
   expression follows on that line: `PARSE-UNEXPECTED-TOKEN` with a help that
-  shows `if !c ... end`. Tests: `unless x`, `unless -x`, `unless [i]` and
-  `unless.foo` (each gets the help or, for `unless.foo`, today's diagnostic for
-  that name), and a variable named `unless` on its own still works.
+  shows `if !c ... end`. A variable named `unless` on its own still works, and
+  `unless.foo` keeps today's diagnostic for that name.
 - **Statement modifiers** (was 25.8): `return x if c`, `break if c`,
   `puts(x) if v` are a second way to write `if`. Section 11's rejection stays as
   it is, with its existing help (`if x`, then the statement on its own line,
