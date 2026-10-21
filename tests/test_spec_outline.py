@@ -2,10 +2,11 @@
 spans (docs/future/39-semantic-cli.md, 39.2 to 39.7). The cases read the JSON form and assert fields, spans, codes and
 exit codes, never message text; one case reads the text form."""
 import json
+import os
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, run, vm_environment
+from tests.agentica_test import cli, run, vm_environment
 from tests.span_support import end, items_by_name, problem, start
 
 # Every kind of declaration, exported or not, an import list and an import that does not exist: `outline` only parses,
@@ -114,7 +115,6 @@ def test_imports_with_path_alias_and_span_even_when_they_do_not_exist(tmp_path):
     ]
 
 
-@pytest.mark.skipif(WINDOWS, reason="the canonical path of a Windows file has its own spelling")
 def test_the_file_is_named_by_its_canonical_path_relative_to_the_working_folder(tmp_path):
     work = tmp_path / "work"
     (work / "sub").mkdir(parents=True)
@@ -127,7 +127,9 @@ def test_the_file_is_named_by_its_canonical_path_relative_to_the_working_folder(
         report = answer(typed, cwd=work)
         assert report["file"] == "sub/one.agc"
         assert report["items"][0]["span"]["file"] == "sub/one.agc"
-    assert answer(str(real), cwd=elsewhere)["file"] == str(real)
+    # The spelling of an absolute path is the system's own (a drive letter, a separator), so compare the files.
+    outside = answer(str(real), cwd=elsewhere)["file"]
+    assert os.path.isabs(outside) and os.path.samefile(outside, real)
 
 
 def test_an_embedded_std_module_is_named_with_its_extension(tmp_path):
