@@ -106,9 +106,7 @@ Collection operations preserve their inputs. Costs exclude callback work.
 - `Map.delete` ignores absent keys and keeps the order of the rest; a key put
   back later goes to the end. It is O(n). `Map.values` follows the `Map.keys`
   order.
-- `Set.new` keeps the first of repeated items. `Set.add` of a member and
-  `Set.delete` of a missing element give the same set. `Set.delete` is O(n) like
-  `Map.delete`; `Set.include?` and `Set.add` take effectively constant time.
+- `Set.delete` is O(n) like `Map.delete`.
 
 `Lazy[T]` is a lazy pipeline: an immutable recipe of a source and steps, not a
 cursor. Building one runs nothing; a terminal runs it, pulling one item at a
@@ -456,8 +454,7 @@ whose format or Agentica version is not the binary's, is refused before anything
 runs; a source file also gets the hint to run it as `agentica FILE.agc`. The
 exit status is the program's own: `System.exit(n)`, 1 for a diagnostic, and 2
 for a command line or a start that fails (a bad option, an unreadable file, bad
-bytecode), with a message that starts `agentica run:`. The old `agentica-vm`
-command and the `AGENTICA_VM` variable are gone: nothing reads the variable.
+bytecode), with a message that starts `agentica run:`.
 
 [agentica-link-1]: ../../site/content/library/data-structures/list.md
 [agentica-link-2]: ../../site/content/library/data-structures/map.md

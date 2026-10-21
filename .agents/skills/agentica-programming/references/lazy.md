@@ -4,8 +4,7 @@
 terminal runs it and pulls one item at a time through every step, so no step
 builds a whole list. Each terminal runs the source again from the start (a
 channel cannot be read twice: a second terminal goes on where the first
-stopped). A
-`Lazy` is a recipe, not a cursor: there is no `next`, `yield`,
+stopped). A `Lazy` is a recipe, not a cursor: there is no `next`, `yield`,
 `Enumerator.new` or generator (a producer is a task that sends into a
 `Channel`, `references/tasks.md`).
 

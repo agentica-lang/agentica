@@ -1,11 +1,10 @@
 ## 47. Code formatter (`agentica fmt`)
 
-**Status:** Deferred (the bootstrap is done), decided by the
-owner on 2026-10-15: roadmap row 7.9. The owner also
-asked for this plan on the same day. Nothing is implemented. The facts in 47.1
-were checked on `origin/master` at `95a45635`. The open questions in 47.9 need
-the owner's answers before phase 47b starts. Phase 47d also waits for the
-language server (§43), which is not scheduled.
+**Status:** Deferred (the bootstrap is done), decided by the owner on
+2026-10-15: roadmap row 7.9. The owner also asked for this plan on the same day.
+Nothing is implemented. The open questions in 47.9 need the owner's answers
+before phase 47b starts. Phase 47d also waits for the language server (§43),
+which is not scheduled.
 
 In short: `agentica fmt` rewrites `.agc` files in place with one printer. It is
 written in Agentica in `compiler/`, on the self-hosted lexer and parser.
@@ -15,74 +14,48 @@ hand. `agentica check` enforces the width, and `fmt` does not.
 
 ### 47.1 Today
 
-Checked on `origin/master` at `95a45635`:
-
 - **No formatter.** No tool reads an `.agc` file and writes it back.
-  `tools/agc-format.rkt` (80 lines, `max-width` at line 16) prints the values
-  that `tools/gen-builtins-data.rkt` and `tools/gen-check-tables.rkt` build for
-  two generated files. A value goes on one line when it fits, and otherwise one
-  item goes on each line with a trailing comma. Doc comments are wrapped at the
-  same width. The tool never reads source text.
 - **Width.** `compiler/agentica.toml` and `stdlib/agentica.toml` each hold
-  `[style] max_line_width = 119` (PR #280, merged 2026-10-15).
-  `tests/test_style_line_width.py` enforces it, and checks that the generator
-  width matches the compiler manifest. No other folder has a manifest. With no
-  `[style]` there is no limit (§45.5).
+  `[style] max_line_width = 119` (PR #280).
+  `tests/test_style_line_width.py` enforces it. No other folder has a manifest.
+  With no `[style]` there is no limit (§45.5).
 - **Plain comments are dropped.** The lexer skips a `#` line without making a
-  token: `src/lexer.rkt:232` and `compiler/syntax/lexer.agc:102-110`. Only a
-  `##` line that starts a line makes a `DOC` token (`src/lexer.rkt:229`,
-  `compiler/syntax/lexer.agc:103`). A `##` after code is an ordinary comment
-  (§32.2).
+  token. Only a `##` line that starts a line makes a `DOC` token. A `##` after
+  code is an ordinary comment (§32.2).
 - **Blank and comment lines look alike to the tokens.** The lexer emits one `NL`
   for each newline outside brackets, "including blank and comment lines"
   (`docs/grammar/04-lexical.md`). A blank line and a comment line both count as
-  blank for `PARSE-MISSING-BLANK-LINE` (`docs/grammar/05-syntax.md`, checked at
-  `src/parser.rkt:327`). A formatter that must tell them apart has to read
-  source spans, not the `NL` tokens.
+  blank for `PARSE-MISSING-BLANK-LINE` (`docs/grammar/05-syntax.md`). A
+  formatter that must tell them apart has to read source spans, not the `NL`
+  tokens.
 - **The tree has no grouping node.** Parentheses around an expression leave no
   trace in the AST. A call does record whether it had parentheses (`Call`,
-  `parenthesized`, `compiler/syntax/ast.agc:314-320`), because a pipe target
-  needs them. `else` and `->` have no node either: `IfStmt` has `else_body` as a
-  list of statements, and `CaseArm` has a pattern and a body. Map entries
-  (`MapEntry`), block parameters (`BlockParam`), fields and variants have nodes.
-  The module doc is not a node (§32.4).
-- **Every node has a span.** The step-2 text form of the tree
-  (`tests/fixtures/frontend/parser/*.ast`) prints each node with an id and a
-  span, for example `call #4 40:3:5-47:3:12 name="puts"`.
-- **Repo style, measured** over the 115 `.agc` files of `compiler/`, `stdlib/`
-  and `examples/` (counts from a script, so they are exact for the files and
-  approximate for what they mean):
+  `parenthesized`), because a pipe target needs them. `else` and `->` have no
+  node either: `IfStmt` has `else_body` as a list of statements, and `CaseArm`
+  has a pattern and a body. Map entries (`MapEntry`), block parameters
+  (`BlockParam`), fields and variants have nodes. The module doc is not a node
+  (§32.4). Every node has a span.
+- **Repo style, measured** over `compiler/`, `stdlib/` and `examples/` (the
+  counts come from a script; re-run it before relying on them):
   - no tabs, trailing spaces, CRLF lines or `;`. Block bodies are indented two
     spaces. The only odd indents are six aligned continuation lines in
-    `stdlib/test/` (`stdlib/test/report.agc:90`), which a hanging-indent printer
-    does not produce;
-  - 72 multi-line `def` headers, each closed by `) -> Type` on its own line.
-    Most parameters take one line each (274 lines with one parameter, against 28
-    lines with several), but `compiler/lower/lower_stmt.agc:26` packs five;
-  - a trailing comma after the last parameter of a broken header, as in
-    `compiler/syntax/parse_text.agc:243`;
-  - 80 lines in `compiler/` end in `and` or `or` (113 in the three folders,
-    comment lines included), as in `compiler/modules/resolve.agc:89-91`; 52 code
-    lines end in ` +`, the pieces of a split string (PR #284);
-  - method chains broken with a leading dot inside parentheses
-    (`stdlib/logger.agc:284-288`), multi-line `if (` conditions
-    (`stdlib/bdd/gherkin.agc:260`), and map and struct literals with one entry
-    per line and a trailing comma (`stdlib/bdd.agc:400`,
-    `stdlib/logger.agc:170`);
-  - no heredocs and no trailing comments after code. There are 487 plain `#`
-    lines and 896 `##` lines in `compiler/`. Two blank lines in a row occur in
-    one place, `stdlib/test/runner.agc:531`, and in none of `compiler/` or
-    `examples/`.
-- **Generated files are not edited by hand.**
-  `compiler/catalog/builtins_data.agc` and `compiler/check/check_tables.agc` say
-  to change `src/` and run the generator. Both generators require `../src/`
-  (`tools/gen-builtins-data.rkt:12-14`), so they cannot run once step 8 removes
-  the Racket front end (question 7 in 47.9).
-- **`std/toml` has landed** (`stdlib/toml.agc`; the roadmap says it landed
-  before the bootstrap). A formatter can read `[style]` with it, as §45.5 plans
-  for `agentica check`.
-- **Corpus size:** 76 `.agc` files in `compiler/` (a flat folder), 12 in
-  `stdlib/`, 27 in `examples/`, and 849 under `tests/fixtures/`.
+    `stdlib/test/`, which a hanging-indent printer does not produce;
+  - multi-line `def` headers are closed by `) -> Type` on its own line, with
+    one parameter per line (a few pack several) and a trailing comma after the
+    last parameter;
+  - lines end in `and` or `or` when a condition is broken, and in ` +` for the
+    pieces of a split string (PR #284);
+  - method chains are broken with a leading dot inside parentheses, multi-line
+    `if (` conditions exist, and map and struct literals have one entry per
+    line and a trailing comma;
+  - no trailing comments after code, and no heredocs outside
+    `examples/heredoc.agc`. Two blank lines in a row occur in one place,
+    `stdlib/test/runner.agc`.
+- **Generated files** are ordinary source: `compiler/catalog/builtins_data.agc`,
+  `compiler/check/check_tables.agc` and `compiler/syntax/unicode_table.agc` are
+  edited by hand (AGENTS.md).
+- **`std/toml` has landed** (`stdlib/toml.agc`). A formatter can read `[style]`
+  with it, as §45.5 plans for `agentica check`.
 
 ### 47.2 Goal and scope
 
@@ -121,27 +94,16 @@ Checked on `origin/master` at `95a45635`:
 
 ### 47.3 Where it lives
 
-- It is written in Agentica in `compiler/`, after step 8 of §18.3. It reuses the
-  self-hosted lexer (`compiler/syntax/lexer.agc`) and parser
-  (`compiler/syntax/parser.agc`). That is why it waits. With one parser there is
-  no second grammar to keep in sync. Before step 8 the front end is Racket, and
-  row 7.2.7 freezes it: `src/` takes no new syntax. A Racket formatter would be
-  a second parser in that frozen tree.
-- Step 8 ports the CLI driver (§18.3), so the subcommand goes into the Agentica
-  CLI. These files are proposed, in their own context folder `compiler/format/`
-  (#456):
-  - `compiler/format/format.agc`: the driver, text in and text or a diagnostic
-    out;
-  - `compiler/format/format_comments.agc`: the comment list and its attachment
-    (47.4);
-  - `compiler/format/format_doc.agc`: the document type and the fit check
-    (47.5);
-  - `compiler/format/format_layout.agc`: one function per node kind.
+It is written in Agentica in its own context folder `compiler/format/` (#456),
+reusing the self-hosted lexer and parser, so there is no second grammar to keep
+in sync. The driver takes text in and returns text or a diagnostic; the comment
+list and its attachment (47.4), the document type and the fit check (47.5), and
+the layout (one function per node kind) are separate files of that folder.
 
 ### 47.4 Comments: the hard part
 
 A plain comment never reaches the tree today, so the design has to put comments
-back. The facts below were checked on 2026-10-15 against each source named.
+back.
 
 **What other formatters do:**
 
@@ -150,23 +112,17 @@ back. The facts below were checked on 2026-10-15 against each source named.
   as own-line, end-of-line or other. An own-line comment becomes a leading
   comment of the following node, or else a trailing comment of the preceding
   node. An end-of-line comment becomes trailing on the preceding node first. A
-  comment with nothing to attach to is dangling on the enclosing node
-  (`src/main/comments/attach.js`).
-- **syntax_tree** (Ruby) does the same more simply. `attach_comments` in
-  `lib/syntax_tree/parser.rb` takes the preceding, enclosing and following
-  sibling of each comment. An inline comment is trailing on the preceding node,
-  and an own-line comment is leading on the following node. The program is the
-  last resort.
-- **gofmt** (`go/printer`) attaches nothing. Its printer keeps the comment list
-  with an index, and before each token it writes the comments that come before
-  it, using their positions for line breaks and blank lines
-  (`intersperseComments`, `writeCommentPrefix`). It is simple, but every layout
+  comment with nothing to attach to is dangling on the enclosing node.
+- **syntax_tree** (Ruby) does the same more simply: an inline comment is
+  trailing on the preceding node, and an own-line comment is leading on the
+  following node. The program is the last resort.
+- **gofmt** attaches nothing. Its printer keeps the comment list with an index,
+  and before each token it writes the comments that come before it, using their
+  positions for line breaks and blank lines. It is simple, but every layout
   decision has to know where the comments fall.
-- **rustfmt** keeps comments as written by default. `wrap_comments`,
+- **rustfmt** keeps comments as written by default: `wrap_comments`,
   `normalize_comments` and `format_code_in_doc_comments` all default to false,
-  and wrapping skips Markdown header comments and comments with a URL
-  (`Configurations.md`).
-- **rubyfmt** was not checked for this plan.
+  and wrapping skips Markdown header comments and comments with a URL.
 
 **Options:**
 
@@ -194,8 +150,8 @@ back. The facts below were checked on 2026-10-15 against each source named.
 - If attachment grows too many special cases, D is the fallback. Phase 47a
   records the choice.
 
-**Attachment (proposal, `format_comments.agc`).** The pass runs on the tree
-and the token list, before any layout:
+**Attachment (proposal).** The pass runs on the tree and the token list, before
+any layout:
 
 1. For each plain comment, find the enclosing node (the deepest node whose span
    contains it), the preceding node (the closest sibling that ends before it)
@@ -212,80 +168,45 @@ and the token list, before any layout:
    own line, as in an empty list or an empty `def` body. A dangling comment
    before `else` or `end` carries the keyword it precedes.
 
-The positions that rules 2 and 3 get wrong are fixed by the table below. Each
-row is one position where a comment can sit.
+The positions that rules 2 and 3 get wrong are fixed by the list below, one
+position per line: where the comment sits; how it is attached; how it is
+printed.
 
-- **Position in the source:** before the module doc
-  - **Attached as:** leading on the module doc
-  - **Printed as:** above the `##` block
-
-- **Position in the source:** after the module doc, before the next item
-  - **Attached as:** trailing on the module doc (own line)
-  - **Printed as:** the blank line the grammar needs stays; a `#` line right
-    after the doc is valid only after that blank line (`PARSE-DETACHED-DOC`
-    otherwise)
-
-- **Position in the source:** a comment-only file, or after the last item
-  - **Attached as:** dangling on the program, or trailing on the last item
-  - **Printed as:** in order, at column 0, after the last item
-
-- **Position in the source:** before `elsif` or `else` of an `if`
-  - **Attached as:** dangling on the `IfStmt`, tagged with that keyword
-  - **Printed as:** at the `if` indent, just before the keyword
-
-- **Position in the source:** before `end` of an `if`
-  - **Attached as:** trailing on the last statement of the last body (own line)
-  - **Printed as:** on its own line, at the body indent
-
-- **Position in the source:** after `else`, with an empty `else` body
-  - **Attached as:** dangling on the `IfStmt`, tagged `else`
-  - **Printed as:** after `else`, indented
-
-- **Position in the source:** between `case` arms
-  - **Attached as:** leading on the next `CaseArm`
-  - **Printed as:** above the arm, at the arm indent
-
-- **Position in the source:** after `->` on an arm line
-  - **Attached as:** trailing on the arm pattern (end of line)
-  - **Printed as:** at the end of the arm's first line
-
-- **Position in the source:** after `do \|x\|`
-  - **Attached as:** trailing on the last `BlockParam` (end of line); with no
-    parameter, leading on the first statement
-  - **Printed as:** at the end of the `do` line, or above the first statement
-
-- **Position in the source:** before the `end` of a block
-  - **Attached as:** trailing on the last statement of the body (own line)
-  - **Printed as:** on its own line, at the body indent
-
-- **Position in the source:** between `def` parameters
-  - **Attached as:** leading on the next `Param`, or trailing on the previous
-  - **Printed as:** one parameter per line
-
-- **Position in the source:** after `) -> Type`
-  - **Attached as:** trailing on the result `TypeRef` (end of line)
-  - **Printed as:** at the end of the header line
-
-- **Position in the source:** between struct fields or enum variants
-  - **Attached as:** leading on the `FieldDecl` or `EnumVariant`
-  - **Printed as:** above it; a doc block stays directly above its declaration
-
-- **Position in the source:** before a closing bracket of a call, list, map or
-  struct literal
-  - **Attached as:** trailing on the last element (own line)
-  - **Printed as:** on its own line after it; the comma goes before the comment
-
-- **Position in the source:** after a map key, before the value
-  - **Attached as:** trailing on the `MapEntry`'s key (end of line)
-  - **Printed as:** at the end of the entry's line
-
-- **Position in the source:** between the lines of a method chain
-  - **Attached as:** trailing on the previous call (own line)
-  - **Printed as:** on its own line after it; a golden of 47b checks it
-
-- **Position in the source:** inside an empty `[]`, `{}` or `()`
-  - **Attached as:** dangling on the literal
-  - **Printed as:** on own lines inside
+- before the module doc; leading on the module doc; above the `##` block.
+- after the module doc, before the next item; trailing on the module doc (own
+  line); the blank line the grammar needs stays, and a `#` line right after the
+  doc is valid only after that blank line (`PARSE-DETACHED-DOC` otherwise).
+- a comment-only file, or after the last item; dangling on the program, or
+  trailing on the last item; in order, at column 0, after the last item.
+- before `elsif` or `else` of an `if`; dangling on the `IfStmt`, tagged with
+  that keyword; at the `if` indent, just before the keyword.
+- before `end` of an `if`, or of a block; trailing on the last statement of the
+  last body (own line); on its own line, at the body indent.
+- after `else`, with an empty `else` body; dangling on the `IfStmt`, tagged
+  `else`; after `else`, indented.
+- between `case` arms; leading on the next `CaseArm`; above the arm, at the arm
+  indent.
+- after `->` on an arm line; trailing on the arm pattern (end of line); at the
+  end of the arm's first line.
+- after `do |x|`; trailing on the last `BlockParam` (end of line), or leading on
+  the first statement when there is no parameter; at the end of the `do` line,
+  or above the first statement.
+- between `def` parameters; leading on the next `Param`, or trailing on the
+  previous; one parameter per line.
+- after `) -> Type`; trailing on the result `TypeRef` (end of line); at the end
+  of the header line.
+- between struct fields or enum variants; leading on the `FieldDecl` or
+  `EnumVariant`; above it, and a doc block stays directly above its
+  declaration.
+- before a closing bracket of a call, list, map or struct literal; trailing on
+  the last element (own line); on its own line after it, and the comma goes
+  before the comment.
+- after a map key, before the value; trailing on the `MapEntry`'s key (end of
+  line); at the end of the entry's line.
+- between the lines of a method chain; trailing on the previous call (own
+  line); on its own line after it, and a golden of 47b checks it.
+- inside an empty `[]`, `{}` or `()`; dangling on the literal; on own lines
+  inside.
 
 Own-line trailing comments are printed at the indent of the node they follow,
 not at their source column. That is the one place where the output does not
@@ -321,17 +242,16 @@ proposal, to be confirmed by the goldens of phase 47b.
    closing bracket goes on its own line at the indent of the opening line.
 3. **`def` headers.** On one line if they fit. Otherwise one parameter goes on
    each line, indented two spaces, with a trailing comma after the last one, and
-   `) -> Type` goes on the closing line
-   (`compiler/syntax/parse_text.agc:235-244`).
+   `) -> Type` goes on the closing line.
 4. **Parentheses.** The printer chooses grouping parentheses from the tree. It
    adds them where precedence needs them, such as `(x |> f()).unwrap!`, where
-   the precedence follows `docs/grammar/05-syntax.md:143-147`. It adds them
-   around a long boolean or arithmetic expression that is broken (rule 7). It
-   drops the author's other grouping parentheses, because the tree does not
-   record them. It never adds or removes the parentheses of a call: `f()` and
-   `puts x` keep their form, and a pipe target keeps the parentheses it needs.
-   A pipe chain broken over lines goes in parentheses, as the grammar requires
-   (`docs/grammar/04-lexical.md:33`).
+   the precedence follows `docs/grammar/05-syntax.md`. It adds them around a
+   long boolean or arithmetic expression that is broken (rule 7). It drops the
+   author's other grouping parentheses, because the tree does not record them.
+   It never adds or removes the parentheses of a call: `f()` and `puts x` keep
+   their form, and a pipe target keeps the parentheses it needs. A pipe chain
+   broken over lines goes in parentheses, with the `|>` at the end of the line,
+   as the grammar requires (`docs/grammar/04-lexical.md`).
 5. **Long strings.** A string that fits stays whole. Otherwise it becomes `(`,
    then pieces, one per line, joined by ` +` at the line ends, then `)`. The
    pieces come from a `fill` (below): whole words, packed up to the width. The
@@ -343,26 +263,25 @@ proposal, to be confirmed by the goldens of phase 47b.
    comment is kept word for word. A `#` line longer than the width is wrapped at
    words into more `#` lines (question 6 in 47.9).
 7. **Long boolean and arithmetic.** Wrap the expression in parentheses and break
-   after each operator, with the operator at the end of the line
-   (`compiler/modules/resolve.agc:89-91`). The next operand goes on the next
-   line, indented two spaces.
+   after each operator, with the operator at the end of the line. The next
+   operand goes on the next line, indented two spaces.
 8. **Doc comments.** A `##` block keeps its lines as written. Only a paragraph
    that has a line over the width is re-flowed, and only that paragraph.
    Paragraphs are separated by empty `##` lines. The room is `max_line_width`
    minus 3 minus the indent of the declaration, because a field or variant doc
-   sits inside its struct or enum. `tools/agc-format.rkt:69` uses the same room.
-   Headings, list items, quotes, tables and fenced code (including
-   ```` ```agentica ```` blocks) keep their lines as written. `agentica doc` and
-   `help` print the text with the `##` markers removed (§32.3, §32.5), so
-   keeping the lines as written keeps that output unchanged.
+   sits inside its struct or enum. Headings, list items, quotes, tables and
+   fenced code (including ```` ```agentica ```` blocks) keep their lines as
+   written. `agentica doc` and `help` print the text with the `##` markers
+   removed (§32.3, §32.5), so keeping the lines as written keeps that output
+   unchanged.
 9. **Order.** Imports, declarations and functions keep their order. Declaration
    order is a checker rule (`CHECK-DECL-ORDER`), so fmt never moves a
    declaration.
 10. **Method chains.** A chain that fits stays on one line. Otherwise the whole
     chain goes in parentheses, the first receiver on the first line, and each
-    following call on its own line, starting with `.` and indented two spaces
-    (`stdlib/logger.agc:284-288`). That form is the one the repo uses. 47b
-    checks it against the parser before the golden is fixed.
+    following call on its own line, starting with `.` and indented two spaces.
+    That form is the one the repo uses. 47b checks it against the parser before
+    the golden is fixed.
 11. **Calls with a `do` block.** The block is the last argument. The header
     `call(args) do |params|` is one line when it fits, and the header counts in
     the fit. When the arguments break, the closing line is `) do |params|`. The
@@ -371,8 +290,7 @@ proposal, to be confirmed by the goldens of phase 47b.
 12. **`if`, `elsif` and `while` conditions.** On one line if they fit. Otherwise
     `if (` on its own line, one operand per line with each operator at the end
     of its line, `)` on its own line at the indent of `if`, and the body
-    indented two spaces (`stdlib/bdd/gherkin.agc:260-266`). `while` takes the
-    same form.
+    indented two spaces. `while` takes the same form.
 13. **Assignment right-hand sides.** A right-hand side that fits stays on the
     line. Otherwise it breaks inside its own brackets: a call or a list as in
     rule 2, a map or struct literal as in rule 14, and a bare boolean or
@@ -380,7 +298,7 @@ proposal, to be confirmed by the goldens of phase 47b.
 14. **Map and struct literals.** `{` or `Type(` ends the line. Each entry or
     argument goes on its own line, indented two spaces, with a trailing comma.
     The closing `}` or `)` sits at the indent of the line that starts the
-    literal (`stdlib/bdd.agc:400-408`, `stdlib/logger.agc:170-176`).
+    literal.
 15. **Struct and enum declarations.** The header is one line. Each field or
     variant goes on its own line, indented two spaces, with no comma, since the
     grammar has none there. A doc block sits directly above its field or
@@ -406,8 +324,7 @@ from the tree. Its pieces are:
 - text, and a soft break that is a space when its group is flat and a newline
   when it is not, with indentation;
 - a group, which is flat when its flat text fits in the rest of the line. The
-  rest includes the text after the group, such as the `)` and `,` of an item.
-  `render` in `tools/agc-format.rkt` already counts that as `trailing`;
+  rest includes the text after the group, such as the `)` and `,` of an item;
 - a hard break, for blank lines;
 - a line suffix, which holds a trailing comment and writes it at the next
   newline. A naive print would write `x # c` and then the `+ 1` after it, which
@@ -428,59 +345,51 @@ Each syntax change after the bootstrap changes the printer in the same PR. That
 is the rule for this plan: a node without a layout rule makes fmt refuse the
 file with `FMT-UNSUPPORTED` (a proposal), and it never guesses.
 
-- **Heredocs `<<~NAME`** (roadmap row 7.6, phase 15 items 15b to 15j).
-  Row 7.6 is ordered before row 7.9, so 47b covers heredocs when it starts. The
-  body is printed byte for byte, including its indent, and the end line stays
-  where it is. A heredoc is a hard break, so the enclosing call is laid out as a
-  broken one. The width counts only the `<<~NAME` line. 15j has landed
-  (post-bootstrap step 5): a heredoc token has the span of its opener and a
-  lexeme that starts with `<<~`, and the body stays in the file text.
-- **Case guards and nested patterns** (`pattern if condition ->`, post-bootstrap
-  step 5, `docs/grammar/06-semantics.md`) are in the language. The guard stays
-  on the line of the pattern, because the parser looks for it up to the first
-  `->` of that line; a guard that does not fit is a layout the formatter has to
-  solve with a shorter condition (a local name), not a line break. A nested
-  pattern is printed on one line. 47b adds the layout rule and a golden.
-- **Pipe chains** that run over lines stay in parentheses, and the `|>` goes at
-  the end of the line, as rule 7 says (`docs/grammar/04-lexical.md:33`).
+- **Heredocs `<<~NAME`** are in the language, so 47b covers them. The body is
+  printed byte for byte, including its indent, and the end line stays where it
+  is. A heredoc is a hard break, so the enclosing call is laid out as a broken
+  one. The width counts only the `<<~NAME` line. A heredoc token has the span of
+  its opener and a lexeme that starts with `<<~`; the body stays in the file
+  text.
+- **Case guards and nested patterns** (`pattern if condition ->`,
+  `docs/grammar/06-semantics.md`) are in the language. The guard stays on the
+  line of the pattern, because the parser looks for it up to the first `->` of
+  that line; a guard that does not fit is a layout the formatter has to solve
+  with a shorter condition (a local name), not a line break. A nested pattern is
+  printed on one line. 47b adds the layout rule and a golden.
 - **`case` arms** with one simple statement on the arrow line stay on one line
-  when they fit (`docs/grammar/06-semantics.md:71`).
+  when they fit (`docs/grammar/06-semantics.md`).
 
 ### 47.7 Tests
 
-All tests are Python `unittest` modules (`AGENTS.md`), in
-`tests/test_fmt.py`, which derives from `tests.agentica_test.TestCase`. Each
-test runs the `agentica fmt` binary in a temporary folder that it cleans up.
+`tests/test_fmt.py`, each test running the `agentica fmt` binary in a temporary
+folder that it cleans up.
 
 - **The normal form.** `agentica fmt --tree FILE` prints the normal form of the
   tree, and the round trip compares the normal form of the input with that of
-  the output. The normal form has one line per node, in the step-2 form, with
-  the id and the span removed. Grouping parentheses are absent, since the tree
-  has none. A `+` chain of string literals and interpolations is flattened into
-  one list of parts, with adjacent text parts merged and empty ones dropped. The
-  `parenthesized` flag of a call is kept. After the tree, one line per comment
-  gives its words, in source order. The comparison is on the normal form, so
-  folding the pieces of a string, and dropping grouping parentheses, do not
-  count as changes.
-- **Goldens** (fast tier): `tests/fixtures/fmt/NAME.input` and `NAME.output`.
-  Each rule of 47.5 and each position of the table in 47.4 has one case. The
-  cases also cover: CRLF input (the output is LF, and `--check` lists the file);
-  comments inside brackets and argument lists, and between case arms; a
-  comment-only file; an interpolation with nested quotes and a `#` in the text
+  the output. The normal form has one line per node, in the text form of the
+  tree (`tests/fixtures/frontend/parser/*.ast`) with the id and the span
+  removed. Grouping parentheses are absent, since the tree has none. A `+` chain
+  of string literals and interpolations is flattened into one list of parts,
+  with adjacent text parts merged and empty ones dropped. The `parenthesized`
+  flag of a call is kept. After the tree, one line per comment gives its words,
+  in source order. The comparison is on the normal form, so folding the pieces
+  of a string, and dropping grouping parentheses, do not count as changes.
+- **Goldens** (fast tier): `tests/fixtures/fmt/NAME.input` and `NAME.output`,
+  one case for each rule of 47.5 and each position of 47.4. They also cover:
+  CRLF input (the output is LF, and `--check` lists the file); comments inside
+  brackets and argument lists, and between case arms; a comment-only file; an
+  interpolation with nested quotes and a `#` in the text
   (`"#{xs.join(", ")} # not a comment"`); an unbreakable long string and an
-  unbreakable long identifier (the output keeps them, and `fmt --check` passes).
-  The heredoc goldens are written with 47b (15j has landed).
-- **Round trip** (fast tier, for every golden): the normal form of the input
-  equals the normal form of the output. This catches a printer that drops a
+  unbreakable long identifier (the output keeps them, and `fmt --check` passes);
+  heredocs.
+- **Round trip** (fast tier, every golden): the normal form of the input equals
+  the normal form of the output. This catches a printer that drops a
   parenthesis, changes an operator or splits a word.
 - **Idempotence:** `fmt(fmt(x)) == fmt(x)` on every golden (fast tier), and on
-  every `.agc` file under `compiler/`, `stdlib/` and `examples/` (slow tier, run
-  by `make test-slow` in CI, as the live corpus).
-- **Corpus** (slow tier): the round trip and idempotence run on every
-  `tests/fixtures/**/*.agc` that parses, and on `compiler/`, `stdlib/` and
-  `examples/`. A fixture that does not parse is an error fixture. The test
-  checks that `fmt` refuses it, and that the diagnostic code is the one the
-  fixture's golden names.
+  every `.agc` file under `compiler/`, `stdlib/`, `examples/` and
+  `tests/fixtures/**` that parses (slow tier). A fixture that does not parse is
+  an error fixture: `fmt` refuses it with the code its golden names.
 - **Independent peer** (fast tier, standard library only). It checks the output
   without the Agentica parser: no tabs, no trailing spaces, LF newlines, a final
   newline, and no line over the width except a line that is one word too long to
@@ -499,9 +408,8 @@ test runs the `agentica fmt` binary in a temporary folder that it cleans up.
 The checklist lives in [§47.10 Implementation](#4710-implementation-row-79)
 below; there is no separate roadmap phase file.
 
-- **47a: comments and the side list.** `lex_with_comments` in
-  `compiler/syntax/lexer.agc`, the attachment pass in
-  `compiler/format/format_comments.agc`, with the table of 47.4, and tests of the (node, role) pairs for a set of
+- **47a: comments and the side list.** `lex_with_comments`, the attachment pass
+  with the list of 47.4, and tests of the (node, role) pairs for a set of
   inputs. Plain `lex` and `parse` do not change, so their goldens do not move.
   No user-visible change.
 - **47b: printer and `--check`.** The document type with the pieces of 47.5, the
@@ -516,9 +424,8 @@ below; there is no separate roadmap phase file.
   `std/toml`, the exit codes of 47.2, `FMT-USAGE`, and the refusal of a file
   that does not parse. The width rule of §45.5 is added to `agentica check` as
   `CHECK-LINE-TOO-LONG`, which replaces `tests/test_style_line_width.py`
-  (question 9 in 47.9). Question 7 decides what the two generated files become.
-  The phase adds a CHANGELOG entry under `[Unreleased]` and a site page for the
-  command. The only `[style]` key is `max_line_width`.
+  (question 9 in 47.9). The phase adds a CHANGELOG entry under `[Unreleased]`
+  and a site page for the command. The only `[style]` key is `max_line_width`.
 - **47d: LSP "format document" (§43).** One request that returns the whole-file
   edit of `format_text`. It is outside the order of row 7.9, and it waits for
   the language server, which is not scheduled (§43.1).
@@ -550,9 +457,9 @@ Each question has options and a recommendation.
 4. **Trailing commas.** Options: (a) always after the last item of a broken
    list, call, map or `def` header; (b) never; (c) only where the grammar text
    says so. **Recommendation:** (a), the repo's habit. The grammar text mentions
-   trailing commas only for lists and calls (`docs/grammar/04-lexical.md:11`). A
-   `def` header in `compiler/syntax/parse_text.agc:243` has one, and the
-   bootstrap compiles that file. The grammar note should say so in 47b.
+   trailing commas only for lists and calls (`docs/grammar/04-lexical.md`). A
+   `def` header in `compiler/syntax/parse_text.agc` has one, and the bootstrap
+   compiles that file. The grammar note should say so in 47b.
 5. **A file that does not parse.** Options: (a) refuse: exit 1 with the lexer or
    parser diagnostic, the file untouched, and `--check` the same; (b) format the
    part before the error, which is not possible, because the parser stops at the
@@ -564,19 +471,17 @@ Each question has options and a recommendation.
    **Recommendation:** (b). The width counts comments (§45.5), so a file that
    the printer could wrap would fail `agentica check`. Option (c) joins lines
    the author wrote apart, which a formatter should not do.
-7. **What replaces the two generators.** Options: (a) after step 8 the two
-   generated files are ordinary source, edited by hand and formatted by fmt, and
-   their header comments say so; (b) a generator written in Agentica writes the
-   same files; (c) keep the Racket generators, which needs `src/`, so it is not
-   possible after step 8. **Recommendation:** (a) when step 8 lands. Choose (b)
-   only if the catalog changes often enough to need a tool. The owner decides in
-   47c.
+7. **What replaces the two generators.** Settled: the Racket generators went
+   with the Racket front end, and the two generated files are ordinary source,
+   edited by hand and formatted by fmt (AGENTS.md). A generator written in
+   Agentica stays an option only if the catalog changes often enough to need a
+   tool.
 8. **Printer style.** Options: (a) a document type with groups, line suffixes
-   and the fit check (47.5); (b) direct string building per node, as `render` in
-   `tools/agc-format.rkt` does. **Recommendation:** (a). The rules of 47.5 nest
-   (a call inside a string inside a `def`), comments need line suffixes, and the
-   fit check must see the text that follows a group. Option (b) is enough for
-   the two generated files, which have two shapes.
+   and the fit check (47.5); (b) direct string building per node.
+   **Recommendation:** (a). The rules of 47.5 nest (a call inside a string
+   inside a `def`), comments need line suffixes, and the fit check must see the
+   text that follows a group. Option (b) is enough only for a tool with two
+   output shapes.
 9. **Who enforces the width.** Options: (a) `agentica check` reports
    `CHECK-LINE-TOO-LONG`, and `fmt --check` covers layout only; (b) `fmt
    --check` also fails on an output line that is still over the width; (c) keep
@@ -586,16 +491,10 @@ Each question has options and a recommendation.
 
 ### 47.10 Implementation (row 7.9)
 
-- One PR per item, each with its own tests and docs. The §47.9 open
-  questions need the owner's answers before 47b starts; 47d waits for the
-  language server (§43, not scheduled) and is outside this order.
-- 47a comments and the side list (§47.4); the (node, role) table of §47.7.
-- 47b printer and `--check` (§47.5–§47.7) with `--tree`; `make fmt-check`
-  over `compiler/` and `stdlib/`; the one-time reformat (run
-  `make goldens` for moved `std/` lines); the trailing-comma note.
-- 47c CLI, `[style]` and the width check (§47.2, §47.9): write mode, `-`,
-  exit codes, `FMT-USAGE`; `max_line_width` only; `CHECK-LINE-TOO-LONG`
-  in `agentica check`, replacing `tests/test_style_line_width.py`.
-- Done when: `agentica fmt` rewrites a file in place, `fmt --check` passes
-  in CI over `compiler/` and `stdlib/`, `agentica check` reports the
-  width, and the round-trip, idempotence and peer tests pass.
+One PR per phase of 47.8, each with its own tests and docs. The §47.9 open
+questions need the owner's answers before 47b starts; 47d waits for the
+language server (§43, not scheduled) and is outside this order.
+
+Done when: `agentica fmt` rewrites a file in place, `fmt --check` passes in CI
+over `compiler/` and `stdlib/`, `agentica check` reports the width, and the
+round-trip, idempotence and peer tests pass.

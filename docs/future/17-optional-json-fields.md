@@ -80,18 +80,16 @@ name: set to Ana
 - **Decode** (`JSON.decode`), for a struct field of type `JsonField[T]`: a
   missing key gives `Absent`; JSON `null` gives `Null`; any other value is
   decoded as `T` and gives `Value(...)`. The error rule: `Value` adds no path
-  step, so an error inside the value keeps today's path and text
-  (`address.zip: expected String` under `address: JsonField[Address]`,
-  `tags[0]: expected String` under `tags: JsonField[List[String]]`). Only when
-  the `JsonField` field's own value has the wrong kind does the message add "or
-  null": `age: expected signed 64-bit Int or null`,
-  `address: expected object or null`. This happens at the `JsonField` level
-  only. `fail` in `decode-json` (`src/json-typed.rkt`) escapes through `let/ec`,
-  so an inner failure cannot be caught and rewritten; instead the field level
-  checks the top kind of the value itself (the check `decode` makes for `T`
-  before it goes deeper) and fails with the "or null" text, then decodes the
-  value as `T`. Fields that are not `JsonField` still fail with "required field"
-  when missing. Extra keys are still ignored.
+  step, so an error inside the value keeps today's path and text (`address.zip:
+  expected String` under `address: JsonField[Address]`, `tags[0]: expected
+  String` under `tags: JsonField[List[String]]`). Only when the `JsonField`
+  field's own value has the wrong kind does the message add "or null": `age:
+  expected signed 64-bit Int or null`, `address: expected object or null`. This
+  happens at the `JsonField` level only: an inner failure is not rewritten. The
+  field level checks the top kind of the value itself (the check `decode` makes
+  for `T` before it goes deeper) and fails with the "or null" text, then decodes
+  the value as `T`. Fields that are not `JsonField` still fail with "required
+  field" when missing. Extra keys are still ignored.
 - **Encode** (`JSON.encode`, `JSON.from`): `Absent` leaves the key out, `Null`
   writes `null`, `Value(x)` writes `x` as today. The other keys keep struct
   declaration order.
@@ -101,41 +99,16 @@ name: set to Ana
   `CHECK-NOT-DECODABLE` in a `JSON.decode` or `JSON.schema` target. The
   placement check still runs first (see "Which code wins").
 - **Schema** (`JSON.schema`): a `JsonField[T]` field is left out of `required`,
-  and its property schema is `{"anyOf": [<schema of T>, {"type": "null"}]}`. The
-  `schema` function in `src/json-typed.rkt` handles `JsonField` before its
-  `reference` fallback, so no `$defs/JsonField` entry is made. `anyOf` and the
-  `"null"` type work in every draft, and the form is the same when `T` is a
-  `$ref` to a struct. When no field of a struct is required, `required` is left
-  out, because draft-04 needs a non-empty list. This also changes structs with
-  no fields: today they get `"required": []` (`src/json-typed.rkt`), and after
-  10e they get no `required` key. So `required` is left out for any struct with
-  no required field: empty structs and structs whose fields are all `JsonField`.
-  It is a schema change; say so in the changelog. Programs that read `required`
-  without checking can break. The JSON site page
-  (`site/content/library/text-and-data/json.md`) keeps its `Point` example,
-  which reads `required` with `unwrap!`: `Point` has required fields, so it
-  still works. 10e adds a new site example with a struct whose fields are all
-  `JsonField`, showing that `required` is absent and reading it safely with
-  `JSON.get` and a `case`:
-
-  ```agentica
-  struct Patch
-    name: JsonField[String]
-    age: JsonField[Int]
-  end
-
-  def main() -> Void
-    schema = JSON.schema(Patch)
-    case JSON.get(schema, "required")
-      ok(names) -> puts(names)
-      error(message) -> puts("no required fields")
-    end
-  end
-  ```
-
-  ```output
-  no required fields
-  ```
+  and its property schema is `{"anyOf": [<schema of T>, {"type": "null"}]}`. No
+  `$defs/JsonField` entry is made. `anyOf` and the `"null"` type work in every
+  draft, and the form is the same when `T` is a `$ref` to a struct. When no
+  field of a struct is required, `required` is left out, because draft-04 needs
+  a non-empty list. This also changes structs with no fields: today they get
+  `"required": []`, and after 10e they get no `required` key. So `required` is
+  left out for any struct with no required field: empty structs and structs
+  whose fields are all `JsonField`. It is a schema change; say so in the
+  changelog. Programs that read `required` without checking can break (the JSON
+  site page's `Point` example has required fields, so it still works).
 
   For `UpdateUser`:
 
@@ -170,18 +143,16 @@ name: set to Ana
   - the whole argument of `JSON.encode` or `JSON.from` (`JSON.encode(f)` where
     `f: JsonField[Int]`).
 
-  A decode or schema target cannot be `JsonField` itself: the checker takes only
-  a type name there (`checker.rkt`, the `json-decode json-schema` rule), and a
-  bare `JsonField` with no type arguments is `CHECK-UNKNOWN-TYPE`, as for any
-  generic name today. `T` itself must be decodable (or encodable) as today, or
-  the call is `CHECK-NOT-DECODABLE` (or `CHECK-NOT-ENCODABLE`). The check walks
-  the type the way `decodable-type?` and `encodable-type?` do now, with one more
-  argument that says whether the type is the direct type of a struct field; it
-  reports the first problem it finds, at the span of the target or argument, and
-  the message says where the `JsonField` sits: the struct and field
-  (`Wrapper.items`), "list item", "map value", "nested JsonField", "encode
-  argument" (the whole argument of `JSON.encode` or `JSON.from`), and, after
-  10d, "payload of `Enum.Variant`".
+  A decode or schema target cannot be `JsonField` itself: a bare `JsonField`
+  with no type arguments is `CHECK-UNKNOWN-TYPE`, as for any generic name today.
+  `T` itself must be decodable (or encodable) as today, or the call is
+  `CHECK-NOT-DECODABLE` (or `CHECK-NOT-ENCODABLE`). The check walks the type the
+  way the decodable and encodable checks do now, with one more argument that
+  says whether the type is the direct type of a struct field; it reports the
+  first problem it finds, at the span of the target or argument, and the message
+  says where the `JsonField` sits: the struct and field (`Wrapper.items`), "list
+  item", "map value", "nested JsonField", "encode argument" (the whole argument
+  of `JSON.encode` or `JSON.from`), and, after 10d, "payload of `Enum.Variant`".
 - **Not a generic exception for `$defs`.** §15.3 and §15.4 keep generic
   instances out of decode and schema because `$defs` is keyed by the bare type
   name. `JsonField[T]` is the one generic instance they accept: it never gets a
@@ -192,7 +163,7 @@ name: set to Ana
   the generic `Box[...]` with `CHECK-NOT-DECODABLE`. The placement walk runs on
   the field types after substitution, and its `seen` list is keyed by the full
   instance type (kind, name and type arguments), not the bare struct name as
-  today's walks in `src/checker.rkt` do. So `Box[T]` with `items: List[T]`, used
+  today's walks do. So `Box[T]` with `items: List[T]`, used
   as `Box[JsonField[Int]]`, has `List[JsonField[Int]]` and is
   `CHECK-JSON-FIELD-PLACE`, and a `Box[Int]` seen earlier does not hide it.
 - **Which code wins.** The placement check runs first, before the decodable and
@@ -228,58 +199,23 @@ name: set to Ana
   forms `JsonField.Absent` and `JsonField.Null` (which arrive as
   `type-expression`s). It adds one thing: `JsonField` has a type parameter, so
   its table entry is generic like a user generic enum. For type references,
-  adding `JsonField` to `reserved-type-names`
+  adding `JsonField` to `RESERVED_TYPE_NAMES`
   (`compiler/catalog/builtins_data.agc`) is what keeps a field type like `age:
   JsonField[Int]` unchanged when linking an imported module.
-- **Encode** (VM only, since 7i deleted the evaluator): a `JsonField` value
-  writes nothing for `Absent` (the key is left out), `null` for `Null` and `x`
-  for `Value(x)`. Once 10d lands, encode matches `JsonField` before the generic
-  tagged-enum path, since builtin enums are not user enums.
+- **Encode:** a `JsonField` value writes nothing for `Absent` (the key is left
+  out), `null` for `Null` and `x` for `Value(x)`. Once 10d lands, encode matches
+  `JsonField` before the generic tagged-enum path, since builtin enums are not
+  user enums.
 - **Diagnostics:** one new code, `CHECK-JSON-FIELD-PLACE`. A missing variant is
   `CHECK-NON-EXHAUSTIVE-CASE`; a wrong payload type is `CHECK-TYPE-MISMATCH`.
-- **VM:** needs the JSON PR (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 7)
-  and its type table. `JsonField` is a builtin entry of the enum table with the
+- **VM:** `JsonField` is a builtin entry of the enum table with the
   fixed variant order `Absent`, `Null`, `Value`, written to the Enums section
   only when a program uses it, as for `JsonValue`. Typed decode, schema and
   encode need to know that a struct field is a `JsonField[T]`: the type table
   gets an entry kind for it that points to `T`, like the List and Map entries.
   If the JSON PR's type table has no such kind, 10e adds it and bumps the
   bytecode format version (`docs/vm/03-ir-and-bytecode.md` §4); otherwise the
-  layout does not change and there is no bump. The JSON PR adds no placeholder
-  for it.
-- **Planned tests:**
-  - decode of the three states (key absent, `null`, a value), in the VM goldens
-    and as a site example;
-  - path errors through a nested struct (`address: JsonField[Address]` with a
-    bad `address.zip`, message `address.zip: expected String`) and a bad value
-    type (`age: "x"`, message `age: expected signed 64-bit Int or null`, since
-    the VM differential test compares printed output);
-  - encode and `JSON.from`: `Absent` leaves the key out, `Null` writes `null`,
-    `Value` writes the value;
-  - schema: the `JsonField` field is not in `required`, its property is the
-    `anyOf` with `{"type": "null"}`, a `$ref` inside `anyOf` for a struct `T`,
-    no `required` key when no field is required, and no `required` key for a
-    struct with no fields; the all-`JsonField` site example above (`Patch`),
-    which reads `required` with `JSON.get` and `case`;
-  - round trip: for an object with only the declared keys and values in encode's
-    form, decode then encode gives back the same object up to key order, for
-    absent, null and value;
-  - `CHECK-JSON-FIELD-PLACE` for a list item, a map value,
-    `JsonField[JsonField[Int]]` and a top-level `JSON.encode` argument, and for
-    `List[JsonField[Nil]]` in a decode target (the placement check wins over
-    `CHECK-NOT-DECODABLE`); `CHECK-REDEFINED-NAME` for a user type named
-    `JsonField`;
-  - `JsonField[Nil]` as a direct struct field: `CHECK-NOT-DECODABLE` in a
-    `JSON.decode` and a `JSON.schema` target, `CHECK-NOT-ENCODABLE` in a
-    `JSON.encode` and a `JSON.from` argument;
-  - once 10c lands: `JSON.encode` and `JSON.from` of a `Box[JsonField[Int]]`
-    with `Absent`, `Null` and `Value`, `CHECK-NOT-DECODABLE` for
-    `Box[JsonField[Int]]` in a decode and a schema target, and
-    `CHECK-JSON-FIELD-PLACE` for `Box[T]` with `items: List[T]` used as
-    `Box[JsonField[Int]]`;
-  - `JsonField` used in an imported module (a struct field of type
-    `JsonField[...]` in the imported module, field types, patterns,
-    `JsonField.Value(x)`, bare `JsonField.Absent` and `JsonField.Null`), checked
-    and run through an `import`;
-  - VM differential test (`tests/test_vm_diff_*.py`), since the VM has JSON.
-
+  layout does not change and there is no bump.
+- **Tests** cover each rule above, with the placement and code-priority cases
+  (including `List[JsonField[Nil]]`), a round trip, a generic `Box` once 10c
+  lands, `JsonField` in an imported module, and the VM differential tests.

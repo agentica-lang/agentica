@@ -12,20 +12,18 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    (lowering). When a detail is not written down, decide it, write it into §2
    and pin it with a golden.
 2. `compiler/lower/lower_*.agc`: lower the form. Emit one IR `step` per former
-   AST entry, before the node's children (§3.3). Anything still out of
-   the subset keeps failing with `LOWER-UNSUPPORTED` at its span; never
-   miscompile. `vm-type?` says which checked types the VM accepts (the
-   scalars, `(Struct name)` and `(Enum name ...)` declared in the program,
-   `Json`, `List`, `Map` and `Set` of accepted types, `Result` of accepted types
-or Void, and
-   `Fn` over accepted types with an accepted or Void result); a new
-   value type widens it.
+   AST entry, before the node's children (§3.3). Anything still out of the
+   subset keeps failing with `LOWER-UNSUPPORTED` at its span; never miscompile.
+   `vm-type?` says which checked types the VM accepts (the scalars, `(Struct
+   name)` and `(Enum name ...)` declared in the program, `Json`, `List`, `Map`
+   and `Set` of accepted types, `Result` of accepted types or Void, and `Fn`
+   over accepted types with an accepted or Void result); a new value type widens
+   it.
 3. New opcode: append it to `OPCODES` in `compiler/bytecode/bytecode_tables.agc`
    and to `agc_opcode` in `vm/value.h` at the same position (a test compares
-   them). No opcodes for later PRs. 44a1 relaxed this once, for `GLOBAL` and
-   `GLOBAL_SET`, which the lowering of 44a2 emits: the loader and interpreter
-   part needed its own `vm-c-critic` review. A PR that does the same says so and
-   names the PR that uses the opcodes.
+   them). No opcodes for later PRs. A PR that adds opcodes before the PR that
+   emits them says so and names that PR; the loader and interpreter part needs
+   its own `vm-c-critic` review.
 4. `vm/loader.c`: validate every operand (register ranges and windows,
    indexes, jump targets, spans). A new file section checks its counts
    against the bytes left and allocates through `load_alloc`, which charges
@@ -69,27 +67,24 @@ up by name.
   line code of the entry (`<start>`), which ends with a tail call of `main`,
   and must never call `<start>` or take `&<start>`.
 - How the lowering handles constants (44a2-2). The linked program is flat, so
-  `compiler/lower/lower_const.agc` decides from the call graph: the
-  functions reachable from `main` (calls, `&f`, blocks) keep the constants they
-  read, and the constants those read; only kept constants are initialized. A
-  scalar literal constant (one literal, or `-` and a number) is a `CONST` at
-  each read and has no slot. Every other constant that any emitted function
-  reads gets a slot, numbered in initialization order (`Checked.constants`), so
-an
+  `compiler/lower/lower_const.agc` decides from the call graph: the functions
+  reachable from `main` (calls, `&f`, blocks) keep the constants they read, and
+  the constants those read; only kept constants are initialized. A scalar
+  literal constant (one literal, or `-` and a number) is a `CONST` at each read
+  and has no slot. Every other constant that any emitted function reads gets a
+  slot, numbered in initialization order (`Checked.constants`), so an
   unreachable function still loads; a slot nothing writes stays unset, and
-  nothing can run the function that reads it. A kept constant is a function
-  with no parameters named by its linked name whose body is `return <value>`.
-  The function table is: the declared functions in program order, the kept
+  nothing can run the function that reads it. A kept constant is a function with
+  no parameters named by its linked name whose body is `return <value>`. The
+  function table is: the declared functions in program order, the kept
   constants' functions in initialization order, `<start>`, then the block
   functions in the order they are lowered (functions first, then constants).
   `<start>` exists whenever the Globals count is above zero, even with no kept
   constant, so the entry is never `main` when slots exist (the loader would
   reject a call of `main` inside `main`); it starts with a `step` and ends with
-  `return` after the tail call, as the loader wants of every function. A read
-  is `step` and `global`; `--dump-ir` shows `globals N` and `g<slot>`. An error
-  in an initializer shows the constant's function, then `<start>`, in the
-  stack trace (`tests/fixtures/vm/constants-error`). The Agentica lowering of
-  step 5 must produce the same table and the same bytes.
+  `return` after the tail call, as the loader wants of every function. An error
+  in an initializer shows the constant's function, then `<start>`, in the stack
+  trace (`tests/fixtures/vm/constants-error`).
 - Typed JSON: `lower_program.agc` gives each IR struct its
   JSON field types when the struct is decodable (greatest fixpoint, so
   recursive structs stay in), and the bytecode writer interns them into the
@@ -106,14 +101,12 @@ an
   copy is charged by size, like `CONCAT`. The VM also checks the receiver's
   struct type and field count at run time, as `agc_struct_def_of` does; the C
   creators already go through `agc_builtin_struct`, so it is a defence.
-- Struct and enum table names are display names: the bytecode writer passes
-  the linked name through the display name (`types.agc`), as the
-  evaluator did when printing (`docs/vm/02-reference-behavior.md` §2.4). The
-lowerer keeps the
+- Struct and enum table names are display names: the bytecode writer passes the
+  linked name through the display name (`types.agc`), as the evaluator did when
+  printing (`docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the
   unique linked names as its keys and in the IR text. Variant ids are global in
-file order;
-  struct ids and field indexes follow declaration order. Generic enums need
-  nothing special: type arguments exist only in the checker.
+  file order; struct ids and field indexes follow declaration order. Generic
+  enums need nothing special: type arguments exist only in the checker.
 - `case` reads a local scrutinee in place (no copy) because every test and
   payload read comes before any arm body runs. Arm bodies go through
   `lower-block`, so the `for` element read (`after-step`) still lands after
@@ -121,17 +114,16 @@ file order;
 - The checker accepts Int literal patterns outside 64 bits
   (`9223372036854775808 ->`); they never match, so the lowerer emits a plain
   jump to the next arm instead of a constant the writer cannot encode.
-- Tail calls: the lowerer turns `return f(...)` into `tail-call` when the
-  value is a direct user call (`lower_expr.agc`; builtins
-  and calls inside larger expressions do not count) and emits no `return`
-  after it. `TAIL_CALL` grows the registers to the frame base plus the
-  callee's count first, then `memmove`s the argument window to `R[0..]`
-  (windows overlap). It does not touch the depth, so a deep tail recursion
-  runs (the depth rule is in `docs/vm/05-values-execution-builtins.md` §6.1).
-Fixtures that must overflow need a
-  non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); the
-  deep tail-recursion case lives in `tests/test_vm_diff_8.py`. The loader
-  treats `TAIL_CALL` as a call for the termination rules.
+- Tail calls: the lowerer turns `return f(...)` into `tail-call` when the value
+  is a direct user call (`lower_expr.agc`; builtins and calls inside larger
+  expressions do not count) and emits no `return` after it. `TAIL_CALL` grows
+  the registers to the frame base plus the callee's count first, then `memmove`s
+  the argument window to `R[0..]` (windows overlap). It does not touch the
+  depth, so a deep tail recursion runs (the depth rule is in
+  `docs/vm/05-values-execution-builtins.md` §6.1). Fixtures that must overflow
+  need a non-tail call (`stack-overflow.agc` uses `return down(n + 1) + 1`); the
+  deep tail-recursion case lives in `tests/test_vm_diff_8.py`. The loader treats
+  `TAIL_CALL` as a call for the termination rules.
 - Closures: a `block-lit` becomes an extra IR function after the declared
   ones (`block@file:line:col`), lowered by a fresh `lower-function` context;
   its captures are the visible names its body (nested blocks included)
@@ -142,24 +134,21 @@ Fixtures that must overflow need a
   block's final expression statement is its value. `&name` is `closure`
   with no captures, `.call` is `call-value` (window base holds the
   function, result lands there).
-- Ranges: `AGC_T_RANGE` holds an atomic `agc_range` (start, end,
-  exclusive); `agc_range_bounds` gives first, last included and non-empty
-  without overflow. A `for` over a range literal lowers to a counter loop
-  with no `RANGE` (`lower-range-for`); over a Range value it reads
-  `RANGE_BOUNDS` once into three slots. The loop variable is the counter
-  slot, and the exit test (`eq` with the last value) runs before `add-i`,
-  so the largest Int never overflows. The loop top is a `STEP` with the
-  `for` span, so each iteration charges one step even with an empty body
-  (never drop the loop); the counting natives call `charge_steps`, shared with
-`STEP`, before
-  each callback. The evaluator charges the same (`step!` per range
-  iteration and per counting callback). `tests/fixtures/vm/step-limited/`
-  holds huge loops that the extras shard runs only with small
-  `--max-steps` values. `Range.each`, `Int.times`, `upto` and
-  `downto` are counting native frames (`counting()` in `vm/interp.c`): no
-  list, a current value, a last value, a direction and a "more" flag. The
-  range text is at most 43 bytes, so `AGC_SCALAR_TEXT` is 48 (a `_Static_assert`
-keeps it at least 44).
+- Ranges: `AGC_T_RANGE` holds an atomic `agc_range` (start, end, exclusive);
+  `agc_range_bounds` gives first, last included and non-empty without overflow.
+  A `for` over a range literal lowers to a counter loop with no `RANGE`
+  (`lower-range-for`); over a Range value it reads `RANGE_BOUNDS` once into
+  three slots. The loop variable is the counter slot, and the exit test (`eq`
+  with the last value) runs before `add-i`, so the largest Int never overflows.
+  The loop top is a `STEP` with the `for` span, so each iteration charges one
+  step even with an empty body (never drop the loop); the counting natives call
+  `count_step`, shared with `STEP`, before each callback.
+  `tests/fixtures/vm/step-limited/` holds huge loops that the extras shard runs
+  only with small `--max-steps` values. `Range.each`, `Int.times`, `upto` and
+  `downto` are counting native frames (`counting()` in `vm/interp.c`): no list,
+  a current value, a last value, a direction and a "more" flag. The range text
+  is at most 43 bytes, so `AGC_SCALAR_TEXT` is 48 (a `_Static_assert` keeps it
+  at least 44).
 - Results: `ok`, `error` and `Result.*` are builtins (`vm/builtins.c`);
   `try`, `is-ok` and `result-value` are opcodes. A Result pattern is a
   `variant-pattern` with enum name `"Result"` and variant `"Ok"` or `"Err"`

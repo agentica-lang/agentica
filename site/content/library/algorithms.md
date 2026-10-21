@@ -8,7 +8,7 @@ Small programs that use the library together. Values are immutable, so each reci
 
 ## Sorting with sort_by
 
-`List.sort_by` sorts by the key a block gives. The key is an `Int`, `Float` or `String`, and equal keys keep their order. To sort the largest first, use a negative key.
+`List.sort_by` sorts by the key a block gives. To sort the largest first, use a negative key.
 
 ```agentica
 struct Player

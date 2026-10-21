@@ -7,7 +7,7 @@ description: Send values from one task to another through a bounded queue.
 A channel is a bounded queue: one task sends values, another receives them. See also [Tasks](/tour/tasks/).
 
 - `Channel[T]` holds values of one type, any type a variable can have except `Void`.
-- A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name. VM only.
+- A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name.
 - `send`, `recv`, `close` and `closed?` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
 
 ## Channel.new
@@ -166,7 +166,7 @@ end
 true
 ```
 
-The same consumer as a [`Lazy`](/library/data-structures/lazy/#chlazy): `jobs.lazy(1000)` gives the values until the channel is closed and drained, and a timeout ends it with an error, so no loop is needed: `jobs.lazy(1000).reduce(0) do |total, n| total + n end` is `ok(15)`.
+The same consumer as a [`Lazy`](/library/data-structures/lazy/#chlazy) needs no loop: `jobs.lazy(1000).reduce(0) do |total, n| total + n end` is `ok(15)`.
 
 ## A producer that owns the channel
 
@@ -206,7 +206,7 @@ false
 Ownership rules:
 
 - A channel never handed over has no owner: only `close` closes it. `Task.spawn(&f, jobs)` does not make an owner.
-- The first `Task.spawn_owning` can come from any task. After that only the owner can hand it on; any other task, or any task once it is closed, stops with `RUNTIME-HANDLE-NOT-OWNED`.
+- The first `Task.spawn_owning` can come from any task. After that only the owner can hand it on; any other task, or any task once it is closed, stops with `RUNTIME-HANDLE-NOT-OWNED`. Any task can still call `Channel.close`.
 - There is one owner. For several producers, use the next pattern.
 
 ## Several sources

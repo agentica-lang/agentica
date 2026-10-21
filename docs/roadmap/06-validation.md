@@ -17,38 +17,25 @@ arm. A pilot comes first, at order step 7.2.2 (decided by the owner on
 and the JIT (9.1), and order step 11 (multicore) does not wait for it.
 
 - [x] Pilot (order step 7.2.2), done on 2026-10-14 (rounds 9 to 11 of
-  `docs/eval.md`). Its two prerequisites, the next two items, were done first:
-  the typed Python arm and the pilot's tasks (20 in all: t1–t8 with typed Python
-  reference solutions, plus t9–t20 of the harder kinds below). It ran:
-  - a regression round of the `binary` arm on the VM, with the models and tasks
-    of rounds 6 (DeepSeek) and 8 (GLM 5.3 flash), t1–t8, 3 reps per task,
-    compared with those rounds;
-  - the pilot: the Agentica `skill` arm against the typed Python arm on the ~20
-    tasks, the same agent and budget, both models (and gpt-oss-120b, added by
-    the owner; Nemotron Lightning 3.5 was dropped part way), 3 reps per cell;
-    measure functional success (hidden tests), tokens, attempts, compile and
-    check errors, and time to a correct solution;
-  - record both in `docs/eval.md`. The results decide the order of the roadmap
-    rows after 7.2.2; the owner's order of 2026-10-14 is in
-    [`README.md`](README.md). The pilot does not tick the run and record items
-    below: the full round does, with enough reps.
+  `docs/eval.md`): a regression round of the `binary` arm on the VM, and the
+  Agentica `skill` arm against the typed Python arm on 20 tasks (t1–t8 and the
+  harder t9–t20 below), the same agent and budget, 3 reps per cell. The results
+  decide the order of the roadmap rows after 7.2.2 (the owner's order of
+  2026-10-14 is in [`README.md`](README.md)). The pilot does not tick the run
+  and record items below: the full round does, with enough reps.
 - [x] Typed Python arm in `tests/eval/run.py`: the agent writes Python with type
-  hints, and a static checker in the eval image checks them; the agent can run
-  it, as it runs `agentica check`. The checker (for example mypy) and its
-  version are chosen in the eval PR and pinned in `tests/eval/Dockerfile`. A
-  solution that fails the checker counts as a failing run. Done: the
-  `typed-python` arm with `mypy --strict` 2.3.1, pinned in the Dockerfile
-  (`docs/eval.md`, "The typed Python arm").
-- [x] Harder tasks under `tests/eval/tasks/`, each with hidden tests and
-  reference solutions in Agentica and typed Python (both pass the hidden tests
-  and their checker): modify an existing program of a few hundred lines;
+  hints and checks them with `mypy --strict` (pinned in `tests/eval/Dockerfile`;
+  `docs/eval.md`, "The typed Python arm"). A solution that fails the checker
+  counts as a failing run.
+- [x] Harder tasks t9 to t20 under `tests/eval/tasks/`, each with hidden tests
+  and reference solutions in Agentica and typed Python (both pass the hidden
+  tests and their checker): modify an existing program of a few hundred lines;
   introduce a type change that crosses a program (a field type, an enum variant,
   or a Result in place of a plain value, followed through every use); add error
   handling to a program that halts on bad input; repair a broken integration
   (for example an HTTP client or server with the wrong JSON shape, or a file
   pipeline with a wrong path or format). Integration tasks stay hermetic:
-  localhost, port 0, fixtures in the task directory. Done: t9 to t20 (12 tasks)
-  with typed Python references that pass `mypy --strict`;
+  localhost, port 0, fixtures in the task directory.
   `python3 tests/eval/run.py --check-references` grades every reference in
   Docker (`docs/eval.md`).
 - [ ] Run the Agentica skill arm and the typed Python arm with the same model
@@ -69,4 +56,3 @@ and the JIT (9.1), and order step 11 (multicore) does not wait for it.
 tests or spend fewer tokens and repairs in Agentica than in typed Python, and
 the findings are listed as follow-up work (language, diagnostics or skill).
 Order step 11 (multicore) does not wait for them.
-

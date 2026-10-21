@@ -6,21 +6,16 @@ spec. When a phase of the [roadmap](../roadmap/README.md) lands, move its syntax
 to `docs/grammar/` and delete it here, preserving section numbers.
 
 Sections 19 and 22 are VM implementation proposals, not language changes;
-section 20 adds crypto without changing the grammar. Sections 23, 24, 31,
-36 and 37 are built and live in the grammar, `docs/bdd.md` or `docs/vm/`;
-§34 stays as the VM record of built small-value sharing. The Files index
-carries current status; linked sections keep requirements, rationale and
-alternatives.
-
+section 20 adds crypto without changing the grammar. The Files index carries
+current status; linked sections keep requirements, rationale and alternatives.
 
 ## Files
 
-Each section links to its proposal or current home; §6 points to the VM design,
-§7 to §25.13, and §18 records the front-end language decision and the
-self-hosted bootstrap. Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33 and 35–37
-have no file of their own: they are built or decided, and their content lives in
-the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
-[`docs/bdd.md`](../bdd.md).
+Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33 and 35–37 have no file of their own:
+they are built or decided, and their content lives in the grammar, `docs/vm/`,
+the roadmap or §18. §31 (BDD) is built and specified in
+[`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built
+small-value sharing.
 
 - §: 3
   - Title: Extensions without a normative grammar
@@ -199,9 +194,8 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 49
   - Title: Type aliases
   - File: [`49-type-aliases.md`](49-type-aliases.md)
-  - Status: Planned by the owner on 2026-10-16 (row 7.12):
-    simple transparent aliases (49a) and generic ones (49b), built;
-    compiler/ only
+  - Status: Built (row 7.12): simple transparent aliases (49a) and generic ones
+    (49b); compiler/ only
 
 - §: 50
   - Title: Test functions without `main`

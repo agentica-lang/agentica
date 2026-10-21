@@ -35,37 +35,19 @@ edits, say so and review the PR head through a scratch worktree instead.
 
 ## Tool ladder (stop at the first that answers)
 
-- **Need:** What changed, by symbol
-  - **First:** gmem `code_diff` (`base: origin/<base>`, `root: <worktree>`)
-  - **Fallback:** `git diff --stat` and `git diff origin/<base>...HEAD`
-
-- **Need:** Exact hunks
-  - **First:** `git diff origin/<base>...HEAD -- <path>`
-  - **Fallback:** none
-
-- **Need:** Shape of a file
-  - **First:** gmem `code_outline`
-  - **Fallback:** `rg -n '^[a-z].*\(' <file>`
-
-- **Need:** Where X is defined
-  - **First:** gmem `find_symbol` (`query`, `root`)
-  - **Fallback:** `rg -nw X vm/`
-
-- **Need:** What a file includes
-  - **First:** gmem `code_imports`
-  - **Fallback:** `rg -n '^#include' <file>`
-
-- **Need:** Who calls X, every `memcpy` or cast
-  - **First:** `ast-grep run --lang c -p 'memcpy($D, $S, $N)' vm/`
-  - **Fallback:** `rg -nw X vm/`
-
-- **Need:** A symbol's body
-  - **First:** read its exact line range
-  - **Fallback:** the whole file only if small
-
-- **Need:** A deleted symbol
-  - **First:** `git show origin/<base>:<path>` and the line range
-  - **Fallback:** the diff hunk
+- What changed, by symbol: gmem `code_diff` (`base: origin/<base>`,
+  `root: <worktree>`); else `git diff --stat` and
+  `git diff origin/<base>...HEAD`.
+- Exact hunks: `git diff origin/<base>...HEAD -- <path>`.
+- Shape of a file: gmem `code_outline`; else `rg -n '^[a-z].*\(' <file>`.
+- Where X is defined: gmem `find_symbol` (`query`, `root`); else
+  `rg -nw X vm/`.
+- What a file includes: gmem `code_imports`; else `rg -n '^#include' <file>`.
+- Who calls X, every `memcpy` or cast:
+  `ast-grep run --lang c -p 'memcpy($D, $S, $N)' vm/`; else `rg -nw X vm/`.
+- A symbol's body: read its exact line range (the whole file only if small).
+- A deleted symbol: `git show origin/<base>:<path>` and the line range, or the
+  diff hunk.
 
 The gmem tools index definitions and includes, never uses. An empty result is
 not proof of absence: confirm with `rg`. Pass the worktree as `root`, or the
@@ -97,11 +79,10 @@ line ranges will not match the diff.
 ### Memory safety and undefined behavior
 
 - Bounds: every index read from a value, a register or bytecode is checked
-  before use. Look for off-by-one at the boundaries the data structure has
-  (for example 31/32/33 in a 32-wide node, or a list at its cap).
+  before use. Look for off-by-one at the boundaries of the data structure
+  (31/32/33 in a 32-wide node, a list at its cap).
 - Fixed-width copies: `memcpy`, loops or struct copies of `N` items whose
-  source may hold fewer. Release builds can hide this; ASan finds it. PR #221
-  fixed one such copy (commit 82677b9, "copy only the items a tail holds").
+  source may hold fewer. Release builds can hide this; ASan finds it.
 - Size arithmetic goes through `agc_size_add` / `agc_size_mul`. Signed
   overflow, shifts by ≥ 64 or by a negative count, and narrowing casts are
   UB or silent bugs: compute on `uint64_t`.
@@ -154,33 +135,32 @@ handles. A second way for any of them is a finding.
 - Diagnostics: one code with a span. Changes to diagnostic output (new JSON
   keys, new lines) must not break their readers: `stdlib/test/child.agc`
   (`vm_shape?`), `compiler/bdd/bdd_runner.agc` and the tests that parse
-  `--json`. PR #225 needed a fix in the child helpers for its new stack keys
-  (commit "tests: the child helpers accept the stack keys of a VM diagnostic").
+  `--json`.
 
 ### Efficiency
 
 - Hot paths are `agc_run_turn` in `vm/interp.c`, `CALL` and `TAIL_CALL`,
   `LIST_GET` and the arithmetic opcodes. Look for new branches, calls, frame
   growth or allocation on them. Keep hot-path flags plain `bool`s, not
-  bit-fields. PR #225 kept a plain `bool tail` in the frame (commit daa8dc9).
+  bit-fields.
 - Look for allocation per item where a bulk path exists, and for O(n) work
   where the design promises O(1) or O(log n). Check builders, slices and
   copies.
-- Performance: claim a speed change only with numbers. When a PR claims one, a
-  small comparison against master is optional and short: one release build of
-  master in a scratch worktree (`git worktree add <scratch>/base origin/<base>`,
-  then `git submodule update --init vm/third_party/bdwgc vm/third_party/libuv
+- Performance: claim a speed change only with numbers. When a PR claims one,
+  a short comparison against master is optional: one release build of master
+  in a scratch worktree (`git worktree add <scratch>/base origin/<base>`, then
+  `git submodule update --init vm/third_party/bdwgc vm/third_party/libuv
   vm/third_party/yyjson vm/third_party/picohttpparser`; the default build uses
   the system OpenSSL) and one of the PR, alternate the runs, take the median of
-  three, and remember that the same binary can move 20-35 % with code layout
-  alone. Compare peak RSS too (`/usr/bin/time -v`) when memory is the claim.
-  Otherwise skip timing.
+  three (the same binary can move 20-35 % with code layout alone). Compare
+  peak RSS too (`/usr/bin/time -v`) when memory is the claim. Otherwise skip
+  timing.
 
 ### Simplicity and architecture
 
-- §14.6 entry rule: there is no new `vm/` subsystem without a program that
-  needs it. Prefer `std/` code, then a separate process. A new core concept
-  must replace something.
+- §14.6 entry rule: no new `vm/` subsystem without a program that needs it
+  (`std/` code first, then a separate process); a new core concept must
+  replace something.
 - §15 layers: core, then services, then adapters, in one direction only.
   `make vm-layers` must pass, and only the listed files may include `uv.h`,
   OpenSSL or private headers such as `list_impl.h`. An exemption added to
@@ -191,18 +171,16 @@ handles. A second way for any of them is a finding.
   (flag what the diff adds, not older code).
   The fix is a platform adapter (`references/vm-c.md` of the development
   skill, "Platform code").
-- C style: types at the top of the file, no prototypes of `static` functions, no
-  mutable globals or file-scope statics, and no value-driven recursion. Follow
-  the development skill's `references/vm-c.md`: every C file starts with a
-  header comment (3 to 8 lines for a source file, 1 to 4 for a C test).
-  Other comments are welcome in complex code when they say why: do not flag a
-  useful one as a defect. Flag a comment that narrates obvious code, or is
-  commented-out code, as a Nit. Ask for a short `/* */` comment as a Nit where
-  complex code gives no reason (an invariant, a GC or ownership rule, a
-  protocol quirk, a hostile-input check). CI checks part of this style:
-  `make vm-lint` (clang-tidy) and `tests/test_vm_style.py`, which checks types
-  at the top, no prototypes of `static` functions and the file header size.
-  Exported names start with `agc_`.
+- C style (the development skill's `references/vm-c.md`): types at the top,
+  no prototypes of `static` functions, no mutable globals or file-scope
+  statics, no value-driven recursion, a header comment in every C file (3 to 8
+  lines for a source file, 1 to 4 for a C test), exported names start with
+  `agc_`. CI checks part of it: `make vm-lint` (clang-tidy) and
+  `tests/test_vm_style.py`. Other comments are welcome in complex code when
+  they say why: do not flag a useful one. Flag a comment that narrates obvious
+  code, or commented-out code, as a Nit. Ask for a short `/* */` comment as a
+  Nit where complex code gives no reason (an invariant, a GC or ownership
+  rule, a protocol quirk, a hostile-input check).
 - Duplication: flag the clones you see and suggest a shared helper; CI runs
   `make dup-check`. Never fix a clone by adding it to the baseline.
 - Builtin tables: a C test may index a table by position. For example,
@@ -251,7 +229,7 @@ builds. Exit 124 means a timeout: retry once, then report it.
   example `make test TESTS="tests/test_vm_stdout.py"`. CI covers the rest.
 - Put scratch programs under the job's tmp directory, not in the repo. Delete
   them at the end. Never `pkill -f`, and leave no background processes.
-- Never print secrets or the real environment. Use `env -i` or explicit
+- Never print secrets or the real environment; use `env -i` or explicit
   variables in tests.
 
 ## Report

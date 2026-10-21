@@ -9,40 +9,24 @@ bytecode) and the `std/` sources inside. The build starts from the checked-in
 
 ```text
 VERSION             the version, one line (read by the Makefile)
-compiler/           the front end in Agentica (§18), one folder per context:
-                    app (CLI, pipeline), io (the only I/O of the stages),
-                    syntax (lexer, parser), modules (linker), packages
-                    (manifest, lock, cache), check, catalog (builtins,
-                    prelude), lower, bytecode, diagnostics, docs (`agentica
-                    doc`), query (`agentica outline`, `type-at`), bdd,
-                    embedded;
-                    front_end.agc at the root is the program the binary
-                    carries
+compiler/           the front end in Agentica (§18), one folder per context
+                    (`ls compiler/`): app (CLI, pipeline), io (the only I/O of
+                    the stages), packages (manifest, lock, cache), catalog
+                    (builtins, prelude); front_end.agc is the program the
+                    binary carries
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
 vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
                     agentica.c is the main of the binary (`run`, front end, hand-off)
-  tests/            C tests (make vm-test)
-  third_party/      submodules: bdwgc, yyjson, libuv, picohttpparser, openssl
 stdlib/             std/ modules written in Agentica (http, binary, queue, bdd, test runner)
-tests/              pytest: test_<area>.py (conftest.py fixtures; agentica_test.py
-                    still supports unittest.TestCase modules); test_spec_<area>.py
-                    are the language rules through the CLI; fixtures/ (goldens,
-                    Node/Python peers)
+tests/              pytest: test_<area>.py; test_spec_<area>.py are the language
+                    rules through the CLI; fixtures/ (goldens, Node/Python peers)
 examples/           small programs per feature (README.md lists them)
-docs/
-  grammar/          the language definition (index: docs/grammar.md)
-  future/           planned syntax, one file per section (§N)
-  roadmap/          phases and the done checklist (README.md: current order)
-  vm/               VM design: bytecode, loader, layers (§15), core invariants (§14)
+docs/               grammar/ (the language definition, index: docs/grammar.md),
+                    future/ (planned syntax, one file per section), roadmap/
+                    (phases and the done checklist), vm/ (VM design)
 site/content/       Hugo documentation site
-site/highlight/     colors the agentica code blocks of the built site
 benchmarks/         make bench programs and Python twins
-.agents/skills/     agentica-development (working on this repo), agentica-programming
-                    (writing .agc), agentica-code-guidelines (.agc style and
-                    speed), vm-c-critic (C VM PR review), agentica-dev-workflow
-                    (the PR loop: review, fix, CI, merge), documentation-writing
-                    (whether and how to change docs), documentation-pruning
-                    (shrinking docs), agentica-release (cutting a release)
+.agents/skills/     agent skills; also documentation-pruning (shrinking docs)
 ```
 
 Each of `docs/grammar/`, `docs/future/`, `docs/roadmap/` and `docs/vm/` has a
@@ -53,35 +37,29 @@ phase 13).
 
 - `poetry install --only test --no-root`: install the pytest test environment.
 - `make`: build `dist/agentica` (`git submodule update --init` first). On Linux
-  it uses system libgc and OpenSSL by default; the Makefile checks them with
-  `pkg-config`. Use `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored` to
-  link the vendored versions of those two libraries statically. This is not a
-  fully static binary. The build links a first binary with
-  `bootstrap/stage0.agcb`, compiles the front end three times and links the
-  final binary. `make fixed-point` checks it once more. `make vm-test`: the C
-  tests. `make test-cli`: the command line tests on the binary. `make stage0`
-  refreshes `bootstrap/stage0.agcb` (see `references/ci.md` of the development
-  skill).
-- `make test TESTS="tests/test_vm_bits.py"`: a subset. `make test` alone runs
-  everything (`JOBS=8` sets the workers).
+  it uses system libgc and OpenSSL by default (checked with `pkg-config`). Use
+  `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored` to link the vendored
+  versions of those two libraries statically (not a fully static binary). The
+  build links a first binary with `bootstrap/stage0.agcb`, compiles the front
+  end three times and links the final binary. `make fixed-point` checks it once
+  more. `make vm-test`: the C tests. `make test-cli`: the command line tests on
+  the binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see
+  `references/ci.md` of the development skill).
+- `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: a
+  subset. `make test` alone runs everything (`JOBS=8` sets the workers).
 - `dist/agentica file.agc` runs a program; `... check file.agc` checks;
   `dist/agentica run -- file.agcb` runs compiled bytecode.
-- `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: each
-  `tests/test_<area>.py` file runs in one pytest process.
 - `make test-slow`: the `@slow` cases; CI only.
 - `make tests KIND=fast|files|slow|all` selects a whole group: `files` holds
   the destructive filesystem cases, which run only in the local Docker sandbox
   (`DOCKER=1` puts any group there, `WINE=1` runs its Windows checks under
   Wine) and in the scratch of an ephemeral CI runner. Encapsulation and the
   Actions route: `references/ci.md` of the development skill.
-- `make vm-tsan`: the C tests of the code that threads share (inbox, job
-  outcome, run queue, wake and cancel, job, sync locks, output) under
+- `make vm-tsan`: the C tests of the code that threads share under
   ThreadSanitizer, in a build without libgc; CI runs it in the sanitizer job.
 - `make test-shared`: the binary test modules (`VM_PY_TESTS`) with
   `AGENTICA_VM_TEST_SHARED=1`, so every lock and held check of the shared state
   is on at one scheduler; CI runs it after `make test`.
-- `make vm-task-map`: the timing cases of `Task.map`
-  (`tests/test_vm_task_map.py`), alone like `make vm-latency`.
 - `make smoke`, `make site` (before merging a site change).
 - `make goldens` rewrites the VM goldens, the CLI output golden
   (`tests/fixtures/cli/forms.json`) and the fast-tier front-end goldens; commit
@@ -131,15 +109,13 @@ phase 13).
   one `diagnostic`; it stops at the first error, never prints, and never lets
   a runtime error of the front end escape: a failure is a diagnostic.
 - Pure core: every folder of `compiler/` except `io/`, `app/`, `bdd/` and
-  `embedded/` (`syntax`, `modules`, `check`, `catalog`, `lower`, `bytecode`,
-  `diagnostics`, `docs`, `query`) never calls `File`, `Dir`, `Path` (except
-  `Path.join`), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`,
-  `HttpWire`, `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or
-  `puts`, and never imports `io/`, `app/`, `bdd/` or an impure `std/` module.
-  They reach the machine through the `Workspace` record
-  (`modules/workspace.agc`), which `io/host.agc` builds and `app/` passes in.
-  `app/`, `bdd/` and `io/` may do I/O. `tests/test_style_core_purity.py`
-  enforces it.
+  `embedded/` never calls `File`, `Dir`, `Path` (except `Path.join`),
+  `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`, `Time`,
+  `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or `puts`, and never
+  imports `io/`, `app/`, `bdd/` or an impure `std/` module. They reach the
+  machine through the `Workspace` record (`modules/workspace.agc`), which
+  `io/host.agc` builds and `app/` passes in. `app/`, `bdd/` and `io/` may do
+  I/O. `tests/test_style_core_purity.py` enforces it.
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-`, `BYTECODE-`) or by area (`PKG-`: the manifest, the lock
   and the package cache; `QUERY-`: the query commands, exit 2), and carry a
@@ -156,16 +132,20 @@ phase 13).
   relaxes and why.
 - Core grammar only (sections 4–6): user enums and type aliases (the only user
   generics), `case`, file modules with explicit imports/exports, builtin
-  `List[T]`, `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in `docs/future/`
-  until its phase lands. No placeholder files or nodes for later phases.
+  `List[T]`, `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in
+  `docs/future/` until its phase lands. No placeholder files or nodes for later
+  phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Python tests run with pytest; existing `unittest.TestCase` modules remain
-  supported during migration. Pytest is a test-only Poetry dependency. Node
-  and Python test peers (curl included) use the standard library only. The
-  VM's C dependencies are the submodules in `vm/third_party`; the only other
-  dev-tool dependencies are the pinned jscpd in `tools/jscpd` and the site
-  highlighter in `site/highlight` (vscode-textmate and vscode-oniguruma).
+- Python tests run with pytest (a test-only Poetry dependency) and live in
+  `tests/test_<area>.py`; `make test` runs each module in its own pytest
+  process, `JOBS` at a time. `unittest.TestCase` modules (deriving from
+  `tests.agentica_test.TestCase`) stay supported and are collected by pytest.
+  Node and Python test peers (curl included) use the standard library only.
+  The VM's C dependencies are the submodules in `vm/third_party`; the only
+  other dev-tool dependencies are the pinned jscpd in `tools/jscpd` and the
+  site highlighter in `site/highlight` (vscode-textmate and
+  vscode-oniguruma).
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external
@@ -173,9 +153,6 @@ phase 13).
   protocol implementation as the peer. Fixtures go in `tests/fixtures/`.
   CI installs the tools and fails if one is missing; local runs may report a
   skip.
-- Python tests live in `tests/test_<area>.py`; `make test` runs each module in
-  its own pytest process, `JOBS` at a time. Existing unittest modules derive
-  from `tests.agentica_test.TestCase` and are collected by pytest.
 - Two test tiers: fast is the default; slow cases (frozen corpus, generated
   inputs, stress) use `@slow` on unittest classes or `pytest.mark.slow` on
   pytest functions. `make test-slow` sets `AGENTICA_TEST_SLOW=1`; CI runs it,

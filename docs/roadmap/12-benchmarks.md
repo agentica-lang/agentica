@@ -3,34 +3,27 @@
 Measure how fast Agentica runs the same programs as Ruby, Crystal and Python. It
 is a measuring task: no language change, no new builtin. It has two rounds.
 Round 1 (12a to 12d) uses single-threaded programs and needs the 7g benchmark
-script (done), the real applications, faster lists (8d) and the VM `IO` library
-(`docs/vm/12-testing-and-pr-plan.md` §12.2 item 6a, done) (real applications are
-order step 13; the `IO` library is for the stdin program in 12a), so the numbers
-show the VM with its planned list representation on realistic programs. Round 2
-(12e to 12g) adds concurrent programs once tasks run on the VM (7h, scheduler in
-`docs/vm/10-io-scheduler.md` §10.2), and covers multicore only if the 7h
-multicore schedulers item lands (`docs/vm/10-io-multicore.md` §10.2.3; it is
-gated, order step 11). The server measurement (7j) is separate and comes
-earlier: it uses one Agentica server and Python, not the cross-language suite.
-The goal is to find VM hot spots and to give honest numbers for the "Ruby with
-types" pitch, not to win a contest.
+script (done), the real applications (order step 13), faster lists (8d) and the
+VM `IO` library (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 6a, done), so
+the numbers show the VM on realistic programs. Round 2 (12e to 12g) adds
+concurrent programs (tasks run on the VM, 7h) and covers multicore (order step
+11; `docs/vm/10-io-multicore.md` §10.2.3). The server measurement (7j) is
+separate and comes earlier: it uses one Agentica server and Python, not the
+cross-language suite. The goal is to find VM hot spots and to give honest
+numbers for the "Ruby with types" pitch, not to win a contest.
 
 - [ ] 12a Suite: reuse the 7g programs (`knight-tour`, `maze-bfs`,
   `traveling-salesman` and the small loops) and add one CLI-style program from
   the real applications step, for example file processing over a fixed input
-  piped on stdin by the runner (the input is kept in `benchmarks/`). It reads
-  stdin, not a file, because the VM has no `File` library before 7h; stdin comes
-  with the VM `IO` library (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 6a,
-  done). Round 2 may add a variant that reads a real file or a TCP socket. Keep
-  the suite small and fixed; every program reads the same input and prints the
-  same output in every language.
+  piped on stdin by the runner (the input is kept in `benchmarks/`). Round 2 may
+  add a variant that reads a real file or a TCP socket. Keep the suite small and
+  fixed; every program reads the same input and prints the same output in every
+  language.
 - [ ] 12b Other languages: write each program idiomatically (no tricks a normal
   user would not use) in Ruby (CRuby, run with YJIT on and off), Crystal
   (`--release` build; compile time reported apart from run time) and,
-  optionally, Python (CPython). For Python, write an idiomatic CPython version
-  of each program (the same one 7g uses as its outside reference); there is one
-  Python version per program. Put them next to the Agentica versions under
-  `benchmarks/`.
+  optionally, Python (CPython; the same version 7g uses as its outside
+  reference). Put them next to the Agentica versions under `benchmarks/`.
 - [ ] 12c Runner: a script under `benchmarks/` that first checks that every
   language gives the same output for each program, then times them. Wall time is
   the median of N=5 runs, measured with `hyperfine` when it is installed and a
@@ -38,31 +31,28 @@ types" pitch, not to win a contest.
   own wrapper process: `/usr/bin/time -v` per run is the default.
   `getrusage(RUSAGE_CHILDREN)` is used only from a fresh wrapper per child,
   since `ru_maxrss` keeps the maximum of all waited children. Crystal's compile
-  time and Agentica's `compile` to `.agcb` are timed apart from the run time. It
-  runs Agentica on the VM. When a language's tool
-  (`ruby`, `crystal`, `python3`) is missing, it skips that language and says so
-  in its report.
+  time and Agentica's `compile` to `.agcb` are timed apart from the run time.
+  When a language's tool (`ruby`, `crystal`, `python3`) is missing, it skips
+  that language and says so in its report.
 - [ ] 12d Report: record the machine, OS, tool versions, wall time and peak
   memory (max RSS), both measured as in 12c, in `docs/vm-benchmarks.md` (a new
   table next to the 7g results). Note where the VM is slow and link the hot
   spots to VM issues.
-- [ ] 12e Round 2 suite (needs 7h): add concurrent programs, for example many
-  tasks doing I/O-like work over pipes or localhost TCP (port 0, cleaned up as
-  in the network tests), and a CPU-bound fan-out over tasks. Same rules as 12a:
-  fixed inputs, same output in every language.
+- [ ] 12e Round 2 suite: add concurrent programs, for example many tasks doing
+  I/O-like work over pipes or localhost TCP (port 0, cleaned up as in the
+  network tests), and a CPU-bound fan-out over tasks. Same rules as 12a: fixed
+  inputs, same output in every language.
 - [ ] 12f Round 2 other languages: idiomatic versions in Ruby (Threads, Fibers,
   and Ractors for the CPU-bound fan-out), Crystal (fibers; `-Dpreview_mt`
   reported as its own column if used) and, optionally, Python (asyncio, and
   threads). The 12c runner times them the same way. Report the VM with
-  `--schedulers 1` and with the default (all cores, `docs/vm/10-io-multicore.md`
-  §10.2.3) if multicore lands; report each parallel runtime (the multicore VM,
-  Ruby Ractors, Crystal `-Dpreview_mt`, Python multiprocessing if used) in its
-  own column, apart from the single-thread ones.
+  `--schedulers 1` and with the default (all cores); report each parallel
+  runtime (the multicore VM, Ruby Ractors, Crystal `-Dpreview_mt`, Python
+  multiprocessing if used) in its own column, apart from the single-thread ones.
 - [ ] 12g Round 2 report: add the concurrent results to `docs/vm-benchmarks.md`
-  and re-run round 1 on the same machine to catch regressions from 7h. If the
-  multicore schedulers item lands (`docs/vm/10-io-multicore.md` §10.2.3), run
-  round 2 and round 1 again and add a new set of numbers, including the cost of
-  stop-the-world collections.
+  and re-run round 1 on the same machine to catch regressions from 7h. With
+  multicore, run round 2 and round 1 again and add a new set of numbers,
+  including the cost of stop-the-world collections.
 - [ ] Not part of `make test` or CI, and no timing thresholds: the numbers are
   observations.
 
@@ -70,4 +60,3 @@ types" pitch, not to win a contest.
 and language, made by the runner on one machine, and the largest VM hot spots it
 shows are listed as follow-up work. Round 2: the same holds for the concurrent
 programs after 7h, with the round 1 numbers re-run next to them.
-

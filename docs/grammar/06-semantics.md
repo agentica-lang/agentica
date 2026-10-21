@@ -256,7 +256,6 @@ function value takes every argument: `&join` has type `Fn[List[String], String,
 String]`, and `.call` needs both arguments. Defaults are part of an exported
 signature. A default is resolved in the module that declares the function, so
 `Models.Level.Info` means the same for a caller that does not import that file.
-`main` takes no parameters, and blocks take no defaults.
 
 ### Enums and pattern matching
 
@@ -273,15 +272,7 @@ builtin, struct, enum or function type, or another alias; a cycle is
 `CHECK-TYPE-ALIAS-CYCLE`. An alias is not a constructor or enum: construct or
 match using the underlying struct or enum name.
 
-A generic alias, `type Matrix[T] = List[List[T]]`, takes one type argument per
-parameter at each use and means the type with the arguments put in
-(`Matrix[Int]` is `List[List[Int]]`). The arguments are never inferred, and a
-wrong count is `CHECK-UNKNOWN-TYPE` at the use. The expanded type is checked
-where the alias is used: an error in the part written in the alias target (a
-`Void` item, a bad key such as `Map[Float, T]`) is reported at the declaration,
-and an error in an argument (`Index[Float]` for `type Index[K] = Map[K, Int]`)
-at the argument. A type parameter of an enum is never taken for a name in the
-alias target.
+Generic aliases (`type Matrix[T] = List[List[T]]`) are in section 5.
 
 `case value ... end` is a statement. An arm may put one simple statement on the
 arrow line (`1 -> puts("one")`), and more lines of the same arm may follow. A
@@ -421,7 +412,7 @@ more = Map.put(stock, "kiwi", 7)
 - A literal uses braces and `key: value` pairs. An empty `{}` needs an expected
   type, like `[]`: `CHECK-EMPTY-MAP-TYPE` (`CHECK-EMPTY-LIST-TYPE` is for `[]`).
 - `m[key]` returns the value; the key must have type `K`. A missing key is a
-  runtime error.
+  runtime error (`RUNTIME-KEY-NOT-FOUND`).
 - A repeated key in a literal keeps the last value at the first position.
   `Map.put` on an existing key keeps its position.
 - Maps are immutable: there is no `m[key] = value`, and `Map.put` returns a new

@@ -4,7 +4,7 @@ weight: 3
 description: Functions for Set[T], a collection of distinct Int or String values. Each one is also a method on sets.
 ---
 
-A set holds each value once, in the order first added. Elements are `Int` or `String`, like map keys. Sets are immutable. Each function is also a method: `Set.size(s)` is `s.size`.
+A set holds each value once, in the order first added. Elements are `Int` or `String`, like map keys. Sets are immutable.
 
 - `for` walks a set in order. A set prints as `Set[1, 2]`.
 - There is no `==`; use `a.subset?(b) and b.subset?(a)`.

@@ -2,10 +2,7 @@
 
 The multicore model (threads, queues and ownership) is in §16
 ([`16-architecture.md`](16-architecture.md)); this section keeps the rules
-that still apply. §16 replaces the earlier BEAM-style plan (a loop, run queue
-and registry per scheduler, home schedulers and work stealing) with one I/O
-loop, one global queue and no home scheduler. Multicore is built in steps
-(roadmap 7h, order step 11); §16.9 lists what exists.
+that still apply.
 
 - **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
   affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it,
@@ -13,9 +10,7 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   2, also a bad variable next to a valid flag (§16.9). `--schedulers 1`
   gives the N=1 order, which still depends on timer and pool timing. `--seed`
   does not imply one scheduler; at N>1 only per-task random values repeat
-  (7.4). The thread split and shared queue are in §16.2–16.3. Tasks are green
-  VM stacks; turns and reductions are in §10.2.1, thread-pool details in
-  §10.2.2.
+  (7.4). The thread split and shared queue are in §16.2–16.3.
 - **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
   specified in §16.3. Requeueing a preempted task does not change the packed
   Stall-check word: it remains live.
@@ -162,18 +157,17 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   operations through its inbox and tasks resume via the global queue, not a
   handle-owning scheduler (§16.2, §16.4). The I/O thread also owns the state
   that a socket's callbacks touch (buffers, TLS session, request slots), so a
-  socket needs no lock (§16.9). Pool threads never touch GC memory (§16.1).
+  socket needs no lock (§16.9).
 - **Stdin.** A handle on the I/O loop like any other. Reads from any scheduler
   are requests. Each read stays whole, because the input keeps a FIFO of waiting
   readers and serves one read at a time. No OS mutex or spinlock is held across
   a park.
-- **Output.** A print is copied whole into a stream buffer or waits whole in
-  its FIFO; lines never mix mid-line (§10.2.2). Streams to one target share a
-  buffer, FIFO and lock, with the loop as sole writer. For N>1 a short lock
-  protects each access and is never held across a park. Blocking fallbacks
-  (§14.1) hold it across writes, retry short writes and `ferror`, then drop
-  writes once the outcome is set. The final `vm/launch.c` diagnostic is exempt.
-  Only interleaving order between tasks is not repeatable (§16.8).
+- **Output.** Streams to one target share a buffer, FIFO and lock, with the
+  loop as sole writer. For N>1 a short lock protects each access and is never
+  held across a park. Blocking fallbacks (§14.1) hold it across writes, retry
+  short writes and `ferror`, then drop writes once the outcome is set. The final
+  `vm/launch.c` diagnostic is exempt. Only interleaving order between tasks is
+  not repeatable (§16.8).
 - **The I/O thread blocks in its loop.** With nothing to do it blocks in
   `uv_run(UV_RUN_ONCE)`. The inbox's `uv_async_t` is ref'd while schedulers run,
   so the loop stays alive with no other handle, and a request calls
@@ -213,8 +207,7 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   in GC memory, so a head in `malloc` memory never hides a task from the
   collector. Jobs and the inbox are `malloc` memory with no GC pointer, and a GC
   resource owns each job (§16.5). Collections stop the world.
-  That cost is accepted and measured in round 2 of the benchmarks, which also
-  measures contention on the packed word and the run queue's lock. Boehm stops
+  That cost is accepted. Boehm stops
   threads with signals installed with `SA_RESTART`. The VM's syscall paths retry
   on `EINTR`, and libuv signal handling (`uv_signal_t`) must never take Boehm's
   suspend and restart signals.
@@ -227,25 +220,19 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   marked `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`:
   - the `AGC_NO_GC` block tracking in `vm/value.c` (fuzz and test builds,
     single-threaded), the fuzz harness statics in `vm/fuzz.c` and
-    `vm/fuzz_main.c` (the old `wide_args` of `vm/main.c`, for Windows, went with
-    that file in 8d-2);
-  - the block-scope `extern char **environ` in `host_env` of `vm/process.c`,
-    read but never written (the child's environment and `System.env` read it);
-  - the stop state `stop` in `vm/loop.c` (lock-free atomics, a pid and the wake
-    handle), since a signal handler gets no context (10.2.2, Stop signals).
+    `vm/fuzz_main.c`;
+  - the stop state of `vm/loop.c` (lock-free atomics, a pid and the wake
+    handle; a function-local `static`, so not marked), since a signal handler
+    gets no context (10.2.2, Stop signals);
   - the system trust store in `vm/tls_trust.c` (a `CRYPTO_ONCE` and the list
     it fills once, read-only after; 10.3 Trust), which every TLS setup job of
     every runtime shares, so one load serves the process.
-    Already moved out of globals: the `ready` flag of `agc_init` (Boehm's
-    `GC_is_init_called` answers instead); the GC-stress counter (`_Atomic`); the
-    SipHash keys (`hash_key` in `agc_vm`, set from OS entropy by `vm/launch.c`
-    before the run); the OS error locale (`messages_locale` in `agc_vm`, made
-    once at start-up and freed on exit); and
-    `setenv("UV_USE_IO_URING", "0", 0)`, which moved to start-up (`agc_io_init`,
-    before any loop exists) because `setenv` is not thread-safe. `agc_io_init`
-    returns whether it set the variable, and `vm/launch.c` keeps that in the
-    runtime (`drop_uring_env`) for `Process.spawn` (10.4). It runs once per
-    process, also in the single binary, whose two runtimes share the result.
+
+  `setenv("UV_USE_IO_URING", "0", 0)` runs once at start-up (`agc_io_init`,
+  before any loop exists), since `setenv` is not thread-safe. `agc_io_init`
+  returns whether it set the variable, and `vm/launch.c` keeps that in the
+  runtime (`drop_uring_env`) for `Process.spawn` (10.4). It runs once per
+  process, also in the single binary, whose two runtimes share the result.
 - **Values are immutable**, so tasks on different schedulers share them without
   locks or copies (§16.7). Any in-place mutation inside the VM (caches, updates
   in place when a value is known to be unique, the faster lists of roadmap 8d)
@@ -268,20 +255,13 @@ loop, one global queue and no home scheduler. Multicore is built in steps
   `GLOBAL` reads with acquire (a slot is a 16-byte value, so per-slot ordering
   would not stop a torn read). At N=1 tasks interleave on one thread and
   nothing is racy.
-- **Order of work.** First the tasks PR, on these split structures, with N=1.
-  Then the multicore schedulers item: N>1 with the I/O
-  thread running its loop (the inbox itself is built, §16.9), the global run
-  queue, Boehm threads, the TCP and TLS
-  steps as requests to the I/O thread, where TLS crypto stays (§16.2, §16.9),
-  and a stress test of the
-  task fixtures with `--schedulers 4`, under TSan when available (`make
-  vm-tsan` runs the C tests of the shared code, §16.9). TSan does not
-  work with Boehm's stop-the-world, so that run uses an `AGC_NO_GC`-style build
-  with `-fsanitize=thread` that never calls `agc_set_alloc_limit`. ASan and
-  TSan, both without GC, cover memory errors and races in the scheduler code.
-  The GC-threaded build is covered only by a GC-stress run with
-  `--schedulers 4`. Round 2 of the benchmarks (roadmap phase 12) then covers
-  multicore. The parity rule stays black-box (1): with N=1, exit code, stdout,
-  program stderr and diagnostic codes match the goldens. The differential,
-  bytecode and golden tests, the `--max-steps` sweep and the seeded runs all run
-  with `--schedulers 1`.
+- **Order of work.** The task fixtures run as a stress test with
+  `--schedulers 4`, under TSan when available (`make vm-tsan` runs the C tests
+  of the shared code, §16.9). TSan does not work with Boehm's stop-the-world,
+  so that run uses an `AGC_NO_GC`-style build with `-fsanitize=thread` that
+  never calls `agc_set_alloc_limit`. ASan and TSan, both without GC, cover
+  memory errors and races in the scheduler code. The GC-threaded build is
+  covered only by a GC-stress run with `--schedulers 4`. The parity rule stays
+  black-box (1): with N=1, exit code, stdout, program stderr and diagnostic
+  codes match the goldens. The differential, bytecode and golden tests, the
+  `--max-steps` sweep and the seeded runs all run with `--schedulers 1`.

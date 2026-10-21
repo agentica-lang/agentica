@@ -6,7 +6,7 @@ description: TCP and TLS sockets and the HTTP/1.1 client and server of std/http.
 
 Network functions return a `Result` and take timeouts in milliseconds.
 
-- Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends. Most examples open real connections, so they are only checked.
+- Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends.
 - A handle belongs to the task that opened it and closes when that task ends, so open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
 - A timeout covers the whole call, including the wait for another task using the same socket. After a read or write timeout the socket is closed, and later calls fail at once with `network: socket is closed`.
 
@@ -40,7 +40,7 @@ TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
 TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 ```
 
-`connect` opens a connection to a server. `accept` waits for the next client of a listener. Both are used in the example below.
+`connect` opens a connection to a server. `accept` waits for the next client of a listener.
 
 ### TCP.send and TCP.read_line
 
@@ -122,7 +122,6 @@ TLS sockets and listeners use the same `TCP` functions, with the same limits and
 
 - `TLS.listen` takes PEM files for the certificate chain and the private key, and fails when a file is bad or the key does not match.
 - A peer that closes without TLS's closing message ends the stream like EOF.
-- TLS works the same on Linux, macOS and Windows.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -328,10 +327,12 @@ end
 
 ### Moving from the builtin HTTP module
 
-The old builtin `HTTP` module is gone. Import `std/http`, then:
+The old builtin `HTTP` module is gone. Import `std/http` and use these names:
 
-- `HTTP.client()` is `HTTP.client(HTTP.client_options())`. `HTTP.text(response.body, t)` is `response.body` (a body that is not UTF-8 is an error).
-- `HTTP.read`, `trailers`, `close_body` and `request_stream` become a whole `HTTP.request`. Streaming is planned.
-- A handler `(request: Request, writer: HttpWriter) -> Void` becomes `(request: HttpRequest) -> Result[HttpResponse]`. `HTTP.respond`, `begin`, `write`, `write_bytes` and `finish` become `return ok(HttpResponse(status: status, headers: headers, body: text))`.
-- `header_timeout_ms` is `request_timeout_ms`, and `timeout_ms` now covers the whole response. `max_body_bytes` defaults to 1 MiB (was 64 MiB).
+- `HTTP.client()` is `HTTP.client(HTTP.client_options())`.
+- `HTTP.text(response.body, t)` is `response.body`; a body that is not UTF-8 is an error.
+- `HTTP.read`, `trailers`, `close_body` and `request_stream` are one `HTTP.request` call. Streaming is planned.
+- A handler `(request: Request, writer: HttpWriter) -> Void` is `(request: HttpRequest) -> Result[HttpResponse]`. `HTTP.respond`, `begin`, `write`, `write_bytes` and `finish` become `return ok(HttpResponse(...))`.
+- `header_timeout_ms` is `request_timeout_ms`; `timeout_ms` now covers the whole response.
+- `max_body_bytes` defaults to 1 MiB (was 64 MiB).
 - `Request`, `Response`, `HttpBody` and `HttpWriter` are gone: use `HttpRequest` and `HttpResponse`.

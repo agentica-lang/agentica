@@ -209,7 +209,6 @@ spends no steps while it waits, and building the result list costs one unit of
 turn budget per item. Each item has its own random generator, split from the
 caller's in input order, so a run with `--seed` gives the same numbers whatever
 order the items end in. The effect is `concurrency`, like `Task.spawn`.
-`Task.map` runs on the VM only.
 
 A BDD step handler must finish its tasks before it returns
 (`RUNTIME-BDD-PENDING-TASKS`), and a crash nothing awaited fails the step with
@@ -219,7 +218,7 @@ A BDD step handler must finish its tasks before it returns
 
 `Channel` is reserved. A `Channel[T]` is a bounded queue that tasks send values
 into and receive values from. It is a handle: assigning or passing it shares the
-same channel. Channels run on the VM only.
+same channel.
 
 ```agentica
 def send_all(jobs: Channel[Int]) -> Result[Void]
@@ -361,7 +360,7 @@ test` it talks to the runner on the child channel (`Process.parent_read_line`
 and `Process.parent_send`, see [`06d`](06d-io-and-network.md#processes) and
 [`bdd.md`](../bdd.md#unit-test-files-testrun)); a VM started with the
 `--agentica-test` arguments but without that channel fails with
-`RUNTIME-TEST-RUN`. The channel belongs to `Test.run`: test code that calls
+`RUNTIME-TEST-RUN`. The channel belongs to `Test.run`: a test or step that calls
 `Process.parent_read_line` or `Process.parent_send` can break the protocol, and
 nothing stops it (the same trust level as the
 [`agentica test`](#agentica-test) rules). The test's own stdin and stdout are

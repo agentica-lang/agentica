@@ -24,7 +24,7 @@ tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
 
 - The archives are not developer-signed or notarized (macOS programs carry only the ad hoc signature Apple silicon requires). `SHA256SUMS` is the only proof of origin.
 - macOS blocks a browser download: run `xattr -d com.apple.quarantine bin/agentica` (a `curl` download has no mark). Windows SmartScreen may warn once.
-- `TCP`, `TLS` and `std/http` work on Linux, macOS and Windows.
+- `TCP`, `TLS` and `std/http` run and are tested on Linux, macOS and Windows.
 
 ### Build from source
 
@@ -127,7 +127,7 @@ src/orders.agc:8:1 export def total(order: Order) -> Int
 src/orders.agc:14:1 def round_cents(value: Float) -> Int
 ```
 
-It prints each declaration with `file:line:column` first, like `rg`, and private declarations too. `--json` adds the `##` doc and summary, the signature, `exported`, and the span of each declaration and of its name, with the fields and variants. Like `doc`, it only reads the file, so its imports need not exist. A bad question, such as a missing file, is `QUERY-USAGE` and exits 2.
+It prints each declaration with `file:line:column` first, like `rg`, and private declarations too. `--json` adds the `##` doc, the signature, `exported` and the spans, with the fields and variants. Like `doc`, it only reads the file, so its imports need not exist. A bad question, such as a missing file, is `QUERY-USAGE` and exits 2.
 
 Ask for the type at a position, with the definition of what the expression names:
 

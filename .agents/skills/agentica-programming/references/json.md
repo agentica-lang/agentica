@@ -24,7 +24,8 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 - `JSON.object` takes a `Map[String, Json]`, `JSON.array` a `List[Json]`.
   `JSON.from` accepts the same recursively encodable data as `JSON.encode`; a
-  non-finite Float halts with `RUNTIME-JSON-ENCODE`.
+  non-finite Float halts with `RUNTIME-JSON-ENCODE` at the `JSON.from` or
+  `JSON.encode` call.
 - Null and false stay distinct, and so do empty objects and empty arrays.
 
 ## Schema and decoding
@@ -76,8 +77,7 @@ JSON.list(j: Json) -> Result[List[Json]]
   once (the last duplicate wins). So `JSON.encode(JSON.parse(x))` is canonical:
   compare two JSON texts by their canonical forms, which ignore key order but
   keep array order and number kinds (`1` is not `1.0`). Objects from
-  `JSON.object` or `JSON.from` have no fixed order. A non-finite Float halts
-  with `RUNTIME-JSON-ENCODE` at the encode call.
+  `JSON.object` or `JSON.from` have no fixed order.
 
 ## Prefer structs for fixed shapes
 

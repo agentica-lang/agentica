@@ -94,8 +94,8 @@ end
 
 ```text
 Int.times(n: Int, f: Fn[Int, Void]) -> Void              # 0 .. n - 1; nothing when n <= 0
-Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void   # nothing when to < from
-Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # nothing when to > from
+Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void   # both ends included; nothing when to < from
+Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # both ends included; nothing when to > from
 Float.from_int(n: Int) -> Float
 Float.to_int(x: Float) -> Result[Int]                    # truncates; NaN, infinity, overflow are errors
 Float.to_int!(x: Float) -> Int                           # same, but halts (RUNTIME-INVALID-NUMBER)
@@ -118,7 +118,6 @@ has no hex literals: write masks in decimal (`255`, `65535`).
 of a Float (not NaN: use `x != x`).
 
 A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`.
-Arithmetic never converts Int and Float implicitly.
 
 ## String
 
@@ -208,8 +207,8 @@ List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run i
   and empty reduce starts.
 - Strings sort by code point, so `"B"` comes before `"a"`. Float NaN sorts last.
   Other element types are `CHECK-TYPE-MISMATCH`.
-- Updates return new lists and leave the input unchanged. `List.repeat(x, 0)` is
-  an empty list of the inferred type; annotate when the context is not enough.
+- `List.repeat(x, 0)` is an empty list of the inferred type; annotate when the
+  context is not enough.
 
 ## Map
 
@@ -270,16 +269,12 @@ Range.last(r: Range) -> Result[Int]                      # last included value: 
 Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.filter do ... end.first(3) (references/lazy.md)
 ```
 
-- `a..b` includes `b`; `a...b` excludes it. The value is a `Range` with no list
-  inside, so `for i in 0...n` never builds one. An end before the start is an
-  empty range.
+- An end before the start is an empty range.
 - Ranges bind looser than every other operator: `0...n + 1` is `0...(n + 1)`.
   They do not chain. Method calls need parentheses: `(1..5).to_a`,
   `(0...n).include?(i)`.
 - A range prints as `1..5` or `1...5`, has `==` (same start, end, and kind), and
   is not JSON-encodable.
-- `n.times do |i| ... end` runs `0` to `n - 1`; `a.upto(b)` and `a.downto(b)`
-  include both ends. They return Void.
 
 ## Result
 
@@ -300,38 +295,10 @@ The rules for `ok`, `error`, `try`, and Void are in `language.md`.
 `receiver.name(args)` calls the builtin of the receiver's static type, with the
 receiver as its first argument. There is no dynamic dispatch.
 
-- **Receiver type:** `String`
-  - **Module:** `String`
-
-- **Receiver type:** `List[T]`
-  - **Module:** `List`
-
-- **Receiver type:** `Map[K, V]`
-  - **Module:** `Map`
-
-- **Receiver type:** `Set[T]`
-  - **Module:** `Set` (`add`, `delete`, `include?`, `size`, `empty?`, `to_a`,
-    `union`, `intersection`, `difference`, `subset?`)
-
-- **Receiver type:** `Float`
-  - **Module:** `Float`
-
-- **Receiver type:** `Result[T]`
-  - **Module:** `Result`
-
-- **Receiver type:** `Json`
-  - **Module:** `JSON`
-
-- **Receiver type:** `Range`
-  - **Module:** `Range`
-
-- **Receiver type:** `Channel[T]`
-  - **Module:** `Channel` (`send`, `recv`, `close`, `closed?`)
-
-- **Receiver type:** `Int`
-  - **Module:** `Int` (`times`, `upto`, `downto`, `bit_and`, `bit_or`,
-    `bit_xor`, `bit_not`, `shift_left`, `shift_right`, `shift_right_unsigned`)
-    and aliases
+The module is the type's name (`List[T]` uses `List`), except `Json`, which
+uses `JSON`. `Int` takes `times`, `upto`, `downto` and the bit functions;
+`Channel[T]` takes `send`, `recv`, `close` and `closed?`; the aliases below
+add more.
 
 Without parentheses, `receiver.name` on a non-struct value is a method with no
 arguments: `s.length`, `xs.size`, `r.ok?`. On a struct, `.name` reads a field;
@@ -427,7 +394,3 @@ negative literal receiver needs parentheses: `(-5).to_s`, since `-5.to_s` is
 - A `?` or `!` suffix belongs to a function name, even with a space before `(`.
   `a!=b` is `a != b`. Variables, parameters, and fields cannot take those
   suffixes. By convention `?` means Bool and `!` halts on failure.
-- Build lists with literals, `List.append`, `List.repeat`, and `List.concat`;
-  change one element with `List.set`. Change maps with `Map.put` and
-  `Map.delete`, and sets with `Set.add` and `Set.delete`. These leave the
-  original unchanged.

@@ -16,51 +16,21 @@ once and reused by many connections, so the CA bundle is loaded once, and so TLS
 options have one home instead of new arguments on every call.
 
 **What exists when this phase starts** (the TLS catch-up PR, roadmap 7h, keeps
-today's API; phase 20 keeps it for HTTP):
-
-```text
-TLS.connect(host: String, port: Int, ca_file: String, timeout_ms: Int) -> Result[Socket]
-TLS.listen(host: String, port: Int, cert_file: String, key_file: String) -> Result[Listener]
-HTTP.listen_tls(host: String, port: Int, cert_file: String, key_file: String, handler: ..., options: HttpServerOptions) -> Result[HttpServer]
-HttpClientOptions(..., ca_file: String)
-```
-
-(`src/builtins.rkt:66` and `src/builtins.rkt:67`,
-`docs/grammar/06d-io-and-network.md`; the HTTP forms are those of [the
-grammar](../grammar/06d-io-and-network.md).) Every call names its trust or its
-key pair by file path. So the runtime either loads and parses the files on every
-call (a system CA bundle is about 150 certificates) or keeps a hidden cache
-keyed by path, which goes stale when a file changes. Phase 20's `HttpClient`
-builds one OpenSSL `SSL_CTX` per client (`docs/vm/10-io-http.md` §10.7), which
-helps HTTP clients only. And every new option (a minimum version, ALPN, a client
-certificate) would be one more argument on each of these calls.
+today's API; phase 20 keeps it for HTTP): every `TLS` and HTTPS call names its
+trust or its key pair by file path (the "Before" forms of 29.5;
+[the grammar](../grammar/06d-io-and-network.md)). So the runtime either loads
+and parses the files on every call (a system CA bundle is about 150
+certificates) or keeps a hidden cache keyed by path, which goes stale when a
+file changes. Phase 20's `HttpClient` builds one OpenSSL `SSL_CTX` per client
+(`docs/vm/10-io-http.md` §10.7), which helps HTTP clients only. And every new
+option (a minimum version, ALPN, a client certificate) would be one more
+argument on each of these calls.
 
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
 one way to do each thing, values stay immutable, types stay static. Security
 rules of `docs/vm/10-io-tls.md` §10.3 do not move: certificates are always
 verified, the hostname is always checked, there is no path that turns
 verification off.
-
-- **§:** 29.1
-  - **Item:** `TlsContext`, `TlsClientOptions`, `TlsServerOptions` and the
-    context builders
-  - **Roadmap:** 19a
-
-- **§:** 29.3
-  - **Item:** `TLS.upgrade` (STARTTLS)
-  - **Roadmap:** 19b
-
-- **§:** 29.4
-  - **Item:** `HTTP` takes contexts
-  - **Roadmap:** 19a
-
-- **§:** 29.5
-  - **Item:** One breaking step: the file-path forms are removed
-  - **Roadmap:** 19a
-
-- **§:** 29.7
-  - **Item:** Later options, each with the one-way test
-  - **Roadmap:** none yet
 
 ### 29.1 The API
 
@@ -95,7 +65,7 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
 
 - **Options records, not arguments.** A context is built from one immutable
   record per role, as `HTTP.client_options()` and `HttpClientOptions` already
-  work (`src/builtins.rkt:68`). A new option is a new field, never a new
+  work. A new option is a new field, never a new
   argument or a new builder, so default parameter values (15a) never have to
   change these calls. A new field does break code that constructs the record
   with every field named, so the skill teaches `with` (15c, built):
@@ -203,13 +173,11 @@ HTTP.listen_stream_tls(host: String, port: Int, tls: TlsContext, handler: Fn[Htt
   client.
 - `HTTP.listen_tls` and `HTTP.listen_stream_tls` (20g) take a server context
   instead of `cert_file` and `key_file`.
-- The client (`docs/vm/10-io-http.md` §10.7.1) keeps the context in its
-  options and its workers call `TLS.connect` with it. This replaces the
-  std-only handle of #394, where `HttpWire.connect_tls` builds one `SSL_CTX` per
-  client from its `ca_file`. Each socket takes its own reference
-  with `SSL_CTX_up_ref` and drops it with `SSL_CTX_free` when it closes, so a
-  context the program no longer holds stays valid while a client uses it
-  (29.6). The server side calls `TLS.listen(host, port, tls)`.
+- The client (`docs/vm/10-io-http.md` §10.7.1) keeps the context in its options
+  and its workers call `TLS.connect` with it. This replaces the std-only handle
+  of #394, where `HttpWire.connect_tls` builds one `SSL_CTX` per client from its
+  `ca_file`. Each socket holds its own reference to the context
+  (`SSL_CTX_up_ref`, 29.6). The server side calls `TLS.listen(host, port, tls)`.
 
 ### 29.5 One breaking step
 
@@ -241,19 +209,13 @@ Phase 19a changes, in one PR:
 - `TlsContext`, `TlsClientOptions` and `TlsServerOptions` become reserved names
   (`CHECK-REDEFINED-NAME` for a user type with one of these names; the CHANGELOG
   says so).
-- The PR migrates every program in the repository that uses TLS or HTTPS: the
-  `tls-*` and `http-*` golden fixtures (`tests/fixtures/vm/`),
-  `tests/test_vm_tls.py` and `tests/test_vm_http.py` (the files the TLS
-  catch-up PR and phase 20 add), any example under `examples/`, the runnable
-  blocks of `site/content/library/io-and-system/network.md`, and the programming
-  skill's `references/network.md`.
-- **One CHANGELOG entry** under "Changed", for example: "TLS settings live in a
-  `TlsContext`, built once with `TLS.client_context(options)` or
-  `TLS.server_context(options)` and shared by every connection. `TLS.connect`,
-  `TLS.listen`, `HTTP.client`, `HTTP.listen_tls` and `HTTP.listen_stream_tls`
-  take a context instead of file paths, and `HttpClientOptions` has no `ca_file`
-  field any more. Build the context once, at start-up, and pass it on.
-  `TLS.upgrade` starts TLS on an open TCP socket (STARTTLS)."
+- The PR migrates every program in the repository that uses TLS or HTTPS (the
+  golden fixtures, the TLS and HTTP tests, the examples, the runnable blocks of
+  the site network page and the programming skill's `references/network.md`).
+- **One CHANGELOG entry** under "Changed": TLS settings live in a `TlsContext`,
+  built once and shared by every connection; the calls above take a context
+  instead of file paths; `HttpClientOptions` has no `ca_file` field any more;
+  `TLS.upgrade` starts TLS on an open TCP socket (STARTTLS).
 
 ### 29.6 VM design
 
@@ -295,10 +257,9 @@ Phase 19a changes, in one PR:
     before it frees it; with N schedulers (§10.2.3) the list has a small lock,
     taken by creation, the finalizer and `agc_io_close`. Under `AGC_NO_GC`
     nothing is collected and `agc_io_close` frees everything.
-  - `docs/vm/05-values-execution-builtins.md` §5.3 gets the exception in one
-    line: "except `TlsContext`, which holds only memory and is freed by a
-    finalizer run on demand between turns (`docs/future/29-tls-context.md`
-    §29.6)".
+  - `docs/vm/05-values-execution-builtins.md` §5.3 records the exception: a
+    `TlsContext` holds only memory and is freed by a finalizer run on demand
+    between turns.
 - **Fuzzing.** Under `no_files` (the fuzzer), `TLS.client_context` and
   `TLS.server_context` end the run with `RUNTIME-INTERNAL`, as `TCP.connect`
   does, so a mutant never reads a file.
@@ -361,33 +322,27 @@ existing context.
 
 **Tests** (VM only):
 
-- Golden fixtures (`tests/fixtures/vm/`): a server context and a client context
-  with the test CA of `tests/fixtures/tls/`, a TLS echo in one program (listener
-  and client in two tasks), one context shared by three concurrent connections,
-  `TLS.upgrade` on both sides of one connection, and the creation errors (a
-  missing file, a key that does not match, an empty `cert_file`) as `error`
-  results. `RUNTIME-TLS-CONTEXT-ROLE` for a server context in `TLS.connect`, a
-  client context in `TLS.listen`, and a non-empty `host` in a server-side
-  `TLS.upgrade`, each at its argument span.
-- `tests/test_vm_tls.py`: independent Python `ssl` peers on port 0 (standard
-  library only): a wrong hostname, a self-signed server without `ca_file`, a
-  `ca_file` that excludes system roots (the cases of §10.3), a STARTTLS exchange
-  where Python plays the SMTP-like server and the VM the client, and the
-  reverse; a `ca_file` replaced on disk after the context is built does not
-  change that context.
-- A C test (`vm/tests/`) that a context dropped while a socket made from it is
-  open stays valid until the socket closes, and that the finalizer runs only
-  from `GC_invoke_finalizers` (under the GC stress build).
+- Golden fixtures with the test CA of `tests/fixtures/tls/`: a server and a
+  client context, a TLS echo (listener and client in two tasks), one context
+  shared by three concurrent connections, `TLS.upgrade` on both sides, and the
+  creation errors (a missing file, a key that does not match, an empty
+  `cert_file`) as `error` results. `RUNTIME-TLS-CONTEXT-ROLE` for a server
+  context in `TLS.connect`, a client context in `TLS.listen`, and a non-empty
+  `host` in a server-side `TLS.upgrade`, each at its argument span.
+- Independent Python `ssl` peers on port 0 in `tests/test_vm_tls.py`: a wrong
+  hostname, a self-signed server without `ca_file`, a `ca_file` that excludes
+  system roots (the cases of §10.3), STARTTLS in both directions; a `ca_file`
+  replaced on disk after the context is built does not change that context.
+- A C test that a context dropped while a socket made from it is open stays
+  valid until the socket closes, and that the finalizer runs only from
+  `GC_invoke_finalizers` (under the GC stress build).
 - Checker tests for the hints of 29.5 (codes and spans).
 
-**Docs:** `grammar.md` ("TCP, TLS and HTTP/1.1": the context API, the records,
-reserved names, the §7 hints), the programming skill (`references/network.md`:
-build one context at start-up and share it; `references/diagnostics.md`:
-`RUNTIME-TLS-CONTEXT-ROLE`), `site/content/library/io-and-system/network.md`
-(runnable examples in `mode="check"`, since they touch the network), the
-CHANGELOG entry of 29.5, `docs/vm/10-io-tls.md` §10.3 (contexts, `TLS.upgrade`),
-`docs/vm/05-values-execution-builtins.md` §5.3 (the finalizer exception), and
-the development skill's `references/vm-net.md`.
+**Docs:** the grammar (the context API, the records, reserved names, the §7
+hints), the programming skill (build one context at start-up and share it;
+`RUNTIME-TLS-CONTEXT-ROLE`), the site network page (runnable examples in
+`mode="check"`, since they touch the network), `docs/vm/10-io-tls.md` §10.3, and
+`docs/vm/05-values-execution-builtins.md` §5.3.
 
 ### 29.9 Implementation (row 7.4)
 

@@ -12,12 +12,11 @@ branch.
   of fixed-size entries (the spans, the instruction words and the span
   indexes of a function) is taken once, since the count check has shown that
   it fits, and decoded without more bounds checks; a rejection and its reason
-  are the same as with a check for each field. The text of a source is checked
-  and indexed eight ASCII bytes at a time. The collector is held off while a
-  program loads (`agc_gc_pause`, and `agc_gc_resume` after a load that
+  are the same as with a check for each field. The collector is held off while
+  a program loads (`agc_gc_pause`, and `agc_gc_resume` after a load that
   succeeded or failed), because everything the loader allocates is live until
-  the load ends: the front end is 3.8 MB, and the collections it triggered
-  only marked it again (the GC-stress build ignores the pause).
+  the load ends and a collection would only mark it again (the GC-stress build
+  ignores the pause).
 - **Header**: magic, format version and Agentica version match exactly. The file
   ends right after the entry. The one exception to the exact Agentica version
   is the front end that the single binary loads itself (the carried one, or
@@ -109,11 +108,11 @@ byte of a file with a type table, an Updates section or Globals.
   errors (exit 2).
 - `agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS]
   [--schedulers N] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb
-  [args...]` runs a compiled program (until step 8d-2 this was the separate
-  `agentica-vm` program). `run` is read only as the first word of the command
-  line; C answers it before any front end starts. The option parser is hand
-  written. It stops at the first non-option and honors `--`. Callers always pass
-  `--` before the file, so an option after the file is a program argument.
+  [args...]` runs a compiled program. `run` is read only as the first word of
+  the command line; C answers it before any front end starts. The option parser
+  is hand written. It stops at the first non-option and honors `--`. Callers
+  always pass `--` before the file, so an option after the file is a program
+  argument.
   Option errors (a repeated option, an unknown switch, a missing or bad value, a
   bad `AGENTICA_FLUSH_TIMEOUT_MS` or `AGENTICA_SCHEDULERS`) exit 2. `--ai` and
   `--json` may both appear, and the last one wins.
@@ -141,11 +140,9 @@ byte of a file with a type table, an Updates section or Globals.
   `agentica` and `agentica run` both honour it) sets it when the flag is absent;
   the flag wins. `0` means no wait, and there is no way to turn the limit off:
   values above 86400000 (24 hours) are rejected. A bad flag or variable value
-  exits 2. When it runs out, the VM prints
-  `agentica: file data may not be written: the flush took longer than MS ms`
-  (with `--json`, a JSON object with the same warning), after the flush and
-  after the diagnostic of a failed run, which is queued before the wait so that
-  the limit covers it. The exit code is kept.
+  exits 2. When it runs out, the VM prints the flush-timeout warning (10.2.2,
+  End of run), after the flush and after the diagnostic of a failed run. The
+  exit code is kept.
 - `--version` prints the VM version and the versions of the libraries it links:
   libgc, yyjson, libuv and OpenSSL (the one that runs). OpenSSL is linked
   statically in the release.
@@ -160,9 +157,6 @@ byte of a file with a type table, an Updates section or Globals.
   refuses the flag (exit 2), since the VMs it starts would not get it; they read
   the variable. `agentica` passes the flag to the VM, and `check` and `compile`
   ignore it.
-- Windows and macOS: the binary embeds the front end as ELF, Mach-O or COFF
-  data and builds on all three systems (`platforms.yml`); `vm/launch.c` finds
-  the executable path through libuv.
 - `agentica file.agc [args...]` runs in the same process: the front end
   compiles in memory and hands the bytes to C with `FrontEnd.hand_off`, and C
   runs them in a new runtime (see "The single binary" below). No temporary file
@@ -181,9 +175,9 @@ byte of a file with a type table, an Updates section or Globals.
   ran, or failed before loading.
 - Windows checks the parent PID through libuv. Bytecode reads use binary
   descriptors and UTF-8 paths. A private handoff opens the file without
-following
-  its final reparse point, then requires a regular disk file with one link,
-  this process user's owner SID, and a protected DACL granting only that user.
+  following its final reparse point, then requires a regular disk file with
+  one link, this process user's owner SID, and a protected DACL granting only
+  that user.
   Only after those checks and the size limit pass does it mark the opened
   handle for deletion on close. A failed check leaves the file intact.
 - On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the process that runs
@@ -197,10 +191,7 @@ following
   signal without the file flush after they kill their own children; the driver
   sends no second signal of its own, so the flush of the driver is not cut
   short (10.2.2). Last, the process flushes and raises the signal again with
-  its default action, so the shell sees it. (Up to 8d-2 the Racket driver
-  waited 2 seconds, sent `SIGTERM`, waited 2 more and sent `SIGKILL`, for every
-  ordinary run; now a run is the process of the binary, and only the BDD
-  driver starts children.)
+  its default action, so the shell sees it.
 - A failed read of the standard input of an `agentica` run is the program's own
   error: it reads the real descriptor (`RUNTIME-INTERNAL`, `cannot read
   standard input`, exit 1). The front end's runtime opens standard input only
@@ -218,17 +209,14 @@ following
   runner and the default step program are not compiled by the driver: the
   binary carries them, compiled at build time (see "The embedded data"). A
   front end that reads the `std/` sources from a folder (`--stdlib`, the tests
-  that fake the binary) compiles both into the run directory, as before, and
+  that fake the binary) compiles both into the run directory, and
   starts the runner with `-- runner.agcb CONFIG`. The configuration names the
   step program file in `steps_bytecode`; an empty name means the default step
   program of the binary, which the runner starts with `--embedded steps`. The
   first binary of the bootstrap runs the driver of stage0, which knows no
-  embedded program and compiles both from the `std/` sources, as it always
-  did. A front end that stops with
-  an error (a bug in the driver) ends the process with status 2, never the 1
-  of a failed test run.
-- `make` builds `dist/agentica` from `bootstrap/stage0.agcb` (§18.2). The
-  release builds it against glibc 2.28 (11).
+  embedded program and compiles both from the `std/` sources. A front end that
+  stops with an error (a bug in the driver) ends the process with status 2,
+  never the 1 of a failed test run.
 - On Windows, unless libuv cannot assign its job object (10.4), the VM and
   every child it starts are in one job that kills its members when the VM ends,
   so a driver that dies takes its direct children with it, and a child that is
@@ -251,7 +239,7 @@ following
   descriptor and trips its assertion, and reads and writes on that stream still
   fail with `EBADF`.
 
-**The single binary (as built in 8b, the product since 8d-2).** `make` links
+**The single binary.** `make` links
 `dist/agentica`: the VM objects, `vm/agentica.c` as its `main`, and the front
 end with the `std/` sources as data (`vm/embedded.h`, written by
 `vm/tools/gen-embedded.sh`). It is the only program of the product
@@ -264,7 +252,7 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   file (a regular file of at most 256 MiB; with `--driver-pid`, only a private
   one, which it deletes after the load), loads it with the full version check
   and runs it in one runtime. No front end is loaded. `agentica run --version`
-  prints the long line (`agentica 0.3.0 (libgc ..., yyjson ..., libuv ...,
+  prints the long line (`agentica VERSION (libgc ..., yyjson ..., libuv ...,
   OpenSSL ...)`); `agentica --version` prints the version alone.
   `--embedded NAME` (hidden, like `--driver-pid`; once) runs a program that
   the binary carries in place of the file: `runner` or `steps`, the two
@@ -327,13 +315,11 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   runtime, the `SIGPIPE` setting (`agc_launch_ignore_sigpipe`) and the one exit
   path (`agc_launch_settle`, `agc_launch_exit`). `agc_io_init` runs once per
   process, so its result is kept in `agc_launch` for both runtimes.
-- **The guarded builtins.** `FrontEnd.hand_off(program: List[Int], options:
-  List[String], arguments: List[String]) -> Result[Void]` and
-  `FrontEnd.std_source(path: String) -> Result[String]` and
-  `FrontEnd.stdin_bytes() -> Result[List[Int]]` (`vm/front_end.c`, in the table
-  list after `Test`). The driver sets `rt->front_end` (an `agc_front_end`) only
-  for the front end it loads itself. Without it, in a user program or in a front
-  end run by `agentica run`, all three fail with
+- **The guarded builtins.** `FrontEnd.hand_off`, `FrontEnd.std_source` and
+  `FrontEnd.stdin_bytes` (`vm/front_end.c`; signatures in
+  `compiler/catalog/builtins_data.agc`). The driver sets `rt->front_end` (an
+  `agc_front_end`) only for the front end it loads itself. Without it, in a user
+  program or in a front end run by `agentica run`, all three fail with
   `RUNTIME-FRONT-END-ONLY` at the call. `hand_off` copies the bytes (at most
   256 MiB, each 0 to 255) and the words (no character 0) into GC memory,
   records them in the `agc_front_end`, and ends the run with `agc_exit(vm, 0)`;
@@ -355,21 +341,18 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   file given to `agentica run`.
 - **The embedded data.** `agc_embedded_data` holds the front end, the BDD
   runner and the default step program of `agentica test`, then for each `std/`
-  source its NUL-terminated path and its text. `agc_embedded_index` has
-  `[offset, length]` of the front end, of the runner and of the step program,
-  the count `N`, and `N` triples `[path offset, text offset, text length]`.
-  Both are `.rodata`, built from `.incbin` and label differences, so there are
-  no relocations. The runner and the step program are `compiler/embedded/
-  runner.agc` and `steps.agc` compiled by the first binary with `stage2` as its
-  front end (`build/stage/runner.agcb`, `steps.agcb`), against the `std/`
-  sources of the same build; `make fixed-point` checks that `dist/agentica`
-  compiles the same bytes. The first binary of the bootstrap is linked without
-  them (length 0), because it has no `stage2` yet to compile them with; its
-  front end is stage0, whose driver compiles them from the `std/` sources on
-  every `agentica test`, as before.
+  source its NUL-terminated path and its text (`agc_embedded_index` holds the
+  offsets; layout in `vm/embedded.h`). Both are `.rodata`, built from `.incbin`
+  and label differences, so there are no relocations. The runner and the step
+  program are `compiler/embedded/runner.agc` and `steps.agc` compiled by the
+  first binary with `stage2` as its front end (`build/stage/runner.agcb`,
+  `steps.agcb`), against the `std/` sources of the same build; `make
+  fixed-point` checks that `dist/agentica` compiles the same bytes. The first
+  binary of the bootstrap is linked without them (length 0), because it has no
+  `stage2` yet to compile them with; its front end is stage0, whose driver
+  compiles them from the `std/` sources on every `agentica test`.
 
-**VM tracing (as built).**
-This note lists what the code chose.
+**VM tracing.**
 
 - `AGENTICA_VM_TRACE` lists the categories to trace: `sched`, `io`, `proc`,
   `tls`, `loader` and `gc`. Trace lines go to stderr. When
@@ -383,28 +366,21 @@ This note lists what the code chose.
 - Every line is valid UTF-8. A text value with a byte that is not part of a
   valid UTF-8 sequence is quoted, and each such byte is written as `\u00XX`. A
   cut line ends with `...` after a whole escape or sequence.
-- Events by category: `sched` (spawn, turn, wake, cancel (`at=call` on the
-  task that `Task.cancel` names, `at=spawn` on a child that a cancelled task
-  spawned), `cancel_deferred`
-  when a cancelled READY task is not in the queue and its popper ends it,
-  stall, fail, stop, exit); `io` (start, done, timeout, lock wait and handoff,
-  stdin, poll, end; a regular file as stdout or stderr shows as `kind=output`
-  jobs, and a pipe,
-  FIFO, terminal or socket as one `output_start stream=stdout|stderr` line and
-  one `output_done` line per run of data; a lock wait of a handle has its own
-  `lock_wait` line; sleeps, channel waits, timed awaits and `Task.map` timers
-  are not jobs and print no `io` line); `sched` also prints `timer_arm
-  task=N in_ms=M` and `timer_fire task=N late_ms=M` for them; `proc` (spawn,
-  spawn_failed, exit, close, term, kill, eof, truncated, stderr, stderr_pause,
-  stderr_resume, guard_cleanup,
-  and `reap pid=N alive=1` when a child is still alive after its bound);
-  `loader` (file, format, tables, done, reject); `gc`
-  (`collect at=turn|end count= heap= free= since=`, from `trace_gc` in
-  `vm/task.c`); `tls` (handshake and its errors, read error, close;
-  `tls_handshake_done` carries `protocol` and `cipher`, `vm/tcp.c`); and the TCP
-  events of 10.3.1 (`tcp_connect`, `tcp_listen`, `tcp_accept`, `tcp_eof`,
-  `tcp_close`, and their error forms). Field names are in `vm/trace.c` and
-  `vm/loop.c`.
+- Events by category: the `AGC_TRACE` points in `vm/` name them (`rg
+  'AGC_TRACE\(' vm`), and the field names are in `vm/trace.c` and `vm/loop.c`.
+  What the code does not show: `cancel` has `at=call` on the task that
+  `Task.cancel` names and `at=spawn` on a child that a cancelled task spawned;
+  `cancel_deferred` is a cancelled READY task that is not in the queue, which
+  its popper ends. A regular file as stdout or stderr shows as `kind=output`
+  jobs; a pipe, FIFO, terminal or socket as one `output_start
+  stream=stdout|stderr` line and one `output_done` line per run of data. A lock
+  wait of a handle has its own `lock_wait` line. Sleeps, channel waits, timed
+  awaits and `Task.map` timers are not jobs and print no `io` line; `sched`
+  prints `timer_arm task=N in_ms=M` and `timer_fire task=N late_ms=M` for them.
+  `proc` prints `reap pid=N alive=1` when a child is still alive after its
+  bound. `gc` lines (`collect at=turn|end count= heap= free= since=`) come from
+  `trace_gc` in `vm/task.c`; `tls_handshake_done` carries `protocol` and
+  `cipher`.
 - `profile` is the odd category: it is not part of `all`, and it counts
   instead of tracing events. It is for finding where a program spends its
   steps. With it on, each function counts its calls and the steps it ran (a
@@ -414,19 +390,17 @@ This note lists what the code chose.
   category costs nothing; with it, every `STEP` takes the slow path of the
   budget counter and the run is about a third slower. When the run ends (once
   for each runtime: the front end hands its program over in a second one)
-  `vm/profile.c` writes `total wall_ms= steps= calls= builtin_calls=
-  builtin_ms= gc_ms= collections=`, then the 30 functions with the most steps
-  (`fn calls= steps= name= at=FILE:LINE`; the step of each pass of a range
-  `each`, `times`, `upto`, `downto` or `File.each_line` loop is `<native>`,
-  while `List.map` and `List.each` add no step beyond their callbacks), the 12
-  source files with the most steps (`file calls=
-  steps= name=`) and the 30 builtins that took the most time (`builtin calls=
-  us= name=`). A builtin is timed for the call itself, so one that parks is
-  timed until it does. `gc_ms` is Boehm's own clock of its collections, and
-  `gc_ms` and `collections` count the whole process so far: the second report
-  of `agentica FILE.agc` includes the collections of the front end.
-  Then come up to 30 `section calls= steps= us= gc_ms= name=` rows, one for
-  each label of `Profile.measure`, the most steps first, then the most calls.
+  `vm/profile.c` writes a `total` line (fields in that file), then the 30
+  functions with the most steps (the step of each pass of a range `each`,
+  `times`, `upto`, `downto` or `File.each_line` loop is `<native>`, while
+  `List.map` and `List.each` add no step beyond their callbacks), the 12 source
+  files with the most steps and the 30 builtins that took the most time. A
+  builtin is timed for the call itself, so one that parks is timed until it
+  does. `gc_ms` is Boehm's own clock of its collections, and `gc_ms` and
+  `collections` count the whole process so far: the second report of
+  `agentica FILE.agc` includes the collections of the front end. Then come up
+  to 30 `section` rows, one for each label of `Profile.measure`, the most steps
+  first, then the most calls.
   A run keeps 4096 labels; later ones share one `[overflow]` section (frame
   `measure[overflow]`), which the label index does not hold. A section counts
   the steps of its task, the wall time and Boehm's clock from the start of the
@@ -454,5 +428,6 @@ This note lists what the code chose.
   1,048,576 stacks and 256 MiB of frames are kept; the weight of a later new
   stack goes to one last `[truncated]` line, followed by one
   `agc-trace folded profile full` warning (`AGENTICA_VM_TEST_PROFILE_STACKS=N`
-  lowers the stack limit for tests). The front end of `agentica FILE.agc` writes no stacks once it has
-  handed its program over, so the output is the program's.
+  lowers the stack limit for tests). The front end of `agentica FILE.agc`
+  writes no stacks once it has handed its program over, so the output is the
+  program's.

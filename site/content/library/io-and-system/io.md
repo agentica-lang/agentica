@@ -15,7 +15,6 @@ On Linux, macOS and Windows:
 - Standard output and error that go to the same terminal or file (for example with `2>&1`) share one buffer, so `puts` and `IO.warn` keep their order.
 - On Windows, two descriptors are the same when they are the same handle object, such as one pipe given to both. Otherwise there is no order between them.
 - A crash message waits for room the same way, and is never put in the middle of a print.
-- At the end of the run, the program waits, within the flush limit, until the output is written.
 - On Windows, after a stop signal and for the last error messages, a pipe or console gets one wait of up to 200 ms in all. So a reader that never reads cannot hold the exit.
 
 On other systems, output is buffered, so call `IO.flush()` when another program waits for your output line by line. A read from standard input blocks the whole program until input arrives. A write to standard output or error blocks it until the reader takes the text.

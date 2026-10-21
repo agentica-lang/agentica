@@ -1,8 +1,5 @@
 # VM loop, stdin, stdout and files
 
-The libuv loop, the resource registry, stdin, stdout and stderr, and the `File`,
-`Dir` and `Path` builtins.
-
 Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
@@ -29,9 +26,6 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     names that are refused (trailing dot or space, `:` that is not a drive),
     and the read of a child's stdout beside libuv for `Process.read_available`
     (none on Windows). `process.c` keeps the search loop and the file test.
-    The I/O thread owns a child's handles and buffers: with several schedulers
-    each `Process` and channel call posts its START step and parks, and the
-    done half reads only the request (`docs/vm/16-architecture.md` §16.9).
 
 - **Path:** `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`
   - **Owns:** The ends of a child channel: how the parent makes them (a socket
@@ -264,13 +258,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     descriptor `vm/output.c` reopened for stdout or stderr.
   - A child run with `--allow-run` can still open `/proc/<VM pid>/fd/N`: the
     check covers the program's own file calls only.
-  - `agc_each_fd` (the `/proc/self/fd` walk, also used by `vm/process.c`) lives
-    here, `owns_st` saying which request frees the state (open, close, or a
-    handle request after its timeout), `Path.join` and `Path.resolve` as pure
-    string code
-  - the owner-only and lock builtins of the BDD driver port
-    (`docs/future/18-front-end-language.md`
-    §18.4, port step 7a), all pool jobs in `work`:
+  - `owns_st` marks the request that frees the file state: open, close, or a
+    handle request after its timeout.
+  - the owner-only and lock builtins of the BDD driver port, all pool jobs in
+    `work`:
     - `File.open(path, "create_private")` is `OP_OPEN_CREATE`, which
       `open_for` handles first with `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`
       and mode 0600, then goes the way of `write`
@@ -280,26 +271,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       `FS_MKDIR` error)
     - `File.try_lock` (`OP_TRY_LOCK`) is `flock(LOCK_EX | LOCK_NB)` on the
       handle's `st->fd` after the handle's own lock wait (`blocked`);
-`open_state`
-      is `usable` without the direction check; a handle with a poller (pipe,
-      FIFO) is refused at once, and any other kind that `fstat` in the job says
-      is not a regular file (a device) is `FS_NOT_LOCKABLE`; `done` returns
-      `ok(true)` or `ok(false)`
+      `open_state` is `usable` without the direction check; a handle with a
+      poller (pipe, FIFO) is refused at once, and any other kind that `fstat` in
+      the job says is not a regular file (a device) is `FS_NOT_LOCKABLE`; `done`
+      returns `ok(true)` or `ok(false)`
     - `Path.remove` (`OP_REMOVE`): `unlink` (repeated on `EINTR`), a missing
       path is success, and `EISDIR` calls `agc_remove_tree` (`vm/tree.c`), whose
       negative returns `AGC_TREE_TOO_DEEP` and `AGC_TREE_REFUSED` become
       `FS_TREE_DEEP` and `FS_REFUSED`; a failure inside the tree comes with the
       path of the failed entry (`failed`), which replaces `o->path` in the error
-    - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with
-      `RENAME_NOREPLACE` (macOS: `renameatx_np` with `RENAME_EXCL`); Windows
-      uses `MoveFileExW` with no flags, which fails if the destination exists;
-      there is no cross-volume copy fallback. The second path is `op.to`; the error is
+    - `Path.rename` (`OP_RENAME`): Unix uses `renameat2` with `RENAME_NOREPLACE`
+      (macOS: `renameatx_np` with `RENAME_EXCL`); Windows uses `MoveFileExW`
+      with no flags, which fails if the destination exists; there is no
+      cross-volume copy fallback. The second path is `op.to`; the error is
       `FS_RENAME` with both paths
   - `Path.real` (`OP_REAL`: the pool `work` half calls `agc_fs_realpath`, the
-    job
-    has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`, `filesystem:
-    cannot resolve path` with the path and the OS error text, and the result is
-    decoded with `lossy`, one U+FFFD per bad byte)
+    job has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`,
+    `filesystem: cannot resolve path` with the path and the OS error text, and
+    the result is decoded with `lossy`, one U+FFFD per bad byte)
   - `File.each_line` (7.2.1h) and `File.foreach` (17e) share one line reader,
     `agc_line_reader` (`agc_lines_new`, `agc_lines_next`, `agc_lines_stop` in
     `services.h`), a state machine with
@@ -392,27 +381,16 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **libuv (7h, in: loop, files and tasks)**
   - `docs/vm/10-io-scheduler.md` §10.2.2 describes the loop with its run queue
-  - only the scheduler (`vm/task.c`, through `agc_io_poll`) calls `uv_run`, and
-    libuv callbacks only set flags (tasks will also queue the task).
-  - N=1 today
-  - the design target (`docs/vm/16-architecture.md` §16, rules per thread in
-    `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the
-    server measurement, decided right after it) is N scheduler threads that pull
-    from one global run queue and one I/O thread, the main thread, with the only
-    libuv loop, built on split structures (read-only runtime; global run queue;
-    the loop and its inbox on the I/O thread, and the registry there or shared
-    under a lock, which is open in §16.11; per-scheduler turn counter; per-task
-    stack, registers and frame).
-  - Once tasks land, a builtin or opcode whose work grows with its input sets a
-    turn cost (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins)
+  - only the thread that owns the loop calls `uv_run` on it (the scheduler with
+    N=1 through `agc_io_poll` in `vm/task.c`, the I/O thread with N>1), and
+    libuv callbacks only set flags and queue the task.
+  - A builtin or opcode whose work grows with its input sets a turn cost
+    (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins)
   - it is taken from the turn only, never from `steps_left`, so it never changes
     how `--max-steps` stops a program.
-  - Only the thread that owns the loop calls `uv_run` on it (the scheduler with
-    N=1, the I/O thread with N>1).
-  - New code adds no mutable `static` or global variable in `vm/` (the
-    exceptions are listed in `docs/vm/10-io-multicore.md` §10.2.3)
-  - state goes in the runtime, scheduler or task struct, and lazy init uses
-    `pthread_once` or runs at start-up.
+  - New code adds no mutable `static` or global variable in `vm/` (rule and
+    exceptions: `references/vm-c.md`); state goes in the runtime, scheduler or
+    task struct, and lazy init uses `pthread_once` or runs at start-up.
   - Handles and requests are `malloc`'d and must stay owned until their
     `uv_close` callback: either the GC object that owns one stays in its
     scheduler's resource registry until then, or the `malloc`'d native state
@@ -432,27 +410,24 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - Stdout and stderr: only `vm/output.c` writes them; `vm/process.c` hands a
   child's stderr to `agc_output_forward` and stops reading the pipe while the
-  stream's queue is full. `agc_vm_init` leaves
-  both on the blocking `FILE *` it was given (`base` is null), so the C tests
-and
-  the fuzzer never depend on the loop; `agc_launch_vm` (`vm/launch.c`) calls
-`agc_output_open`
-  after `agc_input_open`. Never `fwrite` to `vm->rt->out.file` or
-  `err.file` from builtin code: use `agc_write`, which parks the task and
-  expects to be run again, so a builtin must work out its text before the
-  call (and pass no text when `agc_output_waiting` says its text already waits)
-  and not touch state after it that a second run would repeat. Text the
-  VM itself prints goes through `agc_notice_begin` and `agc_notice_end`.
-- Stdin and arguments: only `vm/input.c` reads fd 0; `agc_vm_init` leaves
-  the input closed (`fd = -1`, always EOF) and `System.args` empty, and
+  stream's queue is full. `agc_vm_init` leaves both on the blocking `FILE *` it
+  was given (`base` is null), so the C tests and the fuzzer never depend on the
+  loop; `agc_launch_vm` (`vm/launch.c`) calls `agc_output_open` after
+  `agc_input_open`. Never `fwrite` to `vm->rt->out.file` or `err.file` from
+  builtin code: use `agc_write`, which parks the task and expects to be run
+  again, so a builtin must work out its text before the call (and pass no text
+  when `agc_output_waiting` says its text already waits) and not touch state
+  after it that a second run would repeat. Text the VM itself prints goes
+  through `agc_notice_begin` and `agc_notice_end`.
+- Stdin and arguments: only `vm/input.c` reads fd 0; `agc_vm_init` leaves the
+  input closed (`fd = -1`, always EOF) and `System.args` empty, and
   `agc_launch_vm` opens fd 0 (not for the front end of the single binary, which
-reads nothing) and fills `vm->rt->args`, so the C tests and the
-  fuzzer never block on stdin. Stdin text decodes each invalid byte to
-  U+FFFD (Racket ports); arguments decode each invalid byte to `?` and an
-  incomplete sequence at the end to one `?` (Racket in a UTF-8 locale,
-  through glibc `iconv`); the diff test checks this with `LC_ALL=C.UTF-8`.
-  The driver copies a non-file stdin into the VM with a thread that
-  it kills once the VM exits.
+  reads nothing) and fills `vm->rt->args`, so the C tests and the fuzzer never
+  block on stdin. Stdin text decodes each invalid byte to U+FFFD (Racket ports);
+  arguments decode each invalid byte to `?` and an incomplete sequence at the
+  end to one `?` (Racket in a UTF-8 locale, through glibc `iconv`); the diff
+  test checks this with `LC_ALL=C.UTF-8`. The driver copies a non-file stdin
+  into the VM with a thread that it kills once the VM exits.
 
 ## Native Windows files
 
@@ -466,19 +441,12 @@ Windows locks use non-blocking `LockFileEx` over the whole file: unlike Unix
 advisory `flock`, this also prevents other handles from reading or writing the
 locked range. `file_state.locked` makes repeat calls on the same handle succeed
 without locking the range again. Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`
-(contention); access denied and other failures remain errors. The C builtin
-tests and portable bootstrap smoke cover read-handle locking, repeat calls,
-contention and close/reacquire.
+(contention); access denied and other failures remain errors.
 
 Windows `Path.remove` uses handle-relative no-follow traversal; raw path
 validation precedes normalization. Destructive tests require the scratch
 harness. `Path.rename` uses `MoveFileExW` with no replace/copy flags.
 Windows special file streams remain separate work.
-
-`vm/tests/files_test.c` exercises real builtin calls without needing a
-self-hosted compiler: text and all-byte round trips, append/flush/close,
-Unicode paths, invalid writes that leave data intact, Windows path roots and
-Windows lock exclusion. All native `vm-test` jobs run it.
 
 New filesystem adapter files and headers belong in the explicit lists of
 `vm/tools/check-layers.sh`. Keep `file_io.h` forbidden to core files, keep

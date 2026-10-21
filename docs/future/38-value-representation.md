@@ -13,12 +13,10 @@ memory or speed ever asks for it.
 
 ### 38.1 Today
 
-Checked at `8be2ffa`:
-
-- `agc_value` (`vm/value.h:29-32`, `docs/vm/05-values-execution-builtins.md` §5)
-  is a `uint32_t tag` plus an 8-byte union of `bool`, `int64_t`, `double` and
+- `agc_value` (`vm/value.h`, `docs/vm/05-values-execution-builtins.md` §5) is a
+  `uint32_t tag` plus an 8-byte union of `bool`, `int64_t`, `double` and
   `void *`. That is 12 bytes of data and 4 of padding, so 16 bytes, passed by
-  value. The VM has 20 tags (`vm/value.h:25-27`).
+  value.
 - Under the SysV x86-64 ABI a 16-byte struct of two eightbytes travels in two
   registers, in and out of a call.
 - `Int` and `Float` never allocate. `Int` is a signed 64-bit integer, and
@@ -26,15 +24,15 @@ Checked at `8be2ffa`:
 - Memory is managed by the Boehm GC, which is conservative: it treats any word
   that looks like a pointer into the heap as one. Pointers are never tagged
   (`docs/vm/05-values-execution-builtins.md` §5.3).
-- The GC setup: `build/vm/gc.o` is compiled with
-  `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` (`Makefile:182`), and
-  `vm/value.c:53-56` only calls `GC_INIT` and sets the OOM, abort and warning
-  hooks. So a pointer anywhere inside an object keeps it alive, from the heap as
-  well as from the stack. bdwgc v8.2.12 sets `ALIGNMENT` to 8 on x86-64
-  (`include/private/gcconfig.h:2423`): the collector reads heap objects, the
-  stack and the roots only at 8-byte aligned offsets. The VM keeps both:
-  `agc_init` calls `GC_set_all_interior_pointers(1)` so the system and vendored
-  libgc match, and it calls no `GC_register_displacement`.
+- The GC setup: the collector is compiled with
+  `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` (`GC_COMPILE` in the
+  `Makefile`), and `vm/value.c` only calls `GC_INIT` and sets the OOM, abort and
+  warning hooks. So a pointer anywhere inside an object keeps it alive, from the
+  heap as well as from the stack. bdwgc sets `ALIGNMENT` to 8 on x86-64
+  (`include/private/gcconfig.h`): the collector reads heap objects, the stack
+  and the roots only at 8-byte aligned offsets. The VM keeps both: it calls
+  `GC_set_all_interior_pointers(1)` so the system and vendored libgc match, and
+  it calls no `GC_register_displacement`.
 
 ### 38.2 Packed struct (12 or 9 bytes): rejected
 
@@ -92,7 +90,7 @@ and rebuilds an `agc_value` on every read.
 ### 38.6 Direction: use the static types
 
 The checker already knows the type of every value, so most tags are redundant.
-Lowering gets the types today (`check #:types`). In order of payoff:
+Lowering gets the types today. In order of payoff:
 
 1. **Unboxed `List[Int]` and `List[Float]`**: 8 bytes per item and no tag, in an
    atomic object that the GC does not scan. Built as step 3 of 8d, after the

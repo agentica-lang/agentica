@@ -2,10 +2,9 @@
 
 **Status:** idea, not scheduled. The owner asked on 2026-10-15 to note an LSP
 for some point. The dependencies are technical: it reuses the semantic CLI
-(§39, row 7.2b) and the doc comments
-(§32), so it can only start after them, and it is easiest on the self-hosted
-front end (§18). Nothing here is designed yet; this section only keeps the plan
-and the open questions in one place.
+(§39, row 7.2b) and the doc comments (§32), so it can only start after them.
+Nothing here is designed yet; this section only keeps the plan and the open
+questions in one place.
 
 ### 43.1 Goal (possible scope, not decided)
 
@@ -25,8 +24,7 @@ Editors would show what the checker already knows, without a shell round trip:
   an editor never see different things.
 - **Doc comments (§32).** Hover text is the `##` text of a declaration.
 - **The self-hosted front end (§18, `compiler/`).** The server is probably
-  written on the Agentica front end, not on the Racket one, which has been
-  frozen since row 7.2.7 and would be redone by the port.
+  written on the Agentica front end.
 - **The single binary (§18.8, step 8 of §18.3).** An editor would start one
   executable with the front end inside.
 

@@ -2,11 +2,11 @@
 
 **Status:** `outline` and the core of `type-at` built (types and definitions at
 a position; `doc`, builtins and locals, `--partial`, `symbol` and `refs` are
-planned) (row 7.2b, after `agentica doc`). Agreed with the owner on 2026-10-13:
-agents program better when they can ask the compiler about the code, not only
-read the docs. The front end already builds a linked and checked program with
-types and spans; four CLI commands expose it, JSON first. No language change;
-front end and CLI only, nothing reaches lowering or the VM.
+planned), row 7.2b. Agreed with the owner on 2026-10-13: agents program better
+when they can ask the compiler about the code, not only read the docs. The
+front end already builds a linked and checked program with types and spans;
+four CLI commands expose it, JSON first. No language change; front end and CLI
+only, nothing reaches lowering or the VM.
 
 ```text
 agentica outline FILE [--ai|--json]
@@ -17,78 +17,47 @@ agentica type-at --stdin FILE:LINE:COL [--ai|--json]
 ```
 
 The options may also come before the command, as for every command. After the
-command they are parsed by hand, as `help` and `doc` do
-(`compiler/app/cli_help.agc`, `compiler/app/cli_doc.agc`,
-`compiler/query/query_options.agc`).
+command they are parsed by hand, as `help` and `doc` do.
 
-**Why.** Today an agent that changes a field type or an enum variant finds its
-uses with `rg`, reads whole files to learn a signature, and guesses the type of
-an expression from the code around it. `rg` cannot tell `Models.User` from a
+**Why.** An agent that changes a field type or an enum variant finds its uses
+with `rg`, reads whole files to learn a signature, and guesses the type of an
+expression from the code around it. `rg` cannot tell `Models.User` from a
 local `User`, a field `name` from a variable `name`, or an import alias from a
 module. The linker and the checker know all of this. The 6c task "a type change
 that crosses a program" (roadmap phase 6c) is the case these commands are for.
 
 ### 39.1 Today
 
-Checked against `compiler/` after `agentica doc` (PR #509):
+What the design starts from:
 
-- `agentica check FILE` (`compiler/app/cli.agc`) runs lex → parse → link
-  (`Linker.link_file`, `compiler/modules/linker.agc`) → check
-  (`Checker.check`, `compiler/check/checker.agc:43`, wired in
-  `compiler/app/pipeline.agc`) and prints the first diagnostic in text, `--ai`
-  or `--json` (`DiagnosticJson.json`,
-  `compiler/diagnostics/diagnostic_json.agc`) on stderr with exit 1.
 - `Linker.link_file` links one root. It gives each dependency the prefix `@N::`,
-  numbered per call in visit order (`Modules.enter`,
-  `compiler/modules/modules.agc:354`; the linked name of a declaration is its
-  prefix plus its name, `Resolve.identity`, `compiler/modules/resolve.agc:122`);
-  the root keeps its names without a prefix. It drops the import declarations
-  from the linked program (`Rewrite.rewrite_declarations`,
-  `compiler/modules/rewrite.agc:20-27`), so the checker never sees module keys
-  or aliases. Each call starts from empty tables.
+  numbered per call in visit order; the root keeps its names without a prefix.
+  It drops the import declarations from the linked program, so the checker
+  never sees module keys or aliases. Each call starts from empty tables.
 - Dependency spans carry the canonical absolute path of their file; the root
-  keeps the path as typed (`reject`, `compiler/app/cli.agc`). So one file can
-  appear under two names.
-- `Checked.types` (`compiler/check/checker.agc:27-34`) holds the type of each
-  expression and block by node id (`State.record_type`,
-  `compiler/check/check_expr.agc:55`). A struct field read goes through
-  `check_struct_field` (`compiler/check/check_method.agc:54`), which returns the
-  field's type and records nothing else; its target is checked first, so the
-  target's type, and with it the struct, is in `Checked.types`.
-  `Checked.resolved` (`State.Resolved`, `compiler/check/check_state.agc:45-50`)
-  is set only on the builtin-method path (`record_resolved`,
-  `compiler/check/check_method.agc:122`) and the lowering reads it; it is not a
+  keeps the path as typed. So one file can appear under two names.
+- `Checked.types` holds the type of each expression and block by node id. A
+  struct field read records nothing else, but its target is checked first, so
+  the target's type, and with it the struct, is in `Checked.types`.
+  `Checked.resolved` is set only on the builtin-method path; it is not a
   field's struct.
-- `Modules.Module` keeps each module's alias table (`aliases`,
-  `compiler/modules/modules.agc`), and `LinkedModule`
-  (`compiler/modules/linker.agc`) carries it as `aliases`, alias to module key
-  (`type-at` prints an imported type through it).
-- `Types.display_name` (`compiler/syntax/types.agc`) strips the `@N::` prefix,
-  so diagnostics print an imported type as `User`, not `Models.User`;
-  `Types.to_text_as` takes the map from a prefix to the alias of the asking file
-  and prints `Models.User`.
-- The checker requires exactly one `main() -> Void` (`CHECK-MAIN`,
-  `compiler/check/check_register.agc`); `Checker.check_query`
-  (`compiler/check/checker.agc`) checks without that rule and with every other.
+- `LinkedModule.aliases` is each module's alias table, alias to module key.
+  `Types.display_name` strips the `@N::` prefix, so diagnostics print an
+  imported type as `User`; `Types.to_text_as` takes the map from a prefix to
+  the alias of the asking file and prints `Models.User`.
+- `Checker.check_query` checks without the `CHECK-MAIN` rule and with every
+  other.
 - Some names have no span of their own: the loop variable of `ForStmt` and the
-  slots of `VariantPattern` hold plain strings (`compiler/syntax/ast.agc`). A
-  function, struct, enum, field, variant, constant, type alias, `FieldAccess`
-  and `MethodCall` has a `name_span`; the parser does not print it in
-  `parse_text`.
-- `agentica help NAME [--json]` prints a builtin from the catalog
-  (`builtin_json`, `compiler/app/cli_help.agc:83`); an unknown name prints a
-  plain line on stderr and exits 2. `agentica test` reports a usage error as the
-  diagnostic `RUNTIME-BDD-USAGE` at the pseudo-file `<arguments>`, line 1,
-  column 1 (`Report.usage`, `compiler/bdd/bdd_report.agc:16-18`).
+  slots of `VariantPattern` hold plain strings. Functions, structs, enums,
+  fields, variants, constants, type aliases, `FieldAccess` and `MethodCall`
+  have a `name_span`.
 - `Modules.enter` adds each module to the link tables before its own imports are
-  read. The loader raises some link errors while it reads the imports; the name
+  read. The loader raises some link errors while it reads the imports. The name
   errors (`CHECK-IMPORT-NAME` for a member, `CHECK-UNKNOWN-NAME`, a name of the
-  wrong kind) come from `compiler/modules/resolve.agc` when `rewrite_all`
-  (`compiler/modules/linker.agc`) rewrites the names, after every module is
-  loaded and often inside a dependency.
+  wrong kind) come later, when `rewrite_all` rewrites the names after every
+  module is loaded, and often inside a dependency.
 - `agentica doc PATH [--json]` prints the exported API of one module, parse
-  only, with a signature printer and a JSON item shape (§32.5,
-  `compiler/docs/`).
+  only, with a signature printer and a JSON item shape (§32.5).
 
 ### 39.2 Shape
 
@@ -121,13 +90,10 @@ changes only how diagnostics print; answers keep the text form.
 
 ### 39.3 Commands
 
-- **`outline FILE`**: the top-level declarations of one file in source order:
-  imports (path and alias), structs (with fields), enums (with variants),
-  functions (with their signature), type aliases and constants, each with
-  `exported`, its doc summary and its span. Private declarations are listed too;
-  this is the difference from `agentica doc`, which shows only the exported API.
-  `FILE` may also be a `std/` module name (`std/http`), read from the embedded
-  sources as `agentica doc` does. Parse only (§39.6).
+- **`outline FILE`** (built, `docs/grammar/06b-builtins.md`): the top-level
+  declarations of one file in source order, private ones too, which is the
+  difference from `agentica doc`. `FILE` may also be a `std/` module name.
+  Parse only (§39.6).
 - **`--stdin FILE`**, on every command that reads a file: the text of `FILE` is
   the standard input, as for `agentica check --stdin FILE`. It stands in for the
   `FILE` argument (`outline --stdin FILE`, not `outline FILE --stdin FILE`); the
@@ -150,27 +116,13 @@ changes only how diagnostics print; answers keep the text form.
   declaration, local bindings included. Builtins work too
   (`refs File.read src/`), with no definition. No references is not an error: an
   empty list, exit 0.
-- **`type-at FILE:LINE:COL`**: the checked type of the innermost expression or
-  name whose span contains the position, with that span and its source text. On
-  the name of a field access, it is the whole access (`user.email` above). It
-  also gives the definition of what the expression names: a function, a struct,
-  an enum, a variant, a field or a constant, with the span of the declaration
-  and of its name. A type argument (`Models.User` in `List[Models.User]`) is
-  answered in a later PR, with the definition of a type alias. The core answers
-  a local (a parameter, a binding or a loop variable) with its type and no
-  definition, and a builtin with its type and no definition; their definitions
-  and docs come later. Line and column are 1-based and count code points, as
-  diagnostics do (an emoji is one column, not two UTF-16 units; the LSP
-  converts). The position must be on a token of an expression: a blank between
-  tokens, a comment, the end of a line, the body text of a heredoc (only its
-  interpolations answer) and a keyword that is part of no expression (`return`,
-  `end`, `case`) are on no expression, even inside the span of one. A keyword
-  that belongs to an expression (`try`, `do`, `and`, `!`) answers that
-  expression. `FILE` is a path of the disk (never a `std/` module), checked
+- **`type-at FILE:LINE:COL`** (core built, `docs/grammar/06b-builtins.md`): the
+  checked type of the innermost expression or name at the position, and the
+  definition of what it names. Planned: a type argument (`Models.User` in
+  `List[Models.User]`) with the definition of a type alias; definitions and
+  docs of locals and builtins (the core answers them with a type and no
+  definition). `FILE` is a path of the disk, never a `std/` module, checked
   with its imports; it needs no `main` (§39.6).
-- **`type-at --stdin FILE:LINE:COL`**: the text of `FILE` is the standard input,
-  as for `check --stdin FILE`; `FILE` need not exist, and its folder resolves
-  the imports. The position stands in for the `FILE` argument.
 
 ### 39.4 Names, paths and files
 
@@ -205,14 +157,10 @@ changes only how diagnostics print; answers keep the text form.
   and `refs`; `type-at` uses `FILE` alone.
 - **File names.** The query canonicalizes every file it reads, the files of
   `PATH...` included, and keys modules by the canonical path, so one file has
-  one name. It prints a path relative to the current directory when the file is
-  under it, the absolute path otherwise, and `std/MOD.agc` for an embedded
-  module. A `FILE` in `FILE:LINE:COL` is canonicalized the same way before it is
-  matched. A diagnostic keeps the name as typed, like `check`; only an answer's
-  `file` is canonical. A symlink answers with its target's name. "Relative" is
-  to the working folder, so from `/` the name has no leading slash. A user file
-  under a `std/` folder read with `--stdin` is named `./std/NAME`, so it never
-  looks like an embedded module.
+  one name (the rules of the answer's `file` are in the programming skill,
+  `references/queries.md`). A `FILE` in `FILE:LINE:COL` is canonicalized the
+  same way before it is matched. A diagnostic keeps the name as typed, like
+  `check`; only an answer's `file` is canonical.
 - **Result order:** by file, in the order the files were linked, then by
   position.
 
@@ -233,16 +181,11 @@ signatures are strings.
   (`Models.User`); a type from a module `FILE` does not import (a private type
   of a dependency, or one that reaches it through another module) is printed by
   its bare name, as diagnostics do.
-- `outline`:
-  `{version, command, file, doc, imports: [{path, alias, names, span}], items:
-  [...]}`. `doc` is the module doc or `null`. `alias` is `null` for an import
-  with a list of names, which are `[{name, local, span}]`. Each item is `{kind,
-  name, exported, signature, doc, summary, span, name_span}`, `kind` being
-  `"function"`, `"struct"`, `"enum"`, `"alias"` or `"constant"`, with the extra
-  fields of §32.5 (`parameters` and `result`, `fields`, `variants`); each field
-  and variant has a `name_span` too. `span` is the whole declaration, `export`
-  included, and `name_span` the name. `summary` is the first paragraph of the
-  doc, or `null`.
+- `outline` and `type-at` (built): the shapes are in the programming skill
+  (`references/queries.md`). `outline` builds its items with `compiler/docs/`,
+  which `agentica doc` uses, so the two commands share the signature printer
+  and the item fields and cannot drift. The `type-at` `definition` will carry
+  `kind` `alias` with the answer for a type argument.
 - `symbol`: `{version, command, query, matches: [...], skipped: [...]}`. Each
   match is `{kind, name, module, exported, signature, span}`; `kind` adds
   `"field"` (with `type` and `struct`), `"variant"` (with `payload` and `enum`)
@@ -253,25 +196,8 @@ signatures are strings.
 skipped: [...]}`,
   with `definition` a `symbol` match, or `null` for a builtin. `function` is the
   name of the enclosing function, or `null` at the top level.
-- `type-at`:
-  `{version, command, position: {file, line, column}, kind, text, type, span,
-definition}`.
-  `kind` is an open set: a client must accept a value it does not know. Today
-  it is `"name"` when the position is on a name (a variable, a constant, a
-  function name, the callee of a call, the field or method after the
-  dot) and `"expression"` otherwise; later PRs add values (such as `"builtin"`)
-  without a new `version`. `span` is always the whole expression and `text` its
-  source. `definition` is `null` or a span with the keys `kind` (`function`,
-  `struct`, `enum`, `variant`, `field` or `constant`; `alias` comes with the
-  answer for a type argument), `name` and `name_span` (a span of the name): the
-  span is the whole declaration, as in `outline`.
 - `skipped`: the roots left out (§39.6), each as `{file, diagnostic}`,
   `diagnostic` being the `--json` diagnostic object.
-
-`outline` builds its items with `compiler/docs/` (`doc_model.agc`,
-`doc_json.agc`), which `agentica doc` uses, so the two commands share the
-signature printer and the item fields and cannot drift. The shape of `outline`
-is in `compiler/query/outline_json.agc`.
 
 ### 39.6 Programs that do not check
 
@@ -321,14 +247,13 @@ for as little as they can:
   a checker that recovers from errors, which the front end does not have (each
   stage stops at the first error, AGENTS.md).
 - A queried file does not need `main`: the query checks with the `CHECK-MAIN`
-  rule off (`Checker.check_query`, which shares the loop of `Checker.check`).
-  Everything else is the same checker.
+  rule off (`Checker.check_query`). Everything else is the same checker.
 
 ### 39.7 Diagnostics and exit codes
 
-The commands are a new front-end stage, `compiler/query/`, so its codes have
-their own prefix, `QUERY-`. They are stable, carry a span, and print on stderr
-in the usual three formats.
+The commands are a front-end stage, `compiler/query/`, so its codes have their
+own prefix, `QUERY-`. They are stable, carry a span, and print on stderr in the
+usual three formats.
 
 - **Code:** `QUERY-USAGE`
   - **When:** a missing or extra argument, an unknown option, a bad
@@ -353,10 +278,9 @@ in the usual three formats.
     line, the empty span at the line's end; past the last line, the empty span
     at the end of the file
 
-- The `<arguments>` span follows `RUNTIME-BDD-USAGE`
-  (`compiler/bdd/bdd_report.agc:16-18`): a name typed on the command line has
-  no place in a file. Usage errors are diagnostics, as in `agentica test`, not a
-  plain line as in `help`, so `--json` always gives JSON.
+- The `<arguments>` span follows `RUNTIME-BDD-USAGE`: a name typed on the
+  command line has no place in a file. Usage errors are diagnostics, as in
+  `agentica test`, not a plain line as in `help`, so `--json` always gives JSON.
 - Exit 0: an answer, including an empty list of references and answers with
   `skipped` roots.
 - Exit 1: the program has an error (a `LEX-`, `PARSE-` or `CHECK-` diagnostic)
@@ -385,9 +309,8 @@ in the usual three formats.
   diagnostic, so a later root that reaches it is skipped with that diagnostic
   without linking it again. Modules already linked by an earlier root stay
   linked.
-- **Aliases.** `LinkedModule.aliases` is each module's alias table (alias to
-  module key), so `type-at` prints a type through `FILE`'s own aliases. The
-  same table is kept for every module of several roots.
+- **Aliases.** `LinkedModule.aliases` is kept for every module of several
+  roots, so `type-at` prints a type through `FILE`'s own aliases.
 - **Origins.** The linker fills a side table, `origins`: each linked identity
   (`@N::name`) to its module key, its source name and its declaration span. It
   also fills `uses`: each name use (call, value, type, construction, variant)
@@ -399,16 +322,15 @@ in the usual three formats.
   (§39.1; `type-at` reads it this way for the definition of a field);
   `check_struct_field` does not change, and local bindings from a new `locals`
   table (each use of a parameter or local to its binding span).
-- **Name spans.** For `refs` and `type-at` to point at a name, the parser gives
-  `FieldAccess` and `MethodCall` a `name_span` (built), and the `for` loop
-  variable and the `VariantPattern` bindings a span each (planned).
+- **Name spans.** For `refs` and `type-at` to point at a name, the `for` loop
+  variable and the `VariantPattern` bindings get a span each (planned);
+  `FieldAccess` and `MethodCall` have a `name_span` (built).
 - **Cost.** One lex and parse of each file, one link of the whole set, and at
   most one check of what §39.6 needs, with no lowering, no bytecode and no VM.
   Shared dependencies are linked and checked once. So a command costs about one
   `agentica check` of the files of `PATH...` together, less when no check is
   needed.
-- No daemon, no cache, no watch mode. Start-up is the single binary's (§18),
-  already much faster than the Racket front end's was.
+- No daemon, no cache, no watch mode. Start-up is the single binary's (§18).
 
 ### 39.9 Builtins and `agentica help`
 
@@ -427,10 +349,10 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
 - Before the full 6c round (order step 10), so it can measure the commands
   (§39.12). The 6c pilot (order step 7.2.2) comes before it and does not have
   them.
-- One PR per step, in this order (issue #506): `doc` (row 22b, built), `outline`
-  (built), `type-at`, the opt-in `--partial`, `symbol`, then `refs`. `type-at`
-  is the checker work (the core, then docs and builtins, then locals); `symbol`
-  and `refs` on declarations are the linker work.
+- One PR per step (issue #506), in this order: `doc` (row 22b, built),
+  `outline` (built), `type-at` (the core built; then docs and builtins, then
+  locals), the opt-in `--partial`, `symbol`, then `refs`. `type-at` is the
+  checker work; `symbol` and `refs` on declarations are the linker work.
 
 ### 39.11 Decided against
 
@@ -454,11 +376,10 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
   place of a plain value), one extra Agentica arm runs without the commands,
   with the same model and budget. The binary still has them, so the arm hides
   them: its skill has no `references/queries.md` and no row for it, and `run.py`
-  puts a wrapper `agentica` first in the workspace `PATH` (`/workspace/bin`, as
-  today) that answers the four commands with an unknown-command error and exit
-  2, and passes everything else to the real binary. Each refused call is
-  counted. The usage text still names the commands; that is recorded, not
-  hidden.
+  puts a wrapper `agentica` first in the workspace `PATH` that answers the four
+  commands with an unknown-command error and exit 2, and passes everything else
+  to the real binary. Each refused call is counted. The usage text still names
+  the commands; that is recorded, not hidden.
 - The comparison is hidden tests passed, tokens, repair attempts and time to a
   correct solution.
 - Keep the commands in the skill if agents call them and the arm with them is
@@ -467,56 +388,34 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
 
 ### 39.13 Tests
 
-- One module per command, `tests/test_spec_<command>.py`
-  (`tests/test_spec_outline.py` is built), running the binary with `--json`
-  (`cli` and `run` of `tests/agentica_test.py`), with the files written to a
-  temporary folder or kept in `tests/fixtures/query/`: a root
-  file that imports two modules under aliases and `std/queue`; a struct, an enum
-  with a payload, a private function, a field used in a read and in a
-  construction, a variant in a `case` pattern, a `for` loop; the same alias for
-  different modules in two files; a second root that imports the same module; a
-  broken module (an unknown name inside it) imported by two roots, next to a
-  third root that does not import it; a file with a parse error and a file with
-  a check error.
-- Each test asserts the exit code, the diagnostic code, and the JSON fields and
-  spans, not message text:
-  - `outline`: items, `exported`, signatures, `summary` and spans; a file with a
-    missing import still answers; a parse error gives exit 1 and its code;
-    `std/queue`; `--stdin FILE` (the buffer wins over the disk).
-  - `symbol`: each name form of §39.4, `std/` forms included; a builtin carries
-    the `help` object; several matches; `QUERY-NOT-FOUND`; a directory with the
-    broken file answers with it in `skipped`; both roots that import the broken
-    module are skipped with the same diagnostic and the third answers;
-    `refs total broken.agc` with only a broken root gives exit 1 and its
-    diagnostic; a file given by a relative and an absolute path prints one name.
-  - `refs`: each reference kind; a reference through an alias; a shared module
-    is reported once; an empty list (exit 0); `QUERY-AMBIGUOUS-NAME`; function
-    refs in a program with a check error still answer; field refs in it give
-    exit 1.
-  - `type-at` and the position form of `refs`: an expression, the name of a
-    field access, a name with its definition, a local binding, a `for` variable,
-    a pattern binding, an imported type printed with its alias, a position
-    between tokens and past the end (`QUERY-NO-EXPRESSION`). Built for
-    `type-at`: everything but the local binding, the `for` variable and the
-    pattern binding, which come with their definitions; also a file without
-    `main`, `--stdin`, a check error (exit 1) and non-ASCII text before the
-    position.
-  - `QUERY-USAGE` for each case of §39.7, with the `<arguments>` span.
-- No golden fixtures: nothing runs on the VM.
+One module per command, `tests/test_spec_<command>.py` (`test_spec_outline.py`
+and `test_spec_type_at.py` are built), running the binary with `--json` and
+asserting the exit code, the diagnostic code, and the JSON fields and spans,
+never message text. No golden fixtures: nothing runs on the VM. Cases the
+planned commands must cover:
 
-The docs to update: `docs/grammar/06b-builtins.md` (a Code queries
-paragraph) and `07-diagnostics.md` (`QUERY-`), AGENTS.md, the programming
-skill (`references/queries.md`, `references/diagnostics.md`),
-`site/content/getting-started.md` and the site page, and the development
-skill.
+- `symbol`: each name form of §39.4, `std/` forms included; a builtin carries
+  the `help` object; several matches; `QUERY-NOT-FOUND`; a directory with a
+  broken file answers with it in `skipped`; two roots that import the same
+  broken module are both skipped with the same diagnostic and a third root
+  answers; `refs total broken.agc` with only a broken root gives exit 1 and its
+  diagnostic; a file given by a relative and an absolute path prints one name.
+- `refs`: each reference kind; a reference through an alias; a shared module is
+  reported once; an empty list (exit 0); `QUERY-AMBIGUOUS-NAME`; function refs
+  in a program with a check error still answer; field refs in it give exit 1.
+- `type-at` and the position form of `refs`: still to cover are a local
+  binding, a `for` variable and a pattern binding, with their definitions.
+- The same alias for different modules in two files, and `QUERY-USAGE` for each
+  case of §39.7 with the `<arguments>` span.
+
+Docs to update with each command: the places AGENTS.md names for a language or
+builtin change, and `QUERY-` in `docs/grammar/07-diagnostics.md`.
 
 ### 39.14 Implementation (row 7.2b)
 
-- One PR per step (26a–26c), in the order of §39.10: `outline` (built),
-  `type-at` (the core built), `--partial`, `symbol`, `refs`.
-- Done when: an agent can list a file's declarations, find where a name
-  is defined, list every reference to a declaration across a program, and
-  get the checked type at a position, each in text and in JSON with
-  `version` 1; a broken root is `skipped`, not fatal; a command that needs
-  a check gives the first diagnostic and exit 1; the `QUERY-` codes and
-  exit codes of §39.7 hold; and the tests of §39.13 pass.
+Done when: an agent can list a file's declarations, find where a name is
+defined, list every reference to a declaration across a program, and get the
+checked type at a position, each in text and in JSON with `version` 1; a broken
+root is `skipped`, not fatal; a command that needs a check gives the first
+diagnostic and exit 1; the `QUERY-` codes and exit codes of §39.7 hold; and the
+tests of §39.13 pass.

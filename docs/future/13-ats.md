@@ -37,16 +37,16 @@ end
   (next rule).
 - **Keys and values:** keys are `Int` or `String`; any other key type is
   `CHECK-MAP-KEY-TYPE`, as for `Map` keys. `V` may not be `Void` or `Nil`, and
-  `data-type?` (`src/checker.rkt`) must hold for `V`. That walk is deep: it
-  looks through struct fields, list elements, enum payloads, `Map` values and
-  `Result`, and it rejects `Fn`, `Task`, every opaque handle (such as
-  `FileHandle`, `Process` or `Socket`) and any new type such as `Table`. `Fn` is
-  out because a block can capture a handle, which would get past this rule and
-  could build cycles. A nested `Result[Void]` is allowed, because `data-type?`
-  accepts it. The walk checks each declaration once by name, so recursive
-  generic enums cannot loop. The checker enforces this wherever a `Table[K, V]`
-  type is written or inferred, with `CHECK-TABLE-VALUE` (span on the type, or on
-  `Table.new()` when inferred).
+  `data-type?` must hold for `V`. That walk is deep: it looks through struct
+  fields, list elements, enum payloads, `Map` values and `Result`, and it
+  rejects `Fn`, `Task`, every opaque handle (such as `FileHandle`, `Process` or
+  `Socket`) and any new type such as `Table`. `Fn` is out because a block can
+  capture a handle, which would get past this rule and could build cycles. A
+  nested `Result[Void]` is allowed, because `data-type?` accepts it. The walk
+  checks each declaration once by name, so recursive generic enums cannot loop.
+  The checker enforces this wherever a `Table[K, V]` type is written or
+  inferred, with `CHECK-TABLE-VALUE` (span on the type, or on `Table.new()` when
+  inferred).
 - **Sharing values:** values are immutable, so storing one shares it safely.
   Each call is atomic, so a reader sees either the old value or the new one.
 - Functions (also methods, with the table first):
@@ -94,18 +94,16 @@ first-insertion order; a key deleted and then put again goes to the end, as in
   collector frees it when no value refers to it. Using it from another execution
   halts with `RUNTIME-TABLE-CONTEXT`. On the VM one run is one execution, so a
   handle cannot reach another one today; the check stays for safety and for any
-  later way to pass values between executions. Scenarios stay isolated because
-  each BDD scenario is its own VM run (`docs/bdd.md`, "How a run works"). There
-  is no owner process and no named global table, unlike ETS: a task reaches a
-  table only through a handle it was given.
-  - **BDD:** after phase 21 (`docs/bdd.md`, "How a run works") each scenario
-    runs in its own child VM, and the step program's `main` runs again in that
-    child, so registration and every step of one scenario are one execution. A
-    table created in `main` and captured by a step block is shared by the steps
-    of that scenario and starts fresh in the next one; nothing crosses
-    scenarios. A table cannot go in the scenario's JSON state (`BDD.set` takes
-    `Json`), so to pass a table between steps capture it from `main`; to pass
-    data, use the JSON state.
+  later way to pass values between executions. There is no owner process and no
+  named global table, unlike ETS: a task reaches a table only through a handle
+  it was given.
+  - **BDD:** each scenario runs in its own child VM (`docs/bdd.md`, "How a run
+    works"), and the step program's `main` runs again in that child, so a table
+    created in `main` and captured by a step block is shared by the steps of
+    that scenario and starts fresh in the next one; nothing crosses scenarios.
+    A table cannot go in the scenario's JSON state (`BDD.set` takes `Json`):
+    capture it from `main`. To pass data between steps, use the JSON state
+    (`BDD.set`).
 - **Ownership:** a table is not an OS resource, so the owner rule of
   [handle ownership][task-rules] does not
   apply to it. The task that creates a table does not own it, and ending that
@@ -128,9 +126,7 @@ first-insertion order; a key deleted and then put again goes to the end, as in
   and `add`: their results may be ignored, so it keeps `CHECK-UNUSED-VALUE`
   away. `put` and `delete` return `Void`; they carry it so `help --json` shows
   the effect.
-- **Backend:** the VM is the only backend, since the Racket evaluator was
-  deleted (roadmap row 7.2), so the table lands on the VM only. The contract is
-  only that each call is atomic.
+- **Backend:** VM only. The contract is only that each call is atomic.
   - Scheduler: a table call does not yield, so with one scheduler it is atomic.
     The VM runs one scheduler per logical core by default, so each table call
     needs a lock, or a persistent structure installed with compare-and-swap.
@@ -144,11 +140,10 @@ first-insertion order; a key deleted and then put again goes to the end, as in
 
 ### Implementation (row 17)
 
-- One PR on the VM: the `Table` builtins (`new`, `put`, `put_new`, `get`,
-  `has_key?`, `delete`, `add`, `size`, `keys`, `to_map`) with
-  `CHECK-TABLE-VALUE` and the reserved name, and the concurrency tests:
-  many tasks sharing one table, no leak under stress, a fresh table per
-  scenario. Later, each after a real program needs it: ordered tables,
+- One PR on the VM: the `Table` builtins with `CHECK-TABLE-VALUE` and the
+  reserved name, and the concurrency tests: many tasks sharing one table, no
+  leak under stress, a fresh table per scenario. Later, each after a real
+  program needs it: ordered tables,
   duplicate keys, a block-based `update`, a bounded cache as `std/`.
 - Starts when a real program needs it (7h is done); the order-9 server
   measurement is the natural point to check.

@@ -4,7 +4,7 @@ weight: 1
 description: Functions for List[T]. Each one is also a method on lists.
 ---
 
-Lists are immutable: every function gives a new list. Each is also a method (`List.size(xs)` is `xs.size`). `xs.length` is `xs.size`, `push` is `append`.
+Lists are immutable: every function gives a new list. `xs.length` is `xs.size`, `push` is `append`.
 
 ## Build and read
 
@@ -367,6 +367,6 @@ ok("pear")
 
 ## Costs and names
 
-These are O(n), less when they stop early. They are written in Agentica (`stdlib/prelude/`), so they count `--max-steps` per element, not counting your function: `find` 4, `sum` 4, `tally` about 10, `group_by` about 14, `min_by` about 20.
+These are O(n), less when they stop early. They are written in Agentica (`stdlib/prelude/`), so they count `--max-steps` per element, not counting your function.
 
 Each method has one name: `select`, `collect`, `detect`, `inject` and `reject` are `CHECK-UNKNOWN-METHOD`. Use `filter`, `map`, `find`, `reduce` and `xs.filter do |x| !cond end`.

@@ -1,126 +1,68 @@
 # Front-end recipes and gotchas
 
 Read before editing `compiler/`. The front end is Agentica code in `compiler/`,
-the only one (the Racket front end is gone; tag `bootstrap-racket` keeps it).
-Every language change is made there with a golden: syntax, checker rule,
-builtin row, builtin record or enum entry, registry line, std-only or reserved
-name, message text.
+the only one. Every language change is made there with a golden: syntax,
+checker rule, builtin row, builtin record or enum entry, registry line,
+std-only or reserved name, message text.
 
 ## The front end in Agentica
 
 ### Stages and files
 
-Each stage takes the previous stage's data and returns its typed outcome
-(data or one diagnostic). For example, `Lexer.lex` returns `Diag.Outcome`; other
-stages may use `Result` with a packed `Problem`. `try` stops at the first error.
+`compiler/` has one folder per context (`references/repo-map.md` lists the
+files); a new file goes in the folder of its context. An import inside a folder
+is the bare name (`"lexer"`); across folders it is relative
+(`"../syntax/types"`). Each stage returns its typed outcome (data or one
+diagnostic): `Lexer.lex` returns `Diag.Outcome`, other stages may use `Result`
+with a packed `Problem` (`references/stages.md`).
 
-`compiler/` has one folder per context: `app/`, `io/`, `syntax/`, `modules/`,
-`packages/`, `check/`, `catalog/`, `lower/`, `bytecode/`, `diagnostics/`,
-`docs/`, `query/`, `bdd/` and `embedded/`, with `front_end.agc` at the root. A new file
-goes in the folder of its context. Names below are bare; the folder is in each
-label (`references/repo-map.md` has every file). An import inside a folder is
-the bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
-
-- Data: `syntax/source.agc`, `syntax/token.agc`, `syntax/types.agc` (the
-  `Type` enum), `diagnostics/diagnostic.agc`, `diagnostics/problem.agc` (the
-  packed `Problem` every stage returns). `syntax/suggest.agc` holds the
-  did-you-mean help that the linker and the checker share.
-  `syntax/source_file.agc` holds the strict UTF-8 rules for a source file
-  (`LEX-INVALID-UTF8` at the first bad byte); `io/source_reader.agc` reads the
-  file with them, with no size limit. `syntax/text.agc` holds the
-  quoting and span printing.
-- Lexer (`syntax/`): `lexer.agc`, `unicode.agc` and the hand-edited
-  `unicode_table.agc` (graphic ranges, Unicode 17.0). Entries: `lex.agc`,
-  `lex_text.agc`.
-- Parser (`syntax/`): `ast.agc`, `parse_base.agc`, `parser.agc`; entries
-  `parse.agc`, `parse_text.agc`.
-- Linker (`modules/`): `workspace.agc` (the port),
-  `modules.agc` (loader; walks imports with an explicit stack in a fixed
-  order), `resolve_import.agc`, `import_path.agc` (`std/`, `pkg/`, relative),
-  `resolve.agc`, `rewrite.agc` (linked name of every name), `linker.agc`
-  (`Linker.link_file`, `Linker.program`), `declarations.agc`
-  (`CHECK-DECL-ORDER`), `import_help.agc` (the help of an unknown import
-  name), `link_env.agc` (`Env`
-  and `Settings`: `stdlib/` and environment, passed in, never read inside; a
-  new environment variable gets a `--name=V` flag in `link.agc`, `check.agc`,
-  `lower.agc` and `bytecode.agc`, and a value in the hermetic environment of
-  the tests), `link_failure.agc`.
-- Packages (`packages/`, §45): the manifest, the lock, the git source rules, the
-  cache and the package import, all pure. The rules are in
-  `docs/grammar/05b-modules.md`; the file list is in `repo-map.md`. They read
-  the disk only through the `Workspace` and the environment only through `Env`.
-- Catalog (`catalog/`): `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`,
-  the `Rule` enum), `builtins.agc` (lookups), `builtins_data.agc`
-  (hand-edited rows, records, enums, reserved names), `catalog.agc`,
-  `catalog_text.agc`.
-- Checker (`check/`): `check_register.agc`, `check_stmt.agc`, `check_expr.agc`,
-  `check_call.agc`, `check_method.agc`, `check_rules.agc`, `check_list.agc`,
-  `check_collections.agc`, `check_args.agc`, `check_help.agc`,
-  `check_names.agc`, `check_flow.agc`, `check_unused.agc`, `check_state.agc`,
-  `check_types.agc`, `check_tables.agc` (hand-edited method and help tables),
-  `checker.agc` (`Checker.check(linked)`).
-- Lowering (`lower/`): `ir.agc` (IR data), `lower_tables.agc` (`VM_BUILTINS`,
-  operator tables), `lower_state.agc`, `lower_expr.agc`, `lower_data.agc`,
-  `lower_stmt.agc`, `lower_scan.agc`, `lower_const.agc`, `lower_program.agc`,
-  `lowering.agc` (`Lowering.lower(linked, checked, catalog)`).
-- Writer (`bytecode/`): `bytecode_writer.agc` (`Writer.write`),
-  `bytecode_function.agc`, `bytecode_types.agc`, `bytecode_spans.agc`,
-  `bytecode_pool.agc`, `bytecode_bytes.agc`, `bytecode_tables.agc`
-  (`FORMAT_VERSION`, limits, `OPCODES`), `bytecode_failure.agc`, runner
-  `bytecode.agc`.
-- Docs (`docs/`, §32.5): `agentica doc`. It lexes and parses one module and
-  imports only `syntax/` and `diagnostics/`: `doc.agc` (`of_text`),
-  `doc_model.agc` (the exported items; the doc of an export is on its
-  `ExportDecl`), `signature.agc`, `doc_json.agc`, `doc_text.agc`. The command
-  is `app/cli_doc.agc`; the tests are `tests/test_spec_doc.py`.
+- `io/source_reader.agc` reads a source file with the strict UTF-8 rules of
+  `syntax/source_file.agc` (`LEX-INVALID-UTF8` at the first bad byte), with no
+  size limit.
+- `modules/link_env.agc` (`Env` and `Settings`): `stdlib/` and the environment
+  are passed in, never read inside. A new environment variable gets a `--name=V`
+  flag in `link.agc`, `check.agc`, `lower.agc` and `bytecode.agc`, and a value
+  in the hermetic environment of the tests.
+- Packages (`packages/`, §45): the manifest, the lock, the git source rules,
+  the cache and the package import, all pure. The rules are in
+  `docs/grammar/05b-modules.md`.
+- Docs (`docs/`, §32.5): `agentica doc` lexes and parses one module and imports
+  only `syntax/` and `diagnostics/`; the doc of an export is on its
+  `ExportDecl`. The command is `app/cli_doc.agc`; the tests are
+  `tests/test_spec_doc.py`.
 - Query (`query/`, §39): `agentica outline` parses one file and lists its
-  declarations, private ones too, from the items of `docs/doc_model.agc`:
-  `query_options.agc` (`--json`, `--ai`, `--stdin FILE` after the command,
-  `QUERY-USAGE`), `query_files.agc` (the one file, read through the `Workspace`,
-  and the name an answer gives it), `outline.agc`, `outline_json.agc`,
-  `outline_text.agc`. `agentica type-at` links and checks the file
+  declarations, private ones too, from the items of
+  `compiler/docs/doc_model.agc`. `agentica type-at` links and checks the file
   (`Pipeline.query_file`, `Checker.check_query`: no `CHECK-MAIN`) and answers
-  for a position: `query_position.agc` (`FILE:LINE:COL`, the offset of a
-  position), `at.agc` (the innermost typed expression, a worklist over
-  `check/const_walk.agc`), `definitions.agc`, `type_at.agc`
-  (`QUERY-NO-EXPRESSION`; the type through `Types.to_text_as` and
-  `LinkedModule.aliases`), `type_at_json.agc`, `type_at_text.agc`. The commands
-  are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
+  for a position: `at.agc` finds the innermost typed expression (a worklist over
+  `check/const_walk.agc`) and `type_at.agc` prints the type through
+  `Types.to_text_as` and `LinkedModule.aliases`. The commands are
+  `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
   `tests/test_spec_type_at.py`.
 
 ### Pure core, one port
 
-Every folder of `compiler/` except `io/`, `app/`, `bdd/` and `embedded/`
-(`syntax`, `modules`, `packages`, `check`, `catalog`, `lower`, `bytecode`,
-`diagnostics`, `docs`, `query`)
-is pure: it never calls `File`, `Dir`, `Path` (only `Path.join`, which is
-string work), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`,
-`Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or a bare `puts`,
-and it never imports `io/`, `app/`, `bdd/`, `embedded/` or a `std/` module that
-is not on `PURE_STD_MODULES` in the test (a new std module is forbidden by
-default).
-When a stage needs the machine it calls a function of
-`Workspace` (`modules/workspace.agc`), a record of function values that
-travels in `Env.Settings.workspace`: `read_text`, `file_exists`,
-`directory_exists`, `real_path`, `resolve_path`, `std_source`, `list_folder`
-and `read_bytes` (the last two serve the package hash). The
-environment variables and the host (`windows`) are data in `Env.Env`.
-`io/host.agc` builds the real `Workspace` and `process_env`; a test can build
-a `Workspace` over an in-memory tree. `app/` (the command line), `bdd/` (the
-`agentica test` driver, which runs processes) and `io/` are the only folders
-that do I/O; `embedded/` holds the two programs of `agentica test` that the
-binary carries. The entry programs (`syntax/lex.agc`, `syntax/parse.agc`,
-`modules/link.agc`, `check/check.agc`, `lower/lower.agc`,
-`bytecode/bytecode.agc`, `catalog/catalog.agc`) may call `System.args`, print
-with `puts` and import the `io/` adapters (`bytecode.agc` writes its output
-through `SaveFile`). `tests/test_style_core_purity.py` runs the real lexer
-over the stage folders and fails on a call (`Module.name` as tokens, so
-strings, comments and builtin data rows do not count) or an import; a new
-entry program needs a line in its `ENTRY_PROGRAMS`. A new need of the machine
-is a new `Workspace` field, built in `io/host.agc`. The linker (`modules/`,
-`packages/`) imports no later stage. `catalog/` imports only `syntax/` and
-itself, so every later stage reads it; the code that reads and checks the
-prelude files is `check/prelude_files.agc`.
+The folders other than `io/`, `app/`, `bdd/` and `embedded/` are pure (the
+AGENTS.md rule). They never import `io/`, `app/`, `bdd/`, `embedded/` or a
+`std/` module that is not on `PURE_STD_MODULES` in the test (a new std module
+is forbidden by default). When a stage needs the machine it calls a function
+of `Workspace` (`modules/workspace.agc`), a record of function values that
+travels in `Env.Settings.workspace`; the last two (`list_folder`,
+`read_bytes`) serve the package hash. The environment variables and the host
+(`windows`) are data in `Env.Env`. `io/host.agc` builds the real `Workspace`
+and `process_env`; a test can build a `Workspace` over an in-memory tree.
+`embedded/` holds the two programs of `agentica test` that the binary carries.
+The entry programs (`syntax/lex.agc`, `syntax/parse.agc`, `modules/link.agc`,
+`check/check.agc`, `lower/lower.agc`, `bytecode/bytecode.agc`,
+`catalog/catalog.agc`) may call `System.args`, print with `puts` and import the
+`io/` adapters (`bytecode.agc` writes its output through `SaveFile`).
+`tests/test_style_core_purity.py` runs the real lexer over the stage folders
+and fails on a call (`Module.name` as tokens, so strings, comments and builtin
+data rows do not count) or an import; a new entry program needs a line in its
+`ENTRY_PROGRAMS`. A new need of the machine is a new `Workspace` field, built
+in `io/host.agc`. The linker (`modules/`, `packages/`) imports no later stage.
+`catalog/` imports only `syntax/` and itself, so every later stage reads it;
+the code that reads and checks the prelude files is `check/prelude_files.agc`.
 
 Order inside a `compiler/` file: imports and module doc, structs and enums,
 exported functions, private functions. Code style follows the speed rules:
@@ -151,7 +93,7 @@ fixture folder) and `fixture.links` (`LINK TARGET`, made as symlinks in a copy).
 Text-form notes:
 
 - Lexer: `kind start-end "lexeme" value`; spans `offset:line:column`. Token
-  kinds are Strings and must match the kind list in `references/stages.md`.
+  kinds are Strings (`references/stages.md`).
 - Parser: `role: kind #id span attrs`, two spaces per level. Node ids are dense
   and post-order (a child has a smaller id than its parent; `program` is last).
   `Parser.parse(tokens, first_id)` numbers from `first_id`;
@@ -181,8 +123,8 @@ Text-form notes:
   `column_base` whenever `line_start` changes. Calls cost more than assignments
   on the VM: measure before restyling hot functions. Tail-recursive
   `state.with(...)` was measured 3-6% slower.
-- Depth limits: parser `PARSE-TOO-DEEP` at 1,000 levels; checker
-  `CHECK-TOO-DEEP` at 1,000; lowering uses at most 3 VM frames per level; the
+- Depth limits: the parser and the checker stop at 1,000 levels
+  (`references/stages.md`); lowering uses at most 3 VM frames per level; the
   writer recurses only on JSON field types (1 frame per level, at most 1,024).
   The VM call limit is 10,000 frames. The linker's rewrite is about one VM call
   per level.
@@ -203,10 +145,7 @@ Text-form notes:
   and `lower_argument` use the same functions, so they agree. Compiler code must
   not use defaults until `bootstrap/stage0.agcb` can compile them (the two-step
   refresh in `references/ci.md`).
-- Import forms: `import Alias from "path"`, `import {a, B as C} from "path"`.
-  `ImportDecl` has `alias` and `names`; the linker keeps a `named` table
-  (`bind_names`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`). The path-first
-  form is `PARSE-UNEXPECTED-TOKEN`.
+- Import forms and the linker's `named` table: `references/stages.md` (Linker).
 - Type aliases: `Ast.Decl.TypeAlias`, with the target `TypeRef` and the
   `type_parameters` of a generic one. The parser reads contextual `type` only
   at top level. `check_register.agc` registers the aliases before signatures;
@@ -295,7 +234,7 @@ branch's on the same binary:
   cmp /tmp/old.out /tmp/new.out
   ```
 
-  The repo's 1,055 `.agc` files take about 6 s per run. Add generated inputs
+  The repo's `.agc` files take a few seconds per run. Add generated inputs
   (CRLF, bare CR, non-ASCII, bad escapes, unclosed brackets, interpolation) and
   every prefix of one construct-rich text, which covers each end-of-text
   position. Finish with `make fixed-point` and `make goldens`, which must leave
@@ -306,9 +245,9 @@ branch's on the same binary:
 `poetry run python tools/refreeze.py` reruns pytest modules
 `tests.test_frontend_<stage>` with `AGENTICA_REFREEZE=1`: a golden mismatch
 rewrites the golden and logs the change. Run it in the Poetry test environment,
-which provides pytest. Flags: `--fast-only` (skip the slow tier), `--stage lower` or
-`--stage lexer,parser`, `--jobs N`. It prints what changed: manifest entries
-(key, sizes, hash prefixes) or a unified diff for a text golden. Other
+which provides pytest. Flags: `--fast-only` (skip the slow tier), `--stage
+lower` or `--stage lexer,parser`, `--jobs N`. It prints what changed: manifest
+entries (key, sizes, hash prefixes) or a unified diff for a text golden. Other
 assertions still fail. It freezes whatever the stage prints, so read `git diff`
 and judge each change. A manifest keeps only hashes; to see an output, run the
 stage by hand.
@@ -325,22 +264,20 @@ stage by hand.
   `frozen/check/codes.expected` (the `CHECK-` codes) and
   `frozen/check/builtin-rules.expected`.
 
-### Frozen comparisons (step 8c)
+### Frozen comparisons
 
 The slow tiers compare the Agentica stages with outputs frozen from the old
-Racket stages (removed; the tag keeps them). `tests/test_frontend_<stage>.py`
-for `lexer`, `parser`, `modules`, `check`, `lower`, `catalog`, `bytecode` run
-the stage with the product CLI and compare with
-`tests/fixtures/frontend/frozen/`.
-Fast cases are the ones that were fast before (bytes of examples, id ranges,
-invalid UTF-8, limit scenarios, id numbering); the rest are `@slow`.
-`tests/frontend_support.py` is the helper; `tests/frontend_cases.py` holds
-shared inputs built from formulas.
+Racket stages (removed; the tag `bootstrap-racket` keeps them).
+`tests/test_frontend_<stage>.py` for `lexer`, `parser`, `modules`, `check`,
+`lower`, `catalog`, `bytecode` run the stage with the product CLI and compare
+with `tests/fixtures/frontend/frozen/`. The fast cases are the bytes of
+examples, id ranges, invalid UTF-8, limit scenarios and id numbering; the rest
+are `@slow`. `tests/frontend_support.py` is the helper;
+`tests/frontend_cases.py` holds shared inputs built from formulas.
 
 - `frozen/corpus/*.json`: a fixed snapshot of inputs (examples, stdlib,
-  fixtures,
-  `compiler/`, old checker programs, code blocks of the site). It does not
-  follow those folders: a new `stdlib/` file is not in it.
+  fixtures, `compiler/`, old checker programs, code blocks of the site). It does
+  not follow those folders: a new `stdlib/` file is not in it.
 - Seeded inputs are checked in (`lexer/generated.json`, `parser/generated.json`,
   `check/mutated.json`, `modules/mutated.json`). Formula inputs (nesting shapes,
   chains of 3,000 files, files over 1 MiB, programs of 300 and 1,000 functions)
@@ -350,21 +287,16 @@ shared inputs built from formulas.
   size, the input's SHA-256 and the key. Small outputs are text (`*.expected`).
   `.agcb` files hash without the length and the version text, so a release
   does not change the freeze.
-- Other frozen lists: `frozen/lexer/graphic-ranges.expected`,
-  `frozen/modules/stdlib-registry.expected` (a new `stdlib/` file is one line),
-  `frozen/check/tables.expected` (copy of `check_tables.agc`),
-  `frozen/check/codes.expected`, `frozen/check/builtin-rules.expected`,
-  `frozen/lower/vm-builtins.expected`, `frozen/catalog/rules.expected`,
-  `frozen/bytecode/opcodes.expected`.
-- Phase 2 (goldens next to fixtures) runs in the same modules: every input has
-  a golden and no golden is left over.
-- Accepted losses: `builtins_data.agc` is not compared with a fresh generation
-  (hand-edited now, 106 KB). Section and opcode coverage read the lowering
-  goldens, which cannot tell the `types` and `decodable` sections apart.
+- Other frozen lists (`*.expected`): `frozen/modules/stdlib-registry.expected`
+  (a new `stdlib/` file is one line), `frozen/check/tables.expected` (copy of
+  `check_tables.agc`) and the others under `frozen/` (`ls`).
+- Every input has a golden next to its fixture and no golden is left over.
+- `builtins_data.agc` is not compared with a fresh generation (hand-edited).
+  Section and opcode coverage read the lowering goldens, which cannot tell the
+  `types` and `decodable` sections apart.
 - Fixtures read live by Python are frozen with derived results:
-  `modules/<name>/` (hashes in `modules/ids.sha256`) and
-  `limits/limits.agc` (imports
-  live `compiler/`; output `bytecode/limits.expected`),
+  `modules/<name>/` (hashes in `modules/ids.sha256`), `limits/limits.agc`
+  (imports live `compiler/`; output `bytecode/limits.expected`),
   `parser/synthetic.input` and `hello.input`, and `bytecode/*.agc`
   (`bytecode/fast.sha256`). Editing one, or a `compiler/` file imported by
   `limits.agc`, changes a frozen hash: refreeze and inspect the diff.
@@ -411,8 +343,8 @@ a blank line and a `#` line both give one `NL`. Stray text after `end` is
 
 - A failing test: read the subtest name (a spec case prints its program) and
   the code the CLI gave.
-- Smoke test exits 1: the CLI printed `file:line:column error[CODE]` with a
-  caret excerpt on stderr. That is a stage diagnostic, not a crash.
+- A CLI exit 1 with `file:line:column error[CODE]` and a caret excerpt on
+  stderr is a stage diagnostic, not a crash.
 - `*-INTERNAL` or a `RUNTIME-` error with a trace in `compiler/` means a stage
   assumed something false or indexed out of range. Find the token or index and
   turn it into a diagnostic; the roadmap requires Agentica diagnostics, never
@@ -420,23 +352,17 @@ a blank line and a `#` line both give one `NL`. Stray text after `end` is
 - A stage returns a diagnostic it should not: check the first-error rule and
   that the caller passes the failure on.
 
-## Comments
+## Comments and style
 
-- `compiler/**/*.agc`: a `#` comment where the code is complex or a rule is easy
-  to break (name the rule). Each `def`, `struct` or `enum` you add or touch gets
-  a `##` block, as in `stdlib/queue.agc`. The file's first `##` block, followed
-  by a blank line, is its module doc.
-## Code style
+Style and comments follow `.agents/skills/agentica-code-guidelines/`. Each
+`def`, `struct` or `enum` you add or touch in `compiler/**/*.agc` gets a `##`
+block, as in `stdlib/queue.agc`; the first `##` block, followed by a blank
+line, is the module doc. Lines are at most 119 characters, comments included
+(`[style]` of `compiler/agentica.toml`, checked by
+`tests/test_style_line_width.py`). The pipe-chain rule is not linted; reviews
+check it.
 
-- Lines are at most 119 characters, comments included (`compiler/agentica.toml`
-  `[style]`, checked by `tests/test_style_line_width.py`). Break a call or list
-  one item per line with a trailing comma; wrap a long expression in
-  parentheses.
-- Build strings with interpolation, not `+` or `.to_s`.
-- Several steps on one value are a pipe chain in parentheses, one `|> f(args)`
-  per line, not `x = f(x, args)` repeated three or more times.
-
-## The command line in Agentica (step 8a, the product since 8d-2)
+## The command line in Agentica
 
 `Cli.run(settings, words, hand_off) -> Int` reads the options
 (`cli_options.agc`, first error wins; `--version` and `-h` answer at once) and
@@ -449,10 +375,8 @@ stdout, stderr) and `cli.agc` writes it. Diagnostics print as plain text
 child or temporary file. `agentica run` is answered in C (`vm/agentica.c`) when
 it is the first word; `cli.agc` answers a later `run` with a usage error.
 `test` runs the BDD driver in the same process and starts the runner as
-`settings.self_path run ...`; without `--self` it exits 2.
-`tests/test_cli_forms.py`
-pins the binary's command line against `tests/fixtures/cli/forms.json`.
-`cli_text.agc` keeps the help texts as data.
+`settings.self_path run ...`; without `--self` it exits 2. `cli_text.agc` keeps
+the help texts as data.
 
 To run a `compiler/` change without the build chain:
 `dist/agentica run --allow-run -- build/stage/stage2.agcb --version V --stdlib

@@ -1,14 +1,13 @@
 # TCP, TLS and HTTP
 
-Networking uses the existing expression syntax and lightweight tasks.
 `TCP`, `TLS`, `Socket`, `Listener`, `HttpClient`, `Header`, `HttpResponse`
 and `HttpClientOptions` are reserved. Handles are opaque: no constructor,
 equality, fields or JSON encoding; inspect prints their type in angle
 brackets. A handle belongs to the task that opened it and closes when that
 task ends, or when the run ends (see `tasks.md`). A server loop gives each
 accepted connection to its own task with `Task.spawn_owning(&serve, socket)`,
-so a crash in that task closes only that connection; plain `Task.spawn` leaves
-the socket with the loop task. Network access needs no CLI permission flag.
+so a crash in that task closes only that connection. Network access needs no
+CLI permission flag.
 
 ```text
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
@@ -63,9 +62,8 @@ line over 1 MiB, which also closes the socket.
 
 HTTP is a library written in Agentica. Import it with
 `import HTTP from "std/http"`; an `HTTP.` call without the import is
-`CHECK-UNKNOWN-NAME` with a help that shows the import. It has a client
-(this section) and a server (the next one). Both work the same on Linux,
-macOS and Windows, over HTTP and HTTPS.
+`CHECK-UNKNOWN-NAME` with a help that shows the import. The client and the
+server work the same on Linux, macOS and Windows, over HTTP and HTTPS.
 
 ```text
 HTTP.client_options() -> HttpClientOptions
@@ -187,15 +185,13 @@ task that called `HTTP.listen`: when that task ends (it returns, crashes or is
 cancelled), the server is closed and its port is free, so call `listen` in the
 task that keeps the server, such as `main`.
 
-Earlier releases' `HTTP` API is gone, and the checker's help names the
-replacement for each name. `HTTP.client()` is
-`HTTP.client(HTTP.client_options())`; `HTTP.text(response.body, t)` is
-`response.body`; `read`, `trailers`, `close_body`, and `request_stream` no
-longer exist. A handler takes an `HttpRequest` and returns
-`ok(HttpResponse(...))` instead of calling `HTTP.respond(writer, ...)`.
-`HTTP.begin`, `write`, `write_bytes`, and `finish` are gone.
-`HttpServerOptions.header_timeout_ms` is now `request_timeout_ms`. The
-`Request`, `Response`, `HttpBody`, and `HttpWriter` types are gone. Binary
-bodies have no replacement yet: a body that is not UTF-8 is an error.
-`max_body_bytes` defaults to 1 MiB (it was 64 MiB), and `timeout_ms` covers the
-whole response, not only the headers.
+These names no longer exist in `std/http`: `HTTP.text`, `HTTP.read`,
+`HTTP.trailers`, `HTTP.close_body`, `HTTP.request_stream`, `HTTP.respond`,
+`HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish`, and the types
+`HttpBody`, `HttpWriter`, `Request` and `Response`. The checker's help for
+`respond`, `begin`, `write`, `write_bytes` and `finish` says to return
+`ok(HttpResponse(...))` from the handler. `HTTP.client()` is
+`HTTP.client(HTTP.client_options())`, `HTTP.text(response.body, t)` is
+`response.body`, and `header_timeout_ms` is now `request_timeout_ms`. The
+default `max_body_bytes` is 1 MiB; a client or server that needs more must set
+it.

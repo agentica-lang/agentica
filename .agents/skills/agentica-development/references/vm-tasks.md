@@ -34,22 +34,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/runq.c`
   - **Owns:** The global run queue: a FIFO through `agc_task.next` and one
-    mutex, in GC memory (`agc_runtime.runq`). `agc_runq_push`, `agc_runq_pop`,
-    `agc_runq_remove`, and for an idle scheduler `agc_runq_wait` (blocks on a
-    condvar until a task is queued, NULL after `agc_runq_end` or, on a solo
-    queue, when empty). The queue is solo (no lock, never waits) until
-    `agc_runq_share`, which runs before a second thread touches it. A nudge
-    (`agc_runq_nudge`, `agc_runq_nudged`, `agc_runq_take_nudge`) is work for a
-    scheduler that is not a task: it ends one `agc_runq_wait` with NULL, and
-    the scheduler then calls `agc_io_service` (`vm/loop.c`), which ends the
-    detached jobs that the I/O role handed over. The queue counts its idle
-    schedulers for the stall check of the I/O thread (`agc_runq_quiet`,
-    `agc_runq_still_quiet`, `agc_runq_on_idle`). Before it waits, an idle
-    scheduler spins (`agc_runq_spin`, set up by `agc_runq_spin_setup` at
-    N > 1), and a push skips the condvar signal while one spins. A task that a
-    scheduler thread wakes goes to its runnext slot (`agc_vm.runnext`, taken
-    first by `agc_task_next`, `RUNNEXT_LIMIT` in `vm/task.c`; §16.9, "Wakes
-    between schedulers").
+    mutex, in GC memory (`agc_runtime.runq`). An idle scheduler blocks in
+    `agc_runq_wait` on a condvar until a task is queued (NULL after
+    `agc_runq_end` or, on a solo queue, when empty). The queue is solo (no lock,
+    never waits) until `agc_runq_share`, which runs before a second thread
+    touches it. A nudge (`agc_runq_nudge`) is work for a scheduler that is not
+    a task: it ends one `agc_runq_wait` with NULL, and the scheduler then calls
+    `agc_io_service` (`vm/loop.c`), which ends the detached jobs that the I/O
+    role handed over. The queue counts its idle schedulers for the stall check
+    of the I/O thread (`agc_runq_quiet`). Before it waits, an idle scheduler
+    spins (`agc_runq_spin`, set up at N > 1), and a push skips the condvar
+    signal while one spins. A task that a scheduler thread wakes goes to its
+    runnext slot (`agc_vm.runnext`, taken first by `agc_task_next`,
+    `RUNNEXT_LIMIT` in `vm/task.c`; §16.9, "Wakes between schedulers").
 
 - **Path:** `vm/sync.c`
   - **Owns:** The locks of the shared state. `agc_lock` (a mutex that is solo
@@ -63,19 +60,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     table says `true` or `false`), a stepper step, the halves of a job whose
     kind says `locked`, and each end of a task; never hold it across a park or
     a turn. Order: sync, a stream's lock, then the inbox's and the run queue's.
-    Held checks: `agc_sync_assert` fails the run when a shared VM reaches
-    one of the checked mutators without the lock (the list is in
+    Held checks: `agc_sync_assert` fails the run when a shared VM reaches one of
+    the checked mutators without the lock (the list is in
     `docs/vm/16-architecture.md` §16.9: the task tree, a channel's waiter
     queues, the logger table, a handle's waiters, holder and `next_owner`,
-    stdin's waiters), and `agc_task_next` fails if a turn ended with it held. `agc_share` turns all of it on;
-    `AGENTICA_VM_TEST_SHARED=1` does it for a whole run on one scheduler (test
-    only): `make test-shared` runs the binary modules that way (CI runs it) and
-    `tests/test_vm_shared.py` has the programs for the rarer paths. A new
-    builtin that touches shared state must set `shared` to true in its row;
-    `vm/tests/sync_test.c` checks that every row of the task, `Task.map`,
-    channel, logger, process, duplex, TCP and HTTP tables is marked, that no
-    row of the String, number and JSON tables is, and chosen rows of the core
-    and `File` tables.
+    stdin's waiters), and `agc_task_next` fails if a turn ended with it held.
+    `agc_share` turns all of it on; `AGENTICA_VM_TEST_SHARED=1` does it for a
+    whole run on one scheduler (test only): `make test-shared` runs the binary
+    modules that way (CI runs it) and `tests/test_vm_shared.py` has the programs
+    for the rarer paths. A new builtin that touches shared state must set
+    `shared` to true in its row; `vm/tests/sync_test.c` checks that every row of
+    the task, `Task.map`, channel, logger, process, duplex, TCP and HTTP tables
+    is marked, that no row of the String, number and JSON tables is, and chosen
+    rows of the core and `File` tables.
 
 - **Path:** `vm/inbox.c`
   - **Owns:** The inbox of the I/O thread (`agc_inbox_open`, `agc_inbox_post`,
@@ -154,13 +151,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         waits, and a task that cancels itself or an ancestor is in the walk and
         stops after the call (`yield`). Fixtures `task-cancel-*` run at N = 1
         and N = 4; their output does not depend on timing (channels order
-        the steps; a `Task.sleep(0)` before a cancel changes nothing printed)
-      - `vm/tests/task_cancel_test.c` runs hand-built bytecode with test
-        builtins on the real scheduler
-      - 17c adds the timed await cases there: a waiter cancelled while it waits
-        leaves the target's waiters and closes its timer, and the timer firing
-        first or the target ending first gives `TimedOut` or `Done` with the
-        other side cleaned up)
+        the steps; a `Task.sleep(0)` before a cancel changes nothing printed))
     - task crashes (
       - phase 24, `docs/vm/10-io-scheduler.md` §10.2.1, "Crashes": one `setjmp`
         per turn in `run_turn`, `fatal` picks what still ends the run (`main`,
@@ -201,20 +192,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         - `Task.await` halts with `RUNTIME-TASK-CRASHED` or
           `RUNTIME-TASK-CANCELLED`, `Task.await_result`, picked by lowering for
           a `Result`, returns the error
-        - each has a second arity with a timeout (17c): `await_timeout` shares
+        - each has a second arity with a timeout (17c; the flow is in
+          `docs/vm/10-io-scheduler.md` §10.2.1): `await_timeout` shares
           `outcome` with `await_task`, rejects `timeout <= 0` with
-          `RUNTIME-INVALID-DURATION` at `span + 2`, returns at once with
-          `Await.Done` for a task that has ended (`await_done`, the shared value
-          of `await_timed_out` for the other variant), and otherwise stores
-          `await_deadline` in the caller on the first call, runs no cycle check
+          `RUNTIME-INVALID-DURATION` at `span + 2`, returns `Await.Done` at once
+          for a task that has ended (`await_done`, the shared value of
+          `await_timed_out` for the other variant), and runs no cycle check
           (`awaits_caller` stops at a task whose `await_deadline` is set, so a
-          timed waiter is not an edge of the plain walk), joins the target's
-          waiters and arms its own timer (`agc_task_park_until`) as it parks
-          with retry
-        - the first wake wins: the target's end (`resume` disarms the timer),
-          and a fired timer takes the caller off the target's waiters
-          (`leave_target`), clears the deadline and returns `Await.TimedOut`
-          without touching the target)
+          timed waiter is not an edge of the plain walk); a fired timer takes
+          the caller off the target's waiters (`leave_target`))
       - sleep as a timer of the task (`agc_task_park_until`), `sleep(0)` and
         fuzz sleeps yield, `pending_count` from `pending_tasks`, tasks made
         minus tasks done minus `main`: it counts ready, running and parked
@@ -289,8 +275,6 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Arguments are checked before any wait state changes
   - `Channel.new` and the timeouts fail at their argument (`span + 1 + index`;
     the receiver is argument 0).
-  - No new opcode: the builtins are appended to the table, and `src/lower.rkt`
-    lists their names.
 - `vm/testing.c`
   - the `Test` builtins (`agc_test_builtins`, as built in
     `docs/roadmap/25-unit-tests.md` 25a; the rules are in the grammar's
@@ -330,29 +314,21 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   does the same: `item_ended` (`vm/task_map.c`) puts its end hook back while the
   task is `closing`. A test of a task whose handle is still closing must allow
   for that wait.
-- Tasks: `make vm-task-map` runs `tests/test_vm_task_map.py` alone, the timing
-  cases of `Task.map` (the bound on the items in flight, timeouts, a grandchild,
-  a detached read, HTTP against a `ThreadingHTTPServer`,
-  `RUNTIME-TASK-CANCELLED`); CI runs it right after `make vm-latency`. Its
-  bounds are one-sided or generous (`scaled()`), and it skips when
-  `AGENTICA_VM_BINARY` names another binary. The golden fixtures of `Task.map`
-  (`task-map-*`) never race a timeout against work: they record step counts and
-  run the `--max-steps` sweep.
-- Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept
-  out of `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it
-right
+- `Task.map` goldens (`task-map-*`) never race a timeout against work: they
+  record step counts and run the `--max-steps` sweep. Its timing cases run
+  alone with `make vm-task-map` (`references/vm-tests.md`).
+- Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept out of
+  `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it right
   after `make test`). On one scheduler (`AGENTICA_SCHEDULERS=1`), a sleeping
   task and a stdin reader must wake within 250 ms next to CPU, sort and concat
-  tasks, and must not with
-  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only switch that leaves
-  stdout and stderr on the blocking `FILE` fallback, so
+  tasks, and must not with `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only
+  switch that leaves stdout and stderr on the blocking `FILE` fallback, so
   `tests/test_vm_stdout.py` can test that path on Linux) and
-  `AGENTICA_VM_TEST_NO_TURN_COST=1` (a test-only switch that skips turn
-  costs, `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a
-  `FileHandle` in a loop must let `main` close it, and the run must end.
-  Every read from the VM has a 60-second timeout. The test skips when
-  `AGENTICA_VM_BINARY` names another binary. The `task-*` fixtures keep tasks
-  from running side by side where the step-limit span matters, since with
-  several runnable tasks the span depends on the interleaving. Builtins get
-  `vm->task->regs + base`; `Task.spawn` builds the child's frame with
-  `agc_task_call` on the child, never on the caller.
+  `AGENTICA_VM_TEST_NO_TURN_COST=1` (a test-only switch that skips turn costs,
+  `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a `FileHandle` in a loop
+  must let `main` close it, and the run must end. Every read from the VM has a
+  60-second timeout. The test skips when `AGENTICA_VM_BINARY` names another
+  binary. The `task-*` fixtures keep tasks from running side by side where the
+  step-limit span matters, since with several runnable tasks the span depends on
+  the interleaving. Builtins get `vm->task->regs + base`; `Task.spawn` builds
+  the child's frame with `agc_task_call` on the child, never on the caller.

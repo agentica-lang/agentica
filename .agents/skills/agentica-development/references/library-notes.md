@@ -19,9 +19,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   stderr are blocking `FILE` writes, and a write waits for its reader without a
   timeout.
 
-## JSON (phase 5f)
+## JSON
 
-- Typed decoding (5f2) uses a type-expression AST node accepted only in JSON
+- Typed decoding uses a type-expression AST node accepted only in JSON
   type argument positions. JSON.decode returns located-path Result errors for
   bad data, validates signed Int/finite Float bounds, and ignores extra fields.
   Recursive type validation visits each struct once. Decoded map keys are
@@ -31,9 +31,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   non-finite diagnostics. Builtin record declarations participate in decoding
   and schemas.
 
-- `Json` is opaque, not primitive for equality. Reserve `Json` and `JSON`; all
-  calls use existing parser/AST forms. The catalog has nine JSON functions;
-  `json-encode` is the only new generic checker rule.
+- `Json` is opaque, not primitive for equality. `Json` and `JSON` are reserved
+  names.
 - Recursively check encoding eligibility, including declared struct fields and
   empty containers. A seen-struct path prevents infinite recursion without
   skipping other fields. Results and Int-keyed maps are CHECK-NOT-ENCODABLE.
@@ -48,12 +47,12 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 ## Lightweight I/O tasks
 
 - Task.spawn takes Fn[A, R] and one argument and returns Task[R] and moves no
-  handle; Task.spawn_owning (24b) takes a handle type as the argument (the
-  handle types of the catalog, `compiler/catalog/builtins_data.agc`, else
+  handle; Task.spawn_owning takes a handle type as the argument (the handle
+  types of the catalog, `compiler/catalog/builtins_data.agc`, else
   `CHECK-NOT-A-HANDLE`; keep it in step with the tag list of `agc_owned_of` in
   `vm/loop.c`, so a new handle kind goes into both) and gives it to the new task
-  (`RUNTIME-HANDLE-NOT-OWNED` at run time); a `Channel[T]` is accepted too (24c,
-  a `Channel` type in the checker): a channel is not in `agc_owned_of`, it gets
+  (`RUNTIME-HANDLE-NOT-OWNED` at run time); a `Channel[T]` is accepted too (a
+  `Channel` type in the checker): a channel is not in `agc_owned_of`, it gets
   its registry entry (no native object, `close` is the channel's own shut) from
   `agc_channel_claim` at the first hand-off, so an unowned channel can be handed
   over by any task and `Channel.new` stays free; a task that ends closes the
@@ -62,27 +61,25 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   finished, so the data is on disk; a FIFO or pipe flush is not counted; await
   returns the cached R, including false/nil/error Results. Sleep takes
   nonnegative milliseconds, zero yields and negative values halt with
-  RUNTIME-INVALID-DURATION. Reserve Task, Await and Channel; use Todo for the
-  demonstration struct. `Task.await(task, timeout_ms)` (17c) is a second arity
+  RUNTIME-INVALID-DURATION. `Task`, `Await` and `Channel` are reserved names.
+  `Task.await(task, timeout_ms)` is a second arity
   of the same catalog row in `compiler/catalog/builtins_data.agc` (rule
   `TaskAwaitTimeout` in the checker: the task is a `Task`, the timeout an `Int`,
   the result `Await[R]`) and returns the builtin enum `Await[T]` (`Done(T)`,
   `TimedOut`); see the next bullet for how a builtin enum is wired. No CPU
-  parallelism. Channels (17b) are VM-only builtins in `vm/channel.c`; see
+  parallelism. Channels are VM-only builtins in `vm/channel.c`; see
   `docs/vm/10-io-scheduler.md` §10.2.2.
 - Entrypoint return cancels pending work and closes the run's resources. A
   diagnostic in `main`, RUNTIME-STEP-LIMIT, RUNTIME-INTERNAL or System.exit ends
-  the run; any other diagnostic in a task is a crash that ends only that task
-  (phase 24), and an unobserved crash makes the run exit 1 when `main`
-  returns. Tasks inherit ports and arguments; cross-task stream ordering is
-  unspecified.
+  the run; any other diagnostic in a task is a crash that ends only that
+  task, and an unobserved crash makes the run exit 1 when `main` returns. Tasks
+  inherit ports and arguments; cross-task stream ordering is unspecified.
 - `std/bdd` fails a step with RUNTIME-BDD-PENDING-TASKS when
   `Task.pending_count()` is above zero after its handler, then with
   RUNTIME-TASK-CRASHED when `Task.unobserved_crash()` is `ok`. The runner skips
   stderr lines with `"task": true` when it reads a child's last diagnostic.
-- The `task-*` goldens own task behavior. tests/test_bdd_integration.py verifies
-  concurrent streams of a program under test and cleanup.
-  examples/concurrency.agc is a hermetic CI smoke check.
+- The `task-*` goldens own task behavior; `tests/test_bdd_integration.py`
+  verifies concurrent streams of a program under test and cleanup.
 
 ## TCP, TLS and HTTP
 
@@ -98,8 +95,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   for builtin structs, and picks `Task.await_result` for the timed form when the
   payload is a Result; the VM finds the variants by name
   (`agc_builtin_variant`), and `vm/text.c` prints `Await.Done()` for a Void
-  payload. Handles cannot be constructed, compared or JSON encoded. Grammar and
-  the programming reference describe the same public API.
+  payload. Handles cannot be constructed, compared or JSON encoded.
 - TCP and TLS are C builtins (`vm/tcp.c`, `vm/tls_openssl.c`); HTTP is
   `std/http` in Agentica over the std-only `HttpWire` builtins (`vm/http_*.c`),
   imported as `HTTP`; the server (20c) runs each connection as a task in the
@@ -111,8 +107,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## Logging
 
-- `std/logger` (`stdlib/logger.agc`, 14c) is Agentica over the std-only
-  `LogRegistry` builtins (`vm/logger.c`, ten functions, imported as `Logger`).
+- `std/logger` (`stdlib/logger.agc`) is Agentica over the std-only
+  `LogRegistry` builtins (`vm/logger.c`, imported as `Logger`).
   The registry is the language's one piece of global state: `log` in
   `agc_runtime` (`vm/port.h`: the global level, -1 until `install_default`; the
   lowest handler rank; an `agc_alloc`'d array of name, rank and handler),
@@ -136,11 +132,10 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `benchmarks/programs/logger-disabled.agc`. The goldens `logger-*` hold the
   stack lines of `std/logger.agc` in `logger-tasks.expected`: change
   `logger.agc` and rewrite them.
-- Tests: goldens `logger-format`, `logger-levels`, `logger-tasks`;
-  `tests/std/logger_test.agc` (the registry tests, one child VM per file, each
-  test restores the registry); `tests/test_vm_logger.py` with
-  `tests/fixtures/logger-peer.py` (Python standard library: the JSON lines and
-  `time_text` against `datetime`), `logger-default.agc` and `logger-async.agc`.
+- Tests: goldens `logger-*`; `tests/std/logger_test.agc` (one child VM per
+  file, so each test restores the registry); `tests/test_vm_logger.py` with the
+  Python peer `tests/fixtures/logger-peer.py` (the JSON lines and `time_text`
+  against `datetime`).
 
 ## Files and paths
 
@@ -149,9 +144,13 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   timed-out active operation closes the handle. Symlink targets resolve relative
   to the link's own directory, and link cycles stop at the first repeated path.
   The end of a run flushes stdout first, then closes open files with pool close
-  jobs and waits for them (at most the flush limit: 30000 ms, `--flush-timeout
-  MS` or `AGENTICA_FLUSH_TIMEOUT_MS`; then a warning line and the same exit
-  code); other handles close on the loop thread.
+  jobs and waits for them (at most the flush limit, always on: 30000 ms,
+  `AGC_FLUSH_TIMEOUT_MS` in `vm/port.h`; then a warning line and the same exit
+  code); other handles close on the loop thread. `--flush-timeout MS` or
+  `AGENTICA_FLUSH_TIMEOUT_MS` (read in `vm/launch.c`, the flag wins, a bad value
+  exits 2) sets the limit, and the FIFO test uses small values.
+  `tests/vm_diff_support.py`, `vm_environment` of `tests/agentica_test.py` and
+  the Makefile clear that variable, as they do `AGENTICA_VM_TRACE`.
 - File.open accepts read/write/append modes and only regular files or links to
   regular files; `create_private` makes a new 0600 file with O_EXCL (BDD driver
   port, `references/vm-io.md`). Whole-text calls and individual stream
@@ -160,20 +159,17 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   lexical without symlink resolution, and Path.real is POSIX `realpath` through
   `uv_fs_realpath` in a pool job (no timeout argument; a path that does not
   exist is an error). System.env (in `vm/process.c`) needs no flag.
-  builtin-types.rkt owns FileHandle and FileInfo registration; grammar.md and
-  the self-contained programming reference document matching semantics.
-- File.each_line (7.2.1h) is a stepper builtin (`references/vm-io.md`,
-  `vm/interp.c`): it reads one line at a time through a buffer of `buffer_bytes
-  + 1` bytes, one pool job (regular file) or one poller read (FIFO, pipe, or a
-  device that can wait) per read, each with its own `timeout_ms`; the file
-  closes on every return path, and the end of a task cancelled while it waits
-  closes the handle, as for `File.open`. `buffer_bytes` outside
-  1,024 to 16,777,216 is `RUNTIME-INVALID-COUNT` at the argument, before the
-  file opens; a timeout of zero or less is an error Result.
-  `tests/test_vm_file_lines.py` (with `tests/fixtures/lines-peer.py`) and
-  `vm/tests/each_line_test.c` cover it; `tests/fixtures/vm/file-each-line*.agc`
-  are the goldens.
-- File.foreach and ch.lazy (17e) are the I/O sources of `Lazy` (`vm/lazy.c`,
+- File.each_line is a stepper builtin (`references/vm-io.md`, `vm/interp.c`): it
+  reads one line at a time through a buffer of `buffer_bytes + 1` bytes, one
+  pool job (regular file) or one poller read (FIFO, pipe, or a device that can
+  wait) per read, each with its own `timeout_ms`; the file closes on every
+  return path, and the end of a task cancelled while it waits closes the
+  handle, as for `File.open`. `buffer_bytes` outside 1,024 to 16,777,216 is
+  `RUNTIME-INVALID-COUNT` at the argument, before the file opens; a timeout of
+  zero or less is an error Result. Tests: `tests/test_vm_file_lines.py` (with
+  `tests/fixtures/lines-peer.py`), `vm/tests/each_line_test.c` and the goldens
+  `tests/fixtures/vm/file-each-line*.agc`.
+- File.foreach and ch.lazy are the I/O sources of `Lazy` (`vm/lazy.c`,
   `LAZY_FILE` and `LAZY_CHANNEL`): prelude rows like the other sources. The
   terminal drives the line reader of `File.each_line` (`agc_lines_*` in
   `services.h`) or `agc_channel_receive` (`port.h`), parks on the file job or
@@ -181,38 +177,28 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `lazy_done` before every END (`WAIT_CLOSE`). The run is `unlocked`, and
   takes `rt->sync` only around those two calls (`lazy_lines_next`,
   `lazy_receive`); `resume_stepper` fails `RUNTIME-INTERNAL` if an unlocked step
-  returns holding it.
-  `CHECK-LAZY-NO-STEP` (`compiler/check/check_method.agc`) rejects
-  `File.foreach(...).each` written as one chain. Goldens:
+  returns holding it. `CHECK-LAZY-NO-STEP` (`compiler/check/check_method.agc`)
+  rejects `File.foreach(...).each` written as one chain. Goldens:
   `tests/fixtures/vm/lazy-file.agc`, `lazy-channel.agc`,
   `step-limited/lazy-channel-endless.agc`; closes on every path:
   `tests/test_vm_lazy_io.py`; N=4: `tests/test_vm_multicore.py`.
-- Lazy PR 3 (17e): `lz.write_lines(path, ms)` is the terminal `LAZY_WRITE`,
-  driving the line writer `agc_line_writer` of `vm/files.c` (`agc_writer_*` in
-  `services.h`): it opens before the first pull (`sink_ready`), parks on each
-  write job (`WAIT_SINK`) and is flushed and closed in `lazy_done` after the
-  reader (`WAIT_SINK_CLOSE`); its close error replaces an ok result. `try` in
-  any block of a `Lazy` method: `check_prelude.agc` checks the blocks of
+- `lz.write_lines(path, ms)` is the terminal `LAZY_WRITE`, driving the line
+  writer `agc_line_writer` of `vm/files.c` (`agc_writer_*` in `services.h`): it
+  opens before the first pull (`sink_ready`), parks on each write job
+  (`WAIT_SINK`) and is flushed and closed in `lazy_done` after the reader
+  (`WAIT_SINK_CLOSE`); its close error replaces an ok result. `try` in any
+  block of a `Lazy` method: `check_prelude.agc` checks the blocks of
   `module == "lazy"` rows with `St.step`, `check_try` records the ids
   (`Checked.step_tries`), the lowering emits `try-step`, and the interpreter
   sets `agc_stepper.escaped` (`mark_escape`) so `lazy_resume` ends the run with
   the error. Goldens: `tests/fixtures/vm/lazy-try.agc`, `lazy-write.agc`; the
   round trip and the closes: `tests/test_vm_lazy_io.py`; the Python peer:
   `tests/test_stdlib_prelude.py`.
-- tests/test_filesystem.py (unittest) runs checked Agentica programs through the
-  CLI on the VM against temporary directories, including Path.real through link
-  chains, loops and long paths and System.env with bytes that are not UTF-8,
-  both compared with Python's `os.path.realpath` and `os.environ`
-  (`tests/fixtures/os-peer.py`), plus stream/whole-file round trips, error
-  Results, metadata, paths and EOF, FIFOs on the loop (made with `os.mkfifo`;
-  `tests/fixtures/fifo-peer.py` is a Python reader that is slow or leaves,
-  giving `EPIPE`), a crash cancelling a parked FIFO read, and stdin on the loop.
-  The end-of-run file flush limit is always on (`AGC_FLUSH_TIMEOUT_MS`, 30000,
-  in `vm/port.h`); `--flush-timeout MS` or `AGENTICA_FLUSH_TIMEOUT_MS` (read in
-  `vm/main.c`, the flag wins, a bad value exits 2) sets it, and the FIFO test
-  there uses small values. `tests/vm_diff_support.py`, `vm_environment` of
-  `tests/agentica_test.py` and the Makefile clear that variable, as they do
-  `AGENTICA_VM_TRACE`. Keep filesystem tests local and clean temporary trees on
+- `tests/test_filesystem.py` runs checked Agentica programs through the CLI on
+  the VM against temporary directories, with Python peers for `Path.real` and
+  `System.env` with bytes that are not UTF-8 (`tests/fixtures/os-peer.py`) and
+  for FIFOs (`tests/fixtures/fifo-peer.py`, a reader that is slow or leaves,
+  giving `EPIPE`). Keep filesystem tests local and clean temporary trees on
   every outcome.
 
 ## Void and processes
@@ -225,17 +211,14 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - --allow-run defaults off and reaches the VM. `agentica test --allow-run`
   passes it to step handlers and programs under test. The end of a run kills and
   reaps directly spawned children. Expected operations return Results.
-- tests/test_process.py uses independent Node standard-library children and a
-  Python one (`tests/fixtures/process-peer.py`: argv, environment, working
-  directory, a child that holds), CLI capability checks, binary/full-duplex
-  streams, nonzero exits, deadline policies and PID cleanup. Node is required in CI; local absence visibly skips.
-  It runs on Linux, macOS and Windows (not in `WINDOWS_TEST_MODULES`: Wine
-  cannot start host peers). CI also exercises the compiled executable and
-  examples/process-tool.agc with --allow-run.
+- `tests/test_process.py` uses independent Node standard-library children and a
+  Python one (`tests/fixtures/process-peer.py`). Node is required in CI; local
+  absence visibly skips. It runs on Linux, macOS and Windows (not in
+  `WINDOWS_TEST_MODULES`: Wine cannot start host peers).
 
-## Int and Float bits, std/binary (phases 13a, 13b)
+## Int and Float bits, std/binary
 
-- Int and Float bit builtins (`vm/numbers.c`, 13a): shifts and masks run on
+- Int and Float bit builtins (`vm/numbers.c`): shifts and masks run on
   `uint64_t` and `int_from_bits` turns the result back into an `int64_t` without
   implementation-defined casts; a count of 64 or more is decided before the
   shift (`shift_left` and `shift_right_unsigned` give 0, `shift_right` gives 0
@@ -250,8 +233,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   the script: run it by hand and commit both files when the vectors change.
   `tests/test_vm_bits.py` checks the spans of the errors.
 
-- `std/binary` (`stdlib/binary.agc`, 13b) is Agentica on the 13a builtins, with
-  no C. A reader is `window` (offset range, no overflow for any offset), a
+- `std/binary` (`stdlib/binary.agc`) is Agentica on the bit builtins, with no
+  C. A reader is `window` (offset range, no overflow for any offset), a
   `load8/16/32/64_{be,le}` that indexes the items, ORs them with `bit_or` and
   tests the result once (`bytes_ok`), and walks the bytes (`first_bad_byte`)
   only to name the first bad one; `extend` sign-extends with `shift_left` then
@@ -266,7 +249,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   both files when the vectors change. `tests/test_std_binary.py` checks the
   fixed output.
 
-## std/toml (phase 45-0)
+## std/toml
 
 - `std/toml` (`stdlib/toml.agc`) is pure Agentica, no C. The reader walks a list
   of code points (`Src`, with a 128-entry class table of bits for digits, bare
@@ -285,36 +268,21 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   the section that made it: only that section adds keys. This is the rule set of
   `tomllib`'s flags. The tree is turned into `Value` at the end.
 - Limits, all 256: arrays and inline tables per value, parts of one header,
-  parts
-  of one dotted key. The encoder refuses the same depths (a table path over 256,
-  inline nesting over 256), and `to_json` refuses 2,048 levels, so no value
-built
-  by a caller halts with `RUNTIME-STACK-OVERFLOW`, and what `encode` writes
-  `parse` reads back.
+  parts of one dotted key. The encoder refuses the same depths (a table path
+  over 256, inline nesting over 256), and `to_json` refuses 2,048 levels, so no
+  value built by a caller halts with `RUNTIME-STACK-OVERFLOW`, and what
+  `encode` writes `parse` reads back.
 - The encoder builds the class table once per document, because the date-time
   check reuses the reader (`valid_date_time?`). Tests: `tests/test_std_toml.py`
   compares the tagged value with the vendored toml-test JSON (its `valid/` and
   `invalid/` for TOML 1.0.0, MIT, `tests/fixtures/toml-test/`) and with
   `tomllib`; `.gitattributes` marks both fixture folders `-text` to keep CRLF.
 
-## Comments in stdlib/
+## Comments and style in stdlib/
 
-- Give the module a `##` doc block (its first block, followed by a blank
-  line), and give every exported `def`, `struct` and `enum` you add or touch
-  one, as `stdlib/queue.agc` does; do not add docs to code you do not touch.
-  Say what the code does and returns, not how. A `#` comment goes inside the
-  body or above the `##` block, never between the block and its `def` (that is
-  `PARSE-DETACHED-DOC`).
-- Add a `#` comment where the Agentica is complex: a bit trick, a bound that
-  keeps input safe, an order that matters, or a copy of a VM
-  behavior (name it). Never narrate obvious code.
-
-## Code style in stdlib/
-
-- Lines are at most 119 characters, comments included (`stdlib/agentica.toml`),
-  checked by `tests/test_style_line_width.py`.
-- Build strings with interpolation, not `+` and `.to_s`. Wrap a long one into
-  a few sentence-sized pieces joined with `+`, never one piece per line.
-- Several steps on one value are a pipe chain in parentheses, one
-  `|> f(args)` per line, not `x = f(x, args)` repeated three or more times in
-  a row. The lint does not check it; reviews do.
+Comments and style follow `.agents/skills/agentica-code-guidelines/` and
+`references/frontend.md` ("Comments and style"). Give the module a `##` doc
+block, and every exported `def`, `struct` and `enum` you add or touch one, as
+`stdlib/queue.agc` does; do not add docs to code you do not touch. A `#` comment
+names a VM behavior that the code copies. Lines are at most 119 characters
+(`stdlib/agentica.toml`, checked by `tests/test_style_line_width.py`).

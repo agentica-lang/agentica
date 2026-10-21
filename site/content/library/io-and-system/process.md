@@ -14,7 +14,6 @@ agentica --allow-run tool.agc
 
 - Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds.
 - A program you start belongs to the task that started it and stops when that task ends, however it ends. Programs still running stop when yours ends. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
-- The examples start real programs, so they are only checked.
 
 ## Process.spawn
 
@@ -129,7 +128,6 @@ Starts a program in the folder `dir` (`"."` is the current one) and keeps its ou
 - Standard output and error are read all the time into buffers of 1 MiB each, so the program never blocks on a full pipe and its standard error is never printed. `read_line` and `read_bytes` read standard output as usual.
 - Past 1 MiB of waiting standard output, or of standard error, the rest is dropped and every read of standard output gives `error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0, timeout)` gives it at once, to check without waiting.
 - `close` sends `SIGTERM` and kills the program one second later if it still runs, so an Agentica program can stop its own children. Windows has no `SIGTERM`: the program ends at once, and where libuv can assign its job object, programs the VM started die when the VM ends (other descendants are not covered).
-- `agentica test` runs each [BDD](/library/testing/bdd/) scenario and each program under test as a captured program.
 
 ## Process.output
 
@@ -166,7 +164,7 @@ false
 Process.spawn_channel(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process]
 ```
 
-Like `Process.spawn_captured`, and also opens a private channel to the program, apart from its standard input, output and error. It carries lines of text both ways, on Linux, macOS and Windows. `agentica test` uses it for the test files and BDD scenarios it runs.
+Like `Process.spawn_captured`, and also opens a private channel to the program, apart from its standard input, output and error. It carries lines of text both ways, on Linux, macOS and Windows.
 
 | System | Channel | The program sees |
 |---|---|---|

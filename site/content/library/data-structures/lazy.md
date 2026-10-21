@@ -23,8 +23,6 @@ ok([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10]])
 
 Every terminal gives a `Result`. `take`, `take_while`, `first` and `find` stop the source when they have enough, so an endless source ends; `to_a`, `reduce` and `each` on an endless source never end, and `--max-steps` stops them with `RUNTIME-STEP-LIMIT`. Each item pulled costs one step, and each callback a step plus its body, as in `Range.each`. A terminal can be switched out between items, so other tasks keep running; a terminal over a file or a channel parks while it waits, and a cancel reaches it there.
 
-`try` works in every block of a `Lazy` method, whatever the block gives: a failed `try` ends the pipeline at once, and the terminal returns its error ([try in the blocks](#try-in-the-blocks)).
-
 A `Lazy` has no `==`, no `to_s` and no JSON form; `IO.inspect` prints `<Lazy>`. There is no `next`: a `Lazy` is a recipe, not a cursor. A `List` method on a `Lazy`, such as `lz.size`, is `CHECK-UNKNOWN-METHOD` with a help that shows `to_a`; a step only `Lazy` has, such as `xs.each_cons(2)` on a list, shows `.lazy`.
 
 ## Sources

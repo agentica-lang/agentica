@@ -1,22 +1,20 @@
 ### 10.3 TLS
 
-`TLS.connect` and `TLS.listen` run on the VM, on Linux, macOS and Windows,
-over the TCP sockets of 10.3.1 (libuv on every system). The release links the
-vendored OpenSSL 3.5 LTS statically, and a default source build links the system OpenSSL
-3 (`AGENTICA_OPENSSL`, 10.0). The adapter sets its own minimums and reads no
-`openssl.cnf`, so both builds behave the same.
+`TLS.connect` and `TLS.listen` run on the VM, on Linux, macOS and Windows, over
+the TCP sockets of 10.3.1 (libuv on every system). The release links the
+vendored OpenSSL 3.5 LTS statically, and a default source build links the system
+OpenSSL 3 (`AGENTICA_OPENSSL`, 10.0). The adapter sets its own minimums and
+reads no `openssl.cnf`, so both builds behave the same.
 
-- **Adapter.** `vm/tls.h` declares our own types only. `vm/tls_openssl.c`,
-  `vm/tls_trust.c` and `vm/tls_trust_posix.c` are the only files that include
-  OpenSSL headers. A session uses two memory BIOs, and
-  every call returns OK, WANT_READ, WANT_WRITE, CLOSED or ERROR. An error
-  carries our code, an `errno` for a system error, and a short detail. OpenSSL's
-  error queue is drained in the adapter, and OpenSSL never gets a GC pointer.
-- **Error codes** (`agc_tls_error`): `VERIFY_UNTRUSTED`, `VERIFY_EXPIRED`,
-  `VERIFY_HOSTNAME`, `VERIFY_FAILED` (any other verify result),
-  `HANDSHAKE_FAILED`, `NO_SHARED_VERSION_OR_CIPHER`, `UNEXPECTED_EOF` (the peer
-  closed during the handshake), `PROTOCOL` (an error after the handshake),
-  `BAD_CA`, `BAD_CERT`, `BAD_KEY`, `KEY_MISMATCH`, `NOMEM` and `INTERNAL`.
+- **Adapter.** `vm/tls.h` declares our own types only, so no OpenSSL type leaves
+  the adapter files. A session uses two memory BIOs, and every call returns OK,
+  WANT_READ, WANT_WRITE, CLOSED or ERROR. An error carries our code, an `errno`
+  for a system error, and a short detail. OpenSSL's error queue is drained in
+  the adapter, and OpenSSL never gets a GC pointer.
+- **Error codes** (`agc_tls_error` in `vm/tls.h`): `VERIFY_FAILED` is any verify
+  result other than untrusted, expired or hostname, `UNEXPECTED_EOF` is a peer
+  that closed during the handshake, and `PROTOCOL` is an error after the
+  handshake.
 - **Setup.** `TLS.connect` checks the timeout, port and host as `TCP.connect`
   does, and rejects a NUL in `ca_file`. `TLS.listen` checks as `TCP.listen`
   does, and rejects a NUL in either path. One pool job then reads the CA,
@@ -40,21 +38,18 @@ vendored OpenSSL 3.5 LTS statically, and a default source build links the system
     This holds on every system, Linux included; there is no retry. Its
     certificates are shared, read-only `X509` objects.
   - A certificate the system distrusts is added with an explicit reject of
-    `serverAuth` (`X509_add1_reject_object`), before any trusted copy (the
-    store keeps the first copy). OpenSSL's `check_trust` then fails a chain
-    through a rejected root or intermediate with `X509_V_ERR_CERT_REJECTED`
-    (`crypto/x509/x509_vfy.c`, `obj_trust` in `crypto/x509/x509_trust.c`).
-    OpenSSL never looks up the peer's own certificate, so the client's verify
-    callback (`agc_tls_trust_verify`) refuses a leaf whose rejected copy is in
-    the store. The error is `VERIFY_UNTRUSTED`.
+    `serverAuth` (`X509_add1_reject_object`), before any trusted copy (the store
+    keeps the first copy). OpenSSL's `check_trust` then fails a chain through a
+    rejected root or intermediate with `X509_V_ERR_CERT_REJECTED`. OpenSSL never
+    looks up the peer's own certificate, so the client's verify callback
+    (`agc_tls_trust_verify`) refuses a leaf whose rejected copy is in the store.
+    The error is `VERIFY_UNTRUSTED`.
   - Only the certificates are copied. Platform rules beyond them are not
     applied: Apple's date-based distrust and Certificate Transparency policy,
     the constraints trustd puts on system anchors, and the Windows
     `NotBefore` and disallowed-filetime properties.
-  - Linux and other POSIX (`tls_trust_posix.c`): the first readable file of
-    `/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/tls/certs/ca-bundle.crt`,
-    `/etc/ssl/ca-bundle.pem`, `/etc/pki/tls/cacert.pem`,
-    `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`, `/etc/ssl/cert.pem`.
+  - Linux and other POSIX (`tls_trust_posix.c`): the first readable file of the
+    CA bundle paths listed in `vm/tls_trust_posix.c`.
   - macOS (`tls_trust_darwin.c`, Security framework): the user and admin
     trust settings (`SecTrustSettingsCopyCertificates`,
     `SecTrustSettingsCopyTrustSettings`; the user domain overrides the admin
@@ -127,38 +122,24 @@ vendored OpenSSL 3.5 LTS statically, and a default source build links the system
   `Result` error kind is fixed. A verify failure's detail reads
   `certificate verify failed: <X.509 text>` (the tests match it); other details
   are OpenSSL's text.
-- **Trace** (`tls` category, `docs/vm/08-loader-and-cli.md` §9):
-  `tls_handshake`, `tls_handshake_done`, `tls_handshake_error`,
-  `tls_setup_error`, `tls_read_error`, `tls_close`.
 - **Turn costs and fuzzing.** TLS sockets use the TCP builtins, so they charge
   by size (10.2.1). `TLS.connect` and `TLS.listen` charge nothing. Under
   `no_files` both end the run with `RUNTIME-INTERNAL`.
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
-  other, covering the handshake, `close_notify`, raw EOF, every verify error,
-  the load errors, the trust sources (system store, `SSL_CERT_FILE`, and
-  `ca_file` over both), rejected roots and leaves (through `X509_verify_cert`
-  and a handshake), and a client config that holds the system store with a root
-  that verifies (required on macOS and Windows). It needs no socket, so it runs
-  on Linux, macOS and Windows. The platform policies have their own tests:
-  `vm/tests/tls_trust_darwin_test.c` (trust settings arrays: empty, missing
-  result, Deny, narrow grants, Unspecified, other policies) and
-  `vm/tests/tls_trust_windows_test.c` (EKU properties on in-memory Crypt32
-  stores, a Disallowed copy that wins over ROOT, and CA intermediates that
-  complete a chain to ROOT but are never anchors); `tls_test.c` tests the
-  intermediate rule itself on every system. The goldens `tls-echo` and
+  other, with no socket, so it runs on Linux, macOS and Windows. The platform
+  trust policies have their own tests (`vm/tests/tls_trust_darwin_test.c`,
+  `vm/tests/tls_trust_windows_test.c`). The goldens `tls-echo` and
   `tls-errors` are their own peers. `tests/test_vm_tls.py` covers the rest
   against Node (`tests/fixtures/tls-peer.js`) and Python
-  (`tests/fixtures/tls-peer.py`): EOF with and without `close_notify`, the 1 MiB
-  limit, every verify error on both sides, timeouts, and system trust through
-  `SSL_CERT_FILE`, and HTTPS through `std/http`. It runs on Linux, macOS and
-  Windows. The certificates in `tests/fixtures/tls/` come from `make-certs.sh`.
+  (`tests/fixtures/tls-peer.py`) on all three systems. The certificates in
+  `tests/fixtures/tls/` come from `make-certs.sh`.
 
 ### 10.3.1 TCP (as built)
 
-**As built (TCP PR).** `vm/tcp.c` holds the ten `TCP` builtins, built on
-Linux, macOS and Windows. `vm/stream.c` holds what they share with
+**As built.** `vm/tcp.c` holds the `TCP` builtins, on Linux, macOS and Windows;
+other systems get none. `vm/stream.c` holds what they share with
 `vm/process.c`: the input buffer, the write path, the lock-or-timeout helper
-and the `network:` texts. Other systems get no `TCP` builtins.
+and the `network:` texts.
 
 - **Values.** A `Socket` is a GC value with a registered state and two lock
   records, `reader` and `writer`. `read_line` and `recv_bytes` take the reader

@@ -71,10 +71,10 @@ Term.decode(data: Bytes, type: T) -> Result[T]
 The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
 (`FileHandle`, `Process`, `Socket` and the rest), at any depth.
 
-- The check is a new predicate in `src/checker.rkt`. `data-type?` (the deep walk
-  that §13 uses for table values) only gives the base list of allowed and denied
-  leaf types; it cannot be reused as is, for two reasons. It accepts `Json`,
-  `Result` and type variables, which Term must reject. And its `seen` key is
+- The check is a new walk in the checker. `data-type?` (the deep walk that §13
+  uses for table values) only gives the base list of allowed and denied leaf
+  types; it cannot be reused as is, for two reasons. It accepts `Json`, `Result`
+  and type variables, which Term must reject. And its `seen` key is
   `(kind . name)`, without the type arguments, so once it has walked `Box[Int]`
   it would skip `Box[String]` inside it as already seen. The new walk looks
   through list elements, `Map` keys and values, struct fields and enum payloads,
@@ -89,8 +89,7 @@ The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
   depth of the type, not only at the top: `Box[Json]`, a field
   `items: List[Result[Int]]` and a payload `Map[String, Fn[Int, Int]]` all fail.
   `Json` has its own text form (`JSON.encode` it to a `String` first). `Result`
-  is for error flow, not stored data (use a user enum); `data-type?` accepts it,
-  so this walk must reject it itself.
+  is for error flow, not stored data (use a user enum).
 - **Concrete types only:** the argument of `encode` must have a concrete static
   type, with every type parameter known, as `JSON.encode` requires today (its
   `encodable-type?` rejects a type variable). The checker already gives this at
@@ -101,8 +100,7 @@ The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
   `decode` target (for example once generic functions exist), it is
   `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`. Only type variables left after
   substitution are rejected: the `T` in the declaration of `Box[T]` is fine when
-  the instance is `Box[Int]`. Note that `data-type?` accepts a type variable, so
-  this walk must reject it itself. Encode never falls back to the run-time shape
+  the instance is `Box[Int]`. Encode never falls back to the run-time shape
   of the value.
 - Codes: `Term.encode` on a type that fails the rule is `CHECK-NOT-ENCODABLE`; a
   `Term.decode` target that fails it is `CHECK-NOT-DECODABLE`. The span is on
@@ -139,12 +137,12 @@ The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
   `2^63 - 1`, `major 1` below `-2^63`). Bignum tags (2, 3) are rejected like any
   tag.
 - **Float:** always 8 bytes, so the bits are exact and a `Float` never comes
-  back as an `Int`. Infinities and NaN can occur in Agentica values: an overflow
-  gives `+inf.0`, and `inf - inf` gives NaN (`grammar.md` says that a NaN is not
-  equal to itself). They are written as IEEE 754 values, and `-0.0` keeps its
-  sign. Every NaN is written as the quiet NaN `0x7FF8000000000000`, so both
-  backends give the same bytes whatever NaN payload the host makes. Decode reads
-  a `Float` only from the 8-byte form; half and single floats are rejected.
+  back as an `Int`. Infinities and NaN can occur in Agentica values: a Float
+  overflow gives infinity, and `inf - inf` gives NaN (`grammar.md` says that a
+  NaN is not equal to itself). They are written as IEEE 754 values, and `-0.0`
+  keeps its sign. Every NaN is written as the quiet NaN `0x7FF8000000000000`, so
+  the same bytes come out whatever NaN payload the host makes. Decode reads a
+  `Float` only from the 8-byte form; half and single floats are rejected.
 - **String:** invalid UTF-8 (overlong forms, surrogates, code points above
   U+10FFFF, truncated sequences) is rejected on decode, with the same rule as
   the `.agcb` loader (`docs/vm/08-loader-and-cli.md` §8).
@@ -225,11 +223,9 @@ file anyone could write.
     (an element, a key or value, a field, a payload) is one level deeper than
     that container. No value may be deeper than 10,000.
   - An enum is one level, though it is two CBOR arrays: the outer
-    `[tag, values]` array and its inner `values` array together count once. Take
-    `struct W` with one field `v: Option[Option[Int]]`, holding
-    `W(v: Some(Some(1)))`: the struct is at depth 1, the outer `Some` at depth
-    2, the inner `Some` at depth 3 and the `1` at depth 4; counted by CBOR
-    arrays and maps, the `1` would be at depth 6.
+    `[tag, values]` array and its inner `values` array together count once. For
+    `W(v: Some(Some(1)))` the `1` is at depth 4 (the struct is 1, each `Some`
+    one more); counted by CBOR arrays and maps it would be at depth 6.
   - Encode and decode count the same way, so whatever `encode` writes, `decode`
     reads within the depth limit. Decode knows where an enum starts from the
     target type.
@@ -253,15 +249,14 @@ file anyone could write.
   `[tag, values]` array and its `values` array count as one item together) and
   each payload value. Inside an ignored struct value, which has no Agentica
   type, every CBOR item counts as one. When the count passes `TERM_MAX_ITEMS` =
-  4,000,000, decode stops with `$: too many items`. Both backends share this
-  constant, and encode counts the same way (below). So `Wrap(items: xs)` with
+  4,000,000, decode stops with `$: too many items`. Encode counts the
+  same way (below). So `Wrap(items: xs)` with
   `xs: List[Int]` of `n` elements has 2 + `n` items (the struct, the field value
   `xs`, and the `n` elements): the largest list that fits is 3,999,998 elements,
   and one more is `$: too many items`. For more data, split it into chunks and
   encode each chunk as its own value. In the worst case that is about 4,000,000
   times the size of the largest small value (some hundreds of MiB), plus strings
-  and byte strings, which are bounded by the input (a Racket string holds 4
-  bytes per character, so at most 4 times its bytes).
+  and byte strings, which are bounded by the input.
 - **Total size:** input above 64 MiB is an error before any reading.
 - **Ignored values count too:** an ignored struct value (16.4) is read in full,
   so its bytes count toward the size and length checks, its nesting toward the
@@ -281,32 +276,27 @@ file anyone could write.
   `String` key is written in double quotes with JSON string escaping: `\"` and
   `\\`, `\b`, `\f`, `\n`, `\r`, `\t`, any other code point below U+0020 as
   `\u00XX` with lowercase hex, and every other character as is, in UTF-8
-  (`users["a\"b"]`). Today `JSON.decode` (`src/json-typed.rkt`) writes the key
-  with Racket's `~s`, which differs for some characters (`\e`, `\u007F`,
-  `\u200B`); the PR that lands this section moves `JSON.decode` to the same
-  rule, and from then on both decoders, on both backends, use it.
-- **Paths are built only on error:** while walking, each backend keeps a stack
+  (`users["a\"b"]`). `JSON.decode` writes keys the same way.
+- **Paths are built only on error:** while walking, the walk keeps a stack
   of path segments (a field name, an index or a key) and pushes and pops one per
   level. The path text is joined from the stack only when an error happens,
   never rebuilt at every level, so the cost stays linear in the input.
 - **Depth and item-cap errors use the root path:** `$: depth limit exceeded` and
-  `$: too many items`, in both directions and on both backends, with no deeper
-  path. All other errors keep the full path.
+  `$: too many items`, in both directions, with no deeper path. All other errors
+  keep the full path.
 - **Encode keeps the same limits and returns errors too:** a value deeper than
   the depth limit, with more than `TERM_MAX_ITEMS` values (counted as decode
   counts them), or whose bytes would pass 64 MiB, returns `error(...)`. The
-  depth error is `$: depth limit exceeded` and the item error is
-  `$: too many items`, as on decode; the size error has the path of the first
-  value that crosses the limit. Examples: `$: depth limit exceeded`,
-  `$: too many items`, `cache["big"]: encoded size is larger than 64 MiB`. It
+  depth error is `$: depth limit exceeded` and the item error is `$: too many
+  items`, as on decode; the size error has the path of the first value that
+  crosses the limit (`cache["big"]: encoded size is larger than 64 MiB`). It
   never halts: unlike a non-finite Float in `JSON.encode`
   (`RUNTIME-JSON-ENCODE`), these limits depend on the size of the data, which a
   program cannot easily check before the call. Encode stops writing as soon as a
-  limit is passed, so it never builds more than 64 MiB. So whatever `encode`
-  returns as `ok`, `decode` reads with the same type, with no extra condition.
-  Only a named struct or enum can be the `decode` target (16.2), so a top-level
-  value of another type (`List[Int]`, `Int`, `nil`) must be wrapped in a struct
-  on both sides: encode `Wrap(items: xs)`, decode with `Wrap`.
+  limit is passed, so it never builds more than 64 MiB. Only a named struct or
+  enum can be the `decode` target (16.2), so a top-level value of another type
+  (`List[Int]`, `Int`, `nil`) must be wrapped in a struct on both sides: encode
+  `Wrap(items: xs)`, decode with `Wrap`.
 
 ### 16.6 Versioning
 
@@ -326,33 +316,23 @@ the data.
 
 ### 16.7 Backends
 
-- **VM:** an in-house C codec in `vm/`, with no new dependency. It needs the
-  VM maps (`docs/vm/12-testing-and-pr-plan.md` §12.2 item 5d) and `Bytes` on
-  the VM. CBOR is small: one head byte, then 0, 1, 2, 4 or 8 bytes of argument.
-- **Same bytes:** byte-identical output for the same input, checked by the
-  RFC 8949 vectors and `tests/test_vm_diff_*.py`.
-- **Tests:**
-  - round trips: `decode(encode(v))` gives `v`; `encode(decode(b))` gives `b`
-    for canonical `b`; for `b` with reordered or extra struct keys it gives the
-    canonical bytes;
-  - the RFC 8949 Appendix A vectors that fit the mapping, as fixed bytes in
-    `tests/fixtures/`; they come from the RFC, not from our encoder, so they are
-    the independent counterpart;
-  - depth: an enum nested 10,000 levels encodes and decodes, and one more level
-    is an error;
-  - encode errors: a value past the depth limit returns
-    `$: depth limit exceeded`, one with more than `TERM_MAX_ITEMS` values
-    returns `$: too many items`, and one past 64 MiB returns its path;
-  - item cap boundary: `Wrap(items: xs)` with 3,999,998 elements in `xs` round
-    trips, and with 3,999,999 elements it is `$: too many items`, both on encode
-    and on decode (the decode input built by hand);
-  - hostile input: truncation at every byte, lengths larger than the input,
-    depth one above the limit, more than `TERM_MAX_ITEMS` values (for example
-    4,000,001 one-byte items, also inside an ignored struct value), duplicate
-    map and struct keys (also a duplicate struct key that the struct does not
-    have), tags, indefinite lengths, non-shortest heads, invalid UTF-8, Ints
-    outside int64, and trailing bytes. The VM loader fuzzer (`make vm-fuzz`)
-    gets a decode target too.
+- **VM:** an in-house C codec in `vm/`, with no new dependency. It needs `Bytes`
+  on the VM. CBOR is small: one head byte, then 0, 1, 2, 4 or 8 bytes of
+  argument.
+- **Tests:** the RFC 8949 Appendix A vectors that fit the mapping, as fixed
+  bytes in `tests/fixtures/` (they come from the RFC, not from our encoder, so
+  they are the independent counterpart); round trips (`decode(encode(v))` gives
+  `v`; `encode(decode(b))` gives `b` for canonical `b`, the canonical bytes for
+  reordered or extra struct keys); the depth boundary (an enum nested 10,000
+  levels round trips, one more level is `$: depth limit exceeded`); the item
+  cap boundary (`Wrap(items: xs)` with 3,999,998 elements round trips, with
+  3,999,999 it is `$: too many items`, on encode and on decode with the input
+  built by hand); encode errors with their paths; and hostile input (truncation
+  at every byte, lengths larger than the input, depth one above the limit,
+  4,000,001 one-byte items also inside an ignored struct value, duplicate map
+  and struct keys also when the struct does not have the key, tags, indefinite
+  lengths, non-shortest heads, invalid UTF-8, Ints outside int64, trailing
+  bytes). The VM loader fuzzer (`make vm-fuzz`) gets a decode target too.
 - **Framing:** decode rejects trailing bytes, so a stream of messages needs
   framing. A message can be up to 64 MiB, but `Process.send_bytes` and
   `TCP.send_bytes` take at most 1 MiB per call, and `Process.read_bytes` and
@@ -399,12 +379,8 @@ the data.
 
 - One PR on the VM: `Term.encode`/`Term.decode` per §16.4 with enums as
   `[tag, values]` (§16.5 for hostile input); the Term type check with
-  substituted type arguments; `Term` becomes a reserved name. Needs
-  `Bytes`, generic structs (10c) and the JSON form of enums (10d) first.
-- Tests: round trips, the RFC 8949 Appendix A vectors, byte-identical
-  output, hostile input (§16.5), the item cap boundary, a decode target
-  for `make vm-fuzz`.
-- Done when: an example writes a struct with an `Int`-keyed map, a Float
-  NaN and an enum to bytes and reads it back, with the same bytes and
-  output on the VM; every hostile-input case returns `error(...)`.
-
+  substituted type arguments; `Term` becomes a reserved name. Needs `Bytes`,
+  generic structs (10c) and the JSON form of enums (10d) first.
+- Done when: an example writes a struct with an `Int`-keyed map, a Float NaN and
+  an enum to bytes and reads it back, with the same bytes and output on the VM;
+  every hostile-input case returns `error(...)`.

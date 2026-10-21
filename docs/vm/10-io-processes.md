@@ -62,8 +62,8 @@
   standard streams and the channel reach a child: libuv passes a handle list,
   so no other handle of the VM is inherited.
 
-**As built (processes PR, Linux).** `vm/process.c` holds the eight `Process`
-builtins. Other systems get none.
+**Plain processes.** `vm/process.c` holds the `Process` builtins. Other
+systems get none.
 
 - **Values.** A `Process` has a registered state and two lock records, `reader`
   and `writer`. `read_line` and `read_bytes` take the reader lock. `send`,
@@ -109,13 +109,11 @@ builtins. Other systems get none.
   `init` gets it after `_exit`. A failed kill in `Process.close` ends the run
   with `RUNTIME-PROCESS-CLOSE`. Later operations on a closed process return
   `process: process is closed`.
-- **Signals.** A stop signal takes the one exit path (§10.2.2): children are
-  killed and reaped, files are flushed, and the signal is raised again. Children
-  are killed before the file flush. A VM killed by `SIGKILL`, or ended by the
-  out-of-memory exit (70, §6.3), leaves its children running; one that has a
-  channel reads the end of input (on Windows the job above ends it first). On
-  a break,
-  `agentica` waits 2 seconds, sends `SIGTERM`, and kills the VM 2 seconds later
+- **Signals.** A stop signal takes the one exit path (§10.2.2). A VM killed by
+  `SIGKILL`, or ended by the out-of-memory exit (70, §6.3), leaves its children
+  running; one that has a channel reads the end of input (on Windows the job
+  above ends it first). On a break, `agentica` waits 2 seconds, sends
+  `SIGTERM`, and kills the VM 2 seconds later
   (`docs/vm/08-loader-and-cli.md`).
 - **Behavior notes.**
   - A file that exists but cannot be executed (no execute permission, a bad
@@ -128,7 +126,7 @@ builtins. Other systems get none.
   - `Process.spawn` checks its timeout but does not apply it to the lookup and
     start.
 
-**As built (21a, captured processes, Linux).** `Process.spawn_captured` and
+**Captured processes (21a).** `Process.spawn_captured` and
 `Process.output` (specified in `docs/grammar/06d-io-and-network.md`) share the
 code above.
 
@@ -158,14 +156,11 @@ code above.
 **As built (25c, the child channel).** Descriptors separate from stdin, stdout
 and stderr (a socket pair, or on Windows two pipes) carry the protocol of
 `agentica test` and of BDD children, so a test or a step program owns its own
-stdin and stdout. `Process.spawn_channel`, `channel_read_line`, `channel_send`,
-`channel_close` and `read_available` are in `vm/process.c`;
-`Process.parent_read_line` and `Process.parent_send` (the child side) and the
-shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`);
-the system part (making the ends, the marker, taking them in the child) is
-`vm/duplex_os.h` with `duplex_posix.c` and `duplex_windows.c`. The signatures
-are in `docs/grammar/06d-io-and-network.md`. Linux and macOS use a socket
-pair; Windows uses a pipe per direction (below).
+stdin and stdout. The builtins are in `vm/process.c`; the child side and the
+shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`),
+with the system part in `vm/duplex_os.h`. The signatures are in
+`docs/grammar/06d-io-and-network.md`. Linux and macOS use a socket pair; Windows
+uses a pipe per direction (below).
 
 - **The socket pair.** One `uv_socketpair` (`SOCK_STREAM`) per child. The parent
   keeps one end as two libuv pipe handles, one to read and one to write, on two

@@ -164,7 +164,7 @@ main@app.agc:25;Int.times;block@app.agc:40:11 1000
 
 ## Performance notes
 
-- With the profile off, `Profile.measure` is one block call and `Profile.steps` one builtin call; leave them in the code.
+- With the profile off, `Profile.steps` is one builtin call; leave `Profile.measure` and `Profile.steps` in the code.
 - The profile counts every step, so a profiled run is about a third slower. Folded output at the default sample adds a few percent more; a sample every 100 steps adds about a fifth.
 - Rank by steps; use `us` to compare builtins and sections in one run, and time the program without the profile.
 - The profile runs on one scheduler: a profiled run uses one unless `--schedulers` or `AGENTICA_SCHEDULERS` asks for more, which it refuses.

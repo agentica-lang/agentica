@@ -87,9 +87,7 @@ the form that halts the run with an error instead of returning a `Result`.
 Variables, fields and parameters cannot have the suffix.
 
 The pipe operator `|>` is one token (the longest match next to `|` and `||`), so
-block parameters `do |x|` and `||` are unchanged. It does not continue a line: a
-chain over several lines goes in parentheses (see section 5). Only a leading
-`.name` continues a line.
+block parameters `do |x|` and `||` are unchanged.
 
 ### Doc comments
 

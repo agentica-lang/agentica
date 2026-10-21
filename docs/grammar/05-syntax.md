@@ -68,8 +68,7 @@ Declarations follow a fixed order in every file, the root program, imported
 files and embedded `std/` modules alike: the module doc and the imports first,
 then the constants, then `struct`, `enum` and type alias declarations (exported
 or not, in any order among themselves), then `export def` functions, then
-private `def` functions. A type alias uses `type Name = Type`, or
-`type Name[T, U] = Type` with type parameters; `type` is contextual here and
+private `def` functions. `type` is contextual in an alias declaration and
 remains an ordinary name elsewhere. The order is a style
 rule only: a function may still call a function, use a struct declared later or
 read a constant in the same group. The first declaration that comes after a
@@ -112,10 +111,8 @@ end
 ```
 
 Struct, enum, type alias and function declarations appear only at the top level.
-A type alias is transparent: `type Grid = List[List[Float]]` means exactly
-`List[List[Float]]`, with no new runtime type or conversion. Aliases may name
-builtin, struct, enum and function types, and other aliases; cycles are
-`CHECK-TYPE-ALIAS-CYCLE`. The parser accepts type applications such as
+A type alias is transparent (section 6, "Enums and pattern matching"). The
+parser accepts type applications such as
 `List[Int]`. The checker allows them only for supported builtins, declared
 enums and generic aliases; enums and aliases are the only declarations that
 take type parameters, so generic functions and structs are not supported.
@@ -131,11 +128,11 @@ may use other aliases, generic or not (`type Grid = Matrix[Float]`), and a
 cycle, also through the arguments, is `CHECK-TYPE-ALIAS-CYCLE`. A parameter
 may be a `Map` key or `Set` element in the target; the key rule is judged on
 the expanded type at each use (`CHECK-MAP-KEY-TYPE`, at the argument). A bad
-key written in the target itself (`type B[T] = Map[Float, T]`) is reported at
-the declaration. The target is read where the alias is declared: only its own
-parameters are in scope, so a name in it is never taken for a type parameter of
-the use. An enum type parameter that hides a type the alias names (`struct
-Item`, `type Items = List[Item]`, `enum E[Item] V(Items) end`) is
+key or a `Void` item written in the target itself (`type B[T] = Map[Float, T]`)
+is reported at the declaration. The target is read where the alias is declared:
+only its own parameters are in scope, so a name in it is never taken for a type
+parameter of the use. An enum type parameter that hides a type the alias names
+(`struct Item`, `type Items = List[Item]`, `enum E[Item] V(Items) end`) is
 `CHECK-UNKNOWN-TYPE` at the use. The argument of an unused parameter is still
 checked. An exported generic alias is used through an import (`S.Matrix[Int]`,
 or `import {Matrix} from "m"`). Like any alias it is neither a constructor nor a
@@ -252,15 +249,7 @@ positional value such as `user.with(31)` are `PARSE-UNEXPECTED-TOKEN`, with help
 that shows the form: `value.with(age: 31)`. Like a call, the update is a link of
 a chain (`a.with(x: 1).with(y: 2)`), and a `do` block cannot follow it.
 
-A method chain may span lines: a line whose first token is `.` followed by a
-name continues the line before (§4), also after a `do ... end` block:
-
-```ruby
-lines = File.foreach("ledger.csv", 65536, TIMEOUT_MS)
-  .drop(1)
-  .map do |line| parse(line) end
-  .filter(&big_expense?)
-```
+A method chain may span lines (§4), also after a `do ... end` block.
 
 `x |> f(a, b)` means `f(x, a, b)`: the left value becomes the first argument of
 the call on the right. The right side is a call with parentheses, `name(args)`
@@ -280,8 +269,7 @@ f()` is `f(a + 1)`, `x |> f() == y` is `f(x) == y`, and `x |> f() |> g()` is
 The call keeps its normal order of evaluation (the left value first, then the
 other arguments) and its normal diagnostics: the piped argument's span is the
 left expression's span. A chain over several lines goes in parentheses, one step
-per line (a leading `.name` line continues a line without parentheses, but a
-leading `|>` does not).
+per line.
 
 `a..b` and `a...b` have the lowest precedence and do not chain: `1..2..3` is
 `PARSE-UNEXPECTED-TOKEN` at the second operator, and `0...n + 1` is `0...(n +

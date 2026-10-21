@@ -56,7 +56,6 @@ Under `agentica test`, the runner talks to the file on a channel of its own (see
 - A file that exits, crashes or never calls `Test.run` is a file error that shows what it printed.
 - A test that times out keeps the output it printed, up to 1 MiB. A test that prints more than 1 MiB fails at once with `RUNTIME-BDD-OUTPUT-LIMIT`, even if it never ends, and shows no output.
 - Run as a normal program, the file prints `run this file with agentica test` on stderr and exits 2.
-- `--only TEXT` runs the tests whose name contains `TEXT`.
 
 A test fails with the first of these that applies:
 

@@ -23,8 +23,8 @@ Ask what changed and who reads about it:
   and the programming skill together (the AGENTS.md rule), plus a CHANGELOG
   entry.
 - **A design decision or contract:** the design doc (built: `docs/vm/`;
-  planned: the roadmap phase file, see the pruning map). Write the decision
-  and its reason, not the recipe (files touched, steps taken).
+  planned: the roadmap phase file). Write the decision and its reason, not the
+  recipe (files touched, steps taken).
 - **An implementation detail:** a code comment where the code is not obvious,
   or nothing.
 - **Progress or evidence:** the PR body, the roadmap tick or the CHANGELOG.
@@ -80,12 +80,10 @@ docs. Do not create files under `docs/` unless the user asks for one
 
 ## Gotchas
 
-Real overclaims from recent PRs, each caught only by a critic:
+Real overclaims, each caught only by a critic (see §3 for the rules they
+break):
 
 - "Descendants die with the job object": only direct children do, under
   `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`.
 - "A stopped Windows child exits with code 1": it is 128 + signal.
 - "`agc_sync_assert` in every mutator": it was in some mutators, not all.
-- "Faster" in the CHANGELOG with no benchmark behind it.
-- Benchmark figures in docs that nobody could reproduce.
-- Docs describing `.com` and name rules one PR before the code landed.

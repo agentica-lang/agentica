@@ -100,9 +100,7 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
   - **Meaning:** a `##` doc block that is not directly above a `def`, `struct`,
     `enum`, field or variant: a blank line, a `#` comment, an `import` or the
     end of the file follows it, or it stands in a function body or inside
-    brackets. Move it onto the line above what it documents, or write `#`. Only
-    the first block of a file, followed by a blank line, may stand alone (the
-    module doc)
+    brackets. Move it onto the line above what it documents, or write `#`
 
 - **Code:** `PARSE-TOP-LEVEL-STATEMENT`
   - **Meaning:** a statement outside a function (put it in `def main() ->
@@ -129,8 +127,7 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
   - **Meaning:** the right side of `\|>` is not a call written with parentheses
     (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`); wrap the
     pipe in parentheses and use `.` on the result. The call may follow `try` and
-    take a trailing block. `a + 1 \|> f()` is `f(a + 1)`; put a multi-line chain
-    in parentheses, one `\|>` per line
+    take a trailing block. `a + 1 \|> f()` is `f(a + 1)`
 
 - **Code:** `CHECK-TYPE-MISMATCH`
   - **Meaning:** a value, operand, condition, argument, or return has the wrong
@@ -218,8 +215,8 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
 
 - **Code:** `CHECK-IMPORT-PACKAGE`
   - **Meaning:** a package declared in `agentica.toml` is not in the package
-    cache (run `agentica install`, once it exists), or a file of a package
-    imports a `pkg/` name that its own `agentica.toml` does not declare
+    cache, or a file of a package imports a `pkg/` name that its own
+    `agentica.toml` does not declare
 
 - **Code:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
   `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`

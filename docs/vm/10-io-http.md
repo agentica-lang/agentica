@@ -44,8 +44,6 @@ channels (10.7). The rules of this section are fixed by the hostile-case tests
   `connection`, `trailer`) and dropped; there is no trailer API. EOF inside a
   `Content-Length` or chunked body is `http: truncated HTTP body`; EOF ends a
   close-delimited body normally, except over TLS (10.7.1).
-- Until the streaming items (20e to 20g) there is no chunked encoder. Responses
-  always carry `Content-Length`, and requests are never chunked.
 - Tests target the adapter interface, so a replacement parser must pass the same
   tests: the C unit test `vm/tests/http_parse_test.c`, and the socket cases of
   `tests/test_vm_http.py`, sent by Python raw-socket peers
@@ -53,19 +51,16 @@ channels (10.7). The rules of this section are fixed by the hostile-case tests
 
 #### 10.6.1 As built (20a)
 
-The limits are constants in `vm/http_parse.h`: `AGC_HTTP_MAX_LINE` (8192),
-`AGC_HTTP_MAX_BLOCK` (65536) and `AGC_HTTP_MAX_HEADERS` (100). A response head
-with status 100 to 199 is returned without framing, and the caller counts the
-interim responses. A `Content-Length` body is reserved whole after the limit
-check. Only `vm/http_pico.c` and the Makefile know picohttpparser.
+A response head with status 100 to 199 is returned without framing, and the
+caller counts the interim responses. A `Content-Length` body is reserved whole
+after the limit check.
 
 ### 10.7 HTTP on the VM: the hybrid split
 
 HTTP is split between the C builtin module `HttpWire` and the Agentica module
 `std/http.agc`, which programs import as `HTTP`. The API, options, limits and
 answers are in the grammar (`docs/grammar/06d-io-and-network.md`, "HTTP client
-and server"). The client is 10.7.1, the server 10.7.2, the answers 10.7.3 and
-the tests 10.7.4. Streaming is planned in `docs/future/30-hybrid-http.md`.
+and server"). Streaming is planned in `docs/future/30-hybrid-http.md`.
 Both halves build and run on Linux, macOS and Windows: the C side works on
 libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
@@ -109,7 +104,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 - **Incoming framing** is complete: chunked request bodies, and chunked or
   close-delimited response bodies, are decoded in full, within the limits.
 - **Requests the client sends** carry `Content-Length` when the body is not
-  empty or the method is `POST`, `PUT` or `PATCH`. The client adds `Host`, and
+  empty or the method is `POST`, `PUT` or `PATCH`, and are never chunked. The
+  client adds `Host`, and
   refuses user `Host`, `Content-Length`, `Transfer-Encoding` and `Connection`
   headers, and CR, LF and control bytes. It writes a large body while it reads
   the response, so an early 413 cannot deadlock the call.
@@ -144,15 +140,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
 #### 10.7.1 As built: the client (20a)
 
-```text
-HttpWire.service(jobs: Channel[HttpWire.Job], options: HttpClientOptions, f: Fn[Channel[HttpWire.Job], Void]) -> HttpClient
-HttpWire.jobs(client: HttpClient) -> Channel[HttpWire.Job]
-HttpWire.options(client: HttpClient) -> HttpClientOptions
-HttpWire.encode_request(scheme: String, host: String, port: Int, method: String, target: String, headers: List[Header], body: String, max_body_bytes: Int) -> Result[String]
-HttpWire.read_response(socket: Socket, head_only: Bool, max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Response]
-HttpWire.clean_eof?(socket: Socket) -> Bool
-HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
-```
+The `HttpWire` signatures, for the client and the server, are its rows in
+`compiler/catalog/builtins_data.agc`.
 
 - The client is `std/http` code on `TCP`, `TLS`, `Channel` and `Task`.
   `HttpWire.service` (`vm/http_service.c`) runs `f(jobs)`, the client's owner
@@ -243,16 +232,14 @@ HttpWire.awaited?(reply: Channel[Result[HttpResponse]]) -> Bool
 - One deadline covers the call, from the wait for a connection to the last body
   byte. On timeout the connection is closed and the call returns
   `network: operation timed out`.
-- At the end of the run each worker's HTTPS socket sends one non-blocking
-  `close_notify`, as every tcp.c socket does (§10.2.2).
+
 - Errors are `http: ` plus the text in `vm/http_parse.h`, the texts of
   `std/http`, or the network text of tcp.c.
 
-The C client this replaced differs in ways no test sees:
+Properties of the client that no test checks:
 
 - An idle connection is not watched for a peer close. The retry covers the
   race.
-- The 1 ms guard before a freed connection went to the next waiter is gone.
 - A cancelled caller only stops waiting: its job runs to its end or its
   deadline, and then its connection is closed.
 - A body that is not UTF-8 also closes the connection.
@@ -263,32 +250,10 @@ The C client this replaced differs in ways no test sees:
   caller also gets `http: client is closed`. The owner may still hand jobs to
   workers while it takes the messages buffered before the close, but those
   workers then see the close and send nothing.
-- The client's work is bytecode now, so it spends the step budget of
-  `--max-steps` (the `http-client` fixture: 2829 steps before, about 5400
-  after).
-- A response costs three more task turns (the owner twice, the worker's inbox),
-  so small sequential requests are slower and large bodies faster; the numbers
-  are in the PR that made the change.
+- The client's work is bytecode, so it spends the step budget of
+  `--max-steps`.
 
 #### 10.7.2 As built: the server (20c)
-
-```text
-HttpWire.chunked(max_body_bytes: Int) -> HttpWire.Chunk
-HttpWire.chunk(state: HttpWire.Chunk, data: List[Int], from: Int) -> Result[HttpWire.Chunk]
-HttpWire.chunk_read(state: HttpWire.Chunk, bytes: Int) -> HttpWire.Chunk
-HttpWire.text(carry: List[Int], data: List[Int], runs: List[Int]) -> HttpWire.Text
-HttpWire.read_head(socket: Socket, rest: List[Int], max_body_bytes: Int, timeout_ms: Int) -> Result[HttpWire.Head]
-HttpWire.read_text(socket: Socket, max_bytes: Int, carry: List[Int], timeout_ms: Int) -> Result[HttpWire.Text]
-HttpWire.encode_response(request: HttpRequest, response: HttpResponse, now_ms: Int) -> Result[HttpWire.Reply]
-HttpWire.error_answer(status: Int) -> String
-HttpWire.close_write(socket: Socket) -> Void
-HttpWire.server(listener: Listener, max_connections: Int, f: Fn[HttpServer, Void]) -> HttpServer
-HttpWire.accept(server: HttpServer) -> Result[Socket]
-HttpWire.spawn(server: HttpServer, socket: Socket, f: Fn[Socket, Void]) -> Void
-HttpWire.close_server(server: HttpServer) -> Void
-HttpWire.wait(server: HttpServer) -> Result[Void]
-HttpWire.local_port(server: HttpServer) -> Int
-```
 
 - `vm/http_wire.c` holds the functions that take bytes or records and return
   records (`HttpWire.Chunk`, `HttpWire.Text`, `HttpWire.Reply`). These, with
@@ -302,8 +267,7 @@ HttpWire.local_port(server: HttpServer) -> Int
   unfinished character; `valid` is false for bytes that are not UTF-8, and
   `buffered` counts the input bytes left and `ended` says the input has ended
   or failed; `max_bytes` 0 does not wait) and
-  `close_write`. `vm/http_server.c` holds the task group, on tcp.c's connection
-  object. Header lists are shared with the client in `vm/http_fields.c`.
+  `close_write`.
 - The I/O thread owns the server's state: the listener, the count of open
   connections and the queue of waiting `accept` and `wait` calls. A builtin
   changes it only through a step posted there (`agc_loop_call`, inline at
@@ -342,14 +306,13 @@ HttpWire.local_port(server: HttpServer) -> Int
   a reader waits, so pipelined bytes cannot grow the buffer past one read.
   Bytes past one request stay in the socket's input for the next, except the
   bytes a chunked body's last read took, which `read_head` puts back.
-- The response head is `encode_response`, built before anything is written,
-  with whether the connection closes after it. The status must
-  be 200 to 599. A handler's `Content-Length` or `Transfer-Encoding` is refused
-  (`Content-Length and Transfer-Encoding are set by the server`), and a 204 or
-  304 gets no body. A `Date` header is added unless the handler set one, and the
-  body is omitted for `HEAD`. A `Connection: close` in the request or the
-  response closes the connection, and the handler's `Connection` headers are
-  replaced by one `Connection: close`. A bad response is
+- The response head is `encode_response`, built before anything is written, with
+  whether the connection closes after it. The status must be 200 to 599. A
+  handler's `Content-Length` or `Transfer-Encoding` is refused
+  (`Content-Length and Transfer-Encoding are set by the server`). A `Date`
+  header is added unless the handler set one. A `Connection: close` in the
+  request or the response closes the connection, and the handler's `Connection`
+  headers are replaced by one `Connection: close`. A bad response is
   `error("http: invalid response: <reason>")`, with nothing written. Otherwise
   the write returns `ok(true)` while the connection stays open, and `ok(false)`
   after a closing response, which gets the same lingering close as the error
@@ -381,18 +344,10 @@ HttpWire.local_port(server: HttpServer) -> Int
   path runs `close_server` for it, and its port is free. A running task that
   closes its own server stops after that builtin
   (`vm/tests/task_cancel_test.c`).
-- A crash in a connection task ends that connection (handle ownership), and its
-  client sees
-  the close with no response (Crashes, 10.2.1).
+
 - `std/http` runs the accept loop in the group. For each socket it spawns the
-  connection loop: read a request, run the handler with no time limit, then
-  write the response with a fresh `request_timeout_ms`. A handler `error`, or
-  a response that `encode_response` refuses, gives a 500 with
-  `Connection: close` and one `IO.warn` line (`http: handler error: ...` or
-  `http: invalid response: ...`). The loop ends when the write returns
-  anything but `ok(true)`.
-- The connections are tcp.c sockets, so they get `close_notify` at the end of
-  the run (10.3).
+  connection loop: read a request, run the handler, then write the response.
+  The loop ends when the write returns anything but `ok(true)`.
 
 #### 10.7.3 Errors and status codes
 
@@ -478,32 +433,20 @@ and a body that is not UTF-8. A connection that fails is never pooled.
 
 - **Goldens** (`tests/fixtures/vm/http-*.agc` and `.expected`) are their own
   peers: one program runs a server and a client in two tasks, and only `main`
-  prints. They cover the methods and statuses, the error answers, keep-alive
-  reuse, `Connection: close`, the body limit at and one byte over,
-  `close_server` while a handler sleeps, and `main` returning while a call is in
-  flight. Fixtures that depend on a timeout go in the Racket test, since goldens
+  prints. A case that depends on a timeout cannot be a golden, since goldens
   record step counts.
 - **The hostile cases of 10.6** run against the VM server, sent by a Python
   raw-socket peer (`tests/test_vm_http.py`, standard library only), and check
   the status code and the close. The C unit test (`vm/tests/http_parse_test.c`)
   covers the same list at the adapter.
 - **Interop on port 0** (`tests/test_vm_http.py`, standard library only): the
-  VM client against Python's `http.server` and against an HTTPS server made with
+  VM client against Python's `http.server` and an HTTPS server made with
   Python's `ssl` and the CA of `tests/fixtures/tls/`; the VM server against
-  Python's `http.client` and Node's `http`, including chunked uploads,
-  `Expect: 100-continue`, pipelining and many concurrent clients up to
-  `max_connections`. Python and Node are required in CI.
-- **Platforms**: `tests/test_vm_http.py` and the HTTPS cases of
-  `tests/test_vm_tls.py` run in the macOS and Windows jobs of `platforms.yml`
-  too. The Python peers print LF on Windows; the flood case reads the server's
-  memory with `ps`, or on Windows with `GetProcessMemoryInfo`; the TLS waiters
-  case blocks the CA file read on a FIFO, or on Windows, which has no FIFO, on
-  a named pipe.
+  Python's `http.client` and Node's `http`. Python and Node are required in CI.
 - **Guards**: a user file, a `pkg/` module and a relative import that call
   `HttpWire.service` each get `CHECK-UNKNOWN-NAME` with the `std/http` help
   (the `check` spec tests of the modules rules).
 - **Performance** is not a CI gate: `benchmarks/http_bench.py` against
-  `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md` (roadmap
-  20c-bench).
+  `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md`.
 
 [task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks
