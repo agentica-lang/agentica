@@ -91,13 +91,6 @@ static bool copy_bytes(agc_vm *vm, const agc_list *data, size_t from, size_t n, 
   return true;
 }
 
-static agc_value byte_list(const uint8_t *data, size_t n) {
-  agc_list_builder out;
-  agc_list_builder_sized(&out, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&out, agc_int(data[k]));
-  return agc_list_value(agc_list_builder_finish(&out));
-}
-
 static agc_value empty_list(void) {
   agc_list_builder out;
   agc_list_builder_sized(&out, 0);
@@ -367,7 +360,7 @@ agc_value agc_http_text_value(agc_vm *vm, const uint8_t *buf, size_t len, size_t
   agc_struct *t = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Text", text_fields, 6), 6);
   t->fields[0] = valid ? agc_string_value(agc_make_string((const char *)buf, whole, chars))
                        : agc_string_value(agc_make_string("", 0, 0));
-  t->fields[1] = valid ? byte_list(buf + whole, len - whole) : empty_list();
+  t->fields[1] = valid ? agc_list_value(agc_list_of_bytes(buf + whole, len - whole)) : empty_list();
   t->fields[2] = agc_int((int64_t)bytes);
   t->fields[3] = agc_bool(valid);
   t->fields[4] = agc_int((int64_t)buffered);

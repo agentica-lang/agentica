@@ -301,13 +301,16 @@ Expected types flow into these operations for empty collections and Results.
 - `System.pid()` is the process id of the running program, an `Int`. It needs no
   flag. A program that starts a VM with `--driver-pid` passes it, because the
   child VM checks it against its parent.
-- `FrontEnd.hand_off(program, options, arguments)` and
-  `FrontEnd.std_source(path)` belong to the front end of the single `agentica`
-  binary: the first hands a compiled program (a `List[Int]` of bytes) to the VM,
-  which runs it in a new runtime with the given VM options and arguments, and
-  the second reads an embedded `std/` source by its path in `stdlib/`. They are
-  not for programs: they need no flag, but any program that calls them, and any
-  front end run by `agentica run`, halts with `RUNTIME-FRONT-END-ONLY`.
+- `FrontEnd.hand_off(program, options, arguments)`,
+  `FrontEnd.std_source(path)` and `FrontEnd.stdin_bytes()` belong to the front
+  end of the single `agentica` binary: the first hands a compiled program (a
+  `List[Int]` of bytes) to the VM, which runs it in a new runtime with the given
+  VM options and arguments, the second reads an embedded `std/` source by its
+  path in `stdlib/`, and the third reads standard input to its end as a
+  `Result[List[Int]]` (an error over 16 MiB or when the read fails; a later
+  call reads on from there). They are not for programs: they need no flag, but
+  any program that calls them, and any front end run by `agentica run`, halts
+  with `RUNTIME-FRONT-END-ONLY`.
 - Each run has one generator, seeded from the operating system unless `agentica
   --seed N program.agc` is given (N in `0 .. 2147483647`, otherwise exit 2).
   Each task has its own generator: the main task starts from the seed, and each
@@ -364,7 +367,8 @@ and `JSON.encode` give its text. Signatures are in
 `agentica help NAME --json` prints the name, arity, parameter types, result,
 signature, effects and description, from the catalog that checking and execution
 use. Effects are informational (I/O, tasks, or `test`). An unknown target exits
-2.
+2. `agentica help --json` with no NAME prints every public builtin as one JSON
+array, sorted by name, each element exactly what `help NAME --json` prints.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by

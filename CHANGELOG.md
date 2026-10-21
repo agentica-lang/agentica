@@ -8,6 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica check --stdin FILE` checks the text on standard input as if `FILE`
+  held it.
+- `agentica help --json` with no NAME prints every builtin as one JSON array;
+  `agentica --json help` used to print the text summary.
+
+### Changed
+
+- **Breaking:** `agentica check FILE ... --stdin` is a usage error (exit 2);
+  extra words after `check FILE` used to be ignored.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added

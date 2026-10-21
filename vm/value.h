@@ -583,6 +583,8 @@ void agc_list_builder_sized(agc_list_builder *b, size_t n);
 void agc_list_builder_more(agc_list_builder *b, agc_value v);
 agc_list *agc_list_builder_finish(agc_list_builder *b);
 agc_list *agc_list_from_array(const agc_value *items, size_t n);
+/* A List of Int with one item per byte (0 to 255): the one copy of bytes into a list (stdin, streams, HTTP). */
+agc_list *agc_list_of_bytes(const uint8_t *data, size_t n);
 void agc_list_to_array(const agc_list *l, agc_value *out);
 void agc_list_cursor_begin(agc_list_cursor *c, const agc_list *l, size_t at);
 bool agc_list_cursor_fill(agc_list_cursor *c);

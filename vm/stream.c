@@ -243,18 +243,11 @@ void agc_inbuf_take(agc_inbuf *b, size_t n) {
   b->scanned = b->scanned > n ? b->scanned - n : 0;
 }
 
-static agc_value bytes_value(const uint8_t *data, size_t n) {
-  agc_list_builder out;
-  agc_list_builder_sized(&out, n);
-  for (size_t k = 0; k < n; k++) agc_list_builder_push(&out, agc_int(data[k]));
-  return agc_result_value(true, agc_list_value(agc_list_builder_finish(&out)));
-}
-
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count) {
   size_t have = agc_inbuf_pending(b);
   size_t n = have < count ? have : count;
   if (n == 0 && count > 0 && b->error) return agc_system_error(vm, "error reading from stream port", b->error);
-  agc_value result = bytes_value(pending_at(b), n);
+  agc_value result = agc_result_value(true, agc_list_value(agc_list_of_bytes(pending_at(b), n)));
   agc_inbuf_take(b, n);
   return result;
 }
@@ -294,7 +287,7 @@ agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const c
 
 agc_value agc_inbuf_cut_bytes_value(agc_vm *vm, const agc_inbuf_cut *cut) {
   if (cut->status == AGC_CUT_FAILED) return agc_system_error(vm, "error reading from stream port", cut->error);
-  return bytes_value(cut->data, cut->len);
+  return agc_result_value(true, agc_list_value(agc_list_of_bytes(cut->data, cut->len)));
 }
 
 void agc_inbuf_cut_free(agc_inbuf_cut *cut) {
