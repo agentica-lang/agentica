@@ -890,6 +890,93 @@ static void test_shared_writers_keep_their_lines_whole(void) {
   close_pipe();
 }
 
+/* The reader of test_forwarded_bytes...: counts the resumes the stream posts. */
+static int forward_resumes;
+
+static void count_resume(void *data) {
+  (void)data;
+  forward_resumes++;
+}
+
+/* Forwards chunks of FORWARD_CHUNK bytes of 'f' until the stream asks the reader to stop; returns the bytes sent. */
+#define FORWARD_CHUNK ((size_t)4096)
+
+static size_t forward_until_paused(agc_forward_wait *w) {
+  static uint8_t chunk[FORWARD_CHUNK];
+  memset(chunk, 'f', sizeof chunk);
+  size_t sent = 0;
+  for (int round = 0; round < 1000; round++) {
+    sent += sizeof chunk;
+    if (!agc_output_forward(out(), chunk, sizeof chunk, w)) return sent;
+  }
+  assert(false);
+  return sent;
+}
+
+static void test_forwarded_bytes_pause_at_the_bound_and_resume_once_the_queue_drains(void) {
+  open_pipe();
+  size_t junk = block_pipe();
+  fresh(pipe_fds[1]);
+  forward_resumes = 0;
+  agc_forward_wait w = {NULL, agc_io_loop(&vm), count_resume, NULL};
+  size_t sent = forward_until_paused(&w);
+  /* The ring takes CAP, then the queue grows past the bound by at most one chunk. */
+  assert(sent > CAP + AGC_FORWARD_BOUND && sent <= CAP + AGC_FORWARD_BOUND + FORWARD_CHUNK);
+  assert(forward_resumes == 0 && out()->own_end == 0);
+  read_junk(junk);
+  pump_until(junk + sent);
+  check_run(junk, 'f', sent);
+  assert(forward_resumes == 1);
+  finish();
+  close_pipe();
+}
+
+static void test_a_failed_stream_resumes_its_forwarders_and_drops_their_bytes(void) {
+  open_pipe();
+  (void)block_pipe();
+  fresh(pipe_fds[1]);
+  forward_resumes = 0;
+  agc_forward_wait w = {NULL, agc_io_loop(&vm), count_resume, NULL};
+  (void)forward_until_paused(&w);
+  close_reader();
+  for (int round = 0; round < 1000 && !out()->failed; round++) pump();
+  assert(out()->failed && forward_resumes == 1);
+  /* Only a child wrote there, so the failure does not fail the run. */
+  assert(!agc_output_failed(out()));
+  static const uint8_t more[] = "more";
+  assert(agc_output_forward(out(), more, sizeof more - 1, &w));
+  finish();
+  close(pipe_fds[1]);
+}
+
+/* A print that needs the whole ring keeps the order of arrival: the child bytes queued before it joined go first, the
+   ones after it wait for it. Without that, prints of exactly CAP bytes made one after another would keep a child's bytes
+   out for good. */
+static void test_child_bytes_queued_before_a_print_that_needs_the_whole_ring_go_first(void) {
+  open_pipe();
+  size_t junk = block_pipe();
+  fresh(pipe_fds[1]);
+  agc_task *a = make_task(), *t = make_task();
+  agc_forward_wait w = {NULL, agc_io_loop(&vm), count_resume, NULL};
+  uint8_t before[1000], after[1000];
+  memset(before, 'f', sizeof before);
+  memset(after, 'g', sizeof after);
+  assert(write_as(a, 'a', CAP, false));
+  assert(agc_output_forward(out(), before, sizeof before, &w));
+  assert(!write_as(t, 't', CAP, false));
+  assert(agc_output_forward(out(), after, sizeof after, &w));
+  read_junk(junk);
+  wait_ready(t);
+  assert(retry(t));
+  pump_until(junk + 2 * CAP + sizeof before + sizeof after);
+  check_run(junk, 'a', CAP);
+  check_run(junk + CAP, 'f', sizeof before);
+  check_run(junk + CAP + sizeof before, 't', CAP);
+  check_run(junk + 2 * CAP + sizeof before, 'g', sizeof after);
+  finish();
+  close_pipe();
+}
+
 /* The tests that fill no pipe, so they run on either kind of write end. */
 static void run_unfilled_pipe_tests(void) {
   test_small_prints_keep_order();
@@ -926,6 +1013,9 @@ int main(void) {
   test_the_end_of_run_moves_a_notice_held_by_a_stuck_print();
   test_the_notice_queue_is_bounded_but_a_kept_notice_is_not_dropped();
   test_a_final_notice_is_dropped_when_the_pipe_is_stuck();
+  test_forwarded_bytes_pause_at_the_bound_and_resume_once_the_queue_drains();
+  test_a_failed_stream_resumes_its_forwarders_and_drops_their_bytes();
+  test_child_bytes_queued_before_a_print_that_needs_the_whole_ring_go_first();
 #ifdef _WIN32
   overlapped_end = false;
   run_unfilled_pipe_tests();

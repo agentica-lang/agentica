@@ -196,10 +196,28 @@ typedef struct {
 
 typedef struct agc_output agc_output;
 
+/* A reader of bytes from outside the program (a child's stderr) that stopped reading because a stream's notice queue
+   passed AGC_FORWARD_BOUND (agc_output_forward). The stream keeps it, under its lock, until the queue is back to
+   AGC_FORWARD_RESUME or the stream fails or closes, then posts RESUME(DATA) to LOOP, the loop that owns the reader's
+   handle. Its owner keeps it alive until RESUME runs. */
+typedef struct agc_forward_wait agc_forward_wait;
+struct agc_forward_wait {
+  agc_forward_wait *next;
+  agc_loop *loop;
+  void (*resume)(void *data);
+  void *data;
+};
+
+#define AGC_FORWARD_BOUND AGC_OUTPUT_BUFFER
+/* Half the bound: the reader goes on while the queue still feeds the ring, so the pipe and the stream keep moving. */
+#define AGC_FORWARD_RESUME (AGC_FORWARD_BOUND / 2)
+
 typedef struct {
   agc_output *out;
   const agc_string *text;
   size_t done;
+  /* The stream's queue_in when the writer joined the FIFO: the queued bytes before it go ahead of the writer. */
+  uint64_t queue_mark;
   bool newline, flush;
 } agc_output_wait;
 
@@ -233,12 +251,23 @@ struct agc_output {
   uint8_t *buf;
   size_t start, len;
   uint8_t *notice;
-  size_t notice_at, notice_len;
+  /* The notice queue: bytes [notice_at, notice_len) of a buffer of notice_cap bytes, kept between uses while small. */
+  size_t notice_at, notice_len, notice_cap;
+  /* The bytes that have ever entered the queue; the ones that left it are queue_in minus what is queued. */
+  uint64_t queue_in;
   agc_stdio *io;
   agc_write_mode mode;
   agc_utf8_cut cut;
   bool writing, failed;
+  /* Positions in the bytes of the stream since it opened: `sent` bytes have been written, the ring holds the next
+     `len` and the queue the ones after. `own_end` is the position just past the last byte of text of the program or
+     the VM (bytes forwarded from a child never move it), or UINT64_MAX once such text met the failed stream. Text of
+     the program or the VM is still pending while own_end > sent; a failure freezes both, so a failed write fails the
+     run only when it lost such text (agc_output_failed). Queued bytes before own_end hold a VM notice (or come before
+     one) and go ahead of a waiting print. On the base stream. */
+  uint64_t sent, own_end;
   agc_task *waiters, *waiters_tail;
+  agc_forward_wait *forward_waits;
 };
 
 #define AGC_LOG_NO_HANDLER 4
@@ -705,6 +734,16 @@ bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out);
 bool agc_drain(agc_vm *vm);
 void agc_flush(agc_vm *vm);
+/* Queues N bytes from outside the program (a child's stderr) on OUT, on the I/O thread, behind what the stream already
+   holds, and starts their write: they never wait on the descriptor, and they take only the room that a waiting print
+   does not need, so they never go ahead of it. False when the notice queue holds more than
+   AGC_FORWARD_BOUND bytes after them: the caller stops reading, and W is called back once there is room. A failed
+   stream drops the bytes and returns true. A stream left on its blocking FILE (agc_output_open did not put it on the
+   loop: the C tests, the fuzzer, a descriptor that cannot be reopened) writes them with fwrite. */
+bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w);
+/* True once a write of the stream failed (its data is dropped from then on) and text of the program or the VM was lost
+   with it (agc_output.own_end): a failure that lost only bytes of a child's stderr does not fail the run. */
+bool agc_output_failed(const agc_output *out);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
 uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity);

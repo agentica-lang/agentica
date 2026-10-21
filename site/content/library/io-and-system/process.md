@@ -116,7 +116,7 @@ Stops the program if it still runs and frees it. Closing twice is fine.
 
 For a `Process.spawn` program, the closing task waits up to one second for it to end; other tasks keep running.
 
-Its standard error goes straight to yours, unless started with `Process.spawn_captured`.
+Its standard error goes to yours, unless started with `Process.spawn_captured`. It goes through your program's stderr buffer: while nobody reads your stderr, the child and `Process.wait` on it wait, and other tasks keep running.
 
 ## Process.spawn_captured
 
