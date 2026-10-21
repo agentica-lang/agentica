@@ -1,7 +1,7 @@
 ## The text form of lowering, for tests. See lower.agc.
 
 import Builtins from "../catalog/builtins"
-import Failure from "../check/check_failure"
+import Failure from "../diagnostics/problem"
 import CheckText from "../check/check_text"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"

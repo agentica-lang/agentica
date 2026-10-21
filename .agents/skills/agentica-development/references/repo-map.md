@@ -41,7 +41,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     package_import.agc package_cache.agc package_hash.agc  # which pkg/<name>/ imports are packages, the hash check, the stored name; the cache folder of a commit; the hash of the .agc files (Crypto.sha256)
   check/  # the checker, suggestions, constants and defaults
     suggest.agc  # did_you_mean (the linker also calls it)
-    check_state.agc check_types.agc check_failure.agc  # the checker: Cx and St, type operations and unification, packed Problems with their notes
+    check_state.agc check_types.agc  # the checker: Cx and St, type operations and unification
     check_register.agc check_stmt.agc check_expr.agc  # declarations and main; functions, blocks, statements, case; expressions and operators (CHECK-TOO-DEEP)
     check_call.agc check_method.agc  # calls, enum constructors, struct construction and update; methods and fields (Resolved by node id)
     check_rules.agc check_list.agc check_collections.agc check_args.agc  # the rule of each builtin
@@ -69,6 +69,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     bytecode.agc    # entry: `ROOT -o OUT` for each file; writes the .agcb and prints `wrote N bytes` or the ERROR line (flags as lower.agc, and `--version=V` for the header)
   diagnostics/  # the diagnostic record and its plain, JSON and AI text
     diagnostic.agc  # Diagnostic and Outcome[T]
+    problem.agc  # the packed Problem with its notes (pack, unpack), which every stage returns as its error
     diagnostic_json.agc  # the --json object of a Problem
     diagnostic_plain.agc diagnostic_ai.agc  # the plain text of a Problem and its --ai text
   bdd/  # the `agentica test` driver

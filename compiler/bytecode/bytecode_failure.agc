@@ -1,7 +1,7 @@
-## The BYTECODE- problems of the writer. A failing step returns `error(...)` of a packed problem (check_failure.agc
-## pack), as the lowering does, and `try` carries it to the writer, which unpacks it.
+## The BYTECODE- problems of the writer. A failing step returns `error(...)` of a packed problem (pack in
+## diagnostics/problem.agc), as the lowering does, and `try` carries it to the writer, which unpacks it.
 
-import Failure from "../check/check_failure"
+import Failure from "../diagnostics/problem"
 import Diag from "../diagnostics/diagnostic"
 import Ir from "../lower/ir"
 import Source from "../syntax/source"

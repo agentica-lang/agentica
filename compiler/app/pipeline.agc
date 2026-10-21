@@ -2,7 +2,7 @@
 ## data of the next stage or the first problem. The BDD driver and the command line (cli.agc) both run it.
 
 import Writer from "../bytecode/bytecode_writer"
-import Problems from "../check/check_failure"
+import Problems from "../diagnostics/problem"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
 import Linker from "../modules/linker"

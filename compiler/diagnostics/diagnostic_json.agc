@@ -5,7 +5,7 @@
 ## `callee`, `function` (the signature of the function being checked), `help` and `labels` (a `range` and a `text`
 ## each). The BDD driver sends it to the runner as the text of a file that did not compile.
 
-import Problems from "../check/check_failure"
+import Problems from "problem"
 import Diag from "diagnostic"
 import Source from "../syntax/source"
 

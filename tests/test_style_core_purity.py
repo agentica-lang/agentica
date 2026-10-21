@@ -16,6 +16,7 @@ a string, a heredoc, a comment and the builtin data rows (`"File.open"` in built
 - Imports: a core file may not import from `io/`, `app/` or `bdd/`, nor from a `std/` module that is not on
   PURE_STD_MODULES. A new std module is forbidden until someone reads it and lists it. A file of
   `syntax/` may not import a later stage (LATER_THAN_SYNTAX); it may import `diagnostics/`, the shared diagnostic data.
+  A file of `diagnostics/` may import only its own folder and `syntax/source` (DIAGNOSTICS_MAY_IMPORT).
 
 The entry programs (the text-form runners of each stage, run by tests with `agentica compiler/<folder>/<name>.agc`) are
 driving adapters that live next to their stage. They may read their command line with `System.args`, print with `puts`,
@@ -36,9 +37,12 @@ IO_FOLDERS = {"io"}
 APP_FOLDERS = {"app", "bdd"}
 LEXER = COMPILER / "syntax" / "lex.agc"
 # The stages after syntax/. The first stage cannot take a later one as input (syntax/ast once imported check/types; the
-# Type enum now lives in syntax/types.agc). diagnostics/ is shared data, not a stage, so syntax/ may import it; today
-# syntax/ takes only diagnostics/diagnostic, since the printers there still import check/check_failure (#472).
+# Type enum now lives in syntax/types.agc). diagnostics/ is shared data, not a stage, so syntax/ may import it.
 LATER_THAN_SYNTAX = {"modules", "packages", "check", "catalog", "lower", "bytecode"}
+# diagnostics/ is data that every stage reads (it once imported check/check_failure; the packed Problem now lives in
+# diagnostics/problem.agc). It may import its own folder and the one syntax file that holds the Span it points with,
+# which imports nothing, so no import cycle exists.
+DIAGNOSTICS_MAY_IMPORT = {"compiler/syntax/source"}
 
 OUTSIDE = "an adapter (io/ is for entry programs only, app/ and bdd/ never) or a file outside compiler/"
 FORBIDDEN_MODULES = {
@@ -149,6 +153,12 @@ def forbidden_imports(path, tokens, entry):
             found.append("%s imports %s, %s" % (path, target, OUTSIDE))
         elif path.startswith("compiler/syntax/") and folder in LATER_THAN_SYNTAX:
             found.append("%s imports %s, a later stage" % (path, target))
+        elif (
+            path.startswith("compiler/diagnostics/")
+            and folder != "diagnostics"
+            and resolved not in DIAGNOSTICS_MAY_IMPORT
+        ):
+            found.append("%s imports %s, a stage (diagnostics/ is shared data)" % (path, target))
     return found
 
 
@@ -239,4 +249,20 @@ def test_the_rule_reads_imports(tmp_path):
     entry = "compiler/syntax/lex.agc"
     assert [line.split(" imports ")[1].split(",")[0] for line in offenders({entry: tokens})] == [
         "../app/pipeline", "../bdd/bdd_driver", "std/http", "../check/checker",
+    ]
+
+
+def test_diagnostics_imports_no_stage(tmp_path):
+    (tmp_path / "probe.agc").write_text(
+        'import Diag from "diagnostic"\n'
+        'import Source from "../syntax/source"\n'
+        'import Types from "../syntax/types"\n'
+        'import Problems from "../check/check_failure"\n',
+        encoding="utf-8",
+    )
+    tokens = token_kinds(["probe.agc"], tmp_path)["probe.agc"]
+    path = "compiler/diagnostics/probe.agc"
+    assert offenders({path: tokens}) == [
+        "%s imports ../syntax/types, a stage (diagnostics/ is shared data)" % path,
+        "%s imports ../check/check_failure, a stage (diagnostics/ is shared data)" % path,
     ]
