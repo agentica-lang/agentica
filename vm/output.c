@@ -48,9 +48,18 @@ static _Noreturn void write_failed(agc_vm *vm, agc_output *out) {
   fail_write(vm, out);
 }
 
+/* Forwarded bytes on a stream left on its blocking FILE: written at once, as the VM's own writes to it are. A failed
+   write drops them; the next chunk tries again. */
+static bool forward_file(agc_output *out, const uint8_t *data, size_t n) {
+  agc_lock_take(out->lock);
+  if (fwrite(data, 1, n, out->file) == n) (void)fflush(out->file);
+  agc_lock_drop(out->lock);
+  return true;
+}
+
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->task->output.out == out; }
 
-bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed; }
+bool agc_output_failed(const agc_output *out) { return out->own && out->base && out->base->failed; }
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
@@ -131,13 +140,28 @@ static void drop_notices(agc_output *s) {
   s->notice_at = s->notice_len = 0;
 }
 
+/* The readers that stopped for a full queue read again: a step on their loop, at once where this is the loop's thread.
+   The step only restarts a read, so it may run under the stream's lock. */
+static void resume_forwarders(agc_output *s) {
+  agc_forward_wait *w = s->forward_waits;
+  s->forward_waits = NULL;
+  while (w) {
+    agc_forward_wait *next = w->next;
+    w->next = NULL;
+    agc_loop_call(w->loop, w->resume, w->data);
+    w = next;
+  }
+}
+
 static void pump(agc_output *s, bool force) {
   size_t left = queued(s);
   if (!left || s->failed || (!force && holds(s))) return;
   size_t n = smaller(left, room(s));
   put_bytes(s, s->notice + s->notice_at, n);
   s->notice_at += n;
-  if (s->notice_at == s->notice_len) drop_notices(s);
+  if (s->notice_at < s->notice_len) return;
+  drop_notices(s);
+  resume_forwarders(s);
 }
 
 static void stop_waiting(agc_output *s, agc_task *t) {
@@ -151,6 +175,7 @@ static void fail_stream(agc_vm *vm, agc_output *s) {
   s->failed = true;
   s->start = s->len = 0;
   drop_notices(s);
+  resume_forwarders(s);
   for (agc_task *t = s->waiters; t; t = t->wait_next) agc_task_wake(vm, t, "output");
 }
 
@@ -369,6 +394,7 @@ static bool take_turn(agc_vm *vm, agc_output *out, bool new_writer) {
 static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
   agc_output *s = out->base;
   bool new_writer = enter(vm, out);
+  out->own = true;
   if (new_writer) {
     agc_output_wait w = {.out = out, .text = text, .newline = newline};
     if (total(&w) == 0) {
@@ -552,6 +578,29 @@ static void finish_text(agc_vm *vm, agc_output *s, const char *text, size_t n) {
   write_last(vm, s);
 }
 
+bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w) {
+  agc_output *s = out->base;
+  if (!s) return forward_file(out, data, n);
+  /* The vm that opened the stream is the I/O thread's context: this runs in a libuv callback there. */
+  agc_vm *vm = s->vm;
+  stream_take(vm, s->lock);
+  bool more = true;
+  if (!s->failed) {
+    /* The queue of the VM's notices keeps the bytes whole beside the prints: they enter the ring ahead of waiting
+       writers, never inside a print that holds the stream. A kept append never drops them for the notice limit;
+       the bound below keeps the queue small instead. */
+    queue_notice(s, (const char *)data, n, true);
+    flush_now(vm, s);
+    if (!s->failed && queued(s) > AGC_FORWARD_BOUND) {
+      w->next = s->forward_waits;
+      s->forward_waits = w;
+      more = false;
+    }
+  }
+  stream_drop(vm, s->lock);
+  return more;
+}
+
 void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
   static const char lost[] = "agentica: a diagnostic was lost: out of memory\n";
   agc_output *out = n->out;
@@ -569,6 +618,7 @@ void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
   agc_output *s = out->base;
   stream_take(vm, s->lock);
   bool write = !s->failed && len;
+  out->own = true;
   if (write && mode == AGC_NOTICE_FINAL)
     finish_text(vm, s, text, len);
   else if (write)
@@ -613,6 +663,11 @@ void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
   (void)vm;
   (void)mode;
   fflush(n->out->file);
+}
+
+bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w) {
+  (void)w;
+  return forward_file(out, data, n);
 }
 #endif
 

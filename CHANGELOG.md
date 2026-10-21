@@ -21,6 +21,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `agentica check FILE ... --stdin` is a usage error (exit 2);
   extra words after `check FILE` used to be ignored.
 
+### Fixed
+
+- A child's stderr no longer stalls the VM when the VM's stderr is not read.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added

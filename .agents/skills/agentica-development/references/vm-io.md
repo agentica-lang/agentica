@@ -334,10 +334,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `close_handle`, whose error is the outcome when there was none. A line over
     `LIMIT` is an error; the handle is private, so no handle lock is taken
 - `vm/output.c`
-  - the writer of stdout and stderr, but not the only one: `vm/process.c`
-    forwards a child's stderr to `err.file` with a blocking `fwrite`
-    (`agc_write`, `agc_output_waiting`, `agc_drain` for `IO.flush`, `agc_flush`;
-    row 7.2.1f, `docs/vm/10-io-scheduler.md` §10.2.2).
+  - the only writer of stdout and stderr (`agc_write`, `agc_output_waiting`,
+    `agc_drain` for `IO.flush`, `agc_flush`; row 7.2.1f,
+    `docs/vm/10-io-scheduler.md` §10.2.2). `agc_output_forward` takes a child's
+    stderr on the I/O thread into the notice queue; past `AGC_FORWARD_BOUND`
+    queued it keeps the caller's `agc_forward_wait` and posts its resume once
+    the queue is empty or the stream failed. `own` says the program or the VM
+    wrote the stream, so a failure from forwarded bytes alone does not fail the
+    run.
   - Per stream an `agc_output` (`vm->rt->out` and `err`) with a 64 KiB ring
     (`AGC_OUTPUT_BUFFER`) and a FIFO of waiting writers
   - a print that fits and has nobody ahead of it is copied and returns,
@@ -422,11 +426,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Gotchas
 
-- Stdout and stderr: `vm/output.c` writes them, with one exception:
-  `vm/process.c` forwards the stderr of a child process (`Process.spawn`) to
-  `err.file` with a blocking `fwrite` in its read callback. That text is not in
-  the buffer or in the order of the calls, and it can block the loop when stderr
-  is stuck. `agc_vm_init` leaves
+- Stdout and stderr: only `vm/output.c` writes them; `vm/process.c` hands a
+  child's stderr to `agc_output_forward` and stops reading the pipe while the
+  stream's queue is full. `agc_vm_init` leaves
   both on the blocking `FILE *` it was given (`base` is null), so the C tests
 and
   the fuzzer never depend on the loop; `agc_launch_vm` (`vm/launch.c`) calls

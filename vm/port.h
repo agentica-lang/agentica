@@ -196,6 +196,20 @@ typedef struct {
 
 typedef struct agc_output agc_output;
 
+/* A reader of bytes from outside the program (a child's stderr) that stopped reading because a stream's notice queue
+   passed AGC_FORWARD_BOUND (agc_output_forward). The stream keeps it, under its lock, until the queue is empty or the
+   stream fails, then posts RESUME(DATA) to LOOP, the loop that owns the reader's handle. Its owner keeps it alive until
+   RESUME runs. */
+typedef struct agc_forward_wait agc_forward_wait;
+struct agc_forward_wait {
+  agc_forward_wait *next;
+  agc_loop *loop;
+  void (*resume)(void *data);
+  void *data;
+};
+
+#define AGC_FORWARD_BOUND AGC_OUTPUT_BUFFER
+
 typedef struct {
   agc_output *out;
   const agc_string *text;
@@ -238,7 +252,11 @@ struct agc_output {
   agc_write_mode mode;
   agc_utf8_cut cut;
   bool writing, failed;
+  /* The program or the VM itself put text in this stream (bytes forwarded from a child do not count): only then does a
+     failed write fail the run (agc_output_failed). */
+  bool own;
   agc_task *waiters, *waiters_tail;
+  agc_forward_wait *forward_waits;
 };
 
 #define AGC_LOG_NO_HANDLER 4
@@ -701,6 +719,15 @@ bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out);
 bool agc_drain(agc_vm *vm);
 void agc_flush(agc_vm *vm);
+/* Queues N bytes from outside the program (a child's stderr) on OUT, on the I/O thread, behind what the stream already
+   holds, and starts their write: they never wait on the descriptor. False when the notice queue holds more than
+   AGC_FORWARD_BOUND bytes after them: the caller stops reading, and W is called back once there is room. A failed
+   stream drops the bytes and returns true. A stream left on its blocking FILE (agc_output_open did not put it on the
+   loop: the C tests, the fuzzer, a descriptor that cannot be reopened) writes them with fwrite. */
+bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w);
+/* True once a write of the stream failed (its data is dropped from then on) and the program or the VM had written to it:
+   a failure while only a child's stderr went there does not fail the run. */
+bool agc_output_failed(const agc_output *out);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
 uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity);

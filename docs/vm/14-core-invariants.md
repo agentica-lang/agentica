@@ -86,9 +86,10 @@ Known exceptions, as built:
   or Windows. A full pipe then stalls every task, a stop signal interrupts the
   write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4), and the final
   `fflush` is not bounded by the flush limit. The stderr that a child process
-  writes is forwarded by a blocking `fwrite` too (`vm/process.c`), not through
-  the buffer: the one write outside `vm/output.c`, and it can block the loop on
-  a stuck stderr. With N > 1 they are locked per stream (§16.8).
+  writes goes through the same buffer (`agc_output_forward`, behind the queued
+  notices); past 64 KiB queued, the VM stops reading the child's stderr until
+  the queue is empty, so the child waits on its pipe, not the loop. With N > 1
+  they are locked per stream (§16.8).
 - **Notices (text the VM writes to stderr by itself).** A task crash diagnostic
   and the unobserved-task summary are queued (at most 1 MiB) and enter the
   stderr buffer ahead of waiting writers as room appears, in pieces if they are

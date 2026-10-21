@@ -13,8 +13,8 @@ section says how the scheduler and the loop keep them, as built.
   TLS and HTTP parsing run on the scheduler that resumes the task (§16.2).
   Output order across tasks is not defined.
 - **Output on the loop, blocking files.** Stdout and stderr are buffered and
-  written by the loop (10.2.2); only the fallbacks of §14.1 keep a blocking
-  write (and the forwarded stderr of a child process, 10.2.2). The VM never sets
+  written by the loop (10.2.2), the forwarded stderr of a child process too;
+  only the fallbacks of §14.1 keep a blocking write. The VM never sets
   the thread pool size (10.2.2, Pool size).
 - **Thread-pool threads never touch GC memory.** Requests and handles are
   `malloc`'d, and file buffers are `malloc`'d copies. The GC object that owns a
@@ -649,10 +649,15 @@ section says how the scheduler and the loop keep them, as built.
   the notice queue already holds its 1 MiB (`AGC_NOTICE_KEPT`), and it is queued
   inside a `setjmp` of `vm->fail`, so a failure in the writer's start
   (`agc_fail`) is caught; the text is already in the queue by then, and the
-  end-of-run wait or a later final notice writes it. **The one writer outside
-  this module.** `vm/process.c` forwards the stderr of a child process to the
-  stderr `FILE` with a blocking `fwrite`. It can block the loop when stderr is
-  stuck, and its text is not ordered with the buffered stderr. A write error on
+  end-of-run wait or a later final notice writes it. **A child's stderr.**
+  `vm/process.c` hands each chunk of a plain child's stderr to
+  `agc_output_forward` on the I/O thread: the bytes join the notice queue (so
+  they keep their order with `IO.warn` and never enter a print that holds the
+  stream) and the write starts. When more than 64 KiB wait in the queue the
+  child's pipe is no longer read (`uv_read_stop`) until the queue is empty, so a
+  stuck stderr stops the child, not the loop; the end of the run flushes what
+  was queued like any notice. A failed stderr drops these bytes, and fails the
+  run only when the program or the VM wrote to stderr too. A write error on
   stdout keeps today's exit-code rule (`agc_launch_settle` in `vm/launch.c`). No
   language change: the builtins keep their names, types and results, and a full
   stdout pipe stalls only the tasks that print.
