@@ -109,9 +109,14 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   pending: wait, then merge.
 - **Platforms** (`platforms.yml`: Windows, macOS Intel and ARM) runs on a PR
   only with the `platforms` label, and always on pushes to master. Add the
-  label when the PR touches platform code: `#if` branches, processes, files,
-  the child channel, threads or the Makefile. A master run that fails after a
-  merge without the label is fixed in a new PR at once.
+  label when the PR touches platform code: `vm/`, `#if` branches, processes,
+  files, the child channel, threads or the Makefile, and wait for all four
+  systems. A master run that fails after a merge without the label is fixed
+  in a new PR at once.
+- **Portable Agentica code** (`compiler/`, `stdlib/`, their Python tests,
+  docs, the site) gets no `platforms` label: do not run or wait for the
+  macOS and Windows jobs. Merge when `test` is green (plus `build` and Site
+  examples when they run); master's Platforms run catches the rare gap.
 - Wait with one background loop on `gh run list --branch <b>` filtered by the
   head SHA, started from the main checkout; run the query once in the
   foreground first.
