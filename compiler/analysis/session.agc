@@ -1,8 +1,7 @@
 ## What a library client keeps between questions (stdlib/analysis.agc): the settings of the machine and the buffers
 ## that stand in for files. The value is immutable: `update` and `close` give a new one, and a question reads the one
 ## it is given, so tasks may share a session and ask it at once. Each question builds its Workspace from the buffers
-## and runs the stages from the start; the `generation` counts the changes, so a caller can tell a session from an
-## older one.
+## and runs the stages from the start; the `generation` counts the changes.
 
 import Env from "../modules/link_env"
 import Overlay from "../modules/overlay"

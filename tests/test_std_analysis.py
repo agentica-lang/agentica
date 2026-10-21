@@ -1,7 +1,8 @@
 """`std/analysis` (issue #524): the library answers the questions of `check`, `outline` and `type-at`, and the command
 line runs the same code, so the answers are the same bytes. The cases run a driver program (tests/fixtures/analysis/
 driver.agc) that calls the library, and the CLI with `--json` on the same files, and compare both streams. The driver is
-compiled once for the module (it compiles the core of the front end with it); each case is a run of its bytecode."""
+compiled once for the module (it compiles the core of the front end with it); each case is a run of its bytecode. That
+cost bounds the breadth: thirteen questions of the spec tests of `outline` and `type-at` stand for them, not every one."""
 import json
 
 import pytest
@@ -18,6 +19,7 @@ EXTRA = "export def three() -> Int\n  return 3\nend\n"
 USES_EXTRA = 'import Extra from "extra"\n\ndef run() -> Int\n  return Extra.three()\nend\n'
 PARSE_ERROR = "def broken(\n"
 TYPE_ERROR = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
+USES_BAD = 'import Bad from "bad_util"\n\ndef run() -> Int\n  return Bad.twice(2)\nend\n'
 MISSING_IMPORT = 'import Nowhere from "nowhere"\n\ndef main() -> Void\n  puts("x")\nend\n'
 
 
@@ -32,6 +34,7 @@ def project(tmp_path):
     write_files(tmp_path, {
         "util.agc": UTIL, "main.agc": MAIN, "models.agc": MODELS, "orders.agc": ORDERS, "parse_error.agc": PARSE_ERROR,
         "type_error.agc": TYPE_ERROR, "missing_import.agc": MISSING_IMPORT, "uses_extra.agc": USES_EXTRA,
+        "bad_util.agc": "export def twice(n: Int) -> Int\n  return \"a\"\nend\n", "uses_bad.agc": USES_BAD,
     })
     return tmp_path
 
@@ -65,6 +68,7 @@ PARITY = [
     ("check", "type_error.agc"),
     ("check", "parse_error.agc"),
     ("check", "missing_import.agc"),
+    ("check", "uses_bad.agc"),
     ("outline", "models.agc"),
     ("outline", "orders.agc"),
     ("outline", "parse_error.agc"),
@@ -94,6 +98,21 @@ def test_an_unreadable_file_or_a_bad_position_is_a_query_usage_diagnostic_in_tha
     # `check` does not stop at a missing file: it answers that the program does not pass.
     stdout, stderr = library(driver, project, "check", "nope.agc")
     assert (stdout, json.loads(stderr)["code"]) == ("", "QUERY-USAGE")
+
+
+def test_a_diagnostic_with_every_note_reads_back_to_the_same_bytes(driver, project):
+    every_note = {
+        "code": "CHECK-TYPE-MISMATCH", "message": "m", "file": "a.agc", "key_path": "package.name",
+        "range": {"start": {"line": 2, "column": 3}, "end": {"line": 2, "column": 9}},
+        "expected": "Int", "actual": "String", "callee": "f(n: Int) -> Int", "function": "g() -> Void", "help": "h",
+        "labels": [
+            {"range": {"start": {"line": 1, "column": 1}, "end": {"line": 1, "column": 2}}, "text": "this is Int"},
+            {"range": {"start": {"line": 4, "column": 5}, "end": {"line": 5, "column": 1}}, "text": "and this"},
+        ],
+    }
+    (project / "note.json").write_text(json.dumps(every_note), encoding="utf-8")
+    canonical = json.dumps(every_note, sort_keys=True, separators=(",", ":")) + "\n"
+    assert library(driver, project, "diagnostic", "note.json") == (canonical, "")
 
 
 def test_tasks_ask_one_session_at_once_on_four_schedulers(driver, project):

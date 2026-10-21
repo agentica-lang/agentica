@@ -20,7 +20,8 @@ Analysis.outline_json(found) -> Json     # also type_at_json, diagnostic_json
 - Files come from the disk of the working folder, except those with a buffer
   (`update`, or `Workspace.buffers`): the text stands in for the file, whether
   or not the disk has it, for the file and for every file that imports it.
-  `close` gives the disk back. Two spellings of one file are one buffer.
+  `close` gives the disk back. Two spellings of one file are one buffer (create the folder of a new file
+  before `update`). `Workspace.version` is reserved (1).
 - A `Session` is an immutable value: tasks may share and ask it at once, and an
   `update` leaves the copy of other tasks as it was. `Session.internal` is not
   API. There is no cache: each question runs the stages from the start.
@@ -28,7 +29,9 @@ Analysis.outline_json(found) -> Json     # also type_at_json, diagnostic_json
   has `null`), an absent definition an empty list (`TypeAt.definition` holds 0
   or 1). `Checked.passed` is true when there is no problem, else `diagnostics`
   holds the first one. A range is `Region(start, stop)` of `Position(line,
-  column)`, from 1, in characters. `kind` is an open set.
+  column)`, from 1, in characters. `kind` is an open set. The types are aliases: read their fields,
+  do not construct them. A diagnostic's `file` is the root as typed;
+  `Checked.file` is the canonical name.
 - `outline` and `type_at` return an error whose message is one JSON diagnostic
   (the `--json` object). `Analysis.diagnostic(message)` reads it, so `try`
   works. Codes are the command line's: `LEX-`, `PARSE-`, `CHECK-`, `PKG-`,

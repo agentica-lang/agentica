@@ -6,6 +6,7 @@ import Analysis from "std/analysis"
 #   update PATH TEXTFILE   puts the text of TEXTFILE in the buffer of PATH
 #   close PATH             takes the buffer out
 #   check PATH             `{"ok":true}` on stdout, or the diagnostic on stderr
+#   diagnostic TEXTFILE    the diagnostic that Analysis.diagnostic reads from the JSON in TEXTFILE, written back
 #   check-all PATH...      the last command: one line on stdout for each PATH, from `check` run in tasks, four at a time
 #   outline PATH           the JSON on stdout, or the diagnostic on stderr
 #   type-at PATH LINE COL  the same
@@ -35,6 +36,10 @@ def main() -> Void
       else
         IO.warn(JSON.encode(Analysis.diagnostic_json(checked.diagnostics[0])))
       end
+      at += 2
+    elsif word == "diagnostic"
+      read = Analysis.diagnostic(File.read_text(words[at + 1], 10000).unwrap!)
+      puts(JSON.encode(Analysis.diagnostic_json(read.unwrap!)))
       at += 2
     elsif word == "check-all"
       show_all(session, words.drop(at + 1))

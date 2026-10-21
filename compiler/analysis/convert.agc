@@ -105,8 +105,8 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
   )
 end
 
-## The text of an optional one: a doc, an alias or a default is never the empty text when it is present, so absent and
-## "" mean the same.
+## The text of an optional one. The docs and defaults of an item have been through `DocModel.cleaned`, which turns a
+## blank one into Absent, and an alias is never empty, so absent and "" mean the same.
 export def text(value: Ast.Optional[String]) -> String
   case value
     Ast.Optional.Present(written) -> return written

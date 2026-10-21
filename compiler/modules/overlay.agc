@@ -33,9 +33,14 @@ export def put(buffers: List[Buffer], added: Buffer) -> List[Buffer]
   return without_key(buffers, added.names.key).push(added)
 end
 
-## `buffers` without the buffer of `file`, if it has one.
+## `buffers` without the buffer of `file`, if it has one: the buffer whose file has the same canonical name now, or
+## that was made with `file` spelled as given (the name of a file whose folder did not exist then may have changed
+## since).
 export def remove(buffers: List[Buffer], workspace: Workspace.Workspace, windows: Bool, file: String) -> List[Buffer]
-  return without_key(buffers, names_for(workspace, windows, file).key)
+  key = names_for(workspace, windows, file).key
+  return buffers.filter do |held: Buffer|
+    held.names.key != key and held.names.typed != file and held.names.absolute != file
+  end
 end
 
 ## Whether some buffer is the file `file` names, whichever way it is spelled.

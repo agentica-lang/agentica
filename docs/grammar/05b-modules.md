@@ -95,8 +95,8 @@ or receiver attachment.
   `..` as long as the path stays in `std/`.
 - `std/internal/` holds code that `std/` modules share and that is not API
   (`std/analysis` compiles the pure core of the front end from there). Only a
-  `std/` module may import it; any other file gets `CHECK-IMPORT-IO`, as for a
-  module that does not exist, and so does `agentica doc` or `outline` of it.
+  `std/` module may import it; any other file gets `CHECK-IMPORT-IO`, and so
+  does `agentica doc` or `outline` of it.
 - `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in order:
   `agc_libs/` beside the root program, or beside `agentica.toml` when the
   project has a manifest (not beside a dependency); the absolute roots in
