@@ -446,6 +446,8 @@ def test_a_run_that_chooses_no_count_has_one_scheduler_per_logical_core(tmp_path
     program = compile_agc(HELLO, tmp_path / "hello.agcb")
     got = run_vm(program, env=vm_environment(sched_trace), timeout=scaled(10))
     assert (got.code, got.stdout, scheduler_counts(got)) == (0, "hello\n", [logical_cores()])
+    got = run_vm(program, env=vm_environment({**sched_trace, "AGENTICA_SCHEDULERS": ""}), timeout=scaled(10))
+    assert (got.code, got.stdout, scheduler_counts(got)) == (0, "hello\n", [logical_cores()])
 
 
 @pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="host-only: sched_setaffinity sets the CPUs of a process on Linux only")
@@ -459,10 +461,12 @@ def test_the_default_count_follows_the_cpus_the_process_may_use(tmp_path, sched_
 
 
 @pytest.mark.parametrize("value, flag, code", (
-    ("0", None, 2), ("1025", None, 2), ("", None, 2), ("many", None, 2), ("-1", None, 2),
+    ("0", None, 2), ("1025", None, 2), ("many", None, 2), ("-1", None, 2),
     ("0001", None, 0), ("1", None, 0), ("1024", "1", 0),
+    # An empty variable is unset.
+    ("", None, 0), ("", "1", 0),
     # A bad variable is an error even next to a valid flag: the flag wins over a valid value only.
-    ("many", "1", 2), ("0", "1", 2), ("", "1", 2),
+    ("many", "1", 2), ("0", "1", 2),
 ))
 def test_the_scheduler_variable_is_checked_for_every_command(value, flag, code):
     """AGENTICA_SCHEDULERS is read before the front end starts, so a bad value stops `check` and a program alike."""

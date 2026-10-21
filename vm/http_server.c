@@ -318,7 +318,8 @@ static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!agc_task_owns(vm, args[1])) give_back(hs);
   agc_task *child = agc_task_spawn_owning(vm, hs->group, args[2], args[1], span);
   /* A child of a cancelled group starts cancelled and may have ended already, so the hook may not run; the server's
-     owner is cancelled too and closes the server, after which the room count no longer matters (#392). */
+     owner is cancelled too and closes the server, after which the room count no longer matters (#392). The child is
+     queued already, but this shared row runs under rt->sync, and `hidden` and the hook are read only under it. */
   child->hidden = true;
   child->end_data = hs;
   child->end = connection_ended;

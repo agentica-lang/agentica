@@ -461,6 +461,8 @@ bool agc_launch_env(const char *name, agc_launch_options *options) {
   /* A bad variable is an error even when the flag is given, as the flush limit's is: the flag wins over a valid value
      only. */
   const char *schedulers = getenv("AGENTICA_SCHEDULERS");
+  /* An empty value is unset, so `export AGENTICA_SCHEDULERS=` gives back the default count. */
+  if (schedulers && !*schedulers) schedulers = NULL;
   int64_t count = 0;
   if (schedulers && !parse_schedulers(schedulers, &count)) {
     fprintf(stderr, "%s: AGENTICA_SCHEDULERS needs an integer from 1 to %d\n", name, AGC_SCHEDULERS_MAX);

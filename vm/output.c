@@ -312,10 +312,35 @@ static void start_stream(void *data) {
   agc_stdio_start(q->out, q->part[0], q->length[0], q->part[1], q->length[1], request_finished, q);
 }
 
+static void wake_head(agc_vm *vm, agc_output *s) {
+  agc_task *head = s->waiters;
+  if (head && room(s) >= need(&head->output)) agc_task_wake(vm, head, "output");
+}
+
+/* A Unix socket polls writable only while less than a quarter of its buffer is used, so a socket never waits for the
+   poller before it has tried: it writes the ring, refilled from the queue, until the socket would block, and wakes the
+   head of the FIFO for the room it freed. The ring holds what comes before the queue and the waiting prints, so a
+   write from its start never passes them. Pipes and terminals keep the batch that the poller's wait gives. */
+static void try_socket(agc_vm *vm, agc_output *s) {
+  uint64_t before = s->sent;
+  for (;;) {
+    write_now(vm, s);
+    if (s->failed || s->len) break;
+    size_t left = queued(s);
+    pump(s, false);
+    if (queued(s) == left) break;
+  }
+  if (s->sent != before && !s->failed) wake_head(vm, s);
+}
+
 /* Starts a write of the ring if none is out: a pool job, or a request that tells the loop when the descriptor can be
    written (POLL) or when the stream has taken the bytes (STREAM). */
 static void kick(agc_vm *vm, agc_output *s) {
   if (s->failed || !s->len || s->writing) return;
+  if (agc_stdio_try_first(s)) {
+    try_socket(vm, s);
+    if (s->failed || !s->len) return;
+  }
   drain_request *q = begin_drain(s);
   if (s->mode == AGC_WRITE_DISK || s->mode == AGC_WRITE_THREAD) {
     agc_io_detached(vm, &drain_io, q, agc_void(), 0);
@@ -324,11 +349,6 @@ static void kick(agc_vm *vm, agc_output *s) {
   q->out = s;
   q->job = agc_io_detached(vm, &watch_io, q, agc_void(), AGC_JOB_QUIET);
   agc_io_call(vm, start_stream, q);
-}
-
-static void wake_head(agc_vm *vm, agc_output *s) {
-  agc_task *head = s->waiters;
-  if (head && room(s) >= need(&head->output)) agc_task_wake(vm, head, "output");
 }
 
 static void advance(agc_vm *vm, agc_output *s) {
@@ -465,11 +485,6 @@ static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newlin
     }
     if (!s->waiters && !queued(s) && total(&w) <= room(s)) {
       copy_piece(s, &w, total(&w));
-      /* A direct write only here: no print waits in the FIFO and no child bytes or VM notices are queued, so the ring
-         holds everything that came before this print, and write_now sends it in order from its start. Nothing that
-         must go first is passed, and no task is left parked with room it was not told of. Pipes and terminals keep
-         the batch that the wait gives. */
-      if (agc_stdio_try_first(s)) write_now(vm, s);
       kick(vm, s);
       stream_drop(vm, s->lock);
       return true;

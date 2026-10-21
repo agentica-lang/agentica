@@ -501,6 +501,27 @@ def test_a_socket_as_stdout_read_only_after_the_exit_gets_the_rows_of_a_later_tu
     assert err == ""
 
 
+# A line of 128 KiB and one byte, longer than the 64 KiB ring, after some rows: it goes out in pieces through the FIFO of
+# prints, and each piece must reach the socket without waiting for the poller's writable.
+BIG_LINE_PROGRAM = ROWS_PROGRAM.replace("    n += 1\n  end\n", "    n += 1\n  end\n  big = \"y\"\n  for i in 0..16\n"
+                                        "    big = big + big\n  end\n  puts(big)\n")
+
+
+@not_wine_socket
+@pytest.mark.parametrize("rows", [0, 110])
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_socket_as_stdout_read_only_after_the_exit_gets_a_line_longer_than_the_buffer(tmp_path, rows, schedulers):
+    summary, out, err = run_case(tmp_path, "socket_exit_big", BIG_LINE_PROGRAM % rows,
+                                 peer=["--socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER),
+                                       "--limit", str(scaled(30))],
+                                 vm=["--schedulers", schedulers])
+    assert summary["status"] == 0
+    lines = lines_of(out)
+    check_rows(lines[:-1], rows)
+    assert lines[-1] == "y" * (1 << 17)
+    assert err == ""
+
+
 @not_wine_socket
 def test_a_socket_as_stderr_read_only_after_the_exit_gets_every_row(tmp_path):
     summary, out, err = run_case(tmp_path, "socket_exit_err", ERROR_ROWS_PROGRAM % SOCKET_ROWS,

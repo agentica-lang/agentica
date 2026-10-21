@@ -136,7 +136,8 @@ static void start(agc_vm *vm, map_group *g, uint64_t now) {
     it->running = true;
     it->task = agc_task_spawn_seeded(vm, vm->task, g->fn, &arg, 1, g->span);
     /* A caller that is cancelled gets an item that started cancelled and may have ended already: the hook may not
-       run, and nothing needs it, since the cancelled caller never collects (#392). */
+       run, and nothing needs it, since the cancelled caller never collects (#392). The child is queued already, but
+       this stepper runs under rt->sync, and the end of a task reads `end` only under it. */
     it->task->end = item_ended;
     it->task->end_data = it;
     running_add(g, it);
