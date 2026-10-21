@@ -1,5 +1,6 @@
 import Writer from "../../../../compiler/bytecode/bytecode_writer"
 import Checker from "../../../../compiler/check/checker"
+import SaveFile from "../../../../compiler/io/save_file"
 import Env from "../../../../compiler/modules/link_env"
 import Linker from "../../../../compiler/modules/linker"
 import Lowering from "../../../../compiler/lower/lowering"
@@ -7,58 +8,115 @@ import SourceFile from "../../../../compiler/syntax/source_file"
 import Workspace from "../../../../compiler/modules/workspace"
 
 # Runs the pure core from a file to the bytes of its .agcb (link, check, lower, write) over a Workspace whose files are
-# an in-memory table, so no file of the disk is read: a stage that reached the machine instead of the Workspace would
-# fail on a path that exists nowhere. The program imports a sibling module, a package from the package cache
-# (pkg/greet/greet, found through the lock and the hash of its files) and a std/ module that std_source supplies.
+# an in-memory table, then writes the bytes to a file: the only write to the disk. The program imports a sibling
+# module, a package from the package cache (pkg/greet/greet, found through the lock and the hash of its files) and a
+# std/ module that std_source supplies.
 #
-# With the argument `windows`, the paths are drive paths and Env.windows is true, so the cache folder of the packages
-# is the one under %LOCALAPPDATA%. It prints the stored names of the linked files, each with whether the bytes hold it,
-# or the code and file of the first problem of a stage.
+# What this proves, and what it does not. The table is keyed under the base folder that the test passes, and the test
+# writes garbage files at the same paths of the disk, so a stage that read any of them (with or without a fallback to
+# the Workspace) would parse the garbage and fail: dynamic proof for reads. A call that reads nothing, such as
+# File.stat with its answer ignored, changes no result: only tests/test_style_core_purity.py, which looks for the
+# calls in the source, can see it, and a pure call such as Path.join is invisible to both. A stage that tried the
+# Workspace first and the disk after it is not caught either, since the Workspace answers every read.
+#
+# Arguments, in this order (the test owns the text and the hash of the package, and the version of the binary):
+#   base     the folder of the tree; with `windows` a drive path (C:/mem)
+#   version  the version the .agcb is stamped with, which `run` checks
+#   commit   the commit of the package in the lock
+#   git      the git URL of the package
+#   greet    the text of greet.agc
+#   hash     the hash of the package, from tests/package_support.package_hash
+#   out      the file the bytes are written to
+#   windows  (optional) the paths are drive paths and Env.windows is true, so the cache folder of the packages is the
+#            one under %LOCALAPPDATA%
+#
+# It prints "ok", or the code and file of the first problem of a stage.
 
-COMMIT = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+SAVE_TIMEOUT_MS = 10000
 
-# The hash that tests/package_support.package_hash gives for GREET (a second implementation of the hash rule).
-GREET_HASH = "sha256:26a7e161b772135bd4ae851cc1e47a0038d87576856325f8eb09f6f86fdff0bf"
+MAIN = <<~SRC
+  import Greet from "pkg/greet/greet"
+  import Mini from "std/mini"
+  import Util from "util"
 
-MAIN = (
-  "import Greet from \"pkg/greet/greet\"\nimport Mini from \"std/mini\"\nimport Util from \"util\"\n\n" +
-  "def main() -> Void\n  puts(Greet.hello(Util.twice(Mini.cap(9, 5)).to_s))\nend\n"
-)
+  def main() -> Void
+    puts(Greet.hello(Util.twice(Mini.cap(9, 5)).to_s))
+  end
+SRC
 
-UTIL = "export def twice(n: Int) -> Int\n  return n * 2\nend\n"
+UTIL = <<~SRC
+  export def twice(n: Int) -> Int
+    return n * 2
+  end
+SRC
 
-GREET = "export def hello(name: String) -> String\n  return \"hello \" + name\nend\n"
+MINI = <<~SRC
+  export def cap(n: Int, high: Int) -> Int
+    if n > high
+      return high
+    end
+    return n
+  end
+SRC
 
-MINI = "export def cap(n: Int, high: Int) -> Int\n  if n > high\n    return high\n  end\n  return n\nend\n"
-
-GIT = "https://github.com/acme/greet.git"
-
-MANIFEST = "name = \"app\"\n\n[dependencies]\ngreet = { git = \"#{GIT}\", tag = \"v1.0.0\" }\n"
+# What the test passes in.
+struct Given
+  base: String
+  version: String
+  commit: String
+  git: String
+  greet: String
+  hash: String
+  out: String
+  windows: Bool
+end
 
 # The tree of the project, and the package cache where Env says it is: the XDG folder, or the Windows one.
-def files_of(base: String, windows: Bool) -> Map[String, String]
+def files_of(given: Given) -> Map[String, String]
+  base = given.base
   pkg_root = "#{base}/cache/agentica/pkg"
-  if windows
+  if given.windows
     pkg_root = "#{base}/cache/agentica/cache/pkg"
   end
-  lock = (
-    "version = 1\n\n[[package]]\nname = \"greet\"\ngit = \"#{GIT}\"\n" +
-    "tag = \"v1.0.0\"\ncommit = \"#{COMMIT}\"\nhash = \"#{GREET_HASH}\"\n"
-  )
+  manifest = <<~TOML
+    name = "app"
+
+    [dependencies]
+    greet = { git = "#{given.git}", tag = "v1.0.0" }
+  TOML
+  lock = <<~TOML
+    version = 1
+
+    [[package]]
+    name = "greet"
+    git = "#{given.git}"
+    tag = "v1.0.0"
+    commit = "#{given.commit}"
+    hash = "#{given.hash}"
+  TOML
   return {
     "#{base}/project/src/main.agc": MAIN,
     "#{base}/project/src/util.agc": UTIL,
-    "#{base}/project/agentica.toml": MANIFEST,
+    "#{base}/project/agentica.toml": manifest,
     "#{base}/project/agentica.lock": lock,
-    "#{pkg_root}/github.com/acme/greet/#{COMMIT}/greet.agc": GREET,
+    "#{pkg_root}/#{cache_path(given.git)}/#{given.commit}/greet.agc": given.greet,
   }
+end
+
+# The part of the cache path of a git URL: host/owner/repo, with no scheme and no .git.
+def cache_path(git: String) -> String
+  rest = git.slice("https://".length, git.length - "https://".length)
+  if rest.ends_with?(".git")
+    return rest.slice(0, rest.length - ".git".length)
+  end
+  return rest
 end
 
 def in_memory(files: Map[String, String]) -> Workspace.Workspace
   return Workspace.Workspace(
     read_text: reader() do |path: String| read_file(files, path) end,
-    file_exists: check() do |path: String| files.has_key?(path) end,
-    directory_exists: check() do |path: String| folder?(files, path) end,
+    file_exists: predicate() do |path: String| files.has_key?(path) end,
+    directory_exists: predicate() do |path: String| folder?(files, path) end,
     real_path: resolver() do |path: String| ok(path) end,
     resolve_path: resolver() do |path: String| ok(path) end,
     std_source: resolver() do |name: String| std_module(name) end,
@@ -72,7 +130,7 @@ def reader(f: Fn[String, SourceFile.Read]) -> Fn[String, SourceFile.Read]
   return f
 end
 
-def check(f: Fn[String, Bool]) -> Fn[String, Bool]
+def predicate(f: Fn[String, Bool]) -> Fn[String, Bool]
   return f
 end
 
@@ -114,7 +172,8 @@ def folder?(files: Map[String, String], path: String) -> Bool
 end
 
 # The names directly inside a folder: a name with more path after it is a folder. The package hash lists the folder of
-# the package as "<root>/", with the "/" it gets from joining an empty name, and a disk accepts that.
+# the package as "<root>/", with the "/" it gets from joining an empty name, and a disk accepts that: the stub strips
+# it until the Workspace contract is fixed (issue #497).
 def entries(files: Map[String, String], listed: String) -> Result[List[Workspace.Entry]]
   path = listed
   if path.ends_with?("/")
@@ -138,69 +197,59 @@ def entries(files: Map[String, String], listed: String) -> Result[List[Workspace
 end
 
 def main() -> Void
-  windows = System.args().any? do |argument: String| argument == "windows" end
-  base = "/mem"
+  args = System.args()
+  given = Given(
+    base: args[0],
+    version: args[1],
+    commit: args[2],
+    git: args[3],
+    greet: args[4],
+    hash: args[5],
+    out: args[6],
+    windows: args.size > 7 and args[7] == "windows",
+  )
   env = Env.Env(
     agentica_path: "",
     xdg_data_home: "",
-    xdg_cache_home: "#{base}/cache",
+    xdg_cache_home: "#{given.base}/cache",
     home: "",
     local_app_data: "",
     windows: false,
   )
-  if windows
-    base = "C:/mem"
-    env = env.with(xdg_cache_home: "", local_app_data: "#{base}/cache", windows: true)
+  if given.windows
+    env = env.with(xdg_cache_home: "", local_app_data: "#{given.base}/cache", windows: true)
   end
-  workspace = in_memory(files_of(base, windows))
-  settings = Env.embedded_settings(workspace, env, "0.0.0", false)
-  puts(compile("#{base}/project/src/main.agc", settings))
+  settings = Env.embedded_settings(in_memory(files_of(given)), env, given.version, false)
+  puts(compile("#{given.base}/project/src/main.agc", given.out, settings))
 end
 
-# The stored names of the linked files, then for each whether the .agcb holds it; or the first problem of a stage.
-def compile(path: String, settings: Env.Settings) -> String
+# "ok" once the bytes are written, or the first problem of a stage.
+def compile(path: String, out: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
     Linker.Linking.Failed(failure) -> return "LINK #{failure.diagnostic.code} #{failure.file}"
     Linker.Linking.Done(linked) ->
       case Checker.check(linked, settings)
         Checker.Checking.Failed(problem) -> return "CHECK #{problem.code} #{problem.file}"
-        Checker.Checking.Done(checked) -> return lower(linked, checked, settings)
+        Checker.Checking.Done(checked) -> return lower(linked, checked, out, settings)
       end
   end
 end
 
-def lower(linked: Linker.Linked, checked: Checker.Checked, settings: Env.Settings) -> String
+def lower(linked: Linker.Linked, checked: Checker.Checked, out: String, settings: Env.Settings) -> String
   case Lowering.lower(linked, checked)
     Lowering.Lowered.Failed(problem) -> return "LOWER #{problem.code} #{problem.file}"
     Lowering.Lowered.Done(program) ->
       case Writer.write(program, settings.version)
         Writer.Written.Failed(problem) -> return "WRITE #{problem.code} #{problem.file}"
-        Writer.Written.Done(bytes) -> return report(linked, bytes)
+        Writer.Written.Done(bytes) -> return save(bytes, out)
       end
   end
 end
 
-def report(linked: Linker.Linked, bytes: List[Int]) -> String
-  names = linked.modules.map do |module: Linker.LinkedModule| module.name end.sort
-  lines = names.map do |name: String| "#{name} in-bytes=#{holds?(bytes, String.to_bytes(name))}" end
-  return lines.join("\n")
-end
-
-# Whether the bytes hold the piece, as a run of bytes (the stored names are written as they are in the .agcb).
-def holds?(bytes: List[Int], piece: List[Int]) -> Bool
-  for start in 0..(bytes.size - piece.size)
-    if run_at?(bytes, start, piece)
-      return true
-    end
+def save(bytes: List[Int], out: String) -> String
+  saved = SaveFile.bytes(out, bytes, SAVE_TIMEOUT_MS)
+  if saved.ok?
+    return "ok"
   end
-  return false
-end
-
-def run_at?(bytes: List[Int], start: Int, piece: List[Int]) -> Bool
-  for offset in 0...piece.size
-    if bytes[start + offset] != piece[offset]
-      return false
-    end
-  end
-  return true
+  return "SAVE #{saved.message}"
 end
