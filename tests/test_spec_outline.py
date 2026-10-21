@@ -2,6 +2,7 @@
 spans (docs/future/39-semantic-cli.md, 39.2 to 39.7). The cases read the JSON form and assert fields, spans, codes and
 exit codes, never message text; one case reads the text form."""
 import json
+import os
 
 import pytest
 
@@ -128,13 +129,14 @@ def test_the_file_is_named_by_its_canonical_path_relative_to_the_working_folder(
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     real = (work / "sub" / "one.agc").resolve()
-    # Any spelling of a file below the working folder gives one name; a file outside it gives its absolute path, with
-    # "/" separators on every system.
+    # Any spelling of a file below the working folder gives one name; a file outside it gives its absolute path.
     for typed in ["sub/one.agc", "./sub/../sub/one.agc", str(work / "sub" / "one.agc")]:
         report = answer(typed, cwd=work)
         assert report["file"] == "sub/one.agc"
         assert report["items"][0]["span"]["file"] == "sub/one.agc"
-    assert answer(str(real), cwd=elsewhere)["file"] == real.as_posix()
+    # The spelling of an absolute path is the system's own (a drive letter, a separator), so compare the files.
+    outside = answer(str(real), cwd=elsewhere)["file"]
+    assert os.path.isabs(outside) and os.path.samefile(outside, real)
 
 
 def test_an_embedded_std_module_is_named_with_its_extension(tmp_path):
