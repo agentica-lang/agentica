@@ -3,10 +3,10 @@
 **Status:** Designed. The built parts (45-0 `std/toml`, and the manifest, the
 lock and the cache imports of 45a) are specified in
 [`05b-modules.md`](../grammar/05b-modules.md), the contract. This file keeps
-the decisions and what is pending (45b to 45d). It sits on the path to the JIT:
-after the native Windows and macOS builds (issue
-[#344](https://github.com/sonic182/agentica/issues/344)) and before the FFI
-(issue [#534](https://github.com/sonic182/agentica/issues/534)).
+the decisions and what is pending (45b to 45d). It is item 3 of the list after
+0.8.0 in the [roadmap](../roadmap/README.md): after the FFI core (issue
+[#534](https://github.com/sonic182/agentica/issues/534)) and before the native
+packages (FFI-b).
 
 Decided by the owner:
 
