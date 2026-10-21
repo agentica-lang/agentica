@@ -1647,6 +1647,10 @@ static void release_handles(agc_vm *vm) {
 }
 
 void agc_io_goodbye(agc_vm *vm) {
+  /* A close that a scheduler posted after the I/O thread's last pass is still in the inbox: agc_io_serve stops at
+     `over`, which a scheduler sets without the inbox. The resource has already left the registry, so the walk below
+     does not see it; running the close here sends its goodbye (a TLS socket's close_notify) before the exit. */
+  if (vm->rt->loop && vm->rt->loop->inbox) (void)agc_inbox_run(vm->rt->loop->inbox);
   snapshot shot = registry_snapshot(vm);
   for (size_t k = shot.count; k-- > 0;) {
     agc_resource *r = shot.items[k];

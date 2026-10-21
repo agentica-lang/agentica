@@ -2130,6 +2130,65 @@ def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path,
             process.wait()
 
 
+NET_CLOSE_AT_END = r"""def churn(path: String) -> Int
+  count = 0
+  while true
+    file = File.open(path, "read", 5000).unwrap!
+    File.close(file, 5000)
+    count = count + 1
+  end
+  return count
+end
+
+def main() -> Void
+  dir = System.args()[0]
+  socket = TLS.connect("localhost", System.args()[1].to_i!, "#{dir}/ca.pem", 5000).unwrap!
+  Task.spawn(&churn, "#{dir}/ca.pem")
+  Task.spawn(&churn, "#{dir}/ca.pem")
+  TCP.send(socket, "hello\n", 5000).unwrap!
+  TCP.read_line(socket, 5000).unwrap!
+  ended = TCP.read_line(socket, 5000)
+  TCP.close(socket)
+end
+"""
+
+
+def serve_one_tls_12_session(listener, outcome):
+    """Reads a line, answers it, sends close_notify and records whether the client answers with its own."""
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.maximum_version = ssl.TLSVersion.TLSv1_2
+    context.load_cert_chain(TLS_DIR + "/server.pem", TLS_DIR + "/server-key.pem")
+    conn, _ = listener.accept()
+    conn.settimeout(30)
+    with context.wrap_socket(conn, server_side=True) as tls:
+        data = b""
+        while not data.endswith(b"\n") and (chunk := tls.recv(4096)):
+            data += chunk
+        tls.sendall(b"bye\n")
+        try:
+            tls.unwrap()
+            outcome.append("close_notify")
+        except ssl.SSLEOFError:
+            outcome.append("eof")
+
+
+@RACE
+def test_a_tls_close_right_before_main_returns_still_sends_close_notify(tmp_path, repeats):
+    # TCP.close posts the close to the I/O thread and main returns at once. The I/O thread stops serving at the end
+    # of the run, so a close posted after its last pass was left in the inbox and the socket ended without close_notify
+    # (macOS CI, test_vm_tls.py on four schedulers). The two tasks that open and close a file keep the I/O thread busy,
+    # which makes that late post likely.
+    bytecode = program(tmp_path, "net_close_at_end", NET_CLOSE_AT_END)
+    for _ in range(5 * repeats):
+        outcome = []
+        with socket.create_server(("127.0.0.1", 0)) as listener:
+            server = threading.Thread(target=serve_one_tls_12_session, args=(listener, outcome))
+            server.start()
+            result = vm(bytecode, args=(TLS_DIR, str(listener.getsockname()[1])), timeout=60)
+            server.join(60)
+        assert (result.code, outcome) == (0, ["close_notify"]), result.stderr
+
+
 NET_STALL = r"""def accept(listener: Listener) -> Result[Socket]
   return TCP.accept(listener, 60000)
 end
