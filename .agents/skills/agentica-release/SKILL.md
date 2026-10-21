@@ -52,8 +52,8 @@ branch such as `release/<version>`. Change only:
 Wrap every build in
 `systemd-run --user --scope -q -p MemoryMax=8G -p MemorySwapMax=0 -- <cmd>`.
 
-- The commit message is `release version <version>`.
-- The PR title is the same. Its body lists the version, the date and the
+- The commit message, the PR title and the tag message are all
+  `release version <version>`. The PR body lists the version, the date and the
   stage0 refresh.
 - Label it `platforms` (Platforms runs on a PR only with that label), and
   take it to merge with `.agents/skills/agentica-dev-workflow/`. CI and
@@ -61,8 +61,8 @@ Wrap every build in
 
 ## 2. Tag and publish
 
-Right away after the PR merges, tag its merge commit. You do not need a
-checkout of master:
+Right away after the PR merges, tag its merge commit (no checkout of master
+needed):
 
 ```bash
 git fetch origin
@@ -87,14 +87,14 @@ git push origin <version>
 
 ## 3. Release notes
 
-`publish` leaves the notes empty. Write them by hand. Keep them short:
+`publish` leaves the notes empty. Write them by hand, short:
 
 - the key user-visible points;
 - the breaking changes;
 - for a beta, what is missing on Windows;
 - a link to the CHANGELOG section for the details.
 
-Do not list PRs. The details stay in `CHANGELOG.md`.
+Do not list PRs; the details stay in `CHANGELOG.md`.
 
 ```bash
 gh release edit <version> --notes-file <file>
@@ -119,8 +119,8 @@ that its release link opens the release.
 
 - The release page has the four archives (`linux-x86_64.tar.gz`,
   `macos-x86_64.tar.gz`, `macos-arm64.tar.gz`, `windows-x86_64.zip`, each
-  `agentica-<version>-…`) and `SHA256SUMS`. A beta is marked Pre-release; a
-  final release is Latest.
+  `agentica-<version>-…`) and `SHA256SUMS`. A beta is Pre-release; a final
+  release is Latest.
 - Download one archive, check it against `SHA256SUMS`, and run
   `bin/agentica --version`: it prints `<version>`.
 - CI and Pages on master are green.
@@ -133,7 +133,5 @@ that its release link opens the release.
   set up. Never claim them in the notes.
 - A manual run of `release.yml` (`gh workflow run release.yml --ref <branch>`)
   only uploads artifacts. Use it to try a release change before tagging.
-- The tag message and the bump commit use the same text,
-  `release version <version>`.
 - Never tag a commit whose `VERSION` differs from the tag: the `version` job
   fails, and the tag must be removed (ask the owner first).
