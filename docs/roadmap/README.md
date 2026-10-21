@@ -207,7 +207,8 @@ rows after them may run in parallel when needed and keep their relative order.
     the opt-in `--partial`, `agentica refs` (position form done), JSON first;
     front end and CLI only, nothing to run, no LSP; the full 6c round (step 10)
     measures it. The same answers as a library, `std/analysis` (issue #524):
-    `Std.source` and the library without a cache are done, the cache is pending
+    `Std.source` and the library without a cache (`check`, `outline`, `type_at`,
+    `symbol`, `refs`) are done, the cache is pending
   - **Outcome:** Agents list declarations, find definitions and references
     across modules, and get the checked type at a position, without reading
     whole files or guessing from `rg`
