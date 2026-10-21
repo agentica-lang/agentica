@@ -14,6 +14,16 @@ rule that a site page shows.
 - `make site` needs Dart Sass's `sass` on PATH or in
   `~/.local/opt/dart-sass`. The pinned version and sha256 are in
   `pages.yml`.
+- `make site` also needs Node and `npm ci --prefix site/highlight`. After
+  Hugo, `site/highlight/highlight.mjs` colors every `agentica` block with the
+  TextMate grammar of agc-tmlanguage, copied to
+  `site/highlight/agentica.tmLanguage.json` (the source commit is the
+  `grammar` field of its `package.json`). Each token gets the Chroma class
+  whose color it should have, so `_code.scss` styles both. The script fails
+  when it finds no block. `render-codeblock.html` wraps each block in
+  `div.agc-code` for it; `make site-serve` skips the script, so there the
+  blocks keep Hugo's Ruby colors.
+- `SITE_OUT` sets the output folder of `make site` (default `site/public`).
 
 ## Version
 

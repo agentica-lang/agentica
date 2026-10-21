@@ -21,7 +21,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli conformance conformance-report bootstrap-smoke test-distribution release-check release-package release-smoke clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli conformance conformance-report bootstrap-smoke test-distribution release-check release-package release-smoke clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass site-highlight dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -286,6 +286,7 @@ clean:
 	rm -rf dist build site/public site/resources
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
+SITE_OUT ?= site/public
 
 site site-serve site-sass: export PATH := $(DART_SASS):$(PATH)
 site site-serve: export HUGO_PARAMS_VERSION = $(AGC_VERSION)
@@ -293,8 +294,12 @@ site site-serve: export HUGO_PARAMS_VERSION = $(AGC_VERSION)
 site-sass:
 	@command -v sass >/dev/null || { echo "The site needs Dart Sass: put its sass on PATH or in $(DART_SASS) (pinned version in .github/workflows/pages.yml)" >&2; exit 1; }
 
-site: site-sass
-	hugo --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
+site-highlight:
+	@test -d site/highlight/node_modules || { echo "The site needs its highlighter: run npm ci --prefix site/highlight (needs Node)" >&2; exit 1; }
+
+site: site-sass site-highlight
+	hugo --cleanDestinationDir --source site --panicOnWarning --destination $(abspath $(SITE_OUT)) $(HUGO_FLAGS)
+	node site/highlight/highlight.mjs $(SITE_OUT)
 
 site-serve: site-sass
 	hugo server --source site
