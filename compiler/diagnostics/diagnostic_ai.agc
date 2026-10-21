@@ -59,7 +59,8 @@ def trim(text: String) -> String
   while last > first and space?(characters[last - 1])
     last -= 1
   end
-  return text.slice(first, last - first)
+  length = last - first
+  return text.slice(first, length)
 end
 
 def space?(character: String) -> Bool
