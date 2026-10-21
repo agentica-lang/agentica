@@ -1,7 +1,7 @@
-## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then
-## does what the first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a
-## module with `doc`, list the declarations of a file with `outline`, give the type at a position with `type-at`, or
-## start the tests.
+## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then does what the
+## first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a module with
+## `doc`, list the declarations of a file with `outline`, give the type at a position with `type-at`, list the
+## references to a name with `refs`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -9,7 +9,8 @@
 ## exit status (front_end_cli.agc hands the bytes to C).
 ##
 ## `agentica check --stdin FILE` checks the text on standard input as if FILE held it (io/stdin_buffer.agc); a query
-## command (`outline`) takes `--stdin FILE` the same way, and `type-at --stdin FILE:LINE:COL` reads FILE from it.
+## command (`outline`) takes `--stdin FILE` the same way, and `type-at` and `refs` with `--stdin FILE:LINE:COL` read
+## FILE from it.
 ##
 ## `agentica run [OPTIONS] -- FILE.agcb [ARGS...]`, which runs a compiled program, is not here: C answers it before it
 ## starts this front end.
@@ -88,7 +89,7 @@ def dispatch(session: Session) -> Int
     return emit(Help.help(words, session.options.style))
   elsif first == "doc"
     return doc(session, words)
-  elsif first == "outline" or first == "type-at"
+  elsif first == "outline" or first == "type-at" or first == "refs"
     return query(session, first, words.drop(1))
   elsif first == "symbol"
     return symbol(session, words.drop(1))
@@ -139,12 +140,14 @@ def answered(session: Session, answer: Reply.Answer, source: String) -> Int
   end
 end
 
-# A query command: the words after its name give the options and the one file, or for `type-at` the one position. The
-# style may come from them as well as from the options in front of the command.
+# A query command: the words after its name give the options and the one file, or for `type-at` and `refs` the one
+# position. The style may come from them as well as from the options in front of the command.
 def query(session: Session, verb: String, words: List[String]) -> Int
   usage = CliQuery.outline_usage()
   if verb == "type-at"
     usage = CliQuery.type_at_usage()
+  elsif verb == "refs"
+    usage = CliQuery.refs_usage()
   end
   case QueryOptions.parse(words, session.options.style, usage)
     QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
@@ -153,8 +156,8 @@ def query(session: Session, verb: String, words: List[String]) -> Int
       case QueryFiles.pick(asked, usage)
         QueryFiles.Picked.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
         QueryFiles.Picked.File(file) ->
-          if verb == "type-at"
-            return position(styled, file, asked.stdin != "", usage)
+          if verb != "outline"
+            return position(styled, verb, file, asked.stdin != "", usage)
           end
           if asked.stdin == ""
             return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings), file)
@@ -182,19 +185,26 @@ def symbol(session: Session, words: List[String]) -> Int
   end
 end
 
-# `type-at FILE:LINE:COL`, or `type-at --stdin FILE:LINE:COL`, where the text of FILE is the standard input.
-def position(session: Session, word: String, buffered: Bool, usage: String) -> Int
+# `type-at FILE:LINE:COL` or `refs FILE:LINE:COL`, or the same with `--stdin`, where the text of FILE is the standard
+# input.
+def position(session: Session, verb: String, word: String, buffered: Bool, usage: String) -> Int
   case QueryPosition.parse(word, usage)
     QueryPosition.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryPosition.Parsed.Ready(asked) ->
-      style = session.options.style
       if !buffered
-        return answered(session, CliQuery.type_at(asked, style, session.settings), asked.file)
+        return answered(session, position_answer(verb, asked, session), asked.file)
       end
       return with_buffer(session, asked.file) do |read: Session|
-        answered(read, CliQuery.type_at(asked, style, read.settings), asked.file)
+        answered(read, position_answer(verb, asked, read), asked.file)
       end
   end
+end
+
+def position_answer(verb: String, asked: QueryPosition.Asked, session: Session) -> Reply.Answer
+  if verb == "refs"
+    return CliQuery.refs(asked, session.options.style, session.settings)
+  end
+  return CliQuery.type_at(asked, session.options.style, session.settings)
 end
 
 # `check --stdin FILE`: the text of FILE is the standard input. FILE need not exist, but its folder does: imports and

@@ -157,3 +157,38 @@ export struct Symbols
   matches: List[Symbol]
   skipped: List[Skipped]
 end
+
+## The declaration that `refs` found. `kind` is as for `Definition` and `owner` is the struct of a field or the enum of
+## a variant, as its file writes it ("" for others). `module` is the file of the declaration, and `range` and
+## `name_range` are in it; `exported` is its flag.
+export struct Declaration
+  kind: String
+  name: String
+  owner: String
+  module: String
+  exported: Bool
+  signature: String
+  range: Diagnostics.Region
+  name_range: Diagnostics.Region
+end
+
+## One use of a declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`), the
+## `function` it is in ("" at the top level), and the `range` of the name in `file`.
+export struct Reference
+  kind: String
+  function: String
+  file: String
+  range: Diagnostics.Region
+end
+
+## The answer of `refs` for `query` (`FILE:LINE:COL` as asked). `definition` is empty for a builtin, which `builtin`
+## names (`File.read`; "" for anything else). `references` do not include the definition; they are in the order of the
+## linked files and, within one file, of the text. `skipped` is always empty for now: a position names one file.
+export struct Refs
+  version: Int
+  query: String
+  definition: List[Declaration]
+  builtin: String
+  references: List[Reference]
+  skipped: List[Skipped]
+end

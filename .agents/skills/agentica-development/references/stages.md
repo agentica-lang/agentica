@@ -109,20 +109,22 @@ stage:
     The manifests of the locked packages are checked before any file loads
     (`check_manifests`). The hash and link errors are at the import.
 
-- **Stage:** query (`query/`, `agentica outline`, `type-at`, `symbol`)
+- **Stage:** query (`query/`, `agentica outline`, `type-at`, `refs`, `symbol`)
   - **Codes:** `QUERY-USAGE`, at the pseudo-file `<arguments>` (line 1, column
     1), exit 2: a missing or extra argument, an unknown option, `--stdin`
     without a file, a bad `FILE:LINE:COL`, an unreadable path, or a folder with
     no `*.agc` file. `QUERY-NOT-FOUND`, at `<arguments>`, exit 2: `symbol` NAME
     is in no linked module and no builtin (`symbol` also exits 1 with the first
     diagnostic when no root links).
-    `QUERY-NO-EXPRESSION`, at the position in the file, exit 2: `type-at` on no
-    token of an expression. The stage reads the words (`query_options.agc`),
-    picks and names the file (`query_files.agc`) and lists the declarations
+    `QUERY-NO-EXPRESSION`, at the position in the file, exit 2: `type-at` or
+    `refs` on no token of an expression or name (`refs` also on a name in an
+    import line). The stage reads the words (`query_options.agc`), picks and
+    names the file (`query_files.agc`) and lists the declarations
     (`outline.agc`, `outline_json.agc`, `outline_text.agc`). `outline` lexes and
     parses only, so a lex or parse error of the file keeps its own code and
-    exits 1; it reuses `docs/` for the items. `type-at` links and checks, so it
-    can also fail with any `LEX-`, `PARSE-`, `PKG-` or `CHECK-` code, exit 1.
+    exits 1; it reuses `docs/` for the items. `type-at` and `refs` link and
+    check, so they can also fail with any `LEX-`, `PARSE-`, `PKG-` or `CHECK-`
+    code, exit 1.
 
 - **Stage:** runtime (VM)
   - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,
@@ -508,8 +510,8 @@ integer and reaches only the VM. --allow-run enables Process.spawn and, for
 `test`, reaches step handlers and programs under test; check and help need no
 flag. `tests/fixtures/cli/forms.json` freezes the forms
 (`tests/test_cli_forms.py`). `doc` and the query commands (`outline`,
-`type-at`) are `cli_doc.agc` and `cli_query.agc`: the words after the command
-are read by hand (`query/query_options.agc`), and `--stdin FILE` (`type-at
---stdin FILE:LINE:COL`) goes through `with_buffer` in `cli.agc`, as `check
---stdin` does. `reject` takes the exit status: a `QUERY-` problem exits 2, any
-other 1.
+`type-at`, `refs`) are `cli_doc.agc` and `cli_query.agc`: the words after the
+command are read by hand (`query/query_options.agc`), and `--stdin FILE`
+(`type-at --stdin FILE:LINE:COL`, likewise `refs`) goes through `with_buffer` in
+`cli.agc`, as `check --stdin` does. `reject` takes the exit status: a `QUERY-`
+problem exits 2, any other 1.

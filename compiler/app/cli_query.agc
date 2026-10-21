@@ -1,10 +1,10 @@
-## The query commands (docs/future/39-semantic-cli.md): `agentica outline FILE [--json] [--stdin FILE]`,
-## `agentica type-at FILE:LINE:COL [--json]` (`type-at --stdin FILE:LINE:COL` reads FILE from standard input) and
-## `agentica symbol NAME [PATH...] [--json] [--stdin FILE]`. A query reads its file through the Workspace of the
-## settings, which is the standard input for `--stdin` (cli.agc, `with_buffer`), and answers in text or in JSON.
-## `outline` never links or checks, so the imports of the file need not exist; `type-at` links and checks the file and
-## what it imports, without requiring `main`; `symbol` links each file of its paths on its own and lists the ones that
-## do not link.
+## The query commands (docs/future/39-semantic-cli.md): `agentica outline FILE [--json] [--stdin FILE]`, `agentica
+## type-at FILE:LINE:COL [--json]`, `agentica refs FILE:LINE:COL [--json]` (both read FILE from standard input with
+## `--stdin FILE:LINE:COL`) and `agentica symbol NAME [PATH...] [--json] [--stdin FILE]`. A query reads its file
+## through the Workspace of the settings, which is the standard input for `--stdin` (cli.agc, `with_buffer`), and
+## answers in text or in JSON. `outline` never links or checks, so the imports of the file need not exist; `type-at`
+## and `refs` link and check the file and what it imports, without requiring `main`; `symbol` links each file of its
+## paths on its own and lists the ones that do not link.
 ##
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
@@ -16,6 +16,8 @@ import OutlineText from "../query/outline_text"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
+import RefsJson from "../query/refs_json"
+import RefsText from "../query/refs_text"
 import Reply from "cli_reply"
 import SymbolJson from "../query/symbol_json"
 import SymbolText from "../query/symbol_text"
@@ -25,6 +27,7 @@ import TypeAtText from "../query/type_at_text"
 # The usage line of each query command, given as the help of QUERY-USAGE.
 OUTLINE_USAGE = "usage: agentica outline FILE [--json]   or   agentica outline --stdin FILE [--json]"
 TYPE_AT_USAGE = "usage: agentica type-at FILE:LINE:COL [--json]   or   agentica type-at --stdin FILE:LINE:COL [--json]"
+REFS_USAGE = "usage: agentica refs FILE:LINE:COL [--json]   or   agentica refs --stdin FILE:LINE:COL [--json]"
 SYMBOL_USAGE = "usage: agentica symbol NAME [PATH...] [--json] [--stdin FILE]"
 
 ## The usage line of `agentica outline`.
@@ -35,6 +38,11 @@ end
 ## The usage line of `agentica type-at`.
 export def type_at_usage() -> String
   return TYPE_AT_USAGE
+end
+
+## The usage line of `agentica refs`.
+export def refs_usage() -> String
+  return REFS_USAGE
 end
 
 ## The usage line of `agentica symbol`.
@@ -69,6 +77,20 @@ export def type_at(asked: QueryPosition.Asked, style: String, settings: Env.Sett
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(TypeAtJson.json(found))}\n"))
       end
       return Reply.Answer.Printed(Reply.printed(TypeAtText.text(found)))
+  end
+end
+
+## `agentica refs` for the position `asked`, linked and checked as `type_at` does. It lists the references to the name
+## at the position in the file and what it imports, or is QUERY-NO-EXPRESSION when the position names nothing.
+export def refs(asked: QueryPosition.Asked, style: String, settings: Env.Settings) -> Reply.Answer
+  case Core.refs(settings, asked)
+    Core.Referenced.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, REFS_USAGE))
+    Core.Referenced.Rejected(problem) -> return Reply.Answer.Rejected(problem)
+    Core.Referenced.Done(found) ->
+      if style == "json"
+        return Reply.Answer.Printed(Reply.printed("#{JSON.encode(RefsJson.json(found))}\n"))
+      end
+      return Reply.Answer.Printed(Reply.printed(RefsText.text(found)))
   end
 end
 

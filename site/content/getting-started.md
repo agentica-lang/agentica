@@ -154,6 +154,21 @@ src/models.agc:4:3 field User.email: String
 
 NAME is written as the code writes it: `total`, `User.email`, `Option.Some`, `Models.User` through the import alias of a file under PATH, `std/queue.pop`, or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too. With `--json` each match has its `kind`, `module`, `exported`, `signature`, `doc` and spans, and a builtin has the object of `agentica help NAME --json` under `help`. Each file of PATH is linked on its own: one that does not lex, parse or link is listed under `skipped` with its diagnostic, and the others still answer. A name that nothing declares is `QUERY-NOT-FOUND` and exits 2; if no file links, the first diagnostic is the answer and exits 1.
 
+List every reference to the name at a position:
+
+```sh
+agentica refs src/models.agc:4:3    # --json prints one JSON object; --stdin reads the file from standard input
+```
+
+```text
+src/models.agc:4:3 definition field User.email: String
+src/orders.agc:22:14 read in total
+src/report.agc:9:30 read in render
+src/report.agc:31:5 construct in sample
+```
+
+The position can be on a use or on the name where the declaration is written. The name can be a function, a struct, an enum, a variant, a field, a constant, a type alias, a local variable, a parameter or a builtin; a field of one struct is never mixed with a field of the same name in another, nor a variable of one block with a variable of the same name in a sibling block. The first line is the definition (a builtin has none) and each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in; the span of a use is the name alone. `refs` checks the file and what it imports, and it sees the uses in those files only, not in a file that imports `FILE`. Positions, `--stdin` and the exit codes are those of `type-at`. A position on the module alias of `Models.total(u)` selects the function, not the module, and a position on a name in an import line is `QUERY-NO-EXPRESSION`: an import is not a reference. With `--json` the answer is `{version, command, query, definition, builtin, references, skipped}`; no references is an empty list, not an error.
+
 ## Options
 
 | Option | Does |
@@ -164,6 +179,7 @@ NAME is written as the code writes it: `total`, `User.email`, `Option.Some`, `Mo
 | `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS` (empty counts as unset). `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
 | `--allow-run` | lets the program start programs with `Process.spawn` |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
+| `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answers for the text on standard input as if `FILE` held it |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `compile FILE -o OUT` | writes VM bytecode |

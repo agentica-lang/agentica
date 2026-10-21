@@ -2,6 +2,7 @@
 ## the place it names in the text of FILE. Line and column count from 1, in the units of the spans of the front end
 ## (the characters of the text); a column is an offset in its line.
 
+import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
 import QueryOptions from "query_options"
 import Source from "../syntax/source"
@@ -70,6 +71,16 @@ end
 export def character(offset: Int, line: Int, column: Int) -> Source.Span
   here = Source.Position(offset: offset, line: line, column: column)
   return Source.Span(start: here, stop: Source.Position(offset: offset + 1, line: line, column: column + 1))
+end
+
+## QUERY-NO-EXPRESSION for the position `asked`: it is on no expression or name. `span` is where the diagnostic points.
+export def no_expression(asked: Asked, span: Source.Span) -> Diag.Diagnostic
+  return Diag.fail(
+    "QUERY-NO-EXPRESSION",
+    "no expression at line #{asked.line}, column #{asked.column}",
+    span,
+    Diag.Help.Hint("put the position on a token of an expression; agentica outline lists the declarations"),
+  )
 end
 
 # The empty span at the end of a line.
