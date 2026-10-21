@@ -453,9 +453,22 @@ def test_text_form_of_a_builtin_gives_a_line_with_its_signature(program):
 
 # The locals of one file: every form that binds a name, each name used, and a name bound in sibling scopes (`i` in two
 # loops, `note` in three branches, `n` in two blocks).
-LOCALS = '''enum Pair
+LOCALS = '''DOUBLED = [1, 2].map do |x| x * 2 end
+IGNORED = [1].map do |_| 0 end
+
+enum Pair
   Two(Int, Int)
   Gone
+end
+
+enum Box
+  Full(Int)
+  Empty
+end
+
+enum Shape
+  Nest(Box)
+  Flat
 end
 
 def measure(pair: Pair, scale: Int, parsed: Result[Int]) -> Int
@@ -497,6 +510,21 @@ end
 def to_text(n: Int) -> String
   return "#{n}"
 end
+
+def weigh(shape: Shape) -> Int
+  case shape
+    Shape.Nest(Box.Full(w)) -> return w + 1
+    _ -> return 0
+  end
+end
+
+def countdown(limit: Int) -> Int
+  while limit > 0
+    step = limit - 1
+    limit = step
+  end
+  return limit
+end
 '''
 
 
@@ -535,6 +563,11 @@ LOCAL_CASES = [
     ("deeper", "List[Int]", "local", "deeper = ", "deeper.size"),
     ("m", "Int", "parameter", "m| m + n", "m + n"),
     ("label", "String", "local", "label = ", "label}"),
+    # A block in a constant has no function around it; a name nested in a pattern is typed by its own slot; a binding
+    # in a `while` body is gone after it.
+    ("x", "Int", "parameter", "x| x * 2", "x * 2"),
+    ("w", "Int", "pattern", "w))", "w + 1"),
+    ("step", "Int", "local", "step = limit", "step\n  end"),
 ]
 
 
@@ -596,8 +629,28 @@ def test_a_block_that_captures_a_local_points_at_the_outer_binding(locals_file):
     assert end(local_at("total += value", cwd=locals_file)["span"]) == where(LOCALS, "total += value", 5)
 
 
+def test_the_definition_range_is_the_binding_node_when_it_has_one_else_the_name(locals_file):
+    # A parameter with a type and an assignment have a node of their own (the statement ends with its line); a block
+    # parameter without a type, a `for` variable and a pattern name are the name alone.
+    for name, binding, text, kind in (
+        ("scale", "scale: Int", "scale: Int", "parameter"),
+        ("step", "step = limit", None, "local"),
+        ("x", "x| x * 2", "x", "parameter"),
+        ("i", "i in 1..3", "i", "loop"),
+        ("w", "w))", "w", "pattern"),
+    ):
+        definition = local_at(binding, cwd=locals_file)["definition"]
+        line, column = where(LOCALS, binding)
+        assert definition["kind"] == kind, name
+        assert start(definition) == (line, column), name
+        assert end(definition) == ((line + 1, 1) if text is None else (line, column + len(text))), name
+        assert end(definition["name_span"]) == (line, column + len(name)), name
+
+
 def test_a_discard_binds_nothing_and_is_on_no_expression(locals_file):
     problem(type_at(("locals.agc", where(LOCALS, "(_, _)", 1)), cwd=locals_file), "QUERY-NO-EXPRESSION", 2)
+    # A discarded block parameter is on no expression either, not on the block around it.
+    problem(type_at(("locals.agc", where(LOCALS, "|_|", 1)), cwd=locals_file), "QUERY-NO-EXPRESSION", 2)
 
 
 def test_text_form_of_a_local_gives_the_name_with_its_type_and_the_binding(locals_file):

@@ -55,7 +55,11 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
       end
       # A local comes first: on the name of a binding, the innermost expression would be the one around it.
       case Locals.find(module, checked.bound, offset)
-        Ast.Optional.Present(local) -> return Diag.Outcome.Done(local_answer(linked, local))
+        Ast.Optional.Present(local) ->
+          if local.local.kind == "discard"
+            return nothing(asked, here)
+          end
+          return Diag.Outcome.Done(local_answer(linked, local))
         Ast.Optional.Absent -> return expression_answer(linked, checked, asked, offset, here)
       end
   end

@@ -99,9 +99,9 @@ type, span, definition, help}`.
 - `kind` is `builtin` when the position is on the name of a builtin (`split` in
   `xs.split(",")`, `puts`), `name` when it is on another name (a variable, a
   constant, the callee of a call, the field or method after the dot, the name
-  where a local is bound) and `expression` otherwise. It is an open set (later versions add values):
-  accept a value you do not know. `span` is always the whole expression and
-  `text` its source.
+  where a local is bound) and `expression` otherwise. It is an open set (later
+  versions add values): accept a value you do not know. `span` is always the
+  whole expression and `text` its source.
 - `definition` is null, or the span of the declaration (`{file, range}`) with
   `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; for a
   local see below), `name`, `name_span` (the span of the name), `signature`
@@ -113,9 +113,10 @@ type, span, definition, help}`.
   `kind` is `parameter` (of a function or a block), `local` (the assignment that
   introduces the name), `loop` (a `for` variable) or `pattern` (a name in a
   `case` pattern); `signature` is `name: Type` and `doc` null. The top-level
-  `span` and `text` are the name alone. `range` is the whole parameter or
-  binding, and the name alone for `loop` and `pattern`; `name_span` is the name
-  where it is bound, the place to edit. The binding is the one whose scope holds
+  `span` and `text` are the name alone. The definition's `range` is the binding
+  node when it has one (the whole parameter or assignment), else the name (a
+  `loop` and a `pattern`); `name_span` is the name where it is bound, the place
+  to navigate to. The binding is the one whose scope holds
   the position, so a name bound in sibling blocks (two `for i` loops, `note` in
   each branch of an `if`) answers its own, and a use inside a block of a local
   outside it answers the outer binding. An assignment to a name already bound

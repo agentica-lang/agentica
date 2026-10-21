@@ -14,10 +14,11 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import Locals from "locals"
 
-## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `alias` is for a
-## type argument, which no answer gives yet), its name as the file wrote it, and the file (the `file` of its
-## LinkedModule), the whole declaration and its name. `doc` is the whole `##` text or Absent; `signature` is the one
-## line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
+## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `parameter`,
+## `local`, `loop` or `pattern` for a local; `alias` is for a type argument, which no answer gives yet), its name as
+## the file wrote it, and the file (the `file` of its LinkedModule), the whole declaration and its name (for a
+## local, the binding node and the name; see `of_local`). `doc` is the whole `##` text or Absent; `signature` is the
+## one line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
 ## `Circle(Float)` for a variant.
 export struct Definition
   kind: String
@@ -58,8 +59,10 @@ export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr
   end
 end
 
-## The definition of a local: the binding site (`parameter`, `local`, `loop` or `pattern`, see Locals.Local), with the
-## name and the type as the file writes it (`total: Int`) for a signature and no doc.
+## The definition of a local: the binding site, with `kind` `parameter`, `local`, `loop` or `pattern` (see
+## Locals.Local), and the name and the type as the file writes it (`total: Int`) for a signature and no doc. `span` is
+## the binding node when it has one (the whole parameter or assignment), else the name (`loop` and `pattern`);
+## `name_span` is the name.
 export def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text: String) -> Definition
   return made(
     local.kind,

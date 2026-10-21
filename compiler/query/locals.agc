@@ -20,9 +20,10 @@ import Walk from "../check/const_walk"
 import At from "at"
 
 ## A name bound in a function. `kind` is `parameter` (of a function or a block), `local` (an assignment that introduces
-## the name), `loop` (a `for` variable) or `pattern` (a name in a `case` pattern). `span` is the whole parameter or
-## binding, and the name alone for a `for` variable and a pattern name, which have no node of their own; `name_span` is
-## the name as the binding writes it.
+## the name), `loop` (a `for` variable) or `pattern` (a name in a `case` pattern); `discard` is the name `_` of a
+## parameter, which `find` answers so that the caller knows the position is on no expression. `span` is the whole
+## parameter or binding, and the name alone for a `for` variable and a pattern name, which have no node of their own;
+## `name_span` is the name as the binding writes it.
 export struct Local
   kind: String
   name: String
@@ -75,17 +76,25 @@ export def find(
         if At.holds?(node.span, offset)
           return typed(function_found(ask, node))
         end
+      Ast.Decl.Constant(node) ->
+        # A block in the value of a constant has no function around it: the scope starts empty. No other top-level
+        # form holds an expression that can hold a block (a parameter default must be a constant, and a struct field
+        # has no default).
+        if At.holds?(node.span, offset)
+          return typed(walk(ask, Step.Expr(node.value), {}))
+        end
       _ -> ask = ask
     end
   end
   return Ast.Optional.Absent
 end
 
-# A found local is answered only with a type.
+# A found local is answered only with a type; a discard has none and is kept, so the caller can tell it from a position
+# on no local.
 def typed(found: Ast.Optional[Found]) -> Ast.Optional[Found]
   case found
     Ast.Optional.Present(at) ->
-      if T.unknown?(at.local.type)
+      if at.local.kind != "discard" and T.unknown?(at.local.type)
         return Ast.Optional.Absent
       end
       return found
@@ -95,15 +104,35 @@ end
 
 # The parameters are in scope for the body. The position on the name of one is the parameter itself.
 def function_found(ask: Query, node: Ast.FunctionDecl) -> Ast.Optional[Found]
-  scope: Map[String, Local] = {}
+  locals: List[Local] = []
   for param in node.params
-    here = parameter(ask, param.id, param.name, param.span, param.name_span)
-    if At.holds?(param.name_span, ask.offset) and param.name != "_"
-      return Ast.Optional.Present(Found(local: here, site: param.name_span))
-    end
-    scope = declare(scope, here)
+    locals = locals.push(parameter(ask, param.id, param.name, param.span, param.name_span))
   end
-  return walk(ask, Step.Block(node.body), scope)
+  bound = bind_parameters(ask, locals, {})
+  case bound.found
+    Ast.Optional.Present(_) -> return bound.found
+    Ast.Optional.Absent -> return walk(ask, Step.Block(node.body), bound.scope)
+  end
+end
+
+# The parameters of a function or a block, in order: the one the position is on, or the scope with all of them. The
+# name `_` is a discard, answered as one so that the caller gives no expression for it.
+def bind_parameters(ask: Query, params: List[Local], scope: Map[String, Local]) -> Move
+  inner = scope
+  for local in params
+    if At.holds?(local.name_span, ask.offset)
+      if local.name == "_"
+        return hit(scope, discard(local), local.name_span)
+      end
+      return hit(scope, local, local.name_span)
+    end
+    inner = declare(inner, local)
+  end
+  return stop(inner)
+end
+
+def discard(local: Local) -> Local
+  return Local(kind: "discard", name: local.name, span: local.span, name_span: local.name_span, type: local.type)
 end
 
 # Follows the position down the tree. Each step goes into a smaller part of the tree, so the loop ends.
@@ -369,15 +398,15 @@ end
 
 # The parameters of a block are in scope for its body. A block is the only expression that holds statements.
 def into_block(ask: Query, node: Ast.BlockLit, scope: Map[String, Local]) -> Move
-  inner = scope
+  locals: List[Local] = []
   for param in node.params
-    local = parameter(ask, param.id, param.name, param.span, param.name_span)
-    if At.holds?(param.name_span, ask.offset) and param.name != "_"
-      return hit(scope, local, param.name_span)
-    end
-    inner = declare(inner, local)
+    locals = locals.push(parameter(ask, param.id, param.name, param.span, param.name_span))
   end
-  return go(Step.Block(node.body), inner)
+  bound = bind_parameters(ask, locals, scope)
+  case bound.found
+    Ast.Optional.Present(_) -> return bound
+    Ast.Optional.Absent -> return go(Step.Block(node.body), bound.scope)
+  end
 end
 
 def into_child(ask: Query, expr: Ast.Expr, scope: Map[String, Local]) -> Move

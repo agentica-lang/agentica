@@ -198,10 +198,9 @@ signatures are strings.
   (a name in a `case` pattern), with the `signature` `name: Type` and no `doc`;
   its `span` is the parameter or the binding, or the name alone for a `for`
   variable and a pattern name, and `name_span` is the name at the binding. The
-  top-level
-  `kind` of `type-at` is an open set (`expression`, `name`, `builtin`; later
-  versions may add values) and a client accepts a value it does not know, so
-  `builtin` needed no new `version`. A `builtin` answer has `definition` null
+  top-level `kind` of `type-at` is an open set (`expression`, `name`,
+  `builtin`; later versions may add values) and a client accepts a value it
+  does not know, so `builtin` needed no new `version`. A `builtin` answer has `definition` null
   and `help`, the object of `agentica help NAME --json` (`CatalogJson`, which
   `help` uses too); `help` is null for every other kind. `to_s` and `inspect`
   answer a builtin only where the checker resolves them to one (numbers).
