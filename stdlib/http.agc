@@ -287,7 +287,8 @@ export def local_port(server: HttpServer) -> Int
   return HttpWire.local_port(server)
 end
 
-## Waits until the server is closed, then returns `ok()`.
+## Waits until the server is closed and its handlers, with the tasks they
+## spawned, have ended, then returns `ok()`.
 export def wait(server: HttpServer) -> Result[Void]
   return HttpWire.wait(server)
 end
