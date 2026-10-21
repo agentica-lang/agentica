@@ -5,7 +5,10 @@
 
 #include <assert.h>
 #ifndef _WIN32
+#include <sched.h>
 #include <unistd.h>
+#else
+#include <uv.h>
 #endif
 
 /* A broken park or wake path leaves a test waiting for ever instead of failing it. The deadline ends the process with
@@ -15,6 +18,18 @@ static inline void agc_test_deadline(unsigned seconds) { alarm(seconds); }
 #else
 static inline void agc_test_deadline(unsigned seconds) { (void)seconds; }
 #endif
+
+/* The body of a busy wait between threads that wait for each other in turn. When they outnumber the free cores (a
+   macOS ARM runner has three, shared by the C tests that `make vm-test` runs side by side), a waiter that spins through
+   its time slice keeps the thread it waits for off the core, and each turn costs a slice: a test of many turns then
+   meets its deadline. Giving the core away lets the other thread run at once. */
+static inline void agc_test_yield(void) {
+#ifndef _WIN32
+  (void)sched_yield();
+#else
+  uv_sleep(0);
+#endif
+}
 
 /* The first ready task, left in the queue: it pops every task and pushes them back in order. For tests that run on
    one thread. */

@@ -30,7 +30,7 @@ static void racer(void *arg) {
   int self = (int)(uintptr_t)arg;
   agc_job_outcome value = (agc_job_outcome)(self + 1);
   for (int round = 0; round < ROUNDS; round++) {
-    while (atomic_load_explicit(&go, memory_order_acquire) <= round) {}
+    while (atomic_load_explicit(&go, memory_order_acquire) <= round) agc_test_yield();
     spin((round * 7 + self * 11) % 37);
     payload[round][value] = round * 10 + (int)value;
     if (agc_job_settle(&outcomes[round], value)) atomic_fetch_add(&wins[round], 1);
@@ -42,7 +42,7 @@ static void watcher(void *arg) {
   (void)arg;
   for (int round = 0; round < ROUNDS; round++) {
     agc_job_outcome seen;
-    while ((seen = agc_job_outcome_of(&outcomes[round])) == AGC_JOB_PENDING) {}
+    while ((seen = agc_job_outcome_of(&outcomes[round])) == AGC_JOB_PENDING) agc_test_yield();
     assert(payload[round][seen] == round * 10 + (int)seen);
     atomic_store_explicit(&observed, round + 1, memory_order_release);
   }
@@ -54,7 +54,7 @@ static void test_outcome_is_set_once(void) {
   assert(uv_thread_create(&observer, watcher, NULL) == 0);
   for (int round = 0; round < ROUNDS; round++) {
     atomic_store_explicit(&go, round + 1, memory_order_release);
-    while (atomic_load_explicit(&entered, memory_order_acquire) < (round + 1) * RACERS) {}
+    while (atomic_load_explicit(&entered, memory_order_acquire) < (round + 1) * RACERS) agc_test_yield();
     assert(atomic_load(&wins[round]) == 1);
     assert(agc_job_outcome_of(&outcomes[round]) != AGC_JOB_PENDING);
   }

@@ -30,7 +30,7 @@ static void waker(void *arg) {
   int self = (int)(uintptr_t)arg;
   assert(agc_gc_thread_enter());
   for (int round = 1; round <= ROUNDS; round++) {
-    while (atomic_load_explicit(&go, memory_order_acquire) < round) {}
+    while (atomic_load_explicit(&go, memory_order_acquire) < round) agc_test_yield();
     spin((round * 7 + self * 13) % 41);
     agc_task_wake(&vm, task, "test");
     agc_task_wake(&vm, task, "test");
@@ -65,7 +65,7 @@ static void test_wake_against_park(void) {
       atomic_store_explicit(&task->state, AGC_TASK_READY, memory_order_relaxed);
       agc_runq_push(q, task);
     }
-    while (atomic_load_explicit(&finished, memory_order_acquire) < round * WAKERS) {}
+    while (atomic_load_explicit(&finished, memory_order_acquire) < round * WAKERS) agc_test_yield();
     assert(agc_runq_pop(q) == task);
     assert(agc_runq_pop(q) == NULL);
     assert(task->state == AGC_TASK_READY);
@@ -112,7 +112,7 @@ static void canceller(void *arg) {
   (void)arg;
   assert(agc_gc_thread_enter());
   for (int round = 1; round <= CANCEL_ROUNDS; round++) {
-    while (atomic_load_explicit(&cancel_go, memory_order_acquire) < round) {}
+    while (atomic_load_explicit(&cancel_go, memory_order_acquire) < round) agc_test_yield();
     spin((round * 11) % 53);
     agc_task_cancel(&canceller_vm, victim);
     atomic_fetch_add_explicit(&cancel_done, 1, memory_order_release);
@@ -145,7 +145,7 @@ static void test_cancel_against_park(void) {
       agc_task_end_turn(&vm, t, AGC_TURN_PARKED, true);
       atomic_store_explicit(&cancel_go, round, memory_order_release);
     }
-    while (atomic_load_explicit(&cancel_done, memory_order_acquire) < round) {}
+    while (atomic_load_explicit(&cancel_done, memory_order_acquire) < round) agc_test_yield();
     assert(t->state == AGC_TASK_DONE && t->cancelled);
     assert(atomic_load(&vm.rt->tasks_done) - base == (uint64_t)round);
     assert(agc_runq_pop(vm.rt->runq) == NULL);
