@@ -38,8 +38,8 @@ MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\
 # renamed binary of the skill-nocli arm (`agentica-real`).
 # Global options may come first: flags, `--` and the four that take a value.
 QUERY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?agentica(?:-real)?\s+"
-                           r"(?:(?:--(?:json|ai|partial|allow-run)|--)\s+"
-                           r"|--(?:max-steps|seed|flush-timeout|schedulers)\s+\S+\s+)*"
+                           r"(?:(?:--(?:json|ai|partial|allow-run|dump|dump-ir)|--)\s+"
+                           r"|--(?:max-steps|seed|flush-timeout|schedulers|steps)\s+\S+\s+)*"
                            r"(?:outline|type-at|symbol|refs)(?=\s|$)")
 READ_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:cat|rg|sed|head|grep|tail)(?=\s|$)")
 REFUSED_LOG = ".refused-queries"
@@ -53,7 +53,7 @@ skip=0
 for word in "$@"; do
   if [ "$skip" = 1 ]; then skip=0; continue; fi
   case $word in
-    --max-steps|--seed|--flush-timeout|--schedulers) skip=1 ;;
+    --max-steps|--seed|--flush-timeout|--schedulers|--steps) skip=1 ;;
     -*) ;;
     outline|type-at|symbol|refs)
       echo "$word" >> "$here/@LOG@"
@@ -137,6 +137,8 @@ def prepare(work: Path, task: str, arm: str) -> None:
         parts = sorted((ROOT / "docs" / "grammar").glob("*.md"))
         text = "\n".join(part.read_text(encoding="utf-8") for part in parts)
         text = re.sub(r"\[([^\]]*)\]\(\.\./[^)]*\)", r"\1", text)
+        text = re.sub(r"\[([^\]]*)\]\[agentica-link-\d+\]", r"\1", text)
+        text = re.sub(r"^\[agentica-link-\d+\]: .*\n", "", text, flags=re.MULTILINE)
         (work / "docs" / "grammar.md").write_text(text, encoding="utf-8")
         shutil.copytree(ROOT / "examples", work / "examples")
 

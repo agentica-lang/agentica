@@ -2,7 +2,6 @@ import contextlib
 import io
 import json
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -124,10 +123,8 @@ class PrepareTests(unittest.TestCase):
             self.assertTrue(all(position >= 0 for position in positions), positions)
             self.assertEqual(positions, sorted(positions))
             self.assertNotIn("](../", grammar)
-            # The reference-style definitions (`[agentica-link-1]: ../../site/content/...`) stay; nothing else may.
-            stray = [line for line in grammar.splitlines()
-                     if "site/content" in line and not re.match(r"\[agentica-link-\d+\]: ", line)]
-            self.assertEqual(stray, [])
+            self.assertNotIn("site/content", grammar)
+            self.assertNotIn("[agentica-link-", grammar)
 
     def test_grammar_arm_prompt_names_agentica_help(self) -> None:
         self.assertIn("agentica help NAME", run.prompt(Path("/tmp/work"), "grammar"))
@@ -237,7 +234,8 @@ class NoCliArmTests(unittest.TestCase):
                     self.assertIn("not available", done.stderr)
                     self.assertEqual(done.stdout, "")
             for words in (("--max-steps", "5", "outline", "a.agc"), ("--seed", "3", "--json", "refs", "X"),
-                          ("--flush-timeout", "10", "--schedulers", "2", "symbol", "X"), ("--", "type-at", "a.agc:1:1")):
+                          ("--flush-timeout", "10", "--schedulers", "2", "symbol", "X"),
+                          ("--steps", "s.agc", "refs", "X"), ("--", "type-at", "a.agc:1:1")):
                 with self.subTest(words=words):
                     self.assertEqual(call(*words).returncode, 2)
             for words in (("check", "a.agc"), ("a.agc", "outline"), ("help", "outline"), ("--help",),
@@ -245,7 +243,7 @@ class NoCliArmTests(unittest.TestCase):
                 with self.subTest(words=words):
                     done = call(*words)
                     self.assertEqual((done.returncode, done.stdout), (3, "real " + " ".join(words) + "\n"))
-            self.assertEqual(run.refused_queries(root / "work-skill-nocli"), 9)
+            self.assertEqual(run.refused_queries(root / "work-skill-nocli"), 10)
             self.assertEqual(run.refused_queries(root / "work-skill"), 0)
 
 
@@ -315,6 +313,7 @@ class MetricsTests(unittest.TestCase):
         queries = ("agentica outline a.agc", "agentica --json type-at a.agc:3:5", "dist/agentica symbol Item",
                    "./bin/agentica refs Item src", "agentica --max-steps 5 outline a.agc",
                    "agentica --seed 1 --flush-timeout 5 --schedulers 2 --json refs X", "agentica -- symbol X",
+                   "agentica --dump --steps s.agc outline a.agc", "agentica --dump-ir type-at a.agc:1:1",
                    "cd /workspace && /workspace/bin/agentica refs Item",
                    "printf x | agentica outline --stdin a.agc", "agentica-real outline a.agc", "time agentica symbol X")
         others = ("agentica check a.agc", "agentica help outline", "agentica a.agc outline", "rg outline a.agc",

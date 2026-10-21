@@ -136,8 +136,8 @@ python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models
 # tag (git worktree add ../agentica-6c TAG) so that master can move on; TAG is
 # the first release with the query-command counts, the skill-nocli arm and
 # --max-cost
-python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 1.2
-python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/glm-5p3-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 0.8
+python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 1.1
+python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/glm-5p3-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 0.75
 
 # Summarize a finished run, and count the diagnostics the agents saw
 python3 tests/eval/run.py --summarize tests/eval/results/<run directory>
@@ -315,7 +315,7 @@ that run and of every run in flight; if the sum passes the cap, it stops
 starting new runs (the runs in flight finish) and `summary.md` and `run.json`
 get `stopped_for_budget` (true) and `runs_skipped`. Runs already going and
 outlier runs can go past the cap by up to `--jobs` times the costliest run. The
-6c commands use `--jobs 2`, which keeps that overshoot to about $0.1 at the
+6c commands use `--jobs 2`, which keeps that overshoot to about $0.06 at the
 costs of rounds 10 and 12 (the costliest run was about $0.03).
 
 The estimate is the highest cost seen so far (never below the mean), and never
@@ -335,11 +335,13 @@ run):
 
 | Model | `skill` | `typed-python` | `skill-nocli` | Total | Cap |
 |---|---|---|---|---|---|
-| DeepSeek V4.1 flash | 60 x $0.0082 = $0.49 | 60 x $0.0053 = $0.32 | 15 x $0.0082 = $0.12 | about $0.93 | $1.2 |
-| GLM 5.3 flash | 60 x $0.0056 = $0.34 | 60 x $0.0017 = $0.10 | 15 x $0.0056 = $0.08 | about $0.52 | $0.8 |
+| DeepSeek V4.1 flash | 60 x $0.0082 = $0.49 | 60 x $0.0053 = $0.32 | 15 x $0.0082 = $0.12 | about $0.93 | $1.1 |
+| GLM 5.3 flash | 60 x $0.0056 = $0.34 | 60 x $0.0017 = $0.10 | 15 x $0.0056 = $0.08 | about $0.52 | $0.75 |
 
-About $1.45 for both models, which fits in the $2 of the round: the caps add up
-to $2.0 and leave room for outliers. The cost of a `skill-nocli` run is a guess
+About $1.45 for both models, which fits in the $2 of the round. The $2 is a hard
+limit for the owner, and the cap is soft, so the caps are $1.1 and $0.75: at
+`--jobs 2` a command can pass its cap by about $0.06, and the worst case of both
+is about $1.97. The cost of a `skill-nocli` run is a guess
 (its agents cannot use the queries, so it may cost more than a `skill` run).
 
 ### Hidden cases
@@ -712,8 +714,8 @@ Rounds 9 to 12 together cost $4.85 of the $10 budget.
 
 Round 12 is the last evaluation round until after the bootstrap of the
 self-hosted front end ([§18](future/18-front-end-language.md), roadmap row
-7.2.7) and any improvements that follow it. The owner decided this on 2026-10-14. The full
-6c round (roadmap row 10) waits for that too. See the
+7.2.7) and any improvements that follow it. The owner decided this on
+2026-10-14. The full 6c round (roadmap row 10) waits for that too. See the
 [roadmap](roadmap/README.md).
 
 ### JSON tasks: smoke run (2026-10-03)
