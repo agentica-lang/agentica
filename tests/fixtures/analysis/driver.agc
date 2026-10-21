@@ -11,6 +11,8 @@ import Analysis from "std/analysis"
 #   check-all PATH...      the last command: one line on stdout for each PATH, from `check` run in tasks, four at a time
 #   outline PATH           the JSON on stdout, or the diagnostic on stderr
 #   type-at PATH LINE COL  the same
+#   refs PATH LINE COL     the same
+#   symbol NAME PATH...    the last command (it takes every word left): the same
 # An error is printed after Analysis.diagnostic read it and Analysis.diagnostic_json wrote it back, so the output of a
 # failure also proves that the pair is the identity.
 def main() -> Void
@@ -54,6 +56,12 @@ def main() -> Void
     elsif word == "outline"
       show(outlined(session, words[at + 1]))
       at += 2
+    elsif word == "symbol"
+      show(symbols(session, words[at + 1], words.drop(at + 2)))
+      at = words.size
+    elsif word == "refs"
+      show(referenced(session, words[at + 1], words[at + 2].to_i!, words[at + 3].to_i!))
+      at += 4
     else
       line = words[at + 2].to_i!
       column = words[at + 3].to_i!
@@ -100,6 +108,16 @@ end
 def typed(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
   found = try Analysis.type_at(session, path, line, column)
   return ok(Analysis.type_at_json(found))
+end
+
+def symbols(session: Analysis.Session, name: String, paths: List[String]) -> Result[Json]
+  found = try Analysis.symbol(session, name, paths)
+  return ok(Analysis.symbols_json(found))
+end
+
+def referenced(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
+  found = try Analysis.refs(session, path, line, column)
+  return ok(Analysis.refs_json(found))
 end
 
 # Questions of one session, asked from tasks that may run at once: the lines come back in the order of the paths.
