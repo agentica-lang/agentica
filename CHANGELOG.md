@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-22
+
 ### Added
 
 - `agentica type-at` (and `std/analysis`) answers a type name in an annotation,
@@ -296,7 +298,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.8.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.8.1...HEAD
+[0.8.1]: https://github.com/sonic182/agentica/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/sonic182/agentica/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/sonic182/agentica/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/sonic182/agentica/compare/0.5.0...0.6.0
