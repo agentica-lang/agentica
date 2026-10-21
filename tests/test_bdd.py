@@ -70,6 +70,11 @@ def steps_program(*parts):
     return 'import BDD from "std/bdd"\n\n' + "\n".join(parts) + "\n"
 
 
+# Waits until every task but main has ended (returned or crashed), so a crash is seen whatever the number of
+# schedulers; a yield (Task.sleep(0)) lets the crashing task run first only on one scheduler.
+SETTLE = "def settle() -> Void\n  while Task.pending_count() > 0\n    Task.sleep(1)\n  end\nend\n"
+
+
 def main_running(*steps):
     return "def main() -> Void\n  BDD.run([\n%s\n  ])\nend\n" % ",\n".join("    " + step for step in steps)
 
@@ -208,13 +213,14 @@ def test_tasks_may_assert_must_end_before_the_handler_returns_and_a_crashing_tas
         'def worker(job: Job) -> BDD.Context\n  Task.sleep(0)\n  return BDD.assert(job.ctx, job.n > 0, "worker")\nend\n',
         "def wait(n: Int) -> Int\n  Task.sleep(60000)\n  return n\nend\n",
         "def crash(n: Int) -> Int\n  return 1 / n\nend\n",
+        SETTLE,
         main_running(
             'BDD.step("state is concurrent") do |ctx, args|\n'
             "      tasks = [1, 2, 3, 4].map do |n| Task.spawn(&worker, Job(ctx: ctx, n: n)) end\n"
             "      done = tasks.map do |task| Task.await(task) end\n"
             '      BDD.set(ctx, "1", JSON.from(done.size))\n    end',
             'BDD.step("tasks are pending") do |ctx, args|\n      task = Task.spawn(&wait, 0)\n      ctx\n    end',
-            'BDD.step("a task crashes") do |ctx, args|\n      task = Task.spawn(&crash, 0)\n      Task.sleep(0)\n      ctx\n    end',
+            'BDD.step("a task crashes") do |ctx, args|\n      task = Task.spawn(&crash, 0)\n      settle()\n      ctx\n    end',
             'BDD.step("later works") do |ctx, args| BDD.assert(ctx, not BDD.get(ctx, "1").ok?, "state leaked") end'))
     directory = bdd.suite({
         "tasks.feature": ("Feature: Tasks\nScenario: parallel\nThen state is concurrent\n"
@@ -224,8 +230,8 @@ def test_tasks_may_assert_must_end_before_the_handler_returns_and_a_crashing_tas
         "steps.agc": steps,
         "early.agc": steps_program("def wait(n: Int) -> Int\n  Task.sleep(60000)\n  return n\nend\n",
                                    "def main() -> Void\n  task = Task.spawn(&wait, 0)\n  BDD.run([])\nend"),
-        "crashed.agc": steps_program("def crash(n: Int) -> Int\n  return 1 / n\nend\n",
-                                     "def main() -> Void\n  task = Task.spawn(&crash, 0)\n  Task.sleep(0)\n  BDD.run([])\nend")})
+        "crashed.agc": steps_program("def crash(n: Int) -> Int\n  return 1 / n\nend\n", SETTLE,
+                                     "def main() -> Void\n  task = Task.spawn(&crash, 0)\n  settle()\n  BDD.run([])\nend")})
     feature = joined(directory, "tasks.feature")
     status, report = bdd.json_test(feature, "--steps", joined(directory, "steps.agc"))
     assert status == 1

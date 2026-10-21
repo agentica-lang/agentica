@@ -1,11 +1,16 @@
 /*
  * Process and child channel builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9),
  * in orders set by the calls: a close behind a read's START, a read cancelled from another thread, an exit and a
- * deadline (both orders), a read's deadline, a wait cancelled past its deadline, and the channel. vm-tsan runs it.
+ * deadline (both orders), a read's deadline and its pause, a wait cancelled past its deadline, and the channel.
+ * vm-tsan runs it.
  */
 #include "../core.h"
 #include "io_harness.h"
 #include "test_support.h"
+
+#include <signal.h>
+#include <stdlib.h>
+#include <sys/types.h>
 
 #if defined(__linux__) || defined(__APPLE__)
 #define on_thread agc_test_on_thread
@@ -62,10 +67,7 @@ static bool error_is(agc_value v, const char *message) {
   return !r->ok && is_text(r->value, message);
 }
 
-static void wait_ms(uint64_t ms) {
-  uint64_t due = agc_clock_ms() + ms;
-  while (agc_clock_ms() < due) {}
-}
+static void wait_ms(unsigned ms) { uv_sleep(ms); }
 
 static void captured(const char *script) {
   child = ok_of(step(call(one, "Process.spawn_captured", 4, text("sh"), sh(script), text("."), agc_int(5000))));
@@ -173,14 +175,14 @@ static void test_an_exit_and_a_deadline(void) {
   plain("exit 4");
   calling waiting = call(one, "Process.wait", 2, child, agc_int(1), agc_void(), agc_void());
   assert(start(&waiting));
-  wait_ms(100);
+  wait_ms(500);
   wait_woken(&waiting);
   for (int k = 0; k < 10; k++) (void)agc_io_poll(&vm, false);
   assert(agc_as_int(&vm, ok_of(take(&waiting))) == 4);
   (void)agc_io_poll(&vm, false);
   assert(agc_test_armed_timers(&vm) == 0);
   close_child();
-  plain("sleep 0.1; exit 6");
+  plain("sleep 1; exit 6");
   waiting = call(one, "Process.wait", 2, child, agc_int(5), agc_void(), agc_void());
   assert(start(&waiting));
   wait_woken(&waiting);
@@ -194,10 +196,34 @@ static void test_an_exit_and_a_deadline(void) {
    the child writes later reaches no request, and the next read finds the child closed. */
 static void test_a_read_deadline_before_the_line(void) {
   assert(agc_io_share(&vm, false));
-  captured("sleep 0.1; echo late; exec sleep 60");
+  captured("sleep 1; echo late; exec sleep 60");
   calling reading = call(one, "Process.read_line", 2, child, agc_int(5), agc_void(), agc_void());
   assert(start(&reading));
   wait_woken(&reading);
+  assert(error_is(take(&reading), "network: operation timed out"));
+  assert(error_is(read_line(one, 1000), "process: process is closed"));
+  close_child();
+  settle();
+}
+
+/* The `pause` of a read's deadline shuts the child on the I/O thread when the timer fires, before the task has taken
+   the timeout: the plain child gets SIGKILL and the loop reaps it while the expired job still waits for its task.
+   Without the pause the child would live until the `expired` half posts its stop. */
+static void test_a_read_deadline_stops_the_child_before_the_task_takes_it(void) {
+  assert(agc_io_share(&vm, false));
+  plain("echo $$; exec sleep 60");
+  const agc_string *line = agc_as_string(&vm, ok_of(read_line(one, 5000)));
+  char digits[32];
+  assert(line->bytes > 0 && line->bytes < sizeof digits);
+  memcpy(digits, line->data, line->bytes);
+  digits[line->bytes] = 0;
+  pid_t pid = (pid_t)strtol(digits, NULL, 10);
+  calling reading = call(one, "Process.read_line", 2, child, agc_int(5), agc_void(), agc_void());
+  assert(start(&reading));
+  wait_woken(&reading);
+  uint64_t due = agc_clock_ms() + 10000;
+  while (kill(pid, 0) == 0 && agc_clock_ms() < due) (void)agc_io_poll(&vm, false);
+  assert(kill(pid, 0) != 0);
   assert(error_is(take(&reading), "network: operation timed out"));
   assert(error_is(read_line(one, 1000), "process: process is closed"));
   close_child();
@@ -257,6 +283,7 @@ int main(void) {
   test_a_read_cancelled_from_another_thread();
   test_an_exit_and_a_deadline();
   test_a_read_deadline_before_the_line();
+  test_a_read_deadline_stops_the_child_before_the_task_takes_it();
   test_a_wait_cancelled_past_its_deadline();
   test_the_channel_through_posted_steps();
 #endif

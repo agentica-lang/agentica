@@ -73,7 +73,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     read of buffered bytes or a send that goes out at once returns without a
     park (`agc_io_here`). Tested at N > 1 by `vm/tests/net_test.c` (exact
     orders), `vm/tests/threads_test.c`, the net programs of
-    `tests/test_vm_multicore.py` and `make test-multicore-net`
+    `tests/test_vm_multicore.py` and `make test-multicore-modules`
 
 - **Path:** `vm/net.h`
   - **Owns:** tcp.c's connection object for the HTTP server (`agc_conn`):
@@ -127,7 +127,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     of `accept` and `wait` jobs; builtins change them only by posted steps
     (`agc_loop_call`), `closed` is atomic, and an accept's done half makes the
     socket from the connection the I/O thread took (§10.7.2). Runs at N > 1:
-    the HTTP module is in `make test-multicore-net`, and
+    the HTTP module is in `make test-multicore-modules`, and
     `tests/test_vm_multicore.py` has a load case with cancels and a close.
 
 - **Path:** `vm/http_service.c`

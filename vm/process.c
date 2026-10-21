@@ -70,6 +70,9 @@ struct request {
   size_t count;
   bool posted, counted, finished, stopped;
   bool closed, over, stdin_closed;
+  /* CLOSE: the request holds the count of the resource that the builtin unregistered, until its START gives it back.
+     DETACHED: the job lost its task (the cancel half ran), so the done half has no caller to fail. */
+  bool holds_resource, detached;
   int rc;
   int64_t status;
   uint32_t span;
@@ -262,8 +265,10 @@ static bool finish(request *q) {
     default:
       break;
   }
+  /* Once readied the request is the job's, and its done half may free it on a scheduler: nothing reads it after. */
+  bool over = q->kind == REQ_LINE && reads && q->cut.status == AGC_CUT_OVER;
   agc_io_ready(q->job);
-  return q->kind == REQ_LINE && reads && q->cut.status == AGC_CUT_OVER;
+  return over;
 }
 
 /* A request's wait is over. One made at N = 1 reads the child in its done half, as before; a posted one is
@@ -499,7 +504,8 @@ static void free_launch(launch *l) {
 }
 
 /* The end of a request, on the I/O thread: from its done half, or the job's drop. A request whose START never ran
-   (the run ended first) holds nothing on the child. */
+   (the run ended first) holds nothing on the child, except a close: it still holds the resource's count, so the child
+   is shut and that count goes back here. */
 static void drop_request(void *data) {
   request *q = data;
   proc *p = q->p;
@@ -507,12 +513,15 @@ static void drop_request(void *data) {
   free(q->data);
   free(q->err_data);
   free_launch(q->start);
-  bool counted = q->counted;
+  bool counted = q->counted, held = q->holds_resource;
   if (counted) unlink_request(q);
   free(q);
-  if (!counted) return;
-  p->users--;
-  settle(p);
+  if (held) {
+    (void)shut(p);
+    p->users--;
+  }
+  if (counted) p->users--;
+  if (counted || held) settle(p);
 }
 
 static bool read_ready(proc *p, req_kind kind, size_t count) {
@@ -619,7 +628,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   request *q = data;
   if (q->posted) {
     agc_value result = posted_result(vm, q, context);
-    bool failed = q->kind == REQ_CLOSE && q->rc;
+    bool failed = q->kind == REQ_CLOSE && q->rc && !q->detached;
     uint32_t span = q->span;
     /* The request goes back to the I/O thread, which owns its slot and the child's count. */
     agc_loop_call(agc_io_loop(vm), drop_request, q);
@@ -648,17 +657,24 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
   return result;
 }
 
-/* What a deadline does to a posted request, on the I/O thread: the kind's `pause`, before EXPIRED is published, and
-   once more (a no-op then) from `expired`. The request leaves its slot; a read or a send that timed out closes the
-   child, as `request_expired` does at N = 1. */
+/* The kinds whose timeout closes the child, as `request_expired` does at N = 1: a read, a send, and a spawn whose
+   task gave it up. */
+static bool stops_child(req_kind kind) {
+  return kind == REQ_LINE || kind == REQ_BYTES || kind == REQ_AVAILABLE || kind == REQ_SEND || kind == REQ_SPAWN;
+}
+
+/* What a deadline does to a posted request, on the I/O thread: the kind's `pause`, before EXPIRED is published, or
+   the step that `expired` posts when the task saw the timeout first. The request leaves its slot. A read or a send
+   closes the child even when it was finished: its task got the timeout, so the line or the write status it carries
+   is lost, and the child must then look closed, as at N = 1. */
 static void stop_request(void *data) {
   request *q = data;
   if (!q->posted || q->stopped || !q->counted) return;
   q->stopped = true;
   unlink_request(q);
-  if (q->kind == REQ_CLOSE)
+  if (q->kind == REQ_CLOSE && !q->finished)
     trace_alive(q->p);
-  else if (q->kind != REQ_WAIT && q->kind != REQ_OUTPUT)
+  else if (stops_child(q->kind))
     shut(q->p);
 }
 
@@ -681,10 +697,12 @@ static agc_value request_expired(agc_vm *vm, void *data, agc_value context) {
   return agc_stream_timed_out();
 }
 
+/* The cancel half runs on the I/O thread when the job loses its task (a detach, or the deadline after it). */
 static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
   (void)vm;
   (void)context;
-  const request *q = data;
+  request *q = data;
+  q->detached = true;
   return deadline && q->kind != REQ_SEND;
 }
 
@@ -1119,13 +1137,15 @@ static void own_child(agc_vm *vm, agc_process *pr, proc *p) {
   agc_own(vm, pr->state, close_child);
 }
 
-/* A posted spawn's START. A child whose resource was released before this ran (the end of the run) is not started.
-   A failed spawn leaves the child closed, so the close that its done half posts does nothing more. */
+/* A posted spawn's START. A child whose resource was released before this ran (the end of the run) is not started,
+   nor one whose START comes after the end of the run reaped the children (close_children drives the loop, which runs
+   what is still in the inbox): nobody would kill it. A failed spawn leaves the child closed, so the close that its
+   done half posts does nothing more. */
 static bool begin_spawn(void *data, agc_io_job *job) {
   request *q = data;
   proc *p = q->p;
   link_request(q, job);
-  q->rc = p->closed ? UV_ECANCELED : launch_child(p, q->start);
+  q->rc = p->closed || q->start->g->reaping ? UV_ECANCELED : launch_child(p, q->start);
   if (q->rc) p->closed = true;
   free_launch(q->start);
   q->start = NULL;
@@ -1393,6 +1413,7 @@ static bool begin_close(void *data, agc_io_job *job) {
   proc *p = q->p;
   q->rc = shut(p);
   link_request(q, job);
+  q->holds_resource = false;
   p->users--;
   if (!reaped_on_close(p)) (void)finish(q);
   return true;
@@ -1404,6 +1425,7 @@ static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
   if (!agc_io_here(vm)) {
     request *q = new_request(vm, p, REQ_CLOSE);
     q->span = span;
+    q->holds_resource = true;
     start_request(vm, q, agc_void(), REAP_MS, begin_close);
     return agc_void();
   }
@@ -1473,7 +1495,7 @@ static void drain_out(proc *p) {
 static bool begin_available(void *data, agc_io_job *job) {
   request *q = data;
   proc *p = q->p;
-  if (q->posted && !p->closed) drain_out(p);
+  if (q->posted && !p->closed && agc_proc_drains()) drain_out(p);
   link_request(q, job);
   ready(q);
   return true;

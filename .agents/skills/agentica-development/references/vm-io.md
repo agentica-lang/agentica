@@ -85,8 +85,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - returns whether it set it)
     - `agc_io_uv` (
       - the scheduler's `uv_loop_t`, for handle code; aborts off the I/O
-        thread, so at N > 1 a libuv step goes through `agc_io_call` and the
-        builtins that still call it are refused, `agc_program_for_threads`)
+        thread, so at N > 1 a libuv step goes through `agc_io_call`)
     - `agc_io_loop`, `agc_loop_call`, `agc_loop_uv`, `agc_loop_of_uv` (
       - the loop for a service's `malloc`'d state, a step posted to it from a
         hook with no vm (`release`, `drop`), its `uv_loop_t` on the I/O thread

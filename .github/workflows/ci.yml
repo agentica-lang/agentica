@@ -112,7 +112,7 @@ jobs:
       - name: The binary tests again with the shared-state locks on
         run: make test-shared
       - name: The TCP, TLS, HTTP, process and BDD modules with every VM on four schedulers
-        run: make test-multicore-net
+        run: make test-multicore-modules
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)
         run: make fixed-point
       - name: The product command line tests on the single binary

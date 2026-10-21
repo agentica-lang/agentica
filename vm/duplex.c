@@ -142,7 +142,8 @@ static bool finish(request *q) {
   q->finished = true;
   unlink_request(q);
   q->closed = d->closed;
-  bool cut = false;
+  /* Known before the job is readied: from then on the request is the job's, and its done half may free it. */
+  bool over = false;
   if (q->kind == DX_SEND) {
     q->write_status = d->write_status;
   } else if (q->kind == DX_READ && !q->closed && !q->busy) {
@@ -150,11 +151,11 @@ static bool finish(request *q) {
       q->overflow = d->overflow;
     } else {
       agc_inbuf_cut_line(&d->in, &q->cut);
-      cut = true;
+      over = q->cut.status == AGC_CUT_OVER;
     }
   }
   agc_io_ready(q->job);
-  return cut && q->cut.status == AGC_CUT_OVER;
+  return over;
 }
 
 /* A request's wait is over: one made at N = 1 reads the channel in its done half, a posted one is finished here. */
@@ -287,6 +288,8 @@ static void keep_retry(agc_duplex *d, request *q) {
     d->sent_status = q->closed || q->busy || q->write_closed ? UV_EPIPE : q->write_status;
     return;
   }
+  /* A busy retry read (it found the slot taken) can end after the real one: it must not drop the line kept here. */
+  if (q->busy && d->got_ready) return;
   agc_inbuf_cut_free(&d->got);
   d->got = q->cut;
   q->cut = (agc_inbuf_cut){AGC_CUT_DATA, 0, NULL, 0};
@@ -346,14 +349,15 @@ static bool request_cancel(agc_vm *vm, void *data, agc_value context, bool deadl
   return deadline && q->kind != DX_SEND;
 }
 
-/* A deadline stops a posted request on the I/O thread: the kind's `pause`, and the step that `expired` posts (a no-op
-   then). The channel closes, as request_expired does at N = 1. */
+/* A deadline stops a posted request on the I/O thread: the kind's `pause`, or the step that `expired` posts when the
+   task saw the timeout first. A read or a send closes the channel, as request_expired does at N = 1 (also a finished
+   one: its task got the timeout, so what it carries is lost); a shut, which ends at its START, closes nothing. */
 static void stop_request(void *data) {
   request *q = data;
   if (q->posted && !q->stopped && q->counted) {
     q->stopped = true;
     unlink_request(q);
-    agc_duplex_shut(q->d);
+    if (q->kind != DX_SHUT) agc_duplex_shut(q->d);
   }
 }
 
@@ -479,11 +483,7 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
   const agc_string *text = agc_as_string(vm, line);
   if (text->bytes > LIMIT) return agc_error_value("process: send exceeds 1048576 bytes");
   if (!agc_stream_lock(vm, lock, &timeout, &result)) return result;
-  request *q = new_request(vm, d, DX_SEND, false);
-  q->count = (size_t)agc_value_units(line);
-  if (q->posted) {
-    copy_text(q, text);
-  } else {
+  if (agc_io_here(vm)) {
     int rc = usable(d, d->writer, &result) ? 1 : -1;
     if (rc > 0 && d->write_closed) {
       result = agc_error_value(closed_text);
@@ -495,11 +495,12 @@ agc_value agc_duplex_send(agc_vm *vm, agc_duplex *d, agc_resource *lock, agc_val
                             text->bytes, wrote);
       if (rc <= 0) result = agc_stream_written(vm, rc);
     }
-    if (rc != 1) {
-      free(q);
-      return result;
-    }
+    /* Only a write that did not end at once waits for its end in a request. */
+    if (rc != 1) return result;
   }
+  request *q = new_request(vm, d, DX_SEND, false);
+  q->count = (size_t)agc_value_units(line);
+  if (q->posted) copy_text(q, text);
   start_request(vm, q, agc_handle_value(lock), timeout, begin_send);
   return agc_void();
 }

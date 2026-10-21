@@ -494,9 +494,9 @@ after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 11
   - **Next work:** Multicore schedulers (7h item): **built behind a test
-    switch (2026-10-19/20)**: one I/O thread and N scheduler threads, HTTP
-    included (std/http). Still to do: run N > 1 without the switch, and the
-    remaining refused builtins (`docs/vm/16-architecture.md` §16.9)
+    switch (2026-10-19/21)**: one I/O thread and N scheduler threads, HTTP
+    (std/http), processes and `Test.run` included. Still to do: run N > 1
+    without the switch (`docs/vm/16-architecture.md` §16.9)
   - **Outcome:** One I/O thread and N schedulers, N from `--schedulers`
 
 - **Order:** 10
