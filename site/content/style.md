@@ -4,9 +4,9 @@ weight: 5
 description: How to write Agentica code that is simple and easy to read, with a bad and a good example for each rule.
 ---
 
-Code is read far more often than it is written. This guide keeps Agentica code simple and easy to read, in the spirit of the Ruby and Elixir style guides. When a rule gets in the way of clear code, clear code wins.
+Code is read far more often than it is written. This guide keeps Agentica code simple and easy to read, in the spirit of the Ruby and Elixir style guides. When a rule gets in the way of clear code, clear code wins. Restyle only the code you touch.
 
-Some rules are enforced: the program does not compile when it breaks them. Their examples are marked "Does not compile" and show the error code. Restyle only the code you touch.
+Some rules are enforced: the program does not compile when it breaks them. Their examples are marked "Does not compile" and show the error code.
 
 ## Layout
 
@@ -48,9 +48,9 @@ def main() -> Void
 end
 ```
 
-Put spaces around operators and after commas, but not inside brackets or parentheses: `total(a, b) + 1`, `[1, 2, 3]`, `0..9`.
+Put spaces around operators and after commas, but not around `..` and `...` or inside brackets or parentheses: `total(a, b) + 1`, `[1, 2, 3]`, `0..9`.
 
-Put one blank line after the `end` of each top-level declaration. Do not put blank lines right after `def` or before `end`, or two blank lines in a row.
+Separate top-level declarations with one blank line. Do not put blank lines right after `def` or before `end`, or two blank lines in a row.
 
 ```agentica {expect="PARSE-MISSING-BLANK-LINE"}
 # bad
@@ -250,6 +250,8 @@ end
 struct Parcel
   weight: Int
   width: Int
+  height: Int
+  depth: Int
   rush: Bool
 end
 
@@ -264,7 +266,7 @@ def ship(parcel: Parcel) -> Int
 end
 
 def main() -> Void
-  puts(ship(Parcel(weight: 2, width: 10, rush: true)))
+  puts(ship(Parcel(weight: 2, width: 10, height: 10, depth: 10, rush: true)))
 end
 ```
 
@@ -461,6 +463,8 @@ def main() -> Void
 end
 ```
 
+Leaving a variant out with no `_` does not compile:
+
 ```agentica {expect="CHECK-NON-EXHAUSTIVE-CASE"}
 # bad
 enum Shape
@@ -561,7 +565,10 @@ def double_text(text: String) -> Result[Int]
 end
 
 def main() -> Void
-  puts(double_text("21"))
+  case double_text("21")
+    ok(n) -> puts(n)
+    error(message) -> IO.warn(message)
+  end
 end
 ```
 
