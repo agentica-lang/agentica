@@ -187,8 +187,9 @@ since `String` equality already exists.
 
 **Reuse.** The checker's type predicate for the set above plus `Json`
 (`data-type?`) and the deep compare `agc_equal` in `vm/equal.c` were built for
-`Test.eq` (phase 25a, [`docs/roadmap/25-unit-tests.md`](../roadmap/25-unit-tests.md));
-this item reuses them for `==` and `!=`.
+`Test.eq` (phase 25a,
+[`docs/roadmap/25-unit-tests.md`](../roadmap/25-unit-tests.md)); this item
+reuses them for `==` and `!=`.
 
 **VM:** the `EQ` and `NE` opcodes compare structs, enums, lists, maps and
 Results by value, with an explicit stack (no C recursion, so deep values cannot
@@ -205,6 +206,11 @@ PR bumps the bytecode format version (`docs/vm/03-ir-and-bytecode.md` §4: any
 change to an opcode's meaning bumps it). A new opcode (`EQ_DEEP`) was not
 chosen: the front end and the VM ship together, and one opcode is simpler than
 two.
+
+**Docs that change with it:** `docs/vm/03-ir-and-bytecode.md` §4.2 (the pairs
+`EQ` and `NE` accept, and the `RUNTIME-INTERNAL` rule for other pairs) and
+`docs/vm/10-io-scheduler.md` §10.2.1 (the scalar-only `==` text, and the turn
+cost of the wider `EQ`).
 
 ### 25.5 Standalone lambdas
 
@@ -284,8 +290,9 @@ end
 ```
 
 **`File.eof?`** comes with this item:
-`File.eof?(handle: FileHandle, timeout_ms: Int) -> Result[Bool]`, like `IO.eof?`
-for a file handle. It peeks at the next byte without using it, with the timeout
+`File.eof?(handle: FileHandle, timeout_ms: Int) -> Result[Bool]` (unlike
+`IO.eof?`, which returns `Bool`, so the loop needs `try`) for a file handle. It
+peeks at the next byte without using it, with the timeout
 and handle-lock rules of the other `File` stream functions, and returns an error
 for a handle that is closed or not open for reading. It is a builtin under
 exception 1 of the std-first rule (it touches the OS). Without it, a loop has to
@@ -336,7 +343,9 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
 to the block's closure, `File.close` and the branches above. The block form
 needs no new builtin and no VM change; the only VM change of this item is the
 appended `File.eof?` builtin. It is a lowering, not a `std/` function, since
-that would have to be generic in `T`.
+that would have to be generic in `T`. A failing close is hard to cause in a test
+(it needs a full disk), so a test of the lowered code checks the four outcomes
+(block `ok` or `error`, close `ok` or `error`).
 
 ### 25.11 `format`
 
@@ -444,7 +453,10 @@ flag), so `format("%.2f", x)` stays the one public way. `x.to_fixed(2)`,
 `format("%.2f", x)`. The `Int` bit builtins of phase 13 are not needed: hex is
 written with division and `%`, and the smallest `Int` (`-9223372036854775808`,
 whose magnitude does not fit in `Int`) is a special case for `%d` with zero
-padding (`%021d`) as well as for `%x`.
+padding (`%021d`) as well as for `%x`. Its tests check `__float_fixed` against
+vectors from a checked-in Python script (standard library only), halfway cases
+such as `0.125` and `2.675` included. `docs/vm/03-ir-and-bytecode.md` §4.5
+("There are no internal helper builtins") gains `__float_fixed`.
 
 **Lowering:** lowering turns each call into a concatenation of the literal
 parts and calls to the prelude functions, one per conversion, so no format

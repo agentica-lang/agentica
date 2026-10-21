@@ -18,15 +18,15 @@ The VM has one stop path. A program cannot take part in it.
 - **The stop path.** One `sigaction` handler covers SIGINT, SIGTERM and SIGHUP
   (`agc_io_watch_stop` in `vm/loop.c`), except a signal the VM started as
   ignored. It sets atomics and wakes the loop with `uv_async_send`; it never
-  runs program code. The scheduler checks the first signal between turns, and
-  the run ends as an exit with code 128 + signal (`agc_stop` in `vm/interp.c`).
-  `agc_launch_settle` in `vm/launch.c` kills the children, flushes the output
-  and the files, and raises the signal again with its default action. A second
-  signal is only recorded until the children are stopped; a 3-second `alarm`
-  (`STOP_GRACE_SECONDS` in `vm/loop.c`) bounds that wait. A driven VM whose
-  driver is gone treats even the first signal as a second one. See
-  `docs/vm/14-core-invariants.md` §14.4 and `docs/vm/10-io-scheduler.md`
-  §10.2.2, "Stop signals".
+  runs program code. The scheduler checks the first signal between turns
+  (`check_stop` in `vm/task.c`), and the run ends as an exit with code 128 +
+  signal (`agc_stop` in `vm/interp.c`). `agc_launch_settle` in `vm/launch.c`
+  kills the children, flushes the output and the files, and raises the signal
+  again with its default action. A second signal is only recorded until the
+  children are stopped; a 3-second `alarm` (`STOP_GRACE_SECONDS` in `vm/loop.c`)
+  bounds that wait. A driven VM whose driver is gone treats even the first
+  signal as a second one. See `docs/vm/14-core-invariants.md` §14.4 and
+  `docs/vm/10-io-scheduler.md` §10.2.2, "Stop signals".
 - **No program view.** No builtin reports a signal, and no task ever sees one.
   The VM signals only the children it started (`uv_process_kill` in
   `signal_child`); it has no call to signal another pid or a process group.

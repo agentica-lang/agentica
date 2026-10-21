@@ -12,8 +12,9 @@ prelude code planned for order step 8.2 (2026-10-14); streams in two steps,
 `File.each_line` first (order row 7.2.1h) and a lazy type second (2026-10-14),
 named `Lazy[T]` (2026-10-20). 27.5 records what was decided against
 (generators, fibers, Agent-style shared state, public locks), so it is not
-proposed again. This section finalizes the earlier channel proposal and answers
-[section 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
+proposed again. This section finalizes the earlier channel proposal and
+answers [section
+25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
 **What is asked for:** something like Elixir's `Stream` and `Task.async_stream`,
 Ruby's iterators, generators and accumulators, and faster programs through
@@ -163,6 +164,10 @@ the VM design is in `docs/vm/10-io-scheduler.md` §10.2.1 ("Task.map").
     a walk up the ancestors of every running task at each cancel, was not
     taken: moving children at the end of a task is O(its children) once, and a
     cancel then only walks down.
+  - A `Task.map` whose caller is cancelled is a dead group: no pending item
+    starts, and its in-flight items are cancelled with it. A dead group closes
+    the timers of those items and never writes their slots, so it never wakes
+    the caller.
   - An I/O operation in flight is detached, never abandoned with a close: it
     never closes the handle, so a timed-out item cannot close a handle that
     other items share. The pooled connection of an `HTTP.get` or
@@ -482,8 +487,10 @@ Each of these is decided; it gets a help that names the Agentica form.
     combines the parts with `reduce`; state that lives while tasks run belongs
     to one owner task that receives messages on a channel. An Elixir `Agent` is
     itself a process that receives messages, so the owner task is the same idea,
-    written with the language's own parts (the example is on the
-    [channel page](../../site/content/library/concurrency/channel.md)).
+    written with the language's own parts (the example, with plain
+    `Task.spawn` senders, is on the
+    [channel page](../../site/content/library/concurrency/channel.md); a
+    fan-in from `Task.map` follows the same shape).
   - Help: `Agent.start_link(...)` and the other `Agent` calls show "return
     values from tasks and combine them with `reduce`, or keep the state in one
     task that receives on a `Channel`". A block that assigns to an outer

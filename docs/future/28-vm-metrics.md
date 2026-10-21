@@ -262,8 +262,10 @@ pointer to it may sit in a native's `malloc`'d state
 GC memory). The scheduler reaches it through `vm->obs`: two loads, the same as
 today's `vm->rt->trace.mask`. A macro, `AGC_OBSERVE(vm, trace_bits,
 metric_bits)`, masks both sets of bits against `vm->obs->observe`, so a trace
-point that also carries a hook is still two loads and one test. The trace bits
-are copied into the observe word once at start-up, from `agc_trace.mask`, and
+point that also carries a hook is still two loads and one test. Each set is
+first ANDed with its build constant (`AGC_TRACE_BUILD`, `AGC_METRICS_BUILD`),
+so a build with that feature off compiles the set to 0. The trace bits are
+copied into the observe word once at start-up, from `agc_trace.mask`, and
 never change. Trace points with no hook keep testing `agc_trace.mask` as today:
 the loader, `vm/launch.c`, the process guard's copy (`vm/process.c`, `struct
 guard`) and the trace-only points of `proc` (`struct proc`). The metric bits are
@@ -271,12 +273,13 @@ set only at the lazy start (28.2 rule 5), by the scheduler that owns the word,
 so before the first scrape they are 0 and every hook behaves as if it were not
 there. Code that keeps a copy of the trace struct because libuv callbacks have
 no runtime pointer (`proc`, the process guard, the TCP natives) also keeps a
-pointer to its scheduler's `agc_observe` block, so a callback with a hook sees
-the lazy start in `observe` and counts into `agc_metrics_counts`. The callbacks
-run on the loop thread of the scheduler that owns the native, so the counts stay
-single-writer. One more bit,
-`AGC_METRICS_SERVE`, is set from start-up while metrics are on; only the dequeue
-point tests it.
+pointer to its scheduler's `agc_observe` block, so a callback with a hook
+(`proc` exit, `tcp_connected`, `tcp_connect_error` and `tcp_accept_error`;
+`tcp_accept` runs in a builtin, which has the scheduler) sees the lazy start in
+`observe` and counts into `agc_metrics_counts`. The callbacks run on the loop
+thread of the scheduler that owns the native, so the counts stay single-writer.
+One more bit, `AGC_METRICS_SERVE`, is set from start-up while metrics are on;
+only the dequeue point tests it.
 
 **The dequeue point.** The snapshot check and the run-queue delay hook must run
 after the scheduler's bookkeeping (`finish_task` or `enqueue`, and the poll's
@@ -647,8 +650,11 @@ matter:
 - **Known numbers:** a fixture that spawns 10 tasks and awaits them gives
   `agentica_vm_tasks_spawned_total 11` and `agentica_vm_tasks_finished_total 11`
   in the last file (10 from `tasks_done`, plus main once the outcome is known),
-  and a scrape while main waits shows spawned minus finished of at least 1. A
-  failing fixture gives `agentica_vm_exit_code 1` and its `RUNTIME-` code.
+  and a scrape while main waits shows spawned minus finished of at least 1. An
+  allocation-heavy fixture gives `agentica_vm_gc_collections_total` above 0 (not
+  checked on a sanitizer build, which has no collector), and a child that exits
+  3 gives `agentica_vm_processes_exited_total{exit="nonzero"} 1`. A failing
+  fixture gives `agentica_vm_exit_code 1` and its `RUNTIME-` code.
 - **Nothing changes for the program:** golden fixtures (tasks, files, processes,
   a runtime failure, a `--max-steps` stop) run with the endpoint on (scraped
   every 100 ms during the run) and with the file on; exit code, stdout and
@@ -662,7 +668,9 @@ matter:
   once at start-up into the runtime config like `AGENTICA_VM_TEST_NO_TURN_COST`,
   replaces the 4-second snapshot budget and the 5-second deadline. A silent
   client and one that sends a byte every 50 ms are both closed at the deadline,
-  and a fifth connection is closed at once.
+  and a fifth connection is closed at once. The 503 test scrapes during a
+  fixture of long sorts, and reads the port from the `metrics listen` trace line
+  in `AGENTICA_VM_TRACE_FILE`, so the golden stderr stays unchanged.
 - **File mode:** a reader loop finds a whole, parsable file at every read while
   the program runs (atomic rename); a symlink at the path gives the `cannot
   write` line and no output; other files with temp-like names do not stop the
@@ -673,8 +681,9 @@ matter:
   program killed with `SIGKILL` before its first periodic write leaves a file
   with no `agentica_vm_exit_code`.
 - **Children:** a `Process.spawn` child that prints its environment does not
-  see the two metrics variables and still sees a `UV_USE_IO_URING` value the
-  user set; a scenario run by `agentica test` does not see them either.
+  see the two metrics variables, does not see a `UV_USE_IO_URING` that the VM
+  set, and still sees one the user set; a scenario run by `agentica test` does
+  not see the metrics variables either.
 - **Lazy start** (18c): a program keeps CPU tasks ready for 3 seconds before the
   first scrape; in that scrape the run-queue histogram has the same count at
   `le="1"` as at `le="+Inf"`, so no task was measured from boot. The same holds
@@ -684,8 +693,10 @@ matter:
   `AGENTICA_VM_TRACE` removes them too, so a developer's setting cannot change
   expected output. The `vm-sanitizers` CI job also builds `make vm-test
   METRICS=0`, and `agentica run --version` says `metrics off` there.
-- **Timing-sensitive cases** run alone, like `make vm-latency`, with bounds of
-  several times the expected time.
+- **Timing-sensitive cases** run alone, like `make vm-latency`: they are listed
+  in `PY_ALONE` in the Makefile, with a `make vm-metrics-timing` target and
+  their own CI step after `make vm-latency`. Their bounds are several times the
+  expected time.
 - **Overhead check** (manual, like `make bench`; not in `make test` or CI, where
   timing is noisy): a CPU-heavy program from `benchmarks/programs/` (`calls` and
   `knight-tour`, with `--size` set so a run takes at least 10 seconds) runs
@@ -706,6 +717,16 @@ gets `METRICS=0` (it passes `-DAGC_METRICS_BUILD=0` and goes in the
 `build/vm/flags` stamp like `TRACE` and `SANITIZE`). The `.prom` path check
 (`lstat` before `rename`) is new code, apart from the trace file's `fstat`
 check.
+
+Touch points: `vm/launch.c` (one `start_observe` reads the trace and metrics
+variables together before loading; at the end of the run it sets `stop`, hands
+over the final snapshot and joins the thread with the 1-second timeout);
+`vm/trace.c` (the `metrics` category, and `metrics` in the category regex
+`TRACE_LINE` of `tests/test_vm_trace.py`, which otherwise rejects its lines);
+`vm/port.h` (the `agc_io_bytes` struct and the `done` out-parameter);
+`agc_io_finish` in `vm/loop.c` (copies the count onto the job); and
+`vm/files.c`, `vm/input.c`, `vm/process.c`, `vm/tcp.c` (each keeps the count
+next to its system call).
 
 Multicore (`docs/vm/10-io-multicore.md` §10.2.3): the snapshot design stays; the
 run-queue delay hook is revisited then (28.4: pushes from the I/O thread and
