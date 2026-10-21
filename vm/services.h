@@ -102,6 +102,8 @@ struct uv_stream_s;
 struct uv_write_s;
 agc_value agc_stream_bad_timeout(void);
 agc_value agc_stream_timed_out(void);
+/* The result of a finished write: Ok(Void), or the write error for a negative libuv status. */
+agc_value agc_stream_written(agc_vm *vm, int status);
 agc_resource *agc_new_lock(agc_vm *vm);
 bool agc_stream_lock(agc_vm *vm, agc_resource *lock, int64_t *timeout, agc_value *result);
 size_t agc_inbuf_pending(const agc_inbuf *b);
@@ -126,7 +128,7 @@ int agc_stream_write(struct uv_stream_s *stream, struct uv_write_s *req, uint8_t
 
 typedef struct agc_duplex agc_duplex;
 
-agc_duplex *agc_duplex_new(agc_vm *vm, int read_fd, int write_fd);
+agc_duplex *agc_duplex_new(agc_loop *io, int read_fd, int write_fd);
 void agc_duplex_shut(agc_duplex *d);
 void agc_duplex_release(agc_duplex *d);
 void agc_duplex_overflow(agc_duplex *d, const char *text);

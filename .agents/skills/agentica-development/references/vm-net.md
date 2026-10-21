@@ -179,6 +179,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `request_expired` closes the whole channel (`agc_duplex_shut`), so a timeout
     ends the channel and nothing else
   - `ECONNRESET` on a read is the end of input.
+  - With more than one scheduler every read, send and shut is a request whose
+    steps run on the I/O thread (`posted`): the scheduler reads only the
+    request's result, and the parent channel is attached at start.
   - The parent side is used by `process.c` (`agc_duplex_new` over the parent's
     socket end, `agc_duplex_read_line`, `agc_duplex_send`,
     `agc_duplex_close_write`, which ignores a `uv_shutdown` that fails on the
@@ -220,6 +223,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     handle count (close callbacks) reach zero
   - requests park on `external` jobs that pipe, write and exit callbacks ready
     with `agc_io_ready`
+  - the I/O thread owns `proc`; with more than one scheduler every call
+    (spawn, read, write, close, wait) parks on a request whose steps post to
+    the I/O thread, and the result is copied into the request (`finish`)
+    before it is readied; one scheduler keeps the inline fast paths
   - stdout is read only while a reader waits, 4 KiB at a time (more only for a
     bigger `read_bytes`)
   - stderr is forwarded in its read callback

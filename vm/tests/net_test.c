@@ -30,66 +30,17 @@ static agc_value listener, socket_v;
 
 #define on_thread agc_test_on_thread
 
-typedef struct {
-  const char *name;
-  uint32_t arity;
-  agc_value args[4];
-  agc_value result;
-  bool parked;
-} calling;
-
-/* Calls the builtin as a scheduler does. A call made while the task is parked (a close beside a waiting read) leaves
-   the task as it is, as a second task's call would. */
-static void call_builtin(void *arg) {
-  calling *c = arg;
-  const agc_builtin *b = agc_find_builtin((const uint8_t *)c->name, strlen(c->name), c->arity);
-  assert(b);
-  bool beside = vm.task->parked != NULL;
-  if (!beside) atomic_store(&vm.task->state, AGC_TASK_RUNNING);
-  c->result = b->fn(&vm, c->args, 0);
-  c->parked = !beside && vm.task->parked != NULL;
-  if (c->parked) {
-    assert(vm.task->parking);
-    vm.task->parking = false;
-    assert(agc_task_commit_park(vm.task));
-  }
-}
+typedef agc_test_call calling;
 
 static calling call(const char *name, uint32_t arity, agc_value a, agc_value b, agc_value c, agc_value d) {
-  calling made;
-  memset(&made, 0, sizeof made);
-  made.name = name;
-  made.arity = arity;
-  made.args[0] = a;
-  made.args[1] = b;
-  made.args[2] = c;
-  made.args[3] = d;
-  return made;
+  return agc_test_call_of(&vm, vm.task, name, arity, a, b, c, d);
 }
 
-/* Starts NAME on the scheduler thread; true when the task parked on a job (the START is in the inbox). */
-static bool start(calling *c) {
-  on_thread(call_builtin, c);
-  return c->parked;
-}
+#define call_builtin agc_test_call_builtin
+#define start agc_test_start
+#define take agc_test_take
 
-static void take_on_thread(void *arg) {
-  calling *c = arg;
-  atomic_store(&vm.task->state, AGC_TASK_RUNNING);
-  c->result = agc_io_finish(&vm, vm.task);
-  assert(!vm.task->parked);
-}
-
-static void wait_woken(void) {
-  while (vm.task->state == AGC_TASK_PARKED) assert(agc_io_poll(&vm, true));
-  while (agc_runq_pop(vm.rt->runq)) {}
-}
-
-/* The task, resumed on the scheduler thread, ends its job there: the `done` half runs on that thread. */
-static agc_value take(calling *c) {
-  on_thread(take_on_thread, c);
-  return c->result;
-}
+static void wait_woken(void) { agc_test_wait_woken(&vm, vm.task); }
 
 /* A whole call: start, run the loop until the task wakes, and take the result. */
 static agc_value step(calling c) {
@@ -359,10 +310,7 @@ static void test_connect_tls_with_short_client_options(void) {
 int main(void) {
 #if defined(__linux__) || defined(__APPLE__)
   agc_test_deadline(120);
-  agc_init();
-  agc_gc_allow_threads();
-  agc_io_init();
-  agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
+  agc_test_io_vm(&vm);
   test_close_queued_behind_a_read();
   test_deadline_before_the_bytes();
   test_bytes_before_the_deadline();

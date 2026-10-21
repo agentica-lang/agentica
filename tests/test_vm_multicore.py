@@ -2,10 +2,10 @@
 
 More than one scheduler runs only under that test switch until the count is lifted (#345). The goldens of
 tests/fixtures/vm must hold at four schedulers too, except where the order of output between tasks is not fixed (the
-ORDER set) and for the libraries that still call libuv from their scheduler, which a run with several schedulers
-refuses (Process, Duplex and the Test protocol). TCP, TLS and the HTTP server post every step to the I/O thread, so
-their fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers that fire, the end of
-the run from any scheduler, standard input and FIFOs, sockets used and closed from several schedulers, and the switch.
+ORDER set). TCP, TLS, the HTTP server, processes, the child channel and the Test protocol post every step to the I/O
+thread, so their fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers that
+fire, the end of the run from any scheduler, standard input and FIFOs, sockets and processes used and closed from
+several schedulers, and the switch.
 `make test-multicore` runs this module; `make vm-tsan-run` runs it on a ThreadSanitizer build.
 """
 import hashlib
@@ -27,7 +27,8 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import FIXTURES, ROOT, compile_text, run, vm_command, vm_environment
+from tests.agentica_test import (FIXTURES, compile_text, kill_process, process_alive, run, vm_command, vm_environment,
+                                 wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -43,13 +44,15 @@ RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark
 # spawned send first; a spinning scheduler takes that task at once and runs it beside the yielder.
 # http-client-close-queued counts on the same yield: on another thread the new worker may connect before
 # close_client runs (the call still gets "http: client is closed", but the server sees a connection).
+# process-close-crash prints the crashes of two tasks; process-close-cancel, test-assertions and test-crash-observed
+# count on Task.sleep(0) letting another task run first (a close that ends before its owner crashes, the tasks of a
+# test that crash before it returns). process-channel-close counts on Task.sleep(100) being long enough for its tasks
+# to build a 1 MB text and park before the close, which a ThreadSanitizer build is too slow for.
 ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "channel-returned-order", "handle-spawn-owning",
-         "http-client-close-queued", "logger-tasks",
+         "http-client-close-queued", "logger-tasks", "process-channel-close", "process-close-cancel",
+         "process-close-crash",
          "task-await-cycle", "task-crash-descendants", "task-crash-result", "task-pending-count", "task-preempt-fail",
-         "task-file-close", "tcp-tasks", "test-run-task"}
-# Builtins that a run with several schedulers refuses (agc_program_for_threads in vm/builtin_tables.c, and Test.run on
-# the parent channel): such a fixture keeps its golden or stops with RUNTIME-INTERNAL.
-LOOP_BOUND = re.compile(r"\b(Process|Duplex)\.|\bTest\.run\b")
+         "task-file-close", "tcp-tasks", "test-assertions", "test-crash-observed", "test-run-task"}
 
 
 def vm(bytecode, *flags, args=(), stdin=None, env=None, timeout=None):
@@ -68,13 +71,12 @@ def fixture_cases():
     for path in diff.fixture_programs():
         if path.stem in ORDER:
             continue
-        bound = LOOP_BOUND.search(path.read_text(encoding="utf-8")) is not None
-        cases.append(pytest.param(path, bound, id=path.stem))
+        cases.append(pytest.param(path, id=path.stem))
     return cases
 
 
-@pytest.mark.parametrize("path,bound", fixture_cases())
-def test_a_fixture_keeps_its_golden_on_four_schedulers(path, bound, tmp_path):
+@pytest.mark.parametrize("path", fixture_cases())
+def test_a_fixture_keeps_its_golden_on_four_schedulers(path, tmp_path):
     reason = diff.skip_reason(path.name)
     if reason:
         pytest.skip(reason)
@@ -91,29 +93,7 @@ def test_a_fixture_keeps_its_golden_on_four_schedulers(path, bound, tmp_path):
             shutil.rmtree(directory, ignore_errors=True)
     else:
         result = diff.run_vm(fixture, bytecode, 0, root=root, cwd=tmp_path, env=MULTICORE)
-    seen = diff.outcome(diff.unfixture(result))
-    if bound and seen[3] == "RUNTIME-INTERNAL":
-        assert refused_at_a_bound_call(result[2]), result[2]
-        return
-    assert seen == diff.read_expected(path)
-
-
-def refused_at_a_bound_call(stderr):
-    """True when the last diagnostic's span starts on a source line that calls a refused builtin: the refusal, not
-    another RUNTIME-INTERNAL (a stall has no span)."""
-    try:
-        parsed = json.loads(stderr.rstrip("\n").rsplit("\n", 1)[-1])
-        name, line = parsed["file"], parsed["range"]["start"]["line"]
-    except (ValueError, KeyError, TypeError):
-        return False
-    if name.startswith("@"):
-        source = ROOT / "tests" / name[1:]
-    elif name.startswith("std/"):
-        source = ROOT / "stdlib" / name[len("std/"):]
-    else:
-        source = ROOT / name
-    lines = source.read_text(encoding="utf-8").splitlines()
-    return 0 < line <= len(lines) and LOOP_BOUND.search(lines[line - 1]) is not None
+    assert diff.outcome(diff.unfixture(result)) == diff.read_expected(path)
 
 
 FAN_OUT = """\
@@ -775,11 +755,359 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
             0, "8\n0\nerror(\"filesystem: operation timed out\")\n", "")
 
 
-def test_a_process_call_is_refused_on_several_schedulers(tmp_path):
-    bytecode = program(tmp_path, "proc", "def main() -> Void\n"
-                       "  IO.inspect(Process.spawn_channel(\"sh\", [\"-c\", \"exit 0\"], \".\", 5000).ok?)\nend\n")
-    result = vm(bytecode, "--json")
-    assert diff.outcome((result.code, result.stdout, result.stderr))[3] == "RUNTIME-INTERNAL"
+# Processes, the child channel and the Test protocol run on several schedulers: every libuv step is a request to the
+# I/O thread, which owns each child's handles and buffers (§16.9). The programs use `sh`, so these cases are POSIX.
+POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="the child programs are sh scripts")
+MULTICORE_CHILDREN = {**MULTICORE, "AGENTICA_SCHEDULERS": SCHEDULERS}
+
+PROC_FAN = r"""def echo(n: Int) -> String
+  p = Process.spawn_captured("sh", ["-c", "read x; echo got-$x; echo err-$x >&2; exit 7"], ".", 5000).unwrap!
+  sent = Process.send(p, "#{n}\n", 5000)
+  line = Process.read_line(p, 5000)
+  status = Process.wait(p, 5000)
+  out = Process.output(p, 5000).unwrap!
+  Process.close(p)
+  return "#{sent} #{line} #{status} #{out.stderr.strip()}"
+end
+
+def plain(n: Int) -> String
+  p = Process.spawn("sh", ["-c", "exit #{n}"], 5000).unwrap!
+  status = Process.wait(p, 5000)
+  Process.close(p)
+  return "#{status}"
+end
+
+def main() -> Void
+  tasks = (1..8).to_a.map do |k|
+    Task.spawn(&echo, k)
+  end
+  plains = (1..8).to_a.map do |k|
+    Task.spawn(&plain, k)
+  end
+  for t in tasks
+    puts(Task.await(t))
+  end
+  for t in plains
+    puts(Task.await(t))
+  end
+end
+"""
+
+
+@POSIX_ONLY
+@RACE
+def test_children_of_tasks_on_several_schedulers_send_read_wait_and_close(tmp_path, repeats):
+    # Sixteen tasks each run a child: a captured one is sent a line and read, waited for, its stderr kept, and closed;
+    # a plain one is waited for. Every result is the one of a single scheduler.
+    bytecode = program(tmp_path, "proc_fan", PROC_FAN)
+    expected = "".join('ok() ok("got-%d") ok(7) err-%d\n' % (k, k) for k in range(1, 9))
+    expected += "".join("ok(%d)\n" % k for k in range(1, 9))
+    for _ in range(repeats):
+        result = vm(bytecode, "--allow-run")
+        assert (result.code, result.stdout, result.stderr) == (0, expected, "")
+
+
+PROC_CANCEL = r"""def big() -> String
+  text = "abcdefgh"
+  round = 0
+  while round < 17
+    text = text + text
+    round = round + 1
+  end
+  return text
+end
+
+def reader(p: Process) -> Result[String]
+  return Process.read_line(p, 60000)
+end
+
+def waiter(p: Process) -> Result[Int]
+  return Process.wait(p, 60000)
+end
+
+def sender(p: Process) -> Result[Void]
+  return Process.send(p, big(), 60000)
+end
+
+def watch(pid: String) -> Process
+  script = "while kill -0 #{pid} 2>/dev/null; do sleep 0.02; done; echo gone"
+  return Process.spawn("sh", ["-c", script], 5000).unwrap!
+end
+
+def main() -> Void
+  p = Process.spawn_captured("sh", ["-c", "exec sleep 60"], ".", 5000).unwrap!
+  r = Task.spawn(&reader, p)
+  w = Task.spawn(&waiter, p)
+  s = Task.spawn(&sender, p)
+  Task.sleep(50)
+  Task.cancel(r)
+  Task.cancel(w)
+  Task.cancel(s)
+  IO.inspect(Task.await(r))
+  IO.inspect(Task.await(w))
+  IO.inspect(Task.await(s))
+  IO.inspect(Process.read_line(p, 100))
+  Process.close(p)
+  IO.inspect(Process.wait(p, 100))
+  owned = Process.spawn("sh", ["-c", "echo $$; exec sleep 60"], 5000).unwrap!
+  pid = Process.read_line(owned, 5000).unwrap!
+  o = Task.spawn_owning(&reader, owned)
+  Task.sleep(20)
+  Task.cancel(o)
+  IO.inspect(Task.await(o))
+  IO.inspect(Process.read_line(watch(pid), 5000))
+end
+"""
+
+
+@POSIX_ONLY
+@RACE
+def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_its_child(tmp_path, repeats):
+    # A read, a wait and a 1 MiB send that the child never reads are parked on one child and cancelled from main:
+    # each task ends cancelled. The read keeps the reader lock until its job ends, so main's read times out on it; the
+    # close ends every job and the run. A task that owns a child is cancelled: its end kills the child.
+    bytecode = program(tmp_path, "proc_cancel", PROC_CANCEL)
+    expected = ['error("task: cancelled")'] * 3 + ['error("network: operation timed out")',
+                                                    'error("process: process is closed")', 'error("task: cancelled")',
+                                                    'ok("gone")']
+    for _ in range(repeats):
+        result = vm(bytecode, "--allow-run", timeout=60)
+        assert (result.code, result.stdout.splitlines(), result.stderr) == (0, expected, "")
+
+
+PROC_DEADLINE = r"""def main() -> Void
+  waits: Map[String, Int] = {}
+  reads: Map[String, Int] = {}
+  k = 0
+  while k < 16
+    p = Process.spawn("sh", ["-c", "sleep 0.0#{2 + k % 4}; exit 4"], 5000).unwrap!
+    got = "#{Process.wait(p, 30)}"
+    waits = waits.put(got, waits.get(got, 0) + 1)
+    Process.close(p)
+    q = Process.spawn_captured("sh", ["-c", "sleep 0.0#{2 + k % 4}; echo hi"], ".", 5000).unwrap!
+    line = "#{Process.read_line(q, 30)}"
+    if line != "ok(\"hi\")"
+      line = "#{line} then #{Process.read_line(q, 1000)}"
+    end
+    reads = reads.put(line, reads.get(line, 0) + 1)
+    Process.close(q)
+    k = k + 1
+  end
+  for key in waits.keys
+    puts(key)
+  end
+  puts("--")
+  for key in reads.keys
+    puts(key)
+  end
+end
+"""
+
+
+@POSIX_ONLY
+@RACE
+def test_process_exits_and_lines_that_race_a_deadline_give_the_result_or_the_timeout(tmp_path, repeats):
+    # A wait whose 30 ms deadline races the exit of a child that sleeps 20 to 50 ms: the status or the timeout. A read
+    # that races a line the same way: the line, or the timeout and then a closed child, never both.
+    bytecode = program(tmp_path, "proc_deadline", PROC_DEADLINE)
+    waits = {"ok(4)", 'error("network: operation timed out")'}
+    reads = {'ok("hi")', 'error("network: operation timed out") then error("process: process is closed")'}
+    for _ in range(repeats):
+        result = vm(bytecode, "--allow-run", timeout=60)
+        assert (result.code, result.stderr) == (0, "")
+        first, second = result.stdout.split("--\n")
+        assert set(first.splitlines()) <= waits and set(second.splitlines()) <= reads, result.stdout
+
+
+PROC_STOP = r"""def read(p: Process) -> Result[String]
+  return Process.read_line(p, 60000)
+end
+
+def wait(p: Process) -> Result[Int]
+  return Process.wait(p, 60000)
+end
+
+def leave(code: Int) -> Int
+  Task.sleep(50)
+  System.exit(code)
+  return code
+end
+
+def main() -> Void
+  plain = Process.spawn("sh", ["-c", "echo $$; exec sleep 60"], 5000).unwrap!
+  captured = Process.spawn_captured("sh", ["-c", "echo $$; exec sleep 60"], ".", 5000).unwrap!
+  pids = "#{Process.read_line(plain, 5000).unwrap!} #{Process.read_line(captured, 5000).unwrap!}"
+  Task.spawn(&read, plain)
+  Task.spawn(&wait, captured)
+  puts(pids)
+  IO.flush()
+  if System.args()[0] == "exit"
+    Task.spawn(&leave, 3)
+  end
+  Task.sleep(60000)
+end
+"""
+
+
+@pytest.mark.skipif(not hasattr(signal, "SIGTERM") or sys.platform == "win32", reason="needs POSIX signals")
+@pytest.mark.parametrize("mode", ["signal", "exit"])
+def test_a_stop_signal_or_an_exit_kills_the_children_of_a_run_on_several_schedulers(tmp_path, mode):
+    # A plain and a captured child, each with a task parked on it; the run gets SIGTERM, or a task calls
+    # System.exit(3) on its scheduler. The run ends with the signal or 3, and both children are gone.
+    bytecode = program(tmp_path, "proc_stop", PROC_STOP)
+    process = subprocess.Popen([*vm_command(), *FLAGS, "--allow-run", "--", bytecode, mode], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                               text=True)
+    pids = []
+    try:
+        pids = process.stdout.readline().split()
+        assert len(pids) == 2
+        if mode == "signal":
+            process.send_signal(signal.SIGTERM)
+        out, err = process.communicate(timeout=30)
+        code = -signal.SIGTERM if mode == "signal" else 3
+        assert (process.returncode, out, err) == (code, "", "")
+        assert wait_until(lambda: not any(process_alive(pid) for pid in pids), timeout=10)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+        for pid in pids:
+            kill_process(pid)
+
+
+PROC_CHANNEL = r"""struct Batch
+  p: Process
+  from: Int
+end
+
+def reply(line: String) -> Result[Void]
+  return Process.parent_send("echo:" + line + "\n", 5000)
+end
+
+def child() -> Void
+  replies: List[Task[Result[Void]]] = []
+  line = Process.parent_read_line(5000)
+  while line.ok?
+    replies = replies.push(Task.spawn(&reply, line.unwrap!))
+    line = Process.parent_read_line(5000)
+  end
+  for t in replies
+    Task.await(t).unwrap!
+  end
+  Process.parent_send("end:#{line.message}\n", 5000).unwrap!
+end
+
+def send_batch(b: Batch) -> Result[Void]
+  k = 0
+  while k < 25
+    try Process.channel_send(b.p, "#{b.from + k}\n", 5000)
+    k = k + 1
+  end
+  return ok()
+end
+
+def parent(binary: String, bytecode: String) -> Void
+  p = Process.spawn_channel(binary, ["run", "--", bytecode, binary, bytecode, "child"], ".", 5000).unwrap!
+  senders = [0, 100, 200, 300].map do |from|
+    Task.spawn(&send_batch, Batch(p: p, from: from))
+  end
+  got: List[String] = []
+  k = 0
+  while k < 100
+    got = got.push(Process.channel_read_line(p, 5000).unwrap!)
+    k = k + 1
+  end
+  for t in senders
+    Task.await(t).unwrap!
+  end
+  IO.inspect(Process.channel_close(p, 5000))
+  puts(got.sort.join(","))
+  IO.inspect(Process.channel_read_line(p, 5000))
+  IO.inspect(Process.channel_read_line(p, 5000))
+  IO.inspect(Process.wait(p, 5000))
+  Process.close(p)
+end
+
+def main() -> Void
+  args = System.args()
+  if args.size == 3 && args[2] == "child"
+    child()
+  else
+    parent(args[0], args[1])
+  end
+end
+"""
+
+
+@POSIX_ONLY
+@RACE
+def test_the_child_channel_between_two_runs_on_several_schedulers(tmp_path, repeats):
+    # The parent and its child both run on four schedulers. Four parent tasks send 100 lines on the channel while main
+    # reads the replies; the child answers each line from a task of its own (Process.parent_send from several
+    # schedulers). The parent closes its side, the child reads the end, says so and exits 0.
+    bytecode = program(tmp_path, "proc_channel", PROC_CHANNEL)
+    replies = ",".join(sorted("echo:%d" % (base + k) for base in (0, 100, 200, 300) for k in range(25)))
+    expected = "ok()\n%s\nok(\"end:process: end of input\")\nerror(\"process: end of input\")\nok(0)\n" % replies
+    for _ in range(repeats):
+        result = vm(bytecode, "--allow-run", args=(vm_command()[0], bytecode), env=MULTICORE_CHILDREN, timeout=60)
+        assert (result.code, result.stdout, result.stderr) == (0, expected, "")
+
+
+UNITS = r"""def square(n: Int) -> Int
+  return n * n
+end
+
+def main() -> Void
+  Test.run([
+    Test.test("tasks on several schedulers") do
+      tasks = (1..8).to_a.map do |k|
+        Task.spawn(&square, k)
+      end
+      total = 0
+      for t in tasks
+        total = total + Task.await(t)
+      end
+      Test.eq(total, 204)
+    end,
+    Test.test("a child process") do
+      p = try Process.spawn_captured("sh", ["-c", "echo hi"], ".", 5000)
+      line = try Process.read_line(p, 5000)
+      Process.close(p)
+      Test.eq(line, "hi")
+    end,
+    Test.test("a failing case") do
+      Test.eq(1, 2)
+    end
+  ])
+end
+"""
+
+
+def stable(report):
+    """The report without what changes from run to run: the durations and the seed."""
+    for entry in report["files"]:
+        for scenario in entry["scenarios"]:
+            scenario.pop("duration_ms", None)
+    report.pop("duration_ms", None)
+    report.pop("seed", None)
+    return report
+
+
+@POSIX_ONLY
+def test_agentica_test_runs_a_test_file_on_several_schedulers(tmp_path):
+    # `agentica test` with every VM on four schedulers: the runner and the test file speak the Test protocol over the
+    # parent channel, and the report is the one of a single scheduler.
+    source = tmp_path / "units_test.agc"
+    source.write_text(UNITS, encoding="utf-8")
+    command = [vm_command()[0], "test", "--allow-run", "--json", str(source)]
+    one = run(command, env=vm_environment())
+    several = run(command, env=vm_environment(MULTICORE_CHILDREN))
+    assert (several.code, several.stderr) == (one.code, one.stderr) == (1, "")
+    report = stable(json.loads(several.stdout))
+    assert report == stable(json.loads(one.stdout))
+    assert [s["status"] for s in report["files"][0]["scenarios"]] == ["passed", "passed", "failed"]
+
 
 # TCP and TLS run on several schedulers: every step is a request to the I/O thread, which owns each socket (§16.9).
 TLS_DIR = str(FIXTURES / "tls")

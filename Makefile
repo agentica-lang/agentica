@@ -778,7 +778,7 @@ vm-test: $(VM_TESTS)
 # set-once outcome and reference count, the run queue, the wake against the park, a job on the loop, rt->sync, the output
 # locks and a timer fired against a wake. The VM is built without libgc (AGC_NO_GC), so the collector's own signals are out
 # of the picture; the whole run is checked, so a race fails it.
-VM_TSAN_TESTS := inbox outcome runq task_wake job sync output timers threads net
+VM_TSAN_TESTS := inbox outcome runq task_wake job sync output timers threads net process_threads
 # vm/tools/tsan.supp: the calls from the system libcrypto, whose own locking TSan cannot see (TLS setup on pool threads).
 VM_TSAN_OPTIONS := halt_on_error=1 suppressions=$(CURDIR)/vm/tools/tsan.supp
 vm-tsan:
@@ -788,22 +788,23 @@ vm-tsan:
 # Programs on several schedulers (tests/test_vm_multicore.py): the test-only switch AGENTICA_VM_TEST_MULTICORE=1 lets
 # --schedulers N run them on N threads. test-multicore runs them on dist/agentica; vm-tsan-run runs them on a TSan
 # binary (no libgc, the front end of the release build), so a race between schedulers or with the I/O thread fails it.
-# Both also run the TCP, TLS and HTTP modules with every VM on four schedulers (AGENTICA_VM_TEST_MODULE_SCHEDULERS,
-# read by tests/agentica_test.py); test-multicore-net runs only those.
-VM_NET_MODULES := tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py
+# Both also run the TCP, TLS, HTTP, process and BDD modules with every VM on four schedulers
+# (AGENTICA_VM_TEST_MODULE_SCHEDULERS, read by tests/agentica_test.py); test-multicore-net runs only those.
+VM_MULTICORE_MODULES := tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_process.py \
+  tests/test_process_lifecycle.py tests/test_bdd.py
 test-multicore: dist/agentica$(EXE)
 	@$(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
 	@$(MAKE) --no-print-directory test-multicore-net
 
 test-multicore-net: dist/agentica$(EXE)
-	@AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_NET_MODULES)"
+	@AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_MULTICORE_MODULES)"
 
 vm-tsan-run: dist/agentica$(EXE)
 	$(MAKE) build/vm/tsan/agentica$(EXE) TSAN=1 SANITIZE=0 GC_STRESS=0
 	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
 	  $(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
 	AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" \
-	  AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_NET_MODULES)"
+	  AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_MULTICORE_MODULES)"
 
 # The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)

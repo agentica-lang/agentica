@@ -64,16 +64,10 @@ FIFO_FILE_REASON = ("Windows has no FIFO file and the VM refuses a named pipe as
                     "test_windows_handle_counts.py checks the refusal)")
 
 
-# `make test-multicore` runs whole modules (TCP, TLS, HTTP) on several schedulers: AGENTICA_VM_TEST_MODULE_SCHEDULERS=N
-# makes every VM started with vm_environment() run on N schedulers under the test switch. A case whose program still
-# uses a builtin that several schedulers refuse (Process, Duplex) calls one_scheduler() first.
+# `make test-multicore` runs whole modules (TCP, TLS, HTTP, processes, BDD) on several schedulers:
+# AGENTICA_VM_TEST_MODULE_SCHEDULERS=N makes every VM started with vm_environment() run on N schedulers under the test
+# switch.
 TEST_SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_MODULE_SCHEDULERS", "").strip()
-
-
-def one_scheduler():
-    """Skip the case on a several-scheduler run of its module (TEST_SCHEDULERS): its program needs one scheduler."""
-    if TEST_SCHEDULERS:
-        raise unittest.SkipTest("needs one scheduler (AGENTICA_VM_TEST_MODULE_SCHEDULERS)")
 
 
 

@@ -284,9 +284,6 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
       if (!agc_write(vm, &vm->rt->err, usage, false)) return agc_void();
       agc_exit(vm, 2);
     }
-    /* The parent channel is a Duplex pipe, whose steps still call libuv on the scheduler (agc_program_for_threads). */
-    if (vm->rt->schedulers > 1)
-      agc_fail(vm, "RUNTIME-INTERNAL", "this builtin is not available with several schedulers yet", span);
     if (!agc_parent_open(vm))
       agc_fail(vm, "RUNTIME-TEST-RUN", "Test.run needs the parent channel that agentica test opens", span);
     r = agc_alloc(sizeof(agc_test_run));

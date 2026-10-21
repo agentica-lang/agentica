@@ -422,7 +422,7 @@ static void test_tasks_spread_over_schedulers(void) {
 /* TCP on four schedulers: main listens and spawns NET_TASKS net tasks, then awaits them and closes the listener. Every
    step of a socket is a request to the I/O thread; the tasks issue them and are resumed on whichever scheduler runs
    them, and the run ends once two schedulers have resumed a task after a read. Each round unwraps every result, so a
-   failed step fails the run. Before 3c-2a such a run refused the TCP rows (agc_program_for_threads). */
+   failed step fails the run. */
 static void test_tcp_over_schedulers(void) {
   prog *p = agc_alloc(sizeof *p);
   new_prog(p);

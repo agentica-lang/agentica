@@ -26,8 +26,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - **Path:** `vm/process_os.h`, `vm/process_posix.c`, `vm/process_windows.c`
   - **Owns:** The command search rules of `Process.spawn`: what is a path, the
     PATH list split and quotes, the `.exe`/`.com` allowlist (no PATHEXT) and the
-    names that are refused (trailing dot or space, `:` that is not a drive).
-    `process.c` keeps the search loop and the file test.
+    names that are refused (trailing dot or space, `:` that is not a drive),
+    and the read of a child's stdout beside libuv for `Process.read_available`
+    (none on Windows). `process.c` keeps the search loop and the file test.
+    The I/O thread owns a child's handles and buffers: with several schedulers
+    each `Process` and channel call posts its START step and parks, and the
+    done half reads only the request (`docs/vm/16-architecture.md` §16.9).
 
 - **Path:** `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`
   - **Owns:** The ends of a child channel: how the parent makes them (a socket

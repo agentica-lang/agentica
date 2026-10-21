@@ -6,6 +6,10 @@
 #include "../core.h"
 
 #include <assert.h>
+#include <stdatomic.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 #include <uv.h>
 
 typedef struct {
@@ -28,6 +32,87 @@ static inline void agc_test_on_thread(void (*fn)(void *arg), void *arg) {
   uv_thread_t thread;
   assert(uv_thread_create(&thread, agc_test_hop_main, &h) == 0);
   assert(uv_thread_join(&thread) == 0);
+}
+
+/* A builtin call made on the scheduler thread for one task. */
+typedef struct {
+  agc_vm *vm;
+  agc_task *task;
+  const char *name;
+  uint32_t arity;
+  agc_value args[4];
+  agc_value result;
+  bool parked;
+} agc_test_call;
+
+static inline agc_test_call agc_test_call_of(agc_vm *vm, agc_task *task, const char *name, uint32_t arity,
+                                             agc_value a, agc_value b, agc_value c, agc_value d) {
+  agc_test_call made;
+  memset(&made, 0, sizeof made);
+  made.vm = vm;
+  made.task = task;
+  made.name = name;
+  made.arity = arity;
+  made.args[0] = a;
+  made.args[1] = b;
+  made.args[2] = c;
+  made.args[3] = d;
+  return made;
+}
+
+/* Calls the builtin as a scheduler does (run it with agc_test_on_thread). A call made while its task is parked (a
+   close beside a waiting read) leaves the task as it is, as a second task's call would. */
+static inline void agc_test_call_builtin(void *arg) {
+  agc_test_call *c = arg;
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)c->name, strlen(c->name), c->arity);
+  assert(b);
+  c->vm->task = c->task;
+  bool beside = c->task->parked != NULL;
+  if (!beside) {
+    atomic_store(&c->task->state, AGC_TASK_RUNNING);
+    c->task->parking = false;
+  }
+  c->result = b->fn(c->vm, c->args, 0);
+  c->parked = !beside && c->task->parked != NULL;
+  if (c->parked) {
+    assert(c->task->parking);
+    c->task->parking = false;
+    assert(agc_task_commit_park(c->task));
+  }
+}
+
+/* Starts the call on the scheduler thread; true when its task parked on a job (the START is in the inbox). */
+static inline bool agc_test_start(agc_test_call *c) {
+  agc_test_on_thread(agc_test_call_builtin, c);
+  return c->parked;
+}
+
+/* Runs the loop until the task wakes, and empties the run queue. */
+static inline void agc_test_wait_woken(agc_vm *vm, agc_task *task) {
+  while (task->state == AGC_TASK_PARKED) assert(agc_io_poll(vm, true));
+  while (agc_runq_pop(vm->rt->runq)) {}
+}
+
+static inline void agc_test_take_on_thread(void *arg) {
+  agc_test_call *c = arg;
+  c->vm->task = c->task;
+  atomic_store(&c->task->state, AGC_TASK_RUNNING);
+  c->result = agc_io_finish(c->vm, c->task);
+  assert(!c->task->parked);
+}
+
+/* The task, resumed on the scheduler thread, ends its job there: the `done` or `expired` half runs on that thread. */
+static inline agc_value agc_test_take(agc_test_call *c) {
+  agc_test_on_thread(agc_test_take_on_thread, c);
+  return c->result;
+}
+
+/* Starts the runtime for a VM whose loop runs on the test's thread while other threads call builtins. */
+static inline void agc_test_io_vm(agc_vm *vm) {
+  agc_init();
+  agc_gc_allow_threads();
+  agc_io_init();
+  agc_vm_init(vm, NULL, stdout, stderr, INT64_MAX);
 }
 
 /* Closes the loop, running what is still queued; the run's loop is gone afterwards. */

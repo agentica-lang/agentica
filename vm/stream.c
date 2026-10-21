@@ -88,6 +88,11 @@ agc_value agc_stream_bad_timeout(void) { return agc_error_value(bad_timeout); }
 
 agc_value agc_stream_timed_out(void) { return agc_error_value(timed_out); }
 
+agc_value agc_stream_written(agc_vm *vm, int status) {
+  static const char write_failed[] = "error writing to stream port";
+  return status < 0 ? agc_system_error(vm, write_failed, agc_net_errno(status)) : agc_result_value(true, agc_void());
+}
+
 agc_resource *agc_new_lock(agc_vm *vm) {
   agc_resource *lock = agc_alloc(sizeof(agc_resource));
   lock->id = agc_resource_id(vm);
