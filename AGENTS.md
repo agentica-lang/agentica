@@ -33,7 +33,7 @@ docs/
   roadmap/          phases and the done checklist (README.md: current order)
   vm/               VM design: bytecode, loader, layers (§15), core invariants (§14)
 site/content/       Hugo documentation site
-  highlight/        colors its agentica code blocks after Hugo (site/highlight/)
+site/highlight/     colors the agentica code blocks of the built site
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agentica-development (working on this repo), agentica-programming
                     (writing .agc), agentica-code-guidelines (.agc style and

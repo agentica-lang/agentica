@@ -14,16 +14,18 @@ rule that a site page shows.
 - `make site` needs Dart Sass's `sass` on PATH or in
   `~/.local/opt/dart-sass`. The pinned version and sha256 are in
   `pages.yml`.
-- `make site` also needs Node and `npm ci --prefix site/highlight`. After
+- `make site` also needs Node; it installs `site/highlight/node_modules`
+  with `npm ci` when the package files change. After
   Hugo, `site/highlight/highlight.mjs` colors every `agentica` block with the
   TextMate grammar of agc-tmlanguage, copied to
   `site/highlight/agentica.tmLanguage.json` (the source commit is the
   `grammar` field of its `package.json`). Each token gets the Chroma class
   whose color it should have, so `_code.scss` styles both. The script fails
   when it finds no block. `render-codeblock.html` wraps each block in
-  `div.agc-code` for it; `make site-serve` skips the script, so there the
+  `div.agc-code` for it, without Hugo's highlight options (`linenos`,
+  `hl_lines`), and the script fails on a block of another shape or an
+  unknown HTML entity. `make site-serve` skips the script, so there the
   blocks keep Hugo's Ruby colors.
-- `SITE_OUT` sets the output folder of `make site` (default `site/public`).
 
 ## Version
 
@@ -128,10 +130,9 @@ Fence attributes:
 
 ## Deploy
 
-The site is built only after a merge: `.github/workflows/pages.yml` runs
-`make site` on `master` pushes that touch the site or its sources and
-deploys it to GitHub Pages. So run `make site` locally before merging a
-site change.
+`.github/workflows/pages.yml` runs `make site` on pull requests and `master`
+pushes that touch the site or its sources; only a `master` push deploys it to
+GitHub Pages.
 
 Both jobs run on the self-hosted runners: GitHub-hosted runners do not
 start for this repository (a deploy job on `ubuntu-latest` failed at once

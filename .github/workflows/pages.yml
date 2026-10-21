@@ -1,6 +1,13 @@
 name: Pages
 
 on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'docs/grammar.md'
+      - 'docs/grammar/**'
+      - '.github/workflows/pages.yml'
+      - 'Makefile'
   push:
     branches: [master]
     paths:
@@ -49,7 +56,6 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: site/highlight/package-lock.json
-      - run: npm ci --prefix site/highlight
       - id: pages
         uses: actions/configure-pages@v6
       - run: make site HUGO_FLAGS="--baseURL ${{ steps.pages.outputs.base_url }}/"
@@ -58,6 +64,7 @@ jobs:
           path: site/public
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -32,7 +32,10 @@ function decode(html) {
   return html
     .replace(/<[^>]*>/g, "")
     .replace(/&(#x[0-9a-f]+|#[0-9]+|[a-z]+);/gi, (entity, name) => {
-      if (name[0] !== "#") return ENTITIES[name] ?? entity;
+      if (name[0] !== "#") {
+        if (!(name in ENTITIES)) throw new Error(`unknown entity ${entity}`);
+        return ENTITIES[name];
+      }
       return String.fromCodePoint(name[1] === "x" || name[1] === "X" ? parseInt(name.slice(2), 16) : Number(name.slice(1)));
     });
 }
@@ -43,6 +46,7 @@ function escape(text) {
 
 function classOf(scopes) {
   for (let i = scopes.length - 1; i >= 0; i--) {
+    if (scopes[i].startsWith("meta.embedded")) return null;
     const found = CLASSES.find(([prefix]) => scopes[i] === prefix || scopes[i].startsWith(`${prefix}.`));
     if (found) return found[1];
   }
@@ -107,6 +111,10 @@ for (const file of htmlFiles(site)) {
     }
     return `${open} class=language-agentica data-lang=agentica>${colored}${close}`;
   });
+  if (/class="?agc-code"?/.test(out)) {
+    console.error(`highlight: ${file}: an agentica block has an unexpected shape`);
+    process.exit(1);
+  }
   if (out !== html) writeFileSync(file, out);
 }
 if (blocks === 0) {
