@@ -15,6 +15,7 @@
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
 
+import Cache from "../analysis/cache"
 import Core from "../analysis/analysis"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Env from "../modules/link_env"
@@ -97,9 +98,9 @@ end
 export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
   asking: Core.Typed = Core.Typed.Unreadable
   if partial
-    asking = Core.type_at_partial(settings, asked)
+    asking = Core.type_at_partial(Cache.empty(), settings, asked)
   else
-    asking = Core.type_at(settings, asked)
+    asking = Core.type_at(Cache.empty(), settings, asked)
   end
   case asking
     Core.Typed.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, TYPE_AT_USAGE))
@@ -146,9 +147,9 @@ export def refs_at(
   settings: Env.Settings,
 ) -> Reply.Answer
   if partial
-    return refs_reply(Core.refs_partial(settings, asked), style, asked.file)
+    return refs_reply(Core.refs_partial(Cache.empty(), settings, asked), style, asked.file)
   end
-  return refs_reply(Core.refs_at(settings, asked, paths, REFS_USAGE), style, asked.file)
+  return refs_reply(Core.refs_at(Cache.empty(), settings, asked, paths, REFS_USAGE), style, asked.file)
 end
 
 ## `agentica refs` for a NAME, searched in the files of `paths` (`.` by default) and what they import. `buffer` is the
@@ -160,7 +161,7 @@ export def refs_named(
   style: String,
   settings: Env.Settings,
 ) -> Reply.Answer
-  return refs_reply(Core.refs_named(settings, name, paths, buffer, REFS_USAGE), style, buffer)
+  return refs_reply(Core.refs_named(Cache.empty(), settings, name, paths, buffer, REFS_USAGE), style, buffer)
 end
 
 ## `agentica symbol` for the words after the command: NAME, then the files and folders to search (`.` by default).
@@ -173,7 +174,7 @@ export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.An
   if asked.words.size > 0
     name = asked.words[0]
   end
-  case Core.symbol(settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
+  case Core.symbol(Cache.empty(), settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
     Core.Found.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Found.Done(found) ->
       if asked.style == "json"

@@ -19,6 +19,7 @@
 ## style `--ai` or `--json` asks), 2 for a usage error or a file it cannot read or write; a program that runs gives
 ## its own status.
 
+import Cache from "../analysis/cache"
 import Driver from "../bdd/bdd_driver"
 import Opts from "../bdd/bdd_options"
 import Report from "../bdd/bdd_report"
@@ -266,7 +267,7 @@ end
 def program(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
   if verb == "check"
-    return verdict(session, source, Core.check(session.settings, source))
+    return verdict(session, source, Core.check(Cache.empty(), session.settings, source))
   end
   case Front.read_root(session.settings.workspace, source)
     Front.Root.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))

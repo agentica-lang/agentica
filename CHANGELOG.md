@@ -35,6 +35,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/analysis` answers the questions of `check`, `outline`, `type-at`,
   `symbol` and `refs` from a program, as plain structs, over a session with
   unsaved buffers; the command line runs the same code.
+- `Analysis.refresh(session, path)` keeps the checked program of a file and the
+  parsed modules in the session, so the next questions skip parsing and
+  checking when nothing changed.
 
 ### Changed
 

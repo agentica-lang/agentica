@@ -11,6 +11,7 @@ Analysis.workspace() -> Analysis.Workspace
 Analysis.open(files: Analysis.Workspace) -> Analysis.Session
 Analysis.update(session: Analysis.Session, path: String, text: String) -> Analysis.Session
 Analysis.close(session: Analysis.Session, path: String) -> Analysis.Session
+Analysis.refresh(session: Analysis.Session, path: String) -> Analysis.Session
 Analysis.check(session: Analysis.Session, path: String) -> Analysis.Checked
 Analysis.outline(session: Analysis.Session, path: String) -> Result[Analysis.Outline]
 Analysis.type_at(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
@@ -28,7 +29,15 @@ Analysis.diagnostic_json(found: Analysis.Diagnostic) -> Json
 
 A `Session` reads files from the disk of the working folder, except the files that have a buffer: the text an editor has open and has not saved. `Analysis.update(session, path, text)` returns a session where `path` has `text`, whether or not the disk has the file, and `Analysis.close` takes the buffer out. Two spellings of one file are one buffer; create the folder of a new file before `update`, or `close` it with the spelling you gave. A buffer counts for the file itself and for every file that imports it. `Analysis.open` takes a `Workspace`, `Analysis.workspace()` or one whose `buffers` map already holds paths and texts (its `version` is reserved and must be 1; when two paths are one file, the later one wins).
 
-A session is a value. Tasks may share it and ask it at once, and an `update` in one task leaves the copy of the others as it was. Its field is not API. Each question runs the stages from the start: the session keeps no cache.
+A session is a value. Tasks may share it and ask it at once, and an `update` in one task leaves the copy of the others as it was. Its field is not API. A new session keeps no cache: each question runs the stages from the start, until `refresh` fills the cache (next section).
+
+## Refresh and the cache
+
+`Analysis.refresh(session, path)` returns a session whose cache holds the linked and checked program of the file `path` and the parsed modules it reads. A loop that keeps one session does `update`, then `refresh`, then asks: `check` and `type_at` about `path` then skip parsing and checking.
+
+`check`, `type_at` and `refs` use the checked program of the cache; `symbol` links each file it searches and uses only the parsed modules. A question reads the files again, starting at its file, and uses the cache only where the modules and their texts are the ones the cache was made from. A buffer edit, a `close`, a change on the disk, a new file and a removed file all count, and so does a change of `agentica.toml` that changes what an import means. So the answers are the same with or without `refresh`, and a cache that is stale costs time, never a wrong answer. A refresh checks the program again only when one of its modules changed, and it parses only the modules whose text changed; the check is still of the whole program of `path`. A file that cannot be read or linked leaves the cache as it was, and the questions say why.
+
+The cache keeps at most 16 checked files, the least recently refreshed leaving first, and the parsed modules that these files reach. It lives in the value: there is no task, channel or lock, so the caller owns the loop. Run one `refresh` at a time per session and store the session it returns. Two refreshes that start from one session give two caches, and keeping one drops the work of the other, which costs time and nothing else. A program that refreshes in a task and meanwhile calls `update` on its own copy adopts the refreshed session only if no `update` or `close` came after it started; otherwise it keeps its own session and asks again later.
 
 ## Answers
 

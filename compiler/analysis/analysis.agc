@@ -6,6 +6,7 @@
 ## its own: the command line prints and sets an exit status, the library returns.
 
 import Ast from "../syntax/ast"
+import Cache from "cache"
 import Convert from "convert"
 import Diag from "../diagnostics/diagnostic"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
@@ -78,13 +79,14 @@ enum Partly
 end
 
 ## Links and checks the file at `path`, as `agentica check` does: every rule of a build except that the program
-## declares a `main`, so a library file passes.
-export def check(settings: Env.Settings, path: String) -> Verdict
+## declares a `main`, so a library file passes. `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
+## answer.
+export def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> return Verdict.Unreadable
     Front.Root.Invalid(problem) -> return Verdict.Rejected(problem)
     Front.Root.Readable ->
-      case Front.query_file(path, settings)
+      case Front.query_cached(cache, path, settings)
         Front.Outcome.Rejected(problem) -> return Verdict.Rejected(problem)
         Front.Outcome.Done(_) -> return Verdict.Passed
       end
@@ -93,9 +95,9 @@ end
 
 ## The answer of `check` as data, for the file at `path`. A file that cannot be read is QUERY-USAGE, as for the
 ## queries.
-export def checked(settings: Env.Settings, path: String) -> Model.Checked
+export def checked(cache: Cache.Cache, settings: Env.Settings, path: String) -> Model.Checked
   diagnostics: List[DiagnosticModel.Diagnostic] = []
-  case check(settings, path)
+  case check(cache, settings, path)
     Verdict.Passed -> diagnostics = diagnostics
     Verdict.Unreadable -> diagnostics = [DiagnosticModel.of_problem(unreadable(path))]
     Verdict.Rejected(problem) -> diagnostics = [DiagnosticModel.of_problem(named(settings, problem, path))]
@@ -119,9 +121,9 @@ export def outline(settings: Env.Settings, file: String, buffered: Bool) -> Outl
 end
 
 ## The type and the definition at the position `asked` of a file of the disk (never a `std/` module), linked and
-## checked with what it imports and without requiring `main`.
-export def type_at(settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
-  case position_front(settings, asked)
+## checked with what it imports and without requiring `main`. `cache` only saves work, as for `check`.
+export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+  case position_front(cache, settings, asked)
     Fronted.Unreadable -> return Typed.Unreadable
     Fronted.Rejected(problem) -> return Typed.Rejected(problem)
     Fronted.Done(front) -> return located(settings, asked, front)
@@ -135,8 +137,8 @@ end
 ## declarations (their types, `main`, the constants) do not check, and a position in a function that did not check
 ## that the link cannot name are the first problem, as for `type_at`; a position on no expression is
 ## QUERY-NO-EXPRESSION.
-export def type_at_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
-  case partial_front(settings, asked)
+export def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+  case partial_front(cache, settings, asked)
     Partly.Unreadable -> return Typed.Unreadable
     Partly.Rejected(problem) -> return Typed.Rejected(problem)
     Partly.Done(found) ->
@@ -159,8 +161,8 @@ end
 ## builtin needs the types of every function, so the answer for one is the first problem, as for `refs`; so is a
 ## position in a function that did not check that the link cannot name. Any other position that names nothing is
 ## QUERY-NO-EXPRESSION.
-export def refs_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
-  case partial_front(settings, asked)
+export def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+  case partial_front(cache, settings, asked)
     Partly.Unreadable -> return Referenced.Unreadable
     Partly.Rejected(problem) -> return Referenced.Rejected(problem)
     Partly.Done(found) ->
@@ -183,21 +185,31 @@ export def refs_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> R
 end
 
 ## The declaration of the name at the position `asked` and every reference to it, in the file of the position (linked
-## and checked as for `type_at`) and what it imports. A file that only imports it is not seen: `refs_at` adds files.
-export def refs(settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
-  return refs_at(settings, asked, [], "")
+## and checked as for `type_at`) and what it imports; a file that only imports it is not seen: `refs_at` adds files.
+## `cache` only saves work.
+export def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+  case position_front(cache, settings, asked)
+    Fronted.Unreadable -> return Referenced.Unreadable
+    Fronted.Rejected(problem) -> return Referenced.Rejected(problem)
+    Fronted.Done(front) -> return referenced(settings, asked, front, [])
+  end
 end
 
 ## As `refs`, over the file of the position and the files and folders of `paths` too, linked together
-## (`Linker.link_programs`), so a use in any of them is found. A file of `paths` that does not link is left out and
+## (`Linker.link_programs`), so a use in any of them is found. Without `paths` it is `refs`, which `cache` also saves
+## the work of. A file of `paths` that does not link is left out and
 ## listed in `skipped`; the file of the position must link. A path that names no `*.agc` file is QUERY-USAGE with
 ## `usage` as the help ("" for none).
 export def refs_at(
+  cache: Cache.Cache,
   settings: Env.Settings,
   asked: QueryPosition.Asked,
   paths: List[String],
   usage: String,
 ) -> Referenced
+  if paths.size == 0
+    return refs(cache, settings, asked)
+  end
   case Front.read_root(settings.workspace, asked.file)
     Front.Root.Unreadable(_) -> return Referenced.Unreadable
     Front.Root.Invalid(problem) -> return Referenced.Rejected(problem)
@@ -205,7 +217,7 @@ export def refs_at(
       case SymbolPaths.expand_from(settings.workspace, asked.file, paths, usage)
         SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
         SymbolPaths.Expanded.Files(roots) ->
-          linked = SymbolLink.link(roots, settings)
+          linked = SymbolLink.link(roots, settings, cache.parses)
           case linked.program
             Ast.Optional.Absent -> return Referenced.Rejected(linked.skipped[0].problem)
             Ast.Optional.Present(program) ->
@@ -227,6 +239,7 @@ end
 ## declarations answer to is QUERY-AMBIGUOUS-NAME, with the place of each candidate in the help. A builtin is a name
 ## too. The program is checked as for `refs`, so an error of the program is the first problem.
 export def refs_named(
+  cache: Cache.Cache,
   settings: Env.Settings,
   name: String,
   paths: List[String],
@@ -239,7 +252,7 @@ export def refs_named(
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
     SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
     SymbolPaths.Expanded.Files(roots) ->
-      linked = SymbolLink.link(roots, settings)
+      linked = SymbolLink.link(roots, settings, cache.parses)
       case Symbol.search(name, roots, linked)
         Symbol.Outcome.Refused(problem) -> return Referenced.Rejected(RefsName.not_found(name, problem))
         Symbol.Outcome.Found(found) ->
@@ -255,14 +268,21 @@ end
 ## `buffer` is the FILE that the Workspace of the `settings` holds as a buffer ("" for none); it is searched first. A
 ## missing name and a path that names no `*.agc` file are QUERY-USAGE with `usage` as the help ("" for none), a name
 ## that nothing declares is QUERY-NOT-FOUND, and when no file links the answer is the first problem of the first one.
-export def symbol(settings: Env.Settings, name: String, paths: List[String], buffer: String, usage: String) -> Found
+export def symbol(
+  cache: Cache.Cache,
+  settings: Env.Settings,
+  name: String,
+  paths: List[String],
+  buffer: String,
+  usage: String,
+) -> Found
   if name == ""
     return Found.Rejected(QueryOptions.refusal("missing NAME", usage))
   end
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
     SymbolPaths.Expanded.Refused(problem) -> return Found.Rejected(problem)
     SymbolPaths.Expanded.Files(roots) ->
-      case Symbol.answer(name, roots, settings)
+      case Symbol.answer(name, roots, settings, cache.parses)
         Symbol.Outcome.Refused(problem) -> return Found.Rejected(problem)
         Symbol.Outcome.Found(found) ->
           named = found.with(matches: found.matches.map do |match: Symbol.Match| shown(settings, match) end)
@@ -300,24 +320,24 @@ export def refused(message: String, path: String) -> Problems.Problem
   return QueryOptions.refusal(message, "").with(file: path)
 end
 
-def position_front(settings: Env.Settings, asked: QueryPosition.Asked) -> Fronted
+def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Fronted
   case Front.read_root(settings.workspace, asked.file)
     Front.Root.Unreadable(_) -> return Fronted.Unreadable
     Front.Root.Invalid(problem) -> return Fronted.Rejected(problem)
     Front.Root.Readable ->
-      case Front.query_file(asked.file, settings)
+      case Front.query_cached(cache, asked.file, settings)
         Front.Outcome.Rejected(problem) -> return Fronted.Rejected(problem)
         Front.Outcome.Done(front) -> return Fronted.Done(front)
       end
   end
 end
 
-def partial_front(settings: Env.Settings, asked: QueryPosition.Asked) -> Partly
+def partial_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Partly
   case Front.read_root(settings.workspace, asked.file)
     Front.Root.Unreadable(_) -> return Partly.Unreadable
     Front.Root.Invalid(problem) -> return Partly.Rejected(problem)
     Front.Root.Readable ->
-      case Partial.query_file(asked.file, settings)
+      case Partial.query_file(cache, asked.file, settings)
         Partial.Outcome.Rejected(problem) -> return Partly.Rejected(problem)
         Partial.Outcome.Done(found) -> return Partly.Done(found)
       end

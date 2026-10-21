@@ -428,9 +428,12 @@ usual three formats.
   `agentica check` of the files of `PATH...` together, less when no check is
   needed.
 - **As a library.** `std/analysis` calls the same code
-  (`compiler/analysis/`) from a program, over a session of unsaved buffers;
-  every question still runs the stages from the start.
-- No daemon, no cache, no watch mode. Start-up is the single binary's (§18).
+  (`compiler/analysis/`) from a program, over a session of unsaved buffers.
+  `Analysis.refresh` keeps the checked program of a root and the parsed modules
+  in the session value (`compiler/analysis/cache.agc`); a question uses them
+  only where the modules it reads and their texts are the same.
+- The command line has no daemon, no cache and no watch mode. Start-up is the
+  single binary's (§18).
 
 ### 39.9 Builtins and `agentica help`
 

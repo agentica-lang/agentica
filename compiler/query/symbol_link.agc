@@ -6,6 +6,7 @@ import Ast from "../syntax/ast"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
+import Modules from "../modules/modules"
 import Problems from "../diagnostics/problem"
 import QueryFiles from "query_files"
 import SymbolPaths from "symbol_paths"
@@ -24,9 +25,9 @@ export struct Linked
   skipped: List[Skipped]
 end
 
-## Links every root of `roots`.
-export def link(roots: List[SymbolPaths.Root], settings: Env.Settings) -> Linked
-  programs = Linker.link_programs(roots.map do |root: SymbolPaths.Root| root.typed end, settings)
+## Links every root of `roots`, taking the trees of `parses` for the files whose text is the same.
+export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: Modules.Parses) -> Linked
+  programs = Linker.link_programs(roots.map do |root: SymbolPaths.Root| root.typed end, settings, parses)
   skipped = programs.skipped.map do |left: Linker.Left|
     root = rooted(roots, left.root)
     Skipped(file: QueryFiles.display(settings, root.key, true), problem: problem_of(left.failure, root))

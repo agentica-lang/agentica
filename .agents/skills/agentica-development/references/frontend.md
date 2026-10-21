@@ -88,6 +88,15 @@ with a packed `Problem` (`references/stages.md`).
   `std/internal/compiler/`, which only std modules may import
   (`resolve_import.agc`; `..` is allowed in a std module while the path stays in
   `std/`). Anything the library needs to import must be in `stdlib/CORE`.
+  The session cache (`cache.agc`, `Analysis.refresh`): `Modules.load_with`
+  takes a parsed file from `Parses` when its key and text match, so node ids
+  have gaps and are not in walk order (a changed file is parsed above the
+  highest id; `Cache.crowded?` parses all again from 0 past twice the live
+  ids). Nothing may read a node id except by the id of a node it holds
+  (`Linker.parser_ids` is the highest `next_free_id`, not the last file's), and
+  `test_std_analysis.py` compares cached and uncached answers after edits. A
+  cached root is used only when `Cache.find` sees the same fingerprint (keys,
+  names, origins, aliases) and texts, so a question is right with any cache.
 
 ### Pure core, one port
 
