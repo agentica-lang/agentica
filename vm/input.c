@@ -433,7 +433,7 @@ agc_input_status agc_input_bytes(agc_vm *vm, size_t count, agc_list **out) {
     if (r == 0) break;
   }
   size_t n = in->end - in->start < count ? in->end - in->start : count;
-  *out = agc_list_of_bytes(in->buf + in->start, n);
+  *out = agc_list_of_bytes(n ? in->buf + in->start : NULL, n);
   consume(in, in->start + n);
   return AGC_INPUT_OK;
 }
