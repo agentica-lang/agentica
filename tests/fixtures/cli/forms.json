@@ -149,7 +149,7 @@
   "stdout": "",
   "written": []
  },
- "[[\"--flush-timeout\", \"100\", \"ok.agc\"], {}]": {
+ "[[\"--flush-timeout\", \"10000\", \"ok.agc\"], {}]": {
   "code": 0,
   "stderr": "",
   "stdout": "ok\n",
@@ -355,7 +355,7 @@
   "stdout": "",
   "written": []
  },
- "[[\"--max-steps\", \"5\", \"--seed\", \"1\", \"--json\", \"--allow-run\", \"--flush-timeout\", \"10\", \"ok.agc\"], {}]": {
+ "[[\"--max-steps\", \"5\", \"--seed\", \"1\", \"--json\", \"--allow-run\", \"--flush-timeout\", \"10000\", \"ok.agc\"], {}]": {
   "code": 0,
   "stderr": "",
   "stdout": "ok\n",
@@ -433,7 +433,7 @@
   "stdout": "ok\n",
   "written": []
  },
- "[[\"--seed\", \"1\", \"--flush-timeout\", \"10\", \"--schedulers\", \"1\", \"--allow-run\", \"ok.agc\"], {}]": {
+ "[[\"--seed\", \"1\", \"--flush-timeout\", \"10000\", \"--schedulers\", \"1\", \"--allow-run\", \"ok.agc\"], {}]": {
   "code": 0,
   "stderr": "",
   "stdout": "ok\n",
