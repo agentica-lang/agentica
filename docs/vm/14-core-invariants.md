@@ -271,7 +271,9 @@ port. A closed handle leaves its owner's list (`agc_unregister`). The close of a
 regular file is a pool job, and the ending task's awaiters wait for it, so what
 a helper wrote to a regular file is on disk when the parent's await returns. A
 flush to a FIFO or a pipe, and a close behind any job that holds the file, are
-not waited for. A server owns its listener: `HttpWire.server` takes the listener
+not waited for. A socket, listener, process or server is marked closed under
+`rt->sync` before the awaiters wake, and at N > 1 its close step reaches the
+I/O thread first, so it runs before any step that a woken task posts (#402). A server owns its listener: `HttpWire.server` takes the listener
 off its owner's list, so ending the server's owner closes both and a hand-off
 moves both. `Task.spawn_owning` fails with `RUNTIME-HANDLE-NOT-OWNED` when the
 caller does not own the handle or it is closed, before it makes a task.

@@ -424,7 +424,9 @@ every system or says why not:
    (it writes JUnit files under `build/conformance/<area>/`): `cli`, `spec`,
    `golden` (`AGENTICA_SWEEP=sampled`), `library`, `files` (and then
    `make test-remove-actions`, the destructive cases in the runner scratch),
-   `processes`, `tasks` (one worker, the timing cases) and `network`.
+   `processes`, `tasks` (one worker, the timing cases), `network` and
+   `multicore` (`test_vm_multicore.py`); on Windows and macOS then
+   `make test-multicore-modules` (`ci.yml` runs it on Linux).
 3. `make conformance-report`: a table in the job summary (also the tier and
    the golden sweep that ran), `summary.json` with the outcome of every case,
    and an exit code 1 when a module did not finish, a case failed, an area has
@@ -439,8 +441,7 @@ on none of them (host-only or open gap everywhere).
 The areas are the lists in `tools/conformance.py`. A new `tests/test_*.py` must
 be in an area or in `EXCLUDED` with a reason, or `tests/test_conformance.py`
 fails. Not in the matrix: the Docker and Wine groups, the slow tier,
-sanitizers, fuzz and gc-stress (`ci.yml`, `fuzz.yml`), and
-`test_vm_multicore.py` (several schedulers on every system is the next step).
+sanitizers, fuzz and gc-stress (`ci.yml`, `fuzz.yml`).
 
 Run one system by hand: on that system, `make conformance` (all areas and the
 report, `make conformance-area/<area>` for one; a developer machine reports the

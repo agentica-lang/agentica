@@ -188,6 +188,13 @@ jobs:
       - name: "Area network: TCP, TLS and HTTP against independent peers"
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ${{ matrix.make }} conformance-area/network PYTHON=${{ matrix.python }}
+      - name: "Area multicore: programs on four schedulers (tests/test_vm_multicore.py)"
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ${{ matrix.make }} conformance-area/multicore PYTHON=${{ matrix.python }}
+      # ci.yml runs this step on Linux.
+      - name: The TCP, TLS, HTTP, process and BDD modules with every VM on four schedulers
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && runner.os != 'Linux' }}
+        run: ${{ matrix.make }} test-multicore-modules PYTHON=${{ matrix.python }}
       - name: Evidence report (fails when an area has no passed case or a skip has no host-only reason)
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ${{ matrix.make }} conformance-report PYTHON=${{ matrix.python }} CONFORMANCE_PLATFORM=${{ matrix.platform }}
