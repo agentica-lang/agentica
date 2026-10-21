@@ -179,7 +179,8 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     names the missing `else`, loop or `case` arm
 
 - **Code:** `CHECK-MAIN`
-  - **Meaning:** missing or wrong `main`
+  - **Meaning:** missing `main` (a run or `compile`; `check` does not need one)
+    or a `main` with parameters or a result other than `Void`
 
 - **Code:** `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST`
   - **Meaning:** index on a non-list/map (a String uses `s.at(i)` or

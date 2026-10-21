@@ -91,8 +91,6 @@ DIAGNOSTICS = [
     ("block open at the end of a call", "f(xs.map do |x|\n", "LEX-UNCLOSED-DELIMITER", None, None),
     ("block with no end at the end of the file", "def f()\n  if x\n", "PARSE-UNEXPECTED-TOKEN", None, None),
     ("bare carriage return after a doc line", "## a\rb", "LEX-UNEXPECTED-CHAR", None, None),
-    # An empty file lexes with no error: the first diagnostic is the missing main.
-    ("empty file", "", "CHECK-MAIN", None, None),
     # Doc blocks: a block that is not directly above a declaration is detached, and the span is the whole block.
     ("doc block followed by a blank line", PRE + "## a\n\ndef main() -> Void\nend\n",
      "PARSE-DETACHED-DOC", (5, 1), None),
@@ -185,6 +183,8 @@ CLEAN = [
     ("leading-dot chain with a comment line and CRLF",
      "def main() -> Void\r\n  xs = [1, 2]  # raw\r\n  # step\r\n    .map do |x| x end\r\nend\r\n"),
     ("doc lines with tabs", PRE + "  ## a\n\t## b\ndef main() -> Void\nend\n"),
+    # An empty file lexes and parses with no error; `check` does not need a main.
+    ("empty file", ""),
 ]
 
 # (case, source, stdout): the program runs and prints this, with exit status 0.
