@@ -98,13 +98,16 @@ struct proc {
   uv_pipe_t in, out, err;
   uv_timer_t grace;
   uv_write_t write_req;
-  FILE *forward;
+  /* A plain child's stderr goes to the VM's stderr (agc_output_forward). While the stream's queue is full the read is
+     stopped (paused) and the stream holds forward_wait, with one count in `users`, until it resumes the read. */
+  agc_output *forward;
+  agc_forward_wait forward_wait;
   agc_duplex *channel;
   guard *g;
   proc *run_prev, *run_next;
   size_t users, handles;
   /* begun: the spawn has run, so the handles below are in some state; a child whose spawn never ran has none. */
-  bool begun, linked, running, exited, err_done, in_closed, closed, reading, forward_failed;
+  bool begun, linked, running, exited, err_done, in_closed, closed, reading;
   bool captured, out_cut, err_cut, stop_failed;
   stop_state stop;
   int write_status;
@@ -783,20 +786,43 @@ static void alloc_err(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
   *buf = uv_buf_init((char *)p->err_buf, sizeof p->err_buf);
 }
 
-static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
-  proc *p = OWNER(s, err);
-  if (n > 0 && !p->forward_failed &&
-      (fwrite(buf->base, 1, (size_t)n, p->forward) != (size_t)n || fflush(p->forward) != 0))
-    p->forward_failed = true;
-  if (n > 0)
-    AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr pid=%d bytes=%zd failed=%d", (int)p->process.pid, n,
-              p->forward_failed ? 1 : 0);
-  if (n >= 0) return;
+static void err_over(proc *p, ssize_t n) {
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "eof pid=%d pipe=stderr error=%d", (int)p->process.pid,
             n == UV_EOF ? 0 : agc_net_errno((int)n));
-  uv_read_stop(s);
+  uv_read_stop((uv_stream_t *)&p->err);
   p->err_done = true;
   notify_waits(p);
+}
+
+/* A chunk of a plain child's stderr goes to the VM's stderr through its buffer, never by a write that waits on the
+   descriptor (§14.1). When the stream holds too much, the read stops, so the child waits on its own pipe. */
+static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
+  proc *p = OWNER(s, err);
+  if (n < 0) {
+    err_over(p, n);
+    return;
+  }
+  if (n == 0) return;
+  bool more = agc_output_forward(p->forward, (const uint8_t *)buf->base, (size_t)n, &p->forward_wait);
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr pid=%d bytes=%zd", (int)p->process.pid, n);
+  if (more) return;
+  /* resume_err runs on this thread, after this callback at the earliest, so the stop and the count come first even
+     when another scheduler has drained the queue already. */
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr_pause pid=%d", (int)p->process.pid);
+  uv_read_stop(s);
+  p->users++;
+}
+
+/* The VM's stderr has room again (or failed): the paused read goes on, unless the child was closed meanwhile. */
+static void resume_err(void *data) {
+  proc *p = data;
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr_resume pid=%d", (int)p->process.pid);
+  if (!p->err_done && !uv_is_closing((uv_handle_t *)&p->err)) {
+    int rc = uv_read_start((uv_stream_t *)&p->err, alloc_err, forward_err);
+    if (rc) err_over(p, rc);
+  }
+  p->users--;
+  settle(p);
 }
 
 static void alloc_out(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
@@ -1203,7 +1229,9 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
   p->io = agc_io_loop(vm);
-  p->forward = vm->rt->err.file;
+  /* rt is GC memory that the malloc'd proc does not keep alive, but it lives for the whole run, past every child. */
+  p->forward = &vm->rt->err;
+  p->forward_wait = (agc_forward_wait){NULL, p->io, resume_err, p};
   p->captured = dir != NULL;
   if (!agc_io_here(vm)) {
     /* The resource comes first, so the owner's end closes the child whatever happens to the spawn. */

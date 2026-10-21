@@ -395,7 +395,8 @@ This note lists what the code chose.
   `lock_wait` line; sleeps, channel waits, timed awaits and `Task.map` timers
   are not jobs and print no `io` line); `sched` also prints `timer_arm
   task=N in_ms=M` and `timer_fire task=N late_ms=M` for them; `proc` (spawn,
-  spawn_failed, exit, close, term, kill, eof, truncated, stderr, guard_cleanup,
+  spawn_failed, exit, close, term, kill, eof, truncated, stderr, stderr_pause,
+  stderr_resume, guard_cleanup,
   and `reap pid=N alive=1` when a child is still alive after its bound);
   `loader` (file, format, tables, done, reject); `gc`
   (`collect at=turn|end count= heap= free= since=`, from `trace_gc` in
