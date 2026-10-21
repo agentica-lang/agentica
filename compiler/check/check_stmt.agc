@@ -35,6 +35,7 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
   while index < node.params.size
     param = node.params[index]
     inner = try State.introduce(cx, inner, param.name, signature.params[index], param.span, false)
+    inner = State.record_bound(inner, param.id, [signature.params[index]])
     index += 1
   end
   inner = try check_block(cx, inner, node.body)
@@ -108,6 +109,7 @@ export def check_block_in(
   while index < types.size
     param = block.params[index]
     inside = try State.introduce(cx, inside, param.name, types[index], param.span, false)
+    inside = State.record_bound(inside, param.id, [types[index]])
     index += 1
   end
   done = try block_statements(cx, inside, block.body)
@@ -201,7 +203,8 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
   if T.unknown?(declared)
     type = out.type
   end
-  return State.introduce(cx, out.st, node.name, type, node.span, false)
+  introduced = try State.introduce(cx, out.st, node.name, type, node.span, false)
+  return ok(State.record_bound(introduced, node.id, [type]))
 end
 
 # A binding of a name that is already in scope is an assignment: not from inside a block, not with an annotation, not
@@ -341,6 +344,7 @@ def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
     element = T.item(type)
   end
   inner = try State.introduce(cx, State.enter(iterable.st), node.variable, element, node.span, true)
+  inner = State.record_bound(inner, node.id, [element])
   inner = try in_loop(cx, inner, node.body)
   return ok(State.leave(inner, iterable.st))
 end
@@ -475,11 +479,11 @@ def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types:
       ),
     )
   end
-  current = st
+  current = State.record_bound(st, pattern.id, types)
   index = 0
   while index < types.size
     case pattern.slots[index]
-      Ast.Slot.Bind(name) ->
+      Ast.Slot.Bind(name, _) ->
         if T.is(types[index], "Void")
           return error(
             State.fail(cx, current, "CHECK-VOID-TYPE", "a Void payload must be discarded with _", pattern.span),

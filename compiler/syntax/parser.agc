@@ -585,6 +585,7 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
       Ast.BlockParam(
         id: next_id,
         name: e.tokens[name_pos].lexeme,
+        name_span: e.tokens[name_pos].span,
         type: type,
         span: Base.span_from(e, name_pos, cursor),
       ),
@@ -1263,6 +1264,7 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     Ast.Binding(
       id: value.ids,
       name: e.tokens[pos].lexeme,
+      name_span: e.tokens[pos].span,
       type: type,
       value: value.node,
       span: Base.span_from(e, pos, stop),
@@ -1292,7 +1294,14 @@ def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     ),
   )
   node = Ast.Stmt.Binding(
-    Ast.Binding(id: value.ids + 1, name: e.tokens[pos].lexeme, type: Ast.Optional.Absent, value: combined, span: span),
+    Ast.Binding(
+      id: value.ids + 1,
+      name: e.tokens[pos].lexeme,
+      name_span: e.tokens[pos].span,
+      type: Ast.Optional.Absent,
+      value: combined,
+      span: span,
+    ),
   )
   return stmt_at(node, stop, value.ids + 1)
 end
@@ -1537,6 +1546,7 @@ def parse_for(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       Ast.ForStmt(
         id: body.ids,
         variable: e.tokens[pos + 1].lexeme,
+        variable_span: e.tokens[pos + 1].span,
         iterable: iterable.node,
         body: body.nodes,
         span: Base.span_from(e, pos, stop),
@@ -1668,6 +1678,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int) -> Result[ParamsAt]
       Ast.Param(
         id: param_id,
         name: e.tokens[cursor].lexeme,
+        name_span: e.tokens[cursor].span,
         type: type.node,
         default: default,
         span: Base.span_from(e, cursor, after_type),

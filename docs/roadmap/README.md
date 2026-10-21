@@ -203,7 +203,7 @@ rows after them may run in parallel when needed and keep their relative order.
     in `compiler/`: the semantic CLI for agents
     ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)), in this
     order: `agentica doc` (row 22b, done), `agentica outline` (done), `agentica
-    type-at` (core done; docs, builtins and locals next), the opt-in
+    type-at` (core, docs, builtins and locals done), the opt-in
     `--partial`, `agentica symbol`, `agentica refs`, JSON first; front end and
     CLI only, nothing to run, no LSP; the full 6c round (step 10) measures it
   - **Outcome:** Agents list declarations, find definitions and references

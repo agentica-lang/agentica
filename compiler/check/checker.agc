@@ -23,7 +23,8 @@ import {ENUMS, RECORDS} from "../catalog/builtins"
 ## initialization order (the lowering reads that too, and does not order them again). prelude is the files of the
 ## compiler prelude that the program calls (prelude_files.agc), checked with it: the lowering adds them to the files of
 ## the program. bodies is the prelude function each call of a prelude builtin runs, by id of the call. step_tries is
-## the id of each `try` in the block of a Lazy method (State.St.step).
+## the id of each `try` in the block of a Lazy method (State.St.step). bound is the types that each name binding
+## introduced, by node id (State.record_bound), for `agentica type-at`.
 export struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]
@@ -31,6 +32,7 @@ export struct Checked
   prelude: List[Linker.LinkedModule]
   bodies: Map[Int, String]
   step_tries: Set[Int]
+  bound: Map[Int, List[T.Type]]
 end
 
 ## The result of checking: the types, or the first problem.
@@ -121,6 +123,7 @@ def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> R
       prelude: attached.modules,
       bodies: attached.st.bodies,
       step_tries: attached.st.step_tries,
+      bound: attached.st.bound,
     ),
   )
 end

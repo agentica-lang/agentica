@@ -40,8 +40,14 @@ with a packed `Problem` (`references/stages.md`).
   `Types.to_text_as` and `LinkedModule.aliases`. The definition's `doc` and
   `signature` come from `LinkedModule.parsed` (the linker drops the doc of an
   `export`); a builtin (`Checked.resolved`, or a call by name) answers with
-  `catalog/catalog_json.agc`, which `help` shares. The commands are
-  `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
+  `catalog/catalog_json.agc`, which `help` shares. A local is found by
+  `locals.agc`, which follows the position down from its function or from the
+  value of a constant (a block there starts with an empty scope), rebuilding
+  the scope as `check_stmt.agc` does (a worklist, no recursion); the types come
+  from `Checked.bound` (`State.record_bound`: by the id of a parameter, binding
+  or `for` node, and for a pattern by the id of the variant pattern, one type
+  for each slot), kept apart from `Checked.types` so the lowering never sees
+  them. The commands are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
   `tests/test_spec_type_at.py`.
 
 ### Pure core, one port
