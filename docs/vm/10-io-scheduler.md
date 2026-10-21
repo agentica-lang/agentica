@@ -652,16 +652,19 @@ section says how the scheduler and the loop keep them, as built.
   end-of-run wait or a later final notice writes it. **A child's stderr.**
   `vm/process.c` hands each chunk of a plain child's stderr to
   `agc_output_forward` on the I/O thread: the bytes join the notice queue (so
-  they keep their order with `IO.warn` and never enter a print that holds the
-  stream) and the write starts. When more than 64 KiB wait in the queue the
+  they never enter a print that holds the stream) and the write starts. A
+  waiting print goes first: the child's bytes take only the buffer room that
+  the head of the FIFO does not need, so a child that writes without end does
+  not hold back `IO.warn`; the bytes of a VM notice, and the child bytes queued
+  before it, still go ahead. When more than 64 KiB wait in the queue the
   child's pipe is no longer read (`uv_read_stop`) until the queue is down to 32
   KiB, so a stuck stderr stops the child, not the loop; the end of the run
   flushes what was queued like any notice. A failed stderr drops these bytes,
   and fails the run only when text of the program or the VM was lost with them
-  (still in the buffer, or written after the failure). A write error on
-  stdout keeps today's exit-code rule (`agc_launch_settle` in `vm/launch.c`). No
-  language change: the builtins keep their names, types and results, and a full
-  stdout pipe stalls only the tasks that print.
+  (still in the buffer or the queue, or written after the failure). A write
+  error on stdout keeps today's exit-code rule (`agc_launch_settle` in
+  `vm/launch.c`). No language change: the builtins keep their names, types and
+  results, and a full stdout pipe stalls only the tasks that print.
   - **Tests** (VM only, hermetic, Python stdlib peers).
     `tests/test_vm_stdout.py` with `tests/fixtures/stdout-peer.py` (a pipe, a
     socket pair or a pty as stdout, a separate or merged stderr, a delay before

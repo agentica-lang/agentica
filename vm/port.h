@@ -255,11 +255,13 @@ struct agc_output {
   agc_write_mode mode;
   agc_utf8_cut cut;
   bool writing, failed;
-  /* Text of the program or the VM itself may be lost if the stream fails now: some is still in the ring or the queue,
-     or such a write met the failed stream. Set by those writes, cleared once the ring and the queue are both empty
-     (bytes forwarded from a child never set it), and frozen by the failure: a failed write fails the run only when it
-     is set (agc_output_failed). On the base stream. */
-  bool own;
+  /* Positions in the bytes of the stream since it opened: `sent` bytes have been written, the ring holds the next
+     `len` and the queue the ones after. `own_end` is the position just past the last byte of text of the program or
+     the VM (bytes forwarded from a child never move it), or UINT64_MAX once such text met the failed stream. Text of
+     the program or the VM is still pending while own_end > sent; a failure freezes both, so a failed write fails the
+     run only when it lost such text (agc_output_failed). Queued bytes before own_end hold a VM notice (or come before
+     one) and go ahead of a waiting print. On the base stream. */
+  uint64_t sent, own_end;
   agc_task *waiters, *waiters_tail;
   agc_forward_wait *forward_waits;
 };
@@ -729,13 +731,14 @@ bool agc_output_waiting(const agc_vm *vm, const agc_output *out);
 bool agc_drain(agc_vm *vm);
 void agc_flush(agc_vm *vm);
 /* Queues N bytes from outside the program (a child's stderr) on OUT, on the I/O thread, behind what the stream already
-   holds, and starts their write: they never wait on the descriptor. False when the notice queue holds more than
+   holds, and starts their write: they never wait on the descriptor, and they take only the room that a waiting print
+   does not need, so they never go ahead of it. False when the notice queue holds more than
    AGC_FORWARD_BOUND bytes after them: the caller stops reading, and W is called back once there is room. A failed
    stream drops the bytes and returns true. A stream left on its blocking FILE (agc_output_open did not put it on the
    loop: the C tests, the fuzzer, a descriptor that cannot be reopened) writes them with fwrite. */
 bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w);
 /* True once a write of the stream failed (its data is dropped from then on) and text of the program or the VM was lost
-   with it (agc_output.own): a failure that lost only bytes of a child's stderr does not fail the run. */
+   with it (agc_output.own_end): a failure that lost only bytes of a child's stderr does not fail the run. */
 bool agc_output_failed(const agc_output *out);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);

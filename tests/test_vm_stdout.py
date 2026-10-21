@@ -731,5 +731,53 @@ def test_a_child_stderr_forwarded_to_a_stderr_nobody_reads_yet_does_not_stop_a_t
     lines = lines_of(out)
     assert lines[1] == "ok(0)"
     slowest = int(lines[0].split()[1])
-    assert slowest < 200 + scaled(1500), "a wait of 200 ms took %d ms while stderr was stuck" % slowest
+    assert slowest < 200 + scaled(1000), "a wait of 200 ms took %d ms while stderr was stuck" % slowest
     assert err == "e" * FORWARD_BYTES
+
+
+# A plain child keeps writing to its stderr, which is the stdout pipe of the VM, read slowly. Meanwhile the program
+# warns once and prints how long the warn took; the warn joins the stream between two of the child's chunks.
+STREAMING_BYTES = 8_000_000
+STREAMING_WARN = "w" * 1000
+STREAMING_PROGRAM = """\
+def main() -> Void
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  Task.sleep(300)
+  start = Time.monotonic_ms()
+  IO.warn("%s")
+  puts("took #{Time.monotonic_ms() - start}")
+  IO.inspect(Process.wait(child, 60000))
+end
+
+""" % (agc_literal(PYTHON), STREAMING_BYTES, STREAMING_WARN)
+
+
+@not_wine
+@not_wine_child
+@pytest.mark.parametrize("schedulers", [1, 4])
+def test_a_child_that_keeps_writing_stderr_does_not_hold_back_a_warn_of_the_program(tmp_path, schedulers):
+    # The reader takes 8 KiB every 2 ms, so the child's bytes need about 2 s; the warn waits only for its room.
+    vm = ["--allow-run", "--schedulers", str(schedulers)]
+    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
+    summary, out, _ = run_case(tmp_path, "streaming", STREAMING_PROGRAM, peer=["--merge", "--chunk", "8192",
+                                                                             "--pause", "0.002"], vm=vm, env=env)
+    assert summary["status"] == 0
+    warn = out.find(STREAMING_WARN.encode() + b"\n")
+    took = re.search(rb"took (\d+)\n", out)
+    assert warn >= 0 and took and b"ok(0)\n" in out
+    assert out.count(b"e") == STREAMING_BYTES
+    assert int(took.group(1)) < scaled(1000), "the warn took %s ms" % took.group(1).decode()
+    assert warn < STREAMING_BYTES // 2, "the warn came after %d bytes of the child" % warn
+
+
+@not_wine
+@not_wine_child
+def test_a_reader_that_leaves_once_only_child_bytes_are_pending_keeps_the_exit_code_0(tmp_path):
+    # The warn is written while the child streams; the reader leaves later, at 3 MB, so only the child's bytes are lost.
+    program = STREAMING_PROGRAM.replace('  puts("took #{Time.monotonic_ms() - start}")\n', "").replace(
+        "IO.inspect(Process.wait(child, 60000))", "Process.wait(child, 60000)")
+    summary, out, _ = run_case(tmp_path, "streaming-gone", program, peer=["--merge", "--chunk", "8192", "--pause",
+                                                                          "0.002", "--close-after", "3000000"],
+                               vm=["--allow-run"])
+    assert STREAMING_WARN.encode() + b"\n" in out
+    assert summary["status"] == 0

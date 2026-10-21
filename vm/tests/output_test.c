@@ -922,7 +922,7 @@ static void test_forwarded_bytes_pause_at_the_bound_and_resume_once_the_queue_dr
   size_t sent = forward_until_paused(&w);
   /* The ring takes CAP, then the queue grows past the bound by at most one chunk. */
   assert(sent > CAP + AGC_FORWARD_BOUND && sent <= CAP + AGC_FORWARD_BOUND + FORWARD_CHUNK);
-  assert(forward_resumes == 0 && !out()->own);
+  assert(forward_resumes == 0 && out()->own_end == 0);
   read_junk(junk);
   pump_until(junk + sent);
   check_run(junk, 'f', sent);

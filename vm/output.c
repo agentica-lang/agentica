@@ -62,7 +62,9 @@ static bool forward_file(agc_output *out, const uint8_t *data, size_t n) {
 
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->task->output.out == out; }
 
-bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed && out->base->own; }
+bool agc_output_failed(const agc_output *out) {
+  return out->base && out->base->failed && out->base->own_end > out->base->sent;
+}
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
@@ -104,6 +106,25 @@ static bool holds(const agc_output *s) {
   return head && !head->output.flush && head->output.done > 0 && head->output.done < total(&head->output);
 }
 
+/* The room that bytes forwarded from a child may take: what the head of the FIFO does not need for its next piece (a
+   flush needs the whole ring), and none inside a print that holds the stream. A waiting print finds its room when the
+   ring drains, whatever a child keeps sending (wake_head). */
+static size_t spare(const agc_output *s) {
+  if (holds(s)) return 0;
+  if (!s->waiters) return room(s);
+  size_t want = need(&s->waiters->output);
+  return room(s) > want ? room(s) - want : 0;
+}
+
+/* The queued bytes up to the end of the last VM notice in the queue: they go ahead of a waiting print, as notices
+   do. */
+static size_t urgent(const agc_output *s) {
+  uint64_t head = s->sent + s->len;
+  if (s->own_end <= head) return 0;
+  uint64_t ahead = s->own_end - head;
+  return ahead < queued(s) ? (size_t)ahead : queued(s);
+}
+
 /* The loop may write the ring itself (a final write when the run stops): a file or a device that never waits for a
    reader, or a descriptor that its poller reported ready. */
 static bool direct(const agc_output *s) { return s->mode == AGC_WRITE_DISK || s->mode == AGC_WRITE_POLL; }
@@ -118,6 +139,8 @@ static void trace_run(const agc_output *s, const char *what) {
     AGC_TRACE(&s->vm->rt->trace, AGC_TRACE_IO, "output_%s stream=%s", what, s == &s->vm->rt->out ? "stdout" : "stderr");
 }
 
+/* Appends to the ring. The queue's bytes move up by N when new bytes enter the ring ahead of them (insert); pump moves
+   bytes from the queue to the ring and keeps their positions. */
 static void put_bytes(agc_output *s, const void *data, size_t n) {
   if (!n) return;
   if (!s->len) trace_run(s, "start");
@@ -128,14 +151,21 @@ static void put_bytes(agc_output *s, const void *data, size_t n) {
   s->len += n;
 }
 
+/* New bytes enter the ring ahead of the queue; OWNED when they are text of the program or the VM. */
+static void insert(agc_output *s, const void *data, size_t n, bool owned) {
+  uint64_t head = s->sent + s->len;
+  if (s->own_end > head && s->own_end != UINT64_MAX) s->own_end += n;
+  put_bytes(s, data, n);
+  if (owned && s->own_end < head + n) s->own_end = head + n;
+}
+
 static void consumed(agc_output *s, size_t n) {
   s->start = (s->start + n) % AGC_OUTPUT_BUFFER;
   s->len -= n;
+  s->sent += n;
   if (!s->len) {
     s->start = 0;
     trace_run(s, "done");
-    /* Nothing of the program or the VM is left to lose; a print still waiting fails by itself if the stream fails. */
-    if (!queued(s)) s->own = false;
   }
 }
 
@@ -167,10 +197,16 @@ static void resume_forwarders(agc_output *s) {
   }
 }
 
+/* Moves queued bytes into the ring. Without FORCE a waiting print keeps the room it needs, except from the bytes of a
+   VM notice (urgent), so a child that keeps its queue full never holds a print back. */
 static void pump(agc_output *s, bool force) {
   size_t left = queued(s);
   if (!left || s->failed || (!force && holds(s))) return;
   size_t n = smaller(left, room(s));
+  if (!force && s->waiters) {
+    size_t first = smaller(urgent(s), room(s));
+    n = smaller(left, first > spare(s) ? first : spare(s));
+  }
   put_bytes(s, s->notice + s->notice_at, n);
   s->notice_at += n;
   if (s->notice_at == s->notice_len) drop_notices(s);
@@ -347,10 +383,10 @@ static void copy_piece(agc_output *s, const agc_output_wait *w, size_t n) {
   size_t end = at + n;
   if (at < end && at < w->text->bytes) {
     size_t k = smaller(end - at, w->text->bytes - at);
-    put_bytes(s, w->text->data + at, k);
+    insert(s, w->text->data + at, k, true);
     at += k;
   }
-  if (at < end) put_bytes(s, "\n", 1);
+  if (at < end) insert(s, "\n", 1, true);
 }
 
 /* One look at the wait of the running task, which is marked PARKING already (a task that joins the FIFO marks before
@@ -407,7 +443,6 @@ static bool take_turn(agc_vm *vm, agc_output *out, bool new_writer) {
 static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
   agc_output *s = out->base;
   bool new_writer = enter(vm, out);
-  s->own = true;
   if (new_writer) {
     agc_output_wait w = {.out = out, .text = text, .newline = newline};
     if (total(&w) == 0) {
@@ -586,6 +621,13 @@ static void queue_notice(agc_output *s, const char *text, size_t n, bool kept) {
   s->notice_len += n;
 }
 
+/* A notice of the VM joins the queue; it and what is queued before it go ahead of waiting prints (urgent). */
+static void queue_own(agc_output *s, const char *text, size_t n, bool kept) {
+  size_t before = queued(s);
+  queue_notice(s, text, n, kept);
+  if (queued(s) > before) s->own_end = s->sent + s->len + queued(s);
+}
+
 static void finish_text(agc_vm *vm, agc_output *s, const char *text, size_t n) {
   if (s->mode == AGC_WRITE_DISK && s->writing) return;
   pump(s, true);
@@ -594,7 +636,7 @@ static void finish_text(agc_vm *vm, agc_output *s, const char *text, size_t n) {
     write_last(vm, s);
     size_t k = smaller(n - at, room(s));
     if (!k) return;
-    put_bytes(s, text + at, k);
+    insert(s, text + at, k, true);
     at += k;
   }
   write_last(vm, s);
@@ -608,11 +650,12 @@ bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forw
   stream_take(vm, s->lock);
   bool more = true;
   if (!s->failed) {
-    /* Like the VM's notices the bytes stay whole beside the prints: they enter the ring ahead of waiting writers, never
-       inside a print that holds the stream, at once when nothing is queued before them and through the queue
-       otherwise. A kept append never drops them for the notice limit; the bound below keeps the queue small instead. */
-    size_t now = queued(s) || holds(s) ? 0 : smaller(n, room(s));
-    put_bytes(s, data, now);
+    /* The bytes stay whole beside the prints: never inside a print that holds the stream, and never in the room that a
+       waiting print needs (spare), so they do not go ahead of it. They enter the ring at once when nothing is queued
+       before them and through the queue otherwise. A kept append never drops them for the notice limit; the bound
+       below keeps the queue small instead. */
+    size_t now = queued(s) ? 0 : smaller(n, spare(s));
+    insert(s, data, now, false);
     if (now < n) queue_notice(s, (const char *)data + now, n - now, true);
     flush_now(vm, s);
     if (!s->failed && queued(s) > AGC_FORWARD_BOUND) {
@@ -642,11 +685,11 @@ void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
   agc_output *s = out->base;
   stream_take(vm, s->lock);
   bool write = !s->failed && len;
-  if (len) s->own = true;
+  if (len && s->failed) s->own_end = UINT64_MAX;
   if (write && mode == AGC_NOTICE_FINAL)
     finish_text(vm, s, text, len);
   else if (write)
-    queue_notice(s, text, len, mode == AGC_NOTICE_KEPT);
+    queue_own(s, text, len, mode == AGC_NOTICE_KEPT);
   free(n->text);
   if (write && mode != AGC_NOTICE_FINAL) flush_now(vm, s);
   stream_drop(vm, s->lock);

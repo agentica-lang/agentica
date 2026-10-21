@@ -337,12 +337,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - the only writer of stdout and stderr (`agc_write`, `agc_output_waiting`,
     `agc_drain` for `IO.flush`, `agc_flush`; row 7.2.1f,
     `docs/vm/10-io-scheduler.md` §10.2.2). `agc_output_forward` takes a child's
-    stderr on the I/O thread into the notice queue; past `AGC_FORWARD_BOUND`
-    queued it keeps the caller's `agc_forward_wait` and posts its resume once
-    the queue is down to `AGC_FORWARD_RESUME` (half) or the stream failed or
-    closed. `own` says text of the program or the VM is still in the ring or
-    the queue (cleared when both are empty) or met the failed stream, so a
-    failure that lost only forwarded bytes does not fail the run.
+    stderr on the I/O thread into the notice queue; the bytes take only the
+    room the FIFO's head does not need (`spare`), so a waiting print goes
+    first. Past `AGC_FORWARD_BOUND` queued it keeps the caller's
+    `agc_forward_wait` and posts its resume once the queue is down to
+    `AGC_FORWARD_RESUME` (half) or the stream failed or closed. `sent` and
+    `own_end` are positions in the stream: text of the program or the VM is
+    pending while `own_end > sent`, so a failure that lost only forwarded bytes
+    does not fail the run, and queued bytes before `own_end` (a VM notice) go
+    ahead of a waiting print.
   - Per stream an `agc_output` (`vm->rt->out` and `err`) with a 64 KiB ring
     (`AGC_OUTPUT_BUFFER`) and a FIFO of waiting writers
   - a print that fits and has nobody ahead of it is copied and returns,
