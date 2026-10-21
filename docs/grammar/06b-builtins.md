@@ -406,57 +406,57 @@ the object of `agentica help NAME --json`; a builtin has no definition. A local
 (a parameter, a binding, a `for` variable or a name in a `case` pattern) has its
 type and a definition at its binding, whether the position is on a use or on the
 binding itself. The `kind` of the JSON answer is an open set: a client accepts a
-value it does not know.
-FILE is a path of the disk, linked and checked with its imports; it needs no
-`main`. `--stdin` before the position (`type-at --stdin FILE:LINE:COL`) takes
-the text of FILE from standard input. An error of the program is its own
-diagnostic and exits 1. A position on no token of an expression (a blank, a
-comment, the body text of a heredoc, a keyword such as `return` that is part of
-no expression) is `QUERY-NO-EXPRESSION` and exits 2, as is a bad position
-(`QUERY-USAGE`). With `--partial` (also on `refs`, and accepted by `outline`,
-which never checks) a program in which some functions do not check is answered
-from the functions that do: the answer has `"partial": true` and `diagnostics`,
-and exits 0. A name in a function that did not check is answered by its
-definition after linking and a `type` of null. A program that does not link, or
-a position that cannot be answered this way, is the first diagnostic and exits
-1 as before.
+value it does not know. FILE is a path of the disk, linked and checked with its
+imports; it needs no `main`. `--stdin` before the position (`type-at --stdin
+FILE:LINE:COL`) takes the text of FILE from standard input. An error of the
+program is its own diagnostic and exits 1. A position on no token of an
+expression (a blank, a comment, the body text of a heredoc, a keyword such as
+`return` that is part of no expression) is `QUERY-NO-EXPRESSION` and exits 2, as
+is a bad position (`QUERY-USAGE`). With `--partial` (also on `refs`; `outline`
+accepts it and ignores it, since it never checks) a program in which some
+functions do not check is answered from the functions that do: the answer has
+`"partial": true` and `diagnostics`, and exits 0. A name in a function that did
+not check is answered by its definition after linking, with a `type` of null. A
+program that does not link, or a position that cannot be answered this way, is
+the first diagnostic and exits 1 as before.
 
 `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
-defined in the modules linked from the files under PATH (a file or a folder,
-every `*.agc` file below it; default `.`). NAME is written as the code writes
-it: `total`, `User.email`, `Option.Some`, `Models.User` through an import alias
-of a file of PATH, `std/queue.pop`, or a builtin (`Map.get`). Each match has its
-kind (`function`, `struct`, `enum`, `alias`, `constant`, `field`, `variant` or
-`builtin`), `module`, `exported` (private declarations too), signature, `##`
-doc and spans; a builtin has `help`, the object of `agentica help NAME --json`.
-Only lexing, parsing and linking are needed: the files of PATH are linked
-together, and one that does not link is listed under `skipped` with its first
-diagnostic
-while the others still answer (exit 0); if none links, that diagnostic is the
-answer and the exit status is 1. A name that nothing declares is
-`QUERY-NOT-FOUND` and exits 2, as is a mistake in the arguments
-(`QUERY-USAGE`). `--stdin FILE` takes the text of FILE from standard input and
-searches it too.
+defined in the modules linked from the files under PATH (a file or a folder;
+every `*.agc` file below a folder; default `.`). NAME is written as the code
+writes it: `total`, `User.email`, `Option.Some`, `Models.User` through an import
+alias of a file of PATH, `std/queue.pop`, or a builtin (`Map.get`). Each match
+has its `kind` (`function`, `struct`, `enum`, `alias`, `constant`, `field`,
+`variant` or `builtin`), `module`, `exported` (private declarations too),
+`signature`, `doc` and spans; a builtin has `help`, the object of `agentica help
+NAME --json`. The answer with `--json` is one object, `{version, command, query,
+matches, skipped}`. Only lexing, parsing and linking are needed. The files of
+PATH are linked together; one that does not lex, parse or link is listed under
+`skipped` with its first diagnostic while the others still answer (exit 0). If
+none links, that first diagnostic is the answer and the exit status is 1. A name
+that nothing declares is `QUERY-NOT-FOUND` and exits 2, as is a mistake in the
+arguments (`QUERY-USAGE`). `--stdin FILE` takes the text of FILE from standard
+input and searches it too.
 
 `agentica refs NAME|FILE:LINE:COL [PATH...] [--json]` lists every reference to a
-declaration: a function, struct, enum, variant, field (in a read, a
-construction and a `with`), constant, type alias, local or builtin. The
-declaration is the one that NAME names, written as for `symbol` and resolved the
-same way, or the one the name at the position stands for. The files are linked
-together: FILE and the files under PATH for a position, the files under PATH
-(default `.`) for a NAME, and everything they import; one that does not link is
-listed under `skipped` and the others still answer, except FILE, which must
-link. The program is checked like `type-at` checks it, with the same exit codes.
-The answer has the `definition` (the `symbol` match; null for a builtin, which
-`builtin` names) and the references, each with its `kind`, the `function` it is
-in and the span of the name. The definition is not a reference. A name is told
-by what the linker and the checker resolved it to, so two fields of one name in
-two structs, or a name bound in two sibling blocks, are never mixed. A NAME that
-nothing declares is `QUERY-NOT-FOUND` and one that several declarations answer
-to is `QUERY-AMBIGUOUS-NAME`, whose help lists each as `FILE:LINE:COL`. A
-position on the name in a declaration picks it as well, and so does one on a
-name of an import list (`make` of `import {make} from "models"`), which selects
-the imported declaration. A position on the module alias of `Models.total(u)`
+declaration: a function, struct, enum, variant, field (in a read, a construction
+and a `with`), constant, type alias, local or builtin. The declaration is the
+one that NAME names, written and resolved as for `symbol`, or the one the name
+at the position stands for. The files are linked together: FILE and the files
+under PATH for a position, the files under PATH (default `.`) for a NAME, and
+everything they import. One that does not link is listed under `skipped` and the
+others still answer, except FILE, which must link. The program is checked as
+`type-at` checks it, with the same exit codes. The answer is one object,
+`{version, command, query, definition, builtin, references, skipped}`:
+`definition` is the `symbol` match (null for a builtin, which `builtin` names),
+and `references` lists each use with its `kind`, the `function` it is in and the
+span of the name; the definition is not a reference, and no references is an
+empty list. The linker and the checker decide what a name is, so two fields of
+one name in two structs, or a name bound in two sibling blocks, are never mixed.
+A NAME that nothing declares is `QUERY-NOT-FOUND`; one that several declarations
+answer to is `QUERY-AMBIGUOUS-NAME`, whose help lists each as `FILE:LINE:COL`. A
+position on the name in a declaration picks it, and so does one on a name of an
+import list (`make` of `import {make} from "models"`), which selects the
+imported declaration. A position on the module alias of `Models.total(u)`
 selects the function `total`, not the module; one on a module alias or a path of
 an import line is `QUERY-NO-EXPRESSION`. `--stdin FILE:LINE:COL` takes the text
 of FILE from standard input; with a NAME, `--stdin FILE` searches that text as
