@@ -8,18 +8,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-21
+
 ### Added
 
-- `agentica check --stdin FILE` checks the text on standard input as if `FILE`
-  held it.
-- `JSON.kind(value)`, the kind of a JSON value as a String, without encoding it.
-- `agentica help --json` with no NAME prints every builtin as one JSON array;
-  `agentica --json help` used to print the text summary.
+- `agentica check --stdin FILE` checks standard input as if `FILE` held it.
+- `JSON.kind(value)` gives the kind of a JSON value as a String.
+- `agentica help --json` with no NAME prints every builtin as a JSON array.
 
 ### Changed
 
-- **Breaking:** `agentica check FILE ... --stdin` is a usage error (exit 2);
-  extra words after `check FILE` used to be ignored.
+- **Breaking:** extra words after `agentica check FILE` are a usage error
+  (exit 2); they used to be ignored.
+- `agentica --json help` prints the JSON array, not the text summary.
 
 ### Fixed
 
@@ -233,7 +234,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.5.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.6.0...HEAD
+[0.6.0]: https://github.com/sonic182/agentica/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/sonic182/agentica/compare/0.5.0-beta.1...0.5.0
 [0.5.0-beta.1]:
 https://github.com/sonic182/agentica/compare/0.4.1-beta.1...0.5.0-beta.1
