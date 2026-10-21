@@ -25,8 +25,8 @@ memory or speed ever asks for it.
   that looks like a pointer into the heap as one. Pointers are never tagged
   (`docs/vm/05-values-execution-builtins.md` §5.3).
 - The GC setup: the collector is compiled with
-  `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` (`GC_COMPILE` in the
-  `Makefile`), and `vm/value.c` only calls `GC_INIT` and sets the OOM, abort and
+  `-DALL_INTERIOR_POINTERS -DNO_EXECUTE_PERMISSION` (`GC_COMPILE` in
+  mk/vm.mk), and `vm/value.c` only calls `GC_INIT` and sets the OOM, abort and
   warning hooks. So a pointer anywhere inside an object keeps it alive, from the
   heap as well as from the stack. bdwgc sets `ALIGNMENT` to 8 on x86-64
   (`include/private/gcconfig.h`): the collector reads heap objects, the stack

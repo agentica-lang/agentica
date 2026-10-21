@@ -1,5 +1,6 @@
 # The binary and its bootstrap: stage0 to stage3, the embedded data, the first binary, dist/agentica, fixed-point,
-# stage0 and stage0-check. Needs the VM variables of mk/vm.mk (VM_BUILD, VM_OBJ, AGENTICA_OBJS parts, EXE).
+# stage0 and stage0-check. Needs the VM variables of mk/vm.mk (VM_BUILD, VM_OBJ, AGENTICA_OBJS parts);
+# EXE comes from the root Makefile and mk/vm.mk sets it again.
 
 .PHONY: bootstrap-smoke stage1 stage2 stage3 stage0 stage0-check fixed-point
 

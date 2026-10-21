@@ -1,15 +1,14 @@
 # The C VM: sources, the build modes (release, SANITIZE, TSAN, GC_STRESS, TRACE), compile and link rules, ccache, the
 # third-party libraries (yyjson, picohttpparser, libuv) and the system or vendored libgc and OpenSSL, with their cache keys.
-# Included first: the variables here (VM_BUILD, VM_OBJ, EXE, OSSL_DEP, GC_DEP, ...) are read by the other files while make parses them.
+# Included first: the variables here (VM_BUILD, VM_OBJ, OSSL_DEP, GC_DEP, ...) are read by the other files while make
+# parses them. EXE is set by the root Makefile and set again here.
 
 .PHONY: vm-openssl vm-openssl-key vm-third-party vm-third-party-key
 
 # The C VM (docs/vm/11-build-ci-supply-chain.md section 11). On Linux libgc and OpenSSL are the system ones by default.
 # make                    dist/agentica, the binary (the bootstrap below builds it)
 # make vm-test            C tests in vm/tests/, run in parallel
-# make windows-docker-build  cross-build dist/agentica.exe and the C test binaries with llvm-mingw + Wine
-# make windows-docker-check  also run the C tests and the Windows CI fast Python modules through Wine
-#                           (WINDOWS_TEST_MODULES="tests/test_foo.py ..." selects other fast modules)
+# make windows-docker-build, windows-docker-check  the Windows cross build and check (see mk/windows.mk)
 # make SANITIZE=1         clang with ASan and UBSan, no libgc: the same binary, built in that mode
 # make TSAN=1             clang with TSan, no libgc (TSan and Boehm's stop-the-world do not mix): for make vm-tsan
 # make vm-tsan            the C tests of the code that threads share (inbox, outcome, run queue, wake, job) under TSan

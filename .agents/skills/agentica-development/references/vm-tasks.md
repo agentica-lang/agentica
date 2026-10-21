@@ -318,7 +318,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   record step counts and run the `--max-steps` sweep. Its timing cases run
   alone with `make vm-task-map` (`references/vm-tests.md`).
 - Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept out of
-  `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it right
+  `make test`'s parallel batch by `PY_ALONE` in mk/test.mk; CI runs it right
   after `make test`). On one scheduler (`AGENTICA_SCHEDULERS=1`), a sleeping
   task and a stdin reader must wake within 250 ms next to CPU, sort and concat
   tasks, and must not with `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only

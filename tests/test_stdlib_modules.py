@@ -1,4 +1,4 @@
-"""stdlib/MODULES, the list of std/ modules that the Makefile embeds in the single binary,
+"""stdlib/MODULES, the list of std/ modules that mk/bootstrap.mk embeds in the single binary,
 names every source of stdlib/ once and nothing else. It needs no binary."""
 from tests.agentica_test import ROOT
 

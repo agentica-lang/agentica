@@ -73,7 +73,11 @@ help:
 	  'make fixed-point         check that dist/agentica compiles the same front end' \
 	  'make vm-test             the C tests' \
 	  'make test [TESTS=...]    the fast Python tests' \
+	  'make test-slow           the slow Python tests (CI)' \
 	  'make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]' \
+	  'make vm-tsan             the C tests of the shared-state code, under ThreadSanitizer' \
+	  'make goldens             rewrite the VM, CLI and front-end goldens' \
+	  'make stage0              refresh bootstrap/stage0.agcb after the fixed point holds' \
 	  'make windows-docker-check  the Windows cross build and tests, in Docker with Wine' \
 	  'make site                build the documentation site' \
 	  'make clean               remove dist/, build/ and the site output' \

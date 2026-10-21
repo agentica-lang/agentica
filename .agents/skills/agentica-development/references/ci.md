@@ -114,7 +114,7 @@ comment), then a step that calls it. Targets that are not obvious:
   run reports a skip; a missing VM binary does the same for a test.
 - `test-slow` runs the slow tier (`AGENTICA_TEST_SLOW=1`). Existing
   `unittest.TestCase` tests use the `@slow` wrapper; pytest functions use the
-  `slow` marker. The Makefile clears the flag for `make test`; local runs use
+  `slow` marker. mk/test.mk clears the flag for `make test`; local runs use
   only the fast tier.
 - Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE` (a
   float, default 1; `ci.yml` and `sweep.yml` set 4 for the slow runners):
@@ -163,8 +163,9 @@ comment), then a step that calls it. Targets that are not obvious:
   `Windows_NT` for the cross build below. It selects the sources, libraries,
   linker flags and the embedded object format; `OS`, which Windows sets and no
   other host does, stays the "is this Windows" test for the rest of the
-  Makefile. `RUN_PROGRAM` prefixes build recipes that must execute a program
-  they have just compiled; `VM_TEST_RUNNER` prefixes each C test binary.
+  build (`Makefile`, `mk/*.mk`). `RUN_PROGRAM` prefixes build recipes that
+  must execute a program they have just compiled; `VM_TEST_RUNNER` prefixes
+  each C test binary.
 - `vm-test-binaries` builds the C test programs of `vm-test` without running
   them. `windows-docker-build` uses the pinned image in
   `tools/windows-check.Dockerfile` (llvm-mingw's UCRT toolchain and Wine) to
@@ -493,7 +494,7 @@ Per package, in order: build, strip (macOS: `strip -x` then `codesign --force
 --sign -`, an ad hoc signature that arm64 needs; there is no Developer ID
 signature or notarization, which need credentials), `make release-check`,
 `make release-package`, `make release-smoke`, upload `agentica-PLATFORM`.
-`RELEASE_PLATFORM` (env, from the matrix) names the package; the Makefile
+`RELEASE_PLATFORM` (env, from the matrix) names the package; mk/release.mk
 derives the check format and the architecture from it and
 `tools/release-check.sh` compares that architecture with the machine and with
 the binary, so a runner that is not what its name says fails. The Linux job also
@@ -551,7 +552,7 @@ CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
 ### Tags, versions and CHANGELOG
 
 - The `VERSION` file at the repository root (one line, no `v`) is the single
-  source of the version. `make version` prints it and the Makefile passes it to
+  source of the version. `make version` prints it and mk/vm.mk passes it to
   C as `AGC_VERSION`; `agentica --version` reports it. The Agentica front end
   takes it as an input (`Settings.version`; `--version V` in the arguments of
   `compiler/front_end.agc`), and writes it into each `.agcb` header. Keep it in

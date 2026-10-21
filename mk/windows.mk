@@ -1,5 +1,6 @@
 # The local Windows check without a Windows machine: the llvm-mingw and Wine image, the cross build of dist/agentica.exe
 # and the C tests, and the check that runs them. WINDOWS_CROSS is the set of variables that selects the Windows build.
+# windows-docker-remove-check, windows-docker-remove-wine-check and test-remove-actions are in mk/test.mk.
 
 .PHONY: windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check
 

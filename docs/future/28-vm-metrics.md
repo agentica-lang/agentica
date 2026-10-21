@@ -694,7 +694,7 @@ matter:
   expected output. The `vm-sanitizers` CI job also builds `make vm-test
   METRICS=0`, and `agentica run --version` says `metrics off` there.
 - **Timing-sensitive cases** run alone, like `make vm-latency`: they are listed
-  in `PY_ALONE` in the Makefile, with a `make vm-metrics-timing` target and
+  in `PY_ALONE` in mk/test.mk, with a `make vm-metrics-timing` target and
   their own CI step after `make vm-latency`. Their bounds are several times the
   expected time.
 - **Overhead check** (manual, like `make bench`; not in `make test` or CI, where

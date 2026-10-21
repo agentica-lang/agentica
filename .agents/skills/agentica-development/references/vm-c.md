@@ -94,8 +94,8 @@ operating system call differs.
 - Signal to split: a shared file whose `#if` count grows with a port, two
   copies of one function under `#ifdef`, or flags that only make sense on one
   system. Move the operation behind the adapter header in the same PR, and
-  add the new file to the Makefile, `vm/tools/check-layers.sh` and
-  `references/repo-map.md`.
+  add the new file to the VM source list in mk/vm.mk,
+  `vm/tools/check-layers.sh` and `references/repo-map.md`.
 - Tests of the shared behavior go in an area of `tools/conformance.py` (the
   conformance matrix of `platforms.yml`; a test module in no area fails
   `tests/test_conformance.py`), so they run on every system, and on Windows
