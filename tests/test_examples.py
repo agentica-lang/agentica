@@ -154,7 +154,7 @@ def test_file_task_process_and_http_examples_give_their_expected_output():
     assert cli_run(example("concurrency.agc")) == (0, "42\n14\n", "")
     assert cli_run(example("file-summary.agc"), example("hello.agc")) == (0, "39\n", "")
     assert cli_run(example("http_server.agc")) == (0, "200\nhello\n\n404\nok()\n", "")
-    tool = cli_run("--allow-run", example("process-tool.agc"))
+    tool = cli_run(example("process-tool.agc"))
     assert tool.code == 0, tool.stderr
     assert (tool.stdout, tool.stderr) == ("hello from sh\n", "")
 
@@ -316,7 +316,7 @@ def test_help_lists_the_subcommands_the_core_rules_and_the_builtin_namespaces():
     usage = cli_run("--help")
     assert usage.code == 0
     for token in ("agentica check", "agentica test", "--steps FILE", "agentica help NAME", "def main() -> Void",
-                  "xs = xs.push(2)", "CHECK-CAPTURED-ASSIGNMENT", "--allow-run"):
+                  "xs = xs.push(2)", "CHECK-CAPTURED-ASSIGNMENT", "--deny-run"):
         assert token in usage.stdout
     overview = cli_run("help")
     assert overview.code == 0

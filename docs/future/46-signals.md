@@ -332,15 +332,15 @@ The permission for this call is in 46.3.8.
 
 - `Signal.channel` needs no flag. It only affects the program that asks for it,
   and a program can already stop itself.
-- `Process.spawn_group` needs `--allow-run`, as `Process.spawn` does.
+- `--deny-run` turns off `Process.spawn_group`, as it does `Process.spawn`.
 - `Process.signal` and `Process.signal_group` need nothing more. They only work
   on children that the program already has, and it had to be allowed to start
   them.
-- `System.signal` needs `--allow-run`. It can reach any process of the same
+- `--deny-run` turns off `System.signal`. It can reach any process of the same
   user. Starting programs already gives that class of power.
 
 The recommendation (46.8, question 5) is to gate `System.signal` and
-`spawn_group` with `--allow-run`, and to leave `Signal.channel` open.
+`spawn_group` with `--deny-run`, and to leave `Signal.channel` open.
 
 #### 46.3.9 Platforms
 
@@ -630,9 +630,9 @@ Missing or partly, outside §46:
   (46.8, question 10).
 
 The rest exists: environment variables and boolean flags (`System.env`,
-`String.trim`), spawning `sudo chown` (`Process.spawn_captured` with
-`--allow-run`), the `/proc` scan (`Dir.list("/proc")` and `File.read_text`, not
-yet tested on `/proc`), `Process.wait(p, ms)` with a deadline (it returns
+`String.trim`), spawning `sudo chown` (`Process.spawn_captured`), the `/proc`
+scan (`Dir.list("/proc")` and `File.read_text`, not yet tested on `/proc`),
+`Process.wait(p, ms)` with a deadline (it returns
 `error("network: operation timed out")` and keeps the child, so the example
 repeats the wait), `Path.remove` (a missing path is `ok`, a link is removed
 itself, recursive and without following links, it refuses `/`, `.` and `..` and
@@ -675,7 +675,7 @@ The tests are hermetic, Linux only, and follow the process-test rule of
   change.
 - **46b: sending.** The builtins `Process.signal`, `Process.spawn_group`,
   `Process.signal_group` and `System.signal`, with the pidfd probe and
-  `--allow-run`. The group close and the end-of-run group kill for group
+  `--deny-run`. The group close and the end-of-run group kill for group
   children. Tests: cases 2, 4 and 5 of 46.6. Docs:
   `docs/grammar/06d-io-and-network.md` (Processes), the site Process page, the
   programming skill's processes reference, `docs/vm/10-io-processes.md` §10.4
@@ -735,11 +735,11 @@ as the recommendation, except question 12.
    stop has no VM deadline. The program sets its own deadlines, as the example
    does.
 
-5. **The permission flag.** Options: (a) no flag for subscribing. `--allow-run`
-   for `spawn_group` and `System.signal`. (b) `--allow-run` for every signal
-   call, including subscribing. (c) a new flag such as `--allow-signal`.
+5. **The permission flag.** Options: (a) no flag for subscribing. `--deny-run`
+   for `spawn_group` and `System.signal`. (b) `--deny-run` for every signal
+   call, including subscribing. (c) a new flag such as `--deny-signal`.
    **Recommendation:** (a). A program that subscribes only affects itself. A pid
-   signal reaches other processes, so it belongs to the class that `--allow-run`
+   signal reaches other processes, so it belongs to the class that `--deny-run`
    already covers. A new flag adds one more thing to document for little gain.
 
 6. **SIGHUP reload.** Options: (a) out of scope. HUP stays a stop signal only.

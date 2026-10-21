@@ -343,8 +343,8 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
   if options.schedulers != ""
     flags = flags.concat(["--schedulers", options.schedulers])
   end
-  if options.allow_run
-    flags = flags.push("--allow-run")
+  if options.deny_run
+    flags = flags.push("--deny-run")
   end
   if options.deny_native
     flags = flags.push("--deny-native")
@@ -432,18 +432,17 @@ def test(session: Session, words: List[String]) -> Int
   if options.schedulers != ""
     return emit(Reply.failed(2, "agentica: test does not take --schedulers; set AGENTICA_SCHEDULERS instead\n"))
   end
-  # The VMs of the test files do not get it either (issue #534 adds it), and dropping it would run native code that
-  # the flag refuses.
+  # The VMs of the test files do not get them either, and dropping one would run code that the flag refuses. The
+  # step programs must start the programs under test, so --deny-run cannot reach them as it is.
   if options.deny_native
     return emit(Reply.failed(2, "agentica: test does not take --deny-native yet\n"))
+  elsif options.deny_run
+    return emit(Reply.failed(2, "agentica: test does not take --deny-run yet\n"))
   end
   driver: List[String] = [
     "--vm", binary, "--version", session.settings.version, "--style", options.style,
     "--test-timeout-ms", "30000",
   ]
-  if options.allow_run
-    driver = driver.push("--allow-run")
-  end
   if options.seed != ""
     driver = driver.concat(["--seed", options.seed])
   end

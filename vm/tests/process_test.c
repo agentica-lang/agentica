@@ -53,7 +53,6 @@ static void equal(agc_value value, const char *expected) {
 
 static void init(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-  vm.rt->allow_run = true;
   task = agc_alloc(sizeof(agc_task));
   vm.task = task;
   vm.in_turn = true;

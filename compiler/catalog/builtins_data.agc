@@ -2676,7 +2676,7 @@ ROWS_33: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "Process.spawn",
       effects: ["subprocess"],
-      description: "Start an executable with literal arguments; requires --allow-run.",
+      description: "Start an executable with literal arguments; --deny-run makes it an error.",
       alternatives: [],
     ),
   ]

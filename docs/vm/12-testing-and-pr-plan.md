@@ -9,7 +9,7 @@
   `--ai` runs must match exit/stdout; stderr starts with program stderr, with
   only the same diagnostic code (or nothing) after it. See
   `tests/vm_diff_support.py`.
-- Fixtures may use `.stdin` and `.args`; `process-*` needs `--allow-run`.
+- Fixtures may use `.stdin` and `.args`; `spawn-denied*` runs with `--deny-run`.
   `make goldens` rewrites expected output and refuses timeouts, signals and
   `RUNTIME-INTERNAL`; review intended golden changes.
 - Every run uses `LC_ALL=C.UTF-8` and `LANG=C.UTF-8` for stable OS error text.
@@ -52,7 +52,7 @@ item numbers: other docs cite them.
 7. JSON: `parse`/encode/builders, then decode/schema (format v3, §4.6).
 8. Filesystem/libuv (`File`, `Dir`, `Path`) on Linux.
 9. Tasks and per-task `Random`, one scheduler.
-10. Processes behind `--allow-run`.
+10. Processes, off with `--deny-run`.
 11. TCP (`Socket`, `Listener`).
 12. TLS with vendored OpenSSL.
 

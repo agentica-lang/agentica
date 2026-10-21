@@ -206,7 +206,7 @@ def system_pid_is_the_vm_process_and_the_parent_a_child_sees(root, work, adopt):
     """The driver-pid handoff only accepts the real parent."""
     child = compile_work_text(work, 'def main() -> Void\n  puts("child ran")\nend\n', "child")
     bytecode = compile_work_text(work, PID_PROGRAM, "pid")
-    vm = adopt(Child([*vm_command(), "--allow-run", "--", bytecode, str(vm_binary()), str(child), str(root)],
+    vm = adopt(Child([*vm_command(), "--", bytecode, str(vm_binary()), str(child), str(root)],
                      env=vm_environment(), cwd=root, capture_stderr=True))
     lines = [vm.next_line() for _ in range(5)]
     assert vm.wait() == 0

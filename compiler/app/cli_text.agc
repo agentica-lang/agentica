@@ -7,7 +7,7 @@
 USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
-    "[--schedulers N] [--allow-run] [--deny-native] [check] <source-file> [args...]",
+    "[--schedulers N] [--deny-run] [--deny-native] [check] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check --stdin <source-file>",
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
@@ -22,7 +22,7 @@ USAGE = [
   "       agentica [--ai|--json] refs NAME [PATH...] [--json]",
   "       agentica [--ai|--json] refs <source-file>:LINE:COL [PATH...] [--json] [--partial]",
   "       agentica [--ai|--json] refs --stdin <source-file>:LINE:COL [PATH...] [--json] [--partial]",
-  "       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
+  "       agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
 
@@ -42,7 +42,7 @@ SUMMARY = [
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",
-  "                                          --flush-timeout MS, --schedulers N, --allow-run, --deny-native,",
+  "                                          --flush-timeout MS, --schedulers N, --deny-run, --deny-native,",
   "                                          --source-root DIR, --ai, --json",
   "  agentica doc PATH [--json]              exported API of a file or a std/ module, with its ## docs (parse only)",
   "  agentica outline FILE [--json]          declarations of a file or a std/ module, private ones too, with docs",
@@ -79,8 +79,8 @@ OPTIONS = [
   "",
   "  --version",
   "     print the version and exit",
-  "  --allow-run",
-  "     allow Process.spawn to run child programs (native code can still run them: see --deny-native)",
+  "  --deny-run",
+  "     make Process.spawn and the other Process starts return an error (turns on --deny-native too)",
   "  --deny-native",
   "     refuse a program that declares extern functions (native code), before it starts",
   "  --max-steps <count>",

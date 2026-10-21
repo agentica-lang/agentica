@@ -136,11 +136,11 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   context changed in a task is lost unless taken back from `Task.await`. A task
   that crashed and was not awaited fails the step with `RUNTIME-TASK-CRASHED`,
   the crash text as its message.
-- Handlers can always call `Process.spawn`; `agentica test --allow-run` only
-  lets programs under test start programs. A handler's stdin is an empty pipe
-  the runner closes at once, so reading it gives the end of input; the protocol
-  runs on a channel of its own, so a handler may print anything (it must not
-  call `Process.parent_read_line` or `Process.parent_send`).
+- Handlers and programs under test can call `Process.spawn`. A handler's stdin
+  is an empty pipe the runner closes at once, so reading it gives the end of
+  input; the protocol runs on a channel of its own, so a handler may print
+  anything (it must not call `Process.parent_read_line` or
+  `Process.parent_send`).
 - Programs run with host permissions and environment, with the feature directory
   as their working directory; BDD provides no filesystem or network isolation.
   Timeouts are positive; each scenario has 30 seconds, program-driving calls
@@ -153,8 +153,8 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.
 - To run a suite from a program, start `agentica test --json` with
-  `Process.spawn` (needs `--allow-run`) and parse its report: `ok`, `passed`,
-  `failed`, `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
+  `Process.spawn` and parse its report: `ok`, `passed`, `failed`,
+  `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
 
 ## Diagnostics
 

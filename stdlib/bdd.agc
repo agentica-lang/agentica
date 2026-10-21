@@ -6,7 +6,6 @@
 struct Settings
   base: String
   agentica: List[String]
-  allow_run: Bool
   seeded: Bool
   seed: Int
 end
@@ -308,9 +307,6 @@ def start(ctx: Context, path: String) -> Context
     halt("RUNTIME-BDD-INFRA", "Agentica executable is unavailable")
   end
   flags: List[String] = []
-  if settings.allow_run
-    flags = ["--allow-run"]
-  end
   if settings.seeded
     flags = flags.concat(["--seed", settings.seed.to_s])
   end

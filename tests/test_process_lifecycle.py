@@ -68,7 +68,7 @@ end
 def main() -> Void
   args = System.args()
   copy_private(args[1], args[2] + "/child.agcb")
-  words = ["run", "--allow-run", "--driver-pid", String.from_int(System.pid()), "--", args[2] + "/child.agcb", args[3], args[4]]
+  words = ["run", "--driver-pid", String.from_int(System.pid()), "--", args[2] + "/child.agcb", args[3], args[4]]
   p = Result.unwrap!(Process.spawn_captured(args[0], words, ".", 5000))
   puts(Result.unwrap!(Process.read_line(p, 20000)))
   puts(Result.unwrap!(Process.read_line(p, 20000)))
@@ -89,7 +89,7 @@ def gone(pid):
 
 
 def test_a_child_is_closed_when_the_task_that_owns_it_ends(adopt, request, tmp_path):
-    vm = adopt(start_vm(bytecode(OWNER_PROGRAM, tmp_path, "owner"), PYTHON, PEER, flags=["--allow-run"]))
+    vm = adopt(start_vm(bytecode(OWNER_PROGRAM, tmp_path, "owner"), PYTHON, PEER))
     pid = vm.next_line(WAIT).strip()
     request.addfinalizer(lambda: kill_process(pid))
     assert gone(pid)
@@ -97,7 +97,7 @@ def test_a_child_is_closed_when_the_task_that_owns_it_ends(adopt, request, tmp_p
 
 
 def test_a_stop_signal_ends_the_run_and_its_children(adopt, request, tmp_path):
-    vm = adopt(start_vm(bytecode(HOLD_PROGRAM, tmp_path, "hold"), PYTHON, PEER, flags=["--allow-run"],
+    vm = adopt(start_vm(bytecode(HOLD_PROGRAM, tmp_path, "hold"), PYTHON, PEER,
                         creationflags=NEW_GROUP))
     pid = vm.next_line(WAIT).strip()
     request.addfinalizer(lambda: kill_process(pid))
@@ -114,7 +114,7 @@ def test_a_vm_and_its_child_end_when_their_driver_is_killed(adopt, request, tmp_
     child = bytecode(CHILD_VM_PROGRAM, tmp_path, "child")
     (tmp_path / "private").mkdir()
     driver = adopt(start_vm(bytecode(DRIVER_PROGRAM, tmp_path, "driver"), vm_binary(), child, tmp_path / "private",
-                            PYTHON, PEER, flags=["--allow-run"]))
+                            PYTHON, PEER))
     vm_pid = driver.next_line(WAIT).strip()
     request.addfinalizer(lambda: kill_process(vm_pid))
     peer_pid = driver.next_line(WAIT).strip()

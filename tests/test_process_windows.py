@@ -33,7 +33,7 @@ def exit_line(tmp_path, spawn, extra):
     bytecode = compile_agc(source, tmp_path / "stop.agcb")
     trace = tmp_path / "trace.txt"
     env = {"AGENTICA_VM_TRACE": "proc", "AGENTICA_VM_TRACE_FILE": trace}
-    vm = start_vm(bytecode, tool("node"), PEER, flags=["--allow-run"], env=env)
+    vm = start_vm(bytecode, tool("node"), PEER, env=env)
     try:
         assert vm.wait(scaled(30)) == 0
     finally:

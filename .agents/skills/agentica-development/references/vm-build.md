@@ -58,7 +58,7 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   builtin reaches it today.
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
   handles it when `run` is the first word, with the VM flags (`--max-steps`,
-  `--seed`, `--flush-timeout`, `--schedulers`, `--allow-run`, `--ai`, `--json`,
+  `--seed`, `--flush-timeout`, `--schedulers`, `--deny-run`, `--ai`, `--json`,
   `--source-root`, `--version`) and the hidden `--driver-pid PID` and
   `--embedded NAME` (run the `runner` or `steps` program that the binary
   carries; the front end may not pass it on in a hand-off). The VM then
@@ -144,8 +144,9 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
     channel line). The `test-*` fixtures use it; the plain golden reads of
     `agentica test` modes (`--agentica-test run`) need a `.channel` file, and a
     fixture without one is the no-channel case (`test-no-channel`).
-  - `process-` name prefix: runs with `--allow-run`; its children must be on
-    every CI runner (`/bin/sh`, `cat`, `sleep`) and must end or be closed.
+  - `spawn-denied` name prefix: runs with `--deny-run`. A `process-` fixture's
+    children must be on every CI runner (`/bin/sh`, `cat`, `sleep`) and must
+    end or be closed.
   - `HEAVY_FIXTURES` (in `tests/vm_diff_support.py`): fixtures pinned to a
     shard; the others rotate over shards 1 to 7 and shard 8 runs the extras. A
     new costly fixture may need an entry.

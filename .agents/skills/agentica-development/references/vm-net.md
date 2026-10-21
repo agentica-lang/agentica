@@ -14,8 +14,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     taken in `duplex_os.h` (`references/vm-io.md`).
 
 - **Path:** `vm/process.c`
-  - **Owns:** The `Process` builtins behind `--allow-run`, using libuv on Unix
-    and Windows.
+  - **Owns:** The `Process` builtins (off with `--deny-run`), using libuv on
+    Unix and Windows.
 
 - **Path:** `vm/stream.c`
   - **Owns:** what processes and TCP share (`docs/vm/10-io-tls.md` §10.3.1):

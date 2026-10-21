@@ -47,7 +47,6 @@ Exit code `0`: every scenario passes. `1`: one fails. `2`: the tests could not r
 
 - `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.
-- A program under test can start programs only with `agentica test --allow-run`.
 - It also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`.
 
 ## Built-in steps
@@ -204,4 +203,4 @@ A failed `then_*` check reports `expected` and `actual` in the inspect form, as 
 
 ## Running tests from a program
 
-No function runs features from a program. Start `agentica test --json` with `Process.spawn` (needs `--allow-run`) and read its report.
+No function runs features from a program. Start `agentica test --json` with `Process.spawn` and read its report.

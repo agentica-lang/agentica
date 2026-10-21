@@ -240,11 +240,11 @@ Signatures are in
 encoding; `IO.inspect` prints `<Process>`. Signatures are in
 [`library/io-and-system/process.md`][agentica-link-3].
 
-- Starting a program needs `agentica --allow-run file.agc`. The flag defaults to
-  off and precedes the source file; later arguments reach `System.args`. The
-  `test` command accepts it before or after the command. Checking and `help`
-  need no flag. The permission reaches tasks. BDD step handlers can always start
-  programs.
+- Starting a program needs no flag. With `agentica --deny-run file.agc` (or
+  `agentica run --deny-run`) every start returns an error that begins with
+  `denied: --deny-run`, in every task, and extern blocks are refused as with
+  `--deny-native`. The flag precedes the source file; later arguments reach
+  `System.args`. `agentica test` does not take it yet.
 - A command without `/` is looked up in each `PATH` entry, in order. An empty
   entry is skipped, so `./name` runs a program in the working directory; a
   relative entry such as `.` resolves against it. A command with `/` is a path
@@ -366,8 +366,9 @@ end
 - A call blocks timers, I/O and other tasks until it returns, and the step
   limit cannot stop it in the middle. Native code must retry calls cut
   short by `EINTR`: GC signals can interrupt sleeps and polls.
-- Native code is allowed by default and bypasses `--allow-run`.
-  `agentica --deny-native file.agc` (and `agentica run --deny-native`) refuses
+- Native code is allowed by default and can start programs itself.
+  `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
+  `--deny-*` flag) refuses
   a program that declares any extern function before anything runs:
   `RUNTIME-NATIVE-DENIED`, exit 2. `agentica test` does not take the option
   yet.

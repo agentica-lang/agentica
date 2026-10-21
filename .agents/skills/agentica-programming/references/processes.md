@@ -23,12 +23,10 @@ Process.parent_read_line(timeout_ms: Int) -> Result[String]
 Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 ~~~
 
-- Launching requires agentica --allow-run file.agc. The flag defaults off and
-  precedes the source file; later arguments reach System.args. The test command
-  accepts it before or after the command. Checking and builtin help need no
-  flag. Permission reaches tasks. BDD step handlers can always launch programs
-  (every scenario's child VM runs with `--allow-run`); `agentica test
-  --allow-run` only passes the flag on to the programs under test.
+- Launching needs no flag. With `agentica --deny-run file.agc` every start
+  returns an error that begins with `denied: --deny-run` (in every task), and
+  extern blocks are refused as with `--deny-native`. `agentica test` refuses
+  `--deny-run`.
 - A bare name (no `/`) is looked up in each `PATH` entry in order. The working
   directory is never added (empty entries are skipped): run a program in the
   current directory as `./name`. An explicit relative entry such as `.` or `bin`
@@ -82,7 +80,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 - Operational failures return String error Results. Explicit cleanup failures
   are RUNTIME-PROCESS-CLOSE, at the call span.
 - Captured processes. `spawn_captured` works like `spawn` (same lookup,
-  `--allow-run`, environment and cleanup) with three differences. The child
+  `--deny-run`, environment and cleanup) with three differences. The child
   starts in `dir`: `"."` keeps the working directory, a relative `dir` resolves
   against it, an empty `dir` or one with NUL is an error, and a `dir` that is
   not a directory is "directory is unavailable". The command still resolves

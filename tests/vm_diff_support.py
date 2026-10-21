@@ -45,7 +45,7 @@ SWEEP_HEAD = 100
 SAMPLE_POINTS = 8
 RUNAWAY_LIMIT = 500
 VM_TURN_STEPS = 2000
-ALLOW_RUN_PREFIX = "process-"
+DENY_RUN_PREFIX = "spawn-denied"
 TMP_TOKEN = "@tmp"
 FIXTURE_TOKEN = "@fixtures/"
 # The folder of the open descriptors of the process, which a fixture lists to count them: /proc/self/fd, or /dev/fd on macOS.
@@ -145,13 +145,13 @@ def fixture_arg(argument):
 
 @dataclass(frozen=True)
 class Fixture:
-    """What a VM run of a program needs besides the bytecode: stdin, arguments, environment, channel, --allow-run."""
+    """What a VM run of a program needs besides the bytecode: stdin, arguments, environment, channel, --deny-run."""
 
     input: bytes = b""
     args: tuple = ()
     env: dict = field(default_factory=dict)
     channel: Path = None
-    allow_run: bool = False
+    deny_run: bool = False
 
     @property
     def uses_tmp(self):
@@ -160,7 +160,7 @@ class Fixture:
     @classmethod
     def of(cls, program):
         """The fixture of a program, from its .stdin, .args (a list of double-quoted strings), .env (a list of
-        ("NAME" . "value") pairs) and .channel sidecars; a name that starts with `process-` runs with --allow-run."""
+        ("NAME" . "value") pairs) and .channel sidecars; a name that starts with `spawn-denied` runs with --deny-run."""
         def sidecar(extension):
             path = program.with_suffix(extension)
             return path if path.is_file() else None
@@ -173,7 +173,7 @@ class Fixture:
             env={_unquote(key): _unquote(value) for key, value in _PAIR.findall(env.read_text(encoding="utf-8"))}
             if env else {},
             channel=channel,
-            allow_run=program.name.startswith(ALLOW_RUN_PREFIX))
+            deny_run=program.name.startswith(DENY_RUN_PREFIX))
 
 
 def relocate(text, folder, token):
@@ -287,8 +287,8 @@ def limit_options(limit):
     return ["--max-steps", str(limit)] if limit else []
 
 
-def allow_options(fixture):
-    return ["--allow-run"] if fixture.allow_run else []
+def deny_options(fixture):
+    return ["--deny-run"] if fixture.deny_run else []
 
 
 def source_root_options():
@@ -312,7 +312,7 @@ def fresh_tmp(work):
 
 def run_vm(fixture, bytecode, limit, style="json", root=(), extra=(), timeout=RUN_TIMEOUT, cwd=None, env=None):
     """The VM on `bytecode` with the fixture's arguments and stdin, in one diagnostic style."""
-    options = allow_options(fixture) + limit_options(limit) + style_options(style) + list(root)
+    options = deny_options(fixture) + limit_options(limit) + style_options(style) + list(root)
     return run_vm_process(fixture, options, bytecode, [*fixture.args, *extra], timeout, cwd, env)
 
 
@@ -321,7 +321,7 @@ def run_fixture_vm(fixture, bytecode, limit, work):
     if fixture.uses_tmp:
         directory = fresh_tmp(work)
         try:
-            options = allow_options(fixture) + limit_options(limit) + style_options("json") + source_root_options()
+            options = deny_options(fixture) + limit_options(limit) + style_options("json") + source_root_options()
             result = untmp(directory, run_vm_process(fixture, options, bytecode, tmp_args(fixture, directory),
                                                      cwd=work))
         finally:
@@ -345,7 +345,7 @@ def vm_batch(fixture, bytecode, option_lists, work):
         directory = fresh_tmp(work) if fixture.uses_tmp else None
         try:
             args = tmp_args(fixture, directory) if directory else fixture.args
-            result = run_vm_process(fixture, allow_options(fixture) + source_root_options() + options, bytecode, args,
+            result = run_vm_process(fixture, deny_options(fixture) + source_root_options() + options, bytecode, args,
                                     cwd=work, stdin_path=stdin_path)
             if directory:
                 result = untmp(directory, result)

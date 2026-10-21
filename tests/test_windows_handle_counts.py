@@ -168,7 +168,7 @@ def test_file_calls_cannot_name_the_vms_own_pipes_so_a_later_spawn_does_not_dead
     bytecode = compile_agc(source, tmp_path / "pipes.agcb")
     names_file = tmp_path / "names.txt"
     release = tmp_path / "release"
-    vm = start_vm(bytecode, names_file, PYTHON, release, flags=("--allow-run",))
+    vm = start_vm(bytecode, names_file, PYTHON, release)
     try:
         assert vm.next_line(WAIT) == "ready"
         names = vm_pipe_names(vm.process.pid)

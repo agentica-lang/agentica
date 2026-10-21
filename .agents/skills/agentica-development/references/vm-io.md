@@ -256,7 +256,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     is an entry of `/proc/self/fd` or `/proc/thread-self/fd` (same directory
     device and inode; not `/proc/<pid>/task/<tid>/fd`) with the number of the
     descriptor `vm/output.c` reopened for stdout or stderr.
-  - A child run with `--allow-run` can still open `/proc/<VM pid>/fd/N`: the
+  - A child can still open `/proc/<VM pid>/fd/N`: the
     check covers the program's own file calls only.
   - `owns_st` marks the request that frees the file state: open, close, or a
     handle request after its timeout.

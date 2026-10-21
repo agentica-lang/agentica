@@ -72,7 +72,8 @@ OPTIONS = [
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps=5", "ok.agc"], ["--seed", "2147483648", "ok.agc"], ["--seed", "007", "ok.agc"],
     ["--seed", "--json", "ok.agc"], ["--seed", "1", "--seed"], ["--seed", "5", "--seed", "6", "ok.agc"],
-    ["--ai", "--ai", "check", "ok.agc"], ["--allow-run", "--allow-run", "ok.agc"], ["--steps"],
+    ["--ai", "--ai", "check", "ok.agc"], ["--deny-run", "--deny-run", "ok.agc"], ["--allow-run", "ok.agc"],
+    ["--steps"],
     ["--flush-timeout"], ["--flush-timeout", "x", "ok.agc"], ["--flush-timeout", "10000", "ok.agc"],
     ["--schedulers"], ["--schedulers", "x", "ok.agc"], ["--schedulers", "0", "ok.agc"],
     ["--schedulers", "1025", "ok.agc"], ["--schedulers", "0001", "ok.agc"], ["--schedulers", "2", "ok.agc"],
@@ -81,8 +82,8 @@ OPTIONS = [
     ["check", "--json", "ok.agc"], ["compile", "ok.agc"], ["--dump", "compile", "ok.agc", "-o", "out.agcb"],
     ["--max-steps", "1", "check", "ok.agc"], ["--json", "check", "ok.agc"], ["--ai", "check", "ok.agc"],
     ["check", "nope.agc"], ["nope.agc"], ["check", "."],
-    ["--max-steps", "5", "--seed", "1", "--json", "--allow-run", "--flush-timeout", "10000", "ok.agc"],
-    ["--seed", "1", "--flush-timeout", "10000", "--schedulers", "1", "--allow-run", "ok.agc"],
+    ["--max-steps", "5", "--seed", "1", "--json", "--deny-run", "--flush-timeout", "10000", "ok.agc"],
+    ["--seed", "1", "--flush-timeout", "10000", "--schedulers", "1", "--deny-run", "ok.agc"],
 ]
 
 

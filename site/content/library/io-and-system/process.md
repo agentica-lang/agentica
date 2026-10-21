@@ -4,13 +4,11 @@ weight: 3
 description: Start other programs, talk to them through their input and output, and wait for them.
 ---
 
-A program can start other programs only when it runs with `--allow-run`:
+A program can start other programs unless it runs with `--deny-run`. Then every start returns an error that begins with `denied: --deny-run`, and extern blocks are refused as with `--deny-native`:
 
 ```sh
-agentica --allow-run tool.agc
+agentica --deny-run tool.agc
 ```
-
-[BDD](/library/testing/bdd/) steps can always start programs: `agentica test` runs each scenario with `--allow-run`, and `agentica test --allow-run` also lets the programs under test start programs.
 
 - Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds.
 - A program you start belongs to the task that started it and stops when that task ends, however it ends. Programs still running stop when yours ends. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.

@@ -28,7 +28,7 @@ end
   short).
 - Linux x86_64 only for now: elsewhere the program is refused at load with
   `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
-- Allowed by default, and bypasses `--allow-run`; `--deny-native` refuses
+- Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses
   any program with an extern function at load (`RUNTIME-NATIVE-DENIED`, exit 2).
 - Functions count as `def`s for the declaration order. A wrong signature is
   undefined behavior in C: copy it from the C header.

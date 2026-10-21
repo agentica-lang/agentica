@@ -366,7 +366,7 @@ builtin Process.send forms=1
 builtin Process.send_bytes forms=1
   Process.send_bytes(p: Process, bytes: List[Int], timeout_ms: Int) -> Result[Void] shape=(Opaque(Process), List(Int), Int) -> Result(Void) rule=Plain impl="Process.send_bytes" effects=["subprocess"] desc="Send at most 1 MiB of bytes 0..255 and flush."
 builtin Process.spawn forms=1
-  Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process] shape=(String, List(String), Int) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn" effects=["subprocess"] desc="Start an executable with literal arguments; requires --allow-run."
+  Process.spawn(command: String, args: List[String], timeout_ms: Int) -> Result[Process] shape=(String, List(String), Int) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn" effects=["subprocess"] desc="Start an executable with literal arguments; --deny-run makes it an error."
 builtin Process.spawn_captured forms=1
   Process.spawn_captured(command: String, args: List[String], dir: String, timeout_ms: Int) -> Result[Process] shape=(String, List(String), String, Int) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_captured" effects=["subprocess"] desc="Start an executable in dir with stdout and stderr kept in 1 MiB buffers; VM only."
 builtin Process.spawn_channel forms=1

@@ -32,8 +32,9 @@ check a signature with `agentica help NAME`.
 5. `agentica help NAME` prints a signature (unknown name: exit 2); `agentica
    doc PATH` prints the exported API of a file or `std/` module. Questions about
    code, without reading it: `agentica outline`, `type-at`, `refs` and `symbol`
-   (`references/queries.md`). Run flags: `--allow-run` (`Process.spawn`),
-   `--deny-native` (refuse `extern`), `--seed N`, `--max-steps N`.
+   (`references/queries.md`). Run flags: `--deny-run` (`Process`
+   starts return an error; implies `--deny-native`), `--deny-native` (refuse
+   `extern`), `--seed N`, `--max-steps N`.
 
 ## Cheat sheet
 

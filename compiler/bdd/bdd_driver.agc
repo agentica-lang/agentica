@@ -138,7 +138,6 @@ def prepare_and_run(
     empty_path: empty_path(given),
     empty_message: empty_message(given),
     style: options.style,
-    allow_run: options.allow_run,
     seeded: options.seeded,
     seed: options.seed,
     only: options.only,

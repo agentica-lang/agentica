@@ -335,10 +335,9 @@ def front_end_command(self_path, *words):
     """The command that runs the front end of the binary as an ordinary program, with `self_path` as the binary it
     starts again for `agentica test`: a test can put a script there and see what the driver does with the answers.
 
-    Without --front-end the program has no hand-off and no embedded std/ sources: it reads them from stdlib/, and it
-    needs --allow-run because `test` starts processes (the binary does not: its front end has it)."""
+    Without --front-end the program has no hand-off and no embedded std/ sources: it reads them from stdlib/."""
     require(STAGE2.is_file(), "the front end is not built (%s): run make" % STAGE2)
-    return [*vm_command(), "--allow-run", "--", STAGE2, "--version", agentica_version(), "--stdlib", ROOT / "stdlib",
+    return [*vm_command(), "--", STAGE2, "--version", agentica_version(), "--stdlib", ROOT / "stdlib",
             "--self", self_path, "--", *words]
 
 

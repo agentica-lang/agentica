@@ -536,8 +536,8 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       if (!once(name, json ? &seen_json : &seen_ai, arg)) return AGC_LAUNCH_BAD;
       options->style = json ? AGC_STYLE_JSON : AGC_STYLE_AI;
       i++;
-    } else if (strcmp(arg, "--allow-run") == 0) {
-      if (!once(name, &options->allow_run, arg)) return AGC_LAUNCH_BAD;
+    } else if (strcmp(arg, "--deny-run") == 0) {
+      if (!once(name, &options->deny_run, arg)) return AGC_LAUNCH_BAD;
       i++;
     } else if (strcmp(arg, "--deny-native") == 0) {
       if (!once(name, &options->deny_native, arg)) return AGC_LAUNCH_BAD;
@@ -587,6 +587,8 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       break;
     }
   }
+  /* Native code can call libc and start a program without Process, so any --deny-* flag turns on --deny-native. */
+  if (options->deny_run) options->deny_native = true;
   *at = i;
   return AGC_LAUNCH_OK;
 }
@@ -620,7 +622,7 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->trace = launch->trace;
   rt->style = options->style;
   rt->flush_timeout = options->flush_timeout;
-  rt->allow_run = options->allow_run;
+  rt->deny_run = options->deny_run;
   rt->drop_uring_env = launch->own_uring_env;
   rt->inherited = launch->inherited;
   rt->front_end = front_end;

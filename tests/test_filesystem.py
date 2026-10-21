@@ -104,7 +104,7 @@ def run_program(new_dir):
 
 @pytest.fixture
 def run_vm_bounded(request):
-    """Compile `text`, run the VM on it with --allow-run, and return (exit code, stdout, stderr).
+    """Compile `text`, run the VM on it, and return (exit code, stdout, stderr).
 
     The VM must end within 10 s. `peer` runs it under fixtures/stop-peer.py in that mode;
     `keep_stdin` leaves stdin open until the VM has ended. stdout stays a pipe, which a reader thread drains,
@@ -115,7 +115,7 @@ def run_vm_bounded(request):
         source = root / "program.agc"
         source.write_text(text.replace("@FD_ROOT@", FD_ROOT), encoding="utf-8")
         bytecode = compile_agc(source, root / "program.agcb")
-        command = [*vm_command(), "--allow-run", "--", bytecode, *arguments]
+        command = [*vm_command(), "--", bytecode, *arguments]
         if peer:
             command = [PYTHON, STOP_PEER, peer, *command]
         extra = {"UV_THREADPOOL_SIZE": "1"} if one_pool_thread else {}

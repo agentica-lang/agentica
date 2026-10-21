@@ -169,7 +169,7 @@ handed over: `agc_io_kind`, `agc_close_fn` and `agc_release_fn` of a resource,
 name.
 
 Services may still read fields of the runtime structs: the settings in `vm->rt`
-(`trace`, `cwd`, `no_files`, `allow_run`, `program`, ...), their own resources,
+(`trace`, `cwd`, `no_files`, `deny_run`, `program`, ...), their own resources,
 and their per-task fields (`cursor` for `strings.c`, `random` for `numbers.c`,
 `test` and `test_run` for `testing.c`). A service does not walk or change the
 scheduler's lists; V6 is the one exception left.
@@ -377,7 +377,7 @@ reason.
   - **Where:** `port.h` (`struct agc_task`, `struct agc_vm`, `agc_runtime`),
     `task.c`
   - **What:** service state in core structs (`agc_task`'s `test`, `note` and
-    `test_run`, `agc_vm.process_guard`) and the settings `allow_run`,
+    `test_run`, `agc_vm.process_guard`) and the settings `deny_run`,
     `drop_uring_env` and `no_files`
   - **Fix:** **Accepted**: opaque pointers and settings, no calls. The driver
     sets the settings

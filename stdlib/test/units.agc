@@ -369,7 +369,6 @@ end
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]
   return [
     "run",
-    "--allow-run",
     "--json",
     "--max-steps",
     steps.to_s,

@@ -509,12 +509,12 @@ all entries as a JSON array sorted by name); `help` alone (exit 0) prints the
 command summary and the builtin namespaces. `--help` and `help` share one text.
 Help and test handle trailing style options; options on other commands precede
 the command/file so program args stay intact. --max-steps accepts a positive
-integer and reaches only the VM. --allow-run enables Process.spawn and, for
-`test`, reaches step handlers and programs under test; check and help need no
-flag. `tests/fixtures/cli/forms.json` freezes the forms
-(`tests/test_cli_forms.py`). `doc` and the query commands (`outline`,
-`type-at`, `refs`) are `cli_doc.agc` and `cli_query.agc`: the words after the
-command are read by hand (`query/query_options.agc`), and `--stdin FILE`
-(`type-at --stdin FILE:LINE:COL`, likewise `refs`) goes through `with_buffer` in
-`cli.agc`, as `check --stdin` does. `reject` takes the exit status: a `QUERY-`
-problem exits 2, any other 1.
+integer and reaches only the VM. --deny-run makes Process starts return an
+error, implies --deny-native, and is refused by `test`.
+`tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
+`doc` and the query commands (`outline`, `type-at`, `refs`) are `cli_doc.agc`
+and `cli_query.agc`: the words after the command are read by hand
+(`query/query_options.agc`), and `--stdin FILE` (`type-at --stdin
+FILE:LINE:COL`, likewise `refs`) goes through `with_buffer` in `cli.agc`, as
+`check --stdin` does. `reject` takes the exit status: a `QUERY-` problem exits
+2, any other 1.

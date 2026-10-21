@@ -13,6 +13,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `extern` blocks call C functions of native libraries, with `C.Int`,
   `C.Int64`, `C.Double`, `C.Bool` and `C.String` (Linux x86_64 for now);
   `--deny-native` refuses such a program at load.
+- `--deny-run` makes every `Process` start return an error, and turns on
+  `--deny-native` too.
+
+### Removed
+
+- **Breaking:** `--allow-run` is gone: programs may start processes by
+  default.
 
 ## [0.8.1] - 2026-10-22
 

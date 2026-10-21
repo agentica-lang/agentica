@@ -23,7 +23,7 @@ async function finish(peer, started, extra = {}) {
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function serve(vm, bytecode) {
-  const peer = launch([vm, "run", "--allow-run", "--", bytecode, "serve"]);
+  const peer = launch([vm, "run", "--", bytecode, "serve"]);
   const started = Date.now();
   const replies = [];
   await peer.send("one\n");
@@ -44,7 +44,7 @@ async function serve(vm, bytecode) {
 }
 
 function held(vm, bytecode, mode, options) {
-  const peer = launch([vm, "run", "--allow-run", "--", bytecode, mode], options);
+  const peer = launch([vm, "run", "--", bytecode, mode], options);
   return finish(peer, Date.now());
 }
 

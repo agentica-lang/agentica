@@ -41,7 +41,7 @@ def main() -> Void
   elsif words[0] == "bad-word"
     shown_void(FrontEnd.hand_off([1], [], ["a#{String.from_code(0)}b"]))
   elsif words[0] == "too-many-options"
-    shown_void(FrontEnd.hand_off([1], List.repeat("--allow-run", 65), []))
+    shown_void(FrontEnd.hand_off([1], List.repeat("--deny-run", 65), []))
   elsif words[0] == "too-many-arguments"
     shown_void(FrontEnd.hand_off([1], [], List.repeat("a", 1048576).push("a")))
   end

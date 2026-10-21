@@ -3,8 +3,8 @@
   "code": "RUNTIME-UNWRAP-ERROR",
   "steps": 27,
   "stdout": [
-    "error(\"process: spawning requires --allow-run\")",
-    "error(\"process: spawning requires --allow-run\")",
+    "error(\"denied: --deny-run turns off starting programs\")",
+    "error(\"denied: --deny-run turns off starting programs\")",
     "false",
     ""
   ],
