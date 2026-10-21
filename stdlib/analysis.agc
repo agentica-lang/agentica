@@ -1,16 +1,18 @@
-## Asks the questions of `agentica check`, `outline` and `type-at` from a program, and gets the answers as data.
+## Asks the questions of `agentica check`, `outline`, `type-at`, `symbol` and `refs` from a program, and gets the
+## answers as data.
 ##
 ## Import it with `import Analysis from "std/analysis"`. A `Session` holds the working folder (the disk) and the text
 ## of the files an editor has open and not saved: `Analysis.update` puts a buffer in a new session, `Analysis.close`
 ## takes it out, and a question reads the files of the disk except those with a buffer. The answers are plain structs,
 ## with no enum: the shapes of the `--json` forms (an absent text is `""`, and an absent definition is an empty list).
-## The command line runs the same code, so `Analysis.outline_json` and `Analysis.type_at_json` give byte for byte what
-## `agentica --json outline` and `type-at` print, and `Analysis.diagnostic_json` what `--json check` prints on stderr.
+## The command line runs the same code, so `Analysis.outline_json`, `Analysis.type_at_json`, `Analysis.symbols_json`
+## and `Analysis.refs_json` give byte for byte what `agentica --json outline`, `type-at`, `symbol` and `refs` print,
+## and `Analysis.diagnostic_json` what `--json check` prints on stderr.
 ##
-## `outline` and `type_at` return a `Result`: its error message is the diagnostic as one JSON object, the form of
-## `--json`, and `Analysis.diagnostic` reads it back, so `try` works. The codes are those of the command line (`LEX-`,
-## `PARSE-`, `CHECK-`, `PKG-`, and `QUERY-USAGE` for a file that cannot be read or a position below line 1 or column 1,
-## `QUERY-NO-EXPRESSION`).
+## `outline`, `type_at`, `symbol` and `refs` return a `Result`: its error message is the diagnostic as one JSON object,
+## the form of `--json`, and `Analysis.diagnostic` reads it back, so `try` works. The codes are those of the command
+## line (`LEX-`, `PARSE-`, `CHECK-`, `PKG-`, and `QUERY-USAGE` for a file that cannot be read or a position below line
+## 1 or column 1, `QUERY-NO-EXPRESSION`, `QUERY-NOT-FOUND`).
 ##
 ## The compiler is part of the program that imports this module (as the private `std/internal/compiler`), so a program
 ## that imports it pays the compile time of the compiler's core once. The checker and the catalog of builtins are the
@@ -26,10 +28,13 @@ import DiagnosticRead from "std/internal/compiler/diagnostics/diagnostic_read"
 import Env from "std/internal/compiler/modules/link_env"
 import Host from "std/internal/compiler/io/host"
 import Model from "std/internal/compiler/analysis/model"
+import Overlay from "std/internal/compiler/modules/overlay"
 import OutlineJson from "std/internal/compiler/query/outline_json"
 import Problems from "std/internal/compiler/diagnostics/problem"
 import QueryPosition from "std/internal/compiler/query/query_position"
+import RefsJson from "std/internal/compiler/query/refs_json"
 import Sessions from "std/internal/compiler/analysis/session"
+import SymbolJson from "std/internal/compiler/query/symbol_json"
 import TypeAtJson from "std/internal/compiler/query/type_at_json"
 
 ## A place in a text: line and column count from 1, in characters.
@@ -76,6 +81,24 @@ export type TypeAt = Model.TypeAt
 
 ## The answer of `check`.
 export type Checked = Model.Checked
+
+## One declaration that `symbol` found.
+export type Symbol = Model.Symbol
+
+## A file of a `symbol` query that was left out, with the first problem it hit.
+export type Skipped = Model.Skipped
+
+## The answer of `symbol`.
+export type Symbols = Model.Symbols
+
+## The declaration that `refs` found.
+export type Declaration = Model.Declaration
+
+## One use of a declaration.
+export type Reference = Model.Reference
+
+## The answer of `refs`.
+export type Refs = Model.Refs
 
 ## What a session reads: the disk of the working folder, except the files of `buffers`, which map a path to the text
 ## that stands in for it (an unsaved buffer), whether or not the disk has the file.
@@ -147,7 +170,41 @@ export def type_at(session: Session, path: String, line: Int, column: Int) -> Re
   end
 end
 
-## Reads back the diagnostic that is the message of an error of `outline` or `type_at`.
+## Returns where `name` is declared in the modules linked from the files and folders of `paths`, as `agentica symbol`
+## answers (`.` when `paths` is empty). A folder means every `*.agc` file below it. Each file is linked on its own, and
+## the ones that do not link are in `skipped`. The files with a buffer in the session are searched first, as `--stdin`
+## does, whether or not they are in `paths`, and a path of `paths` that a buffer stands in for is read from the buffer.
+## An empty `name` or a path that names no `*.agc` file is `QUERY-USAGE`, a name that nothing declares is
+## `QUERY-NOT-FOUND`, and when no file links the error is the first problem of the first one.
+export def symbol(session: Session, name: String, paths: List[String]) -> Result[Symbols]
+  settings = Sessions.asking(session.internal)
+  held = session.internal.buffers.map do |buffer: Overlay.Buffer| buffer.names.typed end
+  searched = paths
+  if searched.size == 0 and held.size > 0
+    searched = ["."]
+  end
+  case Core.symbol(settings, name, held.concat(searched), "", "")
+    Core.Found.Done(found) -> return ok(found)
+    Core.Found.Rejected(problem) -> return error(failure(named_in(settings, problem, held)))
+  end
+end
+
+## Returns the declaration of the name at the position `line`, `column` (from 1, in characters) of the file `path` and
+## every reference to it, as `agentica refs` answers: in that file, linked and checked as for `type_at`, and in what it
+## imports; a file that only imports it is not seen. A position that names nothing is `QUERY-NO-EXPRESSION`.
+export def refs(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
+  settings = Sessions.asking(session.internal)
+  if path == "" or line < 1 or column < 1
+    return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
+  end
+  case Core.refs(settings, QueryPosition.Asked(file: path, line: line, column: column))
+    Core.Referenced.Done(found) -> return ok(found)
+    Core.Referenced.Unreadable -> return error(failure(Core.unreadable(path)))
+    Core.Referenced.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+  end
+end
+
+## Reads back the diagnostic that is the message of an error of `outline`, `type_at`, `symbol` or `refs`.
 export def diagnostic(message: String) -> Result[Diagnostic]
   return DiagnosticRead.read(message)
 end
@@ -160,6 +217,16 @@ end
 ## Returns the JSON that `agentica --json type-at` prints, without its final line feed.
 export def type_at_json(found: TypeAt) -> Json
   return TypeAtJson.json(found)
+end
+
+## Returns the JSON that `agentica --json symbol` prints, without its final line feed.
+export def symbols_json(found: Symbols) -> Json
+  return SymbolJson.json(found)
+end
+
+## Returns the JSON that `agentica --json refs` prints, without its final line feed.
+export def refs_json(found: Refs) -> Json
+  return RefsJson.json(found)
 end
 
 ## Returns the JSON that `agentica --json check` prints on stderr for a problem.
@@ -175,6 +242,16 @@ end
 
 def std_source(name: String) -> Result[String]
   return Std.source(name)
+end
+
+# The problem with the file of a buffer named as the session was given it, as the command line names the `--stdin`
+# file.
+def named_in(settings: Env.Settings, problem: Problems.Problem, buffers: List[String]) -> Problems.Problem
+  shown = problem
+  for typed in buffers
+    shown = Core.named(settings, shown, typed)
+  end
+  return shown
 end
 
 # The message of the error of a problem: the diagnostic as JSON text.

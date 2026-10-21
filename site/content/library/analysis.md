@@ -1,10 +1,10 @@
 ---
 title: Code analysis (std)
 weight: 8
-description: The std/analysis module, which answers the questions of check, outline and type-at from a program.
+description: The std/analysis module, which answers the questions of check, outline, type-at, symbol and refs from a program.
 ---
 
-`std/analysis` asks the compiler about code from inside a program: `import Analysis from "std/analysis"`. It answers the questions of `agentica check`, `agentica outline` and `agentica type-at`, and gives the answers as plain structs. The command line runs the same code, so `Analysis.outline_json` and `Analysis.type_at_json` give byte for byte what `agentica --json outline` and `type-at` print, and `Analysis.diagnostic_json` what `--json check` prints on stderr.
+`std/analysis` asks the compiler about code from inside a program: `import Analysis from "std/analysis"`. It answers the questions of `agentica check`, `agentica outline`, `agentica type-at`, `agentica symbol` and `agentica refs`, and gives the answers as plain structs. The command line runs the same code, so `Analysis.outline_json`, `Analysis.type_at_json`, `Analysis.symbols_json` and `Analysis.refs_json` give byte for byte what `agentica --json outline`, `type-at`, `symbol` and `refs` print, and `Analysis.diagnostic_json` what `--json check` prints on stderr.
 
 ```ruby
 Analysis.workspace() -> Analysis.Workspace
@@ -14,9 +14,13 @@ Analysis.close(session: Analysis.Session, path: String) -> Analysis.Session
 Analysis.check(session: Analysis.Session, path: String) -> Analysis.Checked
 Analysis.outline(session: Analysis.Session, path: String) -> Result[Analysis.Outline]
 Analysis.type_at(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
+Analysis.symbol(session: Analysis.Session, name: String, paths: List[String]) -> Result[Analysis.Symbols]
+Analysis.refs(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
 Analysis.outline_json(found: Analysis.Outline) -> Json
 Analysis.type_at_json(found: Analysis.TypeAt) -> Json
+Analysis.symbols_json(found: Analysis.Symbols) -> Json
+Analysis.refs_json(found: Analysis.Refs) -> Json
 Analysis.diagnostic_json(found: Analysis.Diagnostic) -> Json
 ```
 
@@ -33,10 +37,12 @@ The answers are structs of strings, ints, bools and lists, with no enum: the sha
 - `Analysis.check` links and checks the file as `agentica check` does. `Checked.passed` is true when the program has no problem, and `diagnostics` holds the first problem, if any.
 - `Analysis.outline` lists what the file declares, as `agentica outline` does. The file is only parsed.
 - `Analysis.type_at` gives the type and the definition at the position, as `agentica type-at` does. Line and column count from 1.
+- `Analysis.symbol` finds where `name` is declared in the files and folders of `paths` (`.` when the list is empty), as `agentica symbol` does: a folder means every `*.agc` file below it, each file is linked on its own, and the ones that do not link are listed in `Symbols.skipped`. The file of each `Symbol` is `module` ("" for a builtin) and `help` is the JSON of `agentica help NAME --json` for a builtin, JSON null for the others. The files that have a buffer in the session are searched too, first, as `--stdin FILE` does, whether or not `paths` names them.
+- `Analysis.refs` gives the declaration of the name at the position and every reference to it, as `agentica refs` does: in the file (linked and checked as for `type_at`) and what it imports; a file that only imports it is not seen. `Refs.definition` is empty for a builtin, which `Refs.builtin` names ("" for anything else), and a `Reference` is the `range` of the name in its `file`.
 
 ## Errors
 
-`outline` and `type_at` return a `Result` whose error message is the diagnostic as one JSON object, the form of `--json`, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`, `QUERY-NO-EXPRESSION` for a position that is on no expression, and `QUERY-USAGE` for a file that cannot be read or a position below line 1 or column 1; that diagnostic names the file.
+`outline`, `type_at`, `symbol` and `refs` return a `Result` whose error message is the diagnostic as one JSON object, the form of `--json`, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`, `QUERY-NO-EXPRESSION` for a position that is on no expression, `QUERY-NOT-FOUND` for a `symbol` name that nothing declares, and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For a file of `outline`, `type_at` and `refs` that diagnostic names the file, and it has no usage `help`, which is the command line's.
 
 ```agentica {mode="check"}
 import Analysis from "std/analysis"

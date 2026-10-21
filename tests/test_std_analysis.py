@@ -1,8 +1,8 @@
-"""`std/analysis` (issue #524): the library answers the questions of `check`, `outline` and `type-at`, and the command
-line runs the same code, so the answers are the same bytes. The cases run a driver program (tests/fixtures/analysis/
-driver.agc) that calls the library, and the CLI with `--json` on the same files, and compare both streams. The driver is
-compiled once for the module (it compiles the core of the front end with it); each case is a run of its bytecode. That
-cost bounds the breadth: thirteen questions of the spec tests of `outline` and `type-at` stand for them, not every one."""
+"""`std/analysis` (issue #524): the library answers the questions of `check`, `outline`, `type-at`, `symbol` and `refs`,
+and the command line runs the same code, so the answers are the same bytes. The cases run a driver program (tests/
+fixtures/analysis/driver.agc) that calls the library, and the CLI with `--json` on the same files, and compare both
+streams. The driver is compiled once for the module (it compiles the core of the front end with it); each case is a run
+of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
 import json
 
 import pytest
@@ -24,6 +24,10 @@ USES_BAD = 'import Bad from "bad_util"\n\ndef run() -> Int\n  return Bad.twice(2
 # quote with a character outside ASCII in the message.
 LABELLED = 'def main() -> Void\n  puts("tab\\there \\\\")\n  puts(1 + "a")\nend\n'
 NON_ASCII = 'def main() -> Void\n  puts(\u00f1and\u00fa)\nend\n'
+# Unsaved text that `symbol` and `refs` read in place of (or beside) the disk: a module the disk lacks, and a main.agc
+# that calls `twice` twice.
+FRESH = "export def fresh(n: Int) -> Int\n  return n\nend\n"
+TWICE_TWICE = 'import Util from "util"\n\ndef run() -> Int\n  return Util.twice(2) + Util.twice(3)\nend\n'
 MISSING_IMPORT = 'import Nowhere from "nowhere"\n\ndef main() -> Void\n  puts("x")\nend\n'
 
 
@@ -62,8 +66,10 @@ def position(file, source, needle, inside=0):
 
 def asked(project, command, file, *rest):
     """The command line's answer to the question that the driver asks with the same words."""
-    if command == "type-at":
+    if command in ("type-at", "refs"):
         return command_line(project, command, ":".join([file, *rest]))
+    if command == "symbol":
+        return command_line(project, command, file, *rest)
     return command_line(project, command, file)
 
 
@@ -82,6 +88,16 @@ PARITY = [
     ("type-at", *position("orders.agc", ORDERS, "1\nend")),
     ("type-at", "orders.agc", "1", "1"),
     ("type-at", *position("type_error.agc", TYPE_ERROR, "x: Int")),
+    ("symbol", "make", "models.agc", "orders.agc"),
+    ("symbol", "User", "models.agc"),
+    ("symbol", "twice"),
+    ("symbol", "make", "models.agc", "parse_error.agc"),
+    ("symbol", "nothing", "models.agc"),
+    ("symbol", "File.read", "models.agc"),
+    ("refs", *position("orders.agc", ORDERS, "Models.make", 8)),
+    ("refs", *position("orders.agc", ORDERS, "user.age", 5)),
+    ("refs", "orders.agc", "1", "1"),
+    ("refs", "parse_error.agc", "1", "1"),
 ]
 
 
@@ -95,10 +111,16 @@ def test_the_library_answers_with_the_bytes_the_command_line_prints(driver, proj
 
 
 def test_an_unreadable_file_or_a_bad_position_is_a_query_usage_diagnostic_in_that_file(driver, project):
-    for words in [("outline", "nope.agc"), ("type-at", "nope.agc", "1", "1"), ("type-at", "main.agc", "0", "3")]:
+    bad = [("outline", "nope.agc"), ("type-at", "nope.agc", "1", "1"), ("type-at", "main.agc", "0", "3")]
+    bad += [("refs", "nope.agc", "1", "1"), ("refs", "main.agc", "3", "0")]
+    for words in bad:
         stdout, stderr = library(driver, project, *words)
         found = json.loads(stderr)
         assert (stdout, found["code"], found["file"]) == ("", "QUERY-USAGE", words[1])
+    # A symbol query with a bad name or path names no file, and the library gives no usage help.
+    for words in [("symbol", "make", "nope.agc"), ("symbol", "", "models.agc")]:
+        stdout, stderr = library(driver, project, *words)
+        assert (stdout, json.loads(stderr)["code"]) == ("", "QUERY-USAGE")
     # `check` does not stop at a missing file: it answers that the program does not pass.
     stdout, stderr = library(driver, project, "check", "nope.agc")
     assert (stdout, json.loads(stderr)["code"]) == ("", "QUERY-USAGE")
@@ -159,6 +181,28 @@ def test_a_buffer_gives_the_answers_that_stdin_gives_and_close_gives_the_disk_ba
     assert library(driver, project, "update", "main.agc", "unsaved.agc", "check", "main.agc")[1] != ""
     closed = library(driver, project, "update", "main.agc", "unsaved.agc", "close", "main.agc", "check", "main.agc")
     assert closed == ('{"ok":true}\n', "")
+
+
+def test_symbol_and_refs_read_the_buffers_as_stdin_does(driver, project):
+    (project / "fresh.agc").write_text(FRESH, encoding="utf-8")
+    (project / "twice_twice.agc").write_text(TWICE_TWICE, encoding="utf-8")
+    # A buffer of a module the disk lacks is searched first, with the paths or with `.`.
+    for paths in [("models.agc",), ()]:
+        expected = command_line(project, "symbol", "fresh", *paths, "--stdin", "fresh_buffer.agc", stdin=FRESH)
+        assert json.loads(expected[0])["matches"][0]["module"] == "fresh_buffer.agc"
+        got = library(driver, project, "buffer", "fresh_buffer.agc", "fresh.agc", "symbol", "fresh", *paths)
+        assert got == expected
+        later = library(driver, project, "update", "fresh_buffer.agc", "fresh.agc", "symbol", "fresh", *paths)
+        assert later == expected
+    # A position of an unsaved file: the buffer is the file whose imports are followed.
+    file, line, column = position("main.agc", TWICE_TWICE, "Util.twice", 5)
+    expected = command_line(project, "refs", "--stdin", f"{file}:{line}:{column}", stdin=TWICE_TWICE)
+    assert len(json.loads(expected[0])["references"]) == 2
+    assert library(driver, project, "buffer", file, "twice_twice.agc", "refs", file, line, column) == expected
+    # `close` gives the disk back, which has one call of `twice`.
+    closed = library(driver, project, "update", file, "twice_twice.agc", "close", file, "refs", file, line, column)
+    assert closed == command_line(project, "refs", f"{file}:{line}:{column}")
+    assert closed != expected
 
 
 def test_several_buffers_are_one_program_as_if_the_disk_held_them(driver, project):
