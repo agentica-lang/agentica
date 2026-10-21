@@ -13,8 +13,8 @@ a string, a heredoc, a comment and the builtin data rows (`"File.open"` in built
   `System`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`, `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry`),
   and may not call the bare `puts`. The only `Path` function it may use is `Path.join`, which is string work; every
   other `Path` function (present or future) is forbidden. `&File.open` (a function value) is a use too.
-- Imports: a core file may not import from `io/`, `app/` or `bdd/`, nor from a `std/` module that is not on
-  PURE_STD_MODULES. A new std module is forbidden until someone reads it and lists it. A file of
+- Imports: a core file may not import from `io/`, `app/`, `bdd/` or `embedded/`, nor from a `std/` module that is not
+  on PURE_STD_MODULES. A new std module is forbidden until someone reads it and lists it. A file of
   `syntax/` may not import a later stage (LATER_THAN_SYNTAX); it may import `diagnostics/`, the shared diagnostic data.
   A file of `diagnostics/` may import only its own folder and `syntax/source` (DIAGNOSTICS_MAY_IMPORT). A file of
   `modules/` or `packages/` may not import `check/`, `lower/` or `bytecode/`. A file of `catalog/` may import only
@@ -37,6 +37,8 @@ COMPILER = ROOT / "compiler"
 NOT_CORE_FOLDERS = {"io", "app", "bdd", "embedded"}
 IO_FOLDERS = {"io"}
 APP_FOLDERS = {"app", "bdd"}
+# The programs the binary embeds import impure std/ modules, so no stage may import them. Adapters may (none does today).
+EMBEDDED_FOLDERS = {"embedded"}
 LEXER = COMPILER / "syntax" / "lex.agc"
 # The stages after syntax/. The first stage cannot take a later one as input (syntax/ast once imported check/types; the
 # Type enum now lives in syntax/types.agc). diagnostics/ is shared data, not a stage, so syntax/ may import it.
@@ -55,7 +57,9 @@ LATER_THAN_MODULES = {"check", "lower", "bytecode"}
 CATALOG_MAY_IMPORT = {"syntax", "catalog"}
 CATALOG_ONLY = "but catalog/ may import only syntax/ and itself"
 
-OUTSIDE = "an adapter (io/ is for entry programs only, app/ and bdd/ never) or a file outside compiler/"
+OUTSIDE = (
+    "an adapter (io/ is for entry programs only, app/ and bdd/ never), an embedded program or a file outside compiler/"
+)
 FORBIDDEN_MODULES = {
     "File", "Dir", "Process", "System", "FrontEnd", "IO", "TCP", "TLS", "HttpWire", "Time", "Random", "Task", "Channel",
     "Profile", "LogRegistry",
@@ -148,7 +152,7 @@ def imported_paths(tokens):
 
 
 def forbidden_imports(path, tokens, entry):
-    """Why each import of a core file is not allowed: it reaches io/, app/, bdd/ or an impure std/ module."""
+    """Why each import of a core file is not allowed: it reaches io/, app/, bdd/, embedded/ or an impure std/ module."""
     found = []
     for target in imported_paths(tokens):
         if target.startswith("std/"):
@@ -160,7 +164,7 @@ def forbidden_imports(path, tokens, entry):
         folder = parts[1] if len(parts) > 2 and parts[0] == "compiler" else None
         if folder in IO_FOLDERS and entry:
             continue
-        if folder in IO_FOLDERS | APP_FOLDERS or folder is None:
+        if folder in IO_FOLDERS | APP_FOLDERS | EMBEDDED_FOLDERS or folder is None:
             found.append("%s imports %s, %s" % (path, target, OUTSIDE))
         elif path.startswith("compiler/syntax/") and folder in LATER_THAN_SYNTAX:
             found.append("%s imports %s, a later stage" % (path, target))
@@ -268,6 +272,18 @@ def test_the_rule_reads_imports(tmp_path):
     assert [line.split(" imports ")[1].split(",")[0] for line in offenders({entry: tokens})] == [
         "../app/pipeline", "../bdd/bdd_driver", "std/http", "../check/checker",
     ]
+
+
+def test_core_never_imports_embedded(tmp_path):
+    (tmp_path / "probe.agc").write_text(
+        'import Runner from "../embedded/bdd_runner"\n'
+        'import Types from "../syntax/types"\n',
+        encoding="utf-8",
+    )
+    tokens = token_kinds(["probe.agc"], tmp_path)["probe.agc"]
+    # Every core folder is refused, and so is an entry program, which may import io/ and nothing else outside.
+    for path in ("compiler/syntax/probe.agc", "compiler/check/probe.agc", "compiler/lower/lower.agc"):
+        assert offenders({path: tokens}) == ["%s imports ../embedded/bdd_runner, %s" % (path, OUTSIDE)], path
 
 
 def test_diagnostics_imports_no_stage(tmp_path):
