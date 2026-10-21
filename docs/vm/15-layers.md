@@ -235,7 +235,7 @@ the push to the global run queue, and the requests to the I/O thread's inbox are
 start, cancel, stop or extend its timer, release and the libuv steps of a job's
 halves; which port function posts each is open
 ([§16.11](16-architecture.md#1611-open)). With N = 1, as built, they are direct
-calls on one thread ([§16.9](16-architecture.md#169-as-built-n--1)). A service
+calls on one thread ([§16.9](16-architecture.md#169-as-built)). A service
 reaches the queues only through the port. The libuv code of a service (§15.1,
 "libuv is not wrapped") would run in the start step of the request, on the I/O
 thread (§16.9).

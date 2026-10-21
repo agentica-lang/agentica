@@ -271,13 +271,16 @@ def main() -> Void
     end
   end
   Task.await(coordinator)
-  puts(totals)
+  totals.keys.sort.each do |name|
+    puts("#{name}: #{totals.get(name, 0)}")
+  end
 end
 ```
 
 ```output
 b has nothing
-{"a": 60, "c": 30}
+a: 60
+c: 30
 ```
 
 ## State owned by one task

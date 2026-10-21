@@ -393,7 +393,8 @@ arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
 entries across all tasks; N must be a positive integer. Runs are unlimited by
 default, and checking never spends the budget. Exhaustion is
 `RUNTIME-STEP-LIMIT` at the next node. It is not a wall-clock or blocking-I/O
-timeout.
+timeout. Each scheduler takes steps in batches, so with more than one scheduler
+the limit can trip a little late; `--schedulers 1` keeps the exact count.
 
 At the end of a run the VM waits for the buffered writes of every open file, and
 for the output of stdout and stderr that a pipe has not taken yet. The wait is
@@ -407,12 +408,13 @@ not be written"}`).
 
 `agentica --schedulers N program.agc` or the environment variable
 `AGENTICA_SCHEDULERS` sets the number of scheduler threads (an integer from 1 to
-1024; the flag wins over a valid variable, and a bad value in either exits 2,
-before the program starts). The default is one per logical core the process may
-use, at most 1024. With more than one, tasks run in parallel and their order is
-not fixed; `--schedulers 1` runs one task at a time in the order of a single run
-queue. The front end always compiles on one scheduler. `agentica test` refuses
-the flag (exit 2); the VMs it starts read `AGENTICA_SCHEDULERS`.
+1024; the flag wins over a valid variable, an empty variable counts as unset,
+and a bad value in either exits 2, before the program starts). The default is
+one per logical core the process may use, at most 1024. With more than one,
+tasks run in parallel and their order is not fixed; `--schedulers 1` runs one
+task at a time in the order of a single run queue. The front end always compiles
+on one scheduler. `agentica test` refuses the flag (exit 2); the VMs it starts
+read `AGENTICA_SCHEDULERS`.
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user

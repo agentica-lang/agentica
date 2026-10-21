@@ -414,7 +414,7 @@ fd 3 channel of 25c, like Erlang nodes talking to each other.
   signal before a scheduler runs the task. With N = 1 as built there is no hop.
   Measure the latency.
 
-### 16.9 As built: N = 1
+### 16.9 As built
 
 With `--schedulers 1` there is one scheduler and the loop on the same thread;
 by default there is one scheduler per logical core ("Threads" below). The model

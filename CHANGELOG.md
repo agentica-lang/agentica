@@ -19,8 +19,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** programs run on one scheduler per logical core by default, so
   tasks run in parallel and their order is not fixed; use `--schedulers 1` (or
-  `AGENTICA_SCHEDULERS=1`) for the old order. `agentica test` refuses
-  `--schedulers`; the VMs it starts read `AGENTICA_SCHEDULERS`.
+  `AGENTICA_SCHEDULERS=1`) for the old order. `--max-steps` can trip a little
+  late with more than one scheduler. `agentica test` refuses `--schedulers`;
+  the VMs it starts read `AGENTICA_SCHEDULERS`.
 
 ### Fixed
 

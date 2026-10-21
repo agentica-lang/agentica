@@ -410,9 +410,11 @@ def boom(n: Int) -> Int
 end
 
 def main() -> Void
-  task = Task.spawn(&boom, 0)
   puts(Task.unobserved_crash().ok?)
-  Task.sleep(0)
+  task = Task.spawn(&boom, 0)
+  while !Task.unobserved_crash().ok?
+    Task.sleep(1)
+  end
   puts(Task.unobserved_crash().ok?)
   System.exit(0)
 end
