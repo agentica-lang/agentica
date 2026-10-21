@@ -6,24 +6,18 @@ fixed-point and command-line checks live in `platforms.yml`. Windows uses
 MSYS2 UCRT64 GCC to build a native `.exe`; MSYS2 is a build environment, not
 the interpreter of the resulting program.
 
-This first port covers the compiler driver, regular binary files, UTF-8 paths,
-environment lookup and the process primitives needed by stage0. Windows
-special file streams, locks, rename, recursive removal and asynchronous
-standard I/O remain separate follow-up work. `Path.remove` on Windows returns
-an error without deleting anything. The network runs on Windows as on Linux:
-TCP, TLS and `std/http` (client and server) use the same libuv sockets and the
-same C helpers, with no Windows-only HTTP code.
+The network runs on Windows as on Linux: TCP, TLS and `std/http` (client and
+server) use the same libuv sockets and the same C helpers, with no Windows-only
+HTTP code.
 
-The release (`release.yml`) builds one native archive per system on a runner of
-that system (11): Linux x86-64 against glibc 2.28, macOS Intel and Apple silicon
-with `MACOSX_DEPLOYMENT_TARGET=12.0`, and Windows x86-64. Every binary links
-libgc, libuv, yyjson, picohttpparser and OpenSSL statically
-(`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`). The system libraries that
-remain are the C library of each system: glibc (at most 2.28 symbols), libSystem
-on macOS, and on Windows the system DLLs with the Universal C Runtime, which is
-part of Windows 10. `tools/release-check.sh` reads the real format of each
-binary (ELF, Mach-O, PE) and fails on a wrong architecture, a library outside
-that list or missing hardening.
+The release (`release.yml`, 11) builds one native archive per system on a
+runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser
+and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`).
+The system libraries that remain are the C library of each system: glibc (at
+most 2.28 symbols), libSystem on macOS, and on Windows the system DLLs with the
+Universal C Runtime, which is part of Windows 10. `tools/release-check.sh`
+reads the real format of each binary (ELF, Mach-O, PE) and fails on a wrong
+architecture, a library outside that list or missing hardening.
 
 - **Dependency:** C compiler
   - **Choice:** C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks
@@ -38,8 +32,7 @@ that list or missing hardening.
     `AGENTICA_GC=vendored` (the release, the GC-stress build, and the default
     off Linux) `make` compiles its single-file amalgamation (`extra/gc.c`) and
     links it statically. The Linux default, `system`, links the distro's libgc
-    8.2.0 or newer dynamically (`pkg-config bdw-gc`, Debian: `libgc-dev`), as
-    OpenSSL does (11).
+    8.2.0 or newer dynamically, as OpenSSL does (11).
 
 - **Dependency:** yyjson
   - **Choice:** Vendored submodule `vm/third_party/yyjson` (MIT), tag 0.13.0.
@@ -73,9 +66,6 @@ that list or missing hardening.
     OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes
     building OpenSSL. Only `vm/tls_openssl.c` includes OpenSSL headers (10.3).
 
-Every submodule is pinned to a release tag and upgraded only by a reviewed PR
-that bumps it (11).
-
 **License rule.** Vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib, Apache-2.0 or similarly permissive. No copyleft. Its license
 file stays in the submodule and ships with releases. Where there is no license
@@ -100,9 +90,9 @@ and `NOTICE` with the third-party licenses.
 - **`vendored`** builds the pinned submodule and links it statically. The
   release uses it, so the shipped VM needs only glibc's own libraries
   (`readelf -d` shows no `libssl` or `libcrypto`) and runs on any glibc 2.28
-  system. Pull request CI jobs use `system`, except that the `test` job links
-  one vendored release-mode binary from a cached OpenSSL, so this path stays
-  tested (11). The same split applies to libgc through `AGENTICA_GC` (11).
+  system. Pull request CI jobs use `system`, except one vendored release-mode
+  binary in the `test` job (11). The same split applies to libgc through
+  `AGENTICA_GC` (11).
 
 The mode is not remembered. Pass `AGENTICA_OPENSSL=vendored` to every make
 command, or export it. `build/vm/flags` records the mode, so switching it
@@ -117,11 +107,10 @@ The vendored build:
   leaks in. The output goes to `configure.log` and `build.log`. It needs Perl 5
   with its core modules (`IPC::Cmd`; on Debian the `perl` package). The rule
   stops with a clear message when they are missing.
-- Options (`OSSL_OPTS` in the Makefile): `no-shared no-tests no-docs no-apps`,
-  no loadable code (`no-module no-dso no-engine`), no legacy provider, no
-  automatic `openssl.cnf` loading, no parts TLS does not use, and
-  `no-deprecated`, so only the 3.x API is visible. The libraries are PIC, so the
-  PIE link works.
+- Options (`OSSL_OPTS` in the Makefile): static libraries only, no loadable
+  code, no legacy provider, no automatic `openssl.cnf` loading, no parts TLS
+  does not use, and `no-deprecated`, so only the 3.x API is visible. The
+  libraries are PIC, so the PIE link works.
 - Flags per mode: the release adds
   `-fstack-protector-strong -D_FORTIFY_SOURCE=2`; the GC-stress mode adds `-g`;
   the sanitizer mode builds with clang and `-g -fno-omit-frame-pointer` but
@@ -135,13 +124,10 @@ The vendored build:
   yyjson, picohttpparser and libuv follow the same model (11). `make vm-openssl`
   builds only the libraries. After editing OpenSSL sources by hand, remove
   `$(VM_BUILD)/openssl`.
-- Headers: `vm/*.c` see the generated headers through `-I`. Only
-  `vm/tls_openssl.c` includes them.
 - Initialization uses `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`.
   The built-in `OPENSSLDIR` points at the build machine, and the VM may end with
   `_exit` while a pool thread still runs. Contexts set TLS 1.2 and security
   level 2 as minimums.
-- `--version` prints `OpenSSL_version(OPENSSL_VERSION_STRING)`.
 - Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`,
   `git add` it and rebuild. The changed `VERSION.dat` changes the stamp and the
   CI keys. Then rerun the TLS, sanitizer and diff tests. Moving to the next LTS

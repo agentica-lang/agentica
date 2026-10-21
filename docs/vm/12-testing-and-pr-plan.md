@@ -8,8 +8,7 @@
   line is parsed for the diagnostic and removed before comparison. Plain and
   `--ai` runs must match exit/stdout; stderr starts with program stderr, with
   only the same diagnostic code (or nothing) after it. See
-  `tests/vm_diff_support.py` and:
-  [vm-tests](../../.agents/skills/agentica-development/references/vm-tests.md).
+  `tests/vm_diff_support.py`.
 - Fixtures may use `.stdin` and `.args`; `process-*` needs `--allow-run`.
   `make goldens` rewrites expected output and refuses timeouts, signals and
   `RUNTIME-INTERNAL`; review intended golden changes.
@@ -23,8 +22,6 @@
   `L`; completion at any limit requires completion at every larger one.
   `make test` defaults to the full sweep; PR CI samples, release and weekly runs
   use the full schedule.
-  Sampled limits and spacing are detailed in:
-  [vm-tests](../../.agents/skills/agentica-development/references/vm-tests.md).
 - `tests/fixtures/vm/step-limited/` covers runaway loops (including dead code,
   blocks and closures), recursion/tail calls, tasks and counting builtins; each
   must stop with `RUNTIME-STEP-LIMIT` without printing past the loop. Linux runs
@@ -32,7 +29,8 @@
   duration.
 - Other coverage includes CLI styles/flags, signals, inherited descriptors,
   invalid UTF-8, long/deep values, extreme Ints and independent network/process
-  peers. C-test ownership and fixture coverage are listed in:
+  peers. C-test ownership, fixture coverage, and sampled sweep limits and
+  spacing are listed in:
   [vm-tests](../../.agents/skills/agentica-development/references/vm-tests.md).
 - Filesystem fixtures get a fresh scratch directory per run and clean it up.
   VM goldens are timing-free: timeout behavior belongs in

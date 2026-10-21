@@ -5,28 +5,25 @@ Each stage returns data or one diagnostic.
 
 ### 3.1 Types from the checker
 
-The checker records the type of every expression in a table (`#:types`, an `eq?`
-hash). The lowerer needs it for field indexes (which depend on the struct type),
+The checker records the type of every expression in a table. The lowerer needs
+it for field indexes (which depend on the struct type),
 for `LIST_GET` or `MAP_GET`, for typed arithmetic and for unary minus. Each
 typed op still checks its tags at run time (4.2).
 
 ### 3.2 Structures
 
-```racket
-(struct ir-program (sources structs enums functions entry span))
-(struct ir-struct (name fields types))    ; linked name; field names in declaration order; JSON field types or #f
-(struct ir-enum (name variants))          ; list of (variant-name . arity)
-(struct ir-function (name params captures slots body span))
-(struct ir-label (id))
-(struct ir-instr (op args spans))         ; args: slots, constants, indexes, label ids
-```
+The IR is data, defined in `compiler/lower/ir.agc`: `Program` (sources,
+structs, enums, functions, entry, globals, span), `Function` (name, params,
+captures, slots, body, span), `Instr` (op, args, imm, name, spans), `StructDef`
+(linked name, field names in declaration order, field types) and `EnumDef`.
 
-- `body` is a flat list of `ir-instr` and `ir-label`. `--dump-ir` prints it.
+- `body` is a flat list of `Instr`; a label is an `Instr` with op `label` and
+  one argument, the label id. `--dump-ir` prints it.
 - Slots are the VM registers, numbered per function: parameters `0..p-1`,
   captures `p..p+c-1`, then locals and temporaries. Temporaries follow a stack
   discipline, so a call's arguments are the highest live slots (4.3).
-- `types` holds a struct's field types when every field is decodable, else `#f`.
-  Only `JSON.decode` and `JSON.schema` read it.
+- A `StructDef` holds its field types only when every field is decodable
+  (`decodable`). Only `JSON.decode` and `JSON.schema` read them.
 - Each instruction has a list of spans: the span its diagnostic uses (operator
   for arithmetic, index expression for indexing, call span for calls). A merged
   `step` and `call-builtin` have several (4.1).
@@ -356,10 +353,7 @@ Details that code and tests rely on:
   receiver into it, then writes the updated fields. The receiver must be the
   struct type that update entry `c` names, with the field count of that type's
   table entry (a hand-made file may put another value there); anything else is
-  `RUNTIME-INTERNAL`. Every C creator of a struct goes through
-  `agc_builtin_struct`, which checks the name, the count and the field names, so
-  the count test only keeps the invariant at the write, as `agc_struct_def_of`
-  does. The loader has checked every field index of the entry against the
+  `RUNTIME-INTERNAL` (5.2). The loader has checked every field index of the entry against the
   struct's field count, so the writes need no bounds test. Unlike `STRUCT`, the
   copy is linear in the field count, so the instruction charges
   `n * sizeof(agc_value)` bytes of cost, like `CONCAT`.
@@ -409,8 +403,7 @@ Details that code and tests rely on:
   frame. Each time that frame runs, the step function says what comes next: call
   the block with a String, park the task while a read or the final close runs,
   or end with the Result. What a callback or a woken job produced is given back
-  to the step function, so no C code calls the interpreter and the task can
-  block inside the callback, like the `List` builtins. A native frame on top of
+  to the step function, so no C code calls the interpreter. A native frame on top of
   the call stack is resumed at the start of the task's next turn. Each block
   call costs one step, charged as for the other native frames, and the turn cost
   of the bytes read.
@@ -545,24 +538,21 @@ header and the entry.
   file with a count above zero: a file with no slots has a plain `main` as
   entry, and a program may call `main()`.
 - The VM accepts only its own format version and Agentica version (8). Any
-  change to the layout or to an opcode's meaning bumps the format version.
-  Version 5 added the Globals section (version 4 is the Updates section and
-  `STRUCT_WITH`, 15c). Version 6 added the prelude flag of each function
-  (4.7). Versions 7 and 8 are reserved by the designs of §42 and §41.
-  Opcode 52 (`TRY_STEP`) did not bump it: an older VM rejects the file as an
-  unknown opcode.
-- The C loader is the only reader of this format. There is no Racket reader, and
-  no compatibility shims, with one transitional exception: the loader also
-  reads format 5, which has no prelude flag, as long as `bootstrap/stage0.agcb`
-  is in format 5 (the first binary of the bootstrap runs the programs that its
-  stage0 compiler writes in that format). Refreshing stage0
-  (`references/ci.md` of the development skill) lets a later change remove it.
+  change to the layout or to an opcode's meaning bumps the format version
+  (version 6 added the prelude flag of each function, 4.7). Versions 7 and 8
+  are reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not
+  bump it: an older VM rejects the file as an unknown opcode.
+- The C loader is the only reader of this format and has no compatibility
+  shims, with one transitional exception: the loader also reads format 5, which
+  has no prelude flag, as long as `bootstrap/stage0.agcb` is in format 5 (the
+  first binary of the bootstrap runs the programs that its stage0 compiler
+  writes in that format). Refreshing stage0 (`references/ci.md` of the
+  development skill) lets a later change remove it.
 
 ### 4.7 The prelude
 
 The compiler prelude (see the development skill's `references/stages.md`) is
-Agentica
-code that the compiler adds to a program: the bodies of `List.find`,
+Agentica code that the compiler adds to a program: the bodies of `List.find`,
 `List.group_by` and the other prelude methods. Its functions are ordinary
 functions, with differences that make an error inside them read as an error at
 the call in the program.

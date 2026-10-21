@@ -81,14 +81,12 @@ is not repeated here; read the file.
   `"STRASSE"`). Final sigma: `Σ` becomes `ς` only after a cased letter and not
   before one (`ΑΣ` gives `ας`, `ΣΣ` gives `σς`). The mapping tables and the
   write-escape tables are in `vm/unicode_data.c`, generated once from Racket's
-  Unicode data (Racket 9.3, Unicode 17.0) and now frozen, checked-in source; its
+  Unicode data (Racket 9.3, Unicode 17.0) and frozen as checked-in source; its
   header says how a future generator must match it.
 - Debug form of a String: the escapes `\"`, `\\`, `\a \b \t \n \v \f \r \e`; a
   character that is not printed raw becomes `\uXXXX` or `\UXXXXXXXX` (uppercase
   hex). A joiner (U+200C, U+200D, U+E0020 to U+E007F) prints raw only after a
-  raw, non-blank character, so family emoji and flag sequences print raw. The
-  tables in `vm/unicode_data.c` were checked against Racket's `write` for every
-  code point and for joiner contexts when they were generated.
+  raw, non-blank character, so family emoji and flag sequences print raw.
 - Stdin is decoded per byte: each byte that does not start a complete valid
   UTF-8 sequence becomes one U+FFFD (`E2 82 63` gives two U+FFFD then `c`).
   `IO.gets` ends lines at LF, CR or CRLF. A read decodes only the bytes it
@@ -158,7 +156,7 @@ is not repeated here; read the file.
   at both ends. `--json` prints one line with keys in this order: `code`,
   `file`, `message`, `range`, `spawned_at`, `stack`, `stack_omitted`, `task`
   (the last four only when they apply).
-- Stack lines (as built): plain adds
+- Stack lines: plain adds
   `  = stack, innermost first:` after the caret line, `--ai` adds `  stack:`
   after `source:`, and each frame is a line of four spaces,
   `name at file:line:column`, then ` (N times)` for a merged run and
@@ -290,24 +288,23 @@ Every failure is an error value. The checks run in this order:
 - `Path.remove(path, timeout_ms)` removes what is at the path without ever
   following a link, in a pool job. `unlink` goes first: it takes a file or a
   symbolic link itself, and a missing path (`ENOENT`) is `ok()`, as with
-  `unlink(missing_ok=True)`. Any other `unlink` error is reported, `ENOTDIR`
-  for `file/child` included: that is on purpose, because `link/` (a trailing
-  slash on a link) gives the same error and must never report `ok()`. Only
-  `EISDIR` starts the tree walk, `agc_remove_tree` (`vm/tree.c`): the root is
-  opened with `openat(O_NOFOLLOW | O_DIRECTORY)`, so a trailing slash on a link
-  is an error and not a follow, and every entry below is deleted with
-  `unlinkat` on its directory's descriptor, so a link inside the tree is
-  removed as a link and its target is never touched. The walk keeps an explicit
-  stack of at most 128 open levels (`filesystem: directory tree is deeper than
-  128 levels`, the tree partly removed) and reads a directory again while its
-  last pass removed something, since POSIX leaves the entries after an unlinked
-  one unspecified. An `ENOENT` from `unlinkat` (someone else removed the entry,
-  or a file system lists names it cannot remove) is not progress, so a pass that
-  removed nothing ends the walk with `ENOTEMPTY`; `EINTR` is repeated. The walk
-  crosses mount points, as `rm -rf`, Python's `rmtree` and Racket's
-  `delete-directory/files` do. A path whose last component (trailing slashes
-  ignored) is empty, `.` or `..` is refused before anything opens
-  (`filesystem: refusing to remove /, . or ..`): the check is the pure
+  `unlink(missing_ok=True)`. Any other `unlink` error is reported, `ENOTDIR` for
+  `file/child` included: that is on purpose, because `link/` (a trailing slash
+  on a link) gives the same error and must never report `ok()`. Only `EISDIR`
+  starts the tree walk, `agc_remove_tree` (`vm/tree.c`): the root is opened with
+  `openat(O_NOFOLLOW | O_DIRECTORY)`, so a trailing slash on a link is an error
+  and not a follow, and every entry below is deleted with `unlinkat` on its
+  directory's descriptor, so a link inside the tree is removed as a link and its
+  target is never touched. The walk keeps an explicit stack of at most 128 open
+  levels (`filesystem: directory tree is deeper than 128 levels`, the tree
+  partly removed) and reads a directory again while its last pass removed
+  something, since POSIX leaves the entries after an unlinked one unspecified.
+  An `ENOENT` from `unlinkat` (someone else removed the entry, or a file system
+  lists names it cannot remove) is not progress, so a pass that removed nothing
+  ends the walk with `ENOTEMPTY`; `EINTR` is repeated. The walk crosses mount
+  points, as `rm -rf` and Python's `rmtree` do. A path whose last component
+  (trailing slashes ignored) is empty, `.` or `..` is refused before anything
+  opens (`filesystem: refusing to remove /, . or ..`): the check is the pure
   function `agc_tree_refused`, which `agc_remove_tree` calls first, so a test
   can try the names that must never be removed without removing anything. Any
   other failure is `filesystem: cannot remove path` with the OS error text and
@@ -315,15 +312,15 @@ Every failure is an error value. The checks run in this order:
   directory) that failed, not the root. A timeout gives the timeout error, but
   the pool job is not stopped (14.3): the removal runs to its end.
 - `Path.rename(from, to, timeout_ms)` is one `renameat2(AT_FDCWD, from,
-  AT_FDCWD, to, RENAME_NOREPLACE)` in a pool job (`_GNU_SOURCE` is defined in
-  `files.c` for the declaration). It never replaces: an existing `to`, an empty
-  directory included, is `EEXIST`, and it is atomic, so of several processes
-  that race for one name exactly one wins. `rename` never follows a final link,
-  so a link moves as a link. The error is `filesystem: cannot rename path` with
-  `from`, `to` and the OS error text. A file system that does not know
-  `RENAME_NOREPLACE` answers `EINVAL` and the call reports it; there is no
-  fallback with a check first, which would be a race. The driver uses it to
-  give a run directory its final name after the lock inside it is taken.
+  AT_FDCWD, to, RENAME_NOREPLACE)` in a pool job. It never replaces: an existing
+  `to`, an empty directory included, is `EEXIST`, and it is atomic, so of
+  several processes that race for one name exactly one wins. `rename` never
+  follows a final link, so a link moves as a link. The error is `filesystem:
+  cannot rename path` with `from`, `to` and the OS error text. A file system
+  that does not know `RENAME_NOREPLACE` answers `EINVAL` and the call reports
+  it; there is no fallback with a check first, which would be a race. The driver
+  uses it to give a run directory its final name after the lock inside it is
+  taken.
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.

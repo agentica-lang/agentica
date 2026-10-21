@@ -18,26 +18,19 @@ so zeroed registers are valid values.
 
 - **Type:** List
   - **Representation:** Opaque: `struct agc_list` is defined in `vm/list.c` and
-    in the private `vm/list_impl.h` (included by `list.c` and `interp.c`, for
-    the inline `LIST_LEN` and `LIST_GET`, and by `tests/list_test.c`, to check
-    the shape), and every other file reaches a list through the API of `value.h`
-    (`agc_list_len`, `agc_list_get`, a sized builder for a new list, a cursor
-    for a scan, `agc_list_append`, `agc_list_set`, `agc_list_slice`,
-    `agc_list_concat`; [§17.4](17-lists.md)), so no file reads the layout. Only
-    a builder writes a list, and only before it returns it. The layout is a
-    persistent vector as in Clojure: a 32-way trie of leaves of 32 items plus a
-    tail of 1 to 32 items held inline in the list object (`{ len, root, shift,
+    the private `vm/list_impl.h`, and every other file reaches a list through
+    the API of `value.h` ([§17.4](17-lists.md)), so no file reads the layout.
+    Only a builder writes a list, and only before it returns it. The layout is
+    a persistent vector as in Clojure: a 32-way trie of leaves of 32 items plus
+    a tail of 1 to 32 items held inline in the list object (`{ len, root, shift,
     kind, tail[] }`; `root` is NULL up to 32 items), immutable. A list whose
     items are all Ints, or all Floats, keeps 8 raw bytes per item, with no tag,
     in atomic leaves, and `kind` says which
     ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the code that builds
     the list picks the kind from the values, so a mixed list from hostile
-    bytecode is simply boxed. `append` copies the tail (and the path to a new
-    leaf every 32nd time), `set` copies the tail and the path to its leaf, so
-    both are near constant time; `get` is one compare up to 32 items and at most
-    4 loads up to a million, and a build of n pushes is O(n). `take`, `drop`,
-    `reverse` and a `concat` with a long right list stay O(n)
-    ([§17.2](17-lists.md)).
+    bytecode is simply boxed. `append`, `set` and `get` are near constant time,
+    a build of n pushes is O(n), and `take`, `drop`, `reverse` and a `concat`
+    with a long right list stay O(n) ([§17.2](17-lists.md)).
 
 - **Type:** Map
   - **Representation:** A persistent 32-way HAMT from key to value (`vm/map.c`),
@@ -160,7 +153,7 @@ so zeroed registers are valid values.
   native push) are all the stack trace costs while a program runs, plus the span
   of the spawning call that a task keeps (`spawn_span`, set by
   `agc_task_spawn_in`).
-- The stack trace is built when the program fails (as built; the shape is in
+- The stack trace is built when the program fails (the shape is in
   [`02-reference-behavior.md`](02-reference-behavior.md)). `agc_fail` and
   `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`)
   before the `longjmp`, only while a task runs (`vm->in_turn`). It walks the
@@ -200,8 +193,9 @@ so zeroed registers are valid values.
   signal. A second stop signal ends it at once, but only after the children are
   stopped. The out-of-memory and GC abort exits (6.3) and `SIGKILL` run no
   cleanup.
-- Windows does not have this cleanup yet. The plan is console control events and
-  a kill-on-close job object, which would also cover crashes.
+- On Windows, `SIGINT`, `SIGBREAK` and `SIGHUP` take the same path
+  (`vm/loop.c`), and the kill-on-close job object of 10.4 ends the children of
+  a VM that is killed.
 
 ### 6.3 Out of memory and GC aborts
 
@@ -232,15 +226,10 @@ into their GC state.
 
 The C builtins are in `vm/*.c`, with one table per module. The catalog and the
 implementation keys are in `compiler/catalog/builtins_data.agc`. BDD has no C
-builtins: it is written in Agentica (`std/bdd`, `docs/bdd.md`). The VM adds only
-`Process.spawn_captured`, `Process.output`, the child channel builtins of 25c
-(`Process.spawn_channel`, `channel_read_line`, `channel_send`, `channel_close`,
-`read_available`, `parent_read_line` and `parent_send`; `vm/process.c`,
-`vm/duplex.c`), `Task.pending_count`, `Task.spawn_owning` (24b, `vm/task.c`),
-`Task.map` (17a, `vm/task_map.c`) and the `Channel` builtins (`vm/channel.c`). A
-channel call that must wait, and `Task.map`, need the event loop. The event
-loop, files, processes, TCP, TLS and every `HttpWire` builtin (the pure helpers,
-the client service and the server) build and run on Linux, macOS and Windows, so
+builtins: it is written in Agentica (`std/bdd`, `docs/bdd.md`). A channel call
+that must wait, and `Task.map`, need the event loop. The event loop, files,
+processes, TCP, TLS and every `HttpWire` builtin (the pure helpers, the client
+service and the server) build and run on Linux, macOS and Windows, so
 `std/http` works on all three.
 
 ### 7.3 Builtin safety and streams
@@ -297,7 +286,3 @@ the client service and the server) build and run on Linux, macOS and Windows, so
   passes it through. Without a seed the VM takes 8 bytes from the same OS
   entropy as the map hash key. If every source fails, it uses the wall clock.
   `agc_vm_init` seeds with 0, so the C tests and the fuzzer are deterministic.
-- Tests: `vm/tests/random_test.c` checks that a seed repeats and that two seeds
-  differ, the bounds of both functions for small, large, single-value and full
-  ranges, a rough uniformity count, and that `low > high` leaves the state
-  unchanged.

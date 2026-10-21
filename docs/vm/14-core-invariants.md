@@ -52,7 +52,7 @@ Known exceptions, as built:
   `path_string` refuses the `\\.\`, `\\?\` and `//./` spellings. So a named
   pipe or a device is refused at once and its handle closed: no `File` call
   waits on a stream there. The streams that wait reach the VM as sockets,
-  process pipes and the standard streams (see #474).
+  process pipes and the standard streams.
 - **Windows stdin.** The Unix poller cannot watch Windows console handles, so
   every stdin kind is read by one blocking `_read` on a thread of the VM's own,
   not in the pool; the task waits on the loop for the read's job, which an async
@@ -75,16 +75,12 @@ Known exceptions, as built:
   the pool, and that read keeps one pool thread until it returns. A regular file
   that reports size 0 (`/proc`, `/sys`) is read to EOF, at most 1 MiB.
 - **stdout and stderr fallbacks.** `puts`, `print`, `IO.inspect` and `IO.warn`
-- **stdout and stderr fallbacks.** `puts`, `print`, `IO.inspect` and `IO.warn`
   copy into a buffer and wait in a FIFO on the loop (row 7.2.1f, §10.2.2). A
   pipe, FIFO or terminal is reopened through `/proc/self/fd/N`, a socket is
   duplicated, and both are written when the poller says they are writable; a
   regular file or a device epoll refuses is drained by a pool job. The stderr
   that a child process writes goes through the same buffer
-  (`agc_output_forward`, behind the queued notices, and a waiting print goes
-  first: the child's bytes take only the room it does not need); past 64 KiB
-  queued, the VM stops reading the child's stderr until the queue is back to 32
-  KiB, so the child waits on its pipe, not the loop. A stream keeps the
+  (`agc_output_forward`; §10.2.2, "A child's stderr"). A stream keeps the
   blocking `fwrite` of its `FILE *` only when it cannot be put on the loop: the
   reopen or the `dup` fails (no `/proc`, or `EACCES`), the descriptor is not
   open for writing (a closed stdout that `main` refilled with `/dev/null`), it
@@ -96,14 +92,13 @@ Known exceptions, as built:
   are locked per stream (§16.8).
 - **Notices (text the VM writes to stderr by itself).** A task crash diagnostic
   and the unobserved-task summary are queued (at most 1 MiB) and enter the
-  stderr buffer ahead of waiting writers as room appears, in pieces if they are
-  longer than the buffer, and never in the middle of a print that holds the
-  stream, so they are neither lost to a full buffer nor placed inside a print.
-  The diagnostic of a failed run is queued the same way (a kept notice, never
-  dropped for the queue limit) after the blocking streams are flushed and before
-  the end-of-run wait, so the wait and the flush limit cover it. The flush
-  warnings and what is only known after the wait (the flush-timeout warning, a
-  stdout or stderr write error) are written with non-blocking writes, and what a
+  stderr buffer ahead of waiting writers as room appears, never in the middle of
+  a print that holds the stream, so they are neither lost to a full buffer nor
+  placed inside a print. The diagnostic of a failed run is queued the same way
+  (a kept notice, never dropped for the queue limit) after the blocking streams
+  are flushed and before the end-of-run wait, so the wait and the flush limit
+  cover it. What is only known after the wait (the flush-timeout warning, a
+  stdout or stderr write error) is written with non-blocking writes, and what a
   stuck pipe will not take is dropped, so the exit stays bounded and the exit
   code still reports the result (§10.2.2, Notices).
 - **Release flush of a file handle.** When a file job is dropped before its
@@ -146,21 +141,20 @@ reason here.
 
 ### 14.3 Cancelling
 
-**Rule.** One way: `agc_task_cancel` (20b's core, §10.2.1, Cancellation). It
-knows every place a task can park (§14.1) and takes the task out of each one. A
-new kind of wait adds its case to `agc_task_cancel` and to
-`vm/tests/task_cancel_test.c` in the same PR. A crash (cancellation),
-`Test.run`'s leftovers (a test's tasks) and the public `Task.cancel` cancel
-through it. Nothing else cancels a wait. A timer, a job's completion and a crash
-also unlink a task, but they end a wait; they do not cancel one. `unlink_task`
-takes a cancelled task out of every wait, its timer included
-(`agc_timers_disarm`).
+**Rule.** One way: `agc_task_cancel` (§10.2.1, Cancellation). It knows every
+place a task can park (§14.1) and takes the task out of each one. A new kind of
+wait adds its case to `agc_task_cancel` and to `vm/tests/task_cancel_test.c` in
+the same PR. A crash (cancellation), `Test.run`'s leftovers (a test's tasks) and
+the public `Task.cancel` cancel through it. Nothing else cancels a wait. A
+timer, a job's completion and a crash also unlink a task, but they end a wait;
+they do not cancel one. `unlink_task` takes a cancelled task out of every wait,
+its timer included (`agc_timers_disarm`).
 
 A task cancelled from another scheduler finishes its turn first (§10.2.3), after
 the cancel walk over its descendants. A task it spawns in that turn starts
 cancelled: the spawn reads the flag of the parent (or of the task that owns the
 groups above it) under `rt->sync`, which the walk holds too, and ends the child
-before it runs (`spawn_child` in `vm/task.c`, #392). A handle handed to the
+before it runs (`spawn_child` in `vm/task.c`). A handle handed to the
 child is moved first, so the child's end closes it. Cancel reaches every
 descendant. An end hook set after the spawn (`Task.map`'s items,
 `HttpWire.spawn`) may not run for such a child, which may have ended already; a
@@ -173,7 +167,7 @@ set during the turn wins.
 A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its
 `cancel` half. A wait that has taken nothing yet leaves its queue at once, on
 the I/O thread: a `TCP.accept` leaves the listener's queue and a read leaves the
-reader slot (`request_cancel` in `vm/tcp.c`, #403), as an HTTP server's waiter
+reader slot (`request_cancel` in `vm/tcp.c`), as an HTTP server's waiter
 does (`waiter_cancel`). The next connection then goes to a live accept, and the
 bytes stay in the input for the next read, whose reader lock the job's end hands
 on. A wait that has taken something keeps its result: its `done` half runs and
@@ -195,8 +189,8 @@ cancels the head of a full buffer's FIFO.
 The file flush has a limit that is always on, 30 seconds by default, set with
 `--flush-timeout MS` or the environment variable `AGENTICA_FLUSH_TIMEOUT_MS`
 (the flag wins), with no way to turn it off. The owner decided this on
-2026-10-13 (row 7.2.1d, second part, done). At exit, stdout and stderr count as
-part of the file flush. **When `main` ends, the program ends.** The steps are:
+2026-10-13 (row 7.2.1d). At exit, stdout and stderr count as part of the file
+flush. **When `main` ends, the program ends.** The steps are:
 
 1. kill child processes (`close_children`, about 2 seconds at most, driving the
    loop for their exit callbacks, §10.4 Close);
@@ -218,26 +212,24 @@ are never left behind.
 As built (`agc_launch_settle` of `vm/launch.c`, §10.2.2 "End of run" and "Stop
 signals"): `main`'s return, `System.exit`, a diagnostic, the step limit and the
 first stop signal all reach `agc_launch_settle`. It kills the children, sends
-one non-blocking TLS `close_notify` per finished TLS session (sockets and
-`HttpClient` connections), flushes the blocking stdout and stderr, queues the
-diagnostic of a failed run on stderr, closes the files and waits for their flush
-jobs and for the output buffers of stdout and stderr (within the flush limit;
-once a stop signal is set, one non-blocking write per stream and no more wait
-for stdout and stderr), prints what is only known after the wait without
-blocking (the flush-timeout warning, a write-error diagnostic; text that a stuck
-stderr pipe will not take is dropped), and ends with `_exit`, or with the stop
-signal raised again. A second stop signal before the children are stopped is
-recorded and acted on right after, and an `alarm` bounds that at 3 seconds. A
-driven VM whose driver is gone takes the immediate path on its first signal.
-`agc_io_close` is only for the in-process harnesses and for the single binary,
-which closes the front end's loop before it runs the program in a new runtime.
-The Windows stdin reader thread (§14.1) is not joined: the close cancels its
-read where Windows can, and a read it cannot cancel stays in `_read` and takes
-the next input, so no later runtime in the process may read that descriptor.
-Children are reaped by libuv's exit callback, never by `waitpid` or a sleep, and
-step 1 runs the loop for the exits (§10.4 Close; row 7.2.1d, first part, done).
-The streams on the loop drain inside the file flush, so the flush limit bounds
-them; the blocking fallbacks of §14.1 are the only unbounded write left.
+one non-blocking TLS `close_notify` per finished TLS session, flushes the
+blocking stdout and stderr, queues the diagnostic of a failed run on stderr,
+closes the files and waits for their flush jobs and for the output buffers of
+stdout and stderr (within the flush limit; once a stop signal is set, one
+non-blocking write per stream and no more wait for stdout and stderr), prints
+what is only known after the wait without blocking, and ends with `_exit`, or
+with the stop signal raised again. A second stop signal before the children are
+stopped is recorded and acted on right after, and an `alarm` bounds that at 3
+seconds. A driven VM whose driver is gone takes the immediate path on its first
+signal. `agc_io_close` is only for the in-process harnesses and for the single
+binary, which closes the front end's loop before it runs the program in a new
+runtime. The Windows stdin reader thread (§14.1) is not joined: the close
+cancels its read where Windows can, and a read it cannot cancel stays in `_read`
+and takes the next input, so no later runtime in the process may read that
+descriptor. Children are reaped by libuv's exit callback, never by `waitpid` or
+a sleep, and step 1 runs the loop for the exits (§10.4 Close; row 7.2.1d). The
+streams on the loop drain inside the file flush, so the flush limit bounds them;
+the blocking fallbacks of §14.1 are the only unbounded write left.
 
 Known exceptions, outside the exit path: the out-of-memory and GC abort handlers
 end with `_Exit(70)` and run none of these steps (§6.3), and `SIGKILL` runs none
@@ -280,7 +272,7 @@ not waited for. When the end of a task is observed (its `Task.await` returns, or
 `Task.map` takes its result into a slot), the handles it owned and those of the
 descendants that its crash or cancel reached are closed: a socket, listener,
 process or server is marked closed under `rt->sync`, and at N > 1 its close step
-reaches the I/O thread before any step that the observer posts (#402). A
+reaches the I/O thread before any step that the observer posts. A
 timed-out item is not observed this way: its slot is written at its deadline,
 before it or its descendants close anything. A cancelled descendant that is
 still on a turn on another scheduler ends at the end of that turn, and until

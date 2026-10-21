@@ -62,13 +62,13 @@ section says how the scheduler and the loop keep them, as built.
   from `--max-steps` (`steps_left`). The task yields at the next instruction if
   its turn is spent. File builtins charge nothing: their work is I/O, at most 1
   MiB per call.
-- **Test switches.** `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` leaves stdout and
-  stderr on the blocking `FILE` fallback (10.2.2), so that path is tested on
-  Linux. `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge. It
-  changes only when tasks switch, never output, step counts or diagnostics. It
-  is for tests only, so the latency test (`make vm-latency`) can show that it
-  fails without the rule. `AGENTICA_VM_TEST_SHARED=1` calls `agc_share`, so a
-  run on one scheduler takes every lock (§16.9); it is for tests only.
+- **Test switches** (tests only). `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` leaves
+  stdout and stderr on the blocking `FILE` fallback (10.2.2), so that path is
+  tested on Linux. `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost
+  charge. It changes only when tasks switch, never output, step counts or
+  diagnostics, so `make vm-latency` can show that the latency test fails
+  without the rule. `AGENTICA_VM_TEST_SHARED=1` calls `agc_share`, so a run on
+  one scheduler takes every lock (§16.9).
 - **Fairness with I/O.** After each turn the scheduler calls
   `uv_run(UV_RUN_NOWAIT)`, so ready I/O and timers wake their tasks while others
   compute. Tasks woken during a `NOWAIT` go behind the queued ones. With N=1 it
@@ -88,8 +88,7 @@ section says how the scheduler and the loop keep them, as built.
     the run may stop up to (N-1) turn budgets early.
   - Per-task step quotas are not in 7h. Per-task memory quotas are out of scope,
     since the Boehm heap is shared. Only a global heap limit is possible (13).
-- **As built (tasks PR).** `vm/task.c` holds the scheduler and the `Task`
-  builtins. `vm/interp.c` runs one turn and owns the budget code.
+- **As built.** `vm/interp.c` runs one turn and owns the budget code.
   - `Task.sleep(0)` yields. `Task.sleep(n)` is a timer of the task (§16.9).
     Under `no_files` (the fuzzer) every sleep yields.
   - Stdin EOF is delivered once to every task that waited for the read, so a TTY
@@ -108,8 +107,8 @@ section says how the scheduler and the loop keep them, as built.
     waits with a timeout (`await_deadline` is set while it waits), since that
     task ends by itself.
   - **Await with a timeout (17c, `docs/future/27-iteration-and-concurrency.md`
-    §27.3).** `Task.await(task, timeout_ms)` is a C builtin that returns the
-    builtin enum `Await[T]` (`Await.Done(value)` or `Await.TimedOut`);
+    §27.3).** `Task.await(task, timeout_ms)` returns the builtin enum
+    `Await[T]` (`Await.Done(value)` or `Await.TimedOut`);
     `Task.await_result` has the same second arity for a target whose result is a
     `Result`, as the plain pair does. `timeout_ms` of 0 or less is
     `RUNTIME-INVALID-DURATION` at that argument, checked first. The call takes
@@ -117,23 +116,20 @@ section says how the scheduler and the loop keep them, as built.
     and a target that has settled (done, and not closing files) gives
     `Await.Done` with the outcome of the plain await, also when the timer woke
     the caller at the same time as the target's end. Otherwise the deadline is
-    stored in the task (`await_deadline`, computed at the first call from
-    `agc_clock_ms`; the timed form runs no cycle check, since it cannot wait
-    forever, so a task that awaits its own handle with a timeout gets
-    `Await.TimedOut`), the task joins the target's waiters as the plain await
-    does, a timer of the task is armed for the deadline (`agc_task_park_until`,
-    §16.9 "Timers", as for the lock and channel waits), and the task parks with
-    retry. The first of two wakes wins: the target's end (`finish_task` wakes
-    the waiters; `resume` disarms the timer) or the timer (the retry leaves the
-    target's waiters, clears `awaiting` and the deadline, and returns
-    `Await.TimedOut`). A wake before the deadline, with the target unsettled,
-    waits again for the time left. A caller that is cancelled while it waits
-    leaves through `unlink_task` as any awaiter does: its timer is disarmed, and
-    it leaves the target's waiters through `awaiting`; the case
-    is in `vm/tests/task_cancel_test.c`. After a timeout the target is
-    untouched, and a later crash or cancel of it does not reach the caller. The
-    value is built by `vm/task.c` from the program's `Await` enum, found by name
-    (`agc_builtin_variant`).
+    stored in the task (`await_deadline`, computed at the first call; the timed
+    form runs no cycle check, since it cannot wait forever, so a task that
+    awaits its own handle with a timeout gets `Await.TimedOut`), the task joins
+    the target's waiters as the plain await does, a timer of the task is armed
+    for the deadline (`agc_task_park_until`, §16.9 "Timers", as for the lock and
+    channel waits), and the task parks with retry. The first of two wakes wins:
+    the target's end (`finish_task` wakes the waiters; `resume` disarms the
+    timer) or the timer (the retry leaves the target's waiters, clears
+    `awaiting` and the deadline, and returns `Await.TimedOut`). A wake before
+    the deadline, with the target unsettled, waits again for the time left. A
+    caller that is cancelled while it waits leaves through `unlink_task` as any
+    awaiter does: its timer is disarmed, and it leaves the target's waiters
+    through `awaiting`. After a timeout the target is untouched, and a later
+    crash or cancel of it does not reach the caller.
   - When `main` returns, ready and parked tasks never run again, and the exit
     path (End of run) does not wait for their jobs. `System.exit`, a failure in
     `main`, `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL` in any task end the run
@@ -187,11 +183,8 @@ section says how the scheduler and the loop keep them, as built.
     and returns its result. A close that waits behind any job that holds the
     file (for example another task's read of a FIFO or a pipe, which can wait
     for ever) keeps the descriptor open until that job ends or times out, and
-    the awaiters of the ended task do not wait for it. `agc_close_fn` takes the
-    ending task, which only the file close uses; `HttpWire.server` takes the
-    listener off its owner's list (`agc_disown`), so the server owns it and a
-    hand-off of the server moves both. A handle made outside a turn has no
-    owner, and is closed when its result is dropped.
+    the awaiters of the ended task do not wait for it. A handle made outside a
+    turn has no owner, and is closed when its result is dropped.
   - **Cancellation (20b).** A program cancels tasks only through a crash, which
     cancels the crashed task's descendants, through `HTTP.close_server`, and
     through the deadline of a `Task.map` item (below).
@@ -217,14 +210,14 @@ section says how the scheduler and the loop keep them, as built.
     (above 0, `RUNTIME-INVALID-DURATION`), then the empty list, and otherwise
     installs a stepper on the caller (`agc_task_stepper`, as `File.each_line`
     does), so the caller is one task parked in the call and nothing else waits
-    for the group. The group is a GC object: the items, the function, the result
-    slots, the counters, the running list (in start order) and the list of items
-    that ended. The step function runs on the caller each time it wakes: it
-    moves the ended items into their slots (a crashed item is observed and its
-    slot is `error("task crashed: ...")`), reads `agc_clock_ms`, expires the
-    oldest running item whose deadline has passed (its slot is `error("task:
-    timed out")` and `agc_task_cancel` stops it and its descendants), starts
-    items up to `limit`, and, when every slot is set, ends with the list.
+    for the group. The group is a GC object with the running list (in start
+    order) and the list of items that ended. The step function runs on the
+    caller each time it wakes: it moves the ended items into their slots (a
+    crashed item is observed and its slot is `error("task crashed: ...")`),
+    reads `agc_clock_ms`, expires the oldest running item whose deadline has
+    passed (its slot is `error("task: timed out")` and `agc_task_cancel` stops
+    it and its descendants), starts items up to `limit`, and, when every slot is
+    set, ends with the list.
     Otherwise it arms one timer of the caller for the oldest deadline
     (`agc_task_park_until`) and waits. All items have the same timeout and start
     in input order, so the deadlines grow along the running list and one timer
@@ -281,13 +274,11 @@ section says how the scheduler and the loop keep them, as built.
   turn.
 - **Waking and parking.** The work and timer callbacks only set flags and put
   the job on the loop's ready list. After each `uv_run` the scheduler drains
-  that list and queues the tasks. After each turn it calls
-  `uv_run(UV_RUN_NOWAIT)`. With an empty run queue it calls
-  `uv_run(UV_RUN_ONCE)`, or fails with `RUNTIME-INTERNAL` when nothing is alive
-  (Stall check). On completion the `done` half runs on the interpreter thread
-  and builds GC values from the `malloc`'d result. On timeout the `expired` half
-  gives the call's timeout error (`filesystem: operation timed out` for a file)
-  and, for a handle operation, closes the handle.
+  that list and queues the tasks. On completion the `done` half runs on the
+  interpreter thread and builds GC values from the `malloc`'d result. On
+  timeout the `expired` half gives the call's timeout error (`filesystem:
+  operation timed out` for a file) and, for a handle operation, closes the
+  handle.
 - **Thread-pool threads** run only the `work` half, on `malloc` memory.
   `UV_USE_IO_URING` is set to `0` (unless already set) before the loop is made,
   so libuv uses its thread pool and epoll. `SIGINT`, `SIGTERM` and `SIGHUP` are
@@ -317,19 +308,16 @@ section says how the scheduler and the loop keep them, as built.
   poller error is reported by repeating the step, so the call gets the real
   error (`EPIPE` for a reader that left). `read_text` of a pipe, or of a regular
   file that reports size 0 (`/proc`, `/sys`), reads to EOF, at most 1 MiB.
-  `File.each_line` (row 7.2.1h) reads with the same rule: one job per read,
+  `File.each_line` reads with the same rule: one job per read,
   never the whole file. It opens with the read open, then each read is one job
   of at most `buffer_bytes` bytes into a buffer made once, so a regular file
   takes one pool job per read and a pollable path one poller read, each with its
   own `timeout_ms`; a timed-out read closes the handle. Between reads the task
   runs the block for every complete line already in the buffer, so a file of
   short lines costs about one job per `buffer_bytes`. The close is a job too,
-  and the task parks for it. A crash of the reader's task or of one of its
-  ancestors closes the handle (`agc_own`, `agc_close_owned`). A cancel without a
-  crash (a `Test.run` leftover, a `Task.map` timeout) closes it too (24b: the
-  close covers every end of a task, a task parked in a stepper included).
-  On Windows no `File` call waits on the loop: `probe` refuses a named pipe or
-  a device with `ENOTSUP` and the call closes it (§14.1; see #474).
+  and the task parks for it. The handle is closed when the reader's task ends in
+  any way (Owners). On Windows no `File` call waits on the loop: `probe` refuses
+  a named pipe or a device with `ENOTSUP` and the call closes it (§14.1).
 - **End of run: one exit path.** However the run ends (`main` returns,
   `System.exit`, a runtime error, the step limit, a stop signal),
   `agc_launch_settle` in `vm/launch.c` takes the same steps and nothing else
@@ -350,19 +338,17 @@ section says how the scheduler and the loop keep them, as built.
      `agentica: file data may not be written: the flush took longer than MS ms`
      (or `{"flush_timeout_ms":MS,"warning":...}` with `--json`); the exit code
      does not change;
-  4. print what is only known now without blocking (the flush-timeout warning,
-     the `RUNTIME-INTERNAL` diagnostic for a stdout or stderr write error), and
-     end with `_exit`, so libuv's destructor never joins the pool. These go
-     through `agc_notice_end` (10.2.2) as final notices: they are written with
-     non-blocking writes and what a full stderr pipe will not take is dropped,
-     so a stuck stderr pipe cannot hold the exit. No task is awaited, no other
-     pool job is waited for, and no socket is read to its end. Killing the
-     children first means data buffered for a FIFO's reader is lost. A file
-     close that fails at this point prints
-     `agentica: file data may not be written: the flush failed (CODE: message)`
-     (or `{"flush_failed":"CODE","warning":...}`); the exit code does not
-     change. `agc_io_close`, which closes every resource and frees the loop, is
-     only for the in-process harnesses.
+  4. print what is only known now without blocking (the flush-timeout
+     warning, the `RUNTIME-INTERNAL` diagnostic for a stdout or stderr write
+     error), and end with `_exit`, so libuv's destructor never joins the pool.
+     These go through `agc_notice_end` as final notices (Notices, below). No
+     task is awaited, no other pool job is waited for, and no socket is read to
+     its end. Killing the children first means data buffered for a FIFO's reader
+     is lost. A file close that fails at this point prints `agentica: file data
+     may not be written: the flush failed (CODE: message)` (or
+     `{"flush_failed":"CODE","warning":...}`); the exit code does not change.
+     `agc_io_close`, which closes every resource and frees the loop, is only for
+     the in-process harnesses.
 - **Stop signals.** One `sigaction` handler covers `SIGINT`, `SIGTERM` and
   `SIGHUP`, except a signal the VM started ignored (`nohup`). Its state is one
   process-wide variable (`stop` in `vm/loop.c`, lock-free atomics). The first
@@ -376,9 +362,8 @@ section says how the scheduler and the loop keep them, as built.
   has no `SA_RESTART`, so a blocking write (a fallback stream of §14.1) that
   nobody reads returns `EINTR`, and the run ends as the stop (128 + signal, no
   diagnostic); that write is not retried. A stream on the loop has no blocked
-  write: once a stop signal is set, the wait for stdout and stderr in step 3
-  tries one non-blocking write per stream and ends at once, so a stuck reader
-  cannot hold the exit for the flush limit (10.2.2). A CPU-bound task delays the
+  write: once a stop signal is set, its wait in step 3 ends at once after one
+  non-blocking write (End of run and stop, below). A CPU-bound task delays the
   stop by at most one turn.
 - **Per-handle lock (tasks PR).** A `FileHandle` has a `holder` (the job in
   flight), a `next_owner` task, and a FIFO of waiting tasks, all in GC memory.
@@ -573,16 +558,14 @@ section says how the scheduler and the loop keep them, as built.
   the stop and the final notices of the exit share (`settle`).
   The normal end of the run does not use that wait: it is bounded by the flush
   limit. The jobs do not set `flush`, since `agc_output_busy` counts the
-  buffered bytes (End of run, below). The trace shows a pool write as
-  `kind=output` jobs, and a poller stream as one `output_start stream=...` and
-  `output_done` line per run of data (the per-event jobs are quiet,
-  `AGC_JOB_QUIET`). `agc_io_close`, used only by in-process harnesses, does not
-  free the buffer of a stream whose pool write is still in flight; a real exit
-  ends with `_exit`. The reopened descriptor is the VM's own: a `File` path that
-  is an entry of `/proc/self/fd` (`/proc/self/fd/N`, `/dev/fd/N`, compared by
-  directory device and inode, so extra slashes and symlinked directories do not
-  matter) with the number of that descriptor is refused with the
-  not-a-regular-file error (`names_output_fd` in `vm/files.c`, before the open).
+  buffered bytes (End of run, below). `agc_io_close`, used only by in-process
+  harnesses, does not free the buffer of a stream whose pool write is still in
+  flight; a real exit ends with `_exit`. The reopened descriptor is the VM's
+  own: a `File` path that is an entry of `/proc/self/fd` (`/proc/self/fd/N`,
+  `/dev/fd/N`, compared by directory device and inode, so extra slashes and
+  symlinked directories do not matter) with the number of that descriptor is
+  refused with the not-a-regular-file error (`names_output_fd` in `vm/files.c`,
+  before the open).
   The guard is by the directory's device and inode, and it covers
   `/proc/self/fd` and `/proc/thread-self/fd` only, not the
   `/proc/<pid>/task/<tid>/fd` directories (they reach the same pipe as
@@ -641,12 +624,9 @@ section says how the scheduler and the loop keep them, as built.
   non-blocking write per stream (when no pool job is writing it; on Windows a
   request or a pool thread writes, and the exit waits for it within the shared
   200 ms) and then stops waiting for stdout and stderr, so a reader that never
-  reads cannot hold a stopped VM for the flush limit; files keep their wait.
-  `end_run` flushes the blocking `stdout` and `stderr` first and only then
-  queues the diagnostic, so on blocking streams the diagnostic also comes after
-  the program's output (`AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` forces those
-  streams, for tests). The diagnostic is a kept notice: it is queued even when
-  the notice queue already holds its 1 MiB (`AGC_NOTICE_KEPT`), and it is queued
+  reads cannot hold a stopped VM for the flush limit; files keep their wait. The
+  driver diagnostic of a failed run is a kept notice: it is queued even when the
+  notice queue already holds its 1 MiB (`AGC_NOTICE_KEPT`), and it is queued
   inside a `setjmp` of `vm->fail`, so a failure in the writer's start
   (`agc_fail`) is caught; the text is already in the queue by then, and the
   end-of-run wait or a later final notice writes it. **A child's stderr.**
@@ -665,45 +645,10 @@ section says how the scheduler and the loop keep them, as built.
   the run flushes what was queued like any notice. A failed stderr drops these
   bytes, and fails the run only when text of the program or the VM was lost with
   them (still in the buffer or the queue, or written after the failure). A write
-  error on stdout keeps today's exit-code rule (`agc_launch_settle` in
-  `vm/launch.c`). No language change: the builtins keep their names, types and
-  results, and a full stdout pipe stalls only the tasks that print.
-  - **Tests** (VM only, hermetic, Python stdlib peers).
-    `tests/test_vm_stdout.py` with `tests/fixtures/stdout-peer.py` (a pipe, a
-    socket pair or a pty as stdout, a separate or merged stderr, a delay before
-    the reader starts): a pipe that nobody reads for a while, while a timer task
-    keeps running, and the run ends once the reader drains; two tasks that print
-    long lines into a slow pipe, with no interleaving and each in order; a print
-    longer than the buffer next to short prints; the end of run drains within
-    the flush limit, and with a reader that never reads, the run ends after
-    `--flush-timeout` with the existing warning, also when stderr is the same
-    stuck pipe (and then no warning is mixed into the data); a socket as stdout
-    not read yet while a timer task keeps running; a socket as stdout, stderr,
-    both, or stdin and stdout (with stdin read or not), read only after the
-    exit, that still gets every row; a socket that is full at the end, and a
-    read of a socket stdin in flight at the end, neither of which holds the exit
-    past the flush limit; `puts` and `IO.warn` on
-    one pipe and on one pty keep the order of the calls under a slow reader;
-    `IO.flush` returns only after the reader started; a task crash diagnostic
-    that arrives while stderr is full arrives whole when the reader reads later;
-    a `Result.unwrap!` error text longer than 128 KiB reaches a stderr file
-    whole; a print cut by the end of the run that does not hold a queued notice
-    or the exit; a diagnostic longer than the buffer that reaches a slow stderr
-    pipe whole; `File` calls on `/dev/stdout` and `/dev/stderr` that still work
-    when they are pipes; a regular file written by the pool while a child is
-    stopped at the end of the run (the flush wait first runs the `done` halves
-    of jobs that finished during the child stop, `drain` in `finish_flushes`); a
-    reader that went away (`RUNTIME-INTERNAL`, exit 1); a crashed parent whose
-    waiting child leaves the FIFO with nothing partial written.
-    `tests/test_vm_stop.py`: a stop signal with a stdout nobody reads ends the
-    run long before the flush limit. `vm/tests/output_test.c`: the buffer and
-    the FIFO without the interpreter (order, wrap, `IO.flush`, a head that
-    leaves, a leaving long print that lets a queued notice and the next writer
-    through, a reader that left, a file drained by the pool, `/dev/null`, a
-    read-only descriptor, one buffer for one target, notices that wait for room,
-    a notice that does not enter a long print, the end of run moving a notice
-    held by a cut print, a record that starts a line after a cut print, final
-    notices). The waiter case of `agc_task_cancel` is in
-    `vm/tests/task_cancel_test.c` (§14.3).
+  error on stdout keeps the exit-code rule of `agc_launch_settle`
+  (`vm/launch.c`). The builtins keep their names, types and results, and a full
+  stdout pipe stalls only the tasks that print.
+  - **Tests:** `tests/test_vm_stdout.py` (peer `tests/fixtures/stdout-peer.py`),
+    `tests/test_vm_stop.py` and `vm/tests/output_test.c`.
 
 [task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

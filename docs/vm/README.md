@@ -2,10 +2,9 @@
 
 The design of the C bytecode VM, which runs every program. The language does not
 change: `docs/grammar/` (index `docs/grammar.md`) stays the contract. The VM is
-the only backend. The Racket evaluator was deleted in roadmap 7i. The VM's
-codename is Aurora, but only in these docs: the binary (`agentica`), the
-`AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep their
-names.
+the only backend. The VM's codename is Aurora, but only in these docs: the
+binary (`agentica`), the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb`
+and `vm/` keep their names.
 
 The section numbers stay as they were, so a reference such as `§10.4` still
 finds its place. The table below gives the file for each number. The checklist
@@ -43,24 +42,12 @@ and merging or moving `STEP`s. A runaway loop must still hit
   -> vm/ (C11 + Boehm GC): load, validate, run
 ```
 
-- **Place:** `compiler/check/checker.agc`
-  - **Owns:** Gives the checked type of each expression node, by node id.
-
-- **Place:** `compiler/lower/lowering.agc`
-  - **Owns:** Checked program to IR. Resolves names to slots and indexes, makes
-    types explicit, keeps spans, converts closures.
-
-- **Place:** `compiler/bytecode/bytecode_writer.agc`
-  - **Owns:** IR to bytecode: label resolution, constant pool, builtin imports,
-    struct, enum, JSON type and span tables, step merging, binary writer.
-
-- **Place:** `compiler/app/cli.agc`
-  - **Owns:** `--dump-ir`, `compile`, and running every program on the VM.
-    Printing and exit codes stay here.
-
-- **Place:** `vm/`
-  - **Owns:** The C VM: loader, values, interpreter loop, builtins, JSON,
-    diagnostics, CLI driver. Builds `dist/agentica`.
+The checker gives the checked type of each expression node, by node id. Lowering
+resolves names to slots and indexes, makes types explicit, keeps spans and
+converts closures. The bytecode writer resolves labels and writes the constant
+pool, builtin imports, the struct, enum, JSON type and span tables, merges
+steps and writes the binary. Printing and exit codes stay in
+`compiler/app/cli.agc`. `vm/` is the C VM that builds `dist/agentica`.
 
 The lowerer rejects a form it does not handle yet with `LOWER-UNSUPPORTED` at
 the node's span (3.5). It never guesses.

@@ -5,11 +5,10 @@
 - `make` compiles `vm/*.c` with `$(CC) -std=c11 -O2 -Wall -Wextra -Werror`
   and the hardening flags `-fstack-protector-strong -D_FORTIFY_SOURCE=2`, and
   links `dist/agentica` (the VM with the front end inside, the one product;
-  §18.2). On Linux it links PIE with full RELRO. The binary embeds the front end
-  as ELF, Mach-O or COFF data and builds on Linux, macOS and MinGW
-  (`platforms.yml`). The Makefile
-  picks the platform from `OS=Windows_NT` or `uname -s`. The warning flags apply
-  to our own `vm/*.c` only.
+  §18.2). On Linux it links PIE with full RELRO. The binary builds on Linux,
+  macOS and MinGW (`platforms.yml`; the front end is embedded as in 10). The
+  Makefile picks the platform from `OS=Windows_NT` or `uname -s`. The warning
+  flags apply to our own `vm/*.c` only.
 - `AGENTICA_GC` picks the libgc build, like `AGENTICA_OPENSSL` picks OpenSSL.
   `system` (the default on Linux) links the distro's libgc dynamically with the
   flags of `pkg-config --cflags --libs bdw-gc`. The stamp
@@ -41,7 +40,7 @@
   `gc.h` (the only file that does), which gives it the registration calls.
   The collector starts its mark threads when `agc_gc_allow_threads` calls
   `GC_allow_register_threads`, and nothing calls it with one scheduler (N = 1),
-  so the process has no mark thread (the same threads as before the change).
+  so the process has no mark thread.
   The libuv pool threads and the I/O work run on `malloc` memory and never call
   `GC_malloc` or hold a GC pointer (16.5), so they stay unregistered. A thread
   that touches GC memory calls `agc_gc_thread_enter` first and
@@ -49,11 +48,8 @@
   `ALL_INTERIOR_POINTERS`: `agc_init` calls `GC_set_all_interior_pointers(1)`
   before `GC_INIT`, so a libgc built without it behaves like the vendored one:
   both modes match.
-- yyjson's reader, picohttpparser and libuv are compiled per build mode (10).
-  OpenSSL is the system one by default, or the vendored static build for the
-  release (10.0).
 - The Agentica version is the one line of the `VERSION` file, which the Makefile
-  reads with `cat`, so the VM build needs no Racket. Each mode compiles `vm/*.c`
+  reads with `cat`. Each mode compiles `vm/*.c`
   once into `build/vm/<mode>/obj/` (with `-MMD -MP`, so an edited header
   recompiles only its users) and links the VM, the fuzz driver and the C tests
   from those objects. `build/vm/flags` holds the compile and link line, so
@@ -156,14 +152,9 @@
     Makefile's `WINDOWS_TEST_MODULES`, for the local Wine check, is a
     separate list and is not derived from the areas)
 
-- **Job:** Fuzz (`fuzz.yml`, by hand)
-  - **Runner:** GitHub-hosted `ubuntu-latest`, clang
-  - **Runs:** sanitizer build, 5 million mutants, random `FUZZ_SEED`
-
 - The Linux jobs run on every pull request that changes more than docs;
   `platforms.yml` runs on pull requests that carry the `platforms` label and
-  on pushes to `master`, and either can be started by hand. No job installs
-  Racket (the Racket front end was deleted, PR #313), and no step checks or
+  on pushes to `master`, and either can be started by hand. No step checks or
   regenerates the frozen `vm/unicode_data.c` (its header gives the
   provenance). Every system runs the TCP, TLS and HTTP modules too.
 - `.gitattributes` checks every text file out with LF. `.agcb` files are binary,
