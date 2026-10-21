@@ -113,8 +113,8 @@ def stats(session: Analysis.Session) -> String
 end
 
 # `same N` when `session` and a session over the same buffers and no cache answer the check of `path` and the type-at
-# of each (line, column) pair of `numbers` (and the refs there) with the same text, and N of the type-at answers are not errors; else
-# `different` and the two answers.
+# of each (line, column) pair of `numbers` (and the refs there) with the same text, and N of the type-at answers are
+# not errors; else `different` and the two answers.
 def compare(session: Analysis.Session, buffers: Map[String, String], path: String, numbers: List[Int]) -> String
   twin = Analysis.open(Analysis.workspace().with(buffers: buffers))
   ours = answers(session, path, numbers)
