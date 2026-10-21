@@ -412,7 +412,7 @@ more = Map.put(stock, "kiwi", 7)
 - A literal uses braces and `key: value` pairs. An empty `{}` needs an expected
   type, like `[]`: `CHECK-EMPTY-MAP-TYPE` (`CHECK-EMPTY-LIST-TYPE` is for `[]`).
 - `m[key]` returns the value; the key must have type `K`. A missing key is a
-  runtime error.
+  runtime error (`RUNTIME-KEY-NOT-FOUND`).
 - A repeated key in a literal keeps the last value at the first position.
   `Map.put` on an existing key keeps its position.
 - Maps are immutable: there is no `m[key] = value`, and `Map.put` returns a new

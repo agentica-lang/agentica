@@ -324,3 +324,15 @@ def main() -> Void
   HTTP.wait(server).unwrap!
 end
 ```
+
+### Moving from the builtin HTTP module
+
+The old builtin `HTTP` module is gone. Import `std/http` and use these names:
+
+- `HTTP.client()` is `HTTP.client(HTTP.client_options())`.
+- `HTTP.text(response.body, t)` is `response.body`; a body that is not UTF-8 is an error.
+- `HTTP.read`, `trailers`, `close_body` and `request_stream` are one `HTTP.request` call. Streaming is planned.
+- A handler `(request: Request, writer: HttpWriter) -> Void` is `(request: HttpRequest) -> Result[HttpResponse]`. `HTTP.respond`, `begin`, `write`, `write_bytes` and `finish` become `return ok(HttpResponse(...))`.
+- `header_timeout_ms` is `request_timeout_ms`; `timeout_ms` now covers the whole response.
+- `max_body_bytes` defaults to 1 MiB (was 64 MiB).
+- `Request`, `Response`, `HttpBody` and `HttpWriter` are gone: use `HttpRequest` and `HttpResponse`.

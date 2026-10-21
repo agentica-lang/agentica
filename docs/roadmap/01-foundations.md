@@ -62,8 +62,7 @@ that halts. Every function that can fail has two forms: `x(...)` returns
 - **5d.** Standard input and output (`IO`, `System.args`, `System.exit`, the
   stdio transport primitives): [`06b-builtins.md`](../grammar/06b-builtins.md).
 - **5d2.** Consistency fixes: `CHECK-EMPTY-MAP-TYPE`; `--max-steps N` with
-  `RUNTIME-STEP-LIMIT`; O(n) list indexing documented (prefer `for`). Grammar
-  §4, §6.
+  `RUNTIME-STEP-LIMIT`; list indexing is O(log32 n) since 8d. Grammar §4, §6.
 - **5d3.** Agent API (partly open): `agentica check <file>` with three printers
   of one structured diagnostic (plain with labels and help, `--ai`, `--json`);
   grounded suggestions only (nearest name, field list, conversion functions,

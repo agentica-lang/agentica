@@ -206,7 +206,7 @@ false
 Ownership rules:
 
 - A channel never handed over has no owner: only `close` closes it. `Task.spawn(&f, jobs)` does not make an owner.
-- The first `Task.spawn_owning` can come from any task. After that only the owner can hand it on; any other task, or any task once it is closed, stops with `RUNTIME-HANDLE-NOT-OWNED`.
+- The first `Task.spawn_owning` can come from any task. After that only the owner can hand it on; any other task, or any task once it is closed, stops with `RUNTIME-HANDLE-NOT-OWNED`. Any task can still call `Channel.close`.
 - There is one owner. For several producers, use the next pattern.
 
 ## Several sources
