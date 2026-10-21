@@ -7,7 +7,9 @@ time, and interpreter and checker runs that failed.
 The tasks are in `tests/eval/tasks/`. Each has a `task.md`, a reference solution
 in Agentica (`reference.agc`) and in typed Python (`reference.py`), and hidden
 cases. The tasks that start from a program have `start.agc` and `start.py` (and
-`start.typed.py` when the typed arm needs a different start).
+`start.typed.py` when the typed arm needs a different start). A starter program
+can hold an intentional bug: when you edit a task, do not repair it and do not
+change the hidden cases.
 `tests/eval/run.py` runs the agents. `tests/eval/diagnostics.py` counts the
 diagnostics the agents saw in their logs.
 
@@ -140,7 +142,8 @@ loopback peers; Firejail is untested for them. The results go to
 `run.json` with the commit, the commit of the last change to the skill, the
 checker version, the model, the arms, and the image name and ID, next to
 `results.jsonl` and `summary.md`. The runner has its own tests:
-`python3 -m unittest discover -s tests/eval -p 'test_*.py'`.
+`python3 -m unittest discover -s tests/eval -p 'test_*.py'`. These unit tests
+are not part of `make test` or CI.
 
 `--check-references` is the same as `--agent reference` with the arms `binary`,
 `python` and `typed-python` (the three Agentica arms share one reference). It

@@ -90,9 +90,9 @@ and `NOTICE` with the third-party licenses.
 - **`vendored`** builds the pinned submodule and links it statically. The
   release uses it, so the shipped VM needs only glibc's own libraries
   (`readelf -d` shows no `libssl` or `libcrypto`) and runs on any glibc 2.28
-  system. Pull request CI jobs use `system`, except one vendored release-mode
-  binary in the `test` job (11). The same split applies to libgc through
-  `AGENTICA_GC` (11).
+  system. Pull request CI jobs use `system`, except the `test` job, which links
+  one vendored release-mode binary from a cached OpenSSL so this path stays
+  tested (11). The same split applies to libgc through `AGENTICA_GC` (11).
 
 The mode is not remembered. Pass `AGENTICA_OPENSSL=vendored` to every make
 command, or export it. `build/vm/flags` records the mode, so switching it
@@ -124,6 +124,8 @@ The vendored build:
   yyjson, picohttpparser and libuv follow the same model (11). `make vm-openssl`
   builds only the libraries. After editing OpenSSL sources by hand, remove
   `$(VM_BUILD)/openssl`.
+- Headers: `vm/*.c` see the generated headers through `-I`. Only the OpenSSL
+  adapter files include them (layer rule 5, §15.5).
 - Initialization uses `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`.
   The built-in `OPENSSLDIR` points at the build machine, and the VM may end with
   `_exit` while a pool thread still runs. Contexts set TLS 1.2 and security

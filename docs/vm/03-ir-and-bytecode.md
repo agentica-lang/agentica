@@ -403,10 +403,11 @@ Details that code and tests rely on:
   frame. Each time that frame runs, the step function says what comes next: call
   the block with a String, park the task while a read or the final close runs,
   or end with the Result. What a callback or a woken job produced is given back
-  to the step function, so no C code calls the interpreter. A native frame on
-  top of the call stack is resumed at the start of the task's next turn. Each
-  block call costs one step, charged as for the other native frames, and the
-  turn cost of the bytes read.
+  to the step function, so no C code calls the interpreter, and the task can
+  block inside the callback, like the `List` builtins. A native frame on top of
+  the call stack is resumed at the start of the task's next turn. Each block
+  call costs one step, charged as for the other native frames, and the turn
+  cost of the bytes read.
 - The terminals of `Lazy` (`to_a`, `each`, `reduce`, `find`; `vm/lazy.c`) are
   steppers too, with no block of their own: each call names its function
   (`AGC_STEP_CALL` with `fn`, `AGC_STEP_CALL2` for two arguments). Each item

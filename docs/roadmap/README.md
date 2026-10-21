@@ -340,6 +340,7 @@ rows after them may run in parallel when needed and keep their relative order.
     after packages and the FFI
     ([§40.5](../future/40-native-code.md#405-order)). It follows 7l and 7j.
     JIT code must follow the multicore rules of row 11 (§16)
+  - **Outcome:** Hot functions run as native code with the same results
 
 - **Order:** 11
   - **Next work:** **Complete:** multicore schedulers (7h item): one I/O
@@ -424,6 +425,8 @@ macOS releases were done ahead of this order.
    single binary ([§18.3](../future/18-front-end-language.md#183-port)).
 2. **Done (2026-10-16, PR #313)**: delete the Racket front end, freeze
    `vm/unicode_data.c` as checked-in source, tag `bootstrap-racket` (§18.2).
+   Release 0.3.0 was the last with the Racket front end (owner decision,
+   2026-10-15).
 3. A speed pass on the self-hosted front end
    ([§18.5](../future/18-front-end-language.md#185-goals-and-targets)):
    **done (2026-10-16, PRs #315, #317, #319, #326)** for the `agentica test`

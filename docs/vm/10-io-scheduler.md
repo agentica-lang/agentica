@@ -330,8 +330,9 @@ section says how the scheduler and the loop keep them, as built.
      queue the diagnostic of a failed run on stderr (a kept notice, 10.2.2), so
      that the wait below covers it; close every open file, and wait for their
      flush jobs and for the output buffers of stdout and stderr to drain
-     (10.2.2). The limit covers this buffered output and the diagnostic too. The
-     wait is always bounded: 30 seconds by default, or `--flush-timeout MS`, or
+     (10.2.2). The wait first drains the pool jobs that have already finished.
+     The limit covers this buffered output and the diagnostic too. The wait is
+     always bounded: 30 seconds by default, or `--flush-timeout MS`, or
      the environment variable `AGENTICA_FLUSH_TIMEOUT_MS` (the flag wins; there
      is no way to turn the limit off), so a FIFO whose reader stopped cannot
      keep the run open for ever. When it runs out, the VM prints
