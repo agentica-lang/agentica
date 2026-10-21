@@ -399,26 +399,26 @@ innermost expression at a position (line and column from 1, in code points as
 diagnostics count them), its span and source text, and the definition of what it
 names: a function, struct, enum, variant, field or constant, with the span of
 the declaration and of its name, its signature and its `##` doc (null when it
-has none). A type argument is answered in a later version. A type of another
-file is written through the import alias of FILE (`Models.User`). On the name of
-a builtin (`split` in `xs.split(",")`) the `kind` is `builtin` and `help` holds
-the object of `agentica help NAME --json`; a builtin has no definition. A local
-(a parameter, a binding, a `for` variable or a name in a `case` pattern) has its
-type and a definition at its binding, whether the position is on a use or on the
-binding itself. The `kind` of the JSON answer is an open set: a client accepts a
-value it does not know. FILE is a path of the disk, linked and checked with its
-imports; it needs no `main`. `--stdin` before the position (`type-at --stdin
-FILE:LINE:COL`) takes the text of FILE from standard input. An error of the
-program is its own diagnostic and exits 1. A position on no token of an
-expression (a blank, a comment, the body text of a heredoc, a keyword such as
-`return` that is part of no expression) is `QUERY-NO-EXPRESSION` and exits 2, as
-is a bad position (`QUERY-USAGE`). With `--partial` (also on `refs`; `outline`
-accepts it and ignores it, since it never checks) a program in which some
-functions do not check is answered from the functions that do: the answer has
-`"partial": true` and `diagnostics`, and exits 0. A name in a function that did
-not check is answered by its definition after linking, with a `type` of null. A
-program that does not link, or a position that cannot be answered this way, is
-the first diagnostic and exits 1 as before.
+has none). A type name (in an annotation or a type argument) is answered in a
+later version. A type of another file is written through the import alias of
+FILE (`Models.User`). On the name of a builtin (`split` in `xs.split(",")`) the
+`kind` is `builtin` and `help` holds the object of `agentica help NAME --json`;
+a builtin has no definition. A local (a parameter, a binding, a `for` variable
+or a name in a `case` pattern) has its type and a definition at its binding,
+whether the position is on a use or on the binding itself. The `kind` of the
+JSON answer is an open set: a client accepts a value it does not know. FILE is a
+path of the disk, linked and checked with its imports; it needs no `main`.
+`--stdin` before the position (`type-at --stdin FILE:LINE:COL`) takes the text
+of FILE from standard input. An error of the program is its own diagnostic and
+exits 1. A position on no token of an expression (a blank, a comment, the body
+text of a heredoc, a keyword such as `return` that is part of no expression) is
+`QUERY-NO-EXPRESSION` and exits 2, as is a bad position (`QUERY-USAGE`). With
+`--partial` (also on `refs`; `outline` accepts it and ignores it, since it never
+checks) a program in which some functions do not check is answered from the
+functions that do: the answer has `"partial": true` and `diagnostics`, and exits
+0. A name in a function that did not check is answered by its definition after
+linking, with a `type` of null. A program that does not link, or a position that
+cannot be answered this way, is the first diagnostic and exits 1 as before.
 
 `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
 defined in the modules linked from the files under PATH (a file or a folder;

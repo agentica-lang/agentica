@@ -4,8 +4,7 @@
 the TCP sockets of 10.3.1 (libuv on every system). The release links the
 vendored OpenSSL 3.5 LTS statically, and a default source build links the system
 OpenSSL 3 (`AGENTICA_OPENSSL`, 10.0). The adapter sets its own minimums and
-reads
-no `openssl.cnf`, so both builds behave the same.
+reads no `openssl.cnf`, so both builds behave the same.
 
 - **Adapter.** `vm/tls.h` declares our own types only, so no OpenSSL type leaves
   the adapter files. A session uses two memory BIOs, and every call returns OK,

@@ -84,7 +84,7 @@ section says how the scheduler and the loop keep them.
     the run may stop up to (N-1) turn budgets early.
   - Per-task step quotas are not in 7h. Per-task memory quotas are out of scope,
     since the Boehm heap is shared. Only a global heap limit is possible (13).
-- **Sleep, stdin and retry.** The turn and its budget code are in `vm/interp.c`.
+- **As built.** The turn and its budget code are in `vm/interp.c`.
   `Task.sleep(0)` yields. `Task.sleep(n)` is a timer of the task (§16.9). Under
   `no_files` (the fuzzer) every sleep yields. Stdin EOF is delivered once to
   every task that waited for the read, so a TTY reader never waits for a second
@@ -203,11 +203,15 @@ section says how the scheduler and the loop keep them.
   slot is set. An item reports its end through a hook (`end`, `end_data`), which
   `finish_task` calls for a return, a crash and a cancel. The hook ignores an
   item that already timed out. An item cancelled by someone else can only be
-  cancelled through its caller. The caller is then cancelled too, and writes no
-  slot. An item with a file close pending is not settled: the hook waits, and
-  `agc_task_close_done` calls it when the last close ends. If the deadline comes
-  first, the item settles as timed out without waiting for the close. An item
-  that ends after its deadline, but before the caller runs, keeps its result.
+  cancelled through its caller. The caller, a stepper parked on the group's
+  timer, is then cancelled like any parked task (its timer is disarmed): it
+  cancels its children first, never runs the step function again, and so starts
+  nothing and writes no slot. An item with a file close pending is not settled:
+  the hook waits, and `agc_task_close_done` calls it when the last close ends.
+  If the deadline comes first, the item settles as timed out without waiting
+  for the close (`expire` marks its crash, if any, as observed), and the hook,
+  when the close ends, finds a settled item and does nothing. An item that ends
+  after its deadline, but before the caller runs, keeps its result.
   The handles an item opened are closed when it ends or is cancelled (Owners).
   With more than one scheduler (not built) the hook runs on the item's
   scheduler, so the group needs its small lock (10.2.3, "Task.map group lock").
@@ -415,9 +419,14 @@ section says how the scheduler and the loop keep them.
   console, a file, `NUL`) is read by one thread of the VM's own
   (`vm/stdio_windows.c`), never by the pool. That thread does one blocking
   `_read` in binary mode when a read is asked for, and wakes the loop with an
-  async handle. A cancelled reader leaves the read in flight, as on Unix, and
-  its bytes or EOF go to the next reader. At the end of the run the read is
-  cancelled where Windows can (`CancelSynchronousIo`, a pipe). Other unsupported
+  async handle. The handle keeps the loop alive only while a read is out. The
+  thread and its handle are made on the I/O thread at the first read, after the
+  job's start. Stop signals are handled by libuv on the loop, independently of
+  the reader. A cancelled reader leaves the read in flight, as on Unix, and its
+  bytes or EOF go to the next reader. At the end of the run the read is
+  cancelled where Windows can (`CancelSynchronousIo`, a pipe); a read that
+  cannot be cancelled ends with the process, or, in an in-process harness, when
+  input comes, and then touches nothing of the closed loop. Other unsupported
   hosts keep a blocking read on the interpreter thread.
 - **stdout and stderr (row 7.2.1f, `vm/output.c`).** Each stream has one output
   buffer, a `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of
@@ -469,11 +478,17 @@ section says how the scheduler and the loop keep them.
     (`CompareObjectHandles`, Windows 10 1607 and later), and, if it is also
     stdin, when no read of stdin is in flight. A socket that is not overlapped
     serializes its I/O. When it is both stdin and stdout, a blocked read stalls
-    the writes of stdout, and that output is lost after `--flush-timeout`. Where
-    Unix makes one non-blocking write (a stop signal, a final notice), Windows
-    waits for the request up to 200 ms, shared with the other final writes of
-    the exit (`settle`). The jobs do not set `flush`, since `agc_output_busy`
-    counts the buffered bytes instead.
+    the writes of stdout, and that output is lost after `--flush-timeout`. The
+    pipe's handle is a private, non-inheritable copy of the descriptor, so
+    closing it leaves stdout open, and closing it cancels the request in flight.
+    A request takes the ranges of the ring as they are and ends all or nothing,
+    so the ring is consumed when the request ends. Where Unix makes one
+    non-blocking write (a stop signal, a final notice), Windows waits for the
+    request up to 200 ms, shared with the other final writes of the exit
+    (`settle`). The jobs do not set `flush`, since `agc_output_busy` counts the
+    buffered bytes instead. `agc_io_close`, used only by in-process harnesses,
+    does not free the buffer of a stream whose pool write is still in flight; a
+    real exit ends with `_exit`.
   - **Descriptor guard.** A `File` path that names the reopened descriptor
     (above 2) through `/proc/self/fd` or `/proc/thread-self/fd` on Linux, or
     through `/dev/fd` elsewhere, is refused with the not-a-regular-file error
