@@ -116,6 +116,7 @@ Split text; an empty separator gives characters.
 | `--schedulers N` | scheduler threads, 1 to 1024. Env `AGENTICA_SCHEDULERS`. This build runs one; a larger number or a bad value exits with code 2 |
 | `--allow-run` | lets the program start programs with `Process.spawn` |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
+| `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `compile FILE -o OUT` | writes VM bytecode |
 | `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
 | `--version` | prints the version |

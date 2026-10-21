@@ -5,10 +5,10 @@ import Writer from "../bytecode/bytecode_writer"
 import Problems from "../check/check_failure"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
-import SourceReader from "../io/source_reader"
 import Linker from "../modules/linker"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
+import Workspace from "../modules/workspace"
 import Lowering from "../lower/lowering"
 import SourceFile from "../syntax/source_file"
 
@@ -38,10 +38,10 @@ export enum Compiled
   Rejected(Problems.Problem)
 end
 
-## Reads the root file once, so a file that cannot be read or decoded is told apart from a problem of the program. The
-## linker reads it again; every problem names `path` as it was given.
-export def read_root(path: String) -> Root
-  case SourceReader.read(path)
+## Reads the root file once through `workspace`, so a file that cannot be read or decoded is told apart from a problem
+## of the program. The linker reads it again; every problem names `path` as it was given.
+export def read_root(workspace: Workspace.Workspace, path: String) -> Root
+  case workspace.read_text.call(path)
     SourceFile.Read.Unreadable(message) -> return Root.Unreadable(message)
     SourceFile.Read.Invalid(at) -> return Root.Invalid(stage_problem(path, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Text(_) -> return Root.Readable

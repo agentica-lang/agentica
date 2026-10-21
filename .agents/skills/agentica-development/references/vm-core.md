@@ -200,7 +200,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (written by `vm/tools/gen-embedded.sh`)
 
 - **Path:** `vm/front_end.c`
-  - **Owns:** `FrontEnd.hand_off` and `FrontEnd.std_source` (a service,
+  - **Owns:** `FrontEnd.hand_off`, `FrontEnd.std_source` and
+    `FrontEnd.stdin_bytes` (a service,
     `agc_front_end_builtins`): they fail with `RUNTIME-FRONT-END-ONLY` when
     `rt->front_end` is NULL, which it is for every runtime except the front end
     of the single binary

@@ -751,6 +751,20 @@ ROWS_9: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "FrontEnd.stdin_bytes",
+      parameters: [],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "FrontEnd.stdin_bytes",
+      effects: ["process"],
+      description: (
+        "Front end only: standard input as bytes, read to its end (a later call reads on from there); more than " +
+        "16 MiB, or a read that fails, is an error. The front end has no input stream otherwise. Any other program " +
+        "fails with RUNTIME-FRONT-END-ONLY."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "HttpWire.accept",
       parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
       result: Types.Type.Result(Types.Type.Opaque("Socket")),

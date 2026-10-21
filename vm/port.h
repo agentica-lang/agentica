@@ -176,6 +176,8 @@ typedef struct {
   int got;
   uint8_t *buf;
   size_t start, end, cap, scanned;
+  /* The most bytes the next read may add, while agc_input_whole fills to its cap; 0 is no bound. */
+  size_t bound;
   uint64_t eof_seq;
   agc_task *waiters, *waiters_tail;
 } agc_input;
@@ -263,6 +265,10 @@ typedef struct {
  * by what the system lets it start with, far below the second number. The caps keep the counts inside an int. */
 #define AGC_FRONT_END_MAX_OPTIONS 64
 #define AGC_FRONT_END_MAX_ARGUMENTS 1048576
+
+/* The most bytes of standard input that FrontEnd.stdin_bytes takes. The front end holds them as a List of Int, 16
+ * bytes a byte, so the cap is far below a source file the loader would accept (AGC_MAX_FILE_BYTES). */
+#define AGC_FRONT_END_MAX_STDIN ((size_t)16 * 1024 * 1024)
 
 /* What the front end (the compiler that the binary loads from its own data) shares with the driver: the std/ sources
  * it may read, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
@@ -666,6 +672,11 @@ void agc_stdin_read(agc_vm *vm, agc_stdin_reader *r, agc_io_job *job, size_t roo
 int64_t agc_stdin_take(agc_stdin_reader *r, const uint8_t **data);
 void agc_stdin_close(agc_stdin_reader *r);
 #endif
+/* All of standard input to its end, for FrontEnd.stdin_bytes (vm/input.c, the one stdin reader). A runtime with no
+   input stream (the front end's) opens descriptor 0 at the first call. The task parks while a read is in flight
+   (AGC_INPUT_WAIT: return void, the builtin runs again); a failed read is AGC_INPUT_FAILED. At most MAX + 1 bytes are
+   kept: more than MAX gives AGC_INPUT_OK with *OUT NULL, and no list is built. */
+agc_input_status agc_input_whole(agc_vm *vm, size_t max, agc_list **out);
 
 void agc_charge(agc_vm *vm, uint64_t units);
 void agc_charge_bytes(agc_vm *vm, size_t bytes);
