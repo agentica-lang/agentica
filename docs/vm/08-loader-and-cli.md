@@ -155,11 +155,11 @@ byte of a file with a type table, an Updates section or Globals.
   The flag wins over a valid value of the variable; a bad flag or a bad
   variable exits 2 even when the other is valid, and the variable is read
   before the front end starts, so it is checked for every command, also
-  `check`. The default is 1. A count above 1 exits 2 with `agentica: N
-  schedulers were asked for, but this build runs one` before the program loads
-  (`agc_launch_supported`), so it never runs as 1; `agentica test` refuses a
-  flag above 1 the same way. `agentica` passes the flag to the VM, and `check`
-  and `compile` ignore it.
+  `check`. The default is one per logical core (`uv_available_parallelism()`,
+  at most 1024); the front end itself always runs on one. `agentica test`
+  refuses the flag (exit 2), since the VMs it starts would not get it; they read
+  the variable. `agentica` passes the flag to the VM, and `check` and `compile`
+  ignore it.
 - Windows and macOS: the binary embeds the front end as ELF, Mach-O or COFF
   data and builds on all three systems (`platforms.yml`); `vm/launch.c` finds
   the executable path through libuv.

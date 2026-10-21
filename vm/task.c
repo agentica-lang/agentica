@@ -657,8 +657,8 @@ static bool run_task(agc_vm *vm, agc_task *t) {
 }
 
 /* Several schedulers (docs/vm/16-architecture.md §16.9, "Threads"): N scheduler threads share the run queue, and the
-   main thread becomes the I/O thread, the only one that calls libuv. It is reached only under the test switch
-   AGENTICA_VM_TEST_MULTICORE until the count is lifted (#345). */
+   main thread becomes the I/O thread, the only one that calls libuv. A run takes this path unless it has one scheduler
+   (--schedulers 1, or a machine with one core). */
 
 /* The run is over: the first caller records the end in rt->outcome (its own failure, or the end it wrote there), every
    caller ends the run queue, so each scheduler stops at its next turn boundary, and wakes the I/O thread. Nothing reads
@@ -843,6 +843,7 @@ static agc_outcome run_threads(agc_vm *vm) {
 }
 
 agc_outcome agc_vm_run(agc_vm *vm) {
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "run schedulers=%" PRId64, vm->rt->schedulers);
   if (vm->rt->schedulers > 1) return run_threads(vm);
   if (setjmp(vm->fail) == 0) {
     agc_profile_start(vm);

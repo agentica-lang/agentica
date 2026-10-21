@@ -20,6 +20,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `agentica check FILE ... --stdin` is a usage error (exit 2);
   extra words after `check FILE` used to be ignored.
+- **Breaking:** programs run on one scheduler per logical core by default, so
+  tasks run in parallel and their order is not fixed; use `--schedulers 1` (or
+  `AGENTICA_SCHEDULERS=1`) for the old order. `agentica test` refuses
+  `--schedulers`; the VMs it starts read `AGENTICA_SCHEDULERS`.
+
+### Fixed
+
+- A Unix socket as standard output no longer holds the end of the run when its
+  reader reads only after the exit and the output fills more than a quarter of
+  its buffer.
 
 ## [0.5.0] - 2026-10-21
 

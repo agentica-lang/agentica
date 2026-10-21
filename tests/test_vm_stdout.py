@@ -481,6 +481,23 @@ def test_a_socket_as_stdout_read_only_after_the_exit_gets_every_row(tmp_path):
     assert err == ""
 
 
+# Rows past a quarter of the socket's buffer come in a later turn: a Unix socket polls writable only while a quarter of
+# its buffer is used, so the rows must be sent without waiting for that (they fit in the buffer).
+LATE_ROWS_PROGRAM = ROWS_PROGRAM.replace("    n += 1\n  end\n", "    n += 1\n  end\n  Task.sleep(50)\n  while n < %d\n"
+                                         "    puts(\"row #{n} #{filler}\")\n    n += 1\n  end\n")
+
+
+@not_wine_socket
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_socket_as_stdout_read_only_after_the_exit_gets_the_rows_of_a_later_turn(tmp_path, schedulers):
+    summary, out, err = run_case(tmp_path, "socket_exit_late", LATE_ROWS_PROGRAM % (110, 120),
+                                 peer=["--socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)],
+                                 vm=["--schedulers", schedulers])
+    assert summary["status"] == 0
+    check_rows(lines_of(out), 120)
+    assert err == ""
+
+
 @not_wine_socket
 def test_a_socket_as_stderr_read_only_after_the_exit_gets_every_row(tmp_path):
     summary, out, err = run_case(tmp_path, "socket_exit_err", ERROR_ROWS_PROGRAM % SOCKET_ROWS,

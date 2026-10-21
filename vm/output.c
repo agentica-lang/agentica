@@ -377,6 +377,9 @@ static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newlin
     }
     if (!s->waiters && !queued(s) && total(&w) <= room(s)) {
       copy_piece(s, &w, total(&w));
+      /* No task waits for room here, so writing before the kick cannot leave one parked with room it was not told
+         of. Pipes and terminals keep the batch that the wait gives. */
+      if (agc_stdio_try_first(s)) write_now(vm, s);
       kick(vm, s);
       stream_drop(vm, s->lock);
       return true;

@@ -31,11 +31,12 @@ Ruby's iterators, generators and accumulators, and faster programs through
 concurrency.
 
 **What exists today** (`grammar.md`, "Lightweight tasks", "Ranges", "Blocks and
-closures"): `Task.spawn`, `Task.await` and `Task.sleep` give I/O concurrency on
-one core (the VM runs one scheduler, `docs/vm/10-io-scheduler.md` §10.2.1).
+closures"): `Task.spawn`, `Task.await` and `Task.sleep` give I/O concurrency
+and CPU parallelism (one scheduler per logical core,
+`docs/vm/16-architecture.md` §16.9).
 `List` and `Range` methods are eager; `for` over a range does not build a list;
 `reduce` is the accumulator. Channels (27.2) and `Lazy[T]` over lists, ranges
-and `Lazy.produce` (27.4) are built; there is no CPU parallelism.
+and `Lazy.produce` (27.4) are built.
 `Task.await(task, timeout_ms)` (27.3) bounds a
 wait without stopping the task, and `Task.cancel` (27.1) stops a task that the
 program no longer needs.

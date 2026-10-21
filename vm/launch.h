@@ -14,8 +14,9 @@
 
 /* The options that the VM takes before the program. max_steps, flush_timeout and schedulers are the values after the
  * defaults and the flags; the seen_ flags say what was typed (the environment may still set the flush timeout and the
- * schedulers). embedded is the word after --embedded, which only `agentica run` takes: the program is one the binary
- * carries, not a file. */
+ * schedulers). chosen_schedulers, set by agc_launch_env, says the count came from the flag or AGENTICA_SCHEDULERS,
+ * not from the default. embedded is the word after --embedded, which only `agentica run` takes: the program is one the
+ * binary carries, not a file. */
 typedef struct {
   int64_t max_steps, flush_timeout, driver, schedulers;
   uint32_t seed;
@@ -23,7 +24,7 @@ typedef struct {
   const char *source_root;
   const char *embedded;
   size_t source_root_chars;
-  bool seen_flush, seen_schedulers, seen_seed, seen_driver, allow_run;
+  bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, allow_run;
 } agc_launch_options;
 
 typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;
@@ -62,9 +63,13 @@ void agc_launch_defaults(agc_launch_options *options);
  * given. False, with a message on stderr, when a variable is not valid. */
 bool agc_launch_env(const char *name, agc_launch_options *options);
 
-/* False, with a message on stderr, when the options ask for more than this build does: more than one scheduler. Call it
- * once the flags and the environment are both applied. */
-bool agc_launch_supported(const char *name, const agc_launch_options *options);
+/* The schedulers of a run that does not choose a count: one per logical core, at most AGC_SCHEDULERS_MAX. */
+int64_t agc_launch_default_schedulers(void);
+
+/* False, with a message on stderr, when a chosen count above 1 meets something that needs one scheduler (the profile
+ * trace, the test-only blocking output); the default count drops to 1 there instead. Call it once the flags and the
+ * environment are both applied. */
+bool agc_launch_supported(const char *name, agc_launch_options *options);
 
 /* --driver-pid: false when the parent process is not the driver that named itself. */
 bool agc_launch_bind(int64_t driver);

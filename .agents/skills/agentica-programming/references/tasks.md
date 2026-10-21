@@ -100,8 +100,10 @@ A runtime error in `main`, RUNTIME-STEP-LIMIT and System.exit in any task still
 end the whole run; System.exit keeps its code. Returning from the entrypoint
 cancels pending work; explicitly await tasks that must finish. External
 interruption cancels tasks and closes newly created resources while preserving
-caller-supplied ports. No CPU parallelism is exposed. A block can be the task
-function when passed through a `Fn` variable or parameter.
+caller-supplied ports. Tasks run in parallel on one scheduler per logical core
+(`--schedulers N` sets the count; `--schedulers 1` runs one task at a time). A
+block can be the task function when passed through a `Fn` variable or
+parameter.
 
 Random: each task has its own generator, split from its parent at spawn (one
 parent draw per spawn), so with `--seed N` each task repeats its own values. The
@@ -230,9 +232,10 @@ This prints `[ok("page 1"), error("task: timed out"), ok("page 3")]`. The rules:
   `timeout_ms` must be above 0, else RUNTIME-INVALID-DURATION at that argument.
   Both are checked first, also for an empty list (which gives `[]`). A `limit`
   above the list size starts every item at once.
-- `limit` is for I/O (HTTP, files, processes). CPU work does not get faster on
-  one core, and since the clock of an item includes its time in the run queue, a
-  large `limit` over CPU work makes timeouts more likely, not the work faster.
+- `limit` is mostly for I/O (HTTP, files, processes). CPU work runs on at most
+  one item per scheduler at a time, and since the clock of an item includes its
+  time in the run queue, a `limit` above the number of schedulers over CPU work
+  makes timeouts more likely, not the work faster.
 - A cancelled item runs no more user code, and neither does anything it started:
   its tasks (a grandchild too, even if its parent ended) are cancelled, and a
   `Task.map` it called starts no more items. An operation waiting on I/O is

@@ -785,8 +785,8 @@ vm-tsan:
 	$(MAKE) $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) TSAN=1 SANITIZE=0 GC_STRESS=0
 	printf '%s\n' $(patsubst %,build/vm/tsan/%-test,$(VM_TSAN_TESTS)) | TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" xargs -n 1 sh -c '$(VM_TEST_RUNNER) "$$0" || { echo "C test failed: $$0" >&2; exit 255; }'
 
-# Programs on several schedulers (tests/test_vm_multicore.py): the test-only switch AGENTICA_VM_TEST_MULTICORE=1 lets
-# --schedulers N run them on N threads. test-multicore runs them on dist/agentica; vm-tsan-run runs them on a TSan
+# Programs on four schedulers (tests/test_vm_multicore.py, --schedulers 4 on any machine; the default is one per
+# logical core). test-multicore runs them on dist/agentica; vm-tsan-run runs them on a TSan
 # binary (no libgc, the front end of the release build), so a race between schedulers or with the I/O thread fails it.
 # The module run also sets AGENTICA_TEST_EXECUTABLE to that binary, so the tests that run the command line (`agentica
 # test`, `check`) go through TSan too, not through the ASan binary that SANITIZE=1 makes of dist/agentica.
@@ -932,10 +932,11 @@ sweep-full: vm-diff-build
 VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py
 SANITIZE_JOBS ?= 4
 
-# The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only): the lock checks of
-# agc_sync_assert and the owner token then run on every builtin, so a builtin that touches shared state without its lock fails here.
+# The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only; the module
+# knob pins one scheduler, which is not the default): the lock checks of agc_sync_assert and the owner token then run on
+# every builtin, so a builtin that touches shared state without its lock fails here.
 test-shared: dist/agentica$(EXE)
-	AGENTICA_VM_TEST_SHARED=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
+	AGENTICA_VM_TEST_SHARED=1 AGENTICA_VM_TEST_MODULE_SCHEDULERS=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
 
 vm-sanitize-build: dist/agentica$(EXE)
 

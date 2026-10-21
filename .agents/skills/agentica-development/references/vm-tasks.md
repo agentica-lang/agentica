@@ -8,15 +8,22 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **Path:** `vm/task.c`
   - **Owns:** The scheduler (run queue, turns, park and wake), task cancellation
-    and the `Task` builtins. With `rt->schedulers > 1` (test-only:
-    `AGENTICA_VM_TEST_MULTICORE=1`) `agc_vm_run` goes to `run_threads`: one
+    and the `Task` builtins. The count is one per logical core unless
+    `--schedulers` or `AGENTICA_SCHEDULERS` sets it (`vm/launch.c`; the front
+    end always runs at 1). With `rt->schedulers > 1` `agc_vm_run` goes to
+    `run_threads`: one
     `agc_vm` per scheduler thread (`sched_main`, `sched_turns`), the calling
     thread as the I/O thread (`agc_io_serve` in `vm/loop.c`), the first end
     recorded once by `agc_run_over`, the threads joined before the exit path
     (`docs/vm/16-architecture.md` §16.9, "Threads"). A failure writes
     `*vm->outcome`, the record of that scheduler, never `rt->outcome` directly.
-    Programs at N = 4: `tests/test_vm_multicore.py` (`make test-multicore`,
-    `make vm-tsan-run`) and the TCP, TLS, HTTP, process and BDD modules
+    Tests run at the default count, except the goldens
+    (`tests/vm_diff_support.py` sets `AGENTICA_SCHEDULERS=1`: step counts, the
+    `--max-steps` sweep and task order hold only there) and a case whose output
+    depends on task order, which pins `--schedulers 1` (the ORDER set of
+    `tests/test_vm_multicore.py`). Programs at N = 4:
+    `tests/test_vm_multicore.py` (`make test-multicore`, `make vm-tsan-run`)
+    and the TCP, TLS, HTTP, process and BDD modules
     (`make test-multicore-modules`, `AGENTICA_VM_TEST_MODULE_SCHEDULERS`); whole
     runs in C: `vm/tests/threads_test.c`. `agc_task_service` (the `HttpClient`'s
     tree, `HttpWire.service`) spawns under a root with no parent: its tasks
@@ -333,8 +340,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - Tasks: `make vm-latency` runs `tests/test_vm_latency.py` alone (kept
   out of `make test`'s parallel batch by `PY_ALONE` in the Makefile; CI runs it
 right
-  after `make test`). A sleeping task and a stdin reader must wake within
-  250 ms next to CPU, sort and concat tasks, and must not with
+  after `make test`). On one scheduler (`AGENTICA_SCHEDULERS=1`), a sleeping
+  task and a stdin reader must wake within 250 ms next to CPU, sort and concat
+  tasks, and must not with
   `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (a test-only switch that leaves
   stdout and stderr on the blocking `FILE` fallback, so
   `tests/test_vm_stdout.py` can test that path on Linux) and

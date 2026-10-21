@@ -69,8 +69,8 @@ OPTIONS = [
   ].join(""),
   "  --schedulers <n>",
   [
-    "     run on N scheduler threads, 1 to 1024 (AGENTICA_SCHEDULERS sets it too, the flag wins over a valid value); ",
-    "this build runs one, so a larger number is refused",
+    "     run on N scheduler threads, 1 to 1024 (default: one per logical core; AGENTICA_SCHEDULERS sets it too, ",
+    "the flag wins over a valid value); 1 runs one task at a time, in a fixed order",
   ].join(""),
   "  --dump",
   "     print the checked tree instead of running it",

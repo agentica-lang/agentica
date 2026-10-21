@@ -113,7 +113,7 @@ Split text; an empty separator gives characters.
 | `--max-steps N` | stops after `N` steps (`RUNTIME-STEP-LIMIT`) |
 | `--seed N` | makes `Random` repeat the same numbers |
 | `--flush-timeout MS` | waits at most `MS` ms for file data and output at the end, then warns. Default 30000, most 86400000. Env `AGENTICA_FLUSH_TIMEOUT_MS` |
-| `--schedulers N` | scheduler threads, 1 to 1024. Env `AGENTICA_SCHEDULERS`. This build runs one; a larger number or a bad value exits with code 2 |
+| `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS`. `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
 | `--allow-run` | lets the program start programs with `Process.spawn` |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
