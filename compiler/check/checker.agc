@@ -35,6 +35,12 @@ export struct Checked
   bound: Map[Int, List[T.Type]]
 end
 
+## What `check_recovering` learned: the types of the functions that passed and the problems of those that did not.
+export struct Recovered
+  checked: Checked
+  problems: List[Failure.Problem]
+end
+
 ## The result of checking: the types, or the first problem.
 export enum Checking
   Done(Checked)
@@ -43,14 +49,41 @@ end
 
 ## Checks a linked program. The settings tell where the files of the prelude are read.
 export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, true))
+  return finished(run(linked, settings, true, false))
+end
+
+## Checks a linked program as `check_query` does, but a function whose body fails to check does not stop the run: its
+## problem is kept and the other functions are checked. `checked` holds the types of the functions that passed (those
+## of a failed function stay Unknown), so a query can answer about the rest; `problems` are the failures in program
+## order, and the first is the one `check_query` gives. A failure of the registration of the declarations, of the main
+## rule or of the module constants leaves no part that passes: `checked` is `unchecked` and `problems` holds that one
+## failure.
+export def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovered
+  result = run(linked, settings, false, true)
+  if result.ok?
+    return result.unwrap!
+  end
+  return Recovered(checked: unchecked(linked), problems: [Failure.unpack(result.message)])
+end
+
+## The checked data of a program nothing was checked in: every type is Unknown and nothing is resolved or bound.
+export def unchecked(linked: Linker.Linked) -> Checked
+  return Checked(
+    types: no_types(ids_of(linked), max_repeat()),
+    resolved: {},
+    constants: [],
+    prelude: [],
+    bodies: {},
+    step_tries: Set.new([]),
+    bound: {},
+  )
 end
 
 ## Checks a linked program as `check` does, without the rule that it declares a main (CHECK-MAIN): `agentica check` and
 ## a query about a position (`agentica type-at`) take a library file as well as a program. A main that is declared must
 ## still be `main() -> Void`, and every other rule holds.
 export def check_query(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, false))
+  return finished(run(linked, settings, false, false))
 end
 
 ## A list of count slots with no type, built from repeats of at most chunk, so no runtime error escapes for a huge
@@ -69,9 +102,9 @@ export def no_types(count: Int, chunk: Int) -> List[T.Type]
   return types
 end
 
-def finished(result: Result[Checked]) -> Checking
+def finished(result: Result[Recovered]) -> Checking
   if result.ok?
-    return Checking.Done(result.unwrap!)
+    return Checking.Done(result.unwrap!.checked)
   end
   return Checking.Failed(Failure.unpack(result.message))
 end
@@ -97,7 +130,9 @@ def start(linked: Linker.Linked) -> State.Cx
   )
 end
 
-def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> Result[Checked]
+# `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends
+# the run.
+def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool, recover: Bool) -> Result[Recovered]
   base = start(linked)
   cx = try Register.register(base, linked.modules)
   try Register.check_main(cx, linked.modules, linked.root.span, main_required)
@@ -105,27 +140,35 @@ def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> R
   done = try Constants.check_all(cx, st, linked.modules)
   cx = done.cx
   st = done.st
+  problems: List[Failure.Problem] = []
   for module in linked.modules
     here = cx.with(file: module.file)
     for decl in module.declarations
       case decl
-        Ast.Decl.Function(node) -> st = try Statements.check_function(here, st, node)
+        Ast.Decl.Function(node) ->
+          step = Statements.check_function(here, st, node)
+          if step.ok?
+            st = step.unwrap!
+          elsif recover
+            problems = problems.push(Failure.unpack(step.message))
+          else
+            return error(step.message)
+          end
         _ -> st = st
       end
     end
   end
   attached = try Prelude.attach(settings, base, st)
-  return ok(
-    Checked(
-      types: attached.st.types,
-      resolved: attached.st.resolved,
-      constants: done.order,
-      prelude: attached.modules,
-      bodies: attached.st.bodies,
-      step_tries: attached.st.step_tries,
-      bound: attached.st.bound,
-    ),
+  checked = Checked(
+    types: attached.st.types,
+    resolved: attached.st.resolved,
+    constants: done.order,
+    prelude: attached.modules,
+    bodies: attached.st.bodies,
+    step_tries: attached.st.step_tries,
+    bound: attached.st.bound,
   )
+  return ok(Recovered(checked: checked, problems: problems))
 end
 
 # The number of node ids of the program, with the room the linker took for the receivers of constants (Linked.ids).

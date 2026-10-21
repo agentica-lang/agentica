@@ -59,6 +59,40 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
   end
 end
 
+## Whether the answer needs the types of every function to be complete: a field is read through the type of its target,
+## and a builtin may be a method that resolved through one.
+export def needs_types?(found: Answer) -> Bool
+  case found.definition
+    Ast.Optional.Present(declared) -> return declared.kind == "field"
+    Ast.Optional.Absent -> return true
+  end
+end
+
+## The definition of the declaration `target` names, or Absent for a builtin.
+export def defined(modules: List[Linker.LinkedModule], target: Sites.Target) -> Ast.Optional[Definitions.Definition]
+  if target.kind == "field"
+    return Definitions.of_field(modules, target.owner, target.name)
+  elsif target.kind == "variant"
+    return Definitions.of_variant(modules, target.owner, target.name)
+  end
+  return Definitions.of_name(modules, target.name)
+end
+
+## The innermost site whose written name holds the character at `offset`: the shortest, and the first of two equal.
+export def innermost(sites: List[Sites.Site], offset: Int) -> Ast.Optional[Sites.Site]
+  best: Ast.Optional[Sites.Site] = Ast.Optional.Absent
+  best_size = -1
+  for site in sites
+    size = site.reach.stop.offset - site.reach.start.offset
+    closer = best_size < 0 or size < best_size
+    if closer and site.reach.start.offset <= offset and offset < site.reach.stop.offset
+      best = Ast.Optional.Present(site)
+      best_size = size
+    end
+  end
+  return best
+end
+
 # A local: its binding is the definition, and its uses are in the function that holds it.
 def of_local(linked: Linker.Linked, checked: Checker.Checked, local: Locals.Local) -> Answer
   module = linked.modules[0]
@@ -130,30 +164,6 @@ def named_answer(linked: Linker.Linked, target: Sites.Target, references: List[R
     builtin: builtin,
     references: references,
   )
-end
-
-def defined(modules: List[Linker.LinkedModule], target: Sites.Target) -> Ast.Optional[Definitions.Definition]
-  if target.kind == "field"
-    return Definitions.of_field(modules, target.owner, target.name)
-  elsif target.kind == "variant"
-    return Definitions.of_variant(modules, target.owner, target.name)
-  end
-  return Definitions.of_name(modules, target.name)
-end
-
-# The innermost site whose written name holds the character at `offset`: the shortest, and the first of two equal.
-def innermost(sites: List[Sites.Site], offset: Int) -> Ast.Optional[Sites.Site]
-  best: Ast.Optional[Sites.Site] = Ast.Optional.Absent
-  best_size = -1
-  for site in sites
-    size = site.reach.stop.offset - site.reach.start.offset
-    closer = best_size < 0 or size < best_size
-    if closer and site.reach.start.offset <= offset and offset < site.reach.stop.offset
-      best = Ast.Optional.Present(site)
-      best_size = size
-    end
-  end
-  return best
 end
 
 # The name of the function that holds `offset`; "" at the top level.

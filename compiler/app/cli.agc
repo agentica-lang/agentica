@@ -149,7 +149,7 @@ def query(session: Session, verb: String, words: List[String]) -> Int
   elsif verb == "refs"
     usage = CliQuery.refs_usage()
   end
-  case QueryOptions.parse(words, session.options.style, usage)
+  case QueryOptions.parse(words, session.options.style, usage, true)
     QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
@@ -157,7 +157,7 @@ def query(session: Session, verb: String, words: List[String]) -> Int
         QueryFiles.Picked.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
         QueryFiles.Picked.File(file) ->
           if verb != "outline"
-            return position(styled, verb, file, asked.stdin != "", usage)
+            return position(styled, verb, file, asked, usage)
           end
           if asked.stdin == ""
             return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings), file)
@@ -172,7 +172,7 @@ end
 # `symbol NAME [PATH...]`. With `--stdin FILE` the text of FILE is the standard input and FILE is searched as well; a
 # problem in FILE is shown against the buffer.
 def symbol(session: Session, words: List[String]) -> Int
-  case QueryOptions.parse(words, session.options.style, CliQuery.symbol_usage())
+  case QueryOptions.parse(words, session.options.style, CliQuery.symbol_usage(), false)
     QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
@@ -186,25 +186,25 @@ def symbol(session: Session, words: List[String]) -> Int
 end
 
 # `type-at FILE:LINE:COL` or `refs FILE:LINE:COL`, or the same with `--stdin`, where the text of FILE is the standard
-# input.
-def position(session: Session, verb: String, word: String, buffered: Bool, usage: String) -> Int
+# input. `options` are the words of the command: the style, `--stdin` and `--partial`.
+def position(session: Session, verb: String, word: String, options: QueryOptions.Query, usage: String) -> Int
   case QueryPosition.parse(word, usage)
     QueryPosition.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryPosition.Parsed.Ready(asked) ->
-      if !buffered
-        return answered(session, position_answer(verb, asked, session), asked.file)
+      if options.stdin == ""
+        return answered(session, position_answer(verb, asked, options.partial, session), asked.file)
       end
       return with_buffer(session, asked.file) do |read: Session|
-        answered(read, position_answer(verb, asked, read), asked.file)
+        answered(read, position_answer(verb, asked, options.partial, read), asked.file)
       end
   end
 end
 
-def position_answer(verb: String, asked: QueryPosition.Asked, session: Session) -> Reply.Answer
+def position_answer(verb: String, asked: QueryPosition.Asked, partial: Bool, session: Session) -> Reply.Answer
   if verb == "refs"
-    return CliQuery.refs(asked, session.options.style, session.settings)
+    return CliQuery.refs(asked, session.options.style, partial, session.settings)
   end
-  return CliQuery.type_at(asked, session.options.style, session.settings)
+  return CliQuery.type_at(asked, session.options.style, partial, session.settings)
 end
 
 # `check --stdin FILE`: the text of FILE is the standard input. FILE need not exist, but its folder does: imports and

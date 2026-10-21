@@ -13,6 +13,8 @@ import Env from "../modules/link_env"
 import Front from "front"
 import Model from "model"
 import Outline from "../query/outline"
+import Partial from "partial"
+import PartialAt from "../query/partial_at"
 import Problems from "../diagnostics/problem"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
@@ -66,6 +68,13 @@ enum Fronted
   Rejected(Problems.Problem)
 end
 
+# The file of a position, linked and checked as far as it goes, the file cannot be read, or the first problem.
+enum Partly
+  Done(Partial.Recovered)
+  Unreadable
+  Rejected(Problems.Problem)
+end
+
 ## Links and checks the file at `path`, as `agentica check` does: every rule of a build except that the program
 ## declares a `main`, so a library file passes.
 export def check(settings: Env.Settings, path: String) -> Verdict
@@ -114,6 +123,56 @@ export def type_at(settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
     Fronted.Unreadable -> return Typed.Unreadable
     Fronted.Rejected(problem) -> return Typed.Rejected(problem)
     Fronted.Done(front) -> return located(settings, asked, front)
+  end
+end
+
+## `type_at` for a program that may not check (docs/future/39-semantic-cli.md, 39.6, `--partial`). When it checks, the
+## answer is the one of `type_at`. When a function fails to check, the answer is marked `partial` and holds the
+## `diagnostics` of those failures: a position in a function that checked gets its type and definition, and a name in
+## one that did not gets its definition after linking and no type (`type` is ""). A position that neither can answer, a
+## file that does not link and one whose declarations do not register are the first problem, as for `type_at`.
+export def type_at_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+  case partial_front(settings, asked)
+    Partly.Unreadable -> return Typed.Unreadable
+    Partly.Rejected(problem) -> return Typed.Rejected(problem)
+    Partly.Done(found) ->
+      if found.problems.size == 0
+        return located(settings, asked, found.front)
+      end
+      case PartialAt.answer(found.front.linked, found.front.checked, asked)
+        Diag.Outcome.Failed(_) -> return Typed.Rejected(found.problems[0])
+        Diag.Outcome.Done(answered) ->
+          marked = typed_model(settings, asked, answered)
+          return Typed.Done(marked.with(partial: true, diagnostics: diagnostics(settings, found.problems, asked.file)))
+      end
+  end
+end
+
+## `refs` for a program that may not check (docs/future/39-semantic-cli.md, 39.6, `--partial`). When it checks, the
+## answer is the one of `refs`. When a function fails to check, the answer is marked `partial` and holds the
+## `diagnostics` of those failures; it is complete for a function, struct, enum, alias, constant or variant (the
+## linker resolves every use, in a function that failed too) and for a local of a function that checked. A field or a
+## builtin needs the types of every function, so the answer for one is the first problem, as for `refs`; so is a
+## position that names nothing.
+export def refs_partial(settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+  case partial_front(settings, asked)
+    Partly.Unreadable -> return Referenced.Unreadable
+    Partly.Rejected(problem) -> return Referenced.Rejected(problem)
+    Partly.Done(found) ->
+      if found.problems.size == 0
+        return referenced(settings, asked, found.front)
+      end
+      case Refs.answer(found.front.linked, found.front.checked, asked)
+        Diag.Outcome.Failed(_) -> return Referenced.Rejected(found.problems[0])
+        Diag.Outcome.Done(answered) ->
+          if Refs.needs_types?(answered)
+            return Referenced.Rejected(found.problems[0])
+          end
+          marked = Convert.refs(asked, answered, file_names(settings, answered))
+          return Referenced.Done(
+            marked.with(partial: true, diagnostics: diagnostics(settings, found.problems, asked.file)),
+          )
+      end
   end
 end
 
@@ -188,14 +247,38 @@ def position_front(settings: Env.Settings, asked: QueryPosition.Asked) -> Fronte
   end
 end
 
+def partial_front(settings: Env.Settings, asked: QueryPosition.Asked) -> Partly
+  case Front.read_root(settings.workspace, asked.file)
+    Front.Root.Unreadable(_) -> return Partly.Unreadable
+    Front.Root.Invalid(problem) -> return Partly.Rejected(problem)
+    Front.Root.Readable ->
+      case Partial.query_file(asked.file, settings)
+        Partial.Outcome.Rejected(problem) -> return Partly.Rejected(problem)
+        Partial.Outcome.Done(found) -> return Partly.Done(found)
+      end
+  end
+end
+
 def located(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Checked) -> Typed
   case TypeAt.answer(front.linked, front.checked, asked)
     Diag.Outcome.Failed(problem) -> return Typed.Rejected(Front.stage_problem(asked.file, problem))
-    Diag.Outcome.Done(found) ->
-      name = QueryFiles.display(settings, asked.file, true)
-      home = QueryFiles.display(settings, TypeAt.definition_file(found), true)
-      return Typed.Done(Convert.type_at(name, asked, found, home))
+    Diag.Outcome.Done(found) -> return Typed.Done(typed_model(settings, asked, found))
   end
+end
+
+def typed_model(settings: Env.Settings, asked: QueryPosition.Asked, found: TypeAt.Answer) -> Model.TypeAt
+  name = QueryFiles.display(settings, asked.file, true)
+  home = QueryFiles.display(settings, TypeAt.definition_file(found), true)
+  return Convert.type_at(name, asked, found, home)
+end
+
+# The problems as the answer gives them: the file of the question as it was typed.
+def diagnostics(
+  settings: Env.Settings,
+  problems: List[Problems.Problem],
+  source: String,
+) -> List[DiagnosticModel.Diagnostic]
+  return problems.map do |problem: Problems.Problem| DiagnosticModel.of_problem(named(settings, problem, source)) end
 end
 
 def referenced(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Checked) -> Referenced

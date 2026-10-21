@@ -22,6 +22,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica refs FILE:LINE:COL [--json]` lists every reference to the name at a
   position (a function, type, field, variant, constant, local or builtin) in the
   file and what it imports; `--stdin` reads the file from standard input.
+- `agentica type-at` and `agentica refs` take `--partial`: a program in which
+  some functions do not check is still answered (`"partial": true` and the
+  `diagnostics` in the JSON), from the functions that check and from the link.
 - `Std.source(path)` gives the text of a `std/` source that the binary carries,
   such as `"queue.agc"`, to any program.
 - `std/analysis` answers the questions of `check`, `outline` and `type-at` from

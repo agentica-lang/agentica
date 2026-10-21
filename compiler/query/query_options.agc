@@ -1,6 +1,7 @@
 ## The words of a query command (docs/future/39-semantic-cli.md, 39.2) after the command, read by hand as `help` and
-## `doc` read theirs: `--json`, `--ai` and `--stdin FILE` may stand among the arguments, in any order; every other word
-## that starts with "-" and has more than one character is an unknown option. The options in front of the command were
+## `doc` read theirs: `--json`, `--ai`, `--stdin FILE` and, for the commands that answer from a program that does not
+## check, `--partial` may stand among the arguments, in any order; every other word that starts with "-" and has more
+## than one character is an unknown option. The options in front of the command were
 ## read by the command line already (app/cli_options.agc); the last style written wins.
 ##
 ## A mistake in the words is the diagnostic QUERY-USAGE, located at the pseudo-file `<arguments>` (line 1, column 1),
@@ -15,10 +16,12 @@ import Source from "../syntax/source"
 ARGUMENTS = "<arguments>"
 
 ## What the words said. `style` is "plain", "ai" or "json". `stdin` is the FILE of `--stdin` ("" without it): the text
-## of that file is the standard input. `words` are the arguments that are not options, in order.
+## of that file is the standard input. `partial` is whether `--partial` was given. `words` are the arguments that are
+## not options, in order.
 export struct Query
   style: String
   stdin: String
+  partial: Bool
   words: List[String]
 end
 
@@ -29,9 +32,10 @@ export enum Parsed
 end
 
 ## Reads `arguments`, the words after the command. `style` is the one the options in front of the command gave, and
-## `usage` the usage line of the command, which a refusal gives as its help.
-export def parse(arguments: List[String], style: String, usage: String) -> Parsed
-  query = Query(style: style, stdin: "", words: [])
+## `usage` the usage line of the command, which a refusal gives as its help. `partial_wanted` is whether the command
+## has the option `--partial`; for another it is an unknown option.
+export def parse(arguments: List[String], style: String, usage: String, partial_wanted: Bool) -> Parsed
+  query = Query(style: style, stdin: "", partial: false, words: [])
   at = 0
   while at < arguments.size
     word = arguments[at]
@@ -39,6 +43,8 @@ export def parse(arguments: List[String], style: String, usage: String) -> Parse
       query = query.with(style: "json")
     elsif word == "--ai"
       query = query.with(style: "ai")
+    elsif word == "--partial" and partial_wanted
+      query = query.with(partial: true)
     elsif word == "--stdin"
       if query.stdin != "" or at + 1 >= arguments.size or !file_name?(arguments[at + 1])
         return Parsed.Refused(refusal("--stdin needs one FILE, once", usage))
