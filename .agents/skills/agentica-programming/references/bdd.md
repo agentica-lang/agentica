@@ -131,16 +131,16 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   `RUNTIME-BDD-PREMATURE-EXIT`), step limit or loop fails only that scenario;
   remaining steps are `not_executed`, other scenarios/files continue.
 - Handlers may spawn tasks and pass `ctx` in a struct; tasks must end before the
-  handler returns (`RUNTIME-BDD-PENDING-TASKS`). Assertions in tasks count. A
+  handler returns (`RUNTIME-BDD-PENDING-TASKS`; `std/bdd` checks
+  `Task.pending_count()` after each handler). Assertions in tasks count. A
   context changed in a task is lost unless taken back from `Task.await`. A task
   that crashed and was not awaited fails the step with `RUNTIME-TASK-CRASHED`,
   the crash text as its message.
 - Handlers can always call `Process.spawn`; `agentica test --allow-run` only
   lets programs under test start programs. A handler's stdin is an empty pipe
   the runner closes at once, so reading it gives the end of input; the protocol
-  runs on a channel of its own, so a handler may print anything. A handler must
-  not call `Process.parent_read_line` or `Process.parent_send`: they belong to
-  that protocol.
+  runs on a channel of its own, so a handler may print anything (it must not
+  call `Process.parent_read_line` or `Process.parent_send`).
 - Programs run with host permissions and environment, with the feature directory
   as their working directory; BDD provides no filesystem or network isolation.
   Timeouts are positive; each scenario has 30 seconds, program-driving calls
@@ -148,11 +148,10 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   plus one million (library work included), and output is limited to 1 MiB of
   unread stdout, 1 MiB of stderr and 1 MiB of handler output per step.
 - `--only TEXT` (once, not empty) keeps scenarios and tests whose name contains
-  `TEXT`; no match is `CHECK-BDD-EMPTY`. The run always has a seed (shown on
-  failure); `--seed N` replays it, and without it every child shares the seed
-  the runner drew. A `*_test.agc` file in `specs/` is a test file: a helper with
-  that name fails with `RUNTIME-TEST-RUN`. Use port 0 and fresh temporary
-  directories, not fixed names.
+  `TEXT`; no match is `CHECK-BDD-EMPTY`. Without `--seed N` every child shares
+  the seed the runner drew (`testing.md`). A `*_test.agc` file in `specs/` is a
+  test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
+  and fresh temporary directories, not fixed names.
 - To run a suite from a program, start `agentica test --json` with
   `Process.spawn` (needs `--allow-run`) and parse its report: `ok`, `passed`,
   `failed`, `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.

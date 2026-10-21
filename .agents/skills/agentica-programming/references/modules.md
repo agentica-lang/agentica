@@ -77,14 +77,12 @@ reach are built before `main`.
 ## Running
 
 Only the root file's `def main() -> Void` runs; imported `main` functions never
-run. Linking keeps source spans and distinct module identities. Imported calls
-and tasks share the program's execution budget and resource ownership. `agentica
-check`, `agentica FILE`, `agentica --dump`, and `agentica test` use the same
-loader.
+run. Imported calls and tasks share the program's execution budget and
+resource ownership. `agentica check`, `agentica FILE`, `agentica --dump`, and
+`agentica test` use the same loader.
 
 There are no wildcard imports, package registry, mutable module state, nested
-module blocks, or receiver attachment. `as` and `from` are contextual in
-imports, not reserved.
+module blocks, or receiver attachment.
 
 ## Standard library and external libraries
 
@@ -194,30 +192,11 @@ import Sqlite from "pkg/sqlite/db"
 
 `std/queue` is a library written in Agentica. Its exported records are
 `QueueState(items: List[String])` and `Popped(value: String, remaining:
-QueueState)`. With the alias `Queue`:
-
-```text
-Queue.new() -> Queue.QueueState
-Queue.push(q: Queue.QueueState, value: String) -> Queue.QueueState
-Queue.pop(q: Queue.QueueState) -> Result[Queue.Popped]
-Queue.peek(q: Queue.QueueState) -> Result[String]
-Queue.size(q: Queue.QueueState) -> Int
-Queue.empty?(q: Queue.QueueState) -> Bool
-```
-
-Push adds at the back; pop removes the oldest value. Pop and peek on an empty
-queue return an error Result. Inputs are never changed: assign the returned
+QueueState)`. Its functions are `new`, `push`, `pop`, `peek`, `size` and
+`empty?` (signatures: `agentica doc std/queue`). Push adds at the back; pop
+removes the oldest value. Pop and peek on an empty queue return an error
+Result. Inputs are never changed: assign the returned
 queue (or `Popped.remaining`). Empty strings and duplicates are valid.
 `QueueState` is a normal exported struct, not an opaque handle. There are no
 user generics and no blocking cross-task queue operations. `push`, `pop`,
 `peek`, `size` and `empty?` are O(n); no constant-time FIFO is promised.
-
-## Other standard modules
-
-- `std/http`: the HTTP client and server, written in Agentica. See `network.md`.
-- `std/binary`: reads and writes binary numbers in a `List[Int]` of bytes. See
-  `binary.md`.
-- `std/toml`: reads and writes TOML 1.0. See `toml.md`.
-- `std/logger`: levels, handlers, text and JSON lines on stderr. See
-  `logger.md`.
-- `std/bdd`: the step API of `agentica test`. See `bdd.md`.

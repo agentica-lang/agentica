@@ -28,8 +28,8 @@ returns `error("task crashed: CODE at FILE:LINE:COLUMN: MESSAGE")` when `R` is a
 Give a task a `Result` return type when its caller should handle a crash. When
 `main` returns and some crash was never awaited, the run exits 1 with a summary
 line on stderr (`1 task crash was not observed; first: ...`). With `--json`, a
-task crash line has `"task": true` and is not the run's diagnostic; an exit 1
-from an unawaited crash ends with an `{"unobserved_crashes": ...}` line instead.
+task crash line is not the run's diagnostic; an exit 1 from an unawaited crash
+ends with an `{"unobserved_crashes": ...}` line instead.
 `Task.unobserved_crash()` returns `ok(text)` for the first such crash, or an
 error; it does not observe it.
 
@@ -176,16 +176,6 @@ def main() -> Void
 end
 ```
 
-BDD step handlers may spawn tasks and pass `ctx` to them inside a struct. Finish
-them before returning, normally by awaiting them: `std/bdd` checks
-`Task.pending_count()` after each handler, and pending work fails the step with
-RUNTIME-BDD-PENDING-TASKS (also a `main` that leaves tasks running when it calls
-`BDD.run`). Assertions made by tasks count for the step. A context changed in a
-task is lost unless the handler takes it back from `Task.await`. A task that
-crashes and is not awaited fails the step with RUNTIME-TASK-CRASHED when the
-handler returns. A runtime error in the handler itself ends the scenario's child
-VM, so only that scenario fails.
-
 ## Task.map
 
 `Task.map(items, limit, timeout_ms) do |item| ... end` runs the block on each
@@ -251,9 +241,6 @@ This prints `[ok("page 1"), error("task: timed out"), ok("page 3")]`. The rules:
   variables and results are immutable and shared without copies.
 - An item may call `Task.map` itself; each call has its own limit, so the limits
   multiply. Starting an item costs one step of `--max-steps`.
-- A task the item started is cancelled with it, also when its handle left the
-  item: awaiting it halts with RUNTIME-TASK-CANCELLED unless it returns a
-  `Result`.
 
 ## Channels
 
@@ -457,7 +444,5 @@ One way for each job:
   - **The one form:** a `while` loop
 
 A channel wait holds a timer, so tasks that wait for each other through channels
-get timeout errors, not a hang. A file or socket sent over a channel stays owned
-by the task that opened it: it closes when that task ends or the run ends, so
-the task that opened it must outlive its users, or hand the handle to the worker
-with `Task.spawn_owning`.
+get timeout errors, not a hang. A handle sent over a channel stays owned by the
+task that opened it, which must outlive its users.

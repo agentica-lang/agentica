@@ -49,13 +49,11 @@ end
   those. `Fn`, `Task`, handles, `TestCase` and two different types are
   `CHECK-TYPE-MISMATCH`. Maps compare in any key order and sets in any element
   order; Floats by IEEE 754 (NaN is not equal to itself); a `Json` compares as
-  its canonical text (sorted keys). The error is `expected E; actual A` in the
-  `inspect` form, with `Json` as its JSON text.
+  its canonical text (sorted keys). A failure says `values are not equal;
+  expected E; actual A`, in the `inspect` form with `Json` as its JSON text.
 - Put the actual value first: the expected type comes from the left argument, so
   `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`; write `Test.eq(r,
   error("x"))`.
-- A failed `Test.eq` reports the message `values are not equal` with `expected`
-  and `actual`.
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag: `expected ok; actual
   error("...")`, `expected an error; actual ok(0)`.
 - `Test.assert(cond, message)` fails with `message`.
@@ -72,8 +70,7 @@ end
   anything you like with `puts`/`print`/`IO.inspect`, even a line that looks
   like a record: it is output, shown only under a failed test. `Test.run`
   without that channel, under the arguments `agentica test` passes, is
-  `RUNTIME-TEST-RUN`. The two `Process.parent_*` calls are for runner code: a
-  test that calls them can break the protocol, and nothing stops it.
+  `RUNTIME-TEST-RUN`.
 - A task crash outside every test (say, in a task `main` started) that nothing
   awaited fails the whole file (exit 1 with the crash summary).
 - Each test runs in its own task. A test fails with, in this order: a crash (its

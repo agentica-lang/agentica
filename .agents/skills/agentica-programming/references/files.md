@@ -130,9 +130,7 @@ error(...)` work inside it.
 - A file belongs to the task that opened it. The VM closes it, flushing its
   output, when that task ends by return, crash, or cancel. `Task.await` of that
   task returns after a regular file is flushed, so a parent that awaits a helper
-  reads everything the helper wrote (the await does not wait for a flush to a
-  FIFO or pipe). A file a helper returns through `Task.await` is closed when the
-  helper ends (see `tasks.md`).
+  reads everything the helper wrote (see `tasks.md` for the ownership rules).
 - `close` flushes output and is idempotent. `flush` and `close` return Results.
   `File.close` on a handle whose owner is closing waits for that close and
   returns its result.
@@ -164,6 +162,5 @@ When time runs out, the run ends with the same exit code and one stderr line,
 `{"flush_timeout_ms": MS, "warning": "file data may not be written"}`. That is a
 warning, not a diagnostic.
 
-`SIGINT`, `SIGTERM`, and `SIGHUP` take the same end: children stop, files are
-written, then the VM ends by the signal. A second signal ends it at once, after
-the children are stopped.
+`SIGINT`, `SIGTERM`, and `SIGHUP` take the same end (see `processes.md`): files
+are written, then the VM ends by the signal.

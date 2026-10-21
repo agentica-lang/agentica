@@ -263,9 +263,6 @@ end
   accumulator (and an index for a list), or uses `for`, `map`, `filter` or
   `each`. `return count(n - 1, acc + 1)` runs for 1,000,000 calls; `return 1 +
   count(n - 1)` fails with `RUNTIME-STACK-OVERFLOW` at that size.
-- Build a list with `xs = xs.push(x)` in a loop. `push` is cheap because lists
-  are persistent vectors, so there is no need for the prepend-then-reverse habit
-  of Elixir or Lisp.
 - A non-Void function must `return` on every path; a loop does not count, and
   the last expression is not returned implicitly. `return` alone, or reaching
   the end, completes a Void function. A `Nil` function returns `nil` explicitly.
@@ -447,8 +444,6 @@ A block is a function written at the call site as the last argument: `xs.map do
   visible names.
 - A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn`, or
   make a BDD step with `BDD.step("pattern") do |ctx, args| ... end`.
-- `List.each` runs a block per element; `List.any?` and `List.all?` stop at the
-  first deciding element.
 
 ## Result and try
 
@@ -481,8 +476,7 @@ error(message: String) -> Result[T]
   error("bad")]` infers, the reverse order needs an annotation.
 - Non-bang conversions (`String.to_int`) use the same syntax and 64-bit bounds
   as the bang forms, but invalid text returns an error. Unrelated runtime errors
-  are not converted to Results. `IO.gets` returns a line without LF, CR, or
-  CRLF; a blank line is `ok("")`, not end of input.
+  are not converted to Results.
 - `Result.Ok(x)` and `Result.Err(m)` are the same as `ok(x)` and `error(m)`, as
   values and as `case` patterns. `Result.Ok(_)` discards a payload, including
   for `Result[Void]`.
@@ -506,5 +500,5 @@ end
 
 These are rejected with a `help` line that names the Agentica form: `let x = 5`,
 `match x`, `when 1`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`,
-`Hash.new`, `break if x`, `loop do`, `puts(x) if ok`, `;`, and `while x {` ...
-`}`.
+`Hash.new`, `range(n)`, `break if x`, `loop do`, `puts(x) if ok`, `;`, and
+`while x {` ... `}`.

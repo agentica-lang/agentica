@@ -6,9 +6,6 @@ one is accepted by the checker unless its first line names a diagnostic, and
 then it is refused with that code. A `bad` one with no code is bad style only;
 the checker does not see it.
 
-`site/content/style.md` shows these rules to people; change it together with
-this file.
-
 ## Layout
 
 Wrap a long call one item per line with a trailing comma, and a long expression
