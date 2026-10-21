@@ -87,15 +87,6 @@ export def link_file(path: String, settings: Env.Settings) -> Linking
   return link_file_with(path, settings, Modules.no_parses())
 end
 
-## Like `link_file`, taking the trees of `parses` for the files whose text is the same (Modules.load_with).
-export def link_file_with(path: String, settings: Env.Settings, parses: Modules.Parses) -> Linking
-  loaded = Modules.load_with(path, settings, parses)
-  if loaded.ok?
-    return link_loaded(loaded.unwrap!, settings)
-  end
-  return Linking.Failed(Failure.unpack_failure(loaded.message))
-end
-
 ## The program in the form the checker reads: the declarations of every file in one list, with the id, span and module
 ## doc of the root.
 export def program(linked: Linked) -> Ast.Program
@@ -318,4 +309,13 @@ end
 
 def structs_of(prefix: String, kinds: Map[String, Declarations.Kind]) -> List[String]
   return kinds.keys.filter do |name| Declarations.struct?(kinds[name]) end.map do |name| prefix + name end
+end
+
+## Like `link_file`, taking the trees of `parses` for the files whose text is the same (Modules.load_with).
+def link_file_with(path: String, settings: Env.Settings, parses: Modules.Parses) -> Linking
+  loaded = Modules.load_with(path, settings, parses)
+  if loaded.ok?
+    return link_loaded(loaded.unwrap!, settings)
+  end
+  return Linking.Failed(Failure.unpack_failure(loaded.message))
 end

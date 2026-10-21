@@ -37,14 +37,6 @@ export def shape(params: List[Ast.Param]) -> Shape
   return Shape(required: required, total: total, fn_last: fn_last)
 end
 
-## True when the parameter has a default value.
-export def default?(param: Ast.Param) -> Bool
-  case param.default
-    Ast.Optional.Present(value) -> return true
-    Ast.Optional.Absent -> return false
-  end
-end
-
 ## True when the function has a parameter with a default.
 export def has_defaults?(shape: Shape) -> Bool
   return shape.required < shape.total
@@ -72,4 +64,12 @@ export def argument_for(shape: Shape, count: Int, param: Int) -> Int
     return param
   end
   return -1
+end
+
+## True when the parameter has a default value.
+def default?(param: Ast.Param) -> Bool
+  case param.default
+    Ast.Optional.Present(value) -> return true
+    Ast.Optional.Absent -> return false
+  end
 end

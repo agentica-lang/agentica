@@ -84,17 +84,6 @@ export def project_origin() -> Origin
   return Origin(package: "", root: "", label: "")
 end
 
-## The names that a file of this origin may import as packages: the project's own for a file of the project, else those
-## of the manifest of the package it belongs to.
-export def allowed_names(scope: Scope, origin: Origin) -> List[String]
-  if origin.package == ""
-    return scope.direct
-  elsif !scope.opened.has_key?(origin.package)
-    return []
-  end
-  return scope.opened[origin.package].names
-end
-
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
 ## and it shadows the library roots for that name. An undeclared name is a library for a file of the project, and
 ## CHECK-IMPORT-PACKAGE for a file of a package, which reaches nothing its manifest does not declare. `pkg/name` alone,
@@ -336,4 +325,15 @@ end
 
 def refuse(site: Failure.Site, message: String, help: String) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
+end
+
+## The names that a file of this origin may import as packages: the project's own for a file of the project, else those
+## of the manifest of the package it belongs to.
+def allowed_names(scope: Scope, origin: Origin) -> List[String]
+  if origin.package == ""
+    return scope.direct
+  elsif !scope.opened.has_key?(origin.package)
+    return []
+  end
+  return scope.opened[origin.package].names
 end
