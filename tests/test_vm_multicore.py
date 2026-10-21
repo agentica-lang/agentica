@@ -1,11 +1,12 @@
-"""Programs on several scheduler threads (AGENTICA_VM_TEST_MULTICORE=1, --schedulers 4).
+"""Programs on several scheduler threads (--schedulers 4).
 
-More than one scheduler runs only under that test switch until the count is lifted (#345). The goldens of
-tests/fixtures/vm must hold at four schedulers too, except where the order of output between tasks is not fixed (the
-ORDER set). TCP, TLS, the HTTP server, processes, the child channel and the Test protocol post every step to the I/O
-thread, so their fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers that
-fire, the end of the run from any scheduler, standard input and FIFOs, sockets and processes used and closed from
-several schedulers, and the switch.
+A run has one scheduler per logical core unless it asks for a count; these cases pin four, so they mean the same on
+any machine. The goldens of tests/fixtures/vm are taken at one scheduler (tests/vm_diff_support.py) and must hold at
+four too, except where the order of output between tasks is not fixed (the ORDER set), which keeps its golden at
+`--schedulers 1`. TCP, TLS, the HTTP server, processes, the child channel and the Test protocol post every step to the
+I/O thread, so their fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers
+that fire, the end of the run from any scheduler, standard input and FIFOs, sockets and processes used and closed from
+several schedulers, and what still needs one scheduler.
 `make test-multicore` runs this module; `make vm-tsan-run` runs it on a ThreadSanitizer build.
 """
 import hashlib
@@ -31,7 +32,6 @@ from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, compile_text, host_o
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
-MULTICORE = {"AGENTICA_VM_TEST_MULTICORE": "1"}
 FLAGS = ["--schedulers", SCHEDULERS]
 # A race case runs once in the fast tier and 20 times in the slow tier (make test-slow).
 RACE = pytest.mark.parametrize("repeats", [1, pytest.param(20, marks=pytest.mark.slow)], ids=["once", "20x"])
@@ -57,7 +57,7 @@ ORDER = {"channel-fan-in", "channel-owner-ends", "channel-owner-handoff", "chann
 
 
 def vm(bytecode, *flags, args=(), stdin=None, env=None, timeout=None):
-    extra = {**MULTICORE, **(env or {})}
+    extra = env or {}
     options = {} if timeout is None else {"timeout": timeout}
     return run([*vm_command(), *FLAGS, *flags, "--", bytecode, *args], stdin=stdin, env=vm_environment(extra),
                **options)
@@ -76,25 +76,30 @@ def fixture_cases():
     return cases
 
 
-@pytest.mark.parametrize("path", fixture_cases())
-def test_a_fixture_keeps_its_golden_on_four_schedulers(path, tmp_path):
+def golden_outcome(path, tmp_path, flags, env=None):
+    """The outcome of the fixture at PATH run as its golden is taken, with FLAGS added; a skip when it has a reason."""
     reason = diff.skip_reason(path.name)
     if reason:
         pytest.skip(reason)
     fixture = diff.Fixture.of(path)
     bytecode = diff.compile_agc(path, tmp_path / (path.stem + ".agcb"))
-    root = diff.source_root_options() + FLAGS
+    root = diff.source_root_options() + flags
     if fixture.uses_tmp:
         directory = diff.fresh_tmp(tmp_path)
         try:
             result = diff.untmp(directory, diff.run_vm_process(
                 fixture, diff.allow_options(fixture) + diff.style_options("json") + root, bytecode,
-                diff.tmp_args(fixture, directory), cwd=tmp_path, env=MULTICORE))
+                diff.tmp_args(fixture, directory), cwd=tmp_path, env=env))
         finally:
             shutil.rmtree(directory, ignore_errors=True)
     else:
-        result = diff.run_vm(fixture, bytecode, 0, root=root, cwd=tmp_path, env=MULTICORE)
-    assert diff.outcome(diff.unfixture(result)) == diff.read_expected(path)
+        result = diff.run_vm(fixture, bytecode, 0, root=root, cwd=tmp_path, env=env)
+    return diff.outcome(diff.unfixture(result))
+
+
+@pytest.mark.parametrize("path", fixture_cases())
+def test_a_fixture_keeps_its_golden_on_four_schedulers(path, tmp_path):
+    assert golden_outcome(path, tmp_path, FLAGS) == diff.read_expected(path)
 
 
 FAN_OUT = """\
@@ -333,6 +338,36 @@ def test_a_thousand_sleepers_all_wake(tmp_path, repeats):
     for _ in range(repeats):
         result = vm(bytecode)
         assert (result.code, result.stdout, result.stderr) == (0, "1000\n", "")
+
+
+DRAWS = """\
+def draw(n: Int) -> Int
+  return Random.int(0, 1000)
+end
+
+def main() -> Void
+  tasks = (1..2000).to_a.map do |k|
+    Task.spawn(&draw, k)
+  end
+  sum = 0
+  for t in tasks
+    sum = sum + Task.await(t)
+  end
+  puts(sum)
+end
+"""
+
+
+@RACE
+def test_a_spawned_task_draws_from_its_own_stream_on_four_schedulers(tmp_path, repeats):
+    # A child's stream is set before another scheduler can run it: a stream not yet set is all zero, and Random.int
+    # never ended on it. With a seed, the draws are those of one scheduler.
+    bytecode = program(tmp_path, "draws", DRAWS)
+    one = run([*vm_command(), "--seed", "3", "--schedulers", "1", "--", bytecode], env=vm_environment())
+    assert (one.code, one.stderr) == (0, "")
+    for _ in range(repeats):
+        result = vm(bytecode, "--seed", "3", timeout=scaled(30))
+        assert (result.code, result.stdout, result.stderr) == (0, one.stdout, "")
 
 
 CANCELS = """\
@@ -645,7 +680,7 @@ def test_a_socket_as_standard_input_keeps_its_blocking_flag_for_the_parent(tmp_p
     try:
         process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode], stdin=theirs.fileno(),
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   env=vm_environment(MULTICORE), text=True)
+                                   env=vm_environment(), text=True)
         try:
             ours.sendall(b"hello\n")
             out, err = process.communicate(timeout=30)
@@ -761,7 +796,7 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
 # children are sh scripts that need POSIX process ids, descriptor 3 or ps do not run on Windows yet (#486).
 SH_CHILDREN = known_issue(WINDOWS, 486, "the children are sh scripts that need POSIX process ids, descriptor 3 or ps")
 POSIX_SIGNALS = host_only(WINDOWS or not hasattr(signal, "SIGTERM"), "Windows has no POSIX stop signals")
-MULTICORE_CHILDREN = {**MULTICORE, "AGENTICA_SCHEDULERS": SCHEDULERS}
+MULTICORE_CHILDREN = {"AGENTICA_SCHEDULERS": SCHEDULERS}
 
 PROC_FAN = r"""def echo(n: Int) -> String
   first = "import sys; x = sys.stdin.readline().strip(); print('got-' + x, flush=True); "
@@ -968,7 +1003,7 @@ def test_a_stop_signal_or_an_exit_kills_the_children_of_a_run_on_several_schedul
     # System.exit(3) on its scheduler. The run ends with the signal or 3, and both children are gone.
     bytecode = program(tmp_path, "proc_stop", PROC_STOP)
     process = subprocess.Popen([*vm_command(), *FLAGS, "--allow-run", "--", bytecode, mode], stdin=subprocess.DEVNULL,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
                                text=True)
     pids = []
     try:
@@ -1210,7 +1245,7 @@ def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeat
         # A run without the fix leaves a child behind about half the time: ten make it near certain.
         for _ in range(10 * repeats):
             result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                                    env=vm_environment(MULTICORE), timeout=60, check=False)
+                                    env=vm_environment(), timeout=60, check=False)
             assert (result.returncode, result.stdout, result.stderr) == (0, "done\n", "")
             assert wait_until(lambda: not marked(mark), timeout=3), marked(mark)
     finally:
@@ -1264,7 +1299,7 @@ def same_report(tmp_path, name, text):
     source = tmp_path / name
     source.write_text(text, encoding="utf-8")
     command = [vm_command()[0], "test", "--allow-run", "--json", str(source)]
-    one = run(command, env=vm_environment())
+    one = run(command, env=vm_environment({"AGENTICA_SCHEDULERS": "1"}))
     several = run(command, env=vm_environment(MULTICORE_CHILDREN))
     assert (several.code, several.stderr) == (one.code, one.stderr) == (1, "")
     report = stable(json.loads(several.stdout))
@@ -1827,7 +1862,7 @@ def test_the_port_of_a_crashed_owner_refuses_a_peer_once_its_await_returns(tmp_p
     bytecode = program(tmp_path, "owner_crash_port", OWNER_CRASH_PORT)
     for _ in range(5 * repeats):
         process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode], stdin=subprocess.PIPE,
-                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=vm_environment(MULTICORE))
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=vm_environment())
         try:
             assert wait_readable(process.stdout.fileno(), 30), "the run printed no port"
             port = int(process.stdout.readline())
@@ -2110,7 +2145,7 @@ def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path,
     # the TLS one (a missing close_notify raises SSLEOFError).
     bytecode = program(tmp_path, "net_stop", NET_STOP)
     process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, TLS_DIR, mode], stdin=subprocess.DEVNULL,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
                                text=True)
     try:
         plain_port, secure_port = map(int, process.stdout.readline().split())
@@ -2214,7 +2249,7 @@ def test_waits_on_live_connections_are_no_stall_on_several_schedulers(tmp_path):
         server.settimeout(30)
         process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(server.getsockname()[1])],
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   env=vm_environment(MULTICORE), text=True)
+                                   env=vm_environment(), text=True)
         try:
             peers = [server.accept()[0], server.accept()[0]]
             try:
@@ -2233,13 +2268,26 @@ def test_waits_on_live_connections_are_no_stall_on_several_schedulers(tmp_path):
         0, 'error("network: operation timed out")\nerror("network: end of input")\n', "")
 
 
-def test_more_schedulers_need_the_switch_and_refuse_the_profile_and_blocking_output(tmp_path):
+def test_the_profile_and_blocking_output_take_one_scheduler_and_refuse_a_chosen_count(tmp_path):
+    """The default count gives way to one scheduler next to the profile trace or the blocking output; a count above 1
+    asked for by the flag or the variable is refused."""
     bytecode = program(tmp_path, "plain", "def main() -> Void\n  puts(1)\nend\n")
-    assert run([*vm_command(), *FLAGS, "--", bytecode], env=vm_environment()).code == 2
-    assert vm(bytecode, env={"AGENTICA_VM_TRACE": "profile"}).code == 2
-    assert vm(bytecode, env={"AGENTICA_VM_TEST_BLOCKING_OUTPUT": "1"}).code == 2
+    for extra in ({"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": str(tmp_path / "profile")},
+                  {"AGENTICA_VM_TEST_BLOCKING_OUTPUT": "1"}):
+        assert vm(bytecode, env=extra).code == 2
+        chosen = run([*vm_command(), "--", bytecode], env=vm_environment({**extra, "AGENTICA_SCHEDULERS": "2"}))
+        assert chosen.code == 2 and "needs one scheduler" in chosen.stderr
+        default = run([*vm_command(), "--", bytecode], env=vm_environment(extra))
+        assert (default.code, default.stdout) == (0, "1\n")
     plain = vm(bytecode)
     assert (plain.code, plain.stdout) == (0, "1\n")
+
+
+@pytest.mark.parametrize("path", [path for path in diff.fixture_programs() if path.stem in ORDER], ids=lambda p: p.stem)
+def test_a_fixture_whose_order_depends_on_tasks_keeps_its_golden_with_the_flag_at_one(path, tmp_path):
+    """`--schedulers 1` alone, with AGENTICA_SCHEDULERS unset, gives the order of the golden."""
+    unset = {"AGENTICA_SCHEDULERS": None}
+    assert golden_outcome(path, tmp_path, ["--schedulers", "1"], env=unset) == diff.read_expected(path)
 
 
 SPIN_AND_WAIT = """\
@@ -2277,7 +2325,7 @@ def test_a_stop_signal_ends_a_run_with_spinners_and_a_blocked_reader(tmp_path):
     held = os.open(fifo, os.O_RDWR)
     try:
         process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(fifo)], stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
                                    text=True)
         try:
             assert process.stdout.readline() == "ready\n"
@@ -2298,7 +2346,7 @@ def test_a_pending_read_of_standard_input_is_no_stall_on_several_schedulers(tmp_
     # then ends the read with its normal result.
     bytecode = program(tmp_path, "gets", "def main() -> Void\n  IO.inspect(IO.gets())\nend\n")
     process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode], stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(MULTICORE),
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
                                text=True)
     try:
         try:
@@ -2319,7 +2367,7 @@ def test_a_pending_read_of_standard_input_is_no_stall_on_several_schedulers(tmp_
 def test_the_front_end_runs_a_source_file_on_several_schedulers(tmp_path):
     source = tmp_path / "fan.agc"
     source.write_text(FAN_OUT, encoding="utf-8")
-    result = run([vm_command()[0], *FLAGS, str(source)], env=vm_environment(MULTICORE))
+    result = run([vm_command()[0], *FLAGS, str(source)], env=vm_environment())
     assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % expected_fan_out(), "")
 
 
@@ -2446,7 +2494,7 @@ def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_
         trace = tmp_path / ("trace-%d" % k)
         env = {"AGENTICA_VM_TRACE": "tls", "AGENTICA_VM_TRACE_FILE": str(trace)}
         result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode, TLS_DIR, str(clients),
-                      str(requests)], env=vm_environment({**MULTICORE, **env}), timeout=120)
+                      str(requests)], env=vm_environment(env), timeout=120)
         total = clients * requests
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n%d\ntrue 0\nok()\nok()\n" % (
             total, total), "")
@@ -2493,5 +2541,50 @@ def test_http_waits_queued_on_the_io_thread_leave_on_cancel_and_end_at_close(tmp
     bytecode = program(tmp_path, "http_queued", HTTP_QUEUED)
     for _ in range(repeats):
         result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode],
-                     env=vm_environment(MULTICORE), timeout=60)
+                     env=vm_environment(), timeout=60)
         assert (result.code, result.stdout, result.stderr) == (0, "false\nfalse\nok()\nfalse\nfalse\n", "")
+
+
+# A handler in a turn on another scheduler when close_server cancels it ends only at the end of that turn; HTTP.wait
+# waits for it, so the test that owns the server finds no task of it still running (RUNTIME-TEST-PENDING-TASKS).
+HTTP_WAIT_BUSY = r"""import HTTP from "std/http"
+
+# Connects to the port in the path to say that it started, then spins until the close of the server cancels it.
+def spin(request: HttpRequest) -> Result[HttpResponse]
+  port = String.to_int!(String.slice(request.path, 1, String.length(request.path) - 1))
+  signal = try TCP.connect("127.0.0.1", port, 5000)
+  n = 0
+  while true
+    n = n + 1
+  end
+  TCP.close(signal)
+  return ok(HttpResponse(status: 200, headers: [], body: "#{n}"))
+end
+
+def main() -> Void
+  Test.run([
+    Test.test("wait returns once a busy handler has ended") do
+      started = try TCP.listen("127.0.0.1", 0)
+      server = try HTTP.listen("127.0.0.1", 0, &spin, HTTP.server_options())
+      socket = try TCP.connect("127.0.0.1", HTTP.local_port(server), 5000)
+      try TCP.send(socket, "GET /#{TCP.local_port(started)} HTTP/1.1\r\nHost: x\r\n\r\n", 5000)
+      signal = try TCP.accept(started, 5000)
+      HTTP.close_server(server)
+      waited = HTTP.wait(server)
+      TCP.close(signal)
+      TCP.close(socket)
+      Test.eq(waited.ok?, true)
+    end
+  ])
+end
+"""
+
+
+@pytest.mark.parametrize("schedulers", ["1", SCHEDULERS])
+def test_http_wait_returns_after_a_handler_busy_on_another_scheduler_has_ended(tmp_path, schedulers):
+    source = tmp_path / "busy_test.agc"
+    source.write_text(HTTP_WAIT_BUSY, encoding="utf-8")
+    result = run([vm_command()[0], "test", "--json", str(source)],
+                 env=vm_environment({"AGENTICA_SCHEDULERS": schedulers}), timeout=60)
+    report = json.loads(result.stdout)
+    assert (result.code, report["passed"], report["failed"]) == (0, 1, 0), result.stdout

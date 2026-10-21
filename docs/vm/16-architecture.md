@@ -2,9 +2,9 @@
 
 **Status:** decided by the owner on 2026-10-13, row 7.2.1c of the
 [roadmap](../roadmap/README.md). This is the one picture of the threads, the
-queues and who owns what. By default the VM runs one scheduler and the loop on
-the same thread (N = 1); §16.9 says what differs. More than one scheduler is
-built in steps (roadmap step 11), and this model also serves N = 1.
+queues and who owns what. The VM runs one scheduler per logical core by
+default; with N = 1 the scheduler and the loop share one thread. §16.9 says
+what differs, and this model also serves N = 1.
 
 It replaces the first multicore design of §10.2.3 (BEAM style: one loop, one run
 queue and one resource registry per scheduler, a home scheduler for each task,
@@ -368,13 +368,14 @@ fd 3 channel of 25c, like Erlang nodes talking to each other.
 - **One I/O thread** may become the limit at a high rate of sockets. That is
   what §16.10 is for.
 - **A wake crosses threads.** An I/O result goes through a push and a condvar
-  signal before a scheduler runs the task. With N = 1 as built there is no hop.
+  signal before a scheduler runs the task. With `--schedulers 1` there is no hop.
   Measure the latency.
 
-### 16.9 As built: N = 1
+### 16.9 As built
 
-By default there is one scheduler and the loop on the same thread; N > 1 runs
-only under a test-only switch ("Threads" below). The model with N = 1 is almost
+With `--schedulers 1` there is one scheduler and the loop on the same thread;
+by default there is one scheduler per logical core ("Threads" below). The model
+with N = 1 is almost
 what exists: tasks, turns, jobs with their `agc_io_kind` halves, detached jobs,
 the handle lock FIFO, the owners and the one exit path are as in §16.1 to
 §16.6. What differs:
@@ -553,13 +554,13 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
   can fall between the first read and the CAS), which is claimed by a CAS. When
   the CAS finds WOKEN it queues the task, so the task is queued once and its
   next turn takes up the wait again.
-- **`--schedulers N` is parsed and checked, and N > 1 is test-only.**
-  `vm/launch.c` reads the flag and `AGENTICA_SCHEDULERS` (1 to 1024, the flag
-  wins). A count above 1 runs only with `AGENTICA_VM_TEST_MULTICORE=1`;
-  otherwise, and with the profile trace or
-  `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1`, it exits 2 with a message before the
-  program loads, so N > 1 never runs as 1. The front end always runs on one
-  scheduler. The default is 1, not `uv_available_parallelism()`.
+- **`--schedulers N`.** `vm/launch.c` reads the flag and `AGENTICA_SCHEDULERS`
+  (1 to 1024, the flag wins). The default is `uv_available_parallelism()`, at
+  most 1024. The profile trace and `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` need one
+  scheduler: the default count then drops to 1, and a count above 1 chosen by
+  the flag or the variable exits 2 with a message before the program loads. The
+  front end always runs on one scheduler, so its output does not depend on the
+  machine.
 - **Threads.** `agc_vm_run` with N > 1 (`run_threads` in `vm/task.c`) shares the
   locks and the loop, lets threads register with the GC, makes one scheduler
   context (`agc_vm`) per thread and starts scheduler 0; the calling thread
@@ -670,9 +671,9 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
     then the I/O inbox's and the run queue's. No lock is held across a park.
   - Both are solo until `agc_share`, which runs before a second thread exists:
     `rt->shared` is false, `agc_sync_take` tests that one flag and nothing is
-    locked. Only the C tests and `AGENTICA_VM_TEST_SHARED=1` call `agc_share`
-    today. That switch is test-only: it runs a program on one scheduler with
-    every lock on. `make test-shared` (a step of CI) runs the binary test
+    locked. `agc_share` runs when the VM starts N > 1 schedulers (`vm/task.c`), and
+    for the C tests and `AGENTICA_VM_TEST_SHARED=1`, a test-only switch that
+    runs a program on one scheduler with every lock on. `make test-shared` (a step of CI) runs the binary test
     modules that way, and in that mode the lock placement is checked, not
     only exercised: `agc_lock_drop` aborts when the caller is not the owner,
     `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of
@@ -762,10 +763,11 @@ a runnext slot and a short spin (§16.9, "Wakes between schedulers").
   blocking fallback keeps a lock across a write.
 - **The blocking fallback at the end of the run.** The end of the run waits for
   the schedulers (decided, built; §16.9, "Threads"). What stays open is the
-  blocking fallback (refused at N > 1 today). A scheduler can be blocked in a
-  stdout write that holds the stream lock (a full pipe), while the I/O thread's
-  flush of that stream waits for the same lock. The second stop signal is one
-  way out (the write gets `EINTR`, §14.4), but a process signal may not be
-  delivered to that thread. Another is `pthread_kill` on the schedulers. Whether
-  the flush takes the lock with a limit is open. Streams on the loop do not have
-  this problem: no scheduler blocks in a stdout write for them (§10.2.2).
+  blocking fallback (one scheduler only, §16.9, "`--schedulers N`"). A scheduler
+  can be blocked in a stdout write that holds the stream lock (a full pipe),
+  while the I/O thread's flush of that stream waits for the same lock. The
+  second stop signal is one way out (the write gets `EINTR`, §14.4), but a
+  process signal may not be delivered to that thread. Another is `pthread_kill`
+  on the schedulers. Whether the flush takes the lock with a limit is open.
+  Streams on the loop do not have this problem: no scheduler blocks in a stdout
+  write for them (§10.2.2).

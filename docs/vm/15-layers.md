@@ -162,8 +162,10 @@ below.
     start). The list of stop signals is static in `loop.c`; no service reads it
 
 - **Job:** Spawn, wait for, cancel and observe tasks (for `Test.run`)
-  - **Functions:** `agc_task_spawn`, `agc_task_spawn_owning` (24b: spawn a task
-    and give it a handle that the caller owns; `Task.spawn_owning` and
+  - **Functions:** `agc_task_spawn_test` (the body of one test, which is its
+    own test, with a seed set before it can run), `agc_task_spawn_owning`
+    (24b: spawn a task and give it a handle that the caller owns;
+    `Task.spawn_owning` and
     `HttpWire.spawn` call it), `agc_task_spawn_seeded` (spawn under a parent
     with the caller's random seed; every builtin spawn uses it), `agc_task_owns`
     (whether the calling task owns a handle value), `agc_task_close_done` (a
@@ -176,9 +178,9 @@ below.
     parent: no caller's crash, cancel or end reaches it, `Task.pending_count`
     and `Test.test` leave its tree out, and its timers are weak for the stall
     check; `HttpWire.service` calls it),
-    `agc_task_spawn_in` (spawn under a given parent), `agc_task_cancel` to drop
-    a subtree (every cancelled task closes the handles it owns as it ends, so
-    there is no separate drop), and three task fields the service sets on its
+    `agc_task_spawn_seeded` (spawn under a given parent), `agc_task_cancel` to
+    drop a subtree (every cancelled task closes the handles it owns as it ends,
+    so there is no separate drop), and three task fields the service sets on its
     own tasks: the `end` hook with `end_data` (`agc_end_fn`, called once when
     the task ends in any way) and `hidden` (no await can observe the task, so
     its unobserved crashes keep one entry per test, §10.2.1)
@@ -200,7 +202,7 @@ Behind the port sit the two queues of
 the push to the global run queue, and the requests to the I/O thread's inbox are
 start, cancel, stop or extend its timer, release and the libuv steps of a job's
 halves. With N = 1 they are direct calls on one thread
-([§16.9](16-architecture.md#169-as-built-n--1)). A service reaches the queues
+([§16.9](16-architecture.md#169-as-built)). A service reaches the queues
 only through the port. The libuv code of a service runs in the start step of
 the request, on the I/O thread (§16.9).
 

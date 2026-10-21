@@ -434,6 +434,14 @@ static bool parse_schedulers(const char *text, int64_t *count) {
   return parse_count(text, count) && *count >= 1 && *count <= AGC_SCHEDULERS_MAX;
 }
 
+/* One scheduler per logical core (uv_available_parallelism, which counts the CPUs this process may run on), at most
+   AGC_SCHEDULERS_MAX. */
+int64_t agc_launch_default_schedulers(void) {
+  unsigned int cores = uv_available_parallelism();
+  if (cores < 1) return 1;
+  return cores > AGC_SCHEDULERS_MAX ? AGC_SCHEDULERS_MAX : (int64_t)cores;
+}
+
 static bool parse_steps(const char *text, int64_t *steps) { return parse_count(text, steps) && *steps > 0; }
 
 static bool parse_seed(const char *text, uint32_t *seed) {
@@ -452,7 +460,7 @@ void agc_launch_defaults(agc_launch_options *options) {
   memset(options, 0, sizeof *options);
   options->max_steps = INT64_MAX;
   options->flush_timeout = AGC_FLUSH_TIMEOUT_MS;
-  options->schedulers = 1;
+  options->schedulers = agc_launch_default_schedulers();
   options->style = AGC_STYLE_PLAIN;
   options->source_root = "";
 }
@@ -468,35 +476,39 @@ bool agc_launch_env(const char *name, agc_launch_options *options) {
   /* A bad variable is an error even when the flag is given, as the flush limit's is: the flag wins over a valid value
      only. */
   const char *schedulers = getenv("AGENTICA_SCHEDULERS");
+  /* An empty value is unset, so `export AGENTICA_SCHEDULERS=` gives back the default count. */
+  if (schedulers && !*schedulers) schedulers = NULL;
   int64_t count = 0;
   if (schedulers && !parse_schedulers(schedulers, &count)) {
     fprintf(stderr, "%s: AGENTICA_SCHEDULERS needs an integer from 1 to %d\n", name, AGC_SCHEDULERS_MAX);
     return false;
   }
   if (schedulers && !options->seen_schedulers) options->schedulers = count;
+  options->chosen_schedulers = options->seen_schedulers || schedulers;
   return true;
 }
 
-/* More than one scheduler runs only under the test switch AGENTICA_VM_TEST_MULTICORE=1 until the count is lifted
-   (#345). The profile trace counts on one scheduler, and the test-only blocking output holds a stream lock across a
-   write, which the end of a run with scheduler threads cannot wait for: both refuse a larger count. */
-bool agc_launch_supported(const char *name, const agc_launch_options *options) {
-  if (options->schedulers <= 1) return true;
-  const char *multicore = getenv("AGENTICA_VM_TEST_MULTICORE");
-  if (!multicore || strcmp(multicore, "1") != 0) {
-    fprintf(stderr, "%s: %" PRId64 " schedulers were asked for, but this build runs one\n", name, options->schedulers);
-    return false;
-  }
-  if (agc_trace_mask(getenv("AGENTICA_VM_TRACE")) & AGC_TRACE_PROFILE) {
-    fprintf(stderr, "%s: the profile trace needs one scheduler\n", name);
-    return false;
-  }
+/* The profile trace counts on one scheduler, and the test-only blocking output holds a stream lock across a write,
+   which the end of a run with scheduler threads cannot wait for. NULL when neither is on, else what to name in the
+   refusal. */
+static const char *one_scheduler_reason(void) {
+  if (agc_trace_mask(getenv("AGENTICA_VM_TRACE")) & AGC_TRACE_PROFILE) return "the profile trace";
   const char *blocking = getenv("AGENTICA_VM_TEST_BLOCKING_OUTPUT");
-  if (blocking && strcmp(blocking, "1") == 0) {
-    fprintf(stderr, "%s: AGENTICA_VM_TEST_BLOCKING_OUTPUT needs one scheduler\n", name);
-    return false;
+  return blocking && strcmp(blocking, "1") == 0 ? "AGENTICA_VM_TEST_BLOCKING_OUTPUT" : NULL;
+}
+
+/* A count chosen above 1 (the flag or AGENTICA_SCHEDULERS) is refused next to something that needs one scheduler;
+   the default count gives way to one scheduler instead, so a profile needs no extra flag. */
+bool agc_launch_supported(const char *name, agc_launch_options *options) {
+  if (options->schedulers <= 1) return true;
+  const char *reason = one_scheduler_reason();
+  if (!reason) return true;
+  if (!options->chosen_schedulers) {
+    options->schedulers = 1;
+    return true;
   }
-  return true;
+  fprintf(stderr, "%s: %s needs one scheduler\n", name, reason);
+  return false;
 }
 
 static agc_launch_status refuse(const char *name, const char *message) {

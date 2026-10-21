@@ -484,6 +484,44 @@ def test_a_socket_as_stdout_read_only_after_the_exit_gets_every_row(tmp_path):
     assert err == ""
 
 
+# Rows past a quarter of the socket's buffer come in a later turn: a Unix socket polls writable only while a quarter of
+# its buffer is used, so the rows must be sent without waiting for that (they fit in the buffer).
+LATE_ROWS_PROGRAM = ROWS_PROGRAM.replace("    n += 1\n  end\n", "    n += 1\n  end\n  Task.sleep(50)\n  while n < %d\n"
+                                         "    puts(\"row #{n} #{filler}\")\n    n += 1\n  end\n")
+
+
+@not_wine_socket
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_socket_as_stdout_read_only_after_the_exit_gets_the_rows_of_a_later_turn(tmp_path, schedulers):
+    summary, out, err = run_case(tmp_path, "socket_exit_late", LATE_ROWS_PROGRAM % (110, 120),
+                                 peer=["--socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)],
+                                 vm=["--schedulers", schedulers])
+    assert summary["status"] == 0
+    check_rows(lines_of(out), 120)
+    assert err == ""
+
+
+# A line of 128 KiB and one byte, longer than the 64 KiB ring, after some rows: it goes out in pieces through the FIFO of
+# prints, and each piece must reach the socket without waiting for the poller's writable.
+BIG_LINE_PROGRAM = ROWS_PROGRAM.replace("    n += 1\n  end\n", "    n += 1\n  end\n  big = \"y\"\n  for i in 0..16\n"
+                                        "    big = big + big\n  end\n  puts(big)\n")
+
+
+@not_wine_socket
+@pytest.mark.parametrize("rows", [0, 110])
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_socket_as_stdout_read_only_after_the_exit_gets_a_line_longer_than_the_buffer(tmp_path, rows, schedulers):
+    summary, out, err = run_case(tmp_path, "socket_exit_big", BIG_LINE_PROGRAM % rows,
+                                 peer=["--socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER),
+                                       "--limit", str(scaled(30))],
+                                 vm=["--schedulers", schedulers])
+    assert summary["status"] == 0
+    lines = lines_of(out)
+    check_rows(lines[:-1], rows)
+    assert lines[-1] == "y" * (1 << 17)
+    assert err == ""
+
+
 @not_wine_socket
 def test_a_socket_as_stderr_read_only_after_the_exit_gets_every_row(tmp_path):
     summary, out, err = run_case(tmp_path, "socket_exit_err", ERROR_ROWS_PROGRAM % SOCKET_ROWS,
@@ -725,9 +763,7 @@ def test_a_child_stderr_forwarded_to_a_stderr_nobody_reads_yet_does_not_stop_a_t
     # The reader of the VM's stderr starts only after the ticker is done; the child's 2 MiB then all arrive.
     delay = scaled(3.0)
     vm = ["--allow-run", "--schedulers", str(schedulers)]
-    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
-    summary, out, err = run_case(tmp_path, "forward", FORWARD_PROGRAM, peer=["--error-delay", str(delay)], vm=vm,
-                                 env=env)
+    summary, out, err = run_case(tmp_path, "forward", FORWARD_PROGRAM, peer=["--error-delay", str(delay)], vm=vm)
     assert summary["status"] == 0
     lines = lines_of(out)
     assert lines[1] == "ok(0)"
@@ -759,9 +795,8 @@ end
 def test_a_child_that_keeps_writing_stderr_does_not_hold_back_a_warn_of_the_program(tmp_path, schedulers):
     # The reader takes 8 KiB every 2 ms, so the child's bytes need about 2 s; the warn waits only for its room.
     vm = ["--allow-run", "--schedulers", str(schedulers)]
-    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
     summary, out, _ = run_case(tmp_path, "streaming", STREAMING_PROGRAM, peer=["--merge", "--chunk", "8192",
-                                                                             "--pause", "0.002"], vm=vm, env=env)
+                                                                             "--pause", "0.002"], vm=vm)
     assert summary["status"] == 0
     warn = out.find(STREAMING_WARN.encode() + b"\n")
     took = re.search(rb"took (\d+)\n", out)
@@ -807,9 +842,8 @@ def test_a_child_moves_on_while_the_program_keeps_warning_records_that_fill_the_
     limit = scaled(10000)
     program = FULL_RING_PROGRAM % (agc_literal(PYTHON), FULL_RING_CHILD, limit)
     bytecode = compile_text(program, "full-ring", tmp_path)
-    env = {"AGENTICA_VM_TEST_MULTICORE": "1"} if schedulers > 1 else None
     process = subprocess.Popen([*vm_command(), "--allow-run", "--schedulers", str(schedulers), "--", bytecode],
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=vm_environment(env))
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=vm_environment())
     children = 0
     tail = b""
     found = None

@@ -261,6 +261,12 @@ def execute(argv, stdin=b"", stdin_path=None, timeout=RUN_TIMEOUT, cwd=None, env
     return exit_status(process.returncode), decode(out), decode(err)
 
 
+# The goldens are taken and checked at one scheduler: their step counts, the --max-steps sweep and the order of output
+# between tasks are fixed only there. The variable (not the flag) reaches the VMs that a fixture starts too; a flag
+# given in `options` still wins (tests/test_vm_multicore.py runs the goldens at four).
+ONE_SCHEDULER = {"AGENTICA_SCHEDULERS": "1"}
+
+
 def run_vm_process(fixture, options, bytecode, args, timeout=RUN_TIMEOUT, cwd=None, env=None, stdin_path=None):
     """One VM run as (status, stdout, stderr); the status is TIMEOUT when it outlives `timeout` seconds.
 
@@ -269,7 +275,8 @@ def run_vm_process(fixture, options, bytecode, args, timeout=RUN_TIMEOUT, cwd=No
     """
     prefix = [*channel_peer("channel-run"), fixture.channel] if fixture.channel else []
     argv = prefix + [*vm_command(), *options, "--", bytecode, *args]
-    return execute(argv, fixture.input, stdin_path, timeout, cwd, vm_environment({**fixture.env, **(env or {})}))
+    environment = vm_environment({**ONE_SCHEDULER, **fixture.env, **(env or {})})
+    return execute(argv, fixture.input, stdin_path, timeout, cwd, environment)
 
 
 def style_options(style):

@@ -127,9 +127,9 @@ first-insertion order; a key deleted and then put again goes to the end, as in
   the effect.
 - **Backend:** VM only. The contract is only that each call is atomic.
   - Scheduler: a table call does not yield, so with one scheduler it is atomic.
-    With N schedulers in parallel, each table call needs a lock, or a
-    persistent structure installed with compare-and-swap
-    (`docs/vm/10-io-multicore.md` §10.2.3).
+    The VM runs one scheduler per logical core by default, so each table call
+    needs a lock, or a persistent structure installed with compare-and-swap.
+    The rule is in `docs/vm/10-io-multicore.md` §10.2.3.
   - Layout: O(log n) `delete` with insertion order needs its own layout, not the
     `Map` layout. 9a builds a persistent ordered map for it on the VM, for
     example a balanced tree: a persistent hash from key to (sequence, value),

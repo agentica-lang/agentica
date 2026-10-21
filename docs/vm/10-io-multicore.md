@@ -7,10 +7,7 @@ that still apply.
 - **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
   affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it,
   capped at 1024, and the flag wins over a valid variable. Invalid values exit
-  2, also a bad variable next to a valid flag. As built, both are
-  parsed and checked and the default is 1. A count above 1 runs only under the
-  test-only switch `AGENTICA_VM_TEST_MULTICORE=1`, and otherwise exits 2 before
-  the program loads (§16.9). `--schedulers 1`
+  2, also a bad variable next to a valid flag (§16.9). `--schedulers 1`
   gives the N=1 order, which still depends on timer and pool timing. `--seed`
   does not imply one scheduler; at N>1 only per-task random values repeat
   (7.4). The thread split and shared queue are in §16.2–16.3.

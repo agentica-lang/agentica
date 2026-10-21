@@ -28,7 +28,8 @@ static const char usage[] =
   "[--ai|--json] [--source-root DIR] -- <file.agcb> [args...]\n"
   "  --source-root DIR is put before each stored source name that is relative and does not start with std/, in diagnostics and reports\n"
   "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n"
-  "  the run uses 1 scheduler, or N (1 to 1024), or AGENTICA_SCHEDULERS (the flag wins); this build runs one\n";
+  "  the run uses one scheduler per logical core (at most 1024), or N (1 to 1024), or AGENTICA_SCHEDULERS (the flag "
+  "wins); --schedulers 1 runs one task at a time, in a fixed order\n";
 
 /* The std/ sources of the binary, from the index that make wrote. */
 static agc_std_source *std_sources(size_t *count) {

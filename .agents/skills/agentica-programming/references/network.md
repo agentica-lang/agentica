@@ -179,8 +179,8 @@ once (more wait) and a 1 MiB body limit, with the client's option checks.
 Bad requests never reach the handler: the server answers 400, 413, 417,
 431, 501 or 505 itself and closes. `close_server` closes the listener and
 every connection and cancels the handlers and the tasks they spawned;
-`wait` returns `ok()` once the server is closed. When `main` returns, the
-server stops with the run. A server belongs to the task that called
-`HTTP.listen`: when that task ends (it returns, crashes or is cancelled), the
-server is closed and its port is free, so call `listen` in the task that keeps
-the server, such as `main`.
+`wait` returns `ok()` once the server is closed and those tasks have ended.
+When `main` returns, the server stops with the run. A server belongs to the
+task that called `HTTP.listen`: when that task ends (it returns, crashes or is
+cancelled), the server is closed and its port is free, so call `listen` in the
+task that keeps the server, such as `main`.

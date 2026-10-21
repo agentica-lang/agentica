@@ -312,8 +312,9 @@ Expected types flow into these operations for empty collections and Results.
 - Each run has one generator, seeded from the operating system unless `agentica
   --seed N program.agc` is given (N in `0 .. 2147483647`, otherwise exit 2).
   Each task has its own generator: the main task starts from the seed, and each
-  spawn takes one draw from its parent. Timers and I/O can still change how
-  tasks interleave, so a multi-task run as a whole is not repeatable. The
+  spawn takes one draw from its parent. Timers, I/O and more than one
+  scheduler can still change how tasks interleave, so a multi-task run as a
+  whole is not repeatable. The
   generator is not for secrets.
 
 ### JSON
@@ -406,7 +407,8 @@ no expression) is `QUERY-NO-EXPRESSION` and exits 2, as is a bad position
 entries across all tasks; N must be a positive integer. Runs are unlimited by
 default, and checking never spends the budget. Exhaustion is
 `RUNTIME-STEP-LIMIT` at the next node. It is not a wall-clock or blocking-I/O
-timeout.
+timeout. Each scheduler takes steps in batches, so with more than one scheduler
+the limit can trip a little late; `--schedulers 1` keeps the exact count.
 
 At the end of a run the VM waits for the buffered writes of every open file, and
 for the output of stdout and stderr that a pipe has not taken yet. The wait is
@@ -420,9 +422,13 @@ not be written"}`).
 
 `agentica --schedulers N program.agc` or the environment variable
 `AGENTICA_SCHEDULERS` sets the number of scheduler threads (an integer from 1 to
-1024; the flag wins over a valid variable, and a bad value in either exits 2).
-The VM runs one scheduler today, so the default is 1 and a larger number exits 2
-with a message, before the program starts (also for `agentica test`).
+1024; the flag wins over a valid variable, an empty variable counts as unset,
+and a bad value in either exits 2, before the program starts). The default is
+one per logical core the process may use, at most 1024. With more than one,
+tasks run in parallel and their order is not fixed; `--schedulers 1` runs one
+task at a time in the order of a single run queue. The front end always compiles
+on one scheduler. `agentica test` refuses the flag (exit 2); the VMs it starts
+read `AGENTICA_SCHEDULERS`.
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user

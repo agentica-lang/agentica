@@ -110,7 +110,7 @@ it stays manual and out of CI.
   `agentica test`, `BDD.run`; moved to `std/bdd` in phase 21.
   [`docs/bdd.md`](../bdd.md), [`21-bdd-in-agentica.md`](21-bdd-in-agentica.md).
 - **5j2.** Lightweight I/O concurrency (`Task.spawn`, `Task.await`,
-  `Task.sleep`; coroutines, no CPU parallelism): any task diagnostic or
+  `Task.sleep`; coroutines): any task diagnostic or
   `System.exit` ends the run; tasks cancelled and new resources closed at
   entry-point return.
   [`06c-tasks-and-tests.md`](../grammar/06c-tasks-and-tests.md),

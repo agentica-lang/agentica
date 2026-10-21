@@ -110,14 +110,18 @@ def run_vm_bounded(request):
     `keep_stdin` leaves stdin open until the VM has ended. stdout stays a pipe, which a reader thread drains,
     so the cases with one pool thread still cover a pipe on the loop.
     """
-    def run_bounded(root, text, *arguments, peer=None, stdin_text=None, one_pool_thread=False, keep_stdin=False):
+    def run_bounded(root, text, *arguments, peer=None, stdin_text=None, one_pool_thread=False, keep_stdin=False,
+                    schedulers=None):
         source = root / "program.agc"
         source.write_text(text.replace("@FD_ROOT@", FD_ROOT), encoding="utf-8")
         bytecode = compile_agc(source, root / "program.agcb")
         command = [*vm_command(), "--allow-run", "--", bytecode, *arguments]
         if peer:
             command = [PYTHON, STOP_PEER, peer, *command]
-        env = vm_environment({"UV_THREADPOOL_SIZE": "1"} if one_pool_thread else None)
+        extra = {"UV_THREADPOOL_SIZE": "1"} if one_pool_thread else {}
+        if schedulers:
+            extra["AGENTICA_SCHEDULERS"] = schedulers
+        env = vm_environment(extra)
         child = Child(command, env=env, stdin=True, capture_stderr=True)
         request.addfinalizer(child.stop)
         if stdin_text:
@@ -520,9 +524,7 @@ def test_a_cancelled_stdin_reader_leaves_its_read_to_the_next_reader_and_eof_rea
 ) -> None:
     source = tmp_path / "stdin.agc"
     source.write_text(CANCELLED_READER, encoding="utf-8")
-    # AGENTICA_VM_TEST_MULTICORE lets a test build run more than one scheduler (tests/test_vm_multicore.py).
-    env = vm_environment({"UV_THREADPOOL_SIZE": "1", "AGENTICA_SCHEDULERS": schedulers,
-                          "AGENTICA_VM_TEST_MULTICORE": "1"})
+    env = vm_environment({"UV_THREADPOOL_SIZE": "1", "AGENTICA_SCHEDULERS": schedulers})
     bytecode = compile_agc(source, tmp_path / "stdin.agcb")
     child = adopt(Child([*vm_command(), "--", bytecode, tmp_path / "out.txt"], cwd=tmp_path, env=env, stdin=True,
                         capture_stderr=True))
@@ -552,7 +554,9 @@ def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_de
   p = Process.spawn("true", [], 1000).unwrap!
   IO.inspect(Process.wait(p, 1000))
 end
-""", peer="clean")
+""", peer="clean", schedulers="1")
+    # One scheduler: with more, the stdin poller is set up before the program starts and holds a reopened copy of the
+    # inherited stdin pipe under another number, which stays reachable by design (a pipe the VM got at start).
     lines = output_lines(output)
     assert code == 0, errors
     assert lines[-1] == "ok(0)"

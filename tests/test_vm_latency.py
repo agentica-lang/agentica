@@ -2,7 +2,9 @@
 
 Run alone by `make vm-latency` (and not by `make test`, see PY_ALONE in the
 Makefile), so the VMs have the CPU to themselves. fixtures/latency/latency.agc
-runs a sleeping task and a stdin reader next to CPU, sort and concat tasks.
+runs a sleeping task and a stdin reader next to CPU, sort and concat tasks, on
+one scheduler: the turn costs keep the wake latency low where every task shares
+one thread, and with more schedulers a woken task finds an idle one anyway.
 """
 import os
 import re
@@ -33,7 +35,7 @@ def compile_fixture(source, tmp_path):
 
 
 def start(adopt, vm, bytecode, mode, no_turn_cost):
-    env = vm_environment({"AGENTICA_VM_TEST_NO_TURN_COST": "1" if no_turn_cost else None})
+    env = vm_environment({"AGENTICA_VM_TEST_NO_TURN_COST": "1" if no_turn_cost else None, "AGENTICA_SCHEDULERS": "1"})
     return adopt(Child([*vm, "--", bytecode, mode], env=env, stdin=True))
 
 

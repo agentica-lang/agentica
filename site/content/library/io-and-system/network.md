@@ -306,7 +306,7 @@ HTTP.close_server(server: HttpServer) -> Void
 ```
 
 - `close_server` stops accepting, closes every connection and cancels the running handlers and their tasks. Calling it again does nothing.
-- `wait` returns `ok()` once the server is closed. A program that only serves waits on it. When `main` returns, the server stops.
+- `wait` returns `ok()` once the server is closed and its handlers and their tasks have ended. A program that only serves waits on it. When `main` returns, the server stops.
 - A server belongs to the task that called `HTTP.listen` and closes (freeing its port) when that task ends, so call `listen` in the task that keeps it, such as `main`. Each connection belongs to the task that serves it.
 
 ```agentica {mode="check"}

@@ -263,6 +263,11 @@ void agc_stdio_end(agc_output *out, agc_input *in) {
   if (r) uv_mutex_unlock(&r->lock);
 }
 
+bool agc_stdio_try_first(const agc_output *s) {
+  (void)s;
+  return false;
+}
+
 ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) { return _write(s->fd, data, (unsigned)n); }
 
 /* Writes the bytes of two ranges (a ring that wrapped) as one request. They must stay unchanged until done runs, with

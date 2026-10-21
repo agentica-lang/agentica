@@ -123,6 +123,8 @@ static ssize_t writable_chunk(agc_stdio *io, int fd, size_t n) {
 }
 #endif
 
+bool agc_stdio_try_first(const agc_output *s) { return s->mode == AGC_WRITE_POLL && s->io->socket; }
+
 ssize_t agc_stdio_try(agc_output *s, const uint8_t *data, size_t n) {
   agc_stdio *io = s->io;
 #ifdef __APPLE__

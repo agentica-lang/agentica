@@ -617,9 +617,8 @@ bool agc_step_turn(agc_vm *vm, uint32_t span);
 bool agc_turn_charge(agc_vm *vm);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
-agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span);
-agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                            uint32_t span);
+/* Spawns the body of one test of Test.run as a child of the caller: the task is its own test, with its own stream. */
+agc_task *agc_task_spawn_test(agc_vm *vm, agc_value fn, uint32_t span, uint64_t seed);
 agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
                                 uint32_t span);
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span);
@@ -688,8 +687,11 @@ void agc_poller_close(agc_poller *p);
    when it is full). start asks for DONE to be called when a POLL descriptor can be written, or when a STREAM has
    written the two ranges. write is one blocking write on a pool thread (DISK and THREAD): like write(2), it returns
    the bytes written or -1 with errno. end runs just before the process exits, with no write of OUT in flight: it
-   tells the reader of a Windows socket that the output is over, unless IN (stdin) is in a read of the same socket. */
+   tells the reader of a Windows socket that the output is over, unless IN (stdin) is in a read of the same socket.
+   try_first says a POLL target must be tried before the loop waits for it: a Unix socket polls writable only while a
+   quarter of its buffer is used, so a wait can outlast the room a send would still find. */
 bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd);
+bool agc_stdio_try_first(const agc_output *out);
 bool agc_stdio_same(const agc_output *first, int fd);
 void agc_stdio_end(agc_output *out, agc_input *in);
 void agc_stdio_close(agc_stdio *io);

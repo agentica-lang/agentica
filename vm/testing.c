@@ -189,10 +189,7 @@ static uint64_t test_seed(uint64_t seed, const agc_string *name) {
 }
 
 static agc_task *start_test(agc_vm *vm, const agc_test_case *c) {
-  agc_task *t = agc_task_spawn(vm, c->body, NULL, 0, c->span);
-  t->test = t;
-  agc_random_seed(&t->random, test_seed(vm->rt->seed, c->name));
-  return t;
+  return agc_task_spawn_test(vm, c->body, c->span, test_seed(vm->rt->seed, c->name));
 }
 
 /* A test's running descendants moved to the caller when the test task

@@ -270,7 +270,7 @@ Cancellation (a timed-out item):
 
 Tips:
 
-- `limit` is for I/O. CPU work gets no faster on one core, and a large `limit` makes timeouts likelier.
+- `limit` is mostly for I/O. CPU work runs on at most one item per scheduler at a time, and a `limit` above the number of schedulers makes timeouts likelier.
 - Open handles inside the item. A handle shared by items makes them run in turn (its lock). Many tasks needing one handle: give it to one owner task and talk to it over a [Channel](/library/concurrency/channel/).
 - Items, captured variables and results are immutable and shared without copies. An item may call `Task.map`; the limits multiply.
 - Starting an item costs one `--max-steps` step, plus the block's own. With `--seed`, each item gets its own random generator, split in input order.
@@ -408,9 +408,11 @@ def boom(n: Int) -> Int
 end
 
 def main() -> Void
-  task = Task.spawn(&boom, 0)
   puts(Task.unobserved_crash().ok?)
-  Task.sleep(0)
+  task = Task.spawn(&boom, 0)
+  while !Task.unobserved_crash().ok?
+    Task.sleep(1)
+  end
   puts(Task.unobserved_crash().ok?)
   System.exit(0)
 end

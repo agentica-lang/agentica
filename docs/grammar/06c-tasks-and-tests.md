@@ -1,9 +1,12 @@
 ### Lightweight tasks
 
-`Task` is reserved. Tasks are cooperative and share one VM scheduler, so they
-give I/O concurrency without CPU parallelism. A task yields when it waits for
-I/O, a timer, a channel or another task, and at the end of each turn. Signatures
-are in
+`Task` is reserved. Tasks are cooperative: a task yields when it waits for I/O,
+a timer, a channel or another task, and at the end of each turn. They run on
+the VM's schedulers, one per logical core unless `--schedulers N` sets the count
+(section 6b), so tasks may run in parallel and the order of output between
+tasks is not fixed. With `--schedulers 1` one task runs at a time: I/O
+concurrency without CPU parallelism, in the order of a single run queue.
+Signatures are in
 [`library/concurrency/task.md`](../../site/content/library/concurrency/task.md).
 
 `Task.spawn` starts a function at once with one argument; use a struct for
@@ -193,9 +196,10 @@ type is a `Result`).
 argument. Both are checked before any item starts and before the empty-list
 shortcut, so `Task.map(empty, 0, 1000)` is `RUNTIME-INVALID-COUNT`; an empty
 list with valid arguments gives `[]`, and a `limit` larger than the list starts
-every item at once. `limit` is for I/O: CPU work does not get faster on one
-core, and since the clock of an item includes its time in the run queue, a large
-`limit` over CPU work makes timeouts more likely, not the work faster. Items,
+every item at once. CPU work runs on at most one item per scheduler at a time,
+and since the clock of an item includes its time in the run queue, a `limit`
+above the number of schedulers over CPU work makes timeouts more likely, not
+the work faster. Items,
 captured variables and results are immutable and shared without copies. A block
 may capture a handle, and a handle keeps its per-handle lock, but do not share a
 handle across items; give a handle that many tasks need to one owner task.
