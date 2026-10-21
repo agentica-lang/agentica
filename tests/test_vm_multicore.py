@@ -1132,6 +1132,9 @@ def main() -> Void
   t = Task.spawn_owning(&holder, q)
   puts(Task.await(t).ok?)
   Process.close(q)
+  while Task.pending_count() > 0
+    Task.sleep(1)
+  end
   puts(Task.pending_count())
 end
 """.replace("CHILD", CHANNEL_CHILD)
@@ -1142,7 +1145,9 @@ end
 def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats):
     # process-channel-close without its 100 ms sleeps: main closes the child once the child has read the first byte of
     # the sender's 1 MB write, so the send is parked; the read is parked or not yet made (then the process is closed
-    # already). The owner of a second child crashes at the same point: its tasks end and nothing is left.
+    # already). The owner of a second child crashes at the same point: its tasks end and nothing is left. A cancel
+    # that reaches a task on another scheduler lands a little later, so main waits for the count to reach 0; a task
+    # left behind hangs the run until the timeout.
     bytecode = program(tmp_path, "proc_channel_close", PROC_CHANNEL_CLOSE)
     reads = {'error("process: channel is closed")', 'error("process: process is closed")'}
     for _ in range(repeats):
@@ -1159,7 +1164,7 @@ def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats
 SPAWN_AT_END = r"""def spawner(mark: String) -> Int
   n = 0
   while n < 100000
-    p = Process.spawn("sh", ["-c", "sleep 7; :", mark], 5000)
+    p = Process.spawn("sh", ["-c", "while :; do sleep 0.1; done", mark], 5000)
     n = n + 1
   end
   return n
@@ -1187,7 +1192,8 @@ def marked(mark):
 @RACE
 def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeats):
     # Three tasks spawn children in a loop while main returns: every child that started is killed by the end of the
-    # run, and a spawn still queued then starts none. A child left behind would sleep for 7 s with the mark as $0.
+    # run, and a spawn still queued then starts none. A child left behind loops with the mark as $0; its own children
+    # live 0.1 s, so killing the marked shell leaves nothing.
     bytecode = program(tmp_path, "spawn_at_end", SPAWN_AT_END)
     mark = "agc-orphan-%d-%d" % (os.getpid(), repeats)
     # Not run(): it kills the run's process group at the end, which would hide a child left behind.
