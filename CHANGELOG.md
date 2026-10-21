@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica type-at` (and `std/analysis`) answers a type name in an annotation,
+  a type argument, a field or a payload (`kind` `type`), with the struct, enum
+  or alias as definition.
 - `std/analysis` has `type_at_partial` and `refs_partial`, as `type-at` and
   `refs` with `--partial`.
 

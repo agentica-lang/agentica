@@ -91,6 +91,8 @@ PARITY = [
     ("type-at", *position("orders.agc", ORDERS, "name.upcase", 6)),
     ("type-at", *position("orders.agc", ORDERS, "Models.make", 8)),
     ("type-at", *position("orders.agc", ORDERS, "1\nend")),
+    ("type-at", *position("orders.agc", ORDERS, "Models.User) -> Int", 2)),
+    ("type-at", *position("orders.agc", ORDERS, "List[String]", 1)),
     ("type-at", "orders.agc", "1", "1"),
     ("type-at", *position("type_error.agc", TYPE_ERROR, "x: Int")),
     ("symbol", "make", "models.agc", "orders.agc"),

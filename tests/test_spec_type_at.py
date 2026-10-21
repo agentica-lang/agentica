@@ -653,3 +653,124 @@ def test_text_form_of_a_local_gives_the_name_with_its_type_and_the_binding(local
         f"locals.agc:{bound[0]}:{bound[1]} parameter scale",
         "",
     ]
+
+
+# The types of a program, named in every place a type is written, and the file they come from.
+KINDS = '''## A user of the other file.
+export struct User
+  name: String
+end
+
+## An id.
+export type Id = Int
+'''
+
+TYPES = '''import Kinds from "kinds"
+import {Id} from "kinds"
+
+## A point.
+struct Point
+  x: Int
+  items: List[Point]
+end
+
+enum Shape
+  Circle(Point)
+  Pair(Kinds.User, Int)
+end
+
+type Points = List[Point]
+
+def origin(p: Point, user: Kinds.User, id: Id, all: Points) -> Result[Point]
+  q: Point = Point(x: 0, items: [])
+  moved = [q].map do |each: Point| each end
+  return ok(moved[0])
+end
+
+def main() -> Void
+  puts(JSON.decode("{}", Point))
+end
+'''
+
+
+@pytest.fixture
+def types_file(tmp_path):
+    (tmp_path / "kinds.agc").write_text(KINDS, encoding="utf-8")
+    (tmp_path / "types.agc").write_text(TYPES, encoding="utf-8")
+    return tmp_path
+
+
+def type_name_at(needle, inside=0, nth=1, *, cwd):
+    return answer(("types.agc", where(TYPES, needle, inside, nth)), cwd=cwd)
+
+
+# Each place that writes a type: the text that starts at the name, the name, and the nth occurrence of the text.
+POINT_PLACES = [
+    ("Point, user", 1, "a parameter"),
+    ("Point]\n  q:", 1, "the type of the result, as a type argument"),
+    ("Point = Point(x", 1, "the annotation of a local"),
+    ("Point]\nend", 1, "a type argument in a field"),
+    ("Point)\n  Pair", 1, "the payload of a variant"),
+    ("Point]\n\ndef origin", 1, "the target of an alias"),
+    ("Point| each", 1, "the parameter of a block"),
+    ("Point))\nend", 1, "a type as an argument of a call"),
+]
+
+
+@pytest.mark.parametrize("needle,nth,place", POINT_PLACES, ids=[place for _, _, place in POINT_PLACES])
+def test_the_name_of_a_struct_in_a_type_is_a_type_with_the_struct_as_definition(types_file, needle, nth, place):
+    found = type_name_at(needle, nth=nth, cwd=types_file)
+    assert (found["kind"], found["text"], found["type"]) == ("type", "Point", "Point"), place
+    assert start(found["span"]) == where(TYPES, needle, 0, nth) and found["span"]["file"] == "types.agc", place
+    assert end(found["span"]) == where(TYPES, needle, 5, nth), place
+    definition = found["definition"]
+    assert (definition["kind"], definition["name"], definition["file"]) == ("struct", "Point", "types.agc"), place
+    assert (definition["signature"], definition["doc"]) == ("struct Point", "A point."), place
+    assert start(definition["name_span"]) == where(TYPES, "Point\n  x: Int") and found["help"] is None, place
+
+
+def test_a_position_inside_the_name_is_the_type_and_the_brackets_around_a_type_argument_are_not(types_file):
+    inside = type_name_at("Point, user", 4, cwd=types_file)
+    assert (inside["kind"], start(inside["span"])) == ("type", where(TYPES, "Point, user"))
+    bracket = type_at(("types.agc", where(TYPES, "List[Point]", 4)), cwd=types_file)
+    problem(bracket, "QUERY-NO-EXPRESSION", 2)
+
+
+def test_a_builtin_type_is_a_type_with_no_definition_and_no_help(types_file):
+    for needle, name in (("Int\n  items", "Int"), ("List[Point]\nend", "List"), ("Result[Point]", "Result")):
+        found = type_name_at(needle, cwd=types_file)
+        assert (found["kind"], found["text"], found["type"], found["definition"]) == ("type", name, name, None), name
+        assert (found["help"], end(found["span"])) == (None, where(TYPES, needle, len(name))), name
+    nested = type_name_at("List[Point]", 5, cwd=types_file)
+    assert (nested["text"], nested["definition"]["kind"]) == ("Point", "struct")
+
+
+def test_a_qualified_name_is_one_span_and_the_definition_is_in_the_file_of_the_import(types_file):
+    for inside in (0, 3, 5, 6, 9):
+        found = type_name_at("Kinds.User, id", inside, cwd=types_file)
+        assert (found["kind"], found["text"], found["type"]) == ("type", "Kinds.User", "Kinds.User"), inside
+        assert start(found["span"]) == where(TYPES, "Kinds.User, id"), inside
+        assert end(found["span"]) == where(TYPES, "Kinds.User, id", 10), inside
+        definition = found["definition"]
+        assert (definition["kind"], definition["name"], definition["file"]) == ("struct", "User", "kinds.agc"), inside
+        assert definition["doc"] == "A user of the other file." and definition["signature"] == "struct User"
+        assert definition["name_span"]["file"] == "kinds.agc"
+        assert start(definition["name_span"]) == where(KINDS, "User\n  name")
+    payload = type_name_at("Kinds.User, Int", cwd=types_file)
+    assert (payload["kind"], payload["definition"]["name"]) == ("type", "User")
+
+
+def test_an_alias_imported_by_name_is_a_type_with_the_alias_as_definition(types_file):
+    found = type_name_at("Id, all", cwd=types_file)
+    assert (found["kind"], found["text"], found["type"]) == ("type", "Id", "Id")
+    definition = found["definition"]
+    assert (definition["kind"], definition["name"], definition["file"]) == ("alias", "Id", "kinds.agc")
+    assert (definition["signature"], definition["doc"]) == ("type Id = Int", "An id.")
+    # The alias declared in the file itself.
+    own = type_name_at("Points) ->", cwd=types_file)
+    assert own["definition"]["kind"] == "alias" and own["definition"]["file"] == "types.agc"
+
+
+def test_a_construction_is_still_an_expression_with_the_struct_as_definition(types_file):
+    built = type_name_at("Point(x: 0", cwd=types_file)
+    assert (built["kind"], built["type"], built["definition"]["kind"]) == ("name", "Point", "struct")
