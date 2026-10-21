@@ -108,8 +108,8 @@ AREAS = {
         [
             "tests/test_spec_alias.py", "tests/test_spec_bytecode.py", "tests/test_spec_checker_defaults.py",
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
-            "tests/test_spec_lexer.py", "tests/test_spec_modules.py", "tests/test_spec_packages.py",
-            "tests/test_spec_parser.py", "tests/test_spec_patterns.py",
+            "tests/test_spec_lexer.py", "tests/test_spec_main.py", "tests/test_spec_modules.py",
+            "tests/test_spec_packages.py", "tests/test_spec_parser.py", "tests/test_spec_patterns.py",
         ],
     ),
     "golden": (

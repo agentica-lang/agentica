@@ -41,7 +41,7 @@ NAMES = [
 ]
 SCALE_DEF = "def scale() -> Int\n  return 1\nend\n"
 # Programs for the front-end rows: a main that imports the largest module of the corpus, so that `check` goes through
-# every function body of it (gherkin.agc alone has no main and stops at CHECK-MAIN), and the smallest unit test.
+# every function body of it, and the smallest unit test.
 GHERKIN_MAIN = 'import Gherkin from "std/bdd/gherkin"\n\ndef main() -> Void\n  puts("ok")\nend\n'
 SMALL_TEST = 'def main() -> Void\n  Test.run([Test.test("adds") do\n    Test.eq(1 + 1, 2)\n  end])\nend\n'
 # A one-minute load average above this makes the numbers rough; the report says so.
@@ -196,8 +196,7 @@ def startup(runs: int, commands: dict[str, list[str] | None], workdir: Path) -> 
 def front_end(runs: int, workdir: Path) -> list[Row]:
     """Times the front end of dist/agentica (35.2): `check` of files of growing size and a small `agentica test`.
 
-    gherkin.agc and parser.agc have no main, so their `check` ends at CHECK-MAIN (exit 1) after lexing, parsing,
-    linking and registering the declarations; the rows with a main go through every function body."""
+    gherkin.agc and parser.agc have no main, which `check` does not need."""
     if not EXE.exists():
         return [Row("check", "exe", "missing", note="not built")]
     wrapper = workdir / "gherkin_main.agc"
@@ -206,8 +205,8 @@ def front_end(runs: int, workdir: Path) -> list[Row]:
     small.write_text(SMALL_TEST)
     cases = [
         ("check hello.agc", [str(EXE), "check", str(HELLO)], (0,)),
-        ("check gherkin.agc", [str(EXE), "check", str(GHERKIN)], (0, 1)),
-        ("check parser.agc", [str(EXE), "check", str(PARSER)], (0, 1)),
+        ("check gherkin.agc", [str(EXE), "check", str(GHERKIN)], (0,)),
+        ("check parser.agc", [str(EXE), "check", str(PARSER)], (0,)),
         ("check gherkin_main.agc", [str(EXE), "check", str(wrapper)], (0,)),
         ("check front_end.agc", [str(EXE), "check", str(FRONT_END)], (0,)),
         ("test small_test.agc", [str(EXE), "test", str(small)], (0,)),

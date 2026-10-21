@@ -9,9 +9,10 @@ Nothing is implemented. The `main` and `Test.run` form of the grammar's
 
 - A test file is a `*_test.agc` program whose `main` calls `Test.run` with a
   list of `Test.test(name) do ... end` blocks (the grammar's `Test` rules).
-- Every program needs `main() -> Void`: `check_main` in
+- A run and `compile` need `main() -> Void`: `check_main` in
   `compiler/check/check_register.agc` reports CHECK-MAIN otherwise, so a test
-  file with no `main` is CHECK-MAIN today.
+  file with no `main` is CHECK-MAIN there today. `agentica check` does not need
+  a `main`.
 - `agentica test` decides that a file is a test file by its name: `kind_of` in
   `compiler/bdd/bdd_discover.agc` returns "tests" for `_test.agc`. Only the
   driver reads the name; the compiler never does, and nothing tells the front
@@ -73,8 +74,8 @@ end
   compile call (`test_file: true`, passed from `compile_test` in
   `compiler/bdd/bdd_driver.agc` down to `Linker.link_file`), not from the file
   name inside `compiler/`. Every other caller passes `false`, so `agentica
-  check` and `agentica FILE.agc` still report CHECK-MAIN for a test file with no
-  `main`. Whether they should set the flag too is for the PR to decide.
+  FILE.agc` still reports CHECK-MAIN for a test file with no `main`. Whether
+  they should set the flag too is for the PR to decide.
 
 - **Not in 50a**: a `test` keyword form (`test name() ... end`). It is
   rejected for now by the one-way rule, since `def test_...` needs no new

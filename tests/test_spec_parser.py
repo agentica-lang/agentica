@@ -15,11 +15,9 @@ from tests.agentica_test import cli, output_lines, run, vm_environment
 # span: (line, column) of the start, (line, column, line, column) with the end too, (line,) for the line only,
 # or None when the rule is not about a position.
 Reject = namedtuple("Reject", "text code span files", defaults=(None, None))
-# parses_only: the program parses, but its check fails for another reason (a program with no main).
-Accept = namedtuple("Accept", "text files parses_only", defaults=(None, False))
+Accept = namedtuple("Accept", "text files", defaults=(None,))
 Output = namedtuple("Output", "text lines files", defaults=(None,))
 
-PARSE_CODES = ("LEX-", "PARSE-")
 
 ALPHA = "export def one() -> Int\n  return 1\nend\n"
 
@@ -168,11 +166,7 @@ class TestSpecParser:
     def check_accepted(self, cases):
         results = self.run_all([(case.text, case.files) for case in cases], "--json", "check")
         for case, result in zip(cases, results):
-            if case.parses_only:
-                code = json.loads(result.stderr)["code"] if result.code else ""
-                assert not (code.startswith(PARSE_CODES)), result.stderr
-            else:
-                assert ((result.code, result.stdout)) == ((0, '{"ok":true}\n')), result.stderr
+            assert ((result.code, result.stdout)) == ((0, '{"ok":true}\n')), result.stderr
 
     def check_output(self, cases):
         results = self.run_all([(case.text, case.files) for case in cases])
@@ -444,8 +438,7 @@ class TestSpecParser:
         ])
 
     def test_empty_input_parses_to_an_empty_program(self):
-        # check needs a main(), so the empty program fails the check, but it parses.
-        self.check_accepted([Accept("", parses_only=True)])
+        self.check_accepted([Accept("")])
 
     def test_while_reassignment_and_bare_return_parse(self):
         program = (
@@ -571,9 +564,8 @@ class TestSpecParser:
             Accept("\n\n# license\n\n# more\n## Module.\n##\n## Details.\n\n## Adds.\ndef add() -> Void\nend\n\n"
                    + main_of("")),
             Accept("## Not a module doc.\ndef main() -> Void\nend\n"),
-            # Without a main() the check fails, but the module doc parses.
-            Accept("## Only a module doc.\n\n", parses_only=True),
-            Accept("## Module.\n\nimport A from \"a\"\n", {"a.agc": ALPHA}, parses_only=True),
+            Accept("## Only a module doc.\n\n"),
+            Accept("## Module.\n\nimport A from \"a\"\n", {"a.agc": ALPHA}),
         ])
 
     def test_every_detached_doc_block_is_parse_detached_doc_at_its_first_line(self):
