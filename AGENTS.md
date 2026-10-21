@@ -114,6 +114,7 @@ phase 13).
 
 - **Task:** writing or reviewing `.agc` style
   - **Read:** `.agents/skills/agentica-code-guidelines/`
+    (`site/content/style.md` is its page for people)
 
 - **Task:** `site/` or `benchmarks/`
   - **Read:** `.agents/skills/agentica-development/SKILL.md`
