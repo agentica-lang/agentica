@@ -27,7 +27,7 @@ except ImportError:
     fcntl = None
 
 from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, compile_text, host_only, kill_process, known_issue,
-                                 process_alive, run, vm_command, vm_environment, wait_until)
+                                 process_alive, run, vm_command, vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -920,7 +920,8 @@ DEADLINE_CHILDREN = ((PYTHON, "-c", "import sys, time; time.sleep(PAUSE); sys.ex
 def test_process_exits_and_lines_that_race_a_deadline_give_the_result_or_the_timeout(tmp_path, repeats):
     # A wait whose 30 ms deadline races the exit of a child that sleeps 20 to 50 ms: the status or the timeout (a wait
     # that times out leaves the child as it is). A read that races a line the same way: the line, or the timeout,
-    # which closes the child, so the next read finds it closed; never the timeout and then the line.
+    # which closes the child, so the next read finds it closed; never the timeout and then the line. On Windows the
+    # Python children take 50 ms or more to start, so there the case covers only the timeout branch.
     bytecode = program(tmp_path, "proc_deadline", PROC_DEADLINE)
     waits = {"ok(4)", 'error("network: operation timed out")'}
     reads = {'ok("hi")', 'error("network: operation timed out") then error("process: process is closed")'}
@@ -1527,7 +1528,8 @@ def test_net_waits_cancelled_from_other_schedulers_end_and_free_their_port(tmp_p
     # and an accept; then a crashing owner cancels its children parked the same way. The jobs are cancelled by
     # whichever scheduler runs the canceller, the run ends, no task is left (the crashed owner's children end on
     # their own schedulers, so main waits for the count to reach 0), and the accept's port is free again.
-    # Windows takes a 64 MiB send into its buffers at once (as in test_vm_tcp.py), so there the send may end first.
+    # Windows takes a 64 MiB send into its buffers at once (as in test_vm_tcp.py), so there the send may end first,
+    # and on Windows this case does not prove that a parked send is cancelled; the other systems do.
     bytecode = program(tmp_path, "net_cancel", NET_CANCEL)
     timed_out = 'error("task: timed out")'
     sends = {timed_out, 'ok("sent")'} if WINDOWS else {timed_out}
@@ -1805,9 +1807,11 @@ end
 
 @RACE
 def test_handles_of_a_crashed_owner_are_closed_when_its_await_returns(tmp_path, repeats):
-    # #402: a listener, a socket and a child that a task owns are closed by the time the caller's Task.await of that
-    # crashed task returns. The resource is marked closed (under rt->sync) before the waiters are woken, and the I/O
-    # thread runs the close step before any step that a woken task posts. Each run checks 40 rounds of each kind.
+    # #402: a listener, a socket and a child that a task owns itself are closed by the time the caller's Task.await of
+    # that crashed task returns: the I/O thread runs the close step, posted at the owner's end, before any step that
+    # the woken caller posts. It does not pin the order inside finish_task (the close and the wake both run under
+    # rt->sync, and the FIFO inbox orders the close first either way); the descendant cases below cover the gap that
+    # order did leave. Each run checks 40 rounds of each kind.
     bytecode = program(tmp_path, "owner_crash", OWNER_CRASH)
     expected = ['accept: network: listener is closed x40', 'peer: error("network: end of input") x40',
                 'send: error("network: socket is closed") x40', 'wait: error("process: process is closed") x40']
@@ -1825,6 +1829,7 @@ def test_the_port_of_a_crashed_owner_refuses_a_peer_once_its_await_returns(tmp_p
         process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode], stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=vm_environment(MULTICORE))
         try:
+            assert wait_readable(process.stdout.fileno(), 30), "the run printed no port"
             port = int(process.stdout.readline())
             with pytest.raises(ConnectionRefusedError):
                 socket.create_connection(("127.0.0.1", port), timeout=5).close()
@@ -1832,9 +1837,124 @@ def test_the_port_of_a_crashed_owner_refuses_a_peer_once_its_await_returns(tmp_p
             assert process.wait(timeout=30) == 0
         finally:
             kill_process(process.pid)
+            process.stdout.close()
 
 
-NET_STOP =r"""def read(socket: Socket) -> Result[String]
+OWNER_DESCENDANTS = r"""def spin(listener: Listener) -> Result[Int]
+  k = 0
+  while k < 50000000
+    k = k + 1
+  end
+  return ok(k)
+end
+
+def wait(listener: Listener) -> Result[Int]
+  case TCP.accept(listener, 60000)
+    ok(socket) -> TCP.close(socket)
+    error(e) -> return ok(0)
+  end
+  return ok(1)
+end
+
+def crash() -> Result[Int]
+  zero = 0
+  return ok(1 / zero)
+end
+
+def crash_busy(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&spin, listener)
+  return crash()
+end
+
+def crash_wait(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&wait, listener)
+  return crash()
+end
+
+def cancel_busy(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&spin, listener)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def middle(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&spin, listener)
+  return spin(listener)
+end
+
+def crash_nested(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&middle, listener)
+  Task.sleep(2)
+  return crash()
+end
+
+def cancel_nested(listener: Listener) -> Result[Int]
+  Task.spawn_owning(&middle, listener)
+  Task.sleep(60000)
+  return ok(0)
+end
+
+def start(kind: String, listener: Listener) -> Task[Result[Int]]
+  case kind
+    "crash-busy" -> return Task.spawn_owning(&crash_busy, listener)
+    "crash-wait" -> return Task.spawn_owning(&crash_wait, listener)
+    "crash-nested" -> return Task.spawn_owning(&crash_nested, listener)
+    "cancel-nested" -> return Task.spawn_owning(&cancel_nested, listener)
+    _ -> return Task.spawn_owning(&cancel_busy, listener)
+  end
+end
+
+def accepted(got: Result[Socket]) -> String
+  case got
+    ok(socket) ->
+      TCP.close(socket)
+      return "accepted"
+    error(e) -> return e
+  end
+end
+
+def main() -> Void
+  seen: Map[String, Int] = {}
+  for kind in ["crash-busy", "crash-wait", "crash-nested", "cancel-busy", "cancel-nested"]
+    round = 0
+    while round < 100
+      listener = TCP.listen("127.0.0.1", 0).unwrap!
+      waiting = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
+      owner = start(kind, listener)
+      if kind.starts_with?("cancel")
+        Task.sleep(2)
+        Task.cancel(owner)
+      end
+      Task.await(owner)
+      key = "#{kind}: #{accepted(TCP.accept(listener, 1))}"
+      seen = seen.put(key, seen.get(key, 0) + 1)
+      TCP.close(waiting)
+      round = round + 1
+    end
+  end
+  for key in seen.keys.sort
+    puts("#{key} x#{seen.get(key, 0)}")
+  end
+end
+"""
+
+
+@RACE
+def test_handles_held_by_cancelled_descendants_are_closed_when_the_await_of_their_ancestor_returns(tmp_path, repeats):
+    # #402, the nested case: the owner hands the listener on to a child (and, nested, the child to a grandchild), then
+    # crashes or is cancelled. The cancel of a descendant that runs on another scheduler (busy, or just starting its
+    # accept) is deferred to the end of its turn, so the owner's end waits for it (hold in vm/task.c): Task.await of
+    # the owner returns only once the listener is closed, and the pending connection is never accepted. Without the
+    # hold, about a quarter of the rounds accept it. 100 rounds of each kind per run.
+    bytecode = program(tmp_path, "owner_descendants", OWNER_DESCENDANTS)
+    kinds = ["cancel-busy", "cancel-nested", "crash-busy", "crash-nested", "crash-wait"]
+    expected = [f"{kind}: network: listener is closed x100" for kind in kinds]
+    for _ in range(repeats):
+        result = vm(bytecode, timeout=120)
+        assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
+
+
+NET_STOP = r"""def read(socket: Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
 end
 

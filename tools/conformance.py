@@ -67,7 +67,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
-# descriptor flags and colon names; macOS lacks /dev/full and non-UTF-8 names; the other systems lack the Windows-only modules above.
+# descriptor flags and colon names; macOS lacks /dev/full and non-UTF-8 names; the other systems lack the Windows-only
+# modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py",

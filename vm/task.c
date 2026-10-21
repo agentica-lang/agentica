@@ -174,13 +174,38 @@ static void leave_parent(agc_task *t) {
   t->parent = t->prev_sibling = t->next_sibling = NULL;
 }
 
+/* An ended task with nothing pending (`closing` is 0) has settled: its awaiters wake and an end hook that found a
+   close pending, and so put itself back (Task.map), runs again. A task that held another (`holder`, see hold) gives
+   its count back, and a holder that has ended and now has nothing pending settles in turn: a loop, not a recursion,
+   so a deep chain of cancelled tasks needs no stack. A holder that has not ended yet settles in its finish_task. */
+static void settle(agc_vm *vm, agc_task *t) {
+  while (t) {
+    agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+    agc_end_fn end = t->end;
+    t->end = NULL;
+    if (end) end(vm, t);
+    agc_task *holder = t->holder;
+    t->holder = NULL;
+    if (!holder || --holder->closing != 0 || holder->state != AGC_TASK_DONE) return;
+    t = holder;
+  }
+}
+
 void agc_task_close_done(agc_vm *vm, agc_task *t) {
-  if (--t->closing != 0) return;
-  agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
-  /* An end hook that found a close pending put itself back (Task.map), and now the task has settled. */
-  agc_end_fn end = t->end;
-  t->end = NULL;
-  if (end) end(vm, t);
+  if (--t->closing != 0 || t->state != AGC_TASK_DONE) return;
+  settle(vm, t);
+}
+
+/* A cancelled task `t` that has not settled (it still runs and ends at the end of its turn, or it ended with a file
+   close or a held task of its own pending) holds `holder`, the task whose end the cancel reached it through: one
+   count in the holder's `closing`, given back when `t` settles. So the end of the holder is not observed (Task.await,
+   a Task.map end hook) before the owned handles of `t` and of its own cancelled descendants are closed (§14.5). At
+   N = 1 a cancelled task still runs only when it is the canceller's own task. A task holds at most one other. */
+static void hold(agc_vm *vm, agc_task *t, agc_task *holder) {
+  agc_sync_assert(vm);
+  if (!holder || t->holder || (t->state == AGC_TASK_DONE && !t->closing)) return;
+  t->holder = holder;
+  holder->closing++;
 }
 
 static void finish_task(agc_vm *vm, agc_task *t) {
@@ -202,7 +227,10 @@ static void finish_task(agc_vm *vm, agc_task *t) {
     if (t->parent) adopt(vm, t->parent, child);
   }
   leave_parent(t);
-  if (!t->closing) agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+  if (!t->closing) {
+    settle(vm, t);
+    return;
+  }
   agc_end_fn end = t->end;
   t->end = NULL;
   if (end) end(vm, t);
@@ -279,15 +307,23 @@ static void cancel_one(agc_vm *vm, agc_task *t, const char *why) {
 
 /* Children before parents, so each cancelled task has no live child left
    to move; a running task only gets its flag and ends after its builtin. `why`, when set, is the at= reason of the
-   root's trace line. */
-static void cancel_tree(agc_vm *vm, agc_task *root, const char *why) {
+   root's trace line. Each task of the walk below the root that has not settled holds its parent (hold), and so does
+   a child that an earlier cancel reached and that still runs; the root holds `holder` (a crashing parent) when set. */
+static void cancel_tree(agc_vm *vm, agc_task *root, const char *why, agc_task *holder) {
   agc_sync_assert(vm);
-  if (root == vm->rt->main || root->state == AGC_TASK_DONE || root->cancelled) return;
+  if (root == vm->rt->main || root->state == AGC_TASK_DONE) return;
+  if (root->cancelled) {
+    hold(vm, root, holder);
+    return;
+  }
   agc_task *t = root;
   uint64_t count = 0;
   for (;;) {
     agc_task *child = t->children;
-    while (child && child->cancelled) child = child->next_sibling;
+    while (child && child->cancelled) {
+      hold(vm, child, t);
+      child = child->next_sibling;
+    }
     if (child) {
       t = child;
       continue;
@@ -296,12 +332,14 @@ static void cancel_tree(agc_vm *vm, agc_task *root, const char *why) {
     cancel_one(vm, t, t == root ? why : NULL);
     count++;
     if (t == root) break;
+    hold(vm, t, up);
     t = up;
   }
+  hold(vm, root, holder);
   if (vm->task && executing(vm->task)) agc_charge(vm, count);
 }
 
-void agc_task_cancel(agc_vm *vm, agc_task *root) { cancel_tree(vm, root, NULL); }
+void agc_task_cancel(agc_vm *vm, agc_task *root) { cancel_tree(vm, root, NULL, NULL); }
 
 /* The task takes the result of its job. agc_io_finish takes rt->sync itself for the parts that change shared lists (the
    hand-on of a handle's lock, a close) and for the halves of a kind marked `locked`; the rest, such as the text of a
@@ -414,7 +452,7 @@ static void crash(agc_vm *vm, agc_task *t) {
   unlink_task(vm, t);
   for (agc_task *child = t->children, *next; child; child = next) {
     next = child->next_sibling;
-    agc_task_cancel(vm, child);
+    cancel_tree(vm, child, NULL, t);
   }
   finish_task(vm, t);
 }
@@ -851,6 +889,8 @@ static agc_task *spawn_child(agc_vm *vm, agc_task *parent, agc_value fn, const a
   atomic_store_explicit(&child->cancelled, true, memory_order_seq_cst);
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "cancel task=%" PRIu64 " at=spawn", child->id);
   end_cancelled(vm, child);
+  /* A file close of the handed handle that is still pending holds the parent, as in a cancel walk. */
+  hold(vm, child, parent);
   return child;
 }
 
@@ -1064,7 +1104,7 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
    handle reaches main (a program gets handles only from spawns), and the walk refuses it anyway. */
 static agc_value builtin_cancel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  cancel_tree(vm, agc_as_task(vm, args[0]), "call");
+  cancel_tree(vm, agc_as_task(vm, args[0]), "call", NULL);
   return agc_void();
 }
 

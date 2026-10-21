@@ -72,6 +72,13 @@ typedef struct {
 #endif
 } stop_state;
 
+/* The signal mask that pool_enter saves (nothing on Windows). */
+#if defined(_WIN32)
+typedef int pool_mask;
+#else
+typedef sigset_t pool_mask;
+#endif
+
 struct agc_loop {
   uv_loop_t uv;
   uv_timer_t bound;
@@ -398,17 +405,33 @@ static void work_finished(uv_work_t *req, int status) {
   end_wait(j, AGC_JOB_DONE);
 }
 
-/* The pool threads have the stop signals blocked, so a stop signal is handled on the loop's thread only (unwatch_stop). */
+/* Every submit to the libuv pool goes through pool_enter and pool_leave: the pool's threads start at the first submit,
+   whichever it is, and take the signal mask of the thread that submits, so they keep the stop signals blocked and a
+   stop signal is handled on the loop's thread only (unwatch_stop). Nothing to block on Windows. */
+#if !defined(_WIN32)
+static void pool_enter(pool_mask *saved) { agc_io_block_stop(saved); }
+static void pool_leave(const pool_mask *saved) { pthread_sigmask(SIG_SETMASK, saved, NULL); }
+#else
+static void pool_enter(pool_mask *saved) { *saved = 0; }
+static void pool_leave(const pool_mask *saved) { (void)saved; }
+#endif
+
 int agc_io_queue_work(struct uv_loop_s *uv, struct uv_work_s *work, void (*run)(struct uv_work_s *work),
                       void (*after)(struct uv_work_s *work, int status)) {
-#if !defined(_WIN32)
-  sigset_t saved;
-  agc_io_block_stop(&saved);
-#endif
+  pool_mask saved;
+  pool_enter(&saved);
   int rc = uv_queue_work(uv, work, run, after);
-#if !defined(_WIN32)
-  pthread_sigmask(SIG_SETMASK, &saved, NULL);
-#endif
+  pool_leave(&saved);
+  return rc;
+}
+
+int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
+                       void (*done)(struct uv_getaddrinfo_s *req, int status, struct addrinfo *res), const char *node,
+                       const char *service, const struct addrinfo *hints) {
+  pool_mask saved;
+  pool_enter(&saved);
+  int rc = uv_getaddrinfo(uv, req, done, node, service, hints);
+  pool_leave(&saved);
   return rc;
 }
 
@@ -924,10 +947,10 @@ void agc_io_block_stop(sigset_t *saved) {
    till then a second signal is only recorded in `now`. */
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2, "the stop state is read in a signal handler");
 
-/* Dies by SIG now: the default action, raised in this thread with SIG unblocked here (a scheduler keeps it blocked).
-   A signal sent to the whole process may be taken later by another thread, and on macOS the _exit(128 + sig) that
-   follows a call would then win. */
-static void stop_at_once(int sig) {
+/* Dies by SIG now: the default action, raised in this thread with SIG unblocked here (the caller may have blocked
+   it). A signal sent to the whole process may be taken later by another thread, and on macOS the _exit(128 + sig)
+   that follows a call would then win. Safe in a signal handler. */
+void agc_io_die_by(int sig) {
   signal(sig, SIG_DFL);
   sigset_t one;
   sigemptyset(&one);
@@ -939,7 +962,7 @@ static void stop_at_once(int sig) {
 static void stop_overdue(uv_timer_t *timer) {
   (void)timer;
   int now = atomic_load(&stop_status()->now);
-  if (now) stop_at_once(now);
+  if (now) agc_io_die_by(now);
 }
 
 static void stop_requested(int sig) {
@@ -975,11 +998,11 @@ static void stop_woken(uv_async_t *wake) {
   int sig = atomic_load(&stop_status()->now);
   if (!sig) return;
   if (!atomic_load(&stop_status()->held) || !loop->stop_grace_init) {
-    stop_at_once(sig);
+    agc_io_die_by(sig);
     _exit(128 + sig);
   }
   if (uv_timer_start(&loop->stop_grace, stop_overdue, (uint64_t)STOP_GRACE_SECONDS * 1000, 0) != 0) {
-    stop_at_once(sig);
+    agc_io_die_by(sig);
     _exit(128 + sig);
   }
 }
@@ -1030,11 +1053,7 @@ void agc_io_children_stopped(void) {
   atomic_store(&stop_status()->held, false);
   int now = atomic_load(&stop_status()->now);
   if (!now) return;
-  sigset_t set;
-  sigemptyset(&set);
-  sigaddset(&set, now);
-  pthread_sigmask(SIG_UNBLOCK, &set, NULL);
-  stop_at_once(now);
+  agc_io_die_by(now);
   _exit(128 + now);
 }
 

@@ -1026,7 +1026,7 @@ static int resolve(net *n) {
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = n->listener ? AI_PASSIVE : 0;
-  int rc = uv_getaddrinfo(n->loop, &n->dns, resolved, n->host, service, &hints);
+  int rc = agc_io_getaddrinfo(n->loop, &n->dns, resolved, n->host, service, &hints);
   if (!rc) {
     n->resolving = true;
     n->callbacks++;

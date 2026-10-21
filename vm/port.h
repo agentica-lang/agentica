@@ -437,6 +437,8 @@ struct agc_task {
      reads keep their offsets. */
   uint64_t steps;
   struct agc_measure *measures;
+  /* The task whose end waits for this cancelled task to settle: a count in its `closing` (hold in vm/task.c). */
+  agc_task *holder;
 };
 
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
@@ -627,6 +629,12 @@ struct uv_work_s;
    stop signal reaches the loop's thread only (nothing to block on Windows). */
 int agc_io_queue_work(struct uv_loop_s *uv, struct uv_work_s *work, void (*run)(struct uv_work_s *work),
                       void (*after)(struct uv_work_s *work, int status));
+struct uv_getaddrinfo_s;
+struct addrinfo;
+/* uv_getaddrinfo, which runs on the same pool, with the stop signals blocked the same way. */
+int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
+                       void (*done)(struct uv_getaddrinfo_s *req, int status, struct addrinfo *res), const char *node,
+                       const char *service, const struct addrinfo *hints);
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more);
