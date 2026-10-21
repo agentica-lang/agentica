@@ -51,9 +51,9 @@ What the design starts from:
   slots of `VariantPattern` hold plain strings. Functions, structs, enums,
   fields, variants, constants, type aliases, `FieldAccess` and `MethodCall`
   have a `name_span`.
-- `Modules.enter` adds each module to the link tables before its own imports
-  are read. The loader raises some link errors while it reads the imports. The
-  name errors (`CHECK-IMPORT-NAME` for a member, `CHECK-UNKNOWN-NAME`, a name of the
+- `Modules.enter` adds each module to the link tables before its own imports are
+  read. The loader raises some link errors while it reads the imports. The name
+  errors (`CHECK-IMPORT-NAME` for a member, `CHECK-UNKNOWN-NAME`, a name of the
   wrong kind) come later, when `rewrite_all` rewrites the names after every
   module is loaded, and often inside a dependency.
 - `agentica doc PATH [--json]` prints the exported API of one module, parse

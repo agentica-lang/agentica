@@ -205,8 +205,8 @@ conversion.
   that rounds to infinity in its type is `CHECK-FLOAT-RANGE`. This applies to
   `Float` too, which today accepts a 401-digit literal. Reason: an infinity from
   a literal is a silent bug, and the same rule must hold for `Float32`. The
-  exact boundary of `Float32` (its largest finite value is 3.4028234663852886e38)
-  goes into the test vectors.
+  exact boundary of `Float32` (its largest finite value is
+  3.4028234663852886e38) goes into the test vectors.
 - **Rounding a `Float32` literal (recommended).** The literal is stored as its
   decimal text, and the VM rounds it to binary32 once, when the program loads,
   with a correctly rounded `strtof`. Reason: the Agentica front end cannot round

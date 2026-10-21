@@ -121,18 +121,19 @@ The name `Signal` is a risk, and the 46a PR decides it, with this evidence. (1)
 type with a builtin name is `CHECK-REDEFINED-NAME`, so the reserved name is a
 breaking change, and the fixture is renamed. (2) No builtin takes an enum as a
 parameter today. `Await` is only a return value, and it has special checker code
-(`check_await_timeout` in `compiler/check/check_collections.agc`). `List[Signal]`
-as a parameter is new. (3) A builtin enum that shares its name with a function
-namespace has no precedent. The module resolver (`compiler/modules/resolve.agc`)
-reads `Name.x` as an enum constructor when `Name` is a builtin enum. So
-`Signal.channel(...)` would be read as a constructor. The options are: (A) keep
-`Signal.channel` and `Signal.number`, and make the resolver resolve a function
-first, which is a front-end change; (B) move them to `System.subscribe(signals)`
-and `System.signal_number(sig)`, and keep `Signal` as an enum only. The
-recommendation is (B), which avoids the clash. The enum parameter (no builtin
-takes one today) is checked with a spike in 46a (46.8, question 12). The rest of
-this section, the example included, uses the names of (A). Under (B) they change
-to `System.subscribe` and `System.signal_number`.
+(`check_await_timeout` in `compiler/check/check_collections.agc`).
+`List[Signal]` as a parameter is new. (3) A builtin enum that shares its name
+with a function namespace has no precedent. The module resolver
+(`compiler/modules/resolve.agc`) reads `Name.x` as an enum constructor when
+`Name` is a builtin enum. So `Signal.channel(...)` would be read as a
+constructor. The options are: (A) keep `Signal.channel` and `Signal.number`, and
+make the resolver resolve a function first, which is a front-end change; (B)
+move them to `System.subscribe(signals)` and `System.signal_number(sig)`, and
+keep `Signal` as an enum only. The recommendation is (B), which avoids the
+clash. The enum parameter (no builtin takes one today) is checked with a spike
+in 46a (46.8, question 12). The rest of this section, the example included, uses
+the names of (A). Under (B) they change to `System.subscribe` and
+`System.signal_number`.
 
 #### 46.3.2 Ownership, lifecycle and the handler
 
@@ -684,9 +685,10 @@ subscriptions and the `_exit` path of Quit) in `vm/tests`. The cases:
 - **46b: sending.** The builtins `Process.signal`, `Process.spawn_group`,
   `Process.signal_group` and `System.signal`, with the pidfd probe and
   `--allow-run`. The group close and the end-of-run group kill for group
-  children. Tests: cases 2, 4 and 5 of 46.6. Docs: `docs/grammar/06d-io-and-network.md`
-  (Processes), the site Process page, the programming skill's processes
-  reference, `docs/vm/10-io-processes.md` §10.4 and a `CHANGELOG.md` entry.
+  children. Tests: cases 2, 4 and 5 of 46.6. Docs:
+  `docs/grammar/06d-io-and-network.md` (Processes), the site Process page, the
+  programming skill's processes reference, `docs/vm/10-io-processes.md` §10.4
+  and a `CHANGELOG.md` entry.
 - **46c: the driver.** Obsolete as written: it forwarded a break at once from
   the Racket driver to a VM in its own process group (46.8, question 7). Since
   step 8d-2 an ordinary run is the process of the binary (46.1), so there is no
@@ -757,9 +759,9 @@ as the recommendation, except question 12.
 7. **The driver's 2-second wait.** Options: (a) keep it, and tell containers to
    run `agentica run` on the compiled file. (b) forward the break at once and
    drop the second copy that comes from the terminal. This is fragile. (c) start
-   the VM in its own process group and forward the signal once. **Recommendation:**
-   (a) now, and (c) in 46c, after a test with terminal input. Moot since step
-   8d-2: there is no Racket driver (46.7, 46c).
+   the VM in its own process group and forward the signal once.
+   **Recommendation:** (a) now, and (c) in 46c, after a test with terminal
+   input. Moot since step 8d-2: there is no Racket driver (46.7, 46c).
 
 8. **The pid API shape.** Options: (a) `System.signal(pid, sig, comm)` with a
    pidfd and the name check. (b) `System.signal(pid, sig)` with no check, and a

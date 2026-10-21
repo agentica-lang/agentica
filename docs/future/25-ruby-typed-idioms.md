@@ -318,11 +318,10 @@ File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[
   the call if there is one, or else from the body. Unlike `map`, `try` works in
   this block even when `T` is inferred: the outer type is always `Result`, so
   the checker knows what `try` returns from it. This is the small checker rule
-  that `Task.map` ([section
-  27.1](27-iteration-and-concurrency.md#271-taskmap)) already added for builtins
-  whose block result is `Result[T]` with `T` inferred; this item reuses it. `try`
-  in a block with a fixed `Result` type already works (`Test.test`,
-  `File.each_line`).
+  that `Task.map` ([section 27.1](27-iteration-and-concurrency.md#271-taskmap))
+  already added for builtins whose block result is `Result[T]` with `T`
+  inferred; this item reuses it. `try` in a block with a fixed `Result` type
+  already works (`Test.test`, `File.each_line`).
 - The strict rules of [section
   26](26-strict-diagnostics.md#26-strict-diagnostics) hold in the block: an
   unused handle parameter is `CHECK-UNUSED-VARIABLE` (`do |_|`), a statement

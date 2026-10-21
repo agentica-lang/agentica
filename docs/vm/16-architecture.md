@@ -368,8 +368,8 @@ fd 3 channel of 25c, like Erlang nodes talking to each other.
 - **One I/O thread** may become the limit at a high rate of sockets. That is
   what §16.10 is for.
 - **A wake crosses threads.** An I/O result goes through a push and a condvar
-  signal before a scheduler runs the task. With `--schedulers 1` there is no hop.
-  Measure the latency.
+  signal before a scheduler runs the task. With `--schedulers 1` there is no
+  hop. Measure the latency.
 
 ### 16.9 As built
 
@@ -671,25 +671,25 @@ the handle lock FIFO, the owners and the one exit path are as in §16.1 to
     then the I/O inbox's and the run queue's. No lock is held across a park.
   - Both are solo until `agc_share`, which runs before a second thread exists:
     `rt->shared` is false, `agc_sync_take` tests that one flag and nothing is
-    locked. `agc_share` runs when the VM starts N > 1 schedulers (`vm/task.c`), and
-    for the C tests and `AGENTICA_VM_TEST_SHARED=1`, a test-only switch that
-    runs a program on one scheduler with every lock on. `make test-shared` (a step of CI) runs the binary test
-    modules that way, and in that mode the lock placement is checked, not
-    only exercised: `agc_lock_drop` aborts when the caller is not the owner,
-    `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of
-    the shared lists runs without the lock (`rg agc_sync_assert vm/` lists them:
-    the task tree, a channel's waiter queues, the logger table, a handle's
-    waiters, holder and `next_owner`, the stdin waiters and the timer heaps),
-    and `agc_task_next` fails when a turn ended with the lock held.
-    `vm/tests/sync_test.c` checks the marks: every row of the
-    task, `Task.map`, channel, logger, process, duplex, TCP and HTTP tables is
-    marked, no row of the String, number and JSON tables is, and the core and
-    `File` tables are checked by row. `tests/test_vm_shared.py` holds the
-    programs for the paths the other modules do not reach.
-    Not yet under the lock: the profiling counters. A socket or a child needs no
-    lock: the I/O thread owns it ("Services" above). The owner of a stream's
-    lock is the calling thread's context (`agc_notice_end`, `settle` and the
-    start of a write take it), not the stream's own `vm`.
+    locked. `agc_share` runs when the VM starts N > 1 schedulers (`vm/task.c`),
+    and for the C tests and `AGENTICA_VM_TEST_SHARED=1`, a test-only switch that
+    runs a program on one scheduler with every lock on. `make test-shared` (a
+    step of CI) runs the binary test modules that way, and in that mode the lock
+    placement is checked, not only exercised: `agc_lock_drop` aborts when the
+    caller is not the owner, `agc_sync_assert` fails the run with
+    `RUNTIME-INTERNAL` when a mutator of the shared lists runs without the lock
+    (`rg agc_sync_assert vm/` lists them: the task tree, a channel's waiter
+    queues, the logger table, a handle's waiters, holder and `next_owner`, the
+    stdin waiters and the timer heaps), and `agc_task_next` fails when a turn
+    ended with the lock held. `vm/tests/sync_test.c` checks the marks: every row
+    of the task, `Task.map`, channel, logger, process, duplex, TCP and HTTP
+    tables is marked, no row of the String, number and JSON tables is, and the
+    core and `File` tables are checked by row. `tests/test_vm_shared.py` holds
+    the programs for the paths the other modules do not reach. Not yet under the
+    lock: the profiling counters. A socket or a child needs no lock: the I/O
+    thread owns it ("Services" above). The owner of a stream's lock is the
+    calling thread's context (`agc_notice_end`, `settle` and the start of a
+    write take it), not the stream's own `vm`.
 - **One resource registry on the runtime** (`rt->registry`). Boehm is built
   with thread support (§10.2.3, "GC"): `agc_gc_allow_threads`,
   `agc_gc_thread_enter` and `agc_gc_thread_leave` (`vm/value.c`) are the

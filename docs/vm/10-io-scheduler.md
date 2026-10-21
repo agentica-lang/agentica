@@ -5,8 +5,8 @@ section says how the scheduler and the loop keep them, as built.
 
 - **Target.** N scheduler threads run the interpreter and pull ready tasks from
   one global run queue. One I/O thread, the main thread, runs the only libuv
-  loop (10.2.3, §16). The built VM runs one scheduler per logical core by default;
-  with `--schedulers 1` the scheduler and the loop share one thread.
+  loop (10.2.3, §16). The built VM runs one scheduler per logical core by
+  default; with `--schedulers 1` the scheduler and the loop share one thread.
 - **Tasks are VM stacks.** A blocking builtin starts a libuv request, parks its
   task, and the scheduler runs another (10.2.1). Only the loop's thread calls
   `uv_run`. libuv callbacks only copy results and mark tasks ready. With N>1,

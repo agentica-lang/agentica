@@ -152,9 +152,9 @@ per leaf, O(1) per item inside it. List the sites with
   (§17.5).
 - **`List.append`, `push`:** `agc_list_append`, O(1) amortized, O(log32 n)
   worst. **`List.set`:** `agc_list_set`, O(log32 n).
-- **`List.concat`:** b empty gives a; a empty gives b; `b.len <= 32` appends
-  b's items to a (shares a's trie); else a builder whose first leaves are a's
-  own, filled with `memcpy` from a's tail then b (§17.11). O(b.len + a.len / 32).
+- **`List.concat`:** b empty gives a; a empty gives b; `b.len <= 32` appends b's
+  items to a (shares a's trie); else a builder whose first leaves are a's own,
+  filled with `memcpy` from a's tail then b (§17.11). O(b.len + a.len / 32).
 - **`List.take`, `List.drop`:** `agc_list_slice(l, from, count)`: `take(k >=
   len)` and `drop(0)` return the input; `take(k)` with `k > tail_off` shares
   `root` and `shift` and copies only the tail; from a multiple of 32, with
