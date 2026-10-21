@@ -84,7 +84,9 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
   same Agentica version. `agentica run --version` also lists the libraries.
   `--schedulers N` (1 to 1024, or `AGENTICA_SCHEDULERS`) sets the scheduler
   threads; the default is one per logical core. `--schedulers 1` runs one task
-  at a time, in a fixed order. `agentica test` takes only the variable.
+  at a time, in a fixed order. `agentica test` takes only the variable. An
+  empty variable counts as unset. With more than one scheduler `--max-steps`
+  can trip a little late; `--schedulers 1` keeps the exact count.
 
 ## Types
 

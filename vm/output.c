@@ -439,8 +439,9 @@ static bool wait_turn(agc_vm *vm, agc_output *out) {
     size_t n = smaller(total(w) - w->done, room(s));
     copy_piece(s, w, n);
     w->done += n;
-    kick(vm, s);
     if (w->done < total(w)) {
+      /* A finished print kicks in advance, once the next writer is the head and its room is kept. */
+      kick(vm, s);
       agc_task_park(vm, true);
       return false;
     }
