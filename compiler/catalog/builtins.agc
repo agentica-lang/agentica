@@ -1,6 +1,7 @@
 ## The builtin functions and tables the linker, checker, and lowering read. The tables are module constants derived
 ## from builtins_data.agc and prelude_data.agc.
 
+import Types from "../syntax/types"
 import Model from "builtin_model"
 import {
   BUILTIN_ROWS,
@@ -11,7 +12,6 @@ import {
   RESERVED_TYPE_NAMES,
   STD_ONLY_IMPORTS,
 } from "builtins_data"
-import Types from "../syntax/types"
 import {PRELUDE_ONLY as DATA_PRELUDE_ONLY, ROWS as PRELUDE_ROWS} from "prelude_data"
 
 EMPTY_BUILTINS: Map[String, Model.Builtin] = {}
