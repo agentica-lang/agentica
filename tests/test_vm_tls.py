@@ -595,7 +595,8 @@ def test_main_returns_while_tls_tasks_wait_the_run_ends_without_draining_them(tm
     assert count(r" tls tls_handshake_done ") == 4
     # The third is the raw connection, which the accepting task may not reach before main ends on several schedulers.
     servers = count(r" tls tls_handshake socket=0 listener=[0-9]+ role=server$")
-    assert servers in ((2, 3) if TEST_SCHEDULERS else (3,)), text
+    several = TEST_SCHEDULERS != "1" and bool(TEST_SCHEDULERS or (os.cpu_count() or 1) > 1)
+    assert servers in ((2, 3) if several else (3,)), text
 
 
 def test_a_crashed_owner_cancels_its_tasks_in_a_tls_handshake_and_a_tls_read(tmp_path):

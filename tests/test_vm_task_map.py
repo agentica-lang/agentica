@@ -530,9 +530,10 @@ def test_a_timed_out_receiver_leaves_the_channel_queue(tmp_path):
 
 def test_a_value_handed_to_an_item_before_its_deadline_is_kept_when_the_deadline_passes_in_the_same_turn(tmp_path):
     # The run is conclusive only if the sender sent before the deadline and its sort ended after it, each by a
-    # margin. A stall at the wrong moment makes it inconclusive, and then it runs again.
+    # margin. A stall at the wrong moment makes it inconclusive, and then it runs again. "The same turn" needs one
+    # scheduler: with more, the item and the caller of Task.map run beside the sender's sort.
     for _attempt in range(3):
-        lines = run_lines(tmp_path, HAND_OFF_HELD_PROGRAM, "hand-off-held")
+        lines = run_lines(tmp_path, HAND_OFF_HELD_PROGRAM, "hand-off-held", flags=("--schedulers", "1"))
         deadline = int(re.search(r"^deadline (\d+)$", "\n".join(lines), re.M).group(1))
         sent, held = map(int, re.search(r"^sent (\d+) held (\d+)$", "\n".join(lines), re.M).groups())
         if sent + 30 < deadline < sent + held - 30:

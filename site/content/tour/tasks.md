@@ -71,7 +71,7 @@ end
 [ok("page 1"), error("task: timed out"), ok("page 3")]
 ```
 
-Use it for work that waits, such as HTTP requests. `limit` does not speed up CPU work. See [Task.map](/library/concurrency/task/#taskmap) for the rules.
+Use it for work that waits, such as HTTP requests. For CPU work, a `limit` above the number of cores does not help. See [Task.map](/library/concurrency/task/#taskmap) for the rules.
 
 ## More than one argument
 
@@ -150,7 +150,7 @@ done 42
 - A task other than `main` that fails stops alone. Its error is printed, its child tasks are cancelled, and its files and sockets close. Awaiting it gives `error` if it returns a `Result`, else it stops the waiter. An unawaited failure makes the program exit with code 1. An error in `main` stops the program.
 - A file, socket, listener or process belongs to the task that opened it, and closes when that task ends. `Task.spawn_owning` hands one to the new task. It also takes a `Channel`, which closes when that task ends.
 - When `main` returns, running tasks are cancelled. Await what you need.
-- Tasks do not run on several CPU cores. Output may come in any order.
+- Tasks run on several CPU cores (one scheduler per core; `--schedulers 1` runs one at a time). Output may come in any order.
 - To pass values between tasks, use a [Channel](/library/concurrency/channel/).
 
 See [Task](/library/concurrency/task/) and [Channel](/library/concurrency/channel/) for the reference.

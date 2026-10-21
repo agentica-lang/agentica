@@ -64,9 +64,9 @@ FIFO_FILE_REASON = ("Windows has no FIFO file and the VM refuses a named pipe as
                     "test_windows_handle_counts.py checks the refusal)")
 
 
-# `make test-multicore` runs whole modules (TCP, TLS, HTTP, processes, BDD) on several schedulers:
-# AGENTICA_VM_TEST_MODULE_SCHEDULERS=N makes every VM started with vm_environment() run on N schedulers under the test
-# switch.
+# A VM started with vm_environment() runs on one scheduler per logical core, the default, unless
+# AGENTICA_VM_TEST_MODULE_SCHEDULERS=N pins every such VM to N: `make test-multicore-modules` runs whole modules (TCP,
+# TLS, HTTP, processes, BDD) at four on any machine, and `make test-shared` runs at one.
 TEST_SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_MODULE_SCHEDULERS", "").strip()
 
 
@@ -462,7 +462,7 @@ def vm_environment(extra=None):
     env = {k: v for k, v in os.environ.items() if k not in _VM_UNSET}
     env.update(LC_ALL="C.UTF-8", LANG="C.UTF-8")
     if TEST_SCHEDULERS:
-        env.update(AGENTICA_SCHEDULERS=TEST_SCHEDULERS, AGENTICA_VM_TEST_MULTICORE="1")
+        env.update(AGENTICA_SCHEDULERS=TEST_SCHEDULERS)
     env.pop("LC_MESSAGES", None)
     for key, value in (extra or {}).items():
         if value is None:

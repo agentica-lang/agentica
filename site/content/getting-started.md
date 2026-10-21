@@ -146,10 +146,10 @@ Line and column count from 1, in code points (an emoji is one column). A type of
 
 | Option | Does |
 |---|---|
-| `--max-steps N` | stops after `N` steps (`RUNTIME-STEP-LIMIT`) |
+| `--max-steps N` | stops after `N` steps (`RUNTIME-STEP-LIMIT`). Each scheduler takes steps in batches, so the limit can trip a little late; `--schedulers 1` keeps the exact count |
 | `--seed N` | makes `Random` repeat the same numbers |
 | `--flush-timeout MS` | waits at most `MS` ms for file data and output at the end, then warns. Default 30000, most 86400000. Env `AGENTICA_FLUSH_TIMEOUT_MS` |
-| `--schedulers N` | scheduler threads, 1 to 1024. Env `AGENTICA_SCHEDULERS`. This build runs one; a larger number or a bad value exits with code 2 |
+| `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS` (empty counts as unset). `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
 | `--allow-run` | lets the program start programs with `Process.spawn` |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |

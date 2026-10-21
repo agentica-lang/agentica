@@ -657,8 +657,8 @@ static bool run_task(agc_vm *vm, agc_task *t) {
 }
 
 /* Several schedulers (docs/vm/16-architecture.md §16.9, "Threads"): N scheduler threads share the run queue, and the
-   main thread becomes the I/O thread, the only one that calls libuv. It is reached only under the test switch
-   AGENTICA_VM_TEST_MULTICORE until the count is lifted (#345). */
+   main thread becomes the I/O thread, the only one that calls libuv. A run takes this path unless it has one scheduler
+   (--schedulers 1, or a machine with one core). */
 
 /* The run is over: the first caller records the end in rt->outcome (its own failure, or the end it wrote there), every
    caller ends the run queue, so each scheduler stops at its next turn boundary, and wakes the I/O thread. Nothing reads
@@ -843,6 +843,7 @@ static agc_outcome run_threads(agc_vm *vm) {
 }
 
 agc_outcome agc_vm_run(agc_vm *vm) {
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_SCHED, "run schedulers=%" PRId64, vm->rt->schedulers);
   if (vm->rt->schedulers > 1) return run_threads(vm);
   if (setjmp(vm->fail) == 0) {
     agc_profile_start(vm);
@@ -889,9 +890,11 @@ static bool cancelled_parent(const agc_task *parent) {
   return false;
 }
 
-/* HANDED, when not NULL, moves to the child before it can end, so a child that starts cancelled closes it. */
-static agc_task *spawn_child(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                             uint32_t span, agc_resource *handed) {
+/* A child made but not yet started: no scheduler can run it, so the caller sets its random stream (and a test its own
+   mark) here. Once start_child enqueues it, another scheduler may run it at once (N > 1), and a field written after
+   that would race with its first turn: an unset stream is all zero, and Random.int never ends on it. */
+static agc_task *make_child(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                            uint32_t span) {
   agc_task *child = agc_new_task(vm);
   child->input_seen = vm->rt->in.eof_seq;
   child->service = parent->service;
@@ -901,6 +904,11 @@ static agc_task *spawn_child(agc_vm *vm, agc_task *parent, agc_value fn, const a
   child->spawned = true;
   child->spawn_span = span;
   agc_task_call(vm, child, fn, args, argc, span);
+  return child;
+}
+
+/* HANDED, when not NULL, moves to the child before it can end, so a child that starts cancelled closes it. */
+static agc_task *start_child(agc_vm *vm, agc_task *parent, agc_task *child, agc_resource *handed) {
   adopt(vm, parent, child);
   trace_spawn(vm, child, parent);
   if (handed) agc_hand_over(handed, child);
@@ -918,13 +926,11 @@ static agc_task *spawn_child(agc_vm *vm, agc_task *parent, agc_value fn, const a
   return child;
 }
 
-agc_task *agc_task_spawn_in(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                            uint32_t span) {
-  return spawn_child(vm, parent, fn, args, argc, span, NULL);
-}
-
-agc_task *agc_task_spawn(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span) {
-  return agc_task_spawn_in(vm, vm->task, fn, args, argc, span);
+agc_task *agc_task_spawn_test(agc_vm *vm, agc_value fn, uint32_t span, uint64_t seed) {
+  agc_task *child = make_child(vm, vm->task, fn, NULL, 0, span);
+  child->test = child;
+  agc_random_seed(&child->random, seed);
+  return start_child(vm, vm->task, child, NULL);
 }
 
 /* A node of the task tree that never runs: the parent of an HTTP server's
@@ -944,10 +950,9 @@ agc_task *agc_task_group(agc_vm *vm) {
 
 static agc_task *spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
                               uint32_t span, agc_resource *handed) {
-  uint64_t seed = agc_random_next(&vm->task->random);
-  agc_task *child = spawn_child(vm, parent, fn, args, argc, span, handed);
-  agc_random_seed(&child->random, seed);
-  return child;
+  agc_task *child = make_child(vm, parent, fn, args, argc, span);
+  agc_random_seed(&child->random, agc_random_next(&vm->task->random));
+  return start_child(vm, parent, child, handed);
 }
 
 agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
@@ -989,9 +994,9 @@ agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value
   root->service = true;
   atomic_store_explicit(&root->state, AGC_TASK_PARKED, memory_order_relaxed);
   root->result = agc_void();
-  agc_task *child = spawn_child(vm, root, fn, &arg, 1, span, r);
+  agc_task *child = make_child(vm, root, fn, &arg, 1, span);
   agc_random_seed(&child->random, child->id);
-  return child;
+  return start_child(vm, root, child, r);
 }
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {

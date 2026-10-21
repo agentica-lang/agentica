@@ -16,7 +16,7 @@ import subprocess
 import pytest
 
 from tests.agentica_test import (FIXTURES, ROOT, STAGE2, TARGET_OS, UNDER_WINE, binary, compile_agc,
-                                 require, run, run_vm, scaled, vm_environment, write_files)
+                                 require, run, run_vm, scaled, vm_command, vm_environment, write_files)
 
 STDLIB = ROOT / "stdlib"
 FRONT = FIXTURES / "single-binary" / "front.agc"
@@ -398,38 +398,75 @@ def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(t
 
 HELLO = ROOT / "examples" / "hello.agc"
 SCHEDULERS_RANGE = "needs an integer from 1 to 1024"
-MORE_THAN_ONE = "schedulers were asked for, but this build runs one"
+RAN_ON = re.compile(r"^agc-trace \S+ sched run schedulers=([0-9]+)$", re.M)
 
 
-def test_the_scheduler_count_is_checked_and_more_than_one_is_refused_before_the_program_runs(tmp_path):
-    """`--schedulers N` and AGENTICA_SCHEDULERS take 1 to 1024, the flag wins, and until the VM has more than one
-    scheduler a larger count must not run as one: it is a start error (status 2) with nothing on stdout."""
+def scheduler_counts(result):
+    """The scheduler counts of the runs that a sched trace on stderr shows, in order (the front end's first)."""
+    return [int(count) for count in RAN_ON.findall(result.stderr)]
+
+
+def logical_cores():
+    """The CPUs this process may run on, as uv_available_parallelism counts them, at most 1024."""
+    count = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
+    return min(max(count or 1, 1), 1024)
+
+
+@pytest.fixture(scope="module")
+def sched_trace():
+    if "trace off" in run([binary(), "run", "--version"], env=vm_environment(), timeout=scaled(10)).stdout:
+        pytest.skip("the VM was built with TRACE=0")
+    # AGENTICA_SCHEDULERS is unset even under AGENTICA_VM_TEST_MODULE_SCHEDULERS, so a run without the flag or a value
+    # of its own gets the default count.
+    return {"AGENTICA_VM_TRACE": "sched", "AGENTICA_SCHEDULERS": None}
+
+
+def test_the_scheduler_count_is_checked_before_the_program_runs_and_the_flag_wins(tmp_path, sched_trace):
+    """`--schedulers N` and AGENTICA_SCHEDULERS take 1 to 1024 and the flag wins over a valid value; anything else is a
+    start error (status 2) with nothing on stdout."""
     asked = {}
     for count in ("0", "1025", "x", "-1", ""):
         got = agentica("--schedulers", count, HELLO, timeout=scaled(10))
         asked[count] = (got.code, got.stdout, SCHEDULERS_RANGE in got.stderr)
     assert asked == {count: (2, "", True) for count in asked}
-    ran = agentica("--schedulers", "1", HELLO, timeout=scaled(10))
-    assert (ran.code, ran.stdout, ran.stderr) == (0, "hello\n", "")
-    refused = agentica("--schedulers", "2", HELLO, timeout=scaled(10))
-    assert (refused.code, refused.stdout) == (2, "") and MORE_THAN_ONE in refused.stderr
-    many = vm_environment({"AGENTICA_SCHEDULERS": "3"})
-    assert agentica(HELLO, env=many, timeout=scaled(10)).code == 2
-    assert agentica("check", HELLO, env=many, timeout=scaled(10)).code == 0
-    won = agentica("--schedulers", "1", HELLO, env=many, timeout=scaled(10))
-    assert (won.code, won.stdout) == (0, "hello\n")
     program = compile_agc(HELLO, tmp_path / "hello.agcb")
-    for words, code in ((("--schedulers", "1"), 0), (("--schedulers", "2"), 2), (("--schedulers", "0"), 2)):
-        assert run_vm(program, *words, timeout=scaled(10), env=vm_environment()).code == code
-    got = run_vm(program, env=vm_environment({"AGENTICA_SCHEDULERS": "2"}), timeout=scaled(10))
-    assert (got.code, got.stdout) == (2, "") and MORE_THAN_ONE in got.stderr
+    ran = {}
+    for words, env in ((("--schedulers", "1"), {}), (("--schedulers", "2"), {}), ((), {"AGENTICA_SCHEDULERS": "3"}),
+                       (("--schedulers", "1"), {"AGENTICA_SCHEDULERS": "3"})):
+        got = run_vm(program, *words, env=vm_environment({**sched_trace, **env}), timeout=scaled(10))
+        ran[words + tuple(env.values())] = (got.code, got.stdout, scheduler_counts(got))
+    assert ran == {("--schedulers", "1"): (0, "hello\n", [1]), ("--schedulers", "2"): (0, "hello\n", [2]),
+                   ("3",): (0, "hello\n", [3]), ("--schedulers", "1", "3"): (0, "hello\n", [1])}
+    # The front end compiles on one scheduler whatever the count, so its output stays the same; the program gets N.
+    got = agentica("--schedulers", "2", HELLO, env=vm_environment(sched_trace), timeout=scaled(10))
+    assert (got.code, got.stdout, scheduler_counts(got)) == (0, "hello\n", [1, 2])
+
+
+def test_a_run_that_chooses_no_count_has_one_scheduler_per_logical_core(tmp_path, sched_trace):
+    program = compile_agc(HELLO, tmp_path / "hello.agcb")
+    got = run_vm(program, env=vm_environment(sched_trace), timeout=scaled(10))
+    assert (got.code, got.stdout, scheduler_counts(got)) == (0, "hello\n", [logical_cores()])
+    got = run_vm(program, env=vm_environment({**sched_trace, "AGENTICA_SCHEDULERS": ""}), timeout=scaled(10))
+    assert (got.code, got.stdout, scheduler_counts(got)) == (0, "hello\n", [logical_cores()])
+
+
+@pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="host-only: sched_setaffinity sets the CPUs of a process on Linux only")
+def test_the_default_count_follows_the_cpus_the_process_may_use(tmp_path, sched_trace):
+    """The default is the CPUs of the process (its affinity), not the CPUs of the machine."""
+    program = compile_agc(HELLO, tmp_path / "hello.agcb")
+    first = sorted(os.sched_getaffinity(0))[0]
+    got = subprocess.run([*vm_command(), "--", program], env=vm_environment(sched_trace), capture_output=True,
+                         text=True, timeout=scaled(10), preexec_fn=lambda: os.sched_setaffinity(0, {first}))
+    assert (got.returncode, got.stdout, scheduler_counts(got)) == (0, "hello\n", [1])
 
 
 @pytest.mark.parametrize("value, flag, code", (
-    ("0", None, 2), ("1025", None, 2), ("", None, 2), ("many", None, 2), ("-1", None, 2),
+    ("0", None, 2), ("1025", None, 2), ("many", None, 2), ("-1", None, 2),
     ("0001", None, 0), ("1", None, 0), ("1024", "1", 0),
+    # An empty variable is unset.
+    ("", None, 0), ("", "1", 0),
     # A bad variable is an error even next to a valid flag: the flag wins over a valid value only.
-    ("many", "1", 2), ("0", "1", 2), ("", "1", 2),
+    ("many", "1", 2), ("0", "1", 2),
 ))
 def test_the_scheduler_variable_is_checked_for_every_command(value, flag, code):
     """AGENTICA_SCHEDULERS is read before the front end starts, so a bad value stops `check` and a program alike."""
@@ -442,22 +479,25 @@ def test_the_scheduler_variable_is_checked_for_every_command(value, flag, code):
             assert (got.stdout, "AGENTICA_SCHEDULERS " + SCHEDULERS_RANGE in got.stderr) == ("", True)
 
 
-def test_the_test_command_refuses_a_flag_above_one_like_a_program(tmp_path):
-    """The test files run in VMs that the driver starts, so a flag above 1 is refused up front instead of dropped."""
-    refused = agentica("--schedulers", "4", "test", cwd=tmp_path, timeout=scaled(10))
-    assert (refused.code, refused.stdout) == (2, "") and "4 " + MORE_THAN_ONE in refused.stderr
-    allowed = agentica("--schedulers", "1", "test", cwd=tmp_path, timeout=scaled(10))
-    assert MORE_THAN_ONE not in allowed.stdout + allowed.stderr
+def test_the_test_command_refuses_the_flag_and_points_at_the_variable(tmp_path):
+    """The test files run in VMs that the driver starts, so the flag is refused up front instead of dropped."""
+    for count in ("1", "4"):
+        refused = agentica("--schedulers", count, "test", cwd=tmp_path, timeout=scaled(10))
+        assert (refused.code, refused.stdout) == (2, "") and "AGENTICA_SCHEDULERS" in refused.stderr
 
 
 @pytest.mark.skipif(UNDER_WINE, reason="Wine cannot make the owner-only run folder of the test driver")
-def test_the_scheduler_variable_reaches_the_vms_that_the_test_driver_starts(tmp_path):
-    """The driver cannot see the variable in a flag, so the VM it starts stops with the same message."""
+def test_the_scheduler_variable_reaches_the_vms_that_the_test_driver_starts(tmp_path, sched_trace):
+    """The driver cannot see the variable in a flag; the runner and the test files run at its count, the front ends at
+    one."""
     (tmp_path / "test").mkdir()
     (tmp_path / "test" / "x_test.agc").write_text('def main() -> Void\n  Test.run([])\nend\n')
-    env = vm_environment({"AGENTICA_SCHEDULERS": "4", "TMPDIR": tmp_path})
-    stopped = agentica("test", cwd=tmp_path, env=env, timeout=scaled(30))
-    assert stopped.code == 2 and MORE_THAN_ONE in stopped.stdout + stopped.stderr
+    trace = tmp_path / "trace"
+    env = vm_environment({**sched_trace, "AGENTICA_SCHEDULERS": "3", "TMPDIR": tmp_path,
+                          "AGENTICA_VM_TRACE_FILE": trace})
+    ran = agentica("test", cwd=tmp_path, env=env, timeout=scaled(30))
+    assert (ran.stderr, ran.stdout.startswith("0 passed, 0 failed")) == ("", True)
+    assert set(int(count) for count in RAN_ON.findall(trace.read_text())) == {1, 3}
 
 
 def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_folder(tmp_path):

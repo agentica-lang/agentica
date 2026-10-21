@@ -18,12 +18,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   a position of a checked file; `type-at --stdin FILE:LINE:COL` reads the file
   from standard input.
 
+### Changed
+
+- **Breaking:** programs run on one scheduler per logical core by default, so
+  tasks run in parallel and their order is not fixed; use `--schedulers 1` (or
+  `AGENTICA_SCHEDULERS=1`) for the old order. `--max-steps` can trip a little
+  late with more than one scheduler. `agentica test` refuses `--schedulers`;
+  the VMs it starts read `AGENTICA_SCHEDULERS`.
+
 ### Fixed
 
 - `agentica check --stdin --json` is a usage error (exit 2); it used to take
   `--json` as the file name.
 - A child's stderr no longer stalls the VM when the VM's stderr is not read,
   and it keeps its order with stdout when both go to one pipe (`2>&1`).
+- A Unix socket as standard output no longer holds the end of the run when its
+  reader reads only after the exit and the output fills more than a quarter of
+  its buffer.
 
 ## [0.6.0] - 2026-10-21
 
