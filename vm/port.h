@@ -198,8 +198,8 @@ typedef struct agc_output agc_output;
 
 /* A reader of bytes from outside the program (a child's stderr) that stopped reading because a stream's notice queue
    passed AGC_FORWARD_BOUND (agc_output_forward). The stream keeps it, under its lock, until the queue is back to
-   AGC_FORWARD_RESUME or the stream fails or closes, then posts RESUME(DATA) to LOOP, the loop that owns the reader's handle. Its owner keeps it alive until
-   RESUME runs. */
+   AGC_FORWARD_RESUME or the stream fails or closes, then posts RESUME(DATA) to LOOP, the loop that owns the reader's
+   handle. Its owner keeps it alive until RESUME runs. */
 typedef struct agc_forward_wait agc_forward_wait;
 struct agc_forward_wait {
   agc_forward_wait *next;
@@ -209,7 +209,7 @@ struct agc_forward_wait {
 };
 
 #define AGC_FORWARD_BOUND AGC_OUTPUT_BUFFER
-/* Half the bound: the reader goes on while the queue still feeds the ring, so the pipe and the stream both keep moving. */
+/* Half the bound: the reader goes on while the queue still feeds the ring, so the pipe and the stream keep moving. */
 #define AGC_FORWARD_RESUME (AGC_FORWARD_BOUND / 2)
 
 typedef struct {
@@ -249,7 +249,7 @@ struct agc_output {
   uint8_t *buf;
   size_t start, len;
   uint8_t *notice;
-  /* The notice queue: bytes at [notice_at, notice_len) of a buffer of notice_cap bytes, kept between uses while small. */
+  /* The notice queue: bytes [notice_at, notice_len) of a buffer of notice_cap bytes, kept between uses while small. */
   size_t notice_at, notice_len, notice_cap;
   agc_stdio *io;
   agc_write_mode mode;
