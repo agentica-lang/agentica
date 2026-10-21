@@ -52,6 +52,7 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 # its line here in the same pull request.
 KNOWN_ISSUES: dict[int, str] = {
     486: "the multicore cases whose children are sh scripts (POSIX process ids, descriptor 3, ps) have no Windows test",
+    489: "System.exit resets the open TCP sockets on Windows instead of closing them",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).

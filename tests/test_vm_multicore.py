@@ -1527,11 +1527,16 @@ def test_net_waits_cancelled_from_other_schedulers_end_and_free_their_port(tmp_p
     # and an accept; then a crashing owner cancels its children parked the same way. The jobs are cancelled by
     # whichever scheduler runs the canceller, the run ends, no task is left (the crashed owner's children end on
     # their own schedulers, so main waits for the count to reach 0), and the accept's port is free again.
+    # Windows takes a 64 MiB send into its buffers at once (as in test_vm_tcp.py), so there the send may end first.
     bytecode = program(tmp_path, "net_cancel", NET_CANCEL)
+    timed_out = 'error("task: timed out")'
+    sends = {timed_out, 'ok("sent")'} if WINDOWS else {timed_out}
     for _ in range(repeats):
         result = vm(bytecode, args=(TLS_DIR,))
         lines = result.stdout.splitlines()
-        assert (result.code, lines[:7], lines[8:]) == (0, ['error("task: timed out")'] * 7, ["true", "0"]), result.stderr
+        assert (result.code, lines[0], lines[2:5], lines[6], lines[8:]) == (
+            0, timed_out, [timed_out] * 3, timed_out, ["true", "0"]), result.stderr
+        assert {lines[1], lines[5]} <= sends, result.stdout
         assert lines[7].startswith("owner: task crashed: RUNTIME-DIVISION-BY-ZERO"), lines[7]
 
 
@@ -1858,7 +1863,8 @@ end
 """
 
 
-@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), "exit"])
+@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), pytest.param("exit", marks=known_issue(
+    WINDOWS, 489, "System.exit resets the open sockets on Windows"))])
 def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path, mode):
     # A run with a parked accept, a parked TCP read and a parked TLS read gets SIGTERM, or main calls System.exit(3)
     # on its scheduler: the run ends with the signal or 3, and the peer sees EOF on the TCP socket and close_notify on

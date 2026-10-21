@@ -223,8 +223,14 @@ void agc_launch_exit(int code) {
   agc_io_block_stop(&saved);
   int sig = agc_io_stop_signal();
   if (sig) {
+    /* raise() aims at this thread, which may be a scheduler that keeps the stop signals blocked: unblock SIG here, or
+       it stays pending and the _exit below ends the run with 128 + SIG (macOS). */
     signal(sig, SIG_DFL);
     pthread_sigmask(SIG_SETMASK, &saved, NULL);
+    sigset_t one;
+    sigemptyset(&one);
+    sigaddset(&one, sig);
+    pthread_sigmask(SIG_UNBLOCK, &one, NULL);
     raise(sig);
   }
   _exit(code);

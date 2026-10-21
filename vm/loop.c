@@ -924,9 +924,16 @@ void agc_io_block_stop(sigset_t *saved) {
    till then a second signal is only recorded in `now`. */
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2 && ATOMIC_BOOL_LOCK_FREE == 2, "the stop state is read in a signal handler");
 
+/* Dies by SIG now: the default action, raised in this thread with SIG unblocked here (a scheduler keeps it blocked).
+   A signal sent to the whole process may be taken later by another thread, and on macOS the _exit(128 + sig) that
+   follows a call would then win. */
 static void stop_at_once(int sig) {
   signal(sig, SIG_DFL);
-  kill(getpid(), sig);
+  sigset_t one;
+  sigemptyset(&one);
+  sigaddset(&one, sig);
+  pthread_sigmask(SIG_UNBLOCK, &one, NULL);
+  raise(sig);
 }
 
 static void stop_overdue(uv_timer_t *timer) {
