@@ -78,7 +78,7 @@ def write(root_dir: String, written: Writer.Written, output: String, settings: E
   case written
     Writer.Written.Failed(problem) -> return LowerText.problem_text(settings.workspace, root_dir, problem)
     Writer.Written.Done(bytes) ->
-      saved = SaveFile.bytes(output, bytes, 60000)
+      saved = SaveFile.bytes(output, bytes, 60_000)
       if saved.ok?
         return "wrote #{bytes.size} bytes"
       end

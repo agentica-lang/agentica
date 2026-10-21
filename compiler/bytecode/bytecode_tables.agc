@@ -4,7 +4,7 @@
 ## docs/future/35-self-hosting.md, 35.3).
 
 ## The largest value of a u16 operand, and of every count the VM reads as a u16.
-export MAX_U16 = 65535
+export MAX_U16 = 65_535
 
 ## The format version of the .agcb header (docs/vm/03-ir-and-bytecode.md 4.6).
 export FORMAT_VERSION = 6

@@ -135,7 +135,7 @@ def wide_operands(program: Ir.Program, tables: Tables, op: String, a: Int, index
   if index < 0
     return error(Failure.internal(program, "a negative index in #{op}"))
   end
-  return ok(plain(tables, a, index % 65536, index / 65536))
+  return ok(plain(tables, a, index % 65_536, index / 65_536))
 end
 
 # const: the register, and the index of its constant, which is added to the table when it is new.

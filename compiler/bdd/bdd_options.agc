@@ -40,7 +40,7 @@ export def parse(arguments: List[String]) -> Parsed
     allow_run: false,
     seeded: false,
     seed: 0,
-    test_timeout_ms: 30000,
+    test_timeout_ms: 30_000,
     only: "",
     steps: [],
     paths: [],

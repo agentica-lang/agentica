@@ -1,7 +1,7 @@
 ## Writing the bytes of a file: the front end's `compile` output and the harness of the bytecode writer.
 
 # One File.write_bytes call takes at most 1 MiB.
-PIECE = 1048576
+PIECE = 1_048_576
 
 ## Writes the bytes to the file at `path`, which is created or truncated, in pieces of 1 MiB. Every call waits at most
 ## `timeout_ms`.

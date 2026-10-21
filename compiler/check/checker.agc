@@ -176,5 +176,5 @@ end
 # List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node
 # ids.
 def max_repeat() -> Int
-  return 1048576
+  return 1_048_576
 end

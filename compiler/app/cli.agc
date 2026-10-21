@@ -52,7 +52,7 @@ import Texts from "cli_text"
 import Pipeline from "pipeline"
 
 # The deadline of each call that writes the output of `compile`, in milliseconds.
-SAVE_TIMEOUT = 60000
+SAVE_TIMEOUT = 60_000
 
 # What one run is given besides the words of the user: the options read in front of them, the settings and the
 # hand-off. `buffer_file` is the file whose text came from standard input ("" for none), and `buffer_shown` that text
