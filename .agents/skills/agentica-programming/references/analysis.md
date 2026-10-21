@@ -39,17 +39,21 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   for a timeout say, except by reading JSON with `Analysis.diagnostic`. A
   diagnostic's `file` is the root as typed; `Checked.file` is the canonical
   name.
-- `symbol` searches `paths` (files or folders, `.` when empty) and, first, the
-  files with a buffer, as `--stdin` does; unlinkable files are in `skipped`.
+- `symbol` searches `paths` (files or folders, `.` when empty) and, first, every
+  file with a buffer, as `--stdin` does, even outside `paths` and in the
+  bytewise order of their canonical paths; unlinkable files are in `skipped`.
+  A folder that only buffers make is `QUERY-USAGE` (folders are read from disk).
   `refs` answers for the file at the position and what it imports. A builtin
   has `module` `""` (`symbol`) or an empty `definition` and `builtin` set
   (`refs`).
 - `outline`, `type_at`, `symbol` and `refs` return an error whose message is
   one JSON diagnostic (the `--json` object). `Analysis.diagnostic(message)`
-  reads it, so `try` works. Codes are the command line's: `LEX-`, `PARSE-`, `CHECK-`, `PKG-`,
-  `QUERY-NO-EXPRESSION`, `QUERY-NOT-FOUND`, and `QUERY-USAGE` for a file that
-  cannot be read, a position below line 1 or column 1, an empty `symbol` name
-  or a path with no `*.agc` file.
+  reads it, so `try` works. Codes are the command line's: `LEX-`, `PARSE-`,
+  `CHECK-`, `PKG-`, `QUERY-NO-EXPRESSION`, `QUERY-NOT-FOUND`, and
+  `QUERY-USAGE` for a file that cannot be read, a position below line 1 or
+  column 1, an empty `symbol` name or a path with no `*.agc` file. Their
+  `file` is the path asked, or `<arguments>` for `symbol`; the usage `help`
+  of the command line is missing.
 - Cost: the compiler's pure core is compiled into the program, about 24,000
   lines, so a run from source pays seconds. For a tool that runs often:
   `agentica compile tool.agc -o tool.agcb`, then `agentica run -- tool.agcb`.

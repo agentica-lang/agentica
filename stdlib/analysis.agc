@@ -172,14 +172,22 @@ end
 
 ## Returns where `name` is declared in the modules linked from the files and folders of `paths`, as `agentica symbol`
 ## answers (`.` when `paths` is empty). A folder means every `*.agc` file below it. Each file is linked on its own, and
-## the ones that do not link are in `skipped`. The files with a buffer in the session are searched first, as `--stdin`
-## does, whether or not they are in `paths`, and a path of `paths` that a buffer stands in for is read from the buffer.
-## An empty `name` or a path that names no `*.agc` file is `QUERY-USAGE`, a name that nothing declares is
-## `QUERY-NOT-FOUND`, and when no file links the error is the first problem of the first one.
+## the ones that do not link are in `skipped`. Every file with a buffer in the session is searched first, as `--stdin`
+## does, whether or not `paths` names it (so a query cannot be scoped to a folder while other buffers are open), in the
+## bytewise order of their canonical paths, whatever order the buffers were put in; a path of `paths` that a buffer
+## stands in for is read from the buffer. A folder that only buffers make (a buffer `new/a.agc` and `paths` `["new"]`)
+## is not listed, since folders are read from the disk: it is `QUERY-USAGE`, "cannot read". An empty `name` or a path
+## that names no `*.agc` file is `QUERY-USAGE`, a name that nothing declares is `QUERY-NOT-FOUND`, and when no file
+## links the error is the first problem of the first one. The `QUERY-` diagnostics of `symbol` have the file
+## `<arguments>`, and no usage `help` (the command line's line); `QUERY-NOT-FOUND` keeps its `help`, the files not
+## searched.
 export def symbol(session: Session, name: String, paths: List[String]) -> Result[Symbols]
   settings = Sessions.asking(session.internal)
-  held = session.internal.buffers.map do |buffer: Overlay.Buffer| buffer.names.typed end
+  # Sorted, since `update` moves a buffer to the end of the list and the order of the matches must not depend on it.
+  ordered = session.internal.buffers.sort_by do |buffer: Overlay.Buffer| buffer.names.key end
+  held = ordered.map do |buffer: Overlay.Buffer| buffer.names.typed end
   searched = paths
+  # The buffers make the list non-empty, which would drop the default folder of an empty `paths`.
   if searched.size == 0 and held.size > 0
     searched = ["."]
   end
@@ -244,6 +252,8 @@ def std_source(name: String) -> Result[String]
   return Std.source(name)
 end
 
+# Looping is safe: `Core.named` changes the file only when it is the canonical path of that buffer, and a path it has
+# changed is the typed name, which is not the canonical path of another buffer.
 # The problem with the file of a buffer named as the session was given it, as the command line names the `--stdin`
 # file.
 def named_in(settings: Env.Settings, problem: Problems.Problem, buffers: List[String]) -> Problems.Problem

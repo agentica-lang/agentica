@@ -120,7 +120,7 @@ def test_an_unreadable_file_or_a_bad_position_is_a_query_usage_diagnostic_in_tha
     # A symbol query with a bad name or path names no file, and the library gives no usage help.
     for words in [("symbol", "make", "nope.agc"), ("symbol", "", "models.agc")]:
         stdout, stderr = library(driver, project, *words)
-        assert (stdout, json.loads(stderr)["code"]) == ("", "QUERY-USAGE")
+        assert (stdout, json.loads(stderr)["code"], json.loads(stderr)["file"]) == ("", "QUERY-USAGE", "<arguments>")
     # `check` does not stop at a missing file: it answers that the program does not pass.
     stdout, stderr = library(driver, project, "check", "nope.agc")
     assert (stdout, json.loads(stderr)["code"]) == ("", "QUERY-USAGE")
@@ -203,6 +203,22 @@ def test_symbol_and_refs_read_the_buffers_as_stdin_does(driver, project):
     closed = library(driver, project, "update", file, "twice_twice.agc", "close", file, "refs", file, line, column)
     assert closed == command_line(project, "refs", f"{file}:{line}:{column}")
     assert closed != expected
+
+
+def test_symbol_searches_the_buffers_in_the_order_of_their_paths_not_of_their_updates(driver, project):
+    (project / "dup.agc").write_text("export def dup() -> Int\n  return 1\nend\n", encoding="utf-8")
+    first = ("buffer", "a.agc", "dup.agc", "buffer", "b.agc", "dup.agc")
+    before = library(driver, project, *first, "symbol", "dup", "models.agc")
+    modules = [found["module"] for found in json.loads(before[0])["matches"]]
+    assert modules == ["a.agc", "b.agc"]
+    # `update` of the first buffer must not move it behind the second, and the order the buffers were opened in is not
+    # the order of the answer either.
+    assert library(driver, project, *first, "update", "a.agc", "dup.agc", "symbol", "dup", "models.agc") == before
+    swapped = ("buffer", "b.agc", "dup.agc", "buffer", "a.agc", "dup.agc")
+    assert library(driver, project, *swapped, "symbol", "dup", "models.agc") == before
+    # A folder that only buffers make (the disk has no newdir) is not listed.
+    stdout, stderr = library(driver, project, "buffer", "newdir/new.agc", "dup.agc", "symbol", "dup", "newdir")
+    assert (stdout, json.loads(stderr)["code"]) == ("", "QUERY-USAGE")
 
 
 def test_several_buffers_are_one_program_as_if_the_disk_held_them(driver, project):
