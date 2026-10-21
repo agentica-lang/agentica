@@ -26,7 +26,8 @@ end
 
 ## What the core asks of the machine. Each function takes a path as the front end got it and never raises: a failure
 ## is data (`Read.Unreadable`, a `Result` error, `false`). `list_folder` gives the entries of a folder in no
-## particular order, and `read_bytes` the whole content of a file, for the hash of a package.
+## particular order, and `read_bytes` the whole content of a file, for the hash of a package. A path given to the
+## Workspace never ends with a separator, except a filesystem root.
 export struct Workspace
   read_text: Fn[String, SourceFile.Read]
   file_exists: Fn[String, Bool]
