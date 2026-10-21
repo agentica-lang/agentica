@@ -10,8 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `Analysis.type_at_partial` and `Analysis.refs_partial` in `std/analysis` answer
-  as `type-at` and `refs` with `--partial`.
+- `std/analysis` has `type_at_partial` and `refs_partial`, as `type-at` and
+  `refs` with `--partial`.
 
 ## [0.8.0] - 2026-10-21
 

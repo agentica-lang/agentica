@@ -61,15 +61,17 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   (`refs`).
 - `type_at_partial` and `refs_partial` are `--partial`: with a function that
   does not check they answer from the others (`partial` true, the failures in
-  `diagnostics`); a declaration that fails is still the error.
+  `diagnostics`); a declaration that fails is still the error. In a failed
+  function `TypeAt.type` is `""`, and a position the link cannot name is the
+  first problem, as an error.
 - `outline`, `type_at`, `type_at_partial`, `symbol`, `refs` and `refs_partial`
   return an error whose message is one JSON diagnostic (the `--json` object).
-  `Analysis.diagnostic(message)` reads it, so `try` works. Codes are the command line's: `LEX-`, `PARSE-`,
-  `CHECK-`, `PKG-`, `QUERY-NO-EXPRESSION`, `QUERY-NOT-FOUND`, and
-  `QUERY-USAGE` for a file that cannot be read, a position below line 1 or
-  column 1, an empty `symbol` name or a path with no `*.agc` file. Their
-  `file` is the path asked, or `<arguments>` for `symbol`; the usage `help`
-  of the command line is missing.
+  `Analysis.diagnostic(message)` reads it, so `try` works. Codes are the
+  command line's: `LEX-`, `PARSE-`, `CHECK-`, `PKG-`, `QUERY-NO-EXPRESSION`,
+  `QUERY-NOT-FOUND`, and `QUERY-USAGE` for a file that cannot be read, a
+  position below line 1 or column 1, an empty `symbol` name or a path with no
+  `*.agc` file. Their `file` is the path asked, or `<arguments>` for `symbol`;
+  the usage `help` of the command line is missing.
 - Cost: the compiler's pure core (about 27,000 lines) is compiled into the
   program, so a run from source pays seconds. For a tool that runs often:
   `agentica compile tool.agc -o tool.agcb`, then `agentica run -- tool.agcb`.
