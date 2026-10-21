@@ -4,7 +4,7 @@
 import Ast from "../syntax/ast"
 import Model from "builtin_model"
 import Builtins from "builtins"
-import Suggest from "../check/suggest"
+import Suggest from "../syntax/suggest"
 import Text from "../syntax/text"
 import Types from "../syntax/types"
 import {

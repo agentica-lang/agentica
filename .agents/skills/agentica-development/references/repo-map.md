@@ -24,6 +24,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     lex.agc lex_text.agc  # entry: prints the text form of the tokens of each file argument
     text.agc        # quote, span_text, diagnostic_line: the shared pieces of both text forms
     ast.agc         # the AST structs and enums, with a node id on every node
+    suggest.agc     # did_you_mean and closest_among, for unknown names (the linker, the checker, the catalog and the help call them)
     types.agc       # the Type enum and its helpers (the AST, the checker, the catalog, lowering and the writer import it)
     parse_base.agc parser.agc  # parse: List[Token] -> Result[Program](parse_base: Env, packed diagnostics, types, patterns; parser: expressions, statements, declarations)
     parse.agc parse_text.agc  # entry: prints the text form of the tree of each file argument
@@ -33,14 +34,13 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     resolve_import.agc import_path.agc  # std/, pkg/ and relative import resolution, and the import path rules
     resolve.agc rewrite.agc  # resolve: the linked name of a name; rewrite: the declarations of a file with linked names
     linker.agc      # link_file: Linking.Done(Linked) | Failed(Failure); program(): the flat Program for the checker
-    declarations.agc link_env.agc link_failure.agc  # declaration helpers and CHECK-DECL-ORDER; Env and Settings (with the Workspace); Site and packed failures with a file
+    declarations.agc import_help.agc link_env.agc link_failure.agc  # declaration helpers and CHECK-DECL-ORDER; the help of an unknown import name; Env and Settings (with the Workspace); Site and packed failures with a file
     link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --xdg-cache-home=, --home=, --local-app-data=, --ids)
   packages/  # §45: the manifest, the lock and the package cache (core: no I/O, only the Workspace)
     project.agc manifest.agc lock.agc  # the nearest agentica.toml and its lock checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path
     git_source.agc toml_read.agc  # the rules of a name, a git URL, a tag and a ref; the TOML helpers the manifest and the lock share
     package_import.agc package_cache.agc package_hash.agc  # which pkg/<name>/ imports are packages, the hash check, the stored name; the cache folder of a commit; the hash of the .agc files (Crypto.sha256)
-  check/  # the checker, suggestions, constants and defaults
-    suggest.agc  # did_you_mean (the linker also calls it)
+  check/  # the checker, constants and defaults
     check_state.agc check_types.agc  # the checker: Cx and St, type operations and unification
     check_register.agc check_stmt.agc check_expr.agc  # declarations and main; functions, blocks, statements, case; expressions and operators (CHECK-TOO-DEEP)
     check_call.agc check_method.agc  # calls, enum constructors, struct construction and update; methods and fields (Resolved by node id)

@@ -9,6 +9,7 @@
 import Ast from "../syntax/ast"
 import Declarations from "declarations"
 import Diag from "../diagnostics/diagnostic"
+import ImportHelp from "import_help"
 import Paths from "import_path"
 import Lexer from "../syntax/lexer"
 import Env from "link_env"
@@ -19,7 +20,6 @@ import Project from "../packages/project"
 import Resolve from "resolve_import"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
-import Suggest from "../check/suggest"
 import Workspace from "workspace"
 import {BARE_NAMES, RESERVED} from "../catalog/builtins"
 
@@ -247,7 +247,7 @@ def bind_name(
         Failure.Site(file: file, span: entry.span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        Suggest.unknown_import_help(target.key, target.public, entry.name, false),
+        ImportHelp.unknown_import_help(target.key, target.public, entry.name, false),
       ),
     )
   end

@@ -16,7 +16,9 @@ a string, a heredoc, a comment and the builtin data rows (`"File.open"` in built
 - Imports: a core file may not import from `io/`, `app/` or `bdd/`, nor from a `std/` module that is not on
   PURE_STD_MODULES. A new std module is forbidden until someone reads it and lists it. A file of
   `syntax/` may not import a later stage (LATER_THAN_SYNTAX); it may import `diagnostics/`, the shared diagnostic data.
-  A file of `diagnostics/` may import only its own folder and `syntax/source` (DIAGNOSTICS_MAY_IMPORT).
+  A file of `diagnostics/` may import only its own folder and `syntax/source` (DIAGNOSTICS_MAY_IMPORT). A file of
+  `modules/` or `packages/` may not import `check/`, `lower/` or `bytecode/`, nor `catalog/` except its data files
+  (CATALOG_DATA), which import only `syntax/` and each other.
 
 The entry programs (the text-form runners of each stage, run by tests with `agentica compiler/<folder>/<name>.agc`) are
 driving adapters that live next to their stage. They may read their command line with `System.args`, print with `puts`,
@@ -43,6 +45,18 @@ LATER_THAN_SYNTAX = {"modules", "packages", "check", "catalog", "lower", "byteco
 # diagnostics/problem.agc). It may import its own folder and the one syntax file that holds the Span it points with,
 # which imports nothing, so no import cycle exists.
 DIAGNOSTICS_MAY_IMPORT = {"compiler/syntax/source"}
+# modules/ and packages/ come right after syntax/. The linker needs the builtin names (reserved names, enums, records),
+# so it reads the catalog data, but never the checker, the lowering or the writer; the did-you-mean it shares with the
+# checker lives in syntax/suggest.agc. The data files import only syntax/ and each other, so no cycle exists.
+# The rest of catalog/ (prelude, catalog_text) is a later stage.
+LATER_THAN_MODULES = {"check", "catalog", "lower", "bytecode"}
+CATALOG_DATA_ONLY = "but catalog data (read by modules/) may import only syntax/ and itself"
+CATALOG_DATA = {
+    "compiler/catalog/builtin_model",
+    "compiler/catalog/builtins",
+    "compiler/catalog/builtins_data",
+    "compiler/catalog/prelude_data",
+}
 
 OUTSIDE = "an adapter (io/ is for entry programs only, app/ and bdd/ never) or a file outside compiler/"
 FORBIDDEN_MODULES = {
@@ -159,6 +173,14 @@ def forbidden_imports(path, tokens, entry):
             and resolved not in DIAGNOSTICS_MAY_IMPORT
         ):
             found.append("%s imports %s, a stage (diagnostics/ is shared data)" % (path, target))
+        elif (
+            path.startswith(("compiler/modules/", "compiler/packages/"))
+            and folder in LATER_THAN_MODULES
+            and resolved not in CATALOG_DATA
+        ):
+            found.append("%s imports %s, a later stage" % (path, target))
+        elif path.removesuffix(".agc") in CATALOG_DATA and folder != "syntax" and resolved not in CATALOG_DATA:
+            found.append("%s imports %s, %s" % (path, target, CATALOG_DATA_ONLY))
     return found
 
 
@@ -266,3 +288,34 @@ def test_diagnostics_imports_no_stage(tmp_path):
         "%s imports ../syntax/types, a stage (diagnostics/ is shared data)" % path,
         "%s imports ../check/check_failure, a stage (diagnostics/ is shared data)" % path,
     ]
+
+
+def test_modules_import_no_later_stage(tmp_path):
+    (tmp_path / "probe.agc").write_text(
+        'import Suggest from "../syntax/suggest"\n'
+        'import {RESERVED} from "../catalog/builtins"\n'
+        'import Packages from "../packages/project"\n'
+        'import Suggest from "../check/suggest"\n'
+        'import Prelude from "../catalog/prelude"\n'
+        'import Ir from "../lower/ir"\n'
+        'import Writer from "../bytecode/writer"\n',
+        encoding="utf-8",
+    )
+    tokens = token_kinds(["probe.agc"], tmp_path)["probe.agc"]
+    for path in ("compiler/modules/probe.agc", "compiler/packages/probe.agc"):
+        assert offenders({path: tokens}) == [
+            "%s imports ../check/suggest, a later stage" % path,
+            "%s imports ../catalog/prelude, a later stage" % path,
+            "%s imports ../lower/ir, a later stage" % path,
+            "%s imports ../bytecode/writer, a later stage" % path,
+        ]
+    # The catalog data files import only syntax/ and each other; the rest of catalog/ may take the later stages.
+    data = "compiler/catalog/builtins.agc"
+    assert offenders({data: tokens}) == [
+        "%s imports ../packages/project, %s" % (data, CATALOG_DATA_ONLY),
+        "%s imports ../check/suggest, %s" % (data, CATALOG_DATA_ONLY),
+        "%s imports ../catalog/prelude, %s" % (data, CATALOG_DATA_ONLY),
+        "%s imports ../lower/ir, %s" % (data, CATALOG_DATA_ONLY),
+        "%s imports ../bytecode/writer, %s" % (data, CATALOG_DATA_ONLY),
+    ]
+    assert offenders({"compiler/catalog/prelude.agc": tokens}) == []

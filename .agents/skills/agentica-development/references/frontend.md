@@ -22,8 +22,9 @@ folder of its context. Names below are bare; the folder is in each label
 bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
 
 - Data: `syntax/source.agc`, `syntax/token.agc`, `syntax/types.agc` (the
-  `Type` enum), `diagnostics/diagnostic.agc`,
-  `diagnostics/problem.agc` (the packed `Problem` every stage returns).
+  `Type` enum), `diagnostics/diagnostic.agc`, `diagnostics/problem.agc` (the
+  packed `Problem` every stage returns). `syntax/suggest.agc` holds the
+  did-you-mean help that the linker and the checker share.
   `syntax/source_file.agc` holds the strict UTF-8 rules for a source file
   (`LEX-INVALID-UTF8` at the first bad byte); `io/source_reader.agc` reads the
   file with them, with no size limit. `syntax/text.agc` holds the
@@ -33,12 +34,13 @@ bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
   `lex_text.agc`.
 - Parser (`syntax/`): `ast.agc`, `parse_base.agc`, `parser.agc`; entries
   `parse.agc`, `parse_text.agc`.
-- Linker (`modules/`, `suggest.agc` in `check/`): `workspace.agc` (the port),
+- Linker (`modules/`): `workspace.agc` (the port),
   `modules.agc` (loader; walks imports with an explicit stack in a fixed
   order), `resolve_import.agc`, `import_path.agc` (`std/`, `pkg/`, relative),
   `resolve.agc`, `rewrite.agc` (linked name of every name), `linker.agc`
   (`Linker.link_file`, `Linker.program`), `declarations.agc`
-  (`CHECK-DECL-ORDER`), `suggest.agc` (did-you-mean), `link_env.agc` (`Env`
+  (`CHECK-DECL-ORDER`), `import_help.agc` (the help of an unknown import
+  name), `link_env.agc` (`Env`
   and `Settings`: `stdlib/` and environment, passed in, never read inside; a
   new environment variable gets a `--name=V` flag in `link.agc`, `check.agc`,
   `lower.agc` and `bytecode.agc`, and a value in the hermetic environment of
@@ -95,7 +97,10 @@ through `SaveFile`). `tests/test_style_core_purity.py` runs the real lexer
 over the stage folders and fails on a call (`Module.name` as tokens, so
 strings, comments and builtin data rows do not count) or an import; a new
 entry program needs a line in its `ENTRY_PROGRAMS`. A new need of the machine
-is a new `Workspace` field, built in `io/host.agc`.
+is a new `Workspace` field, built in `io/host.agc`. The linker (`modules/`,
+`packages/`) imports no later stage; of `catalog/` it takes only the data files
+(`builtin_model`, `builtins`, `builtins_data`, `prelude_data`), which import
+only `syntax/`.
 
 Order inside a `compiler/` file: imports and module doc, structs and enums,
 exported functions, private functions. Code style follows the speed rules:

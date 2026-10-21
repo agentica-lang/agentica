@@ -7,7 +7,7 @@ import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
 import Reply from "cli_reply"
 import Texts from "cli_text"
-import Suggest from "../check/suggest"
+import Suggest from "../syntax/suggest"
 import Types from "../syntax/types"
 import {PRELUDE_ONLY, PUBLIC_NAMES} from "../catalog/builtins"
 
