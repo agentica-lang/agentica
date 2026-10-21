@@ -66,7 +66,7 @@ BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "List.group_by", "Str
 # Arguments with no file: the options, their mistakes and the help.
 OPTIONS = [
     ["--version"], ["-h"], ["--help"], ["-hx"], ["-xh"], ["-ab", "c"], ["--foo"], ["+x"], ["-"], ["+"], [],
-    ["check"], ["compile"], ["help"], ["--json", "help"], ["help", "--json"], ["help", "Nope"],
+    ["check"], ["compile"], ["help"], ["help", "Nope"],
     ["help", "Strin.split"],
     ["help", "a", "b", "c"], ["help", "HttpWire.service"], ["help", "__fail_arg"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
@@ -247,6 +247,8 @@ def test_help_json_without_a_name_is_every_entry_as_help_name_json_prints_it(wor
     assert [entry for entry, found in zip(catalog, single) if entry != found] == []
     # A builtin with several forms keeps its `overloads`, as `help NAME --json` shows it.
     assert any("overloads" in entry for entry in catalog)
+    # Private (`__`) names and std-only names stay out, as `help NAME` refuses them.
+    assert not [name for name in names if name.startswith("__")] and "Http.get" not in names
 
 
 if __name__ == "__main__":

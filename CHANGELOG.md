@@ -10,7 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `agentica help --json` with no NAME prints every builtin as one JSON array.
+- `agentica help --json` with no NAME prints every builtin as one JSON array; `agentica --json help` used to print the text summary.
 
 ## [0.5.0] - 2026-10-21
 

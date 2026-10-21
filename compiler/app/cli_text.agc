@@ -10,7 +10,7 @@ USAGE = [
     "[--schedulers N] [--allow-run] [check] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
-  "       agentica help NAME [--json]",
+  "       agentica help [NAME] [--json]",
   "       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
@@ -33,7 +33,7 @@ SUMMARY = [
   "                                          --flush-timeout MS, --schedulers N, --allow-run, --source-root DIR,",
   "                                          --ai, --json",
   "  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split",
-  "  agentica help                           this summary and the builtin namespaces",
+  "  agentica help [--json]                  this summary and the builtin namespaces; --json prints every builtin as a JSON array",
   "Core rules:",
   "  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").",
   "  - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".",

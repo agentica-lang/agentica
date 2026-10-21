@@ -26,7 +26,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
   elsif rest.size == 1
     return Reply.printed("#{Texts.summary_text()}#{namespaces_text()}\n")
   elsif rest.size != 2
-    return Reply.failed(2, "usage: agentica help [NAME [--json]]\n")
+    return Reply.failed(2, "usage: agentica help [NAME] [--json]\n")
   end
   name = rest[1]
   entry = Builtins.lookup(name)
@@ -74,6 +74,7 @@ end
 
 # Every public builtin, in name order, each as `builtin_json` gives it, so a client reads both forms with one parser.
 def catalog_json() -> Json
+  # `unwrap!` cannot fail: PUBLIC_NAMES are keys of the same ENTRIES that `Builtins.lookup` reads.
   return JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin_json(Builtins.lookup(name).unwrap!) end)
 end
 
