@@ -32,9 +32,11 @@ Editors would show what the checker already knows, without a shell round trip:
 
 - **Process and checking.** A long-lived process could keep the checked program
   and re-check only the changed modules, or re-check the whole program on each
-  request. The second is simpler; the first needs incremental checking. §39.8
-  has no daemon and no cache, so the LSP is where a long-lived process first
-  appears. Measure the check time of the bootstrap build before choosing.
+  request. The second is simpler; the first needs incremental checking. The
+  command line of §39.8 has no daemon and no cache, so the LSP is where a
+  long-lived process first appears; `Analysis.refresh` gives it a cache that
+  re-checks the whole program of a root only when one of its modules changed.
+  Measure the check time of the bootstrap build before choosing.
 - **Protocol and language.** Is the protocol over stdio written in Agentica,
   run by the VM, or in C, inside the VM?
 - **Editors.** Which editors to test with first.

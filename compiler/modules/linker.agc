@@ -50,11 +50,11 @@ end
 
 ## Links the file at path, with the std/ sources of settings.std and the environment of settings.env.
 export def link_file(path: String, settings: Env.Settings) -> Linking
-  linked = Modules.load(path, settings)
-  if linked.ok?
-    return finish(linked.unwrap!, settings)
+  loaded = Modules.load(path, settings)
+  if loaded.ok?
+    return link_loaded(loaded.unwrap!, settings)
   end
-  return Linking.Failed(Failure.unpack_failure(linked.message))
+  return Linking.Failed(Failure.unpack_failure(loaded.message))
 end
 
 ## The program in the form the checker reads: the declarations of every file in one list, with the id, span and module
@@ -72,7 +72,8 @@ export def program(linked: Linked) -> Ast.Program
   )
 end
 
-def finish(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
+## Links files that were loaded (Modules.load_with): the second half of `link_file`.
+export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
   files = rewrite_all(loaded, settings)
   if files.ok?
     root = loaded.modules[loaded.order[0]].program
@@ -81,9 +82,17 @@ def finish(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
   return Linking.Failed(Failure.unpack_failure(files.message))
 end
 
-# The files are numbered one after the other in the order of loaded.order, so the last one ends the ids of the parser.
+# The ids of the parser end at the highest next_free_id of the files. The files are numbered one after the other in the
+# order of loaded.order unless a walk kept some trees of an earlier one (Modules.Parses), which leaves gaps.
 def parser_ids(loaded: Modules.Loaded) -> Int
-  return Ast.next_free_id(loaded.modules[loaded.order[loaded.order.size - 1]].program)
+  ids = 0
+  for key in loaded.order
+    next = Ast.next_free_id(loaded.modules[key].program)
+    if next > ids
+      ids = next
+    end
+  end
+  return ids
 end
 
 def id_count(loaded: Modules.Loaded) -> Int

@@ -9,6 +9,7 @@
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
 
+import Cache from "../analysis/cache"
 import Core from "../analysis/analysis"
 import Env from "../modules/link_env"
 import OutlineJson from "../query/outline_json"
@@ -61,7 +62,7 @@ end
 ## the rule that a program declares `main` off; a diagnostic of that is exit status 1, and a position that is on no
 ## expression is QUERY-NO-EXPRESSION.
 export def type_at(asked: QueryPosition.Asked, style: String, settings: Env.Settings) -> Reply.Answer
-  case Core.type_at(settings, asked)
+  case Core.type_at(Cache.empty(), settings, asked)
     Core.Typed.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, TYPE_AT_USAGE))
     Core.Typed.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Typed.Done(found) ->

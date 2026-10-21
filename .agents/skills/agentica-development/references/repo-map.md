@@ -15,10 +15,11 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     cli_options.agc cli_help.agc cli_doc.agc cli_query.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; doc (prints docs/'s model); the query commands (outline: prints query/'s model); the fixed texts; what a command answers (Reply, Answer); Launch
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
   analysis/  # the semantic queries, once (§39, `std/analysis`): the CLI and the library both call it, so they cannot drift
-    front.agc  # read_root, check_file, query_file, stage_problem, link_problem: read, link and check, shared by the CLI, the BDD driver and the queries
+    front.agc  # read_root, check_file, query_file, query_cached, refresh, stage_problem, link_problem: read, link and check, shared by the CLI, the BDD driver and the queries
     analysis.agc  # check, checked, outline, type_at over Env.Settings (the Workspace holds any unsaved buffers): data of model.agc or the first Problem
     model.agc convert.agc  # the plain answers (Outline, TypeAt, Checked; no enum) and the conversion from the stages' own types
-    session.agc  # the immutable Session of stdlib/analysis.agc: the settings and the buffers; no cache yet
+    cache.agc  # the Cache of a Session: checked roots (16, by last use) and parsed modules; fingerprint, find, remember
+    session.agc  # the immutable Session of stdlib/analysis.agc: the settings, the buffers and the cache
   io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
     host.agc  # workspace_with(std_source): the real Workspace over the std/ reader it is given; workspace(): for `--stdlib` runs; process_env(): the Env of this process
     stdin_buffer.agc  # take(): the standard input as a buffer; over(): a Workspace with it as one file (modules/overlay.agc)
@@ -34,7 +35,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     lex.agc lex_text.agc parse.agc parse_text.agc  # entries: print the text form of the tokens and the tree of each file argument
   modules/  # file reading, import resolution, the linker
     workspace.agc   # Workspace: the port of the stages to the machine, a record of function values (built in io/host.agc)
-    modules.agc     # load: root path -> every module, read in a fixed order (explicit stack), with CHECK-IMPORT-*, CHECK-DECL-ORDER, CHECK-REDEFINED-NAME
+    modules.agc     # load, load_with: root path -> every module, read in a fixed order (explicit stack), with CHECK-IMPORT-*, CHECK-DECL-ORDER, CHECK-REDEFINED-NAME; load_with takes parsed files (Parses) instead of parsing
     resolve_import.agc import_path.agc  # std/, pkg/ and relative import resolution, and the import path rules; std/internal/ is for std modules only; `--stdlib DIR` reads std/internal/compiler/X from DIR/../compiler/X
     overlay.agc     # buffers (text in memory for files) over a Workspace: `check --stdin` is one, std/analysis any number
     resolve.agc rewrite.agc  # resolve: the linked name of a name; rewrite: the declarations of a file with linked names

@@ -5,6 +5,7 @@
 ## (modules/overlay.agc), and gives the data of model.agc or the first problem. What each caller does with them is its
 ## own: the command line prints and sets an exit status, the library returns.
 
+import Cache from "cache"
 import Convert from "convert"
 import Diag from "../diagnostics/diagnostic"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
@@ -50,13 +51,14 @@ export enum Found
 end
 
 ## Links and checks the file at `path`, as `agentica check` does: every rule of a build except that the program
-## declares a `main`, so a library file passes.
-export def check(settings: Env.Settings, path: String) -> Verdict
+## declares a `main`, so a library file passes. `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
+## answer.
+export def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
   case Front.read_root(settings.workspace, path)
     Front.Root.Unreadable(_) -> return Verdict.Unreadable
     Front.Root.Invalid(problem) -> return Verdict.Rejected(problem)
     Front.Root.Readable ->
-      case Front.query_file(path, settings)
+      case Front.query_cached(cache, path, settings)
         Front.Outcome.Rejected(problem) -> return Verdict.Rejected(problem)
         Front.Outcome.Done(_) -> return Verdict.Passed
       end
@@ -65,9 +67,9 @@ end
 
 ## The answer of `check` as data, for the file at `path`. A file that cannot be read is QUERY-USAGE, as for the
 ## queries.
-export def checked(settings: Env.Settings, path: String) -> Model.Checked
+export def checked(cache: Cache.Cache, settings: Env.Settings, path: String) -> Model.Checked
   diagnostics: List[DiagnosticModel.Diagnostic] = []
-  case check(settings, path)
+  case check(cache, settings, path)
     Verdict.Passed -> diagnostics = diagnostics
     Verdict.Unreadable -> diagnostics = [DiagnosticModel.of_problem(unreadable(path))]
     Verdict.Rejected(problem) -> diagnostics = [DiagnosticModel.of_problem(named(settings, problem, path))]
@@ -91,13 +93,13 @@ export def outline(settings: Env.Settings, file: String, buffered: Bool) -> Outl
 end
 
 ## The type and the definition at the position `asked` of a file of the disk (never a `std/` module), linked and
-## checked with what it imports and without requiring `main`.
-export def type_at(settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+## checked with what it imports and without requiring `main`. `cache` only saves work, as for `check`.
+export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
   case Front.read_root(settings.workspace, asked.file)
     Front.Root.Unreadable(_) -> return Typed.Unreadable
     Front.Root.Invalid(problem) -> return Typed.Rejected(problem)
     Front.Root.Readable ->
-      case Front.query_file(asked.file, settings)
+      case Front.query_cached(cache, asked.file, settings)
         Front.Outcome.Rejected(problem) -> return Typed.Rejected(problem)
         Front.Outcome.Done(front) -> return located(settings, asked, front)
       end

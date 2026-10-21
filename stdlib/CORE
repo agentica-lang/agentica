@@ -1,4 +1,5 @@
 analysis/analysis.agc
+analysis/cache.agc
 analysis/convert.agc
 analysis/front.agc
 analysis/model.agc

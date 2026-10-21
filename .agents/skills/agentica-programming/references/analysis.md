@@ -10,6 +10,7 @@ Analysis.workspace() -> Analysis.Workspace          # version: 1, buffers: {}
 Analysis.open(files: Analysis.Workspace) -> Analysis.Session
 Analysis.update(session, path: String, text: String) -> Analysis.Session
 Analysis.close(session, path: String) -> Analysis.Session
+Analysis.refresh(session, path: String) -> Analysis.Session   # fills the cache for path
 Analysis.check(session, path: String) -> Analysis.Checked
 Analysis.outline(session, path: String) -> Result[Analysis.Outline]
 Analysis.type_at(session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
@@ -24,7 +25,15 @@ Analysis.outline_json(found) -> Json     # also type_at_json, diagnostic_json
   before `update`). `Workspace.version` is reserved (1).
 - A `Session` is an immutable value: tasks may share and ask it at once, and an
   `update` leaves the copy of other tasks as it was. `Session.internal` is not
-  API. There is no cache: each question runs the stages from the start.
+  API.
+- `refresh` keeps the linked and checked program of `path` and the parsed
+  modules in the session (at most 16 checked files, the least recently
+  refreshed leaving first). A question reads the files again and uses the cache
+  only where the modules and their texts are the ones it was made from, so the
+  answers are the same with or without `refresh`. Without it, each question
+  runs the stages from the start. Run one `refresh` at a time and store the
+  session it returns; two refreshes of one session give two caches, and keeping
+  one drops the other's work, not correctness. There is no task or lock.
 - Answers are structs with no enum. An absent text is `""` (`""` where the JSON
   has `null`), an absent definition an empty list (`TypeAt.definition` holds 0
   or 1). `Checked.passed` is true when there is no problem, else `diagnostics`
