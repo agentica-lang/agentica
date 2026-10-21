@@ -27,6 +27,9 @@ import Sites from "sites"
 # member, and the ? or ! that ends a name.
 HEAD_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.?!".split(""))
 
+# The characters that a type name can start with.
+CAPITALS = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
+
 # The longest name a call head is read from, in characters.
 HEAD_LIMIT = 128
 
@@ -67,10 +70,10 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
           return Diag.Outcome.Done(local_answer(linked, local))
         Ast.Optional.Absent ->
           # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
-          if token == "type-name" or token == "dot"
-            case type_answer(linked, checked, offset)
-              Ast.Optional.Present(found) -> return Diag.Outcome.Done(found)
-              Ast.Optional.Absent -> token = token
+          if type_token?(module.text, token, offset)
+            found = type_answer(linked, checked, offset)
+            if found.size > 0
+              return Diag.Outcome.Done(found[0])
             end
           end
           return expression_answer(linked, checked, asked, offset, here)
@@ -126,14 +129,14 @@ end
 
 # The name of a type that holds the position, as the sites of query/sites.agc list it. The checker has no part in it,
 # so a type in a function that failed to check is answered too.
-def type_answer(linked: Linker.Linked, checked: Checker.Checked, offset: Int) -> Ast.Optional[Answer]
+def type_answer(linked: Linker.Linked, checked: Checker.Checked, offset: Int) -> List[Answer]
   module = linked.modules[0]
   sites = Sites.of_types(module, checked, Sites.declared_names(linked.modules))
   case Sites.innermost(sites, offset)
-    Ast.Optional.Absent -> return Ast.Optional.Absent
+    Ast.Optional.Absent -> return []
     Ast.Optional.Present(site) ->
       text = source_text(module.text, site.reach)
-      return Ast.Optional.Present(
+      return [
         Answer(
           kind: "type",
           span: site.reach,
@@ -142,8 +145,17 @@ def type_answer(linked: Linker.Linked, checked: Checker.Checked, offset: Int) ->
           definition: Definitions.of_name(linked.modules, site.target.name),
           builtin: Ast.Optional.Absent,
         ),
-      )
+      ]
   end
+end
+
+# Whether the token at `offset` may be in the name of a type: a type name, or the dot of `Models.User`, which is
+# followed by a name that starts with a capital. The dot of a call (`Models.total`) needs no scan of the sites.
+def type_token?(text: String, token: String, offset: Int) -> Bool
+  if token == "type-name"
+    return true
+  end
+  return token == "dot" and offset + 1 < text.length and CAPITALS.include?(text.at(offset + 1))
 end
 
 def expression_answer(

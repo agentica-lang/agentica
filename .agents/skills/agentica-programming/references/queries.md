@@ -90,8 +90,9 @@ is written as the file writes it (`Models.User` through the import alias); one
 from a module the file does not import is written by its bare name. A type name
 in an annotation (`xs: Models.User`), in a type argument (`Models.User` in
 `List[Models.User]`) or in a field or variant payload has the `kind` `type`: the
-span is the name (`Models.User` is one span), the type is the name as written,
-and the definition is the struct, enum or alias (kind `alias`) it names, also
+span is the name (`Models.User` is one span), the `type` field is that name
+alone as written (`List` on `List[Models.User]`, the alias name for an alias
+use), not the whole annotation, and the definition is the struct, enum or alias (kind `alias`) it names, also
 from an imported file. A builtin type (`Int`, `List`) has no definition.
 `refs` lists these uses as `type`.
 
