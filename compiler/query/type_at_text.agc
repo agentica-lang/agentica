@@ -1,13 +1,18 @@
 ## The text form of `agentica type-at` (docs/future/39-semantic-cli.md, 39.2): the span of the expression, then its
 ## source text and its type, and a second line for the definition, if there is one. Each line starts with
-## `file:line:column`, like `rg`. A builtin has no place: its lines are `builtin` and the signature of each form.
+## `file:line:column`, like `rg`. A builtin has no place: its lines are `builtin` and the signature of each form. The
+## type of a name that only the link could answer (docs/future/39-semantic-cli.md, 39.6) is written `?`.
 
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Model from "../analysis/model"
 
 ## The lines of the answer for the expression in the file of its position.
 export def text(found: Model.TypeAt) -> String
-  head = "#{found.position.file}:#{range(found.range)} #{first_line(found.text)}: #{found.type}"
+  type = found.type
+  if type == ""
+    type = "?"
+  end
+  head = "#{found.position.file}:#{range(found.range)} #{first_line(found.text)}: #{type}"
   if found.definition.size == 0
     return "#{head}\n#{builtin_lines(found.signatures)}"
   end

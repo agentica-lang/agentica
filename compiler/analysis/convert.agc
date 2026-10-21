@@ -108,6 +108,8 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
     definition: definition_of(found.definition, home),
     help: help,
     signatures: signatures,
+    partial: false,
+    diagnostics: [],
   )
 end
 
@@ -157,6 +159,8 @@ export def refs(asked: Position.Asked, found: Refs.Answer, names: Map[String, St
       )
     end,
     skipped: [],
+    partial: false,
+    diagnostics: [],
   )
 end
 

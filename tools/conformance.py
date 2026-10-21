@@ -98,7 +98,7 @@ AREAS = {
         [
             "tests/test_cli_forms.py", "tests/test_check_stdin.py", "tests/test_spec_doc.py",
             "tests/test_spec_outline.py", "tests/test_spec_symbol.py", "tests/test_spec_type_at.py",
-            "tests/test_spec_refs.py", "tests/test_examples.py", "tests/test_modules.py",
+            "tests/test_spec_refs.py", "tests/test_spec_partial.py", "tests/test_examples.py", "tests/test_modules.py",
             "tests/test_source_utf8.py", "tests/test_bdd.py", "tests/test_bdd_posix.py",
             "tests/test_bdd_integration.py", "tests/test_unit_test.py", "tests/test_vm_diff_8.py",
             "tests/test_single_binary.py", "tests/test_stdlib_distribution.py",

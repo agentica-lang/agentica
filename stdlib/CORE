@@ -3,6 +3,7 @@ analysis/cache.agc
 analysis/convert.agc
 analysis/front.agc
 analysis/model.agc
+analysis/partial.agc
 analysis/session.agc
 catalog/builtin_model.agc
 catalog/builtins.agc
@@ -68,6 +69,7 @@ query/definitions.agc
 query/locals.agc
 query/outline.agc
 query/outline_json.agc
+query/partial_at.agc
 query/query_files.agc
 query/query_options.agc
 query/query_position.agc
