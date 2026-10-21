@@ -52,3 +52,8 @@ def test_compile_reports_the_missing_main(tmp_path):
     problem = problem_of(run(cli() + ["--json", "compile", source(tmp_path, LIBRARY), "-o", str(output)]))
     assert (problem["code"], start_of(problem)) == ("CHECK-MAIN", (1, 1))
     assert not output.exists()
+
+
+def test_check_stdin_accepts_a_buffer_with_no_main(tmp_path):
+    result = run(cli() + ["--json", "check", "--stdin", "buffer.agc"], stdin=LIBRARY, cwd=tmp_path)
+    assert (result.code, result.stdout) == (0, '{"ok":true}\n')

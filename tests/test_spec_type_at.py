@@ -261,6 +261,12 @@ def test_a_file_without_main_is_answered(program):
     assert answer(("models.agc", where(MODELS, "3)")), cwd=program)["type"] == "Int"
 
 
+def test_a_main_with_a_wrong_signature_is_check_main_at_its_def(program):
+    (program / "wrong.agc").write_text("def main(x: Int) -> Void\nend\n", encoding="utf-8")
+    failed = problem(type_at(("wrong.agc", (1, 1)), cwd=program), "CHECK-MAIN", 1)
+    assert (start(failed), failed["file"]) == ((1, 1), "wrong.agc")
+
+
 def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk(program):
     buffer = "def double(n: Int) -> Int\n  return n * 2\nend\n"
     report = answer(("orders.agc", (2, 12)), "--stdin", cwd=program, stdin=buffer)
