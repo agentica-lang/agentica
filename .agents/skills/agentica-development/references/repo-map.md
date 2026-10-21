@@ -25,6 +25,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     text.agc        # quote, span_text, diagnostic_line: the shared pieces of both text forms
     ast.agc         # the AST structs and enums, with a node id on every node
     suggest.agc     # did_you_mean and closest_among, for unknown names (the linker, the checker, the catalog and the help call them)
+    prelude_name.agc  # PRELUDE_PREFIX and prelude_name: the names of the prelude files and functions (the linker, the checker and lowering use them)
     types.agc       # the Type enum and its helpers (the AST, the checker, the catalog, lowering and the writer import it)
     parse_base.agc parser.agc  # parse: List[Token] -> Result[Program](parse_base: Env, packed diagnostics, types, patterns; parser: expressions, statements, declarations)
     parse.agc parse_text.agc  # entry: prints the text form of the tree of each file argument
@@ -49,13 +50,13 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     check_const.agc const_walk.agc  # module constants: order, CHECK-CONSTANT-CYCLE, the value and type rules; the children and reads of an initializer
     check_help.agc check_names.agc check_flow.agc check_unused.agc  # help texts, method names, what a body returns, CHECK-UNUSED-VALUE
     check_tables.agc  # method tables and foreign-name helps as data, edited by hand
-    check_prelude.agc  # the checker rule of a call of a prelude function
+    check_prelude.agc prelude_files.agc  # the checker rule of a call of a prelude function; Prelude.attach: read, parse and check the stdlib/prelude/ functions a program calls (stages.md)
     checker.agc     # check(linked, settings): Checking.Done(Checked: types by node id, resolved, the prelude files and their bodies) | Failed(Problem)
     check.agc check_text.agc  # entry: prints the text form of checking each root file argument
-  catalog/  # the builtin catalog and the compiler prelude
+  catalog/  # the builtin catalog (imports only syntax/)
     builtin_model.agc builtins.agc builtins_data.agc  # builtin data structs and the Rule enum; Catalog (lookups by name); the rows, edited by hand
     catalog.agc catalog_text.agc  # entry: prints the text form of the catalog, then the answer to each probe argument
-    prelude.agc prelude_data.agc  # the compiler prelude (stages.md): read, parse and check the stdlib/prelude/ functions a program calls; the table of prelude rows, by hand
+    prelude_data.agc  # the table of prelude rows (stages.md), by hand
   lower/  # the IR and lowering
     ir.agc lower_tables.agc lower_state.agc  # lowering: the IR as data, the lowering tables, Cx and Fx (the function being lowered)
     lower_expr.agc lower_data.agc lower_stmt.agc  # expressions and calls; list, map, enum, struct and update chunks; functions, blocks, statements

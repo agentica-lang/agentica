@@ -98,9 +98,9 @@ over the stage folders and fails on a call (`Module.name` as tokens, so
 strings, comments and builtin data rows do not count) or an import; a new
 entry program needs a line in its `ENTRY_PROGRAMS`. A new need of the machine
 is a new `Workspace` field, built in `io/host.agc`. The linker (`modules/`,
-`packages/`) imports no later stage; of `catalog/` it takes only the data files
-(`builtin_model`, `builtins`, `builtins_data`, `prelude_data`), which import
-only `syntax/`.
+`packages/`) imports no later stage. `catalog/` imports only `syntax/` and
+itself, so every later stage reads it; the code that reads and checks the
+prelude files is `check/prelude_files.agc`.
 
 Order inside a `compiler/` file: imports and module doc, structs and enums,
 exported functions, private functions. Code style follows the speed rules:

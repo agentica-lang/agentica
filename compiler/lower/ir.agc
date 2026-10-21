@@ -7,13 +7,9 @@
 ## them; `const` takes its value in imm and `call-builtin` its name in name. `struct-with` takes dst, window and
 ## struct, then the positions of the changed fields.
 
+import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
-
-## The start of the name of a source file of the compiler prelude (stdlib/prelude/, docs/future/25-ruby-typed-idioms.md
-## 25.6). The prelude has no text in the program: the file is a name, with no text, and every span of its functions is
-## its first character.
-export PRELUDE_PREFIX = "<prelude>/"
 
 ## The value of a `const` instruction. Void and Nil are the values of those types.
 export enum Imm
@@ -88,12 +84,6 @@ export struct Program
   entry: Int
   globals: Int
   span: Source.Span
-end
-
-## The name, in the lowered program, of the prelude function with this key: "list::find" is the function find of
-## stdlib/prelude/list.agc. The prefix cannot start the name of a function of a program.
-export def prelude_name(key: String) -> String
-  return "@prelude::" + key
 end
 
 ## True when the source file at index file is a file of the prelude: the functions lowered from it are the prelude

@@ -139,7 +139,7 @@ end
 # binary embeds and which lists the files of the stdlib/ folder (a test checks that they are the same list).
 def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
   try Paths.validate_library_path(file, site)
-  # The files of std/prelude/ are the compiler prelude, which no program imports (prelude.agc).
+  # The files of std/prelude/ are the compiler prelude, which no program imports (prelude_files.agc).
   if file.starts_with?("std/prelude/") or !std_exists?(settings, file)
     return error(io_failure(site, "unknown standard library module"))
   end
