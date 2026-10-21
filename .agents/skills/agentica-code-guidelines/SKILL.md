@@ -10,8 +10,9 @@ description: >-
 # Agentica code guidelines
 
 Use on `.agc` that passes `agentica check`. Fix syntax or type errors first
-with `agentica-programming`. `[CODE]` means the front end rejects it; `[test]`
-means a repo test enforces it. Unmarked rules are review-only.
+with `agentica-programming`. A diagnostic code in parentheses means the front
+end refuses that form. `[test]` means a repo test enforces the rule. Unmarked
+rules are review-only.
 
 - `references/style.md`: bad/good examples for these rules.
 - `references/performance.md`: measured costs; speed work requires profiling
@@ -24,8 +25,8 @@ Change style only in code you touch. Restyle untouched code separately.
 ## Layout
 
 - Two spaces per indent; no tabs or trailing spaces; one newline at EOF.
-- Lines max 119 characters, comments included `[test]` in `compiler/` and
-  `stdlib/`; use the same limit elsewhere.
+- Lines max 119 characters, comments included (`[test]` in `compiler/` and
+  `stdlib/`); use the same limit elsewhere.
 - Separate top-level declarations with one blank line
   (`PARSE-MISSING-BLANK-LINE`); no double blank lines or blank lines right
   after `def` or before `end`.
@@ -57,13 +58,19 @@ Change style only in code you touch. Restyle untouched code separately.
 - Export only names used by other files. Keep one topic per file; split files
   that grow into several topics.
 - Use `import Alias from "path"` for many names or possible collisions;
-  `import {a, B} from "path"` for one or two frequent names. Never both for
-  one module.
+  `import {a, B} from "path"` for one or two frequent names. Use both for one
+  module only to read its constants beside qualified calls (`Mod.LIMIT` is
+  `CHECK-IMPORT-NAME`; two styles go on two lines).
 - Add a descriptive local type alias when a composite/qualified type recurs;
   don't alias a short, clear type.
-- The first `##` block, then a blank line, is the module doc. Every exported
-  `def`, `struct`, `enum`, field and variant gets a `##` doc starting with a
-  verb and describing its result, not its implementation.
+- The first `##` block, then a blank line, is the module doc. Document as little
+  as possible (KISS; implicit over explicit). Only public code gets `##`: an
+  exported `def`, `struct` or `enum` (every export of `stdlib/` needs one;
+  `tests/test_stdlib_docs.py` checks it), saying what it returns or is, not how.
+  A private `def` never gets `##`; if it needs a note, use one `#` comment.
+  Comment complex code where its nature needs it. A field or variant gets a note
+  only when its name does not say enough. No doc that repeats the name or the
+  signature.
 - `#` comments explain why (rule, order, limit, trick), not the next line.
   Put them in a function body or above a `##` block, never between it and its
   declaration (`PARSE-DETACHED-DOC`). Remove commented-out code.
@@ -88,14 +95,18 @@ Change style only in code you touch. Restyle untouched code separately.
 - Use a parenthesized pipe for three or more steps on one value; put one
   `|> f(args)` per line. Start with the input value. One step is a regular call.
 - Pipe into your own functions. Builtins with method forms use `.`; piping to
-  them fails (`CHECK-PIPE-METHOD`). Replace three-deep nested calls with a pipe.
+  them fails (`CHECK-PIPE-METHOD`): write `x.upcase`, not
+  `x |> String.upcase()`.
+  Replace three-deep nested calls with a pipe.
 
 ## case and if
 
 - Use `case` for enums, `Result` or at least three branches on one value; use
   `if`/`elsif` for yes/no. Prefer `case` over nested `if` on the same value.
 - List every enum variant and omit `_` so new variants fail checking
-  (`CHECK-NON-EXHAUSTIVE-CASE`). Use `_` only when the remainder is one case.
+  (`CHECK-NON-EXHAUSTIVE-CASE`). Use `_` only when every variant it leaves out
+  gets the same result and a new variant should get it too (a few arms of a
+  large enum).
 - Put specific arms/guards first. A guarded or nested arm doesn't cover a
   variant; keep an unguarded fallback.
 - Replace key-to-value `if` chains with a `Map` constant, membership chains

@@ -36,22 +36,20 @@ rules live in `AGENTS.md` and `agentica-development`.
   test` without `TESTS`, the slow tier, sanitizer sweeps, fuzz or gc-stress
   (CI runs them); `KIND=files` only through Docker.
 - **VM C code or concurrency:** tell the author to read `vm-c-critic` (its
-  "Scheduler, tasks and the core rules (§14)" section above all) before it
-  builds, so the first push already has the tests reviewers ask for: cancel
-  from another thread, deadlines, stop signals, stalls, exact interleavings
-  through C tests, and tests that can fail without the change. Before the
-  first push, run the built test binary of the new concurrency tests about 8
-  times at once, all under one memory cap, so order-dependent cases fail
-  locally, not in CI.
+  "Scheduler, tasks and the core rules (§14)" section first) before it builds,
+  so the first push has the tests reviewers ask for: cancel from another
+  thread, deadlines, stop signals, stalls, exact interleavings in C tests, and
+  tests that fail without the change. Before the first push, run the new
+  concurrency test binaries about 8 times at once under one memory cap, so
+  order-dependent cases fail locally.
 - **Speed:** only the author measures, and only when the PR touches the
   interpreter or scheduler hot path: an interleaved A/B against master with
   medians (`benchmarks/`; code layout alone moves a binary by 20-35 %),
   numbers in the PR body. Critics and reviewers do not time.
-- A local pre-commit hook (untracked, installed by hand) may run `make
-  dup-check` when `vm/` or `tests/` is staged and block new clones: refactor
-  them (CI's `dup-check` fails on them either way). Never bypass it
-  (`--no-verify`, `-c core.hooksPath=...`) because of a missing tool; install
-  the tool instead.
+- A local pre-commit hook (untracked) may run `make dup-check` on staged `vm/`
+  or `tests/` files and block new clones; refactor them (CI fails on them too).
+  Never bypass the hook (`--no-verify`, `core.hooksPath`); install the missing
+  tool instead.
 - Untracked folders are per worktree: `tools/jscpd/node_modules` (`make
   dup-check` runs `npm ci` into it), `.venv`, build output. Never symlink them
   from the main checkout: `npm ci` empties a symlinked target, and the
@@ -119,8 +117,8 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   Merge when `test` is green (plus `build` and Site examples when they run);
   master's Platforms run catches the rare gap.
 - Wait with one background loop on `gh run list --branch <b>` filtered by the
-  head SHA, started from the main checkout; run the query once in the
-  foreground first.
+  head SHA, started from the main checkout (run the query once in the
+  foreground first).
 - `vm/tests/loop_test.c:237` on macOS is a known flake (#366): rerun once with
   `gh run rerun ID --failed` and say so. Read other failures with
   `gh run view ID --log-failed`; native Windows finds bugs Wine hides.

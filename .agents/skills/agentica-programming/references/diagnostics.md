@@ -12,7 +12,7 @@ expected Int, found String
 
 The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 (while running); `QUERY-` is a mistake in the question of `agentica outline`,
-`type-at` or `symbol`.
+`type-at`, `symbol` or `refs`.
 With `--json`, the diagnostic that ends the run is the last stderr line; the
 program's own stderr comes before it. Expected process failures
 return error Results. Codes without a row below: `CHECK-VOID-TYPE` and
@@ -36,24 +36,22 @@ index 5 is outside a list of length 3
     main at nested.agc:11:8
 ```
 
-A runtime trace names each file as you can open it from the working directory
-(`agentica examples/hello.agc` shows `examples/hello.agc:3:5` and
-`examples/lib/util.agc:7:11`), and a standard module as `std/NAME.agc`;
-compile-time errors show the first file as typed and an imported file by
-absolute path. Each line is a function and the place it runs: the error for the
-first, the call it waits on for the others. A block is `block`; the builtin that
-runs it (`xs.map`) has no line, so the caller's line is the `xs.map` call.
+A runtime trace names each file as you can open it from the working directory,
+and a standard module as `std/NAME.agc`; compile-time errors show the first file
+as typed and an imported file by absolute path. Each line is a function and the
+place it runs: the error for the first, the call it waits on for the others. A
+block is `block`; a builtin that runs one (`xs.map`) has no line, so the
+caller's line is the `xs.map` call.
 `(after a tail call)` marks a frame whose callers a tail call (`return f(x)`)
-removed. `walk at tree.agc:9:12 (9998 times)` is one line for a recursion; after
-merging, only the 15 innermost and the 5 outermost lines show, with `... 312
-frames not shown ...` between. A task ends with `task spawned at
-file:line:column`, the `Task.spawn` call. A function name or file path longer
-than 256 bytes is cut there, at a character boundary, and ends with `...`.
+removed. `walk at tree.agc:9:12 (9998 times)` is one line for a recursion. After
+merging, the 15 innermost and the 5 outermost lines show, with `... 312 frames
+not shown ...` between. A task ends with `task spawned at file:line:column` (the
+`Task.spawn` call). A function name or file path longer than 256 bytes is cut
+there, at a character boundary, and ends with `...`.
 `--ai` has the same lines under `  stack:`. `--json` adds `stack` (objects with
 `column`, `file`, `function`, `line`, and `repeat` or `tail` when they apply),
-`stack_omitted` and, for a task, `spawned_at`. `RUNTIME-STEP-LIMIT` and
-`RUNTIME-STACK-OVERFLOW` have the stack too, and so does a task's crash line
-(`"task":true`).
+`stack_omitted` and, for a task, `spawned_at`. `RUNTIME-STEP-LIMIT`,
+`RUNTIME-STACK-OVERFLOW` and a task's crash line (`"task":true`) carry it too.
 
 - **Code:** `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`,
   `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`
@@ -207,12 +205,12 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
 
 - **Code:** `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`,
   `CHECK-IMPORT-NAME`
-  - **Meaning:** Missing/unreadable import, invalid path (including a path with
-    `.agc` or another extension), cycle, or unknown/private imported name; for a
-    misspelled name the help suggests the closest export (`did you mean
-    "name"?`); a struct that its module keeps private cannot be constructed or
-    updated with `.with` from another module; `Mod.NAME` on a constant is also
-    `CHECK-IMPORT-NAME` (write `import {NAME} from "path"`)
+  - **Meaning:** missing or unreadable import, invalid path (one with `.agc` or
+    another extension too), cycle, or an unknown or private imported name (the
+    help suggests the closest export, `did you mean "name"?`). A struct its
+    module keeps private cannot be built or updated with `.with` from another
+    module. `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME`: write `import
+    {NAME} from "path"` (`modules.md`)
 
 - **Code:** `CHECK-IMPORT-PACKAGE`
   - **Meaning:** a package declared in `agentica.toml` is not in the package
@@ -230,23 +228,28 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     file is loaded, imported or not
 
 - **Code:** `QUERY-USAGE`
-  - **Meaning:** `agentica outline`, `type-at` or `symbol` was asked a wrong
-    question: a missing or extra argument, an unknown option, `--stdin` without
-    a file, a bad `FILE:LINE:COL`, or a path that cannot be read (for `symbol`
-    also a folder with no `*.agc` file). The file is
-    `<arguments>` at line 1, column 1, and the exit status is 2 (`queries.md`)
+  - **Meaning:** a wrong question to `outline`, `type-at`, `symbol` or `refs`: a
+    missing or extra argument, an unknown option, `--stdin` without a file, a
+    bad `FILE:LINE:COL`, a path that cannot be read, or a folder with no `*.agc`
+    file. The file is `<arguments>` at line 1, column 1, and the exit status is
+    2 (`queries.md`)
 
 - **Code:** `QUERY-NOT-FOUND`
-  - **Meaning:** `agentica symbol` found NAME in no module linked from PATH and
-    in no builtin. The file is `<arguments>`; exit status 2. The help has the
-    closest name and the files that were skipped. Fix the name, or the file
-    that did not link
+  - **Meaning:** `symbol` or `refs` NAME is declared in no linked module and no
+    builtin. The help has the closest name and the skipped files. Fix the name,
+    or the file that does not link. Exit status 2
+
+- **Code:** `QUERY-AMBIGUOUS-NAME`
+  - **Meaning:** `refs` NAME is declared by more than one module. The help lists
+    each candidate as `FILE:LINE:COL`; ask again with that position. Exit status
+    2
 
 - **Code:** `QUERY-NO-EXPRESSION`
-  - **Meaning:** `agentica type-at` was given a position on no token of an
-    expression: a blank between tokens, a comment, a keyword, or past the end of
-    a line or of the file. The span is the position (the end of the line or file
-    when past it); exit status 2. Move the position onto the expression
+  - **Meaning:** `type-at` or `refs` was given a position on no expression or
+    name: a blank between tokens, a comment, a keyword, past the end of a line
+    or of the file, or (for `refs`) a module alias or a path in an import line.
+    The span is the position; exit status 2. Move the position onto the
+    expression
 
 - **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
   - **Meaning:** the `.agc` files of a package in the cache are not the ones the

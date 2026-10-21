@@ -13,8 +13,8 @@ on tasks too easy to separate the arms by accuracy, against an untyped Python
 arm. It is not yet shown that agents do better in Agentica than in Python.
 Repeat the comparison with the current language, harder tasks and a typed Python
 arm. A pilot comes first, at order step 7.2.2 (decided by the owner on
-2026-10-13); the full round is order step 10: after the server measurement (7j)
-and the JIT (9.1), and order step 11 (multicore) does not wait for it.
+2026-10-13); the full round has no fixed order (owner, 2026-10-21), and order
+step 11 (multicore) does not wait for it.
 
 - [x] Pilot (order step 7.2.2), done on 2026-10-14 (rounds 9 to 11 of
   `docs/eval.md`): a regression round of the `binary` arm on the VM, and the
@@ -46,7 +46,7 @@ and the JIT (9.1), and order step 11 (multicore) does not wait for it.
   count as check calls, like `agentica check`: a failing checker run is a repair
   attempt, and tokens and repairs are compared with the checker calls included
   on both sides.
-- [ ] In the full round, measure the semantic CLI of phase 26 as
+- [ ] In the full round, measure the semantic CLI (row 7.2b) as
   `docs/future/39-semantic-cli.md` §39.12 says: count its calls, and run one
   Agentica arm without it on the tasks that cross a program.
 - [ ] Record the results in a new section of `docs/eval.md`, with the skill

@@ -98,8 +98,10 @@ is past it) and exits 2. `QUERY-NOT-FOUND` is a `symbol` or `refs` NAME that no
 linked module declares and the catalog lacks; it is located at `<arguments>`,
 may carry a "did you mean" help, and exits 2. `QUERY-AMBIGUOUS-NAME` is a `refs`
 NAME that more than one declaration answers to; it is located at `<arguments>`,
-its help lists each candidate as `FILE:LINE:COL`, and it exits 2. A `LEX-`, `PARSE-` or `CHECK-` error in the queried file
-exits 1, and wins over a position that is on no expression.
+its help lists each candidate as `FILE:LINE:COL`, and it exits 2. A `LEX-`,
+`PARSE-` or `CHECK-` error in the queried file exits 1, and wins over a position
+that is on no expression. Exit 1 means fix the program, exit 2 fix the question.
+A usage error is a diagnostic too, so with `--json` it is JSON as well.
 
 Names and forms from other languages get a `help` that names the Agentica form.
 A method hint is given only when the suggested method exists for the receiver's

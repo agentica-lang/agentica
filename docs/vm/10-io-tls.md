@@ -9,8 +9,8 @@ reads no `openssl.cnf`, so both builds behave the same.
 - **Adapter.** `vm/tls.h` declares our own types only, so no OpenSSL type leaves
   the adapter files. A session uses two memory BIOs, and every call returns OK,
   WANT_READ, WANT_WRITE, CLOSED or ERROR. An error carries our code, an `errno`
-  for a system error, and a short detail. OpenSSL's error queue is drained in
-  the adapter, and OpenSSL never gets a GC pointer.
+  for a system error, and a short detail. The adapter drains OpenSSL's error
+  queue, and OpenSSL never gets a GC pointer.
 - **Error codes** (`agc_tls_error` in `vm/tls.h`): `VERIFY_FAILED` is any verify
   result other than untrusted, expired or hostname, `UNEXPECTED_EOF` is a peer
   that closed during the handshake, and `PROTOCOL` is an error after the
@@ -26,80 +26,74 @@ reads no `openssl.cnf`, so both builds behave the same.
   every context. Renegotiation is off.
 - **Trust (security rule).** A non-empty `ca_file` replaces system trust. A
   missing or empty file fails the connect with `BAD_CA`. With an empty
-  `ca_file`, the trust is `SSL_CERT_FILE` when set, else the system store of
-  the platform (`vm/tls_trust.h`). The directory is `SSL_CERT_DIR` when set,
-  else none. A source that fails to load is skipped; verification still fails
-  closed.
+  `ca_file`, the trust is `SSL_CERT_FILE` when set, else the platform's system
+  store (`vm/tls_trust.h`). `SSL_CERT_DIR`, when set, adds a directory to
+  either; with a `ca_file` it is not read. A source that fails to load is
+  skipped, and verification still fails closed.
   - The system store is read once per process (`vm/tls_trust.c`, under
     `CRYPTO_THREAD_run_once`, in the first setup pool job that needs it, never
-    on the scheduler or I/O thread) and copied into each new context, so a
-    trust change while the process runs is not seen. A first load that fails
-    also lasts for the whole process, and verification then fails closed.
-    This holds on every system, Linux included; there is no retry. Its
-    certificates are shared, read-only `X509` objects.
+    on the scheduler or I/O thread) and copied into each new context, so a trust
+    change while the process runs is not seen. A first load that fails lasts for
+    the whole process, and verification then fails closed. This holds on every
+    system, Linux included; there is no retry.
   - A certificate the system distrusts is added with an explicit reject of
-    `serverAuth` (`X509_add1_reject_object`), before any trusted copy (the store
-    keeps the first copy). OpenSSL's `check_trust` then fails a chain through a
-    rejected root or intermediate with `X509_V_ERR_CERT_REJECTED`. OpenSSL never
-    looks up the peer's own certificate, so the client's verify callback
-    (`agc_tls_trust_verify`) refuses a leaf whose rejected copy is in the store.
-    The error is `VERIFY_UNTRUSTED`.
-  - Only the certificates are copied. Platform rules beyond them are not
+    `serverAuth` (`X509_add1_reject_object`), before any trusted copy, since the
+    store keeps the first copy. OpenSSL's `check_trust` then fails a chain
+    through a rejected root or intermediate with `X509_V_ERR_CERT_REJECTED`.
+    OpenSSL never looks up the peer's own certificate, so the client's verify
+    callback (`agc_tls_trust_verify`) refuses a leaf whose rejected copy is in
+    the store. The error is `VERIFY_UNTRUSTED`.
+  - Only the certificates are copied. The platform rules beyond them are not
     applied: Apple's date-based distrust and Certificate Transparency policy,
-    the constraints trustd puts on system anchors, and the Windows
-    `NotBefore` and disallowed-filetime properties.
+    the constraints trustd puts on system anchors, and the Windows `NotBefore`
+    and disallowed-filetime properties.
   - Linux and other POSIX (`tls_trust_posix.c`): the first readable file of the
-    CA bundle paths listed in `vm/tls_trust_posix.c`.
-  - macOS (`tls_trust_darwin.c`, Security framework): the user and admin
-    trust settings (`SecTrustSettingsCopyCertificates`,
-    `SecTrustSettingsCopyTrustSettings`; the user domain overrides the admin
-    domain), then the system anchors (`SecTrustCopyAnchorCertificates`). A
-    setting counts when its policy is absent or TLS (`kSecPolicyAppleSSL`). An
-    empty settings array or a `TrustRoot` result adds a root; `TrustAsRoot` on
-    an intermediate has no effect, because without `X509_V_FLAG_PARTIAL_CHAIN`
-    (kept off) OpenSSL only ends a chain at a self-signed certificate. A
-    `Deny` adds the certificate rejected, so it fails a chain even under a
-    system anchor. A grant limited to an application, a host name or a key use
-    is ignored. This is stricter than Apple's first-match order, and fails
-    closed: any matching `Deny` wins, and a `Deny` limited to one host or
-    application rejects the certificate everywhere. No Linux path is read.
-  - Windows (`tls_trust_windows.c`, Crypt32): the current user's
-    `Disallowed` system store, every certificate added rejected, then the
-    `ROOT` store (`CertOpenSystemStoreW`), each certificate whose valid uses
-    (`CertGetEnhancedKeyUsage`) include server authentication, then the `CA`
-    store of intermediates, as CPython's `ssl.load_default_certs` reads `ROOT`
-    and `CA`. Every view includes the machine's stores. A `CA` certificate is
-    only a chain certificate, never a trust anchor: one whose subject equals
-    its issuer is left out (`agc_tls_trust_add_intermediate_der`), because
-    OpenSSL trusts a self-signed certificate in the store, and without
-    `X509_V_FLAG_PARTIAL_CHAIN` any other one only helps build a chain that
-    must still end at a `ROOT` certificate. So a server that sends only its
-    leaf still verifies when Windows keeps its intermediate. A `CA`
-    certificate with the subject and public key of a self-signed certificate
-    already in the store (a cross-signed copy of an anchor) is left out too:
-    OpenSSL looks issuers up by name and could take the copy instead of the
-    anchor, and the store order that decides it is not stable. A `CA`
-    certificate whose EKU extension excludes server authentication is left
-    out (on every system, by the test of OpenSSL's purpose check): OpenSSL
-    takes a store copy first, so such a sibling of a valid intermediate (same
-    subject and key) would fail a chain the server sends correctly. A `CA`
-    certificate whose Crypt32 EKU property alone excludes server
-    authentication is added rejected, so a server that sends that
-    intermediate itself still fails with `VERIFY_UNTRUSTED`
-    (`X509_V_ERR_CERT_REJECTED`); it also shadows same-key siblings, which is
-    taken as the administrator's intent. A root that
-    Windows would download on demand (automatic root update) is not in the
-    store until Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that
-    case.
-- **Verification (security rule).** The client always verifies the peer. There
+    CA bundle paths listed there. No other path is read.
+  - macOS (`tls_trust_darwin.c`, Security framework): the user and admin trust
+    settings, then the system anchors. The user domain overrides the admin
+    domain. A setting counts when its policy is absent or TLS. An empty settings
+    array or a `TrustRoot` result adds a root. `TrustAsRoot` on an intermediate
+    has no effect, because without `X509_V_FLAG_PARTIAL_CHAIN` (kept off)
+    OpenSSL ends a chain only at a self-signed certificate. A `Deny` adds the
+    certificate as rejected, so it fails a chain even under a system anchor. A
+    grant limited to an application, a host name or a key use is ignored. This
+    is stricter than Apple's first-match order and fails closed: any matching
+    `Deny` wins, and a `Deny` limited to one host rejects the certificate
+    everywhere.
+  - Windows (`tls_trust_windows.c`, Crypt32): the current user's `Disallowed`
+    store first, every certificate in it added rejected. Then the `ROOT` store
+    (`CertOpenSystemStoreW`), each certificate whose valid uses include server
+    authentication, then the `CA` store as intermediates, as CPython's
+    `ssl.load_default_certs` reads `ROOT` and `CA`. Every view includes the
+    machine's stores. A `CA` certificate is only a chain certificate, never an
+    anchor:
+    - one whose subject equals its issuer is left out
+      (`agc_tls_trust_add_intermediate_der`), since OpenSSL trusts a self-signed
+      certificate in the store. So a server that sends only its leaf still
+      verifies when Windows keeps its intermediate;
+    - a copy with the subject and public key of a self-signed anchor already in
+      the store is left out, because OpenSSL looks issuers up by name and the
+      store order is not stable;
+    - one whose EKU extension excludes server authentication is left out, on
+      every system: OpenSSL would take a store copy first, and a valid
+      intermediate's sibling with the same subject and key would fail a chain
+      the server sends correctly;
+    - one whose Crypt32 EKU property alone excludes server authentication is
+      added rejected, so a server that sends it still fails with
+      `VERIFY_UNTRUSTED`. It also shadows same-key siblings, which is taken as
+      the administrator's intent.
+
+A root that Windows would download on demand is not in the store until
+Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
+- **Verification (security rule).** The client always verifies the peer; there
   is no verify-none path. An IP-literal host is checked against IP SANs and
   sends no SNI. Any other host gets SNI and hostname verification, with no
   partial wildcards. The server does not ask for client certificates.
 - **Data path.** A TLS socket is the TCP socket of 10.3.1 with a session.
   Decrypted bytes go into the socket's input buffer, so `read_line`,
-  `recv_bytes`, the 1 MiB limits, the locks and the timeouts are exactly the TCP
-  ones. Sends are encrypted in 16 KiB pieces, and the next piece waits for the
-  previous write. A failed write is sticky.
+  `recv_bytes`, the 1 MiB limits, the locks and the timeouts are the TCP ones.
+  Sends are encrypted in 16 KiB pieces, and each piece waits for the previous
+  write. A failed write is sticky.
 - **Accept.** A waiting `TCP.accept` on a TLS listener runs the server handshake
   under its own timeout, and returns the socket only when the handshake is done.
   A failed handshake returns `port->ssl-ports: accept failed (...)`, and the
@@ -108,38 +102,36 @@ reads no `openssl.cnf`, so both builds behave the same.
   once.
 - **EOF (security rule).** A peer that closes without `close_notify` gives a
   plain end of input (`SSL_OP_IGNORE_UNEXPECTED_EOF`). Framing above TLS (lines,
-  HTTP lengths) must catch truncation. A TLS error after the handshake is
-  `error reading from stream port` with `EPROTO`.
+  HTTP lengths) must catch truncation. A TLS error after the handshake is `error
+  reading from stream port` with `EPROTO`.
 - **Close.** `TCP.close` and a timeout send `close_notify` with one
   `uv_try_write` when the handshake finished and no write is pending, then close
   as TCP does. At the end of the run the same single write goes to each finished
   TLS socket (§10.2.2), and `HttpClient` connections get it too (10.7.1).
-- **Messages.** `ssl-connect: connect failed (detail)`,
-  `port->ssl-ports: accept failed (detail)`,
-  `ssl-load-certificate-chain!: load failed from: "path" (detail)`,
-  `ssl-load-private-key!: ...` (also for a key that does not match the
-  certificate), and `ssl-load-verify-source!: ...` for `ca_file`. Only the
-  `Result` error kind is fixed. A verify failure's detail reads
-  `certificate verify failed: <X.509 text>` (the tests match it); other details
-  are OpenSSL's text.
+- **Messages.** Only the `Result` error kind is fixed. A verify failure's detail
+  reads `certificate verify failed: <X.509 text>` (the tests match it); other
+  details are OpenSSL's text. The VM's own prefixes are `ssl-connect:`,
+  `port->ssl-ports:`, `ssl-load-certificate-chain!:`, `ssl-load-private-key!:`
+  (also for a key that does not match the certificate) and
+  `ssl-load-verify-source!:` (for `ca_file`).
 - **Turn costs and fuzzing.** TLS sockets use the TCP builtins, so they charge
   by size (10.2.1). `TLS.connect` and `TLS.listen` charge nothing. Under
   `no_files` both end the run with `RUNTIME-INTERNAL`.
 - **Tests.** `vm/tests/tls_test.c` runs two in-memory adapters against each
-  other, with no socket, so it runs on Linux, macOS and Windows. The platform
-  trust policies have their own tests (`vm/tests/tls_trust_darwin_test.c`,
-  `vm/tests/tls_trust_windows_test.c`). The goldens `tls-echo` and
-  `tls-errors` are their own peers. `tests/test_vm_tls.py` covers the rest
-  against Node (`tests/fixtures/tls-peer.js`) and Python
-  (`tests/fixtures/tls-peer.py`) on all three systems. The certificates in
-  `tests/fixtures/tls/` come from `make-certs.sh`.
+  other, with no socket, so it runs on all three systems. The platform trust
+  policies have their own tests (`vm/tests/tls_trust_darwin_test.c`,
+  `vm/tests/tls_trust_windows_test.c`). The goldens `tls-echo` and `tls-errors`
+  are their own peers. `tests/test_vm_tls.py` covers the rest against Node
+  (`tests/fixtures/tls-peer.js`) and Python (`tests/fixtures/tls-peer.py`) on
+  all three systems. The certificates in `tests/fixtures/tls/` come from
+  `make-certs.sh`.
 
 ### 10.3.1 TCP (as built)
 
 **As built.** `vm/tcp.c` holds the `TCP` builtins, on Linux, macOS and Windows;
-other systems get none. `vm/stream.c` holds what they share with
-`vm/process.c`: the input buffer, the write path, the lock-or-timeout helper
-and the `network:` texts.
+other systems get none. `vm/stream.c` holds what they share with `vm/process.c`:
+the input buffer, the write path, the lock-or-timeout helper and the `network:`
+texts.
 
 - **Values.** A `Socket` is a GC value with a registered state and two lock
   records, `reader` and `writer`. `read_line` and `recv_bytes` take the reader
@@ -147,11 +139,11 @@ and the `network:` texts.
   `agc_handle_wait`, so one deadline covers the lock wait and the operation. A
   `Listener` keeps its bound port, so `TCP.local_port` still answers after
   `close_listener`.
-- **Ownership.** The socket's native state is freed when its users (the resource
-  and each request) and its callbacks (a DNS lookup, one close callback per
-  link) are all done, so no callback sees freed memory. It is registered before
-  any libuv work, so the end of the run finds every handle. Each operation parks
-  only its task, on an external job.
+- **Ownership.** The native state is freed when its users (the resource and each
+  request) and its callbacks (a DNS lookup, one close callback per link) are all
+  done, so no callback sees freed memory. It is registered before any libuv
+  work, so the end of the run finds every handle. Each operation parks only its
+  task, on an external job.
 - **Connect.** The timeout, port (1..65535) and host (no NUL) are checked. The
   host resolves (`AF_UNSPEC`, `SOCK_STREAM`), and each address is tried in order
   until one connects. One timer covers the lookup and every try. On timeout the
@@ -164,15 +156,15 @@ and the `network:` texts.
   a host without IPv6). Any other failure closes every handle and fails the
   listen. For port 0, if a later address finds the chosen port in use, the VM
   starts again with a new port, up to 8 times. With more than one address, IPv6
-  handles are `IPV6_V6ONLY`. Listen has no timeout.
-- **Accept.** `listener is closed` is checked first, then the timeout. Waiting
-  accepts form one FIFO for all of a listener's handles, and a connection is
-  accepted only into the head waiter's `done` half, so it never waits without an
-  owner. If `uv_accept` fails, or libuv reports an accept error (only Windows
-  does, once it has stopped listening on that handle), the listener is closed:
-  the head accept returns the error, and every other waiting accept returns
-  `network: listener is closed`. A
-  timed-out accept leaves the listener open.
+  handles are `UV_TCP_IPV6ONLY`. Listen has no timeout.
+- **Accept.** `network: listener is closed` is checked first, then the timeout.
+  Waiting accepts form one FIFO for all of a listener's handles, and a
+  connection is accepted only into the head waiter's `done` half, so it never
+  waits without an owner. If `uv_accept` fails, or libuv reports an accept error
+  (only Windows does, once it has stopped listening on that handle), the
+  listener is closed: the head accept returns the error, and every other waiting
+  accept returns `network: listener is closed`. A timed-out accept leaves the
+  listener open.
 - **Reads.** `recv_bytes` checks 1..1048576 first, then the timeout, the reader
   lock and the open state. The socket is read only while a reader waits, 4 KiB
   at a time (more when the request asks for more), so the VM reads at most about
@@ -188,8 +180,8 @@ and the `network:` texts.
   the grammar says. `send_bytes` checks byte values and the 1 MiB limit first.
   The bytes go out with `uv_try_write`, the rest with one `uv_write`, and the
   task parks until the callback. `ok()` means every byte reached the kernel's
-  send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns
-  `error writing to stream port` and leaves the socket open.
+  send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `error writing to
+  stream port` and leaves the socket open.
 - **Turn costs.** `send`, `send_bytes`, `recv_bytes` and `read_line` charge by
   size (10.2.1), also when the call parks.
 - **Timeouts.** A timed-out read or write closes the socket. Waiting for the
@@ -197,43 +189,41 @@ and the `network:` texts.
   that, the next call returns `network: socket is closed` at once.
 - **Close.** `TCP.close` and `TCP.close_listener` are idempotent. They close the
   link (a pending write ends with `ECANCELED`), free the input buffer, and wake
-  every waiting request with `network: socket is closed` or
-  `network: listener is closed`. Data the program never read makes the kernel
-  answer with RST instead of FIN.
-- **End of run.** Sockets and listeners are not closed one by one: the exit path
+  every waiting request with `network: socket is closed` or `network: listener
+  is closed`. Data the program never read makes the kernel answer with RST
+  instead of FIN.
+- **End of run.** Sockets and listeners are not closed one by one. The exit path
   (10.2.2) ends with `_exit`, so the OS closes them, also while operations are
   parked. A peer sees FIN, or RST when data was left unread. A DNS lookup still
   running in the pool is not waited for.
 - **Messages.** The VM's own texts start with `network:`: timeouts, closed
   socket or listener, end of input, the line limit, the read size, byte values,
-  `port must be 1..65535` (connect) or `0..65535` (listen), and
-  `host cannot contain NUL`. Connect and listen failures are
-  `tcp-connect: connection failed` or `tcp-connect: host not found` (and
-  `tcp-listen: ...`), with `hostname:` and `port number:` lines and the system
-  error.
-- **Platforms.** The code is shared; libuv hides the socket types. What it
-  does not hide:
-  - *Error numbers.* `vm/net_os.h` maps a libuv error to the errno the
-    message shows: the negated code on POSIX, the UCRT's errno on Windows
-    (`ECONNREFUSED` 107, `ECONNRESET` 108), whose `strerror` names it. Texts
-    and numbers differ per system; the message head does not.
-  - *Accept.* On Unix libuv reports one connection and waits for `uv_accept`;
-    on Windows several `AcceptEx` requests can complete first, so each link
-    counts the connections reported and not taken.
-  - *Bind.* libuv sets `SO_REUSEADDR` on Unix listeners and nothing on
-    Windows, where that option would let another socket take a bound port and
-    `SO_EXCLUSIVEADDRUSE` would refuse a port with connections in
-    `TIME_WAIT`. So on Windows a listener on a specific address can bind a
-    port that another program of the same user holds on the wildcard address,
-    where Linux refuses it; two listeners on the same address conflict on
-    every system.
-  - *Send buffers.* How many bytes the kernel takes before a send parks is
-    the host's: on the Windows CI runner one 32 MiB send to a peer that does
-    not read returns `ok()` at once, where Linux and macOS park it until the
+  `port must be 1..65535` (connect) or `0..65535` (listen), and `host cannot
+  contain NUL`. Connect and listen failures are `tcp-connect: connection failed`
+  or `tcp-connect: host not found` (and `tcp-listen: ...`), with `hostname:` and
+  `port number:` lines and the system error.
+- **Platforms.** The code is shared; libuv hides the socket types. What it does
+  not hide:
+  - *Error numbers.* `vm/net_os.h` maps a libuv error to the errno the message
+    shows: the negated code on POSIX, the UCRT's errno on Windows
+    (`ECONNREFUSED` 107, `ECONNRESET` 108), whose `strerror` names it. Texts and
+    numbers differ per system; the message head does not.
+  - *Accept.* On Unix libuv reports one connection and waits for `uv_accept`; on
+    Windows several `AcceptEx` requests can complete first, so each link counts
+    the connections reported and not taken.
+  - *Bind.* libuv sets `SO_REUSEADDR` on Unix listeners and nothing on Windows,
+    where that option would let another socket take a bound port, and
+    `SO_EXCLUSIVEADDRUSE` would refuse a port with connections in `TIME_WAIT`.
+    So on Windows a listener on a specific address can bind a port that another
+    program of the same user holds on the wildcard address, where Linux refuses
+    it; two listeners on the same address conflict on every system.
+  - *Send buffers.* How many bytes the kernel takes before a send parks is the
+    host's: on the Windows CI runner one 32 MiB send to a peer that does not
+    read returns `ok()` at once, where Linux and macOS park it until the
     timeout.
   - *Refusal.* Windows resends a SYN that a closed port refused before it
-    reports `ECONNREFUSED`, so a refused connect, and a name whose first
-    address refuses (`localhost` to an IPv4-only server), take longer there;
-    the connect timeout covers them.
+    reports `ECONNREFUSED`, so a refused connect, and a name whose first address
+    refuses (`localhost` to an IPv4-only server), take longer there; the connect
+    timeout covers them.
 - **Fuzzing.** Under `no_files`, `TCP.connect` and `TCP.listen` end the run with
   `RUNTIME-INTERNAL`, and the other TCP builtins need a handle from these two.

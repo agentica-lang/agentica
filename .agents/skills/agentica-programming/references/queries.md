@@ -1,22 +1,42 @@
 # Asking the compiler about code
 
-From an Agentica program, `std/analysis` gives the same answers as structs
-(`references/analysis.md`).
+`agentica outline FILE`, `type-at FILE:LINE:COL`, `refs NAME|FILE:LINE:COL
+[PATH...]` and `symbol NAME [PATH...]` answer questions about code without
+reading whole files. Each takes `--json` (one object on stdout) and `--stdin
+FILE` (the text on standard input is FILE, saved or not; `type-at` and `refs`
+take `--stdin FILE:LINE:COL`, before the position). `--stdin FILE` takes the
+place of the FILE argument (`outline --stdin FILE`, not `outline FILE --stdin
+FILE`); FILE need not exist, but imports are found from its folder, and
+`std/...` is then a path of the disk, not a `std/` module. Options may come
+before the command (`agentica --json refs ...`) or after it. Answers go to
+stdout and diagnostics to stderr; `--ai` changes only how diagnostics print.
+The text form starts with `file:line:column`, like `rg`. Lines and columns
+count from 1, in code points. Every JSON answer has `"version": 1` and
+`"command"`; a field that changes meaning gets a new version, new fields can
+appear within a version (ignore keys you do not know), and types and
+signatures are strings. From a program, `std/analysis` gives the same answers
+as structs (`references/analysis.md`).
 
-`agentica outline FILE`, `agentica type-at FILE:LINE:COL`, `agentica refs
-FILE:LINE:COL` and `agentica symbol NAME [PATH...]` ask the compiler about code
-without reading whole files. `outline` lists what one file declares, so you do
-not read the whole file to learn its signatures. It only lexes and parses the
-file: its imports need not exist, and it needs no `main`. FILE is a source file
-or a `std/` module (`agentica outline std/queue`).
+Exit codes: 2 is a bad question, 1 a program that does not check.
+
+| Command   | Exit 1: fix the program | Exit 2: fix the question |
+| --------- | ----------------------- | ------------------------ |
+| `outline` | `LEX-`, `PARSE-` in the file | `QUERY-USAGE` |
+| `type-at` | `LEX-`, `PARSE-`, `PKG-`, `CHECK-` in the file or its imports | `QUERY-USAGE`, `QUERY-NO-EXPRESSION` |
+| `symbol`  | no file links | `QUERY-USAGE`, `QUERY-NOT-FOUND` |
+| `refs`    | any error in the program, or FILE (or every file of PATH) does not link | `QUERY-USAGE`, `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME`, `QUERY-NO-EXPRESSION` |
+
+`QUERY-USAGE` is at `<arguments>` (a missing or extra argument, an unknown
+option, `--stdin` without a file, a bad `FILE:LINE:COL`, an unreadable path, a
+folder with no `*.agc`). Errors print as `check` prints them.
+
+## outline
 
 ```sh
 agentica outline src/orders.agc          # one line per declaration
-agentica outline --json src/orders.agc   # one JSON object on stdout
+agentica outline --json src/orders.agc
 cat buffer.agc | agentica outline --stdin src/orders.agc
 ```
-
-The text form is `file:line:column` first, like `rg`:
 
 ```text
 src/orders.agc:1:1 import Models from "models"
@@ -26,50 +46,29 @@ src/orders.agc:8:1 export def total(order: Order) -> Int
 src/orders.agc:14:1 def round_cents(value: Float) -> Int
 ```
 
-Private declarations are listed too (`agentica doc` shows only the exported
-API). `--stdin FILE` stands in for the FILE argument: the text on standard
-input is FILE, whether or not the disk has it, so you can ask about a buffer you
-have not saved. The file is named by its canonical path, relative to the working
-folder when it is below it (`std/NAME.agc` for a `std/` module). A diagnostic
-keeps the name as typed, like `check`; only an answer's `file` is canonical. A
-symlink answers with its target's name; from `/` the name has no leading slash;
-a file outside the working folder is absolute. A user file under a `std/` folder
-read with `--stdin` is named `./std/NAME`, never like an embedded module.
+It parses only: imports need not exist and no `main` is needed. FILE may be a
+`std/` module (`agentica outline std/queue`). Private declarations are listed
+too (`agentica doc` shows only the exported API). `--partial` is accepted and
+changes nothing.
 
-## JSON
+JSON: `{version: 1, command: "outline", file, doc, imports, items}`.
 
-`{version: 1, command: "outline", file, doc, imports, items}`.
-
-- `imports`: `{path, alias, names, span}`. `alias` is null for
-  `import {a, B as C} from "p"`, whose `names` are `{name, local, span}`.
+- `imports`: `{path, alias, names, span}`. `alias` is null for `import {a, B as
+  C} from "p"`, whose `names` are `{name, local, span}`.
 - `items`, in source order: `{kind, name, exported, signature, doc, summary,
   span, name_span}`. `kind` is `function`, `struct`, `enum`, `alias` or
-  `constant`; `summary` is the first paragraph of the `##` doc or null.
-  - a function adds `parameters` (`{name, type, default}`) and `result`;
-  - a struct adds `fields` (`{name, type, doc, name_span}`);
-  - an enum adds `variants` (`{name, payload, doc, name_span}`).
-- A span is `{file, range: {start: {line, column}, end: {line, column}}}`, lines
-  and columns from 1, the end exclusive. `span` is the whole declaration,
-  `export` included; `name_span` is the name alone, the place to edit.
+  `constant`; `summary` is the first paragraph of the `##` doc, or null.
+  A function adds `parameters` (`{name, type, default}`) and `result`; a
+  struct `fields` (`{name, type, doc, name_span}`); an enum `variants`
+  (`{name, payload, doc, name_span}`).
+- A span is `{file, range: {start: {line, column}, end: {line, column}}}`, end
+  exclusive. `span` covers the whole declaration (`export` included);
+  `name_span` is the name alone, the place to edit.
+- `file` is canonical: relative to the working folder when below it
+  (`std/NAME.agc` for a `std/` module), absolute otherwise. A diagnostic keeps
+  the name as typed.
 
-Types are written as in the file (`Models.User`).
-
-`--partial` is accepted and changes nothing: `outline` never checks.
-
-## Exit codes of outline
-
-- 0: the answer.
-- 1: a `LEX-` or `PARSE-` error in the file; fix the file first.
-- 2: `QUERY-USAGE`, at the pseudo-file `<arguments>`: a missing or extra
-  argument, an unknown option, `--stdin` without a file, or a path that cannot
-  be read. Fix the question.
-
-# The type at a position
-
-`agentica type-at FILE:LINE:COL` gives the checked type of the innermost
-expression at a position, and where what it names is defined. Line and column
-count from 1, in characters, as in a diagnostic, so `outline` and `check`
-positions work as they are.
+## type-at
 
 ```sh
 agentica type-at src/orders.agc:22:14
@@ -82,178 +81,43 @@ src/orders.agc:22:9-22:19 user.email: String
 src/models.agc:4:3 field email
 ```
 
-The first line is the span of the expression, its text and its type; the second,
-if there is one, the name of the definition. On a builtin the second line is
-`builtin` and its signature (one line for each form); docs are in the JSON only.
-On the name of a field or a method the expression is the whole access
-(`user.email`). The file and what it imports are linked and checked, but it
-needs no `main`, so a library file works.
-`--stdin FILE:LINE:COL` takes the text of FILE from standard input (the buffer
-you have not saved); FILE is a path of the disk, never a `std/` module.
+Line 1: the span of the innermost expression at the position, its text and its
+type. Line 2, if any: the definition. On a builtin, line 2 is `builtin` and its
+signature. On a field or method name the expression is the whole access
+(`user.email`). It checks the file and its imports, but needs no `main` (a
+`main` with the wrong signature is still `CHECK-MAIN`). A type of another file
+is written as the file writes it (`Models.User` through the import alias); one
+from a module the file does not import is written by its bare name. A type name
+in an annotation (`xs: Models.User`) or in a type argument (`Models.User` in
+`List[Models.User]`) is not answered yet (`QUERY-NO-EXPRESSION`); `refs` lists
+these uses as `type`.
 
-A type of another file is written as the file writes it: `Models.User` through
-`import Models from "models"`, a bare name when the file does not import it
-under an alias. Line and column count code points (an emoji is one column; an
-editor that counts UTF-16 units converts). A type argument (`Models.User` in
-`List[Models.User]`) is not answered yet.
+A keyword of an expression (`try`, `do`, `and`, `!`) answers that expression;
+`return`, `end` and `case` are on no expression.
 
-## JSON of type-at
+JSON: `{version: 1, command: "type-at", position: {file, line, column}, kind,
+text, type, span, definition, help}`.
 
-`{version: 1, command: "type-at", position: {file, line, column}, kind, text,
-type, span, definition, help}`.
+- `kind`: `builtin` (on a builtin's name, `split` in `xs.split(",")`; `to_s`
+  and `inspect` only where the checker resolves them to one, as on a number),
+  `name` (a variable, constant, callee, field or method name, or the name that
+  binds a local) or `expression`. An open set: accept values you do not know.
+  `span` is always the whole expression; `text` is its source.
+- `definition`: null, or `{file, range, kind, name, name_span, signature, doc}`.
+  `kind` is `function`, `struct`, `enum`, `variant`, `field` or `constant`
+  (`signature` is e.g. `make(name: String) -> User`, `age: Int`,
+  `Circle(Float)`; `doc` is the whole `##` text or null). A local answers with
+  `kind` `parameter`, `local`, `loop` or `pattern`, `signature` `name: Type` and
+  `doc` null; its `range` is the binding node (the whole parameter or
+  assignment), else the name, and `name_span` is where it is bound. A use and
+  the binding give the same answer. A name bound in sibling blocks answers its
+  own binding; `total += 1` is a use of the binding of `total`; `_` is on no
+  expression.
+- `help`: null, except for `builtin`, where it is the object of `agentica help
+  NAME --json` (`name`, `signature`, `description`, `parameters`, `effects`, and
+  `overloads` for several forms).
 
-- `kind` is `builtin` when the position is on the name of a builtin (`split` in
-  `xs.split(",")`, `puts`), `name` when it is on another name (a variable, a
-  constant, the callee of a call, the field or method after the dot, the name
-  where a local is bound) and `expression` otherwise. It is an open set (later
-  versions add values): accept a value you do not know. `span` is always the
-  whole expression and `text` its source.
-- `definition` is null, or the span of the declaration (`{file, range}`) with
-  `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; for a
-  local see below), `name`, `name_span` (the span of the name), `signature`
-  (`make(name: String) -> User`, `age: Int` for a field, `Circle(Float)` for a
-  variant) and `doc` (the whole `##` text, or null). It is null for a builtin,
-  which still has its type.
-- A local answers with its type and a `definition` at its binding, on a use of
-  the name and on the binding itself (the answer is then the same on both). Its
-  `kind` is `parameter` (of a function or a block), `local` (the assignment that
-  introduces the name), `loop` (a `for` variable) or `pattern` (a name in a
-  `case` pattern); `signature` is `name: Type` and `doc` null. The top-level
-  `span` and `text` are the name alone. The definition's `range` is the binding
-  node when it has one (the whole parameter or assignment), else the name (a
-  `loop` and a `pattern`); `name_span` is the name where it is bound, the place
-  to navigate to. The binding is the one whose scope holds
-  the position, so a name bound in sibling blocks (two `for i` loops, `note` in
-  each branch of an `if`) answers its own, and a use inside a block of a local
-  outside it answers the outer binding. An assignment to a name already bound
-  (`total += 1`) is a use of that binding. A `_` binds nothing and is on no
-  expression. `kind` is an open set: accept a value you do not know.
-- `help` is null, except for `kind` `builtin`: then it is the object of
-  `agentica help NAME --json` for that builtin (`name`, `signature`,
-  `description`, `parameters`, `effects`; `overloads` for a builtin with
-  several forms). `to_s` on an Int answers `String.from_int`; `to_s` and
-  `inspect` answer a builtin only where the checker resolves them to one
-  (numbers).
-
-## Exit codes of type-at
-
-- 0: the answer.
-- 1: the program has an error (`LEX-`, `PARSE-` or `CHECK-`), in the file or in
-  an import; it is printed as `check` prints it. Fix the program first.
-- 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file) or
-  `QUERY-NO-EXPRESSION`: the position is not on a token of an expression (a
-  blank between tokens, a comment, a keyword that is part of no expression such
-  as `return`, `end` or `case`, the body text of a heredoc, past the end of a
-  line or of the file). Its span is the position. Move onto the expression; a
-  keyword of an expression (`try`, `do`, `and`, `!`) answers that expression.
-
-## Partial answers
-
-While you edit, the program often does not check. `type-at --partial` and `refs
-FILE:LINE:COL --partial` (no NAME or PATH) answer anyway when only some
-functions fail to check: exit 0, the
-usual JSON plus `"partial": true` and `diagnostics` (the `--json` objects of the
-functions that failed, in program order). A complete answer has neither key, so
-without errors the bytes are those of the command without the option.
-
-- `type-at` in a function that checked gives its type and definition. On a name
-  written in a function that did not check (a call, a constructor, a variant, a
-  type, a constant, a builtin) it gives `kind` `name` (`builtin`), the span of
-  the written name, the definition from the link, and `type` null (text form:
-  `?`). A field, a method call and a local there give the first problem.
-- `refs` on a function, struct, enum, alias, constant or variant lists every
-  use, those in the functions that failed too. A local of a function that
-  checked works. A field or a builtin gives the first problem (exit 1): its uses
-  are told by types.
-- A program that does not lex, parse or link, and one whose declarations fail
-  (their types, `main`, a constant), are the first problem, exit 1, with or
-  without the option. So is a field, a local or a keyword in a function that
-  did not check; any other position on no expression (a blank, a comment, an
-  import line) is QUERY-NO-EXPRESSION, exit 2, as in a program that checks. In text form each problem
-  of a partial answer is a stderr line `partial FILE:LINE:COL: CODE`.
-
-Use it to run `refs --partial` on a function or type again after you edit its
-signature, and `type-at --partial` to read a definition in the function you are
-fixing. Fix the `diagnostics` before you trust a field or a type.
-
-# Where a name is defined
-
-`agentica symbol NAME [PATH...]` finds the declarations that NAME names in the
-modules linked from the files under PATH (a file or a folder; default `.`), so
-you do not `rg` for a definition or read a file for a signature.
-
-```sh
-agentica symbol Models.User.email src/
-agentica --json symbol total src/orders.agc
-cat buffer.agc | agentica symbol total --stdin src/orders.agc
-```
-
-```text
-src/models.agc:4:3 field User.email: String
-```
-
-NAME is written as the code writes it:
-
-- `total`: a function, struct, enum, alias or constant, private ones too; a
-  bare name lists every module that declares it;
-- `Models.total`, `Models.User`: through an import alias of a file under PATH
-  (exported names only; the same alias for two modules lists both). Aliases
-  come only from whole-module imports (`import M from "m"`): after
-  `import {make as mk} from "m"`, `symbol mk` is QUERY-NOT-FOUND and `symbol
-  make` finds the declaration;
-- `User.email`, `Models.User.email`: a struct field; `Option.Some`: a variant;
-- `std/queue.pop`, `std/queue.Popped.value`: a `std/` module that is linked;
-- `Map.get`, `puts`: a builtin, with the `help` object and no place.
-
-A folder is every `*.agc` file below it, in bytewise order of the path, without
-hidden folders, `agc_libs/` and links. The files are linked together, so the
-answer needs no `main` and no type check; a file that does not lex, parse or
-link is under `skipped` and the rest still answer. Matches come in the order the
-files were linked, then by position. `--stdin FILE` is the text of FILE (it need
-not exist) and is searched too, first. Text form: `file:line:column` and the
-declaration as `outline` prints it (`field`, `variant`); each skipped file is
-`skipped FILE: CODE` on stderr.
-
-## JSON of symbol
-
-`{version: 1, command: "symbol", query, matches, skipped}`.
-
-- `matches[]`: `{kind, name, module, exported, signature, doc, span,
-  name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `constant`,
-  `field`, `variant` or `builtin` (an open set). `name` is the name alone;
-  `module` is the file's name; `doc` is the whole `##` text or null; `span` is
-  the declaration, `export` included, as in `outline` (the `range` of a
-  `type-at` definition starts after `export`: compare `name_span`).
-- a field adds `type` and `struct`; a variant `payload` and `enum`; a builtin
-  has `help` (the object of `agentica help NAME --json`) and null `module`,
-  `span`, `name_span` and `doc`.
-- `skipped[]`: `{file, diagnostic}`, the diagnostic being the `--json` object
-  of the first problem of that file or of what it imports.
-
-## Exit codes of symbol
-
-- 0: the answer, `skipped` roots included.
-- 1: no file links; the first diagnostic is printed as `check` prints it.
-- 2: `QUERY-USAGE` (a missing NAME, an unknown option, a path that cannot be
-  read, a folder with no `*.agc` file) or `QUERY-NOT-FOUND`: nothing declares
-  NAME in the linked files, and the help names the closest name and the files
-  that were skipped.
-
-# References to a name
-
-`agentica refs NAME|FILE:LINE:COL [PATH...]` lists every use of a declaration,
-named or found by the name at a position. Run it before you change a field, a
-variant or a function, and keep the list: it tells `Models.User` from a local
-`User`, and a field `name` of one struct from that of another, which `rg`
-cannot. Positions, `--stdin FILE:LINE:COL`, `file` names and the exit codes are
-those of `type-at`; the program is checked (exit 1 on an error).
-
-The files searched are linked together with what they import, so a use in a
-file that only imports the declaration is found if that file is among them.
-`PATH...` are files or folders, as for `symbol`. A NAME searches `PATH...`
-(default `.`). A position links FILE and `PATH...`, and FILE alone when there is
-no PATH, so pass the folder that holds the uses (`agentica refs
-src/models.agc:4:3 src/`).
+## refs
 
 ```sh
 agentica refs Models.User.email src/
@@ -267,54 +131,112 @@ src/orders.agc:22:14 read in total
 src/report.agc:31:5 construct in sample
 ```
 
-The position is on a use or on the name where a declaration is written. The
-first line is the definition (none for a builtin) and each next line is a use
-with its `kind` and the function it is in; the span of a use is the name alone
-(`total` of `Models.total`), so it is the text to edit. Names of a function,
-struct, enum, variant, field, constant, type alias, local, parameter or builtin
-work; two names that look alike but are different declarations are never mixed
-(the `i` of two loops, the `note` of two branches of an `if`).
+Run it before you change a field, a variant or a function, and keep the list.
+It tells `Models.User` from a local `User`, and one struct's field `name` from
+another's, which `rg` cannot. The program is checked. The files searched are
+linked together with what they import, so a use in a file that only imports the
+declaration is found if that file is among them. A position links FILE and
+`PATH...`, and FILE alone when there is no PATH, so pass the folder that holds
+the uses. A NAME searches `PATH...` (default `.`).
 
-NAME is written as for `symbol` and is resolved the same way, but it must
-select one declaration: `total` or `Models.total` that two files declare is
-QUERY-AMBIGUOUS-NAME, and the help lists each candidate as `FILE:LINE:COL`, to
-paste as the position form. A builtin (`puts`, `List.map`) is a name too.
+The position is on a use, or on the name where a declaration is written, or on
+a name of an import list (`make` of `import {make as create} from "models"`, or
+`create`), which selects the imported declaration. Two different declarations
+never mix (the `i` of two loops, the `note` of two branches). A position on the
+module alias of `Models.total(u)` selects `total`, not `Models`. A position on a
+module alias or a path in an import line is `QUERY-NO-EXPRESSION`.
 
-A position on the module alias of `Models.total(u)` selects the function
-`total`, not the module `Models`. A position on a name of an import list
-(`make` of `import {make as create} from "models"`, `create` too) selects the
-imported declaration. A position on a module alias or a path in an import line
-is QUERY-NO-EXPRESSION: a module is not a declaration.
+A NAME is resolved as for `symbol` and must pick one declaration: a `total` or
+`Models.total` that two files declare is `QUERY-AMBIGUOUS-NAME`, and the help
+lists each candidate as `FILE:LINE:COL`, ready for the position form. A builtin
+(`puts`, `List.map`) is a name too.
 
-`{version: 1, command: "refs", query, definition, builtin, references,
+JSON: `{version: 1, command: "refs", query, definition, builtin, references,
 skipped}`.
 
-- `definition` is null for a builtin, else the object of a `symbol` match
-  (`{kind, name, module, exported, signature, doc, span, name_span}`, a field
-  adds `type` and `struct`, a variant `payload` and `enum`); `span` is the
-  whole declaration, `export` included, and `name_span` the name. A local is
-  `parameter`, `local`, `loop` or `pattern`, with no doc. The definition is not
-  in `references`.
-- `builtin` is the name of the builtin (`File.read_text`, `List.map`), else
-  null.
-- `references`: `{kind, function, span}`, files in the order they were linked
-  (FILE first), then by position. `kind` is `call`, `value` (`&f`, a constant),
-  `type` (an annotation), `construct` (a struct construction, a `with`, or a
-  variant constructor, with the span of the field name for a field), `read` (a
-  field read), `pattern` (a variant in a `case` arm) or `binding` (a use of a
-  local, `x += 1` included). `function` is the enclosing function or null. It is
-  an open set: accept a value you do not know. An empty list is an answer, exit
-  0.
-- `skipped[]`: the files of `PATH...` left out, as for `symbol`. In the text
-  form each is `skipped FILE: CODE` on stderr.
+- `definition`: null for a builtin, else a `symbol` match (below). A local is
+  `parameter`, `local`, `loop` or `pattern`, with no doc. It is not repeated in
+  `references`.
+- `builtin`: the builtin's name (`File.read_text`, `List.map`), else null.
+- `references`: `{kind, function, span}`, FILE's files first, then by position.
+  `span` is the name alone (`make` of `Models.make`). `query` is the NAME or the
+  `FILE:LINE:COL` as asked. `kind` is `call`, `value` (`&f`, a constant), `type`
+  (an annotation), `construct` (a struct construction, a `with`, or a variant
+  constructor; the span of a field name for a field), `read` (a field read),
+  `pattern` (a variant in a `case` arm) or `binding` (a use of a local, `x += 1`
+  included). `function` is the enclosing function or null. An open set. No
+  references is an empty list, exit 0.
+- `skipped`: files of `PATH...` that do not link, as for `symbol`.
 
-## Exit codes of refs
+## symbol
 
-- 0: the answer.
-- 1: the program has an error, or FILE (or every file of `PATH...`) does not
-  link; fix it first, or ask with `--partial` for a function, type or variant
-  (function and type uses need no check in the full design, but this version
-  always checks).
-- 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file or path, a missing
-  NAME), `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` or `QUERY-NO-EXPRESSION`:
-  the position is on no name, or on a module alias or a path in an import line.
+```sh
+agentica symbol Models.User.email src/
+agentica --json symbol total src/orders.agc
+cat buffer.agc | agentica symbol total --stdin src/orders.agc
+```
+
+```text
+src/models.agc:4:3 field User.email: String
+```
+
+It finds where NAME is declared in the modules linked from PATH (a file or a
+folder; default `.`). NAME is written as the code writes it:
+
+- `total`: a function, struct, enum, alias or constant, private ones too; a bare
+  name lists every module that declares it.
+- `Models.total`, `Models.User`: through the alias of a whole-module import
+  (`import M from "m"`) in a file under PATH; exported names only. After
+  `import {make as mk} from "m"`, `symbol mk` is `QUERY-NOT-FOUND`, and `symbol
+  make` finds the declaration.
+- `User.email`, `Models.User.email`: a struct field. `Option.Some`: a variant.
+- `std/queue.pop`, `std/queue.Popped.value`: a linked `std/` module.
+- `Map.get`, `puts`: a builtin, with the `help` object and no place.
+
+A folder is every `*.agc` file below it, bytewise by path, without hidden
+folders, `agc_libs/` and links. The files link together, so no `main` and no
+type check are needed. A file that does not lex, parse or link is in `skipped`
+and the rest still answer; the text form prints `skipped FILE: CODE` on stderr
+for each (`refs` too). A file that imports a failing module is skipped with the
+same diagnostic. `--stdin FILE` is searched too, first, and need not exist on
+disk.
+
+JSON: `{version: 1, command: "symbol", query, matches, skipped}`.
+
+- `matches[]`: `{kind, name, module, exported, signature, doc, span,
+  name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `constant`,
+  `field`, `variant` or `builtin` (an open set). `name` is the name alone;
+  `module` is the file's name. A `signature` writes its types as the declaring
+  module does. `span` is the declaration (`export` included), so compare
+  `name_span`, not `range`, with a `type-at` definition (its `range` starts
+  after `export`).
+- A field adds `type` and `struct`; a variant adds `payload` and `enum`. A
+  builtin has `help` and null `module`, `span`, `name_span` and `doc`.
+- `skipped[]`: `{file, diagnostic}`, the diagnostic being the first problem of
+  that file or of what it imports.
+
+## Partial answers
+
+While you edit, the program often does not check. `type-at --partial` and
+`refs FILE:LINE:COL --partial` (no NAME or PATH; with one, `QUERY-USAGE`) still
+answer when only some functions fail: exit 0, the usual JSON plus `"partial":
+true` and `diagnostics` (the `--json` objects of the failing functions, in
+program order). A complete answer has neither key. In text form each problem is
+a stderr line `partial FILE:LINE:COL: CODE`.
+
+- `type-at` in a function that checks gives its type and definition. On a name
+  in a function that does not check (a call, constructor, variant, type,
+  constant or builtin) it gives `kind` `name` (`builtin`), the span of the
+  written name, the definition from the link, and `type` null (text `?`). A
+  field, method call or local there gives the first problem.
+- `refs` on a function, struct, enum, alias, constant or variant lists every
+  use, including those in failing functions. A local of a checking function
+  works. A field or a builtin gives the first problem (exit 1).
+- Still exit 1 with or without the option: a program that does not lex, parse
+  or link, declarations that fail (their types, `main`, a constant), and a
+  field, local or keyword in a failing function. Any other position on no
+  expression is `QUERY-NO-EXPRESSION`, exit 2.
+
+Run `refs --partial` on a function or type again after you edit its signature,
+and `type-at --partial` to read a definition in the function you are fixing.
+Fix the `diagnostics` before you trust a field or a type.

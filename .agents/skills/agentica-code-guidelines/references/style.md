@@ -1,10 +1,8 @@
 # Style rules with examples
 
-Read this when a rule in SKILL.md needs a bad/good pair, or a review needs an
-example to quote. Every example here was run with the release binary: a `bad`
-one is accepted by the checker unless its first line names a diagnostic, and
-then it is refused with that code. A `bad` one with no code is bad style only;
-the checker does not see it.
+Read this when a rule in SKILL.md needs a bad/good pair. Each example was run
+with the release binary. A `bad` example whose first line names a diagnostic is
+refused with that code; one without a code is accepted and is bad style only.
 
 ## Layout
 
@@ -45,21 +43,7 @@ def sample() -> User
 end
 ```
 
-A blank line follows the `end` of every top-level declaration.
-
-```ruby
-# bad PARSE-MISSING-BLANK-LINE
-def one() -> Int
-  return 1
-end
-def main() -> Void
-  puts(one().to_s)
-end
-```
-
 ## Naming
-
-The checker refuses a wrong first letter, but not a wrong style inside the name.
 
 ```ruby
 # bad
@@ -84,17 +68,6 @@ end
 
 def blank?(text: String) -> Bool
   return text.length == 0
-end
-```
-
-A constant must be in capitals.
-
-```ruby
-# bad PARSE-CONSTANT-NAME
-Limit = 10
-
-def main() -> Void
-  puts(Limit.to_s)
 end
 ```
 
@@ -124,20 +97,7 @@ end
 
 ## Modules and docs
 
-The order of a file is fixed: a function declared before a struct is refused.
-
-```ruby
-# bad CHECK-DECL-ORDER
-def main() -> Void
-  puts("x")
-end
-
-struct Item
-  name: String
-end
-```
-
-A doc says what the function returns. A comment says why.
+A `##` doc, only on public code, says what it returns or is. A comment says why.
 
 ```ruby
 # bad
@@ -155,7 +115,7 @@ end
 ```ruby
 # good
 ## Returns the sum of the prices, in cents.
-def total(prices: List[Int]) -> Int
+export def total(prices: List[Int]) -> Int
   sum = 0
   for price in prices
     sum += price
@@ -165,25 +125,12 @@ end
 ```
 
 ```ruby
-# bad PARSE-DETACHED-DOC
-## Returns one.
-# a comment between the doc and the def
-def one() -> Int
-  return 1
-end
-
-def main() -> Void
-  puts(one().to_s)
-end
-```
-
-```ruby
 # good
 # Why 3: the server drops a client after the third failed login.
 MAX_TRIES = 3
 
 ## Returns true when the client may try again.
-def retry?(tries: Int) -> Bool
+export def retry?(tries: Int) -> Bool
   return tries < MAX_TRIES
 end
 ```
@@ -229,26 +176,6 @@ def ship(parcel: Parcel) -> Int
 end
 ```
 
-A record with known fields is a struct, not a map of strings.
-
-```ruby
-# bad
-def greet(user: Map[String, String]) -> String
-  return "hello #{user.get("name").unwrap_or("?")}"
-end
-```
-
-```ruby
-# good
-struct User
-  name: String
-end
-
-def greet(user: User) -> String
-  return "hello #{user.name}"
-end
-```
-
 A running total is a `for` loop. A block cannot assign an outer name.
 
 ```ruby
@@ -274,25 +201,6 @@ end
 
 def doubled(xs: List[Int]) -> List[Int]
   return xs.map do |x| x * 2 end
-end
-```
-
-Use a Bool as itself, and `and`, `or`, `not`.
-
-```ruby
-# bad
-def allowed(admin: Bool, banned: Bool) -> Bool
-  if admin == true && banned == false
-    return true
-  end
-  return false
-end
-```
-
-```ruby
-# good
-def allowed?(admin: Bool, banned: Bool) -> Bool
-  return admin and not banned
 end
 ```
 
@@ -410,22 +318,6 @@ def main() -> Void
 end
 ```
 
-A builtin with a method form is not piped.
-
-```ruby
-# bad CHECK-PIPE-METHOD
-def main() -> Void
-  puts("x" |> String.upcase())
-end
-```
-
-```ruby
-# good
-def main() -> Void
-  puts(["b", "a"].sort.join(","))
-end
-```
-
 `try` goes in front of the step that returns a Result.
 
 ```ruby
@@ -448,8 +340,9 @@ end
 
 ## case and if
 
-List every variant of an enum and leave out `_`: a new variant then fails the
-check where it must be handled.
+List every variant of a small enum and leave out `_`: a new variant then fails
+the check where it must be handled. A `_` is fine when many variants share one
+outcome.
 
 ```ruby
 # bad
@@ -477,20 +370,6 @@ def area(shape: Shape) -> Int
   case shape
     Shape.Circle(r) -> return r * r * 3
     Shape.Dot -> return 0
-  end
-end
-```
-
-```ruby
-# bad CHECK-NON-EXHAUSTIVE-CASE
-enum Shape
-  Dot
-  Circle(Int)
-end
-
-def area(shape: Shape) -> Int
-  case shape
-    Shape.Circle(r) -> return r * r * 3
   end
 end
 ```
