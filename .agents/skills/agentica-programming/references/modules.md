@@ -77,8 +77,9 @@ reach are built before `main`.
 ## Running
 
 Only the root file's `def main() -> Void` runs; imported `main` functions never
-run. Imported calls and tasks share the program's execution budget and
-resource ownership. `agentica check`, `agentica FILE`, `agentica --dump`, and
+run. Linking keeps source spans and distinct module identities. Imported calls
+and tasks share the program's execution budget and resource ownership.
+`agentica check`, `agentica FILE`, `agentica --dump`, and
 `agentica test` use the same loader.
 
 There are no wildcard imports, package registry, mutable module state, nested

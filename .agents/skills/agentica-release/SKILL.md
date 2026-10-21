@@ -1,6 +1,14 @@
 ---
 name: agentica-release
-description: Cut an Agentica release end to end. Covers the version bump PR (VERSION, CHANGELOG, compare links, stage0 refresh), the annotated tag, the release workflow that publishes the four native archives, the hand-written GitHub release notes, the GitHub Pages rebuild, and the post-release checks. Use when asked to make, tag, publish or announce a release or beta (for example "release 0.5.0-beta.1"). Not for building or testing packages locally without releasing (see the release targets in references/ci.md of agentica-development).
+description: >-
+  Cut an Agentica release end to end. Covers the version bump PR (VERSION,
+  CHANGELOG, compare links, stage0 refresh), the annotated tag, the release
+  workflow that publishes the four native archives, the hand-written GitHub
+  release notes, the GitHub Pages rebuild, and the post-release checks. Use
+  when asked to make, tag, publish or announce a release or beta (for example
+  "release 0.5.0-beta.1"). Not for building or testing packages locally without
+  releasing (see the release targets in references/ci.md of
+  agentica-development).
 ---
 
 # Agentica release

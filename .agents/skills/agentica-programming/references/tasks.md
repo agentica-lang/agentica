@@ -448,4 +448,6 @@ One way for each job:
 
 A channel wait holds a timer, so tasks that wait for each other through channels
 get timeout errors, not a hang. A handle sent over a channel stays owned by the
-task that opened it, which must outlive its users.
+task that opened it: it closes when that task ends or the run ends, so that
+task must outlive its users, or hand the handle to the worker with
+`Task.spawn_owning`.
