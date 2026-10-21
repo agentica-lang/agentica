@@ -48,6 +48,21 @@ def main() -> Void
 end
 ```
 
+Output:
+
+```output
+age: keep
+name: keep
+{}
+age: clear
+name: keep
+{"age":null}
+age: set to 30
+name: set to Ana
+{"name":"Ana","age":30}
+{"name":"Bo","age":null}
+```
+
 - **The type.** `JsonField[T]` is a builtin generic enum:
 
   ```agentica

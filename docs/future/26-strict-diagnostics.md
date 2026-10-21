@@ -395,7 +395,10 @@ unreachable statement itself is not checked.
 
 **Today** the checker accepts code after a `return`, a `break` or an exhaustive
 `if`/`case`. After this item a terminator can only be the last statement of its
-block.
+block, so `block_returns?` may look at the last statement only (a
+simplification, not a change in behavior). `contains_return?`
+(`compiler/check/check_flow.agc`) stays a deep search: `missing_return_help`
+uses it to tell "no `return` anywhere" from "a `return` on some paths only".
 
 **Help idea:**
 `this statement never runs, because the block ends at the return on line 5;

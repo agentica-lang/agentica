@@ -42,7 +42,8 @@ Steps 1 (lexer), 2 (parser, with `PARSE-TOO-DEEP`), 3 (modules and linker),
 4 (builtin catalog and checker, with `CHECK-TOO-DEEP`), 5 (lowering, with
 module constants), 6 (bytecode writer), 7 (BDD driver) and 8 (command line,
 single binary, goldens, the test suite and CI) are done; the per-PR record is
-in the roadmap. Source paths are stored relative to the entry file's folder.
+in git history (PRs #237 to #311, then #313; row 7.2.7 of the roadmap). Source
+paths are stored relative to the entry file's folder.
 Each stage carries its diagnostics and dumps (`--dump`, `--dump-ir`)
 so a compiler bug is visible as a runtime error in `compiler/`, reported as an
 internal code with a stack trace (roadmap 14b).

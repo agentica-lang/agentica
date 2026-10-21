@@ -101,6 +101,9 @@ it.
   end
   ```
 
+  A walker over unknown JSON matches it with `case`, and its list arm recurses:
+  `JsonValue.JsonList(items) -> for item in items ... end`.
+
 - **Numbers** follow `JSON.int` and `JSON.float`, and `JSON.parse` does not
   change: The rule is by value, not by text:
   - `JsonInt(n)` for an exact integer that fits in a signed 64-bit `Int`. This

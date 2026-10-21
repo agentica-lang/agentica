@@ -102,7 +102,8 @@ first-insertion order; a key deleted and then put again goes to the end, as in
     created in `main` and captured by a step block is shared by the steps of
     that scenario and starts fresh in the next one; nothing crosses scenarios.
     A table cannot go in the scenario's JSON state (`BDD.set` takes `Json`):
-    capture it from `main`.
+    capture it from `main`. To pass data between steps, use the JSON state
+    (`BDD.set`).
 - **Ownership:** a table is not an OS resource, so the owner rule of
   [handle ownership][task-rules] does not
   apply to it. The task that creates a table does not own it, and ending that
