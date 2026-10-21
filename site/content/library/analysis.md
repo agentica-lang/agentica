@@ -15,8 +15,10 @@ Analysis.refresh(session: Analysis.Session, path: String) -> Analysis.Session
 Analysis.check(session: Analysis.Session, path: String) -> Analysis.Checked
 Analysis.outline(session: Analysis.Session, path: String) -> Result[Analysis.Outline]
 Analysis.type_at(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
+Analysis.type_at_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.TypeAt]
 Analysis.symbol(session: Analysis.Session, name: String, paths: List[String]) -> Result[Analysis.Symbols]
 Analysis.refs(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
+Analysis.refs_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
 Analysis.outline_json(found: Analysis.Outline) -> Json
 Analysis.type_at_json(found: Analysis.TypeAt) -> Json
@@ -54,10 +56,11 @@ A file is named as on the command line: by its canonical path, relative to the w
 - `Analysis.type_at` gives the type and the definition at a position. Line and column count from 1.
 - `Analysis.symbol` finds where `name` is declared in the files and folders of `paths` (`.` when the list is empty). A folder means every `*.agc` file below it. The files are linked together, and those that do not link are listed in `Symbols.skipped`. `Symbol.module` is the file (`""` for a builtin), and `help` is the object of `agentica help NAME --json` for a builtin, JSON null for the others. Every file with a buffer in the session is searched too, first, as `--stdin FILE` does, whether or not `paths` names it, so a query cannot be scoped to a folder while other buffers are open. Buffers come in the bytewise order of their canonical paths, whatever order they were put in, so `matches` does not depend on the history of `update` calls. Folders are listed on the disk: a folder that exists only as buffers (buffer `newdir/new.agc` with `paths` `["newdir"]`) is a `QUERY-USAGE` "cannot read". Name the buffer's file, or leave `paths` empty.
 - `Analysis.refs` gives the declaration of the name at the position and every reference to it, as `agentica refs` does. It links and checks the file as `type_at` does, and sees the file and what it imports; a file that only imports it is not seen. `Refs.definition` is empty for a builtin, which `Refs.builtin` names (`""` for anything else). A `Reference` is the `range` of the name in its `file`.
+- `Analysis.type_at_partial` and `Analysis.refs_partial` are `type_at` and `refs` with `--partial`: when some functions do not check, they answer from the others, with `partial` true and the failures in `diagnostics`; a declaration, `main` or constant that does not check, or a field or builtin for `refs_partial`, is still the first problem as an error.
 
 ## Errors
 
-`outline`, `type_at`, `symbol` and `refs` return a `Result` whose error message is the diagnostic as one JSON object, the `--json` form, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`; `QUERY-NO-EXPRESSION` for a position on no expression; `QUERY-NOT-FOUND` for a `symbol` name that nothing declares; and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For `outline`, `type_at` and `refs` the diagnostic names the file; for `symbol` its `file` is `<arguments>`, as on the command line. Unlike the command line, `QUERY-USAGE` has no usage `help` line; `QUERY-NOT-FOUND` keeps its `help` (the files not searched).
+`outline`, `type_at`, `type_at_partial`, `symbol`, `refs` and `refs_partial` return a `Result` whose error message is the diagnostic as one JSON object, the `--json` form, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`; `QUERY-NO-EXPRESSION` for a position on no expression; `QUERY-NOT-FOUND` for a `symbol` name that nothing declares; and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For `outline`, `type_at` and `refs` the diagnostic names the file; for `symbol` its `file` is `<arguments>`, as on the command line. Unlike the command line, `QUERY-USAGE` has no usage `help` line; `QUERY-NOT-FOUND` keeps its `help` (the files not searched).
 
 ```agentica {mode="check"}
 import Analysis from "std/analysis"
