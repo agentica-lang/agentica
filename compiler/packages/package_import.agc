@@ -327,8 +327,7 @@ def refuse(site: Failure.Site, message: String, help: String) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
 end
 
-## The names that a file of this origin may import as packages: the project's own for a file of the project, else those
-## of the manifest of the package it belongs to.
+# The project's own names for a file of the project, else those of the manifest of the package it belongs to.
 def allowed_names(scope: Scope, origin: Origin) -> List[String]
   if origin.package == ""
     return scope.direct

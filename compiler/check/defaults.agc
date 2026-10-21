@@ -66,7 +66,6 @@ export def argument_for(shape: Shape, count: Int, param: Int) -> Int
   return -1
 end
 
-## True when the parameter has a default value.
 def default?(param: Ast.Param) -> Bool
   case param.default
     Ast.Optional.Present(value) -> return true

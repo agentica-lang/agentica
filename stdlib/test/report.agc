@@ -398,7 +398,7 @@ def stack_lines(root: Json) -> List[String]
   return lines
 end
 
-## The frames the VM shows before a cut stack's gap: AGC_STACK_HEAD in vm/port.h.
+# The frames the VM shows before a cut stack's gap: AGC_STACK_HEAD in vm/port.h.
 def stack_head() -> Int
   return 15
 end

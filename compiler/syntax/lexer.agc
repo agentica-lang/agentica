@@ -1124,13 +1124,12 @@ def scan_doc(input: Input, from: Int, line: Int, line_start: Int) -> DocScan
   )
 end
 
-## Whether the statement that starts at `head_at` is the head of an `if`, `elsif`, `while`, `case` or `for`.
 def block_head?(tokens: List[Tokens.Token], head_at: Int) -> Bool
   return head_at < tokens.size and BLOCK_HEADS.include?(tokens[head_at].kind)
 end
 
-## Whether the last token is the name of a type in a type annotation (`-> Void`, `a: Int`) and not a value such as
-## `Color.Red`: a leading dot after a def or struct line is then the stray dot of a block, not a continuation.
+# True for a type name in an annotation (`-> Void`, `a: Int`), not a value such as `Color.Red`: a leading dot after a
+# def or struct line is then the stray dot of a block, not a continuation.
 def ends_in_type?(tokens: List[Tokens.Token]) -> Bool
   size = tokens.size
   if size < 2 or tokens[size - 1].kind != "type-name"
@@ -1140,9 +1139,9 @@ def ends_in_type?(tokens: List[Tokens.Token]) -> Bool
   return before == "arrow" or before == "colon"
 end
 
-## Whether the first line that is not a plain `#` comment line starts, after its indentation, with a dot and a name
-## (`.map`, `.with(`), not `..`, `...` or a number. A blank line stops the look-ahead (it ends the statement) and so
-## does a `##` doc line. `from` is the start of the line after a line break.
+# Whether the first line that is not a plain `#` comment line starts, after its indentation, with a dot and a name
+# (`.map`, `.with(`), not `..`, `...` or a number. A blank line stops the look-ahead (it ends the statement) and so
+# does a `##` doc line. `from` is the start of the line after a line break.
 def dot_follows?(chars: List[String], from: Int) -> Bool
   index = from
   while true

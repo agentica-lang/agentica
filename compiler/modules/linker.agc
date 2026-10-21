@@ -311,7 +311,7 @@ def structs_of(prefix: String, kinds: Map[String, Declarations.Kind]) -> List[St
   return kinds.keys.filter do |name| Declarations.struct?(kinds[name]) end.map do |name| prefix + name end
 end
 
-## Like `link_file`, taking the trees of `parses` for the files whose text is the same (Modules.load_with).
+# Like `link_file`, with the trees of `parses` for the files whose text is the same (Modules.load_with).
 def link_file_with(path: String, settings: Env.Settings, parses: Modules.Parses) -> Linking
   loaded = Modules.load_with(path, settings, parses)
   if loaded.ok?
