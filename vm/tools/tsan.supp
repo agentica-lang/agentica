@@ -8,3 +8,8 @@ race:agc_tls_server_config
 # only the forking thread, but TSan keeps the parent's history: a scheduler that read `environ` before the fork (the
 # environment copy of the next Process.spawn) looks like a racing thread. Only that function's stack is suppressed.
 race:uv__process_child_init
+# libuv's signal handler (uv__signal_handler) walks the process-wide watcher tree under libuv's signal lock, which is a
+# pipe (a read takes it, a write gives it back). TSan does not see that lock taken inside an asynchronous handler, so a
+# SIGCHLD that lands on a scheduler thread looks like a race with the uv_signal_start of the first Process.spawn on the
+# I/O thread. A plain libuv program reports the same pair. Only that handler's stack is suppressed.
+race:uv__signal_handler
