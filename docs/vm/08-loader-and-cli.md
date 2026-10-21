@@ -326,6 +326,10 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   it returns an error for a bad byte or word and never for an option, which the
   driver reads after the run. `std_source` returns the text of the embedded
   file at that path in `stdlib/` (`queue.agc`, `bdd/gherkin.agc`), or an error.
+  `Std.source` (`agc_std_builtins`, same file) does the same for any program.
+  The driver builds the table of std sources once and every runtime gets it
+  (`rt->std`, through `agc_launch`); it is never written after the start, so
+  the call takes no lock at any number of schedulers.
   `stdin_bytes` is the only way the front end gets standard input. It opens
   the runtime's input stream at the first call and reads it to its end through
   the one stdin reader (`agc_input_whole`, `vm/input.c`): the task parks while

@@ -174,7 +174,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `FrontEnd.stdin_bytes` (a service,
     `agc_front_end_builtins`): they fail with `RUNTIME-FRONT-END-ONLY` when
     `rt->front_end` is NULL, which it is for every runtime except the front end
-    of the single binary
+    of the single binary; also `Std.source` (`agc_std_builtins`, not guarded),
+    which reads the std sources of `rt->std`
 
 - **Path:** `vm/fuzz.c`, `vm/fuzz_main.c`
   - **Owns:** `agc_fuzz_one` and the mutation driver (not in the release binary)

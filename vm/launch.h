@@ -29,11 +29,14 @@ typedef struct {
 
 typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;
 
-/* What the process keeps for all of its runtimes: the trace settings, the pipes it was started with, and whether
- * this process set UV_USE_IO_URING (libuv's setup runs once per process, and a child must not inherit it). */
+/* What the process keeps for all of its runtimes: the trace settings, the pipes it was started with, the std/ sources
+ * of the binary (every runtime gets them), and whether this process set UV_USE_IO_URING (libuv's setup runs once per
+ * process, and a child must not inherit it). */
 typedef struct {
   agc_trace trace;
   agc_file_ids inherited;
+  const agc_std_source *std;
+  size_t std_count;
   bool io_started, own_uring_env;
 } agc_launch;
 

@@ -96,7 +96,6 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
   if (embedded_bdd) arguments[separator_at++] = bdd_flag;
   arguments[separator_at++] = separator;
   for (int k = 0; k < count; k++) arguments[separator_at + k] = words[k];
-  fe->std = std_sources(&fe->std_count);
   agc_launch_options options;
   agc_launch_defaults(&options);
   options.allow_run = true;
@@ -243,6 +242,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "%s: cannot decode command line arguments\n", name);
     return 2;
   }
+  launch.std = std_sources(&launch.std_count);
   if (argc > 1 && strcmp(argv[1], "run") == 0) return run_command(&launch, argc, argv);
   /* The environment is checked before the trace file is opened and before the front end spends its time compiling;
    * run_program applies the value. */

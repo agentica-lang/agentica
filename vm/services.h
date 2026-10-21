@@ -178,5 +178,7 @@ extern const agc_builtin agc_test_builtins[];
 extern const size_t agc_test_builtin_count;
 extern const agc_builtin agc_front_end_builtins[];
 extern const size_t agc_front_end_builtin_count;
+extern const agc_builtin agc_std_builtins[];
+extern const size_t agc_std_builtin_count;
 
 #endif

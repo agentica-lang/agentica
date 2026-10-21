@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Std.source(path)` gives the text of a `std/` source that the binary carries,
+  such as `"queue.agc"`, to any program.
+- **Breaking:** `Std` is a reserved type name.
+
 ## [0.7.0] - 2026-10-21
 
 ### Added

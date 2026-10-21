@@ -10230,5 +10230,58 @@
       "code": "CHECK-REDEFINED-NAME",
       "start": [1, 1]
     }
+  ],
+  "Std.source takes a path and gives a Result[String]; Std is a reserved type name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  text: Result[String] = Std.source(\"queue.agc\")",
+        "  puts(text.unwrap_or(\"\").length())",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  text = Std.source()",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 10],
+      "covers": "Std.source()"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  text = Std.source(1)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 21],
+      "covers": "1"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  text: String = Std.source(\"queue.agc\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 18],
+      "covers": "Std.source(\"queue.agc\")"
+    },
+    {
+      "program": [
+        "struct Std",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
   ]
 }

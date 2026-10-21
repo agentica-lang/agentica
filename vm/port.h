@@ -299,13 +299,11 @@ typedef struct {
  * bytes a byte, so the cap is far below a source file the loader would accept (AGC_MAX_FILE_BYTES). */
 #define AGC_FRONT_END_MAX_STDIN ((size_t)16 * 1024 * 1024)
 
-/* What the front end (the compiler that the binary loads from its own data) shares with the driver: the std/ sources
- * it may read, and the hand-off of the program it compiled. The driver owns it and points the front end's runtime at
- * it; a user program runs in a runtime without one. The hand-off fields are GC memory the driver reads after the
- * front end's run ends. Design: docs/vm/08-loader-and-cli.md. */
+/* What the front end (the compiler that the binary loads from its own data) shares with the driver: the hand-off of
+ * the program it compiled. The driver owns it and points the front end's runtime at it; a user program runs in a
+ * runtime without one. The hand-off fields are GC memory the driver reads after the front end's run ends. Design:
+ * docs/vm/08-loader-and-cli.md. */
 typedef struct {
-  const agc_std_source *std;
-  size_t std_count;
   bool handed;
   uint8_t *program;
   size_t program_len;
@@ -335,6 +333,11 @@ typedef struct {
      signal and the final diagnostics share it, so that the exit does not wait once per stream and notice. */
   uint64_t settle_by;
   agc_front_end *front_end;
+  /* The std/ sources that the binary carries (Std.source, FrontEnd.std_source); NULL and 0 in a runtime without them,
+     such as the C tests. Set before the run starts and never written again, over constant data of the binary, so every
+     scheduler reads them without a lock. */
+  const agc_std_source *std;
+  size_t std_count;
   agc_runq *runq;
   /* The state that every scheduler and the I/O role share (docs/vm/16-architecture.md §16.9, "The context split"): the
      main task, the resource registry and the loop, the process service's guard and parent channel, and the records of

@@ -1,0 +1,21 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 345,
+  "stdout": [
+    "## An immutable first-in, first-out queue of strings.",
+    "true",
+    "true",
+    "nope.agc: error",
+    "queue: error",
+    "std/queue.agc: error",
+    "./queue.agc: error",
+    "/queue.agc: error",
+    "stdlib/queue.agc: error",
+    ": error",
+    "true",
+    "6",
+    ""
+  ],
+  "stderr": []
+}

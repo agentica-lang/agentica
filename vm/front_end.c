@@ -1,11 +1,8 @@
 /*
- * The FrontEnd builtins (agc_front_end_builtins): the calls that only the
- * front end of the single binary may make. hand_off gives the compiled
- * program to the driver and ends the front end's run; std_source reads a std/
- * source that the binary carries; stdin_bytes reads standard input, which the
- * front end's runtime opens only for that call. A user program, or a front end
- * that is run as an ordinary program with `agentica run`, has no agc_front_end
- * in its runtime and fails with RUNTIME-FRONT-END-ONLY. Service layer.
+ * The FrontEnd builtins (agc_front_end_builtins), which only the front end of the binary may call: hand_off gives
+ * the compiled program to the driver and ends the run; std_source reads a std/ source the binary carries; stdin_bytes
+ * reads standard input. Any other runtime has no agc_front_end and fails with RUNTIME-FRONT-END-ONLY. Std.source
+ * (agc_std_builtins) reads the same sources for every program. Service layer.
  * Design: docs/vm/08-loader-and-cli.md and docs/future/18-front-end-language.md §18.4.
  */
 #include "services.h"
@@ -68,15 +65,28 @@ static agc_value builtin_hand_off(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_exit(vm, 0);
 }
 
-static agc_value builtin_std_source(agc_vm *vm, agc_value *args, uint32_t span) {
-  const agc_front_end *fe = guarded(vm, span);
-  const agc_string *path = agc_as_string(vm, args[0]);
-  for (size_t k = 0; k < fe->std_count; k++) {
-    const agc_std_source *source = &fe->std[k];
+/* The text of the std/ source at PATH (relative to stdlib/). rt->std is constant after the start, so this takes no
+ * lock at any number of schedulers. */
+static agc_value std_source(agc_vm *vm, agc_value path_value) {
+  const agc_runtime *rt = vm->rt;
+  if (!rt->std_count) return agc_error_value("this binary carries no std sources");
+  const agc_string *path = agc_as_string(vm, path_value);
+  for (size_t k = 0; k < rt->std_count; k++) {
+    const agc_std_source *source = &rt->std[k];
     if (strlen(source->path) != path->bytes || memcmp(source->path, path->data, path->bytes) != 0) continue;
     return agc_result_value(true, agc_string_value(agc_utf8_decode(source->data, source->len, "\xEF\xBF\xBD", false)));
   }
   return agc_error_value("no such std source");
+}
+
+static agc_value builtin_std_source(agc_vm *vm, agc_value *args, uint32_t span) {
+  guarded(vm, span);
+  return std_source(vm, args[0]);
+}
+
+static agc_value builtin_source(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return std_source(vm, args[0]);
 }
 
 /* All of standard input as bytes. The front end's runtime starts with no input stream, so the real descriptor stays
@@ -107,3 +117,10 @@ const agc_builtin agc_front_end_builtins[] = {
 };
 
 const size_t agc_front_end_builtin_count = sizeof agc_front_end_builtins / sizeof agc_front_end_builtins[0];
+
+/* Not shared: it reads only constant data, so it runs in parallel at any number of schedulers. */
+const agc_builtin agc_std_builtins[] = {
+  {"Std.source", 1, builtin_source, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+};
+
+const size_t agc_std_builtin_count = sizeof agc_std_builtins / sizeof agc_std_builtins[0];

@@ -172,6 +172,7 @@ Set.size SetQuery
 Set.subset? SetSubset
 Set.to_a SetToA
 Set.union SetCombine
+Std.source Plain
 String.at Plain
 String.code Plain
 String.compare Plain
