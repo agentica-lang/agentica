@@ -2147,7 +2147,7 @@ def main() -> Void
   Task.spawn(&churn, "#{dir}/ca.pem")
   TCP.send(socket, "hello\n", 5000).unwrap!
   TCP.read_line(socket, 5000).unwrap!
-  ended = TCP.read_line(socket, 5000)
+  TCP.read_line(socket, 5000)
   TCP.close(socket)
 end
 """
@@ -2156,6 +2156,7 @@ end
 def serve_one_tls_12_session(listener, outcome):
     """Reads a line, answers it, sends close_notify and records whether the client answers with its own."""
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    # TLS 1.2 like tests/fixtures/tls-peer.py, the peer of the test_vm_tls.py case where close_notify went missing.
     context.maximum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(TLS_DIR + "/server.pem", TLS_DIR + "/server-key.pem")
     conn, _ = listener.accept()
