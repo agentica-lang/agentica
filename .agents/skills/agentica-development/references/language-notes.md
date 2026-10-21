@@ -140,7 +140,7 @@ section for the area you are changing.
   types get an internal `@N::Name` identity; human text (printing,
   `to_s`/`inspect`, checker messages through the type printer and `display_name`
   on struct, enum and function names, the VM tables) shows it through
-  `display_name` in `compiler/check/types.agc`, so `Point` from any module
+  `display_name` in `compiler/syntax/types.agc`, so `Point` from any module
   prints `Point`; `did_you_mean` keeps only candidates with the same `@N::`
   prefix as the name (builtins are shared) and suggests their display names.
   Keys stay linked: `JSON.schema` `$defs` keys and `$ref`s keep the `@N::` name

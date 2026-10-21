@@ -23,7 +23,7 @@ import Parser from "../syntax/parser"
 import Resolve from "../modules/resolve_import"
 import SourceFile from "../syntax/source_file"
 import Source from "../syntax/source"
-import T from "../check/types"
+import T from "../syntax/types"
 
 ## The prelude files a program needs, added to the program: the state with room for their node ids, and their modules.
 export struct Attached

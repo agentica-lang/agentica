@@ -10,7 +10,7 @@ import Failure from "check_failure"
 import Defaults from "defaults"
 import Diag from "../diagnostics/diagnostic"
 import Source from "../syntax/source"
-import Types from "types"
+import Types from "../syntax/types"
 import {PUBLIC_NAMES} from "../catalog/builtins"
 
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was

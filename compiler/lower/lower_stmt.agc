@@ -9,7 +9,7 @@ import Expr from "lower_expr"
 import Lowering from "lower_state"
 import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## A lowered function, and the state after it: the block functions made inside it and the next function index, for the
 ## program to collect.

@@ -6,7 +6,7 @@ import Ir from "ir"
 import State from "lower_state"
 import {MAX_CHUNK} from "lower_tables"
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## A list literal. One `list` instruction gathers at most MAX_CHUNK items; a longer literal is built in chunks joined
 ## with List.concat.

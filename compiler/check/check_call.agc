@@ -11,7 +11,7 @@ import State from "check_state"
 import Types from "check_types"
 import Defaults from "defaults"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 import {ENTRIES, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS} from "../catalog/builtins"
 
 # What checking the arguments of a variant learned: the state and the type arguments found.

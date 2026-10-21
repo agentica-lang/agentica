@@ -8,7 +8,7 @@ import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 
 ## Checks a call of a List builtin by its rule. Any other rule is the caller's.
 export def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

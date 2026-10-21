@@ -4,7 +4,7 @@
 ## the catalog agree.
 
 import Model from "builtin_model"
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## The builtins that only the prelude may call: the checker does not know them outside a prelude file, and no help or
 ## suggestion lists them.

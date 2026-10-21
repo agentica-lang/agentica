@@ -5,7 +5,7 @@ import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
 import Data from "check_tables"
 import Suggest from "suggest"
-import Types from "types"
+import Types from "../syntax/types"
 
 ## The tables of check_tables.agc, built once per run. A key is the receiver kind and the name, `String.size`.
 export struct Tables

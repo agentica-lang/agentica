@@ -19,9 +19,10 @@ stages may use `Result` with a packed `Problem`. `try` stops at the first error.
 `bdd/` and `embedded/`, with `front_end.agc` at the root. A new file goes in the
 folder of its context. Names below are bare; the folder is in each label
 (`references/repo-map.md` has every file). An import inside a folder is the
-bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
+bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
 
-- Data: `syntax/source.agc`, `syntax/token.agc`, `diagnostics/diagnostic.agc`.
+- Data: `syntax/source.agc`, `syntax/token.agc`, `syntax/types.agc` (the
+  `Type` enum), `diagnostics/diagnostic.agc`.
   `syntax/source_file.agc` holds the strict UTF-8 rules for a source file
   (`LEX-INVALID-UTF8` at the first bad byte); `io/source_reader.agc` reads the
   file with them, with no size limit. `syntax/text.agc` holds the
@@ -45,10 +46,10 @@ bare name (`"lexer"`); across folders it is relative (`"../check/types"`).
   cache and the package import, all pure. The rules are in
   `docs/grammar/05b-modules.md`; the file list is in `repo-map.md`. They read
   the disk only through the `Workspace` and the environment only through `Env`.
-- Catalog (`catalog/`, `types.agc` in `check/`): `types.agc`,
-  `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`, the `Rule` enum),
-  `builtins.agc` (lookups), `builtins_data.agc` (hand-edited rows, records,
-  enums, reserved names), `catalog.agc`, `catalog_text.agc`.
+- Catalog (`catalog/`): `builtin_model.agc` (`Builtin`, `Record`, `EnumDef`,
+  the `Rule` enum), `builtins.agc` (lookups), `builtins_data.agc`
+  (hand-edited rows, records, enums, reserved names), `catalog.agc`,
+  `catalog_text.agc`.
 - Checker (`check/`): `check_register.agc`, `check_stmt.agc`, `check_expr.agc`,
   `check_call.agc`, `check_method.agc`, `check_rules.agc`, `check_list.agc`,
   `check_collections.agc`, `check_args.agc`, `check_help.agc`,

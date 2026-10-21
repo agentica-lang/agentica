@@ -13,7 +13,7 @@ import PreludeCalls from "check_prelude"
 import State from "check_state"
 import CheckTypes from "check_types"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 
 ## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown
 ## when none.

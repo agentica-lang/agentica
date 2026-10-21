@@ -11,7 +11,7 @@ import ConstWalk from "const_walk"
 import State from "check_state"
 import Linker from "../modules/linker"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 import {ENTRIES} from "../catalog/builtins"
 
 ## What checking the constants leaves: the context with the type of every constant, the state with the types of the

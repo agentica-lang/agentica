@@ -17,7 +17,7 @@ import {FORMAT_VERSION, MAX_U16} from "bytecode_tables"
 import JsonTypes from "bytecode_types"
 import Problems from "../check/check_failure"
 import Ir from "../lower/ir"
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## The result of writing: the bytes of the file, or the first problem (BYTECODE-LIMIT or BYTECODE-INTERNAL).
 export enum Written

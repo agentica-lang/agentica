@@ -6,7 +6,7 @@ import Model from "../catalog/builtin_model"
 import Ir from "ir"
 import State from "lower_state"
 import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {ENUMS, RECORDS} from "../catalog/builtins"
 
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",

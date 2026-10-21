@@ -4,7 +4,7 @@
 
 import Ast from "../syntax/ast"
 import State from "check_state"
-import T from "types"
+import T from "../syntax/types"
 
 ## Argument 0 as a Map[K, V].
 export def map_argument(cx: State.Cx, st: State.St, site: State.Site, context: T.Type) -> Result[State.Out]

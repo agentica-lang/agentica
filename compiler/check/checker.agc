@@ -14,7 +14,7 @@ import Statements from "check_stmt"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Prelude from "../catalog/prelude"
-import T from "types"
+import T from "../syntax/types"
 import {ENUMS, RECORDS} from "../catalog/builtins"
 
 ## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that
