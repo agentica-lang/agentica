@@ -46,8 +46,8 @@ LATER_THAN_SYNTAX = {"modules", "packages", "check", "catalog", "lower", "byteco
 # which imports nothing, so no import cycle exists.
 DIAGNOSTICS_MAY_IMPORT = {"compiler/syntax/source"}
 # modules/ and packages/ come right after syntax/. The linker needs the builtin names (reserved names, enums, records),
-# so it reads the catalog data, but never the checker, the lowering or the writer (it once imported check/suggest; the
-# did-you-mean now lives in syntax/suggest.agc). The data files import only syntax/ and each other, so no cycle exists.
+# so it reads the catalog data, but never the checker, the lowering or the writer; the did-you-mean it shares with the
+# checker lives in syntax/suggest.agc. The data files import only syntax/ and each other, so no cycle exists.
 # The rest of catalog/ (prelude, catalog_text) is a later stage.
 LATER_THAN_MODULES = {"check", "catalog", "lower", "bytecode"}
 CATALOG_DATA_ONLY = "but catalog data (read by modules/) may import only syntax/ and itself"
@@ -297,16 +297,18 @@ def test_modules_import_no_later_stage(tmp_path):
         'import Packages from "../packages/project"\n'
         'import Suggest from "../check/suggest"\n'
         'import Prelude from "../catalog/prelude"\n'
-        'import Ir from "../lower/ir"\n',
+        'import Ir from "../lower/ir"\n'
+        'import Writer from "../bytecode/writer"\n',
         encoding="utf-8",
     )
     tokens = token_kinds(["probe.agc"], tmp_path)["probe.agc"]
-    path = "compiler/modules/probe.agc"
-    assert offenders({path: tokens}) == [
-        "%s imports ../check/suggest, a later stage" % path,
-        "%s imports ../catalog/prelude, a later stage" % path,
-        "%s imports ../lower/ir, a later stage" % path,
-    ]
+    for path in ("compiler/modules/probe.agc", "compiler/packages/probe.agc"):
+        assert offenders({path: tokens}) == [
+            "%s imports ../check/suggest, a later stage" % path,
+            "%s imports ../catalog/prelude, a later stage" % path,
+            "%s imports ../lower/ir, a later stage" % path,
+            "%s imports ../bytecode/writer, a later stage" % path,
+        ]
     # The catalog data files import only syntax/ and each other; the rest of catalog/ may take the later stages.
     data = "compiler/catalog/builtins.agc"
     assert offenders({data: tokens}) == [
@@ -314,5 +316,6 @@ def test_modules_import_no_later_stage(tmp_path):
         "%s imports ../check/suggest, %s" % (data, CATALOG_DATA_ONLY),
         "%s imports ../catalog/prelude, %s" % (data, CATALOG_DATA_ONLY),
         "%s imports ../lower/ir, %s" % (data, CATALOG_DATA_ONLY),
+        "%s imports ../bytecode/writer, %s" % (data, CATALOG_DATA_ONLY),
     ]
     assert offenders({"compiler/catalog/prelude.agc": tokens}) == []

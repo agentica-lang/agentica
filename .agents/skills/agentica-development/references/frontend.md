@@ -22,9 +22,9 @@ folder of its context. Names below are bare; the folder is in each label
 bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
 
 - Data: `syntax/source.agc`, `syntax/token.agc`, `syntax/types.agc` (the
-  `Type` enum), `syntax/suggest.agc` (did-you-mean),
-  `diagnostics/diagnostic.agc`, `diagnostics/problem.agc` (the packed `Problem`
-  every stage returns).
+  `Type` enum), `diagnostics/diagnostic.agc`, `diagnostics/problem.agc` (the
+  packed `Problem` every stage returns). `syntax/suggest.agc` holds the
+  did-you-mean help that the linker and the checker share.
   `syntax/source_file.agc` holds the strict UTF-8 rules for a source file
   (`LEX-INVALID-UTF8` at the first bad byte); `io/source_reader.agc` reads the
   file with them, with no size limit. `syntax/text.agc` holds the
