@@ -42,8 +42,6 @@ true
 false
 ```
 
-Every function here is also a method: `Range.size(r)` is `r.size`.
-
 ## size
 
 ```text

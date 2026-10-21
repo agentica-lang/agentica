@@ -4,7 +4,7 @@ weight: 6
 description: Levels, named handlers and text or JSON lines on stderr with std/logger.
 ---
 
-`std/logger` is an Elixir-style logger written in Agentica. Import it with `import Logger from "std/logger"`. It has four levels, one global level, handlers that you attach and detach while the program runs, and fields on each call.
+`std/logger` is an Elixir-style logger written in Agentica. Import it with `import Logger from "std/logger"`.
 
 The first call of any `Logger` function attaches a handler named `console`. It writes text lines to stderr at level `info`. A program that only logs needs no setup.
 
@@ -191,4 +191,4 @@ end
 - Handlers and the global level live in the VM, and belong to one run. A child started with `Process.spawn` has its own.
 - There are no flags and no per-task metadata. Pass `fields` on each call, as the optional second argument.
 - Log calls are normal code, and count against `--max-steps`.
-- A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison. A call without `fields` also passes an empty map, which adds about 0.07 µs.
+- A call below the global level, or one that no handler accepts, costs one function call, one builtin call and one comparison. A call without `fields` also passes an empty map.

@@ -15,7 +15,6 @@ Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 Starts `function(argument)` in a new task and returns its `Task` handle.
 
 - A file, socket, listener, process or server belongs to the task that opened it and closes when that task ends (returns, crashes or is cancelled). So open a long-lived handle in the task that keeps it, not in a helper.
-- `Task.await` of an ended task returns after its regular files are written and closed (not a flush to a FIFO or a pipe).
 - `Task.spawn` moves nothing: a handle in the argument, or in a struct or list in it, stays with the caller. To give it away, use `Task.spawn_owning`.
 
 ```agentica
@@ -44,7 +43,7 @@ Starts `function(handle)` like `Task.spawn` and gives `handle` to the new task i
 - The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`. Anything else (an `Int`, a struct that holds a socket, an `HttpClient`) is `CHECK-NOT-A-HANDLE`.
 - The caller must own the handle, and can still use it while the new task runs. Otherwise (not owned, already handed over, closed) the caller stops with `RUNTIME-HANDLE-NOT-OWNED` and no task is made.
 - A server loop can give each accepted connection to its own task, so a crash closes only that connection. A handed-over server takes its listener along and keeps serving after its creator ends.
-- A [Channel](/library/concurrency/channel/) has no opener, so any task can make the first hand-off. It closes when the new task ends (see [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel)). Until then only that task can hand it on; any task can call `Channel.close`.
+- A [Channel](/library/concurrency/channel/) has no opener, so any task can make the first hand-off. The ownership rules are in [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel).
 
 ```agentica
 def echo(socket: Socket) -> Result[String]
@@ -367,7 +366,6 @@ Gives how many tasks have not ended yet, not counting `main`.
 
 - Waiting, sleeping and awaiting tasks count, and so does the asker unless it is `main`. Returned or crashed tasks do not, awaited or not.
 - The tasks `std/http` starts for an `HttpClient` never count.
-- `std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step that leaves tasks running.
 
 ```agentica
 def wait_for(task: Task[Int]) -> Int
@@ -402,7 +400,7 @@ end
 Task.unobserved_crash() -> Result[String]
 ```
 
-Gives `ok(text)` with the first crash that no `Task.await` has seen, else an error. Asking does not count as seeing. `std/bdd` uses it to fail a [BDD](/library/testing/bdd/) step whose task crashed.
+Gives `ok(text)` with the first crash that no `Task.await` has seen, else an error. Asking does not count as seeing.
 
 ```agentica
 def boom(n: Int) -> Int

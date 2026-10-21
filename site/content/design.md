@@ -32,7 +32,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 ## One libuv event loop for I/O
 
-**Decision.** One libuv loop handles sockets, timers, child processes and the standard streams; regular files use its thread pool. With several schedulers the loop runs on its own I/O thread. A print copies its text into a 64 KiB buffer per stream, so a slow reader stalls only the tasks that print. It runs on Linux, macOS and Windows.
+**Decision.** One libuv loop handles sockets, timers, child processes and the standard streams; regular files use its thread pool. With several schedulers the loop runs on its own I/O thread. A print copies its text into a 64 KiB buffer per stream, so a slow reader stalls only the tasks that print.
 
 **Why.** libevent had no file I/O, no UTF-8 paths on Windows and no spawn with stdio pipes; libuv has all three. The pool runs only bounded work, because a pool thread that waits forever cannot be cancelled or joined.
 
@@ -52,7 +52,7 @@ Agentica is a small, statically typed language for AI agents. Its programs run o
 
 **Decision.** Five libraries, each a submodule pinned to a release tag: Boehm GC, yyjson, libuv, OpenSSL, picohttpparser. Each must be permissive, with no copyleft.
 
-**Why.** The release links them into one binary per system (on Linux it needs only glibc), so they must be permissive, and each license ships with it.
+**Why.** The release links them into one binary per system, so they must be permissive, and each license ships with it.
 
 ## Learn more
 

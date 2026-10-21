@@ -72,7 +72,7 @@ false
 The VM hides the variables it keeps for itself:
 
 - `AGENTICA_CHANNEL`, and `UV_USE_IO_URING` when the VM set it. A program started with `Process.spawn` does not get them either.
-- `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` are reserved for the VM metrics (a later phase). A program started with `Process.spawn` does not get them, but `System.env` still shows them to your program.
+- `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE` are reserved for the VM metrics. A program started with `Process.spawn` does not get them, but `System.env` still shows them to your program.
 
 ## System.os
 

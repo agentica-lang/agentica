@@ -3,11 +3,7 @@ title: Agentica
 description: Agentica is Ruby with static types. Ruby-like syntax, checked before running, with immutable values.
 ---
 
-Agentica is Ruby with static types. It has Ruby-like syntax. Every program is
-checked before it runs, and values never change in place. The language is small
-on purpose, so people and AI agents can write, read and fix programs with few
-surprises. Every error has a stable code, a source position and often a hint
-with the fix.
+Agentica is Ruby with static types. It has Ruby-like syntax. Every program is checked before it runs, and values never change in place. The language is small on purpose, so people and AI agents can write, read and fix programs with few surprises. Every error has a stable code, a source position and often a hint with the fix.
 
 The project is hosted on [GitHub](https://github.com/sonic182/agentica).
 
@@ -40,12 +36,9 @@ item 3: 119 cents
 total: 1631 cents
 ```
 
-The [language tour](/tour/) covers [structs](/tour/structs/), [enums and `case`](/tour/enums-and-case/) and [`Result`](/tour/results-and-try/).
-
 ## Read next
 
-- [Getting started](/getting-started/): install Agentica, run a program and
-  read its errors.
+- [Getting started](/getting-started/): install Agentica, run a program and read its errors.
 - [Language tour](/tour/): the language in short pages, one idea at a time.
 - [Library](/library/): every builtin module, with one example per function.
 - [Language specification](/reference/): the formal grammar and rules.

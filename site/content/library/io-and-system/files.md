@@ -10,8 +10,6 @@ Every file function takes a timeout in milliseconds and returns a `Result`.
 - Regular files use a pool of 4 threads, shared with DNS lookups and TLS certificate loading, so calls wait for a free thread when many run. Raise it (at most 1024) before the program starts: `UV_THREADPOOL_SIZE=16 agentica app.agc`.
 - Pipes, FIFOs and terminals skip the pool and wait on the event loop, so their timeout always ends the wait. `File.read_text` of a pipe reads until the writer closes it.
 
-The examples touch the disk, so they are only checked here, except `Path.real`.
-
 ## File.write_text
 
 ```text
@@ -80,7 +78,7 @@ end
 File.lstat(path: String, timeout_ms: Int) -> Result[FileInfo]
 ```
 
-Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size_bytes` is the length of the link text, the other fields are the link's own. VM only.
+Like `File.stat`, but a symbolic link is not followed: `kind` is `"link"`, `size_bytes` is the length of the link text, the other fields are the link's own.
 
 ## File.open and File.close
 
@@ -96,7 +94,7 @@ Opens a file for streaming.
 | `"read"` | read an existing file |
 | `"write"` | create the file, or empty it |
 | `"append"` | write at the end of the file |
-| `"create_private"` | VM only: a new file that only you can read and write |
+| `"create_private"` | a new file that only you can read and write |
 
 `"create_private"` fails when the path exists (a dangling link too) and never follows a link, so another user cannot redirect the write. Unix: mode 0600, less where the umask clears bits. Windows: a protected DACL that grants only the current user; creation fails unless the opened object has that owner and DACL.
 
@@ -154,7 +152,7 @@ Takes an exclusive lock on the open file, without waiting. `ok(true)` means it i
 
 - It ends when the handle closes, the opening task ends, or the program ends, even if killed. A `Process.spawn` child does not keep it. There is no unlock call.
 - Unix: advisory (`flock`), so it stops only code that asks too. Windows: `LockFileEx` on the whole range, and the OS rejects reads and writes through other handles.
-- Any handle mode works. Only a regular file can be locked (a pipe, FIFO or `/dev/null` is an error). VM only.
+- Any handle mode works. Only a regular file can be locked (a pipe, FIFO or `/dev/null` is an error).
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -255,7 +253,7 @@ Creates a directory and any missing parents. An existing directory is fine.
 Dir.mkdir_private(path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Creates one directory that only you can enter, for a scratch directory in a shared place such as `/tmp`. It makes no parents, and an existing path is an error, so success means the directory is new and yours. Unix: mode 0700, less where the umask clears bits. Windows: the owner-and-DACL check of `File.open`. VM only.
+Creates one directory that only you can enter, for a scratch directory in a shared place such as `/tmp`. It makes no parents, and an existing path is an error, so success means the directory is new and yours. Unix: mode 0700, less where the umask clears bits. Windows: the owner-and-DACL check of `File.open`.
 
 ```agentica {mode="check"}
 def main() -> Void
@@ -325,7 +323,7 @@ false
 Path.remove(path: String, timeout_ms: Int) -> Result[Void]
 ```
 
-Deletes a file, a symbolic link, or a directory with everything in it. A missing path gives `ok()`. VM only.
+Deletes a file, a symbolic link, or a directory with everything in it. A missing path gives `ok()`.
 
 - It never follows a link: a link is deleted itself, and what it names is left alone.
 - It refuses a filesystem root, a trailing separator, `.` and `..` (also as the end of `dir/..`), and a tree more than 128 levels deep (left partly deleted).
@@ -350,7 +348,7 @@ Renames a file, a symbolic link or a directory to a path that does not exist yet
 
 - It never replaces anything: when `to` exists (even an empty directory) the call fails and nothing changes, so two programs racing for a name have exactly one winner.
 - A symbolic link moves as a link.
-- Both paths must be on one file system; there is no copy fallback. It uses native no-replace operations on Linux, macOS and Windows. VM only.
+- Both paths must be on one file system; there is no copy fallback. It uses native no-replace operations on Linux, macOS and Windows.
 
 ```agentica {mode="check"}
 def main() -> Void

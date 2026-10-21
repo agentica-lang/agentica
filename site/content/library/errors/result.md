@@ -4,7 +4,7 @@ weight: 1
 description: Build and read Result values.
 ---
 
-`Result[T]` is `ok(value)` or `error(message)`. The tour page [Result and try](/tour/results-and-try/) explains how to use it. The functions below are also methods: `Result.ok?(r)` is `r.ok?`.
+`Result[T]` is `ok(value)` or `error(message)`. The tour page [Result and try](/tour/results-and-try/) explains how to use it.
 
 ## ok
 

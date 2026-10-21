@@ -4,7 +4,7 @@ weight: 1
 description: Functions for text. Each one is also a method on String values.
 ---
 
-Strings are Unicode text. Lengths and indexes count characters, not bytes. Every function here is also a method: `String.trim(s)` is `s.trim`.
+Strings are Unicode text. Lengths and indexes count characters, not bytes.
 
 ## Aliases
 
