@@ -19,6 +19,7 @@ import Analysis from "std/analysis"
 #   outline PATH           the JSON on stdout, or the diagnostic on stderr
 #   type-at PATH LINE COL  the same
 #   refs PATH LINE COL     the same
+#   type-at-partial PATH LINE COL, refs-partial PATH LINE COL   the same, with the partial answers
 #   symbol NAME PATH...    the last command (it takes every word left): the same
 # An error is printed after Analysis.diagnostic read it and Analysis.diagnostic_json wrote it back, so the output of a
 # failure also proves that the pair is the identity.
@@ -86,6 +87,12 @@ def main() -> Void
     elsif word == "symbol"
       show(symbols(session, words[at + 1], words.drop(at + 2)))
       at = words.size
+    elsif word == "type-at-partial"
+      show(typed_partial(session, words[at + 1], words[at + 2].to_i!, words[at + 3].to_i!))
+      at += 4
+    elsif word == "refs-partial"
+      show(referenced_partial(session, words[at + 1], words[at + 2].to_i!, words[at + 3].to_i!))
+      at += 4
     elsif word == "refs"
       show(referenced(session, words[at + 1], words[at + 2].to_i!, words[at + 3].to_i!))
       at += 4
@@ -180,6 +187,16 @@ end
 def typed(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
   found = try Analysis.type_at(session, path, line, column)
   return ok(Analysis.type_at_json(found))
+end
+
+def typed_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
+  found = try Analysis.type_at_partial(session, path, line, column)
+  return ok(Analysis.type_at_json(found))
+end
+
+def referenced_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
+  found = try Analysis.refs_partial(session, path, line, column)
+  return ok(Analysis.refs_json(found))
 end
 
 def symbols(session: Analysis.Session, name: String, paths: List[String]) -> Result[Json]

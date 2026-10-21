@@ -10,6 +10,7 @@ import shutil
 import pytest
 
 from tests.agentica_test import ROOT, cli, compile_agc, run, run_vm, vm_environment, write_files
+from tests.test_spec_partial import APP, BAD_DECLARATIONS, FIXED, MODELS as PARTIAL_MODELS
 from tests.test_spec_type_at import MODELS, ORDERS, where
 
 DRIVER = "tests/fixtures/analysis/driver.agc"
@@ -465,3 +466,71 @@ def test_cached_answers_equal_uncached_answers_over_the_front_end_with_modules_m
     assert [line["checks"] for line in lines] == [1, 2, 3]
     # The second refresh parses only the module that changed.
     assert [after["parsed"] - before["parsed"] for before, after in zip(lines, lines[1:])] == [1, 1]
+
+
+def partial_positions(source):
+    """The (line, column) strings of names in `APP`: in a function that checks, in `broken`, and a declared function."""
+    return [
+        position("app.agc", source, needle, inside)[1:]
+        for needle, inside in [("user.age + helper", 5), ("helper(2)", 0), ("count = user", 0), ('helper("no")', 0),
+                               ("made = ", 0), ("user.age\n", 5)]
+    ]
+
+
+def partial_cli(project, command, file, line, column, *, stdin=None):
+    words = [command, "--partial"] + (["--stdin"] if stdin is not None else []) + [f"{file}:{line}:{column}"]
+    return command_line(project, *words, stdin=stdin)
+
+
+@pytest.fixture
+def partial_project(project):
+    write_files(project, {"models.agc": PARTIAL_MODELS, "app.agc": APP, "fixed.agc": FIXED})
+    write_files(project, {name: text for name, (text, _) in BAD_DECLARATIONS.items()})
+    return project
+
+
+def test_the_partial_answers_equal_the_command_line_while_the_plain_ones_fail(driver, partial_project):
+    for line, column in partial_positions(APP):
+        for command, partial in [("type-at", "type-at-partial"), ("refs", "refs-partial")]:
+            got = library(driver, partial_project, partial, "app.agc", line, column)
+            assert got == partial_cli(partial_project, command, "app.agc", line, column)
+            assert got != ("", "")
+            # The plain question still fails with the error of the function that does not check.
+            plain = library(driver, partial_project, command, "app.agc", line, column)
+            assert (plain[0], json.loads(plain[1])["code"]) == ("", "CHECK-TYPE-MISMATCH")
+    good = library(driver, partial_project, "type-at-partial", "app.agc", *partial_positions(APP)[1])
+    assert (json.loads(good[0])["partial"], len(json.loads(good[0])["diagnostics"])) == (True, 1)
+    # A field of `broken` needs the types of every function: the first problem, as for the command line.
+    field = library(driver, partial_project, "refs-partial", "app.agc", *partial_positions(APP)[5])
+    assert (field[0], json.loads(field[1])["code"]) == ("", "CHECK-TYPE-MISMATCH")
+
+
+def test_a_declaration_that_does_not_check_is_still_an_error_of_the_partial_answers(driver, partial_project):
+    for name, (_text, code) in BAD_DECLARATIONS.items():
+        for command, partial in [("type-at", "type-at-partial"), ("refs", "refs-partial")]:
+            got = library(driver, partial_project, partial, name, "5", "5")
+            assert got == partial_cli(partial_project, command, name, "5", "5")
+            assert (got[0], json.loads(got[1])["code"]) == ("", code)
+    nowhere = library(driver, partial_project, "type-at-partial", "nope.agc", "1", "1")
+    assert (nowhere[0], json.loads(nowhere[1])["code"]) == ("", "QUERY-USAGE")
+
+
+def test_a_refreshed_session_gives_the_partial_answers_of_one_with_no_cache_also_after_edits(driver, partial_project):
+    asked_at = partial_positions(APP)
+    # The cache holds the program of `app.agc` as failed, and of `fixed.agc` as checked: both are used.
+    for file in ["app.agc", "fixed.agc"]:
+        for line, column in asked_at:
+            for command, partial in [("type-at", "type-at-partial"), ("refs", "refs-partial")]:
+                got = library(driver, partial_project, "refresh", file, partial, file, line, column)
+                assert got == partial_cli(partial_project, command, file, line, column)
+    # A buffer that fixes `app.agc`, refreshed, then a buffer that breaks it again: the stale cache is not used.
+    for command, partial in [("type-at", "type-at-partial"), ("refs", "refs-partial")]:
+        line, column = asked_at[3]
+        edits = ("buffer", "app.agc", "fixed.agc", "refresh", "app.agc")
+        got = library(driver, partial_project, *edits, partial, "app.agc", line, column)
+        assert got == partial_cli(partial_project, command, "app.agc", line, column, stdin=FIXED)
+        assert "partial" not in json.loads(got[0])
+        broken = (*edits, "update", "app.agc", "app.agc")
+        again = library(driver, partial_project, *broken, partial, "app.agc", line, column)
+        assert again == partial_cli(partial_project, command, "app.agc", line, column, stdin=APP)
+        assert json.loads(again[0])["partial"] is True

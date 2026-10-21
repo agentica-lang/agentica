@@ -9,10 +9,10 @@
 ## and `Analysis.refs_json` give byte for byte what `agentica --json outline`, `type-at`, `symbol` and `refs` print,
 ## and `Analysis.diagnostic_json` what `--json check` prints on stderr.
 ##
-## `outline`, `type_at`, `symbol` and `refs` return a `Result`: its error message is the diagnostic as one JSON object,
-## the form of `--json`, and `Analysis.diagnostic` reads it back, so `try` works. The codes are those of the command
-## line (`LEX-`, `PARSE-`, `CHECK-`, `PKG-`, and `QUERY-USAGE` for a file that cannot be read or a position below line
-## 1 or column 1, `QUERY-NO-EXPRESSION`, `QUERY-NOT-FOUND`).
+## `outline`, `type_at`, `type_at_partial`, `symbol`, `refs` and `refs_partial` return a `Result`: its error message is
+## the diagnostic as one JSON object, the form of `--json`, and `Analysis.diagnostic` reads it back, so `try` works.
+## The codes are those of the command line (`LEX-`, `PARSE-`, `CHECK-`, `PKG-`, and `QUERY-USAGE` for a file that
+## cannot be read or a position below line 1 or column 1, `QUERY-NO-EXPRESSION`, `QUERY-NOT-FOUND`).
 ##
 ## The compiler is part of the program that imports this module (as the private `std/internal/compiler`), so a program
 ## that imports it pays the compile time of the compiler's core once. The checker and the catalog of builtins are the
@@ -184,6 +184,25 @@ export def type_at(session: Session, path: String, line: Int, column: Int) -> Re
   end
 end
 
+## As `type_at`, but a program in which some functions do not check is answered too, as `agentica type-at --partial`
+## does. A position in a function that checked gets its type and definition, and a name in one that did not gets its
+## definition and no type (`type` is ""); the answer has `partial` true and the problems of those functions in
+## `diagnostics`. A program that checks gives the answer of `type_at`. A file that does not link, a program whose
+## declarations (their types, `main`, the constants) do not check, and a position that the link cannot name in a
+## function that did not check are the first problem, an error as for `type_at`.
+export def type_at_partial(session: Session, path: String, line: Int, column: Int) -> Result[TypeAt]
+  settings = Sessions.asking(session.internal)
+  if path == "" or line < 1 or column < 1
+    return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
+  end
+  asked = QueryPosition.Asked(file: path, line: line, column: column)
+  case Core.type_at_partial(session.internal.cache, settings, asked)
+    Core.Typed.Done(found) -> return ok(found)
+    Core.Typed.Unreadable -> return error(failure(Core.unreadable(path)))
+    Core.Typed.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+  end
+end
+
 ## Returns where `name` is declared in the modules linked from the files and folders of `paths`, as `agentica symbol`
 ## answers (`.` when `paths` is empty). A folder means every `*.agc` file below it. The files are linked together, and
 ## the ones that do not link are in `skipped`. Every file with a buffer in the session is searched first, as `--stdin`
@@ -226,7 +245,26 @@ export def refs(session: Session, path: String, line: Int, column: Int) -> Resul
   end
 end
 
-## Reads back the diagnostic that is the message of an error of `outline`, `type_at`, `symbol` or `refs`.
+## As `refs`, but a program in which some functions do not check is answered too, as `agentica refs --partial` does
+## (a position alone: there is no `paths`). The answer has `partial` true and the problems of those functions in
+## `diagnostics`; it is complete for a function, struct, enum, alias, constant, variant or a local of a function that
+## checked. A field or a builtin needs the types of every function, so for one the error is the first problem, as for
+## `refs`. A program that checks gives the answer of `refs`.
+export def refs_partial(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
+  settings = Sessions.asking(session.internal)
+  if path == "" or line < 1 or column < 1
+    return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
+  end
+  asked = QueryPosition.Asked(file: path, line: line, column: column)
+  case Core.refs_partial(session.internal.cache, settings, asked)
+    Core.Referenced.Done(found) -> return ok(found)
+    Core.Referenced.Unreadable -> return error(failure(Core.unreadable(path)))
+    Core.Referenced.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+  end
+end
+
+## Reads back the diagnostic that is the message of an error of `outline`, `type_at`, `type_at_partial`, `symbol`,
+## `refs` or `refs_partial`.
 export def diagnostic(message: String) -> Result[Diagnostic]
   return DiagnosticRead.read(message)
 end

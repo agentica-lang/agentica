@@ -102,6 +102,10 @@ The arms are the context an agent gets:
 - `typed-python`: the same task in Python with type annotations, checked by
   `mypy --strict` (see "The typed Python arm").
 - `skill`: the `agentica-programming` skill and the `agentica` binary.
+- `skill-nocli`: the `skill` arm without the four query commands (`agentica
+  outline`, `type-at`, `symbol`, `refs`), for the measurement of [§39.12](
+  future/39-semantic-cli.md). It is opt-in: `--arms` must name it. See "The
+  no-CLI arm".
 - `grammar`: `docs/grammar.md` and `examples/`, without the skill. The grammar
   arm's text changed in this PR (the `agentica help` pointer in its prompt, and
   no dead file links), so older grammar-arm results are not comparable.
@@ -128,22 +132,32 @@ python3 tests/eval/run.py --check-references
 # A model run: 3 reps per task and arm
 python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python --reps 3 --jobs 4
 
+# The 6c round: one command per model, from a worktree pinned to the release
+# tag (git worktree add ../agentica-6c TAG) so that master can move on; TAG is
+# the first release with the query-command counts, the skill-nocli arm and
+# --max-cost
+python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 1.1
+python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/glm-5p3-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 0.75
+
 # Summarize a finished run, and count the diagnostics the agents saw
 python3 tests/eval/run.py --summarize tests/eval/results/<run directory>
 python3 tests/eval/diagnostics.py
 ```
 
 `--tasks` picks tasks (the default is all twenty). `--arms` picks arms (the
-default is all five). `--sandbox firejail --chroot-root PATH` is the other
-sandbox; you prepare its rootfs yourself, and it needs `mypy` for the typed arm.
-Docker is the only sandbox tested with the typed arm, the drivers and the
-loopback peers; Firejail is untested for them. The results go to
-`tests/eval/results/`, which is not versioned. Each run directory has a
-`run.json` with the commit, the commit of the last change to the skill, the
-checker version, the model, the arms, and the image name and ID, next to
-`results.jsonl` and `summary.md`. The runner has its own tests:
-`python3 -m unittest discover -s tests/eval -p 'test_*.py'`. These unit tests
-are not part of `make test` or CI.
+default is the first five; `skill-nocli` is opt-in). `--arm-tasks
+ARM=TASK,TASK` limits one arm to some of the tasks (full task names, all in
+`--tasks`; repeat the option for another arm). `--max-cost USD` is a soft cap on
+the cost of the round (see "The budget cap"). `--sandbox firejail
+--chroot-root PATH` is the other sandbox; you prepare its rootfs yourself, and
+it needs `mypy` for the typed arm. Docker is the only sandbox tested with the
+typed arm, the drivers and the loopback peers; Firejail is untested for them.
+The results go to `tests/eval/results/`, which is not versioned. Each run
+directory has a `run.json` with the commit, the commit of the last change to the
+skill, the checker version, the Pi version, the model, the arms, and the image
+name and ID, next to `results.jsonl` and `summary.md`. The runner has its own
+tests: `python3 -m unittest discover -s tests/eval -p 'test_*.py'`. These unit
+tests are not part of `make test` or CI.
 
 `--check-references` is the same as `--agent reference` with the arms `binary`,
 `python` and `typed-python` (the three Agentica arms share one reference). It
@@ -239,6 +253,97 @@ by weakening its options.
   part of the pilot of phase 6c. Its workspace no longer gets the Agentica
   binaries.
 
+### Query-command counts
+
+For `--agent pi`, every row and `summary.md` count, next to the checks:
+
+- `query_runs`: bash calls that run `agentica outline`, `type-at`, `symbol` or
+  `refs`, with or without `--json`, through a path (`dist/agentica`) or after
+  `cd x &&`, `time` or a pipe. Like `check_runs`, it is a lower bound (no
+  `bash -c`, no script).
+- `read_runs`: calls that read files: a shell segment that starts with `cat`,
+  `rg`, `sed`, `head`, `grep` or `tail` (a `| head` filter does not count), and
+  every call of Pi's `read` tool.
+- `refused_queries`: calls the `skill-nocli` wrapper refused (0 in the other
+  arms).
+
+`--agent claude` reports 0 for the counts, which means not measured.
+
+### The no-CLI arm
+
+`skill-nocli` is the `skill` arm with two changes, made in the copy the agent
+gets (the skill in the repository is never edited):
+
+- The skill copy has no `references/queries.md` and no `references/analysis.md`,
+  and none of the lines that point to them: the bullets and the sentence in
+  `SKILL.md`, and the `QUERY-` codes of `references/diagnostics.md`. The
+  runner stops when any file of the copy still names a query command, so a
+  change to the skill cannot leak one unnoticed.
+- `bin/agentica` is a shell wrapper and the real binary is `bin/agentica-real`.
+  The wrapper answers `outline`, `type-at`, `symbol` and `refs` with exit 2 and
+  one stderr line (`agentica: 'refs' is not available in this evaluation arm`),
+  appends a line to `bin/.refused-queries`, and passes every other command to
+  the real binary. The grader uses the real binary, not the wrapper.
+
+What the arm does not hide, and the results must say: `agentica --help` and
+`agentica help` still list the four commands (`run.json` has `arm_notes` with
+this), and an agent can call `bin/agentica-real` or read the wrapper. A
+`query_runs` above `refused_queries` shows such a bypass. A refused call still
+costs the agent a turn; read `refused_queries` with that in mind.
+
+The arm runs on the tasks that cross a program: a change that follows a type
+through many uses, where `refs` and `type-at` should help. Proposed subset, from
+the task statements (the start programs are 100 to 194 lines):
+
+| Task | Why it crosses the program |
+|---|---|
+| `t9-inventory-orders` | new fields and a new command through six commands |
+| `t11-gradebook` | the data model changes (weights, ranks, grades) |
+| `t12-member-ids` | the id type changes through structs, maps, sorting, parsing |
+| `t13-transfer-variant` | a new enum variant that every `case` must handle |
+| `t14-price-lookup` | a plain value becomes a `Result[Int]` in four callers |
+
+Left out: t3 (a 19-line start, one field), t10 (new operators, not a type
+change), and the small programs, where reading the file costs less than a query.
+With 3 reps, that is 15 extra runs per model.
+
+### The budget cap
+
+`--max-cost USD` is a soft cap, not a hard limit; without it there is no cap.
+Before each run starts, the runner adds the cost so far, plus the estimate of
+that run and of every run in flight; if the sum passes the cap, it stops
+starting new runs (the runs in flight finish) and `summary.md` and `run.json`
+get `stopped_for_budget` (true) and `runs_skipped`. Runs already going and
+outlier runs can go past the cap by up to `--jobs` times the costliest run. The
+6c commands use `--jobs 2`, which keeps that overshoot to about $0.06 at the
+costs of rounds 10 and 12 (the costliest run was about $0.03).
+
+The estimate is the highest cost seen so far (never below the mean), and never
+below `--run-cost-estimate` (default $0.01). A run that reports no cost (no
+usage at all, or `cost.total` of 0: a timeout, a 429, an auth error) is charged
+the estimate, stays out of that figure, and prints a `warning:` line. Cost is
+what Pi reports (`cost.total`), so the cap is as good as the price table of the
+model. The runner prints `cost so far: $X of the $Y cap` after every run, and
+`run.json` and `summary.md` end with the total. The cap is per command: for two
+models, give each its share of the total (one command each, as in the example
+above); a shared total across commands would need a way to read earlier run
+folders, which the runner does not have.
+
+Estimated cost of the 6c round, from the cost per run of rounds 10 and 12 (3
+reps, 20 tasks, `skill-nocli` on the 5 tasks above, at the cost of a `skill`
+run):
+
+| Model | `skill` | `typed-python` | `skill-nocli` | Total | Cap |
+|---|---|---|---|---|---|
+| DeepSeek V4.1 flash | 60 x $0.0082 = $0.49 | 60 x $0.0053 = $0.32 | 15 x $0.0082 = $0.12 | about $0.93 | $1.1 |
+| GLM 5.3 flash | 60 x $0.0056 = $0.34 | 60 x $0.0017 = $0.10 | 15 x $0.0056 = $0.08 | about $0.52 | $0.75 |
+
+About $1.45 for both models, which fits in the $2 of the round. The $2 is a hard
+limit for the owner, and the cap is soft, so the caps are $1.1 and $0.75: at
+`--jobs 2` a command can pass its cap by about $0.06, and the worst case of both
+is about $1.97. The cost of a `skill-nocli` run is a guess
+(its agents cannot use the queries, so it may cost more than a `skill` run).
+
 ### Hidden cases
 
 A case is `hidden/NN.in` (standard input) and `hidden/NN.out` (the expected
@@ -294,7 +399,13 @@ Python solution that ignores the instruction still passes.
   or `curl` or `urllib` to a host other than `localhost` and `127.0.0.1`. The
   runner has no allow-list for the provider host, so closing the network for the
   agents needs a proxy or firewall that you provide.
-- Rebuild the image if the Dockerfile changed, and run `--check-references`.
+- Rebuild the image if the Dockerfile changed (`docker rmi
+  agentica-eval:local`), and run `--check-references`. The Dockerfile pins Pi
+  1.3.0 (the rounds up to 12 used Pi 1.0.0), so token counts of the 6c round
+  are not strictly comparable with those of earlier rounds; the arms inside the
+  round are. A model run probes `pi --version` in the default image and stops
+  when it differs from the Dockerfile's pin (a stale image); `run.json` has
+  `pi_version`.
 - Do not merge anything or change the skill while a round runs.
 - If `/tmp` is a small `tmpfs`, point `TMPDIR` at a directory on disk before you
   start the runner. Each run copies the runtime bundle (about 580 MB) into a
@@ -603,8 +714,8 @@ Rounds 9 to 12 together cost $4.85 of the $10 budget.
 
 Round 12 is the last evaluation round until after the bootstrap of the
 self-hosted front end ([§18](future/18-front-end-language.md), roadmap row
-7.2.7) and any improvements that follow it. The owner decided this on 2026-10-14. The full
-6c round (roadmap row 10) waits for that too. See the
+7.2.7) and any improvements that follow it. The owner decided this on
+2026-10-14. The full 6c round (roadmap row 10) waits for that too. See the
 [roadmap](roadmap/README.md).
 
 ### JSON tasks: smoke run (2026-10-03)

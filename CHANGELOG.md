@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-22
+
 ### Added
 
 - `extern` blocks call C functions of native libraries, with `C.Int`,
@@ -16,6 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica type-at` (and `std/analysis`) answers a type name in an annotation,
   a type argument, a field or a payload (`kind` `type`), with the struct, enum
   or alias as definition.
+- `std/analysis` has `type_at_partial` and `refs_partial`, as `type-at` and
+  `refs` with `--partial`.
 
 ## [0.8.0] - 2026-10-21
 
@@ -297,7 +301,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.8.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.8.1...HEAD
+[0.8.1]: https://github.com/sonic182/agentica/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/sonic182/agentica/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/sonic182/agentica/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/sonic182/agentica/compare/0.5.0...0.6.0

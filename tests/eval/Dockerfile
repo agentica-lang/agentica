@@ -1,6 +1,6 @@
 FROM node:22-trixie-slim
 
-ARG PI_VERSION=1.0.0
+ARG PI_VERSION=1.3.0
 ARG MYPY_VERSION=2.3.1
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates coreutils libgc1 libssl3t64 libz1 python3 python3-venv ripgrep \

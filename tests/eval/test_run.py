@@ -124,6 +124,7 @@ class PrepareTests(unittest.TestCase):
             self.assertEqual(positions, sorted(positions))
             self.assertNotIn("](../", grammar)
             self.assertNotIn("site/content", grammar)
+            self.assertNotIn("[agentica-link-", grammar)
 
     def test_grammar_arm_prompt_names_agentica_help(self) -> None:
         self.assertIn("agentica help NAME", run.prompt(Path("/tmp/work"), "grammar"))
@@ -172,6 +173,78 @@ class PrepareTests(unittest.TestCase):
             self.assertEqual((root / "work-plain" / "start.py").read_text(encoding="utf-8"), "untyped\n")
             self.assertFalse((root / "work-nostart" / "start.py").exists())
             self.assertNotIn("starting program", run.prompt(root / "work-nostart", "typed-python"))
+
+
+class NoCliArmTests(unittest.TestCase):
+    def fake_runtime(self, root: Path) -> None:
+        binary = root / "dist" / "runtime" / "bin" / "agentica"
+        binary.parent.mkdir(parents=True)
+        binary.write_text('#!/bin/sh\necho "real $*"\nexit 3\n')
+        binary.chmod(0o755)
+        task = root / "tasks" / "sample"
+        task.mkdir(parents=True)
+        (task / "task.md").write_text("Sample task.\n", encoding="utf-8")
+
+    def prepare_in(self, root: Path, *arms: str) -> None:
+        """Prepare work-ARM for each arm in a fake root with a fake runtime."""
+        self.fake_runtime(root)
+        with patch.object(run, "ROOT", root), patch.object(run, "TASKS", root / "tasks"):
+            for arm in arms:
+                run.prepare(root / f"work-{arm}", "sample", arm)
+
+    def test_the_agent_gets_a_skill_without_the_query_commands_and_the_repository_skill_is_untouched(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.prepare_in(root, "skill-nocli", "skill")
+            skill = root / "work-skill-nocli" / "skills" / "agentica-programming"
+
+            self.assertFalse((skill / "references" / "queries.md").exists())
+            self.assertFalse((skill / "references" / "analysis.md").exists())
+            self.assertTrue((skill / "SKILL.md").is_file())
+            for path in skill.rglob("*.md"):
+                self.assertIsNone(run.QUERY_MENTION.search(path.read_text(encoding="utf-8")), path)
+            self.assertTrue((run.SKILL / "references" / "queries.md").is_file())
+            self.assertTrue((root / "work-skill" / "skills" / "agentica-programming" / "references" / "queries.md").is_file())
+            self.assertIn("Use the agentica-programming skill.", run.prompt(root / "work-skill-nocli", "skill-nocli"))
+
+    def test_a_skill_that_still_names_the_commands_stops_the_arm(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            skill = Path(directory) / "skill"
+            shutil.copytree(run.SKILL, skill)
+            (skill / "references" / "files.md").write_text("Try `agentica refs NAME`.\n", encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                run.strip_query_docs(skill)
+
+        self.assertIn("files.md", str(raised.exception))
+
+    def test_the_wrapper_refuses_the_four_commands_and_passes_the_rest_to_the_real_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.prepare_in(root, "skill-nocli")
+            wrapper = str(root / "work-skill-nocli" / "bin" / "agentica")
+
+            def call(*words: str) -> subprocess.CompletedProcess[str]:
+                return subprocess.run([wrapper, *words], capture_output=True, text=True)
+
+            for words in (("outline", "a.agc"), ("type-at", "a.agc:1:1"), ("--json", "symbol", "x"), ("refs", "x", "."),
+                          ("--ai", "--json", "refs", "x")):
+                with self.subTest(words=words):
+                    done = call(*words)
+                    self.assertEqual(done.returncode, 2)
+                    self.assertIn("not available", done.stderr)
+                    self.assertEqual(done.stdout, "")
+            for words in (("--max-steps", "5", "outline", "a.agc"), ("--seed", "3", "--json", "refs", "X"),
+                          ("--flush-timeout", "10", "--schedulers", "2", "symbol", "X"),
+                          ("--steps", "s.agc", "refs", "X"), ("--", "type-at", "a.agc:1:1")):
+                with self.subTest(words=words):
+                    self.assertEqual(call(*words).returncode, 2)
+            for words in (("check", "a.agc"), ("a.agc", "outline"), ("help", "outline"), ("--help",),
+                          ("--seed", "5", "a.agc"), ("run", "--", "a.agcb", "refs")):
+                with self.subTest(words=words):
+                    done = call(*words)
+                    self.assertEqual((done.returncode, done.stdout), (3, "real " + " ".join(words) + "\n"))
+            self.assertEqual(run.refused_queries(root / "work-skill-nocli"), 10)
+            self.assertEqual(run.refused_queries(root / "work-skill"), 0)
 
 
 def bash_events(call: str, command: str, output: str) -> list[str]:
@@ -234,6 +307,31 @@ class MetricsTests(unittest.TestCase):
         metrics = run.claude_metrics(json.dumps({"usage": {"input_tokens": 3, "output_tokens": 4}, "num_turns": 2}))
 
         self.assertEqual((metrics["check_runs"], metrics["check_failures"], metrics["turns"]), (0, 0, 2))
+        self.assertEqual((metrics["query_runs"], metrics["read_runs"]), (0, 0))
+
+    def test_query_calls_are_counted_next_to_file_reads_and_checks(self) -> None:
+        queries = ("agentica outline a.agc", "agentica --json type-at a.agc:3:5", "dist/agentica symbol Item",
+                   "./bin/agentica refs Item src", "agentica --max-steps 5 outline a.agc",
+                   "agentica --seed 1 --flush-timeout 5 --schedulers 2 --json refs X", "agentica -- symbol X",
+                   "agentica --dump --steps s.agc outline a.agc", "agentica --dump-ir type-at a.agc:1:1",
+                   "cd /workspace && /workspace/bin/agentica refs Item",
+                   "printf x | agentica outline --stdin a.agc", "agentica-real outline a.agc", "time agentica symbol X")
+        others = ("agentica check a.agc", "agentica help outline", "agentica a.agc outline", "rg outline a.agc",
+                  "agentica outlines", "echo agentica outline")
+        events: list[str] = []
+        for number, command in enumerate((*queries, *others, "cat a.agc", "agentica check a.agc | head -5",
+                                          "rg -n Item . | head", "head -3 a.agc && sed -n 1,5p a.agc")):
+            events += bash_events(str(number), command, "ok")
+        events.append(json.dumps({"type": "tool_execution_start", "toolCallId": "r", "toolName": "read",
+                                  "args": {"path": "a.agc"}}))
+
+        metrics = run.pi_metrics("\n".join(events))
+
+        self.assertEqual(metrics["query_runs"], len(queries))
+        # cat; `rg ... | head` (the filter after the pipe is no read of its own); `head && sed` (one call); the
+        # read tool; `rg outline` among the others
+        self.assertEqual(metrics["read_runs"], 5)
+        self.assertEqual(metrics["check_runs"], 2)
 
 
 class CheckerGradingTests(unittest.TestCase):
@@ -348,7 +446,7 @@ class ImageDecisionTests(unittest.TestCase):
                 result = self.validate(checker_probe=[(code, "", "not found"), found])
                 self.assertEqual(self.build.call_count, 1)
                 self.assertIn("rebuilding", self.printed)
-                self.assertEqual(result, {"checker": "mypy 2.3.1 (compiled: yes)", "image_id": "sha256:abc"})
+                self.assertEqual(result, {"checker": "mypy 2.3.1 (compiled: yes)", "image_id": "sha256:abc", "pi": None})
         for first in ((1, "", "crash"), (None, "", "timeout")):
             self.build.reset_mock()
             with self.subTest(first=first), self.assertRaises(SystemExit):
@@ -388,20 +486,26 @@ class ImageBuildTests(unittest.TestCase):
 
 
 class MainTests(unittest.TestCase):
-    def main(self, root: Path, argv: list[str], status: str) -> tuple[int, list[tuple[str, list[str], str]], list]:
+    def main(self, root: Path, argv: list[str], status: str,
+             cost: float = 0.0) -> tuple[int, list[tuple[str, list[str], str]], list]:
         calls: list[tuple[str, list[str], str]] = []
+        self.tasks_run: list[tuple[str, str]] = []
 
-        def fake_one_run(args: Namespace, results: Path, scratch: Path, task: str, arm: str, rep: int) -> None:
+        def fake_one_run(args: Namespace, results: Path, scratch: Path, task: str, arm: str, rep: int) -> dict:
             calls.append((args.agent, list(args.pass_env), arm))
-            row = {"task": task, "arm": arm, "status": status, "passed": 1, "total": 1, "failure": None, "code": None}
+            self.tasks_run.append((task, arm))
+            row = {"task": task, "arm": arm, "status": status, "passed": 1, "total": 1, "failure": None, "code": None,
+                   "cost": cost}
             with (results / "results.jsonl").open("a") as handle:
                 handle.write(json.dumps(row) + "\n")
+            return row
 
         validated: list = []
 
-        def fake_validate(image: str, typed: bool = False, agentica: bool = False) -> dict[str, str | None]:
+        def fake_validate(image: str, typed: bool = False, agentica: bool = False,
+                          pi: bool = False) -> dict[str, str | None]:
             validated.append((image, typed, agentica))
-            return {"checker": "mypy 9.9", "image_id": "sha256:feed"}
+            return {"checker": "mypy 9.9", "image_id": "sha256:feed", "pi": "1.3.0" if pi else None}
 
         with (patch.object(run, "ROOT", root), patch.object(run, "EVAL", root / "eval"),
               patch.object(run, "build") as build, patch.object(run, "require_docker"),
@@ -438,10 +542,121 @@ class MainTests(unittest.TestCase):
         self.assertEqual((failing["agent"], failing["pass_env"], failing["agent_network"], failing["arms"]),
                          ("reference", [], False, run.REFERENCE_ARMS))
         self.assertEqual((failing["checker"], failing["image_id"], failing["image"]), ("mypy 9.9", "sha256:feed", "custom:1"))
-        self.assertEqual([arm for _, _, arm in normal_calls], list(run.ARMS))
+        self.assertEqual([arm for _, _, arm in normal_calls], run.DEFAULT_ARMS)
+        self.assertNotIn("skill-nocli", run.DEFAULT_ARMS)
         self.assertEqual({(agent, tuple(env)) for agent, env, _ in normal_calls}, {("pi", ("FOO",))})
         self.assertEqual(normal_validated, [(run.DEFAULT_IMAGE, True, True)])
         self.assertEqual((normal["agent_network"], normal["pass_env"]), (True, ["FOO"]))
+        self.assertEqual((normal["pi_version"], failing["pi_version"]), ("1.3.0", None))
+
+
+    def runtime_root(self, directory: str) -> Path:
+        root = Path(directory)
+        (root / "dist" / "runtime" / "bin").mkdir(parents=True, exist_ok=True)
+        (root / "dist" / "runtime" / "bin" / "agentica").write_text("binary")
+        return root
+
+    def test_an_arm_runs_only_on_its_task_subset(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            self.main(root, ["--tasks", "t1", "t2", "t3", "--arms", "skill", "skill-nocli",
+                             "--arm-tasks", "skill-nocli=t2,t3", "--reps", "2"], "pass")
+            info = self.result_info(root)
+
+        by_arm = {arm: sorted({task for task, name in self.tasks_run if name == arm}) for arm in ("skill", "skill-nocli")}
+        self.assertEqual(by_arm, {"skill": ["t1", "t2", "t3"], "skill-nocli": ["t2", "t3"]})
+        self.assertEqual(len(self.tasks_run), 3 * 2 + 2 * 2)
+        self.assertEqual(info["arm_tasks"], {"skill-nocli": ["t2", "t3"]})
+        self.assertIn("still name", info["arm_notes"]["skill-nocli"])
+
+    def test_a_bad_arm_task_subset_stops_before_any_run(self) -> None:
+        for bad in ("skill-nocli=t9", "python=t1", "skill-nocli=", "skill-nocli"):
+            with self.subTest(bad=bad), tempfile.TemporaryDirectory() as directory:
+                root = self.runtime_root(directory)
+                with self.assertRaises(SystemExit):
+                    self.main(root, ["--tasks", "t1", "--arms", "skill", "skill-nocli", "--arm-tasks", bad], "pass")
+                self.assertEqual(self.tasks_run, [])
+
+    def test_the_budget_stops_new_runs_and_the_summary_says_so(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            code, calls, _ = self.main(root, ["--tasks", "t1", "t2", "t3", "t4", "t5", "--arms", "skill", "--max-cost", "0.05"],
+                                       "pass", cost=0.02)
+            info = self.result_info(root)
+            (results,) = (root / "eval" / "results").iterdir()
+            summary = (results / "summary.md").read_text(encoding="utf-8")
+
+        # 0.00 + 0.01 fits, 0.02 + 0.02 fits, 0.04 + 0.02 would pass 0.05
+        self.assertEqual((code, len(calls)), (0, 2))
+        self.assertEqual((info["stopped_for_budget"], info["runs_skipped"], info["cost"], info["max_cost"]),
+                         (True, 3, 0.04, 0.05))
+        self.assertIn("stopped_for_budget: true (3 runs not started)", summary)
+        self.assertIn("cost: $0.0400 (cap $0.05)", summary)
+
+    def test_without_a_cap_every_run_starts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            self.main(root, ["--tasks", "t1", "t2", "--arms", "skill"], "pass", cost=5.0)
+            info = self.result_info(root)
+
+        self.assertEqual(len(self.tasks_run), 2)
+        self.assertEqual((info["stopped_for_budget"], info["runs_skipped"], info["max_cost"]), (False, 0, None))
+
+    def test_runs_in_flight_count_against_the_cap_and_a_failed_run_is_charged_the_estimate(self) -> None:
+        budget = run.Budget(1.0, 0.4)
+
+        self.assertEqual([budget.begin(), budget.begin(), budget.begin()], [True, True, False])
+        self.assertTrue(budget.stopped)
+        self.assertEqual(budget.end(None), (0.4, True))
+        self.assertFalse(budget.begin())
+
+    def test_an_outlier_raises_the_estimate_and_runs_without_a_cost_are_charged_it_but_stay_out_of_it(self) -> None:
+        budget = run.Budget(1.1, 0.01)
+        for _ in range(3):
+            self.assertTrue(budget.begin())
+            budget.end(0.01)
+        self.assertEqual(budget.estimate(), 0.01)
+        self.assertTrue(budget.begin())
+        budget.end(0.2)
+        # The highest cost seen, not the mean (0.0575), is the estimate of the next runs.
+        self.assertEqual(budget.estimate(), 0.2)
+        # No cost, a cost of 0 (usage missing) or no row at all: charged 0.2 each, and the estimate stays.
+        for reported in (None, 0.0, -1.0):
+            self.assertTrue(budget.begin())
+            _, charged_estimate = budget.end(reported)
+            self.assertTrue(charged_estimate)
+        self.assertEqual(budget.estimate(), 0.2)
+        self.assertAlmostEqual(budget.spent, 0.03 + 0.2 + 3 * 0.2)
+        # 0.83 + 0.2 fits under 1.1 only once.
+        self.assertEqual([budget.begin(), budget.begin()], [True, False])
+        self.assertTrue(budget.stopped)
+
+    def test_a_run_without_a_cost_prints_a_warning_when_there_is_a_cap(self) -> None:
+        args = Namespace()
+        for cap, warns in ((1.0, True), (None, False)):
+            with self.subTest(cap=cap), patch.object(run, "one_run", return_value={"cost": 0.0}):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    run.budgeted_run(args, run.Budget(cap, 0.01), Path("r"), Path("s"), "t1", "skill", 1)
+                self.assertEqual("warning: t1-skill-1 reported no cost" in out.getvalue(), warns)
+
+
+class PiVersionTests(unittest.TestCase):
+    def ensure(self, image: str, outcome: tuple[int | None, str, str]) -> str | None:
+        with patch.object(run, "probe", return_value=outcome), patch.object(run, "dockerfile_pi_version", return_value="1.3.0"):
+            return run.ensure_pi(image)
+
+    def test_the_default_image_must_have_the_pinned_pi_and_another_image_is_only_recorded(self) -> None:
+        self.assertEqual(self.ensure(run.DEFAULT_IMAGE, (0, "1.3.0\n", "")), "1.3.0")
+        self.assertEqual(self.ensure("custom:1", (0, "pi 1.0.0\n", "")), "1.0.0")
+        self.assertIsNone(self.ensure("custom:1", (127, "", "not found")))
+        for outcome in ((0, "1.0.0\n", ""), (127, "", "not found")):
+            with self.subTest(outcome=outcome), self.assertRaises(SystemExit) as raised:
+                self.ensure(run.DEFAULT_IMAGE, outcome)
+            self.assertIn("docker rmi", str(raised.exception))
+
+    def test_the_dockerfile_pins_a_pi_version(self) -> None:
+        self.assertRegex(run.dockerfile_pi_version() or "", r"^\d+\.\d+\.\d+$")
 
 
 class SummaryTests(unittest.TestCase):
@@ -449,16 +664,20 @@ class SummaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             results = Path(directory)
             rows = [{"task": "t1", "arm": "typed-python", "status": "pass", "passed": 2, "total": 2, "seconds": 3.0,
-                     "failing_runs": 1, "check_runs": 2, "type_escapes": 1, "failure": None, "code": None},
+                     "failing_runs": 1, "check_runs": 2, "type_escapes": 1, "query_runs": 1, "refused_queries": 1,
+                     "read_runs": 4, "failure": None, "code": None},
                     {"task": "t1", "arm": "typed-python", "status": "fail", "passed": 0, "total": 2, "seconds": 5.0,
-                     "failing_runs": 3, "check_runs": 4, "type_escapes": 2, "failure": "check", "code": "arg-type"}]
+                     "failing_runs": 3, "check_runs": 4, "type_escapes": 2, "query_runs": 2, "refused_queries": 2,
+                     "read_runs": 6, "failure": "check", "code": "arg-type"}]
             (results / "results.jsonl").write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
             with contextlib.redirect_stdout(io.StringIO()):
                 run.summarize(results)
             summary = (results / "summary.md").read_text(encoding="utf-8")
 
-        self.assertIn("check runs | type escapes", summary)
-        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | 4.0 | 2.0 | 3.0 | 1.5 | check:arg-type |", summary)
+        self.assertIn("check runs | query runs | refused | read runs | type escapes", summary)
+        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | 4.0 | 2.0 | 3.0 | 1.5 | 1.5 | 5.0 | 1.5 | check:arg-type |",
+                      summary)
+        self.assertIn("stopped_for_budget: false", summary)
 
 
 class DockerBoundaryTests(unittest.TestCase):
