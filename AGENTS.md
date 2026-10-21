@@ -14,6 +14,9 @@ compiler/           the front end in Agentica (§18), one folder per context
                     the stages), packages (manifest, lock, cache), catalog
                     (builtins, prelude); front_end.agc is the program the
                     binary carries
+Makefile, mk/       the build: the root has the defaults and `help`; mk/*.mk
+                    has one file per area (vm, bootstrap, test, vm-test,
+                    windows, release, site), included in a fixed order
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
 vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
                     agentica.c is the main of the binary (`run`, front end, hand-off)

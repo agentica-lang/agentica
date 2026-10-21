@@ -145,7 +145,7 @@ jobs:
       - uses: actions/cache/restore@v6
         with:
           path: build/ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
 
       - name: C tests (builds the VM from the sources)
@@ -222,7 +222,7 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           path: build/ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'vm/**/*.c', 'vm/**/*.h') }}
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
 
   # The four summaries side by side: a case that no system ran (host-only or open gap on all four) proves nothing, and
   # one job cannot see that.
