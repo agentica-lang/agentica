@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The conformance matrix: which test modules prove each promised area, and the evidence a system produced.
 
-    conformance.py modules AREA            print the modules of an area, separated by spaces (the Makefile uses it)
+    conformance.py modules AREA            print the modules of an area, separated by spaces (mk/test.mk uses it)
     conformance.py areas                   print the area names, in the order the workflow runs them
     conformance.py host PLATFORM           fail unless this machine is the PLATFORM that the job says it is
     conformance.py report DIR [--platform P]
@@ -88,7 +88,7 @@ HOST_ONLY_ALLOWED = {
 # The reason of a golden fixture that holds the answers of the other family of systems (tests/vm_diff_support.py).
 FIXTURE_VARIANT = re.compile(r"^([\w.-]+-(posix|windows)\.agc) holds the answers of")
 
-# area -> (what it proves, modules). The order is the order of the workflow steps. The areas that the Makefile and the
+# area -> (what it proves, modules). The order is the order of the workflow steps. The areas that mk/*.mk and the
 # workflow run on their own (the build, the fixed point, the C tests and the destructive filesystem group) are steps of
 # the job, not modules, so they are not here.
 AREAS = {
@@ -206,7 +206,7 @@ def modules(area: str) -> list[str]:
 
 
 def all_modules() -> list[str]:
-    """Every tests/test_*.py file, as the Makefile names it."""
+    """Every tests/test_*.py file, as mk/test.mk names it."""
     return sorted(f"tests/{path.name}" for path in (ROOT / "tests").glob("test_*.py"))
 
 
