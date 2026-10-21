@@ -46,7 +46,7 @@ and the JIT (9.1), and order step 11 (multicore) does not wait for it.
   count as check calls, like `agentica check`: a failing checker run is a repair
   attempt, and tokens and repairs are compared with the checker calls included
   on both sides.
-- [ ] In the full round, measure the semantic CLI of phase 26 as
+- [ ] In the full round, measure the semantic CLI (row 7.2b) as
   `docs/future/39-semantic-cli.md` §39.12 says: count its calls, and run one
   Agentica arm without it on the tasks that cross a program.
 - [ ] Record the results in a new section of `docs/eval.md`, with the skill

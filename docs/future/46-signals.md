@@ -645,28 +645,18 @@ the name).
 
 ### 46.6 Testing plan (for later)
 
-The tests are hermetic, Linux only (CI fails if they cannot run there), and
-follow the process-test rule of `AGENTS.md`. Python tests in
-`tests/test_vm_signals.py`; the C side (the masks, the one-value-per-signal rule
-of the channel, the end of the owning task, the fan-out to several
-subscriptions and the `_exit` path of Quit) in `vm/tests`. The cases:
+The tests are hermetic, Linux only, and follow the process-test rule of
+`AGENTS.md`. They cover these behaviors:
 
-1. **A handled stop runs the cleanup.** A program subscribes to TERM, runs its
-   cleanup, prints a line and exits 0 after `os.kill(pid, SIGTERM)`.
-2. **Forwarding.** The program starts a child with `spawn_group` that handles
-   TERM; on TERM it forwards the signal with `Process.signal`.
-3. **Later signals and the force path.** The program ignores a second TERM and
-   stays alive. Then QUIT: the program exits with status 131 as a normal exit
-   (not death by a signal), its children are gone (`os.killpg` with signal 0
-   fails), and no core file was written.
-4. **Escalation.** A child ignores TERM; the program sends Kill to the group
-   after its deadline and the group is gone.
-5. **Pid signals.** A test-owned process started from a symlink named
-   `signal-target` to `/bin/sleep` (so its comm is that name) receives the
-   signal with the right name. With a wrong name the call returns an error and
-   the process is still alive.
-6. **Ignored at start.** The VM starts with INT ignored, as `nohup` does.
-   `Signal.channel` returns the `ignored` error, and INT stays ignored.
+- a handled TERM runs the cleanup, prints, and exits 0;
+- a TERM is forwarded to a child started with `spawn_group`;
+- a second TERM is ignored; QUIT exits with status 131 as a normal exit (not
+  death by a signal), leaves no children, and writes no core file;
+- a child that ignores TERM is killed with its group after the deadline;
+- a signal to a pid carries the right name, and a wrong name is an error that
+  leaves the process alive;
+- INT is ignored at start, as `nohup` does: `Signal.channel` returns the
+  `ignored` error, and INT stays ignored.
 
 ### 46.7 Phases
 
