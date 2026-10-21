@@ -16,6 +16,8 @@ means a repo test enforces it. Unmarked rules are review-only.
 - `references/style.md`: bad/good examples for these rules.
 - `references/performance.md`: measured costs; speed work requires profiling
   and measurement.
+- `site/content/style.md`: the short version for people, on the site; change
+  it together with these rules.
 
 Change style only in code you touch. Restyle untouched code separately.
 

@@ -13,7 +13,8 @@ compiler/           the front end in Agentica (§18), one folder per context:
                     app (CLI, pipeline), io (the only I/O of the stages),
                     syntax (lexer, parser), modules (linker), packages
                     (manifest, lock, cache), check, catalog (builtins,
-                    prelude), lower, bytecode, diagnostics, bdd, embedded;
+                    prelude), lower, bytecode, diagnostics, docs (`agentica
+                    doc`), query (`agentica outline`), bdd, embedded;
                     front_end.agc at the root is the program the binary
                     carries
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
@@ -33,6 +34,7 @@ docs/
   roadmap/          phases and the done checklist (README.md: current order)
   vm/               VM design: bytecode, loader, layers (§15), core invariants (§14)
 site/content/       Hugo documentation site
+site/highlight/     colors the agentica code blocks of the built site
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agentica-development (working on this repo), agentica-programming
                     (writing .agc), agentica-code-guidelines (.agc style and
@@ -114,6 +116,7 @@ phase 13).
 
 - **Task:** writing or reviewing `.agc` style
   - **Read:** `.agents/skills/agentica-code-guidelines/`
+    (`site/content/style.md` is its page for people)
 
 - **Task:** `site/` or `benchmarks/`
   - **Read:** `.agents/skills/agentica-development/SKILL.md`
@@ -128,20 +131,21 @@ phase 13).
   a runtime error of the front end escape: a failure is a diagnostic.
 - Pure core: every folder of `compiler/` except `io/`, `app/`, `bdd/` and
   `embedded/` (`syntax`, `modules`, `check`, `catalog`, `lower`, `bytecode`,
-  `diagnostics`) never calls `File`, `Dir`, `Path` (except `Path.join`),
-  `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`, `Time`,
-  `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or `puts`, and never
-  imports `io/`, `app/`, `bdd/` or an impure `std/` module. They reach the
-  machine through the `Workspace` record (`modules/workspace.agc`), which
-  `io/host.agc` builds and `app/` passes in. `app/`, `bdd/` and `io/` may do
-  I/O. `tests/test_style_core_purity.py` enforces it.
+  `diagnostics`, `docs`, `query`) never calls `File`, `Dir`, `Path` (except
+  `Path.join`), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`,
+  `HttpWire`, `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or
+  `puts`, and never imports `io/`, `app/`, `bdd/` or an impure `std/` module.
+  They reach the machine through the `Workspace` record
+  (`modules/workspace.agc`), which `io/host.agc` builds and `app/` passes in.
+  `app/`, `bdd/` and `io/` may do I/O. `tests/test_style_core_purity.py`
+  enforces it.
 - Diagnostic codes are stable, prefixed by stage (`LEX-`, `PARSE-`, `CHECK-`,
   `RUNTIME-`, `LOWER-`, `BYTECODE-`) or by area (`PKG-`: the manifest, the lock
-  and the package cache), and carry a source span. A `PKG-` error about
-  `agentica.toml` or `agentica.lock` carries the file and the key path instead
-  (`key_path` in `--json`; a missing or unreadable file has the file alone).
-  Tests assert the code (and the span, or the file and key path, when it
-  matters), never message text.
+  and the package cache; `QUERY-`: the query commands, exit 2), and carry a
+  source span. A `PKG-` error about `agentica.toml` or `agentica.lock` carries
+  the file and the key path instead (`key_path` in `--json`; a missing or
+  unreadable file has the file alone). Tests assert the code (and the span, or
+  the file and key path, when it matters), never message text.
 - `compiler/` is the front end: every language change (syntax, checker rule,
   builtin row, builtin record or enum entry, message text) goes there, with its
   golden. The files `builtins_data.agc`, `check_tables.agc` and
@@ -159,7 +163,8 @@ phase 13).
   supported during migration. Pytest is a test-only Poetry dependency. Node
   and Python test peers (curl included) use the standard library only. The
   VM's C dependencies are the submodules in `vm/third_party`; the only other
-  dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+  dev-tool dependencies are the pinned jscpd in `tools/jscpd` and the site
+  highlighter in `site/highlight` (vscode-textmate and vscode-oniguruma).
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external

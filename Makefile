@@ -21,7 +21,7 @@ VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS below).
 .DEFAULT_GOAL := all
 
-.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli conformance conformance-report bootstrap-smoke test-distribution release-check release-package release-smoke clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
+.PHONY: all agentica test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-shared test-cli conformance conformance-report bootstrap-smoke test-distribution release-check release-package release-smoke clean test-bdd smoke goldens bench eval-references version vm-test vm-test-binaries docker-test-image windows-docker-image windows-docker-wrappers windows-docker-build windows-docker-check windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions vm-latency vm-task-map vm-fuzz stage1 stage2 stage3 stage0 stage0-check fixed-point vm-gc-stress vm-trace-off vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-layers vm-diff-build vm-diff-test vm-golden-check sweep-full vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-openssl vm-openssl-key vm-third-party vm-third-party-key site site-serve site-sass dup-check dup-baseline FORCE
 
 all: $(PRODUCT)
 
@@ -293,8 +293,14 @@ site site-serve: export HUGO_PARAMS_VERSION = $(AGC_VERSION)
 site-sass:
 	@command -v sass >/dev/null || { echo "The site needs Dart Sass: put its sass on PATH or in $(DART_SASS) (pinned version in .github/workflows/pages.yml)" >&2; exit 1; }
 
-site: site-sass
+site/highlight/node_modules: site/highlight/package.json site/highlight/package-lock.json
+	@if [ -L $@ ]; then echo "$@ is a symlink: npm ci would empty its target; remove the link (each worktree installs its own)"; exit 1; fi
+	npm ci --prefix site/highlight --ignore-scripts --no-audit --no-fund
+	touch $@
+
+site: site-sass site/highlight/node_modules
 	hugo --cleanDestinationDir --source site --panicOnWarning $(HUGO_FLAGS)
+	node site/highlight/highlight.mjs site/public
 
 site-serve: site-sass
 	hugo server --source site
@@ -758,6 +764,26 @@ fixed-point: $(STAGE_DIR)/stage3.agcb dist/agentica$(EXE)
 # A new stage0 is the stage2 of a checkout where the fixed point holds. The next make rebuilds everything from it.
 stage0: $(STAGE_DIR)/stage3.agcb
 	cp $(STAGE_DIR)/stage2.agcb $(STAGE0)
+
+# make stage0-check BASE_STAGE0=<file>: stage2 built from BASE_STAGE0 (the stage0 of the base branch) with this checkout's
+# compiler/ must be the checked-in stage0, byte for byte (references/ci.md, "Refreshing stage0"). A stage0 compiled with another
+# seed cannot pass; the owner approves that one by hand. The stages go to their own folder, and the first binary and its
+# embedded seed are removed before and after, so a later make links them from bootstrap/stage0.agcb again (the seed is a
+# timestamp dependency of them, and an older file would not relink).
+STAGE_CHECK_DIR := build/stage-check
+STAGE_CHECK_BOOT := $(BOOT) $(VM_BUILD)/bootstrap/embedded.s $(VM_OBJ)/embedded-stage0.o
+stage0-check:
+	@test -n "$(BASE_STAGE0)" -a -f "$(BASE_STAGE0)" || { echo "usage: make stage0-check BASE_STAGE0=<stage0 of the base branch>" >&2; exit 1; }
+	rm -rf $(STAGE_CHECK_DIR) $(STAGE_CHECK_BOOT)
+	status=0; \
+	$(MAKE) --no-print-directory STAGE0="$(BASE_STAGE0)" STAGE_DIR=$(STAGE_CHECK_DIR) stage2 || status=$$?; \
+	rm -f $(STAGE_CHECK_BOOT); \
+	test $$status -eq 0 || { echo "stage0-check: could not build stage2 from $(BASE_STAGE0)" >&2; exit $$status; }
+	cmp $(STAGE_CHECK_DIR)/stage2.agcb $(STAGE0) || { \
+	  echo "stage0-check: bootstrap/stage0.agcb is not the stage2 that the stage0 of the base branch builds from this compiler/." >&2; \
+	  echo "A refresh must be made with 'make fixed-point stage0' on the base branch's stage0. A stage0 compiled with another seed" >&2; \
+	  echo "(STAGE1_COMPILER) cannot pass this check: say so in the PR; the owner approves it by hand." >&2; exit 1; }
+	@echo "stage0-check: ok, $(STAGE0) is the stage2 built from $(BASE_STAGE0)"
 
 VM_TESTS := $(patsubst vm/tests/%_test.c,$(VM_BUILD)/%-test$(EXE),$(wildcard vm/tests/*_test.c))
 .SECONDARY: $(patsubst vm/tests/%.c,$(VM_OBJ)/tests/%.o,$(wildcard vm/tests/*_test.c))

@@ -16,10 +16,10 @@ stages may use `Result` with a packed `Problem`. `try` stops at the first error.
 
 `compiler/` has one folder per context: `app/`, `io/`, `syntax/`, `modules/`,
 `packages/`, `check/`, `catalog/`, `lower/`, `bytecode/`, `diagnostics/`,
-`bdd/` and `embedded/`, with `front_end.agc` at the root. A new file goes in the
-folder of its context. Names below are bare; the folder is in each label
-(`references/repo-map.md` has every file). An import inside a folder is the
-bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
+`docs/`, `query/`, `bdd/` and `embedded/`, with `front_end.agc` at the root. A new file
+goes in the folder of its context. Names below are bare; the folder is in each
+label (`references/repo-map.md` has every file). An import inside a folder is
+the bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
 
 - Data: `syntax/source.agc`, `syntax/token.agc`, `syntax/types.agc` (the
   `Type` enum), `diagnostics/diagnostic.agc`, `diagnostics/problem.agc` (the
@@ -68,12 +68,24 @@ bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
   `bytecode_pool.agc`, `bytecode_bytes.agc`, `bytecode_tables.agc`
   (`FORMAT_VERSION`, limits, `OPCODES`), `bytecode_failure.agc`, runner
   `bytecode.agc`.
+- Docs (`docs/`, §32.5): `agentica doc`. It lexes and parses one module and
+  imports only `syntax/` and `diagnostics/`: `doc.agc` (`of_text`),
+  `doc_model.agc` (the exported items; the doc of an export is on its
+  `ExportDecl`), `signature.agc`, `doc_json.agc`, `doc_text.agc`. The command
+  is `app/cli_doc.agc`; the tests are `tests/test_spec_doc.py`.
+- Query (`query/`, §39): `agentica outline`. It parses one file and lists its
+  declarations, private ones too, from the items of `docs/doc_model.agc`:
+  `query_options.agc` (`--json`, `--ai`, `--stdin FILE` after the command,
+  `QUERY-USAGE`), `query_files.agc` (the one file, read through the
+  `Workspace`, and the name an answer gives it), `outline.agc`,
+  `outline_json.agc`, `outline_text.agc`. The command is `app/cli_query.agc`;
+  the tests are `tests/test_spec_outline.py`.
 
 ### Pure core, one port
 
 Every folder of `compiler/` except `io/`, `app/`, `bdd/` and `embedded/`
 (`syntax`, `modules`, `packages`, `check`, `catalog`, `lower`, `bytecode`,
-`diagnostics`)
+`diagnostics`, `docs`, `query`)
 is pure: it never calls `File`, `Dir`, `Path` (only `Path.join`, which is
 string work), `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`,
 `Time`, `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or a bare `puts`,

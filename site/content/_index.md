@@ -49,5 +49,6 @@ The [language tour](/tour/) covers [structs](/tour/structs/), [enums and `case`]
 - [Language tour](/tour/): the language in short pages, one idea at a time.
 - [Library](/library/): every builtin module, with one example per function.
 - [Language specification](/reference/): the formal grammar and rules.
+- [Style guide](/style/): how to write simple code that is easy to read.
 - [The Aurora VM](/vm/): how your program runs, and the libraries underneath.
 - [Design decisions](/design/): the main design decisions and why each was taken.

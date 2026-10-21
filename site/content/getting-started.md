@@ -106,6 +106,29 @@ String.split(s: String, separator: String) -> List[String]
 Split text; an empty separator gives characters.
 ```
 
+## Read a module's API
+
+```sh
+agentica doc std/queue    # a file path works too; --json prints one JSON object
+```
+
+It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file: the module's imports need not exist. Declarations without `export` are left out.
+
+## List a file's declarations
+
+```sh
+agentica outline src/orders.agc    # --json prints one JSON object; std/queue works too
+```
+
+```text
+src/orders.agc:3:1 export struct Order
+src/orders.agc:4:3 field Order.id: Int
+src/orders.agc:8:1 export def total(order: Order) -> Int
+src/orders.agc:14:1 def round_cents(value: Float) -> Int
+```
+
+It prints each declaration with `file:line:column` first, like `rg`, and private declarations too. `--json` adds the `##` doc and summary, the signature, `exported`, and the span of each declaration and of its name, with the fields and variants. Like `doc`, it only reads the file, so its imports need not exist. A bad question, such as a missing file, is `QUERY-USAGE` and exits 2.
+
 ## Options
 
 | Option | Does |
@@ -116,6 +139,7 @@ Split text; an empty separator gives characters.
 | `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS`. `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
 | `--allow-run` | lets the program start programs with `Process.spawn` |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
+| `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `compile FILE -o OUT` | writes VM bytecode |
 | `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |

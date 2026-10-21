@@ -1695,6 +1695,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
     Ast.FunctionDecl(
       id: body.ids,
       name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
       params: params.nodes,
       result: result.node,
       body: body.nodes,
@@ -1713,6 +1714,7 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String])
   node = Ast.FieldDecl(
     id: type.ids,
     name: e.tokens[pos].lexeme,
+    name_span: e.tokens[pos].span,
     type: type.node,
     doc: doc,
     span: Base.span_from(e, pos, stop),
@@ -1741,6 +1743,7 @@ def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String
   node = Ast.EnumVariant(
     id: next_id,
     name: e.tokens[pos].lexeme,
+    name_span: e.tokens[pos].span,
     payload_types: payload,
     doc: doc,
     span: Base.span_from(e, pos, stop),
@@ -1813,6 +1816,7 @@ def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]
     Ast.StructDecl(
       id: next_id,
       name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
       fields: fields,
       doc: doc,
       span: Base.span_from(e, pos, stop),
@@ -1868,6 +1872,7 @@ def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) 
     Ast.EnumDecl(
       id: next_id,
       name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
       type_parameters: parameters.names,
       variants: variants,
       doc: doc,
@@ -2005,6 +2010,7 @@ def parse_constant_decl(
     Ast.ConstDecl(
       id: value.ids,
       name: name,
+      name_span: e.tokens[name_at].span,
       type: type,
       value: value.node,
       exported: exported,

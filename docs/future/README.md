@@ -125,8 +125,8 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 32
   - Title: Doc comments
   - File: [`32-doc-comments.md`](32-doc-comments.md)
-  - Status: 22a built (row 7.2a); 22b (`agentica doc`) waits until after
-    the bootstrap (row 22b)
+  - Status: 22a built (row 7.2a); `agentica doc` built (row 22b, part 1);
+    `agentica help` for `std/` planned (row 22b, part 2)
 
 - §: 34
   - Title: Shared small values in the VM
@@ -142,7 +142,7 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 39
   - Title: Semantic CLI for agents
   - File: [`39-semantic-cli.md`](39-semantic-cli.md)
-  - Status: Planned (row 7.2b)
+  - Status: In progress (row 7.2b): `doc` and `outline` built
 
 - §: 40
   - Title: Native code and FFI
