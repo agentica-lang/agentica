@@ -25,8 +25,9 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
 - Files come from the disk of the working folder, except those with a buffer
   (`update`, or `Workspace.buffers`): the text stands in for the file, whether
   or not the disk has it, for the file and for every file that imports it.
-  `close` gives the disk back. Two spellings of one file are one buffer (create the folder of a new file
-  before `update`). `Workspace.version` is reserved (1).
+  `close` gives the disk back. Two spellings of one file are one buffer (create
+  the folder of a new file before `update`). `Workspace.version` is reserved
+  (1).
 - A `Session` is an immutable value: tasks may share and ask it at once, and an
   `update` leaves the copy of other tasks as it was. `Session.internal` is not
   API.
@@ -64,8 +65,8 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   column 1, an empty `symbol` name or a path with no `*.agc` file. Their
   `file` is the path asked, or `<arguments>` for `symbol`; the usage `help`
   of the command line is missing.
-- Cost: the compiler's pure core is compiled into the program, about 24,000
-  lines, so a run from source pays seconds. For a tool that runs often:
+- Cost: the compiler's pure core (about 27,000 lines) is compiled into the
+  program, so a run from source pays seconds. For a tool that runs often:
   `agentica compile tool.agc -o tool.agcb`, then `agentica run -- tool.agcb`.
 - `std/internal/` is private to `std/`: another file that imports it gets
   `CHECK-IMPORT-IO`.

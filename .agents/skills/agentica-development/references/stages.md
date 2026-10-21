@@ -109,24 +109,20 @@ stage:
     The manifests of the locked packages are checked before any file loads
     (`check_manifests`). The hash and link errors are at the import.
 
-- **Stage:** query (`query/`, `agentica outline`, `type-at`, `refs`, `symbol`)
-  - **Codes:** `QUERY-USAGE`, at the pseudo-file `<arguments>` (line 1, column
-    1), exit 2: a missing or extra argument, an unknown option, `--stdin`
-    without a file, a bad `FILE:LINE:COL`, an unreadable path, or a folder with
-    no `*.agc` file. `QUERY-NOT-FOUND`, at `<arguments>`, exit 2: `symbol` or
-    `refs` NAME is in no linked module and no builtin (both also exit 1 with the
-    first diagnostic when no root links). `QUERY-AMBIGUOUS-NAME`, at
-    `<arguments>`, exit 2: a `refs` NAME that more than one declaration answers
-    to (`refs_name.agc`). `QUERY-NO-EXPRESSION`, at the position in the file,
-    exit 2: `type-at` or `refs` on no token of an expression or name (`refs`
-    also on a module alias or a path of an import line). The stage reads the
-    words (`query_options.agc`), picks and names the file (`query_files.agc`)
-    and lists the declarations
-    (`outline.agc`, `outline_json.agc`, `outline_text.agc`). `outline` lexes and
-    parses only, so a lex or parse error of the file keeps its own code and
-    exits 1; it reuses `docs/` for the items. `type-at` and `refs` link and
-    check, so they can also fail with any `LEX-`, `PARSE-`, `PKG-` or `CHECK-`
-    code, exit 1.
+- **Stage:** query (`query/`, `outline`, `type-at`, `refs`, `symbol`)
+  - **Codes:** exit 2, at `<arguments>` (line 1, column 1): `QUERY-USAGE` (bad
+    arguments, `--stdin` without a file, a bad `FILE:LINE:COL`, an unreadable
+    path, a folder with no `*.agc`), `QUERY-NOT-FOUND` (`symbol` or `refs` NAME
+    is in no linked module and no builtin), `QUERY-AMBIGUOUS-NAME` (a `refs`
+    NAME that several declarations answer to, `refs_name.agc`).
+    `QUERY-NO-EXPRESSION`, at the position, exit 2: `type-at` or `refs` on no
+    expression or name (`refs` also on a module alias or a path of an import
+    line). The stage reads the words (`query_options.agc`), picks and names the
+    file (`query_files.agc`) and lists the declarations (`outline*.agc`).
+    `outline` only lexes and parses, so its `LEX-` or `PARSE-` keeps its code,
+    exit 1; it reuses `docs/` for the items. `type-at` and `refs` link and
+    check, so they can fail with any `LEX-`, `PARSE-`, `PKG-` or `CHECK-` code,
+    exit 1; `symbol` exits 1 only when no file links.
 
 - **Stage:** runtime (VM)
   - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,

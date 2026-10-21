@@ -5,7 +5,7 @@ Which folder or file owns something. The short tree is in `AGENTS.md`; `ls` and
 contract or a placement rule.
 
 ```text
-Makefile, mk/     # the build: the root has the defaults, the shared variables and `help`; mk/vm.mk the C VM and its modes, bootstrap.mk the stages and dist/agentica, test.mk the Python tests, vm-test.mk the C tests and VM checks, windows.mk, release.mk, site.mk; the include order in the Makefile matters
+Makefile, mk/     # the build: the root has the defaults and `help`; mk/vm.mk the C VM and its modes, bootstrap.mk the stages and dist/agentica, test.mk, vm-test.mk, windows.mk, release.mk, site.mk; the include order matters
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make stage0 refreshes it; references/ci.md)
 compiler/         # the front end in Agentica (§18.3): one folder per context, a new file goes in the folder of its context; agentica.toml holds its [style] (lines at most 119 characters); imports across folders are relative (`../syntax/types`)
   front_end.agc  # the entry point of the front end of the single binary (the Makefile builds this file; make's stages build it)
@@ -14,13 +14,12 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     cli.agc  # run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
     cli_options.agc cli_help.agc cli_doc.agc cli_query.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; doc (prints docs/'s model); the query commands (outline: prints query/'s model); the fixed texts; what a command answers (Reply, Answer); Launch
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
-  analysis/  # the semantic queries, once (§39, `std/analysis`): the CLI and the library both call it, so they cannot drift
-    front.agc  # read_root, check_file, query_file, query_cached, refresh, stage_problem, link_problem: read, link and check, shared by the CLI, the BDD driver and the queries
-    partial.agc  # query_file: link, then Checker.check_recovering (the program, the problems and names of the functions that failed), for `--partial`
-    analysis.agc  # check, checked, outline, type_at, type_at_partial, refs, refs_partial, symbol over Env.Settings (the Workspace holds any unsaved buffers): data of model.agc or the first Problem
-    model.agc convert.agc  # the plain answers (Outline, TypeAt, Checked; no enum) and the conversion from the stages' own types
-    cache.agc  # the Cache of a Session: checked roots (16, by last use) and parsed modules; fingerprint, find, remember
-    session.agc  # the immutable Session of stdlib/analysis.agc: the settings, the buffers and the cache
+  analysis/  # the semantic queries, once (§39, `std/analysis`): the CLI and the library call it
+    front.agc  # read_root, check_file, query_file, query_cached, refresh: read, link and check, shared by the CLI, the BDD driver and the queries
+    partial.agc  # query_file for `--partial`: link, then Checker.check_recovering
+    analysis.agc  # check, checked, outline, type_at, refs, symbol over Env.Settings; the Workspace holds the unsaved buffers
+    model.agc convert.agc  # the plain answers (no enum) and their conversion from the stages' types
+    cache.agc session.agc  # the checked roots and parsed modules of a Session; the Session of stdlib/analysis.agc
   io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
     host.agc  # workspace_with(std_source): the real Workspace over the std/ reader it is given; workspace(): for `--stdlib` runs; process_env(): the Env of this process
     stdin_buffer.agc  # take(): the standard input as a buffer; over(): a Workspace with it as one file (modules/overlay.agc)
@@ -71,7 +70,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     problem.agc  # the packed Problem with its notes (pack, unpack), which every stage returns as its error
     diagnostic_model.agc diagnostic_json.agc diagnostic_read.agc  # the diagnostic as plain data; its JSON (--json); and back from JSON (Analysis.diagnostic)
   docs/  # `agentica doc` (§32.5): lex and parse one module, then its exported API with the `##` docs (imports only syntax/ and diagnostics/)
-  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` checks it and answers for a position; `--partial` answers `type-at` and the position form of `refs` from the functions that check and from the link (partial_at.agc); `agentica symbol` links the files under its paths and finds a name; `agentica refs` links them (or FILE and its paths), checks them and lists the uses of a name or of the name at a position (imports docs/, modules/, check/, catalog/ and syntax/)
+  query/  # the query commands (§39): `outline` parses one file; `type-at`, `refs` and `symbol` link and check (`--partial` answers from the functions that check: partial_at.agc); imports docs/, modules/, check/, catalog/ and syntax/
   bdd/  # the `agentica test` driver
     bdd_driver.agc  # run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
   embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary

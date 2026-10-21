@@ -41,12 +41,9 @@ change needs.
 
 ## Commands while you work
 
-`AGENTS.md` ("Commands") has the build and test commands (`make`,
-`make test TESTS=...`, `make tests KIND=...`, `make test-cli`, `make smoke`,
-`make site`, `make goldens`). More:
+`AGENTS.md` ("Commands") lists the build and test commands. The others:
 
 ```sh
-dist/agentica FILE.agc        # run; `check FILE` only checks; `run -- F.agcb` runs bytecode
 AGENTICA_VM_TRACE=profile dist/agentica check FILE   # step profile (references/vm-build.md)
 make vm-test                  # C tests; one: make build/vm/release/<name>-test
 make fixed-point              # stage2 == stage3 (about 25 s)
@@ -57,14 +54,10 @@ make dup-check                # jscpd: a new copy fails CI; share a helper inste
 ```
 
 Run what the change touches and the affected example with `dist/agentica`.
-Make runs one pytest process per module; keep xdist disabled by default because
-Make already parallelizes modules. Native pytest tests inherit scaled per-test
-timeouts from `tests/conftest.py`; legacy `TestCase` classes keep their own
-limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
-`unittest.TestCase` modules remain supported, `references/ci.md`); slow cases
-(frozen corpus, generated inputs, stress) use `@slow` for unittest or
-`pytest.mark.slow` for pytest. Locally run only the fast tier; CI runs
-`make test-slow`. Destructive filesystem cases never run on the host.
+Make runs one pytest process per module, so keep xdist off. Fast cases go in
+`tests/test_<area>.py`; slow ones (`@slow` on unittest, `pytest.mark.slow` on
+pytest) run only in CI (`make test-slow`). Destructive filesystem cases never
+run on the host (`references/ci.md`).
 
 ## Stage contract
 
@@ -78,39 +71,38 @@ limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
 
 ## Where new code goes
 
-- Keyword, operator, literal: `compiler/syntax/lexer.agc` tables, with a golden
-  (`references/frontend.md`).
-- AST node: `compiler/syntax/ast.agc`, the parser, and the passes that walk the
-  tree.
-- Syntax form: `compiler/syntax/parser.agc` and `ast.agc`, with a parser golden.
-- Diagnostic code: where the problem is found; prefix `LEX-`, `PARSE-`,
-  `CHECK-`, `RUNTIME-`, `LOWER-` or `BYTECODE-` (`references/stages.md`), or
-  `PKG-` for the manifest, the lock and the package cache (a failure at a key
-  path of `agentica.toml` or `agentica.lock` is `Failure.fail_key`).
+Recipes for each kind are in `references/frontend.md` ("Common tasks"); this
+list gives the homes.
+
+- Keyword, operator, AST node, syntax: `compiler/syntax/` (lexer tables,
+  `ast.agc`, the parser), with a golden.
+- Diagnostic code: where the problem is found, with its stage prefix (`LEX-`,
+  `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-`, `stages.md`), or
+  `PKG-` (`Failure.fail_key` for a key path in `agentica.toml` or
+  `agentica.lock`).
 - Builtin: catalog row in `compiler/catalog/builtins_data.agc` (golden in
   `tests/fixtures/frontend/catalog/`), checker rule, `VM_BUILTINS` in
   `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks
-  every catalog key), C in `vm/`, a golden (`references/vm-builtins.md`,
-  `vm.md`, `vm-c.md`).
+  every key), C in `vm/`, a golden (`references/vm-builtins.md`).
 - VM form or opcode: `compiler/lower/lower_*.agc`; `OPCODES` in
-  `compiler/bytecode/bytecode_tables.agc` = `agc_opcode` in `vm/value.h` (same
-  order); `vm/loader.c`, `vm/interp.c`, a golden (`references/vm-lowering.md`).
+  `compiler/bytecode/bytecode_tables.agc` mirrors `agc_opcode` in
+  `vm/value.h` (same order); `vm/loader.c`, `vm/interp.c`; a golden
+  (`references/vm-lowering.md`).
 - Pipeline stage: `compiler/<context>/<stage>.agc`, wired in
   `compiler/app/pipeline.agc`, with `tests/test_spec_<area>.py` and
   `tests/test_frontend_<stage>.py`.
-- Prelude method (List, Map or String in Agentica): a `Rule.Prelude` row in
-  `compiler/catalog/builtins_data.agc`, an entry in
-  `compiler/catalog/prelude_data.agc`, and a body in `stdlib/prelude/`
-  (`references/stages.md`, "Compiler prelude").
+- Prelude method (List, Map, Lazy): a `Rule.Prelude` row in
+  `builtins_data.agc`, an entry in `compiler/catalog/prelude_data.agc`, and a
+  body in `stdlib/prelude/` (`references/stages.md`, "Compiler prelude").
 - `std/` module: `stdlib/<name>.agc`, listed in `stdlib/MODULES`, with a doc on
   the module and each export (`references/library-notes.md`).
-- Test: `tests/test_<area>.py` (pytest; legacy unittest modules remain
-  supported). A language rule is `tests/test_spec_<area>.py` through
-  `--json check FILE`: assert code and span, never message text. VM behavior: a
-  fixture in `tests/fixtures/vm/` plus `.expected`.
-- Language rule: `docs/grammar/`, the site page, and
-  `.agents/skills/agentica-programming/`.
-- Style or idiom of `.agc` code: `.agents/skills/agentica-code-guidelines/`.
+- Test: `tests/test_<area>.py`. A language rule goes in
+  `tests/test_spec_<area>.py` through `--json check FILE`, asserting the code
+  and the span, never the message. VM behavior: a fixture in
+  `tests/fixtures/vm/` with its `.expected`.
+- Language rule: `docs/grammar/`, the site page and
+  `.agents/skills/agentica-programming/` change together. `.agc` style:
+  `agentica-code-guidelines`.
 
 ## VM rules in short
 
@@ -129,7 +121,7 @@ limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
 
 - `repo-map.md`: which file in `compiler/`, `vm/`, `tests/` or `stdlib/` owns
   something.
-- `frontend.md`: compiler edit recipes, stage/golden contract, gotchas and
+- `frontend.md`: compiler edit recipes, the stage and golden contract, gotchas,
   diagnostics; differential checks for performance changes.
 - `stages.md`: token kinds, diagnostic codes, AST nodes, per-stage notes, the
   command line.

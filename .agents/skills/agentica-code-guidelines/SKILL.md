@@ -10,8 +10,9 @@ description: >-
 # Agentica code guidelines
 
 Use on `.agc` that passes `agentica check`. Fix syntax or type errors first
-with `agentica-programming`. `[CODE]` means the front end rejects it; `[test]`
-means a repo test enforces it. Unmarked rules are review-only.
+with `agentica-programming`. A diagnostic code in parentheses means the front
+end refuses that form. `[test]` means a repo test enforces the rule. Unmarked
+rules are review-only.
 
 - `references/style.md`: bad/good examples for these rules.
 - `references/performance.md`: measured costs; speed work requires profiling
@@ -24,8 +25,8 @@ Change style only in code you touch. Restyle untouched code separately.
 ## Layout
 
 - Two spaces per indent; no tabs or trailing spaces; one newline at EOF.
-- Lines max 119 characters, comments included `[test]` in `compiler/` and
-  `stdlib/`; use the same limit elsewhere.
+- Lines max 119 characters, comments included (`[test]` in `compiler/` and
+  `stdlib/`); use the same limit elsewhere.
 - Separate top-level declarations with one blank line
   (`PARSE-MISSING-BLANK-LINE`); no double blank lines or blank lines right
   after `def` or before `end`.
@@ -88,7 +89,8 @@ Change style only in code you touch. Restyle untouched code separately.
 - Use a parenthesized pipe for three or more steps on one value; put one
   `|> f(args)` per line. Start with the input value. One step is a regular call.
 - Pipe into your own functions. Builtins with method forms use `.`; piping to
-  them fails (`CHECK-PIPE-METHOD`). Replace three-deep nested calls with a pipe.
+  them fails (`CHECK-PIPE-METHOD`): write `x.upcase`, not `x |> String.upcase`.
+  Replace three-deep nested calls with a pipe.
 
 ## case and if
 

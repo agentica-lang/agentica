@@ -16,27 +16,24 @@ check a signature with `agentica help NAME`.
 
 ## Check and run
 
-1. Save `program.agc` with exactly one `def main() -> Void` (`check` alone
-   does not need it).
-2. `agentica check F` checks only (`check --stdin F` checks the text on standard
-   input as if F held it). `agentica F ARGS` runs (`System.args()`
-   returns ARGS). `agentica compile F -o F.agcb`, then `agentica run [FLAGS]
-   -- F.agcb ARGS`. Use the path the user gives if `agentica` is not on PATH.
-3. Exit 0: success. Exit 1: first diagnostic on stderr (stable code `LEX-`,
-   `PARSE-`, `CHECK-`, `RUNTIME-` or `PKG-`, a span or, for `agentica.toml` and
-   `agentica.lock`, a key path, often a `help` line). Exit 2: bad
-   usage or unreadable file. Fix the first error and rerun.
-4. Done means exit 0 and the output matches the request. A check does not test
+1. Save `program.agc` with one `def main() -> Void` (`check` alone does not
+   need it).
+2. `agentica check F` only checks; `check --stdin F` checks standard input as
+   F. `agentica F ARGS` runs (`System.args()` returns ARGS). `agentica compile
+   F -o F.agcb`, then `agentica run [FLAGS] -- F.agcb ARGS`. Use the path the
+   user gives if `agentica` is not on PATH.
+3. Exit 0: success. Exit 1: the first diagnostic on stderr, with a stable code
+   (`LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-` or `PKG-`), a span (a key path for
+   `agentica.toml` and `agentica.lock`) and often a `help` line. Exit 2: bad
+   usage or an unreadable file. Fix the first error and rerun. `--ai` prints it
+   as compact text; `--json` as one object.
+4. Exit 0 and the output the request asks for mean done. A check does not test
    runtime behavior.
-5. `agentica help NAME` (`--json` too) prints a signature; `agentica help` lists
-   namespaces; unknown names exit 2. `agentica doc PATH` prints the exported API
-   of a file or a `std/` module. `agentica outline FILE`, `agentica type-at
-   FILE:LINE:COL`, `agentica refs NAME|FILE:LINE:COL [PATH...]` and `agentica
-   symbol NAME [PATH...]` query code without reading it
-   (`references/queries.md`); `type-at` and `refs FILE:LINE:COL` take
-   `--partial` while the code does not check.
-   Flags: `--allow-run` (for `Process.spawn`), `--seed N`, `--max-steps N`,
-   `--json`.
+5. `agentica help NAME` prints a signature (unknown name: exit 2); `agentica
+   doc PATH` prints the exported API of a file or `std/` module. Questions about
+   code, without reading it: `agentica outline`, `type-at`, `refs` and `symbol`
+   (`references/queries.md`). Run flags: `--allow-run` (`Process.spawn`),
+   `--seed N`, `--max-steps N`.
 
 ## Cheat sheet
 
@@ -86,28 +83,22 @@ def main() -> Void
 end
 ```
 
-Ruby forms that work: `s.length`, `s.strip`, `s.split(" ")`, `s.upcase`,
-`s.include?("x")`, `s.to_i` (a Result), `n.to_s`, `n.to_f`, `xs.size`,
-`xs.push(v)`, `xs.sort`, `xs.join(",")`, `m.keys`, `m.put(k, v)`, `m.get(k)`
-(a Result), `(1..3).to_a`, `n.times do |i| ... end`. Full list:
-`references/builtins.md`.
-
 Types: `Int` (64-bit), `Float`, `Bool`, `String`, `Nil`, `Void`, `List[T]`,
 `Map[K, V]` and `Set[T]` (K and T are `Int` or `String`), `Result[T]`, `Range`,
 `Json`, `Fn[A, ..., R]`, `Task[R]`, `Await[T]`, `Channel[T]`, `Lazy[T]`,
-`Process`, your `struct`/`enum`/alias names. Types start uppercase; values,
-functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
-`for _ in`); reading it is an error. Details: `references/language.md`.
+`Process`, your own names. Types start uppercase; values, functions and fields
+start lowercase or `_`. `_` discards (`_ = f()`, `for _ in`) and cannot be read.
+Builtins: `references/builtins.md`.
 
 ## Rules agents break
 
-- Syntax: no `;`, braces, `let`, `when`, `elif`, `then`, `match`, `loop do`,
-  `continue` (use `next`). Strings are double-quoted. Comments are `#`. `break`
-  and `next` stand alone: `if x` then `break`, never `break if x`.
-- File order: module doc, `import`s, constants (`LIMIT = 100`), `struct`/`enum`/
-  aliases, `export def`, private `def` (`CHECK-DECL-ORDER`). A `##` block goes
-  directly above a declaration (`PARSE-DETACHED-DOC`). Defaulted parameters are
-  constants and go last.
+- Syntax: no `;`, braces, `let`, `when`, `elif`, `then`, `match`, `loop do`
+  or `continue` (use `next`). Strings are double-quoted. `break` and `next`
+  stand alone: `if x` then `break`, never `break if x`.
+- File order: module doc, `import`s, constants, `struct`/`enum`/aliases,
+  `export def`, then private `def` (`CHECK-DECL-ORDER`). A `##` block sits
+  directly above its declaration (`PARSE-DETACHED-DOC`). A default is a literal
+  constant; parameters with a default come last (`CHECK-DEFAULT-ORDER`).
 - Imports: `import Models from "models"` then `Models.User`, or `import {User,
   LIMIT, greet as hello} from "models"`; never both on one line, never
   `Mod.LIMIT` for a constant. Packages: `references/modules.md`.
@@ -116,9 +107,9 @@ functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
 - Values are immutable: `xs = xs.push(4)`, `m = m.put("k", 1)`. A bare
   `xs.push(4)` is `CHECK-UNUSED-VALUE`. No field or index assignment:
   `user = user.with(age: 31)`.
-- A block cannot assign an outer variable (`CHECK-CAPTURED-ASSIGNMENT`). A
+- A block cannot assign an outer variable (`CHECK-CAPTURED-ASSIGNMENT`), but a
   `for x in xs ... end` loop can, so use it for running totals.
-- No implicit Int/Float (`CHECK-TYPE-MISMATCH`): `2 * 1.5` fails. Convert with
+- No implicit Int/Float (`CHECK-TYPE-MISMATCH`): `2 * 1.5` fails; convert with
   `n.to_f` or `x.to_i!`. `7 / 2` is `3`.
 - `==` works only on Int, Float, Bool, String, Nil (same type) and ranges.
   Compare enums and structs with `case` or a field. No chained comparisons.
@@ -136,8 +127,7 @@ functions and fields start lowercase or `_`. `_` discards (`_ = f()`,
 - `Task.await(task, timeout_ms)` returns `Await[R]` (`Await.Done(v)` or
   `Await.TimedOut`), not `R`; a timeout does not cancel the task.
 - A `Lazy` recipe (`xs.lazy`, `File.foreach`, `ch.lazy(ms)`) runs only in a
-  terminal (`to_a`, `first(n)`, `each`, `reduce`), which gives a `Result`
-  (`references/lazy.md`).
+  terminal (`to_a`, `first(n)`, `each`, `reduce`), and each returns a `Result`.
 - `Void` has no value (`v = puts("x")` is `CHECK-VOID-VALUE`). Functions, tasks
   and handles cannot be printed or interpolated. Write `(-5).to_s`, since
   `-5.to_s` fails.
@@ -154,41 +144,29 @@ Not in Agentica, and what to write instead: `Map.new` (`{}` with a type),
 
 Read only what the task needs:
 
-- `references/language.md`: a checker error about an operator, type, Void,
-  pattern, block, method or Result, or a core rule not stated here.
+- `references/language.md`: a checker error or a core rule not stated here.
 - `references/builtins.md`: a builtin not in the cheat sheet, or an exact
-  signature (String, List, Map, Set, Range, Int, Float, IO, System, Time,
-  Random, `Crypto.sha256`).
-- `references/lazy.md`: `Lazy[T]`, an endless source, file lines or channel
-  values through steps, `write_lines`, `try` in a step, the first results of a
-  long chain.
+  signature.
+- `references/lazy.md`: `Lazy[T]`, endless sources, file lines or channels
+  through steps, `try` in a step.
 - `references/examples.md`: a complete program to start from.
-- `references/performance.md`: slow programs, 100,000+ items or about 1 MB, hot
-  paths, `AGENTICA_VM_TRACE=profile`, `Profile.measure`, `Profile.steps`, flame
-  graphs.
-- `references/modules.md`: several files, shared constants, `std/`, `pkg/` or
-  packages (`agentica.toml`, `agentica.lock`).
+- `references/performance.md`: slow programs, 100,000+ items,
+  `AGENTICA_VM_TRACE=profile`, `Profile.measure`.
+- `references/modules.md`: several files, `std/`, `pkg/` or packages.
 - `references/json.md`: JSON. `references/toml.md`: TOML (`std/toml`).
-- `references/files.md`: files, directories, paths, locks, private files,
-  removing or renaming paths or trees.
+- `references/files.md`: files, directories, paths, locks, removing trees.
 - `references/processes.md`: starting programs (`Process`).
-- `references/tasks.md`: concurrency, `Task.map`, timed awaits, `Task.cancel`,
-  `Channel`.
-- `references/analysis.md`: asking the compiler for diagnostics, an outline, a
-  type, a symbol or references from a program, with unsaved buffers
-  (`std/analysis`).
-- `references/binary.md`: packing or unpacking bytes (`std/binary`).
-- `references/logger.md`: levels, fields, handlers (`std/logger`).
+- `references/tasks.md`: concurrency, timed awaits, `Task.cancel`, `Channel`.
+- `references/analysis.md`: compiler answers inside a program (`std/analysis`).
+- `references/binary.md`: `std/binary`. `references/logger.md`: `std/logger`.
 - `references/network.md`: TCP, TLS, HTTP client or server.
-- `references/bdd.md`: `.feature` specs and BDD steps (`agentica test`).
+- `references/bdd.md`: `.feature` specs and steps (`agentica test`).
 - `references/testing.md`: unit tests (`Test.test`, `Test.eq`, `Test.run`).
 - `references/diagnostics.md`: a diagnostic code whose meaning or fix is
   unclear.
-- `references/queries.md`: `agentica outline`, `type-at`, `refs` and `symbol`:
-  a file's declarations, the type and definition at a position, every
-  reference to a name, or where a name is defined, without reading the files.
+- `references/queries.md`: `outline`, `type-at`, `refs`, `symbol` (and
+  `--partial` while the code does not check).
 
-For style and idiom, use `agentica-code-guidelines`. Online docs:
-`https://sonic182.github.io/agentica/llms.txt` indexes them;
-`https://sonic182.github.io/agentica/llms-full.txt` has them all.
-`agentica help NAME` is the authority on signatures for the installed binary.
+Style and idiom: `agentica-code-guidelines`. Online docs:
+`https://sonic182.github.io/agentica/llms.txt` (index) and `llms-full.txt`
+(all). `agentica help NAME` is the authority on signatures.

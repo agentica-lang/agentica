@@ -30,73 +30,39 @@ with a packed `Problem` (`references/stages.md`).
   only `syntax/` and `diagnostics/`; the doc of an export is on its
   `ExportDecl`. The command is `app/cli_doc.agc`; the tests are
   `tests/test_spec_doc.py`.
-- Query (`query/`, §39): `agentica outline` parses one file and lists its
-  declarations, private ones too, from the items of
-  `compiler/docs/doc_model.agc`. `agentica type-at` links and checks the file
-  (`Front.query_file`, `Checker.check_query`: a missing `main` is not
-  `CHECK-MAIN`; `agentica check` takes the same entry) and answers
-  for a position: `at.agc` finds the innermost typed expression (a worklist over
-  `check/const_walk.agc`) and `type_at.agc` prints the type through
-  `Types.to_text_as` and `LinkedModule.aliases`. The definition's `doc` and
-  `signature` come from `LinkedModule.parsed` (the linker drops the doc of an
-  `export`); a builtin (`Checked.resolved`, or a call by name) answers with
-  `catalog/catalog_json.agc`, which `help` shares. A local is found by
-  `locals.agc`, which follows the position down from its function or from the
-  value of a constant (a block there starts with an empty scope), rebuilding
-  the scope as `check_stmt.agc` does (a worklist, no recursion); the types come
-  from `Checked.bound` (`State.record_bound`: by the id of a parameter, binding
-  or `for` node, and for a pattern by the id of the variant pattern, one type
-  for each slot), kept apart from `Checked.types` so the lowering never sees
-  them. `agentica symbol NAME [PATH...]` parses and links only:
-  `symbol_paths.agc` expands the paths through `Workspace.list_folder` (the
-  `--stdin` file is the first root), `symbol_link.agc` links every root with
-  `Linker.link_programs` (`modules.agc` `load_roots`, then `rewrite_module`
-  for each root: a root that fails is `Skipped`, a module that two roots reach
-  is linked once, and every module has an `@N::` prefix), and
-  `symbol.agc` matches the name against `Model.declared` of
-  `LinkedModule.parsed` for each module (the aliases of the roots and
-  `std/NAME.` qualify exported names) and the builtin catalog. `symbol_json.agc`
-  and `symbol_text.agc` print it, the text through `outline_text.agc`.
-  `agentica refs` links the same way (`Core.refs_at` links FILE and `PATH...`,
-  `Core.refs_named` the paths of a NAME, whose declaration `symbol.agc` finds
-  and `refs_name.agc` picks) and checks the program: a local by `Locals.uses`,
-  a sweep of its function with the scopes of `locals.agc`; anything else by `sites.agc`, which lists every place
-  of a module that names a function, type, field, variant, constant or builtin
-  (one pass, a worklist over `check/const_walk.agc`). The names are the linked
-  names (`@N::name`), a field is the pair of the struct that `Checked.types`
-  gives the target and its name, a builtin method is `Checked.resolved`; the
-  tree has no span for the name inside a call or a pattern, so `written` reads
-  the dotted name from the text. `refs.agc` picks the site that holds the
-  position (a name of an import list through `LinkedModule.named`) or builds
-  the target of a `symbol` match, and keeps the sites of its target in every
-  linked module; its `definition` is the `symbol` match (`Symbol.declared_at`).
-  The
-  commands are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py`,
-  `tests/test_spec_type_at.py`, `tests/test_spec_symbol.py` and
-  `tests/test_spec_refs.py`.
+- Query (`query/`, §39): the commands `outline`, `type-at`, `symbol` and `refs`
+  (`app/cli_query.agc`, the words read by `query/query_options.agc`). `outline`
+  parses one file and lists the items of `compiler/docs/doc_model.agc`.
+  `type-at` and `refs` link and check (`analysis/front.agc` `query_file`;
+  `Checker.check_query`: a missing `main` is not `CHECK-MAIN`). `at.agc` finds
+  the innermost typed expression; a builtin answers with
+  `catalog/catalog_json.agc`, which `help` shares. A local comes from
+  `locals.agc` and `Checked.bound`, kept apart from `Checked.types` so lowering
+  never sees it. `symbol` parses and links only (`symbol_link.agc`,
+  `Linker.link_programs`: a root that fails is `Skipped`); `symbol.agc` matches
+  the name against `Model.declared`. `refs` finds uses with `sites.agc` (one
+  pass) or `Locals.uses`, and `refs.agc` picks the target. The tree has no span
+  for a name inside a call or a pattern, so `written` reads the dotted name from
+  the text. Tests: `tests/test_spec_outline.py`, `test_spec_type_at.py`,
+  `test_spec_symbol.py`, `test_spec_refs.py`.
 - Analysis (`analysis/`, §39, `std/analysis`): `analysis.agc` is the one
-  implementation of `check`, `outline`, `type-at`, `symbol` and `refs` that
-  `app/` and `stdlib/analysis.agc` call (`front.agc` holds the read, link and
-  check they share with `run` and `compile`). It returns the plain structs of
-  `model.agc` (no enum; `""` and empty lists for absent values; `ok` is a
-  reserved field name, so `Checked.passed`), converted in `convert.agc`; the
-  JSON and text printers in `query/` take those structs, so what the CLI prints
-  is what the library returns. A diagnostic is `diagnostics/diagnostic_model.agc`
-  (`diagnostic_json.agc` writes it, `diagnostic_read.agc` reads it back).
-  Unsaved buffers are `modules/overlay.agc` over the Workspace (`check --stdin`
-  is one buffer). `stdlib/analysis.agc` compiles the files of `stdlib/CORE` as
+  implementation of `check`, `outline`, `type-at`, `symbol` and `refs`, called
+  by `app/` and `stdlib/analysis.agc`; `front.agc` holds the read, link and
+  check shared with `run` and `compile`. It returns the plain structs of
+  `model.agc` (no enum; `""` and empty lists for absent values), converted in
+  `convert.agc`, and the printers in `query/` take those structs, so the CLI
+  prints what the library returns. Diagnostics:
+  `diagnostics/diagnostic_model.agc`, `diagnostic_json.agc`,
+  `diagnostic_read.agc`. Unsaved buffers: `modules/overlay.agc`.
+  `stdlib/analysis.agc` compiles the files of `stdlib/CORE` as
   `std/internal/compiler/`, which only std modules may import
-  (`resolve_import.agc`; `..` is allowed in a std module while the path stays in
-  `std/`). Anything the library needs to import must be in `stdlib/CORE`.
-  The session cache (`cache.agc`, `Analysis.refresh`): `Modules.load_with`
-  takes a parsed file from `Parses` when its key and text match, so node ids
-  have gaps and are not in walk order (a changed file is parsed above the
-  highest id; `Cache.crowded?` parses all again from 0 past twice the live
-  ids). Nothing may read a node id except by the id of a node it holds
-  (`Linker.parser_ids` is the highest `next_free_id`, not the last file's), and
-  `test_std_analysis.py` compares cached and uncached answers after edits. A
-  cached root is used only when `Cache.find` sees the same fingerprint (keys,
-  names, origins, aliases) and texts, so a question is right with any cache.
+  (`resolve_import.agc`): anything the library needs must be in `stdlib/CORE`.
+  The session cache (`cache.agc`, `Analysis.refresh`): `Modules.load_with` takes
+  a parsed file from `Parses` when its key and text match, so node ids have gaps
+  and are not in walk order. Nothing may read a node id except through a node it
+  holds (`Linker.parser_ids` is the highest `next_free_id`). A cached root is
+  used only when `Cache.find` sees the same fingerprint and texts;
+  `test_std_analysis.py` compares cached and uncached answers.
 
 ### Pure core, one port
 
