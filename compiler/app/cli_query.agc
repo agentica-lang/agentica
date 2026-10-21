@@ -8,9 +8,9 @@
 ## paths together and list the ones that do not link, and `refs` checks the program too.
 ##
 ## With `--partial`, `type-at` and `refs FILE:LINE:COL` (alone: not with a NAME or PATH...) also answer from a program
-## in which some functions do not check (39.6): the answer has `partial` and `diagnostics` in the JSON form, one line on
-## stderr for each diagnostic in the text form, and the exit status is 0. A program that checks gets the answer it gets
-## without the option. `outline` takes the option and has nothing to add: it never checks.
+## in which some functions do not check (39.6): the answer has `partial` and `diagnostics` in the JSON form, one line
+## on stderr for each diagnostic in the text form, and the exit status is 0. A program that checks gets the answer it
+## gets without the option. `outline` takes the option and has nothing to add: it never checks.
 ##
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
@@ -134,17 +134,6 @@ export def refs_ask(asked: QueryOptions.Query) -> RefsAsk
   end
 end
 
-# The words as a position or a name, whatever `--partial` says.
-def positioned(asked: QueryOptions.Query) -> RefsAsk
-  if asked.stdin != ""
-    case QueryPosition.parse(asked.stdin, REFS_USAGE)
-      QueryPosition.Parsed.Ready(position) -> return RefsAsk.At(position, asked.words)
-      QueryPosition.Parsed.Refused(_) -> return word_ask(asked.words)
-    end
-  end
-  return word_ask(asked.words)
-end
-
 ## `agentica refs` for the position `asked`, linked together with the files of `paths` and checked as `type_at` checks.
 ## It lists the references to the name at the position, or is QUERY-NO-EXPRESSION when the position names nothing. With
 ## `partial` (and no `paths`: `refs_ask` has refused the others) a program in which some functions do not check is
@@ -194,6 +183,17 @@ export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.An
         Reply.Reply(code: 0, out: SymbolText.text(found), err: SymbolText.skipped_text(found)),
       )
   end
+end
+
+# The words as a position or a name, whatever `--partial` says.
+def positioned(asked: QueryOptions.Query) -> RefsAsk
+  if asked.stdin != ""
+    case QueryPosition.parse(asked.stdin, REFS_USAGE)
+      QueryPosition.Parsed.Ready(position) -> return RefsAsk.At(position, asked.words)
+      QueryPosition.Parsed.Refused(_) -> return word_ask(asked.words)
+    end
+  end
+  return word_ask(asked.words)
 end
 
 # The first word is a position when it has a colon, else a name.

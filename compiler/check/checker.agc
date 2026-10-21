@@ -130,7 +130,7 @@ end
 def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool, recover: Bool) -> Result[Recovered]
   base = start(linked)
   cx = try Register.register(base, linked.modules)
-  try Register.check_main(cx, linked.modules, linked.root.span, main_required)
+  try Register.check_main(cx, linked.modules, linked.roots, linked.root.span, main_required)
   st = State.fresh().with(types: no_types(ids_of(linked), max_repeat()))
   done = try Constants.check_all(cx, st, linked.modules)
   cx = done.cx

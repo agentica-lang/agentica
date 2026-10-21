@@ -25,28 +25,30 @@ export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[
   return ok(found)
 end
 
-## CHECK-MAIN unless the program declares main() -> Void; the first main is the one that counts. root is the span of
-## the program. When `required` is false a program with no main passes, but a main that is declared still has to have
-## the signature.
+## CHECK-MAIN unless the program declares main() -> Void. Only the modules whose key is in `roots` count (a `main` of
+## an imported file does not), and the first main of each is the one that counts; a query that links several roots
+## checks each. root is the span of the program. When `required` is false a program with no main passes, but a main
+## that is declared still has to have the signature.
 export def check_main(
   cx: State.Cx,
   modules: List[Linker.LinkedModule],
+  roots: List[String],
   root: Source.Span,
   required: Bool,
 ) -> Result[Bool]
   st = State.fresh()
+  found = false
   for module in modules
-    for decl in module.declarations
-      case decl
-        Ast.Decl.Function(node) ->
-          if node.name == "main"
-            return main_signature(cx.with(file: module.file), st, node)
-          end
-        _ -> st = st
+    if roots.any? do |key: String| key == module.key end
+      case main_of(module)
+        Ast.Optional.Present(node) ->
+          try main_signature(cx.with(file: module.file), st, node)
+          found = true
+        Ast.Optional.Absent -> found = found
       end
     end
   end
-  if !required
+  if found or !required
     return ok(true)
   end
   return error(
@@ -90,6 +92,20 @@ def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
     end
   end
   return ok(true)
+end
+
+# The first function of the module called main; a prefixed name (a root of several roots) counts by its own name.
+def main_of(module: Linker.LinkedModule) -> Ast.Optional[Ast.FunctionDecl]
+  for decl in module.declarations
+    case decl
+      Ast.Decl.Function(node) ->
+        if T.display_name(node.name) == "main"
+          return Ast.Optional.Present(node)
+        end
+      _ -> next
+    end
+  end
+  return Ast.Optional.Absent
 end
 
 def main_signature(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[Bool]

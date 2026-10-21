@@ -592,3 +592,23 @@ def test_a_check_error_of_a_path_is_exit_1_and_the_standard_input_stands_for_a_f
                        stdin=ORDERS + "\ndef extra() -> Int\n  return total(Models.make(\"z\"))\nend\n")
     assert by_position["definition"]["name"] == "make"
     assert (program / "models.agc").read_text(encoding="utf-8") == MODELS
+
+
+def test_a_main_of_a_root_keeps_its_signature_and_one_of_an_imported_file_is_not_checked(tmp_path):
+    (tmp_path / "bad.agc").write_text('def main(x: Int) -> Void\n  puts("a")\nend\n', encoding="utf-8")
+    (tmp_path / "other.agc").write_text("def other() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (tmp_path / "user.agc").write_text('import L from "lib"\n\ndef f() -> Int\n  return L.g()\nend\n', encoding="utf-8")
+    (tmp_path / "lib.agc").write_text(
+        "export def main(x: Int) -> Int\n  return x\nend\n\nexport def g() -> Int\n  return 1\nend\n", encoding="utf-8")
+    # The root of a position, alone or with other roots, is checked as `type-at` checks it.
+    for words in (["bad.agc:1:5"], ["bad.agc:1:5", "other.agc"], ["other.agc:1:5", "bad.agc"]):
+        diagnostic = problem(ask(*words, cwd=tmp_path), "CHECK-MAIN", 1)
+        assert (diagnostic["file"], diagnostic["range"]["start"]) == ("bad.agc", {"line": 1, "column": 1}), words
+    assert told("user.agc:3:5", cwd=tmp_path)["definition"]["name"] == "f"
+
+
+def test_a_file_name_is_not_found_with_a_hint_and_partial_goes_with_a_position_alone(program):
+    hinted = problem(ask("models.agc", cwd=program), "QUERY-NOT-FOUND", 2)
+    assert "models.agc:LINE:COL" in hinted["help"]
+    for words in (["total", "--partial"], [spot("orders.agc", ORDERS, "total"), "models.agc", "--partial"]):
+        assert problem(ask(*words, cwd=program), "QUERY-USAGE", 2)["file"] == "<arguments>", words

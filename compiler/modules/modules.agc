@@ -172,7 +172,8 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   workspace = settings.workspace
   known = workspace.real_path.call(root)
   if known.ok? and walk.done.has_key?(known.unwrap!)
-    return ok(walk)
+    # The folder is this root's own, not that of the root whose walk loaded the file.
+    return ok(walk.with(root_dir: Paths.directory_of(known.unwrap!)))
   end
   file = workspace.resolve_path.call(root).unwrap_or(root)
   text = try root_text(workspace, root, file)

@@ -241,7 +241,7 @@ export def refs_named(
     SymbolPaths.Expanded.Files(roots) ->
       linked = SymbolLink.link(roots, settings)
       case Symbol.search(name, roots, linked)
-        Symbol.Outcome.Refused(problem) -> return Referenced.Rejected(problem)
+        Symbol.Outcome.Refused(problem) -> return Referenced.Rejected(RefsName.not_found(name, problem))
         Symbol.Outcome.Found(found) ->
           case RefsName.pick(name, found.matches, settings)
             RefsName.Picked.Refused(problem) -> return Referenced.Rejected(problem)

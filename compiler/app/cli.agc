@@ -197,7 +197,8 @@ def refs(session: Session, words: List[String]) -> Int
         CliQuery.RefsAsk.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
         CliQuery.RefsAsk.At(position, paths) ->
           if asked.stdin == ""
-            return answered(styled, CliQuery.refs_at(position, paths, asked.style, asked.partial, styled.settings), position.file)
+            found = CliQuery.refs_at(position, paths, asked.style, asked.partial, styled.settings)
+            return answered(styled, found, position.file)
           end
           return with_buffer(styled, position.file) do |read: Session|
             answered(read, CliQuery.refs_at(position, paths, asked.style, asked.partial, read.settings), position.file)

@@ -30,6 +30,19 @@ export def pick(name: String, matches: List[Symbol.Match], settings: Env.Setting
   )
 end
 
+## The refusal of `symbol` for `name`, with a note when the word ends in `.agc`: a file is not a name, and the position
+## form takes `FILE:LINE:COL`.
+export def not_found(name: String, problem: Problems.Problem) -> Problems.Problem
+  if problem.code != "QUERY-NOT-FOUND" or !name.ends_with?(".agc")
+    return problem
+  end
+  note = "#{name} is a file; to ask about a place in it write #{name}:LINE:COL"
+  case problem.help
+    Diag.Help.Hint(text) -> return problem.with(help: Diag.Help.Hint("#{text}; #{note}"))
+    Diag.Help.NoHelp -> return problem.with(help: Diag.Help.Hint(note))
+  end
+end
+
 # The matches without a second one for the same name in the same file.
 def once(matches: List[Symbol.Match]) -> List[Symbol.Match]
   out: List[Symbol.Match] = []

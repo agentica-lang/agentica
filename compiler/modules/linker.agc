@@ -36,12 +36,14 @@ end
 ## the root first, each file before the files its imports read, and ids, the number of node ids the checker must make
 ## room for: the ids of the parser, and as many again when a file declares a constant, because the linker gives the
 ## receiver of a rewritten NAME.method(...) the id of the call plus the number of ids of the program
-## (Rewrite.rewrite_constant_member).
+## (Rewrite.rewrite_constant_member). roots are the keys of the modules that are roots: the first file for
+## `link_file`, each root that linked for `link_programs`. The checker checks the `main` of those and no other.
 export struct Linked
   root: Ast.Program
   root_dir: String
   modules: List[LinkedModule]
   ids: Int
+  roots: List[String]
 end
 
 ## The result of linking: the program, or the first failure.
@@ -120,7 +122,7 @@ export def link_programs(roots: List[String], settings: Env.Settings) -> Program
   end
   pool = Pool(kept: [], held: {}, made: {}, failed: {})
   skipped: List[Left] = []
-  first: Ast.Optional[Modules.Entry] = Ast.Optional.Absent
+  kept: List[Modules.Entry] = []
   for entry in many.entries
     case entry.failure
       Ast.Optional.Present(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
@@ -129,25 +131,21 @@ export def link_programs(roots: List[String], settings: Env.Settings) -> Program
         pool = admitted.pool
         case admitted.failure
           Ast.Optional.Present(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
-          Ast.Optional.Absent ->
-            case first
-              Ast.Optional.Absent -> first = Ast.Optional.Present(entry)
-              Ast.Optional.Present(_) -> first = first
-            end
+          Ast.Optional.Absent -> kept = kept.push(entry)
         end
     end
   end
-  case first
-    Ast.Optional.Absent -> return Programs(linked: Ast.Optional.Absent, skipped: skipped)
-    Ast.Optional.Present(entry) ->
-      together = Linked(
-        root: loaded.modules[entry.key].program,
-        root_dir: entry.root_dir,
-        modules: pool.kept,
-        ids: id_count(loaded),
-      )
-      return Programs(linked: Ast.Optional.Present(together), skipped: skipped)
+  if kept.size == 0
+    return Programs(linked: Ast.Optional.Absent, skipped: skipped)
   end
+  together = Linked(
+    root: loaded.modules[kept[0].key].program,
+    root_dir: kept[0].root_dir,
+    modules: pool.kept,
+    ids: id_count(loaded),
+    roots: kept.map do |entry: Modules.Entry| entry.key end,
+  )
+  return Programs(linked: Ast.Optional.Present(together), skipped: skipped)
 end
 
 # The root `key` and the files it reaches, in the order `link_file` lists them: the file, then the files of its first
@@ -214,7 +212,15 @@ def finish(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
   files = rewrite_all(loaded, settings)
   if files.ok?
     root = loaded.modules[loaded.order[0]].program
-    return Linking.Done(Linked(root: root, root_dir: loaded.root_dir, modules: files.unwrap!, ids: id_count(loaded)))
+    return Linking.Done(
+      Linked(
+        root: root,
+        root_dir: loaded.root_dir,
+        modules: files.unwrap!,
+        ids: id_count(loaded),
+        roots: [loaded.order[0]],
+      ),
+    )
   end
   return Linking.Failed(Failure.unpack_failure(files.message))
 end
