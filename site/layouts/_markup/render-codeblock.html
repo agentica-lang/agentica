@@ -3,8 +3,12 @@
 <div class="sample sample-{{ $lang }}"><span class="sample-label">{{ cond (eq $lang "input") "Input" "Output" }}</span><pre><code>{{ .Inner }}</code></pre></div>
 {{- else -}}
 {{- $expect := "" -}}
-{{- if in (slice "agentica" "agc") $lang }}{{ $lang = "ruby" }}{{ $expect = .Attributes.expect | default "" }}{{ end -}}
-{{- transform.Highlight .Inner $lang .Options -}}
+{{- $agentica := in (slice "agentica" "agc") $lang -}}
+{{- if $agentica }}{{ $lang = "ruby" }}{{ $expect = .Attributes.expect | default "" }}{{ end -}}
+{{- if and $agentica .Options }}{{ errorf "%s: agentica code blocks take no highlight options, found %v" .Page.File.Path .Options }}{{ end -}}
+{{- if $agentica }}<div class="agc-code">{{ end -}}
+{{- transform.Highlight .Inner $lang (cond $agentica (dict) .Options) -}}
+{{- if $agentica }}</div>{{ end -}}
 {{- with $expect }}
 <div class="sample sample-error"><span class="sample-label">{{ cond (hasPrefix . "RUNTIME-") "Runtime error" "Does not compile" }}</span><pre><code>error[{{ . }}]</code></pre></div>
 {{- end -}}

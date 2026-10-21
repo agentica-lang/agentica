@@ -34,6 +34,7 @@ docs/
   roadmap/          phases and the done checklist (README.md: current order)
   vm/               VM design: bytecode, loader, layers (§15), core invariants (§14)
 site/content/       Hugo documentation site
+site/highlight/     colors the agentica code blocks of the built site
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agentica-development (working on this repo), agentica-programming
                     (writing .agc), agentica-code-guidelines (.agc style and
@@ -161,7 +162,8 @@ phase 13).
   supported during migration. Pytest is a test-only Poetry dependency. Node
   and Python test peers (curl included) use the standard library only. The
   VM's C dependencies are the submodules in `vm/third_party`; the only other
-  dev-tool dependency is the pinned jscpd in `tools/jscpd`.
+  dev-tool dependencies are the pinned jscpd in `tools/jscpd` and the site
+  highlighter in `site/highlight` (vscode-textmate and vscode-oniguruma).
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external
