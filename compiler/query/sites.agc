@@ -112,7 +112,7 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Optional[Ta
     case declaration
       Ast.Decl.Import(node) ->
         for entry in node.names
-          on_name = holds(entry.span, offset) or holds(entry.local_span, offset)
+          on_name = holds?(entry.span, offset) or holds?(entry.local_span, offset)
           linked = module.named.get(entry.local)
           if on_name and linked.ok?
             return Ast.Optional.Present(named(linked.unwrap!))
@@ -136,7 +136,7 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
   end
 end
 
-def holds(span: Source.Span, offset: Int) -> Bool
+def holds?(span: Source.Span, offset: Int) -> Bool
   return span.start.offset <= offset and offset < span.stop.offset
 end
 

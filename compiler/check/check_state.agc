@@ -185,7 +185,7 @@ end
 
 ## actual, or the failure of a mismatch when there is an expected type and it differs.
 export def ensure(cx: Cx, st: St, actual: Types.Type, expected: Types.Type, span: Source.Span) -> Result[Types.Type]
-  if !Types.unknown?(expected) and !Types.same(actual, expected)
+  if !Types.unknown?(expected) and !Types.same?(actual, expected)
     return error(mismatch(cx, st, expected, actual, span))
   end
   return ok(actual)

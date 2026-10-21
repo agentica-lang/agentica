@@ -47,7 +47,7 @@ def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, 
   checked = State.Out(st: bound.st, type: T.Type.Unknown)
   case arg
     Ast.Expr.BlockLit(block) ->
-      if T.is(template, "Fn")
+      if T.is?(template, "Fn")
         checked = try check_block(cx, bound, block, wanted, step)
       else
         checked = try State.expr(cx, bound.st, arg, T.Type.Unknown)
@@ -95,7 +95,7 @@ def check_limits(
         State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "#{form.name} could not tell its types", call),
       )
     end
-    if !limit.allowed.any? do |allowed: T.Type| T.same(allowed, found.unwrap!) end
+    if !limit.allowed.any? do |allowed: T.Type| T.same?(allowed, found.unwrap!) end
       names = limit.allowed.map do |allowed: T.Type| T.to_text(allowed) end
       options = names.take(names.size - 1).join(", ") + " or " + names[names.size - 1]
       return error(

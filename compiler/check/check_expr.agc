@@ -46,7 +46,7 @@ export def check_expression(
   end
   checked = try expression_inside(cx, st.with(nest: st.nest + 1), node, expected)
   span = Ast.expr_span(node)
-  if T.is(checked.type, "Void") and !completion
+  if T.is?(checked.type, "Void") and !completion
     return error(
       State.fail(cx, checked.st, "CHECK-VOID-VALUE", "a Void call has no value; use it as a statement", span),
     )
@@ -188,7 +188,7 @@ end
 # target.call(args): the target is a function value and the arguments match its parameters.
 def check_invoke(cx: State.Cx, st: State.St, node: Ast.Invoke) -> Result[State.Out]
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
-  if !T.is(target.type, "Fn")
+  if !T.is?(target.type, "Fn")
     return error(State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", ".call requires a function value", node.span))
   end
   params = T.params(target.type)
@@ -226,7 +226,7 @@ def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -
     wanted = T.Type.Result(expected)
   end
   out = try State.expr(cx, st, node.operand, wanted)
-  if !T.is(out.type, "Result")
+  if !T.is?(out.type, "Result")
     return error(State.mismatch(cx, out.st, T.Type.Result(T.Type.Var("T")), out.type, Ast.expr_span(node.operand)))
   end
   after = out.st
@@ -238,7 +238,7 @@ end
 
 def result_context?(st: State.St) -> Bool
   case st.result
-    State.Slot.Known(type) -> return T.is(type, "Result")
+    State.Slot.Known(type) -> return T.is?(type, "Result")
     State.Slot.InferResult -> return true
     State.Slot.Infer -> return false
   end
@@ -262,7 +262,7 @@ end
 def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.Type) -> Result[State.Out]
   if T.unknown?(expected)
     return Statements.check_block_body(cx, st, node, Ast.Optional.Absent, T.Type.Unknown, Ast.Optional.Absent)
-  elsif !T.is(expected, "Fn")
+  elsif !T.is?(expected, "Fn")
     return error(
       State.fail_help(
         cx,
@@ -285,13 +285,13 @@ def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.
 end
 
 def check_list(cx: State.Cx, st: State.St, node: Ast.ListLit, expected: T.Type) -> Result[State.Out]
-  if !T.unknown?(expected) and !T.is(expected, "List")
+  if !T.unknown?(expected) and !T.is?(expected, "List")
     return error(
       State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a list", node.span),
     )
   end
   wanted = T.Type.Unknown
-  if T.is(expected, "List")
+  if T.is?(expected, "List")
     wanted = T.item(expected)
   end
   if node.elements.size == 0
@@ -325,7 +325,7 @@ def check_list(cx: State.Cx, st: State.St, node: Ast.ListLit, expected: T.Type) 
 end
 
 def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) -> Result[State.Out]
-  if !T.unknown?(expected) and !T.is(expected, "Map")
+  if !T.unknown?(expected) and !T.is?(expected, "Map")
     return error(
       State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a map", node.span),
     )
@@ -350,7 +350,7 @@ def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) ->
   end
   wanted_key = T.Type.Unknown
   wanted_value = T.Type.Unknown
-  if T.is(expected, "Map")
+  if T.is?(expected, "Map")
     wanted_key = T.key(expected)
     wanted_value = T.value(expected)
   end
@@ -382,10 +382,10 @@ end
 
 def check_index(cx: State.Cx, st: State.St, node: Ast.IndexAccess) -> Result[State.Out]
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
-  if T.is(target.type, "Map")
+  if T.is?(target.type, "Map")
     index = try State.expr(cx, target.st, node.index, T.key(target.type))
     return ok(State.Out(st: index.st, type: T.value(target.type)))
-  elsif T.is(target.type, "List")
+  elsif T.is?(target.type, "List")
     index = try State.expr(cx, target.st, node.index, T.Type.Int)
     return ok(State.Out(st: index.st, type: T.item(target.type)))
   end
@@ -402,16 +402,16 @@ def check_index(cx: State.Cx, st: State.St, node: Ast.IndexAccess) -> Result[Sta
 end
 
 def index_help(target: T.Type) -> String
-  if T.is(target, "String")
+  if T.is?(target, "String")
     return (
       "strings cannot be indexed: s.at(i) reads one character, s.slice(start, length) a part, " +
       "s.split(\"\") gives all characters"
     )
-  elsif T.is(target, "Result")
+  elsif T.is?(target, "Result")
     return "unwrap the Result first: r.unwrap!, try r inside a function that returns Result, or case r"
-  elsif T.is(target, "Struct")
+  elsif T.is?(target, "Struct")
     return "read a field with .name"
-  elsif T.is(target, "Set")
+  elsif T.is?(target, "Set")
     return "sets have no positions: s.include?(x) tests membership, s.to_a gives a list in insertion order"
   end
   return ""
@@ -434,7 +434,7 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out
     end
     return ok(operand)
   end
-  if !T.is(operand.type, "Bool")
+  if !T.is?(operand.type, "Bool")
     return error(
       State.fail(
         cx,
@@ -453,7 +453,7 @@ def unary_operand(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.O
     return ok(State.Out(st: st, type: T.Type.Int))
   end
   out = try State.expr_completion(cx, st, node.operand, T.Type.Unknown)
-  if T.is(out.type, "Void")
+  if T.is?(out.type, "Void")
     return error(
       State.fail_maybe(
         cx,
@@ -566,7 +566,7 @@ end
 
 # Both sides have one type. with_to_s adds to the String help that to_s makes a String of the number.
 def same_types(cx: State.Cx, sides: Sides, node: Ast.Binary, with_to_s: Bool) -> Result[Bool]
-  if T.same(sides.left, sides.right)
+  if T.same?(sides.left, sides.right)
     return ok(true)
   end
   left = T.to_text(sides.left)
@@ -587,9 +587,9 @@ def same_types(cx: State.Cx, sides: Sides, node: Ast.Binary, with_to_s: Bool) ->
 end
 
 def same_help(sides: Sides, with_to_s: Bool) -> String
-  either_int = T.is(sides.left, "Int") or T.is(sides.right, "Int")
-  either_float = T.is(sides.left, "Float") or T.is(sides.right, "Float")
-  either_string = T.is(sides.left, "String") or T.is(sides.right, "String")
+  either_int = T.is?(sides.left, "Int") or T.is?(sides.right, "Int")
+  either_float = T.is?(sides.left, "Float") or T.is?(sides.right, "Float")
+  either_string = T.is?(sides.left, "String") or T.is?(sides.right, "String")
   if either_int and either_float
     return (
       "make both sides the same type: n.to_f (Float.from_int) turns the Int into a Float, " +
@@ -613,7 +613,7 @@ end
 def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   if CheckTypes.numeric?(sides.left) and CheckTypes.numeric?(sides.right)
     return ok(sides.left)
-  elsif T.is(sides.left, "String") and T.is(sides.right, "String")
+  elsif T.is?(sides.left, "String") and T.is?(sides.right, "String")
     return ok(T.Type.String)
   end
   return error(
@@ -630,7 +630,7 @@ def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
 end
 
 def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  if !T.is(sides.left, "Int") or !T.is(sides.right, "Int")
+  if !T.is?(sides.left, "Int") or !T.is?(sides.right, "Int")
     return error(
       type_error(
         cx,
@@ -648,7 +648,7 @@ def comparison_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
   try same_types(cx, sides, node, false)
   if !CheckTypes.numeric?(sides.left) or !CheckTypes.numeric?(sides.right)
     help = ""
-    if T.is(sides.left, "String")
+    if T.is?(sides.left, "String")
       help = "< <= > >= only take Int or Float; compare Strings with == and !=, or order a List[String] with xs.sort"
     end
     return error(type_error(cx, sides, node, "comparison expects two numbers, found #{T.to_text(sides.left)}", help))
@@ -657,7 +657,7 @@ def comparison_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
 end
 
 def range_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  if !T.is(sides.left, "Int") or !T.is(sides.right, "Int")
+  if !T.is?(sides.left, "Int") or !T.is?(sides.right, "Int")
     return error(
       type_error(
         cx,
@@ -673,9 +673,9 @@ end
 
 def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   try same_types(cx, sides, node, true)
-  if !CheckTypes.primitive?(sides.left) and !T.is(sides.left, "Range")
+  if !CheckTypes.primitive?(sides.left) and !T.is?(sides.left, "Range")
     help = ""
-    if T.is(sides.left, "Set")
+    if T.is?(sides.left, "Set")
       help = "two sets are equal when each is a subset of the other: a.subset?(b) and b.subset?(a)"
     end
     return error(
@@ -692,7 +692,7 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
 end
 
 def logical_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  if !T.is(sides.left, "Bool") or !T.is(sides.right, "Bool")
+  if !T.is?(sides.left, "Bool") or !T.is?(sides.right, "Bool")
     return error(
       type_error(
         cx,

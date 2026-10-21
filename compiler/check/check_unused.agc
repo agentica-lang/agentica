@@ -10,7 +10,7 @@ import {ENTRIES} from "../catalog/builtins"
 ## CHECK-UNUSED-VALUE when a value that is dropped could only have been used for itself: a pure builtin, a to_s on a
 ## data value, a .with. Anything else, and any Void value, is fine.
 export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
-  if T.is(type, "Void")
+  if T.is?(type, "Void")
     return ok(true)
   end
   resolved = resolution(st, value)
@@ -105,7 +105,7 @@ def resolved_is_call?(found: State.Resolved) -> Bool
 end
 
 def takes_function?(entry: Model.Builtin) -> Bool
-  return entry.parameters.any? do |parameter: Model.Named| T.is(parameter.type, "Fn") end
+  return entry.parameters.any? do |parameter: Model.Named| T.is?(parameter.type, "Fn") end
 end
 
 def unused_subject(name: String) -> String
@@ -167,5 +167,5 @@ end
 
 # True when the builtin returns the type of its first argument, so the call is a change of that value.
 def keeps_first_type?(entry: Model.Builtin) -> Bool
-  return entry.parameters.size > 0 and T.same(entry.parameters[0].type, entry.result)
+  return entry.parameters.size > 0 and T.same?(entry.parameters[0].type, entry.result)
 end

@@ -34,7 +34,7 @@ end
 # over a handle or channel.
 def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> Result[State.Out]
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
-  if !T.is(callback.type, "Fn") or T.params(callback.type).size != 1
+  if !T.is?(callback.type, "Fn") or T.params(callback.type).size != 1
     return error(
       State.fail(
         cx,
@@ -46,7 +46,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
     )
   end
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
-  if owning and !handle?(cx, handed.type) and !T.is(handed.type, "Channel")
+  if owning and !handle?(cx, handed.type) and !T.is?(handed.type, "Channel")
     return error(
       State.fail_help(
         cx,
@@ -62,12 +62,12 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
 end
 
 def handle?(cx: State.Cx, type: T.Type) -> Bool
-  return T.is(type, "Opaque") and HANDLES.include?(T.name(type))
+  return T.is?(type, "Opaque") and HANDLES.include?(T.name(type))
 end
 
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try State.expr(cx, st, site.args[0], T.task_of(site.expected))
-  if !T.is(target.type, "Task")
+  if !T.is?(target.type, "Task")
     return error(
       State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
     )
@@ -78,11 +78,11 @@ end
 # Task.await with a timeout gives Await[R]: Await.Done(value) or Await.TimedOut.
 def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   context = T.Type.Unknown
-  if T.is(site.expected, "Enum") and T.name(site.expected) == "Await"
+  if T.is?(site.expected, "Enum") and T.name(site.expected) == "Await"
     context = T.Type.Task(T.args(site.expected)[0])
   end
   target = try State.expr(cx, st, site.args[0], context)
-  if !T.is(target.type, "Task")
+  if !T.is?(target.type, "Task")
     return error(
       State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
     )
@@ -120,7 +120,7 @@ end
 def task_map_function(cx: State.Cx, st: State.St, site: State.Site, callback: Ast.Expr) -> Result[State.Out]
   checked = try State.expr(cx, st, callback, T.Type.Unknown)
   span = Ast.expr_span(callback)
-  if !T.is(checked.type, "Fn") or T.params(checked.type).size != 1
+  if !T.is?(checked.type, "Fn") or T.params(checked.type).size != 1
     return error(
       State.fail(cx, checked.st, "CHECK-TYPE-MISMATCH", "Task.map requires a function with one parameter", span),
     )
@@ -139,7 +139,7 @@ end
 # The Result type the block must give: the item of the expected list when that is a Result, else Result[Unknown], which
 # says the body decides the inner type.
 def task_map_block_result(expected: T.Type) -> T.Type
-  if T.is(expected, "List") and T.is(T.item(expected), "Result")
+  if T.is?(expected, "List") and T.is?(T.item(expected), "Result")
     return T.item(expected)
   end
   return T.Type.Result(T.Type.Unknown)
@@ -148,7 +148,7 @@ end
 # The call gives a list of the callback's Results; a callback that gives anything else is CHECK-TYPE-MISMATCH.
 def task_map_result(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Span) -> Result[State.Out]
   result = T.result(callback)
-  if !T.is(result, "Result")
+  if !T.is?(result, "Result")
     return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), result, span))
   end
   return ok(State.Out(st: st, type: T.Type.List(result)))
@@ -170,7 +170,7 @@ def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
       ),
     )
   end
-  if !T.is(site.expected, "Channel")
+  if !T.is?(site.expected, "Channel")
     return error(State.mismatch(cx, capacity.st, site.expected, T.Type.Channel(T.Type.Var("T")), span))
   end
   return ok(State.Out(st: capacity.st, type: site.expected))
@@ -216,7 +216,7 @@ def check_profile_measure(cx: State.Cx, st: State.St, site: State.Site) -> Resul
       return ok(State.Out(st: checked.st, type: T.result(checked.type)))
     _ ->
       checked = try State.expr(cx, label.st, callback, T.Type.Unknown)
-      if !T.is(checked.type, "Fn") or T.params(checked.type).size != 0
+      if !T.is?(checked.type, "Fn") or T.params(checked.type).size != 0
         return error(
           State.fail(
             cx,
@@ -323,7 +323,7 @@ end
 def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   items = site.args[0]
   context = T.Type.Unknown
-  if T.is(site.expected, "Set")
+  if T.is?(site.expected, "Set")
     context = T.Type.List(T.item(site.expected))
   end
   span = site.node.span

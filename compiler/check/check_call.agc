@@ -128,7 +128,7 @@ end
 ## (CHECK-IMPORT-NAME).
 export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdate) -> Result[State.Out]
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
-  if !T.is(target.type, "Struct")
+  if !T.is?(target.type, "Struct")
     return error(
       State.fail_help(
         cx,
@@ -358,7 +358,7 @@ end
 def expected_substitutions(definition: Model.EnumDef, expected: T.Type) -> Map[String, T.Type]
   found: Map[String, T.Type] = {}
   args = T.args(expected)
-  if T.is(expected, "Enum") and T.name(expected) == definition.name and args.size == definition.parameters.size
+  if T.is?(expected, "Enum") and T.name(expected) == definition.name and args.size == definition.parameters.size
     index = 0
     while index < args.size
       found = found.put(definition.parameters[index], args[index])

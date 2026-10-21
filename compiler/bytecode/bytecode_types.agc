@@ -69,7 +69,7 @@ def type_id(
       inner = try type_id(program, struct_index, pool, item)
       return ok(entry_of(inner.pool, 4, inner.id))
     Types.Type.Map(key, value) ->
-      if !Types.is(key, "String")
+      if !Types.is?(key, "String")
         return error(unsupported(program, "a Map with a key that is not a String in a JSON field type"))
       end
       inner = try type_id(program, struct_index, pool, value)

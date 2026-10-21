@@ -109,7 +109,7 @@ def lazy_step?(name: String) -> Bool
     return false
   end
   row = entry.unwrap!
-  return T.is(row.result, "Lazy") and row.parameters.size > 0 and T.is(row.parameters[0].type, "Lazy")
+  return T.is?(row.result, "Lazy") and row.parameters.size > 0 and T.is?(row.parameters[0].type, "Lazy")
 end
 
 # The builtin of the kind's module with that name whose first parameter has the kind, or "".

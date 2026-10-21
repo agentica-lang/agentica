@@ -341,7 +341,7 @@ def check_data(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: 
 end
 
 def data_help(type: T.Type) -> String
-  if T.is(type, "Void")
+  if T.is?(type, "Void")
     return "a constant's value must be data: write nil, not a Void call"
   end
   return (

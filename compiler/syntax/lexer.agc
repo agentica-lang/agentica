@@ -600,8 +600,8 @@ end
 def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
   chars = input.chars
   index = skip_in(chars, first, NUMBER_CHARS)
-  is_float = chars[index] == "." and NUMBER_CHARS.include?(chars[index + 1])
-  if is_float
+  fractional = chars[index] == "." and NUMBER_CHARS.include?(chars[index + 1])
+  if fractional
     index = skip_in(chars, index + 1, NUMBER_CHARS)
   end
   start = Source.position(first, line, line_start)
@@ -617,7 +617,7 @@ def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Ou
     )
   end
   digits = input.text.slice(first, index - first).replace("_", "")
-  if is_float
+  if fractional
     return Diag.Outcome.Done(token(input.text, "float", Tokens.Value.Real(digits.to_f!), start, stop))
   end
   return Diag.Outcome.Done(token(input.text, "integer", integer_value(digits), start, stop))

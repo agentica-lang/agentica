@@ -41,7 +41,7 @@ end
 
 # A struct is read by field unless the name is to_s or inspect and the struct has no such field.
 def field_target?(cx: State.Cx, target: T.Type, name: String) -> Bool
-  if !T.is(target, "Struct")
+  if !T.is?(target, "Struct")
     return false
   end
   if name == "to_s" or name == "inspect"
@@ -159,7 +159,7 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
       "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, " +
       "Results, structs and enums of those"
     )
-  elsif T.is(target, "Struct")
+  elsif T.is?(target, "Struct")
     return struct_help(cx, target, name)
   elsif name == "with"
     return "with copies a struct with some fields changed; the value before .with must be a struct"
@@ -177,7 +177,7 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
   field = Calls.find_field(fields, name)
   if cx.functions.has_key?(name)
     return "structs have no methods; call #{name}(...) with the struct as an argument"
-  elsif field.ok? and T.is(field.unwrap!.type, "Fn")
+  elsif field.ok? and T.is?(field.unwrap!.type, "Fn")
     return "#{name} is a function field; call it with .#{name}.call(...)"
   elsif name == "with"
     # No did-you-mean here: a field close to "with" is not a typo of it.

@@ -239,7 +239,7 @@ end
 def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -> Result[Lowering.Fx]
   span = node.span
   type = Lowering.static_type(cx, node.iterable)
-  if Types.is(type, "Range")
+  if Types.is?(type, "Range")
     fx = try lower_range_for(cx, fx, node, span)
     return ok(fx.with(next: saved))
   end
@@ -247,7 +247,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
   items = fx.next - 1
   out = try Expr.lower_expression(cx, fx, node.iterable, items, false, false)
   fx = out.fx
-  if Types.is(type, "Set")
+  if Types.is?(type, "Set")
     fx = Lowering.emit_builtin(fx, items, "Set.to_a", 1, [span, span])
   end
   if node.body.size > 0

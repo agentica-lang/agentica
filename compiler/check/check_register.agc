@@ -110,7 +110,7 @@ end
 
 def main_signature(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[Bool]
   result = try Types.resolve_type(cx, st, node.result, true)
-  if node.params.size != 0 or !T.is(result, "Void")
+  if node.params.size != 0 or !T.is?(result, "Void")
     return error(State.fail(cx, st, "CHECK-MAIN", "main must take no parameters and return Void", node.span))
   end
   return ok(true)
@@ -233,7 +233,7 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
     seen = seen.add(field.name)
     type = try Types.resolve_type(cx, st, field.type, false)
     # value.with(...) is always the struct update, so a function field named with could never be called without .call.
-    if field.name == "with" and T.is(type, "Fn")
+    if field.name == "with" and T.is?(type, "Fn")
       return error(
         State.fail_help(
           cx,

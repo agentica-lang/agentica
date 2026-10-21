@@ -57,8 +57,8 @@ export def tag(type: Type) -> String
   end
 end
 
-## True when the type is that variant: is(type, "List").
-export def is(type: Type, word: String) -> Bool
+## True when the type is that variant: is?(type, "List").
+export def is?(type: Type, word: String) -> Bool
   return tag(type) == word
 end
 
@@ -132,7 +132,7 @@ export def args(type: Type) -> List[Type]
 end
 
 ## Structural equality, since an enum cannot be compared with ==.
-export def same(a: Type, b: Type) -> Bool
+export def same?(a: Type, b: Type) -> Bool
   if tag(a) != tag(b)
     return false
   end
@@ -140,27 +140,27 @@ export def same(a: Type, b: Type) -> Bool
     Type.Opaque(found) -> return found == name(b)
     Type.Var(found) -> return found == name(b)
     Type.Struct(found) -> return found == name(b)
-    Type.Enum(found, list) -> return found == name(b) and same_all(list, args(b))
-    Type.Map(key_type, value_type) -> return same(key_type, key(b)) and same(value_type, value(b))
-    Type.Fn(list, last) -> return same_all(list, params(b)) and same(last, result(b))
-    Type.Result(inner) -> return same(inner, item(b))
-    Type.Task(inner) -> return same(inner, item(b))
-    Type.Channel(inner) -> return same(inner, item(b))
-    Type.Lazy(inner) -> return same(inner, item(b))
-    Type.List(inner) -> return same(inner, item(b))
-    Type.Set(inner) -> return same(inner, item(b))
+    Type.Enum(found, list) -> return found == name(b) and same_all?(list, args(b))
+    Type.Map(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
+    Type.Fn(list, last) -> return same_all?(list, params(b)) and same?(last, result(b))
+    Type.Result(inner) -> return same?(inner, item(b))
+    Type.Task(inner) -> return same?(inner, item(b))
+    Type.Channel(inner) -> return same?(inner, item(b))
+    Type.Lazy(inner) -> return same?(inner, item(b))
+    Type.List(inner) -> return same?(inner, item(b))
+    Type.Set(inner) -> return same?(inner, item(b))
     _ -> return true
   end
 end
 
 ## True when the two lists have the same length and equal types in order.
-export def same_all(a: List[Type], b: List[Type]) -> Bool
+export def same_all?(a: List[Type], b: List[Type]) -> Bool
   if a.size != b.size
     return false
   end
   index = 0
   while index < a.size
-    if !same(a[index], b[index])
+    if !same?(a[index], b[index])
       return false
     end
     index += 1
@@ -194,7 +194,7 @@ end
 
 ## The type itself when it is a List, else Unknown: the expected type that a list operation passes on.
 export def only_list(type: Type) -> Type
-  if is(type, "List")
+  if is?(type, "List")
     return type
   end
   return Type.Unknown
@@ -202,7 +202,7 @@ end
 
 ## The type itself when it is a Map, else Unknown.
 export def only_map(type: Type) -> Type
-  if is(type, "Map")
+  if is?(type, "Map")
     return type
   end
   return Type.Unknown
@@ -210,7 +210,7 @@ end
 
 ## The type itself when it is a Set, else Unknown.
 export def only_set(type: Type) -> Type
-  if is(type, "Set")
+  if is?(type, "Set")
     return type
   end
   return Type.Unknown
@@ -218,7 +218,7 @@ end
 
 ## The item of a Result, else Unknown: the expected type of the value inside a Result.
 export def only_result_item(type: Type) -> Type
-  if is(type, "Result")
+  if is?(type, "Result")
     return item(type)
   end
   return Type.Unknown

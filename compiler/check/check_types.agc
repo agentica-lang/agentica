@@ -22,7 +22,7 @@ end
 ## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
 ## CHECK-UNKNOWN-TYPE.
 export def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
-  if !contains_alias(cx, ref)
+  if !contains_alias?(cx, ref)
     return resolve_expanded(cx, st, ref, completion)
   end
   expanded = try expand_alias(cx, st, ref, [], State.nesting_limit(), ref.span)
@@ -57,35 +57,35 @@ end
 
 ## True for Int and String, the types of a Map key or a Set element.
 export def key_type?(type: ResolvedType) -> Bool
-  return Types.is(type, "Int") or Types.is(type, "String")
+  return Types.is?(type, "Int") or Types.is?(type, "String")
 end
 
 ## True when the type may be a Map key or a Set element where cx checks: Int and String, and in the files of the
 ## prelude a type variable too (the checker has checked the types it stands for, check_prelude.agc).
 export def key_here?(cx: State.Cx, type: ResolvedType) -> Bool
-  return key_type?(type) or (cx.prelude and Types.is(type, "Var"))
+  return key_type?(type) or (cx.prelude and Types.is?(type, "Var"))
 end
 
 ## True for Int and Float.
 export def numeric?(type: ResolvedType) -> Bool
-  return Types.is(type, "Int") or Types.is(type, "Float")
+  return Types.is?(type, "Int") or Types.is?(type, "Float")
 end
 
 ## True for Int, Float, Bool, String and Nil, the types that == compares.
 export def primitive?(type: ResolvedType) -> Bool
-  return numeric?(type) or Types.is(type, "Bool") or Types.is(type, "String") or Types.is(type, "Nil")
+  return numeric?(type) or Types.is?(type, "Bool") or Types.is?(type, "String") or Types.is?(type, "Nil")
 end
 
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, and structs of
 ## those.
 export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
-  if primitive?(type) or Types.is(type, "Json")
+  if primitive?(type) or Types.is?(type, "Json")
     return true
-  elsif Types.is(type, "List")
+  elsif Types.is?(type, "List")
     return encodable?(cx, Types.item(type), seen)
-  elsif Types.is(type, "Map")
-    return Types.is(Types.key(type), "String") and encodable?(cx, Types.value(type), seen)
-  elsif Types.is(type, "Struct")
+  elsif Types.is?(type, "Map")
+    return Types.is?(Types.key(type), "String") and encodable?(cx, Types.value(type), seen)
+  elsif Types.is?(type, "Struct")
     return struct_all?(cx, Types.name(type), seen, 0)
   end
   return false
@@ -94,13 +94,13 @@ end
 ## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, and
 ## structs of those.
 export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
-  if Types.is(type, "Int") or Types.is(type, "Float") or Types.is(type, "Bool") or Types.is(type, "String")
+  if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
     return true
-  elsif Types.is(type, "List")
+  elsif Types.is?(type, "List")
     return decodable?(cx, Types.item(type), seen)
-  elsif Types.is(type, "Map")
-    return Types.is(Types.key(type), "String") and decodable?(cx, Types.value(type), seen)
-  elsif Types.is(type, "Struct")
+  elsif Types.is?(type, "Map")
+    return Types.is?(Types.key(type), "String") and decodable?(cx, Types.value(type), seen)
+  elsif Types.is?(type, "Struct")
     return struct_all?(cx, Types.name(type), seen, 1)
   end
   return false
@@ -110,17 +110,17 @@ end
 ## maps, sets, Results, structs and enums of those. seen holds the structs and enums already being looked at
 ## ("Struct:name"), so a recursive type ends.
 export def data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
-  if primitive?(type) or Types.is(type, "Json") or Types.is(type, "Range") or Types.is(type, "Var")
+  if primitive?(type) or Types.is?(type, "Json") or Types.is?(type, "Range") or Types.is?(type, "Var")
     return true
-  elsif Types.is(type, "List")
+  elsif Types.is?(type, "List")
     return data?(cx, Types.item(type), seen)
-  elsif Types.is(type, "Map")
+  elsif Types.is?(type, "Map")
     return data?(cx, Types.key(type), seen) and data?(cx, Types.value(type), seen)
-  elsif Types.is(type, "Set")
+  elsif Types.is?(type, "Set")
     return true
-  elsif Types.is(type, "Result")
-    return Types.is(Types.item(type), "Void") or data?(cx, Types.item(type), seen)
-  elsif Types.is(type, "Struct") or Types.is(type, "Enum")
+  elsif Types.is?(type, "Result")
+    return Types.is?(Types.item(type), "Void") or data?(cx, Types.item(type), seen)
+  elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     return nominal_data?(cx, type, seen)
   end
   return false
@@ -183,7 +183,7 @@ export def unify(
   substitutions: Map[String, ResolvedType],
   span: Source.Span,
 ) -> Result[Map[String, ResolvedType]]
-  if Types.is(template, "Var")
+  if Types.is?(template, "Var")
     previous = substitutions.get(Types.name(template))
     if previous.ok?
       try State.ensure(cx, st, actual, previous.unwrap!, span)
@@ -198,11 +198,11 @@ export def unify(
   return ok(substitutions)
 end
 
-def contains_alias(cx: State.Cx, ref: TypeRef) -> Bool
+def contains_alias?(cx: State.Cx, ref: TypeRef) -> Bool
   if !cx.type_params.any? do |item: String| item == ref.name end and cx.aliases.has_key?(ref.name)
     return true
   end
-  return ref.args.any? do |arg: TypeRef| contains_alias(cx, arg) end
+  return ref.args.any? do |arg: TypeRef| contains_alias?(cx, arg) end
 end
 
 def expand_alias(
@@ -617,7 +617,7 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   name = Types.name(type)
   key = "#{Types.tag(type)}:#{name}"
   for argument in Types.args(type)
-    builtin_void = Types.is(argument, "Void") and ENUMS.has_key?(name)
+    builtin_void = Types.is?(argument, "Void") and ENUMS.has_key?(name)
     if !builtin_void and !data?(cx, argument, seen)
       return false
     end
@@ -626,7 +626,7 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
     return true
   end
   inner = seen.push(key)
-  if Types.is(type, "Struct")
+  if Types.is?(type, "Struct")
     for field in cx.structs[name]
       if !data?(cx, field.type, inner)
         return false
@@ -668,7 +668,7 @@ def unify_inside(
 ) -> Result[Map[String, ResolvedType]]
   pairs = parts(template)
   others = parts(actual)
-  if Types.is(template, "Enum") and Types.name(template) != Types.name(actual)
+  if Types.is?(template, "Enum") and Types.name(template) != Types.name(actual)
     try State.ensure(cx, st, actual, template, span)
   end
   if pairs.size != others.size

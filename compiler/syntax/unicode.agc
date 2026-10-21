@@ -1,7 +1,7 @@
 import {GRAPHIC_RANGES} from "unicode_table"
 
 export def graphic?(code: Int) -> Bool
-  return search(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
+  return in_ranges?(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
 end
 
 ## An Int as upper-case hexadecimal digits, padded with zeros to width.
@@ -53,7 +53,7 @@ export def written_text(text: String) -> String
   return parts.join("")
 end
 
-def search(ranges: List[Int], code: Int, low: Int, high: Int) -> Bool
+def in_ranges?(ranges: List[Int], code: Int, low: Int, high: Int) -> Bool
   while low < high
     middle = (low + high) / 2
     if ranges[middle * 2 + 1] < code
@@ -90,7 +90,7 @@ def written_character(ranges: List[Int], code: Int, character: String) -> String
     13 -> return "\\r"
     27 -> return "\\e"
     _ ->
-      if (code > 32 and code < 127) or blank?(code) or search(ranges, code, 0, ranges.size / 2)
+      if (code > 32 and code < 127) or blank?(code) or in_ranges?(ranges, code, 0, ranges.size / 2)
         return character
       end
       if code < 65536
