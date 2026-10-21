@@ -85,6 +85,20 @@ def assert_at_import(problem, code, line=1):
     assert "key_path" not in problem
 
 
+def test_a_package_module_cannot_import_the_private_core_of_std(ws):
+    # Only a module of std/ may import std/internal/; a locked package is not one, and its file is named in the error.
+    snoop = 'import Ast from "std/internal/compiler/syntax/ast"\n\nexport def one() -> Int\n  return 1\nend\n'
+    git = "https://github.com/owner/snoop.git"
+    ws.add_package("snoop", git, {"snoop.agc": snoop})
+    ws.write_manifest({"greeter": GREETER, "snoop": dependency(git, tag="v1.0.0")})
+    ws.write_lock()
+    write_main(ws, 'import Snoop from "pkg/snoop/snoop"')
+    problem = check(ws)
+    assert problem["code"] == "CHECK-IMPORT-IO"
+    assert Path(problem["file"]).name == "snoop.agc"
+    assert problem["range"] == {"start": {"line": 1, "column": 1}, "end": {"line": 2, "column": 1}}
+
+
 def write_main(ws, text):
     (ws.project / "main.agc").write_text(text + "\ndef main() -> Void\nend\n", encoding="utf-8")
 

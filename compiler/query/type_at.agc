@@ -65,6 +65,14 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
   end
 end
 
+## The file of the definition of `answered`; "" when the answer has none.
+export def definition_file(answered: Answer) -> String
+  case answered.definition
+    Ast.Optional.Present(definition) -> return definition.file
+    Ast.Optional.Absent -> return ""
+  end
+end
+
 def expression_answer(
   linked: Linker.Linked,
   checked: Checker.Checked,

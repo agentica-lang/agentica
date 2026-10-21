@@ -367,6 +367,9 @@ usual three formats.
   Shared dependencies are linked and checked once. So a command costs about one
   `agentica check` of the files of `PATH...` together, less when no check is
   needed.
+- **As a library.** `std/analysis` calls the same code
+  (`compiler/analysis/`) from a program, over a session of unsaved buffers;
+  every question still runs the stages from the start.
 - No daemon, no cache, no watch mode. Start-up is the single binary's (§18).
 
 ### 39.9 Builtins and `agentica help`

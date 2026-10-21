@@ -99,13 +99,14 @@ byte of a file with a type table, an Updates section or Globals.
 - `agentica compile file.agc -o file.agcb` runs the front end and writes
   bytecode.
 - `agentica check --stdin file.agc` checks the text on standard input as if
-  `file.agc` held it. The front end takes the bytes with `FrontEnd.stdin_bytes`
-  (see "The guarded builtins") and wraps `Workspace.read_text`, `file_exists`
-  and `real_path` (`compiler/io/stdin_buffer.agc`), so the linker reads the root
-  from the buffer and every other file from the disk. The file need not exist;
-  its folder does for imports. Input over 16 MiB exits 2. `check --stdin` with
-  no file or with two, `check FILE --stdin` and `compile --stdin` are usage
-  errors (exit 2).
+  `file.agc` held it. The front end takes the bytes with
+  `FrontEnd.stdin_bytes` (see "The guarded builtins") and wraps
+  `Workspace.read_text`, `file_exists` and `real_path`
+  (`compiler/io/stdin_buffer.agc`, over `compiler/modules/overlay.agc`), so
+  the linker reads the root from the buffer and every other file from the
+  disk. The file need not exist; its folder does for imports. Input over 16
+  MiB exits 2. `check --stdin` with no file or with two, `check FILE --stdin`
+  and `compile --stdin` are usage errors (exit 2).
 - `agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS]
   [--schedulers N] [--allow-run] [--ai|--json] [--source-root DIR] -- file.agcb
   [args...]` runs a compiled program. `run` is read only as the first word of

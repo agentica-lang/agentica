@@ -31,6 +31,12 @@ comment), then a step that calls it. Targets that are not obvious:
   `steps.agc` to the bytes that the binary carries (about 25 s). The first
   binary of the bootstrap carries no runner and no step program, because it
   has no `stage2` yet.
+- `dist/agentica` also carries the files of `stdlib/CORE` (paths in `compiler/`,
+  the pure core that `std/analysis` needs) as the std sources
+  `internal/compiler/<path>`; `vm/tools/gen-embedded.sh` takes the list and the
+  `compiler` folder as its last two words. A new import in that core needs a line
+  in `stdlib/CORE` (`tests/test_stdlib_modules.py` checks the list against the
+  imports of `stdlib/analysis.agc`). The first binary carries none of them.
 - Refreshing stage0 (`make stage0`). `bootstrap/stage0.agcb` is a stage2 that
   was checked in; it is the only seed of the build. Refresh it (1) after a
   change that the old stage0 cannot compile or load, and (2) before a
