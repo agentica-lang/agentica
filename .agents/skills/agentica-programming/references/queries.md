@@ -77,9 +77,11 @@ src/models.agc:4:3 field email
 ```
 
 The first line is the span of the expression, its text and its type; the second,
-if there is one, the name of the definition. On the name of a field or a method
-the expression is the whole access (`user.email`). The file and what it imports
-are linked and checked, but it needs no `main`, so a library file works.
+if there is one, the name of the definition. On a builtin the second line is
+`builtin` and its signature (one line for each form); docs are in the JSON only.
+On the name of a field or a method the expression is the whole access
+(`user.email`). The file and what it imports are linked and checked, but it
+needs no `main`, so a library file works.
 `--stdin FILE:LINE:COL` takes the text of FILE from standard input (the buffer
 you have not saved); FILE is a path of the disk, never a `std/` module.
 
@@ -92,18 +94,27 @@ editor that counts UTF-16 units converts). A type argument (`Models.User` in
 ## JSON of type-at
 
 `{version: 1, command: "type-at", position: {file, line, column}, kind, text,
-type, span, definition}`.
+type, span, definition, help}`.
 
-- `kind` is `name` when the position is on a name (a variable, a constant, the
-  callee of a call, the field or method after the dot) and `expression`
-  otherwise. It is an open set (later versions add values such as `builtin`):
+- `kind` is `builtin` when the position is on the name of a builtin (`split` in
+  `xs.split(",")`, `puts`), `name` when it is on another name (a variable, a
+  constant, the callee of a call, the field or method after the dot) and
+  `expression` otherwise. It is an open set (later versions add values):
   accept a value you do not know. `span` is always the whole expression and
   `text` its source.
 - `definition` is null, or the span of the declaration (`{file, range}`) with
   `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`),
-  `name` and `name_span`, the span of the name. It is null for a local
-  (a parameter, a binding, a loop variable or a pattern name) and for a builtin
-  such as `String.upcase`; both still have their type.
+  `name`, `name_span` (the span of the name), `signature` (`make(name: String)
+  -> User`, `age: Int` for a field, `Circle(Float)` for a variant) and `doc`
+  (the whole `##` text, or null). It is null for a local (a parameter, a
+  binding, a loop variable or a pattern name) and for a builtin; both still
+  have their type.
+- `help` is null, except for `kind` `builtin`: then it is the object of
+  `agentica help NAME --json` for that builtin (`name`, `signature`,
+  `description`, `parameters`, `effects`; `overloads` for a builtin with
+  several forms). `to_s` on an Int answers `String.from_int`; `to_s` and
+  `inspect` answer a builtin only where the checker resolves them to one
+  (numbers).
 
 ## Exit codes of type-at
 

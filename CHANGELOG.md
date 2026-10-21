@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica type-at` gives the `doc` and the `signature` of the definition, and
+  answers a builtin (`split` in `xs.split(",")`) with `kind` `builtin` and its
+  `help` object, as `agentica help NAME --json` prints it.
+
 ### Changed
 
 - `agentica check` no longer requires `main`, so a library file checks clean; a

@@ -14,7 +14,9 @@ import Rewrite from "rewrite"
 ## declarations with linked names and without exports, in the order of the file. first_id and next_id bound the node
 ## ids of the file (its imports and exports count too, so the declarations leave gaps). aliases maps each import alias
 ## the file wrote to the key of the module it names, so a type of another file can be printed as the file writes it
-## (`Models.User`, `agentica type-at`).
+## (`Models.User`, `agentica type-at`). parsed is the file as the parser gave it: the linker drops the `export` of a
+## declaration and with it the `##` doc that sits on the export, so the docs of a file (`agentica type-at`) are read
+## from here.
 export struct LinkedModule
   key: String
   file: String
@@ -25,6 +27,7 @@ export struct LinkedModule
   text: String
   declarations: List[Ast.Decl]
   aliases: Map[String, String]
+  parsed: Ast.Program
 end
 
 ## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
@@ -116,6 +119,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
         text: module.text,
         declarations: declarations,
         aliases: module.aliases,
+        parsed: module.program,
       ),
     )
   end
