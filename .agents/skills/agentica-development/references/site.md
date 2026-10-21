@@ -14,19 +14,19 @@ rule that a site page shows.
 - `make site` needs Dart Sass's `sass` on PATH or in
   `~/.local/opt/dart-sass`. The pinned version and sha256 are in
   `pages.yml`.
-- `make site` also needs Node; it installs `site/highlight/node_modules`
-  with `npm ci` when the package files change. After
-  Hugo, `site/highlight/highlight.mjs` colors every `agentica` block with the
+- `make site` also needs Node; it installs `site/highlight/node_modules` with
+  `npm ci` when the package files change. After Hugo,
+  `site/highlight/highlight.mjs` colors every `agentica` block with the
   TextMate grammar of agc-tmlanguage, copied to
   `site/highlight/agentica.tmLanguage.json` (the source commit is the
   `grammar` field of its `package.json`). Each token gets the Chroma class
   whose color it should have, so `_code.scss` styles both. The script fails
   when it finds no block. `render-codeblock.html` wraps each block in
-  `div.agc-code` for it, without Hugo's highlight options (`linenos`,
-  `hl_lines`), and the script fails on a block of another shape or an
-  unknown HTML entity, or with fewer colored tokens than blocks.
-  `make site-serve` skips the script, so there the blocks keep Hugo's Ruby
-  colors.
+  `div.agc-code` for it and fails the build when such a block has Hugo
+  highlight options (`linenos`, `hl_lines`); the script fails on a block of
+  another shape or an unknown HTML entity, or when an entry of `CLASSES`
+  colors no token. `make site-serve` skips the script, so there the blocks
+  keep Hugo's Ruby colors.
 - To update the grammar, copy `syntaxes/agentica.tmLanguage.json` from
   agc-tmlanguage, set the `grammar` field to its commit and run `make site`.
 

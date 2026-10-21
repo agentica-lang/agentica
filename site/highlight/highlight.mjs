@@ -26,6 +26,7 @@ const CLASSES = [
   ["variable.other.enummember", "no"],
 ];
 
+const used = new Set();
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
 function decode(html) {
@@ -48,7 +49,10 @@ function classOf(scopes) {
   for (let i = scopes.length - 1; i >= 0; i--) {
     if (scopes[i].startsWith("meta.embedded")) return null;
     const found = CLASSES.find(([prefix]) => scopes[i] === prefix || scopes[i].startsWith(`${prefix}.`));
-    if (found) return found[1];
+    if (found) {
+      used.add(found[0]);
+      return found[1];
+    }
   }
   return null;
 }
@@ -104,7 +108,6 @@ function fail(message) {
 }
 
 let blocks = 0;
-let spans = 0;
 for (const file of htmlFiles(site)) {
   const html = readFileSync(file, "utf8");
   let index = 0;
@@ -119,12 +122,12 @@ for (const file of htmlFiles(site)) {
     }
     const colored = render(grammar, source);
     if (decode(colored) !== source.replace(/\n$/, "")) fail(`${file}: block ${index} changed its text`);
-    spans += colored.split("<span class=").length - 1;
     return `${open} class=language-agentica data-lang=agentica>${colored}${close}`;
   });
   if (/class="?agc-code"?/.test(out)) fail(`${file}: an agentica block has an unexpected shape`);
   if (out !== html) writeFileSync(file, out);
 }
 if (blocks === 0) fail(`no agentica code blocks found in ${site}`);
-if (spans < blocks) fail(`${blocks} blocks got only ${spans} colored tokens: check the scope names in CLASSES`);
-console.log(`highlight: ${blocks} agentica code blocks, ${spans} colored tokens`);
+const unused = CLASSES.filter(([prefix]) => !used.has(prefix)).map(([prefix]) => prefix);
+if (unused.length > 0) fail(`no token matched ${unused.join(", ")}: check the scope names in CLASSES`);
+console.log(`highlight: ${blocks} agentica code blocks`);
