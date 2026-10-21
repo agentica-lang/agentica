@@ -165,6 +165,25 @@ export def validate_library_path(path: String, site: Failure.Site) -> Result[Voi
   return ok()
 end
 
+## The std/ path that a relative import of a std/ module names: `path` is the folder of the importing module (a key,
+## with its trailing "/") and the import path. A ".." goes up inside std/ and may not leave it. CHECK-IMPORT-PATH for a
+## path that leaves std/ or is not made of plain parts (validate_library_path).
+export def inside_std(path: String, site: Failure.Site) -> Result[String]
+  kept: List[String] = []
+  for part in path.split("/")
+    if part == ".." and kept.size > 1
+      kept = kept.take(kept.size - 1)
+    elsif part == ".."
+      return error(invalid_library_path(site))
+    else
+      kept = kept.push(part)
+    end
+  end
+  named = kept.join("/")
+  try validate_library_path(named, site)
+  return ok(named)
+end
+
 ## The parts of a canonical path, with no empty part.
 export def path_parts(path: String) -> List[String]
   return path.split("/").filter do |part| part != "" end

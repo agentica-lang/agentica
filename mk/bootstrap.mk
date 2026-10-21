@@ -21,6 +21,11 @@ STAGE_DIR := build/stage
 FRONT_END_SRC := compiler/front_end.agc
 STD_NAMES := $(shell cat stdlib/MODULES)
 STD_FILES := $(addprefix stdlib/,$(STD_NAMES))
+# The files of compiler/ that std/analysis compiles into a user's program as the private std/internal/compiler/ (stdlib/CORE
+# lists them, relative to compiler/; tests/test_stdlib_modules.py checks the list). The binary carries them with the std/
+# sources.
+CORE_NAMES := $(shell cat stdlib/CORE)
+CORE_FILES := $(addprefix compiler/,$(CORE_NAMES))
 # Every .agc file under compiler/, in all its folders, is an input, except compiler/embedded/: those programs are compiled by
 # the stages, not into them. compiler/agentica.toml is not an input: it holds the style rules for the style test.
 STAGE_INPUTS := $(sort $(shell find compiler -name '*.agc' -not -path 'compiler/embedded/*')) stdlib/MODULES $(STD_FILES) VERSION
@@ -90,15 +95,15 @@ $(EMBEDDED_STAMP): FORCE
 
 # The front end and the std/ sources go into the binary through a generated assembly file with .incbin (not through ccache,
 # which cannot see the files that .incbin reads).
-$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(EMBEDDED_STAMP)
+$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES stdlib/CORE $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(CORE_FILES) $(EMBEDDED_STAMP)
 	@mkdir -p $(VM_BUILD)
-	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) > $@
+	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) stdlib/CORE compiler > $@
 
 $(VM_BUILD)/bootstrap/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE0) $(STD_FILES) $(EMBEDDED_STAMP)
 	@mkdir -p $(VM_BUILD)/bootstrap
 	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE0) stdlib stdlib/MODULES > $@
 
-$(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES)
+$(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(CORE_FILES)
 	@mkdir -p $(VM_OBJ)
 	$(VM_CC) -x assembler -c $< -o $@
 

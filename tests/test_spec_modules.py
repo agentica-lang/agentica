@@ -93,6 +93,8 @@ class TestModuleRules:
     def test_reserved_library_namespaces_reject_traversal_and_keep_the_import_span(self):
         cases = [("std/../queue", "CHECK-IMPORT-PATH"), ("std//queue", "CHECK-IMPORT-PATH"),
                  ("std/missing", "CHECK-IMPORT-IO"), ("pkg/../outside", "CHECK-IMPORT-PATH"),
+                 # std/internal/ holds the core that std/analysis embeds: only a std module may import it.
+                 ("std/internal/compiler/syntax/ast", "CHECK-IMPORT-IO"),
                  ("pkg/agentica-test-nonexistent-stdlib-library", "CHECK-IMPORT-IO")]
         results = self.checks([({"root.agc": 'import Q from "%s"\n' % path + MAIN}, "root.agc", None)
                                for path, _code in cases])

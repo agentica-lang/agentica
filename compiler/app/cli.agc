@@ -41,6 +41,8 @@ import QueryPosition from "../query/query_position"
 import Env from "../modules/link_env"
 import Lowering from "../lower/lowering"
 import LowerText from "../lower/lower_text"
+import Core from "../analysis/analysis"
+import Front from "../analysis/front"
 import Pipeline from "pipeline"
 import Resolve from "../modules/resolve_import"
 import SaveFile from "../io/save_file"
@@ -193,7 +195,7 @@ def with_buffer(session: Session, file: String, then: Fn[Session, Int]) -> Int
   case StdinBuffer.take()
     StdinBuffer.Taken.Failed(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
     StdinBuffer.Taken.Got(buffer) ->
-      workspace = StdinBuffer.over(session.settings.workspace, file, buffer)
+      workspace = StdinBuffer.over(session.settings.workspace, session.settings.env.windows, file, buffer)
       return then.call(
         Session(
           options: session.options,
@@ -209,38 +211,42 @@ end
 # A source file: read, link, check, and then do what the command and the options say.
 def program(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
-  case Pipeline.read_root(session.settings.workspace, source)
-    Pipeline.Root.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
-    Pipeline.Root.Invalid(problem) -> return reject(session, problem, source, 1)
-    Pipeline.Root.Readable -> return linked(session, verb, rest)
+  if verb == "check"
+    return verdict(session, source, Core.check(session.settings, source))
+  end
+  case Front.read_root(session.settings.workspace, source)
+    Front.Root.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
+    Front.Root.Invalid(problem) -> return reject(session, problem, source, 1)
+    Front.Root.Readable -> return linked(session, verb, rest)
+  end
+end
+
+# `check`: say that the program checks, or reject its first problem. `check` accepts a library file: only what is built
+# to run (a run, `compile`) needs a main.
+def verdict(session: Session, source: String, found: Core.Verdict) -> Int
+  case found
+    Core.Verdict.Unreadable -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
+    Core.Verdict.Rejected(problem) -> return reject(session, problem, source, 1)
+    Core.Verdict.Passed ->
+      if session.options.style == "json"
+        return emit(Reply.printed("{\"ok\":true}\n"))
+      end
+      return emit(Reply.printed("check ok\n"))
   end
 end
 
 def linked(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
-  case front_of(session, verb, source)
-    Pipeline.Front.Rejected(problem) -> return reject(session, problem, source, 1)
-    Pipeline.Front.Done(front) -> return checked(session, verb, rest, front)
+  case Front.check_file(source, session.settings)
+    Front.Outcome.Rejected(problem) -> return reject(session, problem, source, 1)
+    Front.Outcome.Done(front) -> return checked(session, verb, rest, front)
   end
-end
-
-# `check` accepts a library file: only what is built to run (a run, `compile`) needs a main.
-def front_of(session: Session, verb: String, source: String) -> Pipeline.Front
-  if verb == "check"
-    return Pipeline.query_file(source, session.settings)
-  end
-  return Pipeline.check_file(source, session.settings)
 end
 
 # What is done with a program that checked, in a fixed order.
-def checked(session: Session, verb: String, rest: List[String], front: Pipeline.Checked) -> Int
+def checked(session: Session, verb: String, rest: List[String], front: Front.Checked) -> Int
   source = rest[0]
-  if verb == "check"
-    if session.options.style == "json"
-      return emit(Reply.printed("{\"ok\":true}\n"))
-    end
-    return emit(Reply.printed("check ok\n"))
-  elsif session.options.dump
+  if session.options.dump
     return emit(Reply.printed("#{CheckText.program_text(front.linked, front.checked)}\n"))
   elsif session.options.dump_ir
     return dump_ir(session, source, front)
@@ -258,7 +264,7 @@ end
 
 # `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of the former front
 # end, which dropped what the bytecode needs (the status note of step 8a in docs/future/35-self-hosting.md says why).
-def dump_ir(session: Session, source: String, front: Pipeline.Checked) -> Int
+def dump_ir(session: Session, source: String, front: Front.Checked) -> Int
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> return reject(session, problem, source, 1)
     Lowering.Lowered.Done(program) ->
@@ -310,11 +316,8 @@ end
 # canonical path. A problem of the arguments (`<arguments>`) has no source lines to show.
 def reject(session: Session, problem: Problems.Problem, source: String, status: Int) -> Int
   style = session.options.style
-  root = is_root?(problem.file, source, session.settings)
-  shown = problem
-  if root
-    shown = problem.with(file: source)
-  end
+  root = Core.root?(problem.file, source, session.settings)
+  shown = Core.named(session.settings, problem, source)
   if style == "json"
     IO.warn(JSON.encode(DiagnosticJson.json(shown)))
   else
@@ -333,15 +336,6 @@ def reject(session: Session, problem: Problems.Problem, source: String, status: 
     end
   end
   return status
-end
-
-# The workspace answers for the canonical path of the root, which is not a file of the disk when it is a buffer.
-def is_root?(named: String, typed: String, settings: Env.Settings) -> Bool
-  if named == typed
-    return true
-  end
-  real = settings.workspace.real_path.call(typed)
-  return real.ok? and real.unwrap! == named
 end
 
 # The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight
