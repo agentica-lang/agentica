@@ -197,7 +197,8 @@ per character.
 `--max-steps`. Each is O(n) with one pass and no copy of the list for each
 element. Steps of the method itself, not counting the block, measured with
 `AGENTICA_VM_TRACE=profile` on 100,000 elements on 2026-10-16
-(`tests/fixtures/vm/prelude-cost.agc` keeps the totals for 2,000 elements):
+(`tests/fixtures/vm/prelude-cost.agc` runs each method once on 2,000 elements,
+and its golden holds only the whole-program steps):
 
 | Method | Steps for each element |
 |---|---:|

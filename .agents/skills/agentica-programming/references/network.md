@@ -184,3 +184,14 @@ When `main` returns, the server stops with the run. A server belongs to the
 task that called `HTTP.listen`: when that task ends (it returns, crashes or is
 cancelled), the server is closed and its port is free, so call `listen` in the
 task that keeps the server, such as `main`.
+
+These names no longer exist in `std/http`: `HTTP.text`, `HTTP.read`,
+`HTTP.trailers`, `HTTP.close_body`, `HTTP.request_stream`, `HTTP.respond`,
+`HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`, `HTTP.finish`, and the types
+`HttpBody`, `HttpWriter`, `Request` and `Response`. The checker's help for
+`respond`, `begin`, `write`, `write_bytes` and `finish` says to return
+`ok(HttpResponse(...))` from the handler. `HTTP.client()` is
+`HTTP.client(HTTP.client_options())`, `HTTP.text(response.body, t)` is
+`response.body`, and `header_timeout_ms` is now `request_timeout_ms`. The
+default `max_body_bytes` is 1 MiB; a client or server that needs more must set
+it.

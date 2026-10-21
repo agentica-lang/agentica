@@ -266,9 +266,10 @@ end
   accumulator (and an index for a list), or uses `for`, `map`, `filter` or
   `each`. `return count(n - 1, acc + 1)` runs for 1,000,000 calls; `return 1 +
   count(n - 1)` fails with `RUNTIME-STACK-OVERFLOW` at that size.
-- A non-Void function must `return` on every path; a loop does not count, and
-  the last expression is not returned implicitly. `return` alone, or reaching
-  the end, completes a Void function. A `Nil` function returns `nil` explicitly.
+- A non-Void function must `return` on every path; a loop does not count (put
+  a `return` after `while true`), and the last expression is not returned
+  implicitly. `return` alone, or reaching the end, completes a Void function. A
+  `Nil` function returns `nil` explicitly.
 
 ## Statements
 
@@ -392,7 +393,8 @@ Operators, from highest to lowest precedence:
   `+` also joins two Strings.
 - `/` on Int truncates toward zero. `%` takes two Ints. A zero divisor is a
   runtime error, also for Float.
-- `< <= > >=` take two numbers of the same type. Comparisons do not chain.
+- `< <= > >=` take two numbers of the same type. Comparisons do not chain:
+  write `a < b and b < c`.
 - `==` and `!=` take two values of the same primitive type (Int, Float, Bool,
   String, Nil), or two ranges. Lists, maps, sets, structs, Results, Json, and Fn
   values cannot be compared (two sets are equal when `a.subset?(b) and
