@@ -11,7 +11,7 @@ import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 import {PRELUDE} from "../catalog/builtins"
 
 # What the arguments checked so far learned: the state, the type of each variable and the span of the argument that

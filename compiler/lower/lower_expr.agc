@@ -15,7 +15,7 @@ import Data from "lower_data"
 import Lowering from "lower_state"
 import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, STRING_OPS, VM_BUILTINS} from "lower_tables"
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {PRELUDE} from "../catalog/builtins"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known

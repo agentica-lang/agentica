@@ -8,7 +8,7 @@ import Builtins from "../catalog/builtins"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 import Suggest from "../check/suggest"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {PRELUDE_ONLY, PUBLIC_NAMES} from "../catalog/builtins"
 
 ## Runs `agentica help` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of it.

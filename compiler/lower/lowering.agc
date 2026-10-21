@@ -22,7 +22,7 @@ import Stmt from "lower_stmt"
 import {BUILTIN_STRUCTS} from "lower_tables"
 import Linker from "../modules/linker"
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {ENUMS} from "../catalog/builtins"
 
 ## The result of lowering: the program, or the first problem (the file it is in comes with it).

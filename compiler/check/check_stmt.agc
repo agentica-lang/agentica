@@ -9,7 +9,7 @@ import State from "check_state"
 import Types from "check_types"
 import Unused from "check_unused"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 
 ## What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
 struct Arms

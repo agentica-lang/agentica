@@ -12,7 +12,7 @@ import Rules from "check_rules"
 import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
-import T from "types"
+import T from "../syntax/types"
 import {ENTRIES} from "../catalog/builtins"
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods

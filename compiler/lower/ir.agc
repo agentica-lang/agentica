@@ -8,7 +8,7 @@
 ## struct, then the positions of the changed fields.
 
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## The start of the name of a source file of the compiler prelude (stdlib/prelude/, docs/future/25-ruby-typed-idioms.md
 ## 25.6). The prelude has no text in the program: the file is a name, with no text, and every span of its functions is

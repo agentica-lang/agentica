@@ -5,7 +5,7 @@ short tree is in `AGENTS.md`; read this to find which file owns something.
 
 ```text
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make stage0 refreshes it; references/ci.md)
-compiler/         # the front end in Agentica (§18.3): one folder per context, a new file goes in the folder of its context; agentica.toml holds its [style] (lines at most 119 characters); imports across folders are relative (`../check/types`)
+compiler/         # the front end in Agentica (§18.3): one folder per context, a new file goes in the folder of its context; agentica.toml holds its [style] (lines at most 119 characters); imports across folders are relative (`../syntax/types`)
   front_end.agc  # the entry point of the front end of the single binary (the Makefile builds this file; make's stages build it)
   app/  # the command line, the pipeline and the replies
     pipeline.agc  # read_root, check_file, build, compile: link, check, lower and write, shared by the CLI and the BDD driver
@@ -24,6 +24,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     lex.agc lex_text.agc  # entry: prints the text form of the tokens of each file argument
     text.agc        # quote, span_text, diagnostic_line: the shared pieces of both text forms
     ast.agc         # the AST structs and enums, with a node id on every node
+    types.agc       # the Type enum and its helpers (the AST, the checker, the catalog, lowering and the writer import it)
     parse_base.agc parser.agc  # parse: List[Token] -> Result[Program](parse_base: Env, packed diagnostics, types, patterns; parser: expressions, statements, declarations)
     parse.agc parse_text.agc  # entry: prints the text form of the tree of each file argument
   modules/  # file reading, import resolution, the linker
@@ -40,7 +41,6 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     package_import.agc package_cache.agc package_hash.agc  # which pkg/<name>/ imports are packages, the hash check, the stored name; the cache folder of a commit; the hash of the .agc files (Crypto.sha256)
   check/  # the checker, types, suggestions, constants and defaults
     suggest.agc  # did_you_mean (the linker also calls it)
-    types.agc  # the Type enum (the catalog, lowering and the writer import it)
     check_state.agc check_types.agc check_failure.agc  # the checker: Cx and St, type operations and unification, packed Problems with their notes
     check_register.agc check_stmt.agc check_expr.agc  # declarations and main; functions, blocks, statements, case; expressions and operators (CHECK-TOO-DEEP)
     check_call.agc check_method.agc  # calls, enum constructors, struct construction and update; methods and fields (Resolved by node id)

@@ -14,7 +14,8 @@ a string, a heredoc, a comment and the builtin data rows (`"File.open"` in built
   and may not call the bare `puts`. The only `Path` function it may use is `Path.join`, which is string work; every
   other `Path` function (present or future) is forbidden. `&File.open` (a function value) is a use too.
 - Imports: a core file may not import from `io/`, `app/` or `bdd/`, nor from a `std/` module that is not on
-  PURE_STD_MODULES. A new std module is forbidden until someone reads it and lists it.
+  PURE_STD_MODULES. A new std module is forbidden until someone reads it and lists it. A file of
+  `syntax/` may not import a later stage (LATER_THAN_SYNTAX); it may import `diagnostics/`, the shared diagnostic data.
 
 The entry programs (the text-form runners of each stage, run by tests with `agentica compiler/<folder>/<name>.agc`) are
 driving adapters that live next to their stage. They may read their command line with `System.args`, print with `puts`,
@@ -34,6 +35,9 @@ NOT_CORE_FOLDERS = {"io", "app", "bdd", "embedded"}
 IO_FOLDERS = {"io"}
 APP_FOLDERS = {"app", "bdd"}
 LEXER = COMPILER / "syntax" / "lex.agc"
+# The stages after syntax/. The first stage cannot take a later one as input (syntax/ast once imported check/types; the
+# Type enum now lives in syntax/types.agc). diagnostics/ is shared data, not a stage, so syntax/ may import it.
+LATER_THAN_SYNTAX = {"modules", "packages", "check", "catalog", "lower", "bytecode"}
 
 OUTSIDE = "an adapter (io/ is for entry programs only, app/ and bdd/ never) or a file outside compiler/"
 FORBIDDEN_MODULES = {
@@ -142,6 +146,8 @@ def forbidden_imports(path, tokens, entry):
             continue
         if folder in IO_FOLDERS | APP_FOLDERS or folder is None:
             found.append("%s imports %s, %s" % (path, target, OUTSIDE))
+        elif path.startswith("compiler/syntax/") and folder in LATER_THAN_SYNTAX:
+            found.append("%s imports %s, a later stage" % (path, target))
     return found
 
 
@@ -209,7 +215,8 @@ def test_the_rule_reads_imports(tmp_path):
         'import Queue from "std/queue"\n'
         'import List from "std/prelude/list"\n'
         'import Local from "lexer"\n'
-        'import Sibling from "../check/types"\n'
+        'import Sibling from "../syntax/types"\n'
+        'import Later from "../check/checker"\n'
         '# import Quiet from "../io/host"\n'
         'x = "import Quiet from \\"../io/host\\""\n',
         encoding="utf-8",
@@ -218,7 +225,7 @@ def test_the_rule_reads_imports(tmp_path):
     tokens = sections["probe.agc"]
     assert imported_paths(tokens) == [
         "../io/host", "../app/pipeline", "../bdd/bdd_driver", "std/http", "std/queue", "std/prelude/list", "lexer",
-        "../check/types",
+        "../syntax/types", "../check/checker",
     ]
     core = "compiler/check/probe.agc"
     assert offenders({core: tokens}) == [
@@ -230,5 +237,5 @@ def test_the_rule_reads_imports(tmp_path):
     # An entry program may import the io/ adapters, and nothing else of that list.
     entry = "compiler/syntax/lex.agc"
     assert [line.split(" imports ")[1].split(",")[0] for line in offenders({entry: tokens})] == [
-        "../app/pipeline", "../bdd/bdd_driver", "std/http",
+        "../app/pipeline", "../bdd/bdd_driver", "std/http", "../check/checker",
     ]

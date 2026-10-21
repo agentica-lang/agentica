@@ -1,6 +1,6 @@
 ## The data types of the builtin catalog. The rows themselves are builtins_data.agc, edited by hand.
 
-import Types from "../check/types"
+import Types from "../syntax/types"
 
 ## The special checking rule of a builtin, the `rule` field of a catalog row. Plain is no rule: the arguments are
 ## checked against the parameters. The other variants name a special rule of the checker in CamelCase (a task spawn is

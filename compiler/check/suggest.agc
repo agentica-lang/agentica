@@ -2,7 +2,7 @@
 
 import Ast from "../syntax/ast"
 import Diag from "../diagnostics/diagnostic"
-import Types from "types"
+import Types from "../syntax/types"
 import Declarations from "../modules/declarations"
 
 ## The help text for the exported name closest to name, or Absent when none is close. A name of up to 4 characters may

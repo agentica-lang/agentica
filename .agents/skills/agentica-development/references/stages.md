@@ -371,7 +371,7 @@ error:
   payloads.
 - Catalogued builtin function names cannot be redefined. `ok` and `error` are
   additionally reserved on locals, parameters, loop variables, and fields.
-- Types are the `Type` enum of `compiler/check/types.agc`: the primitives,
+- Types are the `Type` enum of `compiler/syntax/types.agc`: the primitives,
   `List`, `Map`, `Set`, `Result` and `Task` of a type, structs and enums by
   linked name (an enum carries its type arguments), and type variables during
   payload registration.

@@ -11,7 +11,7 @@ import Diag from "../diagnostics/diagnostic"
 import Ir from "ir"
 import {PRELUDE_PREFIX} from "ir"
 import Source from "../syntax/source"
-import Types from "../check/types"
+import Types from "../syntax/types"
 import {OPAQUE_TYPES} from "../catalog/builtins"
 
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the

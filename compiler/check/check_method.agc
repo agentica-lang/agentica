@@ -9,7 +9,7 @@ import Names from "check_names"
 import State from "check_state"
 import CheckTypes from "check_types"
 import Source from "../syntax/source"
-import T from "types"
+import T from "../syntax/types"
 
 ## Checks target.name(args).
 export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
