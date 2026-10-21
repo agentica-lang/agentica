@@ -2,13 +2,13 @@
 ## of one builtin (as text, or as JSON with `--json`). It reads the builtin catalog (builtins.agc), the one description
 ## of the builtins.
 
-import Ast from "../syntax/ast"
 import Builtins from "../catalog/builtins"
+import {PUBLIC_NAMES} from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
+import Ast from "../syntax/ast"
+import Suggest from "../syntax/suggest"
 import Reply from "cli_reply"
 import Texts from "cli_text"
-import Suggest from "../syntax/suggest"
-import {PUBLIC_NAMES} from "../catalog/builtins"
 
 ## Runs `agentica help` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of it.
 ## A trailing `--json` asks for the JSON form: of the one builtin, or of every public builtin as an array (sorted by

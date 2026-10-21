@@ -1,20 +1,20 @@
 ## The text form of lowering, for tests. See lower.agc.
 
 import Builtins from "../catalog/builtins"
-import Failure from "../diagnostics/problem"
 import CheckText from "../check/check_text"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
-import Ir from "ir"
+import Failure from "../diagnostics/problem"
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import LinkText from "../modules/link_text"
 import Linker from "../modules/linker"
-import Lowering from "lowering"
+import Workspace from "../modules/workspace"
 import Source from "../syntax/source"
 import Text from "../syntax/text"
 import Types from "../syntax/types"
-import Workspace from "../modules/workspace"
+import Ir from "ir"
+import Lowering from "lowering"
 
 ## The text form of lowering the file at path: the IR as lines, or the ERROR line of the first failure of the linker,
 ## the checker or the lowering.

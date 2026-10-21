@@ -2,11 +2,11 @@
 ## write, each giving the data of the next stage or the first problem. The BDD driver and the command line (cli.agc)
 ## both run it.
 
+import Front from "../analysis/front"
 import Writer from "../bytecode/bytecode_writer"
 import Problems from "../diagnostics/problem"
-import Front from "../analysis/front"
-import Env from "../modules/link_env"
 import Lowering from "../lower/lowering"
+import Env from "../modules/link_env"
 
 ## The result of compiling: the bytes of the program, or the first problem.
 export enum Compiled

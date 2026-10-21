@@ -3,8 +3,8 @@
 ## it should have been.
 
 import Ast from "../syntax/ast"
-import State from "check_state"
 import T from "../syntax/types"
+import State from "check_state"
 
 ## Argument 0 as a Map[K, V].
 export def map_argument(cx: State.Cx, st: State.St, site: State.Site, context: T.Type) -> Result[State.Out]
@@ -62,7 +62,7 @@ def shaped(
   shape: T.Type,
 ) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], context)
-  if !T.is(out.type, word)
+  if !T.is?(out.type, word)
     return error(State.mismatch(cx, out.st, shape, out.type, Ast.expr_span(site.args[0])))
   end
   return ok(out)

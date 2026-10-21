@@ -139,7 +139,7 @@ end
 
 def seed(options: Options, value: String) -> Applied
   digits = without_leading_zeros(value)
-  if !digits?(value) or digits.length > 10 or digits.to_i! > 2147483647
+  if !digits?(value) or digits.length > 10 or digits.to_i! > 2_147_483_647
     return Applied.Refused("--seed needs an integer from 0 to 2147483647")
   end
   return Applied.Changed(options.with(seed: digits))

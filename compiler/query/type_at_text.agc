@@ -3,8 +3,8 @@
 ## `file:line:column`, like `rg`. A builtin has no place: its lines are `builtin` and the signature of each form. The
 ## type of a name that only the link could answer (docs/future/39-semantic-cli.md, 39.6) is written `?`.
 
-import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Model from "../analysis/model"
+import DiagnosticModel from "../diagnostics/diagnostic_model"
 
 ## The lines of the answer for the expression in the file of its position.
 export def text(found: Model.TypeAt) -> String

@@ -5,28 +5,28 @@
 ## file (modules/overlay.agc), and gives the data of model.agc or the first problem. What each caller does with them is
 ## its own: the command line prints and sets an exit status, the library returns.
 
-import Ast from "../syntax/ast"
-import Cache from "cache"
-import Convert from "convert"
 import Diag from "../diagnostics/diagnostic"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
-import Env from "../modules/link_env"
-import Front from "front"
-import Model from "model"
-import Outline from "../query/outline"
-import Partial from "partial"
-import PartialAt from "../query/partial_at"
 import Problems from "../diagnostics/problem"
+import Env from "../modules/link_env"
+import Outline from "../query/outline"
+import PartialAt from "../query/partial_at"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
 import Refs from "../query/refs"
 import RefsName from "../query/refs_name"
-import SourceFile from "../syntax/source_file"
 import Symbol from "../query/symbol"
 import SymbolLink from "../query/symbol_link"
 import SymbolPaths from "../query/symbol_paths"
 import TypeAt from "../query/type_at"
+import Ast from "../syntax/ast"
+import SourceFile from "../syntax/source_file"
+import Cache from "cache"
+import Convert from "convert"
+import Front from "front"
+import Model from "model"
+import Partial from "partial"
 
 ## What `check` found: the program links and checks, the file cannot be read, or the first problem.
 export enum Verdict

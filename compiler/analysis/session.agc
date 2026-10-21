@@ -5,11 +5,11 @@
 ## linked and checked and the files it parsed: a question uses what is still valid and computes the rest, so the
 ## answers are the same with any cache.
 
-import Cache from "cache"
 import Env from "../modules/link_env"
-import Front from "front"
 import Overlay from "../modules/overlay"
 import SourceFile from "../syntax/source_file"
+import Cache from "cache"
+import Front from "front"
 
 ## The settings, the buffers, the number of changes made to them and the cache.
 export struct Session

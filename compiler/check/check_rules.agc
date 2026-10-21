@@ -2,18 +2,18 @@
 ## where the last parameter is a function, then the rule of the builtin. The List, Map, Set, Task and Channel rules are
 ## in check_list.agc and check_collections.agc; the rest are here.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
+import Failure from "../diagnostics/problem"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import Args from "check_args"
 import Collections from "check_collections"
-import Failure from "../diagnostics/problem"
 import Lists from "check_list"
 import PreludeCalls from "check_prelude"
 import State from "check_state"
 import CheckTypes from "check_types"
-import Source from "../syntax/source"
-import T from "../syntax/types"
 
 ## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown
 ## when none.
@@ -100,7 +100,7 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
   last = node.args[node.args.size - 1]
   case last
     Ast.Expr.BlockLit(block) ->
-      if !T.is(form.parameters[form.parameters.size - 1].type, "Fn")
+      if !T.is?(form.parameters[form.parameters.size - 1].type, "Fn")
         return error(
           State.fail_help(
             cx,
@@ -173,7 +173,7 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
   message = try State.expr(cx, st, site.args[0], T.Type.String)
   expected = site.expected
   span = site.node.span
-  if !T.unknown?(expected) and !T.is(expected, "Result")
+  if !T.unknown?(expected) and !T.is?(expected, "Result")
     return error(State.mismatch(cx, message.st, expected, T.Type.Result(T.Type.Var("T")), span))
   end
   if T.unknown?(expected)
@@ -217,7 +217,7 @@ end
 def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, decode: Bool) -> Result[State.Out]
   ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
-  if !T.is(type, "Struct") or !CheckTypes.decodable?(cx, type, [])
+  if !T.is?(type, "Struct") or !CheckTypes.decodable?(cx, type, [])
     return error(State.fail(cx, st, "CHECK-NOT-DECODABLE", "target contains types that cannot be decoded", node.span))
   end
   if decode
@@ -250,7 +250,7 @@ end
 def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   actual = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   wanted = try State.expr(cx, actual.st, site.args[1], actual.type)
-  if !T.same(actual.type, wanted.type)
+  if !T.same?(actual.type, wanted.type)
     return error(State.mismatch(cx, wanted.st, actual.type, wanted.type, Ast.expr_span(site.args[1])))
   end
   if !CheckTypes.data?(cx, actual.type, [])
@@ -295,13 +295,13 @@ end
 
 # The rules of the Task, Channel, Map and Set builtins, then of the List builtins.
 def check_other_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
-  if is_list_rule?(rule)
+  if list_rule?(rule)
     return Lists.check_list_rule(cx, st, site, rule)
   end
   return Collections.check_collection_rule(cx, st, site, rule)
 end
 
-def is_list_rule?(rule: Model.Rule) -> Bool
+def list_rule?(rule: Model.Rule) -> Bool
   case rule
     Model.Rule.ListSize -> return true
     Model.Rule.ListReverse -> return true

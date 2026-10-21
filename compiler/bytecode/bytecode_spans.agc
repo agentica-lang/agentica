@@ -2,9 +2,9 @@
 ## with the same spans are one entry, so an instruction names its run by the number of the first span, and a run may be
 ## empty. A span is written as the index of its source and the line and column of its start and end.
 
-import Pool from "bytecode_pool"
 import Ir from "../lower/ir"
 import Source from "../syntax/source"
+import Pool from "bytecode_pool"
 
 ## The run of the spans of the written instruction that starts at body[at] and stands for `count` instructions (more
 ## than one for a run of `step`): the pool with it added when it is new, and its number. Nearly every instruction has
@@ -71,17 +71,17 @@ def span_bytes(file: Int, span: Source.Span) -> List[Int]
   second = start.column
   third = stop.line
   fourth = stop.column
-  if file < 65536 and first < 65536 and second < 65536 and third < 65536 and fourth < 65536
+  if file < 65_536 and first < 65_536 and second < 65_536 and third < 65_536 and fourth < 65_536
     return [
       file % 256, file / 256, 0, 0, first % 256, first / 256, 0, 0, second % 256, second / 256, 0, 0,
       third % 256, third / 256, 0, 0, fourth % 256, fourth / 256, 0, 0,
     ]
   end
   return [
-    file % 256, (file / 256) % 256, (file / 65536) % 256, file / 16777216,
-    first % 256, (first / 256) % 256, (first / 65536) % 256, first / 16777216,
-    second % 256, (second / 256) % 256, (second / 65536) % 256, second / 16777216,
-    third % 256, (third / 256) % 256, (third / 65536) % 256, third / 16777216,
-    fourth % 256, (fourth / 256) % 256, (fourth / 65536) % 256, fourth / 16777216,
+    file % 256, (file / 256) % 256, (file / 65_536) % 256, file / 16_777_216,
+    first % 256, (first / 256) % 256, (first / 65_536) % 256, first / 16_777_216,
+    second % 256, (second / 256) % 256, (second / 65_536) % 256, second / 16_777_216,
+    third % 256, (third / 256) % 256, (third / 65_536) % 256, third / 16_777_216,
+    fourth % 256, (fourth / 256) % 256, (fourth / 65_536) % 256, fourth / 16_777_216,
   ]
 end

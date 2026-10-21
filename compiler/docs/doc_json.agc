@@ -3,10 +3,10 @@
 ## with its `file`, every type a string as written. `agentica outline` writes its items with `item_json` too.
 
 import Convert from "../analysis/convert"
+import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import DocModel from "doc_model"
-import Model from "../analysis/model"
 
 ## The object `{module, doc, items}` of a documented module. `module` is the path as the user typed it, and the `file`
 ## of each span.

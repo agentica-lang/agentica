@@ -1,7 +1,7 @@
 ## The text form of a parse, for tests. See parse_text.
 
-import Ast from "ast"
 import Diag from "../diagnostics/diagnostic"
+import Ast from "ast"
 import Lexer from "lexer"
 import Parser from "parser"
 import Source from "source"

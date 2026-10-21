@@ -3,10 +3,10 @@
 ## failure is PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one file; project.agc checks
 ## it against the manifest, and package_import.agc against the manifest of each package it loads.
 
-import Toml from "std/toml"
-import GitSource from "git_source"
-import Reader from "toml_read"
 import Workspace from "../modules/workspace"
+import GitSource from "git_source"
+import Toml from "std/toml"
+import Reader from "toml_read"
 
 # The keys of the lock and of a [[package]] table. A package has exactly one of tag and ref.
 TOP_KEYS = ["version", "package"]

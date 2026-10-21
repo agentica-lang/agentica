@@ -6,8 +6,8 @@
 ## returns the node with the new position and id. A failure is a Result error whose String is the packed diagnostic, so
 ## `try` stops at the first one.
 
-import Ast from "ast"
 import Diag from "../diagnostics/diagnostic"
+import Ast from "ast"
 import Source from "source"
 import Tokens from "token"
 import Unicode from "unicode"
@@ -335,19 +335,19 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
   inner = try enter(e, pos)
   name = e.tokens[pos].lexeme
   cursor = try expect(e, pos, "type-name", "a type name", false)
-  if is_kind(e, cursor, "dot")
+  if kind?(e, cursor, "dot")
     stop = try expect(e, cursor + 1, "type-name", "an imported type name", false)
     name = "#{name}.#{e.tokens[cursor + 1].lexeme}"
     cursor = stop
   end
   args: List[Ast.TypeRef] = []
   next_id = ids
-  if is_kind(e, cursor, "left-bracket")
+  if kind?(e, cursor, "left-bracket")
     first = try parse_type(inner, cursor + 1, next_id)
     args = args.push(first.node)
     cursor = first.pos
     next_id = first.ids
-    while is_kind(e, cursor, "comma")
+    while kind?(e, cursor, "comma")
       more = try parse_type(inner, cursor + 1, next_id)
       args = args.push(more.node)
       cursor = more.pos
@@ -406,7 +406,7 @@ export def case_arm_start?(e: Env, pos: Int) -> Bool
   return kind_at(e, stop) == "arrow"
 end
 
-def is_kind(e: Env, pos: Int, kind: String) -> Bool
+def kind?(e: Env, pos: Int, kind: String) -> Bool
   return e.tokens[pos].kind == kind
 end
 
@@ -462,7 +462,7 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
   kind = token.kind
   if kind == "name"
     lexeme = token.lexeme
-    if (lexeme == "ok" or lexeme == "error") and is_kind(e, pos + 1, "left-paren")
+    if (lexeme == "ok" or lexeme == "error") and kind?(e, pos + 1, "left-paren")
       return nested_slot(e, pos, ids)
     end
     advanced = try expect(e, pos, "name", "a pattern binding or _", false)
@@ -492,7 +492,7 @@ end
 
 # The slots of the parentheses that open at pos: one or more, separated by commas.
 def parse_slots(e: Env, pos: Int, ids: Int, empty_help: String) -> Result[SlotsAt]
-  if is_kind(e, pos + 1, "right-paren")
+  if kind?(e, pos + 1, "right-paren")
     return error(unexpected_help(e, pos + 1, "a pattern with parentheses needs a binding or _", empty_help))
   end
   slots: List[Ast.Slot] = []
@@ -504,7 +504,7 @@ def parse_slots(e: Env, pos: Int, ids: Int, empty_help: String) -> Result[SlotsA
     slots = slots.push(parsed.slot)
     cursor = parsed.pos
     next_id = parsed.ids
-    if is_kind(e, cursor, "comma")
+    if kind?(e, cursor, "comma")
       cursor += 1
     else
       looping = false
@@ -556,7 +556,7 @@ def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     node = Ast.Pattern.Wildcard(Ast.WildcardPattern(id: ids, span: token.span))
     return ok(PatternAt(node: node, pos: pos + 1, ids: ids + 1))
   end
-  if (lexeme == "ok" or lexeme == "error") and is_kind(e, pos + 1, "left-paren")
+  if (lexeme == "ok" or lexeme == "error") and kind?(e, pos + 1, "left-paren")
     parsed = try parse_slots(e, pos + 1, ids, "write #{lexeme}(_) to match without binding the value")
     variant = "Err"
     if lexeme == "ok"
@@ -587,7 +587,7 @@ def variant_help(enum_name: String, variant_name: String) -> String
 end
 
 def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
-  if !is_kind(e, pos + 1, "dot") and constant_name?(e.tokens[pos].lexeme)
+  if !kind?(e, pos + 1, "dot") and constant_name?(e.tokens[pos].lexeme)
     return error(
       unexpected_help(
         e,
@@ -602,7 +602,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   enum_name = e.tokens[pos].lexeme
   variant_name = e.tokens[cursor].lexeme
   cursor = after
-  if is_kind(e, cursor, "dot")
+  if kind?(e, cursor, "dot")
     last = try expect(e, cursor + 1, "type-name", "a variant name", false)
     enum_name = "#{enum_name}.#{variant_name}"
     variant_name = e.tokens[cursor + 1].lexeme
@@ -610,7 +610,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   end
   slots: List[Ast.Slot] = []
   next_id = ids
-  if is_kind(e, cursor, "left-paren")
+  if kind?(e, cursor, "left-paren")
     parsed = try parse_slots(e, cursor, ids, variant_help(enum_name, variant_name))
     slots = parsed.slots
     cursor = parsed.pos

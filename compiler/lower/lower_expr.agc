@@ -5,19 +5,19 @@
 ## A method call or a field access that names a builtin is not rewritten in compiler/: the lowering reads its Resolved
 ## and lowers the synthetic node it describes.
 
-import Ast from "../syntax/ast"
 import Builtins from "../catalog/builtins"
+import {PRELUDE} from "../catalog/builtins"
 import State from "../check/check_state"
 import ConstWalk from "../check/const_walk"
 import Defaults from "../check/defaults"
-import Ir from "ir"
+import Ast from "../syntax/ast"
 import Names from "../syntax/prelude_name"
+import Source from "../syntax/source"
+import Types from "../syntax/types"
+import Ir from "ir"
 import Data from "lower_data"
 import Lowering from "lower_state"
 import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, STRING_OPS, VM_BUILTINS} from "lower_tables"
-import Source from "../syntax/source"
-import Types from "../syntax/types"
-import {PRELUDE} from "../catalog/builtins"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map was checked as a whole.
@@ -199,7 +199,7 @@ def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Res
   if count == 2
     type = Types.args(type)[0]
   end
-  if Types.is(type, "Result")
+  if Types.is?(type, "Result")
     return ok("Task.await_result")
   end
   return ok("Task.await")
@@ -290,7 +290,7 @@ def lower_unary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Unary, want: Int) ->
   op = "neg-i"
   if node.op == "not"
     op = "not"
-  elsif Types.is(Lowering.type_of(cx, node.operand), "Float")
+  elsif Types.is?(Lowering.type_of(cx, node.operand), "Float")
     op = "neg-f"
   end
   fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.op_span)
@@ -329,9 +329,9 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
   else
     ops = INT_OPS
     side = Lowering.type_of(cx, node.left)
-    if Types.is(side, "Float")
+    if Types.is?(side, "Float")
       ops = FLOAT_OPS
-    elsif Types.is(side, "String")
+    elsif Types.is?(side, "String")
       ops = STRING_OPS
     end
     left = try lower_expression(cx, fx, node.left, -1, false, false)
@@ -367,7 +367,7 @@ def lower_index(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IndexAccess, want: I
   items = try lower_expression(cx, made.fx, node.target, -1, false, false)
   index = try lower_expression(cx, items.fx, node.index, -1, false, false)
   op = "list-get"
-  if Types.is(Lowering.static_type(cx, node.target), "Map")
+  if Types.is?(Lowering.static_type(cx, node.target), "Map")
     op = "map-get"
   end
   fx = Lowering.emit_at(index.fx, op, [made.slot, items.slot, index.slot], Ast.expr_span(node.index))
@@ -425,7 +425,7 @@ end
 
 # The conversion of a value in slot to its text, unless it is a String already.
 def text_of(fx: Lowering.Fx, type: Types.Type, slot: Int, span: Source.Span) -> Result[Lowering.Fx]
-  if Types.is(type, "String")
+  if Types.is?(type, "String")
     return ok(fx)
   end
   return ok(Lowering.emit_at(fx, "to-text", [slot, slot], span))

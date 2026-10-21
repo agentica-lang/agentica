@@ -3,10 +3,10 @@
 ## "v1.2.0" }`, with exactly one of `tag` and `ref`. A failure is PKG-MANIFEST-INVALID, with the file and the key path
 ## (toml_read.agc).
 
-import Toml from "std/toml"
-import GitSource from "git_source"
-import Reader from "toml_read"
 import Workspace from "../modules/workspace"
+import GitSource from "git_source"
+import Toml from "std/toml"
+import Reader from "toml_read"
 
 # The keys the manifest knows, and those of [style] and of a dependency.
 TOP_KEYS = ["name", "dependencies", "style"]

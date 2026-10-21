@@ -2,11 +2,11 @@
 ## span holds the position and that checking gave a type. It walks the tree with a worklist and no recursion, with the
 ## children of `check/const_walk.agc`, so a deep tree cannot reach the limit of VM calls.
 
-import Ast from "../syntax/ast"
+import Walk from "../check/const_walk"
 import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
-import Walk from "../check/const_walk"
 
 ## The innermost expression of `module` that holds the character at `offset` and has a type in `types` (a list indexed
 ## by node id, `Checked.types`), or Absent. Among the expressions that hold it, the one with the shortest span wins,

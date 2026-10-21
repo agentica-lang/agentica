@@ -5,15 +5,15 @@
 ## text hold no expression, even inside the span of one. A local (a parameter, a binding, a loop variable or a pattern
 ## name) is answered with its type and a definition at its binding, on a use of the name and on the binding itself.
 
+import Model from "../catalog/builtin_model"
 import CatalogJson from "../catalog/catalog_json"
+import State from "../check/check_state"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
-import Model from "../catalog/builtin_model"
 import Source from "../syntax/source"
-import State from "../check/check_state"
 import T from "../syntax/types"
 import At from "at"
 import Definitions from "definitions"

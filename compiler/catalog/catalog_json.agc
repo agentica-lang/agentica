@@ -3,9 +3,9 @@
 ## a client reads the three with one parser. It lives in catalog/ so that the stages that answer queries (query/) can
 ## use it without importing the command line (app/).
 
+import Types from "../syntax/types"
 import Model from "builtin_model"
 import Builtins from "builtins"
-import Types from "../syntax/types"
 import {PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
 
 ## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`) or a prelude-only

@@ -172,10 +172,10 @@ def sequence_width(data: List[Int], at: Int) -> Int
     end
     code = code * 64 + next_byte - 128
   end
-  if (width == 3 and code < 2048) or (width == 4 and code < 65536) or code > 1114111
+  if (width == 3 and code < 2048) or (width == 4 and code < 65_536) or code > 1_114_111
     return 0
   end
-  if code >= 55296 and code <= 57343
+  if code >= 55_296 and code <= 57_343
     return 0
   end
   return width

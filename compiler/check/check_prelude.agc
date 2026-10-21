@@ -5,14 +5,14 @@
 ## up as one of its allowed types. The checker records which function of stdlib/prelude/ the call runs, by the id of
 ## the call.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import {PRELUDE} from "../catalog/builtins"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
-import Source from "../syntax/source"
-import T from "../syntax/types"
-import {PRELUDE} from "../catalog/builtins"
 
 # What the arguments checked so far learned: the state, the type of each variable and the span of the argument that
 # bound it (the limits are reported there).
@@ -47,7 +47,7 @@ def check_argument(cx: State.Cx, bound: Bound, arg: Ast.Expr, template: T.Type, 
   checked = State.Out(st: bound.st, type: T.Type.Unknown)
   case arg
     Ast.Expr.BlockLit(block) ->
-      if T.is(template, "Fn")
+      if T.is?(template, "Fn")
         checked = try check_block(cx, bound, block, wanted, step)
       else
         checked = try State.expr(cx, bound.st, arg, T.Type.Unknown)
@@ -95,7 +95,7 @@ def check_limits(
         State.fail(cx, bound.st, "CHECK-TYPE-MISMATCH", "#{form.name} could not tell its types", call),
       )
     end
-    if !limit.allowed.any? do |allowed: T.Type| T.same(allowed, found.unwrap!) end
+    if !limit.allowed.any? do |allowed: T.Type| T.same?(allowed, found.unwrap!) end
       names = limit.allowed.map do |allowed: T.Type| T.to_text(allowed) end
       options = names.take(names.size - 1).join(", ") + " or " + names[names.size - 1]
       return error(

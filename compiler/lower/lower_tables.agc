@@ -84,6 +84,6 @@ export MAX_CHUNK = 255
 
 ## The smallest and largest Int, and the digits of the first (a literal `9223372036854775808` is the digits of an Int
 ## that does not fit).
-export INT_MIN = -9223372036854775807 - 1
-export INT_MAX = 9223372036854775807
+export INT_MIN = -9_223_372_036_854_775_807 - 1
+export INT_MAX = 9_223_372_036_854_775_807
 export INT_MIN_DIGITS = "9223372036854775808"

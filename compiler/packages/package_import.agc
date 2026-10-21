@@ -6,17 +6,17 @@
 ## (check_manifests). A name that the importing manifest does not declare is a library of the pkg/ roots
 ## (resolve_import.agc) for a file of the project; a file of a package may import only what its own manifest declares.
 
+import Diag from "../diagnostics/diagnostic"
+import Paths from "../modules/import_path"
+import Env from "../modules/link_env"
+import Failure from "../modules/link_failure"
+import Workspace from "../modules/workspace"
 import GitSource from "git_source"
 import Lock from "lock"
 import Manifest from "manifest"
 import PackageCache from "package_cache"
 import PackageHash from "package_hash"
 import Project from "project"
-import Diag from "../diagnostics/diagnostic"
-import Paths from "../modules/import_path"
-import Env from "../modules/link_env"
-import Failure from "../modules/link_failure"
-import Workspace from "../modules/workspace"
 
 # The manifest of a package, in the folder that holds its files.
 MANIFEST_FILE = "agentica.toml"
@@ -82,17 +82,6 @@ end
 ## The origin of a file of the project.
 export def project_origin() -> Origin
   return Origin(package: "", root: "", label: "")
-end
-
-## The names that a file of this origin may import as packages: the project's own for a file of the project, else those
-## of the manifest of the package it belongs to.
-export def allowed_names(scope: Scope, origin: Origin) -> List[String]
-  if origin.package == ""
-    return scope.direct
-  elsif !scope.opened.has_key?(origin.package)
-    return []
-  end
-  return scope.opened[origin.package].names
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
@@ -336,4 +325,14 @@ end
 
 def refuse(site: Failure.Site, message: String, help: String) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
+end
+
+# The project's own names for a file of the project, else those of the manifest of the package it belongs to.
+def allowed_names(scope: Scope, origin: Origin) -> List[String]
+  if origin.package == ""
+    return scope.direct
+  elsif !scope.opened.has_key?(origin.package)
+    return []
+  end
+  return scope.opened[origin.package].names
 end

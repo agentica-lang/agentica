@@ -8,6 +8,9 @@
 ##
 ## Recursion: only the JSON field types recurse (bytecode_types.agc, 1 VM frame for each level, at most 1,024 levels).
 
+import Problems from "../diagnostics/problem"
+import Ir from "../lower/ir"
+import Types from "../syntax/types"
 import Bytes from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Function from "bytecode_function"
@@ -15,9 +18,6 @@ import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
 import {FORMAT_VERSION, MAX_U16} from "bytecode_tables"
 import JsonTypes from "bytecode_types"
-import Problems from "../diagnostics/problem"
-import Ir from "../lower/ir"
-import Types from "../syntax/types"
 
 ## The result of writing: the bytes of the file, or the first problem (BYTECODE-LIMIT or BYTECODE-INTERNAL).
 export enum Written
@@ -56,21 +56,23 @@ def build(program: Ir.Program, version: String) -> Result[List[Int]]
     tables = encoded.tables
     functions = Bytes.add_all(functions, encoded.parts)
   end
-  out = header(version)
-  out = sources(out, program)
-  out = pool_section(out, tables.spans)
-  out = pool_section(out, tables.constants)
-  out = structs(out, program)
-  out = pool_section(out, json.types)
-  out = Bytes.add(out, Bytes.u32(json.decodable_count))
-  out = Bytes.add_all(out, json.decodable)
-  out = enums(out, program)
-  out = pool_section(out, tables.updates)
-  out = Bytes.add(out, Bytes.u32(program.globals))
-  out = pool_section(out, tables.builtins)
-  out = Bytes.add(out, Bytes.u32(program.functions.size))
-  out = Bytes.add_all(out, functions)
-  out = Bytes.add(out, Bytes.u32(program.entry))
+  out = (
+    header(version)
+    |> sources(program)
+    |> pool_section(tables.spans)
+    |> pool_section(tables.constants)
+    |> structs(program)
+    |> pool_section(json.types)
+    |> Bytes.add(Bytes.u32(json.decodable_count))
+    |> Bytes.add_all(json.decodable)
+    |> enums(program)
+    |> pool_section(tables.updates)
+    |> Bytes.add(Bytes.u32(program.globals))
+    |> pool_section(tables.builtins)
+    |> Bytes.add(Bytes.u32(program.functions.size))
+    |> Bytes.add_all(functions)
+    |> Bytes.add(Bytes.u32(program.entry))
+  )
   return ok(Bytes.join(out))
 end
 

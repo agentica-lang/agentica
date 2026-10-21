@@ -1,14 +1,14 @@
 ## The checking rules of the List builtins. A rule
 ## takes the call (State.Site) and returns the new state with the type of the call.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import Args from "check_args"
 import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
-import Source from "../syntax/source"
-import T from "../syntax/types"
 
 ## Checks a call of a List builtin by its rule. Any other rule is the caller's.
 export def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
@@ -44,7 +44,7 @@ end
 def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.list_argument(cx, st, site, T.only_list(site.expected))
   element = T.item(target.type)
-  if !T.is(element, "Int") and !T.is(element, "Float") and !T.is(element, "String")
+  if !T.is?(element, "Int") and !T.is?(element, "Float") and !T.is?(element, "String")
     return error(
       State.fail(
         cx,
@@ -90,11 +90,11 @@ end
 
 # The key function takes one parameter and gives an Int, a Float or a String.
 def check_sort_key(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Span) -> Result[Bool]
-  if !T.is(callback, "Fn") or T.params(callback).size != 1
+  if !T.is?(callback, "Fn") or T.params(callback).size != 1
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by requires a key function with one parameter", span))
   end
   key = T.result(callback)
-  if !T.is(key, "Int") and !T.is(key, "Float") and !T.is(key, "String")
+  if !T.is?(key, "Int") and !T.is?(key, "Float") and !T.is?(key, "String")
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by keys must be Int, Float or String", span))
   end
   return ok(true)
@@ -150,7 +150,7 @@ end
 
 def check_repeat(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   context = T.Type.Unknown
-  if T.is(site.expected, "List")
+  if T.is?(site.expected, "List")
     context = T.item(site.expected)
   end
   element = try State.expr(cx, st, site.args[0], context)
@@ -171,7 +171,7 @@ def check_callback_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mode
   if reduces?(rule)
     arity = 2
   end
-  if !T.is(checked.type, "Fn") or T.params(checked.type).size != arity
+  if !T.is?(checked.type, "Fn") or T.params(checked.type).size != arity
     return error(
       State.fail(cx, checked.st, "CHECK-TYPE-MISMATCH", "wrong collection callback type", Ast.expr_span(callback)),
     )
@@ -270,7 +270,7 @@ def callback_result(
     element = params[1]
   end
   current = st
-  if !is_block?(callback)
+  if !block?(callback)
     list = try Args.list_argument(cx, current, site, T.Type.List(element))
     current = list.st
   end
@@ -289,11 +289,11 @@ def reduce_result(
   result: T.Type,
 ) -> Result[State.Out]
   span = Ast.expr_span(callback)
-  if !T.same(accumulator, result)
+  if !T.same?(accumulator, result)
     return error(State.mismatch(cx, st, accumulator, result, span))
   end
   current = st
-  if !is_block?(callback)
+  if !block?(callback)
     initial = try State.expr(cx, current, site.args[1], result)
     current = initial.st
   end
@@ -326,20 +326,20 @@ def plain_result(
 end
 
 def map_result(cx: State.Cx, st: State.St, span: Source.Span, result: T.Type) -> Result[State.Out]
-  if T.is(result, "Void")
+  if T.is?(result, "Void")
     return error(State.fail(cx, st, "CHECK-VOID-VALUE", "map callbacks must return data", span))
   end
   return ok(State.Out(st: st, type: T.Type.List(result)))
 end
 
 def require_type(cx: State.Cx, st: State.St, expected: T.Type, actual: T.Type, span: Source.Span) -> Result[Bool]
-  if !T.same(expected, actual)
+  if !T.same?(expected, actual)
     return error(State.mismatch(cx, st, expected, actual, span))
   end
   return ok(true)
 end
 
-def is_block?(node: Ast.Expr) -> Bool
+def block?(node: Ast.Expr) -> Bool
   case node
     Ast.Expr.BlockLit(block) -> return true
     _ -> return false

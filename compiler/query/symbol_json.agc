@@ -5,9 +5,9 @@
 ## the diagnostic being the `--json` object of the problem. A span is `{file, range}` with the `file` the command
 ## answers with, which is `module`.
 
+import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
-import Model from "../analysis/model"
 
 ## The object of the answer; the `module` of each match is the name the answer gives its file (query_files.agc,
 ## `display`).

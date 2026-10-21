@@ -8,6 +8,9 @@
 ## user asked for. A failure to compile a test file or the step program is not: it goes to the runner, which reports it
 ## as the error of that file.
 
+import Pipeline from "../app/pipeline"
+import DiagnosticJson from "../diagnostics/diagnostic_json"
+import Env from "../modules/link_env"
 import Compile from "bdd_compile"
 import Discover from "bdd_discover"
 import {IO_TIMEOUT, write_bytes, write_text} from "bdd_files"
@@ -16,9 +19,6 @@ import Report from "bdd_report"
 import RunDir from "bdd_rundir"
 import Runner from "bdd_runner"
 import SourceRoot from "bdd_source_root"
-import DiagnosticJson from "../diagnostics/diagnostic_json"
-import Env from "../modules/link_env"
-import Pipeline from "../app/pipeline"
 
 # The runner is a program of two lines, and the step program a program of one call when no --steps is given. A binary
 # that carries the std/ sources carries these two compiled (compiler/embedded/, made by the Makefile with the same two

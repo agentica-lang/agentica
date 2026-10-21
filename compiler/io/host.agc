@@ -8,9 +8,9 @@ import Workspace from "../modules/workspace"
 import SourceReader from "source_reader"
 
 # The deadline, in milliseconds, of a File.stat and of each call of a read.
-STAT_TIMEOUT_MS = 10000
+STAT_TIMEOUT_MS = 10_000
 
-CHUNK_BYTES = 262144
+CHUNK_BYTES = 262_144
 
 ## The workspace of this machine, with `std_source` as the reader of the std/ sources (`FrontEnd.std_source` in the
 ## front end, `Std.source` in a program that embeds the core as `std/internal/compiler`).
@@ -84,14 +84,12 @@ def list_folder(path: String) -> Result[List[Workspace.Entry]]
 end
 
 def entry_kind(kind: String) -> Workspace.EntryKind
-  if kind == "directory"
-    return Workspace.EntryKind.Directory
-  elsif kind == "file"
-    return Workspace.EntryKind.File
-  elsif kind == "link"
-    return Workspace.EntryKind.Link
+  case kind
+    "directory" -> return Workspace.EntryKind.Directory
+    "file" -> return Workspace.EntryKind.File
+    "link" -> return Workspace.EntryKind.Link
+    _ -> return Workspace.EntryKind.Other
   end
-  return Workspace.EntryKind.Other
 end
 
 # The whole file, read in chunks of 256 KiB (File.read_bytes gives at most 1 MiB a call).

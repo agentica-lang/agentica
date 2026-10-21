@@ -9,8 +9,8 @@
 ## the default values of the parameters.
 
 import Ast from "../syntax/ast"
-import Signature from "signature"
 import Source from "../syntax/source"
+import Signature from "signature"
 
 ## One parameter of a function: its name, its type as written and the source text of its default value.
 export struct Parameter

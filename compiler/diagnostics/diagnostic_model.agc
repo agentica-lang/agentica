@@ -2,9 +2,9 @@
 ## `std/analysis` returns. It holds no enum and no offset, so a client reads it without knowing the compiler's types.
 ## An absent note is the empty text, as in the JSON form, where the key is left out.
 
+import Source from "../syntax/source"
 import Diag from "diagnostic"
 import Problems from "problem"
-import Source from "../syntax/source"
 
 ## A place in a text: line and column count from 1, in characters.
 export struct Position

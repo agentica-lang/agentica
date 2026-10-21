@@ -4,12 +4,12 @@
 ##
 ## A function body is flat, so this is a loop over the instructions and uses no recursion.
 
+import Ir from "../lower/ir"
 import Bytes from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
 import {MAX_U16, NEEDS, OPCODES, PAIR_OPS, SINGLE_OPS, WIDE_OPS} from "bytecode_tables"
-import Ir from "../lower/ir"
 
 ## What the writer has interned so far: the entries of the constant, struct update, builtin and span sections.
 export struct Tables
@@ -135,7 +135,7 @@ def wide_operands(program: Ir.Program, tables: Tables, op: String, a: Int, index
   if index < 0
     return error(Failure.internal(program, "a negative index in #{op}"))
   end
-  return ok(plain(tables, a, index % 65536, index / 65536))
+  return ok(plain(tables, a, index % 65_536, index / 65_536))
 end
 
 # const: the register, and the index of its constant, which is added to the table when it is new.

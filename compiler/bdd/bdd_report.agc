@@ -1,11 +1,11 @@
 ## The reports that the driver writes itself, as one file error: a usage error and an infrastructure error. The
 ## reports of the tests come from the runner (stdlib/test/runner.agc).
 
-import Opts from "bdd_options"
-import Problems from "../diagnostics/problem"
 import Diag from "../diagnostics/diagnostic"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
+import Problems from "../diagnostics/problem"
 import Source from "../syntax/source"
+import Opts from "bdd_options"
 
 ## How a run ends: the exit code and the text to print.
 export struct Ending

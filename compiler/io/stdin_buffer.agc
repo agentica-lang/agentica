@@ -6,8 +6,8 @@
 ## can take them the same way.
 
 import Overlay from "../modules/overlay"
-import SourceFile from "../syntax/source_file"
 import Workspace from "../modules/workspace"
+import SourceFile from "../syntax/source_file"
 
 ## What the standard input held: how a file reads it (its text, or the place of the first byte that is not UTF-8), and
 ## the text to show lines of it in a message (U+FFFD in place of each invalid byte).

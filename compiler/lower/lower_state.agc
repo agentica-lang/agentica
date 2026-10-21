@@ -3,16 +3,16 @@
 ## part of the lowering uses. A lowering function takes Cx and Fx and returns the new Fx with its register (Out), or
 ## fails with a packed LOWER- diagnostic (diagnostics/problem.agc), so `try` stops at the first one.
 
-import Ast from "../syntax/ast"
-import Failure from "../diagnostics/problem"
+import {OPAQUE_TYPES} from "../catalog/builtins"
 import State from "../check/check_state"
 import Defaults from "../check/defaults"
 import Diag from "../diagnostics/diagnostic"
-import Ir from "ir"
+import Failure from "../diagnostics/problem"
+import Ast from "../syntax/ast"
 import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
-import {OPAQUE_TYPES} from "../catalog/builtins"
+import Ir from "ir"
 
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the
 ## position of each field.
@@ -199,8 +199,8 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.List(item) -> return vm_type?(cx, item)
     Types.Type.Map(key, value) -> return vm_type?(cx, value)
     Types.Type.Set(item) -> return true
-    Types.Type.Result(item) -> return Types.is(item, "Void") or vm_type?(cx, item)
-    Types.Type.Task(item) -> return Types.is(item, "Void") or vm_type?(cx, item)
+    Types.Type.Result(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
+    Types.Type.Task(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
     Types.Type.Channel(item) -> return vm_type?(cx, item)
     Types.Type.Lazy(item) -> return vm_type?(cx, item)
     Types.Type.Struct(name) -> return cx.user_types.get(name, "") == "Struct"
@@ -223,7 +223,7 @@ end
 ## Fails with LOWER-UNSUPPORTED unless the expression has a type the VM can hold. void allows Void; type is the type to
 ## test (the checker's, or a TypedTarget's).
 export def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) -> Result[Bool]
-  if vm_type?(cx, type) or (void and Types.is(type, "Void"))
+  if vm_type?(cx, type) or (void and Types.is?(type, "Void"))
     return ok(true)
   end
   what = "this expression"
@@ -239,5 +239,5 @@ def fn_type?(cx: Cx, params: List[Types.Type], result: Types.Type) -> Bool
       return false
     end
   end
-  return Types.is(result, "Void") or vm_type?(cx, result)
+  return Types.is?(result, "Void") or vm_type?(cx, result)
 end

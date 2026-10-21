@@ -1,10 +1,10 @@
 ## Helpers for the top-level declarations of a parsed file, and the declaration order rule (CHECK-DECL-ORDER).
 
-import Ast from "../syntax/ast"
 import Diag from "../diagnostics/diagnostic"
-import Failure from "link_failure"
-import Source from "../syntax/source"
+import Ast from "../syntax/ast"
 import Base from "../syntax/parse_base"
+import Source from "../syntax/source"
+import Failure from "link_failure"
 
 ## What a top-level declaration is.
 export enum Kind
@@ -37,6 +37,7 @@ export def span_of(decl: Ast.Decl) -> Source.Span
   end
 end
 
+## Returns the span of the name of a type alias, and the span of the whole declaration for any other one.
 export def name_span_of(decl: Ast.Decl) -> Source.Span
   case unwrap(decl)
     Ast.Decl.TypeAlias(node) -> return node.name_span
@@ -92,6 +93,7 @@ export def enum?(kind: Kind) -> Bool
   end
 end
 
+## Whether the kind is a type alias.
 export def type_alias?(kind: Kind) -> Bool
   case kind
     Kind.TypeAlias -> return true

@@ -4,15 +4,15 @@
 ## a function of the program, no function value, no while, no builtin with effects (CHECK-CONSTANT-EXPRESSION), and
 ## only data types (CHECK-CONSTANT-TYPE).
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
-import CheckTypes from "check_types"
-import ConstWalk from "const_walk"
-import State from "check_state"
+import {ENTRIES} from "../catalog/builtins"
 import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
-import {ENTRIES} from "../catalog/builtins"
+import State from "check_state"
+import CheckTypes from "check_types"
+import ConstWalk from "const_walk"
 
 ## What checking the constants leaves: the context with the type of every constant, the state with the types of the
 ## initializers, and the linked names of the constants in initialization order.
@@ -341,7 +341,7 @@ def check_data(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: 
 end
 
 def data_help(type: T.Type) -> String
-  if T.is(type, "Void")
+  if T.is?(type, "Void")
     return "a constant's value must be data: write nil, not a Void call"
   end
   return (

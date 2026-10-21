@@ -3,15 +3,15 @@
 ## settings (the copy the binary carries). The module is only lexed and parsed (docs/doc.agc), so it never needs its
 ## imports.
 
+import Front from "../analysis/front"
 import Diag from "../diagnostics/diagnostic"
 import Docs from "../docs/doc"
 import DocJson from "../docs/doc_json"
 import DocText from "../docs/doc_text"
 import Env from "../modules/link_env"
-import Front from "../analysis/front"
 import QueryFiles from "../query/query_files"
-import Reply from "cli_reply"
 import SourceFile from "../syntax/source_file"
+import Reply from "cli_reply"
 
 ## Runs `agentica doc` for `words`, the words from `doc` on, in the style `--json` or `--ai` gave in front of it. A
 ## trailing `--json` asks for the JSON form too, as it does for `help`.

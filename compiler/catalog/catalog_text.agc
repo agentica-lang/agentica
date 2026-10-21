@@ -2,11 +2,11 @@
 ## tests/fixtures/frontend/catalog/catalog.text.
 
 import Ast from "../syntax/ast"
-import Model from "builtin_model"
-import Builtins from "builtins"
 import Suggest from "../syntax/suggest"
 import Text from "../syntax/text"
 import Types from "../syntax/types"
+import Model from "builtin_model"
+import Builtins from "builtins"
 import {
   BARE_NAMES, ENTRIES, ENUMS, HANDLES, OPAQUE_TYPES, PRELUDE, PRELUDE_ONLY,
   PUBLIC_NAMES, RECORDS, RESERVED, STD_ONLY,
@@ -106,19 +106,16 @@ def probe_line(probe: String) -> String
   colon = probe.index_of(":").unwrap!
   kind = probe.slice(0, colon)
   rest = probe.slice(colon + 1, probe.length - colon - 1)
-  if kind == "near"
-    near = Suggest.did_you_mean_among(rest, PUBLIC_NAMES, [])
-    return "#{probe} -> #{help_text(near)}"
-  elsif kind == "ref"
-    return "#{probe} -> #{ref_text(rest)}"
-  elsif kind == "type"
-    return "#{probe} -> #{help_text(type_help(rest))}"
-  elsif kind == "sig"
-    return "#{probe} -> #{signature_text(rest)}"
-  elsif kind == "disp"
-    return "#{probe} -> #{Text.quote(Types.display_name(rest))}"
+  case kind
+    "near" ->
+      near = Suggest.did_you_mean_among(rest, PUBLIC_NAMES, [])
+      return "#{probe} -> #{help_text(near)}"
+    "ref" -> return "#{probe} -> #{ref_text(rest)}"
+    "type" -> return "#{probe} -> #{help_text(type_help(rest))}"
+    "sig" -> return "#{probe} -> #{signature_text(rest)}"
+    "disp" -> return "#{probe} -> #{Text.quote(Types.display_name(rest))}"
+    _ -> return "#{probe} -> #{Builtins.std_only_name?(rest)}"
   end
-  return "#{probe} -> #{Builtins.std_only_name?(rest)}"
 end
 
 def type_help(word: String) -> Ast.Optional[String]

@@ -3,8 +3,8 @@
 ## function, like an initializer (CHECK-TYPE-MISMATCH).
 
 import Ast from "../syntax/ast"
-import State from "check_state"
 import Types from "../syntax/types"
+import State from "check_state"
 
 ## CHECK-DEFAULT-ORDER at the first parameter without a default that follows a parameter with one, unless it is the
 ## last and an Fn (the block of a call goes to it), and CHECK-DEFAULT-VALUE at the first default that is not a

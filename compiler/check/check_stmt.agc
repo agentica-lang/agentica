@@ -1,15 +1,15 @@
 ## Statements, blocks, case and functions. Expressions are checked through State.expr, because they are in a module
 ## that imports this one.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import DefaultChecks from "check_defaults"
 import Flow from "check_flow"
 import State from "check_state"
 import Types from "check_types"
 import Unused from "check_unused"
-import Source from "../syntax/source"
-import T from "../syntax/types"
 
 ## What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
 struct Arms
@@ -39,7 +39,7 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
     index += 1
   end
   inner = try check_block(cx, inner, node.body)
-  if !T.is(signature.result, "Void") and !Flow.block_returns?(node.body)
+  if !T.is?(signature.result, "Void") and !Flow.block_returns?(node.body)
     return error(
       State.fail_maybe(
         cx,
@@ -91,7 +91,7 @@ export def check_block_in(
 ) -> Result[State.Out]
   types = try block_parameter_types(cx, st, block, known_params)
   slot = State.Slot.Infer
-  if T.is(known_result, "Result") and T.unknown?(T.item(known_result))
+  if T.is?(known_result, "Result") and T.unknown?(T.item(known_result))
     slot = State.Slot.InferResult
   elsif !T.unknown?(known_result)
     slot = State.Slot.Known(known_result)
@@ -114,7 +114,7 @@ export def check_block_in(
   end
   done = try block_statements(cx, inside, block.body)
   result = block_result(done.st.result, done.type)
-  if !T.is(result, "Void") and T.unknown?(done.type) and !Flow.block_returns?(block.body)
+  if !T.is?(result, "Void") and T.unknown?(done.type) and !Flow.block_returns?(block.body)
     return error(
       State.fail_help(
         cx,
@@ -286,7 +286,7 @@ end
 
 # CHECK-TYPE-MISMATCH, with the help that shows ok(...), unless the type is a Result.
 def require_result(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
-  if !T.is(type, "Result")
+  if !T.is?(type, "Result")
     return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), type, span))
   end
   return ok(true)
@@ -295,7 +295,7 @@ end
 def return_known(cx: State.Cx, st: State.St, node: Ast.Return, expected: T.Type) -> Result[State.St]
   case node.value
     Ast.Optional.Present(value) ->
-      out = try State.expr_completion_if(cx, st, value, expected, T.is(expected, "Void"))
+      out = try State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Void"))
       return ok(out.st)
     Ast.Optional.Absent ->
       try State.ensure(cx, st, T.Type.Void, expected, node.span)
@@ -328,7 +328,7 @@ end
 def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
   iterable = try State.expr(cx, st, node.iterable, T.Type.Unknown)
   type = iterable.type
-  if !T.is(type, "List") and !T.is(type, "Set") and !T.is(type, "Range")
+  if !T.is?(type, "List") and !T.is?(type, "Set") and !T.is?(type, "Range")
     return error(
       State.fail(
         cx,
@@ -340,7 +340,7 @@ def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
     )
   end
   element = T.Type.Int
-  if !T.is(type, "Range")
+  if !T.is?(type, "Range")
     element = T.item(type)
   end
   inner = try State.introduce(cx, State.enter(iterable.st), node.variable, element, node.span, true)
@@ -394,7 +394,7 @@ def check_literal_arm(
   arms: Arms,
 ) -> Result[ArmDone]
   try check_literal(cx, st, pattern, value_type)
-  if arms.literals.any? do |seen: Ast.LitValue| same_literal(seen, pattern.value) end
+  if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, pattern.value) end
     return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate literal case arm", arm.span))
   end
   body = try arm_body(cx, st, arm)
@@ -407,7 +407,7 @@ end
 # A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
 def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value_type: T.Type) -> Result[Bool]
   pattern_type = literal_type(pattern.value)
-  if !Types.primitive?(value_type) or !T.same(value_type, pattern_type)
+  if !Types.primitive?(value_type) or !T.same?(value_type, pattern_type)
     return error(
       State.fail(
         cx,
@@ -484,7 +484,7 @@ def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types:
   while index < types.size
     case pattern.slots[index]
       Ast.Slot.Bind(name, _) ->
-        if T.is(types[index], "Void")
+        if T.is?(types[index], "Void")
           return error(
             State.fail(cx, current, "CHECK-VOID-TYPE", "a Void payload must be discarded with _", pattern.span),
           )
@@ -578,7 +578,7 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
       )
     end
   end
-  if T.is(value_type, "Enum") and pattern.enum_name == T.name(value_type)
+  if T.is?(value_type, "Enum") and pattern.enum_name == T.name(value_type)
     return State.fail(
       cx,
       st,
@@ -600,9 +600,9 @@ end
 # The variant names a case on this type must cover: Ok and Err for a Result, the variants of an enum; an error for any
 # other type.
 def variant_names(cx: State.Cx, value_type: T.Type) -> Result[List[String]]
-  if T.is(value_type, "Result")
+  if T.is?(value_type, "Result")
     return ok(["Ok", "Err"])
-  elsif T.is(value_type, "Enum")
+  elsif T.is?(value_type, "Enum")
     definition = cx.enums.get(T.name(value_type))
     if definition.ok?
       return ok(definition.unwrap!.variants.map do |variant: Model.Variant| variant.name end)
@@ -655,7 +655,7 @@ def literal_type(value: Ast.LitValue) -> T.Type
 end
 
 # equal? on literals: a float matches on its bits, so 0.0 and -0.0 differ.
-def same_literal(a: Ast.LitValue, b: Ast.LitValue) -> Bool
+def same_literal?(a: Ast.LitValue, b: Ast.LitValue) -> Bool
   case a
     Ast.LitValue.Whole(x) -> return whole_is?(b, x)
     Ast.LitValue.Huge(x) -> return huge_is?(b, x)
@@ -757,7 +757,7 @@ def block_parameter_type(
     Ast.Optional.Absent -> context = context
   end
   if !T.unknown?(annotated) and !T.unknown?(context)
-    if !T.same(annotated, context)
+    if !T.same?(annotated, context)
       return error(State.mismatch(cx, st, context, annotated, param.span))
     end
     return ok(context)
@@ -816,12 +816,12 @@ def final_inferred_result(cx: State.Cx, st: State.St, value: Ast.Expr) -> Result
 end
 
 def final_known(cx: State.Cx, st: State.St, value: Ast.Expr, expected: T.Type) -> Result[State.Out]
-  if T.is(expected, "Void")
+  if T.is?(expected, "Void")
     out = try State.expr_completion(cx, st, value, T.Type.Unknown)
     try Unused.check_unused_value(cx, out.st, value, out.type)
     return ok(State.Out(st: out.st, type: T.Type.Unknown))
   end
-  return State.expr_completion_if(cx, st, value, expected, T.is(expected, "Result"))
+  return State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Result"))
 end
 
 # The result type of a block: the one it was given or a return gave, else the type of its last expression, else Void.

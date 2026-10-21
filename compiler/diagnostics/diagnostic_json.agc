@@ -21,12 +21,15 @@ export def object(diagnostic: Model.Diagnostic) -> Json
     "file": JSON.from(diagnostic.file),
     "range": range(diagnostic.range),
   }
-  fields = note(fields, "key_path", diagnostic.key_path)
-  fields = note(fields, "expected", diagnostic.expected)
-  fields = note(fields, "actual", diagnostic.actual)
-  fields = note(fields, "callee", diagnostic.callee)
-  fields = note(fields, "function", diagnostic.function)
-  fields = note(fields, "help", diagnostic.help)
+  fields = (
+    fields
+    |> note("key_path", diagnostic.key_path)
+    |> note("expected", diagnostic.expected)
+    |> note("actual", diagnostic.actual)
+    |> note("callee", diagnostic.callee)
+    |> note("function", diagnostic.function)
+    |> note("help", diagnostic.help)
+  )
   if diagnostic.labels.size > 0
     labels = diagnostic.labels.map do |label: Model.Label|
       JSON.object({"range": range(label.range), "text": JSON.from(label.text)})

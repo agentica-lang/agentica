@@ -3,12 +3,12 @@
 ## The two files share this: the manager lists the keys of a parsed table itself and rejects any it does not know,
 ## because a typed decode would ignore extra keys.
 
-import Toml from "std/toml"
 import Diag from "../diagnostics/diagnostic"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
+import Toml from "std/toml"
 
 ## Whose file is read: its path and the code of its failures (PKG-MANIFEST-INVALID or PKG-LOCK-INVALID).
 export struct Reading

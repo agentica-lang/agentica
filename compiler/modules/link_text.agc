@@ -1,11 +1,11 @@
 ## The text form of a link, for tests. See link.agc.
 
+import ParseText from "../syntax/parse_text"
+import Text from "../syntax/text"
 import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
 import Linker from "linker"
-import ParseText from "../syntax/parse_text"
-import Text from "../syntax/text"
 import Workspace from "workspace"
 
 ## The text form of linking the file at path: the linked program, or the ERROR line of the first failure. The first

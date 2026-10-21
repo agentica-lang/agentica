@@ -17,10 +17,10 @@ export def u32(number: Int) -> List[Int]
   # The fast branch gives the same bytes as the general formula for 0 .. 65535 (the two high bytes are 0 there) and
   # skips the arithmetic for them. Callers never pass a negative number (lines, columns, counts and ids are >= 0): a
   # negative one would take the fast branch and give negative bytes.
-  if number < 65536
+  if number < 65_536
     return [number % 256, number / 256, 0, 0]
   end
-  return [number % 256, (number / 256) % 256, (number / 65536) % 256, number / 16777216]
+  return [number % 256, (number / 256) % 256, (number / 65_536) % 256, number / 16_777_216]
 end
 
 ## The 8 bytes of a signed number, low byte first (a two's complement integer).
@@ -86,8 +86,8 @@ def encoded(code: Int) -> List[Int]
     return [code]
   elsif code < 2048
     return [192 + code / 64, 128 + code % 64]
-  elsif code < 65536
+  elsif code < 65_536
     return [224 + code / 4096, 128 + (code / 64) % 64, 128 + code % 64]
   end
-  return [240 + code / 262144, 128 + (code / 4096) % 64, 128 + (code / 64) % 64, 128 + code % 64]
+  return [240 + code / 262_144, 128 + (code / 4096) % 64, 128 + (code / 64) % 64, 128 + code % 64]
 end

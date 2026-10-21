@@ -5,9 +5,9 @@
 ## span is `{file, range}` with the `file` the command answers with. An answer from a program that does not check
 ## (39.6) adds `partial` (true) and `diagnostics`, and has a `type` of null where only the link knows the name.
 
+import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
-import Model from "../analysis/model"
 
 ## The object of the answer. Every range is in the file of `position`, except that of the definition.
 export def json(found: Model.TypeAt) -> Json

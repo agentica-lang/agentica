@@ -83,7 +83,7 @@ end
 # name is taken for "not UTF-8" even when the file really has a U+FFFD in its name (the only wrong report). Its kind is
 # unknown, so it is a problem only when its name fits (a file) and a folder with such a name is skipped.
 def visit(path: String, name: String, found: Found) -> Found
-  bad_name = name.contains?(String.from_code(65533))
+  bad_name = name.contains?(String.from_code(65_533))
   info = File.lstat(path, IO_TIMEOUT)
   if !info.ok? and bad_name
     if kind_of(name) != ""

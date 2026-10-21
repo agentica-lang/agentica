@@ -7,11 +7,11 @@
 ## fit in the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree;
 ## see ast.agc).
 
+import {ENUMS} from "../catalog/builtins"
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
 import Declarations from "declarations"
 import Resolve from "resolve"
-import Source from "../syntax/source"
-import {ENUMS} from "../catalog/builtins"
 
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
 ## imports left

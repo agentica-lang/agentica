@@ -3,14 +3,14 @@
 ## what the other functions have, the queries can still use. A program that does not link, or whose declarations do
 ## not check (their types, `main`, the constants), has nothing to answer from beyond the first problem.
 
-import Cache from "cache"
 import Checker from "../check/checker"
+import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
-import Front from "front"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
-import Problems from "../diagnostics/problem"
+import Cache from "cache"
+import Front from "front"
 
 ## The program, the problems of its functions that did not check and the linked names of those functions: none when
 ## the program checks, so the answers are complete.

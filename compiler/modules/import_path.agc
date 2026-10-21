@@ -1,12 +1,12 @@
 ## The import path rules that need no file system: the module file name, the std/ and pkg/ path
 ## check, and the path helpers.
 
-import Ast from "../syntax/ast"
-import Declarations from "declarations"
 import Diag from "../diagnostics/diagnostic"
-import Failure from "link_failure"
+import Ast from "../syntax/ast"
 import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Unicode from "../syntax/unicode"
+import Declarations from "declarations"
+import Failure from "link_failure"
 import Workspace from "workspace"
 
 ## The text after the last "/" of a path.

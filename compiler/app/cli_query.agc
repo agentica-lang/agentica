@@ -15,23 +15,23 @@
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
 
-import Cache from "../analysis/cache"
 import Core from "../analysis/analysis"
+import Cache from "../analysis/cache"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
+import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import OutlineJson from "../query/outline_json"
 import OutlineText from "../query/outline_text"
-import Problems from "../diagnostics/problem"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
 import RefsJson from "../query/refs_json"
 import RefsText from "../query/refs_text"
-import Reply from "cli_reply"
 import SymbolJson from "../query/symbol_json"
 import SymbolText from "../query/symbol_text"
 import TypeAtJson from "../query/type_at_json"
 import TypeAtText from "../query/type_at_text"
+import Reply from "cli_reply"
 
 # The usage line of each query command, given as the help of QUERY-USAGE.
 OUTLINE_USAGE = (

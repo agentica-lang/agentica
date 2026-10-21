@@ -3,15 +3,15 @@
 ## uses. A check function takes Cx and St and returns the new St with its result (Out for an expression), or fails with
 ## a packed Problem (diagnostics/problem.agc), so `try` stops at the first diagnostic.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
-import Help from "check_help"
-import Failure from "../diagnostics/problem"
-import Defaults from "defaults"
+import {PUBLIC_NAMES} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
+import Failure from "../diagnostics/problem"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
-import {PUBLIC_NAMES} from "../catalog/builtins"
+import Help from "check_help"
+import Defaults from "defaults"
 
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was
 ## introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
@@ -185,7 +185,7 @@ end
 
 ## actual, or the failure of a mismatch when there is an expected type and it differs.
 export def ensure(cx: Cx, st: St, actual: Types.Type, expected: Types.Type, span: Source.Span) -> Result[Types.Type]
-  if !Types.unknown?(expected) and !Types.same(actual, expected)
+  if !Types.unknown?(expected) and !Types.same?(actual, expected)
     return error(mismatch(cx, st, expected, actual, span))
   end
   return ok(actual)

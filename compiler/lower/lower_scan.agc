@@ -1,8 +1,8 @@
 ## What lowering reads off the tree before it lowers anything: the module constants, the functions and the watched type
 ## names a body mentions. One walk per body, with a worklist, so the depth of the tree does not matter.
 
-import Ast from "../syntax/ast"
 import ConstWalk from "../check/const_walk"
+import Ast from "../syntax/ast"
 
 ## What a body mentions. consts are the linked names of the constants it reads and calls the names of the functions it
 ## calls or takes with `&`, in the order found. written are the watched type names it writes (a type, a type used as a

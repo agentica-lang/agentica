@@ -7,9 +7,9 @@
 import SourceFile from "../syntax/source_file"
 
 # The deadline, in milliseconds, of each system call of a read.
-IO_TIMEOUT_MS = 10000
+IO_TIMEOUT_MS = 10_000
 
-CHUNK_BYTES = 262144
+CHUNK_BYTES = 262_144
 
 ## Reads the file at `path`.
 export def read(path: String) -> SourceFile.Read

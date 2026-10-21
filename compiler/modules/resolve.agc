@@ -4,18 +4,18 @@
 ## ("@2::"), so equal names of two files stay apart. A name through an import alias (Alias.name) becomes the prefixed
 ## name in the imported file, if that file exports it.
 
-import Ast from "../syntax/ast"
-import Declarations from "declarations"
+import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
-import Env from "link_env"
-import Failure from "link_failure"
-import ImportHelp from "import_help"
-import Modules from "modules"
+import Ast from "../syntax/ast"
 import Base from "../syntax/parse_base"
-import Resolve from "resolve_import"
 import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"
-import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
+import Declarations from "declarations"
+import ImportHelp from "import_help"
+import Env from "link_env"
+import Failure from "link_failure"
+import Modules from "modules"
+import Resolve from "resolve_import"
 
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
 ## the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the

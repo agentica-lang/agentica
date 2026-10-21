@@ -1,15 +1,15 @@
 ## Statements, loops, case and functions Expressions are lowered through lower_expr.agc. A block literal becomes a
 ## function through lower_block_function, which Cx.block points to.
 
-import Ast from "../syntax/ast"
 import Builtins from "../catalog/builtins"
 import Paths from "../modules/import_path"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import Types from "../syntax/types"
 import Ir from "ir"
 import Expr from "lower_expr"
 import Lowering from "lower_state"
 import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
-import Source from "../syntax/source"
-import Types from "../syntax/types"
 
 ## A lowered function, and the state after it: the block functions made inside it and the next function index, for the
 ## program to collect.
@@ -239,7 +239,7 @@ end
 def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -> Result[Lowering.Fx]
   span = node.span
   type = Lowering.static_type(cx, node.iterable)
-  if Types.is(type, "Range")
+  if Types.is?(type, "Range")
     fx = try lower_range_for(cx, fx, node, span)
     return ok(fx.with(next: saved))
   end
@@ -247,7 +247,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
   items = fx.next - 1
   out = try Expr.lower_expression(cx, fx, node.iterable, items, false, false)
   fx = out.fx
-  if Types.is(type, "Set")
+  if Types.is?(type, "Set")
     fx = Lowering.emit_builtin(fx, items, "Set.to_a", 1, [span, span])
   end
   if node.body.size > 0

@@ -2,16 +2,16 @@
 ## data of the next stage or the first problem. The command line (app/), the BDD driver and the queries (analysis.agc)
 ## all run it, so what one of them accepts, the others accept.
 
-import Cache from "cache"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
+import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
-import Problems from "../diagnostics/problem"
-import SourceFile from "../syntax/source_file"
 import Workspace from "../modules/workspace"
+import SourceFile from "../syntax/source_file"
+import Cache from "cache"
 
 ## What the root file is: it can be read as UTF-8, it cannot be read (the system's message), or it is not UTF-8
 ## (LEX-INVALID-UTF8, in that file).
