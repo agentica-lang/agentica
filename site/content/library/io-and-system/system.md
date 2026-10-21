@@ -114,6 +114,27 @@ end
 true
 ```
 
+## Std.source
+
+```text
+Std.source(path: String) -> Result[String]
+```
+
+The text of a `std/` source that the `agentica` binary carries, by its exact path in `stdlib/`: `"queue.agc"`, `"bdd/gherkin.agc"`, `"prelude/list.agc"`. Any other path is an error, `"std/queue.agc"` and `"queue"` included. It needs no flag and reads only data of the binary, so tasks may call it at the same time. A doc or lint tool can read the std sources of the binary that runs it this way.
+
+```agentica
+def main() -> Void
+  text = Std.source("queue.agc").unwrap_or("")
+  puts(text.starts_with?("## "))
+  puts(Std.source("nope.agc").ok?)
+end
+```
+
+```output
+true
+false
+```
+
 ## FrontEnd
 
 `FrontEnd.hand_off`, `FrontEnd.std_source` and `FrontEnd.stdin_bytes` belong to the front end of the `agentica` binary. That binary compiles a program and hands it to the VM. They are not for your programs: a program that calls them stops with `RUNTIME-FRONT-END-ONLY`.

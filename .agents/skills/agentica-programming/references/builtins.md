@@ -32,6 +32,7 @@ System.exit(code: Int) -> Void
 System.env(name: String) -> Result[String]   # error if unset or the name is empty, has = or NUL; ok("") if set empty
 System.os() -> String                   # "linux", "macos", "windows", else the lowercase uname name ("unknown" if none or not printable ASCII)
 System.pid() -> Int                     # the process id of this program (VM only)
+Std.source(path: String) -> Result[String]   # a std/ source of this binary by its path in stdlib/ ("queue.agc", "prelude/list.agc"); else error
 Time.now_ms() -> Int                    # wall clock, Unix ms; may jump
 Time.monotonic_ms() -> Int              # never goes backward; use it for durations
 Time.monotonic_ns() -> Int              # same clock in nanoseconds; same origin as monotonic_ms

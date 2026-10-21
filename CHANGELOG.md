@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica type-at` on a local (a parameter, a binding, a `for` variable or a
   name in a `case` pattern) gives its type and a definition at its binding, on a
   use and on the binding itself.
+- `Std.source(path)` gives the text of a `std/` source that the binary carries,
+  such as `"queue.agc"`, to any program.
 
 ### Changed
 
@@ -23,6 +25,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `main` with the wrong signature is still `CHECK-MAIN` (also for `type-at`),
   and a run or `compile` of a file with no `main` still reports it, so use one
   of them to require `main`.
+- **Breaking:** `Std` is a reserved type name.
 
 ## [0.7.0] - 2026-10-21
 

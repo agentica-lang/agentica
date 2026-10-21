@@ -254,6 +254,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "Result",
     "Set",
     "Socket",
+    "Std",
     "String",
     "System",
     "TCP",
@@ -3041,6 +3042,19 @@ ROWS_40: List[Model.Builtin] = [
       implementation: "Set.union",
       effects: [],
       description: "Return the elements of a, then the elements of b that a lacks.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Std.source",
+      parameters: [Model.Named(name: "path", type: Types.Type.String)],
+      result: Types.Type.Result(Types.Type.String),
+      rule: Model.Rule.Plain,
+      implementation: "Std.source",
+      effects: [],
+      description: (
+        "The text of a std/ source that this binary carries, by its path in stdlib/ such as queue.agc, " +
+        "bdd/gherkin.agc or prelude/list.agc; an unknown path is an error."
+      ),
       alternatives: [],
     ),
     Model.Builtin(

@@ -1,4 +1,4 @@
-/* Native environment UTF-8, empty/missing/invalid names, the VM process identity and the system name. */
+/* Native environment UTF-8, empty/missing/invalid names, the VM process identity, the system name and Std.source. */
 #include "../core.h"
 #include "../services.h"
 
@@ -16,6 +16,32 @@ static agc_value call(agc_vm *vm, const char *name) {
     if (strcmp(agc_system_builtins[k].name, name) == 0) return agc_system_builtins[k].fn(vm, NULL, 0);
   assert(!"no such builtin");
   return agc_void();
+}
+
+static agc_value source(agc_vm *vm, const char *path) {
+  agc_value argument = agc_string_value(agc_make_string(path, strlen(path), 0));
+  return agc_std_builtins[0].fn(vm, &argument, 0);
+}
+
+/* A runtime without std sources answers an error; with a table, only an exact path matches. */
+static void test_std_source(agc_vm *vm) {
+  const agc_result *r = agc_as_result(vm, source(vm, "queue.agc"));
+  assert(!r->ok);
+  static const uint8_t queue[] = "## queue\n", gherkin[] = "caf\xc3\xa9";
+  const agc_std_source table[] = {{"queue.agc", queue, sizeof queue - 1}, {"bdd/gherkin.agc", gherkin, 5}};
+  vm->rt->std = table;
+  vm->rt->std_count = 2;
+  r = agc_as_result(vm, source(vm, "queue.agc"));
+  assert(r->ok);
+  const agc_string *text = agc_as_string(vm, r->value);
+  assert(text->bytes == sizeof queue - 1 && memcmp(text->data, queue, text->bytes) == 0);
+  r = agc_as_result(vm, source(vm, "bdd/gherkin.agc"));
+  assert(r->ok && agc_as_string(vm, r->value)->chars == 4);
+  assert(!agc_as_result(vm, source(vm, "queue"))->ok);
+  assert(!agc_as_result(vm, source(vm, "queue.agc2"))->ok);
+  assert(!agc_as_result(vm, source(vm, ""))->ok);
+  vm->rt->std = NULL;
+  vm->rt->std_count = 0;
 }
 
 int main(void) {
@@ -67,6 +93,7 @@ int main(void) {
   too_long[AGC_OS_NAME_MAX] = '\0';
   agc_system_os_name(too_long, got, sizeof got);
   assert(strcmp(got, "unknown") == 0);
+  test_std_source(&vm);
   assert(agc_io_close(&vm));
   puts("system tests passed");
   return 0;

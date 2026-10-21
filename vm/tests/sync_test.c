@@ -103,7 +103,8 @@ static void table_marked(const agc_builtin *table, size_t count, bool shared) {
 }
 
 /* Which builtins the interpreter locks: marked by row. Every row of the tables of tasks, Task.map, channels, the
-   logger, processes, duplex channels, TCP and HTTP is locked; no row of the pure libraries (String, numbers, JSON, Profile) is.
+   logger, processes, duplex channels, TCP and HTTP is locked; no row of the pure libraries (String, numbers, JSON,
+   Profile, Std) is.
    The mixed tables (the core one and File) are checked by row: stdin, handles and closes are locked, the output and
    the file calls that name a path are not. */
 static void test_builtin_classes(void) {
@@ -122,6 +123,7 @@ static void test_builtin_classes(void) {
   table_marked(agc_json_builtins, agc_json_builtin_count, false);
   table_marked(agc_lazy_builtins, agc_lazy_builtin_count, false);
   table_marked(agc_profile_builtins, agc_profile_builtin_count, false);
+  table_marked(agc_std_builtins, agc_std_builtin_count, false);
   struct {
     const char *name;
     uint32_t arity;

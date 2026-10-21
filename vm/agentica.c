@@ -31,10 +31,11 @@ static const char usage[] =
   "  the run uses one scheduler per logical core (at most 1024), or N (1 to 1024), or AGENTICA_SCHEDULERS (the flag "
   "wins); --schedulers 1 runs one task at a time, in a fixed order\n";
 
-/* The std/ sources of the binary, from the index that make wrote. */
+/* The std/ sources of the binary, from the index that make wrote. The rows point only into agc_embedded_data, which
+ * is static, so the array holds no GC pointer and is atomic. */
 static agc_std_source *std_sources(size_t *count) {
   size_t n = (size_t)agc_embedded_index[6];
-  agc_std_source *sources = agc_alloc(agc_size_mul(n ? n : 1, sizeof *sources));
+  agc_std_source *sources = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *sources));
   for (size_t k = 0; k < n; k++) {
     const uint64_t *row = agc_embedded_index + 7 + 3 * k;
     const char *path = (const char *)agc_embedded_data + row[0];
@@ -96,7 +97,6 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
   if (embedded_bdd) arguments[separator_at++] = bdd_flag;
   arguments[separator_at++] = separator;
   for (int k = 0; k < count; k++) arguments[separator_at + k] = words[k];
-  fe->std = std_sources(&fe->std_count);
   agc_launch_options options;
   agc_launch_defaults(&options);
   options.allow_run = true;
@@ -243,6 +243,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "%s: cannot decode command line arguments\n", name);
     return 2;
   }
+  launch.std = std_sources(&launch.std_count);
   if (argc > 1 && strcmp(argv[1], "run") == 0) return run_command(&launch, argc, argv);
   /* The environment is checked before the trace file is opened and before the front end spends its time compiling;
    * run_program applies the value. */

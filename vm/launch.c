@@ -604,6 +604,8 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->drop_uring_env = launch->own_uring_env;
   rt->inherited = launch->inherited;
   rt->front_end = front_end;
+  rt->std = launch->std;
+  rt->std_count = launch->std_count;
   rt->schedulers = front_end ? 1 : options->schedulers;
   seed_map_hash(vm);
   agc_files_init(vm);

@@ -173,6 +173,7 @@ Set.size
 Set.subset?
 Set.to_a
 Set.union
+Std.source
 String.at
 String.code
 String.compare
