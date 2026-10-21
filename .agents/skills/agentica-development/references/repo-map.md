@@ -61,7 +61,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     diagnostic.agc  # Diagnostic and Outcome[T]
     problem.agc  # the packed Problem with its notes (pack, unpack), which every stage returns as its error
   docs/  # `agentica doc` (§32.5): lex and parse one module, then its exported API with the `##` docs (imports only syntax/ and diagnostics/)
-  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` checks it and answers for a position (imports docs/, modules/, check/, catalog/ and syntax/)
+  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` and `agentica refs` check it and answer for a position (imports docs/, modules/, check/, catalog/ and syntax/)
   bdd/  # the `agentica test` driver
     bdd_driver.agc  # run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
   embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary

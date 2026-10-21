@@ -142,6 +142,21 @@ src/models.agc:4:3 field email
 
 Line and column count from 1, in code points (an emoji is one column). A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. With `--json` the definition also has its signature and its `##` doc, and the name of a builtin (`split` in `xs.split(",")`) answers `kind` `builtin` with the object of `agentica help NAME --json` under `help`. A local variable, a parameter or a name bound by a loop or a `case` answers with its type and a definition at the place that binds it, whether the position is on a use or on the binding.
 
+List every reference to the name at a position:
+
+```sh
+agentica refs src/models.agc:4:3    # --json prints one JSON object; --stdin reads the file from standard input
+```
+
+```text
+src/models.agc:4:3 definition field User.email: String
+src/orders.agc:22:14 read in total
+src/report.agc:9:30 read in render
+src/report.agc:31:5 construct in sample
+```
+
+The position can be on a use or on the name where the declaration is written. The name can be a function, a struct, an enum, a variant, a field, a constant, a type alias, a local variable, a parameter or a builtin; a field of one struct is never mixed with a field of the same name in another, nor a variable of one block with a variable of the same name in a sibling block. The first line is the definition (a builtin has none) and each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in; the span of a use is the name alone. `refs` checks the file and what it imports, and it sees the uses in those files only, not in a file that imports `FILE`. Positions, `--stdin` and the exit codes are those of `type-at`. With `--json` the answer is `{version, command, query, definition, builtin, references, skipped}`; no references is an empty list, not an error.
+
 ## Options
 
 | Option | Does |
@@ -152,6 +167,7 @@ Line and column count from 1, in code points (an emoji is one column). A type of
 | `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS` (empty counts as unset). `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
 | `--allow-run` | lets the program start programs with `Process.spawn` |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
+| `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answers for the text on standard input as if `FILE` held it |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `compile FILE -o OUT` | writes VM bytecode |

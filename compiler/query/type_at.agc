@@ -65,6 +65,22 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
   end
 end
 
+## The "@N::" prefix of each file that the root file imports under an alias, to that alias, so a type of such a file is
+## written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases for one
+## file wins.
+export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
+  written: Map[String, String] = {}
+  aliases = linked.modules[0].aliases
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      if module.key == aliases[alias] and module.prefix != "" and !written.has_key?(module.prefix)
+        written = written.put(module.prefix, alias)
+      end
+    end
+  end
+  return written
+end
+
 def expression_answer(
   linked: Linker.Linked,
   checked: Checker.Checked,
@@ -93,14 +109,7 @@ def local_answer(linked: Linker.Linked, at: Locals.Found) -> Answer
 end
 
 def nothing(asked: Position.Asked, span: Source.Span) -> Diag.Outcome[Answer]
-  return Diag.Outcome.Failed(
-    Diag.fail(
-      "QUERY-NO-EXPRESSION",
-      "no expression at line #{asked.line}, column #{asked.column}",
-      span,
-      Diag.Help.Hint("put the position on a token of an expression; agentica outline lists the declarations"),
-    ),
-  )
+  return Diag.Outcome.Failed(Position.no_expression(asked, span))
 end
 
 def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offset: Int) -> Answer
@@ -225,20 +234,4 @@ def on_head?(text: String, span: Source.Span, offset: Int) -> Bool
     head += 1
   end
   return start <= offset and offset < start + head
-end
-
-# The "@N::" prefix of each file that the root file imports under an alias, to that alias, so a type of such a file is
-# written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases for one
-# file wins.
-def written_prefixes(linked: Linker.Linked) -> Map[String, String]
-  written: Map[String, String] = {}
-  aliases = linked.modules[0].aliases
-  for alias in aliases.keys.sort
-    for module in linked.modules
-      if module.key == aliases[alias] and module.prefix != "" and !written.has_key?(module.prefix)
-        written = written.put(module.prefix, alias)
-      end
-    end
-  end
-  return written
 end

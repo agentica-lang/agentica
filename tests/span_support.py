@@ -1,4 +1,4 @@
-"""Readers of the JSON that `agentica doc`, `outline` and `type-at` print, shared by their tests."""
+"""Readers of the JSON that `agentica doc`, `outline`, `type-at` and `refs` print, shared by their tests."""
 import json
 
 
@@ -20,3 +20,13 @@ def problem(result, code, status):
     diagnostic = json.loads(result.stderr)
     assert diagnostic["code"] == code
     return diagnostic
+
+
+def where(source, needle, inside=0, nth=1):
+    """The (line, column) of the character `inside` characters into the `nth` occurrence of `needle`."""
+    at = -1
+    for _ in range(nth):
+        at = source.index(needle, at + 1)
+    at += inside
+    before = source[:at]
+    return before.count("\n") + 1, at - (before.rfind("\n") + 1) + 1

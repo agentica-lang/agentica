@@ -413,6 +413,18 @@ comment, the body text of a heredoc, a keyword such as `return` that is part of
 no expression) is `QUERY-NO-EXPRESSION` and exits 2, as is a bad position
 (`QUERY-USAGE`).
 
+`agentica refs FILE:LINE:COL [--json]` lists every reference to the name at the
+position, in FILE and the files it imports: a function, struct, enum, variant,
+field (in a read, a construction and a `with`), constant, type alias, local or
+builtin. The answer has the `definition` (null for a builtin, which `builtin`
+names) and the references, each with its `kind`, the `function` it is in and the
+span of the name. The definition is not a reference. A name is told by what the
+linker and the checker resolved it to, so two fields of one name in two structs,
+or a name bound in two sibling blocks, are never mixed. A position on the name
+in a declaration picks it as well. FILE is checked like `type-at`, with the same
+`--stdin`, exit codes and `QUERY-NO-EXPRESSION`. A use in a file that only
+imports FILE is not seen.
+
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by
 default, and checking never spends the budget. Exhaustion is

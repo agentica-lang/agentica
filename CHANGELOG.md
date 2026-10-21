@@ -16,6 +16,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica type-at` on a local (a parameter, a binding, a `for` variable or a
   name in a `case` pattern) gives its type and a definition at its binding, on a
   use and on the binding itself.
+- `agentica refs FILE:LINE:COL [--json]` lists every reference to the name at a
+  position (a function, type, field, variant, constant, local or builtin) in the
+  file and what it imports; `--stdin` reads the file from standard input.
 - `Std.source(path)` gives the text of a `std/` source that the binary carries,
   such as `"queue.agc"`, to any program.
 

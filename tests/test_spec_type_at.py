@@ -7,7 +7,7 @@ import os
 import pytest
 
 from tests.agentica_test import cli, run, vm_environment
-from tests.span_support import end, problem, start
+from tests.span_support import end, problem, start, where
 
 # The module the cases import: a struct, an enum with a payload and without, a function and a constant.
 MODELS = '''## A user.
@@ -65,16 +65,6 @@ def build(names: List[String]) -> List[Models.User]
   return [made]
 end
 '''
-
-
-def where(source, needle, inside=0, nth=1):
-    """The (line, column) of the character `inside` characters into the `nth` occurrence of `needle`."""
-    at = -1
-    for _ in range(nth):
-        at = source.index(needle, at + 1)
-    at += inside
-    before = source[:at]
-    return before.count("\n") + 1, at - (before.rfind("\n") + 1) + 1
 
 
 def type_at(position, *words, cwd, stdin=None):

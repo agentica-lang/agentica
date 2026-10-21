@@ -1,10 +1,11 @@
 # Asking the compiler about code
 
-`agentica outline FILE` and `agentica type-at FILE:LINE:COL` ask the compiler
-about code without reading whole files. `outline` lists what one file declares,
-so you do not read the whole file to learn its signatures. It only lexes and
-parses the file: its imports need not exist, and it needs no `main`. FILE is a
-source file or a `std/` module (`agentica outline std/queue`).
+`agentica outline FILE`, `agentica type-at FILE:LINE:COL` and `agentica refs
+FILE:LINE:COL` ask the compiler about code without reading whole files.
+`outline` lists what one file declares, so you do not read the whole file to
+learn its signatures. It only lexes and parses the file: its imports need not
+exist, and it needs no `main`. FILE is a source file or a `std/` module
+(`agentica outline std/queue`).
 
 ```sh
 agentica outline src/orders.agc          # one line per declaration
@@ -140,3 +141,60 @@ type, span, definition, help}`.
   as `return`, `end` or `case`, the body text of a heredoc, past the end of a
   line or of the file). Its span is the position. Move onto the expression; a
   keyword of an expression (`try`, `do`, `and`, `!`) answers that expression.
+
+# References to a name
+
+`agentica refs FILE:LINE:COL` lists every use of the declaration that the name
+at a position stands for, in FILE and the files it imports. Run it before you
+change a field, a variant or a function, and keep the list: it tells
+`Models.User` from a local `User`, and a field `name` of one struct from that of
+another, which `rg` cannot. Positions, `--stdin FILE:LINE:COL`, `file` names and
+the exit codes are those of `type-at`; the program is checked (exit 1 on an
+error), and a use in a file that only imports FILE is not seen, so ask from the
+file that links everything you change.
+
+```sh
+agentica refs src/orders.agc:22:14
+agentica --json refs src/orders.agc:22:14
+```
+
+```text
+src/models.agc:4:3 definition field User.email: String
+src/orders.agc:22:14 read in total
+src/report.agc:31:5 construct in sample
+```
+
+The position is on a use or on the name where a declaration is written. The
+first line is the definition (none for a builtin) and each next line is a use
+with its `kind` and the function it is in; the span of a use is the name alone
+(`total` of `Models.total`), so it is the text to edit. Names of a function,
+struct, enum, variant, field, constant, type alias, local, parameter or builtin
+work; two names that look alike but are different declarations are never mixed
+(the `i` of two loops, the `note` of two branches of an `if`).
+
+`{version: 1, command: "refs", query, definition, builtin, references,
+skipped}`.
+
+- `definition` is null for a builtin, else
+  `{kind, name, module, exported, signature, span, name_span}`: `kind` as in
+  `type-at` (a local is `parameter`, `local`, `loop` or `pattern`), `span` the
+  whole declaration and `name_span` the name; a field adds `struct`, a variant
+  `enum`. The definition is not in `references`.
+- `builtin` is the name of the builtin (`File.read`, `List.map`), else null.
+- `references`: `{kind, function, span}`, files in the order they were linked
+  (FILE first), then by position. `kind` is `call`, `value` (`&f`, a constant),
+  `type` (an annotation), `construct` (a struct construction, a `with`, or a
+  variant constructor, with the span of the field name for a field), `read` (a
+  field read), `pattern` (a variant in a `case` arm) or `binding` (a use of a
+  local, `x += 1` included). `function` is the enclosing function or null. It is
+  an open set: accept a value you do not know. An empty list is an answer, exit
+  0.
+- `skipped` is always `[]` for now.
+
+## Exit codes of refs
+
+- 0: the answer.
+- 1: the program has an error; fix it first (function and type uses need no
+  check in the full design, but this version always checks).
+- 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file, a name in place
+  of a position) or `QUERY-NO-EXPRESSION`: the position is on no name.

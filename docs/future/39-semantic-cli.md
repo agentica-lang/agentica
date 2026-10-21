@@ -1,8 +1,10 @@
 ## 39. Semantic CLI for agents
 
 **Status:** `outline` and `type-at` built (types, definitions with `doc` and
-`signature`, and builtins at a position; locals, `--partial`, `symbol` and
-`refs` are planned), row 7.2b. Agreed with the owner on 2026-10-13: agents
+`signature`, builtins and locals at a position). `refs FILE:LINE:COL` built for
+the files that `FILE` links; the `NAME` form, `PATH...`, `skipped` and answers
+from a program that does not check (§39.6) are planned, as are `--partial` and
+`symbol`. Row 7.2b. Agreed with the owner on 2026-10-13: agents
 program better when they can ask the compiler about the code, not only read the
 docs. The front end already builds a linked and checked program with types and
 spans; four CLI commands expose it, JSON first. No language change; front end
@@ -116,7 +118,10 @@ changes only how diagnostics print; answers keep the text form.
   declaration of the name at that position, which always resolves to one
   declaration, local bindings included. Builtins work too
   (`refs File.read src/`), with no definition. No references is not an error: an
-  empty list, exit 0.
+  empty list, exit 0. Built so far: the position form, for `FILE` and what it
+  imports (`PATH...` is not read); a position on the name where a declaration is
+  written picks it too; the program is always checked (exit 1 on an error); a
+  `with` argument is a `construct` and a constant read a `value`.
 - **`type-at FILE:LINE:COL`** (built, `docs/grammar/06b-builtins.md`): the
   checked type of the innermost expression or name at the position, and the
   definition of what it names, with the `doc` and the `signature` of the
@@ -214,7 +219,11 @@ signatures are strings.
   `{version, command, query, definition, references: [{kind, function, span}],
 skipped: [...]}`,
   with `definition` a `symbol` match, or `null` for a builtin. `function` is the
-  name of the enclosing function, or `null` at the top level.
+  name of the enclosing function, or `null` at the top level. Built so far:
+  `query` is the `FILE:LINE:COL` asked, `definition` adds `name_span`, the
+  `struct` of a field or the `enum` of a variant, `builtin` names a builtin
+  (else null), `references` do not hold the definition, a reference `span` is
+  the name alone (`total` of `Models.total`) and `skipped` is empty.
 - `skipped`: the roots left out (§39.6), each as `{file, diagnostic}`,
   `diagnostic` being the `--json` diagnostic object.
 

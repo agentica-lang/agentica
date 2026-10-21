@@ -47,8 +47,18 @@ with a packed `Problem` (`references/stages.md`).
   from `Checked.bound` (`State.record_bound`: by the id of a parameter, binding
   or `for` node, and for a pattern by the id of the variant pattern, one type
   for each slot), kept apart from `Checked.types` so the lowering never sees
-  them. The commands are `app/cli_query.agc`; the tests are
-  `tests/test_spec_outline.py` and `tests/test_spec_type_at.py`.
+  them. `agentica refs` (the position form) answers from the same linked and
+  checked file: a local by `Locals.uses`, a sweep of its function with the
+  scopes of `locals.agc`; anything else by `sites.agc`, which lists every place
+  of a module that names a function, type, field, variant, constant or builtin
+  (one pass, a worklist over `check/const_walk.agc`). The names are the linked
+  names (`@N::name`), a field is the pair of the struct that `Checked.types`
+  gives the target and its name, a builtin method is `Checked.resolved`; the
+  tree has no span for the name inside a call or a pattern, so `written` reads
+  the dotted name from the text. `refs.agc` picks the site that holds the
+  position and keeps the sites of its target in every linked module. The
+  commands are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py`,
+  `tests/test_spec_type_at.py` and `tests/test_spec_refs.py`.
 
 ### Pure core, one port
 
