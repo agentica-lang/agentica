@@ -176,6 +176,12 @@ extern const agc_builtin agc_logger_builtins[];
 extern const size_t agc_logger_builtin_count;
 extern const agc_builtin agc_test_builtins[];
 extern const size_t agc_test_builtin_count;
+extern const agc_builtin agc_ffi_builtins[];
+extern const size_t agc_ffi_builtin_count;
+/* Whether a run may start PROGRAM: NULL, or the code of the refusal with its message and span, when the program
+   imports Native.call (it declares extern functions) and this build cannot call native code or DENY (--deny-native)
+   refuses it. */
+const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span);
 extern const agc_builtin agc_front_end_builtins[];
 extern const size_t agc_front_end_builtin_count;
 extern const agc_builtin agc_std_builtins[];

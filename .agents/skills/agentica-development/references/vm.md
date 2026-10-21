@@ -53,7 +53,7 @@ core and the driver call goes in `core.h`; a service's export goes in
 stay in their place: `gc.h` in `value.c`, `uv.h` in `loop.c` and the stream
 services, OpenSSL in `tls_openssl.c` (and `tls_trust*.c`) and
 `digest_openssl.c`, picohttpparser in `http_pico.c`,
-`yyjson.h` in `json.c`.
+`yyjson.h` in `json.c`, `ffi.h` in `ffi_libffi.c`.
 
 ## Rules every change keeps
 
@@ -79,7 +79,9 @@ code are recorded in `docs/vm/`.
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, runs children only with its own
-`--allow-run`, and stops within `--max-steps`. The loader enforces the
+`--allow-run`, and stops within `--max-steps`. Native code (`extern`) is
+allowed by default and bypasses `--allow-run`: run untrusted bytecode with
+`--deny-native`. The loader enforces the
 termination rules: every backward jump lands on a `STEP`, every function that
 calls starts with one, and a function without a leading `STEP` has at most 2
 instructions. A file with Globals slots may write them only in the entry

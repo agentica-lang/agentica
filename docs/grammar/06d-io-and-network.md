@@ -337,6 +337,47 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   be written); a regular file, a device or a one-way FIFO there is left alone
   and the program has no channel.
 
+### Native code
+
+An `extern` block (section 5) declares C functions of a native library, which a
+program then calls like any `def`. Pages for people:
+[`library/io-and-system/native.md`][agentica-link-4].
+
+```ruby
+extern "libm.so.6"
+  export def cos(x: C.Double) -> C.Double
+end
+```
+
+- The C types are `C.Int` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
+  (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Bool` (`bool`, `Bool`)
+  and `C.String` (a `const char *`, `String`); a result may also be `Void`. A
+  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
+- The library is a plain string literal: a name without `/`, which the system
+  loader looks up, or an absolute path. Anything else is
+  `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
+  functions and stays open; a library, dependency or function that cannot be
+  found is `RUNTIME-NATIVE-LOAD` at the extern function.
+- An argument is checked before the call: a `C.Int` outside 32 bits is
+  `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
+  `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
+  it may read only during the call. A `C.String` result is copied; `NULL` reads
+  as `""` for now, and bytes that are not UTF-8 become U+FFFD.
+- A call blocks timers, I/O and other tasks until it returns, and the step
+  limit cannot stop it in the middle. Native code must retry calls cut
+  short by `EINTR`: GC signals can interrupt sleeps and polls.
+- Native code is allowed by default and bypasses `--allow-run`.
+  `agentica --deny-native file.agc` (and `agentica run --deny-native`) refuses
+  a program that declares any extern function before anything runs:
+  `RUNTIME-NATIVE-DENIED`, exit 2. `agentica test` does not take the option
+  yet.
+- Native calls work on Linux x86_64. Elsewhere a program that declares an
+  extern function is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2
+  (issue #548). `check`, `compile` and the queries work on every system.
+- The VM trusts the signature: a wrong one is undefined behavior in C, and
+  native code runs with the rights of the program.
+
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
 [agentica-link-2]: ../../site/content/library/io-and-system/files.md
 [agentica-link-3]: ../../site/content/library/io-and-system/process.md
+[agentica-link-4]: ../../site/content/library/io-and-system/native.md

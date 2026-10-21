@@ -239,6 +239,10 @@ typedef enum {
 
 typedef enum { AGC_COST_NONE, AGC_COST_SIZE } agc_cost_rule;
 
+/* The builtin that every extern function lowers to (vm/ffi.c). The loader notes whether a program imports it, so a
+   run can refuse native code before it starts (agc_ffi_refusal). */
+#define AGC_NATIVE_CALL "Native.call"
+
 /* No public builtin may have a name that starts with "__": that prefix marks the prelude-only builtins
    (agc_builtin_prelude_only), which the loader accepts only in prelude functions. */
 typedef struct {
@@ -314,6 +318,8 @@ typedef struct {
   agc_update_def *updates;
   const agc_builtin **builtins;
   agc_function *functions;
+  /* The index of the Native.call import in builtins, and of the first function that calls it, or UINT32_MAX. */
+  uint32_t native_call, native_function;
   /* The Globals slots (module constants, docs/future/44-module-constants.md
      §44.8): global_count values in zeroed memory, so an unset slot has tag
      AGC_T_VOID. No module constant has type Void (44.5), so tag 0 means "never

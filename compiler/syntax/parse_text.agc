@@ -88,7 +88,8 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
       return print_decl(lines, child, "declaration", node.declaration)
     Ast.Decl.Function(node) ->
-      lines = out.push(head(at, role, "function-decl", node.id, node.span, name_attr(node.name) + doc_attr(node.doc)))
+      attrs = name_attr(node.name) + doc_attr(node.doc) + native_attr(node.native)
+      lines = out.push(head(at, role, "function-decl", node.id, node.span, attrs))
       for param in node.params
         lines = print_param(lines, child, param)
       end
@@ -139,6 +140,14 @@ end
 
 def doc_attr(doc: Ast.Optional[String]) -> String
   return text_attr(" doc=", doc)
+end
+
+# The library and the C type codes of an extern function; nothing for an ordinary one.
+def native_attr(native: Ast.Optional[Ast.Native]) -> String
+  case native
+    Ast.Optional.Present(link) -> return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}"
+    Ast.Optional.Absent -> return ""
+  end
 end
 
 def name_attr(name: String) -> String

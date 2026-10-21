@@ -35,6 +35,14 @@ COMPOUND_OPERATORS: Map[String, String] = {
   "modulo-assign": "modulo",
 }
 
+# The C types an extern function may take, with their codes (Ast.Native) and the Agentica types the program sees.
+EXTERN_CODES = {"C.Int": "i", "C.Int64": "l", "C.Double": "d", "C.Bool": "b", "C.String": "s"}
+EXTERN_TYPES = {"i": "Int", "l": "Int", "d": "Float", "b": "Bool", "s": "String", "v": "Void"}
+EXTERN_TYPES_HELP = "extern functions take and return C.Int, C.Int64, C.Double, C.Bool or C.String, or return Void"
+EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
+# The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
+EXTERN_MAX_PARAMS = 64
+
 # A declaration with the next position and the next free node id.
 struct DeclAt
   node: Ast.Decl
@@ -91,6 +99,18 @@ struct ParamsAt
   nodes: List[Ast.Param]
   pos: Int
   ids: Int
+end
+
+struct DeclsAt
+  nodes: List[Ast.Decl]
+  pos: Int
+  ids: Int
+end
+
+# A type of an extern signature: its code and the type as the program sees it.
+struct ExternType
+  code: String
+  type: Ast.TypeRef
 end
 
 struct FieldAt
@@ -1732,10 +1752,183 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
       result: result.node,
       body: body.nodes,
       doc: doc,
+      native: Ast.Optional.Absent,
       span: Base.span_from(e, pos, stop),
     ),
   )
   return decl_at(node, stop, body.ids)
+end
+
+# extern "library" NL, then [##doc] [export] def members, then end. Each member is a function with no body
+# (Ast.Native), so the later stages see ordinary functions.
+def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
+  library = pos + 1
+  if Base.kind_at(e, library) == "string" and Base.heredoc?(e.tokens[library])
+    return error(
+      Base.unexpected_help(
+        e,
+        library,
+        "a library name is not a heredoc",
+        "write the library as a \"...\" string literal",
+      ),
+    )
+  end
+  if Base.kind_at(e, library) == "interp-start"
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-LIBRARY",
+        "a library name is not an interpolated string",
+        Base.span_from(e, library, interpolation_end(e, library) + 1),
+        Base.hint(EXTERN_LIBRARY_HELP),
+      ),
+    )
+  end
+  after_library = try Base.expect(e, library, "string", "a library name", false)
+  name = Base.token_text(e.tokens[library])
+  # A relative path would resolve against the working directory, while imports resolve against the source file:
+  # until a later phase decides, only a name the system loader searches for or an absolute path is taken.
+  if name == "" or (name.contains?("/") and not name.starts_with?("/"))
+    return error(
+      Base.bail(
+        e,
+        library,
+        "PARSE-EXTERN-LIBRARY",
+        "\"#{name}\" is not a library name or an absolute path",
+        Base.hint(EXTERN_LIBRARY_HELP),
+      ),
+    )
+  end
+  cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
+  nodes: List[Ast.Decl] = []
+  next_id = ids
+  looping = true
+  while looping
+    cursor = Base.skip_newlines(e, cursor)
+    if e.tokens[cursor].kind == "end"
+      looping = false
+    else
+      taken = try documented(e, cursor, "extern")
+      at = taken.pos
+      exported = e.tokens[at].kind == "export"
+      if exported
+        at += 1
+      end
+      if e.tokens[at].kind != "def"
+        return error(Base.found(e, at, "def or end in an extern block"))
+      end
+      member = try parse_extern_function(e, at, next_id, taken.doc, name)
+      node = member.node
+      member_ids = member.ids
+      if exported
+        span = Base.span_from(e, taken.pos, member.pos)
+        node = Ast.Decl.Export(Ast.ExportDecl(id: member.ids, declaration: member.node, doc: taken.doc, span: span))
+        member_ids += 1
+      end
+      nodes = nodes.push(node)
+      cursor = member.pos
+      next_id = member_ids
+    end
+  end
+  stop = try expect_statement_end(e, cursor + 1, "a newline after end")
+  return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
+end
+
+# def name(params) -> Type NL in an extern block: a C name, C types, no defaults.
+def parse_extern_function(
+  e: Base.Env,
+  pos: Int,
+  ids: Int,
+  doc: Ast.Optional[String],
+  library: String,
+) -> Result[DeclAt]
+  after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
+  name = e.tokens[pos + 1].lexeme
+  if name.ends_with?("?") or name.ends_with?("!")
+    return error(
+      Base.bail(
+        e,
+        pos + 1,
+        "PARSE-EXTERN-NAME",
+        "\"#{name}\" is not a C function name",
+        Base.hint("an extern function is named as in C: letters, digits and _, without ? or !"),
+      ),
+    )
+  end
+  after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
+  params = try parse_parameters(e, after_open, ids)
+  after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
+  after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
+  result = try Base.parse_type(e, after_arrow, params.ids)
+  stop = try expect_statement_end(e, result.pos, "a newline after the extern function")
+  codes: List[String] = []
+  returned = try extern_type(result.node, true)
+  codes = codes.push(returned.code)
+  if params.nodes.size > EXTERN_MAX_PARAMS
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-ARITY",
+        "an extern function takes at most #{EXTERN_MAX_PARAMS} parameters",
+        params.nodes[EXTERN_MAX_PARAMS].span,
+        Base.hint("pass the values in fewer parameters"),
+      ),
+    )
+  end
+  typed: List[Ast.Param] = []
+  for param in params.nodes
+    case param.default
+      Ast.Optional.Present(value) ->
+        return error(
+          Base.bail_span(
+            "PARSE-EXTERN-DEFAULT",
+            "the extern parameter \"#{param.name}\" has a default value",
+            param.span,
+            Base.hint("C has no default values: write the parameter without = value"),
+          ),
+        )
+      Ast.Optional.Absent -> codes = codes
+    end
+    taken = try extern_type(param.type, false)
+    codes = codes.push(taken.code)
+    typed = typed.push(param.with(type: taken.type))
+  end
+  node = Ast.Decl.Function(
+    Ast.FunctionDecl(
+      id: result.ids,
+      name: name,
+      name_span: e.tokens[pos + 1].span,
+      params: typed,
+      result: returned.type,
+      body: [],
+      doc: doc,
+      native: Ast.Optional.Present(Ast.Native(library: library, symbol: name, codes: codes.join(""))),
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+  return decl_at(node, stop, result.ids)
+end
+
+# The code and the Agentica type of a C type of an extern signature, or PARSE-EXTERN-TYPE at it. Void is a result only.
+def extern_type(ref: Ast.TypeRef, result: Bool) -> Result[ExternType]
+  code = ""
+  if ref.args.size == 0
+    found = EXTERN_CODES.get(ref.name)
+    if found.ok?
+      code = found.unwrap!
+    elsif result and ref.name == "Void"
+      code = "v"
+    end
+  end
+  if code == ""
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-TYPE",
+        "#{ref.name} is not a C type of an extern function",
+        ref.span,
+        Base.hint(EXTERN_TYPES_HELP),
+      ),
+    )
+  end
+  return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code])))
 end
 
 def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[FieldAt]
@@ -1790,6 +1983,9 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   end
   if member == "variant"
     return kind == "type-name"
+  end
+  if member == "extern"
+    return kind == "def" or kind == "export"
   end
   return (
     kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, pos) or
@@ -2084,8 +2280,35 @@ def declaration_start?(e: Base.Env, at: Int) -> Bool
   kind = e.tokens[at].kind
   return (
     kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, at) or
-    (kind == "name" and e.tokens[at].lexeme == "type")
+    (kind == "name" and e.tokens[at].lexeme == "type") or extern_start?(e, at)
   )
+end
+
+# `extern` is a plain name: it starts a block only at the top level and before a string.
+def extern_start?(e: Base.Env, at: Int) -> Bool
+  next = Base.kind_at(e, at + 1)
+  library = next == "string" or next == "interp-start"
+  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "extern" and library
+end
+
+# The position of the interp-end token that closes the interpolated string starting at start (nested strings
+# included), or the last token when the string never closes.
+def interpolation_end(e: Base.Env, start: Int) -> Int
+  depth = 0
+  at = start
+  while at < e.tokens.size - 1
+    kind = e.tokens[at].kind
+    if kind == "interp-start"
+      depth += 1
+    elsif kind == "interp-end"
+      depth -= 1
+      if depth == 0
+        return at
+      end
+    end
+    at += 1
+  end
+  return at
 end
 
 def top_level_help(kind: String) -> String
@@ -2301,6 +2524,12 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
       declarations = declarations.push(parsed.node)
       cursor = parsed.pos
       next_id = parsed.ids
+    elsif extern_start?(e, cursor)
+      block = try parse_extern_block(e, cursor, next_id)
+      declarations = declarations.concat(block.nodes)
+      cursor = block.pos
+      next_id = block.ids
+      after_declaration = true
     elsif declaration_start?(e, cursor) or kind == "DOC"
       taken = try documented(e, cursor, "declaration")
       parsed = try parse_declaration(e, taken.pos, next_id, taken.doc)

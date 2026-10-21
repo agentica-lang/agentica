@@ -98,6 +98,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     tables; a new builtin library adds its table here and its `extern` to
     `vm/services.h`
 
+- **Path:** `vm/ffi.c`, `vm/ffi_os.h`, `vm/ffi_libffi.c`, `vm/ffi_none.c`
+  - **Owns:** native calls: `Native.call` (`agc_ffi_builtins`, the builtin that
+    each `extern` function lowers to, with a signature string
+    `"CODES SYMBOL LIBRARY"` from `compiler/lower/lower_native.agc`), the cache
+    of prepared calls, and `agc_ffi_refusal`, which `agc_launch_native` calls at
+    load (`--deny-native`, systems without libffi). The adapter
+    `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64) opens libraries with
+    `uv_dlopen` and calls with libffi; `vm/ffi_none.c` refuses elsewhere (#548)
+
 - **Path:** `vm/numbers.c`
   - **Owns:** `Float`, `Time` and `Random` builtins (`agc_number_builtins`)
 

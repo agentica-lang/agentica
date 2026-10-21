@@ -282,15 +282,16 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   options it hands over, give the program `--allow-run`. That is why
   `--front-end FILE` is for the build and the tests only, is not in the help,
   and has the same standing as the binary itself. The options it may pass are
-  exactly `--ai`, `--json`, `--allow-run`, `--max-steps N`, `--seed N`,
-  `--flush-timeout MS`, `--schedulers N` and `--source-root DIR`, each once, and
-  nothing else; no positional word, no `--version`. `--driver-pid` is refused
-  (exit 2): it says which process started this one, and only that process can
-  say so. So is `--embedded` (exit 2): only `agentica run` starts an embedded
-  program. The hand-off takes at most 64 option words and 1,048,576 argument
-  words (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`), so the
-  counts fit an `int`. The file of `--front-end` is opened with `O_NONBLOCK` and
-  must be a regular file of at most 256 MiB, so a named pipe is refused at once.
+  exactly `--ai`, `--json`, `--allow-run`, `--deny-native`, `--max-steps N`,
+  `--seed N`, `--flush-timeout MS`, `--schedulers N` and `--source-root DIR`,
+  each once, and nothing else; no positional word, no `--version`.
+  `--driver-pid` is refused (exit 2): it says which process started this one,
+  and only that process can say so. So is `--embedded` (exit 2): only
+  `agentica run` starts an embedded program. The hand-off takes at most 64
+  option words and 1,048,576 argument words (`AGC_FRONT_END_MAX_OPTIONS`,
+  `AGC_FRONT_END_MAX_ARGUMENTS`), so the counts fit an `int`. The file of
+  `--front-end` is opened with `O_NONBLOCK` and must be a regular file of at
+  most 256 MiB, so a named pipe is refused at once.
 - **Shared by the two runs.** `vm/launch.c` holds what both do: the option
   parser (`agc_launch_parse`; its messages start with the program name,
   `agentica` or `agentica run`), seeds, the trace file, the creation of a

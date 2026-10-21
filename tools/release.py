@@ -41,6 +41,7 @@ PLATFORMS = {
 LICENSE_FILES = (
     "licenses/bdwgc/NOTICE", "licenses/libuv/LICENSE", "licenses/libuv/LICENSE-extra", "licenses/yyjson/LICENSE",
     "licenses/picohttpparser/LICENSE", "licenses/openssl/LICENSE.txt", "licenses/unicode/LICENSE.txt",
+    "licenses/libffi/LICENSE",
 )
 DEFAULT_MTIME = 315619200  # 1980-01-02, the first date a zip can hold
 
@@ -86,6 +87,7 @@ def license_text(name: str) -> bytes:
         "licenses/libuv/LICENSE-extra": third / "libuv" / "LICENSE-extra",
         "licenses/yyjson/LICENSE": third / "yyjson" / "LICENSE",
         "licenses/openssl/LICENSE.txt": third / "openssl" / "LICENSE.txt",
+        "licenses/libffi/LICENSE": third / "libffi" / "LICENSE",
         "licenses/unicode/LICENSE.txt": ROOT / "licenses" / "unicode" / "LICENSE.txt",
     }
     return sources[name].read_bytes()

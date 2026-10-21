@@ -1,0 +1,44 @@
+program 0:1:1-14:1 entry=3 globals=0
+source 0 "extern.agc" chars=240
+fn0 "cos" params=1 captures=0 slots=3 @ 0:2:3-3:1
+    step @ 0:2:3-3:1
+    const r1 "dd cos libm.so.6" @ 0:2:3-3:1
+    list r2 r0 1 @ 0:2:3-3:1
+    call-builtin r1 "Native.call" 2 @ 0:2:3-3:1 0:2:3-3:1 0:2:3-3:1
+    return r1 @ 0:2:3-3:1
+fn1 "peer" params=3 captures=0 slots=5 @ 0:6:3-7:1
+    step @ 0:6:3-7:1
+    const r3 "sibs peer /opt/lib/my peer.so" @ 0:6:3-7:1
+    list r4 r0 3 @ 0:6:3-7:1
+    call-builtin r3 "Native.call" 2 @ 0:6:3-7:1 0:6:3-7:1 0:6:3-7:1
+    return r3 @ 0:6:3-7:1
+fn2 "tick" params=0 captures=0 slots=2 @ 0:7:3-8:1
+    step @ 0:7:3-8:1
+    const r0 "v tick /opt/lib/my peer.so" @ 0:7:3-8:1
+    list r1 r0 0 @ 0:7:3-8:1
+    call-builtin r0 "Native.call" 2 @ 0:7:3-8:1 0:7:3-8:1 0:7:3-8:1
+    return r0 @ 0:7:3-8:1
+fn3 "main" params=0 captures=0 slots=5 entry @ 0:10:1-14:1
+    step @ 0:11:3-12:1
+    step @ 0:11:3-11:9
+    call r0 fn2 @ 0:11:3-11:9
+    step @ 0:12:3-13:1
+    step @ 0:12:3-12:37
+    step @ 0:12:8-12:36
+    step @ 0:12:13-12:14
+    const r1 int:1 @ 0:12:13-12:14
+    step @ 0:12:16-12:30
+    step @ 0:12:16-12:24
+    step @ 0:12:20-12:23
+    const r3 float:bits:0 @ 0:12:20-12:23
+    call r3 fn0 @ 0:12:16-12:24
+    step @ 0:12:27-12:30
+    const r4 float:bits:4602678819172646912 @ 0:12:27-12:30
+    lt-f r2 r4 r3 @ 0:12:25-12:26
+    step @ 0:12:32-12:35
+    const r3 "x" @ 0:12:32-12:35
+    call r1 fn1 @ 0:12:8-12:36
+    move r0 r1 @ 0:12:8-12:36
+    call-builtin r0 "puts" 1 @ 0:12:3-12:37 0:12:8-12:36
+    const r0 void @ 0:10:1-14:1
+    return r0 @ 0:10:1-14:1

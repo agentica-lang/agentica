@@ -13,6 +13,8 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
   order), then `export def` functions, then private `def` functions. The first
   declaration out of place is `CHECK-DECL-ORDER`, at its start. The order is
   style only: a function may call a function declared later.
+- An `extern "LIB"` block of C signatures declares native functions, which
+  count as `def`s (`native.md`).
 - A constant is `NAME = expr` or `NAME: Type = expr` at the top level. The name
   is capitals, digits and `_`, at least two characters, starting with a capital
   (`MAX_DEPTH`); another spelling is `PARSE-CONSTANT-NAME`, and `IO`, `JSON`,

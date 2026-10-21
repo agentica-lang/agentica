@@ -443,6 +443,19 @@ there, at a character boundary, and ends with `...`.
   - **Meaning:** under `agentica test`, a test ran longer than 30 seconds; the
     rest of its file is not executed
 
+- **Code:** `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`,
+  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`
+  - **Meaning:** an `extern` signature with a type that is not a C type (the
+    span is the type), a name with `?` or `!`, a parameter with a default, more
+    than 64 parameters, or a library that is not a name without `/` or an
+    absolute path; see `native.md`
+
+- **Code:** `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-DENIED`,
+  `RUNTIME-NATIVE-UNSUPPORTED`
+  - **Meaning:** the library or function of an extern call was not found (at
+    the extern function); or, at load with exit 2, `--deny-native` refused a
+    program with an extern function, or the system has no native calls yet
+
 - **Code:** `LOWER-UNSUPPORTED`
   - **Meaning:** the VM cannot run this form; exit 1 before anything runs. Every
     checked program runs on the VM today, so seeing it is an interpreter bug to

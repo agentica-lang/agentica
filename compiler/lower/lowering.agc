@@ -22,6 +22,7 @@ import Expr from "lower_expr"
 import Program from "lower_program"
 import Scans from "lower_scan"
 import Lowering from "lower_state"
+import Native from "lower_native"
 import Stmt from "lower_stmt"
 import {BUILTIN_STRUCTS} from "lower_tables"
 
@@ -128,9 +129,15 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   for entry in functions
     params = entry.function.params.map do |param: Ast.Param| param.name end
     function = entry.function
-    table = try add_function(
-      cx, table, entry.file, index_of[entry.file], function.name, params, function.body, function.span,
-    )
+    case function.native
+      Ast.Optional.Present(native) ->
+        lowered = try Native.lower(cx.with(file: entry.file), function, native, index_of[entry.file])
+        table = table.with(functions: table.functions.push(lowered))
+      Ast.Optional.Absent ->
+        table = try add_function(
+          cx, table, entry.file, index_of[entry.file], function.name, params, function.body, function.span,
+        )
+    end
   end
   for entry in plan.kept
     file = files_of[entry.name]
