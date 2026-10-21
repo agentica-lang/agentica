@@ -13,6 +13,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica doc PATH [--json]` prints the exported API of a file or a `std/`
   module with its `##` docs.
 
+### Fixed
+
+- A child's stderr no longer stalls the VM when the VM's stderr is not read,
+  and it keeps its order with stdout when both go to one pipe (`2>&1`).
+
 ## [0.6.0] - 2026-10-21
 
 ### Added
