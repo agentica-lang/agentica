@@ -340,8 +340,9 @@ end
 
 ## case and if
 
-List every variant of an enum and leave out `_`: a new variant then fails the
-check where it must be handled.
+List every variant of a small enum and leave out `_`: a new variant then fails
+the check where it must be handled. A `_` is fine when many variants share one
+outcome.
 
 ```ruby
 # bad
