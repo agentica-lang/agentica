@@ -44,8 +44,9 @@ export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
   return finished(run(linked, settings, true))
 end
 
-## Checks a linked program as `check` does, without the rule that it declares `main() -> Void` (CHECK-MAIN): a query
-## about a position (`agentica type-at`) asks about a library file as well as about a program. Every other rule holds.
+## Checks a linked program as `check` does, without the rule that it declares a main (CHECK-MAIN): `agentica check` and
+## a query about a position (`agentica type-at`) take a library file as well as a program. A main that is declared must
+## still be `main() -> Void`, and every other rule holds.
 export def check_query(linked: Linker.Linked, settings: Env.Settings) -> Checking
   return finished(run(linked, settings, false))
 end
@@ -97,9 +98,7 @@ end
 def run(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> Result[Checked]
   base = start(linked)
   cx = try Register.register(base, linked.modules)
-  if main_required
-    try Register.check_main(cx, linked.modules, linked.root.span)
-  end
+  try Register.check_main(cx, linked.modules, linked.root.span, main_required)
   st = State.fresh().with(types: no_types(ids_of(linked), max_repeat()))
   done = try Constants.check_all(cx, st, linked.modules)
   cx = done.cx

@@ -45,8 +45,9 @@ What the design starts from:
   `Types.display_name` strips the `@N::` prefix, so diagnostics print an
   imported type as `User`; `Types.to_text_as` takes the map from a prefix to
   the alias of the asking file and prints `Models.User`.
-- `Checker.check_query` checks without the `CHECK-MAIN` rule and with every
-  other.
+- `Checker.check_query` checks without the rule that `main` exists and with
+  every other (a declared `main` keeps its signature). `agentica check` uses it
+  too.
 - Some names have no span of their own: the loop variable of `ForStmt` and the
   slots of `VariantPattern` hold plain strings. Functions, structs, enums,
   fields, variants, constants, type aliases, `FieldAccess` and `MethodCall`
@@ -246,8 +247,10 @@ for as little as they can:
 - **Alternative, not chosen:** answering from a partly checked program. It needs
   a checker that recovers from errors, which the front end does not have (each
   stage stops at the first error, AGENTS.md).
-- A queried file does not need `main`: the query checks with the `CHECK-MAIN`
-  rule off (`Checker.check_query`). Everything else is the same checker.
+- A queried file does not need `main`: the query checks with the rule that
+  `main` exists off (`Checker.check_query`), as `agentica check` does. A
+  declared `main` still needs its signature. Everything else is the same
+  checker.
 
 ### 39.7 Diagnostics and exit codes
 

@@ -26,8 +26,14 @@ export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[
 end
 
 ## CHECK-MAIN unless the program declares main() -> Void; the first main is the one that counts. root is the span of
-## the program.
-export def check_main(cx: State.Cx, modules: List[Linker.LinkedModule], root: Source.Span) -> Result[Bool]
+## the program. When `required` is false a program with no main passes, but a main that is declared still has to have
+## the signature.
+export def check_main(
+  cx: State.Cx,
+  modules: List[Linker.LinkedModule],
+  root: Source.Span,
+  required: Bool,
+) -> Result[Bool]
   st = State.fresh()
   for module in modules
     for decl in module.declarations
@@ -39,6 +45,9 @@ export def check_main(cx: State.Cx, modules: List[Linker.LinkedModule], root: So
         _ -> st = st
       end
     end
+  end
+  if !required
+    return ok(true)
   end
   return error(
     State.fail(
