@@ -35,8 +35,7 @@ everything else is weighed after them.
   there with a clear error, and its tests are skipped with a `known-issue: #N`
   reason that points to the port issue. The builds on all four systems keep
   passing.
-- **Freeze:** the stable-core freeze (below) comes after the FFI, not after
-  UDP.
+- **Freeze:** after the FFI; see "Stable core" below.
 
 First batch, as soon as possible:
 
@@ -53,8 +52,9 @@ First batch, as soon as possible:
 
 Second batch, after the first:
 
-5. The formatter [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)
-   (row 7.9). Its needs are the heredoc and the open questions of
+5. The formatter
+   [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt) (row 7.9).
+   Its needs are the heredoc and the open questions of
    [§47.9](../future/47-formatter.md#479-open-questions), which the owner
    answers when the work starts.
 6. [#396](https://github.com/sonic182/agentica/issues/396): smaller values,
@@ -62,7 +62,7 @@ Second batch, after the first:
    value representation of the whole VM, so it must work on all four systems,
    not only Linux. It goes before the JIT.
 
-Weighed later, by impact and then effort (owner, 2026-10-21):
+Weighed later (no fixed order)
 
 7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
    (row 7.10).
@@ -323,8 +323,8 @@ Weighed later, by impact and then effort (owner, 2026-10-21):
     `TlsContext`, and can write an HTTP/2 library on `TLS` with ALPN
 
 - **Order:** 7.5
-  - **Next work:** New features, VM-only (cont.): UDP (item 12 of the list
-    after 0.8.0 above, weighed later), then the `Crypto` module
+  - **Next work:** New features, VM-only (cont.): UDP (leaves the core plan,
+    item 12 of the list after 0.8.0 above), then the `Crypto` module
     (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare,
     random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`).
     Logging (14c, `std/logger`) is done.
@@ -340,13 +340,14 @@ Weighed later, by impact and then effort (owner, 2026-10-21):
     nobody asks
 
 - **Order:** 7.8
-  - **Next work:** **After the JIT** (the list after 0.8.0 above, item 20),
+  - **Next work:** **Weighed later** (the list after 0.8.0 above, item 20),
     decided by the owner on 2026-10-15 (design and plan:
     [§46](../future/46-signals.md#46-signals)):
     signals that a program can handle, in parts 46a subscription, 46b sending
     and 46d `std/http` drains its handlers on a stop (46c, the Racket driver,
     is obsolete, §46.7). 46d comes after 46b by the owner's order (§46.7 does
     not require it).
+    46a and 46b may run earlier when no other VM PR is waiting.
   - **Outcome:** A container entrypoint can stop its children and exit on its
     own terms
 
@@ -508,7 +509,7 @@ Windows and macOS releases were done ahead of this order.
    (row 22b) are in the list after 0.8.0 above.
 7. The path to the JIT is replaced by the list after 0.8.0 above. The native
    Windows and macOS builds are done (release 0.5.0-beta.1). UDP leaves the
-   core plan (below); its design waits for the owner's approval (#399).
+   core plan (below); see item 12.
 8. The rest of the order is in the list after 0.8.0 above. Regex needs
    the owner's answer on the Ruby anchors question of
    [§48.10](../future/48-regex.md#4810-decisions-and-open-questions); the

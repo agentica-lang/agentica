@@ -173,7 +173,8 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Status: Scheduled on 2026-10-15, after the bootstrap (§46, row 7.8):
     catch TERM and
     INT for a safe shutdown, forward signals to children, signal a process
-    group (item 20 of the order after 0.8.0 in the roadmap)
+    group (item 20 of the order after 0.8.0 in the roadmap); 46a and 46b may
+    run earlier when no other VM PR is waiting
 
 - §: 47
   - Title: Code formatter (`agentica fmt`)

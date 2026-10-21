@@ -2,7 +2,8 @@
 
 **Status:** Scheduled on 2026-10-15 (row 7.8), after the bootstrap (§18, port
 step 8, done), and item 20 of the list after 0.8.0 in the
-[roadmap](../roadmap/README.md). Nothing is implemented yet.
+[roadmap](../roadmap/README.md). 46a and 46b may run earlier when no other VM
+PR is waiting. Nothing is implemented yet.
 
 The owner asked for a way to catch the OS stop signal in an Agentica program. A
 container entrypoint should stop its child, run cleanup and exit with the right
