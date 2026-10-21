@@ -1,6 +1,6 @@
 ## The adapter of the front end to this machine: the Workspace (modules/workspace.agc) whose functions read the disk
-## and the binary, and the environment of the process. It is the only place that calls File, Path, System and
-## FrontEnd for the core stages; app/ and bdd/ are driving adapters and have their own I/O.
+## and the std/ sources it is given, and the environment of the process. It is the only place that calls File, Path and
+## System for the core stages; app/ and bdd/ are driving adapters and have their own I/O.
 
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
@@ -12,18 +12,25 @@ STAT_TIMEOUT_MS = 10000
 
 CHUNK_BYTES = 262144
 
-## The workspace of this machine.
-export def workspace() -> Workspace.Workspace
+## The workspace of this machine, with `std_source` as the reader of the std/ sources (`FrontEnd.std_source` in the
+## front end, `Std.source` in a program that embeds the core as `std/internal/compiler`).
+export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.Workspace
   return Workspace.Workspace(
     read_text: &SourceReader.read,
     file_exists: &file_exists,
     directory_exists: &directory_exists,
     real_path: &real_path,
     resolve_path: &resolve_path,
-    std_source: &std_source,
+    std_source: std_source,
     list_folder: &list_folder,
     read_bytes: &read_bytes,
   )
+end
+
+## The workspace of this machine for a run with `--stdlib DIR` (the entry programs of the stages), which reads the std/
+## sources from that folder and never asks the workspace for them.
+export def workspace() -> Workspace.Workspace
+  return workspace_with(&no_std_source)
 end
 
 ## The environment of this process.
@@ -38,16 +45,16 @@ export def process_env() -> Env.Env
   )
 end
 
+def no_std_source(name: String) -> Result[String]
+  return error("this workspace carries no std sources")
+end
+
 def real_path(path: String) -> Result[String]
   return Path.real(path)
 end
 
 def resolve_path(path: String) -> Result[String]
   return Path.resolve(path)
-end
-
-def std_source(name: String) -> Result[String]
-  return FrontEnd.std_source(name)
 end
 
 def file_exists(path: String) -> Bool

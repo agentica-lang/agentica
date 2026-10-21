@@ -3,74 +3,55 @@
 ## `name`, `module` (the file), `exported`, `signature`, `span` (the whole declaration) and `name_span` of the
 ## declaration, and the `struct` of a field or the `enum` of a variant. Each reference is `{kind, function, span}`, the
 ## `span` being the name alone and `function` null at the top level. `skipped` is always empty for now: a position
-## names one file. A span is `{file, range}`, with the name that `names` gives the file.
+## names one file. A span is `{file, range}` with the `file` the command answers with.
 
-import Ast from "../syntax/ast"
+import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
-import Definitions from "definitions"
-import Position from "query_position"
-import Refs from "refs"
+import Model from "../analysis/model"
 
-## The version of the shape. A key may be added within a version; one that changes meaning gets a new version.
-export VERSION = 1
-
-## The object of `answered`, for the position `asked`. `names` gives the name that the answer uses for each file
-## (query_files.agc, `display`).
-export def json(names: Map[String, String], asked: Position.Asked, answered: Refs.Answer) -> Json
+## The object of the answer.
+export def json(found: Model.Refs) -> Json
   return JSON.object({
-    "version": JSON.from(VERSION),
+    "version": JSON.from(found.version),
     "command": JSON.from("refs"),
-    "query": JSON.from("#{asked.file}:#{asked.line}:#{asked.column}"),
-    "definition": definition_json(names, answered),
-    "builtin": builtin_json(answered.builtin),
-    "references": JSON.array(answered.references.map do |found: Refs.Reference| reference_json(names, found) end),
-    "skipped": JSON.array([]),
+    "query": JSON.from(found.query),
+    "definition": definition_json(found.definition),
+    "builtin": DocJson.text_json(found.builtin),
+    "references": JSON.array(found.references.map do |use: Model.Reference| reference_json(use) end),
+    "skipped": JSON.array(found.skipped.map do |left: Model.Skipped| skipped_json(left) end),
   })
 end
 
-def builtin_json(name: String) -> Json
-  if name == ""
+def skipped_json(left: Model.Skipped) -> Json
+  return JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
+end
+
+def reference_json(use: Model.Reference) -> Json
+  return JSON.object({
+    "kind": JSON.from(use.kind),
+    "function": DocJson.text_json(use.function),
+    "span": DocJson.span_json(use.file, use.range),
+  })
+end
+
+def definition_json(definition: List[Model.Declaration]) -> Json
+  if definition.size == 0
     return JSON.null()
   end
-  return JSON.from(name)
-end
-
-def reference_json(names: Map[String, String], found: Refs.Reference) -> Json
-  function = JSON.null()
-  if found.function != ""
-    function = JSON.from(found.function)
-  end
-  return JSON.object({
+  found = definition[0]
+  shape = {
     "kind": JSON.from(found.kind),
-    "function": function,
-    "span": DocJson.span_json(file_name(names, found.file), found.span),
-  })
-end
-
-def definition_json(names: Map[String, String], answered: Refs.Answer) -> Json
-  case answered.definition
-    Ast.Optional.Absent -> return JSON.null()
-    Ast.Optional.Present(found) ->
-      file = file_name(names, found.file)
-      shape = {
-        "kind": JSON.from(found.kind),
-        "name": JSON.from(found.name),
-        "module": JSON.from(file),
-        "exported": JSON.from(found.exported),
-        "signature": JSON.from(found.signature),
-        "span": DocJson.span_json(file, found.span),
-        "name_span": DocJson.span_json(file, found.name_span),
-      }
-      if found.kind == "field"
-        shape = shape.put("struct", JSON.from(answered.owner))
-      elsif found.kind == "variant"
-        shape = shape.put("enum", JSON.from(answered.owner))
-      end
-      return JSON.object(shape)
+    "name": JSON.from(found.name),
+    "module": JSON.from(found.module),
+    "exported": JSON.from(found.exported),
+    "signature": JSON.from(found.signature),
+    "span": DocJson.span_json(found.module, found.range),
+    "name_span": DocJson.span_json(found.module, found.name_range),
+  }
+  if found.kind == "field"
+    shape = shape.put("struct", JSON.from(found.owner))
+  elsif found.kind == "variant"
+    shape = shape.put("enum", JSON.from(found.owner))
   end
-end
-
-# The name the answer gives a file; the file as the linker names it when the command did not name it.
-def file_name(names: Map[String, String], file: String) -> String
-  return names.get(file, file)
+  return JSON.object(shape)
 end

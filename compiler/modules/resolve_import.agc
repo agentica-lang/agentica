@@ -10,6 +10,10 @@ import Failure from "link_failure"
 import SourceFile from "../syntax/source_file"
 import Workspace from "workspace"
 
+# The std/ modules that only std/ may import, and the part of them that is the front end's own core (compiler/).
+INTERNAL = "std/internal/"
+INTERNAL_COMPILER = "std/internal/compiler/"
+
 ## What a build gives the resolution besides the importing file: libs_dir, the folder whose agc_libs/ is searched first
 ## (the folder of the manifest when the project has one, else the folder of the root file), and the packages
 ## (packages/package_import.agc).
@@ -46,7 +50,7 @@ export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
     return workspace.read_text.call(key)
   end
   case settings.std
-    Env.StdProvider.Folder(folder) -> return workspace.read_text.call(Paths.join(folder, std_path(key)))
+    Env.StdProvider.Folder(folder) -> return workspace.read_text.call(std_file(folder, key))
     Env.StdProvider.Embedded ->
       text = workspace.std_source.call(std_path(key))
       if text.ok?
@@ -66,23 +70,33 @@ export def resolve_import(
   site: Failure.Site,
 ) -> Result[Resolution]
   if file.starts_with?("std/")
-    key = try standard(settings, file, site)
+    key = try standard_for(settings, file, site, embedded?(importer.key))
     return ok(plain(build, key))
   elsif file.starts_with?("pkg/")
     return pkg(settings, build, importer, file, site)
   elsif embedded?(importer.key)
-    # A relative import of a standard module stays in std/.
+    # A relative import of a standard module stays in std/, and may use ".." to go up inside it.
     folder = importer.key.slice(0, importer.key.length - Paths.last_part(importer.key).length)
-    return resolve_import(settings, build, importer, folder + file, site)
+    named = try Paths.inside_std(folder + file, site)
+    return resolve_import(settings, build, importer, named, site)
   end
   return beside(settings.workspace, build, importer, file, site)
 end
 
-## The key of the std/ module that the import path `file` names. A std/ module exists when the provider has its source.
-## The registry is stdlib/MODULES, which the binary embeds and which lists the files of the stdlib/ folder (a test
-## checks that they are the same list). `agentica doc` shares this check with the imports.
+## The key of the std/ module that the import path `file` names, for a file that is not part of std/ (a program, or
+## `agentica doc` and `outline`). A std/ module exists when the provider has its source. The registry is
+## stdlib/MODULES, which the binary embeds and which lists the files of the stdlib/ folder (a test checks that they are
+## the same list). The modules of std/internal/ are private to std/: this refuses them as it refuses a missing module.
 export def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
+  return standard_for(settings, file, site, false)
+end
+
+# `standard`, where `from_std` says the importing module is a std/ module, which may import std/internal/.
+def standard_for(settings: Env.Settings, file: String, site: Failure.Site, from_std: Bool) -> Result[String]
   try Paths.validate_library_path(file, site)
+  if file.starts_with?(INTERNAL) and !from_std
+    return error(io_failure(site, "std/internal/ modules are private to the standard library"))
+  end
   # The files of std/prelude/ are the compiler prelude, which no program imports (prelude_files.agc).
   if file.starts_with?("std/prelude/") or !std_exists?(settings, file)
     return error(io_failure(site, "unknown standard library module"))
@@ -93,6 +107,16 @@ end
 # The path of the source of a std/ module under stdlib/: the key without its std/.
 def std_path(key: String) -> String
   return key.slice(4, key.length - 4)
+end
+
+# The file of the source of a std/ module in the folder of a run with `--stdlib DIR`. The core that std/analysis embeds
+# as std/internal/compiler/X is the file compiler/X of the checkout, next to the stdlib/ folder.
+def std_file(folder: String, key: String) -> String
+  if key.starts_with?(INTERNAL_COMPILER)
+    core = key.slice(INTERNAL_COMPILER.length, key.length - INTERNAL_COMPILER.length)
+    return Paths.join(Paths.join(folder, "../compiler"), core)
+  end
+  return Paths.join(folder, std_path(key))
 end
 
 # A module of std/ or pkg/ libraries, which belongs to no package.
@@ -149,7 +173,7 @@ end
 
 def std_exists?(settings: Env.Settings, file: String) -> Bool
   case settings.std
-    Env.StdProvider.Folder(folder) -> return settings.workspace.file_exists.call(Paths.join(folder, std_path(file)))
+    Env.StdProvider.Folder(folder) -> return settings.workspace.file_exists.call(std_file(folder, file))
     Env.StdProvider.Embedded -> return settings.workspace.std_source.call(std_path(file)).ok?
   end
 end

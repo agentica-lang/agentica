@@ -91,7 +91,13 @@ or receiver attachment.
 
 - `import Queue from "std/queue"` loads the standard library embedded at build
   time. Nothing needs to be installed, and local files or external roots cannot
-  shadow it. Embedded modules may use relative imports inside `std/`.
+  shadow it. Embedded modules may use relative imports inside `std/`, with
+  `..` as long as the path stays in `std/`.
+- `std/internal/` holds code that `std/` modules share and that is not API
+  (`std/analysis` compiles the pure core of the front end from there). Only a
+  `std/` module may import it; any other file gets `CHECK-IMPORT-IO`.
+  `agentica doc` and `outline` of it fail as for a missing module: `cannot
+  read` (`QUERY-USAGE` in `outline`, exit 2).
 - `import Tools from "pkg/acme/tools"` searches for `acme/tools.agc` in order:
   `agc_libs/` beside the root program, or beside `agentica.toml` when the
   project has a manifest (not beside a dependency); the absolute roots in

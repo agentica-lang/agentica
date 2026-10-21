@@ -120,7 +120,7 @@ true
 Std.source(path: String) -> Result[String]
 ```
 
-The text of a `std/` source that the `agentica` binary carries, by its exact path in `stdlib/`: `"queue.agc"`, `"bdd/gherkin.agc"`, `"prelude/list.agc"`. Any other path is an error, `"std/queue.agc"` and `"queue"` included. It needs no flag and reads only data of the binary, so tasks may call it at the same time. A doc or lint tool can read the std sources of the binary that runs it this way.
+The text of a `std/` source that the `agentica` binary carries, by its exact path in `stdlib/`: `"queue.agc"`, `"bdd/gherkin.agc"`, `"prelude/list.agc"`; `"internal/compiler/..."` is the private core of the front end that `std/analysis` uses. Any other path is an error, `"std/queue.agc"` and `"queue"` included. It needs no flag and reads only data of the binary, so tasks may call it at the same time. A doc or lint tool can read the std sources of the binary that runs it this way.
 
 ```agentica
 def main() -> Void

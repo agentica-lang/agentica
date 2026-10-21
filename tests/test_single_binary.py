@@ -294,14 +294,16 @@ def test_the_front_end_reports_a_missing_std_source(tmp_path):
 
 def test_std_source_gives_the_bytes_of_the_std_files(tmp_path):
     """A program sees the embedded std/ sources byte for byte as they are in stdlib/; puts adds one newline to each."""
-    names = ["queue.agc", "prelude/list.agc"]
+    names = ["queue.agc", "prelude/list.agc", "internal/compiler/syntax/ast.agc"]
+    # The files of stdlib/CORE are the files of compiler/ that std/analysis compiles into a program.
+    files = [ROOT / "compiler/syntax/ast.agc" if name.startswith("internal/") else STDLIB / name for name in names]
     program = "def main() -> Void\n" + "".join(
         '  puts(Std.source("%s").unwrap_or("missing"))\n' % name for name in names) + "end\n"
     directory = make_suite(tmp_path, {"main.agc": program})
     out = tmp_path / "out"
     got = agentica("main.agc", cwd=directory, stdout_to=out)
     assert (got.code, got.stderr) == (0, "")
-    assert out.read_bytes() == b"".join((STDLIB / name).read_bytes() + b"\n" for name in names)
+    assert out.read_bytes() == b"".join(path.read_bytes() + b"\n" for path in files)
 
 
 def test_the_front_end_reads_standard_input_to_its_end(tmp_path):

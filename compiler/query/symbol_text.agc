@@ -3,34 +3,30 @@
 ## name for a field or a variant). A builtin has no place: its lines are `builtin` and the signature of each form.
 ## Docs are in the JSON form only. The roots that were left out are one line each, `skipped FILE: CODE`, for stderr.
 
-import Builtins from "../catalog/builtins"
+import Model from "../analysis/model"
 import OutlineText from "outline_text"
-import Symbol from "symbol"
-import SymbolLink from "symbol_link"
 
 ## The lines of the matches, each with a line feed at the end.
-export def text(matches: List[Symbol.Match]) -> String
-  return matches.map do |match: Symbol.Match| match_text(match) end.join("")
+export def text(found: Model.Symbols) -> String
+  return found.matches.map do |match: Model.Symbol| match_text(match) end.join("")
 end
 
-## One line for each root left out, each with a line feed at the end; empty when none was.
-export def skipped_text(skipped: List[SymbolLink.Skipped]) -> String
-  lines = skipped.map do |left: SymbolLink.Skipped| "skipped #{left.file}: #{left.problem.code}\n" end
+## One line for each file left out, each with a line feed at the end; empty when none was.
+export def skipped_text(found: Model.Symbols) -> String
+  lines = found.skipped.map do |left: Model.Skipped| "skipped #{left.file}: #{left.diagnostic.code}\n" end
   return lines.join("")
 end
 
-def match_text(match: Symbol.Match) -> String
-  case match.extra
-    Symbol.Extra.Declared ->
-      head = OutlineText.declaration_text(match.kind, match.exported, match.signature)
-      return "#{OutlineText.place(match.file, match.span)} #{head}\n"
-    Symbol.Extra.Field(type) ->
-      head = OutlineText.field_text(match.owner, match.name, type)
-      return "#{OutlineText.place(match.file, match.name_span)} #{head}\n"
-    Symbol.Extra.Variant(_) ->
-      head = OutlineText.variant_text(match.owner, match.signature)
-      return "#{OutlineText.place(match.file, match.name_span)} #{head}\n"
-    Symbol.Extra.Builtin(entry) ->
-      return Builtins.signature(entry).split("\n").map do |line: String| "builtin #{line}\n" end.join("")
+def match_text(match: Model.Symbol) -> String
+  if match.kind == "builtin"
+    return match.signatures.map do |line: String| "builtin #{line}\n" end.join("")
+  elsif match.kind == "field"
+    head = OutlineText.field_text(match.owner, match.name, match.type)
+    return "#{OutlineText.place(match.module, match.name_range)} #{head}\n"
+  elsif match.kind == "variant"
+    head = OutlineText.variant_text(match.owner, match.signature)
+    return "#{OutlineText.place(match.module, match.name_range)} #{head}\n"
   end
+  head = OutlineText.declaration_text(match.kind, match.exported, match.signature)
+  return "#{OutlineText.place(match.module, match.range)} #{head}\n"
 end

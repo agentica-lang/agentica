@@ -8,7 +8,7 @@ import Docs from "../docs/doc"
 import DocJson from "../docs/doc_json"
 import DocText from "../docs/doc_text"
 import Env from "../modules/link_env"
-import Pipeline from "pipeline"
+import Front from "../analysis/front"
 import QueryFiles from "../query/query_files"
 import Reply from "cli_reply"
 import SourceFile from "../syntax/source_file"
@@ -29,14 +29,14 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
   case QueryFiles.read(settings, path, false)
     SourceFile.Read.Unreadable(_) -> return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read #{path}\n"))
     SourceFile.Read.Invalid(at) ->
-      return Reply.Answer.Rejected(Pipeline.stage_problem(path, SourceFile.invalid_utf8(at)))
+      return Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Text(text) -> return documented(path, text, as_json)
   end
 end
 
 def documented(path: String, text: String, as_json: Bool) -> Reply.Answer
   case Docs.of_text(text)
-    Diag.Outcome.Failed(problem) -> return Reply.Answer.Rejected(Pipeline.stage_problem(path, problem))
+    Diag.Outcome.Failed(problem) -> return Reply.Answer.Rejected(Front.stage_problem(path, problem))
     Diag.Outcome.Done(module) ->
       if as_json
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(DocJson.json(path, module))}\n"))

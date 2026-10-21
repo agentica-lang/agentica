@@ -301,9 +301,11 @@ Expected types flow into these operations for empty collections and Results.
   child VM checks it against its parent.
 - `Std.source(path)` is the text of a `std/` source that the binary carries, a
   `Result[String]`, by its exact path in `stdlib/`: `"queue.agc"`,
-  `"bdd/gherkin.agc"`, `"prelude/list.agc"`. Any other path, `"std/queue.agc"`
-  and `"queue"` included, is an error. It needs no flag and has no effects: it
-  reads constant data of the binary. `Std` is a reserved type name.
+  `"bdd/gherkin.agc"`, `"prelude/list.agc"`, or `"internal/compiler/..."` for
+  the private core of the front end that `std/analysis` uses. Any other path,
+  `"std/queue.agc"` and `"queue"` included, is an error. It needs no flag and
+  has no effects: it reads constant data of the binary. `Std` is a reserved
+  type name.
 - `FrontEnd.hand_off(program, options, arguments)`,
   `FrontEnd.std_source(path)` and `FrontEnd.stdin_bytes()` belong to the front
   end of the single `agentica` binary: the first hands a compiled program (a

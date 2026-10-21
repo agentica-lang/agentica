@@ -2,31 +2,26 @@
 ## source text and its type, and a second line for the definition, if there is one. Each line starts with
 ## `file:line:column`, like `rg`. A builtin has no place: its lines are `builtin` and the signature of each form.
 
-import Ast from "../syntax/ast"
-import Builtins from "../catalog/builtins"
-import Definitions from "definitions"
-import Model from "../catalog/builtin_model"
-import Source from "../syntax/source"
-import TypeAt from "type_at"
+import DiagnosticModel from "../diagnostics/diagnostic_model"
+import Model from "../analysis/model"
 
-## The lines of the answer for the expression in `file`; `definition_file` is the name of the file of the definition.
-export def text(file: String, answered: TypeAt.Answer, definition_file: String) -> String
-  span = answered.span
-  head = "#{file}:#{range(span)} #{first_line(answered.text)}: #{answered.type}"
-  case answered.definition
-    Ast.Optional.Absent -> return "#{head}\n#{builtin_lines(answered.builtin)}"
-    Ast.Optional.Present(found) ->
-      return "#{head}\n#{definition_file}:#{span_start(found.name_span)} #{found.kind} #{found.name}\n"
+## The lines of the answer for the expression in the file of its position.
+export def text(found: Model.TypeAt) -> String
+  head = "#{found.position.file}:#{range(found.range)} #{first_line(found.text)}: #{found.type}"
+  if found.definition.size == 0
+    return "#{head}\n#{builtin_lines(found.signatures)}"
   end
+  definition = found.definition[0]
+  return "#{head}\n#{definition.file}:#{start(definition.name_range)} #{definition.kind} #{definition.name}\n"
 end
 
 # `line:column-line:column`, the end exclusive.
-def range(span: Source.Span) -> String
-  return "#{span_start(span)}-#{span.stop.line}:#{span.stop.column}"
+def range(part: DiagnosticModel.Region) -> String
+  return "#{start(part)}-#{part.stop.line}:#{part.stop.column}"
 end
 
-def span_start(span: Source.Span) -> String
-  return "#{span.start.line}:#{span.start.column}"
+def start(part: DiagnosticModel.Region) -> String
+  return "#{part.start.line}:#{part.start.column}"
 end
 
 # The text up to its first line break, with "..." when more follows: a block spans lines and the answer is one line.
@@ -39,10 +34,6 @@ def first_line(text: String) -> String
 end
 
 # One `builtin SIGNATURE` line for each form of the builtin; nothing for an answer that is not a builtin.
-def builtin_lines(builtin: Ast.Optional[Model.Builtin]) -> String
-  case builtin
-    Ast.Optional.Absent -> return ""
-    Ast.Optional.Present(entry) ->
-      return Builtins.signature(entry).split("\n").map do |line: String| "builtin #{line}\n" end.join("")
-  end
+def builtin_lines(signatures: List[String]) -> String
+  return signatures.map do |line: String| "builtin #{line}\n" end.join("")
 end

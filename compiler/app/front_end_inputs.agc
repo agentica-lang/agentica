@@ -51,10 +51,14 @@ export def read(arguments: List[String]) -> Read
     return Read.Broken("--version is required")
   end
   env = Host.process_env()
-  workspace = Host.workspace()
+  workspace = Host.workspace_with(&std_source)
   words = arguments.drop(at + 1)
   if stdlib == ""
     return Read.Ready(Env.embedded_settings(workspace, env, version, embedded_bdd).with(self_path: self_path), words)
   end
   return Read.Ready(Env.settings(workspace, stdlib, env).with(version: version, self_path: self_path), words)
+end
+
+def std_source(name: String) -> Result[String]
+  return FrontEnd.std_source(name)
 end
