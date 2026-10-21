@@ -374,6 +374,11 @@ use. Effects are informational (I/O, tasks, or `test`). An unknown target exits
 2. `agentica help --json` with no NAME prints every public builtin as one JSON
 array, sorted by name, each element exactly what `help NAME --json` prints.
 
+`agentica doc PATH [--json]` prints the exported API of a module with its `##`
+docs (section 4): PATH is a source file or a `std/` module name. It only lexes
+and parses the module, so its imports need not exist. Declarations without
+`export` are left out. A lex or parse error exits 1, an unreadable path exits 2.
+
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by
 default, and checking never spends the budget. Exhaustion is

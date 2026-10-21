@@ -27,10 +27,11 @@ check a signature with `agentica help NAME`.
    usage or unreadable file. Fix the first error and rerun.
 4. Done means exit 0 and the output matches the request. A check does not test
    runtime behavior.
-5. `agentica help NAME` (`--json` too) prints a signature; `agentica help`
-   lists namespaces; `agentica help --json` prints all builtins as an array;
-   unknown names exit 2. Flags: `--allow-run` (for `Process.spawn`),
-   `--seed N`, `--max-steps N`, `--json`.
+5. `agentica help NAME` (`--json` too) prints a signature; `agentica help` lists
+   namespaces; `agentica help --json` prints all builtins as an array; unknown
+   names exit 2. `agentica doc PATH` (`--json` too) prints the exported API of a
+   file or a `std/` module with its `##` docs. Flags: `--allow-run` (for
+   `Process.spawn`), `--seed N`, `--max-steps N`, `--json`.
 
 ## Cheat sheet
 

@@ -302,9 +302,10 @@ after them may run in parallel when needed and keep their relative order.
     harness; each test lives in one framework
 
 - **Order:** 22b
-  - **Next work:** **After the bootstrap** (owner, 2026-10-15). New features,
-    front end only, in `compiler/`: `agentica doc PATH` and
-    `agentica help std/MODULE` ([§32](../future/32-doc-comments.md#32-doc-comments), part 22b; [§32.5
+  - **Next work:** **Part 1 done (2026-10-21):** `agentica doc PATH [--json]`.
+    **Part 2 after the bootstrap** (owner, 2026-10-15): `agentica help
+    std/MODULE`. New features, front end only, in `compiler/`
+    ([§32](../future/32-doc-comments.md#32-doc-comments), part 22b; [§32.5
     and §32.6](../future/32-doc-comments.md#32-doc-comments))
   - **Outcome:** Agents and people read a module's API with `agentica doc
     std/http`, in text or JSON
