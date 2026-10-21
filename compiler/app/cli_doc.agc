@@ -8,10 +8,12 @@ import Docs from "../docs/doc"
 import DocJson from "../docs/doc_json"
 import DocText from "../docs/doc_text"
 import Env from "../modules/link_env"
+import Failure from "../modules/link_failure"
 import Pipeline from "pipeline"
 import Problems from "../diagnostics/problem"
 import Reply from "cli_reply"
 import Resolve from "../modules/resolve_import"
+import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
 
 ## What the command gave: a complete answer (the text, a usage error, a file that cannot be read), or the first
@@ -41,13 +43,20 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> An
   end
 end
 
-# A `std/` name is read from the provider of the settings, under the key of the module (`std/http.agc`); any other
-# path is a file of the disk, as the user typed it.
+# A `std/` name is read from the provider of the settings, under the key of the module (`std/http.agc`), after the
+# checks an import of it gets (a plain path, not `std/prelude/`, a module that exists); any other path is a file of the
+# disk, as the user typed it.
 def read(settings: Env.Settings, path: String) -> SourceFile.Read
   if path.starts_with?("std/")
     key = path
     if !path.ends_with?(".agc")
       key = "#{path}.agc"
+    end
+    here = Source.Position(offset: 0, line: 1, column: 1)
+    site = Failure.Site(file: path, span: Source.Span(start: here, stop: here))
+    checked = Resolve.standard(settings, key, site)
+    if !checked.ok?
+      return SourceFile.Read.Unreadable(checked.message)
     end
     return Resolve.read_source(settings, key)
   end

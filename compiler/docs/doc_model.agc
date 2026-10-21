@@ -2,18 +2,21 @@
 ## declarations in source order, each with its signature, its doc and, for a function, a struct or an enum, the parts
 ## the JSON form lists. It is built from the parsed program only: nothing is linked or checked.
 ##
-## A doc is the text of the `##` block with the markers removed (`Ast.Optional`, as on the syntax tree). The doc of an
+## A doc is the text of the `##` block with the markers removed (`Ast.Optional`, as on the syntax tree) and its leading
+## and trailing blank lines dropped (`cleaned`); the lexer already strips the one space after each `##`. The doc of an
 ## exported declaration sits on its ExportDecl, not on the declaration inside it (parser.agc, parse_declaration), so
-## `item_of` reads the outer doc first and the inner one when there is none.
+## `item_of` reads the outer doc first and the inner one when there is none. `of_program` takes the source `text` for
+## the default values of the parameters.
 
 import Ast from "../syntax/ast"
 import Signature from "signature"
 import Source from "../syntax/source"
 
-## One parameter of a function: its name and its type as written.
+## One parameter of a function: its name, its type as written and the source text of its default value.
 export struct Parameter
   name: String
   type: String
+  default: Ast.Optional[String]
 end
 
 ## One field of a struct, with its doc.
@@ -57,30 +60,59 @@ export struct Module
 end
 
 ## The exported API of a parsed program, in source order. Private declarations and imports are left out.
-export def of_program(program: Ast.Program) -> Module
+export def of_program(program: Ast.Program, text: String) -> Module
   items: List[Item] = []
   for declaration in program.declarations
-    for item in items_of(declaration)
+    for item in items_of(declaration, text)
       items = items.push(item)
     end
   end
-  return Module(doc: program.module_doc, items: items)
+  return Module(doc: cleaned(program.module_doc), items: items)
 end
 
-## The first paragraph of a doc, on one line: the text up to the first blank line, with its line breaks as spaces.
-export def summary(doc: Ast.Optional[String]) -> Ast.Optional[String]
+## A doc without its leading and trailing blank lines (a line of spaces is blank); absent when nothing else is left.
+## The lines in between stay as written.
+export def cleaned(doc: Ast.Optional[String]) -> Ast.Optional[String]
   case doc
+    Ast.Optional.Absent -> return doc
+    Ast.Optional.Present(text) ->
+      lines = text.split("\n")
+      first = 0
+      while first < lines.size and lines[first].trim == ""
+        first += 1
+      end
+      last = lines.size
+      while last > first and lines[last - 1].trim == ""
+        last -= 1
+      end
+      if first == last
+        return Ast.Optional.Absent
+      end
+      return Ast.Optional.Present(lines.drop(first).take(last - first).join("\n"))
+  end
+end
+
+## The first paragraph of a doc, on one line: its lines up to the first blank one, each trimmed, joined by a space.
+## Absent when the doc has no such text.
+export def summary(doc: Ast.Optional[String]) -> Ast.Optional[String]
+  case cleaned(doc)
     Ast.Optional.Absent -> return Ast.Optional.Absent
     Ast.Optional.Present(text) ->
-      first = text.split("\n\n")[0]
-      return Ast.Optional.Present(first.split("\n").join(" "))
+      words: List[String] = []
+      for line in text.split("\n")
+        if line.trim == ""
+          return Ast.Optional.Present(words.join(" "))
+        end
+        words = words.push(line.trim)
+      end
+      return Ast.Optional.Present(words.join(" "))
   end
 end
 
 # The item a top-level declaration gives: none for an import and for a declaration without `export`.
-def items_of(declaration: Ast.Decl) -> List[Item]
+def items_of(declaration: Ast.Decl, text: String) -> List[Item]
   case declaration
-    Ast.Decl.Export(node) -> return inner_items(node.declaration, node.doc, node.span)
+    Ast.Decl.Export(node) -> return inner_items(node.declaration, node.doc, node.span, text)
     Ast.Decl.Constant(node) ->
       if node.exported
         return [constant_item(node, node.span)]
@@ -95,9 +127,9 @@ def items_of(declaration: Ast.Decl) -> List[Item]
 end
 
 # The item of the declaration inside an `export`: `doc` and `span` are the ones of the export.
-def inner_items(declaration: Ast.Decl, doc: Ast.Optional[String], span: Source.Span) -> List[Item]
+def inner_items(declaration: Ast.Decl, doc: Ast.Optional[String], span: Source.Span, text: String) -> List[Item]
   case declaration
-    Ast.Decl.Function(node) -> return [function_item(node, doc, span)]
+    Ast.Decl.Function(node) -> return [function_item(node, doc, span, text)]
     Ast.Decl.Struct(node) -> return [struct_item(node, doc, span)]
     Ast.Decl.Enum(node) -> return [enum_item(node, doc, span)]
     Ast.Decl.TypeAlias(node) -> return [alias_item(node, doc, span)]
@@ -115,15 +147,19 @@ def chosen(outer: Ast.Optional[String], inner: Ast.Optional[String]) -> Ast.Opti
   end
 end
 
-def function_item(node: Ast.FunctionDecl, doc: Ast.Optional[String], span: Source.Span) -> Item
+def function_item(node: Ast.FunctionDecl, doc: Ast.Optional[String], span: Source.Span, text: String) -> Item
   parameters = node.params.map do |parameter: Ast.Param|
-    Parameter(name: parameter.name, type: Signature.type_text(parameter.type))
+    Parameter(
+      name: parameter.name,
+      type: Signature.type_text(parameter.type),
+      default: Signature.default_text(parameter, text),
+    )
   end
   return Item(
     kind: "function",
     name: node.name,
-    signature: Signature.function_text(node),
-    doc: chosen(doc, node.doc),
+    signature: Signature.function_text(node, text),
+    doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Function(parameters, Signature.type_text(node.result)),
   )
@@ -131,13 +167,13 @@ end
 
 def struct_item(node: Ast.StructDecl, doc: Ast.Optional[String], span: Source.Span) -> Item
   fields = node.fields.map do |field: Ast.FieldDecl|
-    Field(name: field.name, type: Signature.type_text(field.type), doc: field.doc)
+    Field(name: field.name, type: Signature.type_text(field.type), doc: cleaned(field.doc))
   end
   return Item(
     kind: "struct",
     name: node.name,
     signature: Signature.struct_text(node),
-    doc: chosen(doc, node.doc),
+    doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Struct(fields),
   )
@@ -148,14 +184,14 @@ def enum_item(node: Ast.EnumDecl, doc: Ast.Optional[String], span: Source.Span) 
     Variant(
       name: variant.name,
       payload: variant.payload_types.map do |type: Ast.TypeRef| Signature.type_text(type) end,
-      doc: variant.doc,
+      doc: cleaned(variant.doc),
     )
   end
   return Item(
     kind: "enum",
     name: node.name,
     signature: Signature.enum_text(node),
-    doc: chosen(doc, node.doc),
+    doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Enum(variants),
   )
@@ -166,7 +202,7 @@ def alias_item(node: Ast.TypeAliasDecl, doc: Ast.Optional[String], span: Source.
     kind: "alias",
     name: node.name,
     signature: Signature.alias_text(node),
-    doc: chosen(doc, node.doc),
+    doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Plain,
   )
@@ -178,7 +214,7 @@ def constant_item(node: Ast.ConstDecl, span: Source.Span) -> Item
     kind: "constant",
     name: node.name,
     signature: Signature.constant_text(node),
-    doc: node.doc,
+    doc: cleaned(node.doc),
     span: span,
     detail: Detail.Plain,
   )

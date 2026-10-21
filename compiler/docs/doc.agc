@@ -15,7 +15,7 @@ export def of_text(text: String) -> Diag.Outcome[Model.Module]
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, 0)
         Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(program) -> return Diag.Outcome.Done(Model.of_program(program))
+        Diag.Outcome.Done(program) -> return Diag.Outcome.Done(Model.of_program(program, text))
       end
   end
 end

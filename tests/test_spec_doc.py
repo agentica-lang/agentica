@@ -71,6 +71,10 @@ def start(span):
     return span["range"]["start"]["line"], span["range"]["start"]["column"]
 
 
+def end(span):
+    return span["range"]["end"]["line"], span["range"]["end"]["column"]
+
+
 def test_exports_in_source_order_with_docs_and_spans(tmp_path):
     path = tmp_path / "shapes.agc"
     path.write_text(MODULE, encoding="utf-8")
@@ -89,12 +93,17 @@ def test_exports_in_source_order_with_docs_and_spans(tmp_path):
     assert items["Shape"]["span"]["file"] == str(path)
     assert start(items["Shape"]["span"]) == (15, 1)
     assert start(items["LIMIT"]["span"]) == (8, 1)
+    # Lines and columns start at 1 and the end is exclusive: a declaration followed by a line break ends at the next
+    # line, column 1. The span does not cover the `##` block above it.
+    assert end(items["LIMIT"]["span"]) == (9, 1)
 
     # `export def`: the doc sits on the export, and an undocumented export is still listed.
     add = items["add"]
-    assert add["signature"] == "add(a: Int, b: Int) -> Int"
+    assert add["signature"] == "add(a: Int, b: Int = 2) -> Int"
     assert (add["doc"], add["summary"]) == ("Adds two numbers.", "Adds two numbers.")
-    assert add["parameters"] == [{"name": "a", "type": "Int"}, {"name": "b", "type": "Int"}]
+    assert add["parameters"] == [
+        {"name": "a", "type": "Int", "default": None}, {"name": "b", "type": "Int", "default": "2"},
+    ]
     assert add["result"] == "Int"
     bare = items["bare"]
     assert (bare["doc"], bare["summary"]) == (None, None)
@@ -117,6 +126,9 @@ def test_exports_in_source_order_with_docs_and_spans(tmp_path):
     ]
     assert items["Grid"]["signature"] == "type Grid[T] = List[List[T]]"
     assert items["LIMIT"]["signature"] == "LIMIT: Int"
+    # A constant carries its own doc and an alias the doc of its export.
+    assert items["LIMIT"]["doc"] == "The largest size."
+    assert items["Grid"]["doc"] == "A grid of cells."
 
 
 def test_a_trailing_json_flag_and_a_module_without_docs(tmp_path):
@@ -153,12 +165,29 @@ def test_markdown_form(tmp_path):
     assert lines[0] == "# %s" % path
     assert "Shapes and helpers." in lines
     # An export is a heading with its signature, then its doc; a field or variant is a list line with its doc.
-    heading = lines.index("## `add(a: Int, b: Int) -> Int`")
+    heading = lines.index("## `add(a: Int, b: Int = 2) -> Int`")
     assert lines[heading + 2] == "Adds two numbers."
     assert "- `x: Int` - The x position." in lines
     assert "- `Rect(Float, Map[String, List[Int]])`" in lines
     assert "## `bare(f: Fn[Int, Map[String, List[Int]]]) -> Nowhere.User`" in lines
     assert not any("hidden" in line.lower() for line in lines)
+
+
+def test_summary_skips_blank_lines_and_a_default_is_printed_as_written(tmp_path):
+    path = tmp_path / "blank.agc"
+    path.write_text(
+        '##\n##\n## Leading blank.\n##  indented\n##\n## Second.\n##\n'
+        'export def f(a: Int = -1, b: String = "x" + "y") -> Int\n  return a\nend\n\n'
+        '##\n##\nexport def g() -> Int\n  return 1\nend\n',
+        encoding="utf-8",
+    )
+    items = items_by_name(json.loads(doc(path, "--json").stdout))
+    # The doc keeps its lines as written, less the blank ones at both ends; the summary is trimmed and on one line.
+    assert items["f"]["doc"] == "Leading blank.\n indented\n\nSecond."
+    assert items["f"]["summary"] == "Leading blank. indented"
+    assert items["f"]["signature"] == 'f(a: Int = -1, b: String = "x" + "y") -> Int'
+    assert [p["default"] for p in items["f"]["parameters"]] == ["-1", '"x" + "y"']
+    assert (items["g"]["doc"], items["g"]["summary"]) == (None, None)
 
 
 def test_a_lex_or_parse_error_exits_1_with_its_code(tmp_path):
@@ -178,6 +207,8 @@ def test_a_lex_or_parse_error_exits_1_with_its_code(tmp_path):
 
 def test_an_unreadable_path_or_a_wrong_command_line_exits_2(tmp_path):
     assert doc(tmp_path / "absent.agc", "--json").code == 2
-    assert run(cli() + ["doc", "std/nothing"], env=vm_environment(), cwd=tmp_path).code == 2
+    # A `std/` name gets the checks of an import: only plain parts, and never the compiler prelude.
+    for name in ["std/nothing", "std/../x", "std/prelude/lazy"]:
+        assert run(cli() + ["doc", name], env=vm_environment(), cwd=tmp_path).code == 2
     assert run(cli() + ["doc"], env=vm_environment()).code == 2
     assert run(cli() + ["doc", "a.agc", "b.agc"], env=vm_environment()).code == 2

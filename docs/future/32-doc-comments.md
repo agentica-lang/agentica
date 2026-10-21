@@ -59,7 +59,9 @@ end
   2. then each exported declaration in source order: its signature, its doc, and
      for a struct or enum its fields or variants with their docs.
 - An export without a doc is still listed, with its signature only.
-- `PATH` is a source file or a `std/` module name (`std/http`).
+- `PATH` is a source file or a `std/` module name (`std/http`). A `PATH` that
+  starts with `std/` always names an embedded standard module, as an import
+  does: `std/prelude/` and a path with `.`, `..` or empty parts exit 2.
 - **Parse only.** `agentica doc` lexes and parses one module. It does not link
   it, resolve its imports or type-check it, so it cannot fail on a dependency.
   For a `std/` name the source is the copy embedded in the binary.
@@ -67,7 +69,8 @@ end
   - An unknown file or `std/` module gives exit 2, as `help` does.
 - **Signatures.** A signature is one normalized line built from the AST, in the
   form the builtin catalog uses:
-  - a function: `add(a: Int, b: Int) -> Int`;
+  - a function: `add(a: Int, b: Int = 2) -> Int`, a default value as written
+    in the source;
   - a struct: `struct QueueState`;
   - an enum: `enum Option[T]`.
 
@@ -81,18 +84,23 @@ end
   the same wherever it appears:
   - top level: `{module, doc, items}`;
   - `module`: `PATH` as the user typed it, a file path or a `std/` name;
-  - `doc`: the whole doc text with the `##` markers removed, or `null`. At the
-    top level it is the module doc;
-  - `summary`: the first paragraph of `doc` on one line, or `null`;
+  - `doc`: the whole doc text with the `##` markers removed and its leading and
+    trailing blank lines dropped, or `null`. At the top level it is the module
+    doc;
+  - `summary`: the first paragraph of `doc` on one line, each line trimmed, or
+    `null` when there is none;
   - `items`: one object per export, in source order:
     `{kind, name, signature, summary, doc, span}`;
   - `kind`: `"function"`, `"struct"`, `"enum"`, `"alias"` or `"constant"`;
   - `signature`: the line above; an alias is `type Grid[T] = List[List[T]]`
     and a constant is `LIMIT: Int` (`LIMIT` without a written type);
-  - `span`: the declaration's span, an object
+  - `span`: the declaration's span, from `export` to the end of the
+    declaration, not its `##` block: an object
     `{file, range: {start: {line, column}, end: {line, column}}}`, the two keys
-    a diagnostic JSON puts at its top level, in an object of their own;
-  - a function item also has `parameters`, a list of `{name, type}`, and
+    a diagnostic JSON puts at its top level, in an object of their own. Lines
+    and columns start at 1 and `end` is exclusive, as in a diagnostic;
+  - a function item also has `parameters`, a list of `{name, type, default}`
+    (`default` is the source text of the default value, or `null`), and
     `result`, its result type;
   - a struct item also has `fields`: `[{name, type, doc}]`;
   - an enum item also has `variants`: `[{name, payload: [type], doc}]`, with

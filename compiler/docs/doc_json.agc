@@ -45,7 +45,11 @@ def item_json(module: String, item: Model.Item) -> Json
 end
 
 def parameter_json(parameter: Model.Parameter) -> Json
-  return JSON.object({"name": JSON.from(parameter.name), "type": JSON.from(parameter.type)})
+  return JSON.object({
+    "name": JSON.from(parameter.name),
+    "type": JSON.from(parameter.type),
+    "default": text_json(parameter.default),
+  })
 end
 
 def field_json(field: Model.Field) -> Json

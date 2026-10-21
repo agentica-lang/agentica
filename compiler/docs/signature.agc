@@ -33,9 +33,9 @@ export def type_text(type: Ast.TypeRef) -> String
   return parts.join("")
 end
 
-## `name(a: Int, b: Int) -> Int`. A default value is not printed.
-export def function_text(declaration: Ast.FunctionDecl) -> String
-  parameters = declaration.params.map do |parameter: Ast.Param| parameter_text(parameter) end
+## `name(a: Int, b: Int = 2) -> Int`. `text` is the source of the module: a default value is printed as written there.
+export def function_text(declaration: Ast.FunctionDecl, text: String) -> String
+  parameters = declaration.params.map do |parameter: Ast.Param| parameter_text(parameter, text) end
   return "#{declaration.name}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
 end
 
@@ -71,6 +71,17 @@ export def constant_text(declaration: Ast.ConstDecl) -> String
   end
 end
 
+## The source text of the default value of a parameter, or absent when it has none. A span ends after its last
+## character, so the slice is the expression exactly as written.
+export def default_text(parameter: Ast.Param, text: String) -> Ast.Optional[String]
+  case parameter.default
+    Ast.Optional.Absent -> return Ast.Optional.Absent
+    Ast.Optional.Present(value) ->
+      span = Ast.expr_span(value)
+      return Ast.Optional.Present(text.slice(span.start.offset, span.stop.offset - span.start.offset))
+  end
+end
+
 # The pieces after an opening "[", in the order the stack gives them back: the first argument is the last one pushed,
 # so it is printed first and the "]" comes out after the last argument.
 def closing(args: List[Ast.TypeRef]) -> List[Piece]
@@ -86,8 +97,12 @@ def closing(args: List[Ast.TypeRef]) -> List[Piece]
   return pieces
 end
 
-def parameter_text(parameter: Ast.Param) -> String
-  return "#{parameter.name}: #{type_text(parameter.type)}"
+def parameter_text(parameter: Ast.Param, text: String) -> String
+  typed = "#{parameter.name}: #{type_text(parameter.type)}"
+  case default_text(parameter, text)
+    Ast.Optional.Present(written) -> return "#{typed} = #{written}"
+    Ast.Optional.Absent -> return typed
+  end
 end
 
 # `[T, U]` for the type parameters of an enum or an alias, nothing for none.
