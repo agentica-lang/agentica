@@ -278,10 +278,10 @@ rows after them may run in parallel when needed and keep their relative order.
   - **Next work:** **After the JIT** (step 8 below; 46a and 46b may run earlier
     as VM-only rows, when no other VM PR is waiting), decided by the owner on
     2026-10-15 (design and plan: [§46](../future/46-signals.md#46-signals)):
-    signals that a program can handle, in four parts (46a subscription, 46b
-    sending, 46c the driver forwards a stop at once, 46d `std/http` drains its
-    handlers on a stop). 46c and 46d come after 46b by the owner's order (§46.7
-    does not require it).
+    signals that a program can handle, in parts 46a subscription, 46b sending
+    and 46d `std/http` drains its handlers on a stop (46c, the Racket driver,
+    is obsolete, §46.7). 46d comes after 46b by the owner's order (§46.7 does
+    not require it).
   - **Outcome:** A container entrypoint can stop its children and exit on its
     own terms
 
@@ -450,8 +450,8 @@ macOS releases were done ahead of this order.
    UDP closes the networking part of the stable core (below); its design waits
    for the owner's approval (#399).
 8. After the JIT: signals (row 7.8, [§46](../future/46-signals.md#46-signals),
-   parts 46a to 46d; 46c also lets `agentica test` clean its run directory on
-   Ctrl-C); regular expressions (row 7.10,
+   parts 46a, 46b and 46d; 46c, which also let `agentica test` clean its run
+   directory on Ctrl-C, is obsolete as written, §46.7); regular expressions (row 7.10,
    [§48](../future/48-regex.md#48-regular-expressions)) before the formatter
    (row 7.9, [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)).
    Regex first needs the owner's answer on the Ruby anchors question of

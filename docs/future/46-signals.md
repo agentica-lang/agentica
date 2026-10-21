@@ -390,7 +390,7 @@ watchers. The code has no such watchers, so the placement changes
   close and `System.signal` go in `vm/process.c`. That file is a service. It may
   use libuv and plain syscalls, including the pidfd calls through `syscall()`.
 - The builtin rows and the enum data go in `compiler/catalog/builtins_data.agc`
-  (46.7). Row 7.2.7 of the roadmap allows those rows.
+  (46.7).
 
 No `uv_signal_t` watcher is added (46.3.2).
 

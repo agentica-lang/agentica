@@ -733,12 +733,11 @@ a runnext slot and a short spin (§16.9, "Wakes between schedulers").
   handle's lock FIFO, the stdin waiters and the awaiters list are all under
   `rt->sync`; the alternatives were a short lock for each list, taken to link or
   unlink and never held across a park, or FIFOs owned by the I/O thread with
-  lock enter and leave as requests. For channels §27.2 plans a short lock for
-  each channel; as built `rt->sync` covers them. A lock hand-on and a channel
-  wake race the waiter's deadline, which as built is a timer of the task
+  lock enter and leave as requests. `rt->sync` covers the channels' waiter
+  lists too. A lock hand-on and a channel wake race the waiter's deadline, which as built is a timer of the task
   (§16.9, "Timers"): both wakers run under `rt->sync` and the state CAS picks
   one. A losing lock hand-on must offer the lock to the next waiter; a losing
-  channel wake passes the value or slot on (§27.2).
+  channel wake passes the value or slot on (§10.2.2, "A waiter that leaves").
 - **Read buffers and request slots.** Decided and built for sockets (§16.9,
   "Services"): the I/O thread owns a connection's `agc_conn.in` and its request
   slots (a process's too). The read callback appends to the buffer, read-ahead

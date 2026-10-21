@@ -21,8 +21,6 @@ one array access. Build it in the function only when it depends on the input.
 On 900,000 characters, a `Set[String]` test took 185 ms against 400 ms for an
 `or` chain of five comparisons, and a `Set[Int]` test took 205 ms against
 305 ms [measured, three runs].
-A `name_char?` chain cost about 680 ns per character, against 250 ns for a
-`Set` loop.
 
 ```ruby
 def count_vowels(text: String) -> Int

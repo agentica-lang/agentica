@@ -34,7 +34,7 @@ make vm-tsan-run                     # a TSan agentica (front end of the release
 make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (--schedulers 4), then test-multicore-modules
 make test-multicore-modules          # the TCP, TLS, HTTP, process and BDD modules with every VM on 4 schedulers
 make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
-make vm-task-map                     # tests/test_vm_task_map.py alone (the timing cases of Task.map, see `vm-tasks.md`)
+make vm-task-map                     # tests/test_vm_task_map.py alone (the timing cases of Task.map, see `vm-tests.md`)
 make goldens                         # rewrite tests/fixtures/vm/**/*.expected from the VM; review the diff
 make goldens FIXTURES="name ..."     # only those fixtures (names without .agc, step-limited/ ones too); an unknown name exits 2
 make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, sweep, sidecars, stack files) for only those fixtures
