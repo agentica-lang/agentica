@@ -182,6 +182,7 @@ The two forms give the same answer for the same declaration. The position can be
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answers for the text on standard input as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | searches the text on standard input as one more file, the first |
+| `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `compile FILE -o OUT` | writes VM bytecode |

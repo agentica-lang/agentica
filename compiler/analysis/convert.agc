@@ -108,6 +108,8 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
     definition: definition_of(found.definition, home),
     help: help,
     signatures: signatures,
+    partial: false,
+    diagnostics: [],
   )
 end
 
@@ -149,6 +151,8 @@ export def refs(
       )
     end,
     skipped: skipped.map do |left: SymbolLink.Skipped| skipped_of(left) end,
+    partial: false,
+    diagnostics: [],
   )
 end
 

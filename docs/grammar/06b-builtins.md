@@ -413,7 +413,13 @@ the text of FILE from standard input. An error of the program is its own
 diagnostic and exits 1. A position on no token of an expression (a blank, a
 comment, the body text of a heredoc, a keyword such as `return` that is part of
 no expression) is `QUERY-NO-EXPRESSION` and exits 2, as is a bad position
-(`QUERY-USAGE`).
+(`QUERY-USAGE`). With `--partial` (also on `refs`, and accepted by `outline`,
+which never checks) a program in which some functions do not check is answered
+from the functions that do: the answer has `"partial": true` and `diagnostics`,
+and exits 0. A name in a function that did not check is answered by its
+definition after linking and a `type` of null. A program that does not link, or
+a position that cannot be answered this way, is the first diagnostic and exits
+1 as before.
 
 `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
 defined in the modules linked from the files under PATH (a file or a folder,
@@ -454,7 +460,11 @@ the imported declaration. A position on the module alias of `Models.total(u)`
 selects the function `total`, not the module; one on a module alias or a path of
 an import line is `QUERY-NO-EXPRESSION`. `--stdin FILE:LINE:COL` takes the text
 of FILE from standard input; with a NAME, `--stdin FILE` searches that text as
-one more file, as for `symbol`.
+one more file, as for `symbol`. With `--partial` and a position alone (no PATH),
+the references to a function, struct, enum, alias, constant or variant are
+complete even when some functions do not check, and so are those of a local of a
+function that checks; a field or a builtin needs every function checked. A NAME
+or a PATH with `--partial` is `QUERY-USAGE`.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by

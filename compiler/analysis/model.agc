@@ -99,7 +99,10 @@ end
 ## otherwise; `range` is the whole expression, in `position.file`; `text` is its source text and `type` its type as the
 ## file writes it. `definition` holds the declaration of what the expression names, and is empty when it names none.
 ## `help` is the object of `agentica help NAME --json` for a builtin (JSON null otherwise), and `signatures` holds the
-## signature of each form of that builtin.
+## signature of each form of that builtin. `partial` is true for an answer from a program that does not check
+## (docs/future/39-semantic-cli.md, 39.6): `diagnostics` are its problems, and `type` is "" when the answer is known
+## from the link alone, such as a name in a function that did not check. A complete answer has `partial` false and no
+## diagnostics.
 export struct TypeAt
   version: Int
   position: Place
@@ -110,6 +113,8 @@ export struct TypeAt
   definition: List[Definition]
   help: Json
   signatures: List[String]
+  partial: Bool
+  diagnostics: List[Diagnostics.Diagnostic]
 end
 
 ## The answer of `check`: `passed` is true when the program has no problem (`ok` is a reserved name, so a field cannot
@@ -171,7 +176,7 @@ end
 ## `symbol` lists it (a `Symbol`; its kind is `parameter`, `local`, `loop` or `pattern` for a local) and is empty for a
 ## builtin, which `builtin` names (`File.read`; "" for anything else). `references` do not include the definition; they
 ## are in the order of the linked files and, within one file, of the text. `skipped` holds the files left out, as for
-## `symbol`.
+## `symbol`. `partial` and `diagnostics` are as for `TypeAt`: the answer of a program that does not check.
 export struct Refs
   version: Int
   query: String
@@ -179,4 +184,6 @@ export struct Refs
   builtin: String
   references: List[Reference]
   skipped: List[Skipped]
+  partial: Bool
+  diagnostics: List[Diagnostics.Diagnostic]
 end

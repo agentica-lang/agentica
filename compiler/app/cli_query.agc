@@ -1,16 +1,22 @@
-## The query commands (docs/future/39-semantic-cli.md): `agentica outline FILE [--json] [--stdin FILE]`, `agentica
-## type-at FILE:LINE:COL [--json]` (reads FILE from standard input with `--stdin FILE:LINE:COL`), `agentica symbol NAME
-## [PATH...] [--json] [--stdin FILE]` and `agentica refs NAME|FILE:LINE:COL [PATH...] [--json]`, which takes `--stdin`
-## as `type-at` for a position and as `symbol` for a name. A query reads its file through the Workspace of the
-## settings, which is the standard input for `--stdin` (cli.agc, `with_buffer`), and answers in text or in JSON.
-## `outline` never links or checks, so the imports of the file need not exist; `type-at` links and checks the file and
-## what it imports, without requiring `main`; `symbol` and `refs` link the files of their paths together and list the
-## ones that do not link, and `refs` checks the program too.
+## The query commands (docs/future/39-semantic-cli.md): `agentica outline FILE [--json] [--partial] [--stdin FILE]`,
+## `agentica type-at FILE:LINE:COL [--json] [--partial]` (reads FILE from standard input with `--stdin FILE:LINE:COL`),
+## `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` and `agentica refs NAME|FILE:LINE:COL [PATH...] [--json]
+## [--partial]`, which takes `--stdin` as `type-at` for a position and as `symbol` for a name. A query reads its file
+## through the Workspace of the settings, which is the standard input for `--stdin` (cli.agc, `with_buffer`), and
+## answers in text or in JSON. `outline` never links or checks, so the imports of the file need not exist; `type-at`
+## links and checks the file and what it imports, without requiring `main`; `symbol` and `refs` link the files of their
+## paths together and list the ones that do not link, and `refs` checks the program too.
+##
+## With `--partial`, `type-at` and `refs FILE:LINE:COL` (alone: not with a NAME or PATH...) also answer from a program
+## in which some functions do not check (39.6): the answer has `partial` and `diagnostics` in the JSON form, one line on
+## stderr for each diagnostic in the text form, and the exit status is 0. A program that checks gets the answer it gets
+## without the option. `outline` takes the option and has nothing to add: it never checks.
 ##
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
 
 import Core from "../analysis/analysis"
+import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Env from "../modules/link_env"
 import OutlineJson from "../query/outline_json"
 import OutlineText from "../query/outline_text"
@@ -27,12 +33,18 @@ import TypeAtJson from "../query/type_at_json"
 import TypeAtText from "../query/type_at_text"
 
 # The usage line of each query command, given as the help of QUERY-USAGE.
-OUTLINE_USAGE = "usage: agentica outline FILE [--json]   or   agentica outline --stdin FILE [--json]"
-TYPE_AT_USAGE = "usage: agentica type-at FILE:LINE:COL [--json]   or   agentica type-at --stdin FILE:LINE:COL [--json]"
-REFS_USAGE = [
-  "usage: agentica refs NAME [PATH...] [--json]   or   agentica refs FILE:LINE:COL [PATH...] [--json]   or   ",
-  "agentica refs --stdin FILE:LINE:COL [PATH...] [--json]",
-].join("")
+OUTLINE_USAGE = (
+  "usage: agentica outline FILE [--json] [--partial]   or   " + "agentica outline --stdin FILE [--json] [--partial]"
+)
+TYPE_AT_USAGE = (
+  "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " +
+  "agentica type-at --stdin FILE:LINE:COL [--json] [--partial]"
+)
+REFS_USAGE = (
+  "usage: agentica refs NAME [PATH...] [--json]   or   " +
+  "agentica refs FILE:LINE:COL [PATH...] [--json] [--partial]   or   " +
+  "agentica refs --stdin FILE:LINE:COL [PATH...] [--json] [--partial]"
+)
 SYMBOL_USAGE = "usage: agentica symbol NAME [PATH...] [--json] [--stdin FILE]"
 
 ## What the words of `agentica refs` ask: a position and the paths to link with its file, a name and the paths to
@@ -80,23 +92,50 @@ end
 ## `agentica type-at` for the position `asked`. The Workspace of `settings` answers the file of the position, from the
 ## disk or from the standard input; either way it is a path, never a `std/` module. The file is linked and checked with
 ## the rule that a program declares `main` off; a diagnostic of that is exit status 1, and a position that is on no
-## expression is QUERY-NO-EXPRESSION.
-export def type_at(asked: QueryPosition.Asked, style: String, settings: Env.Settings) -> Reply.Answer
-  case Core.type_at(settings, asked)
+## expression is QUERY-NO-EXPRESSION. With `partial`, a program in which some functions do not check is answered too
+## (`Core.type_at_partial`).
+export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
+  asking: Core.Typed = Core.Typed.Unreadable
+  if partial
+    asking = Core.type_at_partial(settings, asked)
+  else
+    asking = Core.type_at(settings, asked)
+  end
+  case asking
     Core.Typed.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, TYPE_AT_USAGE))
     Core.Typed.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Typed.Done(found) ->
       if style == "json"
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(TypeAtJson.json(found))}\n"))
       end
-      return Reply.Answer.Printed(Reply.printed(TypeAtText.text(found)))
+      text = TypeAtText.text(found)
+      return Reply.Answer.Printed(Reply.Reply(code: 0, out: text, err: partial_text(found.diagnostics)))
   end
 end
 
 ## Reads the words of `refs`. The first word is `FILE:LINE:COL` or a NAME, and the others are paths; `--stdin
 ## FILE:LINE:COL` stands in for the first word. A word with a colon is a position, which a name never has, so a bad
-## position is QUERY-USAGE and not a name that nothing declares.
+## position is QUERY-USAGE and not a name that nothing declares. `--partial` answers a position alone, so a NAME or a
+## path with it is QUERY-USAGE.
 export def refs_ask(asked: QueryOptions.Query) -> RefsAsk
+  found = positioned(asked)
+  case found
+    RefsAsk.At(_, paths) ->
+      if asked.partial and paths.size > 0
+        return RefsAsk.Refused(QueryOptions.refusal("--partial takes FILE:LINE:COL alone", REFS_USAGE))
+      end
+      return found
+    RefsAsk.Named(_, _) ->
+      if asked.partial
+        return RefsAsk.Refused(QueryOptions.refusal("--partial takes FILE:LINE:COL, not a NAME", REFS_USAGE))
+      end
+      return found
+    RefsAsk.Refused(_) -> return found
+  end
+end
+
+# The words as a position or a name, whatever `--partial` says.
+def positioned(asked: QueryOptions.Query) -> RefsAsk
   if asked.stdin != ""
     case QueryPosition.parse(asked.stdin, REFS_USAGE)
       QueryPosition.Parsed.Ready(position) -> return RefsAsk.At(position, asked.words)
@@ -107,13 +146,19 @@ export def refs_ask(asked: QueryOptions.Query) -> RefsAsk
 end
 
 ## `agentica refs` for the position `asked`, linked together with the files of `paths` and checked as `type_at` checks.
-## It lists the references to the name at the position, or is QUERY-NO-EXPRESSION when the position names nothing.
+## It lists the references to the name at the position, or is QUERY-NO-EXPRESSION when the position names nothing. With
+## `partial` (and no `paths`: `refs_ask` has refused the others) a program in which some functions do not check is
+## answered too (`Core.refs_partial`).
 export def refs_at(
   asked: QueryPosition.Asked,
   paths: List[String],
   style: String,
+  partial: Bool,
   settings: Env.Settings,
 ) -> Reply.Answer
+  if partial
+    return refs_reply(Core.refs_partial(settings, asked), style, asked.file)
+  end
   return refs_reply(Core.refs_at(settings, asked, paths, REFS_USAGE), style, asked.file)
 end
 
@@ -164,7 +209,8 @@ def word_ask(words: List[String]) -> RefsAsk
   end
 end
 
-# The reply for an answer of `refs`: in the text form the files left out are one line each on stderr.
+# The reply for an answer of `refs`: in the text form the files left out and the problems of a partial answer are one
+# line each on stderr.
 def refs_reply(found: Core.Referenced, style: String, file: String) -> Reply.Answer
   case found
     Core.Referenced.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(file, REFS_USAGE))
@@ -174,7 +220,20 @@ def refs_reply(found: Core.Referenced, style: String, file: String) -> Reply.Ans
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(RefsJson.json(answer))}\n"))
       end
       return Reply.Answer.Printed(
-        Reply.Reply(code: 0, out: RefsText.text(answer), err: RefsText.skipped_text(answer)),
+        Reply.Reply(
+          code: 0,
+          out: RefsText.text(answer),
+          err: RefsText.skipped_text(answer) + partial_text(answer.diagnostics),
+        ),
       )
   end
+end
+
+# The text form of the problems of a partial answer, one line each on stderr: `partial FILE:LINE:COL: CODE`. A complete
+# answer has none.
+def partial_text(diagnostics: List[DiagnosticModel.Diagnostic]) -> String
+  lines = diagnostics.map do |found: DiagnosticModel.Diagnostic|
+    "partial #{OutlineText.place(found.file, found.range)}: #{found.code}\n"
+  end
+  return lines.join("")
 end

@@ -54,6 +54,8 @@ read with `--stdin` is named `./std/NAME`, never like an embedded module.
 
 Types are written as in the file (`Models.User`).
 
+`--partial` is accepted and changes nothing: `outline` never checks.
+
 ## Exit codes of outline
 
 - 0: the answer.
@@ -144,6 +146,35 @@ type, span, definition, help}`.
   as `return`, `end` or `case`, the body text of a heredoc, past the end of a
   line or of the file). Its span is the position. Move onto the expression; a
   keyword of an expression (`try`, `do`, `and`, `!`) answers that expression.
+
+## Partial answers
+
+While you edit, the program often does not check. `type-at --partial` and `refs
+FILE:LINE:COL --partial` (no NAME or PATH) answer anyway when only some
+functions fail to check: exit 0, the
+usual JSON plus `"partial": true` and `diagnostics` (the `--json` objects of the
+functions that failed, in program order). A complete answer has neither key, so
+without errors the bytes are those of the command without the option.
+
+- `type-at` in a function that checked gives its type and definition. On a name
+  written in a function that did not check (a call, a constructor, a variant, a
+  type, a constant, a builtin) it gives `kind` `name` (`builtin`), the span of
+  the written name, the definition from the link, and `type` null (text form:
+  `?`). A field, a method call and a local there give the first problem.
+- `refs` on a function, struct, enum, alias, constant or variant lists every
+  use, those in the functions that failed too. A local of a function that
+  checked works. A field or a builtin gives the first problem (exit 1): its uses
+  are told by types.
+- A program that does not lex, parse or link, and one whose declarations fail
+  (their types, `main`, a constant), are the first problem, exit 1, with or
+  without the option. So is a field, a local or a keyword in a function that
+  did not check; any other position on no expression (a blank, a comment, an
+  import line) is QUERY-NO-EXPRESSION, exit 2, as in a program that checks. In text form each problem
+  of a partial answer is a stderr line `partial FILE:LINE:COL: CODE`.
+
+Use it to run `refs --partial` on a function or type again after you edit its
+signature, and `type-at --partial` to read a definition in the function you are
+fixing. Fix the `diagnostics` before you trust a field or a type.
 
 # Where a name is defined
 
@@ -281,8 +312,9 @@ skipped}`.
 
 - 0: the answer.
 - 1: the program has an error, or FILE (or every file of `PATH...`) does not
-  link; fix it first (function and type uses need no check in the full design,
-  but this version always checks).
+  link; fix it first, or ask with `--partial` for a function, type or variant
+  (function and type uses need no check in the full design, but this version
+  always checks).
 - 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file or path, a missing
   NAME), `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` or `QUERY-NO-EXPRESSION`:
   the position is on no name, or on a module alias or a path in an import line.

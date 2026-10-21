@@ -33,7 +33,8 @@ check a signature with `agentica help NAME`.
    of a file or a `std/` module. `agentica outline FILE`, `agentica type-at
    FILE:LINE:COL`, `agentica refs NAME|FILE:LINE:COL [PATH...]` and `agentica
    symbol NAME [PATH...]` query code without reading it
-   (`references/queries.md`).
+   (`references/queries.md`); `type-at` and `refs FILE:LINE:COL` take
+   `--partial` while the code does not check.
    Flags: `--allow-run` (for `Process.spawn`), `--seed N`, `--max-steps N`,
    `--json`.
 

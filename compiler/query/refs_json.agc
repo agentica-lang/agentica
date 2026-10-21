@@ -2,7 +2,8 @@
 ## builtin, references, skipped}`. `definition` is null for a builtin, which `builtin` names; else it is the match that
 ## `symbol` gives the declaration (symbol_json.agc, same fields), a local included, with the kind of the binding.
 ## Each reference is `{kind, function, span}`, the `span` being the name alone and `function` null at the top level.
-## `skipped` is as for `symbol`. A span is `{file, range}` with the `file` the command answers with.
+## `skipped` is as for `symbol`. A span is `{file, range}` with the `file` the command answers with. An answer from a
+## program that does not check (39.6) adds `partial` (true) and `diagnostics`.
 
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
@@ -11,7 +12,7 @@ import SymbolJson from "symbol_json"
 
 ## The object of the answer.
 export def json(found: Model.Refs) -> Json
-  return JSON.object({
+  shape = {
     "version": JSON.from(found.version),
     "command": JSON.from("refs"),
     "query": JSON.from(found.query),
@@ -19,7 +20,11 @@ export def json(found: Model.Refs) -> Json
     "builtin": DocJson.text_json(found.builtin),
     "references": JSON.array(found.references.map do |use: Model.Reference| reference_json(use) end),
     "skipped": JSON.array(found.skipped.map do |left: Model.Skipped| skipped_json(left) end),
-  })
+  }
+  if found.partial
+    return JSON.object(DiagnosticJson.partial(shape, found.diagnostics))
+  end
+  return JSON.object(shape)
 end
 
 def skipped_json(left: Model.Skipped) -> Json

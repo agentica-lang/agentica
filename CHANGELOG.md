@@ -26,6 +26,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   name that is ambiguous or unknown is `QUERY-AMBIGUOUS-NAME` or
   `QUERY-NOT-FOUND`. The `definition` has the fields of a `symbol` match.
   `--stdin` reads a file from standard input.
+- `agentica type-at` and `agentica refs` take `--partial`: a program in which
+  some functions do not check is still answered (`"partial": true` and the
+  `diagnostics` in the JSON), from the functions that check and from the link.
+  For `refs` it goes with a position and no PATH.
 - `Std.source(path)` gives the text of a `std/` source that the binary carries,
   such as `"queue.agc"`, to any program.
 - `std/analysis` answers the questions of `check`, `outline`, `type-at`,
