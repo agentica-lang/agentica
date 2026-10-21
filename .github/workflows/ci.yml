@@ -86,6 +86,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
+          fetch-depth: 2
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -115,6 +116,27 @@ jobs:
         run: make test-multicore-modules
       - name: Fixed point of the front end from bootstrap/stage0.agcb (stage2 == stage3, the binary compiles stage2)
         run: make fixed-point
+      # A PR that changes bootstrap/stage0.agcb must carry the stage2 that the base branch's stage0 builds from the PR's
+      # compiler/. HEAD is the merge commit on pull_request, so HEAD^1 is the base tip. The sums go to the job summary.
+      - name: A changed bootstrap/stage0.agcb rebuilds from the stage0 of the base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          if git diff --quiet HEAD^1 HEAD -- bootstrap/stage0.agcb; then
+            echo "bootstrap/stage0.agcb is unchanged: nothing to check"
+            exit 0
+          fi
+          git show HEAD^1:bootstrap/stage0.agcb > "$RUNNER_TEMP/base-stage0.agcb"
+          rc=0
+          make stage0-check BASE_STAGE0="$RUNNER_TEMP/base-stage0.agcb" || rc=$?
+          {
+            echo "### stage0 rebuild check: $([ "$rc" -eq 0 ] && echo passed || echo FAILED)"
+            echo
+            echo '```text'
+            echo "built from the base stage0:  $(sha256sum build/stage-check/stage2.agcb 2>/dev/null | cut -d' ' -f1)"
+            echo "bootstrap/stage0.agcb (PR):  $(sha256sum bootstrap/stage0.agcb | cut -d' ' -f1)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
       - name: The product command line tests on the single binary
         run: make test-cli
       - name: Slow tests
