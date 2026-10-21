@@ -118,7 +118,7 @@ static size_t spare(const agc_output *s) {
 
 /* The queued bytes that go ahead of the head of the FIFO: up to the end of the last VM notice in the queue, as notices
    do, and the bytes queued before the head joined, so the FIFO keeps the order of arrival. A print then waits for at
-   most what was queued when it came (about one bound of a child's bytes), and the child always moves: without this a
+   most what was queued when it came (the bound and one read per child), and the child always moves: without this a
    print that needs the whole ring, made again and again, would keep every byte of the child out (spare is 0). */
 static size_t urgent(const agc_output *s) {
   uint64_t ahead = 0;

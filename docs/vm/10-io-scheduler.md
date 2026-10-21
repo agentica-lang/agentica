@@ -656,8 +656,9 @@ section says how the scheduler and the loop keep them, as built.
   order of arrival holds: the child bytes queued before a print joined the FIFO
   go ahead of it, and the ones after take only the buffer room that the head of
   the FIFO does not need. So a child that writes without end holds back
-  `IO.warn` by at most what was queued when it came, and prints that need the
-  whole buffer do not stop the child; the bytes of a VM notice, and the child
+  `IO.warn` or `IO.flush` by at most what was queued when it came (the 64 KiB
+  bound plus one read chunk per child), and prints that need the whole buffer
+  do not stop the child; the bytes of a VM notice, and the child
   bytes queued before it, still go ahead. When more than 64 KiB wait in the
   queue the child's pipe is no longer read (`uv_read_stop`) until the queue is
   down to 32 KiB, so a stuck stderr stops the child, not the loop; the end of
