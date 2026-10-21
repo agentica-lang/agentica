@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
+  defined in the files under PATH and what they import, with its signature,
+  `##` doc and span; a file that does not link is listed under `skipped`.
 - `agentica type-at` gives the `doc` and the `signature` of the definition, and
   answers a builtin (`split` in `xs.split(",")`) with `kind` `builtin` and its
   `help` object, as `agentica help NAME --json` prints it.

@@ -1,14 +1,14 @@
 ## 39. Semantic CLI for agents
 
-**Status:** `outline` and `type-at` built (types, definitions with `doc` and
-`signature`, builtins and locals at a position). `refs FILE:LINE:COL` built for
-the files that `FILE` links; the `NAME` form, `PATH...`, `skipped` and answers
-from a program that does not check (§39.6) are planned, as are `--partial` and
-`symbol`. Row 7.2b. Agreed with the owner on 2026-10-13: agents
-program better when they can ask the compiler about the code, not only read the
-docs. The front end already builds a linked and checked program with types and
-spans; four CLI commands expose it, JSON first. No language change; front end
-and CLI only, nothing reaches lowering or the VM.
+**Status:** `outline`, `type-at` and `symbol` built (types, definitions with
+`doc` and `signature`, builtins and locals at a position; the workspace
+search). `refs FILE:LINE:COL` built for the files that `FILE` links; the `NAME`
+form, `PATH...`, `skipped` and answers from a program that does not check
+(§39.6) are planned, as is `--partial`. Row 7.2b. Agreed with the owner on
+2026-10-13: agents program better when they can ask the compiler about the
+code, not only read the docs. The front end already builds a linked and checked
+program with types and spans; four CLI commands expose it, JSON first. No
+language change; front end and CLI only, nothing reaches lowering or the VM.
 
 ```text
 agentica outline FILE [--ai|--json]
@@ -102,11 +102,13 @@ changes only how diagnostics print; answers keep the text form.
   `FILE` argument (`outline --stdin FILE`, not `outline FILE --stdin FILE`); the
   file need not exist; commands that resolve imports need its folder, `outline`
   does not. With `--stdin`, `std/...` is a path of the disk.
-- **`symbol NAME [PATH...]`**: where a name is defined, with its signature or
-  type. Names are written as in §39.4. A builtin answers with the same object as
-  `agentica help NAME --json`, under `help`, with no span; so one command
-  answers for user code and builtins alike. A bare name can match declarations
-  in several modules: all matches are listed.
+- **`symbol NAME [PATH...]`** (built): where a name is defined, with its
+  signature or type. Names are written as in §39.4. A builtin answers with the
+  same object as `agentica help NAME --json`, under `help`, with no span; so one
+  command answers for user code and builtins alike. A bare name can match
+  declarations in several modules: all matches are listed. A private
+  declaration is found by its bare name only, since no alias reaches it. With
+  `--stdin FILE` the buffer is `FILE`, searched as one more root, the first.
 - **`refs NAME|FILE:LINE:COL [PATH...]`**: every reference to one declaration in
   the modules linked from `PATH...`, each with its span, its kind and the
   function it is in. The definition comes first. The kinds are `call`, `value`
@@ -122,6 +124,8 @@ changes only how diagnostics print; answers keep the text form.
   imports (`PATH...` is not read); a position on the name where a declaration is
   written picks it too; the program is always checked (exit 1 on an error); a
   `with` argument is a `construct` and a constant read a `value`.
+  Planned for PR9: a position on an import selects the imported declaration
+  (today it is `QUERY-NO-EXPRESSION`: an import is not a reference).
 - **`type-at FILE:LINE:COL`** (built, `docs/grammar/06b-builtins.md`): the
   checked type of the innermost expression or name at the position, and the
   definition of what it names, with the `doc` and the `signature` of the
@@ -211,10 +215,14 @@ signatures are strings.
   `to_s` and `inspect` answer a builtin only where the checker resolves them to
   one (numbers).
 - `symbol`: `{version, command, query, matches: [...], skipped: [...]}`. Each
-  match is `{kind, name, module, exported, signature, span}`; `kind` adds
-  `"field"` (with `type` and `struct`), `"variant"` (with `payload` and `enum`)
-  and `"builtin"` (with `help`, and `span` and `module` set to `null`). `module`
-  is the module's file name (§39.4).
+  match is `{kind, name, module, exported, signature, doc, span, name_span}`;
+  `kind` adds `"field"` (with `type` and `struct`), `"variant"` (with `payload`
+  and `enum`) and `"builtin"` (with `help`). `module` is the module's file name
+  (§39.4). `doc` is the whole `##` text or null, as in `type-at`; `name` is the
+  name alone (`email`), with `struct` or `enum` for a member; a builtin has
+  `module`, `span`, `name_span` and `doc` null. `span` is the whole
+  declaration, `export` included, as in `outline`; the `range` of a `type-at`
+  definition starts at the keyword after `export`, so compare `name_span`.
 - `refs`:
   `{version, command, query, definition, references: [{kind, function, span}],
 skipped: [...]}`,
@@ -325,6 +333,16 @@ usual three formats.
 
 ### 39.8 Linking, checking and performance
 
+- **Built for `symbol` without it.** `symbol` links each root with
+  `Linker.link_file` and merges the modules by key; a root whose module an
+  earlier root linked is not linked again. That saves a link only when the
+  importer sorts before the file it imports; when the imported file sorts first
+  (a chain where each file imports the one before it) every root links its
+  closure, so a directory costs at worst one link of the closure per root (a
+  chain of 60 files takes 1.0 s, 120 files 4.3 s; `compiler/`: 11 s for 145
+  files, 1.9 s for `front_end.agc` alone). `Linker.link_programs` below, or a
+  cache kept between commands, is the real fix; `origins` and `uses` stay
+  planned for `refs`. The file given with `--stdin` is the first root.
 - **One link for all roots.** A new linker entry point, `Linker.link_programs`,
   links several roots into one program with shared tables: each module is
   visited once, whichever root imports it. Every module gets a `@N::` prefix,

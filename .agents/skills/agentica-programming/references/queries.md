@@ -1,11 +1,11 @@
 # Asking the compiler about code
 
-`agentica outline FILE`, `agentica type-at FILE:LINE:COL` and `agentica refs
-FILE:LINE:COL` ask the compiler about code without reading whole files.
-`outline` lists what one file declares, so you do not read the whole file to
-learn its signatures. It only lexes and parses the file: its imports need not
-exist, and it needs no `main`. FILE is a source file or a `std/` module
-(`agentica outline std/queue`).
+`agentica outline FILE`, `agentica type-at FILE:LINE:COL`, `agentica refs
+FILE:LINE:COL` and `agentica symbol NAME [PATH...]` ask the compiler about code
+without reading whole files. `outline` lists what one file declares, so you do
+not read the whole file to learn its signatures. It only lexes and parses the
+file: its imports need not exist, and it needs no `main`. FILE is a source file
+or a `std/` module (`agentica outline std/queue`).
 
 ```sh
 agentica outline src/orders.agc          # one line per declaration
@@ -142,6 +142,69 @@ type, span, definition, help}`.
   line or of the file). Its span is the position. Move onto the expression; a
   keyword of an expression (`try`, `do`, `and`, `!`) answers that expression.
 
+# Where a name is defined
+
+`agentica symbol NAME [PATH...]` finds the declarations that NAME names in the
+modules linked from the files under PATH (a file or a folder; default `.`), so
+you do not `rg` for a definition or read a file for a signature.
+
+```sh
+agentica symbol Models.User.email src/
+agentica --json symbol total src/orders.agc
+cat buffer.agc | agentica symbol total --stdin src/orders.agc
+```
+
+```text
+src/models.agc:4:3 field User.email: String
+```
+
+NAME is written as the code writes it:
+
+- `total`: a function, struct, enum, alias or constant, private ones too; a
+  bare name lists every module that declares it;
+- `Models.total`, `Models.User`: through an import alias of a file under PATH
+  (exported names only; the same alias for two modules lists both). Aliases
+  come only from whole-module imports (`import M from "m"`): after
+  `import {make as mk} from "m"`, `symbol mk` is QUERY-NOT-FOUND and `symbol
+  make` finds the declaration;
+- `User.email`, `Models.User.email`: a struct field; `Option.Some`: a variant;
+- `std/queue.pop`, `std/queue.Popped.value`: a `std/` module that is linked;
+- `Map.get`, `puts`: a builtin, with the `help` object and no place.
+
+A folder is every `*.agc` file below it, in bytewise order of the path, without
+hidden folders, `agc_libs/` and links. The files are linked on their own, so the
+answer needs no `main` and no type check; a file that does not lex, parse or
+link is under `skipped` and the rest still answer. Matches come in the order the
+files were linked, then by position. `--stdin FILE` is the text of FILE (it need
+not exist) and is searched too, first. Text form: `file:line:column` and the
+declaration as `outline` prints it (`field`, `variant`); each skipped file is
+`skipped FILE: CODE` on stderr.
+
+## JSON of symbol
+
+`{version: 1, command: "symbol", query, matches, skipped}`.
+
+- `matches[]`: `{kind, name, module, exported, signature, doc, span,
+  name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `constant`,
+  `field`, `variant` or `builtin` (an open set). `name` is the name alone;
+  `module` is the file's name; `doc` is the whole `##` text or null; `span` is
+  the declaration, `export` included, as in `outline` (the `range` of a
+  `type-at` definition starts after `export`: compare `name_span`).
+- a field adds `type` and `struct`; a variant `payload` and `enum`; a builtin
+  has `help` (the object of `agentica help NAME --json`) and null `module`,
+  `span`, `name_span` and `doc`.
+- `skipped[]`: `{file, diagnostic}`, the diagnostic being the `--json` object
+  of the first problem of that file or of what it imports.
+
+## Exit codes of symbol
+
+- 0: the answer, `skipped` roots included.
+- 1: no file links; the first diagnostic is printed as `check` prints it.
+- 2: `QUERY-USAGE` (a missing NAME, an unknown option, a path that cannot be
+  read, a folder with no `*.agc` file) or `QUERY-NOT-FOUND`: nothing declares
+  NAME in the linked files, and the help names the closest name and the files
+  that were skipped.
+
 # References to a name
 
 `agentica refs FILE:LINE:COL` lists every use of the declaration that the name
@@ -172,6 +235,11 @@ struct, enum, variant, field, constant, type alias, local, parameter or builtin
 work; two names that look alike but are different declarations are never mixed
 (the `i` of two loops, the `note` of two branches of an `if`).
 
+A position on the module alias of `Models.total(u)` selects the function
+`total`, not the module `Models`. A position on a name in an import line is
+QUERY-NO-EXPRESSION: an import is not a reference, so ask from a use or from the
+declaration.
+
 `{version: 1, command: "refs", query, definition, builtin, references,
 skipped}`.
 
@@ -197,4 +265,5 @@ skipped}`.
 - 1: the program has an error; fix it first (function and type uses need no
   check in the full design, but this version always checks).
 - 2: `QUERY-USAGE` (a bad `FILE:LINE:COL`, an unreadable file, a name in place
-  of a position) or `QUERY-NO-EXPRESSION`: the position is on no name.
+  of a position) or `QUERY-NO-EXPRESSION`: the position is on no name, or on a
+  name in an import line.

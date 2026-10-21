@@ -47,7 +47,16 @@ with a packed `Problem` (`references/stages.md`).
   from `Checked.bound` (`State.record_bound`: by the id of a parameter, binding
   or `for` node, and for a pattern by the id of the variant pattern, one type
   for each slot), kept apart from `Checked.types` so the lowering never sees
-  them. `agentica refs` (the position form) answers from the same linked and
+  them. `agentica symbol NAME [PATH...]` parses and links only:
+  `symbol_paths.agc` expands the paths through `Workspace.list_folder` (the
+  `--stdin` file is the first root), `symbol_link.agc` links each root with
+  `Linker.link_file` and merges the modules by key (a root already linked as a
+  dependency is not linked again; a root that fails is `Skipped`), and
+  `symbol.agc` matches the name against `Model.declared` of
+  `LinkedModule.parsed` for each module (the aliases of the roots and
+  `std/NAME.` qualify exported names) and the builtin catalog. `symbol_json.agc`
+  and `symbol_text.agc` print it, the text through `outline_text.agc`.
+  `agentica refs` (the position form) answers from the same linked and
   checked file: a local by `Locals.uses`, a sweep of its function with the
   scopes of `locals.agc`; anything else by `sites.agc`, which lists every place
   of a module that names a function, type, field, variant, constant or builtin
@@ -58,7 +67,8 @@ with a packed `Problem` (`references/stages.md`).
   the dotted name from the text. `refs.agc` picks the site that holds the
   position and keeps the sites of its target in every linked module. The
   commands are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py`,
-  `tests/test_spec_type_at.py` and `tests/test_spec_refs.py`.
+  `tests/test_spec_type_at.py`, `tests/test_spec_symbol.py` and
+  `tests/test_spec_refs.py`.
 
 ### Pure core, one port
 

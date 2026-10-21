@@ -142,6 +142,18 @@ src/models.agc:4:3 field email
 
 Line and column count from 1, in code points (an emoji is one column). A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. With `--json` the definition also has its signature and its `##` doc, and the name of a builtin (`split` in `xs.split(",")`) answers `kind` `builtin` with the object of `agentica help NAME --json` under `help`. A local variable, a parameter or a name bound by a loop or a `case` answers with its type and a definition at the place that binds it, whether the position is on a use or on the binding.
 
+Find where a name is defined in a folder, with its signature and `##` doc:
+
+```sh
+agentica symbol Models.User.email src/    # PATH is a file or a folder, default .; --json, --stdin FILE
+```
+
+```text
+src/models.agc:4:3 field User.email: String
+```
+
+NAME is written as the code writes it: `total`, `User.email`, `Option.Some`, `Models.User` through the import alias of a file under PATH, `std/queue.pop`, or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too. With `--json` each match has its `kind`, `module`, `exported`, `signature`, `doc` and spans, and a builtin has the object of `agentica help NAME --json` under `help`. Each file of PATH is linked on its own: one that does not lex, parse or link is listed under `skipped` with its diagnostic, and the others still answer. A name that nothing declares is `QUERY-NOT-FOUND` and exits 2; if no file links, the first diagnostic is the answer and exits 1.
+
 List every reference to the name at a position:
 
 ```sh
@@ -155,7 +167,7 @@ src/report.agc:9:30 read in render
 src/report.agc:31:5 construct in sample
 ```
 
-The position can be on a use or on the name where the declaration is written. The name can be a function, a struct, an enum, a variant, a field, a constant, a type alias, a local variable, a parameter or a builtin; a field of one struct is never mixed with a field of the same name in another, nor a variable of one block with a variable of the same name in a sibling block. The first line is the definition (a builtin has none) and each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in; the span of a use is the name alone. `refs` checks the file and what it imports, and it sees the uses in those files only, not in a file that imports `FILE`. Positions, `--stdin` and the exit codes are those of `type-at`. With `--json` the answer is `{version, command, query, definition, builtin, references, skipped}`; no references is an empty list, not an error.
+The position can be on a use or on the name where the declaration is written. The name can be a function, a struct, an enum, a variant, a field, a constant, a type alias, a local variable, a parameter or a builtin; a field of one struct is never mixed with a field of the same name in another, nor a variable of one block with a variable of the same name in a sibling block. The first line is the definition (a builtin has none) and each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in; the span of a use is the name alone. `refs` checks the file and what it imports, and it sees the uses in those files only, not in a file that imports `FILE`. Positions, `--stdin` and the exit codes are those of `type-at`. A position on the module alias of `Models.total(u)` selects the function, not the module, and a position on a name in an import line is `QUERY-NO-EXPRESSION`: an import is not a reference. With `--json` the answer is `{version, command, query, definition, builtin, references, skipped}`; no references is an empty list, not an error.
 
 ## Options
 
