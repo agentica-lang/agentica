@@ -93,13 +93,20 @@ class TestModuleRules:
     def test_reserved_library_namespaces_reject_traversal_and_keep_the_import_span(self):
         cases = [("std/../queue", "CHECK-IMPORT-PATH"), ("std//queue", "CHECK-IMPORT-PATH"),
                  ("std/missing", "CHECK-IMPORT-IO"), ("pkg/../outside", "CHECK-IMPORT-PATH"),
-                 # std/internal/ holds the core that std/analysis embeds: only a std module may import it.
-                 ("std/internal/compiler/syntax/ast", "CHECK-IMPORT-IO"),
                  ("pkg/agentica-test-nonexistent-stdlib-library", "CHECK-IMPORT-IO")]
         results = self.checks([({"root.agc": 'import Q from "%s"\n' % path + MAIN}, "root.agc", None)
                                for path, _code in cases])
         for (path, code), checked in zip(cases, results):
             self.assert_rejected(checked, code, line=1, file="root.agc")
+
+    def test_std_internal_is_private_to_std_modules_and_the_span_is_the_import(self):
+        """std/internal/ holds the core that std/analysis embeds: a program may import none of it, a name that exists
+        or not. The span is the import line, up to the start of the next one."""
+        cases = [({"root.agc": 'import Q from "%s"\n' % path + MAIN}, "root.agc", None)
+                 for path in ("std/internal/compiler/syntax/ast", "std/internal/x")]
+        for directory, problem in self.checks(cases):
+            self.assert_rejected((directory, problem), "CHECK-IMPORT-IO", line=1, file="root.agc")
+            assert problem["range"] == {"start": {"line": 1, "column": 1}, "end": {"line": 2, "column": 1}}
 
     def test_pkg_imports_reject_relative_environment_roots_and_escaping_symlinks(self):
         directory = self.files({

@@ -13,7 +13,9 @@
 ## `QUERY-NO-EXPRESSION`).
 ##
 ## The compiler is part of the program that imports this module (as the private `std/internal/compiler`), so a program
-## that imports it pays the compile time of the compiler's core once, and it asks the checker that this binary carries.
+## that imports it pays the compile time of the compiler's core once. The checker and the catalog of builtins are the
+## ones of the binary that compiled the program, frozen in it; the `std/` sources are read from the binary that runs
+## it. The loader refuses a `.agcb` file of another Agentica version, so recompile a tool after upgrading agentica.
 ## A session is a value: tasks may ask one session at once, and an `update` in one task leaves the others' copy as it
 ## was.
 

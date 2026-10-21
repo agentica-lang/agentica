@@ -29,9 +29,12 @@ Analysis.outline_json(found) -> Json     # also type_at_json, diagnostic_json
   has `null`), an absent definition an empty list (`TypeAt.definition` holds 0
   or 1). `Checked.passed` is true when there is no problem, else `diagnostics`
   holds the first one. A range is `Region(start, stop)` of `Position(line,
-  column)`, from 1, in characters. `kind` is an open set. The types are aliases: read their fields,
-  do not construct them. A diagnostic's `file` is the root as typed;
-  `Checked.file` is the canonical name.
+  column)`, from 1, in characters. `kind` is an open set. The types are
+  aliases: read their fields, do not construct them (`Analysis.Position(...)`
+  is `CHECK-UNKNOWN-TYPE`), so a program cannot make a `Diagnostic` of its own,
+  for a timeout say, except by reading JSON with `Analysis.diagnostic`. A
+  diagnostic's `file` is the root as typed; `Checked.file` is the canonical
+  name.
 - `outline` and `type_at` return an error whose message is one JSON diagnostic
   (the `--json` object). `Analysis.diagnostic(message)` reads it, so `try`
   works. Codes are the command line's: `LEX-`, `PARSE-`, `CHECK-`, `PKG-`,
