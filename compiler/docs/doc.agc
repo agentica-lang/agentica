@@ -3,11 +3,11 @@
 ## resolve its imports or check it, so a missing dependency cannot make it fail. The text is read by the caller
 ## (app/cli_doc.agc), which holds the Workspace.
 
-import Ast from "../syntax/ast"
 import Diag from "../diagnostics/diagnostic"
+import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
-import Model from "doc_model"
 import Parser from "../syntax/parser"
+import Model from "doc_model"
 
 ## The parsed program of the module in `text`, or the first lexer or parser diagnostic. `agentica outline` shares it.
 export def parse(text: String) -> Diag.Outcome[Ast.Program]

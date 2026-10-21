@@ -5,19 +5,19 @@
 ## A method call or a field access that names a builtin is not rewritten in compiler/: the lowering reads its Resolved
 ## and lowers the synthetic node it describes.
 
-import Ast from "../syntax/ast"
 import Builtins from "../catalog/builtins"
+import {PRELUDE} from "../catalog/builtins"
 import State from "../check/check_state"
 import ConstWalk from "../check/const_walk"
 import Defaults from "../check/defaults"
-import Ir from "ir"
+import Ast from "../syntax/ast"
 import Names from "../syntax/prelude_name"
+import Source from "../syntax/source"
+import Types from "../syntax/types"
+import Ir from "ir"
 import Data from "lower_data"
 import Lowering from "lower_state"
 import {FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, STRING_OPS, VM_BUILTINS} from "lower_tables"
-import Source from "../syntax/source"
-import Types from "../syntax/types"
-import {PRELUDE} from "../catalog/builtins"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
 ## skips the type check of an item whose list or map was checked as a whole.

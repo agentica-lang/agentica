@@ -3,16 +3,16 @@
 ## fields, the variants of the enums, and the signatures of the functions. Then check_main. A problem is
 ## CHECK-REDEFINED-NAME, CHECK-VOID-TYPE or another type problem, or CHECK-MAIN.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import {ENTRIES, RESERVED} from "../catalog/builtins"
+import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import DefaultChecks from "check_defaults"
 import State from "check_state"
 import Types from "check_types"
 import Defaults from "defaults"
-import Linker from "../modules/linker"
-import Source from "../syntax/source"
-import T from "../syntax/types"
-import {ENTRIES, RESERVED} from "../catalog/builtins"
 
 ## The context with the enums, structs and functions of the program added to the builtin ones.
 export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]

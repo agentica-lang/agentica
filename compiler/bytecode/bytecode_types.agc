@@ -5,12 +5,12 @@
 ## Recursion: type_id takes 1 VM frame for each level of List and Map in a field type. The parser stops a written type
 ## at 1,000 levels, and the writer stops at 1,024 (BYTECODE-LIMIT), so the writer stays under 1,100 frames here.
 
+import Ir from "../lower/ir"
+import Types from "../syntax/types"
 import Bytes from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Pool from "bytecode_pool"
 import {MAX_TYPE_DEPTH, MAX_U16} from "bytecode_tables"
-import Ir from "../lower/ir"
-import Types from "../syntax/types"
 
 ## The two sections: the type table (entries in the order they were first needed) and the bytes of the Decodable
 ## section after its count, with the count.

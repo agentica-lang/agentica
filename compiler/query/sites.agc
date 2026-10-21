@@ -12,14 +12,14 @@
 ##
 ## A module is walked once, with a worklist and no recursion, so a deep tree cannot reach the limit of VM calls.
 
-import Ast from "../syntax/ast"
 import CatalogJson from "../catalog/catalog_json"
-import Checker from "../check/checker"
-import Linker from "../modules/linker"
-import Source from "../syntax/source"
 import State from "../check/check_state"
-import T from "../syntax/types"
+import Checker from "../check/checker"
 import Walk from "../check/const_walk"
+import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 
 # The characters of a name written in the source: a name, a module alias, an enum, a variant.
 NAME_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_?!".split(""))

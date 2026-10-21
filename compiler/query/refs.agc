@@ -9,10 +9,10 @@
 ## every module, so two names that look alike but are different declarations (a field `name` of two structs, a local of
 ## the same name in two blocks) never mix.
 
-import Ast from "../syntax/ast"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
 import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Definitions from "definitions"

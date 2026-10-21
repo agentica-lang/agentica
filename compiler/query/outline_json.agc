@@ -2,8 +2,8 @@
 ## items}`. Each item is the item of `agentica doc` (docs/doc_json.agc) with `exported` and the `name_span` of the item
 ## and of each field and variant. A span is `{file, range}` with the `file` the command answers with.
 
-import DocJson from "../docs/doc_json"
 import Model from "../analysis/model"
+import DocJson from "../docs/doc_json"
 
 ## The object of the outline; `file` is the name the answer gives the file (query_files.agc, `display`).
 export def json(outlined: Model.Outline) -> Json

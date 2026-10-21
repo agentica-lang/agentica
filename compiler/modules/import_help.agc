@@ -1,9 +1,9 @@
 ## The help of an unknown import name: the "did you mean" of the linker.
 
-import Ast from "../syntax/ast"
-import Declarations from "declarations"
 import Diag from "../diagnostics/diagnostic"
+import Ast from "../syntax/ast"
 import Suggest from "../syntax/suggest"
+import Declarations from "declarations"
 
 ## The help of CHECK-IMPORT-NAME for member, which the module key does not export: the fixed texts for the removed
 ## std/http functions and std/logger error, or the did-you-mean over the exports (a private name is never suggested).

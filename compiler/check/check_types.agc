@@ -2,12 +2,12 @@
 ## (can it be printed, encoded to JSON, decoded from JSON), and the type variables of generic enums (substitute,
 ## unify). These are the helpers that do not depend on the walk of the tree.
 
+import {ENUMS, OPAQUE_TYPES} from "../catalog/builtins"
 import Ast from "../syntax/ast"
-import Help from "check_help"
-import State from "check_state"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
-import {ENUMS, OPAQUE_TYPES} from "../catalog/builtins"
+import Help from "check_help"
+import State from "check_state"
 
 type ResolvedType = Types.Type
 

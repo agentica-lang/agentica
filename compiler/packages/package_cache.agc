@@ -1,9 +1,9 @@
 ## Where the files of a package are kept (docs/grammar/05b-modules.md): a folder for each commit of each package,
 ## under the cache root. The build only reads it; filling it is the job of install (a later phase).
 
-import GitSource from "git_source"
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
+import GitSource from "git_source"
 
 ## The folder that holds the packages: `$XDG_CACHE_HOME/agentica/pkg`, which is `~/.cache/agentica/pkg` when
 ## XDG_CACHE_HOME is not set or not absolute. On Windows it is `%LOCALAPPDATA%/agentica/cache/pkg` (the user data

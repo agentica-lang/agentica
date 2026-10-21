@@ -4,8 +4,8 @@
 ## only.
 
 import Model from "../analysis/model"
-import Signature from "../docs/signature"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
+import Signature from "../docs/signature"
 
 ## The text of the outline, one line each and a line feed at the end of every line; empty for an empty file.
 export def text(outlined: Model.Outline) -> String

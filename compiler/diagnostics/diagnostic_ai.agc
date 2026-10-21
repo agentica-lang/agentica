@@ -4,9 +4,9 @@
 ## It reads the text of the file the problem is in, to show one line of it. A line is cut at "\n" and loses one
 ## trailing "\r".
 
-import Problems from "problem"
 import Diag from "diagnostic"
 import Plain from "diagnostic_plain"
+import Problems from "problem"
 
 ## The compact form for an agent: `check failed: 1 error`, then the code, one `name: value` line for each part the
 ## problem has (message, place, function, source line, callee, expected, actual, labels, help). A problem at a key of a

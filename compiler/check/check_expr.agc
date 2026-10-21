@@ -3,17 +3,17 @@
 ## (CHECK-TOO-DEEP), checks the node by its kind, records the type by node id, and refuses a Void value that is not a
 ## completion.
 
-import Ast from "../syntax/ast"
-import Calls from "check_call"
+import {ENTRIES} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
+import Ast from "../syntax/ast"
+import T from "../syntax/types"
+import Calls from "check_call"
 import Help from "check_help"
 import Methods from "check_method"
 import Rules from "check_rules"
 import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
-import T from "../syntax/types"
-import {ENTRIES} from "../catalog/builtins"
 
 # What the two sides of a binary operator are, checked in order. The right side of a range is checked with the methods
 # and fields of its chain marked, so that the help can say a method call on a range needs parentheses.

@@ -3,13 +3,13 @@
 ## with the receiver as first argument, and the resolution is recorded by node id for lowering.
 
 import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import Calls from "check_call"
 import Help from "check_help"
 import Names from "check_names"
 import State from "check_state"
 import CheckTypes from "check_types"
-import Source from "../syntax/source"
-import T from "../syntax/types"
 
 ## Checks target.name(args).
 export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]

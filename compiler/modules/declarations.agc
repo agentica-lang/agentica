@@ -1,10 +1,10 @@
 ## Helpers for the top-level declarations of a parsed file, and the declaration order rule (CHECK-DECL-ORDER).
 
-import Ast from "../syntax/ast"
 import Diag from "../diagnostics/diagnostic"
-import Failure from "link_failure"
-import Source from "../syntax/source"
+import Ast from "../syntax/ast"
 import Base from "../syntax/parse_base"
+import Source from "../syntax/source"
+import Failure from "link_failure"
 
 ## What a top-level declaration is.
 export enum Kind

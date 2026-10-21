@@ -1,18 +1,18 @@
 ## Calls and constructions: a call of a builtin or of a
 ## function of the program, an enum variant, a struct construction and a struct update.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
+import {ENTRIES, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS} from "../catalog/builtins"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import Help from "check_help"
 import Names from "check_names"
 import Rules from "check_rules"
 import State from "check_state"
 import Types from "check_types"
 import Defaults from "defaults"
-import Source from "../syntax/source"
-import T from "../syntax/types"
-import {ENTRIES, PRELUDE_ONLY, PUBLIC_NAMES, RECORDS} from "../catalog/builtins"
 
 # What checking the arguments of a variant learned: the state and the type arguments found.
 struct Inferred

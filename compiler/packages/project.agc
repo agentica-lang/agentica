@@ -5,12 +5,12 @@
 ## package that is in the cache is checked against the lock just after, also before any file is loaded
 ## (package_import.agc, check_manifests).
 
-import GitSource from "git_source"
-import Lock from "lock"
-import Manifest from "manifest"
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
+import GitSource from "git_source"
+import Lock from "lock"
+import Manifest from "manifest"
 
 # The names of the two files, beside each other in the folder of the project.
 MANIFEST_FILE = "agentica.toml"

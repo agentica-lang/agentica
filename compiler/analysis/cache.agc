@@ -13,10 +13,10 @@
 ## the highest id passes twice the ids that live files hold, `crowded?` says so and the caller parses the program again
 ## from 0. The checker's tables are indexed by id, so gaps cost memory, bounded by that factor.
 
-import Ast from "../syntax/ast"
 import Checker from "../check/checker"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
+import Ast from "../syntax/ast"
 
 MAX_ROOTS = 16
 

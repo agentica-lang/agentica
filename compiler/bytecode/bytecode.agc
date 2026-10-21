@@ -1,13 +1,13 @@
-import Writer from "bytecode_writer"
 import CheckText from "../check/check_text"
 import Checker from "../check/checker"
 import Host from "../io/host"
+import SaveFile from "../io/save_file"
+import LowerText from "../lower/lower_text"
+import Lowering from "../lower/lowering"
 import Env from "../modules/link_env"
 import LinkText from "../modules/link_text"
 import Linker from "../modules/linker"
-import Lowering from "../lower/lowering"
-import LowerText from "../lower/lower_text"
-import SaveFile from "../io/save_file"
+import Writer from "bytecode_writer"
 
 # `agentica compiler/bytecode/bytecode.agc [flags] ROOT -o OUT ...` links, checks, lowers and writes each ROOT file to
 # the .agcb file OUT, and prints `== ROOT`, then `wrote N bytes` or the ERROR line of the first failure (those of

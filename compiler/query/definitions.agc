@@ -6,10 +6,10 @@
 ## the `##` doc and the signature of its declaration, read from the file as the parser gave it
 ## (`LinkedModule.parsed`), because the linker drops the doc of an `export`.
 
-import Ast from "../syntax/ast"
-import Linker from "../modules/linker"
 import Model from "../docs/doc_model"
 import Signature from "../docs/signature"
+import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Locals from "locals"

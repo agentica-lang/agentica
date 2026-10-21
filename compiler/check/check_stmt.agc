@@ -1,15 +1,15 @@
 ## Statements, blocks, case and functions. Expressions are checked through State.expr, because they are in a module
 ## that imports this one.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import DefaultChecks from "check_defaults"
 import Flow from "check_flow"
 import State from "check_state"
 import Types from "check_types"
 import Unused from "check_unused"
-import Source from "../syntax/source"
-import T from "../syntax/types"
 
 ## What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
 struct Arms

@@ -6,8 +6,8 @@
 ## returns the node with the new position and id. A failure is a Result error whose String is the packed diagnostic, so
 ## `try` stops at the first one.
 
-import Ast from "ast"
 import Diag from "../diagnostics/diagnostic"
+import Ast from "ast"
 import Source from "source"
 import Tokens from "token"
 import Unicode from "unicode"

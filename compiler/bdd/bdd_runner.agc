@@ -5,11 +5,11 @@
 ## not print the report: a captured child keeps 1 MiB of each stream and drops the rest, and a report of a big run is
 ## larger.
 
+import SourceReader from "../io/source_reader"
+import SourceFile from "../syntax/source_file"
 import Discover from "bdd_discover"
 import {IO_TIMEOUT} from "bdd_files"
 import Opts from "bdd_options"
-import SourceFile from "../syntax/source_file"
-import SourceReader from "../io/source_reader"
 
 # The runner is an ordinary program with a 30 second start, and no limit on its run (each scenario has its own).
 START_TIMEOUT = 30000

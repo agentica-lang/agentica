@@ -1,8 +1,8 @@
 ## The BYTECODE- problems of the writer. A failing step returns `error(...)` of a packed problem (pack in
 ## diagnostics/problem.agc), as the lowering does, and `try` carries it to the writer, which unpacks it.
 
-import Failure from "../diagnostics/problem"
 import Diag from "../diagnostics/diagnostic"
+import Failure from "../diagnostics/problem"
 import Ir from "../lower/ir"
 import Source from "../syntax/source"
 

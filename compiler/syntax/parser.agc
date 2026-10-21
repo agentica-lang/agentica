@@ -5,8 +5,8 @@
 ## functions follow the grammar; the notable choices are listed where they are made: precedence climbing
 ## for the binary operators, ids assigned at construction, and the nesting limit.
 
-import Ast from "ast"
 import Diag from "../diagnostics/diagnostic"
+import Ast from "ast"
 import Base from "parse_base"
 import Tokens from "token"
 

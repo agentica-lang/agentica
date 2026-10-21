@@ -1,13 +1,13 @@
 ## The struct and enum tables of the lowered program The program's structs come first, then the builtin records it
 ## uses, each in the order of the catalog; enums likewise, and their variants are numbered in table order.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import {ENUMS, RECORDS} from "../catalog/builtins"
+import Ast from "../syntax/ast"
+import Types from "../syntax/types"
 import Ir from "ir"
 import State from "lower_state"
 import {BUILTIN_STRUCTS, STRUCT_NEEDS} from "lower_tables"
-import Types from "../syntax/types"
-import {ENUMS, RECORDS} from "../catalog/builtins"
 
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",
 ## structs gives the index and the fields of a struct by name, variants the id of "Enum.Variant", and json_structs the

@@ -1,16 +1,16 @@
 ## The checking rules of the Map, Set, Task, Channel and Profile builtins A rule takes the call (State.Site) and
 ## returns the new state with the type of the call.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import {HANDLES} from "../catalog/builtins"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import Args from "check_args"
 import Lists from "check_list"
 import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
-import Source from "../syntax/source"
-import T from "../syntax/types"
-import {HANDLES} from "../catalog/builtins"
 
 ## Checks a call of a Task, Channel, Map, Set or Profile builtin by its rule. Any other rule is the caller's.
 export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

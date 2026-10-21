@@ -5,14 +5,14 @@
 ## up as one of its allowed types. The checker records which function of stdlib/prelude/ the call runs, by the id of
 ## the call.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
+import {PRELUDE} from "../catalog/builtins"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
-import Source from "../syntax/source"
-import T from "../syntax/types"
-import {PRELUDE} from "../catalog/builtins"
 
 # What the arguments checked so far learned: the state, the type of each variable and the span of the argument that
 # bound it (the limits are reported there).

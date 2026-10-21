@@ -4,8 +4,8 @@
 ## the place of each candidate as `FILE:LINE:COL`, which is the position form of the command.
 
 import Diag from "../diagnostics/diagnostic"
-import Env from "../modules/link_env"
 import Problems from "../diagnostics/problem"
+import Env from "../modules/link_env"
 import QueryFiles from "query_files"
 import QueryOptions from "query_options"
 import Symbol from "symbol"

@@ -2,19 +2,19 @@
 ## and the answers of `type-at`, `symbol` and `refs`. The files an answer names are given by the caller
 ## (query_files.agc, `display`).
 
-import Ast from "../syntax/ast"
 import Builtins from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
-import Definitions from "../query/definitions"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import DocModel from "../docs/doc_model"
-import Model from "model"
+import Definitions from "../query/definitions"
 import Outline from "../query/outline"
 import Position from "../query/query_position"
 import Refs from "../query/refs"
 import Symbol from "../query/symbol"
 import SymbolLink from "../query/symbol_link"
 import TypeAt from "../query/type_at"
+import Ast from "../syntax/ast"
+import Model from "model"
 
 # The version of each shape.
 OUTLINE_VERSION = 1

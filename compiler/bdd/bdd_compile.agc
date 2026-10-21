@@ -1,10 +1,10 @@
 ## Compiling a program for the BDD driver: the Agentica front end from a file to the bytes of its .agcb (pipeline.agc),
 ## with the first problem of any stage as one Problem.
 
-import Report from "bdd_report"
 import Front from "../analysis/front"
 import Pipeline from "../app/pipeline"
 import Env from "../modules/link_env"
+import Report from "bdd_report"
 
 ## Compiles the file at `path`, with `settings.version` in the header. A file that cannot be read is RUNTIME-BDD-INFRA
 ## with the message `unreadable`; a file that is not UTF-8 is LEX-INVALID-UTF8, in that file. Every problem names

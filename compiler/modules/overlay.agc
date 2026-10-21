@@ -3,8 +3,8 @@
 ## the buffers and every other file from the disk, and the stages stay pure. A buffer is kept under the names its file
 ## answers to, computed once when it is made, so a later read does not depend on what the disk holds then.
 
-import Paths from "import_path"
 import SourceFile from "../syntax/source_file"
+import Paths from "import_path"
 import Workspace from "workspace"
 
 # The names one buffer answers to: its file as typed, as a lexical absolute path, and as the linker keys it (the

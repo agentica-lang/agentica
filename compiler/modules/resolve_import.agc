@@ -4,10 +4,10 @@
 
 import Diag from "../diagnostics/diagnostic"
 import Packages from "../packages/package_import"
+import SourceFile from "../syntax/source_file"
 import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
-import SourceFile from "../syntax/source_file"
 import Workspace from "workspace"
 
 # The std/ modules that only std/ may import, and the part of them that is the front end's own core (compiler/).

@@ -2,9 +2,9 @@
 ## ...); "" is no kind. A method is resolved to the full name of a builtin, such as String.length, or to "self" when it
 ## returns the receiver (to_s on a String).
 
-import State from "check_state"
-import T from "../syntax/types"
 import {ENTRIES} from "../catalog/builtins"
+import T from "../syntax/types"
+import State from "check_state"
 
 ## The kind of a receiver, or "" when its type has no methods in the catalog.
 export def receiver_kind(type: T.Type) -> String

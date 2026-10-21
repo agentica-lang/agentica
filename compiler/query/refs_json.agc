@@ -5,9 +5,9 @@
 ## `skipped` is as for `symbol`. A span is `{file, range}` with the `file` the command answers with. An answer from a
 ## program that does not check (39.6) adds `partial` (true) and `diagnostics`.
 
+import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
-import Model from "../analysis/model"
 import SymbolJson from "symbol_json"
 
 ## The object of the answer.

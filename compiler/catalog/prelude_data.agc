@@ -3,8 +3,8 @@
 ## stdlib/prelude/. Edited by hand; tests/test_stdlib_prelude.py checks that every body exists and that this table and
 ## the catalog agree.
 
-import Model from "builtin_model"
 import Types from "../syntax/types"
+import Model from "builtin_model"
 
 ## The builtins that only the prelude may call: the checker does not know them outside a prelude file, and no help or
 ## suggestion lists them.

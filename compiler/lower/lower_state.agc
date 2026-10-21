@@ -3,16 +3,16 @@
 ## part of the lowering uses. A lowering function takes Cx and Fx and returns the new Fx with its register (Out), or
 ## fails with a packed LOWER- diagnostic (diagnostics/problem.agc), so `try` stops at the first one.
 
-import Ast from "../syntax/ast"
-import Failure from "../diagnostics/problem"
+import {OPAQUE_TYPES} from "../catalog/builtins"
 import State from "../check/check_state"
 import Defaults from "../check/defaults"
 import Diag from "../diagnostics/diagnostic"
-import Ir from "ir"
+import Failure from "../diagnostics/problem"
+import Ast from "../syntax/ast"
 import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
-import {OPAQUE_TYPES} from "../catalog/builtins"
+import Ir from "ir"
 
 ## A struct of the program as the lowering reads it: its index in the struct table, its fields in order, and the
 ## position of each field.

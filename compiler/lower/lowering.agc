@@ -7,12 +7,16 @@
 ## take 1 or 2, because many calls are tail calls), and the checker allows 1,000 levels (CHECK-TOO-DEEP), so it uses
 ## about 3,000 of the 10,000 frames of the VM. The scans that read the whole tree use a worklist and do not recurse.
 
-import Ast from "../syntax/ast"
-import Failure from "../diagnostics/problem"
+import {ENUMS} from "../catalog/builtins"
 import Checker from "../check/checker"
 import Defaults from "../check/defaults"
-import Ir from "ir"
+import Failure from "../diagnostics/problem"
+import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
 import {PRELUDE_PREFIX} from "../syntax/prelude_name"
+import Source from "../syntax/source"
+import Types from "../syntax/types"
+import Ir from "ir"
 import Const from "lower_const"
 import Expr from "lower_expr"
 import Program from "lower_program"
@@ -20,10 +24,6 @@ import Scans from "lower_scan"
 import Lowering from "lower_state"
 import Stmt from "lower_stmt"
 import {BUILTIN_STRUCTS} from "lower_tables"
-import Linker from "../modules/linker"
-import Source from "../syntax/source"
-import Types from "../syntax/types"
-import {ENUMS} from "../catalog/builtins"
 
 ## The result of lowering: the program, or the first problem (the file it is in comes with it).
 export enum Lowered

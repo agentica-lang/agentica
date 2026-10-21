@@ -11,22 +11,22 @@
 ## gets ids above every id the earlier files hold, so the ids of one walk have gaps and the files are not in the order
 ## of their ids. Nothing but the checker's tables reads a node id, so the program means the same.
 
-import Ast from "../syntax/ast"
-import Declarations from "declarations"
+import {BARE_NAMES, RESERVED} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
-import ImportHelp from "import_help"
-import Paths from "import_path"
-import Lexer from "../syntax/lexer"
-import Env from "link_env"
-import Failure from "link_failure"
 import Packages from "../packages/package_import"
-import Parser from "../syntax/parser"
 import Project from "../packages/project"
-import Resolve from "resolve_import"
+import Ast from "../syntax/ast"
+import Lexer from "../syntax/lexer"
+import Parser from "../syntax/parser"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
+import Declarations from "declarations"
+import ImportHelp from "import_help"
+import Paths from "import_path"
+import Env from "link_env"
+import Failure from "link_failure"
+import Resolve from "resolve_import"
 import Workspace from "workspace"
-import {BARE_NAMES, RESERVED} from "../catalog/builtins"
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
 ## exported name.

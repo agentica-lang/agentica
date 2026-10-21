@@ -2,8 +2,8 @@
 ## hand; they were generated from the former front end. The catalog test compares
 ## what it prints with a golden.
 
-import Model from "builtin_model"
 import Types from "../syntax/types"
+import Model from "builtin_model"
 
 ## Every builtin, sorted by name.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))

@@ -1,11 +1,11 @@
 ## CHECK-UNUSED-VALUE: a value that is dropped, and could only have been used
 ## for itself, is an error.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
-import State from "check_state"
-import T from "../syntax/types"
 import {ENTRIES} from "../catalog/builtins"
+import Ast from "../syntax/ast"
+import T from "../syntax/types"
+import State from "check_state"
 
 ## CHECK-UNUSED-VALUE when a value that is dropped could only have been used for itself: a pure builtin, a to_s on a
 ## data value, a .with. Anything else, and any Void value, is fine.

@@ -4,8 +4,8 @@
 
 import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
-import QueryOptions from "query_options"
 import Source from "../syntax/source"
+import QueryOptions from "query_options"
 
 # The most digits of a line or a column: nine always fit an Int.
 MAX_DIGITS = 9

@@ -5,12 +5,12 @@
 ## that the link cannot name is unclear (the program's first problem); any other position that nothing answers is
 ## QUERY-NO-EXPRESSION, as in `type-at`.
 
-import Ast from "../syntax/ast"
+import Model from "../catalog/builtin_model"
 import CatalogJson from "../catalog/catalog_json"
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
 import Linker from "../modules/linker"
-import Model from "../catalog/builtin_model"
+import Ast from "../syntax/ast"
 import At from "at"
 import Definitions from "definitions"
 import Position from "query_position"

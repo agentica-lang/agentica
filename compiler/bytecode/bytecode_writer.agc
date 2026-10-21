@@ -8,6 +8,9 @@
 ##
 ## Recursion: only the JSON field types recurse (bytecode_types.agc, 1 VM frame for each level, at most 1,024 levels).
 
+import Problems from "../diagnostics/problem"
+import Ir from "../lower/ir"
+import Types from "../syntax/types"
 import Bytes from "bytecode_bytes"
 import Failure from "bytecode_failure"
 import Function from "bytecode_function"
@@ -15,9 +18,6 @@ import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
 import {FORMAT_VERSION, MAX_U16} from "bytecode_tables"
 import JsonTypes from "bytecode_types"
-import Problems from "../diagnostics/problem"
-import Ir from "../lower/ir"
-import Types from "../syntax/types"
 
 ## The result of writing: the bytes of the file, or the first problem (BYTECODE-LIMIT or BYTECODE-INTERNAL).
 export enum Written

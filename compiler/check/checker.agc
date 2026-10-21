@@ -3,19 +3,19 @@
 ## variants, functions, main), then the module constants are ordered and checked, then each function is checked in
 ## program order, file by file.
 
+import {ENUMS, RECORDS} from "../catalog/builtins"
+import Failure from "../diagnostics/problem"
+import Env from "../modules/link_env"
+import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
+import T from "../syntax/types"
 import Constants from "check_const"
 import Expr from "check_expr"
-import Failure from "../diagnostics/problem"
 import Help from "check_help"
 import Register from "check_register"
 import State from "check_state"
 import Statements from "check_stmt"
-import Env from "../modules/link_env"
-import Linker from "../modules/linker"
 import Prelude from "prelude_files"
-import T from "../syntax/types"
-import {ENUMS, RECORDS} from "../catalog/builtins"
 
 ## What checking learned: the type of each expression and block, in a list indexed by node id (Unknown for a node that
 ## has none: node ids are dense, so a list is faster than a Map to write and read), what each method call or field

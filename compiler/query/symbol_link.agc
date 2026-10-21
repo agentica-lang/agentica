@@ -2,12 +2,12 @@
 ## `Linker.link_programs`: a file that does not lex, parse or link is left out and listed, and the others still
 ## answer. A file that several roots reach is linked once, so a folder costs about one link of its files together.
 
-import Ast from "../syntax/ast"
+import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
-import Problems from "../diagnostics/problem"
+import Ast from "../syntax/ast"
 import QueryFiles from "query_files"
 import SymbolPaths from "symbol_paths"
 

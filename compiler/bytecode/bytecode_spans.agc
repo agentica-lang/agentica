@@ -2,9 +2,9 @@
 ## with the same spans are one entry, so an instruction names its run by the number of the first span, and a run may be
 ## empty. A span is written as the index of its source and the line and column of its start and end.
 
-import Pool from "bytecode_pool"
 import Ir from "../lower/ir"
 import Source from "../syntax/source"
+import Pool from "bytecode_pool"
 
 ## The run of the spans of the written instruction that starts at body[at] and stands for `count` instructions (more
 ## than one for a run of `step`): the pool with it added when it is new, and its number. Nearly every instruction has

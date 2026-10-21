@@ -9,22 +9,22 @@
 ## The files are not modules: no program imports them (resolve_import.agc), and they call builtins only, never each
 ## other.
 
-import Ast from "../syntax/ast"
+import Diag from "../diagnostics/diagnostic"
 import Failure from "../diagnostics/problem"
+import Env from "../modules/link_env"
+import Linker from "../modules/linker"
+import Resolve from "../modules/resolve_import"
+import Ast from "../syntax/ast"
+import Lexer from "../syntax/lexer"
+import Parser from "../syntax/parser"
+import Names from "../syntax/prelude_name"
+import {PRELUDE_PREFIX} from "../syntax/prelude_name"
+import Source from "../syntax/source"
+import SourceFile from "../syntax/source_file"
+import T from "../syntax/types"
 import Register from "check_register"
 import State from "check_state"
 import Statements from "check_stmt"
-import Diag from "../diagnostics/diagnostic"
-import Names from "../syntax/prelude_name"
-import {PRELUDE_PREFIX} from "../syntax/prelude_name"
-import Lexer from "../syntax/lexer"
-import Env from "../modules/link_env"
-import Linker from "../modules/linker"
-import Parser from "../syntax/parser"
-import Resolve from "../modules/resolve_import"
-import SourceFile from "../syntax/source_file"
-import Source from "../syntax/source"
-import T from "../syntax/types"
 
 ## The prelude files a program needs, added to the program: the state with room for their node ids, and their modules.
 export struct Attached

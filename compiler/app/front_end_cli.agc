@@ -10,9 +10,9 @@
 ## test as children of the binary: `agentica run` (cli.agc). C lets the front end start processes for it; the user's
 ## program never runs here.
 
+import Env from "../modules/link_env"
 import Cli from "cli"
 import Launch from "cli_launch"
-import Env from "../modules/link_env"
 
 ## Runs the command line.
 export def run(settings: Env.Settings, words: List[String]) -> Void

@@ -11,8 +11,8 @@ import {
   RESERVED_TYPE_NAMES,
   STD_ONLY_IMPORTS,
 } from "builtins_data"
-import {PRELUDE_ONLY as DATA_PRELUDE_ONLY, ROWS as PRELUDE_ROWS} from "prelude_data"
 import Types from "../syntax/types"
+import {PRELUDE_ONLY as DATA_PRELUDE_ONLY, ROWS as PRELUDE_ROWS} from "prelude_data"
 
 EMPTY_BUILTINS: Map[String, Model.Builtin] = {}
 EMPTY_RECORDS: Map[String, List[Model.Named]] = {}

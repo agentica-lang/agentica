@@ -2,18 +2,18 @@
 ## where the last parameter is a function, then the rule of the builtin. The List, Map, Set, Task and Channel rules are
 ## in check_list.agc and check_collections.agc; the rest are here.
 
-import Ast from "../syntax/ast"
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
+import Failure from "../diagnostics/problem"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import T from "../syntax/types"
 import Args from "check_args"
 import Collections from "check_collections"
-import Failure from "../diagnostics/problem"
 import Lists from "check_list"
 import PreludeCalls from "check_prelude"
 import State from "check_state"
 import CheckTypes from "check_types"
-import Source from "../syntax/source"
-import T from "../syntax/types"
 
 ## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown
 ## when none.

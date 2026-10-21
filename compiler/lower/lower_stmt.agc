@@ -1,15 +1,15 @@
 ## Statements, loops, case and functions Expressions are lowered through lower_expr.agc. A block literal becomes a
 ## function through lower_block_function, which Cx.block points to.
 
-import Ast from "../syntax/ast"
 import Builtins from "../catalog/builtins"
 import Paths from "../modules/import_path"
+import Ast from "../syntax/ast"
+import Source from "../syntax/source"
+import Types from "../syntax/types"
 import Ir from "ir"
 import Expr from "lower_expr"
 import Lowering from "lower_state"
 import {INT_MIN, INT_MIN_DIGITS} from "lower_tables"
-import Source from "../syntax/source"
-import Types from "../syntax/types"
 
 ## A lowered function, and the state after it: the block functions made inside it and the next function index, for the
 ## program to collect.

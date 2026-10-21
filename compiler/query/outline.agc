@@ -3,10 +3,10 @@
 ## missing import cannot make it fail. The declarations are the items of `agentica doc` (docs/doc_model.agc), private
 ## ones included, so the signatures, docs and summaries of the two commands cannot drift.
 
-import Ast from "../syntax/ast"
 import Diag from "../diagnostics/diagnostic"
 import Docs from "../docs/doc"
 import Model from "../docs/doc_model"
+import Ast from "../syntax/ast"
 
 ## What a file declares: its doc, its imports and its other declarations, each in source order.
 export struct Outline

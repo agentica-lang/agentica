@@ -12,11 +12,11 @@
 ## Only the path from the function to the position is walked, one level at a time and with no recursion, so a deep tree
 ## cannot reach the limit of VM calls.
 
-import Ast from "../syntax/ast"
+import Walk from "../check/const_walk"
 import Linker from "../modules/linker"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
-import Walk from "../check/const_walk"
 import At from "at"
 
 ## A name bound in a function. `kind` is `parameter` (of a function or a block), `local` (an assignment that introduces

@@ -6,17 +6,17 @@
 ## (check_manifests). A name that the importing manifest does not declare is a library of the pkg/ roots
 ## (resolve_import.agc) for a file of the project; a file of a package may import only what its own manifest declares.
 
+import Diag from "../diagnostics/diagnostic"
+import Paths from "../modules/import_path"
+import Env from "../modules/link_env"
+import Failure from "../modules/link_failure"
+import Workspace from "../modules/workspace"
 import GitSource from "git_source"
 import Lock from "lock"
 import Manifest from "manifest"
 import PackageCache from "package_cache"
 import PackageHash from "package_hash"
 import Project from "project"
-import Diag from "../diagnostics/diagnostic"
-import Paths from "../modules/import_path"
-import Env from "../modules/link_env"
-import Failure from "../modules/link_failure"
-import Workspace from "../modules/workspace"
 
 # The manifest of a package, in the folder that holds its files.
 MANIFEST_FILE = "agentica.toml"

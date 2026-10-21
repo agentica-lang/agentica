@@ -5,14 +5,14 @@
 ## of the standard library, read from the provider of the settings with the checks an import gets; with `--stdin` the
 ## name is a path of the disk instead, since the buffer stands for a file of the disk.
 
+import Problems from "../diagnostics/problem"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
-import Paths from "../modules/import_path"
-import Problems from "../diagnostics/problem"
-import QueryOptions from "query_options"
 import Resolve from "../modules/resolve_import"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
+import QueryOptions from "query_options"
 
 ## The file of a command, or why the words do not name exactly one.
 export enum Picked
