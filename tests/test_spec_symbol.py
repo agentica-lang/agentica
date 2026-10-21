@@ -6,8 +6,10 @@ import os
 
 import pytest
 
-from tests.agentica_test import cli, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, cli, run, vm_environment
 from tests.span_support import end, problem, start, where
+
+ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 # The module the cases import: a struct, an enum, a type alias, a constant, an exported and a private function.
 MODELS = '''## The cap.
@@ -221,6 +223,53 @@ def test_a_root_that_does_not_link_is_skipped_with_its_first_diagnostic_and_the_
     assert skipped["one.agc"]["file"].endswith("bad.agc")
     # The roots that do not link are not searched, and the answer to a name only they declare says which were left out.
     problem(symbol("a", "one.agc", cwd=tmp_path), "LEX-UNTERMINATED-STRING", 1)
+
+
+def test_a_folder_names_agc_and_agc_libs_in_any_case_as_the_package_hash_does(tmp_path):
+    (tmp_path / "AGC_LIBS").mkdir()
+    body = "def pick() -> Int\n  return 1\nend\n"
+    for name in ["a.agc", "b.AGC", "AGC_LIBS/l.agc"]:
+        (tmp_path / name).write_text(body, encoding="utf-8")
+    assert [m["module"] for m in answer("pick", cwd=tmp_path)["matches"]] == ["a.agc", "b.AGC"]
+
+
+def test_a_root_that_is_not_utf8_is_skipped_with_its_lexer_diagnostic_and_the_others_answer(tmp_path):
+    (tmp_path / "good.agc").write_text("def found() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (tmp_path / "binary.agc").write_bytes(b'def broken() -> Int\n  return "\xff\xfe"\nend\n')
+    report = answer("found", cwd=tmp_path)
+    assert [m["module"] for m in report["matches"]] == ["good.agc"]
+    [skipped] = report["skipped"]
+    assert skipped["file"] == "binary.agc"
+    assert skipped["diagnostic"]["code"] == "LEX-INVALID-UTF8" and skipped["diagnostic"]["file"] == "binary.agc"
+    assert start(skipped["diagnostic"]) == (2, 11) and end(skipped["diagnostic"]) == (2, 12)
+    # The same file alone leaves nothing to answer: its diagnostic is the answer, exit 1.
+    problem(symbol("found", "binary.agc", cwd=tmp_path), "LEX-INVALID-UTF8", 1)
+
+
+@pytest.mark.skipif(not POSIX_PYTHON or ROOT_USER, reason="host-only: a file mode binds a POSIX user, not root")
+def test_a_root_that_cannot_be_read_is_skipped_and_the_others_answer(tmp_path):
+    (tmp_path / "good.agc").write_text("def found() -> Int\n  return 1\nend\n", encoding="utf-8")
+    locked = tmp_path / "locked.agc"
+    locked.write_text("def found() -> Int\n  return 2\nend\n", encoding="utf-8")
+    locked.chmod(0)
+    try:
+        report = answer("found", cwd=tmp_path)
+    finally:
+        locked.chmod(0o644)
+    assert [m["module"] for m in report["matches"]] == ["good.agc"]
+    [skipped] = report["skipped"]
+    assert skipped["file"] == "locked.agc"
+    assert skipped["diagnostic"]["code"] == "CHECK-IMPORT-IO" and skipped["diagnostic"]["file"] == "locked.agc"
+
+
+def test_an_alias_comes_only_from_a_whole_module_import_not_from_a_selective_one(tmp_path):
+    (tmp_path / "m.agc").write_text("export def make() -> Int\n  return 1\nend\n", encoding="utf-8")
+    (tmp_path / "u.agc").write_text('import {make as mk} from "m"\n\ndef run() -> Int\n  return mk()\nend\n',
+                                    encoding="utf-8")
+    problem(symbol("mk", "u.agc", cwd=tmp_path), "QUERY-NOT-FOUND", 2)
+    found = one("make", "u.agc", cwd=tmp_path)
+    assert (found["kind"], found["module"], found["name"]) == ("function", "m.agc", "make")
+    assert start(found["span"]) == (1, 1) and end(found["span"]) == (4, 1)
 
 
 def test_when_every_root_is_skipped_the_first_diagnostic_is_the_answer_with_exit_1(tmp_path):

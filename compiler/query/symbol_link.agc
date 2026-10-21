@@ -3,8 +3,11 @@
 ## merged by key, in the order they were linked, so a file that several roots import is searched once.
 ##
 ## Each root is linked with `Linker.link_file`, which starts from empty tables; a root whose module an earlier root
-## already linked is not linked again (its module is the same file, and its aliases belong to the module). So a folder
-## costs about one link of the files that nothing else in it imports.
+## already linked is not linked again (its module is the same file, and its aliases belong to the module). That saves
+## a link only when the importer comes first: a root that sorts before the files it imports is linked, and those are
+## skipped. When the imported file sorts first (a chain where `f2` imports `f1`, `f3` imports `f2`), every root links
+## its whole closure, so a folder costs at worst one link of the closure per root. The real fix is one link for all the
+## roots (`Linker.link_programs` of docs/future/39-semantic-cli.md 39.8) or a cache kept between commands.
 
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"

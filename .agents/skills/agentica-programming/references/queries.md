@@ -162,7 +162,10 @@ NAME is written as the code writes it:
 - `total`: a function, struct, enum, alias or constant, private ones too; a
   bare name lists every module that declares it;
 - `Models.total`, `Models.User`: through an import alias of a file under PATH
-  (exported names only; the same alias for two modules lists both);
+  (exported names only; the same alias for two modules lists both). Aliases
+  come only from whole-module imports (`import M from "m"`): after
+  `import {make as mk} from "m"`, `symbol mk` is QUERY-NOT-FOUND and `symbol
+  make` finds the declaration;
 - `User.email`, `Models.User.email`: a struct field; `Option.Some`: a variant;
 - `std/queue.pop`, `std/queue.Popped.value`: a `std/` module that is linked;
 - `Map.get`, `puts`: a builtin, with the `help` object and no place.

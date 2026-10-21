@@ -208,16 +208,14 @@ signatures are strings.
   `to_s` and `inspect` answer a builtin only where the checker resolves them to
   one (numbers).
 - `symbol`: `{version, command, query, matches: [...], skipped: [...]}`. Each
-  match is `{kind, name, module, exported, signature, span}`; `kind` adds
-  `"field"` (with `type` and `struct`), `"variant"` (with `payload` and `enum`)
-  and `"builtin"` (with `help`, and `span` and `module` set to `null`). `module`
-  is the module's file name (§39.4).
-  Built as `{kind, name, module, exported, signature, doc, span, name_span}`:
-  `doc` is the whole `##` text or null, as in `type-at`; `name` is the name
-  alone (`email`), with `struct` or `enum` for a member; a builtin has `module`,
-  `span` and `name_span` null and `doc` null. `span` is the whole declaration,
-  `export` included, as in `outline`; the `range` of a `type-at` definition
-  starts at the keyword after `export`, so compare `name_span`.
+  match is `{kind, name, module, exported, signature, doc, span, name_span}`;
+  `kind` adds `"field"` (with `type` and `struct`), `"variant"` (with `payload`
+  and `enum`) and `"builtin"` (with `help`). `module` is the module's file name
+  (§39.4). `doc` is the whole `##` text or null, as in `type-at`; `name` is the
+  name alone (`email`), with `struct` or `enum` for a member; a builtin has
+  `module`, `span`, `name_span` and `doc` null. `span` is the whole
+  declaration, `export` included, as in `outline`; the `range` of a `type-at`
+  definition starts at the keyword after `export`, so compare `name_span`.
 - `refs`:
   `{version, command, query, definition, references: [{kind, function, span}],
 skipped: [...]}`,
@@ -326,9 +324,13 @@ usual three formats.
 
 - **Built for `symbol` without it.** `symbol` links each root with
   `Linker.link_file` and merges the modules by key; a root whose module an
-  earlier root linked is not linked again. A directory costs about one link per
-  file that no other file of it imports (`compiler/`: 11 s for 145 files, 1.9 s
-  for `front_end.agc` alone). `Linker.link_programs`, `origins` and `uses` stay
+  earlier root linked is not linked again. That saves a link only when the
+  importer sorts before the file it imports; when the imported file sorts first
+  (a chain where each file imports the one before it) every root links its
+  closure, so a directory costs at worst one link of the closure per root (a
+  chain of 60 files takes 1.0 s, 120 files 4.3 s; `compiler/`: 11 s for 145
+  files, 1.9 s for `front_end.agc` alone). `Linker.link_programs` below, or a
+  cache kept between commands, is the real fix; `origins` and `uses` stay
   planned for `refs`. The file given with `--stdin` is the first root.
 - **One link for all roots.** A new linker entry point, `Linker.link_programs`,
   links several roots into one program with shared tables: each module is

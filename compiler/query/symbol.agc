@@ -6,23 +6,21 @@
 ## through `std/MOD.` for a module of the standard library, or as a builtin (`Map.get`, `puts`). Linking is in
 ## symbol_link.agc.
 
-import Ast from "../syntax/ast"
 import BuiltinModel from "../catalog/builtin_model"
-import Builtins from "../catalog/builtins"
+import {PUBLIC_NAMES, form_signature} from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
 import Diag from "../diagnostics/diagnostic"
+import Problems from "../diagnostics/problem"
+import Model from "../docs/doc_model"
+import Signature from "../docs/signature"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
-import Model from "../docs/doc_model"
-import Problems from "../diagnostics/problem"
-import QueryFiles from "query_files"
-import QueryOptions from "query_options"
-import Signature from "../docs/signature"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"
+import QueryOptions from "query_options"
 import SymbolLink from "symbol_link"
 import SymbolPaths from "symbol_paths"
-import {PUBLIC_NAMES} from "../catalog/builtins"
 
 ## What a match has besides the common data: the type of a field, the payload of a variant, the catalog row of a
 ## builtin.
@@ -219,7 +217,7 @@ def builtin(name: String) -> List[Match]
       owner: "",
       file: "",
       exported: true,
-      signature: Builtins.form_signature(entry.unwrap!),
+      signature: form_signature(entry.unwrap!),
       doc: Ast.Optional.Absent,
       span: nowhere,
       name_span: nowhere,

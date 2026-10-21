@@ -9,18 +9,14 @@
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
 
-import Ast from "../syntax/ast"
 import Diag from "../diagnostics/diagnostic"
 import Env from "../modules/link_env"
 import Outline from "../query/outline"
 import OutlineJson from "../query/outline_json"
 import OutlineText from "../query/outline_text"
-import Pipeline from "pipeline"
-import QueryOptions from "../query/query_options"
 import QueryFiles from "../query/query_files"
+import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
-import Reply from "cli_reply"
-import SourceFile from "../syntax/source_file"
 import Symbol from "../query/symbol"
 import SymbolJson from "../query/symbol_json"
 import SymbolPaths from "../query/symbol_paths"
@@ -28,6 +24,10 @@ import SymbolText from "../query/symbol_text"
 import TypeAt from "../query/type_at"
 import TypeAtJson from "../query/type_at_json"
 import TypeAtText from "../query/type_at_text"
+import Ast from "../syntax/ast"
+import SourceFile from "../syntax/source_file"
+import Pipeline from "pipeline"
+import Reply from "cli_reply"
 
 # The usage line of each query command, given as the help of QUERY-USAGE.
 OUTLINE_USAGE = "usage: agentica outline FILE [--json]   or   agentica outline --stdin FILE [--json]"

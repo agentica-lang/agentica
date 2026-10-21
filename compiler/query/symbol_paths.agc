@@ -1,19 +1,18 @@
 ## The files a `symbol` query starts from (docs/future/39-semantic-cli.md, 39.4): the `PATH...` of the command line,
 ## each a file or a folder. A folder means every `*.agc` file under it, recursively, without hidden folders and
 ## `agc_libs/` folders, in bytewise order of the path; a link is never followed, so a file reached twice is not read
-## twice. The arguments keep their order, and a file named twice (by another spelling too) comes once. The folders are
-## read through the Workspace of the settings, so the query stays in the pure core.
+## twice. `.agc` and `agc_libs` are compared without regard to case, as the package hash does (package_hash.agc). The
+## arguments keep their order, and a file named twice (by another spelling too) comes once. The folders are read
+## through the Workspace of the settings, so the query stays in the pure core.
 
-import Paths from "../modules/import_path"
 import Problems from "../diagnostics/problem"
-import QueryOptions from "query_options"
+import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
+import PackageHash from "../packages/package_hash"
+import QueryOptions from "query_options"
 
 # The folder a query reads when the command line names none.
 DEFAULT_PATH = "."
-
-# The folder of the packages of a project: the files in it are not part of the project.
-LIBRARY_FOLDER = "agc_libs"
 
 ## One file a query links: the path as it was typed or listed (a diagnostic names it so), and the canonical path that
 ## keys its module, so one file has one root whatever its spelling.
@@ -96,11 +95,13 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
       path = child(here, entry.name)
       case entry.kind
         Workspace.EntryKind.File ->
-          if entry.name.ends_with?(".agc")
+          if PackageHash.source_file?(entry.name)
             files = files.push(path)
           end
         Workspace.EntryKind.Directory ->
-          if !entry.name.starts_with?(".") and entry.name != LIBRARY_FOLDER
+          # The package hash decides what a build loads, in any case of the names; `top` is true at every depth, so
+          # a nested agc_libs/ is left out too, as the query always did.
+          if !PackageHash.skipped_folder?(entry.name, true)
             pending = pending.push(path)
           end
         Workspace.EntryKind.Link -> files = files
