@@ -302,8 +302,8 @@ talking to each other.
 
 - **Boehm stops all threads at once.** Every collection stops every scheduler
   and the I/O thread. This is the main cost of threads against BEAM's
-  per-process heaps. Parallel marking helps. The syscall paths retry on `EINTR`
-  (§10.2.3).
+  per-process heaps. Parallel marking helps. Boehm stops threads with signals
+  installed with `SA_RESTART`, and the syscall paths retry on `EINTR` (§10.2.3).
 - **stdout and stderr are locked per stream when N > 1** (§10.2.3). A print is a
   copy into the stream's buffer, or a wait in its FIFO, and the loop writes it
   (§10.2.2). So only the blocking fallbacks (§14.1) can block a scheduler thread
@@ -334,12 +334,13 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
 - **One thread plays both roles at N = 1.** The scheduler calls
   `uv_run(UV_RUN_NOWAIT)` after each turn and `uv_run(UV_RUN_ONCE)` when the run
   queue is empty (§10.2.1, §10.2.2). A separate I/O thread beside one scheduler
-  thread at N = 1 was built as a prototype and not taken. Every deadline wait (a
-  channel wait, a timed await, `Task.sleep`) would have paid a timer job, and
-  the task-switch benchmark ran several times slower. The request code is the
-  same at any N. What differs is where the loop runs: a request posted on the
-  loop's thread runs at once, and one posted from another thread is queued and
-  wakes the loop.
+  thread at N = 1 was built as a prototype and not taken. The libuv code of the
+  services would also run beside the interpreter, which §16.11 leaves open.
+  Every deadline wait (a channel wait, a timed await, `Task.sleep`) would have
+  paid a timer job, and the task-switch benchmark ran several times slower. The
+  request code is the same at any N. What differs is where the loop runs: a
+  request posted on the loop's thread runs at once, and one posted from another
+  thread is queued and wakes the loop.
 - **The inbox** (`vm/inbox.c`) is a locked queue of `malloc`'d `agc_request`
   entries, taken whole by the loop's thread and woken by a `uv_async_t`. The
   poster sends after it unlocks (§16.3). It does not exist at N = 1: no handle,

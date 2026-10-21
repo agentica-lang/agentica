@@ -41,6 +41,8 @@ tail[] }`) and the node types live in `vm/list.c` and the private
 pointers. A leaf is 32 items of the list's kind (512 bytes, or 256 for numeric
 kinds, §17.12).
 
+- `tail_len(n)` is 0 for n = 0, else `((n - 1) & 31) + 1`; `tail_off(n)` is
+  `n - tail_len(n)`.
 - The list object holds the last `tail_len(len)` items inline in `tail`, so the
   tail has 1 to 32 items (none for an empty list). The trie holds the first
   `tail_off(len)` items in full leaves of 32. `root` is NULL exactly when `len
@@ -76,10 +78,11 @@ kinds, §17.12).
   makes about 15 allocations for a million items. Separate leaves took six times
   as long as the flat array for a million items, which is why leaves are slices
   (`docs/vm-benchmarks.md`, "Bulk builds and memory"). `finish` aborts unless
-  exactly n items were pushed; that is a C bug, not a program error. A later
-  `set` copies the leaf it changes, so the array lives as long as a list shares
-  one of its leaves. Bulk copies fill the builder a leaf at a time with
-  `memcpy`.
+  exactly n items were pushed; that is a C bug, not a program error. Every node
+  a builder writes was created by that builder after it began, so writing in
+  place is safe. A later `set` copies the leaf it changes, so the array lives as
+  long as a list shares one of its leaves. Bulk copies fill the builder a leaf
+  at a time with `memcpy`.
 - **Unknown count.** `filter`, and `Task.map` (`vm/task_map.c`,
   [§27.1](../future/27-iteration-and-concurrency.md#271-taskmap), results arrive
   out of order), fill a flat staging array and call `agc_list_from_array(items,
@@ -139,8 +142,7 @@ per leaf, O(1) per item inside it. The call sites are listed by
   decoded, so the list is finished only after them, or at once when n = 0.
 
 Not call sites: the loader (§17.7), `Channel` (a ring of values, no list) and
-the
-stepper protocol. A new builtin that returns a list uses a sized builder;
+the stepper protocol. A new builtin that returns a list uses a sized builder;
 `Task.map` follows §17.2, "Unknown count".
 
 ### 17.4 The C API
@@ -185,22 +187,23 @@ charges `2 * (a + b)` only when `b.len > 32`.
 
 The work of `append` and `set` is bounded (one tail of at most 32 items and one
 path of at most 12 nodes, §17.2). Charging 2n would make a task yield after
-every
-push once its list passes 1,000 items (`AGC_TURN_STEPS` is 2,000). The cost only
-moves the point where a task yields, but a golden with two tasks and a big push
-loop could then print in another order. If a golden changes, find the cause
-first; do not run `make goldens` to hide it. `make vm-latency`, run alone, must
-still pass its 250 ms limit.
+every push once its list passes 1,000 items (`AGC_TURN_STEPS` is 2,000). The
+cost only moves the point where a task yields, but a golden with two tasks and a
+big push loop could then print in another order. If a golden changes, find the
+cause first; do not run `make goldens` to hide it. `make vm-latency`, run alone,
+must still pass its 250 ms limit.
 
 ### 17.6 Multicore and invariants
 
 - **Values are immutable after they are returned**
   ([§10.2.3](10-io-multicore.md), "Values are immutable";
   [§16.7](16-architecture.md#167-sharing)). Tasks on different schedulers share
-  lists with no lock and no copy. Nothing writes a list after `finish`, or after
-  `append` or `set` returns: no cached cursor or last leaf in the list object,
-  no counter, no lazy field. Such a cache would be a write after publication, a
-  data race once N > 1.
+  lists with no lock and no copy. `append`, `set`, `slice` and `concat` never
+  write to their input, and a builder writes only nodes it made, before
+  `finish`. Nothing writes a list after `finish`, or after `append` or `set`
+  returns: no cached cursor or last leaf in the list object, no counter, no
+  lazy field. Such a cache would be a write after publication, a data race
+  once N > 1.
 - **No transients.** A builder lives in one C frame or in a task-private object
   (`agc_native`, a parse, decode or walk frame) that no value refers to until
   `finish`. A task cancelled halfway leaves a builder as garbage. An in-place
@@ -354,12 +357,10 @@ and `Nil` is not a wildcard). Only a hostile `.agcb` can mix.
 **Kind of the result.** The sized builder takes the tag of its first item, and
 the list object is allocated at that push, since its size depends on the kind.
 `from_array` (a literal, `filter`) takes the tag of the first item when all
-items
-have it. `append` keeps the kind of the list (or takes the item's, for an empty
-list); `set`, `slice` and `reverse` keep it. `repeat` takes the tag of the
-value.
-`concat` gives the kind of both lists when equal; an empty side gives the other
-list as it is.
+items have it. `append` keeps the kind of the list (or takes the item's, for an
+empty list); `set`, `slice` and `reverse` keep it. `repeat` takes the tag of the
+value. `concat` gives the kind of both lists when equal; an empty side gives the
+other list as it is.
 
 **Reads and writes.** `list_at` and `agc_list_trie_get` rebuild the value from
 the kind: the tag is the kind and the payload is the 8 bytes. The cursor and the
@@ -390,14 +391,14 @@ masks.
 **Mixing kinds.** The checker does not allow it, but a `.agcb` can ask for it:
 `List.set` of a String into an Int list, a `map` block that returns an Int and
 then a String, `List.concat` of an Int and a Float list. No code reads an item
-as
-another kind, and the kind of a returned list never changes. Where kinds meet,
-the result is boxed, and no operation fails:
+as another kind, and the kind of a returned list never changes. Where kinds
+meet, the result is boxed, and no operation fails:
 
 - A push whose tag differs from a numeric builder's kind replaces the builder by
   a boxed one of the same size, which holds the items written so far (read back
-  as values). That costs O(n) once. A builder that shares leaves is only made
-  for lists of one kind, so it never converts.
+  as values). That costs O(n) once. A boxed builder never becomes numeric. A
+  builder that shares leaves is only made for lists of one kind, so it never
+  converts.
 - `append` and `set` of a value with another tag onto a numeric list copy the
   list to boxed first. The input is unchanged.
 - `concat` of two non-empty lists of different kinds fills one boxed builder
@@ -409,12 +410,11 @@ the result is boxed, and no operation fails:
 **Sort.** For a list that sorts by itself (`List.sort`) and has a numeric kind,
 the entry's item is the raw 8 bytes of the number, and the result is built by
 pushing the sorted words, with no read through the trie by index. The order
-keys,
-the checks and the merge are the same, so the order is the same: stable, `-0.0`
-equal to `0.0`, every NaN last and equal. A second merge on the 8-byte words was
-no faster for Float, because the order key had to be recomputed at every
-compare,
-so it was dropped. `sort_by` and the sort of Strings are unchanged.
+keys, the checks and the merge are the same, so the order is the same: stable,
+`-0.0` equal to `0.0`, every NaN last and equal. A second merge on the 8-byte
+words was no faster for Float, because the order key had to be recomputed at
+every compare, so it was dropped. `sort_by` and the sort of Strings are
+unchanged.
 
 **Costs.** A numeric item takes 8 bytes instead of 16, so a list of at most 32
 items is 24 + 8k bytes. A builder is 48 bytes: the list, the write pointers, the
@@ -429,6 +429,5 @@ the result. Registers, calls, structs, maps and Json values stay `agc_value`.
 **Tests.** `vm/tests/list_test.c` runs the whole API with Int, Float and boxed
 items over the lengths of §17.8 (the million lengths for Int only). It builds
 mixed lists by hand at every boundary, checks that an empty list has no kind,
-and
-that `-0.0`, NaN and the limits of Int survive each operation. The golden
+and that `-0.0`, NaN and the limits of Int survive each operation. The golden
 `tests/fixtures/vm/list-unboxed.agc` covers the same behavior end to end.

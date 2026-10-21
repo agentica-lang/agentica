@@ -48,9 +48,9 @@ joined the pool, and the pool waited for a FIFO that never wrote.
 Known exceptions, as built (the mechanisms are in §10.2.2):
 
 - **Windows `File` calls.** `probe` and `path_string` in `vm/files.c` refuse a
-  named pipe or a device at once, so no `File` call waits on a stream. The
-  waiting streams reach the VM as sockets, process pipes and the standard
-  streams.
+  named pipe or a device at once, so no `File` call waits on a stream.
+  `path_string` refuses the `\\.\`, `\\?\` and `//./` spellings. The waiting
+  streams reach the VM as sockets, process pipes and the standard streams.
 - **Windows stdin.** One blocking `_read` on a thread of the VM's own reads
   every stdin kind, and the task waits on the loop for that job. At most one
   read is in flight. Cancelling a reader detaches the job rather than

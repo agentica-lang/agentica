@@ -104,35 +104,48 @@ byte of a file with a type table, an Updates section or Globals.
   `Workspace.read_text`, `file_exists` and `real_path`
   (`compiler/io/stdin_buffer.agc`, over `compiler/modules/overlay.agc`), so the
   linker reads the root from the buffer and every other file from the disk.
-  Input over 16 MiB exits 2.
+  Input over 16 MiB exits 2. `check --stdin` with no file or with two,
+  `check FILE --stdin` and `compile --stdin` are usage errors (exit 2).
 - `run`: C answers the word `run` before any front end starts. The option parser
   is hand written. It stops at the first non-option and honors `--`. Callers
   always pass `--` before the file, so an option after the file is a program
   argument. A repeated option, an unknown switch or a bad value exits
   2. `--ai` and `--json` may both appear, and the last one wins.
-- `--source-root DIR` puts `DIR/` before every source name of the program that
-  is relative and does not start with `std/`, once, right after the load
-  (`agc_program_set_source_root`). Diagnostics, stack traces, task crash lines
-  and test reports all print the joined name, so the 256-byte cut of stack lines
-  applies to it. A leading `./` is dropped from every name that is joined. The
-  bytes added over all names are capped at 64 MiB; past it the VM exits 2 with
-  `--source-root is too long for this program`. DIR is not normalized, so an
-  imported file above the root prints as `DIR/../shared/x.agc`.
+- `--source-root DIR` (once; DIR must be valid UTF-8 and not `--`, and "" does
+  nothing; a bad DIR exits 2) puts `DIR/` before every source name of the
+  program that is relative and does not start with `std/`, once, right after
+  the load (`agc_program_set_source_root`), so diagnostics, stack traces, task
+  crash lines and test reports all print the joined name (the 256-byte cut of
+  stack lines applies to it). No `/` is added when DIR already ends in one. A
+  name that starts with `std/` is a standard module; the front end writes a
+  user file under a `std/` folder as `./std/NAME.agc`, which is joined. A
+  leading `./` is dropped from every name that is joined, not only from that
+  one: with DIR `r`, `./x.agc` prints as `r/x.agc`. An absolute name is left
+  as it is. The bytes added over all names are capped at 64 MiB; past it the
+  VM exits 2 with `--source-root is too long for this program`. The `.agcb`
+  stores names relative to the folder of the entry file (4.6); `agentica`
+  passes that folder as the user would type it, relative to the working
+  directory, unless the entry is in it. Without the option the stored name
+  prints. DIR is not normalized: an imported file above the root prints as
+  `DIR/../shared/x.agc`.
 - `--flush-timeout MS` sets the end-of-run wait for file close jobs and for the
   buffered output of stdout and stderr (10.2.2, End of run). The environment
   variable `AGENTICA_FLUSH_TIMEOUT_MS` is read by the VM, so `agentica` and
-  `agentica run` both honour it; the flag wins. When the wait runs out, the VM
-  prints the flush-timeout warning after the flush and after the diagnostic of a
-  failed run. The exit code is kept.
+  `agentica run` both honour it; the flag wins. `0` means no wait; values above
+  86400000 (24 hours) are rejected. When the wait runs out, the VM prints the
+  flush-timeout warning after the flush and after the diagnostic of a failed
+  run. The exit code is kept.
 - `--version` prints the VM version and the versions of the libraries it links:
   libgc, yyjson, libuv and OpenSSL (the one that runs). OpenSSL is linked
   statically in the release.
-- `--schedulers N` (10.2.3) sets the scheduler threads. The variable
+- `--schedulers N` (10.2.3) sets the scheduler threads: an integer from 1 to
+  1024, without a sign, a space or a trailing letter. The variable
   `AGENTICA_SCHEDULERS` is read before the front end starts, so a bad value
-  exits 2 for every command, also `check`. The front end itself always runs on
-  one scheduler; `check` and `compile` ignore the flag. `agentica test` refuses
-  the flag (exit 2), since the VMs it starts would not get it; they read the
-  variable.
+  exits 2 for every command, also `check`. The flag wins over a valid variable;
+  a bad flag or a bad variable exits 2 even when the other is valid. The front
+  end itself always runs on one scheduler; `check` and `compile` ignore the
+  flag. `agentica test` refuses the flag (exit 2), since the VMs it starts would
+  not get it; they read the variable.
 - `agentica file.agc [args...]` runs in the same process: the front end compiles
   in memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them
   in a new runtime (see "The single binary" below). No temporary file and no
