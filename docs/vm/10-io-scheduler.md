@@ -654,10 +654,11 @@ section says how the scheduler and the loop keep them, as built.
   `agc_output_forward` on the I/O thread: the bytes join the notice queue (so
   they keep their order with `IO.warn` and never enter a print that holds the
   stream) and the write starts. When more than 64 KiB wait in the queue the
-  child's pipe is no longer read (`uv_read_stop`) until the queue is empty, so a
-  stuck stderr stops the child, not the loop; the end of the run flushes what
-  was queued like any notice. A failed stderr drops these bytes, and fails the
-  run only when the program or the VM wrote to stderr too. A write error on
+  child's pipe is no longer read (`uv_read_stop`) until the queue is down to 32
+  KiB, so a stuck stderr stops the child, not the loop; the end of the run
+  flushes what was queued like any notice. A failed stderr drops these bytes,
+  and fails the run only when text of the program or the VM was lost with them
+  (still in the buffer, or written after the failure). A write error on
   stdout keeps today's exit-code rule (`agc_launch_settle` in `vm/launch.c`). No
   language change: the builtins keep their names, types and results, and a full
   stdout pipe stalls only the tasks that print.

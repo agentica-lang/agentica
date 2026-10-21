@@ -66,8 +66,8 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   returns the host exit code, including nonzero codes, and can be repeated. It
   preserves unread stdout and waits for stderr forwarding to finish.
 - Stderr streams separately to the program's stderr with a fixed-size buffer.
-  While nobody reads the program's stderr, the child blocks on its stderr (and
-  `wait` waits); other tasks keep running.
+  While nobody reads the program's stderr, the child blocks on its stderr and
+  `wait` does not return until it drains; other tasks keep running.
   Output has no lifetime cap. A child can block when stdout's pipe fills: use
   Task to read concurrently with sending or waiting.
 - A process belongs to the task that opened it: when that task ends (it returns,

@@ -75,21 +75,24 @@ Known exceptions, as built:
   the pool, and that read keeps one pool thread until it returns. A regular file
   that reports size 0 (`/proc`, `/sys`) is read to EOF, at most 1 MiB.
 - **stdout and stderr fallbacks.** `puts`, `print`, `IO.inspect` and `IO.warn`
+- **stdout and stderr fallbacks.** `puts`, `print`, `IO.inspect` and `IO.warn`
   copy into a buffer and wait in a FIFO on the loop (row 7.2.1f, §10.2.2). A
   pipe, FIFO or terminal is reopened through `/proc/self/fd/N`, a socket is
   duplicated, and both are written when the poller says they are writable; a
-  regular file or a device epoll refuses is drained by a pool job. A stream
-  keeps the blocking `fwrite` of its `FILE *` only when it cannot be put on the
-  loop: the reopen or the `dup` fails (no `/proc`, or `EACCES`), the descriptor
-  is not open for writing (a closed stdout that `main` refilled with
-  `/dev/null`), it is another descriptor type, or the build is not Linux, macOS
-  or Windows. A full pipe then stalls every task, a stop signal interrupts the
-  write (`EINTR`, no `SA_RESTART`) and ends the run (§14.4), and the final
-  `fflush` is not bounded by the flush limit. The stderr that a child process
-  writes goes through the same buffer (`agc_output_forward`, behind the queued
-  notices); past 64 KiB queued, the VM stops reading the child's stderr until
-  the queue is empty, so the child waits on its pipe, not the loop. With N > 1
-  they are locked per stream (§16.8).
+  regular file or a device epoll refuses is drained by a pool job. The stderr
+  that a child process writes goes through the same buffer
+  (`agc_output_forward`, behind the queued notices); past 64 KiB queued, the VM
+  stops reading the child's stderr until the queue is back to 32 KiB, so the
+  child waits on its pipe, not the loop. A stream keeps the blocking `fwrite` of
+  its `FILE *` only when it cannot be put on the loop: the reopen or the `dup`
+  fails (no `/proc`, or `EACCES`), the descriptor is not open for writing (a
+  closed stdout that `main` refilled with `/dev/null`), it is another
+  descriptor type, or the build is not Linux, macOS or Windows. A full pipe then
+  stalls every task, a stop signal interrupts the write (`EINTR`, no
+  `SA_RESTART`) and ends the run (§14.4), and the final `fflush` is not bounded
+  by the flush limit; a child's stderr then takes the same blocking `fwrite`, on
+  the I/O thread under the stream's lock. With N > 1 they are locked per stream
+  (§16.8).
 - **Notices (text the VM writes to stderr by itself).** A task crash diagnostic
   and the unobserved-task summary are queued (at most 1 MiB) and enter the
   stderr buffer ahead of waiting writers as room appears, in pieces if they are

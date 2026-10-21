@@ -339,9 +339,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `docs/vm/10-io-scheduler.md` §10.2.2). `agc_output_forward` takes a child's
     stderr on the I/O thread into the notice queue; past `AGC_FORWARD_BOUND`
     queued it keeps the caller's `agc_forward_wait` and posts its resume once
-    the queue is empty or the stream failed. `own` says the program or the VM
-    wrote the stream, so a failure from forwarded bytes alone does not fail the
-    run.
+    the queue is down to `AGC_FORWARD_RESUME` (half) or the stream failed or
+    closed. `own` says text of the program or the VM is still in the ring or
+    the queue (cleared when both are empty) or met the failed stream, so a
+    failure that lost only forwarded bytes does not fail the run.
   - Per stream an `agc_output` (`vm->rt->out` and `err`) with a 64 KiB ring
     (`AGC_OUTPUT_BUFFER`) and a FIFO of waiting writers
   - a print that fits and has nobody ahead of it is copied and returns,

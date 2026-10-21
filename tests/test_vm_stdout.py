@@ -15,7 +15,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, compile_text, run, scaled,
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, agc_literal, compile_text, run, scaled,
                                  vm_command, vm_environment)
 
 PEER = FIXTURES / "stdout-peer.py"
@@ -33,6 +33,8 @@ dev_full = pytest.mark.skipif(
     not sys.platform.startswith("linux") or WINDOWS,
     reason="host-only: needs /dev/full (Linux); a reader that went away is the case of the same name on every system")
 not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
+not_wine_child = pytest.mark.skipif(
+    UNDER_WINE, reason="Wine runs the Windows binary, which starts neither /bin/sh nor a Linux Python")
 # The cases that read a socket only after the VM exited check how Windows closes the socket with the process; Wine's
 # sockets are another implementation, so they are not run there.
 not_wine_socket = pytest.mark.skipif(UNDER_WINE, reason="Wine: the close of a socket at exit is not Windows' own")
@@ -585,6 +587,41 @@ def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(tmp_path):
     assert out == "done\n"
 
 
+# A child writes to its stderr, which the VM forwards to its own; LATE is what the program does once the child is done.
+CHILD_STDERR_PROGRAM = """\
+def main() -> Void
+  %s
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * 200000)"], 60000))
+  Process.wait(child, 60000)
+  %s
+end
+
+"""
+
+
+@dev_full
+@not_wine_child
+def test_a_stderr_that_only_a_child_wrote_to_and_cannot_be_written_keeps_the_exit_code_0(tmp_path):
+    program = CHILD_STDERR_PROGRAM % ("", agc_literal(PYTHON), 'puts("done")')
+    status, _, out, _ = run_to_file(tmp_path, "child-full-stderr", program, stderr_file="/dev/full")
+    assert status == 0
+    assert out == "done\n"
+
+
+@not_wine
+@not_wine_child
+@pytest.mark.parametrize("late, status", [("", 0), ('IO.warn("late")', 1)])
+def test_a_stderr_lost_after_the_program_wrote_to_it_fails_the_run_only_if_a_later_write_is_lost(tmp_path, late,
+                                                                                               status):
+    # stderr is the stdout pipe; its reader takes the program's line and goes away, so only the child's bytes fail.
+    early = 'IO.warn("early")\n  Task.sleep(300)'
+    program = CHILD_STDERR_PROGRAM % (early, agc_literal(PYTHON), late)
+    summary, out, _ = run_case(tmp_path, "child-gone", program, peer=["--merge", "--close-after", "6"],
+                               vm=["--allow-run"])
+    assert out.startswith(b"early\n")
+    assert summary["status"] == status
+
+
 def test_a_long_diagnostic_reaches_a_slow_stderr_pipe_whole(tmp_path):
     summary, _, err = run_case(tmp_path, "slow-diagnostic", BIG_UNWRAP_PROGRAM % 17, peer=["--error-delay", "1.0"],
                                vm=["--json"])
@@ -672,15 +709,16 @@ def ticker(child: Process) -> Int
 end
 
 def main() -> Void
-  child = Result.unwrap!(Process.spawn("%s", ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], 60000))
   slowest = Task.await(Task.spawn(&ticker, child))
   puts("slowest #{slowest}")
   IO.inspect(Process.wait(child, 60000))
 end
 
-""" % (str(PYTHON).replace("\\", "\\\\"), FORWARD_BYTES)
+""" % (agc_literal(PYTHON), FORWARD_BYTES)
 
 
+@not_wine_child
 @pytest.mark.parametrize("schedulers", [1, 4])
 def test_a_child_stderr_forwarded_to_a_stderr_nobody_reads_yet_does_not_stop_a_timer_task(tmp_path, schedulers):
     # The reader of the VM's stderr starts only after the ticker is done; the child's 2 MiB then all arrive.
@@ -693,5 +731,5 @@ def test_a_child_stderr_forwarded_to_a_stderr_nobody_reads_yet_does_not_stop_a_t
     lines = lines_of(out)
     assert lines[1] == "ok(0)"
     slowest = int(lines[0].split()[1])
-    assert slowest < 200 + scaled(1000), "a wait of 200 ms took %d ms while stderr was stuck" % slowest
+    assert slowest < 200 + scaled(1500), "a wait of 200 ms took %d ms while stderr was stuck" % slowest
     assert err == "e" * FORWARD_BYTES

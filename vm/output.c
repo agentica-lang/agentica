@@ -20,6 +20,9 @@
    Windows pipe or console, or any handle whose writer is a pool thread or a request. */
 #define FINAL_WAIT_MS 200
 
+/* The notice queue keeps its buffer between uses up to this size, so a child's stderr does not allocate per chunk. */
+#define NOTICE_KEEP (2 * AGC_FORWARD_BOUND)
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* One write of a pool job or a stream: the two ranges of the ring and what came of them. A POLL stream has no ranges. */
 typedef struct {
@@ -59,7 +62,7 @@ static bool forward_file(agc_output *out, const uint8_t *data, size_t n) {
 
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->task->output.out == out; }
 
-bool agc_output_failed(const agc_output *out) { return out->own && out->base && out->base->failed; }
+bool agc_output_failed(const agc_output *out) { return out->base && out->base->failed && out->base->own; }
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
@@ -131,17 +134,28 @@ static void consumed(agc_output *s, size_t n) {
   if (!s->len) {
     s->start = 0;
     trace_run(s, "done");
+    /* Nothing of the program or the VM is left to lose; a print still waiting fails by itself if the stream fails. */
+    if (!queued(s)) s->own = false;
   }
 }
 
-static void drop_notices(agc_output *s) {
+static void free_notices(agc_output *s) {
   free(s->notice);
   s->notice = NULL;
+  s->notice_at = s->notice_len = s->notice_cap = 0;
+}
+
+/* The queue is empty: a small buffer stays for the next notice or chunk. */
+static void drop_notices(agc_output *s) {
+  if (s->notice_cap > NOTICE_KEEP) {
+    free_notices(s);
+    return;
+  }
   s->notice_at = s->notice_len = 0;
 }
 
 /* The readers that stopped for a full queue read again: a step on their loop, at once where this is the loop's thread.
-   The step only restarts a read, so it may run under the stream's lock. */
+   The step only restarts a read (or ends it), so it may run under the stream's lock. */
 static void resume_forwarders(agc_output *s) {
   agc_forward_wait *w = s->forward_waits;
   s->forward_waits = NULL;
@@ -159,9 +173,8 @@ static void pump(agc_output *s, bool force) {
   size_t n = smaller(left, room(s));
   put_bytes(s, s->notice + s->notice_at, n);
   s->notice_at += n;
-  if (s->notice_at < s->notice_len) return;
-  drop_notices(s);
-  resume_forwarders(s);
+  if (s->notice_at == s->notice_len) drop_notices(s);
+  if (s->forward_waits && queued(s) <= AGC_FORWARD_RESUME) resume_forwarders(s);
 }
 
 static void stop_waiting(agc_output *s, agc_task *t) {
@@ -174,7 +187,7 @@ static void fail_stream(agc_vm *vm, agc_output *s) {
   assert(!held(s));
   s->failed = true;
   s->start = s->len = 0;
-  drop_notices(s);
+  free_notices(s);
   resume_forwarders(s);
   for (agc_task *t = s->waiters; t; t = t->wait_next) agc_task_wake(vm, t, "output");
 }
@@ -394,7 +407,7 @@ static bool take_turn(agc_vm *vm, agc_output *out, bool new_writer) {
 static bool put(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
   agc_output *s = out->base;
   bool new_writer = enter(vm, out);
-  out->own = true;
+  s->own = true;
   if (new_writer) {
     agc_output_wait w = {.out = out, .text = text, .newline = newline};
     if (total(&w) == 0) {
@@ -530,10 +543,12 @@ static void close_stream(agc_output *s) {
       s->buf = NULL;
       s->writing = false;
     }
-    drop_notices(s);
+    free_notices(s);
     s->len = 0;
   }
   s->base = NULL;
+  /* A reader still paused goes on (its bytes now take the blocking FILE) or ends, so its child can be freed. */
+  resume_forwarders(s);
 }
 
 void agc_output_close(agc_vm *vm) {
@@ -552,15 +567,22 @@ FILE *agc_notice_begin(agc_output *out, agc_notice *n) {
 
 static void queue_notice(agc_output *s, const char *text, size_t n, bool kept) {
   if (!kept && queued(s) >= AGC_NOTICE_LIMIT) return;
-  if (s->notice_at) {
+  if (s->notice_cap - s->notice_len < n && s->notice_at) {
     memmove(s->notice, s->notice + s->notice_at, queued(s));
     s->notice_len -= s->notice_at;
     s->notice_at = 0;
   }
-  uint8_t *grown = realloc(s->notice, s->notice_len + n);
-  if (!grown) return;
-  memcpy(grown + s->notice_len, text, n);
-  s->notice = grown;
+  if (s->notice_cap - s->notice_len < n) {
+    /* Doubling: the bytes of a child's stderr cost one copy each, not a realloc per chunk. */
+    size_t cap = agc_size_add(s->notice_len, n);
+    size_t doubled = agc_size_mul(s->notice_cap, 2);
+    if (cap < doubled) cap = doubled;
+    uint8_t *grown = realloc(s->notice, cap);
+    if (!grown) return;
+    s->notice = grown;
+    s->notice_cap = cap;
+  }
+  memcpy(s->notice + s->notice_len, text, n);
   s->notice_len += n;
 }
 
@@ -586,10 +608,12 @@ bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forw
   stream_take(vm, s->lock);
   bool more = true;
   if (!s->failed) {
-    /* The queue of the VM's notices keeps the bytes whole beside the prints: they enter the ring ahead of waiting
-       writers, never inside a print that holds the stream. A kept append never drops them for the notice limit;
-       the bound below keeps the queue small instead. */
-    queue_notice(s, (const char *)data, n, true);
+    /* Like the VM's notices the bytes stay whole beside the prints: they enter the ring ahead of waiting writers, never
+       inside a print that holds the stream, at once when nothing is queued before them and through the queue
+       otherwise. A kept append never drops them for the notice limit; the bound below keeps the queue small instead. */
+    size_t now = queued(s) || holds(s) ? 0 : smaller(n, room(s));
+    put_bytes(s, data, now);
+    if (now < n) queue_notice(s, (const char *)data + now, n - now, true);
     flush_now(vm, s);
     if (!s->failed && queued(s) > AGC_FORWARD_BOUND) {
       w->next = s->forward_waits;
@@ -618,7 +642,7 @@ void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
   agc_output *s = out->base;
   stream_take(vm, s->lock);
   bool write = !s->failed && len;
-  out->own = true;
+  if (len) s->own = true;
   if (write && mode == AGC_NOTICE_FINAL)
     finish_text(vm, s, text, len);
   else if (write)

@@ -197,8 +197,8 @@ typedef struct {
 typedef struct agc_output agc_output;
 
 /* A reader of bytes from outside the program (a child's stderr) that stopped reading because a stream's notice queue
-   passed AGC_FORWARD_BOUND (agc_output_forward). The stream keeps it, under its lock, until the queue is empty or the
-   stream fails, then posts RESUME(DATA) to LOOP, the loop that owns the reader's handle. Its owner keeps it alive until
+   passed AGC_FORWARD_BOUND (agc_output_forward). The stream keeps it, under its lock, until the queue is back to
+   AGC_FORWARD_RESUME or the stream fails or closes, then posts RESUME(DATA) to LOOP, the loop that owns the reader's handle. Its owner keeps it alive until
    RESUME runs. */
 typedef struct agc_forward_wait agc_forward_wait;
 struct agc_forward_wait {
@@ -209,6 +209,8 @@ struct agc_forward_wait {
 };
 
 #define AGC_FORWARD_BOUND AGC_OUTPUT_BUFFER
+/* Half the bound: the reader goes on while the queue still feeds the ring, so the pipe and the stream both keep moving. */
+#define AGC_FORWARD_RESUME (AGC_FORWARD_BOUND / 2)
 
 typedef struct {
   agc_output *out;
@@ -247,13 +249,16 @@ struct agc_output {
   uint8_t *buf;
   size_t start, len;
   uint8_t *notice;
-  size_t notice_at, notice_len;
+  /* The notice queue: bytes at [notice_at, notice_len) of a buffer of notice_cap bytes, kept between uses while small. */
+  size_t notice_at, notice_len, notice_cap;
   agc_stdio *io;
   agc_write_mode mode;
   agc_utf8_cut cut;
   bool writing, failed;
-  /* The program or the VM itself put text in this stream (bytes forwarded from a child do not count): only then does a
-     failed write fail the run (agc_output_failed). */
+  /* Text of the program or the VM itself may be lost if the stream fails now: some is still in the ring or the queue,
+     or such a write met the failed stream. Set by those writes, cleared once the ring and the queue are both empty
+     (bytes forwarded from a child never set it), and frozen by the failure: a failed write fails the run only when it
+     is set (agc_output_failed). On the base stream. */
   bool own;
   agc_task *waiters, *waiters_tail;
   agc_forward_wait *forward_waits;
@@ -725,8 +730,8 @@ void agc_flush(agc_vm *vm);
    stream drops the bytes and returns true. A stream left on its blocking FILE (agc_output_open did not put it on the
    loop: the C tests, the fuzzer, a descriptor that cannot be reopened) writes them with fwrite. */
 bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w);
-/* True once a write of the stream failed (its data is dropped from then on) and the program or the VM had written to it:
-   a failure while only a child's stderr went there does not fail the run. */
+/* True once a write of the stream failed (its data is dropped from then on) and text of the program or the VM was lost
+   with it (agc_output.own): a failure that lost only bytes of a child's stderr does not fail the run. */
 bool agc_output_failed(const agc_output *out);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);

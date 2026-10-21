@@ -794,20 +794,6 @@ static void err_over(proc *p, ssize_t n) {
   notify_waits(p);
 }
 
-static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf);
-
-/* The VM's stderr has room again (or failed): the paused read goes on, unless the child was closed meanwhile. */
-static void resume_err(void *data) {
-  proc *p = data;
-  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr_resume pid=%d", (int)p->process.pid);
-  if (!p->err_done && !uv_is_closing((uv_handle_t *)&p->err)) {
-    int rc = uv_read_start((uv_stream_t *)&p->err, alloc_err, forward_err);
-    if (rc) err_over(p, rc);
-  }
-  p->users--;
-  settle(p);
-}
-
 /* A chunk of a plain child's stderr goes to the VM's stderr through its buffer, never by a write that waits on the
    descriptor (§14.1). When the stream holds too much, the read stops, so the child waits on its own pipe. */
 static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
@@ -825,6 +811,18 @@ static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr_pause pid=%d", (int)p->process.pid);
   uv_read_stop(s);
   p->users++;
+}
+
+/* The VM's stderr has room again (or failed): the paused read goes on, unless the child was closed meanwhile. */
+static void resume_err(void *data) {
+  proc *p = data;
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr_resume pid=%d", (int)p->process.pid);
+  if (!p->err_done && !uv_is_closing((uv_handle_t *)&p->err)) {
+    int rc = uv_read_start((uv_stream_t *)&p->err, alloc_err, forward_err);
+    if (rc) err_over(p, rc);
+  }
+  p->users--;
+  settle(p);
 }
 
 static void alloc_out(uv_handle_t *h, size_t suggested, uv_buf_t *buf) {
@@ -1231,6 +1229,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   if (!p) agc_out_of_memory();
   p->trace = vm->rt->trace;
   p->io = agc_io_loop(vm);
+  /* rt is GC memory that the malloc'd proc does not keep alive, but it lives for the whole run, past every child. */
   p->forward = &vm->rt->err;
   p->forward_wait = (agc_forward_wait){NULL, p->io, resume_err, p};
   p->captured = dir != NULL;
