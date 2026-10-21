@@ -33,7 +33,7 @@ check a signature with `agentica help NAME`.
    doc PATH` prints the exported API of a file or `std/` module. Questions about
    code, without reading it: `agentica outline`, `type-at`, `refs` and `symbol`
    (`references/queries.md`). Run flags: `--allow-run` (`Process.spawn`),
-   `--seed N`, `--max-steps N`.
+   `--deny-native` (refuse `extern`), `--seed N`, `--max-steps N`.
 
 ## Cheat sheet
 
@@ -156,6 +156,7 @@ Read only what the task needs:
 - `references/json.md`: JSON. `references/toml.md`: TOML (`std/toml`).
 - `references/files.md`: files, directories, paths, locks, removing trees.
 - `references/processes.md`: starting programs (`Process`).
+- `references/native.md`: calling C functions (`extern` blocks).
 - `references/tasks.md`: concurrency, timed awaits, `Task.cancel`, `Channel`.
 - `references/analysis.md`: compiler answers inside a program (`std/analysis`).
 - `references/binary.md`: `std/binary`. `references/logger.md`: `std/logger`.

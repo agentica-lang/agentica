@@ -29,10 +29,12 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception (SPDX:
     (dual), with its notice at the top of `picohttpparser.h`;
   - OpenSSL 3 (`vm/third_party/openssl`): Apache-2.0, with its license in
     `LICENSE.txt`;
+  - libffi (`vm/third_party/libffi`, built into the Linux x86_64 binary for the
+    native calls): MIT, with its license in `LICENSE`;
 
 Every release archive (Linux, macOS and Windows) ships these notices in
 `licenses/`: `bdwgc/NOTICE`, `libuv/LICENSE` and `LICENSE-extra`,
 `yyjson/LICENSE`, `picohttpparser/LICENSE` (the notice from
-`picohttpparser.h`), `openssl/LICENSE.txt`, `unicode/LICENSE.txt` (also in this
-repository). All of these libraries are built into the program, so no archive
+`picohttpparser.h`), `openssl/LICENSE.txt`, `libffi/LICENSE`,
+`unicode/LICENSE.txt` (also in this repository). All of these libraries are built into the program, so no archive
 carries a library file of its own.

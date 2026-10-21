@@ -524,7 +524,7 @@ runs the golden tests with the full sweep (`make vm-diff-test`),
   libgc. A change of a floor or of the allowed DLLs is made in that script.
 - `tools/release.py package` writes `agentica-VERSION-PLATFORM.(tar.gz|zip)`
   with `bin/agentica` (`bin/agentica.exe` on Windows), `LICENSE`, `NOTICE` and
-  the seven files of `licenses/` (the same set on every platform; the names are
+  the eight files of `licenses/` (the same set on every platform; the names are
   in `LICENSE_FILES`), then verifies the member list: exactly those files, once
   each, below one folder; a link or a device is refused. The archive is
   reproducible (commit time, root owner): the same binary gives the same

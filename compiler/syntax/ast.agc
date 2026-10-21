@@ -101,7 +101,8 @@ export struct ConstDecl
   span: Source.Span
 end
 
-## def name(params) -> Result with its body.
+## def name(params) -> Result with its body. A function of an `extern "library"` block has native Present and no body;
+## its parameter and result types are already the Agentica types of the C types it was written with.
 export struct FunctionDecl
   id: Int
   name: String
@@ -110,7 +111,17 @@ export struct FunctionDecl
   result: TypeRef
   body: List[Stmt]
   doc: Optional[String]
+  native: Optional[Native]
   span: Source.Span
+end
+
+## The C side of an extern function: the library it is in, as written, its C name (the linker renames the function,
+## never this), and the codes of its C types, the result's first and then one per parameter (i C.Int, l C.Int64,
+## d C.Double, b C.Bool, s C.String, v Void).
+export struct Native
+  library: String
+  symbol: String
+  codes: String
 end
 
 ## One parameter of a function, with its default value when `NAME: type = expression` gave one. The default is an

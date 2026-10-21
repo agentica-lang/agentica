@@ -1,0 +1,11 @@
+extern "libm.so.6"
+  ## The cosine.
+  export def cos(x: C.Double) -> C.Double
+
+  def labs(n: C.Int64) -> C.Int64
+end
+
+extern "./lib/my peer.so"
+  def peer(a: C.Int, b: C.Bool, s: C.String) -> C.String
+  def tick() -> Void
+end

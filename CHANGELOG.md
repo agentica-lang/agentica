@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `extern` blocks call C functions of native libraries, with `C.Int`,
+  `C.Int64`, `C.Double`, `C.Bool` and `C.String` (Linux x86_64 for now);
+  `--deny-native` refuses such a program at load.
+
 ## [0.8.0] - 2026-10-21
 
 ### Added

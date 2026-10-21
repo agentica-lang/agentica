@@ -53,7 +53,7 @@ core and the driver call goes in `core.h`; a service's export goes in
 stay in their place: `gc.h` in `value.c`, `uv.h` in `loop.c` and the stream
 services, OpenSSL in `tls_openssl.c` (and `tls_trust*.c`) and
 `digest_openssl.c`, picohttpparser in `http_pico.c`,
-`yyjson.h` in `json.c`.
+`yyjson.h` in `json.c`, `ffi.h` in `ffi_libffi.c`.
 
 ## Rules every change keeps
 

@@ -10,5 +10,6 @@ description: Standard input and output, files, other programs, the network, and 
 - [TCP, TLS and HTTP](/library/io-and-system/network/): sockets, an HTTP client and an HTTP server.
 - [Logger](/library/io-and-system/logger/): levels, named handlers, and text or JSON lines on stderr.
 - [System, Time and Random](/library/io-and-system/system/): program arguments, exit codes, clocks and random numbers.
+- [Native code](/library/io-and-system/native/): call C functions of a native library with an `extern` block.
 
 Files, processes and the network return a `Result` and take timeouts in milliseconds.

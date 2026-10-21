@@ -11,8 +11,8 @@ import Texts from "cli_text"
 
 # The options that are given once at most, with the number of values each takes; --steps may repeat.
 ONCE = {
-  "--version": 0, "--allow-run": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1,
-  "--dump": 0, "--dump-ir": 0, "--ai": 0, "--json": 0,
+  "--version": 0, "--allow-run": 0, "--deny-native": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1,
+  "--schedulers": 1, "--dump": 0, "--dump-ir": 0, "--ai": 0, "--json": 0,
 }
 DIGITS = "0123456789"
 
@@ -24,6 +24,7 @@ export struct Options
   flush_timeout: String
   schedulers: String
   allow_run: Bool
+  deny_native: Bool
   dump: Bool
   dump_ir: Bool
   steps: List[String]
@@ -52,6 +53,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     flush_timeout: "",
     schedulers: "",
     allow_run: false,
+    deny_native: false,
     dump: false,
     dump_ir: false,
     steps: [],
@@ -117,6 +119,7 @@ end
 def apply(options: Options, word: String, value: String) -> Applied
   case word
     "--allow-run" -> return Applied.Changed(options.with(allow_run: true))
+    "--deny-native" -> return Applied.Changed(options.with(deny_native: true))
     "--dump" -> return Applied.Changed(options.with(dump: true))
     "--dump-ir" -> return Applied.Changed(options.with(dump_ir: true))
     "--ai" -> return Applied.Changed(options.with(style: "ai"))

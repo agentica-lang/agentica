@@ -346,6 +346,9 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
   if options.allow_run
     flags = flags.push("--allow-run")
   end
+  if options.deny_native
+    flags = flags.push("--deny-native")
+  end
   root = SourceRoot.option(source)
   if root != ""
     flags = flags.concat(["--source-root", root])
@@ -428,6 +431,11 @@ def test(session: Session, words: List[String]) -> Int
   # dropped without a word. Those VMs inherit AGENTICA_SCHEDULERS, which sets the count for all of them.
   if options.schedulers != ""
     return emit(Reply.failed(2, "agentica: test does not take --schedulers; set AGENTICA_SCHEDULERS instead\n"))
+  end
+  # The VMs of the test files do not get it either (issue #534 adds it), and dropping it would run native code that
+  # the flag refuses.
+  if options.deny_native
+    return emit(Reply.failed(2, "agentica: test does not take --deny-native yet\n"))
   end
   driver: List[String] = [
     "--vm", binary, "--version", session.settings.version, "--style", options.style,

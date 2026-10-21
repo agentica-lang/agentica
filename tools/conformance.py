@@ -53,6 +53,7 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 KNOWN_ISSUES: dict[int, str] = {
     486: "the multicore cases whose children are sh scripts (POSIX process ids, descriptor 3, ps) have no Windows test",
     489: "System.exit resets the open TCP sockets on Windows instead of closing them",
+    548: "native calls (extern functions) are built on Linux x86_64 only; macOS and Windows refuse them at load",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
@@ -111,6 +112,7 @@ AREAS = {
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
             "tests/test_spec_lexer.py", "tests/test_spec_main.py", "tests/test_spec_modules.py",
             "tests/test_spec_packages.py", "tests/test_spec_parser.py", "tests/test_spec_patterns.py",
+            "tests/test_spec_extern.py",
         ],
     ),
     "golden": (
@@ -122,12 +124,13 @@ AREAS = {
         ],
     ),
     "library": (
-        "std/ modules and standard streams: analysis, binary, toml, prelude, logger, clock, crypto, stdout and stderr",
+        "std/ modules, standard streams and native calls: analysis, binary, toml, prelude, logger, clock, crypto, "
+        "stdout and stderr, extern functions",
         [
             "tests/test_std_analysis.py", "tests/test_std_binary.py", "tests/test_std_toml.py",
             "tests/test_stdlib_prelude.py",
             "tests/test_vm_logger.py", "tests/test_vm_monotonic.py", "tests/test_vm_stdout.py",
-            "tests/test_vm_crypto.py",
+            "tests/test_vm_crypto.py", "tests/test_vm_native.py",
         ],
     ),
     "files": (

@@ -28,6 +28,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_logger_builtins, &agc_logger_builtin_count},
   {agc_test_builtins, &agc_test_builtin_count},
   {agc_front_end_builtins, &agc_front_end_builtin_count},
+  {agc_ffi_builtins, &agc_ffi_builtin_count},
   {agc_std_builtins, &agc_std_builtin_count},
   {agc_profile_builtins, &agc_profile_builtin_count},
 };

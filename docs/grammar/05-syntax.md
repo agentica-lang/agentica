@@ -9,7 +9,7 @@ uppercase names are lexical tokens.
 ```ebnf
 program          = [ NL ], [ module_doc ], { declaration }, EOF ;
 module_doc       = DOC, NL, NL ;
-declaration      = import_decl
+declaration      = import_decl | extern_decl
                  | [ DOC, NL ], ( constant_decl | function_decl | struct_decl | enum_decl | alias_decl
                  | "export", ( function_decl | struct_decl | enum_decl | alias_decl ) ) ;
 constant_decl    = [ "export" ], CONST_NAME, [ ":", type ], "=", expression, NL ;
@@ -21,6 +21,13 @@ function_decl    = "def", NAME, "(", [ parameters ], ")",
                    "->", type, NL, block, "end", NL ;
 parameters       = parameter, { ",", parameter }, [ "," ] ;
 parameter        = NAME, ":", type, [ "=", expression ] ;
+
+extern_decl      = "extern", STRING, NL, { extern_function }, "end", NL ;
+extern_function  = [ DOC, NL ], [ "export" ], "def", NAME, "(",
+                   [ c_parameter, { ",", c_parameter }, [ "," ] ], ")",
+                   "->", ( c_type | "Void" ), NL ;
+c_parameter      = NAME, ":", c_type ;
+c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" ) ;
 
 struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
@@ -40,6 +47,18 @@ A parameter may end with a default value, `NAME: type = expression`. The parser
 takes any expression after `=`, so that the checker can say why a default is not
 allowed; the rules are in section 6, "Default parameter values". A block
 parameter (`do |x|`) takes no default.
+
+An `extern` block declares functions of a native library, named by the string
+after `extern` (section 6d, "Native code"). Each line is the signature of one C
+function: no body, no default (`PARSE-EXTERN-DEFAULT` at the parameter), C
+types only (`PARSE-EXTERN-TYPE` at the type) and a C name, without `?` or `!`
+(`PARSE-EXTERN-NAME` at the name). Anything else in the block, a body or a
+library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. Each function is a
+`def` for the rest of the language: `export` makes it importable, it takes
+the place of a `def` in the declaration order, the whole block needs the blank
+line of a declaration, and the checker sees `C.Int` and `C.Int64` as `Int`, `C.Double` as `Float`,
+`C.Bool` as `Bool` and `C.String` as `String`. `extern` is contextual: it is a
+keyword only at the start of a top-level declaration.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

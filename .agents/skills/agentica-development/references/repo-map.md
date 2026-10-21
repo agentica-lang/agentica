@@ -61,6 +61,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   lower/  # the IR and lowering
     ir.agc lower_tables.agc lower_state.agc  # the IR as data, the lowering tables (VM_BUILTINS), Cx and Fx (the function being lowered)
     lowering.agc    # lower(linked, checked, catalog): Lowered.Done(Ir.Program) | Failed(Problem), function table
+    lower_native.agc  # the body of an extern function: one Native.call with its signature string (vm/ffi.c)
   bytecode/  # the bytecode writer
     bytecode_tables.agc  # format constants and opcode numbers
     bytecode_writer.agc  # write(program, version): Written.Done(bytes) | Failed(Problem), the sections in file order; the version is an input, never a constant
@@ -83,7 +84,8 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   agentica.c      # the binary's main: `run` (the VM with its flags), else the front end in a first runtime, retired at the hand-off, then the program in a second
   embedded.h      # the symbols of the generated embedded.s: the front end, the BDD runner and step program, and the std/ sources (references/vm-build.md)
   tools/          # check-layers.sh and its self-test, gen-embedded.sh (references/vm-build.md)
-  third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
+  ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, the refusal at load, libffi on Linux x86_64 (references/vm-core.md)
+  third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl, libffi (Linux x86_64 only) (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
   tests/          # C tests, plain asserts (references/vm-tests.md)
 tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); references/vm-tests.md says which covers what
   test_spec_<area>.py  # pytest language rules through the CLI (code and span from --json, never message text); shared helpers live in spec_support.py. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.

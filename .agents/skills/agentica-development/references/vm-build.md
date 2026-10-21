@@ -7,13 +7,13 @@ Read first: `references/vm.md`.
 ## Commands
 
 ```sh
-git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser and openssl after a clone or a bump
+git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparser, openssl and libffi after a clone or a bump
 make                                 # dist/agentica, the one binary, from bootstrap/stage0.agcb (Linux: the system libgc and OpenSSL 3 from pkg-config, dynamic: Debian libgc-dev libssl-dev pkg-config)
 make AGENTICA_GC=vendored            # libgc from the submodule (extra/gc.c) instead, static; the release, the GC-stress build and non-Linux hosts build this way
 make AGENTICA_OPENSSL=vendored       # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
 make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
 make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
-make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser and libuv for this mode
+make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser, libuv and (Linux x86_64) libffi for this mode
 make -s vm-third-party-key           # their build key (includes a libgc=system|vendored line; compile lines, compiler, submodule commits and local diffs)
 make vm-test                         # C tests: every vm/tests/<name>_test.c in VM_TESTS
 make stage1 stage2 stage3            # the front end stages in build/stage/ (the chain: references/ci.md)

@@ -7,7 +7,7 @@
 USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
-    "[--schedulers N] [--allow-run] [check] <source-file> [args...]",
+    "[--schedulers N] [--allow-run] [--deny-native] [check] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check --stdin <source-file>",
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
@@ -42,8 +42,8 @@ SUMMARY = [
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",
-  "                                          --flush-timeout MS, --schedulers N, --allow-run, --source-root DIR,",
-  "                                          --ai, --json",
+  "                                          --flush-timeout MS, --schedulers N, --allow-run, --deny-native,",
+  "                                          --source-root DIR, --ai, --json",
   "  agentica doc PATH [--json]              exported API of a file or a std/ module, with its ## docs (parse only)",
   "  agentica outline FILE [--json]          declarations of a file or a std/ module, private ones too, with docs",
   "                                          and spans (parse only); --stdin FILE reads the file from standard input",
@@ -81,6 +81,8 @@ OPTIONS = [
   "     print the version and exit",
   "  --allow-run",
   "     allow Process.spawn to run child programs",
+  "  --deny-native",
+  "     refuse a program that declares extern functions (native code), before it starts",
   "  --max-steps <count>",
   "     limit execution to N expression/statement entries",
   "  --seed <n>",

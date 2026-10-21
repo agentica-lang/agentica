@@ -25,8 +25,11 @@ struct ArmDone
 end
 
 ## Checks a function: its body with the parameters in scope, then that every path returns a value when the result is
-## not Void.
+## not Void. An extern function has no body: its signature is all there is.
 export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
+  if extern?(node)
+    return ok(st)
+  end
   signature = cx.functions[node.name]
   here = st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature))
   checked = try DefaultChecks.check_types(cx, here, node, signature.params)
@@ -861,5 +864,13 @@ def statement_span(statement: Ast.Stmt) -> Source.Span
     Ast.Stmt.For(node) -> return node.span
     Ast.Stmt.Control(node) -> return node.span
     Ast.Stmt.Case(node) -> return node.span
+  end
+end
+
+# Whether the function is declared in an extern block.
+def extern?(node: Ast.FunctionDecl) -> Bool
+  case node.native
+    Ast.Optional.Present(link) -> return true
+    Ast.Optional.Absent -> return false
   end
 end

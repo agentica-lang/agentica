@@ -539,6 +539,9 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
     } else if (strcmp(arg, "--allow-run") == 0) {
       if (!once(name, &options->allow_run, arg)) return AGC_LAUNCH_BAD;
       i++;
+    } else if (strcmp(arg, "--deny-native") == 0) {
+      if (!once(name, &options->deny_native, arg)) return AGC_LAUNCH_BAD;
+      i++;
     } else if (strcmp(arg, "--max-steps") == 0) {
       if (!once(name, &seen_steps, arg)) return AGC_LAUNCH_BAD;
       if (!value || !parse_steps(value, &options->max_steps))
@@ -586,6 +589,23 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
   }
   *at = i;
   return AGC_LAUNCH_OK;
+}
+
+bool agc_launch_native(const agc_program *program, const agc_launch_options *options) {
+  const char *message = NULL;
+  uint32_t span = 0;
+  const char *code = agc_ffi_refusal(program, options->deny_native, &message, &span);
+  if (!code) return true;
+  agc_outcome outcome;
+  memset(&outcome, 0, sizeof outcome);
+  outcome.kind = AGC_FAILED;
+  outcome.code = code;
+  outcome.message = message;
+  outcome.message_len = strlen(message);
+  outcome.span = span;
+  agc_print_diagnostic(stderr, program, &outcome, options->style, false);
+  fflush(stderr);
+  return false;
 }
 
 agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_launch_options *options,

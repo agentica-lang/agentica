@@ -484,6 +484,20 @@ static void load_globals(reader *r, agc_program *p) {
   p->globals = load_alloc(r, agc_size_mul(p->global_count, sizeof(agc_value)), false);
 }
 
+/* The first function that calls Native.call: the span of a refusal at load (agc_ffi_refusal). */
+static void note_native_function(agc_program *p) {
+  for (uint32_t i = 0; i < p->function_count; i++) {
+    const agc_function *f = &p->functions[i];
+    for (uint32_t pc = 0; pc < f->count; pc++) {
+      agc_instr in = f->code[pc];
+      if (in.op == AGC_OP_CALL_BUILTIN && ((uint32_t)in.b | ((uint32_t)in.c << 16)) == p->native_call) {
+        p->native_function = i;
+        return;
+      }
+    }
+  }
+}
+
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
@@ -546,6 +560,8 @@ static void load(reader *r, agc_program *p) {
   load_updates(r, p);
   load_globals(r, p);
 
+  p->native_call = UINT32_MAX;
+  p->native_function = UINT32_MAX;
   p->builtin_count = read_count(r, 8, "builtin");
   p->builtins = load_alloc(r, agc_size_mul(p->builtin_count, sizeof(agc_builtin *)), false);
   for (uint32_t i = 0; i < p->builtin_count; i++) {
@@ -553,6 +569,7 @@ static void load(reader *r, agc_program *p) {
     uint32_t arity = read_u32(r);
     p->builtins[i] = agc_find_builtin((const uint8_t *)name->data, name->bytes, arity);
     if (!p->builtins[i]) reject(r, "unknown builtin");
+    if (strcmp(p->builtins[i]->name, AGC_NATIVE_CALL) == 0) p->native_call = i;
   }
 
   p->function_count = read_count(r, 36, "function");
@@ -598,6 +615,7 @@ static void load(reader *r, agc_program *p) {
   if (left(r) != 0) reject(r, "trailing bytes");
 
   for (uint32_t i = 0; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
+  if (p->native_call != UINT32_MAX) note_native_function(p);
 }
 
 static void trace_tables(const agc_trace *tr, const agc_program *p) {

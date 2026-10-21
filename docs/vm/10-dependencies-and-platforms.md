@@ -59,6 +59,14 @@ architecture, a library outside that list or missing hardening.
     knows no limits. It is built at the baseline, without `-msse4.2`. Its SSE4.2
     path is a SIMD candidate (`docs/future/19-simd.md` §19).
 
+- **Dependency:** libffi
+  - **Choice:** Vendored submodule `vm/third_party/libffi` (MIT), tag v3.8.0.
+    It calls the C functions of `extern` blocks. Built on Linux x86_64 only for
+    now (issue #548): its x86-64 sources are compiled per mode into
+    `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure
+    script would write made by `mk/vm.mk`, and linked statically. Only
+    `vm/ffi_libffi.c` includes `ffi.h`.
+
 - **Dependency:** OpenSSL 3.5 LTS
   - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),
     shallow, tag `openssl-3.5.9`. Linked statically in the release

@@ -24,7 +24,7 @@ typedef struct {
   const char *source_root;
   const char *embedded;
   size_t source_root_chars;
-  bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, allow_run;
+  bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, allow_run, deny_native;
 } agc_launch_options;
 
 typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;
@@ -73,6 +73,11 @@ int64_t agc_launch_default_schedulers(void);
  * trace, the test-only blocking output); the default count drops to 1 there instead. Call it once the flags and the
  * environment are both applied. */
 bool agc_launch_supported(const char *name, agc_launch_options *options);
+
+/* --deny-native and the systems without native calls: false, with the diagnostic on stderr in the run's style, when
+ * PROGRAM declares extern functions and may not run (agc_ffi_refusal). Call it after the load, before the VM starts:
+ * the caller exits with status 2. */
+bool agc_launch_native(const agc_program *program, const agc_launch_options *options);
 
 /* --driver-pid: false when the parent process is not the driver that named itself. */
 bool agc_launch_bind(int64_t driver);

@@ -333,6 +333,8 @@ typedef struct {
      signal and the final diagnostics share it, so that the exit does not wait once per stream and notice. */
   uint64_t settle_by;
   agc_front_end *front_end;
+  /* The prepared native calls of the run (vm/ffi.c), made at the first call of each extern function; NULL before. */
+  struct agc_ffi_cache *ffi;
   /* The std/ sources that the binary carries (Std.source, FrontEnd.std_source); NULL and 0 in a runtime without them,
      such as the C tests. Set before the run starts and never written again, over constant data of the binary, so every
      scheduler reads them without a lock. */

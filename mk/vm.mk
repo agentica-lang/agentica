@@ -31,15 +31,16 @@
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
-# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser and libuv for this mode (no libgc with SANITIZE=1)
+# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser, libuv and (Linux x86_64) libffi for this mode (no libgc with SANITIZE=1)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
 PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
+FFI_DIR := vm/third_party/libffi
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -82,6 +83,15 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/async unix/core unix/dl unix/fs unix/getaddrinfo unix/getnameinfo unix/loop-watcher unix/loop unix/pipe unix/poll \
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
   unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
+endif
+# libffi for the native calls (vm/ffi_libffi.c), compiled from its sources like libuv, with the two headers that its
+# configure script would write made by the rules below. Linux x86_64 only for now (issue #548): elsewhere vm/ffi_none.c
+# refuses a program with extern functions.
+FFI_NAMES :=
+ifneq ($(VM_OS),Windows_NT)
+ifeq ($(shell uname -s) $(shell uname -m),Linux x86_64)
+FFI_NAMES := prep_cif types x86/ffi64 x86/ffiw64 x86/unix64 x86/win64
+endif
 endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 PKG_CONFIG ?= pkg-config
@@ -159,6 +169,8 @@ GC_COMPILE = $(CC) -std=c11 -O2 $(VM_PIC) -DALL_INTERIOR_POINTERS -DNO_EXECUTE_P
 YY_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS) $(YY_DEFS)
 PICO_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS)
 UV_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) $(UV_DEFS) -I $(UV_DIR)/include -I $(UV_DIR)/src
+FFI_INC = $(VM_BUILD)/ffi/include
+FFI_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) -I $(FFI_INC) -I $(FFI_DIR)/include
 SUBMODULE_KEY = if [ "$$(git -C $(1) rev-parse --show-toplevel 2>/dev/null)" = '$(CURDIR)/$(1)' ]; then \
   git ls-tree HEAD $(1); git -C $(1) rev-parse HEAD; git -C $(1) diff --no-ext-diff --no-color --binary HEAD | cksum; \
   (cd $(1) && git ls-files -z -o --exclude-standard | xargs -0r cksum); \
@@ -168,7 +180,9 @@ GC_KEY = { echo '$(GC_COMPILE)'; $(CC) --version 2>/dev/null | head -n 1; $(call
 TP_KEY = { echo '$(shell uname -s) $(shell uname -m) $(OS)'; \
   echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) | $(AR) rcs'; $(VM_CC) --version 2>/dev/null | head -n 1; \
   $(AR) --version 2>/dev/null | head -n 1; \
-  $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); }
+  echo '$(FFI_COMPILE) | $(FFI_NAMES)'; \
+  $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); \
+  $(if $(FFI_NAMES),$(call SUBMODULE_KEY,$(FFI_DIR));) }
 ifeq ($(origin CCACHE),undefined)
 CCACHE := $(shell c=$$(command -v ccache 2>/dev/null) || exit 0; d=$$($$c -k cache_dir 2>/dev/null) || d=$${CCACHE_DIR:-$$HOME/.ccache}; \
   while [ ! -d "$$d" ]; do d=$$(dirname "$$d"); done; [ -w "$$d" ] && echo $$c)
@@ -181,6 +195,12 @@ VM_YY := $(VM_BUILD)/yyjson.o
 VM_PICO := $(VM_BUILD)/picohttpparser.o
 VM_UV := $(if $(UV_NAMES),$(VM_BUILD)/libuv.a)
 UV_OBJS := $(patsubst %,$(VM_BUILD)/uv/%.o,$(UV_NAMES))
+VM_FFI := $(if $(FFI_NAMES),$(VM_BUILD)/libffi.a)
+FFI_OBJS := $(patsubst %,$(VM_BUILD)/ffi/%.o,$(FFI_NAMES))
+FFI_HEADERS := $(if $(FFI_NAMES),$(FFI_INC)/ffi.h $(FFI_INC)/fficonfig.h $(FFI_INC)/ffitarget.h)
+ifneq ($(FFI_NAMES),)
+VM_CFLAGS += -DAGC_FFI -I $(FFI_INC)
+endif
 OSSL_BUILD := $(VM_BUILD)/openssl
 OSSL_STAMP := $(VM_BUILD)/openssl-flags
 OSSL_OPTS := no-shared no-tests no-docs no-apps no-module no-dso no-engine no-legacy no-autoload-config no-async no-comp \
@@ -251,7 +271,7 @@ vm-third-party-key:
 	@$(TP_KEY)
 	@$(if $(filter system,$(GC_MODE)),$(GC_SYSTEM_KEY),$(if $(VM_GC),$(GC_KEY),:))
 
-vm-third-party: $(GC_DEP) $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
+vm-third-party: $(GC_DEP) $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_FFI)
 
 $(GC_DIR)/extra/gc.c:
 	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
@@ -295,6 +315,45 @@ $(VM_BUILD)/libuv.a: $(UV_OBJS) | $(UV_DIR)/src/uv-common.c
 	rm -f $@
 	$(AR) rcs $@ $(UV_OBJS)
 
+$(FFI_DIR)/include/ffi.h.in:
+	@echo "missing $(FFI_DIR): run git submodule update --init" >&2; exit 1
+
+# What libffi's configure would find on Linux x86_64 with gcc or clang: the version comes from configure.ac, so a
+# submodule bump follows it.
+$(FFI_INC)/ffi.h: $(VM_TP_STAMP) | $(FFI_DIR)/include/ffi.h.in
+	@mkdir -p $(dir $@)
+	version=$$(sed -n 's/^AC_INIT(\[libffi\],\[\([0-9.]*\)\].*/\1/p' $(FFI_DIR)/configure.ac); \
+	  number=$$(echo "$$version" | awk -F. '{print $$1 * 10000 + $$2 * 100 + $$3}'); \
+	  [ -n "$$version" ] || { echo "cannot read the libffi version from $(FFI_DIR)/configure.ac" >&2; exit 1; }; \
+	  sed -e "s/@VERSION@/$$version/" -e 's/@TARGET@/X86_64/g' -e 's/@HAVE_LONG_DOUBLE@/1/' \
+	    -e "s/@FFI_VERSION_STRING@/$$version/" -e "s/@FFI_VERSION_NUMBER@/$$number/" \
+	    -e 's/@FFI_EXEC_TRAMPOLINE_TABLE@/0/g' $(FFI_DIR)/include/ffi.h.in > $@.new && mv $@.new $@
+
+$(FFI_INC)/ffitarget.h: $(VM_TP_STAMP) | $(FFI_DIR)/include/ffi.h.in
+	@mkdir -p $(dir $@)
+	cp $(FFI_DIR)/src/x86/ffitarget.h $@
+
+$(FFI_INC)/fficonfig.h: $(VM_TP_STAMP)
+	@mkdir -p $(dir $@)
+	@printf '%s\n' '#define STDC_HEADERS 1' '#define HAVE_MEMCPY 1' '#define HAVE_LONG_DOUBLE 1' \
+	  '#define HAVE_AS_X86_PCREL 1' '#define HAVE_RO_EH_FRAME 1' '#define EH_FRAME_FLAGS "a"' '#define FFI_NO_RAW_API 1' \
+	  '#ifdef LIBFFI_ASM' '#define FFI_HIDDEN(name) .hidden name' '#else' \
+	  '#define FFI_HIDDEN __attribute__ ((visibility ("hidden")))' '#endif' > $@
+
+$(VM_BUILD)/ffi/%.o: $(FFI_DIR)/src/%.c $(FFI_HEADERS)
+	@mkdir -p $(dir $@)
+	$(CCACHE) $(FFI_COMPILE) $(DEBUG_MAP) -c $< -o $@
+
+$(VM_BUILD)/ffi/%.o: $(FFI_DIR)/src/%.S $(FFI_HEADERS)
+	@mkdir -p $(dir $@)
+	$(CCACHE) $(FFI_COMPILE) $(DEBUG_MAP) -c $< -o $@
+
+$(VM_BUILD)/libffi.a: $(FFI_OBJS)
+	rm -f $@
+	$(AR) rcs $@ $(FFI_OBJS)
+
+$(VM_OBJ)/ffi_libffi.o: $(FFI_HEADERS)
+
 $(OSSL_DIR)/VERSION.dat:
 	@echo "missing $(OSSL_DIR): run git submodule update --init" >&2; exit 1
 
@@ -328,5 +387,5 @@ $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
 $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 	@test -f $@ || { echo "$@ is missing: remove $(OSSL_BUILD) and rebuild" >&2; exit 1; }
 
-VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV)
+VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_FFI)
 VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(VM_LDFLAGS)

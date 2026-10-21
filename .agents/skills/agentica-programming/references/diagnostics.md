@@ -443,10 +443,21 @@ there, at a character boundary, and ends with `...`.
   - **Meaning:** under `agentica test`, a test ran longer than 30 seconds; the
     rest of its file is not executed
 
+- **Code:** `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`
+  - **Meaning:** an `extern` signature with a type that is not a C type (the
+    span is the type), a name with `?` or `!`, or a parameter with a default;
+    see `native.md`
+
+- **Code:** `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-DENIED`,
+  `RUNTIME-NATIVE-UNSUPPORTED`
+  - **Meaning:** the library or function of an extern call was not found (at
+    the extern function); or, at load with exit 2, `--deny-native` refused a
+    program with an extern function, or the system has no native calls yet
+
 - **Code:** `LOWER-UNSUPPORTED`
-  - **Meaning:** the VM cannot run this form; exit 1 before anything runs. Every
-    checked program runs on the VM today, so seeing it is an interpreter bug to
-    report
+  - **Meaning:** the VM cannot run this form; exit 1 before anything runs: an
+    extern function with more than 64 parameters. Otherwise every checked
+    program runs on the VM, so seeing it is an interpreter bug to report
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and
 `RUNTIME-BDD-*` codes; see `bdd.md`.
