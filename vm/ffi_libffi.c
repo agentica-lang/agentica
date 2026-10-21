@@ -1,7 +1,6 @@
 /*
  * The native calls of a build with libffi (AGC_FFI, Linux x86_64 for now):
- * uv_dlopen and uv_dlsym find the function (libuv's portable dlopen, which
- * the ports of #548 keep), ffi_prep_cif describes its signature
+ * dlopen and dlsym find the function, ffi_prep_cif describes its signature
  * once and ffi_call calls it. Adapter layer; ffi.c converts the values and
  * ffi_none.c is the other half. Design: docs/grammar/06d-io-and-network.md.
  */
@@ -9,11 +8,11 @@
 #include "ffi_os.h"
 #include "value.h"
 
+#include <dlfcn.h>
 #include <ffi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uv.h>
 
 /* The cif points at types, so both live in one block. */
 struct agc_ffi_call {
@@ -44,19 +43,22 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
     snprintf(error, size, "%s has more than %d parameters", symbol, AGC_FFI_MAX_PARAMS);
     return NULL;
   }
-  /* The library is never closed: a prepared call keeps pointing into it until the process ends. Its uv_lib_t holds
-     the handle and libuv's last error text, so it lives in malloc memory that is never freed either. */
-  uv_lib_t *lib = malloc(sizeof(uv_lib_t));
-  if (!lib) agc_out_of_memory();
-  if (uv_dlopen(library, lib) != 0) {
-    snprintf(error, size, "cannot open %s: %s", library, uv_dlerror(lib));
-    uv_dlclose(lib);
-    free(lib);
+  /* RTLD_NOW binds every symbol of the library at once, so a missing dependency is a load error here and not a
+     crash at its first use. A library that holds the function is never closed: a prepared call keeps pointing into
+     it until the process ends. */
+  void *lib = dlopen(library, RTLD_NOW | RTLD_LOCAL);
+  if (!lib) {
+    const char *why = dlerror();
+    snprintf(error, size, "cannot open %s: %s", library, why ? why : "unknown error");
     return NULL;
   }
-  void *found = NULL;
-  if (uv_dlsym(lib, symbol, &found) != 0 || !found) {
-    snprintf(error, size, "%s has no function %s", library, symbol);
+  dlerror();
+  void *found = dlsym(lib, symbol);
+  if (!found) {
+    const char *why = dlerror();
+    snprintf(error, size, "%s has no function %s: %s", library, symbol, why ? why : "the symbol is NULL");
+    /* dlopen counts references: closing drops only this one, so a failing call repeated in a loop leaks nothing. */
+    dlclose(lib);
     return NULL;
   }
   agc_ffi_call *call = malloc(sizeof(agc_ffi_call));
@@ -68,6 +70,7 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   for (uint32_t k = 0; k < count; k++) call->types[k] = ffi_type_of(params[k]);
   if (ffi_prep_cif(&call->cif, FFI_DEFAULT_ABI, count, ffi_type_of(result), call->types) != FFI_OK) {
     free(call);
+    dlclose(lib);
     snprintf(error, size, "cannot describe the signature of %s", symbol);
     return NULL;
   }

@@ -35,12 +35,15 @@ COMPOUND_OPERATORS: Map[String, String] = {
   "modulo-assign": "modulo",
 }
 
-# A declaration with the next position and the next free node id.
 # The C types an extern function may take, with their codes (Ast.Native) and the Agentica types the program sees.
 EXTERN_CODES = {"C.Int": "i", "C.Int64": "l", "C.Double": "d", "C.Bool": "b", "C.String": "s"}
 EXTERN_TYPES = {"i": "Int", "l": "Int", "d": "Float", "b": "Bool", "s": "String", "v": "Void"}
 EXTERN_TYPES_HELP = "extern functions take and return C.Int, C.Int64, C.Double, C.Bool or C.String, or return Void"
+EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
+# The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
+EXTERN_MAX_PARAMS = 64
 
+# A declaration with the next position and the next free node id.
 struct DeclAt
   node: Ast.Decl
   pos: Int
@@ -1770,9 +1773,32 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       ),
     )
   end
+  if Base.kind_at(e, library) == "interp-start"
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-LIBRARY",
+        "a library name is not an interpolated string",
+        Base.span_from(e, library, interpolation_end(e, library) + 1),
+        Base.hint(EXTERN_LIBRARY_HELP),
+      ),
+    )
+  end
   after_library = try Base.expect(e, library, "string", "a library name", false)
-  cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
   name = Base.token_text(e.tokens[library])
+  # A relative path would resolve against the working directory, while imports resolve against the source file:
+  # until a later phase decides, only a name the system loader searches for or an absolute path is taken.
+  if name == "" or (name.contains?("/") and not name.starts_with?("/"))
+    return error(
+      Base.bail(
+        e,
+        library,
+        "PARSE-EXTERN-LIBRARY",
+        "\"#{name}\" is not a library name or an absolute path",
+        Base.hint(EXTERN_LIBRARY_HELP),
+      ),
+    )
+  end
+  cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
   nodes: List[Ast.Decl] = []
   next_id = ids
   looping = true
@@ -1837,6 +1863,16 @@ def parse_extern_function(
   codes: List[String] = []
   returned = try extern_type(result.node, true)
   codes = codes.push(returned.code)
+  if params.nodes.size > EXTERN_MAX_PARAMS
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-ARITY",
+        "an extern function takes at most #{EXTERN_MAX_PARAMS} parameters",
+        params.nodes[EXTERN_MAX_PARAMS].span,
+        Base.hint("pass the values in fewer parameters"),
+      ),
+    )
+  end
   typed: List[Ast.Param] = []
   for param in params.nodes
     case param.default
@@ -2250,7 +2286,29 @@ end
 
 # `extern` is a plain name: it starts a block only at the top level and before a string.
 def extern_start?(e: Base.Env, at: Int) -> Bool
-  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "extern" and Base.kind_at(e, at + 1) == "string"
+  next = Base.kind_at(e, at + 1)
+  library = next == "string" or next == "interp-start"
+  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "extern" and library
+end
+
+# The position of the interp-end token that closes the interpolated string starting at start (nested strings
+# included), or the last token when the string never closes.
+def interpolation_end(e: Base.Env, start: Int) -> Int
+  depth = 0
+  at = start
+  while at < e.tokens.size - 1
+    kind = e.tokens[at].kind
+    if kind == "interp-start"
+      depth += 1
+    elsif kind == "interp-end"
+      depth -= 1
+      if depth == 0
+        return at
+      end
+    end
+    at += 1
+  end
+  return at
 end
 
 def top_level_help(kind: String) -> String

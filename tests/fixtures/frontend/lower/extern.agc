@@ -2,7 +2,7 @@ extern "libm.so.6"
   def cos(x: C.Double) -> C.Double
 end
 
-extern "./lib/my peer.so"
+extern "/opt/lib/my peer.so"
   def peer(a: C.Int, b: C.Bool, s: C.String) -> C.String
   def tick() -> Void
 end

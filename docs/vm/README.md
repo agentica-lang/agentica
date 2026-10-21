@@ -54,16 +54,17 @@ the node's span (3.5). It never guesses.
 
 **Trust model.** A `.agcb` file is untrusted input. Whatever it contains, the VM
 must not have memory errors, must not run child processes unless the VM itself
-got `--allow-run`, and must stop within `--max-steps` when a limit is given. A
-file that passes the loader can still compute wrong values or end with
-`RUNTIME-INTERNAL`. That is the whole guarantee. `--max-steps` bounds
-instructions, not memory. One `CONCAT` or `INSPECT` costs time and memory in
-proportion to its strings, so a file can double a string per instruction and
-reach the out-of-memory exit (70, 6.3) in a few dozen steps. Printing a list
-costs time and memory in proportion to its text, and lists can share items.
-Chained bindings can make that text exponential in the number of bindings, and
-printing such a list ends in the same out-of-memory exit. A heap cap is an open
-question (13).
+got `--allow-run`, and must stop within `--max-steps` when a limit is given.
+Native code (`extern`) is allowed by default and bypasses `--allow-run`, so
+untrusted bytecode must run with `--deny-native`. A file that passes the loader
+can still compute wrong values or end with `RUNTIME-INTERNAL`. That is the whole
+guarantee. `--max-steps` bounds instructions, not memory. One `CONCAT` or
+`INSPECT` costs time and memory in proportion to its strings, so a file can
+double a string per instruction and reach the out-of-memory exit (70, 6.3) in a
+few dozen steps. Printing a list costs time and memory in proportion to its
+text, and lists can share items. Chained bindings can make that text exponential
+in the number of bindings, and printing such a list ends in the same
+out-of-memory exit. A heap cap is an open question (13).
 
 ## Files
 

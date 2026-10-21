@@ -11,11 +11,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/* The C types of an extern signature: C.Int is int32_t, C.Int64 int64_t, C.Double double, C.Bool _Bool and C.String
-   a NUL-terminated char *. Void is for results only. */
 /* The most parameters an extern function may have. */
 #define AGC_FFI_MAX_PARAMS 64
 
+/* The C types of an extern signature: C.Int is int32_t, C.Int64 int64_t, C.Double double, C.Bool _Bool and C.String
+   a NUL-terminated char *. Void is for results only. */
 typedef enum { AGC_C_VOID, AGC_C_INT, AGC_C_INT64, AGC_C_DOUBLE, AGC_C_BOOL, AGC_C_STRING } agc_c_type;
 
 typedef union {
@@ -34,7 +34,8 @@ bool agc_ffi_supported(void);
 
 /* Opens LIBRARY (a name the system loader searches, or a path with a "/"), finds SYMBOL in it and prepares the call
    of RESULT SYMBOL(PARAMS[0..COUNT)). NULL with a message in ERROR (SIZE bytes) when the library or the symbol is
-   missing, COUNT is above AGC_FFI_MAX_PARAMS or the build cannot call native code. A library stays open until the process ends. */
+   missing, COUNT is above AGC_FFI_MAX_PARAMS or the build cannot call native code. A library that holds SYMBOL
+   stays open until the process ends. */
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, char *error, size_t size);
 

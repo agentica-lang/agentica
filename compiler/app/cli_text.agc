@@ -80,7 +80,7 @@ OPTIONS = [
   "  --version",
   "     print the version and exit",
   "  --allow-run",
-  "     allow Process.spawn to run child programs",
+  "     allow Process.spawn to run child programs (native code can still run them: see --deny-native)",
   "  --deny-native",
   "     refuse a program that declares extern functions (native code), before it starts",
   "  --max-steps <count>",

@@ -352,25 +352,25 @@ end
 - The C types are `C.Int` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
   (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Bool` (`bool`, `Bool`)
   and `C.String` (a `const char *`, `String`); a result may also be `Void`. A
-  function takes at most 64 parameters (`LOWER-UNSUPPORTED`).
-- The string after `extern` goes to the system loader as it is: a name without
-  `/` is looked up where the system looks up libraries, and a name with `/` is
-  a path, relative to the working directory. The library is opened at the
-  first call of one of its functions and stays open until the program ends. A
-  library or function that cannot be found is `RUNTIME-NATIVE-LOAD` at the
-  extern function.
+  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
+- The library is a plain string literal: a name without `/`, which the system
+  loader looks up, or an absolute path. Anything else is
+  `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
+  functions and stays open; a library, dependency or function that cannot be
+  found is `RUNTIME-NATIVE-LOAD` at the extern function.
 - An argument is checked before the call: a `C.Int` outside 32 bits is
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
-  it may read only during the call. A `C.String` result is copied; `NULL` is
-  `""`, and bytes that are not UTF-8 become U+FFFD.
-- A call runs on the scheduler that runs the task, and one native call at a
-  time runs in the whole program; the step limit cannot stop a call in the
-  middle. It counts as 64 steps.
-- Native code is allowed by default. `agentica --deny-native file.agc` (and
-  `agentica run --deny-native`) refuses a program that declares any extern
-  function before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. `agentica
-  test` does not take the option yet.
+  it may read only during the call. A `C.String` result is copied; `NULL` reads
+  as `""` for now, and bytes that are not UTF-8 become U+FFFD.
+- A call blocks timers, I/O and other tasks until it returns, and the step
+  limit cannot stop it in the middle. Native code must retry calls cut
+  short by `EINTR`: GC signals can interrupt sleeps and polls.
+- Native code is allowed by default and bypasses `--allow-run`.
+  `agentica --deny-native file.agc` (and `agentica run --deny-native`) refuses
+  a program that declares any extern function before anything runs:
+  `RUNTIME-NATIVE-DENIED`, exit 2. `agentica test` does not take the option
+  yet.
 - Native calls work on Linux x86_64. Elsewhere a program that declares an
   extern function is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2
   (issue #548). `check`, `compile` and the queries work on every system.

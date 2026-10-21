@@ -48,17 +48,20 @@ takes any expression after `=`, so that the checker can say why a default is not
 allowed; the rules are in section 6, "Default parameter values". A block
 parameter (`do |x|`) takes no default.
 
-An `extern` block declares functions of a native library, named by the string
-after `extern` (section 6d, "Native code"). Each line is the signature of one C
+An `extern` block declares functions of a native library (section 6d, "Native
+code"). The library is a plain string: a name without `/` or an absolute path
+(`PARSE-EXTERN-LIBRARY` at the string). Each line is the signature of one C
 function: no body, no default (`PARSE-EXTERN-DEFAULT` at the parameter), C
-types only (`PARSE-EXTERN-TYPE` at the type) and a C name, without `?` or `!`
+types only (`PARSE-EXTERN-TYPE` at the type), at most 64 parameters
+(`PARSE-EXTERN-ARITY` at the 65th) and a C name, without `?` or `!`
 (`PARSE-EXTERN-NAME` at the name). Anything else in the block, a body or a
-library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. Each function is a
-`def` for the rest of the language: `export` makes it importable, it takes
-the place of a `def` in the declaration order, the whole block needs the blank
-line of a declaration, and the checker sees `C.Int` and `C.Int64` as `Int`, `C.Double` as `Float`,
-`C.Bool` as `Bool` and `C.String` as `String`. `extern` is contextual: it is a
-keyword only at the start of a top-level declaration.
+library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc goes on a
+`def` inside the block. Each function is a `def` for the rest of the language:
+`export` makes it importable, it takes the place of a `def` in the declaration
+order, the whole block needs the blank line of a declaration, and the checker
+sees `C.Int` and `C.Int64` as `Int`, `C.Double` as `Float`, `C.Bool` as `Bool`
+and `C.String` as `String`. `extern` is contextual: it is a keyword only at the
+start of a top-level declaration.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

@@ -15,7 +15,7 @@ VALID = """extern "libm.so.6"
   def labs(n: C.Int64) -> C.Int64
 end
 
-extern "./lib/peer.so"
+extern "/opt/peer/libpeer.so"
   def peer(a: C.Int, b: C.Bool, s: C.String) -> Void
 end
 
@@ -95,6 +95,27 @@ def test_an_extern_parameter_has_no_default(tmp_path):
 ])
 def test_an_extern_block_holds_only_signatures(tmp_path, text, start):
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-UNEXPECTED-TOKEN", start)
+
+
+@pytest.mark.parametrize("library, stop", [
+    ('""', 10),
+    ('"./libpeer.so"', 22),
+    ('"lib/peer.so"', 21),
+    ('"lib#{1}.so"', 20),
+])
+def test_a_library_is_a_system_name_or_an_absolute_path(tmp_path, library, stop):
+    text = 'extern %s\n  def abs(n: C.Int) -> C.Int\nend\n' % library
+    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-LIBRARY", (1, 8), (1, stop))
+
+
+def test_an_extern_function_takes_at_most_64_parameters(tmp_path):
+    params = ", ".join("p%d: C.Int" % k for k in range(64))
+    ok = 'extern "libc.so.6"\n  def f(%s) -> Void\nend\n' % params
+    assert check(source(tmp_path, ok)).code == 0
+    over = 'extern "libc.so.6"\n  def f(%s, extra: C.Int) -> Void\nend\n' % params
+    start = len("  def f(%s, " % params) + 1
+    assert at(problem_of(check(source(tmp_path, over)))) == (
+        "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: C.Int")))
 
 
 def test_an_extern_block_follows_the_blank_line_rule(tmp_path):

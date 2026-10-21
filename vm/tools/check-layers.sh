@@ -63,7 +63,7 @@ only 'tls_trust\.h' "tls_openssl.c tls_trust.c tls_trust_posix.c tls_trust_darwi
 only 'picohttpparser\.h' "http_pico.c"
 only 'yyjson\.h' "json.c"
 only 'ffi\.h' "ffi_libffi.c"
-only 'uv\.h' "loop.c runq.c inbox.c sync.c stdio_windows.c stream.c duplex.c process.c system.c tcp.c file_io.c file_windows.c duplex_posix.c duplex_windows.c system_posix.c net_windows.c launch.c ffi_libffi.c"
+only 'uv\.h' "loop.c runq.c inbox.c sync.c stdio_windows.c stream.c duplex.c process.c system.c tcp.c file_io.c file_windows.c duplex_posix.c duplex_windows.c system_posix.c net_windows.c launch.c"
 if found -n --max-depth 1 '^[A-Za-z_][\w \*]*\bagc_\w+\([^{]*\)\s*;\s*$' --glob '*.c' .; then bad "an agc_ prototype in a .c file"; fi
 if found -n --max-depth 1 '^\s*extern\b.*\bagc_|^[A-Za-z_][\w \*]*\bagc_\w+\s*\[[^\]]*\]\s*;' --glob '*.c' .; then bad "an agc_ variable declared in a .c file"; fi
 

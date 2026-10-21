@@ -37,13 +37,18 @@ end
 """
 
 
+def shared_library(tmp_path_factory, name):
+    """Build tests/fixtures/native/NAME.c into a shared library and return its absolute path."""
+    out = tmp_path_factory.mktemp("native") / ("lib%s.so" % name)
+    subprocess.run([tool("cc"), "-shared", "-fPIC", "-O1", "-o", str(out), str(FIXTURES / "native" / (name + ".c"))],
+                   check=True)
+    return out
+
+
 @pytest.fixture(scope="module")
 def peer(tmp_path_factory):
     """The path of the peer library, built once for the module."""
-    out = tmp_path_factory.mktemp("native") / "libpeer.so"
-    subprocess.run([tool("cc"), "-shared", "-fPIC", "-O1", "-o", str(out), str(FIXTURES / "native" / "peer.c")],
-                   check=True)
-    return out
+    return shared_library(tmp_path_factory, "peer")
 
 
 def program(tmp_path, text, name="program.agc"):
@@ -168,6 +173,16 @@ def main() -> Void
 end
 """
     assert diagnostic(agentica("--json", program(tmp_path, text), case), 1) == (code, (line, 3))
+
+
+@ON_LINUX_ONLY
+def test_a_library_with_an_unbound_symbol_is_a_load_error_and_keeps_earlier_output(tmp_path, tmp_path_factory):
+    library = shared_library(tmp_path_factory, "unbound")
+    text = 'extern "%s"\n  def unbound_call() -> C.Int\nend\n\n' \
+           'def main() -> Void\n  puts("before")\n  puts(unbound_call())\nend\n' % library
+    result = agentica("--json", program(tmp_path, text))
+    assert result.stdout == "before\n"
+    assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3))
 
 
 EXTERN_FIRST = """def main() -> Void
