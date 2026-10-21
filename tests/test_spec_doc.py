@@ -4,6 +4,7 @@ message text; one case reads the Markdown form."""
 import json
 
 from tests.agentica_test import cli, run, vm_environment
+from tests.span_support import end, items_by_name, start
 
 # A module with every kind of export, a private declaration of each kind that must be left out, and an import that does
 # not exist: `doc` only parses, so the import cannot make it fail. Line numbers are asserted below.
@@ -61,18 +62,6 @@ end
 
 def doc(path, *flags, cwd=None):
     return run(cli() + [*flags, "doc", str(path)], env=vm_environment(), cwd=cwd)
-
-
-def items_by_name(report):
-    return {item["name"]: item for item in report["items"]}
-
-
-def start(span):
-    return span["range"]["start"]["line"], span["range"]["start"]["column"]
-
-
-def end(span):
-    return span["range"]["end"]["line"], span["range"]["end"]["column"]
 
 
 def test_exports_in_source_order_with_docs_and_spans(tmp_path):

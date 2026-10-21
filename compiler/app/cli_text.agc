@@ -13,6 +13,8 @@ USAGE = [
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
   "       agentica help [NAME] [--json]",
   "       agentica [--ai|--json] doc <path> [--json]",
+  "       agentica [--ai|--json] outline <source-file> [--json]",
+  "       agentica [--ai|--json] outline --stdin <source-file> [--json]",
   "       agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
@@ -36,6 +38,8 @@ SUMMARY = [
   "                                          --flush-timeout MS, --schedulers N, --allow-run, --source-root DIR,",
   "                                          --ai, --json",
   "  agentica doc PATH [--json]              exported API of a file or a std/ module, with its ## docs (parse only)",
+  "  agentica outline FILE [--json]          declarations of a file or a std/ module, private ones too, with docs",
+  "                                          and spans (parse only); --stdin FILE reads the file from standard input",
   "  agentica help NAME [--json]             signature and description of a builtin, e.g. agentica help String.split",
   "  agentica help [--json]                  this summary and the builtin namespaces;",
   "                                          --json prints every builtin as a JSON array",

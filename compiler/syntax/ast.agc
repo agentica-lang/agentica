@@ -7,6 +7,9 @@
 ## because Agentica has no object identity.
 ##
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
+##
+## A function, struct, enum, type alias, constant, field and variant also keep the span of its name (`name_span`), for
+## the commands that point at a name (`agentica outline`). parse_text.agc does not print it.
 
 import Source from "source"
 import Types from "types"
@@ -88,6 +91,7 @@ end
 export struct ConstDecl
   id: Int
   name: String
+  name_span: Source.Span
   type: Optional[TypeRef]
   value: Expr
   exported: Bool
@@ -99,6 +103,7 @@ end
 export struct FunctionDecl
   id: Int
   name: String
+  name_span: Source.Span
   params: List[Param]
   result: TypeRef
   body: List[Stmt]
@@ -121,6 +126,7 @@ end
 export struct StructDecl
   id: Int
   name: String
+  name_span: Source.Span
   fields: List[FieldDecl]
   doc: Optional[String]
   span: Source.Span
@@ -130,6 +136,7 @@ end
 export struct FieldDecl
   id: Int
   name: String
+  name_span: Source.Span
   type: TypeRef
   doc: Optional[String]
   span: Source.Span
@@ -139,6 +146,7 @@ end
 export struct EnumDecl
   id: Int
   name: String
+  name_span: Source.Span
   type_parameters: List[String]
   variants: List[EnumVariant]
   doc: Optional[String]
@@ -160,6 +168,7 @@ end
 export struct EnumVariant
   id: Int
   name: String
+  name_span: Source.Span
   payload_types: List[TypeRef]
   doc: Optional[String]
   span: Source.Span

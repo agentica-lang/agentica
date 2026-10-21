@@ -142,7 +142,7 @@ the grammar, `docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified 
 - §: 39
   - Title: Semantic CLI for agents
   - File: [`39-semantic-cli.md`](39-semantic-cli.md)
-  - Status: Planned (row 7.2b)
+  - Status: In progress (row 7.2b): `doc` and `outline` built
 
 - §: 40
   - Title: Native code and FFI

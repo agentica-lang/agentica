@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `agentica doc PATH [--json]` prints the exported API of a file or a `std/`
   module with its `##` docs.
+- `agentica outline FILE [--json] [--stdin FILE]` lists the declarations of a
+  file, private ones too, with their signatures, docs and spans.
 
 ### Fixed
 

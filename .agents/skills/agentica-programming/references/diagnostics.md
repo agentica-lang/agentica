@@ -11,8 +11,9 @@ expected Int, found String
 ```
 
 The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
-(while running). With `--json`, the diagnostic that ends the run is the last
-stderr line; the program's own stderr comes before it. Expected process failures
+(while running); `QUERY-` is a mistake in the arguments of `agentica outline`.
+With `--json`, the diagnostic that ends the run is the last stderr line; the
+program's own stderr comes before it. Expected process failures
 return error Results. Codes without a row below: `CHECK-VOID-TYPE` and
 `CHECK-VOID-VALUE` (see `language.md`), and `RUNTIME-PROCESS-CLOSE` (a failed
 explicit process cleanup, at the call span).
@@ -228,6 +229,12 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     for a TOML syntax error. A missing or unreadable file has only its name.
     The manifests of all locked packages in the cache are checked before any
     file is loaded, imported or not
+
+- **Code:** `QUERY-USAGE`
+  - **Meaning:** `agentica outline` was asked a wrong question: a missing or
+    extra argument, an unknown option, `--stdin` without a file, or a path that
+    cannot be read. The file is `<arguments>` at line 1, column 1, and the exit
+    status is 2 (`queries.md`)
 
 - **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
   - **Meaning:** the `.agc` files of a package in the cache are not the ones the

@@ -311,13 +311,13 @@ after them may run in parallel when needed and keep their relative order.
     std/http`, in text or JSON
 
 - **Order:** 7.2b
-  - **Next work:** **After the bootstrap** (owner, 2026-10-14). New features,
-    VM-only (cont.), after row 22b, in `compiler/`: the semantic CLI
-    for agents
-    ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)): `agentica
-    outline`, then `agentica symbol` and `agentica refs`, then `agentica
-    type-at`, JSON first; front end and CLI only, nothing to run, no LSP; the
-    full 6c round (step 10) measures it
+  - **Next work:** **Started 2026-10-21** (owner, issue #506). New features, VM-only (cont.), after row 22b, in
+    `compiler/`: the semantic CLI for agents
+    ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)), in this
+    order: `agentica doc` (row 22b, done), `agentica outline` (done), `agentica
+    type-at`, the opt-in `--partial`, `agentica symbol`, `agentica refs`, JSON
+    first; front end and CLI only, nothing to run, no LSP; the full 6c round
+    (step 10) measures it
   - **Outcome:** Agents list declarations, find definitions and references
     across modules, and get the checked type at a position, without reading
     whole files or guessing from `rg`
@@ -597,6 +597,7 @@ macOS releases were done ahead of this order.
    stage0 refresh of §18.2 is a later PR).
 6. The other rows that waited for the bootstrap: the prelude (row 8.2),
    strict diagnostics (row 7.6), `agentica doc` and `help` (row 22b), the
+   semantic CLI (row 7.2b, started 2026-10-21, issue #506), the
    44b–44d table rewrites (**done 2026-10-16**), type aliases (row 7.12,
    §49: 49a and 49b done), test functions without `main`
    (row 7.11, §50), and `Task.map` (**done**, 17a, PR #316).
@@ -608,8 +609,7 @@ macOS releases were done ahead of this order.
    0.5.0-beta.1); the gaps Windows still has close first, for the 0.5.0
    release without beta. UDP closes the networking part of the stable core
    (below); its design waits for the owner's approval (#399).
-8. After the JIT: the semantic CLI (row 7.2b,
-   postponed by the owner on 2026-10-16); signals (row 7.8,
+8. After the JIT: signals (row 7.8,
 [§46](../future/46-signals.md#46-signals),
    parts 46a to 46d; 46c also lets `agentica test` clean its run directory on
    Ctrl-C); regular expressions (row 7.10,

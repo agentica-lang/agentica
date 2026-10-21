@@ -379,6 +379,15 @@ docs (section 4): PATH is a source file or a `std/` module name. It only lexes
 and parses the module, so its imports need not exist. Declarations without
 `export` are left out. A lex or parse error exits 1, an unreadable path exits 2.
 
+`agentica outline FILE [--json] [--stdin FILE]` lists the top-level declarations
+of one file in source order, private ones too: imports, functions, structs with
+their fields, enums with their variants, type aliases and constants, each with
+`exported`, its signature, its `##` doc and summary, and its span and the span
+of its name. FILE is a source file or a `std/` module name. It only lexes and
+parses the file, so its imports need not exist. `--stdin FILE` takes the text of
+FILE from standard input. A lex or parse error exits 1; a mistake in the
+arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
+
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by
 default, and checking never spends the budget. Exhaustion is

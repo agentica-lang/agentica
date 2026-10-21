@@ -1,13 +1,14 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then
 ## does what the first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a
-## module with `doc`, or start the tests.
+## module with `doc`, list the declarations of a file with `outline`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
 ## starts again), the words the user typed and `hand_off`, the function that runs a compiled program and gives back its
 ## exit status (front_end_cli.agc hands the bytes to C).
 ##
-## `agentica check --stdin FILE` checks the text on standard input as if FILE held it (io/stdin_buffer.agc).
+## `agentica check --stdin FILE` checks the text on standard input as if FILE held it (io/stdin_buffer.agc); a query
+## command (`outline`) takes `--stdin FILE` the same way.
 ##
 ## `agentica run [OPTIONS] -- FILE.agcb [ARGS...]`, which runs a compiled program, is not here: C answers it before it
 ## starts this front end.
@@ -23,6 +24,7 @@ import SourceRoot from "../bdd/bdd_source_root"
 import Problems from "../diagnostics/problem"
 import CheckText from "../check/check_text"
 import CliDoc from "cli_doc"
+import CliQuery from "cli_query"
 import Options from "cli_options"
 import Launch from "cli_launch"
 import Help from "cli_help"
@@ -32,6 +34,8 @@ import Texts from "cli_text"
 import Ai from "../diagnostics/diagnostic_ai"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Plain from "../diagnostics/diagnostic_plain"
+import QueryFiles from "../query/query_files"
+import QueryOptions from "../query/query_options"
 import Env from "../modules/link_env"
 import Lowering from "../lower/lowering"
 import LowerText from "../lower/lower_text"
@@ -80,6 +84,8 @@ def dispatch(session: Session) -> Int
     return emit(Help.help(words, session.options.style))
   elsif first == "doc"
     return doc(session, words)
+  elsif first == "outline"
+    return query(session, words.drop(1))
   elsif first == "run"
     return emit(Reply.failed(2, Texts.run_first_text()))
   end
@@ -106,9 +112,41 @@ end
 
 # `doc PATH`: a complete answer, or the first problem of the module, shown as a problem of PATH.
 def doc(session: Session, words: List[String]) -> Int
-  case CliDoc.run(words, session.options.style, session.settings)
-    CliDoc.Answer.Printed(reply) -> return emit(reply)
-    CliDoc.Answer.Rejected(problem) -> return reject(session, problem, problem.file)
+  return answered(session, CliDoc.run(words, session.options.style, session.settings))
+end
+
+# What a command gave: print the answer, or reject the first problem of the program. A QUERY- problem is a mistake in
+# the question, exit status 2; any other is a mistake in the program, exit status 1.
+def answered(session: Session, answer: Reply.Answer) -> Int
+  case answer
+    Reply.Answer.Printed(reply) -> return emit(reply)
+    Reply.Answer.Rejected(problem) ->
+      status = 1
+      if problem.code.starts_with?("QUERY-")
+        status = 2
+      end
+      return reject(session, problem, problem.file, status)
+  end
+end
+
+# A query command: the words after its name give the options and the one file. The style may come from them as well as
+# from the options in front of the command.
+def query(session: Session, words: List[String]) -> Int
+  usage = CliQuery.outline_usage()
+  case QueryOptions.parse(words, session.options.style, usage)
+    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem))
+    QueryOptions.Parsed.Ready(asked) ->
+      styled = session.with(options: session.options.with(style: asked.style))
+      case QueryFiles.pick(asked, usage)
+        QueryFiles.Picked.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem))
+        QueryFiles.Picked.File(file) ->
+          if asked.stdin == ""
+            return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings))
+          end
+          return with_buffer(styled, file) do |buffered: Session|
+            answered(buffered, CliQuery.outline(file, asked.style, true, buffered.settings))
+          end
+      end
   end
 end
 
@@ -118,18 +156,25 @@ def check_stdin(session: Session, files: List[String]) -> Int
   if files.size != 1 or files[0] == ""
     return emit(Reply.failed(2, Texts.usage_text()))
   end
+  return with_buffer(session, files[0]) do |buffered: Session| program(buffered, "check", files) end
+end
+
+# Takes the standard input as the text of `file` and gives `then` a session whose workspace answers it. A standard
+# input that cannot be taken is status 2 and `then` never runs.
+def with_buffer(session: Session, file: String, then: Fn[Session, Int]) -> Int
   case StdinBuffer.take()
     StdinBuffer.Taken.Failed(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
     StdinBuffer.Taken.Got(buffer) ->
-      workspace = StdinBuffer.over(session.settings.workspace, files[0], buffer)
-      buffered = Session(
-        options: session.options,
-        settings: session.settings.with(workspace: workspace),
-        hand_off: session.hand_off,
-        buffer_file: files[0],
-        buffer_shown: buffer.shown,
+      workspace = StdinBuffer.over(session.settings.workspace, file, buffer)
+      return then.call(
+        Session(
+          options: session.options,
+          settings: session.settings.with(workspace: workspace),
+          hand_off: session.hand_off,
+          buffer_file: file,
+          buffer_shown: buffer.shown,
+        ),
       )
-      return program(buffered, "check", files)
   end
 end
 
@@ -138,7 +183,7 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
   case Pipeline.read_root(session.settings.workspace, source)
     Pipeline.Root.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
-    Pipeline.Root.Invalid(problem) -> return reject(session, problem, source)
+    Pipeline.Root.Invalid(problem) -> return reject(session, problem, source, 1)
     Pipeline.Root.Readable -> return linked(session, verb, rest)
   end
 end
@@ -146,7 +191,7 @@ end
 def linked(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
   case Pipeline.check_file(source, session.settings)
-    Pipeline.Front.Rejected(problem) -> return reject(session, problem, source)
+    Pipeline.Front.Rejected(problem) -> return reject(session, problem, source, 1)
     Pipeline.Front.Done(front) -> return checked(session, verb, rest, front)
   end
 end
@@ -165,7 +210,7 @@ def checked(session: Session, verb: String, rest: List[String], front: Pipeline.
     return dump_ir(session, source, front)
   end
   case Pipeline.build(front, session.settings)
-    Pipeline.Compiled.Rejected(problem) -> return reject(session, problem, source)
+    Pipeline.Compiled.Rejected(problem) -> return reject(session, problem, source, 1)
     Pipeline.Compiled.Bytes(bytes) ->
       if verb == "compile"
         return save(rest[2], bytes)
@@ -179,7 +224,7 @@ end
 # end, which dropped what the bytecode needs (the status note of step 8a in docs/future/35-self-hosting.md says why).
 def dump_ir(session: Session, source: String, front: Pipeline.Checked) -> Int
   case Lowering.lower(front.linked, front.checked)
-    Lowering.Lowered.Failed(problem) -> return reject(session, problem, source)
+    Lowering.Lowered.Failed(problem) -> return reject(session, problem, source, 1)
     Lowering.Lowered.Done(program) ->
       text = LowerText.program_text(program)
       return emit(Reply.printed("#{text}\n"))
@@ -224,10 +269,10 @@ def save(output: String, bytes: List[Int]) -> Int
   return 0
 end
 
-# The first problem of a stage, in the form the options ask for, on stderr: exit status 1. A problem in the root file
-# names it as it was typed (the linker knows it by its absolute path), and one in an imported file by its canonical
-# path.
-def reject(session: Session, problem: Problems.Problem, source: String) -> Int
+# The first problem of a stage, in the form the options ask for, on stderr, with exit status `status`. A problem in the
+# root file names it as it was typed (the linker knows it by its absolute path), and one in an imported file by its
+# canonical path. A problem of the arguments (`<arguments>`) has no source lines to show.
+def reject(session: Session, problem: Problems.Problem, source: String, status: Int) -> Int
   style = session.options.style
   root = is_root?(problem.file, source, session.settings)
   shown = problem
@@ -238,16 +283,18 @@ def reject(session: Session, problem: Problems.Problem, source: String) -> Int
     IO.warn(JSON.encode(DiagnosticJson.json(shown)))
   else
     text = ""
-    if Problems.at_source?(problem)
+    if Problems.at_source?(problem) and !QueryOptions.arguments?(problem)
       text = source_text(session, problem.file, root)
     end
     if style == "ai"
       IO.warn(Ai.ai(shown, text))
+    elsif QueryOptions.arguments?(problem)
+      IO.warn(Plain.without_source(shown))
     else
       IO.warn(Plain.format(shown, text))
     end
   end
-  return 1
+  return status
 end
 
 # The workspace answers for the canonical path of the root, which is not a file of the disk when it is a buffer.
