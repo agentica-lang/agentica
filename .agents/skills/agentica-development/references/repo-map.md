@@ -47,6 +47,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     checker.agc     # check(linked, settings): Checking.Done(Checked: types by node id, resolved, the prelude files and their bodies) | Failed(Problem)
   catalog/  # the builtin catalog (imports only syntax/)
     builtin_model.agc builtins.agc builtins_data.agc  # builtin data structs and the Rule enum; Catalog (lookups by name); the rows, edited by hand
+    catalog_json.agc  # the JSON of a builtin and of the catalog: `agentica help --json` and the `help` of `type-at` print it
     prelude_data.agc  # the table of prelude rows (stages.md), by hand
   lower/  # the IR and lowering
     ir.agc lower_tables.agc lower_state.agc  # the IR as data, the lowering tables (VM_BUILTINS), Cx and Fx (the function being lowered)
@@ -59,7 +60,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     diagnostic.agc  # Diagnostic and Outcome[T]
     problem.agc  # the packed Problem with its notes (pack, unpack), which every stage returns as its error
   docs/  # `agentica doc` (§32.5): lex and parse one module, then its exported API with the `##` docs (imports only syntax/ and diagnostics/)
-  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` checks it and answers for a position (imports docs/, modules/, check/ and syntax/)
+  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` checks it and answers for a position (imports docs/, modules/, check/, catalog/ and syntax/)
   bdd/  # the `agentica test` driver
     bdd_driver.agc  # run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
   embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary

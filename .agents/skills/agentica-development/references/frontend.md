@@ -36,7 +36,10 @@ with a packed `Problem` (`references/stages.md`).
   (`Pipeline.query_file`, `Checker.check_query`: no `CHECK-MAIN`) and answers
   for a position: `at.agc` finds the innermost typed expression (a worklist over
   `check/const_walk.agc`) and `type_at.agc` prints the type through
-  `Types.to_text_as` and `LinkedModule.aliases`. The commands are
+  `Types.to_text_as` and `LinkedModule.aliases`. The definition's `doc` and
+  `signature` come from `LinkedModule.parsed` (the linker drops the doc of an
+  `export`); a builtin (`Checked.resolved`, or a call by name) answers with
+  `catalog/catalog_json.agc`, which `help` shares. The commands are
   `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
   `tests/test_spec_type_at.py`.
 

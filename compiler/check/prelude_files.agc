@@ -117,6 +117,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
       text: text,
       declarations: kept,
       aliases: {},
+      parsed: program,
     ),
   )
 end
