@@ -123,9 +123,13 @@ def list_files(workspace: Workspace.Workspace, root: String) -> Listing
   return Listing.Files(files)
 end
 
+# Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".
 def join(folder: String, name: String) -> String
   if folder == ""
     return name
+  end
+  if name == ""
+    return folder
   end
   return "#{folder}/#{name}"
 end

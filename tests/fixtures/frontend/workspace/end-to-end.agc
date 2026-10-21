@@ -171,14 +171,9 @@ def folder?(files: Map[String, String], path: String) -> Bool
   return files.keys.any? do |file: String| file.starts_with?("#{path}/") end
 end
 
-# The names directly inside a folder: a name with more path after it is a folder. The package hash lists the folder of
-# the package as "<root>/", with the "/" it gets from joining an empty name, and a disk accepts that: the stub strips
-# it until the Workspace contract is fixed (issue #497).
-def entries(files: Map[String, String], listed: String) -> Result[List[Workspace.Entry]]
-  path = listed
-  if path.ends_with?("/")
-    path = path.slice(0, path.length - 1)
-  end
+# The names directly inside a folder: a name with more path after it is a folder. A path with a trailing "/" is not a
+# folder here, as the Workspace contract says.
+def entries(files: Map[String, String], path: String) -> Result[List[Workspace.Entry]]
   if !folder?(files, path)
     return error("no such folder")
   end
