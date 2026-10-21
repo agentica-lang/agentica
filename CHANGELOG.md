@@ -8,45 +8,31 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-21
+
 ### Added
 
-- `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
-  defined in the files under PATH and what they import, with its signature,
-  `##` doc and span; a file that does not link is listed under `skipped`.
-- `agentica type-at` gives the `doc` and the `signature` of the definition, and
-  answers a builtin (`split` in `xs.split(",")`) with `kind` `builtin` and its
-  `help` object, as `agentica help NAME --json` prints it.
-- `agentica type-at` on a local (a parameter, a binding, a `for` variable or a
-  name in a `case` pattern) gives its type and a definition at its binding, on a
-  use and on the binding itself.
-- `agentica refs NAME|FILE:LINE:COL [PATH...] [--json]` lists every reference to
-  a name or to the name at a position (a function, type, field, variant,
-  constant, local or builtin) in the files of PATH and what they import; a
-  position on a name of an import list selects the imported declaration, and a
-  name that is ambiguous or unknown is `QUERY-AMBIGUOUS-NAME` or
-  `QUERY-NOT-FOUND`. The `definition` has the fields of a `symbol` match.
-  `--stdin` reads a file from standard input.
-- `agentica type-at` and `agentica refs` take `--partial`: a program in which
-  some functions do not check is still answered (`"partial": true` and the
-  `diagnostics` in the JSON), from the functions that check and from the link.
-  For `refs` it goes with a position and no PATH.
-- `Std.source(path)` gives the text of a `std/` source that the binary carries,
-  such as `"queue.agc"`, to any program.
-- `std/analysis` answers the questions of `check`, `outline`, `type-at`,
-  `symbol` and `refs` from a program, as plain structs, over a session with
-  unsaved buffers; the command line runs the same code.
-- `Analysis.refresh(session, path)` keeps the checked program of a file and the
-  parsed modules in the session, so the next questions skip parsing and
-  checking when nothing changed.
+- `agentica symbol NAME [PATH...]` finds where a name is defined, with its
+  signature, `##` doc and span.
+- `agentica refs NAME|FILE:LINE:COL [PATH...]` lists every reference to a name
+  or to the name at a position.
+- `agentica type-at` gives the `doc` and `signature` of a definition, answers a
+  builtin with its `help`, and answers a local (parameter, binding, `for`
+  variable, `case` pattern name).
+- `type-at` and `refs` take `--partial`: a program in which some functions do
+  not check is still answered.
+- `Std.source(path)` gives the text of a `std/` source that the binary carries.
+- `std/analysis` answers `check`, `outline`, `type-at`, `symbol` and `refs` from
+  a program, over a session with unsaved buffers.
+- `Analysis.refresh(session, path)` keeps the checked program in the session,
+  so the next questions skip parsing and checking when nothing changed.
 
 ### Changed
 
-- `std/internal/` can be imported only from `std/` modules (`CHECK-IMPORT-IO`),
-  and a `std/` module may use `..` in a relative import that stays in `std/`.
-- `agentica check` no longer requires `main`, so a library file checks clean; a
-  `main` with the wrong signature is still `CHECK-MAIN` (also for `type-at`),
-  and a run or `compile` of a file with no `main` still reports it, so use one
-  of them to require `main`.
+- `std/internal/` can be imported only from `std/` modules
+  (`CHECK-IMPORT-IO`).
+- `agentica check` no longer requires `main`, so a library file checks clean;
+  `run` and `compile` still report a missing `main`.
 - **Breaking:** `Std` is a reserved type name.
 
 ## [0.7.0] - 2026-10-21
@@ -302,7 +288,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.7.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.8.0...HEAD
+[0.8.0]: https://github.com/sonic182/agentica/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/sonic182/agentica/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/sonic182/agentica/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/sonic182/agentica/compare/0.5.0-beta.1...0.5.0
