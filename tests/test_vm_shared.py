@@ -9,7 +9,9 @@ import subprocess
 
 from tests.agentica_test import RUN_TIMEOUT, compile_text, run_vm, vm_command, vm_environment
 
-SHARED = {"AGENTICA_VM_TEST_SHARED": "1"}
+# One scheduler, as `make test-shared`: the programs count on Task.sleep(0) letting the holder take the handle's lock
+# first, an order that only one scheduler fixes.
+SHARED = {"AGENTICA_VM_TEST_SHARED": "1", "AGENTICA_SCHEDULERS": "1"}
 
 CRASH_IN_BUILTIN = """\
 def bad_map(n: Int) -> Result[Int]

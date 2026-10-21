@@ -448,7 +448,7 @@ def test_a_run_that_chooses_no_count_has_one_scheduler_per_logical_core(tmp_path
     assert (got.code, got.stdout, scheduler_counts(got)) == (0, "hello\n", [logical_cores()])
 
 
-@pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="the CPUs of a process are set only on Linux here")
+@pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="host-only: sched_setaffinity sets the CPUs of a process on Linux only")
 def test_the_default_count_follows_the_cpus_the_process_may_use(tmp_path, sched_trace):
     """The default is the CPUs of the process (its affinity), not the CPUs of the machine."""
     program = compile_agc(HELLO, tmp_path / "hello.agcb")
