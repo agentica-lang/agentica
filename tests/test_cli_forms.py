@@ -232,6 +232,23 @@ def test_help_for_a_few_builtins_in_both_forms(workspace, case_groups, frozen):
     assert differences(workspace, frozen, case_groups["helps"]) == ""
 
 
+def test_help_json_without_a_name_is_every_entry_as_help_name_json_prints_it(workspace):
+    everything = workspace.observe(["help", "--json"])
+    assert everything["code"] == 0 and workspace.observe(["--json", "help"]) == everything
+    catalog = json.loads(everything["stdout"])
+    names = [entry["name"] for entry in catalog]
+    assert names == sorted(names) and len(set(names)) == len(names) and "String.split" in names
+
+    def one(name):
+        return json.loads(workspace.observe(["help", name, "--json"])["stdout"])
+
+    with ThreadPoolExecutor(JOBS) as pool:
+        single = list(pool.map(one, names))
+    assert [entry for entry, found in zip(catalog, single) if entry != found] == []
+    # A builtin with several forms keeps its `overloads`, as `help NAME --json` shows it.
+    assert any("overloads" in entry for entry in catalog)
+
+
 if __name__ == "__main__":
     if sys.argv[1:] == ["freeze"]:
         freeze()

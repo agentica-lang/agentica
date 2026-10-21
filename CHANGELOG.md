@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica help --json` with no NAME prints every builtin as one JSON array.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added

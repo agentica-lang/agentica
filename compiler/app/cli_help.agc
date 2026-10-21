@@ -12,7 +12,8 @@ import Types from "../check/types"
 import {PRELUDE_ONLY, PUBLIC_NAMES} from "../catalog/builtins"
 
 ## Runs `agentica help` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of it.
-## A trailing `--json` asks for the JSON form of the one builtin, and nothing else takes an option.
+## A trailing `--json` asks for the JSON form: of the one builtin, or of every public builtin as an array (sorted by
+## name, each element as `help NAME --json` prints it) when there is no NAME. Nothing else takes an option.
 export def help(words: List[String], style: String) -> Reply.Reply
   rest = words
   as_json = style == "json"
@@ -20,7 +21,9 @@ export def help(words: List[String], style: String) -> Reply.Reply
     as_json = true
     rest = rest.take(rest.size - 1)
   end
-  if rest.size == 1
+  if rest.size == 1 and as_json
+    return Reply.printed("#{JSON.encode(catalog_json())}\n")
+  elsif rest.size == 1
     return Reply.printed("#{Texts.summary_text()}#{namespaces_text()}\n")
   elsif rest.size != 2
     return Reply.failed(2, "usage: agentica help [NAME [--json]]\n")
@@ -67,6 +70,11 @@ def namespaces_text() -> String
       "\"std/bdd\") are not in this catalog.",
     ].join(""),
   ].join("\n")
+end
+
+# Every public builtin, in name order, each as `builtin_json` gives it, so a client reads both forms with one parser.
+def catalog_json() -> Json
+  return JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin_json(Builtins.lookup(name).unwrap!) end)
 end
 
 # The JSON of a builtin: one object for a builtin with one form, else the name, the description and the effects of the
