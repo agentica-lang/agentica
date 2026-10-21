@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-21
+
 ### Added
 
 - `agentica doc PATH [--json]` prints the exported API of a file or a `std/`
@@ -25,6 +27,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `AGENTICA_SCHEDULERS=1`) for the old order. `--max-steps` can trip a little
   late with more than one scheduler. `agentica test` refuses `--schedulers`;
   the VMs it starts read `AGENTICA_SCHEDULERS`.
+- `HTTP.wait` returns only after the server's handlers and the tasks they
+  spawned have ended; it used to return as soon as the server was closed.
 
 ### Fixed
 
@@ -257,7 +261,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.6.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.7.0...HEAD
+[0.7.0]: https://github.com/sonic182/agentica/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/sonic182/agentica/compare/0.5.0...0.6.0
 [0.5.0]: https://github.com/sonic182/agentica/compare/0.5.0-beta.1...0.5.0
 [0.5.0-beta.1]:
