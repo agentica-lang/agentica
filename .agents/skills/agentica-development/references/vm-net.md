@@ -310,14 +310,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `AGENTICA_OPENSSL` picks it (`docs/vm/10-dependencies-and-platforms.md`
     §10.0).
   - The default `system` links the system OpenSSL dynamically (`pkg-config`).
-    A stamp (`OSSL_DEP` in the Makefile) fails with a clear message when
+    A stamp (`OSSL_DEP` in mk/vm.mk) fails with a clear message when
     `pkg-config` or the package is missing or older than `OSSL_MIN` (3.0.0: the
     code uses 3.0 APIs such as `SSL_CTX_load_verify_file`), and
     `vm/tls_openssl.c` has an `#error` for older versions and LibreSSL.
   - The mode is not remembered: pass `AGENTICA_OPENSSL=vendored` to every make
     command or export it.
   - `vendored` (the release and the Platforms jobs) builds the submodule static
-    per build mode (`OSSL_OPTS` and `OSSL_CFLAGS` in the Makefile; the
+    per build mode (`OSSL_OPTS` and `OSSL_CFLAGS` in mk/vm.mk; the
     sanitizer build uses a non-instrumented OpenSSL, and ASan's interceptors
     still check the buffers we hand it). Both commands run under `env -u` for
     the make and compiler variables, and the sub-make is a plain `make` (never

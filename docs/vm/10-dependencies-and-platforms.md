@@ -108,7 +108,7 @@ The vendored build:
   leaks in. The output goes to `configure.log` and `build.log`. It needs Perl 5
   with its core modules (`IPC::Cmd`; on Debian the `perl` package). The rule
   stops with a clear message when they are missing.
-- Options (`OSSL_OPTS` in the Makefile): static libraries only, no loadable
+- Options (`OSSL_OPTS` in mk/vm.mk): static libraries only, no loadable
   code, no legacy provider, no automatic `openssl.cnf` loading, no parts TLS
   does not use, and `no-deprecated`, so only the 3.x API is visible. The
   libraries are PIC, so the PIE link works.

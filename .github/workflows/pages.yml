@@ -8,6 +8,7 @@ on:
       - 'docs/grammar/**'
       - '.github/workflows/pages.yml'
       - 'Makefile'
+      - 'mk/**'
   push:
     branches: [master]
     paths:
@@ -16,6 +17,7 @@ on:
       - 'docs/grammar/**'
       - '.github/workflows/pages.yml'
       - 'Makefile'
+      - 'mk/**'
   workflow_dispatch:
 
 permissions:

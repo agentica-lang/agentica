@@ -400,9 +400,11 @@ the declaration and of its name, its signature and its `##` doc (null when it
 has none). A type argument is answered in a later version. A type of another
 file is written through the import alias of FILE (`Models.User`). On the name of
 a builtin (`split` in `xs.split(",")`) the `kind` is `builtin` and `help` holds
-the object of `agentica help NAME --json`; a builtin has no definition, and a
-local has a type and no definition. The `kind` of the JSON answer is an open
-set: a client accepts a value it does not know.
+the object of `agentica help NAME --json`; a builtin has no definition. A local
+(a parameter, a binding, a `for` variable or a name in a `case` pattern) has its
+type and a definition at its binding, whether the position is on a use or on the
+binding itself. The `kind` of the JSON answer is an open set: a client accepts a
+value it does not know.
 FILE is a path of the disk, linked and checked with its imports; it needs no
 `main`. `--stdin` before the position (`type-at --stdin FILE:LINE:COL`) takes
 the text of FILE from standard input. An error of the program is its own

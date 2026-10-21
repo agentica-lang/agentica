@@ -199,7 +199,7 @@ jobs:
                   trace=true ;;
               esac
               case "$f" in
-                vm/*|Makefile|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
+                vm/*|Makefile|mk/*|.gitmodules|.clang-tidy|.github/workflows/ci.yml)
                   c=true ;;
               esac
             done <<< "$files"

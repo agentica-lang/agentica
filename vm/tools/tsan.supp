@@ -13,3 +13,7 @@ race:uv__process_child_init
 # SIGCHLD that lands on a scheduler thread looks like a race with the uv_signal_start of the first Process.spawn on the
 # I/O thread. A plain libuv program reports the same pair. Only that handler's stack is suppressed.
 race:uv__signal_handler
+# The first EVP_sha256 digest runs OpenSSL's one-time setup (CRYPTO_THREAD_run_once). When two schedulers hash at
+# once, TSan sees the system libcrypto's uninstrumented locking as a race on its setup data (#532). Only stacks
+# through Crypto.sha256 are suppressed.
+race:builtin_sha256

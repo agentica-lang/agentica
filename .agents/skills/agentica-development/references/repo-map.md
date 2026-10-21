@@ -5,6 +5,7 @@ Which folder or file owns something. The short tree is in `AGENTS.md`; `ls` and
 contract or a placement rule.
 
 ```text
+Makefile, mk/     # the build: the root has the defaults, the shared variables and `help`; mk/vm.mk the C VM and its modes, bootstrap.mk the stages and dist/agentica, test.mk the Python tests, vm-test.mk the C tests and VM checks, windows.mk, release.mk, site.mk; the include order in the Makefile matters
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (make stage0 refreshes it; references/ci.md)
 compiler/         # the front end in Agentica (§18.3): one folder per context, a new file goes in the folder of its context; agentica.toml holds its [style] (lines at most 119 characters); imports across folders are relative (`../syntax/types`)
   front_end.agc  # the entry point of the front end of the single binary (the Makefile builds this file; make's stages build it)

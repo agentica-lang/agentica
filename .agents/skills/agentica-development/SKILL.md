@@ -140,7 +140,7 @@ limits. Fast cases go in `tests/test_<area>.py` (pytest; legacy
 - `bdd.md`: `agentica test`: `compiler/bdd/bdd_driver.agc`, `std/bdd`,
   `stdlib/test/`, step programs and handlers.
 - `vm.md`: any VM work: pipeline, layers, rules, index of `vm-*.md`.
-- `ci.md`: `.github/workflows/`, Makefile, new VM files, peers, fixtures, jscpd,
-  CI jobs, releases, `CHANGELOG.md`.
+- `ci.md`: `.github/workflows/`, Makefile and `mk/`, new VM files, peers,
+  fixtures, jscpd, CI jobs, releases, `CHANGELOG.md`.
 - `site.md`: `site/`, or a language rule or builtin shown on a site page.
 - `bench-eval.md`: `benchmarks/`, `make bench`, `tests/eval/`, measuring speed.

@@ -32,7 +32,7 @@ MODE_TIMEOUTS = {
     "windows-wine-tests": 900,
 }
 MODES = tuple(MODE_TIMEOUTS)
-# Modes that run in the Ubuntu image; the rest use the Windows/Wine image the Makefile built.
+# Modes that run in the Ubuntu image; the rest use the Windows/Wine image mk/windows.mk built.
 UBUNTU_MODES = ("probe", "fast", "files", "slow", "all", "bdd")
 # The destructive modes get no network and no host-visible storage.
 NETWORKLESS_MODES = ("probe", "files", "bdd", "windows-wine-tests")

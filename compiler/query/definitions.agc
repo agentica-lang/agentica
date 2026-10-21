@@ -1,8 +1,9 @@
 ## Where the declaration of an expression is (docs/future/39-semantic-cli.md, 39.3): the function a call names, the
 ## variant of an enum constructor, the struct of a construction, the field of a field access, a constant. The
 ## names of the linked program are unique (`@N::name` for a file that is not the root), so one scan of its declarations
-## finds the declaration. A builtin and a local have no declaration here, so they have no definition. A definition
-## carries the `##` doc and the signature of its declaration, read from the file as the parser gave it
+## finds the declaration. A builtin has no declaration here, so it has no definition. A local is not in the
+## declarations: `of_local` makes its definition from the binding that query/locals.agc found. A definition carries
+## the `##` doc and the signature of its declaration, read from the file as the parser gave it
 ## (`LinkedModule.parsed`), because the linker drops the doc of an `export`.
 
 import Ast from "../syntax/ast"
@@ -11,11 +12,13 @@ import Model from "../docs/doc_model"
 import Signature from "../docs/signature"
 import Source from "../syntax/source"
 import T from "../syntax/types"
+import Locals from "locals"
 
-## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `alias` is for a
-## type argument, which no answer gives yet), its name as the file wrote it, and the file (the `file` of its
-## LinkedModule), the whole declaration and its name. `doc` is the whole `##` text or Absent; `signature` is the one
-## line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
+## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `parameter`,
+## `local`, `loop` or `pattern` for a local; `alias` is for a type argument, which no answer gives yet), its name as
+## the file wrote it, and the file (the `file` of its LinkedModule), the whole declaration and its name (for a
+## local, the binding node and the name; see `of_local`). `doc` is the whole `##` text or Absent; `signature` is the
+## one line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
 ## `Circle(Float)` for a variant.
 export struct Definition
   kind: String
@@ -54,6 +57,21 @@ export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr
     Ast.Expr.FieldAccess(node) -> return field(find(modules, T.name(target_type(types, node.target))), node.name)
     _ -> return Ast.Optional.Absent
   end
+end
+
+## The definition of a local: the binding site, with `kind` `parameter`, `local`, `loop` or `pattern` (see
+## Locals.Local), and the name and the type as the file writes it (`total: Int`) for a signature and no doc. `span` is
+## the binding node when it has one (the whole parameter or assignment), else the name (`loop` and `pattern`);
+## `name_span` is the name.
+export def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text: String) -> Definition
+  return made(
+    local.kind,
+    local.name,
+    module,
+    local.span,
+    local.name_span,
+    Described(doc: Ast.Optional.Absent, signature: "#{local.name}: #{type_text}"),
+  )
 end
 
 # The type recorded for the target of a field access; Unknown when there is none.

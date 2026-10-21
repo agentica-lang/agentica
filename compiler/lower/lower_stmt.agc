@@ -468,7 +468,7 @@ def bind_payload(
       item = 0
       for slot in node.slots
         case slot
-          Ast.Slot.Bind(name) ->
+          Ast.Slot.Bind(name, _) ->
             fx = Lowering.alloc(fx)
             target = fx.next - 1
             fx = fx.with(vars: fx.vars.put(name, target))
@@ -500,7 +500,7 @@ end
 
 def slot_binds?(slot: Ast.Slot) -> Bool
   case slot
-    Ast.Slot.Bind(name) -> return true
+    Ast.Slot.Bind(name, _) -> return true
     Ast.Slot.Skip -> return false
     Ast.Slot.Nested(inner) -> return binds?(inner)
   end

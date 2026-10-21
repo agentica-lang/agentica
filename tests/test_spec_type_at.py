@@ -118,10 +118,11 @@ def test_the_name_of_a_field_access_is_the_whole_access_with_the_field_as_defini
     assert start(field["name_span"]) == where(MODELS, "age: Int")
     assert end(field["name_span"]) == where(MODELS, "age: Int", 3)
     assert start(field) == where(MODELS, "age: Int")
-    # On the target, the answer is the target: a parameter, whose binding is not recorded yet.
+    # On the target, the answer is the target: a parameter, whose binding is the definition.
     on_target = answer(("orders.agc", where(ORDERS, "user.age", 1)), cwd=program)
     assert (on_target["kind"], on_target["type"], on_target["text"]) == ("name", "Models.User", "user")
-    assert on_target["definition"] is None
+    assert (on_target["definition"]["kind"], on_target["definition"]["file"]) == ("parameter", "orders.agc")
+    assert start(on_target["definition"]["name_span"]) == where(ORDERS, "user: Models.User")
 
 
 def test_a_method_call_is_a_name_on_its_method_and_a_builtin_has_no_definition(program):
@@ -446,5 +447,219 @@ def test_text_form_of_a_builtin_gives_a_line_with_its_signature(program):
     assert result.stdout.split("\n") == [
         f"orders.agc:{line}:{column}-{line}:{column + 11} name.upcase: String",
         "builtin String.upcase(s: String) -> String",
+        "",
+    ]
+
+
+# The locals of one file: every form that binds a name, each name used, and a name bound in sibling scopes (`i` in two
+# loops, `note` in three branches, `n` in two blocks).
+LOCALS = '''DOUBLED = [1, 2].map do |x| x * 2 end
+IGNORED = [1].map do |_| 0 end
+
+enum Pair
+  Two(Int, Int)
+  Gone
+end
+
+enum Box
+  Full(Int)
+  Empty
+end
+
+enum Shape
+  Nest(Box)
+  Flat
+end
+
+def measure(pair: Pair, scale: Int, parsed: Result[Int]) -> Int
+  total = 0
+  case pair
+    Pair.Two(left, right) if left > 0 -> total = left * right + scale
+    Pair.Two(_, _) -> total = 1
+    Pair.Gone -> total = 2
+  end
+  case parsed
+    ok(value) -> total += value
+    error(reason) -> total += reason.size
+  end
+  for i in 1..3
+    total += i
+  end
+  for i in [4, 5]
+    total = total + i
+  end
+  if scale > 1
+    note = "big"
+    puts(note)
+  elsif scale > 0
+    note = "small"
+    puts(note)
+  else
+    note = "none"
+    puts(note)
+  end
+  scaled = [1, 2].map do |n| n * scale + total end
+  [3].each do |n|
+    deeper = [n].map do |m| m + n + scale end
+    puts(deeper.size)
+  end
+  label = total |> to_text()
+  return scaled.size + "#{label}".size
+end
+
+def to_text(n: Int) -> String
+  return "#{n}"
+end
+
+def weigh(shape: Shape) -> Int
+  case shape
+    Shape.Nest(Box.Full(w)) -> return w + 1
+    _ -> return 0
+  end
+end
+
+def countdown(limit: Int) -> Int
+  while limit > 0
+    step = limit - 1
+    limit = step
+  end
+  return limit
+end
+'''
+
+
+@pytest.fixture
+def locals_file(tmp_path):
+    (tmp_path / "locals.agc").write_text(LOCALS, encoding="utf-8")
+    return tmp_path
+
+
+def local_at(needle, inside=0, nth=1, *, cwd):
+    return answer(("locals.agc", where(LOCALS, needle, inside, nth)), cwd=cwd)
+
+
+def binding_of(report):
+    """(kind, name, start of the name) of the definition of an answer."""
+    definition = report["definition"]
+    assert definition["name_span"]["file"] == definition["file"] == "locals.agc"
+    return definition["kind"], definition["name"], start(definition["name_span"])
+
+
+# Each local of the file: the name, its type and kind, where it is bound (the text that starts at the name), and a use
+# of it (the text that starts at the use). Every form that binds a name is here.
+LOCAL_CASES = [
+    ("pair", "Pair", "parameter", "pair: Pair", "pair\n"),
+    ("scale", "Int", "parameter", "scale: Int", "scale\n"),
+    ("parsed", "Result[Int]", "parameter", "parsed: Result", "parsed\n"),
+    ("left", "Int", "pattern", "left, right", "left * right"),
+    ("right", "Int", "pattern", "right)", "right + scale"),
+    ("value", "Int", "pattern", "value)", "value\n"),
+    ("reason", "String", "pattern", "reason)", "reason.size"),
+    ("total", "Int", "local", "total = 0", "total |>"),
+    ("i", "Int", "loop", "i in 1..3", "i\n  end"),
+    ("note", "String", "local", 'note = "big"', "note)"),
+    ("scaled", "List[Int]", "local", "scaled = ", "scaled.size"),
+    ("n", "Int", "parameter", "n| n * scale", "n * scale"),
+    ("deeper", "List[Int]", "local", "deeper = ", "deeper.size"),
+    ("m", "Int", "parameter", "m| m + n", "m + n"),
+    ("label", "String", "local", "label = ", "label}"),
+    # A block in a constant has no function around it; a name nested in a pattern is typed by its own slot; a binding
+    # in a `while` body is gone after it.
+    ("x", "Int", "parameter", "x| x * 2", "x * 2"),
+    ("w", "Int", "pattern", "w))", "w + 1"),
+    ("step", "Int", "local", "step = limit", "step\n  end"),
+]
+
+
+def test_a_use_of_a_local_has_its_type_and_its_binding_as_definition(locals_file):
+    for name, type_, kind, binding, use in LOCAL_CASES:
+        report = local_at(use, cwd=locals_file)
+        assert (report["kind"], report["type"], report["text"], report["help"]) == ("name", type_, name, None), name
+        assert binding_of(report) == (kind, name, where(LOCALS, binding)), name
+        definition = report["definition"]
+        assert (definition["signature"], definition["doc"]) == (f"{name}: {type_}", None), name
+        assert end(definition["name_span"]) == where(LOCALS, binding, len(name)), name
+        # The span of the answer is the name where it is used, not the expression around it.
+        assert end(report["span"]) == where(LOCALS, use, len(name)), name
+
+
+def test_the_binding_site_of_a_local_answers_that_binding_and_the_definition_can_be_asked_back(locals_file):
+    for name, type_, kind, binding, use in LOCAL_CASES:
+        site = local_at(binding, cwd=locals_file)
+        assert (site["kind"], site["type"], site["text"]) == ("name", type_, name), name
+        assert binding_of(site) == (kind, name, where(LOCALS, binding)), name
+        # The span of the answer is the name alone, which is also the name_span of the definition.
+        assert (site["span"]["range"], site["span"]["file"]) == (site["definition"]["name_span"]["range"], "locals.agc")
+        # What a use answers can be asked back: the definition's name_span is a position that answers the same binding.
+        used = local_at(use, cwd=locals_file)
+        again = answer(("locals.agc", start(used["definition"]["name_span"])), cwd=locals_file)
+        assert again["definition"] == used["definition"] == site["definition"], name
+
+
+def test_a_name_bound_in_sibling_scopes_points_at_the_binding_of_its_own_scope(locals_file):
+    # `note` is bound in each branch of an if: three bindings, each use belongs to the branch it is in.
+    for nth, value in enumerate(('"big"', '"small"', '"none"'), start=1):
+        binding = where(LOCALS, f"note = {value}")
+        used = local_at("puts(note)", 5, nth, cwd=locals_file)
+        assert binding_of(used) == ("local", "note", binding)
+        assert local_at(f"note = {value}", cwd=locals_file)["definition"] == used["definition"]
+    # The variable of two loops, and the parameter `n` of two blocks.
+    assert binding_of(local_at("+= i\n  end", 3, cwd=locals_file))[2] == where(LOCALS, "i in 1..3")
+    assert binding_of(local_at("+ i\n  end", 2, cwd=locals_file))[2] == where(LOCALS, "i in [4, 5]")
+    assert binding_of(local_at("n * scale", cwd=locals_file))[2] == where(LOCALS, "n| n * scale")
+    assert binding_of(local_at("[n].map", 1, cwd=locals_file))[2] == where(LOCALS, "n|", 0, 2)
+    # A reassignment in a loop points at the first binding of the name.
+    assert binding_of(local_at("total = total + i", 8, cwd=locals_file))[2] == where(LOCALS, "total = 0")
+
+
+def test_a_block_that_captures_a_local_points_at_the_outer_binding(locals_file):
+    outer = where(LOCALS, "scale: Int")
+    # `scale` is a parameter of the function, read in a block and in a block inside a block.
+    for needle, inside in (("* scale", 2), ("+ scale end", 2)):
+        report = local_at(needle, inside, cwd=locals_file)
+        assert (binding_of(report), report["type"]) == (("parameter", "scale", outer), "Int"), needle
+    # `n` is a parameter of the outer block, read in the inner one; `m` is the inner block's own.
+    assert binding_of(local_at("m + n", 4, cwd=locals_file)) == ("parameter", "n", where(LOCALS, "n|", 0, 2))
+    assert binding_of(local_at("m + n", 0, cwd=locals_file)) == ("parameter", "m", where(LOCALS, "m|"))
+    # `total` is an outer local read in a block, and the target of an assignment is the binding it assigns.
+    first = where(LOCALS, "total = 0")
+    assert binding_of(local_at("+ total end", 2, cwd=locals_file))[2] == first
+    assert binding_of(local_at("total += value", cwd=locals_file))[2] == first
+    assert binding_of(local_at("total = total + i", cwd=locals_file)) == ("local", "total", first)
+    assert end(local_at("total += value", cwd=locals_file)["span"]) == where(LOCALS, "total += value", 5)
+
+
+def test_the_definition_range_is_the_binding_node_when_it_has_one_else_the_name(locals_file):
+    # A parameter with a type and an assignment have a node of their own (the statement ends with its line); a block
+    # parameter without a type, a `for` variable and a pattern name are the name alone.
+    for name, binding, text, kind in (
+        ("scale", "scale: Int", "scale: Int", "parameter"),
+        ("step", "step = limit", None, "local"),
+        ("x", "x| x * 2", "x", "parameter"),
+        ("i", "i in 1..3", "i", "loop"),
+        ("w", "w))", "w", "pattern"),
+    ):
+        definition = local_at(binding, cwd=locals_file)["definition"]
+        line, column = where(LOCALS, binding)
+        assert definition["kind"] == kind, name
+        assert start(definition) == (line, column), name
+        assert end(definition) == ((line + 1, 1) if text is None else (line, column + len(text))), name
+        assert end(definition["name_span"]) == (line, column + len(name)), name
+
+
+def test_a_discard_binds_nothing_and_is_on_no_expression(locals_file):
+    problem(type_at(("locals.agc", where(LOCALS, "(_, _)", 1)), cwd=locals_file), "QUERY-NO-EXPRESSION", 2)
+    # A discarded block parameter is on no expression either, not on the block around it.
+    problem(type_at(("locals.agc", where(LOCALS, "|_|", 1)), cwd=locals_file), "QUERY-NO-EXPRESSION", 2)
+
+
+def test_text_form_of_a_local_gives_the_name_with_its_type_and_the_binding(locals_file):
+    line, column = where(LOCALS, "scale\n")
+    result = run(cli() + ["type-at", f"locals.agc:{line}:{column}"], env=vm_environment(), cwd=locals_file)
+    assert (result.code, result.stderr) == (0, "")
+    bound = where(LOCALS, "scale: Int")
+    assert result.stdout.split("\n") == [
+        f"locals.agc:{line}:{column}-{line}:{column + 5} scale: Int",
+        f"locals.agc:{bound[0]}:{bound[1]} parameter scale",
         "",
     ]

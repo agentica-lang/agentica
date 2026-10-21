@@ -149,7 +149,7 @@
     line, language rules, goldens, library, files, processes, tasks,
     network), and a report that fails when an area has no passed case or a
     case is skipped for a reason that is not on the reviewed list (the
-    Makefile's `WINDOWS_TEST_MODULES`, for the local Wine check, is a
+    `WINDOWS_TEST_MODULES` of mk/windows.mk, for the local Wine check, is a
     separate list and is not derived from the areas)
 
 - The Linux jobs run on every pull request that changes more than docs;

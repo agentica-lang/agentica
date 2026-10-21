@@ -9,8 +9,9 @@
 ## Docs (`##` comments) are a field of the declaration, field or variant they document, not a table keyed by span.
 ##
 ## A function, struct, enum, type alias, constant, field and variant also keep the span of its name (`name_span`), as
-## do a field access and a method call, for the commands that point at a name (`agentica outline`, `agentica
-## type-at`). parse_text.agc does not print it.
+## do a field access, a method call, a parameter, a block parameter and a binding; a `for` variable keeps
+## `variable_span` and a name in a pattern the span in its Slot. They serve the commands that point at a name
+## (`agentica outline`, `agentica type-at`). parse_text.agc does not print any of them.
 
 import Source from "source"
 import Types from "types"
@@ -118,6 +119,7 @@ end
 export struct Param
   id: Int
   name: String
+  name_span: Source.Span
   type: TypeRef
   default: Optional[Expr]
   span: Source.Span
@@ -187,10 +189,11 @@ export enum Stmt
   Case(CaseStmt)
 end
 
-## name = value, name: Type = value, or the desugared name += value.
+## name = value, name: Type = value, or the desugared name += value. `name_span` is the name on the left.
 export struct Binding
   id: Int
   name: String
+  name_span: Source.Span
   type: Optional[TypeRef]
   value: Expr
   span: Source.Span
@@ -238,6 +241,7 @@ end
 export struct ForStmt
   id: Int
   variable: String
+  variable_span: Source.Span
   iterable: Expr
   body: List[Stmt]
   span: Source.Span
@@ -297,11 +301,11 @@ export struct VariantPattern
   span: Source.Span
 end
 
-## One payload position of a variant pattern: a name that binds the value, `_` that drops it, or a nested pattern (a
-## literal, or another variant, to any depth). A name and `_` have no node id of their own, so a pattern with no nested
-## part numbers the nodes of the tree as it did before nested patterns existed.
+## One payload position of a variant pattern: a name that binds the value (with the span of the name), `_` that drops
+## it, or a nested pattern (a literal, or another variant, to any depth). A name and `_` have no node id of their own,
+## so a pattern with no nested part numbers the nodes of the tree as it did before nested patterns existed.
 export enum Slot
-  Bind(String)
+  Bind(String, Source.Span)
   Skip
   Nested(Pattern)
 end
@@ -478,6 +482,7 @@ end
 export struct BlockParam
   id: Int
   name: String
+  name_span: Source.Span
   type: Optional[TypeRef]
   span: Source.Span
 end
@@ -603,6 +608,20 @@ export def pattern_span(pattern: Pattern) -> Source.Span
     Pattern.Wildcard(node) -> return node.span
     Pattern.Literal(node) -> return node.span
     Pattern.Variant(node) -> return node.span
+  end
+end
+
+## The span of a statement node.
+export def stmt_span(stmt: Stmt) -> Source.Span
+  case stmt
+    Stmt.Binding(node) -> return node.span
+    Stmt.Return(node) -> return node.span
+    Stmt.Expression(node) -> return node.span
+    Stmt.If(node) -> return node.span
+    Stmt.While(node) -> return node.span
+    Stmt.For(node) -> return node.span
+    Stmt.Control(node) -> return node.span
+    Stmt.Case(node) -> return node.span
   end
 end
 

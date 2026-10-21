@@ -154,7 +154,7 @@ def test_the_runner_and_the_steps_the_binary_carries_give_the_report_of_ones_com
 
 
 def test_the_programs_the_binary_carries_are_the_texts_the_driver_compiles_without_them():
-    """The Makefile compiles compiler/embedded/*.agc into the binary; the driver has the same two texts for a front
+    """mk/bootstrap.mk compiles compiler/embedded/*.agc into the binary; the driver has the same two texts for a front
     end that reads the std/ sources from a folder."""
     driver = (ROOT / "compiler" / "bdd" / "bdd_driver.agc").read_text()
     for name, constant in (("runner", "RUNNER_ROOT"), ("steps", "DEFAULT_STEPS")):

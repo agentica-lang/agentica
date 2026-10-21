@@ -86,7 +86,8 @@ end
 ## nothing is ever deleted. bodies is the function of the prelude that each call of a prelude builtin runs, by the id
 ## of the call (the lowering reads it). step is true inside the block of a Lazy method, where a failed `try` ends the
 ## pipeline instead of returning from the block, and step_tries holds the id of each such `try` (the lowering emits
-## try-step for them).
+## try-step for them). bound holds what each name binding introduced, by the id of its node (see record_bound); it is
+## for the queries (`agentica type-at`), and the lowering never reads it.
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -101,6 +102,7 @@ export struct St
   bodies: Map[Int, String]
   step: Bool
   step_tries: Set[Int]
+  bound: Map[Int, List[Types.Type]]
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -140,6 +142,7 @@ export def fresh() -> St
     bodies: {},
     step: false,
     step_tries: no_tries,
+    bound: {},
   )
 end
 
@@ -206,6 +209,14 @@ end
 ## The state with the type of a node recorded.
 export def record_type(st: St, id: Int, type: Types.Type) -> St
   return st.with(types: st.types.set(id, type))
+end
+
+## The state with the types that a node introduced as names recorded: one for a parameter, a block parameter, a binding
+## or a `for` statement (the type of its variable), and one for each payload position of a variant pattern (the type of
+## the name there, if the slot has one). They are kept apart from `types`, which holds expressions only, so a type that
+## only a binding names does not reach the lowering.
+export def record_bound(st: St, id: Int, types: List[Types.Type]) -> St
+  return st.with(bound: st.bound.put(id, types))
 end
 
 ## The state with the resolution of a node recorded.

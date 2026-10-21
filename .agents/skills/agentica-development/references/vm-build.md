@@ -206,7 +206,7 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   (the sanitizers in `SANITIZE=1`, no `-Werror`) and the `YY_DEFS` that turn
   off everything but the reader; `vm/*.c` see the same `YY_DEFS` and `-I
   vm/third_party/yyjson/src`, and only `vm/json.c` includes `yyjson.h`. libuv
-  (a `UV_NAMES` list per system in the Makefile, from the lists of its
+  (a `UV_NAMES` list per system in `mk/vm.mk`, from the lists of its
   `CMakeLists.txt`) builds per mode into `$(VM_BUILD)/uv/*.o` with
   `-std=gnu11`, its own `UV_DEFS` and the mode's `YY_CFLAGS`, then
   `$(VM_BUILD)/libuv.a`, linked with `-ldl -lrt` on Linux. The yyjson,
@@ -219,7 +219,7 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   include `uv.h`. Bumping libuv: check out the new tag inside
   `vm/third_party/libuv`, compare its Linux source list with `UV_NAMES`,
   `git add vm/third_party/libuv`, and rerun the sanitizer and diff tests.
-- Platforms: the Makefile picks Linux, macOS (`uname -s` is `Darwin`) or
+- Platforms: `mk/vm.mk` picks Linux, macOS (`uname -s` is `Darwin`) or
   Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
   default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
   `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
@@ -250,8 +250,8 @@ Under `vm/third_party/`; `git submodule status` shows the pins.
   back.
 - Under ASan, Boehm is off (`-DAGC_NO_GC`); GC bugs need the GC-debug stress
   run (`make vm-gc-stress`), not ASan.
-- Portability: keep driver platform code in `vm/launch.c` and the Makefile
-  platform block; VM platform code follows "Platform code" in
+- Portability: keep driver platform code in `vm/launch.c` and the platform block
+  of `mk/vm.mk`; VM platform code follows "Platform code" in
   `references/vm-c.md`. `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
   guards the signal. `_Exit` is C11; mingw-w64 still provides `write`,
   `open`, `read`, `fstat` and `ssize_t` with `-std=c11`, but its `struct

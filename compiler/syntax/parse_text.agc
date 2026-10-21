@@ -386,7 +386,7 @@ end
 # A name is quoted, `_` is -, and a nested pattern is * (its own line follows the variant, in the order of the slots).
 def slot_text(slot: Ast.Slot) -> String
   case slot
-    Ast.Slot.Bind(name) -> return Text.quote(name)
+    Ast.Slot.Bind(name, _) -> return Text.quote(name)
     Ast.Slot.Skip -> return "-"
     Ast.Slot.Nested(inner) -> return "*"
   end
