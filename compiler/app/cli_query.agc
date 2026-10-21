@@ -32,14 +32,15 @@ import TypeAtText from "../query/type_at_text"
 
 # The usage line of each query command, given as the help of QUERY-USAGE.
 OUTLINE_USAGE = (
-  "usage: agentica outline FILE [--json] [--partial]   or   " + "agentica outline --stdin FILE [--partial]"
+  "usage: agentica outline FILE [--json] [--partial]   or   " + "agentica outline --stdin FILE [--json] [--partial]"
 )
 TYPE_AT_USAGE = (
   "usage: agentica type-at FILE:LINE:COL [--json] [--partial]   or   " +
-  "agentica type-at --stdin FILE:LINE:COL [--partial]"
+  "agentica type-at --stdin FILE:LINE:COL [--json] [--partial]"
 )
 REFS_USAGE = (
-  "usage: agentica refs FILE:LINE:COL [--json] [--partial]   or   " + "agentica refs --stdin FILE:LINE:COL [--partial]"
+  "usage: agentica refs FILE:LINE:COL [--json] [--partial]   or   " +
+  "agentica refs --stdin FILE:LINE:COL [--json] [--partial]"
 )
 SYMBOL_USAGE = "usage: agentica symbol NAME [PATH...] [--json] [--stdin FILE]"
 
@@ -83,9 +84,11 @@ end
 ## expression is QUERY-NO-EXPRESSION. With `partial`, a program in which some functions do not check is answered too
 ## (`Core.type_at_partial`).
 export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
-  asking = Core.type_at(settings, asked)
+  asking: Core.Typed = Core.Typed.Unreadable
   if partial
     asking = Core.type_at_partial(settings, asked)
+  else
+    asking = Core.type_at(settings, asked)
   end
   case asking
     Core.Typed.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, TYPE_AT_USAGE))
@@ -103,9 +106,11 @@ end
 ## at the position in the file and what it imports, or is QUERY-NO-EXPRESSION when the position names nothing. With
 ## `partial`, a program in which some functions do not check is answered too (`Core.refs_partial`).
 export def refs(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
-  asking = Core.refs(settings, asked)
+  asking: Core.Referenced = Core.Referenced.Unreadable
   if partial
     asking = Core.refs_partial(settings, asked)
+  else
+    asking = Core.refs(settings, asked)
   end
   case asking
     Core.Referenced.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, REFS_USAGE))
