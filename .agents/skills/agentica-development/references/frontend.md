@@ -47,8 +47,8 @@ with a packed `Problem` (`references/stages.md`).
   from `Checked.bound` (`State.record_bound`: by the id of a parameter, binding
   or `for` node, and for a pattern by the id of the variant pattern, one type
   for each slot), kept apart from `Checked.types` so the lowering never sees
-  them. The commands are `app/cli_query.agc`; the tests are `tests/test_spec_outline.py` and
-  `tests/test_spec_type_at.py`.
+  them. The commands are `app/cli_query.agc`; the tests are
+  `tests/test_spec_outline.py` and `tests/test_spec_type_at.py`.
 
 ### Pure core, one port
 

@@ -200,10 +200,11 @@ signatures are strings.
   variable and a pattern name, and `name_span` is the name at the binding. The
   top-level `kind` of `type-at` is an open set (`expression`, `name`,
   `builtin`; later versions may add values) and a client accepts a value it
-  does not know, so `builtin` needed no new `version`. A `builtin` answer has `definition` null
-  and `help`, the object of `agentica help NAME --json` (`CatalogJson`, which
-  `help` uses too); `help` is null for every other kind. `to_s` and `inspect`
-  answer a builtin only where the checker resolves them to one (numbers).
+  does not know, so `builtin` needed no new `version`. A `builtin` answer has
+  `definition` null and `help`, the object of `agentica help NAME --json`
+  (`CatalogJson`, which `help` uses too); `help` is null for every other kind.
+  `to_s` and `inspect` answer a builtin only where the checker resolves them to
+  one (numbers).
 - `symbol`: `{version, command, query, matches: [...], skipped: [...]}`. Each
   match is `{kind, name, module, exported, signature, span}`; `kind` adds
   `"field"` (with `type` and `struct`), `"variant"` (with `payload` and `enum`)
