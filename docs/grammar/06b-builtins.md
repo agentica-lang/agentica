@@ -399,8 +399,11 @@ innermost expression at a position (line and column from 1, in code points as
 diagnostics count them), its span and source text, and the definition of what it
 names: a function, struct, enum, variant, field or constant, with the span of
 the declaration and of its name, its signature and its `##` doc (null when it
-has none). A type name (in an annotation or a type argument) is answered in a
-later version. A type of another file is written through the import alias of
+has none). A type name (in an annotation, a type argument or a field or
+payload type) has the `kind` `type`, the span of the name (`Models.User` is one
+span) and the struct, enum or type alias it names as definition (`alias` kind
+for an alias); a builtin type (`Int`, `List`) has no definition. A type of
+another file is written through the import alias of
 FILE (`Models.User`). On the name of a builtin (`split` in `xs.split(",")`) the
 `kind` is `builtin` and `help` holds the object of `agentica help NAME --json`;
 a builtin has no definition. A local (a parameter, a binding, a `for` variable

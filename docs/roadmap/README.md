@@ -268,8 +268,8 @@ Weighed later (no fixed order)
 - **Order:** 7.2b
   - **Next work:** **Built (2026-10-21, issue #506):** the semantic CLI and
     `std/analysis` ([§39](../future/39-semantic-cli.md)),
-    front end and CLI only, nothing to run. Open: `type-at` on type names
-    (§39.3); the 6c round (row 10) measures the commands (§39.12)
+    front end and CLI only, nothing to run. Open: the 6c round (row 10)
+    measures the commands (§39.12)
   - **Outcome:** Agents list declarations, find definitions and references
     across modules, and get the checked type at a position, without reading
     whole files or guessing from `rg`

@@ -180,21 +180,28 @@ def test_a_position_that_the_link_cannot_answer_is_the_first_problem(program):
 
 
 def test_a_position_on_no_expression_is_told_from_a_broken_program_when_the_parse_can_tell(program):
-    # A blank line, an import line and the gap between functions are on no expression; so is a parameter annotation of
-    # a function that checked for `type-at`, as in a program that checks. A token of a failed function that the link
-    # cannot name could be an expression, so it is the first problem.
-    annotation = where(APP, "Models.User) -> Int", 2)
+    # A blank line, an import line and the gap between functions are on no expression. A token of a failed function
+    # that the link cannot name could be an expression, so it is the first problem.
     for verb in ("type-at", "refs"):
         for spot in ((2, 1), where(APP, "import"), where(APP, "end\n\ndef helper", 3)):
             result = asked(verb, ("app.agc", spot), "--partial", cwd=program)
             assert problem(result, "QUERY-NO-EXPRESSION", 2)["file"] == "app.agc"
         inside = asked(verb, ("app.agc", where(APP, "return helper(\"no\")")), "--partial", cwd=program)
         assert problem(inside, "CHECK-TYPE-MISMATCH", 1)["file"] == "app.agc"
-    whole = asked("type-at", ("fixed.agc", annotation), cwd=program)
-    spot = ("app.agc", annotation)
-    assert problem(asked("type-at", spot, "--partial", cwd=program), "QUERY-NO-EXPRESSION", 2)
-    assert problem(whole, "QUERY-NO-EXPRESSION", 2)["range"] == problem(
-        asked("type-at", ("app.agc", annotation), "--partial", cwd=program), "QUERY-NO-EXPRESSION", 2)["range"]
+
+
+def test_a_type_name_is_answered_from_the_link_in_a_function_that_did_not_check(program):
+    # The annotation of `broken` and the one of `good` are both answered, the same way, and a program that checks
+    # answers the same name with the same bytes apart from the marker.
+    for needle, inside in (("Models.User) -> Int\n  made", 2), ("Models.User) -> Int\n  return user.age", 2)):
+        report = answer("type-at", ("app.agc", where(APP, needle, inside)), "--partial", cwd=program)
+        assert (report["partial"], report["kind"], report["text"]) == (True, "type", "Models.User")
+        assert (report["definition"]["kind"], report["definition"]["file"]) == ("struct", "models.agc")
+    builtin = answer("type-at", ("app.agc", where(APP, "-> Int\n  made", 3)), "--partial", cwd=program)
+    assert (builtin["partial"], builtin["kind"], builtin["text"], builtin["definition"]) == (True, "type", "Int", None)
+    whole = answer("type-at", ("fixed.agc", where(FIXED, "Models.User) -> Int\n  made", 2)), cwd=program)
+    marked = answer("type-at", ("app.agc", where(APP, "Models.User) -> Int\n  made", 2)), "--partial", cwd=program)
+    assert (whole["kind"], whole["definition"]) == (marked["kind"], marked["definition"])
 
 
 @pytest.mark.parametrize("name", sorted(BAD_DECLARATIONS))
