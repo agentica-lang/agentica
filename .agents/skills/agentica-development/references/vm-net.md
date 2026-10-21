@@ -152,12 +152,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - `vm/duplex.c`
   - the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As
-    built (25c)"; Linux and macOS, a pipe path on Windows): an `agc_duplex`
-    is one bidirectional libuv pipe over a socket end with an `agc_inbuf`
-    (line reads, 1 MiB), at most one reader request and one writer request, a
-    reference count (the owner, each request, the pipe handle and the shutdown
-    request) the
-    `overflow` text and the flags `closed`, `write_closed` and `sent`.
+    built (25c, the child channel)"; Linux and macOS, a pipe path on Windows):
+    an `agc_duplex` is one bidirectional libuv pipe over a socket end with an
+    `agc_inbuf` (line reads, 1 MiB), at most one reader request and one writer
+    request, a reference count (the owner, each request, the pipe handle and the
+    shutdown request) the `overflow` text and the flags `closed`, `write_closed`
+    and `sent`.
   - `agc_duplex_overflow` (called by `process.c` when stdout or stderr is cut)
     stores the output-exceeds text and readies a pending reader
   - a read that finds no complete line then returns that error, now or later,
