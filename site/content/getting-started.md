@@ -72,7 +72,7 @@ agentica greet.agc Ana Bob    # prints one greeting per name
 
 ## Check and errors
 
-`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. `check` needs no `main`, so a library file passes; running or compiling a file needs `def main() -> Void`. The checker stops at the first error:
+`agentica check hello.agc` checks types without running and prints `check ok`. Every run checks first, so a type error stops it before any output. `check` accepts a file without `main`; a run or `compile` needs `def main() -> Void`. The checker stops at the first error:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void
@@ -114,6 +114,10 @@ agentica doc std/queue    # a file path works too; --json prints one JSON object
 
 It prints the exported declarations in source order, each with its signature and its `##` doc, and a struct's fields or an enum's variants. It only reads the file: the module's imports need not exist. Declarations without `export` are left out.
 
+## Query the code
+
+`outline`, `type-at`, `symbol` and `refs` answer questions about the code, for editors and agents. None of them runs the program. Each prints text, or one JSON object with `--json`. Exit codes: `0` answered, `1` the code has an error (its first diagnostic is the answer), `2` a bad question or an unreadable file. The `QUERY-` codes are `QUERY-USAGE` (bad arguments or file), `QUERY-NO-EXPRESSION` (no expression at the position), `QUERY-NOT-FOUND` and `QUERY-AMBIGUOUS-NAME`; see [Diagnostics](/reference/).
+
 ## List a file's declarations
 
 ```sh
@@ -127,12 +131,12 @@ src/orders.agc:8:1 export def total(order: Order) -> Int
 src/orders.agc:14:1 def round_cents(value: Float) -> Int
 ```
 
-It prints each declaration with `file:line:column` first, like `rg`, and private declarations too. `--json` adds the `##` doc, the signature, `exported` and the spans, with the fields and variants. Like `doc`, it only reads the file, so its imports need not exist. A bad question, such as a missing file, is `QUERY-USAGE` and exits 2.
+`outline` only parses its file, so the imports need not exist. It prints each declaration with `file:line:column` first, like `rg`, and private ones too. `--json` adds the `##` doc, the signature, `exported`, the spans and the fields or variants.
 
-Ask for the type at a position, with the definition of what the expression names:
+## Type at a position
 
 ```sh
-agentica type-at src/orders.agc:22:14    # --json prints one JSON object; --stdin reads the file from standard input
+agentica type-at src/orders.agc:22:14    # --json for one object; --stdin FILE:LINE:COL reads FILE from standard input
 ```
 
 ```text
@@ -140,35 +144,33 @@ src/orders.agc:22:9-22:19 user.email: String
 src/models.agc:4:3 field email
 ```
 
-Line and column count from 1, in code points (an emoji is one column). A type of another file is written through the import alias (`Models.User`). `type-at` checks the file and what it imports, but needs no `main`; an error in the program is its own diagnostic and exits 1. A position that is not on a token of an expression is `QUERY-NO-EXPRESSION` and exits 2. With `--json` the definition also has its signature and its `##` doc, and the name of a builtin (`split` in `xs.split(",")`) answers `kind` `builtin` with the object of `agentica help NAME --json` under `help`. A local variable, a parameter or a name bound by a loop or a `case` answers with its type and a definition at the place that binds it, whether the position is on a use or on the binding.
+Line and column count from 1, in code points (an emoji is one column). The first line is the type of the expression and its span; the next is its definition. `type-at` checks the file and what it imports, but needs no `main`. A type of another file is written through the import alias (`Models.User`). A local, a parameter or a loop variable has a type and a definition at its binding. A builtin (`split` in `xs.split(",")`) has no definition; with `--json` it has `kind` `builtin` and the object of `agentica help NAME --json` under `help`.
 
-Find where a name is defined in a folder, with its signature and `##` doc:
+## Find a name
 
 ```sh
-agentica symbol Models.User.email src/    # PATH is a file or a folder, default .; --json, --stdin FILE
+agentica symbol Models.User.email src/    # PATH is a file or a folder, default .
 ```
 
 ```text
 src/models.agc:4:3 field User.email: String
 ```
 
-NAME is written as the code writes it: `total`, `User.email`, `Option.Some`, `Models.User` through the import alias of a file under PATH, `std/queue.pop`, or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too. With `--json` each match has its `kind`, `module`, `exported`, `signature`, `doc` and spans, and a builtin has the object of `agentica help NAME --json` under `help`. The files of PATH are linked together: one that does not lex, parse or link is listed under `skipped` with its diagnostic, and the others still answer. A name that nothing declares is `QUERY-NOT-FOUND` and exits 2; if no file links, the first diagnostic is the answer and exits 1.
+NAME is written as the code writes it: `total`, `User.email`, `Option.Some`, `Models.User` through the import alias of a file under PATH, `std/queue.pop` or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too. The files under PATH are linked together; one that does not link is listed under `skipped` and the others still answer. `--json` adds `kind`, `module`, `exported`, `signature`, `doc` and the spans to each match.
 
-List every reference to a name, or to the name at a position:
+## Find references
 
 ```sh
-agentica refs Models.User.email src/    # NAME and PATH as for symbol; --json prints one JSON object
-agentica refs src/models.agc:4:3 src/   # FILE:LINE:COL; --stdin reads the file from standard input
+agentica refs Models.User.email src/    # or: agentica refs src/models.agc:4:3 src/
 ```
 
 ```text
 src/models.agc:4:3 definition field User.email: String
 src/orders.agc:22:14 read in total
-src/report.agc:9:30 read in render
 src/report.agc:31:5 construct in sample
 ```
 
-The two forms give the same answer for the same declaration. The position can be on a use, on the name where the declaration is written, or on a name of an import list (`make` of `import {make} from "models"`). The name can be a function, a struct, an enum, a variant, a field, a constant, a type alias, a local variable, a parameter or a builtin; a field of one struct is never mixed with a field of the same name in another, nor a variable of one block with a variable of the same name in a sibling block. The first line is the definition (a builtin has none) and each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in; the span of a use is the name alone. `refs` links the files together (FILE and the files under PATH for a position, the files under PATH for a NAME, default `.`, and what they import), so it sees the uses in all of them, and checks them. A file under PATH that does not link is listed under `skipped` and the others still answer. A NAME that nothing declares is `QUERY-NOT-FOUND`, and one that several declarations answer to is `QUERY-AMBIGUOUS-NAME` with each candidate as `FILE:LINE:COL` in its help, ready for the position form. Positions, `--stdin` and the other exit codes are those of `type-at`. A position on the module alias of `Models.total(u)` selects the function, not the module, and a position on a module alias or a path of an import line is `QUERY-NO-EXPRESSION`. With `--json` the answer is `{version, command, query, definition, builtin, references, skipped}`; no references is an empty list, not an error.
+The first line is the declaration. Each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in. The position can be on a use or on the declaration. Two fields with one name in two structs are never mixed. A name that several declarations answer to is `QUERY-AMBIGUOUS-NAME`, and its help lists each one as `FILE:LINE:COL` for the position form. With `--json` the answer is one object, `{version, command, query, definition, builtin, references, skipped}`.
 
 ## Options
 
@@ -180,16 +182,17 @@ The two forms give the same answer for the same declaration. The position can be
 | `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS` (empty counts as unset). `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
 | `--allow-run` | lets the program start programs with `Process.spawn` |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
-| `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answers for the text on standard input as if `FILE` held it |
-| `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | searches the text on standard input as one more file, the first |
-| `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
+| `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
+| `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
+| `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
 | `compile FILE -o OUT` | writes VM bytecode |
 | `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
 | `--version` | prints the version |
 
 A flag wins over its environment variable.
+
 
 ## Test
 
