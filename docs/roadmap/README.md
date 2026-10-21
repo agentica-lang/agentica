@@ -191,25 +191,16 @@ rows after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 22b
   - **Next work:** **Part 1 done (2026-10-21):** `agentica doc PATH [--json]`.
-    **Part 2 after the bootstrap** (owner, 2026-10-15): `agentica help
-    std/MODULE`. Front end only, in `compiler/`
-    ([§32](../future/32-doc-comments.md#32-doc-comments), part 22b, §32.5 and
-    §32.6)
+    Part 2 pending: `agentica help std/MODULE`, front end only
+    ([§32.6](../future/32-doc-comments.md)).
   - **Outcome:** Agents and people read a module's API with `agentica doc
     std/http`, in text or JSON
 
 - **Order:** 7.2b
-  - **Next work:** **Started 2026-10-21** (owner, issue #506). After row 22b,
-    in `compiler/`: the semantic CLI for agents
-    ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)), in this
-    order: `agentica doc` (row 22b, done), `agentica outline` (done), `agentica
-    type-at` (core, docs, builtins and locals done), `agentica symbol` (done),
-    the opt-in `--partial` (done for `type-at` and the position form of
-    `refs`), `agentica refs` (done), JSON first;
-    front end and CLI only, nothing to run, no LSP; the full 6c round (step 10)
-    measures it. The same answers as a library, `std/analysis` (issue #524):
-    `Std.source` and the library without a cache (`check`, `outline`, `type_at`,
-    `symbol`, `refs`) and the cache (`Analysis.refresh`) are done
+  - **Next work:** **Built (2026-10-21, issue #506):** the semantic CLI and
+    `std/analysis` ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)),
+    front end and CLI only, nothing to run. Open: `type-at` on type names
+    (§39.3); the 6c round (row 10) measures the commands (§39.12)
   - **Outcome:** Agents list declarations, find definitions and references
     across modules, and get the checked type at a position, without reading
     whole files or guessing from `rg`
@@ -356,7 +347,7 @@ rows after them may run in parallel when needed and keep their relative order.
 - **Order:** 10
   - **Next work:** Evaluation round: Agentica against typed Python on harder
     tasks (6c), the full round after the pilot of step 7.2.2, with the semantic
-    CLI of phase 26 (§39.12). It waits until after the bootstrap (row 7.2.7),
+    CLI of row 7.2b (§39.12). It waits until after the bootstrap (row 7.2.7),
     by the owner's decision of 2026-10-14
   - **Outcome:** Evidence on whether agents do better in Agentica than in typed
     Python
@@ -445,7 +436,7 @@ Windows and macOS releases were done ahead of this order.
    §18.2 is a later PR).
 6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
    diagnostics (row 7.6), `agentica doc` and `help` (row 22b), the semantic CLI
-   (row 7.2b, started 2026-10-21, issue #506), the 44b–44d table rewrites
+   (row 7.2b, built 2026-10-21, issue #506), the 44b–44d table rewrites
    (**done 2026-10-16**), type aliases (row 7.12, §49: 49a and 49b done), test
    functions without `main` (row 7.11, §50), and `Task.map` (**done**, 17a, PR
    #316).

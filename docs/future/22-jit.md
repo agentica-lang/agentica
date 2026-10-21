@@ -1,8 +1,8 @@
 ## 22. JIT
 
 **Status:** required, not gated (roadmap 7m). It starts after the VM layers
-(section 21, roadmap 7l) and the server measurement (7j), so it has numbers to
-beat, and after packages and the FFI (issue
+(`docs/vm/15-layers.md`, roadmap 7l) and the server measurement (7j), so it has
+numbers to beat, and after packages and the FFI (issue
 [#534](https://github.com/sonic182/agentica/issues/534)). Compiled code follows
 the multicore rules of `docs/vm/16-architecture.md`. No language change.
 
@@ -13,7 +13,7 @@ the multicore rules of `docs/vm/16-architecture.md`. No language change.
 - Tier 2 is a baseline JIT for hot functions, in the style of V8's Sparkplug:
   one pass over the bytecode, no IR, fixed code per opcode. It has no
   speculation, so no deoptimization. It emits native code that calls the opcode
-  helpers (`agc_op_concat`, `agc_op_eq`, ... from section 21) and inlines the
+  helpers (`agc_op_*` in `vm/core.h`) and inlines the
   Int and Float fast paths, register moves and jumps.
 - A later tier comes only if measurements ask for it: an SSA IR built from the
   bytecode and the checker's types, locals in registers, linear-scan register

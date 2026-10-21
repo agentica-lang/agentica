@@ -19,7 +19,7 @@ Editors would show what the checker already knows, without a shell round trip:
 
 ### 43.2 What it builds on
 
-- **The semantic CLI (§39).** `outline`, `symbol`, `refs` and `type-at` will
+- **The semantic CLI (§39, built).** `outline`, `symbol`, `refs` and `type-at`
   define the answers. The server would give the same answers, so an agent and
   an editor never see different things.
 - **Doc comments (§32).** Hover text is the `##` text of a declaration.

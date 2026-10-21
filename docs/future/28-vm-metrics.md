@@ -710,33 +710,19 @@ matter:
 
 ### 28.9 Where the code goes
 
-The metrics code follows the C rules of the development skill (file order, no
-static prototypes, `agc_` names, no mutable globals: all state is in the
-runtime, the scheduler and the thread's own `malloc`'d struct). The Makefile
-gets `METRICS=0` (it passes `-DAGC_METRICS_BUILD=0` and goes in the
-`build/vm/flags` stamp like `TRACE` and `SANITIZE`). The `.prom` path check
+The metrics code follows the C rules of the development skill. All state is in
+the runtime, the scheduler and the thread's own `malloc`'d struct: no mutable
+globals. The build has a `METRICS=0` switch, and the `.prom` path check
 (`lstat` before `rename`) is new code, apart from the trace file's `fstat`
 check.
 
-Touch points: `vm/launch.c` (one `start_observe` reads the trace and metrics
-variables together before loading; at the end of the run it sets `stop`, hands
-over the final snapshot and joins the thread with the 1-second timeout);
-`vm/trace.c` (the `metrics` category, and `metrics` in the category regex
-`TRACE_LINE` of `tests/test_vm_trace.py`, which otherwise rejects its lines);
-`vm/port.h` (the `agc_io_bytes` struct and the `done` out-parameter);
-`agc_io_finish` in `vm/loop.c` (copies the count onto the job); and
-`vm/files.c`, `vm/input.c`, `vm/process.c`, `vm/tcp.c` (each keeps the count
-next to its system call).
-
-Multicore (`docs/vm/10-io-multicore.md` §10.2.3): the snapshot design stays; the
-run-queue delay hook is revisited then (28.4: pushes from the I/O thread and
-from other schedulers into the global run queue break the "after the remembered
-tail" rule). Each scheduler has its own counts, observe word and snapshot part;
-the metrics thread sums the parts. An idle scheduler waits on the run queue's
-condvar, not in `uv_run` (§16.3), so how a request wakes it changes then.
-Scheduler 0 reads the GC (with Boehm's thread support on, through
-`GC_get_prof_stats`, which takes the GC lock) and the shared atomics. No lock
-and no atomic add on the hot path.
+Multicore (`docs/vm/10-io-multicore.md` §10.2.3): the snapshot design stays;
+the run-queue delay hook is revisited then (28.4). Each scheduler has its own
+counts, observe word and snapshot part; the metrics thread sums the parts. An
+idle scheduler waits on the run queue's condvar, not in `uv_run` (§16.3), so how
+a request wakes it changes then. Scheduler 0 reads the GC (with Boehm's thread
+support on, through `GC_get_prof_stats`, which takes the GC lock) and the
+shared atomics. No lock and no atomic add on the hot path.
 
 Each PR documents its part in `docs/vm/08-loader-and-cli.md` §9 and
 `docs/vm/10-io-scheduler.md`.

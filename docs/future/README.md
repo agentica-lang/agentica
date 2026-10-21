@@ -15,7 +15,8 @@ Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33 and 35–37 have no file of their o
 they are built or decided, and their content lives in the grammar, `docs/vm/`,
 the roadmap or §18. §31 (BDD) is built and specified in
 [`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built
-small-value sharing.
+small-value sharing. §40 (native code and FFI) was replaced by issue
+[#534](https://github.com/sonic182/agentica/issues/534), which holds its design.
 
 - §: 3
   - Title: Extensions without a normative grammar
@@ -137,7 +138,9 @@ small-value sharing.
 - §: 39
   - Title: Semantic CLI for agents
   - File: [`39-semantic-cli.md`](39-semantic-cli.md)
-  - Status: In progress (row 7.2b): `doc` and `outline` built
+  - Status: Built (row 7.2b): `outline`, `symbol`, `refs`, `type-at`,
+    `--partial` and `std/analysis`; pending: `type-at` on a type name (§39.3)
+    and the 6c measurement (§39.12)
 
 - §: 41
   - Title: Dates and times

@@ -729,11 +729,12 @@ CPU.
 
 With the `exe` runner, `benchmarks/run.py` also times the front end inside
 `dist/agentica` (§18.5): `check` of `examples/hello.agc`, of
-`stdlib/bdd/gherkin.agc` and of `compiler/syntax/parser.agc` (both have no
-`main`, which `check` does not need; old rows stopped at `CHECK-MAIN`, new runs
-check every body), of a three-line `main` that imports
-gherkin (the full check of its bodies), and of `compiler/front_end.agc` (the
-whole front end), and one `agentica test` of a one-test file. The heading of the
+`stdlib/bdd/gherkin.agc` and of `compiler/syntax/parser.agc` (neither has a
+`main`, and `check` does not need one, so it checks every body; earlier rows of
+these two stopped at `CHECK-MAIN` and are not comparable), of a three-line
+`main` that imports gherkin (the full check of its bodies), and of
+`compiler/front_end.agc` (the whole front end), and one `agentica test` of a
+one-test file. The heading of the
 table prints the load average, and says "measured under load" when the
 one-minute load is above 2. CI does not gate on these times.
 

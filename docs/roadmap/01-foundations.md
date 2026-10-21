@@ -9,11 +9,12 @@ its files in `docs/grammar/`, and the tests of each stage are in
 **Still open from this period** (both tracked here until they are done or
 dropped):
 
-- [ ] Phase 5d3, the rest of the agent API: `symbols`, `show` and `refs` with
-  one test per command over `examples/`, and the measurement of `--ai` and
-  labels against plain text on the `binary` arm (`docs/eval.md`). The semantic
-  commands for agents are now planned as [§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)
-  (`outline`, `symbol`, `refs`, `type-at`).
+- [ ] Phase 5d3, the rest of the agent API: `show`, with one test per command
+  over `examples/`, and the measurement of `--ai` and labels against plain text
+  on the `binary` arm (`docs/eval.md`). The commands `symbol` and `refs` are
+  built as part of the semantic CLI (row 7.2b,
+  [§39](../future/39-semantic-cli.md)); `show` is not a command, and the owner
+  decides whether it is still wanted.
 - [ ] Phase 6a, the Sonnet 5.5 round (postponed; only `pi` for now). Rounds 1 to
   8 are done and recorded in `docs/eval.md`; see
   [`06-validation.md`](06-validation.md).
