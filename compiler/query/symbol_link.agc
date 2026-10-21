@@ -12,6 +12,7 @@
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
+import Modules from "../modules/modules"
 import Problems from "../diagnostics/problem"
 import QueryFiles from "query_files"
 import SymbolPaths from "symbol_paths"
@@ -28,14 +29,14 @@ export struct Linked
   skipped: List[Skipped]
 end
 
-## Links every root of `roots`.
-export def link(roots: List[SymbolPaths.Root], settings: Env.Settings) -> Linked
+## Links every root of `roots`, taking the trees of `parses` for the files whose text is the same.
+export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: Modules.Parses) -> Linked
   modules: List[Linker.LinkedModule] = []
   known: Map[String, Bool] = {}
   skipped: List[Skipped] = []
   for root in roots
     if !known.has_key?(root.key)
-      case Linker.link_file(root.typed, settings)
+      case Linker.link_file_with(root.typed, settings, parses)
         Linker.Linking.Done(linked) ->
           for module in linked.modules
             if !known.has_key?(module.key)

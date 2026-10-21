@@ -4,6 +4,8 @@ fixtures/analysis/driver.agc) that calls the library, and the CLI with `--json` 
 streams. The driver is compiled once for the module (it compiles the core of the front end with it); each case is a run
 of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
 import json
+import os
+import shutil
 
 import pytest
 
@@ -15,6 +17,8 @@ UTIL = "export def twice(n: Int) -> Int\n  return n * 2\nend\n"
 # `twice` is gone, so MAIN no longer checks against this one.
 UTIL_RENAMED = "export def doubled(n: Int) -> Int\n  return n * 2\nend\n"
 MAIN = 'import Util from "util"\n\ndef run() -> Int\n  return Util.twice(2)\nend\n'
+# Another body for `twice`: the same exports, another text.
+UTIL_CHANGED = "export def twice(n: Int) -> Int\n  return n + n\nend\n"
 EXTRA = "export def three() -> Int\n  return 3\nend\n"
 USES_EXTRA = 'import Extra from "extra"\n\ndef run() -> Int\n  return Extra.three()\nend\n'
 PARSE_ERROR = "def broken(\n"
@@ -271,3 +275,191 @@ def test_a_std_module_of_a_stdlib_folder_may_not_leave_std_with_dots(project):
     linked = run(cli() + stage, cwd=project, env=vm_environment())
     assert (linked.code, linked.stderr) == (0, "")
     assert 'ERROR CHECK-IMPORT-PATH 0:1:1-21:2:1 "invalid library path" - file="std/a.agc"' in linked.stdout
+
+
+def stats_of(stdout):
+    """The `stats` lines of a driver run, as dicts of ints."""
+    return [
+        {key: int(value) for key, value in (pair.split("=") for pair in line.split())}
+        for line in stdout.splitlines() if line.startswith("roots=")
+    ]
+
+
+def counted(stdout, *keys):
+    """For each `stats` line, the values of `keys`."""
+    return [tuple(line[key] for key in keys) for line in stats_of(stdout)]
+
+
+REFRESHED = [
+    ("check", "main.agc"),
+    ("check", "type_error.agc"),
+    ("check", "parse_error.agc"),
+    ("check", "missing_import.agc"),
+    ("check", "uses_bad.agc"),
+    ("type-at", *position("orders.agc", ORDERS, "user.age", 5)),
+    ("type-at", *position("orders.agc", ORDERS, "Models.make", 8)),
+]
+
+
+@pytest.mark.parametrize("question", REFRESHED, ids=[" ".join(question) for question in REFRESHED])
+def test_a_refresh_before_a_question_gives_the_answer_without_it_and_the_command_lines(driver, project, question):
+    """A file that does not link (a parse error, a missing import) leaves the cache as it was; the question says why."""
+    command, file, *rest = question
+    got = library(driver, project, "refresh", file, command, file, *rest)
+    assert got == asked(project, command, file, *rest)
+    assert got == library(driver, project, command, file, *rest) != ("", "")
+
+
+def test_symbol_and_refs_after_a_refresh_give_the_answers_of_the_command_line(driver, project):
+    where_make = position("orders.agc", ORDERS, "Models.make", 8)
+    got = library(driver, project, "refresh", "orders.agc", "refresh", "models.agc", "refs", *where_make)
+    assert got == command_line(project, "refs", ":".join(where_make)) != ("", "")
+    got = library(driver, project, "refresh", "orders.agc", "refresh", "models.agc", "symbol", "make", "models.agc", "orders.agc")
+    assert got == command_line(project, "symbol", "make", "models.agc", "orders.agc") != ("", "")
+
+
+def test_a_buffer_edit_and_a_close_check_a_root_again_and_a_root_that_does_not_reach_the_file_keeps_its_check(
+    driver, project,
+):
+    write_files(project, {"util_changed.agc": UTIL_CHANGED})
+    out, err = library(
+        driver, project,
+        "refresh", "main.agc", "stats",
+        "refresh", "main.agc", "stats",
+        "refresh", "models.agc", "stats",
+        "update", "util.agc", "util_changed.agc", "refresh", "models.agc", "stats",
+        "refresh", "main.agc", "stats",
+        "close", "util.agc", "refresh", "main.agc", "stats",
+        "refresh", "main.agc", "check", "main.agc",
+    )
+    assert (err, out.splitlines()[-1]) == ("", '{"ok":true}')
+    # main.agc and util.agc are two files; models.agc is one. A second refresh walks and reuses everything; the buffer
+    # of util.agc is one parse and one check again, and so is its close, with main.agc itself never parsed again.
+    expected = [(1, 1, 2), (1, 1, 2), (2, 2, 3), (2, 2, 3), (2, 3, 4), (2, 4, 5)]
+    assert counted(out, "roots", "checks", "parsed") == expected
+
+
+def test_a_disk_edit_a_new_file_and_a_removed_file_are_seen_by_the_next_refresh_and_question(driver, project):
+    write_files(project, {"util_changed.agc": UTIL_CHANGED, "extra_text.agc": EXTRA})
+    out, err = library(
+        driver, project,
+        "refresh", "main.agc", "stats",
+        "write", "util.agc", "util_changed.agc", "refresh", "main.agc", "stats",
+        "refresh", "uses_extra.agc", "stats",
+        "write", "extra.agc", "extra_text.agc", "refresh", "uses_extra.agc", "stats",
+        "remove", "extra.agc", "check", "uses_extra.agc", "compare", "uses_extra.agc",
+    )
+    # The edit of util.agc is one parse and one check. uses_extra.agc has no extra.agc yet: the walk fails and the cache
+    # stays as it was; once the file exists it is two parses and one check.
+    assert counted(out, "roots", "checks", "parsed") == [(1, 1, 2), (1, 2, 3), (1, 2, 3), (2, 3, 5)]
+    # The cached root of uses_extra.agc is not used once extra.agc is gone: the question reads the files again.
+    assert json.loads(err)["code"] == "CHECK-IMPORT-IO"
+    assert out.splitlines()[-1] == "same 0"
+
+
+def test_a_manifest_that_appears_is_seen_by_the_next_question_though_the_root_is_cached(driver, project):
+    write_files(project, {"bad.toml": 'name = "x"\n[dependencies\n'})
+    out, err = library(
+        driver, project, "refresh", "main.agc", "write", "agentica.toml", "bad.toml", "check", "main.agc", "stats",
+        "compare", "main.agc",
+    )
+    assert json.loads(err)["code"] == "PKG-MANIFEST-INVALID"
+    assert out.splitlines()[-1] == "same 0"
+    assert counted(out, "roots", "checks") == [(1, 1)]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="host-only: symbolic links need privileges on Windows")
+def test_two_spellings_of_one_file_keep_their_own_name_in_a_cached_diagnostic(driver, project):
+    """real.agc and its link have one key; a root cached under one spelling must not answer for the other."""
+    (project / "link.agc").symlink_to(project / "type_error.agc")
+    for first, second in [("link.agc", "type_error.agc"), ("type_error.agc", "link.agc")]:
+        cached = library(driver, project, "refresh", first, "check", second)
+        assert cached == library(driver, project, "check", second) == command_line(project, "check", second)
+        assert json.loads(cached[1])["file"] != ""
+
+
+def test_at_most_sixteen_roots_are_kept_the_least_recently_refreshed_leaving_first(driver, project):
+    names = [f"r{number}.agc" for number in range(18)]
+    write_files(project, {name: f"def f{at}() -> Int\n  return {at}\nend\n" for at, name in enumerate(names)})
+    words = [word for name in names for word in ("refresh", name)] + ["stats"]
+    # r17 is the latest, so it stays; r0 left long ago and is checked again, which pushes r2 out; r2 is checked again.
+    for name in ["r17.agc", "r0.agc", "r2.agc", "r17.agc"]:
+        words += ["refresh", name, "stats"]
+    out, err = library(driver, project, *words)
+    assert err == ""
+    # The parsed files are the sixteen of the roots kept.
+    expected = [(16, 18, 16), (16, 18, 16), (16, 19, 16), (16, 20, 16), (16, 20, 16)]
+    assert counted(out, "roots", "checks", "kept") == expected
+
+
+def positions(source, *needles):
+    return [str(number) for needle, inside in needles for number in where(source, needle, inside)]
+
+
+def test_cached_answers_equal_uncached_answers_when_the_modules_move_in_the_id_space(driver, project):
+    """Every edit of a buffer gives its file new ids above the others, so the files leave their order of ids; the
+    answers must not notice, and the ids are numbered again from 0 when the gaps pass half of them."""
+    extra = "\nexport def extra() -> Int\n  return 1\nend\n"
+    write_files(project, {"models_a.agc": "# one\n" + MODELS, "models_b.agc": MODELS + extra})
+    words = ["refresh", "orders.agc", "stats"]
+    for text in ["models_a.agc", "models_b.agc"] * 5:
+        words += ["update", "models.agc", text, "refresh", "orders.agc", "stats"]
+    asked_at = positions(
+        ORDERS, ("user.age", 5), ("name.upcase", 6), ("Models.make", 8), ("1\nend", 0), ("Queue.new", 7),
+        ("LIMIT. to_s", 2),
+    )
+    out, err = library(driver, project, *words, "compare", "orders.agc", *asked_at)
+    assert (err, out.splitlines()[-1]) == ("", "same 6")
+    lines = stats_of(out)
+    # A program that checks again each time: one check for each refresh. The three files are parsed once, then models.agc
+    # for each edit, and all three again when the ids pass twice the live ones.
+    assert [line["checks"] for line in lines] == list(range(1, 12))
+    assert lines[-1]["parsed"] > 3 + 10
+    assert all(line["top"] <= 2 * line["live"] for line in lines)
+    tops = [line["top"] for line in lines]
+    assert any(after < before for before, after in zip(tops, tops[1:])), tops
+    assert tops != sorted(tops)
+
+
+def test_a_refreshed_session_is_asked_by_tasks_on_four_schedulers_with_the_answers_of_the_command_line(driver, project):
+    files = ["main.agc", "type_error.agc", "orders.agc", "missing_import.agc", "main.agc"]
+    expected = ""
+    for file in files:
+        out, err = command_line(project, "check", file)
+        expected += out or err
+    got = library(
+        driver, project, "refresh", "main.agc", "refresh", "orders.agc", "refresh", "type_error.agc",
+        "check-all", *files, flags=("--schedulers", "4"),
+    )
+    assert got == (expected, "")
+
+
+def edited_front_end(project):
+    """A copy of compiler/ in `project`, and the text of two of its modules with a line added (edits that stay valid)."""
+    shutil.copytree(ROOT / "compiler", project / "compiler")
+    for name in ("syntax/source_file", "app/front_end_cli"):
+        original = (ROOT / "compiler" / (name + ".agc")).read_text(encoding="utf-8")
+        write_files(project, {name.replace("/", "_") + "_edit.agc": "## An edit.\n" + original})
+
+
+@pytest.mark.slow
+def test_cached_answers_equal_uncached_answers_over_the_front_end_with_modules_moved(driver, project):
+    """compiler/front_end.agc is about a hundred modules; a check of it takes seconds, and the uncached side of the
+    comparison runs it three times."""
+    edited_front_end(project)
+    source = (ROOT / "compiler/front_end.agc").read_text(encoding="utf-8")
+    asked_at = positions(source, ("Inputs.read(", 7), ("Cli.run(settings", 4))
+    out, err = library(
+        driver, project,
+        "refresh", "compiler/front_end.agc", "stats",
+        "update", "compiler/syntax/source_file.agc", "syntax_source_file_edit.agc",
+        "refresh", "compiler/front_end.agc", "stats",
+        "update", "compiler/app/front_end_cli.agc", "app_front_end_cli_edit.agc",
+        "refresh", "compiler/front_end.agc", "stats",
+        "compare", "compiler/front_end.agc", *asked_at,
+    )
+    assert (err, out.splitlines()[-1]) == ("", "same 2")
+    lines = stats_of(out)
+    assert [line["checks"] for line in lines] == [1, 2, 3]
+    # The second refresh parses only the module that changed.
+    assert [after["parsed"] - before["parsed"] for before, after in zip(lines, lines[1:])] == [1, 1]

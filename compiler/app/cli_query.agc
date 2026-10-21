@@ -14,6 +14,7 @@
 ## A mistake in the question is a QUERY- diagnostic and exit status 2; a diagnostic of the file (lexer, parser, linker
 ## or checker) is exit status 1 (cli.agc prints both).
 
+import Cache from "../analysis/cache"
 import Core from "../analysis/analysis"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Env from "../modules/link_env"
@@ -86,9 +87,9 @@ end
 export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
   asking: Core.Typed = Core.Typed.Unreadable
   if partial
-    asking = Core.type_at_partial(settings, asked)
+    asking = Core.type_at_partial(Cache.empty(), settings, asked)
   else
-    asking = Core.type_at(settings, asked)
+    asking = Core.type_at(Cache.empty(), settings, asked)
   end
   case asking
     Core.Typed.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, TYPE_AT_USAGE))
@@ -108,9 +109,9 @@ end
 export def refs(asked: QueryPosition.Asked, style: String, partial: Bool, settings: Env.Settings) -> Reply.Answer
   asking: Core.Referenced = Core.Referenced.Unreadable
   if partial
-    asking = Core.refs_partial(settings, asked)
+    asking = Core.refs_partial(Cache.empty(), settings, asked)
   else
-    asking = Core.refs(settings, asked)
+    asking = Core.refs(Cache.empty(), settings, asked)
   end
   case asking
     Core.Referenced.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, REFS_USAGE))
@@ -134,7 +135,7 @@ export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.An
   if asked.words.size > 0
     name = asked.words[0]
   end
-  case Core.symbol(settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
+  case Core.symbol(Cache.empty(), settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
     Core.Found.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Found.Done(found) ->
       if asked.style == "json"

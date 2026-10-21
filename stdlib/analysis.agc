@@ -20,6 +20,16 @@
 ## it. The loader refuses a `.agcb` file of another Agentica version, so recompile a tool after upgrading agentica.
 ## A session is a value: tasks may ask one session at once, and an `update` in one task leaves the others' copy as it
 ## was.
+##
+## `Analysis.refresh` makes the questions about a file fast: it returns a session whose cache holds the linked and
+## checked program of the file, and the parsed modules it reads. A loop that keeps one session does `update`, then
+## `refresh`, then asks. A question reads the files again and uses the cache only where the modules and their texts are
+## the ones it was made from (a buffer, a closed buffer, a change on the disk, a new or a removed file all count), so
+## the answers are the same with or without `refresh`, whatever the cache holds. The cache keeps at most 16 checked
+## files, the least recently refreshed leaving first, and the parsed modules that these reach. It lives in the value:
+## there is no task or lock. The caller owns the loop: run `refresh` in a task, one at a time, and store the session it
+## returns; two refreshes of one session give two caches, and keeping one drops the work of the other (it costs time,
+## not correctness).
 
 import Core from "std/internal/compiler/analysis/analysis"
 import DiagnosticJson from "std/internal/compiler/diagnostics/diagnostic_json"
@@ -137,10 +147,17 @@ export def close(session: Session, path: String) -> Session
   return Session(internal: Sessions.close(session.internal, path))
 end
 
+## Returns `session` with the file `path` linked and checked in its cache, so the questions about `path` that follow
+## reuse them, and so do those about files that import the same modules. A file that cannot be read or linked leaves
+## the cache as it was, and the questions say why. Run one `refresh` at a time per session and keep what it returns.
+export def refresh(session: Session, path: String) -> Session
+  return Session(internal: Sessions.refresh(session.internal, path))
+end
+
 ## Returns the answer of `agentica check` for the file `path`: it links and checks the program, and its `diagnostics`
 ## hold the first problem, if any. A file that cannot be read is a `QUERY-USAGE` diagnostic.
 export def check(session: Session, path: String) -> Checked
-  return Core.checked(Sessions.asking(session.internal), path)
+  return Core.checked(session.internal.cache, Sessions.asking(session.internal), path)
 end
 
 ## Returns the declarations of the file `path`, as `agentica outline` lists them. The file is only parsed, so its
@@ -163,7 +180,7 @@ export def type_at(session: Session, path: String, line: Int, column: Int) -> Re
   if path == "" or line < 1 or column < 1
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
   end
-  case Core.type_at(settings, QueryPosition.Asked(file: path, line: line, column: column))
+  case Core.type_at(session.internal.cache, settings, QueryPosition.Asked(file: path, line: line, column: column))
     Core.Typed.Done(found) -> return ok(found)
     Core.Typed.Unreadable -> return error(failure(Core.unreadable(path)))
     Core.Typed.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
@@ -191,7 +208,7 @@ export def symbol(session: Session, name: String, paths: List[String]) -> Result
   if searched.size == 0 and held.size > 0
     searched = ["."]
   end
-  case Core.symbol(settings, name, held.concat(searched), "", "")
+  case Core.symbol(session.internal.cache, settings, name, held.concat(searched), "", "")
     Core.Found.Done(found) -> return ok(found)
     Core.Found.Rejected(problem) -> return error(failure(named_in(settings, problem, held)))
   end
@@ -205,7 +222,7 @@ export def refs(session: Session, path: String, line: Int, column: Int) -> Resul
   if path == "" or line < 1 or column < 1
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
   end
-  case Core.refs(settings, QueryPosition.Asked(file: path, line: line, column: column))
+  case Core.refs(session.internal.cache, settings, QueryPosition.Asked(file: path, line: line, column: column))
     Core.Referenced.Done(found) -> return ok(found)
     Core.Referenced.Unreadable -> return error(failure(Core.unreadable(path)))
     Core.Referenced.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))

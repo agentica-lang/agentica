@@ -15,6 +15,7 @@ import Model from "../docs/doc_model"
 import Signature from "../docs/signature"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
+import Modules from "../modules/modules"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"
@@ -65,8 +66,13 @@ end
 ## The matches of `name` in the modules linked from `roots`. When every root is left out there is nothing to search:
 ## the answer is the first problem of the first one (an error of the program, exit status 1). A name that nothing
 ## declares is QUERY-NOT-FOUND.
-export def answer(name: String, roots: List[SymbolPaths.Root], settings: Env.Settings) -> Outcome
-  linked = SymbolLink.link(roots, settings)
+export def answer(
+  name: String,
+  roots: List[SymbolPaths.Root],
+  settings: Env.Settings,
+  parses: Modules.Parses,
+) -> Outcome
+  linked = SymbolLink.link(roots, settings, parses)
   if linked.modules.size == 0
     return Outcome.Refused(linked.skipped[0].problem)
   end

@@ -5,6 +5,11 @@
 ## no VM call depth. Files are met in a fixed order (a file is read at its import, before the imports
 ## after it), so the first failure is the same, and so are the node ids: every file is parsed from the next free id of
 ## the file read before it (parse, Ast.next_free_id).
+##
+## A client that walks the same program again and again (analysis/cache.agc) hands `load_with` the files it parsed
+## earlier. A file whose text is the same is not parsed again: it keeps its tree and its ids, and a file that is parsed
+## gets ids above every id the earlier files hold, so the ids of one walk have gaps and the files are not in the order
+## of their ids. Nothing but the checker's tables reads a node id, so the program means the same.
 
 import Ast from "../syntax/ast"
 import Declarations from "declarations"
@@ -50,11 +55,28 @@ export struct Module
 end
 
 ## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a
-## file imported twice appears once. root_dir is the folder of the root file.
+## file imported twice appears once. root_dir is the folder of the root file. parsed is the number of files that this
+## walk lexed and parsed; the others came from the Kept files it was given.
 export struct Loaded
   order: List[String]
   modules: Map[String, Module]
   root_dir: String
+  parsed: Int
+end
+
+## A file parsed by an earlier walk: its text, the first id of its tree and the tree. It can stand for the file in a
+## later walk while the file has this text.
+export struct Kept
+  text: String
+  first_id: Int
+  program: Ast.Program
+end
+
+## The files that a walk may take instead of parsing, by key, and top, an id above every id of those files (the ranges
+## of the files in `kept` must not overlap). A file that has to be parsed gets ids from top on.
+export struct Parses
+  kept: Map[String, Kept]
+  top: Int
 end
 
 # A file whose imports are being read: the module so far (its aliases, the paths written for them and named imports are
@@ -78,6 +100,8 @@ struct Walk
   done: Map[String, Module]
   order: List[String]
   next_id: Int
+  parsed: Int
+  kept: Map[String, Kept]
   root_dir: String
   build: Resolve.Build
 end
@@ -98,36 +122,78 @@ struct Collected
   public: Map[String, Declarations.Kind]
 end
 
+# A tree for a file, from the Kept files or from the parser, and whether the parser made it.
+struct Taken
+  program: Ast.Program
+  first_id: Int
+  fresh: Bool
+end
+
+## Parses nothing again: the files are numbered one after the other from 0.
+export def no_parses() -> Parses
+  return Parses(kept: {}, top: 0)
+end
+
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
 ## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
 export def load(root: String, settings: Env.Settings) -> Result[Loaded]
+  return load_with(root, settings, no_parses())
+end
+
+## Like `load`, taking from `parses` the tree of each file whose text it still has. The files are read as before, so a
+## file that appeared, vanished or changed since the earlier walk is met, and the walk fails or differs as it would
+## without `parses`.
+export def load_with(root: String, settings: Env.Settings, parses: Parses) -> Result[Loaded]
   workspace = settings.workspace
   file = workspace.resolve_path.call(root).unwrap_or(root)
   text = try root_text(workspace, root, file)
-  program = try parse_source(file, text, 0)
   key = workspace.real_path.call(root)
   if !key.ok?
+    # The error sits at the end of the root's tree, so a file that does not parse is reported first.
+    program = try parse_source(file, text, 0)
     return error(
       Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp),
     )
   end
+  taken = try take(parses.kept, parses.top, key.unwrap!, file, text)
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
   scope = try Packages.check_manifests(workspace, settings.env, Packages.scope_of(project))
   build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)
-  empty = Walk(stack: [], seen: {}, done: {}, order: [], next_id: 0, root_dir: root_dir, build: build)
+  empty = Walk(
+    stack: [],
+    seen: {},
+    done: {},
+    order: [],
+    next_id: parses.top,
+    parsed: 0,
+    kept: parses.kept,
+    root_dir: root_dir,
+    build: build,
+  )
   first = Parsed(
     key: key.unwrap!,
     file: file,
     text: text,
-    program: program,
-    first_id: 0,
+    program: taken.program,
+    first_id: taken.first_id,
     name: Paths.stored_name(root_dir, key.unwrap!),
     origin: Packages.project_origin(),
   )
-  walk = try enter(settings, empty, first)
+  walk = try enter(settings, empty, first, taken.fresh)
   finished = try run(settings, walk)
-  return ok(Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir))
+  return ok(
+    Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir, parsed: finished.parsed),
+  )
+end
+
+# The tree of the file `key` with `text`: the kept one when its text is the same, and else the parse from `next_id`.
+def take(kept: Map[String, Kept], next_id: Int, key: String, file: String, text: String) -> Result[Taken]
+  if kept.has_key?(key) and kept[key].text == text
+    return ok(Taken(program: kept[key].program, first_id: kept[key].first_id, fresh: false))
+  end
+  program = try parse_source(file, text, next_id)
+  return ok(Taken(program: program, first_id: next_id, fresh: true))
 end
 
 def start_span() -> Source.Span
@@ -305,7 +371,7 @@ end
 def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, site: Failure.Site) -> Result[Walk]
   key = found.key
   text = try imported_text(settings, key, site)
-  program = try parse_source(key, text, walk.next_id)
+  taken = try take(walk.kept, walk.next_id, key, key, text)
   name = found.name
   if name == ""
     name = Paths.stored_name(walk.root_dir, key)
@@ -314,12 +380,12 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
     key: key,
     file: key,
     text: text,
-    program: program,
-    first_id: walk.next_id,
+    program: taken.program,
+    first_id: taken.first_id,
     name: name,
     origin: found.origin,
   )
-  return enter(settings, walk, parsed)
+  return enter(settings, walk, parsed, taken.fresh)
 end
 
 # The text of the root file: CHECK-IMPORT-IO at its start with the system's message, or LEX-INVALID-UTF8.
@@ -345,7 +411,7 @@ end
 
 # Registers a parsed file: the declaration order, then the declared names, then it goes on the stack with the imports
 # to read.
-def enter(settings: Env.Settings, walk: Walk, parsed: Parsed) -> Result[Walk]
+def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Result[Walk]
   key = parsed.key
   program = parsed.program
   try Declarations.check_order(parsed.file, program.declarations)
@@ -384,9 +450,25 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed) -> Result[Walk]
       stack: walk.stack.push(frame),
       seen: walk.seen.put(key, 1),
       order: walk.order.push(key),
-      next_id: Ast.next_free_id(program),
+      next_id: max_of(walk.next_id, Ast.next_free_id(program)),
+      parsed: counted(walk.parsed, fresh),
     ),
   )
+end
+
+# A file that came from the Kept files lies below the next id, so only a parsed one moves it.
+def max_of(a: Int, b: Int) -> Int
+  if a > b
+    return a
+  end
+  return b
+end
+
+def counted(parsed: Int, fresh: Bool) -> Int
+  if fresh
+    return parsed + 1
+  end
+  return parsed
 end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
