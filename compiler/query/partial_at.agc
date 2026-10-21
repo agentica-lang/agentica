@@ -19,8 +19,9 @@ import Sites from "sites"
 import TypeAt from "type_at"
 
 # The sites that a name written in an expression gives. A `read` needs the type of its target and a `definition` is the
-# name where a declaration is written, which `type-at` does not answer.
-LINKED_KINDS = Set.new(["call", "value", "construct", "type", "pattern"])
+# name where a declaration is written, which `type-at` does not answer. A `type` is not here: `TypeAt.answer` finds the
+# name of a type from the link alone, in a function that failed too.
+LINKED_KINDS = Set.new(["call", "value", "construct", "pattern"])
 
 ## The answer for `asked`, a position in the root file of `linked`, of which `checked` holds the functions that passed
 ## and `failed` names (by linked name) those that did not. Only a position inside a failed function falls back to the
@@ -82,7 +83,7 @@ def named(
   sites = Sites.of_module(module, checked, Sites.declared_names(linked.modules), "").filter do |site: Sites.Site|
     LINKED_KINDS.include?(site.kind)
   end
-  case Refs.innermost(sites, offset)
+  case Sites.innermost(sites, offset)
     Ast.Optional.Absent -> return missed
     Ast.Optional.Present(site) ->
       definition = Refs.definition_of(linked.modules, site.target)

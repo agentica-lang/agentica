@@ -3,7 +3,9 @@
 ##
 ## A position must be on a token: a blank between tokens, a comment, the end of a line and anything past the end of the
 ## text hold no expression, even inside the span of one. A local (a parameter, a binding, a loop variable or a pattern
-## name) is answered with its type and a definition at its binding, on a use of the name and on the binding itself.
+## name) is answered with its type and a definition at its binding, on a use of the name and on the binding itself. The
+## name of a type in an annotation or a type argument (`Point`, `Models.User`, `List`) is answered with the kind
+## `type`.
 
 import Model from "../catalog/builtin_model"
 import CatalogJson from "../catalog/catalog_json"
@@ -19,21 +21,26 @@ import At from "at"
 import Definitions from "definitions"
 import Locals from "locals"
 import Position from "query_position"
+import Sites from "sites"
 
 # The characters of a name written in front of the parenthesis of a call: a name, a dot between a module and its
 # member, and the ? or ! that ends a name.
 HEAD_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.?!".split(""))
 
+# The characters that a type name can start with.
+CAPITALS = Set.new("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))
+
 # The longest name a call head is read from, in characters.
 HEAD_LIMIT = 128
 
 ## What a position is on. `kind` is `builtin` when the position is on the name of a builtin (`split` in
-## `xs.split(",")`, `puts`), `name` when it is on another name (a variable, a function or type named, the name of a
-## field or method after the dot, the name where a local is bound) and `expression` otherwise; `span` is always the
-## whole expression, so on the name of a field access it is the whole access, and the name alone on a local. `text` is
-## the source text of `span`, `type` the type as the root file writes it, and `definition` the declaration of what the
-## expression names, or the binding of a local. `builtin` is the catalog row of a `builtin` answer, which has no
-## definition.
+## `xs.split(",")`, `puts`), `type` when it is on the name of a type in an annotation or a type argument, `name` when
+## it is on another name (a variable, a function named, the name of a field or method after the dot, the name where a
+## local is bound) and `expression` otherwise; `span` is always the whole expression, so on the name of a field access
+## it is the whole access, and the name alone on a local or a type (the qualified name for `Models.User`). `text` is
+## the source text of `span`, `type` the type as the root file writes it (the written name for a `type` answer), and
+## `definition` the declaration of what the expression names, the binding of a local, or the struct, enum or alias of
+## a type (none for a builtin type). `builtin` is the catalog row of a `builtin` answer, which has no definition.
 export struct Answer
   kind: String
   span: Source.Span
@@ -50,7 +57,8 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
     Position.Located.Outside(span) -> return nothing(asked, span)
     Position.Located.At(offset) ->
       here = Position.character(offset, asked.line, asked.column)
-      if !on_token?(module.text, offset)
+      token = kind_at(module.text, offset)
+      if token == ""
         return nothing(asked, here)
       end
       # A local comes first: on the name of a binding, the innermost expression would be the one around it.
@@ -60,7 +68,15 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
             return nothing(asked, here)
           end
           return Diag.Outcome.Done(local_answer(linked, local))
-        Ast.Optional.Absent -> return expression_answer(linked, checked, asked, offset, here)
+        Ast.Optional.Absent ->
+          # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
+          if type_token?(module.text, token, offset)
+            found = type_answer(linked, checked, offset)
+            if found.size > 0
+              return Diag.Outcome.Done(found[0])
+            end
+          end
+          return expression_answer(linked, checked, asked, offset, here)
       end
   end
 end
@@ -92,18 +108,54 @@ end
 ## Whether some token of the text holds the character at `offset`. Line breaks and the end are tokens that hold
 ## nothing.
 export def on_token?(text: String, offset: Int) -> Bool
+  return kind_at(text, offset) != ""
+end
+
+# The kind of the token that holds the character at `offset`; "" for none, a line break and the end included.
+def kind_at(text: String, offset: Int) -> String
   case Lexer.lex(text)
-    Diag.Outcome.Failed(_) -> return false
+    Diag.Outcome.Failed(_) -> return ""
     Diag.Outcome.Done(tokens) ->
       for token in tokens
         if token.span.start.offset > offset
-          return false
+          return ""
         elsif token.kind != "NL" and token.kind != "eof" and At.holds?(token.span, offset)
-          return true
+          return token.kind
         end
       end
-      return false
+      return ""
   end
+end
+
+# The name of a type that holds the position, as the sites of query/sites.agc list it. The checker has no part in it,
+# so a type in a function that failed to check is answered too.
+def type_answer(linked: Linker.Linked, checked: Checker.Checked, offset: Int) -> List[Answer]
+  module = linked.modules[0]
+  sites = Sites.of_types(module, checked, Sites.declared_names(linked.modules))
+  case Sites.innermost(sites, offset)
+    Ast.Optional.Absent -> return []
+    Ast.Optional.Present(site) ->
+      text = source_text(module.text, site.reach)
+      return [
+        Answer(
+          kind: "type",
+          span: site.reach,
+          text: text,
+          type: text,
+          definition: Definitions.of_name(linked.modules, site.target.name),
+          builtin: Ast.Optional.Absent,
+        ),
+      ]
+  end
+end
+
+# Whether the token at `offset` may be in the name of a type: a type name, or the dot of `Models.User`, which is
+# followed by a name that starts with a capital. The dot of a call (`Models.total`) needs no scan of the sites.
+def type_token?(text: String, token: String, offset: Int) -> Bool
+  if token == "type-name"
+    return true
+  end
+  return token == "dot" and offset + 1 < text.length and CAPITALS.include?(text.at(offset + 1))
 end
 
 def expression_answer(
@@ -215,7 +267,6 @@ def on_name?(expr: Ast.Expr, text: String, offset: Int) -> Bool
   case expr
     Ast.Expr.Name(_) -> return true
     Ast.Expr.ConstRef(_) -> return true
-    # Not reached yet: no type is recorded for a TypeName (see Definitions.of_expr), so it is never the answer.
     Ast.Expr.TypeName(_) -> return true
     Ast.Expr.FunctionRef(_) -> return true
     Ast.Expr.FieldAccess(node) -> return At.holds?(node.name_span, offset)

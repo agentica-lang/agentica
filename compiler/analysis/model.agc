@@ -95,9 +95,10 @@ export struct Definition
   doc: String
 end
 
-## What a position is on. `kind` is `builtin` for the name of a builtin, `name` for another name and `expression`
-## otherwise; `range` is the whole expression, in `position.file`; `text` is its source text and `type` its type as the
-## file writes it. `definition` holds the declaration of what the expression names, and is empty when it names none.
+## What a position is on. `kind` is `builtin` for the name of a builtin, `type` for the name of a type in an annotation
+## or a type argument, `name` for another name and `expression` otherwise; `range` is the whole expression, in
+## `position.file`; `text` is its source text and `type` its type as the file writes it (the written name for a
+## `type`). `definition` holds the declaration of what the expression names, and is empty when it names none.
 ## `help` is the object of `agentica help NAME --json` for a builtin (JSON null otherwise), and `signatures` holds the
 ## signature of each form of that builtin. `partial` is true for an answer from a program that does not check
 ## (docs/future/39-semantic-cli.md, 39.6): `diagnostics` are its problems, and `type` is "" when the answer is known

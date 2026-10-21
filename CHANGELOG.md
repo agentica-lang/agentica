@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `extern` blocks call C functions of native libraries, with `C.Int`,
   `C.Int64`, `C.Double`, `C.Bool` and `C.String` (Linux x86_64 for now);
   `--deny-native` refuses such a program at load.
+- `agentica type-at` (and `std/analysis`) answers a type name in an annotation,
+  a type argument, a field or a payload (`kind` `type`), with the struct, enum
+  or alias as definition.
 
 ## [0.8.0] - 2026-10-21
 
