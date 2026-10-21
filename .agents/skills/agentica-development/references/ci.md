@@ -58,8 +58,10 @@ STAGE1_COMPILER="path/to/agentica"`
   blob: refresh it only when needed, so the history stays small.
   A PR that changes it runs `make stage0-check BASE_STAGE0=<base stage0>` in
   the `test` job: stage2 built from the base branch's stage0 with the PR's
-  `compiler/` must equal the PR's file (the sums go to the job summary). Case
-  (b) cannot pass it: say so in the PR, and the owner approves it by hand.
+  `compiler/` must equal the PR's file (the sums go to the job summary). It
+  checks the merge commit, so when another `compiler/` change lands first,
+  merge master and refresh again. Case (b) cannot pass it: say so in the PR,
+  and the owner approves it by hand.
   Format 6 (the prelude flag) is not in the checked-in stage0 yet: the loader
   still reads format 5 (`AGC_FORMAT_PREVIOUS` in `vm/value.h`) so that the
   first binary of the bootstrap works. The next stage0 refresh makes it
