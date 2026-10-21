@@ -17,7 +17,8 @@ check a signature with `agentica help NAME`.
 ## Check and run
 
 1. Save `program.agc` with exactly one `def main() -> Void`.
-2. `agentica check F` checks only. `agentica F ARGS` runs (`System.args()`
+2. `agentica check F` checks only (`check --stdin F` checks the text on standard
+   input as if F held it). `agentica F ARGS` runs (`System.args()`
    returns ARGS). `agentica compile F -o F.agcb`, then `agentica run [FLAGS]
    -- F.agcb ARGS`. Use the path the user gives if `agentica` is not on PATH.
 3. Exit 0: success. Exit 1: first diagnostic on stderr (stable code `LEX-`,
