@@ -120,3 +120,40 @@ export struct Checked
   passed: Bool
   diagnostics: List[Diagnostics.Diagnostic]
 end
+
+## One declaration that `symbol` found. `kind` is `function`, `struct`, `enum`, `alias`, `constant`, `field`,
+## `variant` or `builtin`; `name` is the name alone and `owner` the struct or enum of a field or a variant ("" for
+## others). `module` is the file of the declaration, and `range` and `name_range` are in it; a builtin has no place, so
+## its `module` is "". `exported` is the flag of the declaration, or of the struct or enum of a member, and `doc` the
+## whole `##` text ("" for none). A field has its `type`, a variant its `payload`; a builtin has `help` (the object of
+## `agentica help NAME --json`, JSON null for the others) and the signature of each of its forms in `signatures`.
+export struct Symbol
+  kind: String
+  name: String
+  owner: String
+  module: String
+  exported: Bool
+  signature: String
+  doc: String
+  range: Diagnostics.Region
+  name_range: Diagnostics.Region
+  type: String
+  payload: List[String]
+  help: Json
+  signatures: List[String]
+end
+
+## A file of a `symbol` query that was left out, with the first problem it hit.
+export struct Skipped
+  file: String
+  diagnostic: Diagnostics.Diagnostic
+end
+
+## The answer of `symbol` for `query`: the matches, in the order the modules were linked and then in source order (the
+## builtin last), and the files left out.
+export struct Symbols
+  version: Int
+  query: String
+  matches: List[Symbol]
+  skipped: List[Skipped]
+end

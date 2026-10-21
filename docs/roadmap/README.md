@@ -203,8 +203,8 @@ rows after them may run in parallel when needed and keep their relative order.
     in `compiler/`: the semantic CLI for agents
     ([§39](../future/39-semantic-cli.md#39-semantic-cli-for-agents)), in this
     order: `agentica doc` (row 22b, done), `agentica outline` (done), `agentica
-    type-at` (core, docs, builtins and locals done), the opt-in
-    `--partial`, `agentica symbol`, `agentica refs`, JSON first; front end and
+    type-at` (core, docs, builtins and locals done), `agentica symbol` (done),
+    the opt-in `--partial`, `agentica refs`, JSON first; front end and
     CLI only, nothing to run, no LSP; the full 6c round (step 10) measures it.
     The same answers as a library, `std/analysis` (issue #524): `Std.source`
     and the library without a cache are done, the cache is pending
@@ -339,8 +339,9 @@ rows after them may run in parallel when needed and keep their relative order.
 
 - **Order:** 9.1
   - **Next work:** JIT (7m, `docs/future/22-jit.md` §22): required; it comes
-    after packages and the FFI
-    ([§40.5](../future/40-native-code.md#405-order)). It follows 7l and 7j.
+    after packages and the FFI (issue
+    [#534](https://github.com/sonic182/agentica/issues/534)). It follows 7l and
+    7j.
     JIT code must follow the multicore rules of row 11 (§16)
   - **Outcome:** Hot functions run as native code with the same results
 
@@ -416,12 +417,12 @@ Its steps (§18.3) are PRs, not rows of this table.
 
 The owner set this order for the work after the bootstrap on 2026-10-15 and
 revised it on 2026-10-16, 2026-10-19 (multicore moved ahead of the JIT) and
-2026-10-20 (packages before the FFI,
-[§40.5](../future/40-native-code.md#405-order)): the rows that waited for the
-bootstrap come first, then the path to the JIT (row 9.1, which should also speed
-up `agentica test`), and the other features after the JIT. The package system
-and the FFI sit on that path. Multicore (row 11) and the native Windows and
-macOS releases were done ahead of this order.
+2026-10-20 (packages before the FFI, issue
+[#534](https://github.com/sonic182/agentica/issues/534)): the rows that waited
+for the bootstrap come first, then the path to the JIT (row 9.1, which should
+also speed up `agentica test`), and the other features after the JIT. The
+package system and the FFI sit on that path. Multicore (row 11) and the native
+Windows and macOS releases were done ahead of this order.
 
 1. **Done (2026-10-16, PR #312)**: release 0.4.0, the first release with the
    single binary ([§18.3](../future/18-front-end-language.md#183-port)).
@@ -448,8 +449,8 @@ macOS releases were done ahead of this order.
    #316).
 7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
    7.7), the server measurement (row 9), the package system
-   ([§45](../future/45-packages.md)), UDP (row 7.5, issue #399), the FFI and
-   native module header ([§40](../future/40-native-code.md)), then the JIT (row
+   ([§45](../future/45-packages.md)), UDP (row 7.5, issue #399), the FFI (issue
+   [#534](https://github.com/sonic182/agentica/issues/534)), then the JIT (row
    9.1). The native Windows and macOS builds are done (release 0.5.0-beta.1);
    the gaps Windows still has close first, for the 0.5.0 release without beta.
    UDP closes the networking part of the stable core (below); its design waits
@@ -472,10 +473,10 @@ and the OS primitives that need the event loop (files, processes, timers, TCP,
 TLS and UDP). UDP is in the core, not an extension, because a socket must wait
 without blocking the scheduler, with timeouts and cancel. Everything else is an
 extension: first a package written in Agentica
-([§45](../future/45-packages.md)), and a native module through the FFI
-([§40](../future/40-native-code.md)) only when it needs a library in C, C++ or
-Rust. After UDP and the FFI land, the core changes only for bugs, platforms and
-speed (the JIT).
+([§45](../future/45-packages.md)), and a native library through the FFI (issue
+[#534](https://github.com/sonic182/agentica/issues/534)) only when it needs a
+library in C, C++ or Rust. After UDP and the FFI land, the core changes
+only for bugs, platforms and speed (the JIT).
 
 Designed, not scheduled, with no row in this table:
 

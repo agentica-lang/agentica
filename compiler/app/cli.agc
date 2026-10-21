@@ -90,6 +90,8 @@ def dispatch(session: Session) -> Int
     return doc(session, words)
   elsif first == "outline" or first == "type-at"
     return query(session, first, words.drop(1))
+  elsif first == "symbol"
+    return symbol(session, words.drop(1))
   elsif first == "run"
     return emit(Reply.failed(2, Texts.run_first_text()))
   end
@@ -160,6 +162,22 @@ def query(session: Session, verb: String, words: List[String]) -> Int
           return with_buffer(styled, file) do |buffered: Session|
             answered(buffered, CliQuery.outline(file, asked.style, true, buffered.settings), file)
           end
+      end
+  end
+end
+
+# `symbol NAME [PATH...]`. With `--stdin FILE` the text of FILE is the standard input and FILE is searched as well; a
+# problem in FILE is shown against the buffer.
+def symbol(session: Session, words: List[String]) -> Int
+  case QueryOptions.parse(words, session.options.style, CliQuery.symbol_usage())
+    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Ready(asked) ->
+      styled = session.with(options: session.options.with(style: asked.style))
+      if asked.stdin == ""
+        return answered(styled, CliQuery.symbol(asked, styled.settings), "")
+      end
+      return with_buffer(styled, asked.stdin) do |buffered: Session|
+        answered(buffered, CliQuery.symbol(asked, buffered.settings), asked.stdin)
       end
   end
 end

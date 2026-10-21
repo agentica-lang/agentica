@@ -70,6 +70,9 @@ query/outline_json.agc
 query/query_files.agc
 query/query_options.agc
 query/query_position.agc
+query/symbol.agc
+query/symbol_link.agc
+query/symbol_paths.agc
 query/type_at.agc
 query/type_at_json.agc
 syntax/ast.agc

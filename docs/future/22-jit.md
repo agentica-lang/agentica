@@ -2,8 +2,9 @@
 
 **Status:** required, not gated (roadmap 7m). It starts after the VM layers
 (section 21, roadmap 7l) and the server measurement (7j), so it has numbers to
-beat, and after packages and the FFI (§40.5). Compiled code follows the
-multicore rules of `docs/vm/16-architecture.md`. No language change.
+beat, and after packages and the FFI (issue
+[#534](https://github.com/sonic182/agentica/issues/534)). Compiled code follows
+the multicore rules of `docs/vm/16-architecture.md`. No language change.
 
 **Tiers:**
 

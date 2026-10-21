@@ -19,17 +19,19 @@ export struct Parameter
   default: Ast.Optional[String]
 end
 
-## One field of a struct, with its doc and the span of its name.
+## One field of a struct, with its doc, its span and the span of its name.
 export struct Field
   name: String
+  span: Source.Span
   name_span: Source.Span
   type: String
   doc: Ast.Optional[String]
 end
 
-## One variant of an enum, with the types of its payload as written, its doc and the span of its name.
+## One variant of an enum, with the types of its payload as written, its doc, its span and the span of its name.
 export struct Variant
   name: String
+  span: Source.Span
   name_span: Source.Span
   payload: List[String]
   doc: Ast.Optional[String]
@@ -184,6 +186,7 @@ def struct_item(node: Ast.StructDecl, doc: Ast.Optional[String], span: Source.Sp
   fields = node.fields.map do |field: Ast.FieldDecl|
     Field(
       name: field.name,
+      span: field.span,
       name_span: field.name_span,
       type: Signature.type_text(field.type),
       doc: cleaned(field.doc),
@@ -205,6 +208,7 @@ def enum_item(node: Ast.EnumDecl, doc: Ast.Optional[String], span: Source.Span, 
   variants = node.variants.map do |variant: Ast.EnumVariant|
     Variant(
       name: variant.name,
+      span: variant.span,
       name_span: variant.name_span,
       payload: variant.payload_types.map do |type: Ast.TypeRef| Signature.type_text(type) end,
       doc: cleaned(variant.doc),

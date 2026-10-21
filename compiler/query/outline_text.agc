@@ -15,7 +15,7 @@ export def text(outlined: Model.Outline) -> String
     lines = lines.push("#{place(file, declaration.range)} #{import_text(declaration)}")
   end
   for item in outlined.items
-    lines = lines.push("#{place(file, item.range)} #{item_text(item)}")
+    lines = lines.push("#{place(file, item.range)} #{declaration_text(item.kind, item.exported, item.signature)}")
     lines = lines.concat(member_lines(file, item))
   end
   if lines.size == 0
@@ -24,8 +24,31 @@ export def text(outlined: Model.Outline) -> String
   return "#{lines.join("\n")}\n"
 end
 
-def place(file: String, range: DiagnosticModel.Region) -> String
+## `file:line:column`, the start of `range`, which `rg` prints in front of a hit.
+export def place(file: String, range: DiagnosticModel.Region) -> String
   return "#{file}:#{range.start.line}:#{range.start.column}"
+end
+
+## The declaration with `export` when it has one; a function with `def`, since its signature does not hold it.
+export def declaration_text(kind: String, exported: Bool, signature: String) -> String
+  head = signature
+  if kind == "function"
+    head = "def #{head}"
+  end
+  if exported
+    return "export #{head}"
+  end
+  return head
+end
+
+## `field Struct.name: Type`.
+export def field_text(owner: String, name: String, type: String) -> String
+  return "field #{owner}.#{name}: #{type}"
+end
+
+## `variant Enum.Name(Payload)`, the variant written as its signature.
+export def variant_text(owner: String, signature: String) -> String
+  return "variant #{owner}.#{signature}"
 end
 
 # `import Models from "models"` or `import {A, B as C} from "models"`.
@@ -44,22 +67,10 @@ def imported_name(name: Model.ImportName) -> String
   return "#{name.name} as #{name.local}"
 end
 
-# The declaration with `export` when it has one; a function with `def`, since its signature does not hold it.
-def item_text(item: Model.Item) -> String
-  head = item.signature
-  if item.kind == "function"
-    head = "def #{head}"
-  end
-  if item.exported
-    return "export #{head}"
-  end
-  return head
-end
-
 # `field Struct.name: Type` and `variant Enum.Name(Payload)`, one line each, at the position of the name.
 def member_lines(file: String, item: Model.Item) -> List[String]
   fields = item.fields.map do |field: Model.Field|
-    "#{place(file, field.name_range)} field #{item.name}.#{field.name}: #{field.type}"
+    "#{place(file, field.name_range)} #{field_text(item.name, field.name, field.type)}"
   end
   variants = item.variants.map do |variant: Model.Variant| variant_line(file, item.name, variant) end
   return fields.concat(variants)
@@ -67,5 +78,5 @@ end
 
 def variant_line(file: String, enum_name: String, variant: Model.Variant) -> String
   written = Signature.variant_text(variant.name, variant.payload)
-  return "#{place(file, variant.name_range)} variant #{enum_name}.#{written}"
+  return "#{place(file, variant.name_range)} #{variant_text(enum_name, written)}"
 end

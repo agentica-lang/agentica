@@ -11,8 +11,8 @@ expected Int, found String
 ```
 
 The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
-(while running); `QUERY-` is a mistake in the question of `agentica outline` or
-`type-at`.
+(while running); `QUERY-` is a mistake in the question of `agentica outline`,
+`type-at` or `symbol`.
 With `--json`, the diagnostic that ends the run is the last stderr line; the
 program's own stderr comes before it. Expected process failures
 return error Results. Codes without a row below: `CHECK-VOID-TYPE` and
@@ -230,10 +230,17 @@ than 256 bytes is cut there, at a character boundary, and ends with `...`.
     file is loaded, imported or not
 
 - **Code:** `QUERY-USAGE`
-  - **Meaning:** `agentica outline` or `type-at` was asked a wrong question: a
-    missing or extra argument, an unknown option, `--stdin` without a file, a
-    bad `FILE:LINE:COL`, or a path that cannot be read. The file is
+  - **Meaning:** `agentica outline`, `type-at` or `symbol` was asked a wrong
+    question: a missing or extra argument, an unknown option, `--stdin` without
+    a file, a bad `FILE:LINE:COL`, or a path that cannot be read (for `symbol`
+    also a folder with no `*.agc` file). The file is
     `<arguments>` at line 1, column 1, and the exit status is 2 (`queries.md`)
+
+- **Code:** `QUERY-NOT-FOUND`
+  - **Meaning:** `agentica symbol` found NAME in no module linked from PATH and
+    in no builtin. The file is `<arguments>`; exit status 2. The help has the
+    closest name and the files that were skipped. Fix the name, or the file
+    that did not link
 
 - **Code:** `QUERY-NO-EXPRESSION`
   - **Meaning:** `agentica type-at` was given a position on no token of an

@@ -10,12 +10,15 @@ import DocModel from "../docs/doc_model"
 import Model from "model"
 import Outline from "../query/outline"
 import Position from "../query/query_position"
+import Symbol from "../query/symbol"
+import SymbolLink from "../query/symbol_link"
 import TypeAt from "../query/type_at"
 
 # The version of each shape.
 OUTLINE_VERSION = 1
 TYPE_AT_VERSION = 1
 CHECKED_VERSION = 1
+SYMBOL_VERSION = 1
 
 ## The declaration `declared` of a module as plain data.
 export def item(declared: DocModel.Item) -> Model.Item
@@ -105,6 +108,18 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
   )
 end
 
+## The answer `found` for `query`. Each match and skipped file is already named as the answer names it.
+export def symbols(query: String, found: Symbol.Answer) -> Model.Symbols
+  return Model.Symbols(
+    version: SYMBOL_VERSION,
+    query: query,
+    matches: found.matches.map do |match: Symbol.Match| symbol(match) end,
+    skipped: found.skipped.map do |left: SymbolLink.Skipped|
+      Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))
+    end,
+  )
+end
+
 ## The text of an optional one. The docs and defaults of an item have been through `DocModel.cleaned`, which turns a
 ## blank one into Absent, and an alias is never empty, so absent and "" mean the same.
 export def text(value: Ast.Optional[String]) -> String
@@ -124,6 +139,36 @@ def import_of(declaration: Ast.ImportDecl) -> Model.Import
     alias: text(declaration.alias),
     names: names,
     range: DiagnosticModel.range_of(declaration.span),
+  )
+end
+
+def symbol(match: Symbol.Match) -> Model.Symbol
+  type = ""
+  payload: List[String] = []
+  help = JSON.null()
+  signatures: List[String] = []
+  case match.extra
+    Symbol.Extra.Declared -> type = type
+    Symbol.Extra.Field(written) -> type = written
+    Symbol.Extra.Variant(types) -> payload = types
+    Symbol.Extra.Builtin(entry) ->
+      help = CatalogJson.builtin(entry)
+      signatures = Builtins.signature(entry).split("\n")
+  end
+  return Model.Symbol(
+    kind: match.kind,
+    name: match.name,
+    owner: match.owner,
+    module: match.file,
+    exported: match.exported,
+    signature: match.signature,
+    doc: text(match.doc),
+    range: DiagnosticModel.range_of(match.span),
+    name_range: DiagnosticModel.range_of(match.name_span),
+    type: type,
+    payload: payload,
+    help: help,
+    signatures: signatures,
   )
 end
 
