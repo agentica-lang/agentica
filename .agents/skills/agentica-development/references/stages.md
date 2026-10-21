@@ -551,7 +551,8 @@ exit 1, an unwritable output prints one line and exits 2. Arguments after the
 source file reach the VM as `System.args`, and the command exits with the VM's
 code. No source file exits 2. `check` never runs; --ai/--json use the same
 structured diagnostic. `help NAME --json` reads the catalog without a source
-file (unknown target exits 2); `help` alone (exit 0) prints the command summary
+file (unknown target exits 2; with no NAME it prints all entries as a JSON
+array sorted by name); `help` alone (exit 0) prints the command summary
 and the builtin namespaces. `--help` and `help` share one text. Help and test
 handle trailing style options; options on other commands precede the
 command/file so program args stay intact. --max-steps accepts a positive integer
