@@ -4,6 +4,7 @@
   <a class="version" href="{{ partial "release-url.html" . }}" title="Release {{ partial "version.html" . }}">{{ partial "version.html" . }}</a>
   <button class="nav-toggle" type="button" aria-controls="sidebar" aria-expanded="false">Menu</button>
   {{- partial "search.html" . }}
+  {{- partial "theme-toggle.html" . }}
   {{- if site.Params.repoPublic }}
   <a class="repo" href="{{ site.Params.repo }}">GitHub</a>
   {{- end }}
