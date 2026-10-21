@@ -13,7 +13,8 @@ compiler/           the front end in Agentica (§18), one folder per context:
                     app (CLI, pipeline), io (the only I/O of the stages),
                     syntax (lexer, parser), modules (linker), packages
                     (manifest, lock, cache), check, catalog (builtins,
-                    prelude), lower, bytecode, diagnostics, bdd, embedded;
+                    prelude), lower, bytecode, diagnostics, docs (`agentica
+                    doc`), bdd, embedded;
                     front_end.agc at the root is the program the binary
                     carries
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
@@ -129,7 +130,7 @@ phase 13).
   a runtime error of the front end escape: a failure is a diagnostic.
 - Pure core: every folder of `compiler/` except `io/`, `app/`, `bdd/` and
   `embedded/` (`syntax`, `modules`, `check`, `catalog`, `lower`, `bytecode`,
-  `diagnostics`) never calls `File`, `Dir`, `Path` (except `Path.join`),
+  `diagnostics`, `docs`) never calls `File`, `Dir`, `Path` (except `Path.join`),
   `System`, `Process`, `FrontEnd`, `IO`, `TCP`, `TLS`, `HttpWire`, `Time`,
   `Random`, `Task`, `Channel`, `Profile`, `LogRegistry` or `puts`, and never
   imports `io/`, `app/`, `bdd/` or an impure `std/` module. They reach the

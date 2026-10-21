@@ -32,6 +32,11 @@ export def json(problem: Problems.Problem) -> Json
   return JSON.object(fields)
 end
 
+## The JSON object of a span: `start` and `end`, each with a `line` and a `column`.
+export def range(span: Source.Span) -> Json
+  return JSON.object({"start": position(span.start), "end": position(span.stop)})
+end
+
 def help_text(help: Diag.Help) -> String
   case help
     Diag.Help.Hint(text) -> return text
@@ -45,10 +50,6 @@ def note(fields: Map[String, Json], key: String, text: String) -> Map[String, Js
     return fields
   end
   return fields.put(key, JSON.from(text))
-end
-
-def range(span: Source.Span) -> Json
-  return JSON.object({"start": position(span.start), "end": position(span.stop)})
 end
 
 def position(at: Source.Position) -> Json

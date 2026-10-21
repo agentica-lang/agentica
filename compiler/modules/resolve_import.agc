@@ -78,6 +78,18 @@ export def resolve_import(
   return beside(settings.workspace, build, importer, file, site)
 end
 
+## The key of the std/ module that the import path `file` names. A std/ module exists when the provider has its source.
+## The registry is stdlib/MODULES, which the binary embeds and which lists the files of the stdlib/ folder (a test
+## checks that they are the same list). `agentica doc` shares this check with the imports.
+export def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
+  try Paths.validate_library_path(file, site)
+  # The files of std/prelude/ are the compiler prelude, which no program imports (prelude_files.agc).
+  if file.starts_with?("std/prelude/") or !std_exists?(settings, file)
+    return error(io_failure(site, "unknown standard library module"))
+  end
+  return ok(file)
+end
+
 # The path of the source of a std/ module under stdlib/: the key without its std/.
 def std_path(key: String) -> String
   return key.slice(4, key.length - 4)
@@ -133,17 +145,6 @@ end
 
 def io_failure(site: Failure.Site, message: String) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp)
-end
-
-# A std/ module exists when the provider has its source. The registry is stdlib/MODULES, which the
-# binary embeds and which lists the files of the stdlib/ folder (a test checks that they are the same list).
-def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
-  try Paths.validate_library_path(file, site)
-  # The files of std/prelude/ are the compiler prelude, which no program imports (prelude_files.agc).
-  if file.starts_with?("std/prelude/") or !std_exists?(settings, file)
-    return error(io_failure(site, "unknown standard library module"))
-  end
-  return ok(file)
 end
 
 def std_exists?(settings: Env.Settings, file: String) -> Bool

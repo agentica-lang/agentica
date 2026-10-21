@@ -1,14 +1,18 @@
 ## 32. Doc comments
 
-**Status:** 22a is built; 22b (§32.5, §32.6) waits until after the bootstrap
-(roadmap [row 22b](../roadmap/README.md)). Decided on 2026-10-12: Agentica has
-documentation comments written as `##` lines, in the style of Rust's `///`, so
-that a later tool generates documentation from the code. The `##` syntax, the
-`DOC` token, the parser side table and the `std/` docs of 22a are in the grammar
+**Status:** 22a and `agentica doc` (§32.5, part 1 of 22b) are built; `agentica
+help` for `std/` (§32.6) is not (roadmap [row 22b](../roadmap/README.md)).
+Decided on 2026-10-12: Agentica has documentation comments written as `##`
+lines, in the style of Rust's `///`, so that a later tool generates
+documentation from the code. The `##` syntax, the `DOC` token and the `std/`
+docs of 22a are in the grammar
 ([`04-lexical.md`](../grammar/04-lexical.md#doc-comments) for the token and
-section 5 for where a block may stand); the parser keeps each block with its
-declaration in a side table, so the AST, the bytecode and the VM do not change
-and a program with doc comments runs as before.
+section 5 for where a block may stand); the parser keeps each block in the `doc`
+field of its declaration, field or variant (`Program.module_doc` for the module
+doc; `compiler/syntax/ast.agc`), so the bytecode and the VM do not change and a
+program with doc comments runs as before. The doc of an exported `def`,
+`struct`, `enum` or alias is on its `ExportDecl`, not on the declaration inside
+it.
 
 The idea in one paragraph: a run of lines that start with `##` documents the
 declaration on the next line. `#` stays an ordinary comment that tools ignore.
@@ -55,7 +59,9 @@ end
   2. then each exported declaration in source order: its signature, its doc, and
      for a struct or enum its fields or variants with their docs.
 - An export without a doc is still listed, with its signature only.
-- `PATH` is a source file or a `std/` module name (`std/http`).
+- `PATH` is a source file or a `std/` module name (`std/http`). A `PATH` that
+  starts with `std/` always names an embedded standard module, as an import
+  does: `std/prelude/` and a path with `.`, `..` or empty parts exit 2.
 - **Parse only.** `agentica doc` lexes and parses one module. It does not link
   it, resolve its imports or type-check it, so it cannot fail on a dependency.
   For a `std/` name the source is the copy embedded in the binary.
@@ -63,28 +69,38 @@ end
   - An unknown file or `std/` module gives exit 2, as `help` does.
 - **Signatures.** A signature is one normalized line built from the AST, in the
   form the builtin catalog uses:
-  - a function: `add(a: Int, b: Int) -> Int`;
+  - a function: `add(a: Int, b: Int = 2) -> Int`, a default value as written
+    in the source;
   - a struct: `struct QueueState`;
   - an enum: `enum Option[T]`.
 
   Types are printed as written, so an import alias such as `Models.User` stays
   as it is.
+- The Markdown form starts with `# PATH`, then the module doc, then for each
+  export a heading with its signature, its doc, and a list line per field or
+  variant.
 - `agentica doc PATH --json` prints the same data as one JSON object. The format
   is stable, so agents and a future site generator can read it. Each field means
   the same wherever it appears:
   - top level: `{module, doc, items}`;
   - `module`: `PATH` as the user typed it, a file path or a `std/` name;
-  - `doc`: the whole doc text with the `##` markers removed, or `null`. At the
-    top level it is the module doc;
-  - `summary`: the first paragraph of `doc`, or `null`;
+  - `doc`: the whole doc text with the `##` markers removed and its leading and
+    trailing blank lines dropped, or `null`. At the top level it is the module
+    doc;
+  - `summary`: the first paragraph of `doc` on one line, each line trimmed, or
+    `null` when there is none;
   - `items`: one object per export, in source order:
     `{kind, name, signature, summary, doc, span}`;
-  - `kind`: `"function"`, `"struct"` or `"enum"`;
-  - `signature`: the line above;
-  - `span`: the declaration's span, an object
+  - `kind`: `"function"`, `"struct"`, `"enum"`, `"alias"` or `"constant"`;
+  - `signature`: the line above; an alias is `type Grid[T] = List[List[T]]`
+    and a constant is `LIMIT: Int` (`LIMIT` without a written type);
+  - `span`: the declaration's span, from `export` to the end of the
+    declaration, not its `##` block: an object
     `{file, range: {start: {line, column}, end: {line, column}}}`, the two keys
-    a diagnostic JSON puts at its top level, in an object of their own;
-  - a function item also has `parameters`, a list of `{name, type}`, and
+    a diagnostic JSON puts at its top level, in an object of their own. Lines
+    and columns start at 1 and `end` is exclusive, as in a diagnostic;
+  - a function item also has `parameters`, a list of `{name, type, default}`
+    (`default` is the source text of the default value, or `null`), and
     `result`, its result type;
   - a struct item also has `fields`: `[{name, type, doc}]`;
   - an enum item also has `variants`: `[{name, payload: [type], doc}]`, with
