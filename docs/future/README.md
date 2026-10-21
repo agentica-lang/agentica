@@ -173,7 +173,7 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Status: Scheduled on 2026-10-15, after the bootstrap (§46, row 7.8):
     catch TERM and
     INT for a safe shutdown, forward signals to children, signal a process
-    group; 46a and 46b (VM code and builtin table rows) may come earlier
+    group (item 20 of the order after 0.8.0 in the roadmap)
 
 - §: 47
   - Title: Code formatter (`agentica fmt`)
@@ -197,7 +197,7 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
 - §: 50
   - Title: Test functions without `main`
   - File: [`50-test-functions.md`](50-test-functions.md)
-  - Status: Planned (row 7.11, post-bootstrap step 6): a `*_test.agc` file may
+  - Status: Planned (row 7.11, item 14 after 0.8.0): a `*_test.agc` file may
     have no `main`; its top-level `test_*` functions are its tests
 
 New features are VM-only (roadmap 7i deleted the evaluator) and get no second

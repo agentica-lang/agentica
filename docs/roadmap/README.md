@@ -25,6 +25,75 @@ The owner set the order of 2026-10-14 for the rows from 7.2.3 on. Rows 7.2.4 to
 rows marked deferred waited until after the bootstrap. The VM-only and C-only
 rows after them may run in parallel when needed and keep their relative order.
 
+### Next, after 0.8.0 (owner, 2026-10-21)
+
+The owner's order for the work after release 0.8.0. Two batches come first;
+everything else is weighed after them.
+
+- **Linux first:** new VM and C features land on Linux first. Until Windows
+  and macOS support comes later, in separate work, the feature is refused
+  there with a clear error, and its tests are skipped with a `known-issue: #N`
+  reason that points to the port issue. The builds on all four systems keep
+  passing.
+- **Freeze:** the stable-core freeze (below) comes after the FFI, not after
+  UDP.
+
+First batch, as soon as possible:
+
+1. FFI-a: the core of [#534](https://github.com/sonic182/agentica/issues/534)
+   (extern blocks, `C.*` types, `resource`, the three call kinds,
+   `Native.wait_readable/wait_writable`, `--allow-native`), with system or
+   local libraries.
+2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
+   bytecode, so unchanged programs skip the front end.
+3. Packages [45b](../future/45-packages.md) (`fetch`), then 45c (`add`,
+   `update`) and 45d (`vendor`); 45c and 45d need 45b.
+4. FFI-b: native libraries in packages (`[native]` in `agentica.toml`, hashes
+   in the lock); needs 45b.
+
+Second batch, after the first:
+
+5. The formatter [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)
+   (row 7.9). Its needs are the heredoc and the open questions of
+   [§47.9](../future/47-formatter.md#479-open-questions), which the owner
+   answers when the work starts.
+6. [#396](https://github.com/sonic182/agentica/issues/396): smaller values,
+   with compact storage instead of the 16-byte `agc_value`. It changes the
+   value representation of the whole VM, so it must work on all four systems,
+   not only Linux. It goes before the JIT.
+
+Weighed later, by impact and then effort (owner, 2026-10-21):
+
+7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
+   (row 7.10).
+8. The JIT (row 9.1, [§22](../future/22-jit.md)); it needs 8.1, 7.7 and 9, and
+   comes after the FFI. #396 (item 6) goes before it.
+9. [#531](https://github.com/sonic182/agentica/issues/531): `type-at` on type
+   names (row 7.2b).
+10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer.
+11. Flaky tests [#528](https://github.com/sonic182/agentica/issues/528) and
+    [#382](https://github.com/sonic182/agentica/issues/382).
+12. UDP [#450](https://github.com/sonic182/agentica/issues/450) (row 7.5): it
+    leaves the core plan and may be a package built on the FFI later.
+13. Strict diagnostics (row 7.6).
+14. Test functions [§50](../future/50-test-functions.md#50-test-functions)
+    (row 7.11).
+15. `Set[T]` and `Queue[T]` (row 12).
+16. HTTP streaming, 20e to 20g
+    ([§30](../future/30-hybrid-http.md#3011-streaming-on-channels)), with
+    `TlsContext` ([§29](../future/29-tls-context.md#29-tls-contexts)) and ALPN
+    (19c).
+17. [#469](https://github.com/sonic182/agentica/issues/469): the doc site.
+18. `agentica help std/MODULE` (row 22b, part 2).
+19. The Windows issues [#489](https://github.com/sonic182/agentica/issues/489),
+    [#486](https://github.com/sonic182/agentica/issues/486),
+    [#474](https://github.com/sonic182/agentica/issues/474),
+    [#462](https://github.com/sonic182/agentica/issues/462),
+    [#457](https://github.com/sonic182/agentica/issues/457),
+    [#393](https://github.com/sonic182/agentica/issues/393) and
+    [#385](https://github.com/sonic182/agentica/issues/385).
+20. Signals [§46](../future/46-signals.md#46-signals) (row 7.8).
+
 - **Order:** 1
   - **Next work:** **Complete:** Everyday library (5n plus strings,
     conversions, time and randomness)
@@ -254,7 +323,8 @@ rows after them may run in parallel when needed and keep their relative order.
     `TlsContext`, and can write an HTTP/2 library on `TLS` with ALPN
 
 - **Order:** 7.5
-  - **Next work:** New features, VM-only (cont.): UDP, then the `Crypto` module
+  - **Next work:** New features, VM-only (cont.): UDP (item 12 of the list
+    after 0.8.0 above, weighed later), then the `Crypto` module
     (`docs/future/20-crypto.md` §20: hashes, HMAC, constant-time compare,
     random bytes, password hashing and AEAD on OpenSSL 3; needs `Bytes`).
     Logging (14c, `std/logger`) is done.
@@ -270,9 +340,9 @@ rows after them may run in parallel when needed and keep their relative order.
     nobody asks
 
 - **Order:** 7.8
-  - **Next work:** **After the JIT** (step 8 below; 46a and 46b may run earlier
-    as VM-only rows, when no other VM PR is waiting), decided by the owner on
-    2026-10-15 (design and plan: [§46](../future/46-signals.md#46-signals)):
+  - **Next work:** **After the JIT** (the list after 0.8.0 above, item 20),
+    decided by the owner on 2026-10-15 (design and plan:
+    [§46](../future/46-signals.md#46-signals)):
     signals that a program can handle, in parts 46a subscription, 46b sending
     and 46d `std/http` drains its handlers on a stop (46c, the Racket driver,
     is obsolete, §46.7). 46d comes after 46b by the owner's order (§46.7 does
@@ -281,34 +351,31 @@ rows after them may run in parallel when needed and keep their relative order.
     own terms
 
 - **Order:** 7.9
-  - **Next work:** **After the JIT** (step 8 below), decided by the owner on
-    2026-10-15 (design and plan:
+  - **Next work:** **Second batch** (the list after 0.8.0 above, item 5),
+    decided by the owner on 2026-10-15 (design and plan:
     [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)): a code
     formatter, `agentica fmt`, written in Agentica on the self-hosted lexer and
     parser (parts 47a to 47c; 47c adds `CHECK-LINE-TOO-LONG`, which replaces
     `tests/test_style_line_width.py`). 47d, the LSP format-document hook, is
     outside this order: it waits for the language server (§43, not scheduled).
-    Row 7.10 (regular expressions) comes before this row, by the owner's
-    decision of 2026-10-15.
   - **Outcome:** Every `.agc` file has one layout, checked in CI
 
 - **Order:** 7.10
-  - **Next work:** **After the JIT** (step 8 below), decided by the owner on
-    2026-10-15 (design and plan:
+  - **Next work:** **Weighed later** (the list after 0.8.0 above, item 7),
+    decided by the owner on 2026-10-15 (design and plan:
     [§48](../future/48-regex.md#48-regular-expressions)): regular expressions,
     std first: `std/regex` in Agentica (a parser and a linear-time Pike VM, no
     backtracking), then the regex literal `/pattern/flags` (48b, `compiler/`
-    only); a C matcher only if measured (48c). It comes before row 7.9 (the
-    formatter), by the owner's decision of 2026-10-15.
+    only); a C matcher only if measured (48c).
   - **Outcome:** A program searches, extracts, replaces and splits text with a
     pattern, and no pattern can stall the VM
 
 - **Order:** 7.11
-  - **Next work:** **Planned**, not yet scheduled by the owner (design and plan:
-    [§50](../future/50-test-functions.md#50-test-functions)): a `*_test.agc`
-    file may have no `main`; its top-level `test_*` functions are its tests, and
-    the front end adds the `main` that runs them (50a, `compiler/` only).
-    Post-bootstrap step 6.
+  - **Next work:** **Planned**, in the list after 0.8.0 above (item 14; design
+    and plan: [§50](../future/50-test-functions.md#50-test-functions)): a
+    `*_test.agc` file may have no `main`; its top-level `test_*` functions are
+    its tests, and the front end adds the `main` that runs them (50a,
+    `compiler/` only).
   - **Outcome:** A test file reads as a list of tests
 
 - **Order:** 7.12
@@ -316,7 +383,7 @@ rows after them may run in parallel when needed and keep their relative order.
     [§49](../future/49-type-aliases.md#49-type-aliases)): transparent aliases
     (`type Grid = List[List[Float]]`) and generic ones (`type Matrix[T] =
     List[List[T]]`) are compiler-only, with no bytecode or VM change.
-    Post-bootstrap step 6, before row 7.11 and before the path to the JIT.
+    Post-bootstrap step 6.
 
 - **Order:** 8.1
   - **Next work:** The rest of the VM layers (7l: opcode helpers, builtin
@@ -331,11 +398,9 @@ rows after them may run in parallel when needed and keep their relative order.
     peak memory and real start-up, against Python as an outside reference
 
 - **Order:** 9.1
-  - **Next work:** JIT (7m, `docs/future/22-jit.md` §22): required; it comes
-    after packages and the FFI (issue
-    [#534](https://github.com/sonic182/agentica/issues/534)). It follows 7l and
-    7j.
-    JIT code must follow the multicore rules of row 11 (§16)
+  - **Next work:** JIT (7m, `docs/future/22-jit.md` §22): required; its place
+    and prerequisites are in the list after 0.8.0 above (item 8). JIT code must
+    follow the multicore rules of row 11 (§16)
   - **Outcome:** Hot functions run as native code with the same results
 
 - **Order:** 11
@@ -414,7 +479,8 @@ revised it on 2026-10-16, 2026-10-19 (multicore moved ahead of the JIT) and
 [#534](https://github.com/sonic182/agentica/issues/534)): the rows that waited
 for the bootstrap come first, then the path to the JIT (row 9.1, which should
 also speed up `agentica test`), and the other features after the JIT. The
-package system and the FFI sit on that path. Multicore (row 11) and the native
+package system and the FFI sit on that path. The list after 0.8.0 above
+(2026-10-21) replaces that path. Multicore (row 11) and the native
 Windows and macOS releases were done ahead of this order.
 
 1. **Done (2026-10-16, PR #312)**: release 0.4.0, the first release with the
@@ -434,42 +500,32 @@ Windows and macOS releases were done ahead of this order.
 5. **Done (2026-10-16, PRs #322 and #325):** `case` guards, nested patterns and
    the `<<~NAME` heredoc, in `compiler/` only (the two-step stage0 refresh of
    §18.2 is a later PR).
-6. The other rows that waited for the bootstrap: the prelude (row 8.2), strict
-   diagnostics (row 7.6), `agentica doc` and `help` (row 22b), the semantic CLI
-   (row 7.2b, built 2026-10-21, issue #506), the 44b–44d table rewrites
-   (**done 2026-10-16**), type aliases (row 7.12, §49: 49a and 49b done), test
-   functions without `main` (row 7.11, §50), and `Task.map` (**done**, 17a, PR
-   #316).
-7. The path to the JIT: the rest of the VM layers (row 8.1), VM metrics (row
-   7.7), the server measurement (row 9), the package system
-   ([§45](../future/45-packages.md)), UDP (row 7.5, issue #399), the FFI (issue
-   [#534](https://github.com/sonic182/agentica/issues/534)), then the JIT (row
-   9.1). The native Windows and macOS builds are done (release 0.5.0-beta.1);
-   the gaps Windows still has close first, for the 0.5.0 release without beta.
-   UDP closes the networking part of the stable core (below); its design waits
-   for the owner's approval (#399).
-8. After the JIT: signals (row 7.8, [§46](../future/46-signals.md#46-signals),
-   parts 46a, 46b and 46d; 46c, which also let `agentica test` clean its run
-   directory on Ctrl-C, is obsolete as written, §46.7); regular expressions (row 7.10,
-   [§48](../future/48-regex.md#48-regular-expressions)) before the formatter
-   (row 7.9, [§47](../future/47-formatter.md#47-code-formatter-agentica-fmt)).
-   Regex first needs the owner's answer on the Ruby anchors question of
+6. The other rows that waited for the bootstrap: the prelude (row 8.2),
+   `agentica doc` (row 22b), the semantic CLI (row 7.2b, built 2026-10-21,
+   issue #506), the 44b–44d table rewrites (**done 2026-10-16**), type aliases
+   (row 7.12, §49: 49a and 49b done), and `Task.map` (**done**, 17a, PR #316).
+   Strict diagnostics (row 7.6), test functions (row 7.11) and `help` part 2
+   (row 22b) are in the list after 0.8.0 above.
+7. The path to the JIT is replaced by the list after 0.8.0 above. The native
+   Windows and macOS builds are done (release 0.5.0-beta.1). UDP leaves the
+   core plan (below); its design waits for the owner's approval (#399).
+8. The rest of the order is in the list after 0.8.0 above. Regex needs
+   the owner's answer on the Ruby anchors question of
    [§48.10](../future/48-regex.md#4810-decisions-and-open-questions); the
    formatter needs the heredoc of step 5 and the open questions of
    [§47.9](../future/47-formatter.md#479-open-questions). Also later, in no
-   fixed order: HTTP streaming and `TlsContext` (row 7.4), the 6c evaluation
-   round (row 10) and the Unicode generator.
+   fixed order: the 6c evaluation round (row 10) and the Unicode generator.
 
-Stable core (owner decision, 2026-10-20). The C core stays small, safe and
-stable: the language, the VM, the GC, the scheduler, tasks and channels, JSON,
-and the OS primitives that need the event loop (files, processes, timers, TCP,
-TLS and UDP). UDP is in the core, not an extension, because a socket must wait
-without blocking the scheduler, with timeouts and cancel. Everything else is an
-extension: first a package written in Agentica
-([§45](../future/45-packages.md)), and a native library through the FFI (issue
+Stable core (owner decisions, 2026-10-20 and 2026-10-21). The C core stays
+small, safe and stable: the language, the VM, the GC, the scheduler, tasks and
+channels, JSON, and the OS primitives that need the event loop (files,
+processes, timers, TCP and TLS). UDP is not in the core plan: it may be a
+package built on the FFI later. Everything else is an extension: first a
+package written in Agentica ([§45](../future/45-packages.md)), and a native
+library through the FFI (issue
 [#534](https://github.com/sonic182/agentica/issues/534)) only when it needs a
-library in C, C++ or Rust. After UDP and the FFI land, the core changes
-only for bugs, platforms and speed (the JIT).
+library in C, C++ or Rust. After the FFI lands, the core changes only for bugs,
+platforms and speed (the JIT).
 
 Designed, not scheduled, with no row in this table:
 
@@ -486,8 +542,8 @@ Idea, not scheduled, with no row: a language server
 the §32 doc comments, so it can only start after them (and is easiest on the
 self-hosted front end of §18).
 
-Designed, with no row: packages ([§45](../future/45-packages.md)). It sits on
-the path to the JIT, before the FFI (step 7 above). The owner answered §45.14
+Designed, with no row: packages ([§45](../future/45-packages.md)). It is item 3
+of the list after 0.8.0 above, before FFI-b (item 4). The owner answered §45.14
 on 2026-10-20. Done: the TOML parser `std/toml` (45-0), the manifest, the lock
 and `pkg/<name>/` imports from the cache (45a). Next: fetch and install
 (45b).

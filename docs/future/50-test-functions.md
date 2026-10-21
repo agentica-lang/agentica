@@ -1,7 +1,7 @@
 ## 50. Test functions
 
 **Status:** planned (2026-10-16), one part (50a, one PR). Row 7.11 of the
-[roadmap](../roadmap/README.md) order, in post-bootstrap step 6.
+[roadmap](../roadmap/README.md) order, item 14 of the list after 0.8.0.
 Nothing is implemented. The `main` and `Test.run` form of the grammar's
 `Unit tests (Test)` and `agentica test` sections stays valid.
 
