@@ -3,19 +3,20 @@
 **Status:** `outline`, `type-at` and `symbol` built (types, definitions with
 `doc` and `signature`, builtins and locals at a position; the workspace
 search). `refs FILE:LINE:COL` built for the files that `FILE` links; the `NAME`
-form, `PATH...`, `skipped` and answers from a program that does not check
-(§39.6) are planned, as is `--partial`. Row 7.2b. Agreed with the owner on
+form, `PATH...` and `skipped` are planned. `--partial`, answers of `type-at`
+and `refs` from a program in which some functions do not check, is built
+(§39.6). Row 7.2b. Agreed with the owner on
 2026-10-13: agents program better when they can ask the compiler about the
 code, not only read the docs. The front end already builds a linked and checked
 program with types and spans; four CLI commands expose it, JSON first. No
 language change; front end and CLI only, nothing reaches lowering or the VM.
 
 ```text
-agentica outline FILE [--ai|--json]
+agentica outline FILE [--partial] [--ai|--json]
 agentica symbol NAME [PATH...] [--ai|--json]
-agentica refs NAME|FILE:LINE:COL [PATH...] [--ai|--json]
-agentica type-at FILE:LINE:COL [--ai|--json]
-agentica type-at --stdin FILE:LINE:COL [--ai|--json]
+agentica refs NAME|FILE:LINE:COL [PATH...] [--partial] [--ai|--json]
+agentica type-at FILE:LINE:COL [--partial] [--ai|--json]
+agentica type-at --stdin FILE:LINE:COL [--partial] [--ai|--json]
 ```
 
 The options may also come before the command, as for every command. After the
@@ -122,10 +123,12 @@ changes only how diagnostics print; answers keep the text form.
   (`refs File.read src/`), with no definition. No references is not an error: an
   empty list, exit 0. Built so far: the position form, for `FILE` and what it
   imports (`PATH...` is not read); a position on the name where a declaration is
-  written picks it too; the program is always checked (exit 1 on an error); a
-  `with` argument is a `construct` and a constant read a `value`.
-  Planned for PR9: a position on an import selects the imported declaration
-  (today it is `QUERY-NO-EXPRESSION`: an import is not a reference).
+  written picks it too; the program is checked (exit 1 on an error); a
+  `with` argument is a `construct` and a constant read a `value`. With
+  `--partial` a program in which some functions do not check is answered too
+  (§39.6). Planned for PR9: a position on an import selects the imported
+  declaration (today it is `QUERY-NO-EXPRESSION`: an import is not a
+  reference).
 - **`type-at FILE:LINE:COL`** (built, `docs/grammar/06b-builtins.md`): the
   checked type of the innermost expression or name at the position, and the
   definition of what it names, with the `doc` and the `signature` of the
@@ -136,7 +139,8 @@ changes only how diagnostics print; answers keep the text form.
   binding itself. Planned: a type argument (`Models.User` in
   `List[Models.User]`) with the definition of a type alias. `FILE` is
   a path of the disk, never a `std/` module, checked with its imports; it needs
-  no `main` (§39.6).
+  no `main` (§39.6). With `--partial` it answers although some functions do not
+  check (§39.6).
 
 ### 39.4 Names, paths and files
 
@@ -234,33 +238,75 @@ skipped: [...]}`,
   the name alone (`total` of `Models.total`) and `skipped` is empty.
 - `skipped`: the roots left out (§39.6), each as `{file, diagnostic}`,
   `diagnostic` being the `--json` diagnostic object.
+- **A partial answer** (`type-at` and `refs` with `--partial`, §39.6) has the
+  shape of the complete answer and two more keys: `"partial": true` and
+  `diagnostics`, the `--json` diagnostic objects of every function that did not
+  check, in program order. A complete answer has neither key, so a program that
+  checks prints the same bytes with or without the option. In a `type-at`
+  answer known from the link alone, `type` is null.
 
 ### 39.6 Programs that do not check
 
 Agents ask these questions while a program is half edited, so the commands ask
-for as little as they can:
+for as little as they can. Without `--partial` each command answers only when
+what it needs is free of errors, and otherwise prints the first diagnostic and
+exits 1, as `agentica check` does. Owner decision, 2026-10-21: the partial
+answers are opt-in (`--partial`), with recovery per function and none in the
+parser.
 
 - **Command:** `outline`
   - **Needs:** parse of `FILE`
-  - **Why:** declarations are syntax
+  - **Why:** declarations are syntax; `--partial` changes nothing, since
+    `outline` never checks. A lex or parse error is still exit 1
 
 - **Command:** `symbol`
   - **Needs:** parse and link
   - **Why:** declarations, fields and variants are syntax; aliases are resolved
     by the linker
 
-- **Command:** `refs` on a function, struct, enum or variant
-  - **Needs:** parse and link
+- **Command:** `refs` on a function, struct, enum, alias, constant or variant
+  - **Needs:** parse and link (`--partial`); else check
   - **Why:** the linker resolves every top-level and alias-qualified name
 
-- **Command:** `refs` on a field, the position form on a local
-  - **Needs:** check
+- **Command:** `refs` on a field, a builtin, the position form on a local
+  - **Needs:** check (`--partial`: the function that holds a local)
   - **Why:** `user.email` needs the type of `user`
 
 - **Command:** `type-at`
-  - **Needs:** check of `FILE` and its imports
+  - **Needs:** check of `FILE` and its imports (`--partial`: the function that
+    holds the position, else the link)
   - **Why:** it is a type
 
+- **`--partial`, `type-at` and `refs`.** The checker goes on after a function
+  whose body does not check (`Checker.check_recovering`): the types of the other
+  functions are kept and the failure is a problem of the answer. The answer is
+  the complete one, with `partial` true and the problems as `diagnostics`
+  (§39.5), and exit 0:
+  - `type-at` on an expression of a function that checked answers as without
+    the option. On a name written in a function that did not check (a call, a
+    `&f`, a constant, a type in an annotation, a construction, a variant, a
+    builtin) it answers `kind` `name` (`builtin` for a builtin) with the span of
+    the written name, the definition after linking, and `type` null; a field, a
+    method and a local there are not known;
+  - `refs` on a function, struct, enum, alias, constant or variant is complete,
+    uses in a function that did not check included, since the linker resolves
+    them. On a local of a function that checked it is complete. On a field or a
+    builtin, which a use is told by the type of its target, it is not answered:
+    the first problem, exit 1;
+  - a file that does not lex, parse or link, and a failure of the declarations
+    (their types, `main`, the constants), are the first problem, exit 1, as
+    without the option: no function is checked, so there is nothing to answer
+    from;
+  - a position on a token of a function that did not check that the link cannot
+    name (a field, a local, a keyword) is the first problem, exit 1. Any other
+    position that nothing answers (a blank, a comment, an import line, a
+    parameter annotation of a function that checked) is
+    `QUERY-NO-EXPRESSION`, exit 2, as in a program that checks, so a caller can
+    tell a bad position from a broken program. Inside a failed function the
+    parse cannot tell a keyword like `end` from an expression, so that case
+    stays the first problem;
+  - the text form is the same, a `?` for an unknown type, and one line on stderr
+    for each problem: `partial FILE:LINE:COL: CODE`.
 - **Linking each root on its own.** `symbol` and `refs` link the roots one at a
   time into shared tables (§39.8). A root whose own lex, parse or link fails is
   left out and listed in `skipped` with its first diagnostic; the others still
@@ -277,11 +323,12 @@ for as little as they can:
   as `agentica check` does.
 - **Edit order.** In a type change across a program, the program stops checking
   after the first edit. The programming skill says: run `refs` before the edit
-  and keep the list. Function, type and variant refs keep working after the
-  edit, since they need only linking.
-- **Alternative, not chosen:** answering from a partly checked program. It needs
-  a checker that recovers from errors, which the front end does not have (each
-  stage stops at the first error, AGENTS.md).
+  and keep the list; after it, `refs --partial` on a function, type or variant
+  still works, since it needs only linking.
+- **Alternative, not chosen:** answering from a partly checked program with no
+  option, or with a checker that recovers inside a function. The recovery is per
+  function, because each stage stops at the first error (AGENTS.md), and opt-in,
+  because an exit 0 with a missing type is not what `check` users expect.
 - A queried file does not need `main`: the query checks with the rule that
   `main` exists off (`Checker.check_query`), as `agentica check` does. A
   declared `main` still needs its signature. Everything else is the same
@@ -319,8 +366,8 @@ usual three formats.
 - The `<arguments>` span follows `RUNTIME-BDD-USAGE`: a name typed on the
   command line has no place in a file. Usage errors are diagnostics, as in
   `agentica test`, not a plain line as in `help`, so `--json` always gives JSON.
-- Exit 0: an answer, including an empty list of references and answers with
-  `skipped` roots.
+- Exit 0: an answer, including an empty list of references, answers with
+  `skipped` roots and a partial answer (`--partial`, §39.6).
 - Exit 1: the program has an error (a `LEX-`, `PARSE-` or `CHECK-` diagnostic)
   that the command needs to be free of (§39.6), or every root was skipped.
 - Exit 2: every `QUERY-` code, as `help` and `doc` exit 2 for an unknown name;
@@ -402,8 +449,8 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
   them.
 - One PR per step (issue #506), in this order: `doc` (row 22b, built),
   `outline` (built), `type-at` (the core and the docs and builtins built; then
-  locals), the opt-in `--partial`, `symbol`, then `refs`. `type-at` is the
-  checker work; `symbol` and `refs` on declarations are the linker work.
+  locals), `symbol`, `refs`, then the opt-in `--partial` (built). `type-at` is
+  the checker work; `symbol` and `refs` on declarations are the linker work.
 
 ### 39.11 Decided against
 
@@ -414,7 +461,7 @@ do not repeat it: a builtin match embeds the `help --json` object as it is.
 - **Rename and refactor commands.** Agents edit files well; what they lack is
   the list of places to edit, which `refs` gives.
 - **Editor integration, a daemon, a cache.** See §39.8.
-- **Partial answers from a program that does not check.** See §39.6.
+- **Partial answers by default.** They are opt-in (`--partial`), see §39.6.
 
 ### 39.12 Measuring it: the 6c round
 
@@ -452,8 +499,9 @@ planned commands must cover:
   answers; `refs total broken.agc` with only a broken root gives exit 1 and its
   diagnostic; a file given by a relative and an absolute path prints one name.
 - `refs`: each reference kind; a reference through an alias; a shared module is
-  reported once; an empty list (exit 0); `QUERY-AMBIGUOUS-NAME`; function refs
-  in a program with a check error still answer; field refs in it give exit 1.
+  reported once; an empty list (exit 0); `QUERY-AMBIGUOUS-NAME`; with
+  `--partial`, function refs in a program with a check error still answer and
+  field refs in it give exit 1 (`tests/test_spec_partial.py`).
 - `type-at` and the position form of `refs`: still to cover are a local
   binding, a `for` variable and a pattern binding, with their definitions.
 - The same alias for different modules in two files, and `QUERY-USAGE` for each

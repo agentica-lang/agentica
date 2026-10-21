@@ -3,7 +3,8 @@
 ## `name`, `module` (the file), `exported`, `signature`, `span` (the whole declaration) and `name_span` of the
 ## declaration, and the `struct` of a field or the `enum` of a variant. Each reference is `{kind, function, span}`, the
 ## `span` being the name alone and `function` null at the top level. `skipped` is always empty for now: a position
-## names one file. A span is `{file, range}` with the `file` the command answers with.
+## names one file. A span is `{file, range}` with the `file` the command answers with. An answer from a program that
+## does not check (39.6) adds `partial` (true) and `diagnostics`.
 
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import DocJson from "../docs/doc_json"
@@ -11,7 +12,7 @@ import Model from "../analysis/model"
 
 ## The object of the answer.
 export def json(found: Model.Refs) -> Json
-  return JSON.object({
+  shape = {
     "version": JSON.from(found.version),
     "command": JSON.from("refs"),
     "query": JSON.from(found.query),
@@ -19,7 +20,11 @@ export def json(found: Model.Refs) -> Json
     "builtin": DocJson.text_json(found.builtin),
     "references": JSON.array(found.references.map do |use: Model.Reference| reference_json(use) end),
     "skipped": JSON.array(found.skipped.map do |left: Model.Skipped| skipped_json(left) end),
-  })
+  }
+  if found.partial
+    return JSON.object(DiagnosticJson.partial(shape, found.diagnostics))
+  end
+  return JSON.object(shape)
 end
 
 def skipped_json(left: Model.Skipped) -> Json

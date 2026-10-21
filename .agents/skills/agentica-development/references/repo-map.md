@@ -16,7 +16,8 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
   analysis/  # the semantic queries, once (§39, `std/analysis`): the CLI and the library both call it, so they cannot drift
     front.agc  # read_root, check_file, query_file, stage_problem, link_problem: read, link and check, shared by the CLI, the BDD driver and the queries
-    analysis.agc  # check, checked, outline, type_at, refs, symbol over Env.Settings (the Workspace holds any unsaved buffers): data of model.agc or the first Problem
+    partial.agc  # query_file: link, then Checker.check_recovering (the program, the problems and names of the functions that failed), for `--partial`
+    analysis.agc  # check, checked, outline, type_at, type_at_partial, refs, refs_partial, symbol over Env.Settings (the Workspace holds any unsaved buffers): data of model.agc or the first Problem
     model.agc convert.agc  # the plain answers (Outline, TypeAt, Checked; no enum) and the conversion from the stages' own types
     session.agc  # the immutable Session of stdlib/analysis.agc: the settings and the buffers; no cache yet
   io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
@@ -44,7 +45,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   packages/  # §45: the manifest, the lock and the package cache (core: no I/O, only the Workspace)
     project.agc manifest.agc lock.agc  # the nearest agentica.toml and its lock checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path
     package_import.agc package_cache.agc package_hash.agc  # which pkg/<name>/ imports are packages, the hash check, the stored name; the cache folder of a commit; the hash of the .agc files (Crypto.sha256)
-  check/  # the checker, constants and defaults
+  check/  # the checker, constants and defaults; `Checker.check_recovering` keeps going after a function that fails (`--partial`)
     check_state.agc check_types.agc  # Cx and St, type operations and unification
     check_call.agc check_method.agc  # calls, enum constructors, struct construction and update; methods and fields (Resolved by node id)
     check_rules.agc check_list.agc check_collections.agc check_args.agc  # the rule of each builtin
@@ -69,7 +70,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     problem.agc  # the packed Problem with its notes (pack, unpack), which every stage returns as its error
     diagnostic_model.agc diagnostic_json.agc diagnostic_read.agc  # the diagnostic as plain data; its JSON (--json); and back from JSON (Analysis.diagnostic)
   docs/  # `agentica doc` (§32.5): lex and parse one module, then its exported API with the `##` docs (imports only syntax/ and diagnostics/)
-  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` and `agentica refs` check it and answer for a position; `agentica symbol` links the files under its paths and finds a name (imports docs/, modules/, check/, catalog/ and syntax/)
+  query/  # the query commands (§39): `agentica outline` parses one file and lists its declarations, private ones too; `agentica type-at` and `agentica refs` check it and answer for a position; `--partial` answers them from the functions that check and from the link (partial_at.agc); `agentica symbol` links the files under its paths and finds a name (imports docs/, modules/, check/, catalog/ and syntax/)
   bdd/  # the `agentica test` driver
     bdd_driver.agc  # run(options, settings) -> Ending, the tests compiled into the run directory; the runner and default steps come from the binary (`compiler/embedded/`)
   embedded/runner.agc embedded/steps.agc  # not stage inputs: the roots of the BDD runner and the default step program, compiled by `make` with stage2 and embedded in the binary
