@@ -22,10 +22,9 @@ or Void, and
    value type widens it.
 3. New opcode: append it to `OPCODES` in `compiler/bytecode/bytecode_tables.agc`
    and to `agc_opcode` in `vm/value.h` at the same position (a test compares
-   them). No opcodes for later PRs. 44a1 relaxed this once, for `GLOBAL` and
-   `GLOBAL_SET`, which the lowering of 44a2 emits: the loader and interpreter
-   part needed its own `vm-c-critic` review. A PR that does the same says so and
-   names the PR that uses the opcodes.
+   them). No opcodes for later PRs. A PR that adds opcodes before the PR that
+   emits them says so and names that PR; the loader and interpreter part needs
+   its own `vm-c-critic` review.
 4. `vm/loader.c`: validate every operand (register ranges and windows,
    indexes, jump targets, spans). A new file section checks its counts
    against the bytes left and allocates through `load_alloc`, which charges
@@ -85,11 +84,9 @@ an
   `<start>` exists whenever the Globals count is above zero, even with no kept
   constant, so the entry is never `main` when slots exist (the loader would
   reject a call of `main` inside `main`); it starts with a `step` and ends with
-  `return` after the tail call, as the loader wants of every function. A read
-  is `step` and `global`; `--dump-ir` shows `globals N` and `g<slot>`. An error
+  `return` after the tail call, as the loader wants of every function. An error
   in an initializer shows the constant's function, then `<start>`, in the
-  stack trace (`tests/fixtures/vm/constants-error`). The Agentica lowering of
-  step 5 must produce the same table and the same bytes.
+  stack trace (`tests/fixtures/vm/constants-error`).
 - Typed JSON: `lower_program.agc` gives each IR struct its
   JSON field types when the struct is decodable (greatest fixpoint, so
   recursive structs stay in), and the bytecode writer interns them into the
@@ -149,11 +146,10 @@ Fixtures that must overflow need a
   `RANGE_BOUNDS` once into three slots. The loop variable is the counter
   slot, and the exit test (`eq` with the last value) runs before `add-i`,
   so the largest Int never overflows. The loop top is a `STEP` with the
-  `for` span, so each iteration charges one step even with an empty body
+  (never drop the loop); the counting natives call `count_step`, shared with
   (never drop the loop); the counting natives call `charge_steps`, shared with
 `STEP`, before
-  each callback. The evaluator charges the same (`step!` per range
-  iteration and per counting callback). `tests/fixtures/vm/step-limited/`
+  each callback. `tests/fixtures/vm/step-limited/`
   holds huge loops that the extras shard runs only with small
   `--max-steps` values. `Range.each`, `Int.times`, `upto` and
   `downto` are counting native frames (`counting()` in `vm/interp.c`): no

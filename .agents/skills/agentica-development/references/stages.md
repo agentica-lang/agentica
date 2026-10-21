@@ -1,10 +1,10 @@
 # Pipeline stages reference
 
-Detailed tables for the Agentica front end in `compiler/`. Read this when adding
-or renaming a token, AST node, or diagnostic code. Each stage has a module and
-an entry program that prints its text form (`lex.agc`, `parse.agc`, `link.agc`,
-`check.agc`, `lower.agc`, `bytecode.agc`); the goldens in
-`tests/fixtures/frontend/<stage>/` pin those texts (`references/frontend.md`).
+Contracts of the Agentica front end in `compiler/`. Read this when adding or
+renaming a token, AST node, or diagnostic code. Each stage has an entry program
+that prints its text form (`lex.agc`, `parse.agc`, `link.agc`, `check.agc`,
+`lower.agc`, `bytecode.agc`); the goldens in `tests/fixtures/frontend/<stage>/`
+pin those texts (`references/frontend.md`).
 
 ## Conventions
 
@@ -32,68 +32,25 @@ comment line look the same.
 
 ### Token kinds
 
-- **Kind:** `name`
-  - **Lexeme:** identifier starting with a lowercase letter or `_`
+Kinds are Strings, listed in `OPERATOR_KINDS` and `WORD_ACTIONS` of
+`compiler/syntax/lexer.agc`; a reserved word is its own kind. Notes:
 
-- **Kind:** `type-name`
-  - **Lexeme:** identifier starting with an uppercase letter
-
-- **Kind:** `def` `struct` `enum` `case` `do` `import` `export` `end` `if`
-  `elsif` `else` `while` `for` `in` `return` `try` `true` `false` `nil` `and`
-  `or` `not`
-  - **Lexeme:** the reserved words
-
-- **Kind:** `integer` `float`
-  - **Lexeme:** decimal number literal
-
-- **Kind:** `string`
-  - **Lexeme:** decoded string contents
-
-- **Kind:** `interp-start` `interp-middle` `interp-end`
-  - **Lexeme:** decoded text before, between and after `#{...}` pieces; the
-    expression tokens come between them
-
-- **Kind:** `arrow` `equal` `not-equal` `less-equal` `greater-equal`
-  - **Lexeme:** `->` `==` `!=` `<=` `>=`
-
-- **Kind:** `left-paren` `right-paren` `left-bracket` `right-bracket`
-  `left-brace` `right-brace`
-  - **Lexeme:** `(` `)` `[` `]` `{` `}`
-
-- **Kind:** `comma` `colon` `dot`
-  - **Lexeme:** `,` `:` `.`
-
-- **Kind:** `dot-dot` `dot-dot-dot`
-  - **Lexeme:** `..` `...` (ranges; `1..5` stays two integers, since a Float
-    needs a digit after the dot)
-
-- **Kind:** `ampersand`
-  - **Lexeme:** `&`
-
-- **Kind:** `pipe` `pipe-forward`
-  - **Lexeme:** `\|` (block parameters) and `\|>` (the pipe operator; longest
-    match, so `do \|x\|` and `\|\|` are unchanged)
-
-- **Kind:** `and` `or` `not` (symbol forms)
-  - **Lexeme:** `&&` `\|\|` `!` (a `!` glued to a name stays in the name; `!=`
-    stays `not-equal`)
-
-- **Kind:** `plus-assign` `minus-assign` `multiply-assign` `divide-assign`
-  `modulo-assign`
-  - **Lexeme:** `+=` `-=` `*=` `/=` `%=`; the parser desugars `x op= e` into
-    `binding x #f (binary op ...)`
-
-- **Kind:** `assign` `plus` `minus` `multiply` `divide` `modulo` `less`
-  `greater`
-  - **Lexeme:** `=` `+` `-` `*` `/` `%` `<` `>`
-
-- **Kind:** `NL` `EOF`
-  - **Lexeme:** newline token, end of input
-
-- **Kind:** `DOC`
-  - **Lexeme:** one block of `##` doc lines (roadmap 22a); the lexeme is the raw
-    block, the span covers it from the first `##` to the end of the last line,
-    and the `NL` of the line break after it follows as usual
+- `name` starts with a lowercase letter or `_`; `type-name` with an uppercase
+  letter. `integer` and `float` are decimal literals; `string` holds the decoded
+  contents; `interp-start`, `interp-middle` and `interp-end` hold the decoded
+  text before, between and after `#{...}` pieces, and the expression tokens
+  come between them.
+- `dot-dot` and `dot-dot-dot` are ranges; `1..5` stays two integers, since a
+  Float needs a digit after the dot.
+- `pipe` is `|` (block parameters) and `pipe-forward` is `|>` (longest match,
+  so `do |x|` and `||` are unchanged). `&&`, `||` and `!` are the kinds `and`,
+  `or` and `not`; a `!` glued to a name stays in the name, and `!=` stays
+  `not-equal`.
+- The parser desugars `x op= e` (`plus-assign` and the like) into `binding x #f
+  (binary op ...)`.
+- `DOC` is one block of `##` doc lines: the lexeme is the raw block, the span
+  covers it from the first `##` to the end of the last line, and the `NL` of
+  the line break after it follows as usual.
 
 The parser reads the keyword literals from their kind, not from `value`: `true`,
 `false` and `nil` are literals.
@@ -212,20 +169,19 @@ producer diagnostics retain their original code and span.
   A `.` followed by a digit or `_` continues the number; a letter or another `.`
   ends it (`1_000.times`, `1_000..2_000`). The text conversions
   (`String.to_int`, JSON) stay strict and reject `_`.
-- A heredoc `<<~NAME` (25.10) is the `CharClass.Less` arm of the main loop (`<`
-  has a class of its own, so the operator arm stays short). `scan_heredoc` reads
-  the body lines from the line after the opener (or from the `Resume` that an
-  earlier heredoc of the same line left), takes the common indentation off, and
-  emits the string tokens at the place of the opener, all with the span of
-  `<<~NAME`. Each `#{...}` is lexed by `lex_from`, the main loop itself, started
-  inside the line with the `#` frame pushed and `stop_depth` set to the frame
-  count, so the `}` that finds that depth ends the run; its tokens keep their
-  real positions. The main loop keeps a `resume` point: at the line break of the
-  opener line it emits the `NL` and jumps over the bodies. No field on the token
-  or the node says that a string is a heredoc: its lexeme is the opener
-  (`<<~NAME`), which `Base.heredoc?` reads for the `case` pattern and the
-  `import` path (`PARSE-UNEXPECTED-TOKEN`). Spans inside a body lie after the
-  spans of the nodes that hold them.
+- A heredoc `<<~NAME` is the `CharClass.Less` arm of the main loop.
+  `scan_heredoc` reads the body lines from the line after the opener (or from
+  the `Resume` that an earlier heredoc of the same line left), takes the common
+  indentation off, and emits the string tokens at the place of the opener, all
+  with the span of `<<~NAME`. Each `#{...}` is lexed by `lex_from`, the main
+  loop itself, started inside the line with the `#` frame pushed and
+  `stop_depth` set to the frame count, so the `}` that finds that depth ends the
+  run; its tokens keep their real positions. The main loop keeps a `resume`
+  point: at the line break of the opener line it emits the `NL` and jumps over
+  the bodies. No field on the token or the node says that a string is a
+  heredoc: its lexeme is the opener (`<<~NAME`), which `Base.heredoc?` reads for
+  the `case` pattern and the `import` path (`PARSE-UNEXPECTED-TOKEN`). Spans
+  inside a body lie after the spans of the nodes that hold them.
 
 ## Syntax tree (`compiler/syntax/ast.agc`)
 
@@ -237,36 +193,21 @@ exported declaration (not the `def` inside), the `FieldDecl` in a struct, the
 `EnumVariant` in an enum. The other nodes do not know about docs, so the
 checker, lowering and bytecode see the tree as before.
 
-- **Group:** declarations
-  - **Nodes:** `Program`, `ImportDecl` (path, alias, `names`: a list of
-    `ImportName` (name, local, span, local span), empty for an alias; exactly
-    one of alias and names is set), `ExportDecl`, `ConstDecl` (name,
-    `name_span`, optional type, value, `exported`, span; `exported` is true for
-    `export NAME = ...`, and the linker clears it), `FunctionDecl`, `Param`
-    (name, type, `default`: an optional expression, span), `StructDecl`,
-    `EnumDecl`, `EnumVariant`, `FieldDecl`, `TypeRef`. A function, struct, enum,
-    constant, field, variant and type alias holds the `name_span` of its name,
-    as do `FieldAccess` and `MethodCall`; `parse_text` and the linker text do
-    not print it, so the goldens do not carry it
+The node lists are in `ast.agc`. Fields that are not obvious:
 
-- **Group:** statements
-  - **Nodes:** `Binding`, `Return`, `LoopControl`, `ExprStmt`, `IfBranch`,
-    `IfStmt`, `CaseStmt`, `CaseArm` (with `guard`), `WildcardPattern`,
-    `LiteralPattern`, `VariantPattern` (with `Slot` entries), `WhileStmt`,
-    `ForStmt`
-
-- **Group:** expressions
-  - **Nodes:** `Literal`, `TypeName` (name, span; JSON type arguments only),
-    `ConstRef` (linked name, span; made by the linker for a read of a constant),
-    `NameRef`, `Call`, `EnumConstructor`, `FunctionRef`, `Invoke` (target, args,
-    span), `NamedArg`, `Construct`, `StructUpdate` (target, named args, span,
-    `visible`: the linked struct names the file may update, set by the linker;
-    the `value.with(f: x)` copy), `ListLit`, `MapLit` (with `MapEntry`),
-    `FieldAccess` (target, name, `name_span`, span, `resolved`), `MethodCall`
-    (target, name, `name_span`, args, span, `resolved`), `TypedTarget`
-    (expression, type; checker-made receiver), `Interpolation` (parts: strings
-    and expressions, span), `BlockLit` (params, body, span) with `BlockParam`,
-    `IndexAccess`, `TryExpr` (operand, span), `Unary`, `Binary`
+- `ImportDecl` has `path`, `alias` and `names` (a list of `ImportName`: name,
+  local, span, local span); exactly one of alias and names is set.
+- `ConstDecl.exported` is true for `export NAME = ...`, and the linker clears
+  it. `ConstRef` is made by the linker for a read of a constant.
+- `Param.default` is an optional expression.
+- A function, struct, enum, constant, field, variant and type alias holds the
+  `name_span` of its name, as do `FieldAccess` and `MethodCall`; `parse_text`
+  and the linker text do not print it, so the goldens do not carry it.
+- `StructUpdate` (the `value.with(f: x)` copy) has `visible`: the linked struct
+  names the file may update, set by the linker.
+- `FieldAccess` and `MethodCall` have `resolved`; `TypedTarget` (expression,
+  type) is the receiver the checker makes. `TypeName` carries JSON type
+  arguments only.
 
 Design points: one `TypeRef` covers `Int`, `List[Int]`, and `List[List[Int]]`;
 one `Literal` covers integers, floats, strings, booleans, and `nil`; grouping `(
@@ -312,21 +253,16 @@ returned:
   frames per level (builtins with the nested call as first argument; 3 for `if`,
   calls and method chains; 6 for each nested block), about 5,000 of the 10,000
   at the limit.
-- Top level accepts def/struct/enum/type-alias/import, constants (`NAME =
-  value`, `ConstDecl`) and exported forms of
-  def/struct/enum/type-alias/constant. `type` is contextual: it starts an alias
-  declaration only at the top level and remains an ordinary name elsewhere.
-  `case` uses an optional `do`, `->`, and `end`; `while` and `for` headers also
+- `type` is contextual: it starts an alias declaration only at the top level
+  and remains an ordinary name elsewhere. `case`, `while` and `for` headers
   take an optional `do`. A case arm body is either a NL and a block, or one
   simple statement on the arrow line followed by more statements. A qualified
   function name without `(` is a `Call` with no arguments. `import` has two
-  forms: `import Alias from "path"` and `import {a, B as C} from "path"`; a
-  string right after `import` (the path-first form of earlier versions) is
-  `PARSE-UNEXPECTED-TOKEN` at the string, with a help that shows the first form;
-  `from` and `as` are plain `name` tokens read by their text, so they stay
-  usable as names. Qualified names cover imported types, enum
-  constructors/patterns, calls and function references. Module nodes must pass
-  through the linker before check.
+  forms, `import Alias from "path"` and `import {a, B as C} from "path"`; a
+  string right after `import` (the path-first form) is `PARSE-UNEXPECTED-TOKEN`
+  at the string, with a help that shows the first form; `from` and `as` are
+  plain `name` tokens read by their text, so they stay usable as names. Module
+  nodes must pass through the linker before check.
 - `.with(` (the name is exactly `with`, then `(`) makes a `StructUpdate`: named
   arguments only, at least one, a trailing comma and blocks allowed in the
   values; `value.with` without `(` stays a field access, and `with` is not a
@@ -335,7 +271,7 @@ returned:
   `:`; otherwise it is an expression.
 - Stray `NL` tokens are skipped at the top level and between statements (see
   "Lexer gotcha: stray NL tokens" in `references/frontend.md`).
-- Doc blocks (roadmap 22a): the parser takes an optional `DOC` before a
+- Doc blocks: the parser takes an optional `DOC` before a
   declaration, a field or a variant, and accepts the block only when its `next`
   is `code` and one `NL` is followed by the member's first token; the text is
   then stored under the member's span. At the top level, a block with `next`
@@ -361,9 +297,10 @@ module all get it. `HttpWire` is also left out of `help`, its JSON and every
 "did you mean". The linked program carries the root file's `docs` and module
 doc; nothing after the parser reads them.
 
-Names imported with `import {a, B as C} from "path"` live in a per-file table
-(local name to the module key and the original name), filled once the module is
-loaded, because the checks need its exports. In order, per entry:
+Names imported with `import {a, B as C} from "path"` live in a per-file `named`
+table (local name to the module key and the original name; `bind_names`),
+filled once the module is loaded, because the checks need its exports. In
+order, per entry:
 `CHECK-IMPORT-NAME` at the original name (unknown or private),
 `CHECK-IMPORT-RENAME` at the local name (a type name must start with a capital
 letter, a function name must not), then `CHECK-REDEFINED-NAME` at the local name
@@ -402,8 +339,7 @@ error:
   implementation key and trusts checked arity.
 - String operations count Unicode characters. Numeric conversions accept signed
   decimals: non-bang forms return Result; bang failures remain
-  `RUNTIME-INVALID-NUMBER` / `RUNTIME-INTEGER-OVERFLOW`. IO.gets returns
-  Result[String]; IO.gets! retains the old String/EOF diagnostic behavior.
+  `RUNTIME-INVALID-NUMBER` / `RUNTIME-INTEGER-OVERFLOW`.
 - Expected types must reach builtin calls for contextual ok/error and
   unwrap/default. An untyped error is CHECK-RESULT-TYPE, and a `Channel.new`
   with no expected type is CHECK-EXPECTED-TYPE. `try` requires a
@@ -411,13 +347,13 @@ error:
   from the enclosing success type. It does not guarantee a return. `try` also
   works in a block whose expected `Fn` has a fixed `Result` type (`Test.test`,
   `File.each_line`). The last expression of such a block is checked as a
-  completion value (7.2.1h), so a Void or non-Result last expression is
+  completion value, so a Void or non-Result last expression is
   `CHECK-TYPE-MISMATCH`, not `CHECK-VOID-VALUE`. The help `give a Result with
   ok() or error("message")` (`ok(...)` when `T` is not Void) is given for every
   mismatch whose expected type is a `Result` and whose actual type is not one, a
   block's last expression or `x: Result[Int] = 5` alike. `try` also works in a
-  block whose `Result[T]` has an inferred `T` (17a `Task.map`; 15i `File.open`
-  blocks reuse it): the call rule (`check_task_map` in `check_collections.agc`)
+  block whose `Result[T]` has an inferred `T` (`Task.map`; `File.open` blocks
+  reuse it): the call rule (`check_task_map` in `check_collections.agc`)
   gives the block the expected `Result[R]` from the expected `List[Result[R]]`,
   else `Result[Unknown]`, and `check_block_body` turns `Result[Unknown]` into
   the `Slot.InferResult` slot (`check_state.agc`): `result_context?` accepts it,
@@ -445,9 +381,8 @@ run it (`plain`, `limited` for a variable that only some types may take,
 `chosen` for one function per type of the variable), and the body is a `def` in
 `stdlib/prelude/<file>.agc` that names its type variables (`A`, `B`, `K`, `V`)
 in annotations. To add one: the row in `builtins_data.agc` (sorted by name), the
-entry in `prelude_data.agc`, the body, and the tests of 25.6 (a spec case for
-each rule, a VM golden for the results and the errors, a step count in
-`tests/fixtures/vm/prelude-cost.agc`).
+entry in `prelude_data.agc`, the body, and the tests of 25.6 (a spec case per
+rule, a VM golden, a step count in `tests/fixtures/vm/prelude-cost.agc`).
 
 - `Rule.Prelude` (`check_prelude.agc`) checks the arguments left to right, binds
   the type variables (a block gets the types known so far), checks the limits
@@ -514,15 +449,10 @@ reader. `tests/test_frontend_bytecode.py` compares the writer with the frozen
 bytes of the original writer, and its `OPCODES` with `agc_opcode` in
 `vm/value.h`. The version of the header is the `VERSION` file, an input of the
 writer (`Settings` in `compiler/modules/link_env.agc`), never a constant. The
-file is format version 6 (the prelude flag of each function); since version 5,
-after the Updates section the writer writes the Globals count (`u32`, the number
-of slots of the module constants, 0 for a program without any; 44a2). The opcode
-list ends with `global` and `global-set`, which the lowering emits for a
-constant read and for `<start>`, then `try-step` (52), the `try` of a block of a
-Lazy method. The IR holds the interned struct updates (struct index and updated
-field indexes, one `STRUCT_WITH` operand each). `BYTECODE-LIMIT` (at most 65535
-each) for structs, enum variants, fields in one struct, payload items in one
-variant, module constants, JSON field types, struct updates and registers in one
+format version is `FORMAT_VERSION` in `bytecode_tables.agc`; the sections are
+in `docs/vm/03-ir-and-bytecode.md`. `BYTECODE-LIMIT` (at most 65535 each) for
+structs, enum variants, fields in one struct, payload items in one variant,
+module constants, JSON field types, struct updates and registers in one
 function, and for more than 1024 nested List and Map levels in a JSON field
 type; an impossible IR is `BYTECODE-INTERNAL` at the program span.
 
@@ -544,12 +474,12 @@ name. Every entry's implementation key must be in `VM_BUILTINS` of
 catalog) and run in a golden fixture; do not add test-only exports.
 
 A builtin can have several signatures (alternatives by arity): the checker and
-lowering use the same selection. Map.get/2 returns Result[V]; Map.get/3 returns
-V with an eagerly evaluated default. Text help lists both signatures, and its
-JSON help carries overloads; single-signature JSON output is unchanged.
-List.repeat count errors are RUNTIME-INVALID-COUNT at the argument span, with a
-1048576-element cap. List.set reuses RUNTIME-INDEX-OUT-OF-RANGE. Map.delete
-removes both hash storage and insertion-order keys.
+lowering use the same selection. Only catalog initialization fills the
+alternatives field; `builtin-ref` optionally selects by arity. Map.get/2
+returns Result[V]; Map.get/3 returns V with an eagerly evaluated default. Text
+help lists both signatures, and its JSON help carries an `overloads` array;
+single-signature JSON output is unchanged. There is no user-function
+overloading.
 
 ## Command line (`compiler/app/cli.agc` and `cli_*.agc`)
 
@@ -558,25 +488,25 @@ removes both hash storage and insertion-order keys.
 It reads the file (a missing file prints one plain line and exits 2), then
 links, checks and lowers it, and hands the bytecode to the VM. A diagnostic is
 printed in the plain form (header, message, source line, caret run) on stderr
-with exit
-1. `--dump` pretty-prints the checked tree instead of running it; `--dump-ir`
-prints the lowered program. `compile FILE -o OUT` (first argument only, exactly
-that shape, else usage exit 2) checks, lowers and writes bytecode, and it cannot
-be combined with `--dump` or `--dump-ir` (usage, exit 2); lowering diagnostics
-exit 1, an unwritable output prints one line and exits 2. Arguments after the
-source file reach the VM as `System.args`, and the command exits with the VM's
-code. No source file exits 2. `check` never runs; --ai/--json use the same
-structured diagnostic. `help NAME --json` reads the catalog without a source
-file (unknown target exits 2; with no NAME it prints all entries as a JSON
-array sorted by name); `help` alone (exit 0) prints the command summary
-and the builtin namespaces. `--help` and `help` share one text. Help and test
-handle trailing style options; options on other commands precede the
-command/file so program args stay intact. --max-steps accepts a positive integer
-and reaches only the VM. --allow-run enables Process.spawn and, for `test`,
-reaches step handlers and programs under test; check and help need no flag.
-`tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
-`doc` and the query commands (`outline`, `type-at`) are `cli_doc.agc` and
-`cli_query.agc`: the words after the command are read by hand
-(`query/query_options.agc`), and `--stdin FILE` (`type-at --stdin
-FILE:LINE:COL`) goes through `with_buffer` in `cli.agc`, as `check --stdin`
-does. `reject` takes the exit status: a `QUERY-` problem exits 2, any other 1.
+with exit 1. `--dump` pretty-prints the checked tree instead of running it;
+`--dump-ir` prints the lowered program. `compile FILE -o OUT` (first argument
+only, exactly that shape, else usage exit 2) checks, lowers and writes
+bytecode, and it cannot be combined with `--dump` or `--dump-ir` (usage, exit
+2); lowering diagnostics exit 1, an unwritable output prints one line and exits
+2. Arguments after the source file reach the VM as `System.args`, and the
+command exits with the VM's code. No source file exits 2. `check` never runs;
+--ai/--json use the same structured diagnostic. `help NAME --json` reads the
+catalog without a source file (unknown target exits 2; with no NAME it prints
+all entries as a JSON array sorted by name); `help` alone (exit 0) prints the
+command summary and the builtin namespaces. `--help` and `help` share one text.
+Help and test handle trailing style options; options on other commands precede
+the command/file so program args stay intact. --max-steps accepts a positive
+integer and reaches only the VM. --allow-run enables Process.spawn and, for
+`test`, reaches step handlers and programs under test; check and help need no
+flag. `tests/fixtures/cli/forms.json` freezes the forms
+(`tests/test_cli_forms.py`). `doc` and the query commands (`outline`,
+`type-at`) are `cli_doc.agc` and `cli_query.agc`: the words after the command
+are read by hand (`query/query_options.agc`), and `--stdin FILE` (`type-at
+--stdin FILE:LINE:COL`) goes through `with_buffer` in `cli.agc`, as `check
+--stdin` does. `reject` takes the exit status: a `QUERY-` problem exits 2, any
+other 1.

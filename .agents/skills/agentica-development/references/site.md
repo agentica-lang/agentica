@@ -5,15 +5,15 @@ rule that a site page shows.
 
 ## Build
 
-- The site is in `site/` and uses Hugo extended 0.167.
+- The site is in `site/` and uses Hugo extended (the version and the Dart Sass
+  version, with their sha256, are pinned in `pages.yml`).
 - `make site` builds `site/public`. Warnings fail the build.
 - `make site-serve` serves it at `http://localhost:1313/agentica/`.
 - Styles are SCSS partials in `site/assets/scss/` (custom properties in
   `_tokens.scss`). Dart Sass compiles them through Hugo Pipes; they are
   minified with the JS and HTML.
 - `make site` needs Dart Sass's `sass` on PATH or in
-  `~/.local/opt/dart-sass`. The pinned version and sha256 are in
-  `pages.yml`.
+  `~/.local/opt/dart-sass`.
 - `make site` also needs Node; it installs `site/highlight/node_modules` with
   `npm ci` when the package files change. After Hugo,
   `site/highlight/highlight.mjs` colors every `agentica` block with the
@@ -45,28 +45,26 @@ rule that a site page shows.
 ## Search
 
 - `layouts/home.search.json` builds `/search.json` at build time (the
-  `search` output format of the home page in `hugo.toml`). It has one entry
-  per page (title, section, URL, summary) with the plain text split at each
-  `h2`/`h3`, so results link to the heading anchor. It changes with the
-  content; never edit it by hand.
-- `_partials/search.html` (in the header), `assets/js/search.js` and
-  `assets/scss/_search.scss` are the UI: plain JS, no library. The index
-  loads on first focus. `/` or Ctrl/Cmd+K focuses, arrows choose, Enter
-  opens, Escape closes.
+  `search` output format of the home page in `hugo.toml`), with one entry per
+  page and the plain text split at each `h2`/`h3`, so results link to the
+  heading anchor. Never edit it by hand.
+- The UI is `_partials/search.html`, `assets/js/search.js` and
+  `assets/scss/_search.scss`: plain JS, no library; the index loads on first
+  focus.
 
 ## Content
 
 - The user docs live in `site/content`: Getting started, the Language tour
-  in `tour/`, the Library in `library/`, `vm.md`, a top-level page on the
-  Aurora VM and its libraries, and `design.md`, a short summary of the main
-  design decisions and why each was taken.
+  in `tour/`, the Library in `library/`, `vm.md` (the Aurora VM and its
+  libraries) and `design.md` (the main design decisions and why each was
+  taken).
 - The Library is grouped by topic: `library/TOPIC/_index.md` (a short intro
   that says which form fits which job) and one page per builtin module in
   `library/TOPIC/NAME.md`, plus the `algorithms.md` page of runnable recipes.
   A new module page goes into a topic folder, so its URL is
-  `/library/TOPIC/NAME/`; the topics and pages are ordered by `weight`, and
-  the sidebar, the list pages, `llms.txt` and `search.json` follow the tree.
-- Order and titles come from front matter (`title`, `weight`).
+  `/library/TOPIC/NAME/`. Order and titles come from front matter (`title`,
+  `weight`); the sidebar, the list pages, `llms.txt` and `search.json` follow
+  the tree.
 - `docs/grammar/*.md` is the language specification (`/reference/`): the
   content adapter `content/_content.gotmpl` reads the files through an assets
   mount (`hugo.toml`) and joins them, in file-name order, into one page. A new
@@ -91,8 +89,8 @@ rule that a site page shows.
 - `_partials/markdown-links.html` points links at the other pages' `.md` URLs
   (and `#anchor` links at the page's own `.md`), sharing
   `_partials/link-target.html` with `render-link.html`. It skips top-level
-  ``` fences and backtick code spans, and images (not `~~~` fences, fences of
-  4 or more backticks, or indented fences). `home.llms.txt` runs
+  ``` fences, backtick code spans and images, but not `~~~` fences, fences of
+  4 or more backticks, or indented fences. `home.llms.txt` runs
   `_partials/markdown-links-check.html`, which fails the build if that
   rewrite changes.
 - Fence attributes become plain text. `{expect="CHECK-X"}` adds
@@ -105,19 +103,17 @@ rule that a site page shows.
   URL), both in the order of `_partials/llms-groups.html`, with absolute URLs
   from `baseURL`.
 - `_partials/page-actions.html` is the "Copy page" split button next to each
-  page's `<h1>` (both in a `.page-head`). Its menu has View Source (the `.md`)
-  and links that open ChatGPT or Claude with a prompt to read the `.md` URL.
-  `assets/js/page-actions.js` fetches the `.md` for the clipboard and adds
-  the `ready` class that shows the button, so it stays hidden without the
-  script. Without the Clipboard API it removes the copy items.
+  page's `<h1>`; `assets/js/page-actions.js` fetches the `.md` for the
+  clipboard and adds the `ready` class that shows the button, so it stays
+  hidden without the script.
 
 ## Examples are tests
 
 Every `agentica` code block in `site/content` must be a complete program.
 `tests/test_site_examples.py` checks each one and runs it with the CLI (stdin from an
 optional `input` block right after it), and compares stdout with the
-`output` block that follows. `make test` runs three pages as a smoke; the
-whole site runs in the slow tier (`make test-slow`).
+`output` block that follows. `make test` runs the `SMOKE_PAGES` of that file
+as a smoke; the whole site runs in the slow tier (`make test-slow`).
 `.github/workflows/site-examples.yml` runs the slow tier of this file alone on
 pull requests that change only `site/content` (CI skips those).
 
@@ -137,10 +133,7 @@ Fence attributes:
 pushes that touch the site or its sources; only a `master` push deploys it to
 GitHub Pages.
 
-Both jobs run on the self-hosted runners: GitHub-hosted runners do not
-start for this repository (a deploy job on `ubuntu-latest` failed at once
-with no runner on 2026-10-14). Never
-cancel a Pages run while its `deploy-pages` step runs: GitHub keeps that
+Never cancel a Pages run while its `deploy-pages` step runs: GitHub keeps that
 Pages deployment "in progress", every later deploy fails with "due to in
-progress deployment", and only time (about half an hour on 2026-10-14) or
-Settings → Pages → Source clears it.
+progress deployment", and only time (about half an hour) or Settings → Pages →
+Source clears it.

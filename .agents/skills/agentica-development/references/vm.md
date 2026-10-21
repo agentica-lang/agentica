@@ -4,14 +4,11 @@ The VM's codename is Aurora (Aurora VM). Only the docs use it: the binary,
 the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep
 their names.
 
-`docs/vm/` is the contract: reference behavior, IR, bytecode format, value
-layout, loader rules, libraries and the PR plan. `docs/vm/README.md` gives the
-file for each section, and `docs/roadmap/07-vm.md` lists what is built. This
-file is the index of the VM guide: the pipeline, the layers, the rules every
-change keeps, and which file to read next. When this guide and `docs/vm/`
-disagree, `docs/vm/` wins. The VM is the only backend and the reference: roadmap
-7i deleted the Racket evaluator. Notes below that compare with "the evaluator"
-record why a rule was copied from it.
+`docs/vm/` is the contract (`docs/vm/README.md` gives the file for each
+section), and `docs/roadmap/07-vm.md` lists what is built. When this guide and
+`docs/vm/` disagree, `docs/vm/` wins. The VM is the only backend and the
+reference: roadmap 7i deleted the Racket evaluator. Notes below that compare
+with "the evaluator" record why a rule was copied from it.
 
 Every C edit also reads `references/vm-c.md`.
 
@@ -78,9 +75,7 @@ spans, stderr wording, OS error text, exact step counts and the step-limit
 span may change, but VM messages must stay clear for agents. Lowering may
 optimize (inline, fold constants, move or merge `STEP`s) as long as the
 goldens hold. Differences from the old evaluator in exit code, stdout or
-code are recorded in `docs/vm/` (for example a failed stdout write exits 1,
-out of memory exits 70, and the 2^24 register cap gives
-`RUNTIME-STACK-OVERFLOW`).
+code are recorded in `docs/vm/`.
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, runs children only with its own

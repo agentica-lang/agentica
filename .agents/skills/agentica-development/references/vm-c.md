@@ -136,10 +136,8 @@ Racket's exit handler). SIGPIPE is ignored and every write is checked.
   index keeps the old commit otherwise), rebuild with `AGENTICA_GC=vendored`,
   and run the sanitizer and diff tests.
 - `AGENTICA_GC` picks the libgc (`docs/vm/11-build-ci-supply-chain.md`):
-  `system` (the Linux default) links the distro's libgc with `pkg-config
-  --cflags --libs bdw-gc`, after the stamp `$(VM_BUILD)/gc-system` (an
-  order-only prerequisite of every VM object and a prerequisite of every
-  binary) has checked pkg-config, the package and `GC_MIN` (8.2.0);
+  `system` (the Linux default) links the distro's libgc with `pkg-config`; the
+  stamp `$(VM_BUILD)/gc-system` checks the package and `GC_MIN` (8.2.0);
   `vendored` builds `build/vm/gc.o` from the submodule (non-Linux hosts, the
   release, and `GC_STRESS=1` always); `SANITIZE=1` has no libgc. The mode is
   not remembered: pass it to every make command or export it. Both builds

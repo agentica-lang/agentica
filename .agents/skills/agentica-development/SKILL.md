@@ -41,24 +41,19 @@ change needs.
 
 ## Commands while you work
 
+`AGENTS.md` ("Commands") has the build and test commands (`make`,
+`make test TESTS=...`, `make tests KIND=...`, `make test-cli`, `make smoke`,
+`make site`, `make goldens`). More:
+
 ```sh
-poetry install --only test --no-root      # install pytest test dependencies
-make                          # build dist/agentica from bootstrap/stage0.agcb (git submodule update --init first)
-make test TESTS="tests/test_vm_bits.py"   # pytest modules, one process each; builds the binary first
-make tests KIND=files         # destructive filesystem group: Docker locally, Actions scratch in CI
-make tests KIND=fast DOCKER=1 # a group in tools/ubuntu-test.Dockerfile; KIND=slow too
-make tests KIND=files WINE=1  # Windows removal refusal under Wine (compatibility only)
 dist/agentica FILE.agc        # run; `check FILE` only checks; `run -- F.agcb` runs bytecode
-make test-cli                 # product command line tests
 AGENTICA_VM_TRACE=profile dist/agentica check FILE   # step profile (references/vm-build.md)
 make vm-test                  # C tests; one: make build/vm/release/<name>-test
 make fixed-point              # stage2 == stage3 (about 25 s)
 make stage0                   # refresh bootstrap/stage0.agcb (references/ci.md)
-make goldens                  # rewrite VM and front-end goldens after an intended change; review the diff
 poetry run python tools/refreeze.py  # rewrite frozen goldens; --stage, --fast-only
 make vm-golden-check FIXTURES="a b"   # check only those fixtures; make goldens FIXTURES=... rewrites them
 make dup-check                # jscpd: a new copy fails CI; share a helper instead
-make site                     # before merging a site change
 ```
 
 Run what the change touches and the affected example with `dist/agentica`.

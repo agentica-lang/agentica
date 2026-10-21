@@ -6,37 +6,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Add a C builtin
 
-1. `compiler/lower/lower_tables.agc`: let the call through the builtin check
-   (today only the `VM_BUILTINS` keys `puts`, `IO.print`, `IO.warn`,
-   `IO.inspect`, `IO.gets`, `IO.gets!`, `IO.read`, `IO.read_bytes`, `IO.flush`,
-   `IO.eof?`, `System.args`, `System.exit`, `System.env`, `System.pid`,
-   `FrontEnd.hand_off`, `FrontEnd.std_source`, `FrontEnd.stdin_bytes`,
-   `String.from_int`, `String.from_float`, `ok` (arities 0 and 1), `error`,
-   `Result.ok?`, `Result.unwrap!`, `Result.unwrap_or`, `Result.message`, the
-   callback builtins `List.map`, `List.filter`, `List.reduce`, `List.each`,
-   `List.any?`, `List.all?` and `List.sort_by`, and the range builtins
-   `Range.size`, `Range.to_a`, `Range.include?`, `Range.first`, `Range.last`,
-   `Range.each`, `Int.times`, `Int.upto` and `Int.downto`, and the `List` and
-   `Map` library (`List.size`, `append`, `set`, `repeat`, `concat`, `take`,
-   `drop`, `at`, `reverse`, `sort`; `Map.has_key?`, `keys`, `size`, `put`, `get`
-   at arities 2 and 3, `delete`, `values`), the `Set` library (`Set.new`, `add`,
-   `delete`, `include?`, `size`, `empty?`, `to_a`, `union`, `intersection`,
-   `difference`, `subset?`), every `String.*` builtin, and `Float.from_int`,
-   `Float.to_int`, `Float.to_int!`, `Time.now_ms`, `Time.monotonic_ms`,
-   `Time.monotonic_ns`, `Random.int` and `Random.float`, and every `JSON.*`
-   builtin (the type argument of `JSON.decode` and `JSON.schema` lowers to a
-   String constant with the struct's linked name; a struct without JSON field
-   types, such as `Header` or a struct that contains one, is
-   `LOWER-UNSUPPORTED`), and every `File.*`, `Dir.*` and `Path.*` builtin (with
-   `FileHandle` in `value-types` and `FileInfo` appended to the struct table
-   when a checked type mentions it), every `Process.*` builtin, and every
-   `TCP.*` builtin (with `Process`, `Socket` and `Listener` in `value-types`)
-   are accepted; everything else is `LOWER-UNSUPPORTED`; the lowerer also emits
-   `List.concat` and `Map.put` for list and map literals above 255 elements; the
-   loader rejects `MAP` with more than 255 pairs) and emit `call-builtin` with
-   the catalog's implementation key and arity. The import table carries the
-   implementation key, not the written name: `puts` and `IO.puts` both import
-   `"puts"`.
+1. `compiler/lower/lower_tables.agc`: add the key to `VM_BUILTINS` (a call of
+   any other builtin is `LOWER-UNSUPPORTED`), and a builtin record the VM
+   builds to `BUILTIN_STRUCTS` (`STRUCT_NEEDS` for the records it contains).
+   Lowering emits `call-builtin` with the catalog's implementation key and
+   arity. The import table carries the implementation key, not the written
+   name: `puts` and `IO.puts` both import `"puts"`. List and map literals above
+   255 elements (`MAX_CHUNK`) lower to `List.concat` and `Map.put`; the loader
+   rejects `MAP` with more than 255 pairs. The type argument of `JSON.decode`
+   and `JSON.schema` lowers to a String constant with the struct's linked name;
+   a struct without JSON field types, such as `Header` or a struct that
+   contains one, is `LOWER-UNSUPPORTED`.
 2. `vm/builtins.c`: add the entry under that key and arity.
 3. Add a fixture to `tests/fixtures/vm/` for the happy path and for each
    runtime code or span the builtin can raise; add a loader assert if the import
@@ -155,15 +135,10 @@ must never crash or change the run):
   through the `profile_*` hooks (out of line and cold, and only in the copy of
   `turn_loop` that has `profiling` true), and a new hook goes in the same
   way, so the plain copy keeps its code. Hooks in the one loop had made
-  `calls` 26% and `arithmetic` 14% slower (PR #315). Measure a change of the
+  `calls` 26% and `arithmetic` 14% slower. Measure a change of the
   loop on more than one link layout (`docs/vm-benchmarks.md`): the same code
   moves by 10 % with the order of the objects.
-- Folded stacks (`AGENTICA_PROFILE_FORMAT=folded`) are sampled in
-  `profile_steps`, the hook every `STEP` reaches with the profile on, every
-  `profile->every` steps: `interp.c` turns the task's frames into codes
-  (`AGC_PROFILE_CODE`: function, builtin of a native frame, measure label,
-  cut) and `agc_profile_add_stack` keeps one entry per distinct stack. Names
-  are written only at the end. `Profile.measure` with the profile on is a
+- `Profile.measure` with the profile on is a
   stepper (`agc_profile_measure_step`, which `frame_code` recognizes); its
   `measures` list on the task is checked against the frames
   (`agc_frame_runs`), so a block that a runtime error ended leaves no stale

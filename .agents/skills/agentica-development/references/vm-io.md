@@ -1,8 +1,5 @@
 # VM loop, stdin, stdout and files
 
-The libuv loop, the resource registry, stdin, stdout and stderr, and the `File`,
-`Dir` and `Path` builtins.
-
 Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
@@ -29,9 +26,6 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     names that are refused (trailing dot or space, `:` that is not a drive),
     and the read of a child's stdout beside libuv for `Process.read_available`
     (none on Windows). `process.c` keeps the search loop and the file test.
-    The I/O thread owns a child's handles and buffers: with several schedulers
-    each `Process` and channel call posts its START step and parks, and the
-    done half reads only the request (`docs/vm/16-architecture.md` §16.9).
 
 - **Path:** `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`
   - **Owns:** The ends of a child channel: how the parent makes them (a socket
@@ -264,13 +258,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     descriptor `vm/output.c` reopened for stdout or stderr.
   - A child run with `--allow-run` can still open `/proc/<VM pid>/fd/N`: the
     check covers the program's own file calls only.
-  - `agc_each_fd` (the `/proc/self/fd` walk, also used by `vm/process.c`) lives
-    here, `owns_st` saying which request frees the state (open, close, or a
-    handle request after its timeout), `Path.join` and `Path.resolve` as pure
-    string code
-  - the owner-only and lock builtins of the BDD driver port
-    (`docs/future/18-front-end-language.md`
-    §18.4, port step 7a), all pool jobs in `work`:
+  - the owner-only and lock builtins of the BDD driver port, all pool jobs in
+    `work`:
     - `File.open(path, "create_private")` is `OP_OPEN_CREATE`, which
       `open_for` handles first with `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW`
       and mode 0600, then goes the way of `write`
@@ -392,27 +381,16 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - **libuv (7h, in: loop, files and tasks)**
   - `docs/vm/10-io-scheduler.md` §10.2.2 describes the loop with its run queue
-  - only the scheduler (`vm/task.c`, through `agc_io_poll`) calls `uv_run`, and
-    libuv callbacks only set flags (tasks will also queue the task).
-  - N=1 today
-  - the design target (`docs/vm/16-architecture.md` §16, rules per thread in
-    `docs/vm/10-io-multicore.md` §10.2.3, gated in the roadmap order on the
-    server measurement, decided right after it) is N scheduler threads that pull
-    from one global run queue and one I/O thread, the main thread, with the only
-    libuv loop, built on split structures (read-only runtime; global run queue;
-    the loop and its inbox on the I/O thread, and the registry there or shared
-    under a lock, which is open in §16.11; per-scheduler turn counter; per-task
-    stack, registers and frame).
-  - Once tasks land, a builtin or opcode whose work grows with its input sets a
-    turn cost (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins)
+  - only the thread that owns the loop calls `uv_run` on it (the scheduler with
+    N=1 through `agc_io_poll` in `vm/task.c`, the I/O thread with N>1), and
+    libuv callbacks only set flags and queue the task.
+  - A builtin or opcode whose work grows with its input sets a turn cost
+    (`docs/vm/10-io-scheduler.md` §10.2.1, Builtins)
   - it is taken from the turn only, never from `steps_left`, so it never changes
     how `--max-steps` stops a program.
-  - Only the thread that owns the loop calls `uv_run` on it (the scheduler with
-    N=1, the I/O thread with N>1).
-  - New code adds no mutable `static` or global variable in `vm/` (the
-    exceptions are listed in `docs/vm/10-io-multicore.md` §10.2.3)
-  - state goes in the runtime, scheduler or task struct, and lazy init uses
-    `pthread_once` or runs at start-up.
+  - New code adds no mutable `static` or global variable in `vm/` (rule and
+    exceptions: `references/vm-c.md`); state goes in the runtime, scheduler or
+    task struct, and lazy init uses `pthread_once` or runs at start-up.
   - Handles and requests are `malloc`'d and must stay owned until their
     `uv_close` callback: either the GC object that owns one stays in its
     scheduler's resource registry until then, or the `malloc`'d native state
@@ -466,19 +444,12 @@ Windows locks use non-blocking `LockFileEx` over the whole file: unlike Unix
 advisory `flock`, this also prevents other handles from reading or writing the
 locked range. `file_state.locked` makes repeat calls on the same handle succeed
 without locking the range again. Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`
-(contention); access denied and other failures remain errors. The C builtin
-tests and portable bootstrap smoke cover read-handle locking, repeat calls,
-contention and close/reacquire.
+(contention); access denied and other failures remain errors.
 
 Windows `Path.remove` uses handle-relative no-follow traversal; raw path
 validation precedes normalization. Destructive tests require the scratch
 harness. `Path.rename` uses `MoveFileExW` with no replace/copy flags.
 Windows special file streams remain separate work.
-
-`vm/tests/files_test.c` exercises real builtin calls without needing a
-self-hosted compiler: text and all-byte round trips, append/flush/close,
-Unicode paths, invalid writes that leave data intact, Windows path roots and
-Windows lock exclusion. All native `vm-test` jobs run it.
 
 New filesystem adapter files and headers belong in the explicit lists of
 `vm/tools/check-layers.sh`. Keep `file_io.h` forbidden to core files, keep
