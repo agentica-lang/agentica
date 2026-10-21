@@ -139,8 +139,7 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Title: Semantic CLI for agents
   - File: [`39-semantic-cli.md`](39-semantic-cli.md)
   - Status: Built (row 7.2b): `outline`, `symbol`, `refs`, `type-at`,
-    `--partial` and `std/analysis`; pending: `type-at` on a type name (§39.3)
-    and the 6c measurement (§39.12)
+    `--partial` and `std/analysis`; pending: the 6c measurement (§39.12)
 
 - §: 41
   - Title: Dates and times

@@ -92,21 +92,6 @@ export def definition_of(
   return Definitions.of_name(modules, target.name)
 end
 
-## The innermost site whose written name holds the character at `offset`: the shortest, and the first of two equal.
-export def innermost(sites: List[Sites.Site], offset: Int) -> Ast.Optional[Sites.Site]
-  best: Ast.Optional[Sites.Site] = Ast.Optional.Absent
-  best_size = -1
-  for site in sites
-    size = site.reach.stop.offset - site.reach.start.offset
-    closer = best_size < 0 or size < best_size
-    if closer and site.reach.start.offset <= offset and offset < site.reach.stop.offset
-      best = Ast.Optional.Present(site)
-      best_size = size
-    end
-  end
-  return best
-end
-
 # A local: its binding is the definition, and its uses are in the function that holds it.
 def of_local(linked: Linker.Linked, checked: Checker.Checked, local: Locals.Local) -> Answer
   module = linked.modules[0]
@@ -165,7 +150,7 @@ def of_name(
     Ast.Optional.Absent -> declared = declared
   end
   own = Sites.of_module(root, checked, declared, "")
-  case innermost(own, offset)
+  case Sites.innermost(own, offset)
     Ast.Optional.Absent -> return Diag.Outcome.Failed(Position.no_expression(asked, here))
     Ast.Optional.Present(site) ->
       key = site.target.key
