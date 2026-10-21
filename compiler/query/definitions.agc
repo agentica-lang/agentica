@@ -15,7 +15,7 @@ import T from "../syntax/types"
 import Locals from "locals"
 
 ## A declaration found: its `kind` (`function`, `struct`, `enum`, `variant`, `field` or `constant`; `parameter`,
-## `local`, `loop` or `pattern` for a local; `alias` is for a type argument, which no answer gives yet), its name as
+## `local`, `loop` or `pattern` for a local; `alias` is for the name of a type alias), its name as
 ## the file wrote it, and the file (the `file` of its LinkedModule), the whole declaration and its name (for a
 ## local, the binding node and the name; see `of_local`). `doc` is the whole `##` text or Absent; `signature` is the
 ## one line `agentica doc` gives the declaration (`make(name: String) -> User`), `name: Type` for a field and
@@ -52,8 +52,8 @@ export def of_expr(modules: List[Linker.LinkedModule], types: List[T.Type], expr
     Ast.Expr.Call(node) -> return top_level(modules, node.name)
     Ast.Expr.FunctionRef(node) -> return top_level(modules, node.name)
     Ast.Expr.Construct(node) -> return top_level(modules, node.type_name)
-    # Not reached yet: the checker records no type for a TypeName (a type argument), so `type-at` skips it. The arm
-    # waits for a later PR that answers a type argument; it is also the only way to an `alias` definition.
+    # `type-at` does not reach this arm: the checker records no type for a TypeName, and the name of a type is answered
+    # from its site (query/type_at.agc).
     Ast.Expr.TypeName(node) -> return top_level(modules, node.name)
     Ast.Expr.ConstRef(node) -> return top_level(modules, node.name)
     Ast.Expr.EnumConstructor(node) -> return variant(find(modules, node.enum_name), node.variant_name)

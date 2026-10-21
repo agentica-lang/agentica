@@ -12,6 +12,7 @@
 ##
 ## A module is walked once, with a worklist and no recursion, so a deep tree cannot reach the limit of VM calls.
 
+import {RESERVED} from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
 import State from "../check/check_state"
 import Checker from "../check/checker"
@@ -50,12 +51,14 @@ end
 
 # What the walk of a module knows: what the checker recorded, the linked names the program declares (a name that is
 # none of these and no public builtin is not a declaration), `wanted`, the `key` of the one target to keep or "" to
-# keep all, the text of the module and the function the walk is in.
+# keep all, whether the name of a builtin type (`Int`, `List`) is a site too, the text of the module and the function
+# the walk is in.
 struct Scan
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]
   declared: Set[String]
   wanted: String
+  builtin_types: Bool
   text: String
   function: String
 end
@@ -78,19 +81,29 @@ export def of_module(
   declared: Set[String],
   wanted: String,
 ) -> List[Site]
-  scan = Scan(
-    types: checked.types,
-    resolved: checked.resolved,
-    declared: declared,
-    wanted: wanted,
-    text: module.text,
-    function: "",
-  )
-  out: List[Site] = []
-  for declaration in module.declarations
-    out = out.concat(declaration_sites(scan, declaration))
+  return scanned(module, checked, declared, wanted, false)
+end
+
+## The sites of kind `type` of `module`, in the order of the text: the names of types in annotations and as type
+## arguments. Unlike `of_module`, the name of a builtin type is a site too, with the target `named("Int")`, so a query
+## can answer on it.
+export def of_types(module: Linker.LinkedModule, checked: Checker.Checked, declared: Set[String]) -> List[Site]
+  return scanned(module, checked, declared, "", true).filter do |site: Site| site.kind == "type" end
+end
+
+## The innermost site whose written name holds the character at `offset`: the shortest, and the first of two equal.
+export def innermost(sites: List[Site], offset: Int) -> Ast.Optional[Site]
+  best: Ast.Optional[Site] = Ast.Optional.Absent
+  best_size = -1
+  for site in sites
+    size = site.reach.stop.offset - site.reach.start.offset
+    closer = best_size < 0 or size < best_size
+    if closer and site.reach.start.offset <= offset and offset < site.reach.stop.offset
+      best = Ast.Optional.Present(site)
+      best_size = size
+    end
   end
-  return distinct(out.sort_by do |site: Site| site.reach.start.offset end)
+  return best
 end
 
 ## The target of a name that is a top-level declaration (its linked name) or a builtin.
@@ -122,6 +135,29 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Optional[Ta
     end
   end
   return Ast.Optional.Absent
+end
+
+def scanned(
+  module: Linker.LinkedModule,
+  checked: Checker.Checked,
+  declared: Set[String],
+  wanted: String,
+  builtin_types: Bool,
+) -> List[Site]
+  scan = Scan(
+    types: checked.types,
+    resolved: checked.resolved,
+    declared: declared,
+    wanted: wanted,
+    builtin_types: builtin_types,
+    text: module.text,
+    function: "",
+  )
+  out: List[Site] = []
+  for declaration in module.declarations
+    out = out.concat(declaration_sites(scan, declaration))
+  end
+  return distinct(out.sort_by do |site: Site| site.reach.start.offset end)
 end
 
 def declaration_names(declaration: Ast.Decl) -> List[String]
@@ -323,9 +359,9 @@ def name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -
   return placed(scan, named(name), kind, whole, whole)
 end
 
-# The name of a declared type written from `start`.
+# The name of a declared type written from `start`, or of a builtin one when the scan wants those.
 def type_name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -> List[Site]
-  if !scan.declared.include?(name)
+  if !scan.declared.include?(name) and !(scan.builtin_types and RESERVED.include?(name))
     return []
   end
   parts = written(scan.text, start)

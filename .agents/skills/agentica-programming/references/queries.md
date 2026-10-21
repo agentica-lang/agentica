@@ -88,9 +88,12 @@ signature. On a field or method name the expression is the whole access
 `main` with the wrong signature is still `CHECK-MAIN`). A type of another file
 is written as the file writes it (`Models.User` through the import alias); one
 from a module the file does not import is written by its bare name. A type name
-in an annotation (`xs: Models.User`) or in a type argument (`Models.User` in
-`List[Models.User]`) is not answered yet (`QUERY-NO-EXPRESSION`); `refs` lists
-these uses as `type`.
+in an annotation (`xs: Models.User`), in a type argument (`Models.User` in
+`List[Models.User]`) or in a field or variant payload has the `kind` `type`: the
+span is the name (`Models.User` is one span), the type is the name as written,
+and the definition is the struct, enum or alias (kind `alias`) it names, also
+from an imported file. A builtin type (`Int`, `List`) has no definition.
+`refs` lists these uses as `type`.
 
 A keyword of an expression (`try`, `do`, `and`, `!`) answers that expression;
 `return`, `end` and `case` are on no expression.
@@ -101,11 +104,12 @@ text, type, span, definition, help}`.
 - `kind`: `builtin` (on a builtin's name, `split` in `xs.split(",")`; `to_s`
   and `inspect` only where the checker resolves them to one, as on a number),
   `name` (a variable, constant, callee, field or method name, or the name that
-  binds a local) or `expression`. An open set: accept values you do not know.
+  binds a local), `type` (a type name in an annotation or a type argument) or
+  `expression`. An open set: accept values you do not know.
   `span` is always the whole expression; `text` is its source.
 - `definition`: null, or `{file, range, kind, name, name_span, signature, doc}`.
-  `kind` is `function`, `struct`, `enum`, `variant`, `field` or `constant`
-  (`signature` is e.g. `make(name: String) -> User`, `age: Int`,
+  `kind` is `function`, `struct`, `enum`, `alias`, `variant`, `field` or
+  `constant` (`signature` is e.g. `make(name: String) -> User`, `age: Int`,
   `Circle(Float)`; `doc` is the whole `##` text or null). A local answers with
   `kind` `parameter`, `local`, `loop` or `pattern`, `signature` `name: Type` and
   `doc` null; its `range` is the binding node (the whole parameter or

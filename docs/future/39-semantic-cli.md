@@ -2,9 +2,8 @@
 
 **Status:** built (row 7.2b, issue #506, PRs #525 to #543): `outline`,
 `symbol`, `refs`, `type-at`, `--stdin`, the opt-in `--partial` and
-`std/analysis` with `Analysis.refresh`. Pending: `type-at` on a type name
-(§39.3) and the measurement of the 6c round (§39.12). The contract of each
-built part lives in its home, not here:
+`std/analysis` with `Analysis.refresh`. Pending: the measurement of the 6c
+round (§39.12). The contract of each built part lives in its home, not here:
 
 - commands, options and the answers:
   [`docs/grammar/06b-builtins.md`](../grammar/06b-builtins.md) and
@@ -35,13 +34,8 @@ and `doc` do. The streams and `--ai` rules are in the programming skill
 
 ### 39.3 Commands
 
-Built, except one part:
-
-- `type-at` on a type name is `QUERY-NO-EXPRESSION` today, both for a name in
-  an annotation (`xs: Models.User`) and for a type argument (`Models.User` in
-  `List[Models.User]`); checked on 2026-10-21. Planned: an answer for the type
-  name with the definition of what it names (struct, enum or type alias, with
-  `kind` `alias` for an alias). `refs` already lists these uses as `type`.
+Built. `type-at` answers a type name too (an annotation, a type argument, a
+field or payload type, an alias target).
 
 ### 39.4 Names, paths and files
 
