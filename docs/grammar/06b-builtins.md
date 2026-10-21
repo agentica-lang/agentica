@@ -371,7 +371,8 @@ and `JSON.encode` give its text. Signatures are in
 `agentica help NAME --json` prints the name, arity, parameter types, result,
 signature, effects and description, from the catalog that checking and execution
 use. Effects are informational (I/O, tasks, or `test`). An unknown target exits
-2.
+2. `agentica help --json` with no NAME prints every public builtin as one JSON
+array, sorted by name, each element exactly what `help NAME --json` prints.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by
