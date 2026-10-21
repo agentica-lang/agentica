@@ -318,6 +318,8 @@ typedef struct {
   agc_lines parent_locks;
   agc_task *crashes, *crashes_tail, *quiet;
   uint64_t crash_count, observed_count;
+  /* The cancel walks so far (cancel_tree), under rt->sync: the stamp of agc_task.held_walk. */
+  uint64_t cancel_walks;
   _Atomic uint64_t tasks_done;
   /* The one lock for the shared state of the tasks (agc_sync_take): the task tree, the waiter lists, the channels, the
      Task.map groups and the logger table. `shared` is false until agc_share, and then the lock is real, and the
@@ -437,8 +439,10 @@ struct agc_task {
      reads keep their offsets. */
   uint64_t steps;
   struct agc_measure *measures;
-  /* The task whose end waits for this cancelled task to settle: a count in its `closing` (hold in vm/task.c). */
+  /* The task whose end waits for this cancelled task to settle: a count in its `closing` (hold in vm/task.c), and the
+     cancel walk (rt->cancel_walks) that last held it, so the walk does not climb its chain again (cancel_tree). */
   agc_task *holder;
+  uint64_t held_walk;
 };
 
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each

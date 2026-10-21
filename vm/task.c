@@ -321,7 +321,12 @@ static void cancel_one(agc_vm *vm, agc_task *t, const char *why) {
 /* Children before parents, so each cancelled task has no live child left
    to move; a running task only gets its flag and ends after its builtin. `why`, when set, is the at= reason of the
    root's trace line. Each task of the walk below the root that has not settled holds its parent (hold), and so does
-   a child that an earlier cancel reached and that still runs; the root holds `holder` (a crashing parent) when set. */
+   a child that an earlier cancel reached and that still runs; the root holds `holder` (a crashing parent) when set.
+
+   A task that this walk held already (stamped with `walk`) is not held again when it shows up among the children of
+   `t` after an adoption: it was held by its parent then, and every task that ended since between it and `t` held its
+   own parent right after its cancel_one (only this walk ends tasks while it holds rt->sync, and end hooks do not
+   cancel), so `t` is on its chain already. Climbing the chain again at each level would cost O(depth^2) (#499). */
 static void cancel_tree(agc_vm *vm, agc_task *root, const char *why, agc_task *holder) {
   agc_sync_assert(vm);
   if (root == vm->rt->main || root->state == AGC_TASK_DONE) return;
@@ -329,12 +334,16 @@ static void cancel_tree(agc_vm *vm, agc_task *root, const char *why, agc_task *h
     hold(vm, root, holder);
     return;
   }
+  uint64_t walk = ++vm->rt->cancel_walks;
   agc_task *t = root;
   uint64_t count = 0;
   for (;;) {
     agc_task *child = t->children;
     while (child && child->cancelled) {
-      hold(vm, child, t);
+      if (child->held_walk != walk) {
+        hold(vm, child, t);
+        child->held_walk = walk;
+      }
       child = child->next_sibling;
     }
     if (child) {
@@ -346,6 +355,7 @@ static void cancel_tree(agc_vm *vm, agc_task *root, const char *why, agc_task *h
     count++;
     if (t == root) break;
     hold(vm, t, up);
+    t->held_walk = walk;
     t = up;
   }
   hold(vm, root, holder);

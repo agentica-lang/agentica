@@ -27,7 +27,7 @@ except ImportError:
     fcntl = None
 
 from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, compile_text, host_only, kill_process, known_issue,
-                                 process_alive, run, vm_command, vm_environment, wait_readable, wait_until)
+                                 process_alive, run, scaled, vm_command, vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -2024,6 +2024,52 @@ def test_handles_held_by_cancelled_descendants_are_closed_when_the_await_of_thei
         result = vm(bytecode, timeout=120)
         assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
 
+
+
+DEEP_CANCEL = r"""struct Level
+  depth: Int
+  ready: Channel[Int]
+end
+
+def spin(ready: Channel[Int]) -> Result[Int]
+  try ready.send(1, 60000)
+  k = 0
+  while k < 2000000000
+    k = k + 1
+  end
+  return ok(k)
+end
+
+def level(l: Level) -> Result[Int]
+  if l.depth == 0
+    return spin(l.ready)
+  end
+  Task.spawn(&level, Level(depth: l.depth - 1, ready: l.ready))
+  Task.sleep(600000)
+  return ok(0)
+end
+
+def main() -> Void
+  ready: Channel[Int] = Channel.new(1)
+  root = Task.spawn(&level, Level(depth: System.args()[0].to_i.unwrap!, ready: ready))
+  ready.recv(60000).unwrap!
+  t0 = Time.monotonic_ms()
+  Task.cancel(root)
+  puts("cancel #{Time.monotonic_ms() - t0}")
+  IO.inspect(Task.await(root))
+end
+"""
+
+
+def test_one_cancel_of_a_deep_line_with_a_busy_leaf_costs_linear_time(tmp_path):
+    # #499: the leaf runs on another scheduler, so the cancel walk holds it, and each ancestor it ends moves the leaf
+    # up into the next one. Holding the leaf again at every level climbed its whole holder chain: one Task.cancel at
+    # depth 32000 took about 26 s under rt->sync. The walk is linear now (a few ms); the bound leaves room for slow runs.
+    bytecode = program(tmp_path, "deep_cancel", DEEP_CANCEL)
+    result = vm(bytecode, args=["32000"], timeout=scaled(120))
+    lines = result.stdout.splitlines()
+    assert (result.code, lines[1:]) == (0, ["error(\"task: cancelled\")"]), result.stderr
+    assert int(lines[0].removeprefix("cancel ")) < scaled(1500), lines[0]
 
 NET_STOP = r"""def read(socket: Socket) -> Result[String]
   return TCP.read_line(socket, 60000)
