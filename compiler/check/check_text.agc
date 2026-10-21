@@ -1,6 +1,6 @@
 ## The text form of a check, for tests. See check.agc.
 
-import Failure from "check_failure"
+import Failure from "../diagnostics/problem"
 import State from "check_state"
 import Checker from "checker"
 import Diag from "../diagnostics/diagnostic"

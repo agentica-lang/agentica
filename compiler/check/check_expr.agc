@@ -5,7 +5,7 @@
 
 import Ast from "../syntax/ast"
 import Calls from "check_call"
-import Failure from "check_failure"
+import Failure from "../diagnostics/problem"
 import Help from "check_help"
 import Methods from "check_method"
 import Rules from "check_rules"

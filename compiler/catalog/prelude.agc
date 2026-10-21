@@ -9,7 +9,7 @@
 ## files are not modules: no program imports them (resolve_import.agc), and they call builtins only, never each other.
 
 import Ast from "../syntax/ast"
-import Failure from "../check/check_failure"
+import Failure from "../diagnostics/problem"
 import Register from "../check/check_register"
 import State from "../check/check_state"
 import Statements from "../check/check_stmt"

@@ -22,7 +22,8 @@ folder of its context. Names below are bare; the folder is in each label
 bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
 
 - Data: `syntax/source.agc`, `syntax/token.agc`, `syntax/types.agc` (the
-  `Type` enum), `diagnostics/diagnostic.agc`.
+  `Type` enum), `diagnostics/diagnostic.agc`,
+  `diagnostics/problem.agc` (the packed `Problem` every stage returns).
   `syntax/source_file.agc` holds the strict UTF-8 rules for a source file
   (`LEX-INVALID-UTF8` at the first bad byte); `io/source_reader.agc` reads the
   file with them, with no size limit. `syntax/text.agc` holds the
@@ -54,8 +55,7 @@ bare name (`"lexer"`); across folders it is relative (`"../syntax/types"`).
   `check_call.agc`, `check_method.agc`, `check_rules.agc`, `check_list.agc`,
   `check_collections.agc`, `check_args.agc`, `check_help.agc`,
   `check_names.agc`, `check_flow.agc`, `check_unused.agc`, `check_state.agc`,
-  `check_types.agc`,
-  `check_failure.agc`, `check_tables.agc` (hand-edited method and help tables),
+  `check_types.agc`, `check_tables.agc` (hand-edited method and help tables),
   `checker.agc` (`Checker.check(linked)`).
 - Lowering (`lower/`): `ir.agc` (IR data), `lower_tables.agc` (`VM_BUILTINS`,
   operator tables), `lower_state.agc`, `lower_expr.agc`, `lower_data.agc`,

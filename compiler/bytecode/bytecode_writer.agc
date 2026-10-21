@@ -15,7 +15,7 @@ import Pool from "bytecode_pool"
 import Spans from "bytecode_spans"
 import {FORMAT_VERSION, MAX_U16} from "bytecode_tables"
 import JsonTypes from "bytecode_types"
-import Problems from "../check/check_failure"
+import Problems from "../diagnostics/problem"
 import Ir from "../lower/ir"
 import Types from "../syntax/types"
 

@@ -4,7 +4,7 @@
 ## It reads the text of the file the problem is in, to show one line of it. A line is cut at "\n" and loses one
 ## trailing "\r".
 
-import Problems from "../check/check_failure"
+import Problems from "problem"
 import Diag from "diagnostic"
 import Plain from "diagnostic_plain"
 

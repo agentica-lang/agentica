@@ -5,7 +5,7 @@
 ## to the end of its first line. The marks of one line are drawn on one row, in the order of their columns, and the
 ## notes of the labels come under it, the last column first.
 
-import Problems from "../check/check_failure"
+import Problems from "problem"
 import Diag from "diagnostic"
 import Source from "../syntax/source"
 

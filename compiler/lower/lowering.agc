@@ -8,7 +8,7 @@
 ## about 3,000 of the 10,000 frames of the VM. The scans that read the whole tree use a worklist and do not recurse.
 
 import Ast from "../syntax/ast"
-import Failure from "../check/check_failure"
+import Failure from "../diagnostics/problem"
 import Checker from "../check/checker"
 import Defaults from "../check/defaults"
 import Ir from "ir"

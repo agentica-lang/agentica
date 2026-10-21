@@ -1,10 +1,10 @@
 ## The state of the lowering (a state that is passed and returned, not mutated): what is
 ## fixed for the run (Cx), what changes while one function is lowered (Fx), and the small operations on them that every
 ## part of the lowering uses. A lowering function takes Cx and Fx and returns the new Fx with its register (Out), or
-## fails with a packed LOWER- diagnostic (check_failure.agc), so `try` stops at the first one.
+## fails with a packed LOWER- diagnostic (diagnostics/problem.agc), so `try` stops at the first one.
 
 import Ast from "../syntax/ast"
-import Failure from "../check/check_failure"
+import Failure from "../diagnostics/problem"
 import State from "../check/check_state"
 import Defaults from "../check/defaults"
 import Diag from "../diagnostics/diagnostic"
