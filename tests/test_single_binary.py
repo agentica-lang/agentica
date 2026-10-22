@@ -291,6 +291,59 @@ def test_each_deny_flag_turns_its_family_into_an_error_result(tmp_path, flag):
                 assert "denied:" not in line, line
 
 
+# Every gated row a typed program can reach, with the flag that turns it off. The rows that take a FileHandle are left
+# out: only File.open makes one. The TLS rows name files, so --deny-fs alone turns them off too ("files"). The gate
+# fires before anything is resolved or opened, so nothing here connects.
+GATED = (
+    ("File.open", 'File.open("x.txt", "r", 1000)', "--deny-fs"),
+    ("File.read_text", 'File.read_text("x.txt", 1000)', "--deny-fs"),
+    ("File.write_text", 'File.write_text("x.txt", "a", 1000)', "--deny-fs"),
+    ("File.append_text", 'File.append_text("x.txt", "a", 1000)', "--deny-fs"),
+    ("File.stat", 'File.stat("x.txt", 1000)', "--deny-fs"),
+    ("File.lstat", 'File.lstat("x.txt", 1000)', "--deny-fs"),
+    ("File.each_line", 'File.each_line("x.txt", 4096, 1000) do |line| ok() end', "--deny-fs"),
+    ("File.foreach", 'File.foreach("x.txt", 4096, 1000).to_a', "--deny-fs"),
+    ("Lazy.write_lines", '["a"].lazy.write_lines("x.txt", 1000)', "--deny-fs"),
+    ("Dir.list", 'Dir.list(".", 1000)', "--deny-fs"),
+    ("Dir.mkdir", 'Dir.mkdir("d", 1000)', "--deny-fs"),
+    ("Dir.mkdir_private", 'Dir.mkdir_private("d", 1000)', "--deny-fs"),
+    ("Path.cwd", "Path.cwd()", "--deny-fs"),
+    ("Path.resolve", 'Path.resolve("x.txt")', "--deny-fs"),
+    ("Path.real", 'Path.real("x.txt")', "--deny-fs"),
+    ("Path.remove", 'Path.remove("x.txt", 1000)', "--deny-fs"),
+    ("Path.rename", 'Path.rename("x.txt", "y.txt", 1000)', "--deny-fs"),
+    ("Path.join", 'Path.join(["a", "b"])', None),
+    ("TCP.connect", 'TCP.connect("127.0.0.1", 1, 1000)', "--deny-net"),
+    ("TCP.listen", 'TCP.listen("127.0.0.1", 0)', "--deny-net"),
+    ("TLS.connect", 'TLS.connect("127.0.0.1", 1, "ca.pem", 1000)', "files"),
+    ("TLS.listen", 'TLS.listen("127.0.0.1", 0, "cert.pem", "key.pem")', "files"),
+    ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HTTP.client_options().with(ca_file: "ca.pem"))), '
+                             '"https://127.0.0.1:1/")', "files"),
+)
+
+
+def test_every_gated_row_returns_the_error_of_its_flag(tmp_path):
+    """With --deny-fs --deny-net, every row is denied by its own flag (a TLS row by --deny-net, which comes first);
+    with --deny-fs alone and the argument `files`, the program runs only the rows that read files, and the TLS ones
+    are denied by --deny-fs."""
+    body = "".join(
+        f"  if all or {str(flag in ('files', None)).lower()}\n    r{k} = {call}\n    if r{k}.ok?\n"
+        f"      puts(\"{name} ok\")\n    else\n      puts(\"{name} #{{r{k}.message}}\")\n    end\n  end\n"
+        for k, (name, call, flag) in enumerate(GATED))
+    source = 'import HTTP from "std/http"\n\ndef main() -> Void\n  all = System.args().size == 0\n' + body + "end\n"
+    directory = make_suite(tmp_path, {"main.agc": source})
+    for flags, words, files_flag in ((["--deny-fs", "--deny-net"], [], "--deny-net"), (["--deny-fs"], ["files"],
+                                                                                         "--deny-fs")):
+        got = agentica(*flags, "main.agc", *words, cwd=directory)
+        assert got.code == 0, got
+        expected = {name: files_flag if flag == "files" else flag for name, _, flag in GATED
+                    if not words or flag in ("files", None)}
+        lines = dict(line.split(" ", 1) for line in got.stdout.splitlines())
+        assert lines.keys() == expected.keys(), got
+        for name, flag in expected.items():
+            assert lines[name] == "ok" if flag is None else lines[name].startswith(f"denied: {flag}"), (name, got)
+
+
 def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_does_not(tmp_path):
     work = tmp_path
     data = front_end(work).read_bytes()

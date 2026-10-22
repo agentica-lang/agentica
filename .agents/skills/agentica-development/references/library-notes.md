@@ -158,7 +158,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   Dir.mkdir is recursive and idempotent, Dir.list is sorted, Path.resolve is
   lexical without symlink resolution, and Path.real is POSIX `realpath` through
   `uv_fs_realpath` in a pool job (no timeout argument; a path that does not
-  exist is an error). System.env (in `vm/system.c`) needs no flag.
+  exist is an error). System.env (in `vm/system.c`) is off with --deny-env.
 - File.each_line is a stepper builtin (`references/vm-io.md`, `vm/interp.c`): it
   reads one line at a time through a buffer of `buffer_bytes + 1` bytes, one
   pool job (regular file) or one poller read (FIFO, pipe, or a device that can

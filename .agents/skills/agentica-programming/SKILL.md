@@ -36,7 +36,9 @@ check a signature with `agentica help NAME`.
    `--deny-fs`, `--deny-env` (`Process` starts, network, `File`/`Dir`/`Path`
    but `Path.join`, `System.env` return an error starting `denied: --deny-X`;
    each implies `--deny-native`), `--deny-native` (refuse `extern`),
-   `--sandbox` (all of them, for untrusted code), `--seed N`, `--max-steps N`.
+   `--sandbox` (all of them, for untrusted code; a program that can start
+   processes escapes a single flag, so use `--sandbox` or add `--deny-run`),
+   `--seed N`, `--max-steps N`.
 
 ## Cheat sheet
 
