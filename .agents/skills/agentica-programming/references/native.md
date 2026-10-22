@@ -15,8 +15,9 @@ end
 - Types: `C.Int32` (32-bit `int`, an `Int`), `C.Int64` (`Int`), `C.Double`
   (`Float`), `C.Bool` (`Bool`), `C.String` (`const char *`, a `String`); a
   result may be `Void`. Anything else (`C.Int` too: write the width) is
-  `PARSE-EXTERN-TYPE`; more than 64 parameters `PARSE-EXTERN-ARITY`; a name with `?` or `!` `PARSE-EXTERN-NAME`; a
-  default `PARSE-EXTERN-DEFAULT`. `##` docs go on the `def` lines.
+  `PARSE-EXTERN-TYPE`; more than 64 parameters `PARSE-EXTERN-ARITY`; a name
+  with `?` or `!` `PARSE-EXTERN-NAME`; a default `PARSE-EXTERN-DEFAULT`. `##`
+  docs go on the `def` lines.
 - The library is a plain string: a name without `/` (the system looks it up) or
   an absolute path, else `PARSE-EXTERN-LIBRARY`. It opens at the first call; not
   found is `RUNTIME-NATIVE-LOAD`. The working directory is never searched. On
@@ -29,8 +30,8 @@ end
   (libc and libm are `"libSystem.B.dylib"`); any other library needs an
   absolute path. `DYLD_*` variables do not pass through a shebang or a shell
   (SIP drops them).
-- A `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
-  is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""`: when
+- A `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a
+  `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""`: when
   NULL matters, declare `-> C.Pointer` and use `Native.string_at`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as

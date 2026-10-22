@@ -117,7 +117,7 @@ export struct FunctionDecl
 end
 
 ## The C side of an extern function: the library it is in, as written, its C name (the linker renames the function,
-## never this), the codes of its C types, the result's first and then one per parameter (i C.Int, l C.Int64,
+## never this), the codes of its C types, the result's first and then one per parameter (i C.Int32, l C.Int64,
 ## d C.Double, b C.Bool, s C.String, p C.Pointer, y C.Bytes, r a resource of the block, v Void; an `out` parameter has
 ## the capital of its code: I, L, D, B, P or R), and whether it is a `compute def`, which runs on the VM's compute pool
 ## while the task waits. A function that returns a resource has the resource's name as written and the C name of its
