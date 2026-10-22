@@ -210,7 +210,12 @@ that still apply.
   That cost is accepted. Boehm stops
   threads with signals installed with `SA_RESTART`. The VM's syscall paths retry
   on `EINTR`, and libuv signal handling (`uv_signal_t`) must never take Boehm's
-  suspend and restart signals.
+  suspend and restart signals. On Windows Boehm stops threads with
+  `SuspendThread`, so a stopped thread may hold the `malloc` heap lock, and the
+  collecting thread must not `malloc` until the world restarts. Its mark phase
+  calls `signal(SIGSEGV, ...)`, and the UCRT allocates a thread's signal table
+  at that thread's first `signal` call, so every thread calls `signal` once
+  before it registers (`own_signal_table` in `vm/value.c`, #528).
 - **No mutable global state in `vm/`.** Every mutable `static` or global
   variable goes into the runtime, scheduler or task struct. Lazy one-time init
   uses `pthread_once` or happens at start-up. `make vm-lint` enforces this with

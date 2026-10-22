@@ -86,6 +86,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Windows: non-ASCII text typed on a console reaches standard input reads as
   UTF-8, not as U+FFFD.
+- Windows: a program with several schedulers no longer hangs, now and then, in
+  a garbage collection.
 
 ### Removed
 
