@@ -1,24 +1,55 @@
 # Complete programs
 
-Control flow and functions:
+Structs, enums, `case`, Result, `try`, `for` and blocks:
 
 ```ruby
-def classify(age: Int) -> String
-  if age >= 18
-    return "adult"
-  elsif age >= 13
-    return "teen"
-  else
-    return "child"
+struct Item
+  name: String
+  price: Int
+end
+
+enum Status
+  Paid
+  Owed(Int)
+end
+
+def describe(status: Status) -> String
+  case status
+    Status.Paid -> return "paid"
+    Status.Owed(amount) -> return "owed #{amount}"
   end
 end
 
+def parse_price(text: String) -> Result[Int]
+  price = try text.to_i
+  if price < 0
+    return error("negative: #{price}")
+  elsif price == 0
+    return error("free")
+  end
+  return ok(price)
+end
+
 def main() -> Void
-  puts(classify(25))
+  items: List[Item] = [Item(name: "pen", price: 3), Item(name: "book", price: 12)]
+  total = 0
+  for item in items
+    total += item.price
+  end
+  names = items.map do |item| item.name.upcase end
+  puts("#{names.join(",")} cost #{total}, half is #{total.to_f * 0.5}")
+  case total
+    15 -> puts("fifteen")
+    _ -> puts("total is #{total}")
+  end
+  case parse_price("x7")
+    ok(p) -> puts(describe(Status.Owed(p)))
+    error(message) -> puts(message)
+  end
 end
 ```
 
-Structs, lists and blocks:
+Filtering with a block:
 
 ```ruby
 struct Todo
@@ -39,7 +70,7 @@ def main() -> Void
 end
 ```
 
-Maps and strings:
+Maps:
 
 ```ruby
 def main() -> Void
@@ -53,7 +84,7 @@ def main() -> Void
 end
 ```
 
-Reading input, Result and `try`:
+Reading input:
 
 ```ruby
 def parse_numbers(line: String) -> Result[List[Int]]

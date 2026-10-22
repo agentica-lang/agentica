@@ -11,7 +11,7 @@ roadmap](../roadmap/pending-general-programming-and-mcp.md).
 ### 48.1 Today
 
 - There is no regex: `=~` and `matches?` do not exist
-  (`.agents/skills/agentica-programming/SKILL.md`).
+  (`.agents/skills/agentica-programming/references/builtins.md`).
 - The String builtins work on literal text (`agentica help String`). Positions
   count characters, not bytes (`docs/grammar/06b-builtins.md`).
 - The string escapes are `\"`, `\\`, `\#`, `\n`, `\r` and `\t`

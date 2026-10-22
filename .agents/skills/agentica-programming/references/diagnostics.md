@@ -11,18 +11,16 @@ expected Int, found String
 ```
 
 The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
-(while running); `QUERY-` is a mistake in the question of `agentica outline`,
-`type-at`, `symbol` or `refs`.
-With `--json`, the diagnostic that ends the run is the last stderr line; the
-program's own stderr comes before it. Expected process failures
-return error Results. Codes without a row below: `CHECK-VOID-TYPE` and
-`CHECK-VOID-VALUE` (see `language.md`), and `RUNTIME-PROCESS-CLOSE` (a failed
-explicit process cleanup, at the call span).
+(while running), `PKG-` (manifest, lock, package cache). `QUERY-` is a bad
+question to `outline`, `type-at`, `symbol` or `refs`. With `--json`, the
+diagnostic that ends the run is the last stderr line, after the program's own
+stderr. Expected process failures return error Results. Codes without an entry
+below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (`language.md`) and
+`RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call span).
 
-A runtime error also prints the call stack of the task that failed, innermost
-first, in the plain, `--ai` and `--json` formats (no flag). It shows when the
-task has more than one frame or is not `main`; a failure directly in `main` has
-none:
+A runtime error in a task with more than one frame, or not `main`, also prints
+the call stack of the failed task, innermost first, in the plain, `--ai` (under
+`  stack:`) and `--json` formats:
 
 ```text
 nested.agc:2:13 error[RUNTIME-INDEX-OUT-OF-RANGE]
@@ -36,456 +34,250 @@ index 5 is outside a list of length 3
     main at nested.agc:11:8
 ```
 
-A runtime trace names each file as you can open it from the working directory,
-and a standard module as `std/NAME.agc`; compile-time errors show the first file
-as typed and an imported file by absolute path. Each line is a function and the
-place it runs: the error for the first, the call it waits on for the others. A
-block is `block`; a builtin that runs one (`xs.map`) has no line, so the
-caller's line is the `xs.map` call.
-`(after a tail call)` marks a frame whose callers a tail call (`return f(x)`)
-removed. `walk at tree.agc:9:12 (9998 times)` is one line for a recursion. After
-merging, the 15 innermost and the 5 outermost lines show, with `... 312 frames
-not shown ...` between. A task ends with `task spawned at file:line:column` (the
-`Task.spawn` call). A function name or file path longer than 256 bytes is cut
-there, at a character boundary, and ends with `...`.
-`--ai` has the same lines under `  stack:`. `--json` adds `stack` (objects with
-`column`, `file`, `function`, `line`, and `repeat` or `tail` when they apply),
-`stack_omitted` and, for a task, `spawned_at`. `RUNTIME-STEP-LIMIT`,
-`RUNTIME-STACK-OVERFLOW` and a task's crash line (`"task":true`) carry it too.
-
-- **Code:** `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`,
-  `LEX-INVALID-ESCAPE`, `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`
-  - **Meaning:** bad character, string, or bracket. A `;` says Agentica has no
-    semicolons (end the statement with a newline). A `'` or a backtick says
-    strings use double quotes (a character is a one-character String). A `}`
-    with no `{` open, and an unclosed `{`, say blocks end with `end`, not `}`.
-
-- **Code:** `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
-  `LEX-HEREDOC-ONE-LINE`
-  - **Meaning:** a heredoc `<<~NAME` with no end line (a line with only `NAME`;
-    the span is the opener), a tab in the leading whitespace of a body line or
-    of the end line (indent with spaces; the span is the tab), or a heredoc with
-    fewer than two lines of text (write `"text\n"`). `<<NAME`, `<<-NAME`,
-    `<<~'NAME'` and `<<~name` are `LEX-UNEXPECTED-CHAR` with a help that shows
-    `<<~NAME`; `xs << x` is `PARSE-UNEXPECTED-TOKEN` with a help that shows `xs
-    = xs.push(x)`
-
-- **Code:** `LEX-INVALID-UTF8`
-  - **Meaning:** a source file (the one you run or one it imports) holds bytes
-    that are not valid UTF-8. The span is the first bad byte; save the file as
-    UTF-8
-
-- **Code:** `LEX-INVALID-NUMBER`
-  - **Meaning:** a `_` in a number literal that is not between two digits: `1_`,
-    `1__0`, `1_.5`, `1._5`. Write `1_000` or `0.000_5`; the `_` is only visual
-
-- **Code:** `PARSE-UNEXPECTED-TOKEN`
-  - **Meaning:** the parser expected something else here. A `{` after `def ...
-    -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says blocks
-    have no braces and names the form: `while cond` ... `end`. A `//` or `/*`
-    says comments start with `#`. `value.with()` and `value.with(31)` say to
-    name each field to change, as in `value.with(age: 31)`
-
-- **Code:** `PARSE-UNCLOSED-BLOCK`
-  - **Meaning:** missing `end`
-
-- **Code:** `PARSE-MISSING-BLANK-LINE`
-  - **Meaning:** no blank line between the `end` of a declaration and the next
-    one; a `##` doc block counts as part of the next declaration, so the blank
-    line goes before it
-
-- **Code:** `PARSE-DETACHED-DOC`
-  - **Meaning:** a `##` doc block that is not directly above a `def`, `struct`,
-    `enum`, field or variant: a blank line, a `#` comment, an `import` or the
-    end of the file follows it, or it stands in a function body or inside
-    brackets. Move it onto the line above what it documents, or write `#`
-
-- **Code:** `PARSE-TOP-LEVEL-STATEMENT`
-  - **Meaning:** a statement outside a function (put it in `def main() ->
-    Void`), or an extra `end` (a stray `else` or `elsif` has no matching `if`)
-
-- **Code:** `PARSE-CHAINED-COMPARISON`
-  - **Meaning:** `a < b < c`
-
-- **Code:** `PARSE-TOO-DEEP`
-  - **Meaning:** more than 1,000 levels of nesting (parentheses, brackets,
-    blocks, statements, prefix operators, type arguments), or chains of
-    operators or `.` suffixes counted as levels too (what follows the k-th link
-    of a chain is k levels deeper); split the code into functions or bindings
-
-- **Code:** `PARSE-INVALID-ASSIGNMENT-TARGET`
-  - **Meaning:** assignment to an index or field, or to a constant inside a
-    function (constants never change)
-
-- **Code:** `PARSE-CONSTANT-NAME`
-  - **Meaning:** a top-level `Name = ...` whose name is not capitals, digits and
-    `_` of two or more characters; the help gives `MAX_DEPTH` for `MaxDepth`
-
-- **Code:** `PARSE-PIPE-TARGET`
-  - **Meaning:** the right side of `\|>` is not a call written with parentheses
-    (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`); wrap the
-    pipe in parentheses and use `.` on the result. The call may follow `try` and
-    take a trailing block. `a + 1 \|> f()` is `f(a + 1)`
-
-- **Code:** `CHECK-TYPE-MISMATCH`
-  - **Meaning:** a value, operand, condition, argument, or return has the wrong
-    type; also printing or interpolating a value without `to_s` (a function,
-    task or handle). Int with Float: `n.to_f`, `x.to_i!`; String with a number:
-    `s.to_i!`, `n.to_s`; `<` on Strings: only numbers are ordered
-
-- **Code:** `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD`
-  - **Meaning:** a name, type, or field that does not exist (`continue` says
-    `next`; `Map.new` says `m: Map[String, Int] = {}`); also a field that
-    `value.with(...)` names but the struct lacks
-
-- **Code:** `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`,
-  `CHECK-ANNOTATION-ON-EXISTING`
-  - **Meaning:** duplicate declaration, shadowing, annotation on an existing
-    name; an `Fn` field named `with` (`value.with(...)` is the struct update, so
-    rename the field)
-
-- **Code:** `CHECK-ARITY`
-  - **Meaning:** wrong number of arguments; for a function with default values
-    the message gives the range (`expects 1 to 2 arguments`)
-
-- **Code:** `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`
-  - **Meaning:** a parameter without a default after one with a default (only a
-    last `Fn` parameter may stay without one); a default that is not a constant
-    (a literal, `true`, `false`, `nil`, `[]`, `{}` or an enum variant without a
-    payload): make the parameter required instead
-
-- **Code:** `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD`
-  - **Meaning:** struct construction fields
-
-- **Code:** `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`
-  - **Meaning:** an empty `[]` or `{}`, respectively, with no expected type:
-    annotate it, `m: Map[String, Int] = {}`
-
-- **Code:** `CHECK-RESULT-TYPE`
-  - **Meaning:** an error constructor without an expected Result type
-
-- **Code:** `CHECK-EXPECTED-TYPE`
-  - **Meaning:** `Channel.new(n)` with no expected type; annotate it: `ch:
-    Channel[Int] = Channel.new(8)` (see `tasks.md`)
-
-- **Code:** `CHECK-TRY-CONTEXT`
-  - **Meaning:** try in a function or block not returning Result (a block of
-    a `Lazy` method accepts any `try`: its failure ends the pipeline)
-
-- **Code:** `CHECK-MISSING-RETURN`
-  - **Meaning:** a path without `return` in a non-`Void` function; the help
-    names the missing `else`, loop or `case` arm
-
-- **Code:** `CHECK-MAIN`
-  - **Meaning:** missing `main` (a run or `compile`; `check` does not need one)
-    or a `main` with parameters or a result other than `Void`
-
-- **Code:** `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST`
-  - **Meaning:** index on a non-list/map (a String uses `s.at(i)` or
-    `s.slice(start, length)`), `for` over something that is not a list, a set or
-    a range
-
-- **Code:** `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`,
-  `CHECK-ENUM-TYPE-INFERENCE`
-  - **Meaning:** unknown enum variant, named arguments to a variant, generic
-    enum type not known from payloads or context
-
-- **Code:** `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
-  `CHECK-UNREACHABLE-CASE-ARM`
-  - **Meaning:** a pattern that does not fit the value, a `case` missing
-    variants or `_`, an arm already covered
-
-- **Code:** `CHECK-MAP-KEY-TYPE`
-  - **Meaning:** a map key that is not `Int` or `String`
-
-- **Code:** `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE`
-  - **Meaning:** a `Set` element type that is not `Int` or `String`;
-    `Set.new([])` with no expected type: annotate it, `s: Set[Int] =
-    Set.new([])`
-
-- **Code:** `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`,
-  `CHECK-IMPORT-NAME`
-  - **Meaning:** missing or unreadable import, invalid path (one with `.agc` or
-    another extension too), cycle, or an unknown or private imported name (the
-    help suggests the closest export, `did you mean "name"?`). A struct its
-    module keeps private cannot be built or updated with `.with` from another
-    module. `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME`: write `import
-    {NAME} from "path"` (`modules.md`)
-
-- **Code:** `CHECK-IMPORT-PACKAGE`
-  - **Meaning:** a package declared in `agentica.toml` is not in the package
-    cache, or a file of a package imports a `pkg/` name that its own
-    `agentica.toml` does not declare
-
-- **Code:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
-  `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`
-  - **Meaning:** `agentica.toml` or `agentica.lock` is bad, missing, or does not
-    agree with the other (stale); one name has two sources in the project and
-    its packages (conflict). The report names the file and a key path such as
-    `dependencies.sqlite.git` (`key_path` in `--json`), or a line and column
-    for a TOML syntax error. A missing or unreadable file has only its name.
-    The manifests of all locked packages in the cache are checked before any
-    file is loaded, imported or not
-
-- **Code:** `QUERY-USAGE`
-  - **Meaning:** a wrong question to `outline`, `type-at`, `symbol` or `refs`: a
-    missing or extra argument, an unknown option, `--stdin` without a file, a
-    bad `FILE:LINE:COL`, a path that cannot be read, or a folder with no `*.agc`
-    file. The file is `<arguments>` at line 1, column 1, and the exit status is
-    2 (`queries.md`)
-
-- **Code:** `QUERY-NOT-FOUND`
-  - **Meaning:** `symbol` or `refs` NAME is declared in no linked module and no
-    builtin. The help has the closest name and the skipped files. Fix the name,
-    or the file that does not link. Exit status 2
-
-- **Code:** `QUERY-AMBIGUOUS-NAME`
-  - **Meaning:** `refs` NAME is declared by more than one module. The help lists
-    each candidate as `FILE:LINE:COL`; ask again with that position. Exit status
-    2
-
-- **Code:** `QUERY-NO-EXPRESSION`
-  - **Meaning:** `type-at` or `refs` was given a position on no expression or
-    name: a blank between tokens, a comment, a keyword, past the end of a line
-    or of the file, or (for `refs`) a module alias or a path in an import line.
-    The span is the position; exit status 2. Move the position onto the
-    expression
-
-- **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
-  - **Meaning:** the `.agc` files of a package in `agc_libs/<name>/` or the
-    cache (or just fetched by `install`) are not the ones the lock hashes (an
-    edited, added or missing file), or one is a symbolic link or submodule, or
-    the `agentica.toml` of the package is not a regular file; for a vendored
-    copy run `agentica vendor` again, for the cache remove the folder and run
-    `agentica install` again; `agc_libs/` itself as a link is `PKG-SYMLINK` for
-    `vendor`
-
-- **Code:** `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`,
-  `PKG-MANIFEST-MISSING`
-  - **Meaning:** `agentica install` failed: git did not start or failed, the
-    tag or commit does not exist, a copied path is unsafe, a file is over 1 MiB
-    (16 MiB in all) or the cache cannot be written (`PKG-FETCH`, git's message
-    in the help); the tag now points to another commit than `agentica.lock` (the
-    lock is not changed); two package paths differ only in case (only case is
-    compared); or no `agentica.toml` was found. The report names
-    the file and the key path of the entry, such as `package[0].tag`
-
-- **Code:** `PKG-DEPENDENCY-EXISTS`, `PKG-DEPENDENCY-UNKNOWN`,
-  `PKG-MANIFEST-EDIT`, `PKG-WRITE`
-  - **Meaning:** `agentica add` or `update` stopped before it wrote anything
-    (except `PKG-WRITE`): the name is a dependency already (change its pin in
-    `agentica.toml`, then `update NAME`); `update NAME` names no dependency of
-    the manifest; the manifest has a layout that the one-line edit cannot handle
-    (write the line by hand); or `agentica.lock` or `agentica.toml` cannot be
-    written. The fetch errors of a new pin are the codes of `install`, at the
-    manifest key `dependencies.<name>.git` (or `.tag`, `.ref`). `agentica
-    vendor` gives `PKG-WRITE` too, at the `agc_libs/` file it cannot write
-
-- **Code:** `CHECK-IMPORT-RENAME`
-  - **Meaning:** `import {A as b}` where the new name breaks the case rule of
-    what it renames: a struct or enum gets a capitalized name, a function a
-    lowercase one, a constant a constant name (capitals and underscores)
-
-- **Code:** `CHECK-CONSTANT-EXPRESSION`
-  - **Meaning:** a constant uses a call of your own function, `&f`, a block
-    outside a builtin call, `while`, or a builtin with effects; compute it in a
-    function instead
-
-- **Code:** `CHECK-CONSTANT-TYPE`
-  - **Meaning:** a constant expression has a type that is not data (`Channel`,
-    `Task`, `Fn`, handles, `Void`)
-
-- **Code:** `CHECK-CONSTANT-CYCLE`
-  - **Meaning:** constants that read each other in a loop; the help lists `A ->
-    B -> A`
-
-- **Code:** `CHECK-DECL-ORDER`
-  - **Meaning:** a declaration out of the file order (imports, constants,
-    `struct`/`enum`/type aliases, `export def`, `def`): a type after a function,
-    a private `def` before an `export def`, an `import` after a declaration;
-    move it to its group
-
-- **Code:** `CHECK-MODULE-CONTEXT`
-  - **Meaning:** Raw import/export declarations need module resolution before
-    checking
-
-- **Code:** `CHECK-NOT-DECODABLE`
-  - **Meaning:** JSON.decode/schema target is not a struct or contains
-    unsupported field types
-
-- **Code:** `CHECK-NOT-ENCODABLE`
-  - **Meaning:** JSON.encode on a type with unsupported nested values or
-    Int-keyed maps
-
-- **Code:** `CHECK-IMMUTABLE-ASSIGNMENT`
-  - **Meaning:** assignment to a `for` variable
-
-- **Code:** `CHECK-INT-RANGE`
-  - **Meaning:** an integer literal that does not fit in `Int`
-
-- **Code:** `CHECK-PIPE-METHOD`
-  - **Meaning:** `x \|> String.trim()`: a builtin that has a method form for the
-    left value is written with `.` (`x.trim`); the help shows the method form,
-    with a piped left side in parentheses
-
-- **Code:** `CHECK-UNKNOWN-METHOD`
-  - **Meaning:** method not defined for the receiver's type, or a method call on
-    a struct, or `.with(...)` on a value that is not a struct. Common foreign
-    names get the real one: `s.chars` says `s.split("")`, `s.matches?` says
-    `contains?`, `to_string` says `to_s`
-
-- **Code:** `CHECK-LAZY-NO-STEP`
-  - **Meaning:** `File.foreach(...).each do ... end` with no step in between,
-    written as one chain;
-    write `File.each_line(path, n, ms) do |line| ... end`
-
-- **Code:** `CHECK-UNUSED-VALUE`
-  - **Meaning:** result of a builtin without effects is ignored (`xs.push(1)`
-    alone), or of a struct update (`user.with(age: 31)` alone)
-
-- **Code:** `CHECK-BLOCK-TYPE`
-  - **Meaning:** a block parameter has no type from the call; annotate it (`do
-    |x: Int|`)
-
-- **Code:** `CHECK-BLOCK-TARGET`
-  - **Meaning:** a block is passed to a function whose last parameter is not a
-    `Fn`
-
-- **Code:** `CHECK-LOOP-CONTROL`
-  - **Meaning:** `break` or `next` outside a `while`/`for` body, or inside a
-    block
-
-- **Code:** `CHECK-CAPTURED-ASSIGNMENT`
-  - **Meaning:** a block assigns to an outer variable; use a `for` loop or
-    `reduce`. For `xs.each do |w|` on a name or field the help shows the loop,
-    `for w in xs ... end`, which can assign the variable
-
-- **Code:** `CHECK-NOT-A-HANDLE`
-  - **Meaning:** `Task.spawn_owning` with an argument that is not a
-    `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`,
-    at the argument (see `tasks.md`)
-
-- **Code:** `CHECK-TYPE-ALIAS-CYCLE`
-  - **Meaning:** a type alias that expands to itself, directly or through other
-    aliases; break the cycle
-
-- **Code:** `CHECK-TOO-DEEP`
-  - **Meaning:** more than 1,000 levels of expressions and statements, or more
-    than 1,000 type references in an expanded alias; split the code or aliases
-    into smaller parts
-
-- **Code:** `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`
-  - **Meaning:** arithmetic failure
-
-- **Code:** `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`
-  - **Meaning:** list index or map key not present
-
-- **Code:** `RUNTIME-INVALID-COUNT`
-  - **Meaning:** List.repeat count outside 0..1048576, or negative
-    List.take/drop count; `Channel.new` capacity outside 1..1048576; a
-    `Task.map` `limit` outside 1..1024; a negative
-    `Int.shift_left`/`shift_right`/`shift_right_unsigned` count
-
-- **Code:** `RUNTIME-INVALID-NUMBER`
-  - **Meaning:** `String.to_int!` / `String.to_float!` on bad text,
-    `Float.to_int!` on NaN or infinity, `Float.from_bits32` outside
-    0..4294967295, a `Crypto.sha256` item outside 0..255
-
-- **Code:** `RUNTIME-INVALID-RANGE`
-  - **Meaning:** `Random.int` with `min > max`
-
-- **Code:** `RUNTIME-INVALID-CHARACTER`
-  - **Meaning:** `String.code` without exactly one character, or
-    `String.from_code` outside Unicode scalar values
-
-- **Code:** `RUNTIME-END-OF-INPUT`
-  - **Meaning:** `IO.gets!` with no input left
-
-- **Code:** `RUNTIME-UNWRAP-ERROR`
-  - **Meaning:** Result.unwrap! on an error
-
-- **Code:** `RUNTIME-JSON-ENCODE`
-  - **Meaning:** JSON.encode cannot represent a non-finite Float
-
-- **Code:** `RUNTIME-STEP-LIMIT`
-  - **Meaning:** execution step budget exhausted; the stack shows where the loop
-    runs
-
-- **Code:** `RUNTIME-STACK-OVERFLOW`
-  - **Meaning:** recursion too deep (depth 10000); the stack shows the repeating
-    function once, with its count; only `return f(...)` tail calls are free, so
-    rewrite with an accumulator or a loop
-
-- **Code:** `RUNTIME-INVALID-DURATION`
-  - **Meaning:** negative `Task.sleep` duration, negative
-    `Channel.send`/`Channel.recv` timeout, a `Task.await(task, timeout_ms)`
-    timeout of 0 or less, or a `Task.map` `timeout_ms` of 0 or less (see
-    `tasks.md`)
-
-- **Code:** `RUNTIME-TASK-CANCELLED`
-  - **Meaning:** `Task.await` on a task the VM cancelled when `R` is not a
-    `Result`, at the await (see `tasks.md`); a task can hold a cancelled child's
-    handle by receiving it over a channel, for example from a `Task.map` item
-    that timed out
-
-- **Code:** `RUNTIME-TASK-AWAIT-CYCLE`
-  - **Meaning:** `Task.await` of a task that is waiting for the caller, directly
-    or through other awaits, at the await (see `tasks.md`)
-
-- **Code:** `RUNTIME-HANDLE-NOT-OWNED`
-  - **Meaning:** `Task.spawn_owning` of a handle the calling task does not own,
-    one already handed over, or a closed one (a closed channel too), at the
-    handle argument (see `tasks.md`)
-
-- **Code:** `RUNTIME-TASK-CRASHED`
-  - **Meaning:** `Task.await` on a crashed task when `R` is not a `Result`, at
-    the await; the message is the crash text (see `tasks.md`); a BDD step or a
-    test whose task crashed unawaited
-
-- **Code:** `RUNTIME-TEST-ASSERTION`
-  - **Meaning:** a failed `Test.eq`, `Test.ok?`, `Test.error?` or `Test.assert`
-    in a test, at the assertion (see `testing.md`)
-
-- **Code:** `RUNTIME-TEST-ERROR`
-  - **Meaning:** a test block returned `error(message)`, at the `Test.test` call
-
-- **Code:** `RUNTIME-TEST-NAME`
-  - **Meaning:** an empty or repeated test name, at that `Test.test` call
-
-- **Code:** `RUNTIME-TEST-RUN`
-  - **Meaning:** `Test.run` called in a task other than `main`'s own (a test, or
-    a task you spawned); call it from `main` itself. It is also the code of a
-    call with the `agentica test` arguments but no parent channel. Under
-    `agentica test` it also names a test file whose `main` returns without
-    calling `Test.run` (a `*_test.agc` helper: rename it)
-
-- **Code:** `RUNTIME-TEST-PENDING-TASKS`
-  - **Meaning:** a test returned while tasks it spawned were still running;
-    await them
-
-- **Code:** `RUNTIME-TEST-TIMEOUT`
-  - **Meaning:** under `agentica test`, a test ran longer than 30 seconds; the
-    rest of its file is not executed
-
-- **Code:** `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`,
-  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`, `PARSE-EXTERN-FREE`
-  - **Meaning:** an `extern` signature with a type that is not a C type or a
-    resource declared above in the block (the span is the type), a name with
-    `?` or `!`, a parameter with a default, more than 64 parameters, a library
-    that is not a name without `/` or an absolute path, or a `def` of the
-    block's `free:` function; see `native.md`
-
-- **Code:** `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`,
-  `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`
-  - **Meaning:** the library or function of an extern call was not found (at
-    the extern function); a call took a closed resource; or, at load with exit
-    2, `--deny-native` refused a program with an extern function or a
-    `Native.*` call, or the system has no native calls yet
-
-- **Code:** `LOWER-UNSUPPORTED`
-  - **Meaning:** the VM cannot run this form; exit 1 before anything runs. Every
-    checked program runs on the VM today, so seeing it is an interpreter bug to
-    report
+Each line is a function and the place it runs (the error for the first, the
+call it waits on for the others); a block is `block`, and a builtin that runs
+one (`xs.map`) has no line. `(after a tail call)` marks a frame whose callers a
+tail call removed; `walk at tree.agc:9:12 (9998 times)` is one line for a
+recursion. The 15 innermost and 5 outermost lines show, with `... 312 frames
+not shown ...` between. A task ends with `task spawned at file:line:column`.
+A function name or file path over 256 bytes is cut there and ends with `...`.
+Runtime traces name files as you can open them from the working directory (a
+standard module as `std/NAME.agc`); compile-time errors show the first file as
+typed and imports by absolute path. `--json` adds `stack` (objects with
+`column`, `file`, `function`, `line`, and `repeat` or `tail`), `stack_omitted`
+and, for a task, `spawned_at`; `RUNTIME-STEP-LIMIT`, `RUNTIME-STACK-OVERFLOW`
+and a task's crash line (`"task":true`) carry it too.
+
+- `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`,
+  `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`: bad character, string or
+  bracket. A `;`, a `'` or backtick, a `}` with no `{`, or an unclosed `{` gets
+  a help naming the Agentica form (newline, double quotes, `end`).
+- `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE`: a
+  heredoc with no end line (the span is the opener), a tab in the leading
+  whitespace of a body or end line (the span is the tab), or fewer than two text
+  lines. A malformed opener (`<<NAME`, `<<-NAME`, `<<~'NAME'`, `<<~name`) is
+  `LEX-UNEXPECTED-CHAR`; `xs << x` is `PARSE-UNEXPECTED-TOKEN`.
+- `LEX-INVALID-UTF8`: a source file (the one you run or an import) holds bytes
+  that are not UTF-8; the span is the first bad byte.
+- `LEX-INVALID-NUMBER`: a `_` in a number that is not between two digits (`1_`,
+  `1__0`, `1_.5`, `1._5`).
+- `PARSE-UNEXPECTED-TOKEN`: the parser expected something else. A `{` after
+  `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says
+  blocks have no braces; `//` or `/*` says comments start with `#`;
+  `value.with()` and `value.with(31)` say to name each field.
+- `PARSE-UNCLOSED-BLOCK`: missing `end`.
+- `PARSE-MISSING-BLANK-LINE`: no blank line between the `end` of a declaration
+  and the next one (a `##` doc block belongs to the next declaration: the blank
+  line goes before it).
+- `PARSE-DETACHED-DOC`: a `##` block not directly above a `def`, `struct`,
+  `enum`, field or variant (a blank line, a `#` comment, an `import` or the end
+  of the file follows it, or it stands in a function body or inside brackets).
+- `PARSE-TOP-LEVEL-STATEMENT`: a statement outside a function, or an extra `end`
+  (a stray `else` or `elsif` has no `if`).
+- `PARSE-CHAINED-COMPARISON`: `a < b < c`.
+- `PARSE-TOO-DEEP`: more than 1,000 levels of nesting (parentheses, brackets,
+  blocks, statements, prefix operators, type arguments); chains of operators or
+  `.` suffixes count as levels too.
+- `PARSE-INVALID-ASSIGNMENT-TARGET`: assignment to an index or field, or to a
+  constant inside a function.
+- `PARSE-CONSTANT-NAME`: a top-level `Name = ...` whose name is not capitals,
+  digits and `_` of two or more characters.
+- `PARSE-PIPE-TARGET`: the right side of `|>` is not a call written with
+  parentheses (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`).
+  The call may follow `try` and take a trailing block; `a + 1 |> f()` is
+  `f(a + 1)`.
+- `CHECK-TYPE-MISMATCH`: a value, operand, condition, argument or return has the
+  wrong type; also printing or interpolating a function, task or handle. Int
+  with Float needs `n.to_f` or `x.to_i!`; String with a number `s.to_i!` or
+  `n.to_s`; `<` orders only numbers.
+- `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD`: a name,
+  type or field that does not exist (`continue` says `next`, `Map.new` says to
+  annotate `{}`); also a field `value.with(...)` names but the struct lacks.
+- `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`:
+  duplicate declaration, shadowing, an annotation on an existing name; an `Fn`
+  field named `with` (`value.with(...)` is the struct update).
+- `CHECK-ARITY`: wrong number of arguments (with defaults, `expects 1 to 2
+  arguments`).
+- `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`: a parameter without a default
+  after one with a default (only a last `Fn` parameter may); a default that is
+  not a constant (a literal, `true`, `false`, `nil`, `[]`, `{}` or a
+  payload-less enum variant).
+- `CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD`: struct construction fields.
+- `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`: an empty `[]` or `{}` with no
+  expected type.
+- `CHECK-RESULT-TYPE`: an `error(...)` without an expected Result type.
+- `CHECK-EXPECTED-TYPE`: `Channel.new(n)` with no expected type.
+- `CHECK-TRY-CONTEXT`: `try` in a function or block not returning a Result (a
+  `Lazy` method block accepts any `try`: its failure ends the pipeline).
+- `CHECK-MISSING-RETURN`: a path without `return` in a non-`Void` function.
+- `CHECK-MAIN`: no `main` (for a run or `compile`; `check` needs none), or a
+  `main` with parameters or a result other than `Void`.
+- `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST`: an index on a non-list/map (a
+  String uses `s.at(i)` or `s.slice(start, length)`); `for` over something that
+  is not a list, set or range.
+- `CHECK-UNKNOWN-VARIANT`, `CHECK-ENUM-POSITIONAL-ARGS`,
+  `CHECK-ENUM-TYPE-INFERENCE`: unknown enum variant; named arguments to a
+  variant; a generic enum type not known from payloads or context.
+- `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
+  `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
+  missing variants or `_`; an arm already covered.
+- `CHECK-MAP-KEY-TYPE`: a map key that is not `Int` or `String`.
+- `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE`: a `Set` element type that is
+  not `Int` or `String`; `Set.new([])` with no expected type.
+- `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`,
+  `CHECK-IMPORT-NAME`: a missing or unreadable import; an invalid path (with
+  `.agc` or another extension too); a cycle; an unknown or private imported
+  name. A private struct cannot be built or updated with `.with` from another
+  module. `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME` (`modules.md`).
+- `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in the
+  package cache, or a package file imports a `pkg/` name its own `agentica.toml`
+  does not declare.
+- `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
+  `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`: `agentica.toml` or `agentica.lock` is
+  bad, missing, or disagrees with the other (stale); one name has two sources in
+  the project and its packages (conflict). The report names the file and a key
+  path such as `dependencies.sqlite.git` (`key_path` in `--json`), or a line and
+  column for a TOML syntax error; a missing or unreadable file has only its
+  name. The manifests of all locked packages in the cache are checked before any
+  file loads, imported or not.
+- `QUERY-USAGE`: a wrong question to `outline`, `type-at`, `symbol` or `refs`: a
+  missing or extra argument, an unknown option, `--stdin` without a file, a bad
+  `FILE:LINE:COL`, an unreadable path, or a folder with no `*.agc` file. The
+  file is `<arguments>` at line 1, column 1; exit 2.
+- `QUERY-NOT-FOUND`: `symbol` or `refs` NAME is declared in no linked module and
+  no builtin. The help has the closest name and the skipped files. Exit 2.
+- `QUERY-AMBIGUOUS-NAME`: `refs` NAME is declared by more than one module; the
+  help lists each candidate as `FILE:LINE:COL` to ask again with. Exit 2.
+- `QUERY-NO-EXPRESSION`: `type-at` or `refs` was given a position on no
+  expression or name: a blank between tokens, a comment, a keyword, past the end
+  of a line or file, or (for `refs`) a module alias or path in an import line.
+  The span is the position; exit 2.
+- `PKG-HASH-MISMATCH`, `PKG-SYMLINK`: the `.agc` files of a package in
+  `agc_libs/<name>/` or the cache (or just fetched by `install`) are not the
+  ones the lock hashes (edited, added or missing), or one is a symbolic link or
+  submodule, or the package's `agentica.toml` is not a regular file. Run
+  `agentica vendor` again for a vendored copy; remove the folder and run
+  `agentica install` for the cache. `agc_libs/` itself as a link is
+  `PKG-SYMLINK` for `vendor`.
+- `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
+  `agentica install` failed: git did not start or failed, the tag or commit does
+  not exist, a copied path is unsafe, a file is over 1 MiB (16 MiB in all) or
+  the cache cannot be written (`PKG-FETCH`, git's message in the help); the tag
+  now points to another commit than `agentica.lock` (the lock is not changed);
+  two package paths differ only in case; no `agentica.toml` was found. The
+  report names the file and the key path of the entry, such as `package[0].tag`.
+- `PKG-DEPENDENCY-EXISTS`, `PKG-DEPENDENCY-UNKNOWN`, `PKG-MANIFEST-EDIT`,
+  `PKG-WRITE`: `agentica add` or `update` stopped before it wrote anything
+  (except `PKG-WRITE`): the name is a dependency already (change its pin in
+  `agentica.toml`, then `update NAME`); `update NAME` names no dependency of the
+  manifest; the manifest has a layout the one-line edit cannot handle (write the
+  line by hand); or `agentica.lock` or `agentica.toml` cannot be written. Fetch
+  errors of a new pin are the codes of `install`, at `dependencies.<name>.git`
+  (or `.tag`, `.ref`). `agentica vendor` gives `PKG-WRITE` too, at the
+  `agc_libs/` file it cannot write.
+- `CHECK-IMPORT-RENAME`: `import {A as b}` where the new name breaks the case
+  rule of what it renames (struct or enum capitalized, function lowercase,
+  constant a constant name).
+- `CHECK-CONSTANT-EXPRESSION`: a constant uses a call of your own function,
+  `&f`, a block outside a builtin call, `while`, or a builtin with effects.
+- `CHECK-CONSTANT-TYPE`: a constant expression whose type is not data
+  (`Channel`, `Task`, `Fn`, handles, `Void`).
+- `CHECK-CONSTANT-CYCLE`: constants that read each other in a loop.
+- `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
+  `struct`/`enum`/aliases, `export def`, `def`).
+- `CHECK-MODULE-CONTEXT`: raw import/export declarations need module resolution
+  before checking.
+- `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema` target that is not a struct or
+  has unsupported field types.
+- `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
+  or Int-keyed maps.
+- `CHECK-IMMUTABLE-ASSIGNMENT`: assignment to a `for` variable.
+- `CHECK-INT-RANGE`: an integer literal that does not fit in `Int`.
+- `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
+  the left value is written with `.` (`x.upcase`).
+- `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method
+  call on a struct, or `.with(...)` on a non-struct. Common foreign names get
+  the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
+- `CHECK-LAZY-NO-STEP`: `File.foreach(...).each do ... end` with no step between
+  them (use `File.each_line`).
+- `CHECK-UNUSED-VALUE`: the result of a builtin without effects is ignored
+  (`xs.push(1)` alone), or of a struct update (`user.with(age: 31)` alone).
+- `CHECK-BLOCK-TYPE`: a block parameter has no type from the call (`do |x:
+  Int|`).
+- `CHECK-BLOCK-TARGET`: a block passed to a function whose last parameter is not
+  a `Fn`.
+- `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
+  inside a block.
+- `CHECK-CAPTURED-ASSIGNMENT`: a block assigns to an outer variable (use a `for`
+  loop or `reduce`; for `xs.each do |w|` the help shows the loop).
+- `CHECK-NOT-A-HANDLE`: `Task.spawn_owning` with an argument that is not a
+  `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`.
+- `CHECK-TYPE-ALIAS-CYCLE`: a type alias that expands to itself.
+- `CHECK-TOO-DEEP`: more than 1,000 levels of expressions and statements, or
+  more than 1,000 type references in an expanded alias.
+- `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`: arithmetic failure.
+- `RUNTIME-INDEX-OUT-OF-RANGE`, `RUNTIME-KEY-NOT-FOUND`: a list index or map key
+  not present.
+- `RUNTIME-INVALID-COUNT`: `List.repeat` count outside 0..1048576, or a negative
+  `List.take`/`drop` count; `Channel.new` capacity outside 1..1048576; a
+  `Task.map` `limit` outside 1..1024; a negative
+  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count.
+- `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
+  `x.to_i!` on a Float that is NaN or infinity, `Float.from_bits32` outside
+  0..4294967295, a `Crypto.sha256` item outside 0..255.
+- `RUNTIME-INVALID-RANGE`: `Random.int` with `min > max`.
+- `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or
+  `String.from_code` outside Unicode scalar values.
+- `RUNTIME-END-OF-INPUT`: `IO.gets!` with no input left.
+- `RUNTIME-UNWRAP-ERROR`: `r.unwrap!` on an error.
+- `RUNTIME-JSON-ENCODE`: `JSON.encode` of a non-finite Float.
+- `RUNTIME-STEP-LIMIT`: the execution step budget is exhausted; the stack shows
+  where the loop runs.
+- `RUNTIME-STACK-OVERFLOW`: recursion deeper than 10000; the stack shows the
+  repeating function once, with its count. Only `return f(...)` tail calls are
+  free.
+- `RUNTIME-INVALID-DURATION`: a negative `Task.sleep` duration, a negative
+  `Channel.send`/`recv` timeout, a `Task.await(task, timeout_ms)` or `Task.map`
+  `timeout_ms` of 0 or less.
+- `RUNTIME-TASK-CANCELLED`: `Task.await` on a task the VM cancelled, when `R` is
+  not a `Result`, at the await. A task can hold a cancelled child's handle by
+  receiving it over a channel (for example from a `Task.map` item that timed
+  out).
+- `RUNTIME-TASK-AWAIT-CYCLE`: `Task.await` of a task that is waiting for the
+  caller, directly or through other awaits, at the await.
+- `RUNTIME-HANDLE-NOT-OWNED`: `Task.spawn_owning` of a handle the calling task
+  does not own, one already handed over, or a closed one (a closed channel too),
+  at the handle argument.
+- `RUNTIME-TASK-CRASHED`: `Task.await` on a crashed task when `R` is not a
+  `Result`, at the await; the message is the crash text. Also a BDD step or test
+  whose task crashed unawaited.
+- `RUNTIME-TEST-ASSERTION`: a failed `Test.eq`, `Test.ok?`, `Test.error?` or
+  `Test.assert` in a test, at the assertion.
+- `RUNTIME-TEST-ERROR`: a test block returned `error(message)`, at the
+  `Test.test` call.
+- `RUNTIME-TEST-NAME`: an empty or repeated test name, at that `Test.test` call.
+- `RUNTIME-TEST-RUN`: `Test.run` called in a task other than `main`'s own (a
+  test, or a task you spawned). Also a call with the `agentica test` arguments
+  but no parent channel, and, under `agentica test`, a test file whose `main`
+  returns without calling `Test.run` (a `*_test.agc` helper: rename it).
+- `RUNTIME-TEST-PENDING-TASKS`: a test returned while tasks it spawned were
+  still running.
+- `RUNTIME-TEST-TIMEOUT`: under `agentica test`, a test ran longer than 30
+  seconds; the rest of its file is not executed.
+- `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`,
+  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`, `PARSE-EXTERN-FREE`: an
+  `extern` signature with a type that is not a C type or a resource declared
+  above in the block (the span is the type), a name with `?` or `!`, a
+  parameter with a default, more than 64 parameters, a library that is not a
+  name without `/` or an absolute path, or a `def` of the block's `free:`
+  function (`native.md`).
+- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-DENIED`,
+  `RUNTIME-NATIVE-UNSUPPORTED`: the library or function of an extern call was
+  not found (at the extern function); a call took a closed resource; or, at
+  load with exit 2, `--deny-native` refused a program with an extern function
+  or a `Native.*` call, or the system has no native calls.
+- `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything
+  runs); an interpreter bug to report.
 
 BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and
-`RUNTIME-BDD-*` codes; see `bdd.md`.
+`RUNTIME-BDD-*` codes: `bdd.md`.
