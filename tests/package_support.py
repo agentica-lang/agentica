@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, known_issue, run, tool, vm_environment
+from tests.agentica_test import WINDOWS, cli, run, tool, vm_environment
 
 COMMIT = "a" * 40
 
@@ -313,8 +313,8 @@ def no_git_path(base):
 
 
 def remove_tree(path):
-    """shutil.rmtree. On Windows it also removes read-only files: git writes its objects read-only, the package cache
-    keeps them after a fetch (issue 598), and Windows will not delete a read-only file."""
+    """shutil.rmtree. On Windows it also removes read-only files: git writes its objects read-only, and Windows will not
+    delete a read-only file."""
     if os.name != "nt":
         shutil.rmtree(path)
         return
@@ -323,12 +323,6 @@ def remove_tree(path):
         os.chmod(name, stat.S_IWRITE)
         function(name)
     shutil.rmtree(path, onexc=make_writable)
-
-
-# The fetch leaves a hidden .tmp-* folder in the package cache on Windows (issue 598): the cases that assert none is left.
-LEAKS_THE_CACHE = known_issue(
-    WINDOWS, 598, "the package cache keeps a .tmp-* folder after a fetch, because git writes its objects read-only and "
-                  "Path.remove refuses them")
 
 
 def cached_files(folder):
