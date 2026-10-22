@@ -4,6 +4,7 @@ Each case builds a project folder with its deps/ folder by hand (no fetching), r
 the root file and asserts the code and where it is: the span of the import, or the file and key path of a manifest or
 lock error. Message and help text are not asserted (AGENTS.md).
 """
+import contextlib
 import json
 import os
 import shutil
@@ -11,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, run, vm_environment
+from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
 from tests.package_support import COMMIT, Workspace, dependency, package_hash
 
 # No AGENTICA_PATH roots and no user data folder, so only what a case builds resolves; deps/ is each case's own.
@@ -360,7 +361,6 @@ def test_a_folder_of_deps_that_does_not_match_the_lock_is_refused_when_the_packa
     assert check(ws, "plain.agc") is None
 
 
-@pytest.mark.skipif(not POSIX_PYTHON, reason="host-only: a symbolic link needs no privilege on POSIX only")
 def test_a_symbolic_link_among_the_agc_files_of_a_package_is_refused(ws):
     folder = ws.deps / "greeter"
     (folder / "linked.agc").symlink_to(folder / "greet.agc")
@@ -503,7 +503,6 @@ def add_alone(ws, files=None, **extra):
     return ws.deps / "alone"
 
 
-@host_only(WINDOWS, "a symbolic link needs a privilege that Windows does not give by default")
 def test_a_manifest_that_is_a_symbolic_link_is_refused_and_never_read(ws, tmp_path):
     folder = add_alone(ws)
     outside = tmp_path / "outside.toml"
@@ -522,7 +521,6 @@ def test_a_manifest_that_is_not_a_regular_file_is_refused(ws):
     assert_at_import(check(ws, "use.agc"), "PKG-SYMLINK")
 
 
-@host_only(WINDOWS, "a symbolic link needs a privilege that Windows does not give by default")
 def test_a_symbolic_link_to_a_folder_that_leaves_the_package_is_not_importable(ws, tmp_path):
     folder = add_alone(ws)
     outside = tmp_path / "outside"
@@ -550,7 +548,7 @@ def test_the_agc_extension_and_agc_libs_are_compared_without_regard_to_case(ws):
     assert_at_import(check(ws), "CHECK-IMPORT-PATH")
 
 
-@host_only(WINDOWS, "a folder made unreadable with chmod 000 does not exist on Windows")
+@host_only(WINDOWS, "a folder or file made unreadable with chmod 000 has no equivalent on Windows, which has no mode bits")
 @pytest.mark.skipif(ROOT_USER, reason="root can read any folder")
 def test_a_package_folder_or_file_that_cannot_be_read_is_an_import_error_not_a_crash(ws, request):
     folder = add_alone(ws, {"one.agc": ONE, "inner/two.agc": ONE})
@@ -654,13 +652,32 @@ def test_a_manifest_or_lock_error_with_a_key_shows_the_key_in_the_plain_and_ai_f
     assert [line for line in ai if line.startswith("  at: ")] == ["  at: " + head]
 
 
-@host_only(WINDOWS, "a file made unreadable with chmod 000 does not exist on Windows")
+@contextlib.contextmanager
+def unreadable(path):
+    """While the block runs, `path` cannot be read. POSIX: mode 000. Windows has no mode to take, but a file that a
+    process has locked (an editor, for instance) cannot be read."""
+    if os.name != "nt":
+        path.chmod(0o000)
+        try:
+            yield
+        finally:
+            path.chmod(0o600)
+        return
+    import msvcrt
+    size = path.stat().st_size
+    with open(path, "r+b") as handle:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, size)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, size)
+
+
 @pytest.mark.skipif(ROOT_USER, reason="root can read any file")
-def test_a_manifest_or_lock_that_cannot_be_read_is_a_failure_of_the_whole_file(ws, request):
+def test_a_manifest_or_lock_that_cannot_be_read_is_a_failure_of_the_whole_file(ws):
     for name, code in [("agentica.toml", "PKG-MANIFEST-INVALID"), ("agentica.lock", "PKG-LOCK-INVALID")]:
         path = ws.project / name
-        path.chmod(0o000)
-        request.addfinalizer(lambda path=path: path.chmod(0o600))
-        assert_at_key(check(ws), code, path, "")
-        assert ":1:1" not in run_text(ws)
-        path.chmod(0o600)
+        with unreadable(path):
+            assert_at_key(check(ws), code, path, "")
+            assert ":1:1" not in run_text(ws)

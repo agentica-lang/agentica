@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 from pathlib import Path
 
@@ -281,6 +282,27 @@ def assert_at_key(problem, code, file, key_path):
     assert problem["code"] == code
     assert Path(problem["file"]) == Path(file)
     assert problem.get("key_path", "") == key_path
+
+
+def no_git_path(base):
+    """A PATH on which `git` cannot be found. On POSIX it is an empty folder. A Windows binary may load its DLLs through
+    PATH (a build that links OpenSSL dynamically), so there it is the PATH of the process without the folders that
+    hold git."""
+    if os.name != "nt":
+        empty = Path(base) / "no-git"
+        empty.mkdir(exist_ok=True)
+        return str(empty)
+    folders = os.environ.get("PATH", "").split(os.pathsep)
+    return os.pathsep.join(folder for folder in folders if folder and shutil.which("git", path=folder) is None)
+
+
+def remove_tree(path):
+    """shutil.rmtree that also removes read-only files: git writes its objects read-only, and Windows will not delete a
+    read-only file."""
+    def make_writable(function, name, error):
+        os.chmod(name, stat.S_IWRITE)
+        function(name)
+    shutil.rmtree(path, onexc=make_writable)
 
 
 def cached_files(folder):
