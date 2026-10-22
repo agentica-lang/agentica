@@ -166,6 +166,7 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
     Ast.Decl.Struct(node) -> return [node.name]
     Ast.Decl.Enum(node) -> return [node.name]
     Ast.Decl.TypeAlias(node) -> return [node.name]
+    Ast.Decl.Resource(node) -> return [node.name]
     Ast.Decl.Constant(node) -> return [node.name]
     Ast.Decl.Import(_) -> return []
     Ast.Decl.Export(_) -> return []
@@ -197,6 +198,7 @@ def declaration_sites(scan: Scan, declaration: Ast.Decl) -> List[Site]
     Ast.Decl.TypeAlias(node) ->
       head = defined(scan, named(node.name), node.name_span)
       return head.concat(type_sites(scan, node.target, node.type_parameters))
+    Ast.Decl.Resource(node) -> return defined(scan, named(node.name), node.name_span)
     Ast.Decl.Constant(node) ->
       head = defined(scan, named(node.name), node.name_span).concat(optional_type_sites(scan, node.type, []))
       return head.concat(walk(scan, [Walk.Node.Expr(node.value)]))
@@ -444,12 +446,19 @@ def type_sites(scan: Scan, type: Ast.TypeRef, parameters: List[String]) -> List[
   while at < work.size
     ref = work[at]
     at += 1
-    if ref.args.size > 0 or !parameters.any? do |parameter: String| parameter == ref.name end
+    written = ref.args.size > 0 or !parameters.any? do |parameter: String| parameter == ref.name end
+    if written and !made?(ref)
       out = out.concat(type_name_sites(scan, ref.name, ref.span.start, "type"))
     end
     work = work.concat(ref.args)
   end
   return out
+end
+
+# A type the parser made around a written one, with its span (the Result of an extern function that returns a
+# resource): it is not written, so the name there is its argument's.
+def made?(ref: Ast.TypeRef) -> Bool
+  return ref.args.any? do |arg: Ast.TypeRef| arg.span.start.offset == ref.span.start.offset end
 end
 
 # The position `count` characters further on the same line.

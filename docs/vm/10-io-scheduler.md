@@ -289,7 +289,10 @@ section says how the scheduler and the loop keep them.
   1. kill the children and drive the loop until libuv's exit callbacks have
      reaped them (10.4, Close; at most about 2 seconds);
   2. one non-blocking TLS `close_notify` on each TLS session that finished its
-     handshake: TCP sockets (10.3) and `HttpClient` connections (10.7.1);
+     handshake: TCP sockets (10.3) and `HttpClient` connections (10.7.1). Each
+     TCP socket and listener still open is then closed the way a close from a
+     task closes it, so the peer reads the end of input: Windows resets a
+     socket left to the exit while a read is pending (#489);
   3. flush the blocking stdout and stderr (`fflush`, retried on `EINTR`), then
      queue the diagnostic of a failed run as a kept notice (10.2.2), so the wait
      below covers it. Close every open file, and wait for their flush jobs and

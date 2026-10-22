@@ -440,7 +440,12 @@ static void shut(net *n, const char *why) {
   }
 }
 
-static void say_goodbye(void *native) { goodbye(native); }
+/* The resource's goodbye at the end of the run (agc_io_goodbye, on the one thread left): the close that a close from
+   any task makes, close_notify first, so the socket is closed before the exit. Leaving it to the OS is not enough:
+   Windows resets a socket that still has a read pending when the process ends, and the peer got WSAECONNRESET
+   instead of the end of input (#489). The registry keeps its count; its release finds the net closed and only gives
+   the count back. */
+static void say_goodbye(void *native) { shut(native, "exit"); }
 
 /* The resource gave its count back: the close and the count, on the I/O thread. */
 static void release_step(void *data) {

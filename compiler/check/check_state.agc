@@ -69,6 +69,7 @@ export struct Cx
   structs: Map[String, List[Model.Named]]
   enums: Map[String, Model.EnumDef]
   aliases: Map[String, Ast.TypeAliasDecl]
+  resources: Set[String]
   functions: Map[String, Signature]
   constants: Map[String, Types.Type]
   type_params: List[String]

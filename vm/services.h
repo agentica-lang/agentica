@@ -185,7 +185,7 @@ extern const size_t agc_test_builtin_count;
 extern const agc_builtin agc_ffi_builtins[];
 extern const size_t agc_ffi_builtin_count;
 /* Whether a run may start PROGRAM: NULL, or the code of the refusal with its message and span, when the program
-   imports a native builtin (Native.call for its extern functions, or a Native.wait_*) and this build cannot call
+   imports a native builtin (Native.call for its extern functions, or another Native.*) and this build cannot call
    native code or DENY (--deny-native) refuses it. */
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span);
 extern const agc_builtin agc_front_end_builtins[];

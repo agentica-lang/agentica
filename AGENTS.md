@@ -172,9 +172,9 @@ phase 13).
   page and the programming skill together. Keep
   `.agents/skills/agentica-programming/SKILL.md` as short as possible: a table
   of references with a one-line summary each, plus only what nearly every task
-  needs. Core rules go in `references/language.md`; library detail in its
-  `references/<area>.md` plus its row in the table. The skill is self-contained
-  and does not read the grammar.
+  needs. Core language rules go in the `references/language-*.md` files; library
+  detail goes in its `references/<area>.md` plus its row in the table. The skill
+  is self-contained and does not read the grammar.
 - A user-visible change adds an entry under `## [Unreleased]` in
   `CHANGELOG.md`: one short line per change, for users (details belong in the
   PR and docs); mark a breaking change `**Breaking:**`.

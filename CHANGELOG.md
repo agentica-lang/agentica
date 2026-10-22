@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   compute pool while the task waits and other tasks run.
 - `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable` park a
   task until a descriptor of native code can be read or written.
+- `extern` blocks take `C.Pointer`, `C.Bytes` and `resource Name, free: fn`,
+  a C pointer that `Native.close` or the end of the owning task frees once.
 - `extern` blocks call native libraries on Windows x64 too; `Native.wait_*`
   returns an error there for now.
 - `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
@@ -33,29 +35,29 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   flag.
 - `agentica test` takes the `--deny-*` flags and `--sandbox`, for the test
   files, the step programs and the programs under test.
-- `agentica install` fills the package cache from `agentica.lock` with the
-  system `git`, checks the commit and the hash, and never changes the lock.
+- `agentica install` fetches the packages of `agentica.lock` with the system
+  `git` into a download cache, checks the commit and the hash, writes each
+  package into `deps/<name>/` beside `agentica.toml`, and never changes the
+  lock.
   **Breaking:** `install` is a command now, so a script named `install` runs as
   `agentica ./install`.
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`) adds a dependency to
   `agentica.toml` (one new line, comments stay) and writes `agentica.lock`;
-  `agentica update [NAME]` takes the tags again and rewrites the lock.
+  `agentica update [NAME]` takes the tags again and rewrites the lock. Both
+  refresh `deps/` and remove the folder of a package the lock dropped.
   **Breaking:** `add` and `update` are commands now, so scripts with those
   names run as `agentica ./add` and `agentica ./update`.
 - `agentica FILE.agc` and `agentica test` keep the compiled program in
   `_build/bytecode/` in the project (or beside the source) and skip the front
   end while the sources are the same; `--no-cache` turns it off and
   `AGENTICA_BUILD_DIR` replaces `_build/`.
-- `agentica vendor` copies the locked packages into `agc_libs/<name>/`, and a
-  build reads that copy before the cache, checking its hash against the lock.
-  **Breaking:** `vendor` is a command now, so a script named `vendor` runs as
-  `agentica ./vendor`; `vendor` replaces whatever `agc_libs/<name>/` held for a
-  locked package; a folder `agc_libs/<name>/` with the name of a declared
-  dependency is read as its vendored copy, so it must be the locked files; and
-  the `pkg/` library search skips `agc_libs/<name>/` for a locked package the
-  importing manifest did not declare.
+- A build reads a package only from `deps/<name>/` beside `agentica.toml`,
+  checking its hash against the lock; a declared package missing there is
+  `CHECK-IMPORT-PACKAGE` and the help says to run `agentica install`. The tool
+  writes no `.gitignore` in `deps/`: commit it or ignore it. `agc_libs/` stays
+  for local libraries. There is no `agentica vendor`: `deps/` is the local copy.
 - A git dependency takes `subdir`, so one repository can hold several packages
-  in folders: the lock keeps it, the hash, the cache and `agc_libs/` cover only
+  in folders: the lock keeps it, the hash, the cache and `deps/` cover only
   that folder, and `agentica add NAME URL --tag TAG --subdir DIR` writes it.
 - `agentica help NAME` answers a name from Ruby, Python or JS (`strip`,
   `String.to_i`, `value!`) with the builtin it stands for, and gives
@@ -80,6 +82,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `--allow-run` is gone: programs may start processes by
   default.
+
+### Fixed
+
+- On Windows, open TCP and TLS sockets are closed at the end of a run (for
+  example `System.exit`) instead of reset, so the peer reads the end of input.
 
 ## [0.8.1] - 2026-10-22
 

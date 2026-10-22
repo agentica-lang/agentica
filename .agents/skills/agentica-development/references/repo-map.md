@@ -12,7 +12,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   app/  # the command line, the pipeline and the replies
     pipeline.agc  # build, compile: lower and write after analysis/front.agc has linked and checked; shared by the CLI and the BDD driver
     cli.agc  # run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
-    cli_install.agc cli_add.agc cli_vendor.agc cli_project.agc  # `install` (§45b): the lock's packages into the cache through io/package_fetch.agc, never writes the lock; `add` and `update` (§45c): resolve, write agentica.lock (and one line of agentica.toml for `add`); `vendor` (§45d): install, then the cache into agc_libs/<name>/ through io/package_vendor.agc; what the commands share
+    cli_install.agc cli_add.agc cli_project.agc  # `install` (§45b): the lock's packages into the cache through io/package_fetch.agc, then into deps/<name>/ through io/package_deps.agc, never writes the lock; `add` and `update` (§45c): resolve, write agentica.lock (and one line of agentica.toml for `add`), then refresh deps/; what the commands share
     cli_options.agc cli_help.agc cli_doc.agc cli_query.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; doc (prints docs/'s model); the query commands (outline: prints query/'s model); the fixed texts; what a command answers (Reply, Answer); Launch
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
   analysis/  # the semantic queries, once (§39, `std/analysis`): the CLI and the library call it
@@ -23,7 +23,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     cache.agc session.agc  # the checked roots and parsed modules of a Session; the Session of stdlib/analysis.agc
   io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
     host.agc  # workspace_with(std_source): the real Workspace over the std/ reader it is given; workspace(): for `--stdlib` runs; process_env(): the Env of this process
-    package_vendor.agc  # put(): one locked package from its cache folder into agc_libs/<name>/ (staged in a hidden folder, hashed, swapped in by renames; never through a link)
+    package_deps.agc  # sync(): the locked packages into deps/<name>/ and the dropped ones out; put(): one package from its cache folder (staged in a hidden folder, hashed, swapped in by renames; never through a link)
     git_process.agc package_fetch.agc package_resolve.agc  # the system `git` as a process; fill(): one locked package into the cache (depth-1 fetch, ls-tree and cat-file, hash check, rename into place); resolve(): a pin that is not locked yet, commit and hash learnt from the fetch; the closure of lock entries for `add` and `update`
     bytecode_cache.agc  # plan/lookup/store: `_build/bytecode/` in the project or beside the root (AGENTICA_BUILD_DIR replaces `_build/`), one entry per root: a head, a text (key, program digest, `source SHA PATH` lines, `absent`/`present` probes of the resolver), the .agcb bytes; `_build/`, `bytecode/` and the entry must be private (mkdir_private, create_private, lstat checks); used by app/cli.agc (run) and bdd/bdd_compile.agc (test files), through app/pipeline.agc `build_cached`
     random_name.agc  # hex(): a random name (16 bytes of /dev/urandom; the clock and pid on Windows); hex_of(): bytes as hex
@@ -47,7 +47,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     linker.agc      # link_file: Linking.Done(Linked) | Failed(Failure); program(): the flat Program for the checker
     link_env.agc    # Env and Settings (with the Workspace)
     link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --xdg-cache-home=, --home=, --local-app-data=, --ids)
-  packages/  # §45: the manifest, the lock and the package cache (core: no I/O, only the Workspace)
+  packages/  # §45: the manifest, the lock, the download cache and the deps/ imports (core: no I/O, only the Workspace)
     project.agc manifest.agc lock.agc  # the nearest agentica.toml and its lock checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path
     manifest_edit.agc  # §45c: the one line `add` puts in the text of agentica.toml (the lock writer is `Lock.encode`)
     package_tree.agc  # the files a fetch copies, chosen from `git ls-tree -r -z -l` (PKG-SYMLINK, PKG-PATH-COLLISION; text only, no I/O)
@@ -91,7 +91,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   agentica.c      # the binary's main: `run` (the VM with its flags), else the front end in a first runtime, retired at the hand-off, then the program in a second
   embedded.h      # the symbols of the generated embedded.s: the front end, the BDD runner and step program, and the std/ sources (references/vm-build.md)
   tools/          # check-layers.sh and its self-test, gen-embedded.sh (references/vm-build.md)
-  ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, Native.wait_*, the refusal at load, libffi on Linux x86_64 and Windows x64 (references/vm-core.md)
+  ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, resources, Native.wait_*, the refusal at load, libffi on Linux x86_64 and Windows x64 (references/vm-core.md)
   compute.c       # the compute pool of `compute def` calls: one thread per scheduler, FIFO, apart from the libuv pool (docs/vm/16-architecture.md §16.9)
   third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl, libffi (Linux x86_64 and Windows x64) (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
   tests/          # C tests, plain asserts (references/vm-tests.md)

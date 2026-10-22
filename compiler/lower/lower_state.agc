@@ -3,7 +3,6 @@
 ## part of the lowering uses. A lowering function takes Cx and Fx and returns the new Fx with its register (Out), or
 ## fails with a packed LOWER- diagnostic (diagnostics/problem.agc), so `try` stops at the first one.
 
-import {OPAQUE_TYPES} from "../catalog/builtins"
 import State from "../check/check_state"
 import Defaults from "../check/defaults"
 import Diag from "../diagnostics/diagnostic"
@@ -206,7 +205,9 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Struct(name) -> return cx.user_types.get(name, "") == "Struct"
     Types.Type.Enum(name, args) -> return cx.user_types.get(name, "") == "Enum"
     Types.Type.Fn(params, result) -> return fn_type?(cx, params, result)
-    Types.Type.Opaque(name) -> return OPAQUE_TYPES.include?(name)
+    # The checker makes an opaque type only from OPAQUE_TYPES (a builtin handle, TestCase, C.Pointer) or a resource of
+    # an extern block (cx.resources): the VM has them all.
+    Types.Type.Opaque(name) -> return true
     Types.Type.Int -> return true
     Types.Type.Float -> return true
     Types.Type.Bool -> return true

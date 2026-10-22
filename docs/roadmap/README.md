@@ -44,13 +44,13 @@ First batch, as soon as possible:
    `Native.wait_readable/wait_writable`, `--deny-native`), with system or
    local libraries. PR 1 of the split (core calls) is done (#553), PR 4
    (`compute def`) is done (#559), PR 5 (`Native.wait_readable/wait_writable`)
-   is done (#561), and PR 6 (`agentica test` takes the deny flags) is done
-   (#560).
+   is done (#561), PR 6 (`agentica test` takes the deny flags) is done
+   (#560), and PR 2 (opaque values) is done (#572).
 2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
    bytecode, so unchanged programs skip the front end. Done: `_build/bytecode/`
    in the project, for `agentica FILE.agc` and `agentica test`.
 3. Packages [45](../future/45-packages.md): done. 45b (`install`, the fetch),
-   45c (`add`, `update`) and 45d (`vendor`) are built; FFI-b is the rest.
+   45c (`add`, `update`) and `deps/` (#578) are built; FFI-b is the rest.
 4. FFI-b: native libraries in packages (`[native]` in `agentica.toml`, hashes
    in the lock); needs 45b.
 
@@ -89,9 +89,7 @@ Weighed later (no fixed order)
     (19c).
 17. [#469](https://github.com/sonic182/agentica/issues/469): the doc site.
 18. `agentica help std/MODULE` (row 22b, part 2).
-19. The Windows issues [#489](https://github.com/sonic182/agentica/issues/489),
-    [#486](https://github.com/sonic182/agentica/issues/486),
-    [#474](https://github.com/sonic182/agentica/issues/474),
+19. The Windows issues [#474](https://github.com/sonic182/agentica/issues/474),
     [#462](https://github.com/sonic182/agentica/issues/462),
     [#457](https://github.com/sonic182/agentica/issues/457),
     [#393](https://github.com/sonic182/agentica/issues/393) and
@@ -552,7 +550,8 @@ Packages ([§45](../future/45-packages.md)), with no row. It is item 3 of the
 list after 0.8.0 above, before FFI-b (item 4). The owner answered §45.14 on
 2026-10-20. Done: the TOML parser `std/toml` (45-0), the manifest, the lock and
 `pkg/<name>/` imports from the cache (45a), fetch and `install` (45b), `add`
-and `update` (45c), and `vendor` (45d). Packages are complete except FFI-b.
+and `update` (45c), and the `deps/` folder (#578). Packages are complete except
+FFI-b.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep

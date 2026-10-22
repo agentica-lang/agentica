@@ -191,7 +191,8 @@ Set.subset?(a: Set[T], b: Set[T]) -> Bool                # every element of a is
   and `add` are effectively constant time. Re-adding a deleted element puts it
   at the end. `for x in set` visits in order.
 - No index (`s[0]` is `CHECK-NOT-INDEXABLE`). `Test.eq` compares two sets in any
-  order. Element and empty-set typing: `language.md`.
+  order. Element and empty-set typing:
+  `language-statements-expressions.md`.
 
 ## Range
 
@@ -224,7 +225,8 @@ r.message() -> String                                    # the error message, or
 ```
 
 `r.is_err?`, `r.error?`, `r.value!` and `r.ok!` do not exist: write `!r.ok?` and
-`r.unwrap!`. Rules for `ok`, `error`, `try` and Void: `language.md`.
+`r.unwrap!`. Rules for `ok`, `error` and `try`:
+`language-blocks-results.md`; Void: `language-program-types.md`.
 
 ## Methods and Ruby names
 

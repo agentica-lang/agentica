@@ -37,10 +37,10 @@ export struct Variant
   doc: String
 end
 
-## One top-level declaration. `kind` is "function", "struct", "enum", "alias" or "constant"; `range` is the whole
-## declaration, `export` included, and `name_range` the name alone. `doc` is the whole text of the `##` block ("" for
-## none) and `summary` its first paragraph on one line. A function has `parameters` and `result`, a struct its `fields`
-## and an enum its `variants`; the other lists are empty.
+## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource" or "constant"; `range` is
+## the whole declaration, `export` included, and `name_range` the name alone. `doc` is the whole text of the `##` block
+## ("" for none) and `summary` its first paragraph on one line. A function has `parameters` and `result`, a struct its
+## `fields` and an enum its `variants`; the other lists are empty.
 export struct Item
   kind: String
   name: String

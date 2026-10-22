@@ -38,7 +38,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE
 } agc_tag;
 
 typedef struct {
@@ -223,6 +223,22 @@ typedef struct {
   agc_task *group;
 } agc_http_server;
 
+struct agc_ffi_call;
+
+/* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned,
+   the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
+   entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
+   it now. A close marks it `closed` and takes it off its owner; the free runs then, or at the end of the last of those
+   calls, so C never sees the pointer freed while a pool thread uses it. Changes under rt->sync. */
+typedef struct {
+  agc_resource *state;
+  void *pointer;
+  struct agc_ffi_call *free;
+  const char *name;
+  uint32_t jobs;
+  bool closed, freed;
+} agc_c_resource;
+
 typedef struct {
   agc_string *name;
   agc_value body;
@@ -240,8 +256,9 @@ typedef enum {
 typedef enum { AGC_COST_NONE, AGC_COST_SIZE } agc_cost_rule;
 
 /* The builtin that every extern function lowers to (vm/ffi.c). Every builtin whose name starts with AGC_NATIVE_PREFIX
-   (it and the waits Native.wait_readable and wait_writable) is native code: the loader notes whether a program imports
-   one, so a run can refuse native code before it starts (agc_ffi_refusal). */
+   (it, the waits Native.wait_readable and wait_writable, Native.close, Native.null and Native.null?) is native code:
+   the loader notes whether a program imports one, so a run can refuse native code before it starts
+   (agc_ffi_refusal). */
 #define AGC_NATIVE_CALL "Native.call"
 #define AGC_NATIVE_PREFIX "Native."
 #define AGC_NATIVE_PREFIX_LEN (sizeof AGC_NATIVE_PREFIX - 1)
@@ -380,6 +397,9 @@ agc_value agc_http_server_value(agc_http_server *s);
 agc_value agc_channel_value(agc_channel *c);
 /* A Lazy recipe (vm/lazy.c): an immutable node that the VM never looks inside outside that file. */
 agc_value agc_lazy_value(const void *node);
+/* A C.Pointer of native code (vm/ffi.c), which may be NULL, and a resource. */
+agc_value agc_c_pointer_value(void *pointer);
+agc_value agc_c_resource_value(agc_c_resource *r);
 agc_resource *agc_as_handle(agc_vm *vm, agc_value v);
 agc_task *agc_as_task(agc_vm *vm, agc_value v);
 agc_process *agc_as_process(agc_vm *vm, agc_value v);
@@ -390,6 +410,8 @@ agc_test_case *agc_as_test_case(agc_vm *vm, agc_value v);
 agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);
 agc_channel *agc_as_channel(agc_vm *vm, agc_value v);
 const void *agc_as_lazy(agc_vm *vm, agc_value v);
+void *agc_as_c_pointer(agc_vm *vm, agc_value v);
+agc_c_resource *agc_as_c_resource(agc_vm *vm, agc_value v);
 /* The constructors and checked accessors of the common value types are inline: the interpreter and the builtins
  * use them on every instruction, and a call for each access (they used to live in value.c) cost more than the
  * Int add they served. A value of the wrong type calls agc_wrong_tag, which fails with RUNTIME-INTERNAL and does not

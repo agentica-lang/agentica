@@ -775,3 +775,18 @@ def test_an_alias_imported_by_name_is_a_type_with_the_alias_as_definition(types_
 def test_a_construction_is_still_an_expression_with_the_struct_as_definition(types_file):
     built = type_name_at("Point(x: 0", cwd=types_file)
     assert (built["kind"], built["type"], built["definition"]["kind"]) == ("name", "Point", "struct")
+
+
+# A resource names its declaration as a parameter and as the result of its block, which the parser wraps in Result.
+def test_a_resource_has_its_declaration_as_definition_in_a_parameter_and_a_result(tmp_path):
+    source = ('extern "libdb.so"\n  resource Db, free: db_close\n  def db_open(path: C.String) -> Db\n'
+              "  def db_size(db: Db) -> C.Int\nend\n")
+    (tmp_path / "db.agc").write_text(source, encoding="utf-8")
+    for needle in ("Db\n  def", "Db) ->"):
+        found = answer(("db.agc", where(source, needle)), cwd=tmp_path)
+        assert (found["kind"], found["text"]) == ("type", "Db"), needle
+        assert (start(found["span"]), end(found["span"])) == (where(source, needle), where(source, needle, 2)), needle
+        definition = found["definition"]
+        assert (definition["kind"], definition["name"], definition["signature"]) == (
+            "resource", "Db", "resource Db, free: db_close"), needle
+        assert start(definition["name_span"]) == where(source, "Db,"), needle
