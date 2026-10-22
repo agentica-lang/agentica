@@ -912,7 +912,7 @@ def summarize(results: Path) -> None:
 
 
 def run_order(tasks: list[str], arms: list[str], arm_tasks: dict[str, list[str]], reps: int) -> list[tuple[str, str, int]]:
-    """The queue: rep by rep, and inside a rep task by task, then arm by arm. A budget stop (or a crash) then
+    """The queue: rep by rep, and inside a rep task by task, then arm by arm. A budget stop then
     leaves every (task, arm) with the same number of reps, give or take one, instead of dropping a whole task or
     arm block. With --jobs above 1 the pool starts the runs in this order."""
     pairs = [(task, arm) for task in tasks for arm in arms if task in arm_tasks.get(arm, tasks)]

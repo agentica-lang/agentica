@@ -622,19 +622,20 @@ class MainTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = self.runtime_root(directory)
-            self.main(root, ["--tasks", "t1", "t2", "--arms", "skill", "typed-python", "--reps", "3",
-                             "--max-cost", "0.11"], "pass", cost=0.02)
+            self.main(root, ["--tasks", "t1", "t2", "--arms", "skill", "typed-python",
+                             "--arm-tasks", "typed-python=t2", "--reps", "3", "--max-cost", "0.11"],
+                      "pass", cost=0.02)
             (results,) = (root / "eval" / "results").iterdir()
             summary = (results / "summary.md").read_text(encoding="utf-8")
 
-        # 0.08 + 0.02 fits under 0.11, 0.10 + 0.02 does not: five runs, the fifth being rep 2 of the first pair.
+        # 0.08 + 0.02 fits under 0.11, 0.10 + 0.02 does not: five runs over three pairs (typed-python only runs
+        # t2): all of rep 1, then rep 2 of the first two pairs.
         started = Counter(self.tasks_run)
-        self.assertEqual(len(self.tasks_run), 5)
-        self.assertEqual(self.tasks_run[:4], [("t1", "skill"), ("t1", "typed-python"), ("t2", "skill"), ("t2", "typed-python")])
-        self.assertEqual(len(started), 4)
+        self.assertEqual(self.tasks_run, [("t1", "skill"), ("t2", "skill"), ("t2", "typed-python"),
+                                          ("t1", "skill"), ("t2", "skill")])
         self.assertLessEqual(max(started.values()) - min(started.values()), 1)
-        self.assertIn("reps completed (of 3): 2: t1/skill", summary)
-        self.assertIn("reps completed (of 3): 1: t1/typed-python, t2/skill, t2/typed-python", summary)
+        self.assertIn("reps completed (of 3): 2: t1/skill, t2/skill", summary)
+        self.assertIn("reps completed (of 3): 1: t2/typed-python", summary)
 
     def test_without_a_cap_every_run_starts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
