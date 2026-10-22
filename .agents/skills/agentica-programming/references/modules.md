@@ -151,10 +151,25 @@ import Sqlite from "pkg/sqlite/db"
   relative imports cannot leave it; the lock keeps `subdir` and the hash covers
   only that folder. Another folder of the same repository is a dependency like
   any other.
+- A repository of packages can be a workspace (like npm): its root
+  `agentica.toml` has `[workspace]` with `repository = "<git URL>"` and
+  `members = ["sqlite", "postgres"]` (folders written like a `subdir`, each
+  with its own `agentica.toml`); a bad table is `PKG-MANIFEST-INVALID` at
+  `workspace.<key>` or `workspace.members[n]`. A project that is the root or
+  a member (found by going up to the nearest manifest with the table, never
+  into a package of `deps/`) reads a dependency whose `git` is the
+  `repository` and whose `subdir` is a member from that member's folder: no
+  fetch, no copy to `deps/`, no hash, so an edit is seen at once. Its manifest
+  entry stays normal (`git`, `tag`, `subdir`); its lock entry has
+  `workspace = true` and no `commit` or `hash`. Outside the repository, and
+  for a package of the cache or `deps/`, the table is ignored and the
+  dependency is fetched. A lock that disagrees with the workspace is
+  `PKG-LOCK-STALE`.
 - `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared package.
   A declared name comes before the `pkg/` library folders (`agc_libs/` too); an
   undeclared name is the search above. The files of a package come only from
-  `deps/<name>/` beside `agentica.toml`, never from the cache.
+  `deps/<name>/` beside `agentica.toml`, never from the cache (a workspace
+  member comes from its folder).
 - A file of a package imports only the names of its own `agentica.toml`, and its
   own modules by relative paths inside the package.
 - A manifest with dependencies needs `agentica.lock` beside it. Only the
@@ -210,12 +225,12 @@ import Sqlite from "pkg/sqlite/db"
   to make the lock match it again. Both then refresh `deps/` and remove the
   folder of a package the lock dropped.
 - `deps/<name>/` holds the `.agc` files and the `agentica.toml` of each locked
-  package, direct or not, flat (for a `subdir`, that folder only). `install`
-  replaces the folder of each locked package that is not a real folder or whose
-  `.agc` files differ from the lock (run it again to restore an edited file)
-  and leaves every other entry of `deps/` alone (a killed run may leave a
-  hidden `.tmp-*` or `.old-*` entry; the next command removes it once it is
-  older than ten minutes). The
+  package that is not a workspace member, direct or not, flat (for a `subdir`,
+  that folder only). `install` replaces the folder of each locked package that
+  is not a real folder or whose `.agc` files differ from the lock (run it again
+  to restore an edited file) and leaves every other entry of `deps/` alone (a
+  killed run may leave a hidden `.tmp-*` or `.old-*` entry; the next command
+  removes it once it is older than ten minutes). The
   tool writes no `.gitignore` there: commit `deps/` or ignore it. `deps/` as a
   symbolic link is `PKG-SYMLINK`; a failed write is `PKG-WRITE` (after `add` or
   `update` saved the lock, run `agentica install` to write the locked packages

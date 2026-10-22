@@ -129,7 +129,8 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   text = try Reader.read_text(settings.workspace, Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID"))
   edited = ManifestEdit.add_dependency(text, request.name, request.source)
   manifest = try added_manifest(found.manifest, edited, request)
-  packages = try PackageResolve.resolve(settings, manifest, found.lock, PackageResolve.Refresh(all: false, name: ""))
+  refresh = PackageResolve.Refresh(all: false, name: "")
+  packages = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
   try unchanged(settings, file, text)
   try save(settings, found.lock.file, Lock.encode(packages), "")
   try save(settings, file, edited, LOCK_WRITTEN)
@@ -184,7 +185,7 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
     return error(Failure.fail_file(manifest.file, "PKG-DEPENDENCY-UNKNOWN", message, help))
   end
   refresh = PackageResolve.Refresh(all: name == "", name: name)
-  packages = try PackageResolve.resolve(settings, manifest, found.lock, refresh)
+  packages = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
   # A project with no dependency and no lock stays as it is: nothing asks for a lock.
   if packages.size > 0 or settings.workspace.file_exists.call(found.lock.file)
     try save(settings, found.lock.file, Lock.encode(packages), "")
@@ -225,14 +226,16 @@ def report(old: Lock.Lock, packages: List[Lock.Locked], added: String) -> String
   lines: List[String] = []
   ordered = packages.sort_by do |item| item.name end
   for locked in ordered
-    label = "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
+    label = Lock.label(locked)
     if locked.source.subdir != ""
       label = "#{label} (folder #{locked.source.subdir})"
     end
     before = Lock.find(old, locked.name)
     if !before.ok? or locked.name == added
       lines = lines.push("added #{label}")
-    elsif before.unwrap!.commit != locked.commit or !GitSource.same?(before.unwrap!.source, locked.source)
+    elsif before.unwrap!.commit != locked.commit or before.unwrap!.member != locked.member
+      lines = lines.push("updated #{label}")
+    elsif !GitSource.same?(before.unwrap!.source, locked.source)
       lines = lines.push("updated #{label}")
     end
   end

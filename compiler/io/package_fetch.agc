@@ -96,7 +96,7 @@ export def resolve(
     return error(fail(place, "PKG-FETCH", "ref", message, "write the 40 (or 64) digits of the commit"))
   end
   # A ref is the commit already; a tag's commit is learnt from the fetch.
-  pin = Lock.Locked(name: name, source: source, commit: source.ref, hash: "")
+  pin = Lock.Locked(name: name, source: source, commit: source.ref, hash: "", member: false)
   made = make_temp(cache)
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
@@ -238,7 +238,7 @@ def resolve_into(
   end
   try copy_tree(place, scratch, commit, pin.source.subdir)
   hash = try hash_of(workspace, place, pin, scratch.files)
-  locked = Lock.Locked(name: pin.name, source: pin.source, commit: commit, hash: hash)
+  locked = Lock.Locked(name: pin.name, source: pin.source, commit: commit, hash: hash, member: false)
   target = PackageCache.folder(cache, locked.source, commit)
   try move_into_place(workspace, place, scratch.files, target, locked)
   return ok(locked)

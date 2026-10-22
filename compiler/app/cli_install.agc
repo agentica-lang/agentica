@@ -6,12 +6,12 @@
 ## other, and the first failure stops the command. When all are in the cache, the manifest of each package is checked
 ## against the lock, as a build checks it, and only then are the files written to deps/ (io/package_deps.agc), so a
 ## cache or a manifest that fails those checks writes nothing there. A folder of deps/ that the lock does not name is
-## left as it is.
+## left as it is. A package the lock marks as a member of the workspace of the project is neither fetched nor written
+## to deps/: the build reads it from the member's folder, and its manifest is checked there.
 
 import PackageDeps from "../io/package_deps"
 import PackageFetch from "../io/package_fetch"
 import Env from "../modules/link_env"
-import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
 import PackageCache from "../packages/package_cache"
 import PackageImport from "../packages/package_import"
@@ -32,13 +32,17 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   if lock.packages.size == 0
     return ok("nothing to install\n")
   end
-  cache = try PackageFetch.cache_root(settings.env, lock.file)
+  cache = try cache_of(settings, lock)
   lines: List[String] = []
   for index in 0...lock.packages.size
     locked = lock.packages[index]
+    label = Lock.label(locked)
+    if locked.member
+      lines = lines.push("in the workspace #{label}")
+      next
+    end
     place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
     filled = try PackageFetch.fill(settings.workspace, cache, place, locked)
-    label = "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
     case filled
       PackageFetch.Filled.Fetched -> lines = lines.push("fetched #{label}")
       PackageFetch.Filled.Present -> lines = lines.push("in the cache #{label}")
@@ -67,11 +71,23 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   if lock.packages.size == 0
     return ok()
   end
-  cache = try PackageFetch.cache_root(settings.env, lock.file)
+  cache = try cache_of(settings, lock)
   folders: Map[String, String] = {}
   for locked in lock.packages
-    folders = folders.put(locked.name, PackageCache.folder(cache, locked.source, locked.commit))
+    if locked.member
+      folders = folders.put(locked.name, PackageImport.folder_of(scope, locked))
+    else
+      folders = folders.put(locked.name, PackageCache.folder(cache, locked.source, locked.commit))
+    end
   end
   try PackageImport.check_folders(settings.workspace, scope, folders)
   return ok()
+end
+
+# The cache root, which only a lock with a fetched package needs: a lock of members alone needs no HOME.
+def cache_of(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
+  if lock.packages.all? do |locked| locked.member end
+    return ok("")
+  end
+  return PackageFetch.cache_root(settings.env, lock.file)
 end
