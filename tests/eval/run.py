@@ -904,9 +904,35 @@ def summarize(results: Path) -> None:
         out += ["", f"cost: ${info['cost']:.4f}" + (f" (cap ${info['max_cost']:.2f})" if info.get("max_cost") is not None else "")]
     out += ["", f"stopped_for_budget: {str(bool(info.get('stopped_for_budget'))).lower()}"
             + (f" ({info['runs_skipped']} runs not started)" if info.get("stopped_for_budget") else "")]
+    if info.get("stopped_for_budget"):
+        out += reps_completed(rows, info)
     text = "\n".join(out) + "\n"
     (results / "summary.md").write_text(text, encoding="utf-8")
     print(text)
+
+
+def run_order(tasks: list[str], arms: list[str], arm_tasks: dict[str, list[str]], reps: int) -> list[tuple[str, str, int]]:
+    """The queue: rep by rep, and inside a rep task by task, then arm by arm. A budget stop then
+    leaves every (task, arm) with the same number of reps, give or take one, instead of dropping a whole task or
+    arm block. With --jobs above 1 the pool starts the runs in this order."""
+    pairs = [(task, arm) for task in tasks for arm in arms if task in arm_tasks.get(arm, tasks)]
+    return [(task, arm, rep) for rep in range(1, reps + 1) for task, arm in pairs]
+
+
+def reps_completed(rows: list[dict], info: dict) -> list[str]:
+    """Lines saying how many reps each (task, arm) of the round finished, grouped by that count, most reps first.
+    Needs the planned grid in run.json; older files without it give no lines."""
+    if not all(key in info for key in ("tasks", "arms", "reps")):
+        return []
+    done: dict[tuple[str, str], int] = {}
+    for row in rows:
+        done[(row["task"], row["arm"])] = done.get((row["task"], row["arm"]), 0) + 1
+    planned = [(task, arm) for task, arm, _ in run_order(info["tasks"], info["arms"], info.get("arm_tasks") or {}, 1)]
+    by_count: dict[int, list[str]] = {}
+    for task, arm in planned:
+        by_count.setdefault(done.get((task, arm), 0), []).append(f"{task}/{arm}")
+    return [f"reps completed (of {info['reps']}): {count}: " + ", ".join(names)
+            for count, names in sorted(by_count.items(), reverse=True)]
 
 
 def parse_arm_tasks(specs: list[str], arms: list[str], tasks: list[str]) -> dict[str, list[str]]:
@@ -987,8 +1013,7 @@ def main() -> int:
     results = EVAL / "results" / f"{stamp}-{args.agent}"
     results.mkdir(parents=True)
     (results / "run.json").write_text(json.dumps(run_info(args, image_info), indent=2) + "\n", encoding="utf-8")
-    jobs = [(task, arm, rep) for task in args.tasks for arm in args.arms
-            if task in args.arm_tasks.get(arm, args.tasks) for rep in range(1, args.reps + 1)]
+    jobs = run_order(args.tasks, args.arms, args.arm_tasks, args.reps)
     budget = Budget(args.max_cost, args.run_cost_estimate)
     with tempfile.TemporaryDirectory(prefix="agentica-eval-") as scratch_dir:
         scratch = Path(scratch_dir)

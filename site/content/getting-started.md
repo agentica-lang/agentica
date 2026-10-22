@@ -194,7 +194,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
 | `install` | fills the package cache from `agentica.lock` with the system `git` (see the modules tour); never changes the lock |
-| `add NAME URL --tag TAG`, `add NAME URL --ref COMMIT` | adds a dependency to `agentica.toml` and writes `agentica.lock`, fetching with the system `git` (see the modules tour) |
+| `add NAME URL --tag TAG`, `add NAME URL --ref COMMIT` (and `--subdir DIR`) | adds a dependency to `agentica.toml` and writes `agentica.lock`, fetching with the system `git` (see the modules tour) |
 | `update [NAME]` | fetches the tag pins again (all, or the dependency `NAME`) and rewrites `agentica.lock` |
 | `vendor` | does what `install` does, then copies the locked packages into `agc_libs/NAME/` next to `agentica.toml`; a build reads a copy before the cache (see the modules tour) |
 | `compile FILE -o OUT` | writes VM bytecode |

@@ -47,13 +47,15 @@ def cache_path(git):
     return rest[:-len(".git")] if rest.endswith(".git") else rest
 
 
-def dependency(git, tag=None, ref=None):
+def dependency(git, tag=None, ref=None, subdir=None):
     """A dependency of a manifest, as the inline table the manifest writes."""
     entry = {"git": git}
     if tag is not None:
         entry["tag"] = tag
     if ref is not None:
         entry["ref"] = ref
+    if subdir is not None:
+        entry["subdir"] = subdir
     return entry
 
 
@@ -89,9 +91,10 @@ class Workspace:
         """The environment that points the compiler at self.cache: the system reads one of the two variables."""
         return {"LOCALAPPDATA": str(self.cache)} if WINDOWS else {"XDG_CACHE_HOME": str(self.cache)}
 
-    def folder(self, git, commit=COMMIT):
-        """Where the cache keeps one commit of a package."""
-        return self.pkg_root / cache_path(git) / commit
+    def folder(self, git, commit=COMMIT, subdir=""):
+        """Where the cache keeps one commit of a package; a folder of the repository (`subdir`) has the folder
+        `<commit>@<subdir with / written @>`."""
+        return self.pkg_root / cache_path(git) / (commit + "".join("@" + part for part in subdir.split("/") if part))
 
     def add_package(self, name, git, files, tag=None, ref=None, dependencies=None, commit=COMMIT):
         """Writes the files of a package into the cache, with the agentica.toml that declares `dependencies` when
@@ -119,7 +122,7 @@ class Workspace:
         text = "version = 1\n"
         for entry in entries:
             text += "\n[[package]]\n"
-            order = ["name", "git", "tag", "ref", "commit", "hash"]
+            order = ["name", "git", "subdir", "tag", "ref", "commit", "hash"]
             for key in order + [key for key in entry if key not in order]:
                 if key in entry:
                     text += "%s = %s\n" % (key, json.dumps(entry[key]))
@@ -226,10 +229,11 @@ class Remotes:
         return commit
 
 
-def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None):
+def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None, subdir=None):
     """Notes the lock entry of a package whose files the remote holds. The hash comes from the Python implementation of
-    the hash rule, over a scratch copy of the .agc files."""
-    scratch = ws.base / ("scratch-" + path.replace("/", "-"))
+    the hash rule, over a scratch copy of the .agc files. For a package that is a folder of the repository (`subdir`),
+    `files` are the files of that folder, with paths relative to it, and `name` is required."""
+    scratch = ws.base / ("scratch-" + (name or path).replace("/", "-"))
     shutil.rmtree(scratch, ignore_errors=True)
     for relative, content in files.items():
         if relative.endswith(".agc"):
@@ -237,6 +241,8 @@ def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None):
             (scratch / relative).write_bytes(content if isinstance(content, bytes) else content.encode("utf-8"))
     entry = {"name": name or path.split("/")[1], "git": remotes.url(path), "commit": commit,
              "hash": package_hash(scratch) if scratch.exists() else package_hash(ws.base)}
+    if subdir is not None:
+        entry["subdir"] = subdir
     entry.update({"tag": tag} if ref is None else {"ref": ref})
     ws.locked.append(entry)
     return entry
@@ -253,6 +259,17 @@ def run_json(command, ws, remotes, *words, **extra):
         assert result.stdout == '{"ok":true}\n'
         return result, None
     return result, json.loads(result.stderr) if result.code == 1 else None
+
+
+def command(ws, remotes, *words, **extra):
+    """The result of `--json WORDS` in the project folder, and the problem it reported (None for a success)."""
+    result = run(cli() + ["--json", *words], cwd=ws.project, env=environment(ws, remotes, **extra))
+    return result, json.loads(result.stderr) if result.code == 1 else None
+
+
+def problem_of(ws, remotes, **extra):
+    """The problem that `--json check` reports for main.agc of the project, or None."""
+    return command(ws, remotes, "check", str(ws.project / "main.agc"), **extra)[1]
 
 
 def assert_at_key(problem, code, file, key_path):

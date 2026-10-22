@@ -101,7 +101,7 @@ end
 
 # The dependencies in the manifest of a package that is in the cache; none when it has no manifest.
 def asked_by(settings: Env.Settings, cache: String, locked: Lock.Locked) -> Result[List[Wanted]]
-  file = Paths.join(PackageCache.folder(cache, locked.source.git, locked.commit), MANIFEST_FILE)
+  file = Paths.join(PackageCache.folder(cache, locked.source, locked.commit), MANIFEST_FILE)
   if !settings.workspace.file_exists.call(file)
     return ok([])
   end

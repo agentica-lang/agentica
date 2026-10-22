@@ -299,10 +299,12 @@ def library_project(tmp_path):
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.agc").write_text(LIBRARY_MAIN, encoding="utf-8")
-    home = tmp_path / "home"
-    (home / ".local" / "share" / "agentica" / "lib").mkdir(parents=True)
-    (home / ".local" / "share" / "agentica" / "lib" / "foo.agc").write_text(UTIL % "later", encoding="utf-8")
-    return src, {"HOME": str(home), "XDG_DATA_HOME": None, "AGENTICA_PATH": ""}
+    # The user folder is <data>/agentica/lib, with <data> from XDG_DATA_HOME, or from %LOCALAPPDATA% on Windows (which
+    # reads neither XDG_DATA_HOME nor HOME).
+    data = tmp_path / "data"
+    (data / "agentica" / "lib").mkdir(parents=True)
+    (data / "agentica" / "lib" / "foo.agc").write_text(UTIL % "later", encoding="utf-8")
+    return src, {"HOME": None, "XDG_DATA_HOME": str(data), "LOCALAPPDATA": str(data), "AGENTICA_PATH": ""}
 
 
 @pytest.mark.parametrize("earlier", [
