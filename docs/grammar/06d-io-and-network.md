@@ -385,14 +385,17 @@ end
   of native code (a socket, a pipe) can be read or written, while other tasks
   run. This is how a library in non-blocking mode (libpq, curl multi) waits:
   `try Native.wait_readable(Raw.PQsocket(conn), 5_000)`. The wait polls a
-  duplicate of `fd`, so the native code keeps its descriptor, two tasks may
-  wait on one descriptor, and the descriptor is put in non-blocking mode. An
-  error or a hang-up on the descriptor ends the wait with `ok` too, as in
-  poll(2): the next native call reports it. After `timeout_ms` (positive) the
-  result is `error("native: timed out")`. A timeout that is not positive, a
-  negative `fd`, and a descriptor that cannot be duplicated or polled (closed,
-  a regular file, `/dev/null`) give an error that starts with `native: `. A
-  cancel stops the wait.
+  new open of the file of `fd` (`/proc/self/fd`), so the native code keeps its
+  descriptor and its flags, and two tasks may wait on one descriptor. A socket,
+  or a file that cannot be opened again (an eventfd), is polled through a
+  duplicate instead, which puts `fd` in non-blocking mode. An error or a
+  hang-up on the descriptor ends the wait with `ok` too, as in poll(2): the
+  next native call reports it. After `timeout_ms` (positive) the result is
+  `error("native: timed out")`. A timeout that is not positive, a negative
+  `fd`, and a descriptor that is closed or cannot be polled (a regular file,
+  `/dev/null`) give an error that starts with `native: `. A close of `fd`
+  during a wait does not end it: it ends at its timeout unless the file
+  becomes ready. A cancel stops the wait.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses

@@ -267,6 +267,8 @@ WAIT_EXTERN = """extern "{library}"
   def peer_pipe_put() -> C.Int
   def peer_pipe_take() -> C.Int
   def peer_pipe_fill() -> Void
+  def peer_pipe_blocking() -> Void
+  def peer_nonblocking(fd: C.Int) -> C.Int
   def peer_dev_null() -> C.Int
   def peer_open_fds() -> C.Int
 end
@@ -298,6 +300,23 @@ end
 """
     result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
+
+
+# The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a
+# terminal, say) stays blocking after the wait, whether it ended ready or at its timeout.
+@ON_LINUX_ONLY
+def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
+    main = """def main() -> Void
+  fd = peer_pipe()
+  peer_pipe_blocking()
+  puts(Native.wait_readable(fd, 30))
+  puts(Native.wait_writable(peer_pipe_writer(), 1_000))
+  puts(peer_nonblocking(fd))
+  puts(peer_nonblocking(peer_pipe_writer()))
+end
+"""
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("native: timed out")\nok()\n0\n0\n', "")
 
 
 @ON_LINUX_ONLY

@@ -102,6 +102,7 @@ A library's connect loop waits the same way, with `try Native.wait_readable(sock
 
 - After `timeout_ms` (positive) the result is `error("native: timed out")`. A timeout that is not positive, a negative descriptor, and one that cannot be polled (closed, a regular file, `/dev/null`) give an error that starts with `native: `.
 - An error or a hang-up on the descriptor ends the wait with `ok`, as `poll(2)` does: the library's next call reports it.
-- The wait watches a duplicate of the descriptor, so the library keeps its own, and two tasks may wait on one descriptor. The descriptor is put in non-blocking mode.
+- The wait watches a new open of the descriptor's file, so the library keeps its descriptor and its flags, and two tasks may wait on one descriptor. A socket, or a file that cannot be opened again (an eventfd), is watched through a duplicate, which puts the descriptor in non-blocking mode.
+- If the library closes the descriptor during a wait, the wait goes on and ends at its timeout (`native: timed out`) unless the file becomes ready.
 - A cancel stops the wait; the end of the program does not wait for it.
 - `--deny-native` refuses a program that calls them, as it refuses extern functions: a descriptor comes from native code.

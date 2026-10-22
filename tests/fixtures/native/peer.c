@@ -105,6 +105,17 @@ void peer_pipe_fill(void) {
   while (write(pipe_fds[1], buf, sizeof buf) > 0) {}
 }
 
+/* Makes both ends of the pipe blocking, as a terminal usually is. */
+void peer_pipe_blocking(void) {
+  for (int k = 0; k < 2; k++) (void)fcntl(pipe_fds[k], F_SETFL, fcntl(pipe_fds[k], F_GETFL) & ~O_NONBLOCK);
+}
+
+/* 1 when FD is in non-blocking mode, 0 when not, -1 when it is not open. */
+int32_t peer_nonblocking(int32_t fd) {
+  int flags = fcntl(fd, F_GETFL);
+  return flags < 0 ? -1 : (flags & O_NONBLOCK) != 0;
+}
+
 /* A descriptor that cannot be polled: /dev/null. */
 int32_t peer_dev_null(void) { return open("/dev/null", O_RDONLY | O_CLOEXEC); }
 

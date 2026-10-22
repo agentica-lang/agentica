@@ -40,9 +40,11 @@ end
   Timeout (positive ms): `error("native: timed out")`; a bad timeout or a
   descriptor that is negative, closed or not pollable (regular file,
   `/dev/null`): an error starting `native: `. An error or hang-up on the
-  descriptor gives `ok` (the next native call reports it). It polls a
-  duplicate, so two tasks may wait on one descriptor; the descriptor becomes
-  non-blocking. A cancel stops the wait.
+  descriptor gives `ok` (the next native call reports it). It polls a new
+  open of the file, so the descriptor keeps its flags and two tasks may wait
+  on one descriptor; a socket or an eventfd is polled through a duplicate and
+  becomes non-blocking. Closing the descriptor does not end a wait (it times
+  out unless the file becomes ready). A cancel stops the wait.
 - Linux x86_64 only for now: elsewhere a program with an extern function or a
   `Native.wait_*` call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`
   (exit 2). `check` works everywhere.
