@@ -1,13 +1,13 @@
 ## 45. Packages
 
-**Status:** Designed. The built parts (45-0 `std/toml`, the manifest, the lock
-and the cache imports of 45a, the fetch and `install` of 45b, and `add`,
-`update` and the writers of 45c) are specified in
+**Status:** Built. The parts (45-0 `std/toml`, the manifest, the lock and the
+cache imports of 45a, the fetch and `install` of 45b, `add`, `update` and the
+writers of 45c, and `vendor` of 45d) are specified in
 [`05b-modules.md`](../grammar/05b-modules.md), the contract. This file keeps
-the decisions and what is pending (45d). It is item 3 of the list after
-0.8.0 in the [roadmap](../roadmap/README.md): after the FFI core (issue
+the decisions. It is item 3 of the list after 0.8.0 in the
+[roadmap](../roadmap/README.md): after the FFI core (issue
 [#534](https://github.com/sonic182/agentica/issues/534)) and before the native
-packages (FFI-b).
+packages (FFI-b), which are the only part left.
 
 Decided by the owner:
 
@@ -129,8 +129,8 @@ fetch of `install` are in 05b. What 45b does, and what 45c adds on it:
 
 ### 45.9 Commands and errors
 
-`install` (45b), `add` and `update` (45c) are built; `vendor` is pending (45d).
-The exact command line is decided in each phase.
+`install` (45b), `add`, `update` (45c) and `vendor` (45d) are built. The exact
+command line is decided in each phase.
 
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole 40-digit id)
   adds the dependency to `agentica.toml`, rewrites the lock and fills the
@@ -188,7 +188,34 @@ The exact command line is decided in each phase.
   `vendor` writes only the paths of locked packages. It leaves other files in
   `agc_libs/` alone, the `pkg/` libraries of 05b included. A declared name never
   reaches the `pkg/` search, because a `pkg/` import would load an unhashed
-  copy.
+  copy. **Built (45d).** Decided:
+  - It does what `install` does first (the same fetch, hash and manifest
+    checks, the same `git` only for what the cache lacks), then copies from
+    the cache, never from git: the copy is the hashed cache folder, so it is
+    the locked files. It takes no argument and writes no lock.
+  - The folder of a locked package is the package's to replace. A copy edited
+    by hand, with a stale or added file, or a link of that name, is replaced by
+    the locked files when `vendor` runs again; that is how a
+    `PKG-HASH-MISMATCH` of a copy is repaired. The new copy is built in a
+    hidden folder of `agc_libs/`, hashed, and swapped in with two renames.
+  - It does not remove anything else. The folder of a package that is no
+    longer locked stays (it is an ordinary `pkg/` library folder then), and the
+    user deletes it. Not removing keeps the rule "writes only the paths of
+    locked packages" and cannot delete a library installed by hand.
+  - `agc_libs/` must be a real folder, never a link, and nothing is written
+    through a link (`PKG-SYMLINK`). A write that fails is `PKG-WRITE`.
+  - The `pkg/` library search skips `agc_libs/<name>/` for a locked name the
+    importing manifest did not declare, so vendoring does not let the project
+    import a package that only another package declared. The cost: a library
+    installed by hand in `agc_libs/` under the name of a locked package is not
+    found any more (the other roots still are).
+  - The new folder is made with the ordinary mode; only its private staging
+    parent is 0700. A killed `vendor` can leave `.tmp-*` or `.old-*` folders in
+    `agc_libs/`, which are safe to delete.
+  - The build looks at `agc_libs/<name>/` beside the manifest of the project
+    for every locked name, those of packages too (the lock is one list). The
+    manifest of the package is copied, so a build reads the names it declares
+    from the copy. The stored names are the same as from the cache.
 - The lock writer sorts the `[[package]]` tables by name and writes their keys
   in the order of 05b, so a rewrite with no change makes no diff.
 - The package commands grant the run permission to their own process (45.14,
@@ -219,8 +246,10 @@ breaks "no code runs at install", comes later and needs its own grant.
 `tests/test_spec_packages.py`, and the fetch tests of 45b in
 `tests/test_spec_package_fetch.py` (end to end, offline, moved tag, hash
 mismatch, fetch errors, links and case collisions) and the writer tests of 45c
-in `tests/test_spec_package_add.py` (below), which run through the CLI. The
-pending tests are below.
+in `tests/test_spec_package_add.py` (below), and the `vendor` tests of 45d in
+`tests/test_spec_package_vendor.py` (copies and layout, a copy read before the
+cache, an edited copy, other entries left alone, links, a build with no cache
+and no git), which run through the CLI. The pending tests are below.
 
 - The fetch and writer tests use a bare git repository in a temporary folder
   as the remote. 45b needs no knob of the tool: a throwaway `HOME` has a
@@ -247,8 +276,8 @@ pending tests are below.
   check, the cache fill, `install` and the fetch errors (45.8, 45.9).
 - **45c. Add and update. Done.** `add`, `update`, the lock writer and the
   manifest writer, with the rules of 45.7. The round trip of 45.11.
-- **45d. Vendor.** `vendor`, the `agc_libs/<name>/` layout, and the build order
-  that prefers a vendored copy of a declared name (45.9).
+- **45d. Vendor. Done.** `vendor`, the `agc_libs/<name>/` layout, and the build
+  order that prefers a vendored copy of a declared name (45.9).
 
 Each phase updates [`05b-modules.md`](../grammar/05b-modules.md), the
 programming skill and the CHANGELOG, because import behavior changes for users.

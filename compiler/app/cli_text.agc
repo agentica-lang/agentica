@@ -26,6 +26,7 @@ USAGE = [
   "       agentica [--ai|--json] install",
   "       agentica [--ai|--json] add NAME URL --tag TAG|--ref COMMIT",
   "       agentica [--ai|--json] update [NAME]",
+  "       agentica [--ai|--json] vendor",
   "       agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
@@ -50,6 +51,8 @@ SUMMARY = [
   "                                          agentica.lock (the other lines of agentica.toml stay as they are)",
   "  agentica update [NAME]                  fetch the tag pins again (all, or the dependency NAME) and rewrite",
   "                                          agentica.lock; a commit pin and a package already locked do not move",
+  "  agentica vendor                         fill the cache as install does, then copy the locked packages",
+  "                                          into agc_libs/NAME/; a build reads a copy before the cache",
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",

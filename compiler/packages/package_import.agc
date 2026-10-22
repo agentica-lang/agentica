@@ -1,10 +1,12 @@
 ## Imports of packages (docs/grammar/05b-modules.md). `pkg/<name>/<module>` is a package import when
 ## <name> is declared by the manifest of the importing file: the manifest of the project for a file of the project, the
-## manifest of the package for a file of a package. The files come from the cache folder of the commit the lock names,
-## and the first time a build loads a package, the hash of its .agc files must be the hash in the lock. Before any
-## file is loaded, the manifests of the locked packages that are in the cache are checked against the lock
-## (check_manifests). A name that the importing manifest does not declare is a library of the pkg/ roots
-## (resolve_import.agc) for a file of the project; a file of a package may import only what its own manifest declares.
+## manifest of the package for a file of a package. The files come from the vendored copy `agc_libs/<name>/` beside the
+## manifest of the project when it is there (`agentica vendor`), else from the cache folder of the commit the lock
+## names. The first time a build loads a package, the hash of its .agc files must be the hash in the lock; a vendored
+## copy that differs is an error, never a fallback to the cache. Before any file is loaded, the manifests of the locked
+## packages that are vendored or in the cache are checked against the lock (check_manifests). A name that the importing
+## manifest does not declare is a library of the pkg/ roots (resolve_import.agc) for a file of the project; a file of a
+## package may import only what its own manifest declares.
 
 import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
@@ -20,6 +22,9 @@ import Project from "project"
 
 # The manifest of a package, in the folder that holds its files.
 MANIFEST_FILE = "agentica.toml"
+
+# The folder beside the manifest of the project that holds the vendored copies, one folder for each locked package.
+VENDOR_FOLDER = "agc_libs"
 
 ## The package a file belongs to. package is its local name, root the real folder of its files in the cache and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
@@ -38,10 +43,11 @@ export struct Opened
   names: List[String]
 end
 
-## What a build knows when it resolves an import: the names the project declares, the lock, the names that the
-## manifests of the locked packages declare (by package name; check_manifests reads them before any file is loaded),
-## and the packages loaded so far (by name).
+## What a build knows when it resolves an import: the folder of the vendored copies ("" when the project has no
+## manifest), the names the project declares, the lock, the names that the manifests of the locked packages declare (by
+## package name; check_manifests reads them before any file is loaded), and the packages loaded so far (by name).
 export struct Scope
+  vendor: String
   direct: List[String]
   lock: Lock.Lock
   declared: Map[String, List[String]]
@@ -62,6 +68,13 @@ export struct Located
   opened: Map[String, Opened]
 end
 
+# Where a locked package is read from: its folder, and whether that is the vendored copy. The folder is "" when the
+# package is not vendored and the cache has no place (no HOME).
+struct Source
+  folder: String
+  vendored: Bool
+end
+
 # What a package folder holds under the name of the manifest.
 enum Shape
   Absent
@@ -73,9 +86,16 @@ end
 ## The scope of a build of this project, before any package is loaded.
 export def scope_of(project: Project.Project) -> Scope
   case project
-    Project.Project.Bare -> return Scope(direct: [], lock: Lock.Lock(file: "", packages: []), declared: {}, opened: {})
+    Project.Project.Bare ->
+      return Scope(vendor: "", direct: [], lock: Lock.Lock(file: "", packages: []), declared: {}, opened: {})
     Project.Project.Declared(found) ->
-      return Scope(direct: Project.direct_names(project), lock: found.lock, declared: {}, opened: {})
+      return Scope(
+        vendor: Paths.join(found.dir, VENDOR_FOLDER),
+        direct: Project.direct_names(project),
+        lock: found.lock,
+        declared: {},
+        opened: {},
+      )
   end
 end
 
@@ -106,8 +126,8 @@ export def match_import(scope: Scope, origin: Origin, file: String, site: Failur
   return ok(Match.Library)
 end
 
-## Finds the module rest of the package name: the cache folder of the locked commit, hashed (and its manifest read) the
-## first time it is used.
+## Finds the module rest of the package name: its vendored copy or the cache folder of the locked commit, hashed (and
+## its manifest read) the first time it is used.
 export def open_package(
   workspace: Workspace.Workspace,
   env: Env.Env,
@@ -147,31 +167,64 @@ export def stay_inside(origin: Origin, file: String, site: Failure.Site) -> Resu
   return ok(stored_name(origin.label, inner))
 end
 
-## Checks the manifest of every package of the lock that is in the cache against the lock, before any file is loaded,
-## so one name with two sources anywhere in the tree (PKG-SOURCE-CONFLICT), or a name the lock lacks (PKG-LOCK-STALE),
-## is reported whether or not an import reaches that package. What cannot be looked at safely is left for the import
-## that loads it: a package that is not in the cache, a folder that cannot be listed and a manifest that is not a
-## regular file report their own diagnostic there (and nothing is read from them here). It gives the scope with the
-## names that the manifests declare, so that loading a package does not list its folder again.
+## Checks the manifest of every package of the lock that is vendored or in the cache against the lock, before any file
+## is loaded, so one name with two sources anywhere in the tree (PKG-SOURCE-CONFLICT), or a name the lock lacks
+## (PKG-LOCK-STALE), is reported whether or not an import reaches that package. What cannot be looked at safely is left
+## for the import that loads it: a package that is neither vendored nor in the cache, a folder that cannot be listed
+## and a manifest that is not a regular file report their own diagnostic there (and nothing is read from them here). It
+## gives the scope with the names that the manifests declare, so that loading a package does not list its folder
+## again.
 export def check_manifests(workspace: Workspace.Workspace, env: Env.Env, scope: Scope) -> Result[Scope]
-  cache = PackageCache.root(env)
   declared = scope.declared
-  if cache != ""
-    for locked in scope.lock.packages
-      real = workspace.real_path.call(PackageCache.folder(cache, locked.source.git, locked.commit))
-      if real.ok? and workspace.directory_exists.call(real.unwrap!)
-        case shape_of(workspace, real.unwrap!)
-          Shape.Absent -> declared = declared.put(locked.name, [])
-          Shape.Regular ->
-            names = try read_names(workspace, scope.lock, real.unwrap!)
-            declared = declared.put(locked.name, names)
-          Shape.Unsafe(_) -> next
-          Shape.Unlisted(_) -> next
-        end
+  for locked in scope.lock.packages
+    source = source_of(workspace, env, scope, locked)
+    if source.folder == ""
+      next
+    end
+    real = workspace.real_path.call(source.folder)
+    if real.ok? and workspace.directory_exists.call(real.unwrap!)
+      case shape_of(workspace, real.unwrap!)
+        Shape.Absent -> declared = declared.put(locked.name, [])
+        Shape.Regular ->
+          names = try read_names(workspace, scope.lock, real.unwrap!)
+          declared = declared.put(locked.name, names)
+        Shape.Unsafe(_) -> next
+        Shape.Unlisted(_) -> next
       end
     end
   end
   return ok(scope.with(declared: declared))
+end
+
+## Whether the `pkg/` import path file (ending in .agc) names a module of a locked package, such as `pkg/tools/x.agc`
+## when `tools` is in the lock. For a name the importing manifest does not declare, the library search then skips
+## `agc_libs/`, where `agentica vendor` put a copy of every locked package, so a vendored build reaches the same
+## packages as a cache-only one.
+export def locked_module?(scope: Scope, file: String) -> Bool
+  parts = file.split("/")
+  return parts.size > 2 and Lock.find(scope.lock, parts[1]).ok?
+end
+
+## The folder of the vendored copy of a locked package, `agc_libs/<name>` beside the manifest of the project.
+export def vendored_folder(scope: Scope, name: String) -> String
+  return Paths.join(scope.vendor, name)
+end
+
+# The vendored copy when the project folder has an entry of that name (a link or a file too: it is looked at without
+# following, and then read, so a copy that cannot be read is an error and the cache is not used instead), else the
+# cache folder of the commit.
+def source_of(workspace: Workspace.Workspace, env: Env.Env, scope: Scope, locked: Lock.Locked) -> Source
+  if scope.vendor != ""
+    listed = workspace.list_folder.call(scope.vendor)
+    if listed.ok? and listed.unwrap!.any? do |entry| entry.name == locked.name end
+      return Source(folder: vendored_folder(scope, locked.name), vendored: true)
+    end
+  end
+  cache = PackageCache.root(env)
+  if cache == ""
+    return Source(folder: "", vendored: false)
+  end
+  return Source(folder: PackageCache.folder(cache, locked.source.git, locked.commit), vendored: false)
 end
 
 # The name of a package file in the program and in the .agcb: it does not depend on the cache folder of the machine.
@@ -194,7 +247,7 @@ def confined(root: String, file: String, site: Failure.Site) -> Result[String]
   return ok(below.join("/"))
 end
 
-# The package in the cache, with its hash checked against the lock and its manifest read.
+# The package from its vendored copy or the cache, with its hash checked against the lock and its manifest read.
 def load(
   workspace: Workspace.Workspace,
   env: Env.Env,
@@ -202,16 +255,19 @@ def load(
   locked: Lock.Locked,
   site: Failure.Site,
 ) -> Result[Opened]
-  cache = PackageCache.root(env)
-  if cache == ""
+  source = source_of(workspace, env, scope, locked)
+  if source.folder == ""
     return error(missing(site, "there is no package cache folder: HOME is not set", "set HOME or XDG_CACHE_HOME"))
   end
-  folder = PackageCache.folder(cache, locked.source.git, locked.commit)
-  real = workspace.real_path.call(folder)
+  real = workspace.real_path.call(source.folder)
   if !real.ok? or !workspace.directory_exists.call(real.unwrap!)
-    return error(missing(site, "#{locked.name} is not in the package cache", "put the package in #{folder}"))
+    if source.vendored
+      message = "the vendored copy #{source.folder} of #{locked.name} is not a folder"
+      return error(missing(site, message, "run agentica vendor, or remove #{source.folder}"))
+    end
+    return error(missing(site, "#{locked.name} is not in the package cache", "put the package in #{source.folder}"))
   end
-  try verify(workspace, locked, real.unwrap!, folder, site)
+  try verify(workspace, locked, real.unwrap!, source, site)
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
   label = "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
   return ok(Opened(root: real.unwrap!, label: label, names: names))
@@ -221,7 +277,7 @@ def verify(
   workspace: Workspace.Workspace,
   locked: Lock.Locked,
   real: String,
-  folder: String,
+  source: Source,
   site: Failure.Site,
 ) -> Result[Void]
   case PackageHash.hash_folder(workspace, real)
@@ -233,14 +289,14 @@ def verify(
       return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read the package: #{message}", Diag.Help.NoHelp))
     PackageHash.Hashed.Hash(hash) ->
       if hash != locked.hash
-        return error(
-          Failure.fail_at(
-            site,
-            "PKG-HASH-MISMATCH",
-            "the files of #{locked.name} in the cache are not the ones the lock names",
-            Failure.hint("remove #{folder} and put the package back in the cache"),
-          ),
-        )
+        where = "in the cache"
+        help = "remove #{source.folder} and put the package back in the cache"
+        if source.vendored
+          where = "in agc_libs"
+          help = "run agentica vendor to put the locked files back"
+        end
+        message = "the files of #{locked.name} #{where} are not the ones the lock names"
+        return error(Failure.fail_at(site, "PKG-HASH-MISMATCH", message, Failure.hint(help)))
       end
       return ok()
   end

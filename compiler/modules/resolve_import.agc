@@ -136,7 +136,7 @@ def pkg(
   try Paths.validate_library_path(file, site)
   case try Packages.match_import(build.scope, importer.origin, file, site)
     Packages.Match.Library ->
-      key = try library(settings, build.libs_dir, file, site)
+      key = try library(settings, build.libs_dir, Packages.locked_module?(build.scope, file), file, site)
       return ok(plain(build, key))
     Packages.Match.Package(name, rest) ->
       located = try Packages.open_package(settings.workspace, settings.env, build.scope, name, rest, site)
@@ -178,8 +178,16 @@ def std_exists?(settings: Env.Settings, file: String) -> Bool
   end
 end
 
-def library(settings: Env.Settings, libs_dir: String, file: String, site: Failure.Site) -> Result[String]
-  roots = try library_roots(settings, libs_dir, site)
+# `vendored` is true for a module of a locked package that the importing manifest did not declare: agc_libs/ is skipped
+# for it, since its folder there is a vendored copy of that package, not a library (the other roots still apply).
+def library(
+  settings: Env.Settings,
+  libs_dir: String,
+  vendored: Bool,
+  file: String,
+  site: Failure.Site,
+) -> Result[String]
+  roots = try library_roots(settings, libs_dir, vendored, site)
   rest = file.slice(4, file.length - 4)
   for root in roots
     candidate = Paths.join(root, rest)
@@ -194,7 +202,12 @@ end
 # user data folder, then the system folders (none on Windows). Every AGENTICA_PATH entry must be absolute, whether or
 # not it is used. The Windows rules of docs/grammar/05b-modules.md are all here: the ";" separator, drive and UNC
 # roots, and %LOCALAPPDATA%.
-def library_roots(settings: Env.Settings, libs_dir: String, site: Failure.Site) -> Result[List[String]]
+def library_roots(
+  settings: Env.Settings,
+  libs_dir: String,
+  vendored: Bool,
+  site: Failure.Site,
+) -> Result[List[String]]
   on_windows = settings.env.windows
   separator = ":"
   if on_windows
@@ -212,7 +225,11 @@ def library_roots(settings: Env.Settings, libs_dir: String, site: Failure.Site) 
     end
     configured = configured.push(entry)
   end
-  roots = [Paths.join(libs_dir, "agc_libs")].concat(configured).concat(user_roots(settings.env, on_windows))
+  first = [Paths.join(libs_dir, "agc_libs")]
+  if vendored
+    first = []
+  end
+  roots = first.concat(configured).concat(user_roots(settings.env, on_windows))
   if on_windows
     return ok(roots)
   end

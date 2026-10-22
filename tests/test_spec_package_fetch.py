@@ -5,14 +5,13 @@ The remote of every case is a bare git repository in a temporary folder; a throw
 keep the https URL, git is the system git, and nothing touches the network or the real git config or package cache.
 Cases assert codes and the file and key path, never message text (AGENTS.md).
 """
-import json
 import os
 
 import pytest
 
 from tests.agentica_test import WINDOWS, cli, host_only, run
 from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment, git,  # noqa: F401
-                                    lock_entry, package_hash, remotes, ws)
+                                    lock_entry, package_hash, remotes, run_json, ws)
 
 pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
@@ -22,11 +21,7 @@ TOOLS = "owner/tools"
 
 def install(ws, remotes, *words, **extra):
     """The result of `--json install` in the project folder, and the problem it reported, or None for a success."""
-    result = run(cli() + ["--json", "install", *words], cwd=ws.project, env=environment(ws, remotes, **extra))
-    if result.code == 0:
-        assert result.stdout == '{"ok":true}\n'
-        return result, None
-    return result, json.loads(result.stderr) if result.code == 1 else None
+    return run_json("install", ws, remotes, *words, **extra)
 
 
 def project(ws, dependencies):

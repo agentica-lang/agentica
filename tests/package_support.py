@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, tool, vm_environment
+from tests.agentica_test import WINDOWS, cli, run, tool, vm_environment
 
 COMMIT = "a" * 40
 
@@ -224,6 +224,15 @@ def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None):
 
 def environment(ws, remotes, **extra):
     return vm_environment({"AGENTICA_PATH": "", **ws.cache_variables, **remotes.environment, **extra})
+
+
+def run_json(command, ws, remotes, *words, **extra):
+    """The result of `--json COMMAND` in the project folder, and the problem it reported, or None for a success."""
+    result = run(cli() + ["--json", command, *words], cwd=ws.project, env=environment(ws, remotes, **extra))
+    if result.code == 0:
+        assert result.stdout == '{"ok":true}\n'
+        return result, None
+    return result, json.loads(result.stderr) if result.code == 1 else None
 
 
 def assert_at_key(problem, code, file, key_path):

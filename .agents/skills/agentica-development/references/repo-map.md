@@ -12,7 +12,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
   app/  # the command line, the pipeline and the replies
     pipeline.agc  # build, compile: lower and write after analysis/front.agc has linked and checked; shared by the CLI and the BDD driver
     cli.agc  # run(settings, words, hand_off) -> exit status; test calls the BDD driver in process, which starts `settings.self_path run ...`; a later `run` word is a usage error
-    cli_install.agc cli_add.agc cli_project.agc  # `install` (§45b): the lock's packages into the cache through io/package_fetch.agc, never writes the lock; `add` and `update` (§45c): resolve, write agentica.lock (and one line of agentica.toml for `add`); what the three share
+    cli_install.agc cli_add.agc cli_vendor.agc cli_project.agc  # `install` (§45b): the lock's packages into the cache through io/package_fetch.agc, never writes the lock; `add` and `update` (§45c): resolve, write agentica.lock (and one line of agentica.toml for `add`); `vendor` (§45d): install, then the cache into agc_libs/<name>/ through io/package_vendor.agc; what the commands share
     cli_options.agc cli_help.agc cli_doc.agc cli_query.agc cli_text.agc cli_reply.agc cli_launch.agc  # the options; help; doc (prints docs/'s model); the query commands (outline: prints query/'s model); the fixed texts; what a command answers (Reply, Answer); Launch
     front_end_inputs.agc front_end_cli.agc  # the front end of the single binary (§18.2): `--version V [--stdlib DIR] [--self PATH] -- WORDS`, then front_end_cli.agc runs cli.agc over FrontEnd.hand_off
   analysis/  # the semantic queries, once (§39, `std/analysis`): the CLI and the library call it
@@ -23,6 +23,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     cache.agc session.agc  # the checked roots and parsed modules of a Session; the Session of stdlib/analysis.agc
   io/  # the adapter to the machine: the only code that reads files and the environment for the stages (app/ and bdd/ do their own I/O)
     host.agc  # workspace_with(std_source): the real Workspace over the std/ reader it is given; workspace(): for `--stdlib` runs; process_env(): the Env of this process
+    package_vendor.agc  # put(): one locked package from its cache folder into agc_libs/<name>/ (staged in a hidden folder, hashed, swapped in by renames; never through a link)
     git_process.agc package_fetch.agc package_resolve.agc  # the system `git` as a process; fill(): one locked package into the cache (depth-1 fetch, ls-tree and cat-file, hash check, rename into place); resolve(): a pin that is not locked yet, commit and hash learnt from the fetch; the closure of lock entries for `add` and `update`
     stdin_buffer.agc  # take(): the standard input as a buffer; over(): a Workspace with it as one file (modules/overlay.agc)
     source_reader.agc  # read, read_shown: a whole file as strict UTF-8 text in chunks (the rules are in syntax/source_file.agc)

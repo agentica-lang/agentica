@@ -48,8 +48,8 @@ First batch, as soon as possible:
    (#560).
 2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
    bytecode, so unchanged programs skip the front end.
-3. Packages [45](../future/45-packages.md): 45b (`install`, the fetch) and 45c
-   (`add`, `update`) are done; then 45d (`vendor`).
+3. Packages [45](../future/45-packages.md): done. 45b (`install`, the fetch),
+   45c (`add`, `update`) and 45d (`vendor`) are built; FFI-b is the rest.
 4. FFI-b: native libraries in packages (`[native]` in `agentica.toml`, hashes
    in the lock); needs 45b.
 
@@ -547,11 +547,11 @@ Idea, not scheduled, with no row: a language server
 the §32 doc comments, so it can only start after them (and is easiest on the
 self-hosted front end of §18).
 
-Designed, with no row: packages ([§45](../future/45-packages.md)). It is item 3
-of the list after 0.8.0 above, before FFI-b (item 4). The owner answered §45.14
-on 2026-10-20. Done: the TOML parser `std/toml` (45-0), the manifest, the lock
-and `pkg/<name>/` imports from the cache (45a), fetch and `install` (45b), and
-`add` and `update` (45c). Next: `vendor` (45d).
+Packages ([§45](../future/45-packages.md)), with no row. It is item 3 of the
+list after 0.8.0 above, before FFI-b (item 4). The owner answered §45.14 on
+2026-10-20. Done: the TOML parser `std/toml` (45-0), the manifest, the lock and
+`pkg/<name>/` imports from the cache (45a), fetch and `install` (45b), `add`
+and `update` (45c), and `vendor` (45d). Packages are complete except FFI-b.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep

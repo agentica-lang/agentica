@@ -2,7 +2,7 @@
 ## first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a module with
 ## `doc`, list the declarations of a file with `outline`, give the type at a position with `type-at`, list the
 ## references to a name with `refs`, fill the package cache with `install`, change the packages with `add` and
-## `update`, or start the tests.
+## `update`, copy them into agc_libs/ with `vendor`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -53,6 +53,7 @@ import CliQuery from "cli_query"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 import Pipeline from "pipeline"
+import Vendor from "cli_vendor"
 
 # The deadline of each call that writes the output of `compile`, in milliseconds.
 SAVE_TIMEOUT = 60_000
@@ -99,6 +100,8 @@ def dispatch(session: Session) -> Int
     return answered(session, Add.add(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "update"
     return answered(session, Add.update(session.settings, session.options.style, words.drop(1)), "")
+  elsif first == "vendor"
+    return vendor(session, words.drop(1))
   elsif first == "outline" or first == "type-at"
     return query(session, first, words.drop(1))
   elsif first == "symbol"
@@ -140,6 +143,14 @@ def install(session: Session, words: List[String]) -> Int
     return emit(Reply.failed(2, Texts.usage_text()))
   end
   return answered(session, Install.run(session.settings, session.options.style), "")
+end
+
+# `vendor`: it takes no word; the project is the one of the working folder.
+def vendor(session: Session, words: List[String]) -> Int
+  if words.size != 0
+    return emit(Reply.failed(2, Texts.usage_text()))
+  end
+  return answered(session, Vendor.run(session.settings, session.options.style), "")
 end
 
 # What a command gave: print the answer, or reject the first problem of the program. A QUERY- problem is a mistake in
