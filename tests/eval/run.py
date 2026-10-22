@@ -567,7 +567,13 @@ def command_failed(command: str, text: str) -> bool:
 
 
 def pi_metrics(out: str) -> dict[str, int | float]:
-    m = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "cost": 0.0, "turns": 0,
+    """Counters from the `message_end` events of the assistant in Pi's JSON stream.
+
+    `tokens_in` is the uncached input only, `tokens_cached` the cache reads: the context an agent read is
+    `tokens_in + tokens_cached + tokens_cache_write`. The cost is split in the same way as the usage events do:
+    `cost_input`, `cost_cache` (reads and writes) and `cost_output`."""
+    m = {"tokens_in": 0, "tokens_out": 0, "tokens_cached": 0, "tokens_cache_write": 0, "cost": 0.0,
+         "cost_input": 0.0, "cost_cache": 0.0, "cost_output": 0.0, "turns": 0,
          "interpreter_runs": 0, "failing_runs": 0, "check_runs": 0, "check_failures": 0,
          "outside_reads": 0, "net_commands": 0, "query_runs": 0, "read_runs": 0}
     pending: dict[str, str] = {}
@@ -585,7 +591,12 @@ def pi_metrics(out: str) -> dict[str, int | float]:
             m["tokens_in"] += usage.get("input", 0)
             m["tokens_out"] += usage.get("output", 0)
             m["tokens_cached"] += usage.get("cacheRead", 0)
-            m["cost"] += usage.get("cost", {}).get("total", 0.0)
+            usage_cost = usage.get("cost", {})
+            m["tokens_cache_write"] += usage.get("cacheWrite", 0)
+            m["cost"] += usage_cost.get("total", 0.0)
+            m["cost_input"] += usage_cost.get("input", 0.0)
+            m["cost_cache"] += usage_cost.get("cacheRead", 0.0) + usage_cost.get("cacheWrite", 0.0)
+            m["cost_output"] += usage_cost.get("output", 0.0)
         elif kind == "tool_execution_start":
             args = json.dumps(event.get("args", {}))
             if str(ROOT) in args:
@@ -619,7 +630,8 @@ def claude_metrics(out: str) -> dict[str, int | float]:
         return {}
     usage = data.get("usage", {})
     return {"tokens_in": usage.get("input_tokens", 0), "tokens_out": usage.get("output_tokens", 0),
-            "tokens_cached": usage.get("cache_read_input_tokens", 0), "cost": data.get("total_cost_usd", 0.0),
+            "tokens_cached": usage.get("cache_read_input_tokens", 0),
+            "tokens_cache_write": usage.get("cache_creation_input_tokens", 0), "cost": data.get("total_cost_usd", 0.0),
             "turns": data.get("num_turns", 0), "check_runs": 0, "check_failures": 0,
             "query_runs": 0, "read_runs": 0}
 
@@ -859,6 +871,15 @@ def run_info(args: argparse.Namespace, image_info: dict[str, str | None]) -> dic
             "arm_notes": {arm: NOCLI_NOTE for arm in args.arms if arm == "skill-nocli"}}
 
 
+def mean_known(rows: list[dict], keys: tuple[str, ...], places: int) -> str:
+    """The mean over `rows` of the sum of `keys`, or `-` when any row lacks a key: results files from before a
+    field existed have no value for it, which is unknown, not 0."""
+    if any(key not in row for row in rows for key in keys):
+        return "-"
+    total = sum(row[key] for row in rows for key in keys) / len(rows)
+    return f"{total:.{places}f}"
+
+
 def summarize(results: Path) -> None:
     rows = read_rows(results)
     info_file = results / "run.json"
@@ -866,16 +887,20 @@ def summarize(results: Path) -> None:
     groups = {}
     for row in rows:
         groups.setdefault((row["task"], row["arm"]), []).append(row)
-    out = ["| task | arm | runs | pass | cases | tokens | seconds | failing runs | check runs | query runs | refused | read runs | type escapes | failures |",
-           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    out = ["| task | arm | runs | pass | cases | tokens | context | cost in $ | cost cache $ | cost out $ | seconds | failing runs | check runs | query runs | refused | read runs | type escapes | failures |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for (task, arm), rs in sorted(groups.items()):
         n = len(rs)
         mean = lambda key: round(sum(r.get(key, 0) for r in rs) / n, 1)
         tokens = round(sum(r.get("tokens_in", 0) + r.get("tokens_out", 0) for r in rs) / n)
+        # The context is what the agent read: uncached input, cache reads and cache writes. Older rows have no
+        # `tokens_cache_write`; it counts only when present.
+        context = "-" if any("tokens_in" not in r or "tokens_cached" not in r for r in rs) else str(round(
+            sum(r["tokens_in"] + r["tokens_cached"] + r.get("tokens_cache_write", 0) for r in rs) / n))
         passes = sum(r["status"] == "pass" for r in rs)
         cases = round(sum(r["passed"] / r["total"] for r in rs) / n * 100)
         kinds = ", ".join(sorted({f"{r['failure']}:{r['code']}" if r["code"] else str(r["failure"]) for r in rs if r["failure"]})) or "-"
-        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {mean('seconds')} | {mean('failing_runs')} | {mean('check_runs')} | {mean('query_runs')} | {mean('refused_queries')} | {mean('read_runs')} | {mean('type_escapes')} | {kinds} |")
+        out.append(f"| {task} | {arm} | {n} | {passes}/{n} | {cases}% | {tokens} | {context} | {mean_known(rs, ('cost_input',), 4)} | {mean_known(rs, ('cost_cache',), 4)} | {mean_known(rs, ('cost_output',), 4)} | {mean('seconds')} | {mean('failing_runs')} | {mean('check_runs')} | {mean('query_runs')} | {mean('refused_queries')} | {mean('read_runs')} | {mean('type_escapes')} | {kinds} |")
     if info.get("cost") is not None:
         out += ["", f"cost: ${info['cost']:.4f}" + (f" (cap ${info['max_cost']:.2f})" if info.get("max_cost") is not None else "")]
     out += ["", f"stopped_for_budget: {str(bool(info.get('stopped_for_budget'))).lower()}"

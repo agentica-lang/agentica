@@ -736,12 +736,26 @@ round are. The round cost $1.52 of the $2.
 
 Per run, `skill` against `typed-python` on the tasks both ran:
 
-| Model | Arm | Passed | Tokens in | Tokens out | Cost | Turns | Seconds | Failing runs |
-|---|---|---|---|---|---|---|---|---|
-| DeepSeek | `skill` | 38/39 | 22,170 | 5,792 | $0.0144 | 9.6 | 59 | 0.10 |
-| DeepSeek | `typed-python` | 39/39 | 8,176 | 4,426 | $0.0079 | 5.7 | 41 | 0.05 |
-| GLM | `skill` | 58/60 | 9,302 | 2,858 | $0.0053 | 11.8 | 40 | 0.92 |
-| GLM | `typed-python` | 53/60 | 2,824 | 1,474 | $0.0017 | 6.0 | 22 | 0.28 |
+| Model | Arm | Passed | Tokens in | Context | Tokens out | Cost | Turns | Seconds | Failing runs |
+|---|---|---|---|---|---|---|---|---|---|
+| DeepSeek | `skill` | 38/39 | 22,170 | 152,073 | 5,792 | $0.0144 | 9.6 | 59 | 0.10 |
+| DeepSeek | `typed-python` | 39/39 | 8,176 | 32,412 | 4,426 | $0.0079 | 5.7 | 41 | 0.05 |
+| GLM | `skill` | 58/60 | 9,302 | 91,885 | 2,858 | $0.0053 | 11.8 | 40 | 0.92 |
+| GLM | `typed-python` | 53/60 | 2,824 | 19,227 | 1,474 | $0.0017 | 6.0 | 22 | 0.28 |
+
+"Tokens in" is the uncached input only. "Context" is what the agent read: the
+input plus the cache reads (Pi reported no cache writes). The cache reads are
+most of it, so "tokens in" understates the gap between the arms.
+
+Cost over the same runs (39 per arm for DeepSeek, 60 for GLM), split as Pi
+reports it:
+
+| Model | Arm | Input | Cache read | Output | Total |
+|---|---|---|---|---|---|
+| DeepSeek | `skill` | $0.259 | $0.030 | $0.271 | $0.561 |
+| DeepSeek | `typed-python` | $0.096 | $0.006 | $0.207 | $0.308 |
+| GLM | `skill` | $0.084 | $0.149 | $0.086 | $0.318 |
+| GLM | `typed-python` | $0.025 | $0.030 | $0.044 | $0.099 |
 
 - **The commands were not used.** `query_runs` is 0 in all 225 Pi runs. In the
   raw logs (`agent.jsonl`), none of the 1,040 bash calls runs `outline`,
@@ -762,9 +776,14 @@ Per run, `skill` against `typed-python` on the tasks both ran:
   failure. Agentica: DeepSeek t19 once (0/8); GLM t6 twice (7/8). Typed Python:
   none for DeepSeek; GLM seven (t6 three times, t2, t16, t18 and t19 once).
 - **Agentica costs more per run:** 1.8 times (DeepSeek) and 3.1 times (GLM),
-  with 2.2 and 2.8 times the tokens, 1.7 and 2.0 times the turns, and 1.4 and
-  1.8 times the seconds. The failing check or run calls per run are also higher
-  (GLM 0.92 against 0.28).
+  with 4.7 and 4.8 times the context, 1.3 and 1.9 times the output tokens,
+  1.7 and 2.0 times the turns, and 1.4 and 1.8 times the seconds. The failing
+  check or run calls per run are also higher (GLM 0.92 against 0.28). Counted
+  as input plus output without the cache reads, the gap looks like 2.2 and 2.8
+  times the tokens; that figure leaves most of the context out.
+- **Most of the extra cost is on the input side.** Input and cache reads are
+  75% (DeepSeek) and 81% (GLM) of what `skill` costs more than `typed-python`.
+  The context, not the output, is what to cut.
 - **DeepSeek stopped for budget.** Its cost per run was above the estimate
   ($0.0144 against $0.0082 for `skill`) because the runs go in task-name order
   (t1, t10 to t19, t2, t20, then t3 to t9), so the larger tasks ran first. The
