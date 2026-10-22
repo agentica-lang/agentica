@@ -40,6 +40,7 @@ one (`xs.map`) has no line. `(after a tail call)` marks a frame whose callers a
 tail call removed; `walk at tree.agc:9:12 (9998 times)` is one line for a
 recursion. The 15 innermost and 5 outermost lines show, with `... 312 frames
 not shown ...` between. A task ends with `task spawned at file:line:column`.
+A function name or file path over 256 bytes is cut there and ends with `...`.
 Runtime traces name files as you can open them from the working directory (a
 standard module as `std/NAME.agc`); compile-time errors show the first file as
 typed and imports by absolute path. `--json` adds `stack` (objects with
@@ -192,8 +193,8 @@ and a task's crash line (`"task":true`) carry it too.
   or Int-keyed maps.
 - `CHECK-IMMUTABLE-ASSIGNMENT`: assignment to a `for` variable.
 - `CHECK-INT-RANGE`: an integer literal that does not fit in `Int`.
-- `CHECK-PIPE-METHOD`: `x |> String.trim()`: a builtin with a method form for
-  the left value is written with `.` (`x.trim`).
+- `CHECK-PIPE-METHOD`: `x |> String.strip()`: a builtin with a method form for
+  the left value is written with `.` (`x.strip`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method
   call on a struct, or `.with(...)` on a non-struct. Common foreign names get
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
@@ -221,14 +222,14 @@ and a task's crash line (`"task":true`) carry it too.
   `List.take`/`drop` count; `Channel.new` capacity outside 1..1048576; a
   `Task.map` `limit` outside 1..1024; a negative
   `Int.shift_left`/`shift_right`/`shift_right_unsigned` count.
-- `RUNTIME-INVALID-NUMBER`: `String.to_int!`/`to_float!` on bad text,
-  `Float.to_int!` on NaN or infinity, `Float.from_bits32` outside 0..4294967295,
-  a `Crypto.sha256` item outside 0..255.
+- `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
+  `x.to_i!` on a Float that is NaN or infinity, `Float.from_bits32` outside
+  0..4294967295, a `Crypto.sha256` item outside 0..255.
 - `RUNTIME-INVALID-RANGE`: `Random.int` with `min > max`.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or
   `String.from_code` outside Unicode scalar values.
 - `RUNTIME-END-OF-INPUT`: `IO.gets!` with no input left.
-- `RUNTIME-UNWRAP-ERROR`: `Result.unwrap!` on an error.
+- `RUNTIME-UNWRAP-ERROR`: `r.unwrap!` on an error.
 - `RUNTIME-JSON-ENCODE`: `JSON.encode` of a non-finite Float.
 - `RUNTIME-STEP-LIMIT`: the execution step budget is exhausted; the stack shows
   where the loop runs.

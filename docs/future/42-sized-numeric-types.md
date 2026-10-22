@@ -604,10 +604,10 @@ standard library only, and the checker goldens of the Agentica front end against
   `RUNTIME-INVALID-COUNT` for a negative shift count.
 - **Docs in each step.** The grammar (`04-lexical.md`, `06-semantics.md`,
   `06b-builtins.md`, `07-diagnostics.md`), the programming skill (a short
-  `SKILL.md`; the rules in its references), the site numbers page (and `binary.md` in step 3), the
-  development skill's VM references, and a `CHANGELOG.md` entry under
-  `## [Unreleased]`, with `**Breaking:**` for the reserved names (step 1) and
-  the binary API (step 3).
+  `SKILL.md`; the rules in its references), the site numbers page (and
+  `binary.md` in step 3), the development skill's VM references, and a
+  `CHANGELOG.md` entry under `## [Unreleased]`, with `**Breaking:**` for the
+  reserved names (step 1) and the binary API (step 3).
 
 ### 42.14 Freeze and bootstrap impact
 

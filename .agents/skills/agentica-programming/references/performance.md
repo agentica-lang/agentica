@@ -16,11 +16,12 @@ comparisons. A table that does not depend on the arguments belongs in a module
 constant: built once before `main`, read with one array access. Build it in the
 function only when it depends on the input. On 900,000 characters a
 `Set[String]` test took 185 ms against 400 ms for an `or` chain of five
-comparisons [measured, three runs].
+comparisons, and a `Set[Int]` test 205 ms against 305 ms [measured, three
+runs].
 
-For one pass over a text, a `while` with `String.code(text.at(j))` is enough
+For one pass over a text, a `while` with `text.at(j).code` is enough
 (283 ms on 1M ASCII characters). Keep the codes in a list
-(`text.split("").map do |c| String.code(c) end`) when you scan the same text
+(`text.split("").map do |c| c.code end`) when you scan the same text
 twice or move back and forth.
 
 ## Loops and structs
@@ -62,10 +63,10 @@ Costs in steps, measured on 100,000 repeats:
 - A call costs several steps. Inline a function that runs for each token when
   the loop makes a token every few characters: a lexer went from 52 to 24 steps
   per character by moving hot arms into `lex`, tables into module constants and
-  using `text.split("")` instead of `String.code` of each character. Inlining
+  using `text.split("")` instead of `code` of each character. Inlining
   one helper alone cut 2.1%, so first find the work done per item: a closure
   called per character, a table built per call, a call per token.
-- `text.split("").map do |c| String.code(c) end` costs 3 steps and a builtin
+- `text.split("").map do |c| c.code end` costs 3 steps and a builtin
   call per character. `Set[String]` tests cost as much as `Set[Int]`.
 - The line lengths of `text.split("\n")` find the end of a line or comment with
   no scan (a CR needs the scan: it ends a line too). A value used again goes in

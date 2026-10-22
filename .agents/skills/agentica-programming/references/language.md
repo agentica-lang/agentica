@@ -138,12 +138,12 @@ variables, parameters, fields, list elements and map values are
 `CHECK-VOID-TYPE`; `List[Result[Void]]` is valid. A Void call may be a statement
 or be forwarded with `return another_void_call()`. Assigning, passing,
 constructing, operating on or inspecting a bare completion is `CHECK-VOID-VALUE`
-(`v = puts("x")`), as is `Result.unwrap!(Result[Void])`,
+(`v = puts("x")`), as is `r.unwrap!` on a `Result[Void]`,
 `Task.await(Task[Void])` and a successful `try` on `Result[Void]`.
 
 `ok()` is `Result[Void]` and prints `ok()`; `ok(nil)` is `Result[Nil]`. A
 `Result[Void]` function returns `ok()` or `error(message)` explicitly.
-`Result.unwrap_or` needs a data fallback, so it cannot take `Result[Void]`.
+`r.unwrap_or(d)` needs a data fallback, so it cannot take `Result[Void]`.
 
 ## Declarations
 
@@ -170,8 +170,8 @@ end
   The default is a constant: an Int, Float or String literal (a minus before a
   number is fine; `#{...}` is not), `true`, `false`, `nil`, `[]`, `{}` (built
   again at each call, typed by the parameter) or a payload-less enum variant
-  (`Level.Info`). Anything else is `CHECK-DEFAULT-VALUE`; a wrong type is
-  `CHECK-TYPE-MISMATCH` at the default.
+  (`Level.Info`, or `Models.Level.Info` from another module). Anything else is
+  `CHECK-DEFAULT-VALUE`; a wrong type is `CHECK-TYPE-MISMATCH` at the default.
 - After a defaulted parameter every parameter needs a default
   (`CHECK-DEFAULT-ORDER`), except a last `Fn` parameter, which a block or the
   last argument always fills: with `def each_line(path: String, timeout_ms: Int
@@ -251,10 +251,10 @@ end
   digits, `_`; `<<NAME`, `<<-NAME`, `<<~'NAME'` and `<<~name` are
   `LEX-UNEXPECTED-CHAR`). The smallest indentation among the text lines is
   removed, a space-only line becomes empty, and every line, the last too, ends
-  with `\n`: `<<~T`, ` a`, ` b`, `T` is `"a\n b\n"`. Escapes and `#{...}` work
-  as in a string (indentation is removed first). The rest of the opener line is
-  code (`puts(<<~T)`, `<<~T.length`, `f(<<~A, <<~B)`); inside `(...)` the call
-  goes on after the end line. It needs two text lines or more
+  with `\n`: `<<~T`, `  a`, `    b`, `T` is `"a\n  b\n"`. Escapes and `#{...}`
+  work as in a string (indentation is removed first). The rest of the opener
+  line is code (`puts(<<~T)`, `<<~T.length`, `f(<<~A, <<~B)`); inside `(...)`
+  the call goes on after the end line. It needs two text lines or more
   (`LEX-HEREDOC-ONE-LINE`; write `"text\n"`); a tab in the indentation is
   `LEX-HEREDOC-INDENT`; no end line is `LEX-UNTERMINATED-HEREDOC`.
 - Lists `[1, 2, 3]`; maps `{"a": 1, "b": 2}`. A repeated key keeps the last
@@ -323,9 +323,9 @@ Operators, from highest to lowest precedence:
 - `x |> f(a)` means `f(x, a)`. The right side is a call with parentheses
   (`f(a)`, `Alias.f(a)`), optionally after `try`, else `PARSE-PIPE-TARGET`;
   pipes group left. A builtin with a method form is written with `.`
-  (`CHECK-PIPE-METHOD`: `x.trim`, not `x |> String.trim()`). A multi-line chain
-  goes in parentheses, one step per line; a leading `|>` does not continue a
-  line, unlike a leading `.name`.
+  (`CHECK-PIPE-METHOD`: `x.strip`, not `x |> String.strip()`). A multi-line
+  chain goes in parentheses, one step per line; a leading `|>` does not continue
+  a line, unlike a leading `.name`.
 
   ```ruby
   out = (
@@ -384,14 +384,14 @@ error(message: String) -> Result[T]
   Success paths still return explicitly. The operand must be a Result: `try
   text.to_i`, not `try text.to_i!`. A `try` supplies `Result[T]` to its operand;
   the function's return type alone does not.
-- `Result.unwrap!` halts with `RUNTIME-UNWRAP-ERROR` on an error and passes its
+- `r.unwrap!` halts with `RUNTIME-UNWRAP-ERROR` on an error and passes its
   expected type to the operand as `Result[T]`. `unwrap_or` takes the expected T
   or the default's type and evaluates both arguments, left to right, even on
-  success. `Result.ok?` and `Result.message` need a known Result type; `message`
-  is `""` for a success.
+  success. `r.ok?` and `r.message` need a known Result type; `message` is `""`
+  for a success.
 - `ok(false)` and `ok(nil)` are successes. Results nest and hold lists, maps and
   structs; they have no equality, fields or indexing.
-- Non-bang conversions (`String.to_int`) share the bang forms' syntax and 64-bit
+- Non-bang conversions (`s.to_i`) share the bang forms' syntax and 64-bit
   bounds but return an error on bad text; other runtime errors are not
   converted. `"x".to_i` is a Result, not `0`.
 - `Result.Ok(x)` and `Result.Err(m)` equal `ok(x)` and `error(m)`, as values and

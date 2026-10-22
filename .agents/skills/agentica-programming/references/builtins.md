@@ -1,11 +1,14 @@
 # Builtins
 
-Signatures of the core namespaces. `agentica help NAME` prints one. A name from
-another language (`strip`, `String.to_i`, `value!`) prints the builtins it
-stands for (`--json`: `{"alias", "builtins", "hints"}`); one with only a hint
-(`len`, `int`) prints it and exits 2, as does an unknown name. Builtin
-namespaces and type names are reserved: no declaration, local, parameter, field
-or import alias may use them. `ok` and `error` are calls, never declared names.
+Signatures of the core namespaces. A row written `x.name(...)` is a Ruby name:
+write it in method form only (`String.strip(s)` is `CHECK-UNKNOWN-NAME`). Other
+rows may be written either way (`String.length(s)` or `s.length`). `agentica
+help NAME` prints a signature. A Ruby or other name (`strip`, `value!`) prints
+the builtin it stands for, under its Agentica name (`--json`: `{"alias",
+"builtins", "hints"}`); one with only a hint (`len`, `int`) prints it and exits
+2, as does an unknown name. Builtin namespaces and type names are reserved: no
+declaration, local, parameter, field or import alias may use them. `ok` and
+`error` are calls, never declared names.
 
 ## Output, input, system
 
@@ -20,7 +23,7 @@ IO.warn(value: T) -> Void               # stderr, with newline
 IO.inspect(value: T) -> T               # prints the debug form, returns the value
 IO.gets() -> Result[String]             # ok(line), or error at end of input
 IO.gets!() -> String                    # halts at end of input
-IO.read() -> String                     # to end of input; not for line protocols
+IO.read() -> String                     # to end of input (not IO.read_all); not for line protocols
 IO.eof?() -> Bool                       # peeks one byte; may block; not a readiness poll
 IO.flush() -> Void                      # stdout only
 System.args() -> List[String]           # the ARGS after the file
@@ -46,9 +49,9 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
 Int.times(n: Int, f: Fn[Int, Void]) -> Void              # 0 .. n - 1; nothing when n <= 0
 Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void   # both ends included; nothing when to < from
 Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # both ends included; nothing when to > from
-Float.from_int(n: Int) -> Float
-Float.to_int(x: Float) -> Result[Int]                    # truncates; NaN, infinity, overflow are errors
-Float.to_int!(x: Float) -> Int                           # same, but halts (RUNTIME-INVALID-NUMBER)
+n.to_f() -> Float                                        # Int
+x.to_i() -> Result[Int]                                  # Float; truncates; NaN, infinity, overflow are errors
+x.to_i!() -> Int                                         # same, but halts (RUNTIME-INVALID-NUMBER)
 ```
 
 A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`.
@@ -60,28 +63,28 @@ Bit operations: `binary.md`.
 String.length(s: String) -> Int                          # Unicode characters
 String.upcase(s: String) -> String
 String.downcase(s: String) -> String
-String.trim(s: String) -> String
+s.strip() -> String
 String.split(s: String, separator: String) -> List[String]   # keeps empty parts; "" gives characters
-String.join(parts: List[String], separator: String) -> String
-String.contains?(s: String, part: String) -> Bool
-String.starts_with?(s: String, prefix: String) -> Bool
-String.ends_with?(s: String, suffix: String) -> Bool
+parts.join(separator: String) -> String               # List[String]
+s.include?(part: String) -> Bool
+s.start_with?(prefix: String) -> Bool
+s.end_with?(suffix: String) -> Bool
 String.replace(s: String, from: String, to: String) -> String
 String.slice(s: String, start: Int, length: Int) -> String   # bad range halts
 String.index_of(s: String, part: String) -> Result[Int]      # first match; error if absent
 String.at(s: String, index: Int) -> String               # one character; halts outside
 String.reverse(s: String) -> String
-String.code(c: String) -> Int                            # code point of one character; other lengths halt
+String.code(c: String) -> Int                            # c.code: code point of one character; other lengths halt
 String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
 String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
-String.from_int(n: Int) -> String
-String.from_float(x: Float) -> String
+n.to_s() -> String                                       # Int
+x.to_s() -> String                                       # Float
 String.from_bytes(data: List[Int]) -> Result[String]     # strict UTF-8; binary.md
 String.to_bytes(s: String) -> List[Int]                  # UTF-8 bytes, 0..255
-String.to_int(s: String) -> Result[Int]                  # signed decimal; overflow is an error
-String.to_float(s: String) -> Result[Float]
-String.to_int!(s: String) -> Int                         # halts on bad text (RUNTIME-INVALID-NUMBER)
-String.to_float!(s: String) -> Float
+s.to_i() -> Result[Int]                                  # signed decimal; overflow is an error
+s.to_f() -> Result[Float]
+s.to_i!() -> Int                                         # halts on bad text (RUNTIME-INVALID-NUMBER)
+s.to_f!() -> Float
 ```
 
 - `"a,,b,".split(",")` is `["a", "", "b", ""]`; `"abc".split("")` is
@@ -89,13 +92,13 @@ String.to_float!(s: String) -> Float
 - `index_of` and `at` count characters, like `length`. Use `code` and
   `from_code` for character arithmetic. Strings cannot be indexed (`s[0]`).
 - No regex builtin (`=~`, `matches?`). `s.empty?` is `s.length == 0`, `s.chars`
-  is `s.split("")`, `s.ord` is `String.code(s)`, `s.bytes` is `s.to_bytes`.
+  is `s.split("")`, `s.ord` is `s.code`, `s.bytes` is `s.to_bytes`.
 
 ## List
 
 ```text
 List.size(list: List[T]) -> Int
-List.append(list: List[T], value: T) -> List[T]          # near constant time: n appends build a list in O(n)
+xs.push(value: T) -> List[T]                             # near constant time: n pushes build a list in O(n)
 List.set(list: List[T], index: Int, value: T) -> List[T] # 0..length-1, else RUNTIME-INDEX-OUT-OF-RANGE; O(log32 n)
 List.repeat(value: T, count: Int) -> List[T]             # count 0..1048576, else RUNTIME-INVALID-COUNT
 List.reverse(list: List[T]) -> List[T]
@@ -210,10 +213,10 @@ Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.filter do
 ok(value: T) -> Result[T]
 ok() -> Result[Void]
 error(message: String) -> Result[T]                      # needs an expected Result type
-Result.ok?(r: Result[T]) -> Bool
-Result.unwrap!(r: Result[T]) -> T                        # halts with RUNTIME-UNWRAP-ERROR on error
-Result.unwrap_or(r: Result[T], default: T) -> T
-Result.message(r: Result[T]) -> String                   # the error message, or "" for success
+r.ok?() -> Bool
+r.unwrap!() -> T                                         # halts with RUNTIME-UNWRAP-ERROR on error
+r.unwrap_or(default: T) -> T
+r.message() -> String                                    # the error message, or "" for success
 ```
 
 `r.is_err?`, `r.error?`, `r.value!` and `r.ok!` do not exist: write `!r.ok?` and
@@ -231,11 +234,10 @@ structs and enums have no methods. `.call(...)` invokes a function value. An
 unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the type's
 methods.
 
-Write the Ruby method names; each is the same call as its Agentica name
-(`agentica help NAME` shows the target): `strip`, `include?`, `start_with?`,
-`end_with?`, `to_i`, `to_f`, `to_i!`, `to_f!`, `size` on a String, `length` on a
-List, `push`, `join` on a `List[String]`, `to_s` and `inspect` on any data
-value, `n.to_f`, `x.to_i`.
+Write the Ruby method names: `strip`, `include?`, `start_with?`, `end_with?`,
+`to_i`, `to_f`, `to_i!`, `to_f!`, `push`, `join` on a `List[String]`, `to_s` and
+`inspect` on any data value, `n.to_f`, `x.to_i`. `length` is the String's and
+`size` the List's, Map's and Set's.
 
 Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A
 negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is

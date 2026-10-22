@@ -293,13 +293,12 @@ its capacity gives backpressure and `recv` is `next`.
 ## One form per job
 
 - Change, select or combine list items: `map`, `filter`, `reduce` (eager).
-- A running total or a value built in a loop: `reduce`, or a `for`/`while` that
-  reassigns a local.
+- A running total or a value built in a loop: `reduce`; a `for` only where a
+  block cannot assign the variables you update.
 - Run over a list at the same time, a few at a time, a timeout each, results in
   input order: `Task.map(items, limit, timeout_ms)`.
 - Long-lived workers, producer and consumer, flows of unknown length, results in
   the order they end: tasks and a `Channel`.
 - State several tasks update: one owner task receiving messages on a channel.
 - Each line of a big file in bounded memory: `File.each_line`.
-- An endless sequence or a source too big for a list: `Lazy` (`lazy.md`) or a
-  `while` loop.
+- An endless sequence or a source too big for a list: `Lazy` (`lazy.md`).

@@ -107,6 +107,6 @@ end
 
 def main() -> Void
   text = JSON.encode({"name": "Ana"})
-  puts(Result.unwrap!(greet_json(text)))
+  puts(greet_json(text).unwrap!)
 end
 ```
