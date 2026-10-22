@@ -165,17 +165,30 @@ class Remotes:
         """The https URL of a repository `owner/repo`, as a manifest writes it."""
         return self.HOST + path
 
-    def git(self, *arguments, cwd):
+    def git(self, *arguments, cwd, stdin=None):
+        """Runs git with the isolated environment and returns its stripped stdout; `stdin` is bytes fed to it."""
         env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
         env.update({key: value for key, value in self.environment.items() if value is not None})
-        done = subprocess.run(["git", *arguments], cwd=str(cwd), env=env, capture_output=True, text=True)
+        done = subprocess.run(["git", *arguments], cwd=str(cwd), env=env, capture_output=True, input=stdin)
         assert done.returncode == 0, (arguments, done.stderr)
-        return done.stdout.strip()
+        return done.stdout.decode("utf-8").strip()
+
+    def tree(self, entries, cwd):
+        """Writes the tree object of `entries` ({name: (mode, type, object id or bytes)}, where bytes become a blob)."""
+        lines = []
+        for name, (mode, kind, content) in entries.items():
+            if isinstance(content, bytes):
+                content = self.git("hash-object", "-w", "--stdin", cwd=cwd, stdin=content)
+            lines.append("%s %s %s\t%s\n" % (mode, kind, content, name))
+        return self.git("mktree", cwd=cwd, stdin="".join(lines).encode("utf-8"))
 
     def publish(self, path, files, tag=None, annotated=True, links=None, gitlinks=None):
         """Commits `files` ({path: bytes or str}) as the whole tree of the repository `owner/repo`, tags the commit
         (`tag`, annotated unless told otherwise) and pushes it to the bare repository. `links` maps a path to the target
-        of a symbolic link, and `gitlinks` the paths of submodule entries (mode 160000). Returns the commit."""
+        of a symbolic link, and `gitlinks` the paths of submodule entries (mode 160000). Returns the commit.
+
+        The tree is built with git plumbing (blobs and trees), never through a working folder, so names that differ
+        only in case stay two entries on a case-insensitive file system (the default of macOS and Windows)."""
         work = self.work / path
         bare = self.root / path
         if not work.exists():
@@ -183,21 +196,28 @@ class Remotes:
             self.git("init", "--quiet", "--initial-branch=main", cwd=work)
             self.git("init", "--bare", "--quiet", str(bare), cwd=self.work)
             self.git("remote", "add", "origin", str(bare), cwd=work)
-        self.git("rm", "-r", "--quiet", "--ignore-unmatch", "-f", ".", cwd=work)
-        for entry in work.iterdir():
-            if entry.name != ".git":
-                shutil.rmtree(entry) if entry.is_dir() and not entry.is_symlink() else entry.unlink()
-        for relative, content in files.items():
-            target = work / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(content if isinstance(content, bytes) else content.encode("utf-8"))
-        for relative, destination in (links or {}).items():
-            os.symlink(destination, work / relative)
-        self.git("add", "-A", cwd=work)
-        for relative in gitlinks or []:
-            self.git("update-index", "--add", "--cacheinfo", "160000,%s,%s" % ("1" * 40, relative), cwd=work)
-        self.git("commit", "--quiet", "--allow-empty", "-m", "release", cwd=work)
-        commit = self.git("rev-parse", "HEAD", cwd=work)
+        leaves = {name: ("100644", "blob", content if isinstance(content, bytes) else content.encode("utf-8"))
+                  for name, content in files.items()}
+        leaves.update({name: ("120000", "blob", target.encode("utf-8")) for name, target in (links or {}).items()})
+        leaves.update({name: ("160000", "commit", "1" * 40) for name in gitlinks or []})
+        root = {}
+        for name, leaf in leaves.items():
+            *folders, last = name.split("/")
+            folder = root
+            for part in folders:
+                folder = folder.setdefault(part, {})
+            folder[last] = leaf
+
+        def write(node):
+            entries = {name: ("040000", "tree", write(child)) if isinstance(child, dict) else child
+                       for name, child in node.items()}
+            return self.tree(entries, work)
+
+        # A first publish has no HEAD yet; later ones chain, so the same files published twice are two commits.
+        has_head = (work / ".git" / "refs" / "heads" / "main").exists()
+        parent = self.git("rev-parse", "HEAD", cwd=work) if has_head else ""
+        commit = self.git("commit-tree", write(root), *(["-p", parent] if parent else []), "-m", "release", cwd=work)
+        self.git("update-ref", "HEAD", commit, cwd=work)
         pushed = ["push", "--quiet", "--force", "origin", "HEAD:refs/heads/main"]
         if tag is not None:
             self.git(*(["tag", "-f", "-a", "-m", tag] if annotated else ["tag", "-f"]), tag, cwd=work)
