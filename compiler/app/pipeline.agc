@@ -3,6 +3,7 @@
 ## both run it.
 
 import Front from "../analysis/front"
+import BytecodeCache from "../io/bytecode_cache"
 import Writer from "../bytecode/bytecode_writer"
 import Problems from "../diagnostics/problem"
 import Lowering from "../lower/lowering"
@@ -20,6 +21,18 @@ export def build(front: Front.Checked, settings: Env.Settings) -> Compiled
     Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
     Lowering.Lowered.Done(program) ->
       return write(Writer.write(program, settings.version))
+  end
+end
+
+## Like `build`, and keeps the bytes in the bytecode cache of `plan` (io/bytecode_cache.agc). The cache never fails a
+## compile: a plan that is off, or an entry that cannot be written, changes nothing.
+export def build_cached(front: Front.Checked, settings: Env.Settings, plan: BytecodeCache.Plan) -> Compiled
+  built = build(front, settings)
+  case built
+    Compiled.Rejected(_) -> return built
+    Compiled.Bytes(bytes) ->
+      BytecodeCache.store(plan, settings, front.linked.modules, bytes)
+      return built
   end
 end
 

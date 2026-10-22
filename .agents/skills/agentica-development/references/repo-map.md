@@ -25,6 +25,8 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     host.agc  # workspace_with(std_source): the real Workspace over the std/ reader it is given; workspace(): for `--stdlib` runs; process_env(): the Env of this process
     package_vendor.agc  # put(): one locked package from its cache folder into agc_libs/<name>/ (staged in a hidden folder, hashed, swapped in by renames; never through a link)
     git_process.agc package_fetch.agc package_resolve.agc  # the system `git` as a process; fill(): one locked package into the cache (depth-1 fetch, ls-tree and cat-file, hash check, rename into place); resolve(): a pin that is not locked yet, commit and hash learnt from the fetch; the closure of lock entries for `add` and `update`
+    bytecode_cache.agc  # plan/lookup/store: `_build/bytecode/` in the project or beside the root (AGENTICA_BUILD_DIR replaces `_build/`), one entry per root: a head, a text (key, program digest, `source SHA PATH` lines, `absent`/`present` probes of the resolver), the .agcb bytes; `_build/`, `bytecode/` and the entry must be private (mkdir_private, create_private, lstat checks); used by app/cli.agc (run) and bdd/bdd_compile.agc (test files), through app/pipeline.agc `build_cached`
+    random_name.agc  # hex(): a random name (16 bytes of /dev/urandom; the clock and pid on Windows); hex_of(): bytes as hex
     stdin_buffer.agc  # take(): the standard input as a buffer; over(): a Workspace with it as one file (modules/overlay.agc)
     source_reader.agc  # read, read_shown: a whole file as strict UTF-8 text in chunks (the rules are in syntax/source_file.agc)
   syntax/  # source text, tokens, lexer, parser, AST

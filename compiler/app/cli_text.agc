@@ -7,8 +7,8 @@
 USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
-    "[--schedulers N] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] [check] ",
-    "<source-file> [args...]",
+    "[--schedulers N] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] [--no-cache] ",
+    "[check] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check --stdin <source-file>",
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
@@ -27,7 +27,7 @@ USAGE = [
   "       agentica [--ai|--json] add NAME URL --tag TAG|--ref COMMIT [--subdir DIR]",
   "       agentica [--ai|--json] update [NAME]",
   "       agentica [--ai|--json] vendor",
-  "       agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
+  "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
 
@@ -127,6 +127,11 @@ OPTIONS = [
   "     print the checked tree instead of running it",
   "  --dump-ir",
   "     print the lowered VM IR instead of running it",
+  "  --no-cache",
+  [
+    "     compile the program again and do not keep its bytecode; by default the bytecode of a program that ",
+    "did not change is read from _build/bytecode/ in the project (AGENTICA_BUILD_DIR replaces _build/)",
+  ].join(""),
   "  --ai",
   "     print diagnostics as compact text for an agent",
   "  --json",
