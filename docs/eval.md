@@ -724,7 +724,7 @@ The first full 6c round, from the worktree pinned to tag 0.8.1 (`5a65383`,
 skill commit `95b86f4`), with the `skill`, `typed-python` and `skill-nocli`
 arms, 3 reps. Pi 1.3.0, `mypy` 2.3.1, agent network allowed (`agent_network`
 true; 12 `net_commands`, all on t18). `--check-references` passed all 60 runs.
-The runs went in parallel (`--jobs 2` for DeepSeek), so seconds are rough. Pi
+The runs went in parallel (`--jobs 2` for both models), so seconds are rough. Pi
 1.3.0 means tokens are not comparable with rounds 1 to 12; the arms in this
 round are. The round cost $1.52 of the $2.
 
