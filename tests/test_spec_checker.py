@@ -110,6 +110,25 @@ def test_pipe_into_a_builtin_with_a_method_form_is_pipe_method(tmp_path):
         assert_code(text, "CHECK-PIPE-METHOD", tmp_path)
 
 
+def test_length_and_size_are_both_methods_of_string_list_map_set_and_range(tmp_path):
+    body = ('  m: Map[String, Int] = {}\n  xs: List[Int] = [1]\n  s = Set.new([1])\n'
+            '  puts("ab".length + "ab".size + xs.length + xs.size + m.length + m.size + s.length + s.size)\n'
+            '  puts((1..3).length + (1..3).size)')
+    assert_clean(main_with(body), tmp_path)
+    assert_code(main_with("  puts(1.length)"), "CHECK-UNKNOWN-METHOD", tmp_path)
+
+
+def test_helps_show_the_ruby_form_of_a_builtin(tmp_path):
+    piped = assert_code(main_with('  s = " a "\n  t = s |> String.trim()\n  puts(t)'), "CHECK-PIPE-METHOD", tmp_path)
+    assert "strip" in piped["help"] and "trim" not in piped["help"]
+    unknown = assert_code(main_with('  puts(String.strip("a"))'), "CHECK-UNKNOWN-NAME", tmp_path)
+    assert "s.strip" in unknown["help"] and "String.trim" not in unknown["help"]
+    typo = assert_code(main_with('  puts("a".len)'), "CHECK-UNKNOWN-METHOD", tmp_path)
+    assert "length" in typo["help"] and "size" in typo["help"]
+    listed = assert_code(main_with('  puts("a".frobnicate)'), "CHECK-UNKNOWN-METHOD", tmp_path)
+    assert "strip" in listed["help"] and "trim" not in listed["help"]
+
+
 def test_expressions_and_statements_nest_at_most_1000_levels(tmp_path):
     for count in (997, 998):
         assert_clean(main_with("  x = 1\n  y = x" + links(count) + "\n  puts(y)"), tmp_path)

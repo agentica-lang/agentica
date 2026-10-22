@@ -135,6 +135,9 @@ phase 13).
   checked-in data (see its header). These rules are defaults, which a PR may
   relax when following them costs more than it saves; the PR says which rule it
   relaxes and why.
+- One way per thing, and it is the Ruby form (name, method form, syntax). A
+  non-Ruby internal name has the Ruby name as alias, and every user-facing
+  text shows only the Ruby form (rule and exception: the development skill).
 - Core grammar only (sections 4–6): user enums and type aliases (the only user
   generics), `case`, file modules with explicit imports/exports, builtin
   `List[T]`, `Map[K, V]`, `Result[T]`, and `try`. Planned syntax stays in

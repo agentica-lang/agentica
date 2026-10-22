@@ -356,7 +356,7 @@ type:
     parentheses and use `.` on the result: `(x \|> f()).unwrap!`
 
 - **Written:** `x \|> String.trim()` (`CHECK-PIPE-METHOD`)
-  - **Help:** the method form: `x.trim`
+  - **Help:** the method form: `x.strip`
 
 - **Written:** `break if x`, `next if x`
   - **Help:** `if x`, then `break` on its own line, then `end`

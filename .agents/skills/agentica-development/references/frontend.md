@@ -206,14 +206,16 @@ every walker: `rewrite.agc`, `const_walk.agc`, the checker, lowering,
 
 Add tokens first if needed, then the node, then a parse function called from
 the right place (statement, primary or program parser). Add a valid test and a
-rejection test asserting the code in `tests/test_spec_<area>.py`.
+rejection test asserting the code in `tests/test_spec_<area>.py`. The syntax is
+Ruby's when Ruby has one; another habit gets a diagnostic with a `help:`.
 
 ### Add a diagnostic code
 
 Pick a stage prefix (`LEX-`, `PARSE-`, `CHECK-`, `LOWER-`, `BYTECODE-`,
 `RUNTIME-`). Raise it with the stage helper (`Base.bail`, `Failure.problem`)
 and a span. Test code and location (`start`, `covers` from `--json check`), as
-in `tests/test_spec_checker_rest.py`.
+in `tests/test_spec_checker_rest.py`. A `help:` writes builtins in the Ruby
+form (`s.strip`), never the internal name.
 
 ### Add a builtin rule
 

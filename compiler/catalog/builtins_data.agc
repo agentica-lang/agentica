@@ -1782,7 +1782,7 @@ ROWS_20: List[Model.Builtin] = [
       rule: Model.Rule.ListAppend,
       implementation: "List.append",
       effects: [],
-      description: "Return a new list with this value appended; near constant time.",
+      description: "Return a new list with the value pushed on the end; near constant time.",
       alternatives: [],
     ),
   ]
@@ -3188,7 +3188,7 @@ ROWS_41: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "String.from_float",
       effects: [],
-      description: "Format a float.",
+      description: "Convert a Float to text.",
       alternatives: [],
     ),
   ]
@@ -3201,7 +3201,7 @@ ROWS_42: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "String.from_int",
       effects: [],
-      description: "Format an integer.",
+      description: "Convert an Int to text.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -3370,7 +3370,7 @@ ROWS_45: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "String.trim",
       effects: [],
-      description: "Trim surrounding whitespace.",
+      description: "Strip surrounding whitespace.",
       alternatives: [],
     ),
     Model.Builtin(

@@ -181,7 +181,7 @@ def add(a: Int, b: Int) -> Int
 end
 
 def load(text: String) -> Result[Int]
-  return text.trim |> try parse() |> validate()
+  return text.strip |> try parse() |> validate()
 end
 
 def main() -> Void
@@ -204,7 +204,7 @@ error("negative")
 
 - The right side must be a call with parentheses. A multi-line chain goes in parentheses, as `total` above.
 - It may start with `try`: `x |> try f()` means `try f(x)`.
-- A builtin with a method form uses `.`: `s.trim`, not `s |> String.trim()` (`CHECK-PIPE-METHOD`).
+- A builtin with a method form uses `.`: `s.strip`, not `s |> String.trim()` (`CHECK-PIPE-METHOD`).
 
 ```agentica {expect="CHECK-PIPE-METHOD"}
 def main() -> Void

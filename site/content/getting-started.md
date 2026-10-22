@@ -102,7 +102,7 @@ agentica help String.split    # `agentica help` alone lists commands and namespa
 ```
 
 ```text
-String.split(s: String, separator: String) -> List[String]
+s.split(separator: String) -> List[String]
 Split text; an empty separator gives characters.
 ```
 

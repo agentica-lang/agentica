@@ -3,14 +3,15 @@
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
 type. The checker picks the module from the static type (`String`, `List`,
 `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, and `Json` through `JSON`);
-there is no dynamic dispatch. `s.trim` is `String.trim(s)`, but `"a".from_int`
+there is no dynamic dispatch. `s.strip` is `String.trim(s)`, but `"a".from_int`
 is not a method. Without parentheses, `receiver.name` on a non-struct value is a
 method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
 Structs and enums have no methods.
 
-Ruby aliases are the module functions named in the library pages: `size`,
-`length`, `strip`, `include?`, `start_with?`, `end_with?`, `push`, `join`,
-`to_f`, and `to_s` and `inspect` on any data value. Two differ from Ruby: `to_i`
+Ruby aliases are the module functions named in the library pages: `strip`,
+`include?`, `start_with?`, `end_with?`, `push`, `join`, `to_f`, and `to_s` and
+`inspect` on any data value. `length` and `size` both work on `String`, `List`,
+`Map`, `Set` and `Range`, as in Ruby. Two differ from Ruby: `to_i`
 and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and
 `to_i!` and `to_f!` halt on bad text. An unknown method is
 `CHECK-UNKNOWN-METHOD`.
@@ -376,7 +377,10 @@ and `JSON.encode` give its text. Signatures are in
 
 `agentica help NAME --json` prints the name, arity, parameter types, result,
 signature, effects and description, from the catalog that checking and execution
-use. Effects are informational (I/O, tasks, or `test`). An unknown target exits
+use, and `ruby`: the signature in the Ruby method form (`s.strip() -> String`
+for `String.trim`), or null for a builtin with no method form. The help text
+and the helps of diagnostics write that form too (`s.strip`, not `String.trim`),
+while both names stay accepted. Effects are informational (I/O, tasks, or `test`). An unknown target exits
 2, with a hint when the name is a close builtin or one from another language
 that the checker knows (`Hash.new`, `int`). A name that other languages use for
 a builtin (`strip`, `String.to_i`, `value!`) is not unknown: it exits 0 with

@@ -306,11 +306,10 @@ def test_help_reads_the_catalog_without_a_source_file():
     assert [variant["result"] for variant in variants] == ["Result[V]", "V"]
     get_text = cli_run("help", "Map.get")
     assert get_text.code == 0
-    assert re.search(r"Map.get\(map: Map\[K, V\], key: K\) -> Result\[V\]", get_text.stdout)
-    assert re.search(r"default: V\) -> V", get_text.stdout)
+    assert "map.get(key: K) -> Result[V]\nmap.get(key: K, default: V) -> V\n" in get_text.stdout
     unknown = cli_run("help", "String.to_it", "--json")
     assert unknown.code == 2
-    assert re.search("String.to_int", unknown.stderr)
+    assert "s.to_i" in unknown.stderr
 
 
 def check_table(name):
@@ -330,19 +329,58 @@ def test_help_answers_the_agentica_name_of_a_name_from_another_language():
         assert [builtin["name"] for builtin in data["builtins"]] == [target], name
         text = cli_run("help", name)
         assert (text.code, text.stderr) == (0, ""), name
-        assert target in text.stdout.splitlines()[0], name
         assert cli_run("--ai", "help", name) == text
     # A name that fits several types lists each of them, in name order.
     several = json.loads(cli_run("help", "to_i", "--json").stdout)
     assert [builtin["name"] for builtin in several["builtins"]] == ["Float.to_int", "String.to_int"]
+    assert [builtin["ruby"] for builtin in several["builtins"]] == [
+        "x.to_i() -> Result[Int]", "s.to_i() -> Result[Int]"]
     # A kind narrows the answer to that kind.
     assert [b["name"] for b in json.loads(cli_run("help", "Map.length", "--json").stdout)["builtins"]] == ["Map.size"]
 
 
-def test_help_says_the_method_when_the_name_asked_is_already_the_method_name():
-    renamed = cli_run("help", "strip").stdout.splitlines()[0]
-    method = cli_run("help", "trim").stdout.splitlines()[0]
-    assert "is called" in renamed and "is called" not in method
+def test_help_shows_the_ruby_method_form_and_keeps_the_builtin_name_in_json():
+    strip = json.loads(cli_run("help", "String.trim", "--json").stdout)
+    assert (strip["name"], strip["signature"], strip["ruby"]) == (
+        "String.trim", "String.trim(s: String) -> String", "s.strip() -> String")
+    # A method of its own kind has a Ruby form without an alias; a builtin that is no method has none.
+    assert json.loads(cli_run("help", "Result.ok?", "--json").stdout)["ruby"] == "r.ok?() -> Bool"
+    assert json.loads(cli_run("help", "puts", "--json").stdout)["ruby"] is None
+    # Each form of an overloaded builtin has its own.
+    forms = json.loads(cli_run("help", "Map.get", "--json").stdout)["overloads"]
+    assert [form["ruby"] for form in forms] == ["map.get(key: K) -> Result[V]", "map.get(key: K, default: V) -> V"]
+    every = json.loads(cli_run("help", "--json").stdout)
+    assert all("ruby" in form for form in every if "overloads" not in form)
+
+
+def test_help_writes_the_ruby_form_for_the_builtin_and_for_the_agentica_name():
+    for name in ("strip", "trim", "String.trim", "String.strip"):
+        lines = cli_run("help", name).stdout.splitlines()
+        assert "s.strip() -> String" in lines, name
+        assert "String.trim(s: String) -> String" not in lines, name
+    # The Agentica name says which form to write; the Ruby name needs no such line.
+    assert ".strip" in cli_run("help", "trim").stdout.splitlines()[0]
+    assert cli_run("help", "strip").stdout.splitlines()[0] == "s.strip() -> String"
+    for name, form in [("ok?", "r.ok?() -> Bool"), ("unwrap_or", "r.unwrap_or(default: T) -> T"),
+                       ("value!", "r.unwrap!() -> T"), ("contains?", "s.include?(part: String) -> Bool"),
+                       ("push", "list.push(value: T) -> List[T]")]:
+        assert form in cli_run("help", name).stdout.splitlines(), name
+
+
+def test_help_lists_the_method_form_first_and_answers_include():
+    names = [builtin["name"] for builtin in json.loads(cli_run("help", "join", "--json").stdout)["builtins"]]
+    assert names[:2] == ["String.join", "Path.join"]
+    found = cli_run("help", "include", "--json")
+    assert found.code == 0
+    assert {"String.contains?", "Set.include?"} <= {b["name"] for b in json.loads(found.stdout)["builtins"]}
+
+
+def test_help_answers_length_and_size_for_every_kind_that_has_them():
+    kinds = {"List.size", "Map.size", "Range.size", "Set.size", "String.length"}
+    for name in ("length", "size"):
+        found = {b["name"] for b in json.loads(cli_run("help", name, "--json").stdout)["builtins"]}
+        assert found == kinds, name
+        assert "s.%s() -> Int" % name in cli_run("help", name).stdout.splitlines(), name
 
 
 def test_help_prints_the_checker_hint_of_a_bare_name_on_other_types():
@@ -380,9 +418,10 @@ def test_every_alias_of_the_checker_tables_names_a_public_builtin():
         assert cli_run("help", name).code == (2 if name in hinted else 0), name
 
 
-def test_an_unknown_method_suggests_the_agentica_method(tmp_path):
-    for expression, suggested in [("r.value!", "unwrap!"), ("r.ok!", "unwrap!"), ("m.length", "size"),
-                                  ('"a".contains("a")', "contains?"), ('"a".includes("a")', "contains?"),
+def test_an_unknown_method_suggests_the_ruby_method(tmp_path):
+    for expression, suggested in [("r.value!", "unwrap!"), ("r.ok!", "unwrap!"), ("m.len", "length"),
+                                  ('"a".len', "size"), ('"a".contains("a")', "include?"),
+                                  ('"a".includes("a")', "include?"), ('"a".include("a")', "include?"),
                                   ("xs.contains?(1)", "any?"), ("(1..3).drop(1)", "to_a"),
                                   ('"abc".take(2)', "join"), ('"abc".drop(1)', "join"),
                                   ("xs.count do |x| x > 1 end", "filter"), ("xs.count", "filter"),

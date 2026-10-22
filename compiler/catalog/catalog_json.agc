@@ -6,6 +6,7 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 import Builtins from "builtins"
+import RubyForm from "ruby_form"
 import {PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
 
 ## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`) or a prelude-only
@@ -24,7 +25,9 @@ export def catalog() -> Json
 end
 
 ## The JSON of a builtin: one object for a builtin with one form, else the name, the description and the effects of
-## the first form with the object of each form under `overloads`.
+## the first form with the object of each form under `overloads`. `ruby` of a form is its signature in the Ruby method
+## form (`s.strip() -> String` for `String.trim`), or null when the builtin has none; `name` and `signature` stay the
+## name of the builtin.
 export def builtin(entry: Model.Builtin) -> Json
   if entry.alternatives.size == 0
     return form_json(entry)
@@ -48,9 +51,18 @@ def form_json(form: Model.Builtin) -> Json
     "parameters": JSON.array(parameters),
     "result": JSON.from(Types.to_text(form.result)),
     "signature": JSON.from(Builtins.form_signature(form)),
+    "ruby": ruby(form),
     "effects": strings(form.effects),
     "description": JSON.from(form.description),
   })
+end
+
+def ruby(form: Model.Builtin) -> Json
+  text = RubyForm.signature(form)
+  if text == ""
+    return JSON.from(nil)
+  end
+  return JSON.from(text)
 end
 
 def strings(items: List[String]) -> Json

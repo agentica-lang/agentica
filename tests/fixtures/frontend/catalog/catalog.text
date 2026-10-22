@@ -231,7 +231,7 @@ builtin List.all? forms=1
 builtin List.any? forms=1
   List.any?(list: List[A], f: Fn[A, Bool]) -> Bool shape=(List(Var(A)), Fn([Var(A)], Bool)) -> Bool rule=ListAny impl="List.any?" effects=[] desc="True when f is true for some element; stops at the first true."
 builtin List.append forms=1
-  List.append(list: List[T], value: T) -> List[T] shape=(List(Var(T)), Var(T)) -> List(Var(T)) rule=ListAppend impl="List.append" effects=[] desc="Return a new list with this value appended; near constant time."
+  List.append(list: List[T], value: T) -> List[T] shape=(List(Var(T)), Var(T)) -> List(Var(T)) rule=ListAppend impl="List.append" effects=[] desc="Return a new list with the value pushed on the end; near constant time."
 builtin List.at forms=1
   List.at(list: List[T], index: Int) -> T shape=(List(Var(T)), Int) -> Var(T) rule=ListAt impl="List.at" effects=[] desc="Read a zero-based index; invalid indexes halt; O(log32 n)."
 builtin List.concat forms=1
@@ -448,9 +448,9 @@ builtin String.from_bytes forms=1
 builtin String.from_code forms=1
   String.from_code(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_code" effects=[] desc="Build a one-character string from a Unicode scalar value; invalid values halt."
 builtin String.from_float forms=1
-  String.from_float(x: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Format a float."
+  String.from_float(x: Float) -> String shape=(Float) -> String rule=Plain impl="String.from_float" effects=[] desc="Convert a Float to text."
 builtin String.from_int forms=1
-  String.from_int(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Format an integer."
+  String.from_int(n: Int) -> String shape=(Int) -> String rule=Plain impl="String.from_int" effects=[] desc="Convert an Int to text."
 builtin String.index_of forms=1
   String.index_of(s: String, part: String) -> Result[Int] shape=(String, String) -> Result(Int) rule=Plain impl="String.index_of" effects=[] desc="Find the first character index of part; absent text returns an error."
 builtin String.join forms=1
@@ -478,7 +478,7 @@ builtin String.to_int forms=1
 builtin String.to_int! forms=1
   String.to_int!(s: String) -> Int shape=(String) -> Int rule=Plain impl="String.to_int!" effects=[] desc="Parse signed decimal Int; halt on invalid text or overflow."
 builtin String.trim forms=1
-  String.trim(s: String) -> String shape=(String) -> String rule=Plain impl="String.trim" effects=[] desc="Trim surrounding whitespace."
+  String.trim(s: String) -> String shape=(String) -> String rule=Plain impl="String.trim" effects=[] desc="Strip surrounding whitespace."
 builtin String.upcase forms=1
   String.upcase(s: String) -> String shape=(String) -> String rule=Plain impl="String.upcase" effects=[] desc="Uppercase text."
 builtin System.args forms=1
