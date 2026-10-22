@@ -1,12 +1,15 @@
 /* The independent peer of the native calls (tests/test_vm_native.py): a shared library that the test builds with the
    system C compiler, so each C type crosses the boundary through a real ABI. */
-#define _POSIX_C_SOURCE 200809L
+#define _GNU_SOURCE
 #include <ctype.h>
+#include <dirent.h>
+#include <fcntl.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 static char shout[64];
 static int32_t bumps;
@@ -75,3 +78,53 @@ int32_t peer_nap(int32_t ms) {
 }
 
 int32_t peer_naps(void) { return atomic_load(&naps); }
+
+/* For Native.wait_readable and wait_writable: a non-blocking pipe that the peer owns, as a library owns its socket. */
+static int pipe_fds[2] = {-1, -1};
+
+/* Opens the pipe and returns its read end, or -1. */
+int32_t peer_pipe(void) { return pipe2(pipe_fds, O_NONBLOCK | O_CLOEXEC) == 0 ? pipe_fds[0] : -1; }
+int32_t peer_pipe_writer(void) { return pipe_fds[1]; }
+
+/* Writes one byte into the pipe; 1 when it went in. */
+int32_t peer_pipe_put(void) { return (int32_t)write(pipe_fds[1], "x", 1); }
+
+/* Reads what the pipe holds; the number of bytes read. */
+int32_t peer_pipe_take(void) {
+  char buf[256];
+  int32_t total = 0;
+  ssize_t n;
+  while ((n = read(pipe_fds[0], buf, sizeof buf)) > 0) total += (int32_t)n;
+  return total;
+}
+
+/* Writes until the pipe is full, so its write end no longer polls writable. */
+void peer_pipe_fill(void) {
+  char buf[4096];
+  memset(buf, 'y', sizeof buf);
+  while (write(pipe_fds[1], buf, sizeof buf) > 0) {}
+}
+
+/* Makes both ends of the pipe blocking, as a terminal usually is. */
+void peer_pipe_blocking(void) {
+  for (int k = 0; k < 2; k++) (void)fcntl(pipe_fds[k], F_SETFL, fcntl(pipe_fds[k], F_GETFL) & ~O_NONBLOCK);
+}
+
+/* 1 when FD is in non-blocking mode, 0 when not, -1 when it is not open. */
+int32_t peer_nonblocking(int32_t fd) {
+  int flags = fcntl(fd, F_GETFL);
+  return flags < 0 ? -1 : (flags & O_NONBLOCK) != 0;
+}
+
+/* A descriptor that cannot be polled: /dev/null. */
+int32_t peer_dev_null(void) { return open("/dev/null", O_RDONLY | O_CLOEXEC); }
+
+/* The number of descriptors the process has open. */
+int32_t peer_open_fds(void) {
+  DIR *dir = opendir("/proc/self/fd");
+  if (!dir) return -1;
+  int32_t n = 0;
+  while (readdir(dir)) n++;
+  closedir(dir);
+  return n;
+}

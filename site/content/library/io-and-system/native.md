@@ -20,7 +20,7 @@ def main() -> Void
 end
 ```
 
-- Native calls work on Linux x86_64 for now. On other systems a program that declares an extern function is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
+- Native calls and waits work on Linux x86_64 for now. On other systems a program that declares an extern function or calls a `Native.wait_*` is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
 - Native code runs with your program's rights, and a wrong signature is undefined behavior in C: declare each function exactly as its C header does.
 - Put `##` docs on the `def` lines inside the block.
 
@@ -51,7 +51,7 @@ A result may also be `Void`. A function takes at most 64 parameters (`PARSE-EXTE
 
 - A `def` call blocks timers, I/O and other tasks until it returns, so keep such calls short, and use `compute def` for the long ones. `--max-steps` cannot stop a call in the middle.
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
-- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.
+- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.wait_*` before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.
 
 ## Compute calls
 
@@ -74,3 +74,35 @@ end
 - Nothing stops a compute call in the middle: it has no timeout, and `--max-steps` does not end it. For a limit, run the call in a task and use `Task.await(task, ms)`. A cancel skips a call that has not started; a running call runs on, the cancelled task stops waiting at once, and the result is dropped. The program does not wait for a running call at the end.
 - A call that never returns holds a pool thread for the rest of the run. Once `--schedulers` such calls are stuck, every later compute call waits.
 - The arguments are copied before the call and a `C.String` result as it returns. The function runs on another thread, so it must be safe to call from one.
+
+## Waiting on a descriptor
+
+Many C network libraries (libpq, curl multi, hiredis) have a non-blocking mode: the library says which socket it waits for, and your program waits. `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable(fd, timeout_ms)` park the task until the descriptor can be read or written, while the other tasks go on. Both give a `Result[Void]`.
+
+```agentica {mode="check"}
+extern "libc.so.6"
+  def eventfd(initval: C.Int, flags: C.Int) -> C.Int
+  def eventfd_write(fd: C.Int, value: C.Int64) -> C.Int
+end
+
+def ring(fd: Int) -> Int
+  Task.sleep(50)
+  return eventfd_write(fd, 1)
+end
+
+def main() -> Void
+  fd = eventfd(0, 0)
+  bell = Task.spawn(&ring, fd)
+  puts(Native.wait_readable(fd, 1_000))   # ok() once the other task writes
+  puts(Task.await(bell))
+end
+```
+
+A library's connect loop waits the same way, with `try Native.wait_readable(socket, 5_000)` between its polls.
+
+- After `timeout_ms` (positive) the result is `error("native: timed out")`. A timeout that is not positive, a negative descriptor, and one that cannot be polled (closed, a regular file, `/dev/null`) give an error that starts with `native: `.
+- An error or a hang-up on the descriptor ends the wait with `ok`, as `poll(2)` does: the library's next call reports it.
+- The wait watches a new open of the descriptor's file, so the library keeps its descriptor and its flags, and two tasks may wait on one descriptor. A socket, or a file that cannot be opened again (an eventfd), is watched through a duplicate, which puts the descriptor in non-blocking mode.
+- If the library closes the descriptor during a wait, the wait goes on and ends at its timeout (`native: timed out`) unless the file becomes ready.
+- A cancel stops the wait; the end of the program does not wait for it.
+- `--deny-native` refuses a program that calls them, as it refuses extern functions: a descriptor comes from native code.

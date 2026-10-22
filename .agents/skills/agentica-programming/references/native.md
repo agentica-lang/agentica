@@ -33,9 +33,22 @@ end
   not yet started; a running one runs on and its result is dropped. A call that
   never returns holds a pool thread; once `--schedulers` are stuck, later
   compute calls wait. The function must be safe to call from another thread.
-- Linux x86_64 only for now: elsewhere the program is refused at load with
-  `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
-- Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses
-  any program with an extern function at load (`RUNTIME-NATIVE-DENIED`, exit 2).
+- `Native.wait_readable(fd: Int, timeout_ms: Int) -> Result[Void]` and
+  `Native.wait_writable` park the task until a descriptor of native code (a
+  library's socket) can be read or written; other tasks run. For libraries in
+  non-blocking mode: `try Native.wait_readable(Raw.PQsocket(conn), 5_000)`.
+  Timeout (positive ms): `error("native: timed out")`; a bad timeout or a
+  descriptor that is negative, closed or not pollable (regular file,
+  `/dev/null`): an error starting `native: `. An error or hang-up on the
+  descriptor gives `ok` (the next native call reports it). It polls a new
+  open of the file, so the descriptor keeps its flags and two tasks may wait
+  on one descriptor; a socket or an eventfd is polled through a duplicate and
+  becomes non-blocking. Closing the descriptor does not end a wait (it times
+  out unless the file becomes ready). A cancel stops the wait.
+- Linux x86_64 only for now: elsewhere a program with an extern function or a
+  `Native.wait_*` call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`
+  (exit 2). `check` works everywhere.
+- Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
+  program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
 - Functions count as `def`s for the declaration order. A wrong signature is
   undefined behavior in C: copy it from the C header.

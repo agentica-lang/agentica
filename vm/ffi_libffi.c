@@ -9,10 +9,13 @@
 #include "value.h"
 
 #include <dlfcn.h>
+#include <fcntl.h>
 #include <ffi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 /* The cif points at types, so both live in one block. */
 struct agc_ffi_call {
@@ -99,4 +102,21 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
     case AGC_C_VOID: break;
   }
 }
+
+/* /proc/self/fd/N opens the file again (a pipe, a terminal), with an open file description of its own; a socket
+   cannot be opened that way. */
+int agc_ffi_wait_fd_open(int fd) {
+  int flags = fcntl(fd, F_GETFL);
+  if (flags < 0) return -1;
+  struct stat info;
+  if (fstat(fd, &info) == 0 && !S_ISSOCK(info.st_mode)) {
+    char path[32];
+    snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
+    int again = open(path, (flags & O_ACCMODE) | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
+    if (again >= 0) return again;
+  }
+  return fcntl(fd, F_DUPFD_CLOEXEC, 3);
+}
+
+void agc_ffi_wait_fd_close(int fd) { (void)close(fd); }
 #endif

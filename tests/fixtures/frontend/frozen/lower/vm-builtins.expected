@@ -125,6 +125,8 @@ Map.keys
 Map.put
 Map.size
 Map.values
+Native.wait_readable
+Native.wait_writable
 Path.cwd
 Path.join
 Path.real

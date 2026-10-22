@@ -77,12 +77,12 @@ static void test_refusal(void) {
   memset(&p, 0, sizeof p);
   p.functions = functions;
   p.function_count = 2;
-  p.native_call = UINT32_MAX;
+  p.native_import = UINT32_MAX;
   p.native_function = UINT32_MAX;
   const char *message = NULL;
   uint32_t span = 0;
   assert(agc_ffi_refusal(&p, true, &message, &span) == NULL);
-  p.native_call = 0;
+  p.native_import = 0;
   p.native_function = 1;
   const char *code = agc_ffi_refusal(&p, true, &message, &span);
   assert(strcmp(code, AGC_FFI_BUILT ? "RUNTIME-NATIVE-DENIED" : "RUNTIME-NATIVE-UNSUPPORTED") == 0 && span == 7);

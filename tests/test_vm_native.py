@@ -261,6 +261,152 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
 
 
+WAIT_EXTERN = """extern "{library}"
+  def peer_pipe() -> C.Int
+  def peer_pipe_writer() -> C.Int
+  def peer_pipe_put() -> C.Int
+  def peer_pipe_take() -> C.Int
+  def peer_pipe_fill() -> Void
+  def peer_pipe_blocking() -> Void
+  def peer_nonblocking(fd: C.Int) -> C.Int
+  def peer_dev_null() -> C.Int
+  def peer_open_fds() -> C.Int
+end
+
+def wait(fd: Int) -> Result[Void]
+  return Native.wait_readable(fd, 20_000)
+end
+
+"""
+
+
+# Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
+# scheduler up; the write end is writable at once.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  fd = peer_pipe()
+  first = Task.spawn(&wait, fd)
+  second = Task.spawn(&wait, fd)
+  Task.sleep(20)
+  puts("main runs")
+  puts(peer_pipe_put())
+  puts(Task.await(first))
+  puts(Task.await(second))
+  puts(peer_pipe_take())
+  puts(Native.wait_writable(peer_pipe_writer(), 1_000))
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
+
+
+# The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a
+# terminal, say) stays blocking after the wait, whether it ended ready or at its timeout.
+@ON_LINUX_ONLY
+def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
+    main = """def main() -> Void
+  fd = peer_pipe()
+  peer_pipe_blocking()
+  puts(Native.wait_readable(fd, 30))
+  puts(Native.wait_writable(peer_pipe_writer(), 1_000))
+  puts(peer_nonblocking(fd))
+  puts(peer_nonblocking(peer_pipe_writer()))
+end
+"""
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("native: timed out")\nok()\n0\n0\n', "")
+
+
+@ON_LINUX_ONLY
+def test_a_wait_times_out_and_refuses_what_it_cannot_poll(tmp_path, peer):
+    main = """def first_line(result: Result[Void]) -> String
+  return result.message.split("\\n")[0]
+end
+
+def main() -> Void
+  fd = peer_pipe()
+  puts(Native.wait_readable(fd, 30))
+  peer_pipe_fill()
+  puts(Native.wait_writable(peer_pipe_writer(), 30))
+  puts(Native.wait_readable(fd, 0))
+  puts(Native.wait_readable(-1, 30))
+  puts(first_line(Native.wait_readable(1_000_000, 30)))
+  puts(first_line(Native.wait_writable(peer_dev_null(), 30)))
+end
+"""
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        'error("native: timed out")', 'error("native: timed out")',
+        'error("native: timeout must be positive milliseconds")', 'error("native: invalid descriptor")',
+        "native: cannot wait on the descriptor", "native: cannot wait on the descriptor", "",
+    ]
+
+
+# The wait polls a duplicate of the descriptor: a cancel closes the duplicate once (the count of open descriptors goes
+# back), and the peer's own descriptor still works.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_cancel_stops_a_wait_and_closes_its_duplicate(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  fd = peer_pipe()
+  base = peer_open_fds()
+  waiter = Task.spawn(&wait, fd)
+  n = 0
+  while peer_open_fds() == base and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  Task.sleep(20)
+  puts(peer_open_fds() - base)
+  Task.cancel(waiter)
+  puts(Task.await(waiter))
+  n = 0
+  while peer_open_fds() != base and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  puts(peer_open_fds() - base)
+  peer_pipe_put()
+  puts(Native.wait_readable(fd, 1_000))
+  puts(peer_pipe_take())
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["1", 'error("task: cancelled")', "0", "ok()", "1", ""]
+
+
+@ON_LINUX_ONLY
+def test_the_run_ends_while_a_task_waits(tmp_path, peer):
+    main = """def main() -> Void
+  waiter = Task.spawn(&wait, peer_pipe())
+  Task.sleep(20)
+  puts("done")
+end
+"""
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=peer) + main), timeout=10)
+    assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
+
+
+WAIT_ONLY = """def main() -> Void
+  puts("started")
+  puts(Native.wait_writable(1, 1_000))
+end
+"""
+
+
+# A wait needs a descriptor of native code and changes it (non-blocking mode), so --deny-native refuses a program
+# that waits, with no extern block, at load; other systems refuse it at load too.
+@pytest.mark.parametrize("flag", ["--deny-native", "--sandbox"])
+def test_a_program_that_waits_is_native_code(tmp_path, flag):
+    result = agentica("--json", flag, program(tmp_path, WAIT_ONLY))
+    assert result.stdout == ""
+    assert diagnostic(result, 2) == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED", (1, 1))
+
+
 @ON_LINUX_ONLY
 @pytest.mark.parametrize("case, code, line", [
     ("lib", "RUNTIME-NATIVE-LOAD", 2),

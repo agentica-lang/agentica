@@ -5,11 +5,14 @@
  * one prepared call per signature, converts Agentica values to C and back,
  * runs a fast call on the scheduler and a compute call on the compute pool
  * (agc_io_compute), and leaves dlopen and libffi to the adapter (ffi_os.h).
- * Service layer.
+ * Also Native.wait_readable and Native.wait_writable, the waits of a task on a
+ * descriptor of native code. Service layer.
  */
 #include "ffi_os.h"
 #include "services.h"
 
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,6 +46,22 @@ typedef struct {
   agc_c_value out;
   agc_c_value in[];
 } compute_call;
+
+/* One Native.wait_readable or wait_writable, in malloc memory. The task's descriptor is never polled itself: FD is a
+   new open of its file, or a duplicate (agc_ffi_wait_fd_open), which the poller owns and closes once its wait is over.
+   So the native code keeps its descriptor whatever happens to the wait, a descriptor the loop already watches can
+   still be waited on, and two tasks can wait on one descriptor. `more`, `ready`, `cancel`, `pause` and `drop` run on the I/O thread; `done` and `expired`
+   on the scheduler that resumes the task, after the job's outcome has published what the I/O thread wrote. */
+typedef struct {
+  agc_vm *vm;
+  agc_io_job *job;
+  agc_poller *poller;
+  /* The polled descriptor, until the poller takes it. */
+  int fd;
+  /* The errno of a poller that could not be made (a regular file or /dev/null cannot be polled: EPERM), else 0. */
+  int err;
+  bool writing;
+} native_wait;
 
 /* The prepared calls of the run, by signature string, in malloc memory (no GC pointers): open addressing over a
    power-of-two table, kept at most half full. Native.call is a shared builtin, so in a shared VM it runs with
@@ -310,15 +329,120 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   return result_value(e->result, &out);
 }
 
+/* An error or a hang-up on the descriptor ends the wait as readiness does: as with poll(2), the next call of the
+   native code does not block and reports the error itself (a refused connect, for example). */
+static void wait_ready(void *data, int status) {
+  (void)status;
+  native_wait *w = data;
+  agc_poller_pause(w->poller);
+  agc_io_ready(w->job);
+}
+
+/* The job's START, on the I/O thread, before its deadline is armed (agc_io_start_then). */
+static bool wait_begin(void *data, agc_io_job *job) {
+  native_wait *w = data;
+  w->job = job;
+  int err = 0;
+  w->poller = agc_poller_open(w->vm, w->fd, &err);
+  if (!w->poller) {
+    w->err = err ? err : EIO;
+    agc_io_ready(job);
+    return false;
+  }
+  w->fd = -1;
+  agc_poller_wait(w->poller, w->writing, wait_ready, w);
+  return true;
+}
+
+static void wait_drop(void *data) {
+  native_wait *w = data;
+  if (w->poller)
+    agc_poller_close(w->poller);
+  else if (w->fd >= 0)
+    agc_ffi_wait_fd_close(w->fd);
+  free(w);
+}
+
+static agc_value wait_done(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  native_wait *w = data;
+  agc_value v = w->err ? agc_system_error(vm, "native: cannot wait on the descriptor", w->err)
+                       : agc_result_value(true, agc_void());
+  wait_drop(w);
+  return v;
+}
+
+/* The deadline passed; `pause` has stopped the poll on the I/O thread already, and `drop` frees the data later. */
+static agc_value wait_expired(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  return agc_error_value("native: timed out");
+}
+
+static void wait_pause(void *data) {
+  native_wait *w = data;
+  if (w->poller) agc_poller_pause(w->poller);
+}
+
+/* A cancel (or the deadline of a detached job): the poll stops and the job can be dropped. A job whose poller could
+   not be made has ended already. */
+static bool wait_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
+  (void)deadline;
+  native_wait *w = data;
+  if (!w->poller) return false;
+  agc_poller_pause(w->poller);
+  return true;
+}
+
+static const agc_io_kind wait_io = {NULL, wait_done, wait_expired, wait_drop, true, "native_wait", wait_cancel, false,
+                                    wait_pause};
+
+/* Native.wait_readable(fd, timeout_ms) and wait_writable: the task parks on a job while the I/O thread polls the
+   descriptor, until it is ready (ok), the timeout passes (`native: timed out`) or the task is cancelled. A program
+   that calls them is refused at load like one with extern functions (agc_ffi_refusal), so a build without native
+   calls never reaches the builtin. */
+static agc_value native_wait_on(agc_vm *vm, agc_value *args, uint32_t span, bool writing) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  int64_t fd = agc_as_int(vm, args[0]);
+  int64_t timeout = agc_as_int(vm, args[1]);
+  if (timeout <= 0) return agc_error_value("native: timeout must be positive milliseconds");
+  if (fd < 0 || fd > INT_MAX) return agc_error_value("native: invalid descriptor");
+  /* The loop is made first: a loop that cannot start fails here, before the descriptor is opened. */
+  (void)agc_io_loop(vm);
+  int polled = agc_ffi_wait_fd_open((int)fd);
+  if (polled < 0) return agc_system_error(vm, "native: cannot wait on the descriptor", errno);
+  native_wait *w = malloc(sizeof *w);
+  if (!w) {
+    agc_ffi_wait_fd_close(polled);
+    agc_out_of_memory();
+  }
+  *w = (native_wait){vm, NULL, NULL, polled, 0, writing};
+  agc_io_start_then(vm, &wait_io, w, agc_void(), timeout, wait_begin);
+  return agc_void();
+}
+
+static agc_value builtin_wait_readable(agc_vm *vm, agc_value *args, uint32_t span) {
+  return native_wait_on(vm, args, span, false);
+}
+
+static agc_value builtin_wait_writable(agc_vm *vm, agc_value *args, uint32_t span) {
+  return native_wait_on(vm, args, span, true);
+}
+
 const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **message, uint32_t *span) {
-  if (program->native_call == UINT32_MAX) return NULL;
+  if (program->native_import == UINT32_MAX) return NULL;
   *span = program->native_function == UINT32_MAX ? 0 : program->functions[program->native_function].span;
   if (!agc_ffi_supported()) {
-    *message = "this program declares extern functions, and native calls are not supported on this system yet";
+    *message = "this program uses native code (extern functions or Native.wait_*), which is not supported on this "
+               "system yet";
     return "RUNTIME-NATIVE-UNSUPPORTED";
   }
   if (deny) {
-    *message = "this program declares extern functions, and --deny-native (or any --deny-* flag) refuses native code";
+    *message = "this program uses native code (extern functions or Native.wait_*), and --deny-native (or any --deny-* "
+               "flag) refuses it";
     return "RUNTIME-NATIVE-DENIED";
   }
   return NULL;
@@ -326,6 +450,8 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
 
 const agc_builtin agc_ffi_builtins[] = {
   {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };
 
 const size_t agc_ffi_builtin_count = sizeof agc_ffi_builtins / sizeof agc_ffi_builtins[0];

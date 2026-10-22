@@ -2406,6 +2406,38 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.wait_readable",
+      parameters: [
+        Model.Named(name: "fd", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Native.wait_readable",
+      effects: ["native"],
+      description: (
+        "Park this task until the descriptor fd of native code can be read, at most positive timeout_ms " +
+        "(error native: timed out); Linux only, refused by --deny-native."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.wait_writable",
+      parameters: [
+        Model.Named(name: "fd", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Native.wait_writable",
+      effects: ["native"],
+      description: (
+        "Park this task until the descriptor fd of native code can be written, at most positive timeout_ms " +
+        "(error native: timed out); Linux only, refused by --deny-native."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Path.cwd",
       parameters: [],
       result: Types.Type.Result(Types.Type.String),
