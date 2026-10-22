@@ -12,6 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Windows: `Native.wait_readable` and `Native.wait_writable` wait on a native
   library's socket; any other value is an error.
+- The `AGENTICA_VM_TRACE=profile` report ends with what the VM ran: an `op` row
+  for each opcode with its share, the 20 most common opcode pairs, and an
+  `events` line (frame reloads and the paths of builtin calls).
 
 ### Changed
 

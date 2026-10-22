@@ -67,7 +67,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    "Builtins"): a builtin whose work grows with its input takes `AGC_COST_SIZE`
    or charges `agc_charge` from inside; never touch `steps_left` for that. CPU
    work with no wait (`Crypto.sha256`, a sort) stays on the scheduler with that
-   cost; the libuv pool is for blocking calls. State goes in `vm->rt` (shared
+   cost; the libuv pool is for blocking calls. The last field, `leaf`, marks a
+   plain C call that never parks, starts a stepper or a block, charges turn cost
+   (a map lookup charges for a String key) or counts a step: `CALL_BUILTIN`
+   stores its result and skips the generic tail. A leaf row is not `shared`,
+   has `AGC_NATIVE_NONE` and `AGC_COST_NONE` (`vm/tests/sync_test.c`), and the
+   sanitizer and GC-stress builds abort on a leaf call that breaks the rule
+   (`AGC_LEAF_CHECK`). Read the function and what it calls before marking a
+   row; when unsure, leave it `false`. State goes in `vm->rt` (shared
    runtime), `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files` first
    in file builtins and in `TCP.connect` and `TCP.listen`, so the fuzzer never
    touches the disk or the network, and then the `--deny-*` flag of the family
@@ -134,7 +141,9 @@ must never crash or change the run):
   `agc_profile_report` (`vm/profile.c`) own its counters, `interp.c` counts
   through the `profile_*` hooks (out of line and cold, and only in the copy of
   `turn_loop` that has `profiling` true), and a new hook goes in the same
-  way, so the plain copy keeps its code. Hooks in the one loop had made
+  way, so the plain copy keeps its code. The per-instruction opcode and pair
+  counts (`profile_op`) are inline under `if (profiling)` instead, since a call
+  per instruction would slow the profiled run. Hooks in the one loop had made
   `calls` 26% and `arithmetic` 14% slower. Measure a change of the
   loop on more than one link layout (`docs/vm-benchmarks.md`): the same code
   moves by 10 % with the order of the objects.

@@ -483,7 +483,7 @@ struct agc_task {
 /* The counters of the profile trace category (AGENTICA_VM_TRACE=profile): calls and steps have one slot for each
  * function of the program and one more, the last, for the steps that a counting loop (Range#each, times, upto, downto)
  * or a stepper builtin takes for each pass; the builtin arrays have one slot for each builtin the program lists.
- * Allocated when the run starts and written as trace lines when it ends (trace.c). */
+ * Allocated when the run starts and written as trace lines when it ends (profile.c). */
 typedef struct {
   uint32_t functions, builtins;
   uint64_t start_ns;
@@ -494,6 +494,13 @@ typedef struct {
   struct agc_profile_stacks *stacks;
   uint64_t every, left;
   uint64_t *frames;
+  /* The bytecode instructions run, by opcode (`ops`, AGC_OP_COUNT slots) and by the opcode run before them in the same
+     frame (`pairs[before * AGC_OP_COUNT + op]`; the first instruction after a reload has none). `reloads` counts the
+     reloads of the turn loop's frame state, the start of each turn included. The CALL_BUILTIN calls split into those
+     that took the leaf path, those that took the generic tail and those that started a native frame. The profile runs
+     on one scheduler (agc_launch_supported), so these plain counters need no lock. */
+  uint64_t *ops, *pairs;
+  uint64_t reloads, builtin_leaf, builtin_tail, builtin_native;
 } agc_profile;
 
 struct agc_vm {

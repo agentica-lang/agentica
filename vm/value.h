@@ -278,6 +278,13 @@ typedef struct {
      rows; in a shared VM agc_sync_assert in the mutators of the shared lists (docs/vm/16-architecture.md §16.9) fails a
      run that reaches one without the lock, and make test-shared runs the programs that way. */
   bool shared;
+  /* A plain C call: the builtin never parks (agc_io_start, agc_task_park), never starts a stepper or a block, never
+     charges turn cost (agc_charge, nor a helper that charges, such as a map lookup that hashes a String key) and never
+     counts a step or asks to yield; it only returns a value or fails with agc_fail. CALL_BUILTIN then stores the result
+     and goes on without the generic tail. A leaf row is never shared, has AGC_NATIVE_NONE and AGC_COST_NONE
+     (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds abort when a leaf call breaks the
+     rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. */
+  bool leaf;
 } agc_builtin;
 
 /* prelude marks a function of the compiler prelude (docs/future/25-ruby-typed-idioms.md §25.6): its spans are not

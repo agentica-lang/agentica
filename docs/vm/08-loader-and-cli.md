@@ -398,7 +398,16 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   called in its place (`agc_task_call_block`): one step, no native frame; with
   it on, it is a stepper whose native frame names the label. `Profile.steps` is
   the task's steps (`agc_task_steps`: its finished turns plus the running one),
-  the same with the profile on or off.
+  the same with the profile on or off. The report ends with what the loop of
+  `interp.c` ran: one `events` line (`instructions`, `reloads` of the top
+  frame's state, the start of each turn included, and the `CALL_BUILTIN` calls
+  that took the leaf path, `builtin_leaf`, the generic tail, `builtin_tail`, or
+  started a native frame, `builtin_native`), then one `op` row for each opcode
+  that ran (`count`, `share` of the instructions in percent, `name` as
+  `--dump-ir` spells it), the most first, and the 20 `pair` rows with the most
+  runs of opcode `first` followed by `then` in one frame (the first instruction
+  after a reload starts no pair). These counters live in `agc_profile`, like the
+  others, and the profile runs on one scheduler, so they need no lock.
 - `AGENTICA_PROFILE_FORMAT=folded` (with `profile`; `report` or unset keeps the
   report, another value is one `agc-trace unknown profile format` line) writes
   folded stacks instead of the report, to the trace output: a line per distinct

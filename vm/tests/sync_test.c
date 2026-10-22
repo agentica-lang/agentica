@@ -1,10 +1,12 @@
 /*
  * rt->sync (docs/vm/16-architecture.md §16.9): solo until agc_share, then one mutual exclusion that nests per
- * scheduler and is undone by agc_sync_reset. Threads each hold a copy of the vm, as schedulers do.
+ * scheduler and is undone by agc_sync_reset. Threads each hold a copy of the vm, as schedulers do. Also the shared and
+ * leaf marks of the builtin rows, and the check that stops a call of a row marked leaf by mistake.
  */
 #include "../core.h"
 #include "../services.h"
 #include "test_abort.h"
+#include "test_program.h"
 #include "test_support.h"
 
 #include <assert.h>
@@ -139,6 +141,67 @@ static void test_builtin_classes(void) {
   }
 }
 
+/* A leaf row is a plain call (agc_builtin.leaf): never shared, no native frame, no cost by size. The hot accessors are
+   marked; a map lookup is not, since hashing a String key charges turn cost, nor is anything that writes output. */
+static void test_leaf_rows(void) {
+  for (size_t t = 0; t < agc_builtin_table_count; t++) {
+    for (size_t i = 0; i < *agc_builtin_tables[t].count; i++) {
+      const agc_builtin *b = &agc_builtin_tables[t].entries[i];
+      if (!b->leaf) continue;
+      if (b->shared || b->native != AGC_NATIVE_NONE || b->cost != AGC_COST_NONE || !b->fn)
+        fprintf(stderr, "%s/%u: a leaf row must be a plain call\n", b->name, b->arity);
+      assert(b->fn && !b->shared && b->native == AGC_NATIVE_NONE && b->cost == AGC_COST_NONE);
+    }
+  }
+  struct {
+    const char *name;
+    uint32_t arity;
+    bool leaf;
+  } expected[] = {
+      {"List.size", 1, true},     {"List.at", 2, true},       {"String.length", 1, true}, {"Int.bit_and", 2, true},
+      {"Map.get", 2, false},      {"Map.has_key?", 2, false}, {"Set.include?", 2, false}, {"List.concat", 2, false},
+      {"puts", 1, false},         {"List.map", 2, false},     {"IO.gets", 0, false},
+  };
+  for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
+    const agc_builtin *b = agc_find_builtin((const uint8_t *)expected[k].name, strlen(expected[k].name), expected[k].arity);
+    assert(b && b->leaf == expected[k].leaf);
+  }
+}
+
+#if AGC_LEAF_CHECK && !defined(_WIN32)
+static agc_value charges_cost(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  agc_charge(vm, 1);
+  return agc_void();
+}
+
+static const agc_builtin mismarked = {"Test.mismarked", 0, charges_cost, AGC_NATIVE_NONE, AGC_COST_NONE, false, true};
+
+/* A program whose entry calls the mismarked builtin and returns. */
+static void run_mismarked(void) {
+  static agc_program p;
+  static agc_test_source src;
+  static agc_span spans[4];
+  static agc_value constants[1];
+  static const agc_builtin *builtins[1] = {&mismarked};
+  static agc_function fns[1];
+  static agc_instr code[4];
+  static uint32_t code_spans[4];
+  static agc_vm leaf_vm;
+  agc_test_program(&p, &src, spans, 4, constants, builtins, 1, fns, 1, code, code_spans, 4, 0);
+  agc_test_emit(&fns[0], 4, AGC_OP_CALL_BUILTIN, 0, 0, 1);
+  agc_test_emit(&fns[0], 4, AGC_OP_RETURN, 0, 0, 2);
+  agc_vm_init(&leaf_vm, &p, stdout, stderr, INT64_MAX);
+  agc_vm_run(&leaf_vm);
+}
+
+/* The sanitizer and GC-stress builds stop a leaf call that charged turn cost, naming the row. */
+static void test_mismarked_leaf_aborts(void) {
+  agc_test_aborts_with(run_mismarked, "builtin Test.mismarked/0 is marked leaf but charged turn cost");
+}
+#endif
+
 /* In a shared VM a mutator of the shared lists that runs without rt->sync fails with a diagnostic, and agc_sync_reset
    gives back what a failed builtin held. */
 static void test_assert_and_reset(void) {
@@ -178,9 +241,13 @@ int main(void) {
   /* Before the collector may start threads: the child allocates the lock through the GC after the fork. */
   test_relock_aborts();
 #endif
+#if AGC_LEAF_CHECK && !defined(_WIN32)
+  test_mismarked_leaf_aborts();
+#endif
   agc_gc_allow_threads();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_builtin_classes();
+  test_leaf_rows();
   test_solo();
   test_exclusion_and_nesting();
   test_reset_frees_the_lock();

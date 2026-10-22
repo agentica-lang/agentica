@@ -12,6 +12,9 @@
 
 #define PROFILE_TOP 30
 #define PROFILE_FILES 12
+#define PROFILE_PAIRS 20
+#define SHARE_TEXT 48
+#define OPCODE_PAIRS ((size_t)AGC_OP_COUNT * AGC_OP_COUNT)
 #define FOLDED_FLUSH 65536
 /* The most labels of Profile.measure with a section of their own; later ones share OVERFLOW_LABEL. A dynamic label
    ("item #{i}") would otherwise keep one entry per value for the whole run. */
@@ -82,6 +85,17 @@ typedef struct {
   size_t len, room;
   int fd;
 } out_buffer;
+
+/* The name of each opcode in the order of agc_opcode (vm/value.h), spelled as OPCODES in
+   compiler/bytecode/bytecode_tables.agc and --dump-ir spell it; tests/test_frontend_bytecode.py checks the list. */
+static const char *const opcode_names[] = {
+  "move", "const", "step", "add-i", "sub-i", "mul-i", "div-i", "mod-i", "neg-i", "not", "lt-i", "le-i", "eq", "ne",
+  "jump", "jump-if-false", "jump-if-true", "call", "call-builtin", "return", "add-f", "sub-f", "mul-f", "div-f",
+  "neg-f", "lt-f", "le-f", "concat", "to-text", "inspect", "list", "list-len", "list-get", "struct", "field", "enum",
+  "is-variant", "payload", "same", "tail-call", "try", "is-ok", "result-value", "map", "map-get", "call-value",
+  "closure", "range", "range-bounds", "struct-with", "global", "global-set", "try-step",
+};
+_Static_assert(sizeof opcode_names / sizeof opcode_names[0] == AGC_OP_COUNT, "one name for each opcode");
 
 static uint64_t hash_bytes(uint64_t h, const void *data, size_t n) {
   const unsigned char *p = data;
@@ -271,8 +285,8 @@ static agc_value builtin_steps(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_profile_builtins[] = {
-  {"Profile.measure", 2, builtin_measure, AGC_NATIVE_NONE, AGC_COST_NONE, false},
-  {"Profile.steps", 0, builtin_steps, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Profile.measure", 2, builtin_measure, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Profile.steps", 0, builtin_steps, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };
 
 const size_t agc_profile_builtin_count = sizeof agc_profile_builtins / sizeof agc_profile_builtins[0];
@@ -283,7 +297,7 @@ static bool ranks_before(const uint64_t *counts, const uint64_t *then, size_t a,
   return then && then[a] > then[b];
 }
 
-/* The indexes of the `limit` (at most PROFILE_TOP) entries with the largest counts, ranked by COUNTS and then by THEN
+/* The indexes of the `limit` (the room of TOP) entries with the largest counts, ranked by COUNTS and then by THEN
  * (NULL: counts alone), the lower index first among equal ones; entries whose keys are all zero are left out. Returns
  * how many there are. */
 static size_t top_counts(const uint64_t *counts, const uint64_t *then, size_t n, uint32_t *top, size_t limit) {
@@ -318,6 +332,10 @@ void agc_profile_start(agc_vm *vm) {
   profile->steps = agc_alloc(agc_size_mul((size_t)p->function_count + 1, sizeof(uint64_t)));
   profile->builtin_calls = agc_alloc(agc_size_mul((size_t)p->builtin_count + 1, sizeof(uint64_t)));
   profile->builtin_ns = agc_alloc(agc_size_mul((size_t)p->builtin_count + 1, sizeof(uint64_t)));
+  profile->ops = agc_alloc_atomic(AGC_OP_COUNT * sizeof(uint64_t));
+  memset(profile->ops, 0, AGC_OP_COUNT * sizeof(uint64_t));
+  profile->pairs = agc_alloc_atomic(OPCODE_PAIRS * sizeof(uint64_t));
+  memset(profile->pairs, 0, OPCODE_PAIRS * sizeof(uint64_t));
   struct agc_profile_sections *sections = agc_alloc(sizeof *sections);
   sections->cap = 8;
   sections->items = agc_alloc(sections->cap * sizeof *sections->items);
@@ -369,6 +387,35 @@ static void report_sections(const agc_trace *tr, const struct agc_profile_sectio
               "section calls=%" PRIu64 " steps=%" PRIu64 " us=%" PRIu64 " gc_ms=%" PRIu64 " name=%.*s", it->calls,
               it->steps, it->ns / 1000u, it->gc_ms, agc_trace_len(it->label->bytes), it->label->data);
   }
+}
+
+/* COUNT as a share of TOTAL in percent with two decimals ("12.34"), written in TEXT. */
+static const char *share_of(uint64_t count, uint64_t total, char text[SHARE_TEXT]) {
+  uint64_t hundredths = total ? (uint64_t)((double)count * 10000.0 / (double)total + 0.5) : 0;
+  snprintf(text, SHARE_TEXT, "%" PRIu64 ".%02" PRIu64, hundredths / 100u, hundredths % 100u);
+  return text;
+}
+
+/* What the turn loop did: one `events` line (instructions, frame reloads and the paths of CALL_BUILTIN), every opcode
+   that ran with its share of the instructions, the most first, and the PROFILE_PAIRS pairs of opcodes run one after
+   the other in a frame with their share of all pairs. */
+static void report_loop(const agc_trace *tr, const agc_profile *profile) {
+  uint64_t instructions = sum_counts(profile->ops, AGC_OP_COUNT), pairs = sum_counts(profile->pairs, OPCODE_PAIRS);
+  AGC_TRACE(tr, AGC_TRACE_PROFILE,
+            "events instructions=%" PRIu64 " reloads=%" PRIu64 " builtin_leaf=%" PRIu64 " builtin_tail=%" PRIu64
+            " builtin_native=%" PRIu64,
+            instructions, profile->reloads, profile->builtin_leaf, profile->builtin_tail, profile->builtin_native);
+  char share[SHARE_TEXT];
+  uint32_t top[AGC_OP_COUNT];
+  size_t found = top_counts(profile->ops, NULL, AGC_OP_COUNT, top, AGC_OP_COUNT);
+  for (size_t k = 0; k < found; k++)
+    AGC_TRACE(tr, AGC_TRACE_PROFILE, "op count=%" PRIu64 " share=%s name=%s", profile->ops[top[k]],
+              share_of(profile->ops[top[k]], instructions, share), opcode_names[top[k]]);
+  found = top_counts(profile->pairs, NULL, OPCODE_PAIRS, top, PROFILE_PAIRS);
+  for (size_t k = 0; k < found; k++)
+    AGC_TRACE(tr, AGC_TRACE_PROFILE, "pair count=%" PRIu64 " share=%s first=%s then=%s", profile->pairs[top[k]],
+              share_of(profile->pairs[top[k]], pairs, share), opcode_names[top[k] / AGC_OP_COUNT],
+              opcode_names[top[k] % AGC_OP_COUNT]);
 }
 
 static void out_bytes(out_buffer *out, const char *s, size_t n) {
@@ -467,7 +514,8 @@ static void report_folded(const agc_vm *vm, const agc_profile *profile) {
 }
 
 /* One total line, then the functions with the most steps, the source files with the most steps, the builtins that
- * took the most time and the sections of Profile.measure, each with its counts. The step that a counting loop
+ * took the most time and the sections of Profile.measure, each with its counts, and last what the turn loop ran
+ * (report_loop). The step that a counting loop
  * (Range#each, Int#times, upto, downto) or a stepper builtin (File.each_line) takes for each pass is the function
  * "<native>"; List.map, each, filter and the like count no step of their own, only the steps of their callbacks.
  * Builtin time is wall time of the call itself: a builtin that waits (a sleep, a read) is timed until it parks, and
@@ -527,4 +575,5 @@ void agc_profile_report(agc_vm *vm) {
               profile->builtin_ns[id] / 1000u, name);
   }
   report_sections(tr, profile->sections);
+  report_loop(tr, profile);
 }

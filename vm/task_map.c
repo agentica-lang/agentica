@@ -189,7 +189,7 @@ static agc_value builtin_map(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_task_map_builtins[] = {
-  {"Task.map", 4, builtin_map, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"Task.map", 4, builtin_map, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
 };
 
 const size_t agc_task_map_builtin_count = sizeof agc_task_map_builtins / sizeof agc_task_map_builtins[0];

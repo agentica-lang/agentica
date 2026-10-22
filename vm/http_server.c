@@ -356,12 +356,12 @@ static agc_value builtin_local_port(agc_vm *vm, agc_value *args, uint32_t span) 
 }
 
 const agc_builtin agc_http_server_builtins[] = {
-  {"HttpWire.server", 3, builtin_server, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.accept", 1, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.close_server", 1, builtin_close_server, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.wait", 1, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.server", 3, builtin_server, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.accept", 1, builtin_accept, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.close_server", 1, builtin_close_server, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.wait", 1, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.local_port", 1, builtin_local_port, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
 };
 
 const size_t agc_http_server_builtin_count = sizeof agc_http_server_builtins / sizeof agc_http_server_builtins[0];
