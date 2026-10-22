@@ -59,7 +59,10 @@ struct agc_memstream {
    `closed`. `buf` grows to the largest read asked for and is kept for the whole run; the done half of a read takes it
    while the thread waits for the next `want`. The thread and the loop side each hold a reference: the thread may stay
    in a read after the close, until input or EOF comes. A handle that is not overlapped serializes its I/O, so while
-   the thread is in a read of a socket that is also stdout (inetd), the writes of stdout wait for that read. */
+   the thread is in a read of a socket that is also stdout (inetd), the writes of stdout wait for that read.
+   A console is read as UTF-16 (ReadConsoleW) into `units` and handed on as UTF-8: `high` keeps a high surrogate whose
+   low half is still in the console, and `spill` the UTF-8 bytes of a console read that did not fit the room asked for.
+   Only the thread uses them. */
 struct agc_stdin_reader {
   uv_async_t wake;
   uv_mutex_t lock;
@@ -72,6 +75,10 @@ struct agc_stdin_reader {
   size_t room, cap;
   int64_t got;
   uint8_t *buf;
+  wchar_t high, *units;
+  size_t units_cap;
+  uint8_t *spill;
+  size_t spill_at, spill_len, spill_cap;
   atomic_int refs;
 };
 
@@ -364,12 +371,75 @@ static void reader_unref(agc_stdin_reader *r) {
   uv_cond_destroy(&r->asked);
   uv_mutex_destroy(&r->lock);
   free(r->buf);
+  free(r->units);
+  free(r->spill);
   free(r);
 }
 
-/* The thread: one blocking _read per request, in binary mode as before. */
+/* DATA, of *CAP items of SIZE bytes, grown to at least N items (*CAP then says how many); NULL when memory is out,
+   with DATA left as it was. */
+static void *grow(void *data, size_t *cap, size_t n, size_t size) {
+  if (*cap >= n) return data;
+  void *grown = realloc(data, n * size);
+  if (grown) *cap = n;
+  return grown;
+}
+
+/* One read of a console: the text typed, in UTF-8 whatever the console's code page is. It asks for ROOM units, as
+   _read asked for ROOM bytes: a console in line mode keeps no more of a line than the read asks for (the rest of what
+   is typed is dropped), so asking for less would cut long lines. What does not fit ROOM waits in `spill` for the next
+   read. As ReadFile does on a console, a read that gives nothing (Ctrl+C) and one that starts with Ctrl+Z are the end
+   of input (0). Returns the bytes put in `buf`, or -1 with errno. */
+static int console_read(agc_stdin_reader *r, HANDLE console, size_t room) {
+  while (r->spill_len == 0) {
+    wchar_t *units = grow(r->units, &r->units_cap, room + 1, sizeof(wchar_t));
+    if (!units) {
+      errno = ENOMEM;
+      return -1;
+    }
+    r->units = units;
+    DWORD start = r->high ? 1 : 0, got = 0;
+    units[0] = r->high;
+    if (!ReadConsoleW(console, units + start, (DWORD)room, &got, NULL)) {
+      errno = EIO;
+      return -1;
+    }
+    /* Accepted edge: after a held high surrogate, a 0-unit read drops it, and a Ctrl+Z is text, not the end. */
+    if (got == 0 || (!start && units[0] == 0x1A)) {
+      r->high = 0;
+      return 0;
+    }
+    DWORD total = start + got;
+    r->high = IS_HIGH_SURROGATE(units[total - 1]) ? units[--total] : 0;
+    if (total == 0) continue;
+    int need = WideCharToMultiByte(CP_UTF8, 0, units, (int)total, NULL, 0, NULL, NULL);
+    if (need <= 0) {
+      errno = EIO;
+      return -1;
+    }
+    uint8_t *spill = grow(r->spill, &r->spill_cap, (size_t)need, 1);
+    if (!spill) {
+      errno = ENOMEM;
+      return -1;
+    }
+    r->spill = spill;
+    r->spill_len = (size_t)WideCharToMultiByte(CP_UTF8, 0, units, (int)total, (char *)r->spill, need, NULL, NULL);
+    r->spill_at = 0;
+  }
+  size_t take = r->spill_len < room ? r->spill_len : room;
+  memcpy(r->buf, r->spill + r->spill_at, take);
+  r->spill_at += take;
+  r->spill_len -= take;
+  return (int)take;
+}
+
+/* The thread: one blocking read per request. A console is read as text (console_read); anything else (a pipe, a file,
+   NUL) with _read in binary mode, as it comes. */
 static void reader_main(void *data) {
   agc_stdin_reader *r = data;
+  DWORD mode;
+  HANDLE handle = (HANDLE)_get_osfhandle(r->fd);
+  bool console = handle != INVALID_HANDLE_VALUE && GetConsoleMode(handle, &mode);
   uv_mutex_lock(&r->lock);
   for (;;) {
     while (!r->want && !r->closed) uv_cond_wait(&r->asked, &r->lock);
@@ -379,7 +449,7 @@ static void reader_main(void *data) {
     uv_mutex_unlock(&r->lock);
     int n;
     do {
-      n = _read(r->fd, r->buf, (unsigned)room);
+      n = console ? console_read(r, handle, room) : _read(r->fd, r->buf, (unsigned)room);
     } while (n < 0 && errno == EINTR);
     uv_mutex_lock(&r->lock);
     r->in_read = false;

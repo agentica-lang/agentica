@@ -24,6 +24,7 @@ import pytest
 from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, ROOT, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
                                  host_only, output_lines, run, scaled, vm_command, vm_environment)
 from tests.test_vm_stdout import ROWS_PROGRAM, STUCK_ROWS
+from tests.windows_support import long_paths_enabled
 
 EXAMPLES = ROOT / "examples"
 STOP_PEER = FIXTURES / "stop-peer.py"
@@ -787,8 +788,8 @@ def test_path_real_resolves_a_deep_folder_longer_than_a_small_buffer_where_the_s
                                                                                                 os_peer_lines):
     root = new_dir()
     if WINDOWS:
-        # Windows fails a path whose absolute form is 260 characters or more (the binary has no long-path manifest).
-        # Python makes the folder with the \\?\ prefix, and the VM, given the plain path, cannot reach it.
+        # Python makes the folder with the \\?\ prefix. The VM, given the plain path, reaches it only when Windows
+        # lifts the MAX_PATH limit (long_paths_enabled).
         prefix = "\\\\?\\"
         first = str(root / ("d" * 100))
         here = prefix + str(root)
@@ -797,7 +798,7 @@ def test_path_real_resolves_a_deep_folder_longer_than_a_small_buffer_where_the_s
                 here = here + "\\" + "d" * 100
                 os.mkdir(here)
             seen = os_lines("real", [here[4:], first])
-            assert seen[0] == "error" and seen[1].startswith("ok:"), seen
+            assert seen[0].startswith("ok:") == long_paths_enabled() and seen[1].startswith("ok:"), seen
         finally:
             shutil.rmtree(prefix + first, ignore_errors=True)
         return

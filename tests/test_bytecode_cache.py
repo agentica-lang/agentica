@@ -11,7 +11,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, known_issue, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, run, vm_environment
 from tests.package_support import Workspace, dependency
 
 HEAD_BYTES = 18
@@ -224,8 +224,6 @@ def test_agentica_test_reads_and_keeps_the_entry_of_a_test_file(tmp_path):
 
 
 POSIX_ONLY = host_only(not POSIX_PYTHON, "file modes and owners bind a POSIX system")
-# The link checks work on Windows too, but a symbolic link there needs a privilege the test cannot count on.
-LINKS = known_issue(not POSIX_PYTHON, 568, "the link cases of the bytecode cache have no Windows test")
 
 
 @POSIX_ONLY
@@ -260,7 +258,6 @@ def test_an_entry_that_others_can_write_is_replaced(src, tmp_path):
     assert stat.S_IMODE(entry.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
 
 
-@LINKS
 def test_a_link_in_place_of_the_entry_is_not_read_and_not_written_through(src, tmp_path):
     agentica(src, "main.agc")
     entry = only_entry(src / "_build" / "bytecode")
@@ -275,7 +272,6 @@ def test_a_link_in_place_of_the_entry_is_not_read_and_not_written_through(src, t
     assert target.read_bytes() == kept and not entry.is_symlink() and entry.is_file()
 
 
-@LINKS
 @pytest.mark.parametrize("level", ["_build", "bytecode"])
 def test_a_link_in_place_of_a_folder_is_not_used_and_nothing_is_written_where_it_leads(src, tmp_path, level):
     agentica(src, "main.agc")
@@ -283,7 +279,7 @@ def test_a_link_in_place_of_a_folder_is_not_used_and_nothing_is_written_where_it
     swap_program(only_entry(src / "_build" / "bytecode"), compiled(tmp_path, "other", program("from the entry")))
     moved = tmp_path / "moved"
     folder.rename(moved)
-    folder.symlink_to(moved)
+    folder.symlink_to(moved, target_is_directory=True)
     before = sorted(path.name for path in moved.iterdir())
     (src / "util.agc").write_text(UTIL % "two", encoding="utf-8")
     done = agentica(src, "main.agc")
@@ -309,7 +305,7 @@ def library_project(tmp_path):
 
 @pytest.mark.parametrize("earlier", [
     "agc_libs",
-    pytest.param("agc_libs beside a link", marks=LINKS),
+    "agc_libs beside a link",
     "AGENTICA_PATH",
 ])
 def test_a_library_that_appears_in_an_earlier_folder_of_the_search_misses(tmp_path, earlier):
@@ -371,7 +367,6 @@ def test_the_entries_of_a_project_go_to_its_root_and_a_manifest_that_appears_in_
     assert agentica(inner, "main.agc").stdout == "from the entry\n"
 
 
-@LINKS
 def test_an_import_through_a_link_that_is_retargeted_misses(tmp_path):
     src = tmp_path / "src"
     src.mkdir()

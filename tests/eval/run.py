@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -20,16 +19,11 @@ ROOT = Path(__file__).resolve().parents[2]
 EVAL = ROOT / "tests" / "eval"
 TASKS = EVAL / "tasks"
 SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
-# The one-file skill of the skill-minimal arm. It lives with the eval, not in .agents/skills/, so no agent finds two
-# skills for one job; the sandbox installs it under the name agentica-programming, so its frontmatter says so.
-MINIMAL_SKILL_PATH = "tests/eval/skills/agentica-programming-minimal"
-MINIMAL_SKILL = ROOT / MINIMAL_SKILL_PATH
-ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py", "typed-python": "py", "skill-nocli": "agc",
-        "skill-minimal": "agc"}
+ARMS = {"skill": "agc", "grammar": "agc", "binary": "agc", "python": "py", "typed-python": "py", "skill-nocli": "agc"}
 TYPED_ARMS = {"typed-python"}
-SKILL_ARMS = {"skill", "skill-nocli", "skill-minimal"}
+SKILL_ARMS = {"skill", "skill-nocli"}
 # Arms that run only when asked for with --arms: the default is the five arms of the early rounds.
-OPT_IN_ARMS = {"skill-nocli", "skill-minimal"}
+OPT_IN_ARMS = {"skill-nocli"}
 NOCLI_NOTE = "agentica --help and agentica help still name the four query commands; the wrapper only refuses them"
 REFERENCE_ARMS = ["binary", "python", "typed-python"]
 CHECKER = ["mypy", "--strict", "--cache-dir=/dev/null"]
@@ -134,7 +128,7 @@ def prepare(work: Path, task: str, arm: str) -> None:
         shutil.copytree(ROOT / "dist" / "runtime", work, dirs_exist_ok=True)
     if arm in SKILL_ARMS:
         (work / "skills").mkdir()
-        shutil.copytree(MINIMAL_SKILL if arm == "skill-minimal" else SKILL, work / "skills" / "agentica-programming")
+        shutil.copytree(SKILL, work / "skills" / "agentica-programming")
     if arm == "skill-nocli":
         strip_query_docs(work / "skills" / "agentica-programming")
         install_query_wrapper(work / "bin")
@@ -858,29 +852,11 @@ def read_rows(results: Path) -> list[dict]:
     return [json.loads(line) for line in (results / "results.jsonl").read_text(encoding="utf-8").splitlines()]
 
 
-def skill_digest(skill: Path) -> str:
-    """A hash of the names and bytes of every file of a skill folder, so run.json says which text a run used even when
-    the folder has uncommitted changes."""
-    digest = hashlib.sha256()
-    for path in sorted(skill.rglob("*")):
-        if path.is_file():
-            digest.update(path.relative_to(skill).as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
-    return digest.hexdigest()
-
-
 def git_output(*command: str) -> str:
     try:
         return subprocess.run(["git", *command], cwd=ROOT, capture_output=True, text=True, check=True).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return ""
-
-
-def minimal_skill_info(arms: list[str]) -> dict[str, str]:
-    """The skill-minimal arm's skill: its last commit and the hash of its folder (empty when the arm is not run)."""
-    if "skill-minimal" not in arms:
-        return {}
-    return {"skill_minimal_commit": git_output("log", "-1", "--format=%H", "--", MINIMAL_SKILL_PATH),
-            "skill_minimal_sha256": skill_digest(MINIMAL_SKILL)}
 
 
 def run_info(args: argparse.Namespace, image_info: dict[str, str | None]) -> dict:
@@ -891,8 +867,7 @@ def run_info(args: argparse.Namespace, image_info: dict[str, str | None]) -> dic
             "image_id": image_info["image_id"], "checker": image_info["checker"], "pi_version": image_info.get("pi"), "pass_env": args.pass_env,
             "agent_network": AGENT_NETWORK and args.agent != "reference", "arm_tasks": args.arm_tasks,
             "max_cost": args.max_cost,
-            "arm_notes": {arm: NOCLI_NOTE for arm in args.arms if arm == "skill-nocli"},
-            **minimal_skill_info(args.arms)}
+            "arm_notes": {arm: NOCLI_NOTE for arm in args.arms if arm == "skill-nocli"}}
 
 
 def mean_known(rows: list[dict], keys: tuple[str, ...], places: int) -> str:

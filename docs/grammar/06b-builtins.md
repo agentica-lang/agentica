@@ -552,12 +552,13 @@ hits has no front-end diagnostics, since the program checked when it was
 cached. The entry is used only when `_build/`, `bytecode/` and the file are
 what the cache made: real folders and a regular file, never a link, owned by
 the user and writable by no one else (the folders are made with mode 0700).
-Otherwise the run
-goes on without the cache. On Windows, which has no modes or owner ids to read,
-only the link and file-kind checks apply. `check`, `compile`, `--dump`,
-`--dump-ir`, `check --stdin` and `run` do not use it; `--no-cache` skips it for
-one run; a folder that cannot be written is not an error. The `--deny-*` flags
-do not apply to it: they are for the program.
+Otherwise the run goes on without the cache. On Windows, which has no modes or
+owner ids to read, only the link and file-kind checks apply: the cache trusts
+its folder, with no owner or ACL check, and a folder that other users can write
+is out of scope. `check`, `compile`, `--dump`, `--dump-ir`, `check --stdin` and
+`run` do not use it; `--no-cache` skips it for one run; a folder that cannot be
+written is not an error. The `--deny-*` flags do not apply to it: they are for
+the program.
 
 ### Running a compiled program
 

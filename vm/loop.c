@@ -1298,7 +1298,8 @@ static agc_poller *poller_open(agc_vm *vm, int fd, bool probe, int *err) {
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) { return poller_open(vm, fd, true, err); }
 
 #ifdef _WIN32
-/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor (issue #568). */
+/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor: a wait is not
+   supported there. */
 agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
   (void)vm;
   (void)fd;

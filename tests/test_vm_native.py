@@ -4,8 +4,8 @@ The peer is tests/fixtures/native/peer.c, built with the system C compiler into 
 dylib on macOS) for each module run, so every C type crosses a real ABI; three cases also call the system SQLite
 (libsqlite3.so.0 on Linux, which CI installs, and libsqlite3.dylib on macOS). Native calls exist on Linux x86_64,
 Windows x64 and macOS: elsewhere a program that declares extern functions is refused at load with
-RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. Native.wait_* has no Windows port
-yet (#568). Tests assert codes and spans, never messages (AGENTS.md).
+RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. Native.wait_* is not supported on
+Windows. Tests assert codes and spans, never messages (AGENTS.md).
 """
 import ctypes
 import json
@@ -15,16 +15,15 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, TARGET_OS, WINDOWS, cli, host_only, known_issue, require, run, tool,
-                                 vm_environment)
+from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, host_only, require, run, tool, vm_environment
 
 MACOS = TARGET_OS == "darwin"
 # The systems whose build has libffi; the others refuse native code at load, and the call cases skip there.
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
 NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux x86_64, Windows x64 and macOS only")
-# libuv polls only sockets on Windows, and the peer's descriptors are pipes.
-NATIVE_WAITS = known_issue(WINDOWS, 568, "Native.wait_* has no Windows port yet")
+# Native.wait_* is not supported on Windows: libuv polls only sockets there, and the peer's descriptors are pipes.
+NATIVE_WAITS = host_only(WINDOWS, "Native.wait_* is not supported on Windows (libuv polls only sockets there)")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both, and on
 # macOS libSystem (in the dyld shared cache, not on disk).
@@ -828,7 +827,7 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
 
 
-# On Windows a wait is not ported yet (#568): it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
+# On Windows a wait is not supported: it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
 # can be polled, so the run only has to end.
 @NATIVE_CALLS
 def test_a_wait_on_windows_returns_an_error(tmp_path):
