@@ -207,8 +207,13 @@ def declaration_sites(scan: Scan, declaration: Ast.Decl) -> List[Site]
   end
 end
 
+# The result of an extern function with out parameters names its record, which the program never wrote: its span is
+# the C result type, where the record's `result` field is defined, so it gives no site of its own.
 def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
-  out = defined(scan, named(node.name), node.name_span).concat(type_sites(scan, node.result, []))
+  out = defined(scan, named(node.name), node.name_span)
+  if !record_result?(node)
+    out = out.concat(type_sites(scan, node.result, []))
+  end
   roots: List[Walk.Node] = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
   for param in node.params
     out = out.concat(type_sites(scan, param.type, []))
@@ -220,13 +225,26 @@ def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
   return out.concat(walk(scan, roots))
 end
 
+# The record of an extern function (record_of) has the function's name span, which the function's definition takes.
 def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
-  out = defined(scan, named(node.name), node.name_span)
+  out: List[Site] = []
+  if node.record_of == ""
+    out = defined(scan, named(node.name), node.name_span)
+  end
   for field in node.fields
     out = out.concat(defined(scan, member("field", node.name, field.name), field.name_span))
     out = out.concat(type_sites(scan, field.type, []))
   end
   return out
+end
+
+# Whether the function is an extern function with out parameters, whose result is its record: one of its codes is a
+# capital (Ast.Native), whatever the type, so a new type code needs no change here.
+def record_result?(node: Ast.FunctionDecl) -> Bool
+  case node.native
+    Ast.Optional.Present(native) -> return native.codes.split("").any? do |code: String| code != code.downcase end
+    Ast.Optional.Absent -> return false
+  end
 end
 
 # A type parameter of the enum stays as it is in a payload (`Full(T)`): it names no declaration.

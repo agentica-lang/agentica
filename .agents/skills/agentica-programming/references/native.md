@@ -52,6 +52,31 @@ end
     def fputs(text: C.String, stream: Stream) -> C.Int
   end
   ~~~
+- `out NAME: T` is an out parameter (`T` is `C.Int`, `C.Int64`, `C.Double`,
+  `C.Bool`, `C.Pointer` or a resource; else `PARSE-EXTERN-OUT`). The caller
+  does not pass it; C writes through a pointer to a zeroed slot. The call
+  returns a record named after the C name in CamelCase (`Sqlite3Open`), with
+  `result` (the C result; none for `Void`) and one field per out parameter.
+  An out resource field is the resource (not a `Result`): owned by the task
+  when C wrote a pointer, closed (never freed, calls fail with
+  `RUNTIME-NATIVE-CLOSED`) when it is NULL, so check `result` first. An out
+  named `result` beside a C result is `PARSE-EXTERN-OUT`.
+
+  ~~~ruby
+  extern "libsqlite3.so.0"
+    resource Db, free: sqlite3_close_v2
+    def sqlite3_open(filename: C.String, out db: Db) -> C.Int
+  end
+
+  def open(path: String) -> Result[Db]
+    opened = sqlite3_open(path)
+    if opened.result != 0
+      Native.close(opened.db)   # a failed open still gives a live handle
+      return error("sqlite open failed: #{opened.result}")
+    end
+    return ok(opened.db)
+  end
+  ~~~
 - A `def` call blocks timers, I/O and other tasks until it returns: keep such
   calls short. Native code must retry on `EINTR` (GC signals cut sleeps and
   polls short).
@@ -74,10 +99,10 @@ end
   descriptor; a socket or an eventfd is polled through a duplicate and becomes
   non-blocking. Closing the descriptor does not end a wait (it times out unless
   the file becomes ready). A cancel stops the wait.
-- Linux x86_64 and Windows x64 for now (`Native.wait_*` returns an error on
-  Windows): elsewhere a program with an extern function or a `Native.*` call
-  is refused at load with `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works
-  everywhere.
+- Linux x86_64 and Windows x64 for now (`Native.wait_*` is not supported on
+  Windows and returns an error): elsewhere a program with an extern function
+  or a `Native.*` call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`
+  (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
 - Functions count as `def`s for the declaration order, resources as types. A

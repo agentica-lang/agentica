@@ -28,7 +28,7 @@ extern_function  = [ "compute" ], "def", NAME, "(",
                    [ c_parameter, { ",", c_parameter }, [ "," ] ], ")",
                    "->", ( c_type | TYPE_NAME | "Void" ), NL ;
 resource_decl    = "resource", TYPE_NAME, ",", "free", ":", NAME, NL ;
-c_parameter      = NAME, ":", ( c_type | "C", ".", "Bytes" | TYPE_NAME ) ;
+c_parameter      = [ "out" ], NAME, ":", ( c_type | "C", ".", "Bytes" | TYPE_NAME ) ;
 c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" | "Pointer" ) ;
 
 struct_decl      = "struct", TYPE_NAME, NL,
@@ -79,6 +79,23 @@ name; the check is per block, so another block of the same library may still
 declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
 `C.Bytes` is a parameter only, a `List[Int]` for the checker. `resource` is a
 keyword only at the start of a member of an extern block.
+
+`out NAME: type` in an extern function is an out parameter: C gets a pointer to
+a slot and writes the value there (section 6d). The caller does not pass it.
+A function with out parameters returns its record, a struct that the parser
+declares next to it, named after the C name in CamelCase (`sqlite3_open` gives
+`Sqlite3Open`): a field `result` with the C result (none for `Void`), then one
+field per out parameter, in order, named after it. The record is exported with
+its function and has no place in the declaration order. An out parameter is
+`C.Int`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the
+block, whose field is the resource itself, not a `Result`; anything else is
+`PARSE-EXTERN-OUT` at the type. An out parameter named `result` of a function
+with a C result, an in and an out parameter of one name (at the later), and a C
+name with no letter for the record's name, are `PARSE-EXTERN-OUT` at that name;
+`out` before a parameter outside an extern block is `PARSE-EXTERN-OUT` at the
+word. A type of the record's name elsewhere in the file, and two out parameters
+of one name, are `CHECK-REDEFINED-NAME`. `out` is a keyword only before a
+parameter name.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

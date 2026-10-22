@@ -14,4 +14,7 @@ extern "/opt/lib/my peer.so"
   def tick() -> Void
   ## Runs on the compute pool.
   compute def crunch(n: C.Int64) -> C.Double
+  ## Gives a connection and a count as out parameters.
+  export def peer_accept(port: C.Int, out conn: Conn, out count: C.Int64) -> C.Int
+  def peer_split(x: C.Double, out whole: C.Double) -> Void
 end

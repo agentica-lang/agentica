@@ -19,14 +19,14 @@
 ## (WINDOWS_MIN_AGE_SECONDS), so a run that is still starting is not taken by a run that overlaps it. What is left is
 ## a residual case: a sweep that meets the folder between the creation of `lock` and the lock itself would take the
 ## lock first and the run would fail to lock (`claim` is an error then). It needs a clock that is a minute off or an
-## mtime that is not updated, so it is not expected in practice; #385 tracks pinning the folder before `lock` exists.
+## mtime that is not updated, so it is not expected in practice.
 ## `discard` on Windows closes the lock and then removes the folder, which is not atomic, but both sides are best
 ## effort, so a lost race only leaves the folder for a later sweep.
 ##
-## Windows has no sticky bit, so nothing there tells a shared temporary folder from a private one. The protection of
-## the run folder assumes a temporary folder that only the user can modify, as the default per-user one is: another
-## user with the right to delete entries of the parent (FILE_DELETE_CHILD) could replace the run folder before `lock`
-## pins it. The owner check of the sweep on Windows is #393; the pin before `lock` is #385.
+## Windows has no sticky bit, so nothing there tells a shared temporary folder from a private one. On Windows the run
+## assumes a temporary folder that only the user can modify, as the default per-user `%TEMP%` is, and it checks nothing
+## about it. A shared multi-user temporary folder is out of scope: another user with the right to delete entries of the
+## parent (FILE_DELETE_CHILD) could replace the run folder before `lock` pins it.
 
 import RandomName from "../io/random_name"
 import {IO_TIMEOUT} from "bdd_files"

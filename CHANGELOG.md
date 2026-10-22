@@ -20,7 +20,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `extern` blocks take `C.Pointer`, `C.Bytes` and `resource Name, free: fn`,
   a C pointer that `Native.close` or the end of the owning task frees once.
 - `extern` blocks call native libraries on Windows x64 too; `Native.wait_*`
-  returns an error there for now.
+  returns an error there.
+- `out` parameters of extern functions:
+  `def sqlite3_open(name: C.String, out db: Db) -> C.Int` returns a record with
+  `result` and one field per out value.
 - `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
   `List`.
 - Ruby's other method names work: `collect`, `select`, `inject`, `detect`,
@@ -76,6 +79,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica help`, `help --json` (a new `ruby` field) and the helps of
   diagnostics show the Ruby form of a builtin (`s.strip`, not `String.trim`);
   both names are still accepted.
+- Windows: `agentica.exe` declares `longPathAware`, so paths of 260 characters
+  or more work on machines that set `LongPathsEnabled` to 1.
+
+### Fixed
+
+- Windows: non-ASCII text typed on a console reaches standard input reads as
+  UTF-8, not as U+FFFD.
 
 ### Removed
 

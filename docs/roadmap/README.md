@@ -45,7 +45,8 @@ First batch, as soon as possible:
    local libraries. PR 1 of the split (core calls) is done (#553), PR 4
    (`compute def`) is done (#559), PR 5 (`Native.wait_readable/wait_writable`)
    is done (#561), PR 6 (`agentica test` takes the deny flags) is done
-   (#560), and PR 2 (opaque values) is done (#572).
+   (#560), PR 2 (opaque values) is done (#572), and PR 3 (`out` parameters)
+   is done (#591).
 2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
    bytecode, so unchanged programs skip the front end. Done: `_build/bytecode/`
    in the project, for `agentica FILE.agc` and `agentica test`.
@@ -90,10 +91,8 @@ Weighed later (no fixed order)
 17. [#469](https://github.com/sonic182/agentica/issues/469): the doc site.
 18. `agentica help std/MODULE` (row 22b, part 2).
 19. The Windows issues [#474](https://github.com/sonic182/agentica/issues/474),
-    [#462](https://github.com/sonic182/agentica/issues/462),
-    [#457](https://github.com/sonic182/agentica/issues/457),
-    [#393](https://github.com/sonic182/agentica/issues/393) and
-    [#385](https://github.com/sonic182/agentica/issues/385).
+    [#462](https://github.com/sonic182/agentica/issues/462) and
+    [#457](https://github.com/sonic182/agentica/issues/457).
 20. Signals [§46](../future/46-signals.md#46-signals) (row 7.8).
 
 - **Order:** 1

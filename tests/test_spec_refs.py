@@ -631,3 +631,36 @@ def test_a_resource_is_found_in_the_signatures_of_its_block_and_of_another_file(
             ("db.agc", *where(db, "Db\nend"), "type", "db_open"),
             ("use.agc", *where(use, "Db)"), "type", "count"),
         ], words
+
+
+# An extern function with an out parameter has a record (Sqlite3Open) declared at the function's name: a question at
+# the name or at a call is about the function, and a field of the record is defined at its out parameter.
+NATIVE = '''extern "libsqlite3.so.0"
+  resource Db, free: sqlite3_close_v2
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
+end
+
+def main() -> Void
+  opened = sqlite3_open(":memory:")
+  Native.close(opened.db)
+end
+'''
+
+
+def test_an_extern_function_with_an_out_parameter_is_found_at_its_name_and_calls(tmp_path):
+    (tmp_path / "native.agc").write_text(NATIVE, encoding="utf-8")
+    call = ("native.agc", where(NATIVE, "sqlite3_open(\":", 0))
+    for position in (call, ("native.agc", where(NATIVE, "sqlite3_open(filename", 0))):
+        report = answer(position, cwd=tmp_path)
+        definition = report["definition"]
+        assert (definition["kind"], definition["name"]) == ("function", "sqlite3_open")
+        assert start(definition["name_span"]) == where(NATIVE, "sqlite3_open(filename", 0)
+        assert places(report) == [("native.agc", *call[1], "call", "main")]
+    typed = run(cli() + ["--json", "type-at", "native.agc:%d:%d" % call[1]], env=vm_environment(), cwd=tmp_path)
+    found = json.loads(typed.stdout)
+    assert (typed.code, found["type"], found["definition"]["kind"]) == (0, "Sqlite3Open", "function")
+    field = answer(("native.agc", where(NATIVE, "opened.db", 7)), cwd=tmp_path)
+    assert (field["definition"]["kind"], field["definition"]["struct"], field["definition"]["signature"]) == (
+        "field", "Sqlite3Open", "db: Db")
+    assert start(field["definition"]["name_span"]) == where(NATIVE, "db: Db", 0)
+    assert places(field) == [("native.agc", *where(NATIVE, "opened.db", 7), "read", "main")]

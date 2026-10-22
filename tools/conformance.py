@@ -51,8 +51,6 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
 KNOWN_ISSUES: dict[int, str] = {
-    568: "the bytecode cache trusts any real folder on Windows (no owner or ACL check), and its link cases have no test; "
-         "Native.wait_* has no Windows port (libuv polls only sockets there)",
     598: "the package cache keeps a hidden .tmp-* folder (a bare git repository) after every fetch on Windows: "
          "git writes its objects read-only and Path.remove refuses them",
     548: "native calls (extern functions) are not built on macOS yet; macOS refuses them at load",
@@ -70,9 +68,9 @@ WINDOWS_ONLY_MODULES = frozenset({
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
-# descriptor flags and colon names (and the system libraries of Linux, such as libsqlite3.so.0 in
-# tests/test_vm_native.py); macOS lacks /dev/full and non-UTF-8 names; both lack sched_setaffinity; the other
-# systems lack the Windows-only modules above.
+# descriptor flags and colon names (and the system libraries of Linux, such as libsqlite3.so.0, and Native.wait_*, which
+# libuv cannot poll there, both in tests/test_vm_native.py); macOS lacks /dev/full and non-UTF-8 names; both lack
+# sched_setaffinity; the other systems lack the Windows-only modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py",
