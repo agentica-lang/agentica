@@ -23,6 +23,7 @@ USAGE = [
   "       agentica [--ai|--json] refs NAME [PATH...] [--json]",
   "       agentica [--ai|--json] refs <source-file>:LINE:COL [PATH...] [--json] [--partial]",
   "       agentica [--ai|--json] refs --stdin <source-file>:LINE:COL [PATH...] [--json] [--partial]",
+  "       agentica [--ai|--json] install",
   "       agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
@@ -40,6 +41,8 @@ SUMMARY = [
   "  agentica test [PATH...] [--steps FILE] [--only TEXT]",
   "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);",
   "                                          --steps FILE is the step program of the .feature files",
+  "  agentica install                        fetch the packages of agentica.lock into the package cache with git;",
+  "                                          the lock is never changed; a package already cached is not fetched",
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",

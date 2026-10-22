@@ -54,22 +54,8 @@ export def fold(name: String) -> String
   return name.upcase.downcase
 end
 
-def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Hashed
-  # The pieces are joined at the end, in pairs level by level: appending each file to the stream would copy the whole
-  # stream once for each file (a list cannot grow by a long piece in constant time).
-  pieces: List[List[Int]] = []
-  for path in paths
-    read = workspace.read_bytes.call(Paths.join(root, path))
-    if !read.ok?
-      return Hashed.Unreadable(read.message)
-    end
-    pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
-  end
-  return Hashed.Hash("sha256:#{hex(Crypto.sha256(concat_all(pieces)))}")
-end
-
-# The pieces one after the other. Each level joins neighbours, so a byte is copied about log2(pieces) times.
-def concat_all(pieces: List[List[Int]]) -> List[Int]
+## The pieces one after the other. Each level joins neighbours, so a byte is copied about log2(pieces) times.
+export def concat_all(pieces: List[List[Int]]) -> List[Int]
   level = pieces
   while level.size > 1
     merged: List[List[Int]] = []
@@ -88,6 +74,20 @@ def concat_all(pieces: List[List[Int]]) -> List[Int]
     return []
   end
   return level[0]
+end
+
+def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Hashed
+  # The pieces are joined at the end, in pairs level by level: appending each file to the stream would copy the whole
+  # stream once for each file (a list cannot grow by a long piece in constant time).
+  pieces: List[List[Int]] = []
+  for path in paths
+    read = workspace.read_bytes.call(Paths.join(root, path))
+    if !read.ok?
+      return Hashed.Unreadable(read.message)
+    end
+    pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
+  end
+  return Hashed.Hash("sha256:#{hex(Crypto.sha256(concat_all(pieces)))}")
 end
 
 # The relative paths of the .agc files, walking the folders with an explicit stack.

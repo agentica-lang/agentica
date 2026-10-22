@@ -162,8 +162,9 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
 - §: 45
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
-  - Status: 45-0 (`std/toml`) and 45a (manifest, lock, `pkg/<name>/`
-    imports from the cache) built; 45b-45d planned. Order: issue
+  - Status: 45-0 (`std/toml`), 45a (manifest, lock, `pkg/<name>/`
+    imports from the cache) and 45b (fetch, `install`) built; 45c and 45d
+    planned. Order: issue
     [#534](https://github.com/sonic182/agentica/issues/534). Form: issue #468
 
 - §: 46

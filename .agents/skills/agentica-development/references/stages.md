@@ -109,6 +109,10 @@ stage:
     and column; a missing or unreadable file has no key (`Failure.fail_file`).
     The manifests of the locked packages are checked before any file loads
     (`check_manifests`). The hash and link errors are at the import.
+    `agentica install` (`app/cli_install.agc`, `io/package_fetch.agc`) adds
+    `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION` and
+    `PKG-MANIFEST-MISSING`, and also reports `PKG-HASH-MISMATCH` and
+    `PKG-SYMLINK`, all at a key of `agentica.lock` (`package[N].tag`, ...).
 
 - **Stage:** query (`query/`, `outline`, `type-at`, `refs`, `symbol`)
   - **Codes:** exit 2, at `<arguments>` (line 1, column 1): `QUERY-USAGE` (bad
@@ -512,7 +516,7 @@ the command/file so program args stay intact. --max-steps accepts a positive
 integer and reaches only the VM. The --deny-* flags and --sandbox go to the
 VM as typed (`Options.deny`); `test` passes them to the driver.
 `tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
-`doc` and the query commands (`outline`, `type-at`, `refs`) are `cli_doc.agc`
+`install` is `cli_install.agc` (it takes no word). `doc` and the query commands (`outline`, `type-at`, `refs`) are `cli_doc.agc`
 and `cli_query.agc`: the words after the command are read by hand
 (`query/query_options.agc`), and `--stdin FILE` (`type-at --stdin
 FILE:LINE:COL`, likewise `refs`) goes through `with_buffer` in `cli.agc`, as

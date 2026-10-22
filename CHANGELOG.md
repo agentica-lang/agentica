@@ -24,6 +24,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   flag.
 - `agentica test` takes the `--deny-*` flags and `--sandbox`, for the test
   files, the step programs and the programs under test.
+- `agentica install` fills the package cache from `agentica.lock` with the
+  system `git`, checks the commit and the hash, and never changes the lock.
+  **Breaking:** `install` is a command now, so a script named `install` runs as
+  `agentica ./install`.
 
 ### Removed
 
