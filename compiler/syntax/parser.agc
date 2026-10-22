@@ -1879,20 +1879,21 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       node = member.node
       member_ids = member.ids
       span = Base.span_from(e, taken.pos, member.pos)
+      if exported
+        node = Ast.Decl.Export(Ast.ExportDecl(id: member_ids, declaration: member.node, doc: taken.doc, span: span))
+        member_ids += 1
+      end
+      nodes = nodes.push(node)
+      # The record comes after its function, so a lookup by the name's position finds the function first.
       for record in taken_member.records
         if exported
-          wrapped = Ast.ExportDecl(id: member_ids, declaration: record, doc: Ast.Optional.Absent, span: span)
+          wrapped = Ast.ExportDecl(id: member_ids, declaration: record, doc: record_doc(record), span: span)
           nodes = nodes.push(Ast.Decl.Export(wrapped))
           member_ids += 1
         else
           nodes = nodes.push(record)
         end
       end
-      if exported
-        node = Ast.Decl.Export(Ast.ExportDecl(id: member_ids, declaration: member.node, doc: taken.doc, span: span))
-        member_ids += 1
-      end
-      nodes = nodes.push(node)
       cursor = member.pos
       next_id = member_ids
     end
@@ -2040,6 +2041,18 @@ def parse_extern_function(
     end
     taken = try extern_type(param.type, false, block, next_id)
     next_id = taken.ids
+    # An in and an out parameter of one name would be a parameter of the function and a field of its record; two of
+    # the same side are the checker's CHECK-REDEFINED-NAME.
+    if other_side?(params, index)
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-OUT",
+          "the parameter \"#{param.name}\" is declared twice",
+          param.name_span,
+          Base.hint("give the out parameter another name"),
+        ),
+      )
+    end
     if params.outs[index]
       field = try out_field(param, taken, returned.code)
       codes = codes.push(taken.code.upcase)
@@ -2092,7 +2105,7 @@ def parse_extern_function(
       name: record,
       name_span: e.tokens[pos + 1].span,
       fields: fields,
-      doc: Ast.Optional.Absent,
+      doc: Ast.Optional.Present("The result of `#{name}`."),
       record_of: name,
       span: span,
     )
@@ -2160,6 +2173,26 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
     span: param.span,
   )
   return ok(field)
+end
+
+# Whether a parameter before the one at index has its name and is on the other side (in or out).
+def other_side?(params: ParamsAt, index: Int) -> Bool
+  at = 0
+  while at < index
+    if params.nodes[at].name == params.nodes[index].name and params.outs[at] != params.outs[index]
+      return true
+    end
+    at += 1
+  end
+  return false
+end
+
+# The doc of a record, which its export repeats.
+def record_doc(record: Ast.Decl) -> Ast.Optional[String]
+  case record
+    Ast.Decl.Struct(node) -> return node.doc
+    _ -> return Ast.Optional.Absent
+  end
 end
 
 # The name of the record of an extern function with out parameters: its C name in CamelCase (sqlite3_open is

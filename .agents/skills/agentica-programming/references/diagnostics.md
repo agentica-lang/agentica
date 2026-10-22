@@ -272,8 +272,9 @@ and a task's crash line (`"task":true`) carry it too.
   name without `/` or an absolute path, or a `def` of the block's `free:`
   function (`native.md`).
 - `PARSE-EXTERN-OUT`: an `out` parameter of a type that cannot be one
-  (`C.String`, `C.Bytes`), named `result` beside a C result, of a C name with
-  no letter for the record's name, or outside an extern block (`native.md`).
+  (`C.String`, `C.Bytes`), named `result` beside a C result or like an in
+  parameter, of a C name with no letter for the record's name, or outside an
+  extern block (`native.md`).
 - `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-DENIED`,
   `RUNTIME-NATIVE-UNSUPPORTED`: the library or function of an extern call was
   not found (at the extern function); a call took a closed resource; or, at

@@ -616,6 +616,17 @@ end
     assert result.stdout.split("\n") == ["[10, 6, 15000000000, 42, 5]", "1.25", "true", "-1", "42", "1", ""]
 
 
+# The record of an exported extern function is exported with it: another file names its type and reads its fields.
+@NATIVE_CALLS
+def test_the_record_of_an_out_call_crosses_an_import(tmp_path, peer):
+    program(tmp_path, 'extern "%s"\n  export def peer_out_twice(n: C.Int, out twice: C.Int) -> Void\nend\n'
+            % literal(peer), "raw.agc")
+    main = program(tmp_path, 'import Raw from "./raw"\n\ndef twice(made: Raw.PeerOutTwice) -> Int\n'
+                   '  return made.twice\nend\n\ndef main() -> Void\n  puts(twice(Raw.peer_out_twice(4)))\nend\n')
+    result = agentica(main)
+    assert (result.code, result.stdout, result.stderr) == (0, "8\n", "")
+
+
 # A compute call fills its out slots on the pool thread. Its task gets a resource that it owns (its end frees it); a
 # cancel while C runs drops the result, and the out resource is freed once, when the call returns.
 @NATIVE_CALLS
@@ -1008,14 +1019,17 @@ end
 
 
 # sqlite3_open gives an out Db and sqlite3_prepare_v2 an out Stmt (and the tail as a C.Pointer). A table gets two
-# rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource.
+# rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. An open
+# that fails (SQLITE_CANTOPEN, 14) still gives a live handle, which the wrapper reads and closes.
 @NATIVE_CALLS
 @NO_SYSTEM_SQLITE
 def test_the_system_sqlite_opens_a_database_and_queries_it_through_out_parameters(tmp_path, sqlite):
     main = """def open(path: String) -> Result[Db]
   opened = sqlite3_open(path)
   if opened.result != SQLITE_OK
-    return error("sqlite open: #{sqlite3_errmsg(opened.db)}")
+    puts(sqlite3_errcode(opened.db))
+    Native.close(opened.db)
+    return error("sqlite open: #{opened.result}")
   end
   return ok(opened.db)
 end
@@ -1046,8 +1060,11 @@ def main() -> Void
   puts(sqlite3_errmsg(db).end_with?("syntax error"))
   Native.close(bad.stmt)
   Native.close(db)
+  IO.inspect(open("/no/such/dir/x.db"))
 end
 """
     result = agentica(program(tmp_path, "SQLITE_OK = 0\nSQLITE_ROW = 100\n\n" + SQLITE_OUT_EXTERN + main))
     assert (result.code, result.stderr) == (0, "")
-    assert result.stdout.split("\n") == ["101", "101", "101", "0", "1 one", "2 two", "[1, 1]", "true", ""]
+    assert result.stdout.split("\n") == [
+        "101", "101", "101", "0", "1 one", "2 two", "[1, 1]", "true", "14", 'error("sqlite open: 14")', "",
+    ]

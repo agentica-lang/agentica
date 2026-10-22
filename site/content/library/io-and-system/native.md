@@ -81,11 +81,12 @@ A C function that gives a value through a pointer, such as `int sqlite3_open(con
 
 ## A real library: SQLite
 
-The raw `extern` layer stays private, and safe functions on top of it return `Result`. This program opens an in-memory database, fills a table and reads it back.
+The raw `extern` layer stays private, and safe functions on top of it return `Result`. This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on Windows, give the name or absolute path of a SQLite DLL.
 
 ```agentica {mode="check"}
 SQLITE_OK = 0
 SQLITE_ROW = 100
+SQLITE_DONE = 101
 
 extern "libsqlite3.so.0"
   resource Db, free: sqlite3_close_v2
@@ -121,7 +122,11 @@ end
 ## Runs a statement that returns no rows.
 def run(db: Db, sql: String) -> Result[Void]
   stmt = try prepare(db, sql)
-  sqlite3_step(stmt)
+  if sqlite3_step(stmt) != SQLITE_DONE
+    message = sqlite3_errmsg(db)
+    Native.close(stmt)
+    return error("sqlite: #{message}")
+  end
   Native.close(stmt)
   return ok()
 end

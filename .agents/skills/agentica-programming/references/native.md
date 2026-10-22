@@ -71,6 +71,7 @@ end
   def open(path: String) -> Result[Db]
     opened = sqlite3_open(path)
     if opened.result != 0
+      Native.close(opened.db)   # a failed open still gives a live handle
       return error("sqlite open failed: #{opened.result}")
     end
     return ok(opened.db)

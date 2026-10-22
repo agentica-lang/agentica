@@ -70,6 +70,17 @@ typedef struct {
   agc_c_value in[];
 } compute_call;
 
+/* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
+   out resource's, as named by the signature. */
+typedef struct {
+  const char *names[AGC_FFI_MAX_PARAMS + 1];
+  size_t lens[AGC_FFI_MAX_PARAMS + 1];
+  const char *kinds[AGC_FFI_MAX_PARAMS + 1];
+  size_t kind_lens[AGC_FFI_MAX_PARAMS + 1];
+  agc_ffi_call *calls[AGC_FFI_MAX_PARAMS + 1];
+  uint32_t count;
+} free_list;
+
 /* How the copy of a C.Bytes argument went (copy_bytes). */
 typedef enum { BYTES_OK, BYTES_RANGE, BYTES_TAG } bytes_outcome;
 
@@ -164,17 +175,6 @@ static _Noreturn void load_failed(agc_vm *vm, const char *error, uint32_t span) 
   agc_string *text = agc_utf8_decode((const uint8_t *)error, strlen(error), "\xEF\xBF\xBD", false);
   agc_fail_text(vm, "RUNTIME-NATIVE-LOAD", text, span);
 }
-
-/* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
-   out resource's, as named by the signature. */
-typedef struct {
-  const char *names[AGC_FFI_MAX_PARAMS + 1];
-  size_t lens[AGC_FFI_MAX_PARAMS + 1];
-  const char *kinds[AGC_FFI_MAX_PARAMS + 1];
-  size_t kind_lens[AGC_FFI_MAX_PARAMS + 1];
-  agc_ffi_call *calls[AGC_FFI_MAX_PARAMS + 1];
-  uint32_t count;
-} free_list;
 
 static void discard_frees(free_list *frees) {
   for (uint32_t k = 0; k < frees->count; k++)
@@ -322,11 +322,17 @@ static ffi_entry *find_call(agc_vm *vm, const agc_string *text, uint32_t span) {
   return e;
 }
 
+/* Runs FREE_CALL, a void free(void *), on POINTER unless it is NULL. */
+static void free_pointer(agc_ffi_call *free_call, void *pointer) {
+  if (!pointer) return;
+  agc_c_value arg = {.p = pointer}, unused;
+  agc_ffi_invoke(free_call, &arg, &unused);
+}
+
 /* Calls the free function of the resource, once. */
 static void call_free(agc_c_resource *res) {
   res->closed = res->freed = true;
-  agc_c_value arg = {.p = res->pointer}, out;
-  agc_ffi_invoke(res->free, &arg, &out);
+  free_pointer(res->free, res->pointer);
 }
 
 /* Frees the resource and drops its registry entry; under rt->sync, with no compute call holding it. */
@@ -573,15 +579,9 @@ static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r
 /* The resources that a compute call with out parameters made, when nobody takes its value (the task was cancelled):
    each pointer that is not NULL is freed here, once, and no value is made. */
 static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots) {
-  if (e->result == AGC_C_RESOURCE && r->p) {
-    agc_c_value arg = {.p = r->p}, unused;
-    agc_ffi_invoke(e->free, &arg, &unused);
-  }
+  if (e->result == AGC_C_RESOURCE) free_pointer(e->free, r->p);
   for (uint32_t k = 0; k < e->count; k++)
-    if (e->out[k] && e->params[k] == AGC_C_RESOURCE && slots[k].p) {
-      agc_c_value arg = {.p = slots[k].p}, unused;
-      agc_ffi_invoke(e->made[k].free, &arg, &unused);
-    }
+    if (e->out[k] && e->params[k] == AGC_C_RESOURCE) free_pointer(e->made[k].free, slots[k].p);
 }
 
 static void free_copies(const ffi_entry *e, agc_c_value *in) {
@@ -622,9 +622,11 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   const ffi_entry *e = c->entry;
   release_held(vm, e, c->held);
   agc_value v = agc_void();
-  /* A call with out parameters gives a List, which the detached end (discard in vm/loop.c) does not look into. It runs
-     between turns (end_detached), while the task's own end runs in its turn (agc_io_finish from resume), so outside a
-     turn the value is dropped: the resources it would hold are freed here instead of made. */
+  /* A call with out parameters gives a List, which the detached end (discard in vm/loop.c) does not look into, so its
+     resources are freed here when nobody takes the value. Invariant (the one agc_own relies on too): `done` runs with
+     vm->in_turn set exactly when a task takes the value (agc_io_finish, from resume in the task's turn); a detached
+     job's `done` runs from end_detached, which the drain and agc_io_service call only between turns. The job's own
+     `detached` flag is private to vm/loop.c and reaches no half. */
   if (c->ran && e->outs && !vm->in_turn)
     drop_made(e, &c->out, c->slots);
   else if (c->ran)

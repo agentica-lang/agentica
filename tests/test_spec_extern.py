@@ -314,14 +314,17 @@ def test_the_record_of_an_exported_extern_function_is_imported(tmp_path):
 
 
 # PARSE-EXTERN-OUT: at the type of an out C.String or C.Bytes (who frees what C writes is not known), at an out
-# parameter named result when the function has a C result, at a C name with no letter for the record's name, and at
-# the word out outside an extern block. `out` is still a parameter name.
+# parameter named result when the function has a C result, at a C name with no letter for the record's name, at the
+# word out outside an extern block, and at the later of an in and an out parameter of one name. `out` is still a
+# parameter name.
 @pytest.mark.parametrize("text, start, stop", [
     ('extern "libc.so.6"\n  def f(out s: C.String) -> C.Int\nend\n', (2, 16), (2, 24)),
     ('extern "libc.so.6"\n  def f(out b: C.Bytes) -> Void\nend\n', (2, 16), (2, 23)),
     ('extern "libc.so.6"\n  def f(out result: C.Int) -> C.Int\nend\n', (2, 13), (2, 19)),
     ('extern "libc.so.6"\n  def _2(out n: C.Int) -> C.Int\nend\n', (2, 7), (2, 9)),
     ('def f(out n: Int) -> Int\n  return n\nend\n', (1, 7), (1, 10)),
+    ('extern "libm.so.6"\n  def frexp(x: C.Double, out x: C.Int) -> C.Double\nend\n', (2, 30), (2, 31)),
+    ('extern "libm.so.6"\n  def f(out x: C.Int, x: C.Double) -> C.Double\nend\n', (2, 23), (2, 24)),
 ])
 def test_an_out_parameter_is_a_c_value_of_an_extern_function(tmp_path, text, start, stop):
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-OUT", start, stop)
@@ -333,11 +336,14 @@ def test_out_is_still_a_name_and_result_is_an_out_of_a_void_function(tmp_path):
     assert check(source(tmp_path, text)).code == 0
 
 
-# The record is a type name of the file: a struct of that name is CHECK-REDEFINED-NAME at the extern function, and
-# the extern block may still come after the functions of the file.
+# The record is a type name of the file: a struct of that name is CHECK-REDEFINED-NAME at the extern function, two out
+# parameters of one name are that code at the second (a field of the record twice), and the extern block may still
+# come after the functions of the file.
 def test_the_record_takes_its_name_and_follows_the_function(tmp_path):
     clash = 'struct DbOpen\n  x: Int\nend\n\n' + OUTS % ""
     assert at(problem_of(check(source(tmp_path, clash))))[:2] == ("CHECK-REDEFINED-NAME", (7, 3))
+    twice = 'extern "libc.so.6"\n  def f(out x: C.Int, out x: C.Int) -> C.Int\nend\n'
+    assert at(problem_of(check(source(tmp_path, twice)))) == ("CHECK-REDEFINED-NAME", (2, 23), (2, 35))
     late = 'def main() -> Void\n  puts(db_open().db)\nend\n\n' \
            'extern "libc.so.6"\n  def db_open(out db: C.Int) -> Void\nend\n'
     assert check(source(tmp_path, late)).code == 0
