@@ -15,8 +15,9 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 question to `outline`, `type-at`, `symbol` or `refs`. With `--json`, the
 diagnostic that ends the run is the last stderr line, after the program's own
 stderr. Expected process failures return error Results. Codes without an entry
-below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (`language.md`) and
-`RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call span).
+below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (`language-program-types.md`)
+and `RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call
+span).
 
 A runtime error in a task with more than one frame, or not `main`, also prints
 the call stack of the failed task, innermost first, in the plain, `--ai` (under
