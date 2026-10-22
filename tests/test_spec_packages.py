@@ -414,9 +414,15 @@ def test_an_undeclared_name_falls_back_to_the_pkg_roots_and_the_project_cannot_r
     # pkg/tools/ is today's library search: nothing there.
     write_main(ws, 'import Tools from "pkg/tools/bang"\n')
     assert_at_import(check(ws), "CHECK-IMPORT-IO")
+    # agc_libs/tools is where `vendor` puts the locked package, not a library, so the search skips it ...
     (ws.project / "agc_libs" / "tools").mkdir(parents=True)
     (ws.project / "agc_libs" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
-    assert check(ws) is None
+    assert_at_import(check(ws), "CHECK-IMPORT-IO")
+    # ... and the other roots are searched as before.
+    root = ws.base / "libs"
+    (root / "tools").mkdir(parents=True)
+    (root / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
+    assert check(ws, AGENTICA_PATH=str(root)) is None
 
 
 def test_a_declared_name_shadows_a_library_of_the_same_name(ws):

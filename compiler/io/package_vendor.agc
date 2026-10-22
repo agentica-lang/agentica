@@ -3,6 +3,10 @@
 ## of the package. They are built in a hidden folder of agc_libs/, hashed against the lock, and swapped for the old
 ## `agc_libs/<name>/` in two renames, so a build never sees a half-written copy and a failure leaves the old copy.
 ##
+## The staging folder is a private (0700) parent, and the copy is a child of it made with the ordinary mode, because
+## the folder that ends up as agc_libs/<name>/ keeps its mode through the renames and other users must read it. A
+## killed vendor can leave a hidden `.tmp-*` or `.old-*` folder in agc_libs/, which is safe to delete.
+##
 ## Nothing is written outside agc_libs/: the staging folder is made there, new and private, with names the cache gave,
 ## and agc_libs/ itself must be a real folder, never a link. The folder of the package is owned by `vendor`: whatever
 ## was there (an edited copy, a stale file, a link) is replaced by the locked files. Other entries of agc_libs/ stay.
@@ -40,10 +44,11 @@ export def put(
 ) -> Result[Void]
   files = try chosen(workspace, source, place, locked)
   try prepare(workspace, libs)
-  stage = try make_stage(libs)
-  done = stage_and_swap(workspace, libs, stage, source, files, place, locked)
-  # A staging folder that cannot be removed stays hidden in agc_libs/ and does not change the answer.
-  Path.remove(stage, FS_TIMEOUT_MS)
+  parent = try make_stage(libs)
+  done = stage_and_swap(workspace, libs, parent, source, files, place, locked)
+  # A staging folder that cannot be removed stays hidden in agc_libs/ and does not change the answer. After a swap
+  # only the empty parent is left.
+  Path.remove(parent, FS_TIMEOUT_MS)
   return done
 end
 
@@ -129,7 +134,7 @@ end
 def make_stage(libs: String) -> Result[String]
   failure = "no free name"
   for attempt in 0...TEMP_TRIES
-    name = Paths.join(libs, ".tmp-#{System.pid()}-#{Random.int(0, 999_999_999)}")
+    name = Paths.join(libs, ".tmp-#{unique()}")
     made = Dir.mkdir_private(name, FS_TIMEOUT_MS)
     if made.ok?
       return ok(name)
@@ -139,15 +144,25 @@ def make_stage(libs: String) -> Result[String]
   return error(write_failure(libs, "cannot make a folder in #{libs}", failure))
 end
 
+def unique() -> String
+  return "#{System.pid()}-#{Random.int(0, 999_999_999)}"
+end
+
 def stage_and_swap(
   workspace: Workspace.Workspace,
   libs: String,
-  stage: String,
+  parent: String,
   source: String,
   files: List[String],
   place: PackageFetch.Place,
   locked: Lock.Locked,
 ) -> Result[Void]
+  # Dir.mkdir keeps the mode of an ordinary folder (0777 less the umask), unlike the private parent.
+  stage = Paths.join(parent, "copy")
+  made = Dir.mkdir(stage, FS_TIMEOUT_MS)
+  if !made.ok?
+    return error(write_failure(stage, "cannot make #{stage}", made.message))
+  end
   for path in files
     try copy(workspace, source, stage, path)
   end
@@ -188,7 +203,7 @@ end
 # takes its place, and the old one is removed. A rename that fails puts the old one back.
 def swap(workspace: Workspace.Workspace, libs: String, stage: String, name: String) -> Result[Void]
   target = Paths.join(libs, name)
-  backup = Paths.join(libs, ".old-#{System.pid()}-#{name}")
+  backup = Paths.join(libs, ".old-#{unique()}-#{name}")
   seen = try kind_of(workspace, target)
   replacing = !absent?(seen)
   if replacing
@@ -200,7 +215,11 @@ def swap(workspace: Workspace.Workspace, libs: String, stage: String, name: Stri
   placed = Path.rename(stage, target, FS_TIMEOUT_MS)
   if !placed.ok?
     if replacing
-      Path.rename(backup, target, FS_TIMEOUT_MS)
+      back = Path.rename(backup, target, FS_TIMEOUT_MS)
+      if !back.ok?
+        message = "cannot write #{target}, and the old copy could not be put back: it is in #{backup}"
+        return error(write_failure(target, message, "#{placed.message}; #{back.message}"))
+      end
     end
     return error(write_failure(target, "cannot write #{target}", placed.message))
   end

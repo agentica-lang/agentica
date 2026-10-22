@@ -196,6 +196,15 @@ export def check_manifests(workspace: Workspace.Workspace, env: Env.Env, scope: 
   return ok(scope.with(declared: declared))
 end
 
+## Whether the `pkg/` import path file (ending in .agc) names a module of a locked package, such as `pkg/tools/x.agc`
+## when `tools` is in the lock. For a name the importing manifest does not declare, the library search then skips
+## `agc_libs/`, where `agentica vendor` put a copy of every locked package, so a vendored build reaches the same
+## packages as a cache-only one.
+export def locked_module?(scope: Scope, file: String) -> Bool
+  parts = file.split("/")
+  return parts.size > 2 and Lock.find(scope.lock, parts[1]).ok?
+end
+
 ## The folder of the vendored copy of a locked package, `agc_libs/<name>` beside the manifest of the project.
 export def vendored_folder(scope: Scope, name: String) -> String
   return Paths.join(scope.vendor, name)

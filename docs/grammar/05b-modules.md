@@ -316,7 +316,11 @@ import Sqlite from "pkg/sqlite/db"
   `agc_libs/<name>/` in two renames, so the old copy stays if a step fails; the
   folder of a locked package is replaced whatever it held (an edited copy, a
   stale file, a link, a `pkg/` library of that name), and running `vendor`
-  again is how to restore it. It writes nothing but those folders: other
+  again is how to restore it. The new folder has the ordinary mode (not the
+  private one of the staging folder). A killed `vendor` may leave a hidden
+  `.tmp-*` or `.old-*` folder in `agc_libs/`; it is safe to delete, and a
+  `PKG-WRITE` that could not put an old copy back names the `.old-*` folder
+  that holds it. It writes nothing but those folders: other
   entries of `agc_libs/`, the `pkg/` libraries and the folders of packages that
   are no longer locked included, are left alone. `agc_libs/` itself must be a
   real folder: a symbolic link is `PKG-SYMLINK`, and a file or a write that
@@ -332,8 +336,13 @@ import Sqlite from "pkg/sqlite/db"
   `PKG-HASH-MISMATCH` at the import, and the cache is not used instead; an
   entry that is not a folder is `CHECK-IMPORT-PACKAGE`. The stored names of the
   files do not depend on where they were read, so the bytecode is the same from
-  a copy and from the cache. A name the project does not declare is not
-  affected: it is the `pkg/` library search.
+  a copy and from the cache. A link to a folder at `agc_libs/<name>` is
+  followed when a build reads it (the hash covers what is behind it); `vendor`
+  replaces the link itself. A name the project does not declare is the `pkg/`
+  library search, except that `agc_libs/` is skipped for the name of a locked
+  package, whose folder there is a vendored copy: the project reaches the same
+  packages with and without `vendor` (a library of that name in the other
+  roots is still found).
 - The hash covers the `.agc` files of the package folder. Their paths are
   relative to it, written with `/`, in bytewise order; for each file, its path,
   a zero byte, its size in decimal, a zero byte and its bytes. The hash is

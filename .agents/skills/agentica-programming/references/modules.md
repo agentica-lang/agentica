@@ -212,7 +212,10 @@ import Sqlite from "pkg/sqlite/db"
   so a build needs no network and no cache. It never writes the lock. It
   replaces the folder of each locked package whatever it held (run it again to
   restore an edited copy) and leaves every other entry of `agc_libs/` alone,
-  the folders of packages no longer locked included. `agc_libs/` as a symbolic
+  the folders of packages no longer locked included (a killed run may leave a
+  hidden `.tmp-*` or `.old-*` folder there; delete it). The `pkg/` library
+  search skips `agc_libs/<name>/` for a locked package the importing manifest
+  did not declare. `agc_libs/` as a symbolic
   link is `PKG-SYMLINK`; a write that fails is `PKG-WRITE`. A build hashes a
   vendored copy as it hashes the cache: a copy that differs is
   `PKG-HASH-MISMATCH`, and the cache is not used instead.

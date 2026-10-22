@@ -8,6 +8,7 @@ and key path, never message text (AGENTS.md).
 import json
 import os
 import shutil
+import stat
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,9 @@ pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// fold
 
 from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment,  # noqa: E402
                                     git, lock_entry, package_hash, remotes, run_json, ws)  # noqa: F401
+
+# root can write into a folder whatever its mode, so the case that needs a read-only one does not hold for it.
+ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 GREETER = "owner/greeter"
 TOOLS = "owner/tools"
@@ -69,6 +73,12 @@ def test_vendor_copies_the_locked_files_and_a_build_runs_with_no_cache_and_no_gi
     assert cached_files(libs / "tools") == ["bang.agc"]
     assert sorted(os.listdir(libs)) == ["greeter", "tools"]
     assert package_hash(libs / "greeter") == ws.locked[0]["hash"]
+    # Folders and files have the ordinary mode, not the private one of the staging folder: another user reads them.
+    umask = os.umask(0)
+    os.umask(umask)
+    for folder in (libs / "greeter", libs / "greeter" / "util", libs / "tools"):
+        assert stat.S_IMODE(folder.stat().st_mode) == 0o777 & ~umask, folder
+    assert stat.S_IMODE((libs / "greeter" / "greet.agc").stat().st_mode) & 0o044 == 0o044 & ~umask
 
     # The bytecode names the files by package and version, so it is the same from the cache and from the copies.
     from_cache = tmp_path / "cache.agcb"
@@ -182,3 +192,47 @@ def test_vendor_with_no_manifest_a_stale_lock_a_word_or_nothing_locked(ws, remot
     _, problem = vendor(ws, remotes)
     assert_at_key(problem, "PKG-LOCK-STALE", ws.project / "agentica.toml", "dependencies.greeter")
     assert not (ws.project / "agc_libs").exists()
+
+
+def test_a_locked_package_the_manifest_did_not_declare_is_not_reached_through_the_vendored_copy(project, remotes):
+    ws = project
+    # tools is locked because greeter needs it; the project does not declare it.
+    (ws.project / "main.agc").write_text('import Tools from "pkg/tools/bang"\n', encoding="utf-8")
+    before = problem_of(ws, remotes)
+    assert vendor(ws, remotes)[0].code == 0
+    after = problem_of(ws, remotes)
+    assert (before["code"], after["code"]) == ("CHECK-IMPORT-IO", "CHECK-IMPORT-IO")
+    assert before["range"] == after["range"]
+
+
+@pytest.mark.skipif(ROOT_USER, reason="root writes into a read-only folder")
+def test_a_write_that_fails_keeps_the_old_copy_and_leaves_no_hidden_folder(project, remotes):
+    ws = project
+    libs = ws.project / "agc_libs"
+    assert vendor(ws, remotes)[0].code == 0
+    (libs / "greeter" / "stale.agc").write_text("# stale\n", encoding="utf-8")
+    libs.chmod(0o555)
+    try:
+        _, problem = vendor(ws, remotes)
+    finally:
+        libs.chmod(0o755)
+    assert problem["code"] == "PKG-WRITE"
+    assert sorted(os.listdir(libs)) == ["greeter", "tools"]
+    assert (libs / "greeter" / "stale.agc").exists()
+
+
+def test_a_package_with_nested_folders_is_vendored_and_imported(ws, remotes):
+    files = {"a/b/c/z.agc": 'export def z() -> String\n  return "deep"\nend\n', "a/top.agc": "# top\n"}
+    commit = remotes.publish("owner/nested", files, tag="v1.0.0")
+    lock_entry(ws, remotes, "owner/nested", files, commit, tag="v1.0.0")
+    ws.write_manifest({"nested": dependency(remotes.url("owner/nested"), tag="v1.0.0")})
+    ws.write_lock()
+    (ws.project / "main.agc").write_text(
+        'import Z from "pkg/nested/a/b/c/z"\n\ndef main() -> Void\n  puts(Z.z())\nend\n', encoding="utf-8")
+    assert vendor(ws, remotes)[0].code == 0
+    copy = ws.project / "agc_libs" / "nested"
+    assert cached_files(copy) == ["a/b/c/z.agc", "a/top.agc"]
+    assert package_hash(copy) == ws.locked[0]["hash"]
+    shutil.rmtree(ws.pkg_root)
+    ran = build(ws, remotes)
+    assert (ran.code, ran.stdout) == (0, "deep\n"), ran.stderr

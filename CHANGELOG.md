@@ -36,9 +36,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica vendor` copies the locked packages into `agc_libs/<name>/`, and a
   build reads that copy before the cache, checking its hash against the lock.
   **Breaking:** `vendor` is a command now, so a script named `vendor` runs as
-  `agentica ./vendor`, and a folder `agc_libs/<name>/` with the name of a
-  declared dependency is read as its vendored copy, so it must be the locked
-  files.
+  `agentica ./vendor`; `vendor` replaces whatever `agc_libs/<name>/` held for a
+  locked package; a folder `agc_libs/<name>/` with the name of a declared
+  dependency is read as its vendored copy, so it must be the locked files; and
+  the `pkg/` library search skips `agc_libs/<name>/` for a locked package the
+  importing manifest did not declare.
 
 ### Removed
 

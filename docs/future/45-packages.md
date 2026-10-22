@@ -204,6 +204,14 @@ command line is decided in each phase.
     locked packages" and cannot delete a library installed by hand.
   - `agc_libs/` must be a real folder, never a link, and nothing is written
     through a link (`PKG-SYMLINK`). A write that fails is `PKG-WRITE`.
+  - The `pkg/` library search skips `agc_libs/<name>/` for a locked name the
+    importing manifest did not declare, so vendoring does not let the project
+    import a package that only another package declared. The cost: a library
+    installed by hand in `agc_libs/` under the name of a locked package is not
+    found any more (the other roots still are).
+  - The new folder is made with the ordinary mode; only its private staging
+    parent is 0700. A killed `vendor` can leave `.tmp-*` or `.old-*` folders in
+    `agc_libs/`, which are safe to delete.
   - The build looks at `agc_libs/<name>/` beside the manifest of the project
     for every locked name, those of packages too (the lock is one list). The
     manifest of the package is copied, so a build reads the names it declares
