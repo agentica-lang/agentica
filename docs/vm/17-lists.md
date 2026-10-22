@@ -235,48 +235,21 @@ must still pass its 250 ms limit.
 - The fuzzer (`agc_fuzz_one`) counts each node's `BLOCK_COST` (64 bytes) in its
   allocation limit under `AGC_NO_GC`, so list-heavy mutants reach it sooner.
 
-### 17.8 Test plan
+### 17.8 Tests
 
-Rules: `AGENTS.md` (plain-assert C tests in `vm/tests/`, goldens for features,
-no new framework).
-
-- **C unit tests, `vm/tests/list_test.c`** (`make vm-test`, the ASan run and
-  `make vm-gc-stress`). For each boundary length of §17.2 (0, 1, 2, 31 to 33, 63
-  to 65, 1,023 to 1,025, 1,056, 1,057, 32,768, 32,769, 32,800, 32,801,
-  1,048,576, 1,048,608 and 1,048,609):
-  - build with the builder and, up to 33,000 items, with repeated `append`;
-    compare `len`, every `get`, the cursor order, `agc_list_to_array` and the
-    shape (root NULL exactly when n <= 32, and the shift at each boundary). The
-    million lengths use the builder, then one `append` and one `set`. Under
-    `AGC_NO_GC` every version stays allocated until `agc_release_all`; under
-    `AGC_GC_STRESS` the cap is 1,000 items.
-  - persistence: from one old list, `append` and `set` results at the boundary
-    indexes. The old list stays unchanged, and each new list differs only where
-    it should. Keep every version of a 5,000-item list and check them at the
-    end.
-  - `slice`, `concat` (with `b.len` 0, 1, 32, 33), `reverse` and `agc_debug`.
-  - `agc_list_repeat`, then `set`, `append`, `reverse` and `slice`: the repeated
-    list stays unchanged. The leaf and the branches are shared, so a `set` that
-    wrote in place would show here.
-- **Goldens.** Every `tests/fixtures/vm/*.expected` stays byte-identical,
-  `steps` included. `tests/fixtures/vm/list-vector.agc` covers the trie
-  boundaries, then `set`, `take`, `drop`, `concat`, `reverse`, `sort`, `map`,
-  `filter`, `for`, and old versions printed after new ones were made.
+- **C unit tests,** `vm/tests/list_test.c` (`make vm-test`, the ASan run and
+  `make vm-gc-stress`): every boundary length of §17.2, built both ways, with
+  persistence of old versions, `slice`, `concat`, `reverse` and the shared
+  leaves of `agc_list_repeat`.
+- **Goldens.** `tests/fixtures/vm/list-vector.agc` covers the trie boundaries
+  and old versions printed after new ones were made.
 - **Benchmark gates** (`make bench`; numbers in `docs/vm-benchmarks.md`;
-  programs `benchmarks/programs/list-build.agc` and `list-bulk.agc`):
-  - 160,000 pushes in a loop run in under 1 s, and 2n pushes take under 2.5
-    times as long as n.
-  - Bulk builds (`List.repeat`, `Range.to_a`, `reverse`, `take`, `drop`, a big
-    `concat`, `join`, `String.split` and `sort` over 60,000 to 500,000 items)
-    take at most 1.3 times the flat array's time. The builder allocates its trie
-    in a few big blocks (§17.2).
-  - No other benchmark is slower than 2%. If a `for` or `at` heavy program is,
-    the first fix is an inline fast path for `agc_list_get` and `agc_list_len`
-    in `vm/list_impl.h`. Before blaming the list code for a loop slowdown, time
-    the program with another link layout: the same interpreter ran 15 to 20%
-    apart on loops with no list operation.
-  - `maze-bfs` is a no-regression check; its lists hold at most 4 items. Report
-    peak RSS; a growth above 10% needs an explanation.
+  programs `benchmarks/programs/list-build.agc` and `list-bulk.agc`): 160,000
+  pushes in a loop run in under 1 s, and 2n pushes take under 2.5 times as long
+  as n; bulk builds take at most 1.3 times the flat array's time; `maze-bfs` is
+  a no-regression check. Before blaming the list code for a loop slowdown, time
+  the program with another link layout: the same interpreter ran 15 to 20%
+  apart on loops with no list operation.
 
 ### 17.10 Decisions
 
@@ -291,11 +264,8 @@ Decided on 2026-10-14, when this design was merged:
    start at a multiple of 32 and for the right side of a `concat`, and makes
    `take`, an aligned `drop` and the left side of a `concat` share leaves.
 4. **Two PRs, not one:** first the API over the flat array with every call site
-   migrated and no behavior change (the compiler checks it: the opaque type
-   turns a missed site into a compile error, and the goldens plus the new
-   fixture show nothing changed), then the trie behind the API (the tests of the
-   first PR run unchanged against it, so they are a real oracle). A regression
-   is either in a migrated site or in the trie.
+   migrated, then the trie behind the API, so the first PR's tests were an
+   oracle for the second.
 
 ### 17.11 Bulk operations after the trie
 
@@ -427,7 +397,7 @@ format do not change. The numbers are in
 the result. Registers, calls, structs, maps and Json values stay `agc_value`.
 
 **Tests.** `vm/tests/list_test.c` runs the whole API with Int, Float and boxed
-items over the lengths of §17.8 (the million lengths for Int only). It builds
-mixed lists by hand at every boundary, checks that an empty list has no kind,
-and that `-0.0`, NaN and the limits of Int survive each operation. The golden
+items over the boundary lengths of §17.2 (the million lengths for Int only). It
+builds mixed lists by hand at every boundary, checks that an empty list has no
+kind, and that `-0.0`, NaN and the limits of Int survive each operation. The golden
 `tests/fixtures/vm/list-unboxed.agc` covers the same behavior end to end.

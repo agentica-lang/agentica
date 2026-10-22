@@ -9,8 +9,8 @@ section says how the scheduler and the loop keep them.
   `--schedulers 1` the scheduler and the loop share one thread.
 - **Tasks are VM stacks.** A blocking builtin starts a libuv request, parks its
   task, and the scheduler runs another (10.2.1). Only the loop's thread calls
-  `uv_run`. libuv callbacks only copy results and mark tasks ready. With N>1,
-  TLS and HTTP parsing run on the scheduler that resumes the task (§16.2).
+  `uv_run`. libuv callbacks only copy results and mark tasks ready. TLS crypto
+  runs on the I/O thread, beside the socket state (§16.2).
   Output order across tasks is not defined.
 - **Output on the loop, blocking files.** Stdout and stderr are written by the
   loop (10.2.2), and so is the forwarded stderr of a child process. Only the
@@ -82,7 +82,7 @@ section says how the scheduler and the loop keep them.
     batch per turn and gives back the unspent part when the turn ends, the task
     parks, or the scheduler goes idle. With N=1 the counts are exact. With N>1
     the run may stop up to (N-1) turn budgets early.
-  - Per-task step quotas are not in 7h. Per-task memory quotas are out of scope,
+  - There are no per-task step quotas. Per-task memory quotas are out of scope,
     since the Boehm heap is shared. Only a global heap limit is possible (13).
 - **As built.** The turn and its budget code are in `vm/interp.c`.
   `Task.sleep(0)` yields. `Task.sleep(n)` is a timer of the task (§16.9). Under
@@ -213,15 +213,15 @@ section says how the scheduler and the loop keep them.
   when the close ends, finds a settled item and does nothing. An item that ends
   after its deadline, but before the caller runs, keeps its result.
   The handles an item opened are closed when it ends or is cancelled (Owners).
-  With more than one scheduler (not built) the hook runs on the item's
-  scheduler, so the group needs its small lock (10.2.3, "Task.map group lock").
+  At N>1 the hook runs on the item's scheduler, under `rt->sync` (§16.9, "One
+  coarse lock").
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, no
   timer of a task is armed (§16.9, "Timers"), and `main` is not done, the VM
   fails with `RUNTIME-INTERNAL` ("every task is waiting and nothing can wake
   them"). No program reaches it. Every channel wait and every timed await holds
   a timer, every other wait holds a libuv request, a timer or a live task, and
   plain await cycles halt before they park (`Task.await` above). For N>1 see
-  10.2.3.
+  §16.9, "Stall".
 - **Multi-task runs.** A runaway multi-task run must stop with
   `RUNTIME-STEP-LIMIT` (the black-box rule, §1). The `--max-steps` sweep (§12.1)
   needs each limit to give the full outcome, or the step limit with stdout a

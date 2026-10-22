@@ -33,4 +33,4 @@ A library's connect loop waits the same way, with `try Native.wait_readable(sock
 - If the library closes the descriptor during a wait, the wait goes on and ends at its timeout (`native: timed out`) unless the file becomes ready.
 - A cancel stops the wait; the end of the program does not wait for it.
 - On Windows only a socket can be waited on: the number is the library's Winsock `SOCKET`, watched through a duplicate socket. That puts the socket in non-blocking mode for good, since Winsock cannot read the mode back. One socket handle takes one wait at a time: a second wait on the same handle value while one is waiting gives an error that starts with `native: `, and the value of a closed socket may stay busy until its wait ends. Any other value (a C runtime descriptor, a file or pipe handle) gives such an error too, and so does a closed socket, usually (Windows reuses handle values).
-- `--deny-native` refuses a program that calls them, as it refuses extern functions: a descriptor comes from native code.
+- `--deny-native` refuses them too: a descriptor comes from native code.
