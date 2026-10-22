@@ -1348,6 +1348,7 @@ static void wait_ended(agc_poller *p) {
    the mode back to restore it. Any other value fails in WSADuplicateSocketW (ENOTSOCK). ERR is libuv's code negated. */
 agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
   agc_loop *loop = loop_of(vm);
+  if (!on_io_thread(loop)) agc_internal_abort("a scheduler thread opened a poller");
   if (*wait_of(loop, fd)) {
     *err = -UV_EBUSY;
     return NULL;

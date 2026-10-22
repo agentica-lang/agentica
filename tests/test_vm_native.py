@@ -680,11 +680,17 @@ end
 
 
 # Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
-# scheduler up; the write end is writable at once. On Windows one socket takes one wait at a time (two polls of one
-# socket would cancel each other in a busy loop in libuv), so one of the two tasks gets an error at once.
+# scheduler up; the write end is writable at once.
+#
+# On Windows one socket takes one wait at a time: two polls of one socket would cancel each other in a busy loop in
+# libuv. While a task waits (its duplicate is open), a second wait is an error at once; once the wait has ended ready,
+# and again after a timeout, the socket can be waited on again.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
+    if WINDOWS:
+        windows_socket_takes_one_wait_at_a_time(tmp_path, peer, schedulers)
+        return
     main = """def main() -> Void
   fd = peer_pipe()
   first = Task.spawn(&wait, fd)
@@ -699,13 +705,34 @@ def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, sch
 end
 """
     result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
-    if not WINDOWS:
-        assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
-        return
+    assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
+
+
+def windows_socket_takes_one_wait_at_a_time(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  fd = peer_pipe()
+  base = peer_open_fds()
+  first = Task.spawn(&wait, fd)
+  n = 0
+  while peer_open_fds() == base and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+  puts(Native.wait_readable(fd, 1_000))
+  puts(peer_pipe_put())
+  puts(Task.await(first))
+  puts(peer_pipe_take())
+  puts(Native.wait_readable(fd, 30))
+  puts(peer_pipe_put())
+  puts(Native.wait_readable(fd, 1_000))
+  puts(peer_pipe_take())
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     lines = result.stdout.split("\n")
-    assert lines[:2] + lines[4:] == ["main runs", "1", "1", "ok()", ""], result.stdout
-    assert sorted(line[:44] for line in lines[2:4]) == ['error("native: cannot wait on the descriptor', "ok()"]
+    assert lines[0].startswith('error("native: cannot wait on the descriptor'), result.stdout
+    assert lines[1:] == ["1", "ok()", "1", 'error("native: timed out")', "1", "ok()", "1", ""], result.stdout
 
 
 # The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a

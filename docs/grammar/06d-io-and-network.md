@@ -456,10 +456,12 @@ end
   becomes ready. A cancel stops the wait. On Windows only a socket can be waited
   on: `fd` is a Winsock `SOCKET` of the library, polled through a duplicate
   socket. That puts it in non-blocking mode, which is not put back (Winsock
-  cannot read it). One socket takes one wait at a time: a second wait while one
-  polls gives an error that starts with `native: `. Any other value (a C runtime
-  descriptor, a file or pipe handle) gives such an error too, and so does a
-  closed socket, usually (Windows reuses handle values).
+  cannot read it). One socket handle takes one wait at a time: a second wait on
+  the same handle value while one polls gives an error that starts with `native:
+  `, and the value of a closed socket may stay busy until its wait ends. Any
+  other value (a C runtime descriptor, a file or pipe handle) gives such an
+  error too, and so does a closed socket, usually (Windows reuses handle
+  values).
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses

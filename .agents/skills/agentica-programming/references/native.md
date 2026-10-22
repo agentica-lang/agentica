@@ -104,11 +104,11 @@ end
   one descriptor (a socket, a terminal master, an eventfd or a macOS pipe is
   polled through a duplicate, flags kept). Closing the descriptor does not end
   a wait (it times out unless the file becomes ready). A cancel stops the
-  wait. On Windows only a socket works: `fd` is the library's Winsock
-  `SOCKET`, polled through a duplicate that makes it non-blocking (its mode is
-  not put back), one wait per socket at a time (a second gives an error
-  starting `native: `); any other value is an error starting `native: `, and
-  a closed socket usually is.
+  wait. On Windows only a socket works: `fd` is the library's Winsock `SOCKET`,
+  polled through a duplicate that makes it non-blocking (its mode is not put
+  back), one wait per socket handle at a time (a second gives an error starting
+  `native: `; a closed socket's value may stay busy until its wait ends); any
+  other value is an error starting `native: `, and a closed socket usually is.
 - Linux x86_64, Windows x64 and macOS: elsewhere a program with an extern
   function or a `Native.*` call is refused at load with
   `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
