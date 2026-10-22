@@ -47,7 +47,8 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   `test` or after it. They reach every test file, step program and program
   under test, not the runner, which still reads the test folders and starts
   them. With `--deny-run` (or `--sandbox`) a step cannot start a program under
-  test.
+  test. Under `--deny-fs` a missing program under test shows as exit 2 from
+  its `agentica` command.
 - **Exit codes.** 0 when every scenario passes and there is at least one; 1 for
   verification failures or an empty suite; 2 for usage errors and any
   `RUNTIME-BDD-INFRA`. All three output formats give the same verdict.
