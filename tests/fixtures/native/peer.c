@@ -13,6 +13,7 @@
 #else
 #include <dirent.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 #endif
@@ -97,8 +98,15 @@ int32_t peer_naps(void) { return atomic_load(&naps); }
 /* For Native.wait_readable and wait_writable: a non-blocking pipe that the peer owns, as a library owns its socket. */
 static int pipe_fds[2] = {-1, -1};
 
-/* Opens the pipe and returns its read end, or -1. */
-int32_t peer_pipe(void) { return pipe2(pipe_fds, O_NONBLOCK | O_CLOEXEC) == 0 ? pipe_fds[0] : -1; }
+/* Opens the pipe and returns its read end, or -1. macOS has no pipe2. */
+int32_t peer_pipe(void) {
+  if (pipe(pipe_fds) != 0) return -1;
+  for (int k = 0; k < 2; k++) {
+    (void)fcntl(pipe_fds[k], F_SETFL, O_NONBLOCK);
+    (void)fcntl(pipe_fds[k], F_SETFD, FD_CLOEXEC);
+  }
+  return pipe_fds[0];
+}
 int32_t peer_pipe_writer(void) { return pipe_fds[1]; }
 
 /* Writes one byte into the pipe; 1 when it went in. */
@@ -131,12 +139,49 @@ int32_t peer_nonblocking(int32_t fd) {
   return flags < 0 ? -1 : (flags & O_NONBLOCK) != 0;
 }
 
-/* A descriptor that cannot be polled: /dev/null. */
-int32_t peer_dev_null(void) { return open("/dev/null", O_RDONLY | O_CLOEXEC); }
+/* A descriptor that cannot be polled: a regular file, unlinked at once. (/dev/null cannot be polled on Linux, but
+   kqueue calls it always ready.) */
+int32_t peer_regular_file(void) {
+  char path[] = "/tmp/agentica-peer-XXXXXX";
+  int fd = mkstemp(path);
+  if (fd >= 0) (void)unlink(path);
+  return fd;
+}
+
+/* A named FIFO at PATH, with a reader and a writer that the peer owns; its read end, or -1. */
+static int fifo_fds[2] = {-1, -1};
+
+int32_t peer_fifo(const char *path) {
+  if (mkfifo(path, 0600) != 0) return -1;
+  fifo_fds[0] = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+  fifo_fds[1] = fifo_fds[0] < 0 ? -1 : open(path, O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+  return fifo_fds[1] < 0 ? -1 : fifo_fds[0];
+}
+
+/* Writes one byte into the FIFO; 1 when it went in. */
+int32_t peer_fifo_put(void) { return (int32_t)write(fifo_fds[1], "x", 1); }
+
+/* A terminal: its master, or -1. The peer keeps the slave open. */
+static int pty_slave = -1;
+
+int32_t peer_pty(void) {
+  int master = posix_openpt(O_RDWR | O_NOCTTY);
+  if (master < 0 || grantpt(master) != 0 || unlockpt(master) != 0) return -1;
+  const char *name = ptsname(master);
+  pty_slave = name ? open(name, O_RDWR | O_NOCTTY | O_CLOEXEC) : -1;
+  return pty_slave < 0 ? -1 : master;
+}
+
+/* Writes one byte on the slave side, which the master then reads; 1 when it went in. */
+int32_t peer_pty_put(void) { return (int32_t)write(pty_slave, "x", 1); }
 
 /* The number of descriptors the process has open. */
 int32_t peer_open_fds(void) {
+#ifdef __APPLE__
+  DIR *dir = opendir("/dev/fd");
+#else
   DIR *dir = opendir("/proc/self/fd");
+#endif
   if (!dir) return -1;
   int32_t n = 0;
   while (readdir(dir)) n++;

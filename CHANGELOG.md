@@ -8,12 +8,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0-beta.2] - 2026-10-22
+
+### Added
+
+- `extern` blocks and `Native.wait_*` work on macOS (x86_64 and arm64).
+
 ### Fixed
 
 - Windows: `install`, `add` and `update` no longer leave temporary git folders
   in the package cache.
+- Windows: a program with several schedulers no longer hangs, now and then, in
+  a garbage collection.
 
 ## [0.9.0-beta.1] - 2026-10-22
+
+Not published: the release smoke test failed, so `0.9.0-beta.2` is the first
+release with these changes.
 
 ### Added
 
@@ -354,7 +365,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...HEAD
+[0.9.0-beta.2]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...0.9.0-beta.2
 [0.9.0-beta.1]: https://github.com/sonic182/agentica/compare/0.8.1...0.9.0-beta.1
 [0.8.1]: https://github.com/sonic182/agentica/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/sonic182/agentica/compare/0.7.0...0.8.0
