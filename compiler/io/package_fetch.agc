@@ -175,14 +175,16 @@ def fetch(
 end
 
 # git writes its objects read-only and Path.remove refuses a read-only entry on Windows, so `attrib` clears the
-# attribute of the whole tree first. A failure of either step leaves the folder, as before.
+# attribute of the whole tree first. A failure of either step leaves the folder, as before. attrib runs in the working
+# folder, not in `temp`: a running child holds its folder open on Windows, and then Path.remove could not remove it.
 def remove_temp(temp: String) -> Void
   if System.os() == "windows"
     pattern = Paths.join(temp, "*").replace("/", "\\")
-    spawned = Process.spawn_captured("attrib", ["-R", "/S", "/D", pattern], temp, FS_TIMEOUT_MS)
+    spawned = Process.spawn_captured("attrib", ["-R", "/S", "/D", pattern], ".", FS_TIMEOUT_MS)
     if spawned.ok?
-      Process.wait(spawned.unwrap!, FS_TIMEOUT_MS)
-      Process.close(spawned.unwrap!)
+      child = spawned.unwrap!
+      Process.wait(child, FS_TIMEOUT_MS)
+      Process.close(child)
     end
   end
   Path.remove(temp, FS_TIMEOUT_MS)
