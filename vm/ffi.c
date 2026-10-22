@@ -3,8 +3,9 @@
  * to, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per signature,
  * converts values to C and back, runs a fast call on the scheduler and a compute call on the compute pool
  * (agc_io_compute), and leaves dlopen and libffi to the adapter (ffi_os.h). Also the resources that extern functions
- * return (agc_c_resource) with Native.close, Native.null and Native.null?, and Native.wait_readable and wait_writable,
- * the waits of a task on a descriptor of native code. Service layer.
+ * return (agc_c_resource) with Native.close, Native.null and Native.null?, Native.pointer, the reads of memory that C
+ * returns (Native.string_at and bytes_at), and Native.wait_readable and wait_writable, the waits of a task on a
+ * descriptor of native code. Service layer.
  */
 #include "ffi_os.h"
 #include "services.h"
@@ -408,15 +409,15 @@ static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) 
 }
 
 /* Checks argument V against its C type before anything is allocated, so a failure (agc_fail longjmps) leaks
-   nothing. A C.Int that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and cutting
-   them short would call the function with another value. The items of a C.Bytes are checked while they are copied
-   (copy_bytes), and whether a resource is closed before and after that (check_open). */
+   nothing. A C.Int32 that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and
+   cutting them short would call the function with another value. The items of a C.Bytes are checked while they are
+   copied (copy_bytes), and whether a resource is closed before and after that (check_open). */
 static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t span) {
   switch (type) {
     case AGC_C_INT: {
       int64_t n = agc_as_int(vm, v);
       if (n < INT32_MIN || n > INT32_MAX)
-        agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a C.Int argument does not fit in 32 bits", span);
+        agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a C.Int32 argument does not fit in 32 bits", span);
       break;
     }
     case AGC_C_INT64: agc_as_int(vm, v); break;
@@ -525,6 +526,12 @@ static void check_open(agc_vm *vm, const ffi_entry *e, const agc_list *values, u
     }
 }
 
+/* A String copy of the N bytes of C memory at P (NULL when N is 0). Bytes that are not UTF-8 become U+FFFD, as in
+   every String the VM builds from outside text. */
+static agc_value text_value(const uint8_t *p, size_t n) {
+  return agc_string_value(agc_utf8_decode(n ? p : (const uint8_t *)"", n, "\xEF\xBF\xBD", false));
+}
+
 static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r) {
   switch (e->result) {
     case AGC_C_INT: return agc_int(r->i);
@@ -532,10 +539,9 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
     case AGC_C_DOUBLE: return agc_float(r->d);
     case AGC_C_BOOL: return agc_bool(r->b);
     case AGC_C_STRING: {
-      /* The function keeps the text it returns (Agentica copies it and frees nothing); NULL reads as "". Bytes that
-         are not UTF-8 become U+FFFD, as in every String the VM builds from outside text. */
+      /* The function keeps the text it returns (Agentica copies it and frees nothing); NULL reads as "". */
       const char *s = r->s ? r->s : "";
-      return agc_string_value(agc_utf8_decode((const uint8_t *)s, strlen(s), "\xEF\xBF\xBD", false));
+      return text_value((const uint8_t *)s, strlen(s));
     }
     case AGC_C_POINTER: return agc_c_pointer_value(r->p);
     case AGC_C_RESOURCE: return resource_result(vm, e, r->p);
@@ -733,6 +739,47 @@ static agc_value builtin_native_null_p(agc_vm *vm, agc_value *args, uint32_t spa
   return agc_bool(agc_as_c_pointer(vm, args[0]) == NULL);
 }
 
+/* Native.pointer(address): the C.Pointer with this integer value, such as SQLITE_TRANSIENT, (void *)-1. */
+static agc_value builtin_native_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_c_pointer_value((void *)(intptr_t)agc_as_int(vm, args[0]));
+}
+
+/* The memory of a read (Native.string_at and bytes_at): the pointer args[0] and, when LENGTH is not NULL, the length
+   args[1], stored there. The pointer is checked first: NULL fails unless the length is 0, the C way to say "empty",
+   which reads nothing (SQLite gives NULL for an empty blob); then a negative length fails. Any other pointer is read
+   as it is: native code is trusted, and a pointer or a length that C does not own is undefined behavior, like a wrong
+   signature. The fuzzer's hand-made bytecode (no_files) may not read memory, as it may not call. */
+static const uint8_t *memory_at(agc_vm *vm, agc_value *args, uint32_t span, size_t *length) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  const uint8_t *p = agc_as_c_pointer(vm, args[0]);
+  int64_t n = length ? agc_as_int(vm, args[1]) : 1;
+  if (!p && n != 0) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a native read at a NULL C.Pointer", span + 1);
+  if (n < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "length must be nonnegative", span + 2);
+  if (length) *length = (size_t)n;
+  return p;
+}
+
+/* Native.string_at(pointer) and string_at(pointer, length): a copy of the NUL-terminated text at the pointer, or of
+   exactly LENGTH bytes (NUL bytes included). */
+static agc_value builtin_string_at(agc_vm *vm, agc_value *args, uint32_t span) {
+  const uint8_t *p = memory_at(vm, args, span, NULL);
+  return text_value(p, strlen((const char *)p));
+}
+
+static agc_value builtin_string_at_length(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t n;
+  const uint8_t *p = memory_at(vm, args, span, &n);
+  return text_value(p, n);
+}
+
+/* Native.bytes_at(pointer, length): a List of the LENGTH bytes at the pointer. */
+static agc_value builtin_bytes_at(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t n;
+  const uint8_t *p = memory_at(vm, args, span, &n);
+  return agc_list_value(agc_list_of_bytes(p, n));
+}
+
 /* An error or a hang-up on the descriptor ends the wait as readiness does: as with poll(2), the next call of the
    native code does not block and reports the error itself (a refused connect, for example). */
 static void wait_ready(void *data, int status) {
@@ -846,6 +893,10 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };

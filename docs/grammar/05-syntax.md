@@ -61,7 +61,7 @@ library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc goes on a
 `def` inside the block. Each function is a `def` for the rest of the language:
 `export` makes it importable, it takes the place of a `def` in the declaration
 order, the whole block needs the blank line of a declaration, and the checker
-sees `C.Int` and `C.Int64` as `Int`, `C.Double` as `Float`, `C.Bool` as `Bool`
+sees `C.Int32` and `C.Int64` as `Int`, `C.Double` as `Float`, `C.Bool` as `Bool`
 and `C.String` as `String`. `compute def` declares a function that runs off the
 scheduler while the task waits (section 6d); `export` comes first. `extern` is
 contextual: it is a keyword only at the start of a top-level declaration, and
@@ -87,7 +87,7 @@ declares next to it, named after the C name in CamelCase (`sqlite3_open` gives
 `Sqlite3Open`): a field `result` with the C result (none for `Void`), then one
 field per out parameter, in order, named after it. The record is exported with
 its function and has no place in the declaration order. An out parameter is
-`C.Int`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the
+`C.Int32`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the
 block, whose field is the resource itself, not a `Result`; anything else is
 `PARSE-EXTERN-OUT` at the type. An out parameter named `result` of a function
 with a C result, an in and an out parameter of one name (at the later), and a C

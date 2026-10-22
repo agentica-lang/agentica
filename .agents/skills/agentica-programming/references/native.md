@@ -12,11 +12,12 @@ extern "libm.so.6"
 end
 ~~~
 
-- Types: `C.Int` (32-bit `int`, an `Int`), `C.Int64` (`Int`), `C.Double`
+- Types: `C.Int32` (32-bit `int`, an `Int`), `C.Int64` (`Int`), `C.Double`
   (`Float`), `C.Bool` (`Bool`), `C.String` (`const char *`, a `String`); a
-  result may be `Void`. Anything else is `PARSE-EXTERN-TYPE`; more than 64
-  parameters `PARSE-EXTERN-ARITY`; a name with `?` or `!` `PARSE-EXTERN-NAME`; a
-  default `PARSE-EXTERN-DEFAULT`. `##` docs go on the `def` lines.
+  result may be `Void`. Anything else (`C.Int` too: write the width) is
+  `PARSE-EXTERN-TYPE`; more than 64 parameters `PARSE-EXTERN-ARITY`; a name
+  with `?` or `!` `PARSE-EXTERN-NAME`; a default `PARSE-EXTERN-DEFAULT`. `##`
+  docs go on the `def` lines.
 - The library is a plain string: a name without `/` (the system looks it up) or
   an absolute path, else `PARSE-EXTERN-LIBRARY`. It opens at the first call; not
   found is `RUNTIME-NATIVE-LOAD`. The working directory is never searched. On
@@ -24,18 +25,29 @@ end
   `agentica.exe` and in System32, not in `PATH`; an absolute path is
   `"C:\\libs\\x.dll"` (escaped backslashes), and its DLLs are searched in its
   folder and the default folders, never in `PATH` (put `libgcc_s_seh-1.dll` next
-  to a MinGW DLL). On macOS a name (`"libsqlite3.dylib"`) is looked up as
-  `/usr/lib/NAME` (and in `DYLD_LIBRARY_PATH`): the system libraries, in the
-  dyld shared cache (libc and libm are `"libSystem.B.dylib"`); any other library
-  needs an absolute path. `DYLD_*` variables do not pass through a shebang or a
-  shell (SIP drops them).
-- A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
-  is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""` for now.
+  to a MinGW DLL).
+  On macOS a name (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and
+  in `DYLD_LIBRARY_PATH`): the system libraries, in the dyld shared cache
+  (libc and libm are `"libSystem.B.dylib"`); any other library needs an
+  absolute path. `DYLD_*` variables do not pass through a shebang or a shell
+  (SIP drops them).
+- A `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a
+  `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
+  `""`: when NULL matters, declare `-> C.Pointer` and use `Native.string_at`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as
   `<C.Pointer>`. `C.Bytes` is a parameter only: a `List[Int]` of bytes (an
   item outside 0..255 is `RUNTIME-INVALID-NUMBER`) that C gets as a
   `const uint8_t *` copy valid during the call; pass the length separately.
+- Memory C returns: `Native.string_at(p) -> String` (up to the NUL),
+  `Native.string_at(p, length)` (exactly `length` bytes, NULs included) and
+  `Native.bytes_at(p, length) -> List[Int]` copy it; bytes that are not UTF-8
+  become U+FFFD. NULL with length 0 reads as empty (an empty SQLite blob);
+  other NULL is `RUNTIME-NATIVE-NULL` (test with `Native.null?` first), checked
+  before a negative length (`RUNTIME-INVALID-COUNT`); a length past what C
+  owns is undefined behavior. `Native.pointer(n)` is the pointer with value `n`
+  (`SQLITE_TRANSIENT` is `Native.pointer(-1)`). A `char **` out parameter
+  read with `string_at` is then freed by its C function (`sqlite3_free`).
 - `[export] resource Db, free: db_close` in a block declares a resource type,
   freed by `void db_close(void *)` of the same library. Declare it above the
   `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is
@@ -54,10 +66,10 @@ end
   extern "libc.so.6"
     resource Stream, free: fclose
     def fopen(path: C.String, mode: C.String) -> Stream
-    def fputs(text: C.String, stream: Stream) -> C.Int
+    def fputs(text: C.String, stream: Stream) -> C.Int32
   end
   ~~~
-- `out NAME: T` is an out parameter (`T` is `C.Int`, `C.Int64`, `C.Double`,
+- `out NAME: T` is an out parameter (`T` is `C.Int32`, `C.Int64`, `C.Double`,
   `C.Bool`, `C.Pointer` or a resource; else `PARSE-EXTERN-OUT`). The caller
   does not pass it; C writes through a pointer to a zeroed slot. The call
   returns a record named after the C name in CamelCase (`Sqlite3Open`), with
@@ -70,7 +82,7 @@ end
   ~~~ruby
   extern "libsqlite3.so.0"
     resource Db, free: sqlite3_close_v2
-    def sqlite3_open(filename: C.String, out db: Db) -> C.Int
+    def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
   end
 
   def open(path: String) -> Result[Db]

@@ -637,7 +637,7 @@ def test_a_resource_is_found_in_the_signatures_of_its_block_and_of_another_file(
 # the name or at a call is about the function, and a field of the record is defined at its out parameter.
 NATIVE = '''extern "libsqlite3.so.0"
   resource Db, free: sqlite3_close_v2
-  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
 end
 
 def main() -> Void

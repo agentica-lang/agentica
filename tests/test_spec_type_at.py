@@ -780,7 +780,7 @@ def test_a_construction_is_still_an_expression_with_the_struct_as_definition(typ
 # A resource names its declaration as a parameter and as the result of its block, which the parser wraps in Result.
 def test_a_resource_has_its_declaration_as_definition_in_a_parameter_and_a_result(tmp_path):
     source = ('extern "libdb.so"\n  resource Db, free: db_close\n  def db_open(path: C.String) -> Db\n'
-              "  def db_size(db: Db) -> C.Int\nend\n")
+              "  def db_size(db: Db) -> C.Int32\nend\n")
     (tmp_path / "db.agc").write_text(source, encoding="utf-8")
     for needle in ("Db\n  def", "Db) ->"):
         found = answer(("db.agc", where(source, needle)), cwd=tmp_path)

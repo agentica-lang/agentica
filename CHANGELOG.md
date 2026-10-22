@@ -8,9 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the extern type `C.Int` is now `C.Int32`, so both widths are
+  explicit (`C.Int32`, `C.Int64`); `C.Int` is `PARSE-EXTERN-TYPE`.
+
+## [0.9.0-beta.2] - 2026-10-22
+
 ### Added
 
 - `extern` blocks and `Native.wait_*` work on macOS (x86_64 and arm64).
+- `Native.string_at`, `Native.bytes_at` and `Native.pointer` read memory that C
+  returns and make sentinel pointers.
 
 ### Fixed
 
@@ -20,6 +29,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   a garbage collection.
 
 ## [0.9.0-beta.1] - 2026-10-22
+
+Not published: the release smoke test failed, so `0.9.0-beta.2` is the first
+release with these changes.
 
 ### Added
 
@@ -360,7 +372,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...HEAD
+[0.9.0-beta.2]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...0.9.0-beta.2
 [0.9.0-beta.1]: https://github.com/sonic182/agentica/compare/0.8.1...0.9.0-beta.1
 [0.8.1]: https://github.com/sonic182/agentica/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/sonic182/agentica/compare/0.7.0...0.8.0
