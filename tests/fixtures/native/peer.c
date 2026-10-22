@@ -290,3 +290,9 @@ int32_t peer_out_open_later(int32_t value, int32_t limit_ms, void **res) {
   *res = peer_res_open(value);
   return value;
 }
+
+/* For Native.string_at and bytes_at: UTF-8 text with a NUL inside, 12 bytes before the last NUL. And for
+   Native.pointer: the integer value of a pointer. */
+static const char text_with_nul[] = "h\xc3\xa9llo\0world";
+const void *peer_text(void) { return text_with_nul; }
+int64_t peer_ptr_value(void *p) { return (int64_t)(intptr_t)p; }

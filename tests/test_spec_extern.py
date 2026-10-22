@@ -232,6 +232,29 @@ def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
     assert at(problem_of(check(source(tmp_path, OPENER % body)))) == (code, start, stop)
 
 
+# Native.string_at and bytes_at read memory at a C.Pointer (not a resource) with an Int length, and Native.pointer
+# makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it, and a wrong count CHECK-ARITY.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  s: String = Native.string_at(db_handle(db_open().unwrap!), 3)\n"
+     "  b: List[Int] = Native.bytes_at(Native.pointer(-1), 0)\n"
+     "  puts(s + Native.string_at(Native.null()) + b.size.to_s)", None, None, None),
+    ('  puts(Native.string_at("x"))', "CHECK-TYPE-MISMATCH", (8, 25), (8, 28)),
+    ("  db = db_open().unwrap!\n  puts(Native.string_at(db))", "CHECK-TYPE-MISMATCH", (9, 25), (9, 27)),
+    ('  puts(Native.string_at(Native.null(), "3"))', "CHECK-TYPE-MISMATCH", (8, 40), (8, 43)),
+    ("  puts(Native.string_at(Native.null(), 1, 2))", "CHECK-ARITY", (8, 8), (8, 45)),
+    ("  puts(Native.bytes_at(Native.pointer(1), [3]))", "CHECK-TYPE-MISMATCH", (8, 43), (8, 46)),
+    ("  puts(Native.bytes_at(Native.null()))", "CHECK-ARITY", (8, 8), (8, 38)),
+    ("  puts(Native.pointer(1.5))", "CHECK-TYPE-MISMATCH", (8, 23), (8, 26)),
+    ("  n: Int = Native.pointer(1)", "CHECK-TYPE-MISMATCH", (8, 12), (8, 29)),
+])
+def test_the_memory_builtins_take_a_pointer_and_a_length(tmp_path, body, code, start, stop):
+    result = check(source(tmp_path, OPENER % body))
+    if code is None:
+        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
+    else:
+        assert at(problem_of(result)) == (code, start, stop)
+
+
 # The block's free function is the VM's to call: a def of it, before or after the resource, is PARSE-EXTERN-FREE at
 # the later of the two names.
 @pytest.mark.parametrize("members, start, stop", [

@@ -275,9 +275,10 @@ and a task's crash line (`"task":true`) carry it too.
   (`C.String`, `C.Bytes`), named `result` beside a C result or like an in
   parameter, of a C name with no letter for the record's name, or outside an
   extern block (`native.md`).
-- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-DENIED`,
-  `RUNTIME-NATIVE-UNSUPPORTED`: the library or function of an extern call was
-  not found (at the extern function); a call took a closed resource; or, at
+- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-NULL`,
+  `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`: the library or
+  function of an extern call was not found (at the extern function); a call
+  took a closed resource; `Native.string_at` or `bytes_at` read at NULL; or, at
   load with exit 2, `--deny-native` refused a program with an extern function
   or a `Native.*` call, or the system has no native calls.
 - `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything

@@ -2446,6 +2446,22 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.bytes_at",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "length", type: Types.Type.Int),
+      ],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Native.bytes_at",
+      effects: ["native"],
+      description: (
+        "Copy length bytes at the C.Pointer into a list; NULL is RUNTIME-NATIVE-NULL, a negative length " +
+        "RUNTIME-INVALID-COUNT, and a length past the memory undefined behavior."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.close",
       parameters: [Model.Named(name: "resource", type: Types.Type.Var("R"))],
       result: Types.Type.Void,
@@ -2477,6 +2493,43 @@ ROWS_28: List[Model.Builtin] = [
       effects: ["native"],
       description: "True when the C.Pointer is NULL.",
       alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.pointer",
+      parameters: [Model.Named(name: "address", type: Types.Type.Int)],
+      result: Types.Type.Opaque("C.Pointer"),
+      rule: Model.Rule.Plain,
+      implementation: "Native.pointer",
+      effects: ["native"],
+      description: "The C.Pointer with this integer value, for a sentinel such as SQLITE_TRANSIENT (-1).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.string_at",
+      parameters: [Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer"))],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Native.string_at",
+      effects: ["native"],
+      description: (
+        "Copy the NUL-terminated text at the C.Pointer, or exactly length bytes; bytes that are not UTF-8 become " +
+        "U+FFFD, NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT."
+      ),
+      alternatives: [
+        Model.Builtin(
+          name: "Native.string_at",
+          parameters: [
+            Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+            Model.Named(name: "length", type: Types.Type.Int),
+          ],
+          result: Types.Type.String,
+          rule: Model.Rule.Plain,
+          implementation: "Native.string_at",
+          effects: ["native"],
+          description: "Copy exactly length bytes at the C.Pointer, NUL bytes included.",
+          alternatives: [],
+        ),
+      ],
     ),
     Model.Builtin(
       name: "Native.wait_readable",

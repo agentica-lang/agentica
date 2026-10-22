@@ -11,6 +11,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `extern` blocks and `Native.wait_*` work on macOS (x86_64 and arm64).
+- `Native.string_at`, `Native.bytes_at` and `Native.pointer` read memory that C
+  returns and make sentinel pointers.
 
 ### Fixed
 

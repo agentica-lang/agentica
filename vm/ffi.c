@@ -3,8 +3,9 @@
  * to, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per signature,
  * converts values to C and back, runs a fast call on the scheduler and a compute call on the compute pool
  * (agc_io_compute), and leaves dlopen and libffi to the adapter (ffi_os.h). Also the resources that extern functions
- * return (agc_c_resource) with Native.close, Native.null and Native.null?, and Native.wait_readable and wait_writable,
- * the waits of a task on a descriptor of native code. Service layer.
+ * return (agc_c_resource) with Native.close, Native.null and Native.null?, Native.pointer, the reads of memory that C
+ * returns (Native.string_at and bytes_at), and Native.wait_readable and wait_writable, the waits of a task on a
+ * descriptor of native code. Service layer.
  */
 #include "ffi_os.h"
 #include "services.h"
@@ -733,6 +734,49 @@ static agc_value builtin_native_null_p(agc_vm *vm, agc_value *args, uint32_t spa
   return agc_bool(agc_as_c_pointer(vm, args[0]) == NULL);
 }
 
+/* Native.pointer(address): the C.Pointer with this integer value, such as SQLITE_TRANSIENT, (void *)-1. */
+static agc_value builtin_native_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_c_pointer_value((void *)(intptr_t)agc_as_int(vm, args[0]));
+}
+
+/* The memory that a C.Pointer argument points to, for Native.string_at and bytes_at. NULL fails; any other pointer is
+   read as it is: native code is trusted, and a pointer or a length that C does not own is undefined behavior, like a
+   wrong signature. The fuzzer's hand-made bytecode (no_files) may not read memory, as it may not call. */
+static const uint8_t *memory_at(agc_vm *vm, agc_value pointer, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  const uint8_t *p = agc_as_c_pointer(vm, pointer);
+  if (!p) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a native read at a NULL C.Pointer", span + 1);
+  return p;
+}
+
+/* The length argument of a read; negative fails. */
+static size_t length_of(agc_vm *vm, agc_value length, uint32_t span) {
+  int64_t n = agc_as_int(vm, length);
+  if (n < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "length must be nonnegative", span + 2);
+  return (size_t)n;
+}
+
+/* Native.string_at(pointer) and string_at(pointer, length): a copy of the NUL-terminated text at the pointer, or of
+   exactly LENGTH bytes (NUL bytes included). Bytes that are not UTF-8 become U+FFFD, as for a C.String result. */
+static agc_value builtin_string_at(agc_vm *vm, agc_value *args, uint32_t span) {
+  const uint8_t *p = memory_at(vm, args[0], span);
+  return agc_string_value(agc_utf8_decode(p, strlen((const char *)p), "\xEF\xBF\xBD", false));
+}
+
+static agc_value builtin_string_at_length(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t n = length_of(vm, args[1], span);
+  const uint8_t *p = memory_at(vm, args[0], span);
+  return agc_string_value(agc_utf8_decode(p, n, "\xEF\xBF\xBD", false));
+}
+
+/* Native.bytes_at(pointer, length): a List of the LENGTH bytes at the pointer. */
+static agc_value builtin_bytes_at(agc_vm *vm, agc_value *args, uint32_t span) {
+  size_t n = length_of(vm, args[1], span);
+  const uint8_t *p = memory_at(vm, args[0], span);
+  return agc_list_value(agc_list_of_bytes(p, n));
+}
+
 /* An error or a hang-up on the descriptor ends the wait as readiness does: as with poll(2), the next call of the
    native code does not block and reports the error itself (a refused connect, for example). */
 static void wait_ready(void *data, int status) {
@@ -846,6 +890,10 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
 };
