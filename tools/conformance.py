@@ -51,6 +51,7 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
 KNOWN_ISSUES: dict[int, str] = {
+    615: "Windows: File.open create_private follows a dangling symlink and creates its target",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).

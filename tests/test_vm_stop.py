@@ -19,9 +19,10 @@ from tests.windows_console_support import CHILD as WINDOWS_CHILD, run_on_console
 from tests.windows_support import COPY_PROGRAM
 
 # SIGTERM, SIGINT, SIGHUP and SIGALRM are POSIX signals, so each case that sends one is host-only on Windows, and the
-# reason says which case of tests/test_windows_console_stop.py sends Ctrl+Break for the same behavior. The two cases that
-# need a full FIFO are host-only: the VM refuses a named pipe as a file on Windows. Ctrl+C through the CLI runs on both:
-# Windows types it into a pseudo console, the console of the CLI, the VM and the child.
+# reason says which case of tests/test_windows_console_stop.py sends Ctrl+Break for the same behavior. The case that
+# holds a FIFO full with a second signal is host-only too: the VM refuses a named pipe as a file on Windows. The driven
+# VM case needs a FIFO on POSIX only and has a Windows form. Ctrl+C through the CLI runs on both: Windows types it into
+# a pseudo console, the console of the CLI, the VM and the child.
 
 PEER = FIXTURES / "stop-peer.py"
 WAIT_SECONDS = scaled(10)
