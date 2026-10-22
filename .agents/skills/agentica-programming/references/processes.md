@@ -157,3 +157,47 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   `Test.run` and the BDD step programs use the channel
   (`references/testing.md`), and a test or step that calls them can break the
   protocol, with nothing to stop it.
+
+## Standard streams and the environment
+
+```text
+IO.read_bytes(count: Int) -> Result[List[Int]]   # count 0..1048576; bytes 0..255
+IO.flush() -> Void                               # stdout only
+System.env(name: String) -> Result[String]       # error if unset or the name is empty, has = or NUL; ok("") if set empty
+System.os() -> String                            # "linux", "macos", "windows", else the lowercase uname name ("unknown" if none or not printable ASCII)
+System.pid() -> Int                              # the process id of this program (VM only)
+```
+
+- `IO.read_bytes` waits for `count` bytes or end of input. A short final read
+  succeeds; end of input before any byte, or a zero count, gives `ok([])`.
+  Invalid counts return an error without consuming input. Read in several calls
+  for larger streams. `String.from_bytes` decodes complete UTF-8 sequences only
+  (`binary.md`).
+- `IO.flush` flushes stdout, not stderr. On Linux, macOS and Windows, a print is
+  copied into a 64 KiB buffer per stream and written as the reader takes it, so
+  output reaches a pipe without `IO.flush`. Stdout and stderr to the same file
+  keep the order of the calls (on Windows, when both descriptors are one handle
+  object, as with a pipe given to both). `IO.flush` returns once the buffer is
+  in the pipe, so it can wait for a slow reader. On other systems, output does
+  not auto-flush. For stdio protocols, write one compact JSON message per line,
+  flush after each response, and send logs to `IO.warn`.
+- `System.env` needs no flag; `--deny-env` makes it an error starting `denied:
+  --deny-env` (`System.os` and `System.pid` stay on). A value that is not UTF-8
+  is decoded with U+FFFD for each bad byte. The home directory is
+  `System.env("HOME")`. There is no call that lists the variables.
+  `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the VM set itself are hidden. A
+  child from `Process.spawn` also does not get `AGENTICA_VM_METRICS` or
+  `AGENTICA_VM_METRICS_FILE`, but `System.env` shows them to you.
+- `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`:
+  that VM checks that its parent is this process.
+
+```ruby
+def main() -> Void
+  data = IO.read_bytes(4)
+  if data.ok?
+    text = String.from_bytes(data.unwrap!)
+    IO.print(text.unwrap_or("invalid UTF-8"))
+    IO.flush()
+  end
+end
+```

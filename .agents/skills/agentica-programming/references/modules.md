@@ -120,6 +120,12 @@ the import. Embedded-module diagnostics name their source, such as
 directory; external modules may use ordinary relative imports for their
 dependencies.
 
+`Std.source(path: String) -> Result[String]` returns the source of a std/
+module embedded in this binary, by its path in `stdlib/` (`"queue.agc"`,
+`"prelude/list.agc"`), or an error. `FrontEnd.hand_off` and
+`FrontEnd.std_source` are for the compiler's own front end: do not call them,
+since any other program halts with `RUNTIME-FRONT-END-ONLY`.
+
 ## Packages (`agentica.toml`)
 
 A project with an `agentica.toml` in the folder of the root file (or above it)

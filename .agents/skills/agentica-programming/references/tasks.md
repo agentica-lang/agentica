@@ -101,9 +101,12 @@ end the whole run; System.exit keeps its code. Returning from the entrypoint
 cancels pending work; explicitly await tasks that must finish. External
 interruption cancels tasks and closes newly created resources while preserving
 caller-supplied ports. Tasks run in parallel on one scheduler per logical core
-(`--schedulers N` sets the count; `--schedulers 1` runs one task at a time). A
-block can be the task function when passed through a `Fn` variable or
-parameter.
+(`--schedulers N` sets the count, 1 to 1024, or `AGENTICA_SCHEDULERS`; the
+default is one per logical core). `--schedulers 1` runs one task at a time, in
+a fixed order. `agentica test` takes only the variable; an empty variable counts
+as unset. With more than one scheduler `--max-steps` can trip a little late;
+`--schedulers 1` keeps the exact count. A block can be the task function when
+passed through a `Fn` variable or parameter.
 
 Random: each task has its own generator, split from its parent at spawn (one
 parent draw per spawn), so with `--seed N` each task repeats its own values. The

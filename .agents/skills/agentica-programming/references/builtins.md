@@ -1,9 +1,12 @@
 # Builtins
 
-Exact signatures for the core namespaces. `agentica help NAME` prints the
-signature of any builtin. Other namespaces have their own file: File, Dir, Path
-in `files.md`; Process in `processes.md`; Task and Channel in `tasks.md`; TCP,
-TLS, and HTTP in `network.md`; JSON in `json.md`; Test in `testing.md`; BDD in
+Exact signatures for the core namespaces. `agentica help NAME` prints a
+signature but does not resolve Ruby aliases (`String.to_i`); see "Methods on
+builtin types". Other namespaces: File, Dir, Path in `files.md`; Process,
+`System.env`, `System.os`, `System.pid` and stdio in `processes.md`; Task and
+Channel in `tasks.md`; TCP, TLS, HTTP in `network.md`; JSON in `json.md`; bit
+operations, `Crypto` and `std/binary` in `binary.md`; `Profile` in
+`performance.md`; `Std.source` in `modules.md`; Test in `testing.md`; BDD in
 `bdd.md`.
 
 Builtin namespaces and type names are reserved: no declaration, local,
@@ -21,103 +24,39 @@ IO.puts(value: T) -> Void
 IO.print(value: T) -> Void
 IO.warn(value: T) -> Void               # stderr, with newline
 IO.inspect(value: T) -> T               # prints the debug form, returns the value
-IO.gets() -> Result[String]             # ok(line) or error at end of input
+IO.gets() -> Result[String]             # ok(line), or error at end of input
 IO.gets!() -> String                    # halts at end of input
-IO.read() -> String                     # reads to end of input; use gets for line protocols
-IO.read_bytes(count: Int) -> Result[List[Int]]   # count 0..1048576; bytes 0..255
-IO.flush() -> Void                      # stdout only
+IO.read() -> String                     # to end of input; not for line protocols
 IO.eof?() -> Bool                       # peeks one byte; may block; not a readiness poll
+IO.flush() -> Void                      # stdout only; processes.md
 System.args() -> List[String]
 System.exit(code: Int) -> Void
-System.env(name: String) -> Result[String]   # error if unset or the name is empty, has = or NUL; ok("") if set empty
-System.os() -> String                   # "linux", "macos", "windows", else the lowercase uname name ("unknown" if none or not printable ASCII)
-System.pid() -> Int                     # the process id of this program (VM only)
-Std.source(path: String) -> Result[String]   # a std/ source of this binary by its path in stdlib/ ("queue.agc", "prelude/list.agc"); else error
+System.env(name: String) -> Result[String]   # error if unset; processes.md
 Time.now_ms() -> Int                    # wall clock, Unix ms; may jump
-Time.monotonic_ms() -> Int              # never goes backward; use it for durations
-Time.monotonic_ns() -> Int              # same clock in nanoseconds; same origin as monotonic_ms
+Time.monotonic_ms() -> Int              # never goes backward; use for durations
+Time.monotonic_ns() -> Int              # same clock in nanoseconds
 Random.int(min: Int, max: Int) -> Int   # uniform, both ends inclusive; min > max halts (RUNTIME-INVALID-RANGE)
 Random.float() -> Float                 # 0.0 up to, not including, 1.0
-Profile.measure(label: String, block: Fn[T]) -> T   # runs the block once; a section row with the profile on
-Profile.steps() -> Int                  # steps of this task so far; the same on every run (performance.md)
-Crypto.sha256(data: List[Int]) -> List[Int]   # 32 digest bytes; an item outside 0..255 halts (RUNTIME-INVALID-NUMBER)
 ```
 
 - `IO.gets` strips LF, CR, or CRLF; a blank line is `ok("")`, not the end.
-- `IO.read_bytes` waits for `count` bytes or end of input. A short final read
-  succeeds; end of input before any byte, or a zero count, gives `ok([])`.
-  Invalid counts return an error without consuming input. Read in several calls
-  for larger streams.
-- `String.from_bytes` decodes strictly. A byte read can split a UTF-8 character,
-  so decode complete sequences only, and switch to text reads only at character
-  boundaries. `String.to_bytes(s)` encodes text for `TCP.send_bytes`,
-  `File.write_bytes` and the like.
-- `Crypto.sha256` hashes bytes (a `List[Int]`, as the byte reads give) with
-  OpenSSL. Its time grows with the list. `Crypto` is a reserved type name.
-- `IO.eof?` does not consume a byte and does not wait for a whole UTF-8
-  character. Reads have no timeout; step budgets do not interrupt blocking
-  input.
-- `IO.flush` flushes stdout, not stderr. On Linux, macOS and Windows, a print is
-  copied into a 64 KiB buffer per stream and written as the reader takes it, so
-  output reaches a pipe without `IO.flush`. Stdout and stderr to the same file
-  keep the order of the calls (on Windows, when both descriptors are one handle
-  object, as with a pipe given to both). `IO.flush` returns once the buffer is
-  in the pipe, so it can wait for a slow reader. On other systems, output does
-  not auto-flush. For stdio protocols, write one compact JSON message per line,
-  flush after each response, and send logs to `IO.warn`.
-- `System.env` needs no flag; `--deny-env` makes it an error starting `denied:
-  --deny-env` (`System.os` and `System.pid` stay on). A value that is not UTF-8
-  is decoded with U+FFFD for each bad byte. The home directory is
-  `System.env("HOME")`. There is no call that lists the variables.
-  `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the VM set itself are hidden. A
-  child from `Process.spawn` also does not get `AGENTICA_VM_METRICS` or
-  `AGENTICA_VM_METRICS_FILE`, but `System.env` shows them to you.
-- `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`:
-  that VM checks that its parent is this process.
-- `FrontEnd.hand_off` and `FrontEnd.std_source` are for the compiler's own front
-  end. Do not call them: any other program halts with `RUNTIME-FRONT-END-ONLY`.
+- `IO.eof?` consumes nothing and does not wait for a whole UTF-8 character.
+  Reads have no timeout; step budgets do not interrupt blocking input.
 - `Time` and `Random` are reserved module names. `Random` has one generator per
   run, seeded from the OS unless `--seed N` is given (`agentica --seed N
-  program.agc`, N in `0 .. 2147483647`). Each task has its own generator, split
-  at spawn. The generator is not for secrets.
-
-```ruby
-def main() -> Void
-  data = IO.read_bytes(4)
-  if data.ok?
-    text = String.from_bytes(data.unwrap!)
-    IO.print(text.unwrap_or("invalid UTF-8"))
-    IO.flush()
-  end
-end
-```
+  program.agc`, N in `0 .. 2147483647`). Each task's generator is split at
+  spawn. It is not for secrets.
 
 ## Int, Float
 
 ```text
 Int.times(n: Int, f: Fn[Int, Void]) -> Void              # 0 .. n - 1; nothing when n <= 0
-Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void   # both ends included; nothing when to < from
-Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # both ends included; nothing when to > from
+Int.upto(from: Int, to: Int, f: Fn[Int, Void]) -> Void   # both ends included
+Int.downto(from: Int, to: Int, f: Fn[Int, Void]) -> Void # both ends included
 Float.from_int(n: Int) -> Float
 Float.to_int(x: Float) -> Result[Int]                    # truncates; NaN, infinity, overflow are errors
 Float.to_int!(x: Float) -> Int                           # same, but halts (RUNTIME-INVALID-NUMBER)
-Int.bit_and(a: Int, b: Int) -> Int                       # 64-bit two's complement; never fails
-Int.bit_or(a: Int, b: Int) -> Int
-Int.bit_xor(a: Int, b: Int) -> Int
-Int.bit_not(a: Int) -> Int                               # -1 - a
-Int.shift_left(a: Int, count: Int) -> Int                # wraps; 64 or more gives 0
-Int.shift_right(a: Int, count: Int) -> Int               # arithmetic, rounds down; 64 or more gives 0 or -1
-Int.shift_right_unsigned(a: Int, count: Int) -> Int      # logical; 64 or more gives 0
-Float.to_bits(x: Float) -> Int                           # binary64 bits as an Int; every NaN gives 9221120237041090560
-Float.from_bits(bits: Int) -> Float                      # any Int; any NaN pattern gives NaN
-Float.to_bits32(x: Float) -> Int                         # rounds to binary32; 0..4294967295; every NaN gives 2143289344
-Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0..4294967295 halt (RUNTIME-INVALID-NUMBER)
 ```
-
-A negative shift count halts with `RUNTIME-INVALID-COUNT` at the count. The core
-has no hex literals: write masks in decimal (`255`, `65535`).
-`x.shift_right(i).bit_and(1) == 1` tests bit `i`; `x.to_bits < 0` tests the sign
-of a Float (not NaN: use `x != x`).
 
 A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`.
 
@@ -139,11 +78,11 @@ String.index_of(s: String, part: String) -> Result[Int]      # first match; erro
 String.at(s: String, index: Int) -> String               # one character; halts outside
 String.reverse(s: String) -> String
 String.code(c: String) -> Int                            # code point of one character; other lengths halt
-String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in the order of sort (code point); also a.compare(b)
+String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
 String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
 String.from_int(n: Int) -> String
 String.from_float(x: Float) -> String
-String.from_bytes(data: List[Int]) -> Result[String]     # strict UTF-8
+String.from_bytes(data: List[Int]) -> Result[String]     # strict UTF-8; binary.md
 String.to_bytes(s: String) -> List[Int]                  # UTF-8 bytes, 0..255; inverse of from_bytes
 String.to_int(s: String) -> Result[Int]                  # signed decimal; overflow is an error
 String.to_float(s: String) -> Result[Float]
@@ -151,8 +90,8 @@ String.to_int!(s: String) -> Int                         # halts on bad text (RU
 String.to_float!(s: String) -> Float
 ```
 
-- `"a,,b,".split(",")` is `["a", "", "b", ""]`; `"abc".split("")` is `["a", "b",
-  "c"]`.
+- `"a,,b,".split(",")` is `["a", "", "b", ""]`; `"abc".split("")` is
+  `["a", "b", "c"]`.
 - `index_of` and `at` count characters, like `length`. Use `code` and
   `from_code` for character arithmetic. Strings cannot be indexed with `s[0]`.
 - `s.trim` is the method form of `String.trim(s)`. `"a".from_int` is not a
@@ -162,23 +101,23 @@ String.to_float!(s: String) -> Float
 
 ```text
 List.size(list: List[T]) -> Int
-List.append(list: List[T], value: T) -> List[T]          # near constant time; n appends build a list in O(n)
-List.set(list: List[T], index: Int, value: T) -> List[T] # index 0..length-1; else RUNTIME-INDEX-OUT-OF-RANGE; O(log32 n)
-List.repeat(value: T, count: Int) -> List[T]             # count 0..1048576; else RUNTIME-INVALID-COUNT
+List.append(list: List[T], value: T) -> List[T]          # near constant time
+List.set(list: List[T], index: Int, value: T) -> List[T] # 0..length-1, else RUNTIME-INDEX-OUT-OF-RANGE; O(log32 n)
+List.repeat(value: T, count: Int) -> List[T]             # count 0..1048576, else RUNTIME-INVALID-COUNT
 List.reverse(list: List[T]) -> List[T]
 List.concat(a: List[T], b: List[T]) -> List[T]           # O(length of b) when b has at most 32 items, else O(length of a + b)
-List.take(list: List[T], count: Int) -> List[T]          # counts above length are fine; negative halts (RUNTIME-INVALID-COUNT)
+List.take(list: List[T], count: Int) -> List[T]          # count above length is fine; negative halts
 List.drop(list: List[T], count: Int) -> List[T]          # same count rules as take
-List.at(list: List[T], index: Int) -> T                  # zero-based; out of range halts (RUNTIME-INDEX-OUT-OF-RANGE); O(log32 n)
+List.at(list: List[T], index: Int) -> T                  # zero-based; halts (RUNTIME-INDEX-OUT-OF-RANGE); O(log32 n)
 List.map(list: List[A], f: Fn[A, B]) -> List[B]          # f returns data, not Void
 List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B   # folds left: f(acc, item); empty gives initial
 List.each(list: List[A], f: Fn[A, Void]) -> Void
 List.any?(list: List[A], f: Fn[A, Bool]) -> Bool         # stops at the first true
 List.all?(list: List[A], f: Fn[A, Bool]) -> Bool         # stops at the first false
-List.sort(list: List[T]) -> List[T]                      # T is Int, Float, or String; stable
-List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]    # key is Int, Float, or String; one call per element
-List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]    # ok(first match) or error("not found"); stops at the match
+List.sort(list: List[T]) -> List[T]                      # T is Int, Float or String; stable
+List.sort_by(list: List[A], key: Fn[A, K]) -> List[A]    # key is Int, Float or String; one call per element
+List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]   # ok(first match) or error("not found")
 List.each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void   # f(item, index), index from 0
 List.flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
 List.partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]     # [accepted, rejected]
@@ -191,24 +130,24 @@ List.uniq(list: List[K]) -> List[K]                      # K is Int or String; k
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]   # key Int, Float or String; first wins ties; empty is an error
 List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]   # NaN keys never win unless all are NaN
-List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run in a terminal (references/lazy.md)
+List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run in a terminal (lazy.md)
 ```
 
-- `map`, `filter`, and `reduce` cost O(n); `sort` and `sort_by` cost O(n log n);
+- `map`, `filter`, and `reduce` cost O(n); `sort` and `sort_by` O(n log n);
   callback work is extra. Each callback runs once per element, left to right,
   under the caller's execution budget.
-- `find` ... `max_by` are written in Agentica (the compiler prelude) and cost
-  O(n), 4 to 28 steps for each element (`references/performance.md`). A runtime
-  error in one is reported at your call. Each has one name: `select`, `collect`,
-  `detect`, `inject` and `reject` are `CHECK-UNKNOWN-METHOD` (`filter`, `map`,
-  `find`, `reduce`, and `xs.filter do |x| !cond end`), and a `Range` has none of
-  them (`(1..5).to_a.map do ... end`). A block after `each_slice` is
-  `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ... end`.
+- `find` to `max_by` are written in Agentica (the compiler prelude): O(n),
+  4 to 28 steps per element (`performance.md`). A runtime error in one is
+  reported at your call. Each has one name: `select`, `collect`, `detect`,
+  `inject` and `reject` are `CHECK-UNKNOWN-METHOD` (use `filter`, `map`, `find`,
+  `reduce`, or `xs.filter do |x| !cond end`). A range has none of them:
+  `(1..5).to_a.map do ... end`. A block after `each_slice` is
+  `CHECK-BLOCK-TARGET`: write `xs.each_slice(2).each do |pair| ... end`.
 - Callback types must match exactly. A callback given as `&name`, a `Fn`
   variable, or a block with typed parameters (`do |x: Int|`) types empty lists
   and empty reduce starts.
-- Strings sort by code point, so `"B"` comes before `"a"`. Float NaN sorts last.
-  Other element types are `CHECK-TYPE-MISMATCH`.
+- Strings sort by code point, so `"B"` comes before `"a"`. Float NaN sorts
+  last. Other element types are `CHECK-TYPE-MISMATCH`.
 - `List.repeat(x, 0)` is an empty list of the inferred type; annotate when the
   context is not enough.
 
@@ -224,7 +163,7 @@ Map.get(map: Map[K, V], key: K, default: V) -> V         # default is evaluated 
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]   # returns a new map
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignored; O(n)
 Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void      # f(key, value) in insertion order
-Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]   # keeps the entries f accepts, in insertion order
+Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]   # keeps the entries f accepts
 ```
 
 - Lookup, `has_key?`, and `put` are effectively constant time (a persistent
@@ -236,7 +175,7 @@ Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]   # keeps the entries
 ## Set
 
 ```text
-Set.new(items: List[T]) -> Set[T]                        # T is Int or String; repeated items dropped, the first keeps its place
+Set.new(items: List[T]) -> Set[T]                        # T is Int or String; repeats dropped, first keeps its place
 Set.add(set: Set[T], value: T) -> Set[T]                 # a member leaves the set unchanged
 Set.delete(set: Set[T], value: T) -> Set[T]              # a missing element is ignored; O(n)
 Set.include?(set: Set[T], value: T) -> Bool
@@ -250,14 +189,13 @@ Set.subset?(a: Set[T], b: Set[T]) -> Bool                # every element of a is
 ```
 
 - Sets are immutable like maps: `seen = seen.add(x)`; a bare `seen.add(x)` is
-  `CHECK-UNUSED-VALUE`. Membership and `add` are effectively constant time (the
-  map HAMT). Re-adding a deleted element puts it at the end.
+  `CHECK-UNUSED-VALUE`. Re-adding a deleted element puts it at the end.
 - `Set.new([])` needs an expected type: `seen: Set[Int] = Set.new([])`
   (`CHECK-EMPTY-SET-TYPE`). A `Set[Float]` or `Set[List[Int]]` is
   `CHECK-SET-ELEMENT-TYPE`.
-- `for x in set` visits the elements in order. `puts(set)` prints `Set[1, 2]`.
-  There is no `==`, no index (`s[0]` is `CHECK-NOT-INDEXABLE`) and no JSON
-  encoding; `Test.eq` compares two sets in any order.
+- `for x in set` visits the elements in order. `puts(set)` prints
+  `Set[1, 2]`. There is no `==`, no index (`s[0]` is `CHECK-NOT-INDEXABLE`)
+  and no JSON encoding; `Test.eq` compares two sets in any order.
 
 ## Range
 
@@ -268,15 +206,14 @@ Range.include?(r: Range, value: Int) -> Bool
 Range.each(r: Range, f: Fn[Int, Void]) -> Void
 Range.first(r: Range) -> Result[Int]                     # error("the range is empty") when empty
 Range.last(r: Range) -> Result[Int]                      # last included value: (1...5).last is ok(4)
-Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.filter do ... end.first(3) (references/lazy.md)
+Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.filter do ... end.first(3) (lazy.md)
 ```
 
-- An end before the start is an empty range.
-- Ranges bind looser than every other operator: `0...n + 1` is `0...(n + 1)`.
-  They do not chain. Method calls need parentheses: `(1..5).to_a`,
-  `(0...n).include?(i)`.
-- A range prints as `1..5` or `1...5`, has `==` (same start, end, and kind), and
-  is not JSON-encodable.
+- An end before the start is an empty range. Ranges bind looser than every
+  other operator (`0...n + 1` is `0...(n + 1)`) and do not chain. Method calls
+  need parentheses: `(1..5).to_a`, `(0...n).include?(i)`.
+- A range prints as `1..5` or `1...5`, has `==` (same start, end, and kind),
+  and is not JSON-encodable.
 
 ## Result
 
@@ -295,76 +232,30 @@ The rules for `ok`, `error`, `try`, and Void are in `language.md`.
 ## Methods on builtin types
 
 `receiver.name(args)` calls the builtin of the receiver's static type, with the
-receiver as its first argument. There is no dynamic dispatch.
-
-The module is the type's name (`List[T]` uses `List`), except `Json`, which
-uses `JSON`. `Int` takes `times`, `upto`, `downto` and the bit functions;
-`Channel[T]` takes `send`, `recv`, `close` and `closed?`; the aliases below
-add more.
+receiver as its first argument; there is no dynamic dispatch. The module is the
+type's name (`List[T]` uses `List`), except `Json`, which uses `JSON`. `Int`
+takes `times`, `upto`, `downto` and the bit functions; `Channel[T]` takes
+`send`, `recv`, `close` and `closed?`.
 
 Without parentheses, `receiver.name` on a non-struct value is a method with no
-arguments: `s.length`, `xs.size`, `r.ok?`. On a struct, `.name` reads a field;
+arguments (`s.length`, `xs.size`, `r.ok?`). On a struct it reads a field;
 structs and enums have no methods. `.call(...)` invokes a function value. An
 unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the list of that
 type's methods.
 
-Ruby aliases:
+Ruby aliases, each the same call as its target:
 
-- **Receiver:** `String`
-  - **Alias:** `size`
-  - **Same as:** `String.length`
-
-- **Receiver:** `String`
-  - **Alias:** `to_i`, `to_i!`
-  - **Same as:** `String.to_int` (Result), `String.to_int!`
-
-- **Receiver:** `String`
-  - **Alias:** `to_f`, `to_f!`
-  - **Same as:** `String.to_float` (Result), `String.to_float!`
-
-- **Receiver:** `String`
-  - **Alias:** `strip`
-  - **Same as:** `String.trim`
-
-- **Receiver:** `String`
-  - **Alias:** `include?`, `start_with?`, `end_with?`
-  - **Same as:** `String.contains?`, `String.starts_with?`, `String.ends_with?`
-
-- **Receiver:** `String`
-  - **Alias:** `to_s`
-  - **Same as:** the same string
-
-- **Receiver:** `List`
-  - **Alias:** `length`
-  - **Same as:** `List.size`
-
-- **Receiver:** `List`
-  - **Alias:** `push`
-  - **Same as:** `List.append`
-
-- **Receiver:** `List[String]`
-  - **Alias:** `join`
-  - **Same as:** `String.join`
-
-- **Receiver:** `Int`
-  - **Alias:** `to_s`, `to_f`
-  - **Same as:** `String.from_int`, `Float.from_int`
-
-- **Receiver:** `Float`
-  - **Alias:** `to_s`
-  - **Same as:** `String.from_float`
-
-- **Receiver:** `Float`
-  - **Alias:** `to_i`, `to_i!`
-  - **Same as:** `Float.to_int` (Result), `Float.to_int!`
-
-- **Receiver:** any data value
-  - **Alias:** `to_s`
-  - **Same as:** the text `"#{x}"` gives
-
-- **Receiver:** any data value
-  - **Alias:** `inspect`
-  - **Same as:** the text `IO.inspect(x)` prints
+- `String`: `size` (`length`); `to_i`, `to_i!` (`to_int`, `to_int!`);
+  `to_f`, `to_f!` (`to_float`, `to_float!`); `strip` (`trim`);
+  `include?`, `start_with?`, `end_with?` (`contains?`, `starts_with?`,
+  `ends_with?`); `to_s` (the same string).
+- `List`: `length` (`size`); `push` (`append`); `join` on `List[String]`
+  (`String.join`).
+- `Int`: `to_s` (`String.from_int`); `to_f` (`Float.from_int`).
+- `Float`: `to_s` (`String.from_float`); `to_i`, `to_i!` (`Float.to_int`,
+  `Float.to_int!`).
+- Any data value: `to_s` (the text `"#{x}"` gives); `inspect` (the text
+  `IO.inspect(x)` prints).
 
 Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A
 negative literal receiver needs parentheses: `(-5).to_s`, since `-5.to_s` is
@@ -373,26 +264,26 @@ negative literal receiver needs parentheses: `(-5).to_s`, since `-5.to_s` is
 ## to_s and inspect
 
 - Every data value has `to_s`: numbers, `Bool`, `String`, `nil`, `Json`, and
-  lists, maps, sets, Results, structs, and enums built from those. `x.to_s` is
-  the text `"#{x}"` gives: a String as it is, a `Json` as its JSON text,
-  anything else in its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`,
-  `Item(name: "a")`, `Shape.Box(1, 2)`). Inside a list or Result, `Json` shows
-  as `<Json>`, so `puts(JSON.parse(s))` prints `ok(<Json>)`.
+  lists, maps, sets, Results, structs and enums built from those. `x.to_s` is
+  the text `"#{x}"` gives: a String as it is, a `Json` as its JSON text, else
+  its `IO.inspect` form (`true`, `nil`, `[1, 2]`, `ok(3)`, `Item(name: "a")`,
+  `Shape.Box(1, 2)`). Inside a list or Result, `Json` shows as `<Json>`, so
+  `puts(JSON.parse(s))` prints `ok(<Json>)`.
 - Functions, tasks, and resource handles (sockets, files, processes, HTTP
-  values) have no `to_s`. Printing or interpolating one is
-  `CHECK-TYPE-MISMATCH`; `.to_s` on one is `CHECK-UNKNOWN-METHOD`.
+  values) have no `to_s`: printing or interpolating one is
+  `CHECK-TYPE-MISMATCH`, and `.to_s` on one is `CHECK-UNKNOWN-METHOD`.
 - `nil.to_s` is `"nil"`; `puts([1, 2])` writes `[1, 2]`. A struct field named
   `to_s` is read as the field.
 - `x.inspect` is the `IO.inspect` form as a String. It differs from `to_s` for
   strings, which keep their quotes (`"a".inspect` is the quoted text), and for
-  `Json`, which gives `<Json>`. The debug form is for display, not guaranteed to
-  be valid source.
+  `Json`, which gives `<Json>`. The debug form is for display, not guaranteed
+  to be valid source.
 
 ## Other rules
 
-- Values never change, so a method never changes its receiver. A builtin without
-  effects whose non-Void result is ignored is `CHECK-UNUSED-VALUE`. `!`-suffixed
-  functions and builtins that take a function are exempt.
-- A `?` or `!` suffix belongs to a function name, even with a space before `(`.
-  `a!=b` is `a != b`. Variables, parameters, and fields cannot take those
+- Values never change, so a method never changes its receiver. A builtin
+  without effects whose non-Void result is ignored is `CHECK-UNUSED-VALUE`.
+  `!`-suffixed functions and builtins that take a function are exempt.
+- A `?` or `!` suffix belongs to a function name, even with a space before
+  `(`. `a!=b` is `a != b`. Variables, parameters, and fields cannot take those
   suffixes. By convention `?` means Bool and `!` halts on failure.

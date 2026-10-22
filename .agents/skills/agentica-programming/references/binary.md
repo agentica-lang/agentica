@@ -2,8 +2,8 @@
 
 `import Binary from "std/binary"`. Binary data is a `List[Int]` with each item
 in `0 .. 255`, like `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and
-`Process.read_bytes` give. The module is written in Agentica on the `Int` and
-`Float` bit builtins (`references/builtins.md`).
+`Process.read_bytes` give. The module is written in Agentica on the bit builtins
+below.
 
 ```text
 Binary.read_u8(data: List[Int], offset: Int) -> Result[Int]
@@ -65,3 +65,35 @@ end
 
 It prints `[2, 1, 0, 0, 0, 0, 0, 0, 248, 63]`, `ok(513)`, `ok(1.5)` and
 `error("u32 at offset 8 is outside a list of length 10")`.
+
+## Bit operations
+
+```text
+Int.bit_and(a: Int, b: Int) -> Int                       # 64-bit two's complement; never fails
+Int.bit_or(a: Int, b: Int) -> Int
+Int.bit_xor(a: Int, b: Int) -> Int
+Int.bit_not(a: Int) -> Int                               # -1 - a
+Int.shift_left(a: Int, count: Int) -> Int                # wraps; 64 or more gives 0
+Int.shift_right(a: Int, count: Int) -> Int               # arithmetic, rounds down; 64 or more gives 0 or -1
+Int.shift_right_unsigned(a: Int, count: Int) -> Int      # logical; 64 or more gives 0
+Float.to_bits(x: Float) -> Int                           # binary64 bits as an Int; every NaN gives 9221120237041090560
+Float.from_bits(bits: Int) -> Float                      # any Int; any NaN pattern gives NaN
+Float.to_bits32(x: Float) -> Int                         # rounds to binary32; 0..4294967295; every NaN gives 2143289344
+Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0..4294967295 halt (RUNTIME-INVALID-NUMBER)
+```
+
+- A negative shift count halts with `RUNTIME-INVALID-COUNT` at the count.
+- The core has no hex literals: write masks in decimal (`255`, `65535`).
+- `x.shift_right(i).bit_and(1) == 1` tests bit `i`; `x.to_bits < 0` tests the
+  sign of a Float (not NaN: use `x != x`).
+
+## Text bytes and hashing
+
+- `String.from_bytes` decodes strictly. A byte read can split a UTF-8
+  character, so decode complete sequences only, and switch to text reads only
+  at character boundaries. `String.to_bytes(s)` encodes text for
+  `TCP.send_bytes`, `File.write_bytes` and the like.
+- `Crypto.sha256(data: List[Int]) -> List[Int]` hashes bytes (a `List[Int]`, as
+  the byte reads give) with OpenSSL and returns the 32 digest bytes. An item
+  outside 0..255 halts (`RUNTIME-INVALID-NUMBER`). Its time grows with the list.
+  `Crypto` is a reserved type name.
