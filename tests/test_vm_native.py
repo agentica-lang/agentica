@@ -1,11 +1,13 @@
 """Native calls (the extern blocks of docs/grammar/05-syntax.md and 06d-io-and-network.md) through the product CLI.
 
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows) for
-each module run, so every C type crosses a real ABI. Native calls exist on Linux x86_64 and Windows x64 for now:
+each module run, so every C type crosses a real ABI; two cases also call the system libsqlite3.so.0 on Linux, which
+CI installs. Native calls exist on Linux x86_64 and Windows x64 for now:
 elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
 test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* has
 no Windows port yet (#568). Tests assert codes and spans, never messages (AGENTS.md).
 """
+import ctypes
 import json
 import platform
 import subprocess
@@ -13,7 +15,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, known_issue, run, tool, vm_environment
+from tests.agentica_test import (FIXTURES, TARGET_OS, WINDOWS, cli, host_only, known_issue, require, run, tool,
+                                 vm_environment)
 
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64"))
@@ -850,3 +853,62 @@ def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
         assert errors == {"native_test.agc": "RUNTIME-NATIVE-DENIED", "plain_test.agc": None}, words
         assert (report["passed"], report["failed"]) == (1, 0), words
     assert agentica("test", cwd=tmp_path).code == 0
+
+
+# A real library, not the peer: the system SQLite of Linux. sqlite3_malloc and sqlite3_free are a resource, and
+# sqlite3_msize reads the block (the full open/exec/query case waits for the out parameters of FFI-a PR 3).
+SQLITE_LIBRARY = "libsqlite3.so.0"
+
+SQLITE_EXTERN = """extern "%s"
+  resource Block, free: sqlite3_free
+  def sqlite3_libversion_number() -> C.Int
+  def sqlite3_libversion() -> C.String
+  def sqlite3_complete(sql: C.String) -> C.Int
+  def sqlite3_malloc(size: C.Int) -> Block
+  def sqlite3_msize(block: Block) -> C.Int64
+end
+
+""" % SQLITE_LIBRARY
+
+# libsqlite3.so.0 is a Linux system library: CI installs libsqlite3-0, and a missing library fails there and skips
+# on a local run. Windows has no such library; the systems without native calls skip with the port issue (#548).
+NO_SYSTEM_SQLITE = host_only(WINDOWS, "Windows has no libsqlite3.so.0 (a Linux system library)")
+
+
+@pytest.fixture(scope="module")
+def sqlite():
+    """Skip (a failure in CI) when the system SQLite library is not installed."""
+    try:
+        ctypes.CDLL(SQLITE_LIBRARY)
+    except OSError:
+        require(False, SQLITE_LIBRARY + " is required (Debian: apt install libsqlite3-0)")
+
+
+@NATIVE_CALLS
+@NO_SYSTEM_SQLITE
+def test_the_system_sqlite_answers_its_version_and_whether_a_statement_is_complete(tmp_path, sqlite):
+    main = """def main() -> Void
+  puts(sqlite3_libversion_number() >= 3_000_000)
+  puts(sqlite3_libversion().start_with?("3."))
+  puts(sqlite3_complete("select 1;"))
+  puts(sqlite3_complete("select"))
+end
+"""
+    result = agentica(program(tmp_path, SQLITE_EXTERN + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "true\ntrue\n1\n0\n", "")
+
+
+@NATIVE_CALLS
+@NO_SYSTEM_SQLITE
+def test_a_block_of_sqlite_malloc_is_a_resource_that_close_frees(tmp_path, sqlite):
+    main = """def main() -> Void
+  block = sqlite3_malloc(64).unwrap!
+  puts(sqlite3_msize(block) >= 64)
+  Native.close(block)
+  Native.close(block)
+  puts(sqlite3_msize(block))
+end
+"""
+    result = agentica("--json", program(tmp_path, SQLITE_EXTERN + main))
+    assert diagnostic(result, 1)[0] == "RUNTIME-NATIVE-CLOSED"
+    assert result.stdout == "true\n"
