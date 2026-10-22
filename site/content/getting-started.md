@@ -187,6 +187,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--deny-native` | refuses a program that declares an `extern` block or calls a `Native.wait_*` before it runs (`RUNTIME-NATIVE-DENIED`, exit 2). Every `--deny-*` flag turns it on |
 | `--sandbox` | all the `--deny-*` flags: use it to run code you do not trust. A program that can start processes escapes a single flag; use `--sandbox`, or add `--deny-run`. `agentica test` gives them to the test files, the step programs and the programs under test, not to its runner |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
+| `--no-cache` | compiles the program again and does not keep its bytecode (see [Bytecode cache](#bytecode-cache)) |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
@@ -201,6 +202,12 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--version` | prints the version |
 
 A flag wins over its environment variable.
+
+## Bytecode cache
+
+`agentica FILE.agc` and `agentica test` keep the compiled program of each root file in a folder `.agc_cache/` next to it, like Python's `__pycache__`, and read it back while the sources are the same. A program that imports `std/analysis` starts in about a tenth of a second instead of six. The entry holds the SHA-256 of every file the program was built from (`agentica.toml`, `agentica.lock` and the names in `agc_libs/` count too) and the version and build of the binary, so any change to them compiles the program again and replaces the entry. There is one entry for each root file and nothing deletes it, so remove the folder when you like. Put `.agc_cache/` in your `.gitignore` (the folder has a `.gitignore` of its own, which `git` honours).
+
+`AGENTICA_CACHE_DIR` names another folder for all the entries. `--no-cache` skips the cache for one run. If the folder cannot be written the program runs without the cache. `check`, `compile`, `--dump`, `--dump-ir` and `run -- FILE.agcb` do not use it, and a program that does not compile is never cached. The `--deny-*` flags are for the program, not for the compiler, so the compiler still reads and writes the cache under them.
 
 ## Test
 

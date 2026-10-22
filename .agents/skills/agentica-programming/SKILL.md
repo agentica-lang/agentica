@@ -38,7 +38,9 @@ check a signature with `agentica help NAME`.
    each implies `--deny-native`), `--deny-native` (refuse native code),
    `--sandbox` (all of them, for untrusted code; a program that can start
    processes escapes a single flag, so use `--sandbox` or add `--deny-run`),
-   `--seed N`, `--max-steps N`.
+   `--seed N`, `--max-steps N`. `agentica F` keeps the bytecode in
+   `.agc_cache/` next to F (`.gitignore` it) while the sources are the same;
+   `--no-cache` skips it, `AGENTICA_CACHE_DIR` moves it.
 
 ## Cheat sheet
 

@@ -102,7 +102,7 @@ AREAS = {
             "tests/test_spec_refs.py", "tests/test_spec_partial.py", "tests/test_examples.py", "tests/test_modules.py",
             "tests/test_source_utf8.py", "tests/test_bdd.py", "tests/test_bdd_posix.py",
             "tests/test_bdd_integration.py", "tests/test_unit_test.py", "tests/test_vm_diff_8.py",
-            "tests/test_single_binary.py", "tests/test_stdlib_distribution.py",
+            "tests/test_single_binary.py", "tests/test_stdlib_distribution.py", "tests/test_bytecode_cache.py",
         ],
     ),
     "spec": (

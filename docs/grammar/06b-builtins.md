@@ -517,6 +517,20 @@ function) replaces the caller's frame and does not count, so deep tail recursion
 runs. A call inside a larger expression, such as `return 1 + f(n - 1)`, and a
 call of a builtin are not tail calls.
 
+### The bytecode cache
+
+`agentica FILE.agc` and each test file of `agentica test` keep their compiled
+program in `.agc_cache/` next to the root file (the folder `AGENTICA_CACHE_DIR`
+names, when set). The entry holds the bytes `agentica compile` writes, the
+version and build of the binary, and the SHA-256 of every file the front end
+read, with `agentica.toml`, `agentica.lock` and the `pkg/` search folders
+counted. A lookup hashes them again; any difference, or a damaged entry, compiles
+the program again and replaces the entry. A run that hits has no
+front-end diagnostics, since the program checked when it was cached. `check`,
+`compile`, `--dump`, `--dump-ir`, `check --stdin` and `run` do not use it;
+`--no-cache` skips it for one run; a folder that cannot be written is not an
+error. The `--deny-*` flags do not apply to it: they are for the program.
+
 ### Running a compiled program
 
 `agentica compile file.agc -o file.agcb` writes a program as bytecode, and

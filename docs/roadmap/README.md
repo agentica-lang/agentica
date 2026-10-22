@@ -47,7 +47,8 @@ First batch, as soon as possible:
    is done (#561), and PR 6 (`agentica test` takes the deny flags) is done
    (#560).
 2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
-   bytecode, so unchanged programs skip the front end.
+   bytecode, so unchanged programs skip the front end. Done: `.agc_cache/` next
+   to the sources, for `agentica FILE.agc` and `agentica test`.
 3. Packages [45](../future/45-packages.md): done. 45b (`install`, the fetch),
    45c (`add`, `update`) and 45d (`vendor`) are built; FFI-b is the rest.
 4. FFI-b: native libraries in packages (`[native]` in `agentica.toml`, hashes

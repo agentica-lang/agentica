@@ -13,7 +13,7 @@ import Texts from "cli_text"
 ONCE = {
   "--version": 0, "--deny-run": 0, "--deny-net": 0, "--deny-fs": 0, "--deny-env": 0, "--deny-native": 0,
   "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--dump": 0, "--dump-ir": 0,
-  "--ai": 0, "--json": 0,
+  "--ai": 0, "--json": 0, "--no-cache": 0,
 }
 DIGITS = "0123456789"
 
@@ -27,6 +27,7 @@ export struct Options
   deny: List[String]
   dump: Bool
   dump_ir: Bool
+  no_cache: Bool
   steps: List[String]
   words: List[String]
 end
@@ -55,6 +56,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     deny: [],
     dump: false,
     dump_ir: false,
+    no_cache: false,
     steps: [],
     words: [],
   )
@@ -123,6 +125,7 @@ def apply(options: Options, word: String, value: String) -> Applied
   case word
     "--dump" -> return Applied.Changed(options.with(dump: true))
     "--dump-ir" -> return Applied.Changed(options.with(dump_ir: true))
+    "--no-cache" -> return Applied.Changed(options.with(no_cache: true))
     "--ai" -> return Applied.Changed(options.with(style: "ai"))
     "--json" -> return Applied.Changed(options.with(style: "json"))
     "--steps" -> return Applied.Changed(options.with(steps: options.steps.push(value)))
