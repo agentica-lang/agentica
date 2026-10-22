@@ -2,7 +2,7 @@
  * The platform half of the native calls (docs/grammar/06d-io-and-network.md,
  * "Native code"): open a library, find a symbol and call it with C values.
  * ffi_libffi.c does it with the system loader and libffi where the build has
- * libffi (AGC_FFI: Linux x86_64 and Windows x64 for now); ffi_none.c says no
+ * libffi (AGC_FFI: Linux x86_64, Windows x64 and macOS); ffi_none.c says no
  * elsewhere. No VM values.
  */
 #ifndef AGC_FFI_OS_H
@@ -52,9 +52,10 @@ void agc_ffi_discard(agc_ffi_call *call);
 void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result);
 
 /* The descriptor that a Native.wait_* polls in place of FD, which stays as the native code left it: a new open of
-   the same file with FD's access mode (non-blocking, close-on-exec), so FD's own flags do not change. A socket, and
-   a file that cannot be opened again (an eventfd, a FIFO with no reader), get a duplicate instead, which shares FD's
-   flags: polling puts both in non-blocking mode. -1 with errno when neither works (EBADF for a closed FD, ENOSYS in a
+   the same file with FD's access mode (non-blocking, close-on-exec), so FD's own flags do not change. A socket, a
+   pipe on macOS, and a file that cannot be opened again (an eventfd, a FIFO with no reader), get a duplicate instead,
+   which shares FD's flags: polling a socket puts both in non-blocking mode (the macOS loop polls a pipe with poll(2),
+   which leaves its flags alone). -1 with errno when neither works (EBADF for a closed FD, ENOSYS in a
    build without native calls, and on Windows for now). wait_fd_close closes what wait_fd_open returned. */
 int agc_ffi_wait_fd_open(int fd);
 void agc_ffi_wait_fd_close(int fd);

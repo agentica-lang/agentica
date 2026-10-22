@@ -20,7 +20,7 @@ def main() -> Void
 end
 ```
 
-- Native calls work on Linux x86_64 and Windows x64 for now, and `Native.wait_*` on Linux x86_64 (on Windows it returns an error). On other systems a program that declares an extern function or calls a `Native.*` builtin is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
+- Native calls work on Linux x86_64, Windows x64 and macOS (x86_64 and arm64), and `Native.wait_*` on Linux x86_64 and macOS (on Windows it returns an error). On other systems a program that declares an extern function or calls a `Native.*` builtin is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
 - Native code runs with your program's rights, and a wrong signature is undefined behavior in C: declare each function exactly as its C header does.
 - Put `##` docs on the `def` lines inside the block.
 
@@ -81,7 +81,7 @@ A C function that gives a value through a pointer, such as `int sqlite3_open(con
 
 ## A real library: SQLite
 
-The raw `extern` layer stays private, and safe functions on top of it return `Result`. This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on Windows, give the name or absolute path of a SQLite DLL.
+The raw `extern` layer stays private, and safe functions on top of it return `Result`. This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on macOS the system one is `libsqlite3.dylib`, and on Windows, give the name or absolute path of a SQLite DLL.
 
 ```agentica {mode="check"}
 SQLITE_OK = 0
@@ -148,7 +148,7 @@ end
 
 ## The block
 
-- The library is a plain string: a name without `/` (`"libm.so.6"`), which the system looks up, or an absolute path (`"/opt/tool/libtool.so"`). Anything else is `PARSE-EXTERN-LIBRARY`. The working directory is never searched. On Windows a name (`"ucrtbase.dll"`) is looked up next to `agentica.exe` and in the system folder, not in `PATH`; write an absolute path with escaped backslashes (`"C:\\libs\\x.dll"`), and the DLLs it needs are searched in its folder and the default folders, never in `PATH` (a MinGW DLL that needs `libgcc_s_seh-1.dll` must have it next to it).
+- The library is a plain string: a name without `/` (`"libm.so.6"`), which the system looks up, or an absolute path (`"/opt/tool/libtool.so"`). Anything else is `PARSE-EXTERN-LIBRARY`. The working directory is never searched. On Windows a name (`"ucrtbase.dll"`) is looked up next to `agentica.exe` and in the system folder, not in `PATH`; write an absolute path with escaped backslashes (`"C:\\libs\\x.dll"`), and the DLLs it needs are searched in its folder and the default folders, never in `PATH` (a MinGW DLL that needs `libgcc_s_seh-1.dll` must have it next to it). On macOS a name (`"libsqlite3.dylib"`) is looked up in `DYLD_LIBRARY_PATH`, then in `/usr/lib`, where the system libraries are found even though their files live in the dyld shared cache (libc and libm are `"libSystem.B.dylib"`); a library elsewhere, such as Homebrew's, takes its absolute path (`"/opt/homebrew/lib/libpq.dylib"`).
 - The library opens at the first call of one of its functions and stays open. A library, dependency or function that is not found fails that call with `RUNTIME-NATIVE-LOAD`.
 - Names are C names, without `?` or `!` (`PARSE-EXTERN-NAME`); parameters take no default (`PARSE-EXTERN-DEFAULT`); only the types above and the block's resources cross (`PARSE-EXTERN-TYPE`).
 - `export def` makes a function importable from other files. The functions take the place of `def` functions in the declaration order, and resources the place of types.
@@ -207,9 +207,9 @@ end
 
 A library's connect loop waits the same way, with `try Native.wait_readable(socket, 5_000)` between its polls.
 
-- After `timeout_ms` (positive) the result is `error("native: timed out")`. A timeout that is not positive, a negative descriptor, and one that cannot be polled (closed, a regular file, `/dev/null`) give an error that starts with `native: `.
+- After `timeout_ms` (positive) the result is `error("native: timed out")`. A timeout that is not positive, a negative descriptor, and one that cannot be polled (closed, a regular file, `/dev/null` on Linux) give an error that starts with `native: `. On macOS `/dev/null` is always ready.
 - An error or a hang-up on the descriptor ends the wait with `ok`, as `poll(2)` does: the library's next call reports it.
-- The wait watches a new open of the descriptor's file, so the library keeps its descriptor and its flags, and two tasks may wait on one descriptor. A socket, or a file that cannot be opened again (an eventfd), is watched through a duplicate, which puts the descriptor in non-blocking mode.
+- The wait watches a new open of the descriptor's file, so the library keeps its descriptor and its flags, and two tasks may wait on one descriptor. A socket, or a file that cannot be opened again (an eventfd), is watched through a duplicate, which puts the descriptor in non-blocking mode. On macOS a pipe is watched through a duplicate too, and keeps its flags.
 - If the library closes the descriptor during a wait, the wait goes on and ends at its timeout (`native: timed out`) unless the file becomes ready.
 - A cancel stops the wait; the end of the program does not wait for it.
 - `--deny-native` refuses a program that calls them, as it refuses extern functions: a descriptor comes from native code.

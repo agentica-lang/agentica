@@ -95,7 +95,8 @@ typedef struct {
   agc_poller *poller;
   /* The polled descriptor, until the poller takes it. */
   int fd;
-  /* The errno of a poller that could not be made (a regular file or /dev/null cannot be polled: EPERM), else 0. */
+  /* The errno of a poller that could not be made, else 0: a regular file cannot be polled (EPERM on Linux, EINVAL on
+     macOS). */
   int err;
   bool writing;
 } native_wait;

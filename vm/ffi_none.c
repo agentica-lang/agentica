@@ -1,6 +1,6 @@
 /*
- * The native calls of a build without libffi (every system but Linux x86_64
- * and Windows x64 for now, issue #548): nothing can be prepared, so a program
+ * The native calls of a build without libffi (every system but Linux x86_64,
+ * Windows x64 and macOS): nothing can be prepared, so a program
  * with extern functions is refused at load (agc_ffi_refusal). Adapter layer;
  * the other half is ffi_libffi.c.
  */

@@ -1,11 +1,15 @@
 /*
- * The native calls of a build with libffi (AGC_FFI: Linux x86_64 and Windows
- * x64 for now): the loader (dlopen and dlsym, or LoadLibraryExW and
+ * The native calls of a build with libffi (AGC_FFI: Linux x86_64, Windows x64
+ * and macOS): the loader (dlopen and dlsym, or LoadLibraryExW and
  * GetProcAddress) finds the function, ffi_prep_cif describes its signature
  * once and ffi_call calls it. Adapter layer; ffi.c converts the values and
  * ffi_none.c is the other half. Design: docs/grammar/06d-io-and-network.md.
  */
 #ifdef AGC_FFI
+#ifdef __APPLE__
+/* F_GETPATH. */
+#define _DARWIN_C_SOURCE
+#endif
 #include "ffi_os.h"
 #include "value.h"
 
@@ -21,8 +25,12 @@
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+/* The paths that the POSIX half builds: PATH_MAX on macOS, which F_GETPATH needs. */
+#define PATH_BUF 1024
 #endif
 
 /* The cif points at types, so both live in one block. */
@@ -135,10 +143,44 @@ static void *library_symbol(void *lib, const char *library, const char *symbol, 
 /* LoadLibraryExW counts references like dlopen: freeing drops only this one. */
 static void library_close(void *lib) { (void)FreeLibrary((HMODULE)lib); }
 #else
+#ifdef __APPLE__
+/* dyld looks a bare name up in DYLD_LIBRARY_PATH, then in /usr/lib (on disk or in the dyld shared cache, where the
+   system libraries live), then in the working directory, which Linux never searches. As /usr/lib/NAME it is looked up
+   the same way without the working directory: DYLD_LIBRARY_PATH applies to the last component of any path. NULL with
+   a message in ERROR when the path does not fit in BUF (PATH_BUF bytes). */
+static const char *loader_path(const char *library, char *buf, char *error, size_t size) {
+  if (strchr(library, '/')) return library;
+  int n = snprintf(buf, PATH_BUF, "/usr/lib/%s", library);
+  if (n > 0 && n < PATH_BUF) return buf;
+  snprintf(error, size, "cannot open %s: the name is too long", library);
+  return NULL;
+}
+
+/* macOS has no /proc: F_GETPATH names the file of FD (a terminal, say). A pipe and a socket have no name. */
+static bool fd_path(int fd, char *buf, size_t size) { return size >= PATH_MAX && fcntl(fd, F_GETPATH, buf) != -1; }
+#else
+/* dlopen searches a bare name in LD_LIBRARY_PATH, the cache and the system folders, never in the working directory. */
+static const char *loader_path(const char *library, char *buf, char *error, size_t size) {
+  (void)buf;
+  (void)error;
+  (void)size;
+  return library;
+}
+
+/* /proc/self/fd/N opens the file of FD again (a pipe, a terminal), with an open file description of its own. */
+static bool fd_path(int fd, char *buf, size_t size) {
+  int n = snprintf(buf, size, "/proc/self/fd/%d", fd);
+  return n > 0 && (size_t)n < size;
+}
+#endif
+
 /* RTLD_NOW binds every symbol of the library at once, so a missing dependency is a load error here and not a crash at
    its first use. */
 static void *library_open(const char *library, char *error, size_t size) {
-  void *lib = dlopen(library, RTLD_NOW | RTLD_LOCAL);
+  char buf[PATH_BUF];
+  const char *path = loader_path(library, buf, error, size);
+  if (!path) return NULL;
+  void *lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
   if (!lib) {
     const char *why = dlerror();
     snprintf(error, size, "cannot open %s: %s", library, why ? why : "unknown error");
@@ -238,15 +280,13 @@ int agc_ffi_wait_fd_open(int fd) {
 
 void agc_ffi_wait_fd_close(int fd) { (void)fd; }
 #else
-/* /proc/self/fd/N opens the file again (a pipe, a terminal), with an open file description of its own; a socket
-   cannot be opened that way. */
+/* A file with a path (fd_path) is opened again; a socket, and on macOS a pipe, cannot be opened that way. */
 int agc_ffi_wait_fd_open(int fd) {
   int flags = fcntl(fd, F_GETFL);
   if (flags < 0) return -1;
   struct stat info;
-  if (fstat(fd, &info) == 0 && !S_ISSOCK(info.st_mode)) {
-    char path[32];
-    snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
+  char path[PATH_BUF];
+  if (fstat(fd, &info) == 0 && !S_ISSOCK(info.st_mode) && fd_path(fd, path, sizeof path)) {
     int again = open(path, (flags & O_ACCMODE) | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
     if (again >= 0) return again;
   }

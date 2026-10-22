@@ -53,7 +53,6 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 KNOWN_ISSUES: dict[int, str] = {
     568: "the bytecode cache trusts any real folder on Windows (no owner or ACL check), and its link cases have no test; "
          "Native.wait_* has no Windows port (libuv polls only sockets there)",
-    548: "native calls (extern functions) are not built on macOS yet; macOS refuses them at load",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
@@ -68,8 +67,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
-# descriptor flags and colon names (and the system libraries of Linux, such as libsqlite3.so.0 in
-# tests/test_vm_native.py); macOS lacks /dev/full and non-UTF-8 names; both lack sched_setaffinity; the other
+# descriptor flags and colon names (and a system SQLite library, which
+# tests/test_vm_native.py calls); macOS lacks /dev/full and non-UTF-8 names; both lack sched_setaffinity; the other
 # systems lack the Windows-only modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({

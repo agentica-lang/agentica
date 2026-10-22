@@ -91,7 +91,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   agentica.c      # the binary's main: `run` (the VM with its flags), else the front end in a first runtime, retired at the hand-off, then the program in a second
   embedded.h      # the symbols of the generated embedded.s: the front end, the BDD runner and step program, and the std/ sources (references/vm-build.md)
   tools/          # check-layers.sh and its self-test, gen-embedded.sh (references/vm-build.md)
-  ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, resources, Native.wait_*, the refusal at load, libffi on Linux x86_64 and Windows x64 (references/vm-core.md)
+  ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, resources, Native.wait_*, the refusal at load, libffi on Linux x86_64, Windows x64 and macOS (references/vm-core.md)
   compute.c       # the compute pool of `compute def` calls: one thread per scheduler, FIFO, apart from the libuv pool (docs/vm/16-architecture.md §16.9)
   third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl, libffi (Linux x86_64 and Windows x64) (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
   tests/          # C tests, plain asserts (references/vm-tests.md)
