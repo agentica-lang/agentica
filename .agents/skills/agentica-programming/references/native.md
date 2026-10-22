@@ -40,9 +40,10 @@ end
 - Memory C returns: `Native.string_at(p) -> String` (up to the NUL),
   `Native.string_at(p, length)` (exactly `length` bytes, NULs included) and
   `Native.bytes_at(p, length) -> List[Int]` copy it; bytes that are not UTF-8
-  become U+FFFD. NULL is `RUNTIME-NATIVE-NULL` (test with `Native.null?`
-  first), a negative length `RUNTIME-INVALID-COUNT`; a length past what C owns
-  is undefined behavior. `Native.pointer(n)` is the pointer with value `n`
+  become U+FFFD. NULL with length 0 reads as empty (an empty SQLite blob);
+  other NULL is `RUNTIME-NATIVE-NULL` (test with `Native.null?` first), checked
+  before a negative length (`RUNTIME-INVALID-COUNT`); a length past what C
+  owns is undefined behavior. `Native.pointer(n)` is the pointer with value `n`
   (`SQLITE_TRANSIENT` is `Native.pointer(-1)`). A `char **` out parameter
   read with `string_at` is then freed by its C function (`sqlite3_free`).
 - `[export] resource Db, free: db_close` in a block declares a resource type,

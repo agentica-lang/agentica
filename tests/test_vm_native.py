@@ -457,7 +457,7 @@ end
 
 
 # Native.string_at reads up to the NUL, or exactly the length given (the NUL and a cut character included, which
-# becomes U+FFFD); Native.bytes_at copies bytes. Native.pointer makes the pointer of an integer, which C sees as that
+# becomes U+FFFD); Native.bytes_at copies bytes. NULL with length 0 is empty, as C means it. Native.pointer makes the pointer of an integer, which C sees as that
 # integer, and a pointer's value makes the same pointer again.
 @NATIVE_CALLS
 def test_memory_that_c_returns_is_read_as_text_or_bytes(tmp_path, peer):
@@ -469,6 +469,8 @@ def test_memory_that_c_returns_is_read_as_text_or_bytes(tmp_path, peer):
   puts(Native.string_at(p, 0).size)
   puts(Native.bytes_at(p, 12))
   puts(Native.bytes_at(p, 0))
+  puts(Native.bytes_at(Native.null(), 0))
+  puts(Native.string_at(Native.null(), 0).size)
   puts(peer_ptr_value(Native.pointer(-1)))
   puts(peer_ptr_value(Native.pointer(4096)))
   puts(Native.null?(Native.pointer(0)))
@@ -479,16 +481,18 @@ end
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         "héllo", '"héllo\\u0000world"', "h\ufffd", "0", "[104, 195, 169, 108, 108, 111, 0, 119, 111, 114, 108, 100]",
-        "[]", "-1", "4096", "true", "42", "",
+        "[]", "[]", "0", "-1", "4096", "true", "42", "",
     ]
 
 
-# A read at NULL is RUNTIME-NATIVE-NULL at the pointer, and a negative length RUNTIME-INVALID-COUNT at the length.
+# A read at NULL is RUNTIME-NATIVE-NULL at the pointer, and a negative length RUNTIME-INVALID-COUNT at the length; the
+# pointer is checked first.
 @NATIVE_CALLS
 @pytest.mark.parametrize("call, code, argument", [
     ("Native.string_at(Native.null())", "RUNTIME-NATIVE-NULL", "Native.null()"),
     ("Native.string_at(Native.null(), 1)", "RUNTIME-NATIVE-NULL", "Native.null()"),
     ("Native.bytes_at(Native.pointer(0), 1)", "RUNTIME-NATIVE-NULL", "Native.pointer(0)"),
+    ("Native.bytes_at(Native.null(), -1)", "RUNTIME-NATIVE-NULL", "Native.null()"),
     ("Native.string_at(peer_text(), -1)", "RUNTIME-INVALID-COUNT", "-1"),
     ("Native.bytes_at(peer_text(), -1)", "RUNTIME-INVALID-COUNT", "-1"),
 ])
@@ -503,7 +507,7 @@ def test_a_read_at_null_or_with_a_negative_length_stops_the_run(tmp_path, peer, 
 # The memory builtins are native code too: a program that calls only them is refused at load like one with extern
 # functions.
 def test_deny_native_refuses_the_memory_builtins(tmp_path):
-    text = 'def main() -> Void\n  puts("started")\n  puts(Native.null?(Native.pointer(0)))\nend\n'
+    text = 'def main() -> Void\n  puts("started")\n  puts(Native.string_at(Native.pointer(0), 0))\nend\n'
     result = agentica("--json", "--deny-native", program(tmp_path, text))
     assert result.stdout == ""
     assert diagnostic(result, 2)[0] == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED")
@@ -1187,7 +1191,7 @@ SQLITE_MEMORY_EXTERN = SQLITE_OUT_EXTERN.replace("  def sqlite3_column_text(stmt
 
 # A blob and a text bound with SQLITE_TRANSIENT (SQLite copies them: the C.String and C.Bytes copies live only during
 # the call) come back through sqlite3_column_blob and sqlite3_column_text with their lengths; a row of SQL NULLs gives
-# NULL pointers. sqlite3_exec writes its error message to an out pointer, which string_at reads and sqlite3_free
+# NULL pointers, and an empty blob a NULL pointer with length 0, which reads as []. sqlite3_exec writes its error message to an out pointer, which string_at reads and sqlite3_free
 # frees; a statement that works leaves it NULL.
 @NATIVE_CALLS
 @NO_SYSTEM_SQLITE
@@ -1210,6 +1214,12 @@ def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tm
   puts(sqlite3_step(query))
   puts([Native.null?(sqlite3_column_blob(query, 0)), Native.null?(sqlite3_column_text(query, 1))])
   Native.close(query)
+  empty = sqlite3_prepare_v2(db, "select x''", -1).stmt
+  puts(sqlite3_step(empty))
+  blob_at = sqlite3_column_blob(empty, 0)
+  puts(Native.null?(blob_at))
+  puts(Native.bytes_at(blob_at, sqlite3_column_bytes(empty, 0)))
+  Native.close(empty)
   failed = sqlite3_exec(db, "select from nowhere", Native.null(), Native.null())
   puts(failed.result)
   puts(Native.string_at(failed.errmsg).end_with?("syntax error"))
@@ -1221,6 +1231,6 @@ end
     result = agentica(program(tmp_path, SQLITE_MEMORY_EXTERN + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "0", "[0, 0]", "101", "0", "100", "[0, 1, 127, 128, 255]", "héllo", "héllo", "100", "[true, true]", "1", "true",
-        "true", "",
+        "0", "[0, 0]", "101", "0", "100", "[0, 1, 127, 128, 255]", "héllo", "héllo", "100", "[true, true]", "100",
+        "true", "[]", "1", "true", "true", "",
     ]

@@ -336,7 +336,7 @@ builtin Map.size forms=1
 builtin Map.values forms=1
   Map.values(map: Map[K, V]) -> List[V] shape=(Map(Var(K), Var(V))) -> List(Var(V)) rule=MapValues impl="Map.values" effects=[] desc="Return values in insertion order."
 builtin Native.bytes_at forms=1
-  Native.bytes_at(pointer: C.Pointer, length: Int) -> List[Int] shape=(Opaque(C.Pointer), Int) -> List(Int) rule=Plain impl="Native.bytes_at" effects=["native"] desc="Copy length bytes at the C.Pointer into a list; NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT, and a length past the memory undefined behavior."
+  Native.bytes_at(pointer: C.Pointer, length: Int) -> List[Int] shape=(Opaque(C.Pointer), Int) -> List(Int) rule=Plain impl="Native.bytes_at" effects=["native"] desc="Copy length bytes at the C.Pointer into a list; NULL with length 0 is [], other NULL is RUNTIME-NATIVE-NULL, then a negative length RUNTIME-INVALID-COUNT; a length past the memory is undefined."
 builtin Native.close forms=1
   Native.close(resource: R) -> Void shape=(Var(R)) -> Void rule=NativeClose impl="Native.close" effects=["native"] desc="Free a resource of an extern block with its free function, once; a closed resource is left as it is and a native call with it fails with RUNTIME-NATIVE-CLOSED."
 builtin Native.null forms=1
@@ -346,8 +346,8 @@ builtin Native.null? forms=1
 builtin Native.pointer forms=1
   Native.pointer(address: Int) -> C.Pointer shape=(Int) -> Opaque(C.Pointer) rule=Plain impl="Native.pointer" effects=["native"] desc="The C.Pointer with this integer value, for a sentinel such as SQLITE_TRANSIENT (-1)."
 builtin Native.string_at forms=2
-  Native.string_at(pointer: C.Pointer) -> String shape=(Opaque(C.Pointer)) -> String rule=Plain impl="Native.string_at" effects=["native"] desc="Copy the NUL-terminated text at the C.Pointer, or exactly length bytes; bytes that are not UTF-8 become U+FFFD, NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT."
-  Native.string_at(pointer: C.Pointer, length: Int) -> String shape=(Opaque(C.Pointer), Int) -> String rule=Plain impl="Native.string_at" effects=["native"] desc="Copy exactly length bytes at the C.Pointer, NUL bytes included."
+  Native.string_at(pointer: C.Pointer) -> String shape=(Opaque(C.Pointer)) -> String rule=Plain impl="Native.string_at" effects=["native"] desc="Copy the NUL-terminated text at the C.Pointer; bytes that are not UTF-8 become U+FFFD, and NULL is RUNTIME-NATIVE-NULL."
+  Native.string_at(pointer: C.Pointer, length: Int) -> String shape=(Opaque(C.Pointer), Int) -> String rule=Plain impl="Native.string_at" effects=["native"] desc="Copy exactly length bytes at the C.Pointer, NUL bytes included; NULL with length 0 is \"\", other NULL is RUNTIME-NATIVE-NULL, then a negative length RUNTIME-INVALID-COUNT."
 builtin Native.wait_readable forms=1
   Native.wait_readable(fd: Int, timeout_ms: Int) -> Result[Void] shape=(Int, Int) -> Result(Void) rule=Plain impl="Native.wait_readable" effects=["native"] desc="Park this task until the descriptor fd of native code can be read, at most positive timeout_ms (error native: timed out); Linux only, refused by --deny-native."
 builtin Native.wait_writable forms=1

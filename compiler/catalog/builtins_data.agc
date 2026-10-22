@@ -2456,8 +2456,8 @@ ROWS_28: List[Model.Builtin] = [
       implementation: "Native.bytes_at",
       effects: ["native"],
       description: (
-        "Copy length bytes at the C.Pointer into a list; NULL is RUNTIME-NATIVE-NULL, a negative length " +
-        "RUNTIME-INVALID-COUNT, and a length past the memory undefined behavior."
+        "Copy length bytes at the C.Pointer into a list; NULL with length 0 is [], other NULL is " +
+        "RUNTIME-NATIVE-NULL, then a negative length RUNTIME-INVALID-COUNT; a length past the memory is undefined."
       ),
       alternatives: [],
     ),
@@ -2512,8 +2512,8 @@ ROWS_28: List[Model.Builtin] = [
       implementation: "Native.string_at",
       effects: ["native"],
       description: (
-        "Copy the NUL-terminated text at the C.Pointer, or exactly length bytes; bytes that are not UTF-8 become " +
-        "U+FFFD, NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT."
+        "Copy the NUL-terminated text at the C.Pointer; bytes that are not UTF-8 become U+FFFD, and NULL is " +
+        "RUNTIME-NATIVE-NULL."
       ),
       alternatives: [
         Model.Builtin(
@@ -2526,7 +2526,10 @@ ROWS_28: List[Model.Builtin] = [
           rule: Model.Rule.Plain,
           implementation: "Native.string_at",
           effects: ["native"],
-          description: "Copy exactly length bytes at the C.Pointer, NUL bytes included.",
+          description: (
+            "Copy exactly length bytes at the C.Pointer, NUL bytes included; NULL with length 0 is \"\", other " +
+            "NULL is RUNTIME-NATIVE-NULL, then a negative length RUNTIME-INVALID-COUNT."
+          ),
           alternatives: [],
         ),
       ],

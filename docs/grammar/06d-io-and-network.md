@@ -393,8 +393,10 @@ end
   `Native.string_at(p)` copies the NUL-terminated text, `Native.string_at(p,
   length)` exactly `length` bytes (NUL bytes included), and
   `Native.bytes_at(p, length)` gives the bytes as a `List[Int]`. Bytes that are
-  not UTF-8 become U+FFFD. A NULL `p` is `RUNTIME-NATIVE-NULL` at the pointer,
-  and a negative length `RUNTIME-INVALID-COUNT` at the length. A pointer or a
+  not UTF-8 become U+FFFD. A NULL `p` with length 0 reads as empty (C's way
+  to say empty: SQLite gives NULL for an empty blob); any other NULL `p` is
+  `RUNTIME-NATIVE-NULL` at the pointer, checked first, and then a negative
+  length is `RUNTIME-INVALID-COUNT` at the length. A pointer or a
   length that C does not own is undefined behavior, like a wrong signature, and
   is not checked. `Native.pointer(n)` is the `C.Pointer` with the integer value
   `n`, for sentinels such as `SQLITE_TRANSIENT` (`Native.pointer(-1)`).

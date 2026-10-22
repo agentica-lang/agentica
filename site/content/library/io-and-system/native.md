@@ -49,7 +49,7 @@ A function that returns a pointer and a length, or text that may be NULL, is dec
 
 - `Native.string_at(p)` copies the NUL-terminated text at `p`, and `Native.string_at(p, length)` exactly `length` bytes, NUL bytes included. Bytes that are not UTF-8 become U+FFFD.
 - `Native.bytes_at(p, length)` copies `length` bytes into a `List[Int]`.
-- A NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. A negative length fails with `RUNTIME-INVALID-COUNT`. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
+- A NULL `p` with length 0 reads as `""` or `[]`, as C means it (SQLite gives NULL for an empty blob). Any other NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. Then a negative length fails with `RUNTIME-INVALID-COUNT`: the pointer is checked first. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
 - `Native.pointer(n)` is the pointer with the integer value `n`, for sentinels such as `SQLITE_TRANSIENT`, which is `Native.pointer(-1)`.
 
 ```agentica {mode="check"}

@@ -526,6 +526,12 @@ static void check_open(agc_vm *vm, const ffi_entry *e, const agc_list *values, u
     }
 }
 
+/* A String copy of the N bytes of C memory at P (NULL when N is 0). Bytes that are not UTF-8 become U+FFFD, as in
+   every String the VM builds from outside text. */
+static agc_value text_value(const uint8_t *p, size_t n) {
+  return agc_string_value(agc_utf8_decode(n ? p : (const uint8_t *)"", n, "\xEF\xBF\xBD", false));
+}
+
 static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r) {
   switch (e->result) {
     case AGC_C_INT: return agc_int(r->i);
@@ -533,10 +539,9 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
     case AGC_C_DOUBLE: return agc_float(r->d);
     case AGC_C_BOOL: return agc_bool(r->b);
     case AGC_C_STRING: {
-      /* The function keeps the text it returns (Agentica copies it and frees nothing); NULL reads as "". Bytes that
-         are not UTF-8 become U+FFFD, as in every String the VM builds from outside text. */
+      /* The function keeps the text it returns (Agentica copies it and frees nothing); NULL reads as "". */
       const char *s = r->s ? r->s : "";
-      return agc_string_value(agc_utf8_decode((const uint8_t *)s, strlen(s), "\xEF\xBF\xBD", false));
+      return text_value((const uint8_t *)s, strlen(s));
     }
     case AGC_C_POINTER: return agc_c_pointer_value(r->p);
     case AGC_C_RESOURCE: return resource_result(vm, e, r->p);
@@ -740,40 +745,38 @@ static agc_value builtin_native_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_c_pointer_value((void *)(intptr_t)agc_as_int(vm, args[0]));
 }
 
-/* The memory that a C.Pointer argument points to, for Native.string_at and bytes_at. NULL fails; any other pointer is
-   read as it is: native code is trusted, and a pointer or a length that C does not own is undefined behavior, like a
-   wrong signature. The fuzzer's hand-made bytecode (no_files) may not read memory, as it may not call. */
-static const uint8_t *memory_at(agc_vm *vm, agc_value pointer, uint32_t span) {
+/* The memory of a read (Native.string_at and bytes_at): the pointer args[0] and, when LENGTH is not NULL, the length
+   args[1], stored there. The pointer is checked first: NULL fails unless the length is 0, the C way to say "empty",
+   which reads nothing (SQLite gives NULL for an empty blob); then a negative length fails. Any other pointer is read
+   as it is: native code is trusted, and a pointer or a length that C does not own is undefined behavior, like a wrong
+   signature. The fuzzer's hand-made bytecode (no_files) may not read memory, as it may not call. */
+static const uint8_t *memory_at(agc_vm *vm, agc_value *args, uint32_t span, size_t *length) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-  const uint8_t *p = agc_as_c_pointer(vm, pointer);
-  if (!p) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a native read at a NULL C.Pointer", span + 1);
+  const uint8_t *p = agc_as_c_pointer(vm, args[0]);
+  int64_t n = length ? agc_as_int(vm, args[1]) : 1;
+  if (!p && n != 0) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a native read at a NULL C.Pointer", span + 1);
+  if (n < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "length must be nonnegative", span + 2);
+  if (length) *length = (size_t)n;
   return p;
 }
 
-/* The length argument of a read; negative fails. */
-static size_t length_of(agc_vm *vm, agc_value length, uint32_t span) {
-  int64_t n = agc_as_int(vm, length);
-  if (n < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "length must be nonnegative", span + 2);
-  return (size_t)n;
-}
-
 /* Native.string_at(pointer) and string_at(pointer, length): a copy of the NUL-terminated text at the pointer, or of
-   exactly LENGTH bytes (NUL bytes included). Bytes that are not UTF-8 become U+FFFD, as for a C.String result. */
+   exactly LENGTH bytes (NUL bytes included). */
 static agc_value builtin_string_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  const uint8_t *p = memory_at(vm, args[0], span);
-  return agc_string_value(agc_utf8_decode(p, strlen((const char *)p), "\xEF\xBF\xBD", false));
+  const uint8_t *p = memory_at(vm, args, span, NULL);
+  return text_value(p, strlen((const char *)p));
 }
 
 static agc_value builtin_string_at_length(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n = length_of(vm, args[1], span);
-  const uint8_t *p = memory_at(vm, args[0], span);
-  return agc_string_value(agc_utf8_decode(p, n, "\xEF\xBF\xBD", false));
+  size_t n;
+  const uint8_t *p = memory_at(vm, args, span, &n);
+  return text_value(p, n);
 }
 
 /* Native.bytes_at(pointer, length): a List of the LENGTH bytes at the pointer. */
 static agc_value builtin_bytes_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n = length_of(vm, args[1], span);
-  const uint8_t *p = memory_at(vm, args[0], span);
+  size_t n;
+  const uint8_t *p = memory_at(vm, args, span, &n);
   return agc_list_value(agc_list_of_bytes(p, n));
 }
 
