@@ -32,10 +32,9 @@ end
 ## Finds the workspace of the project whose manifest is in `project_dir` (a canonical path): the nearest manifest going
 ## up, from that folder, that has a `[workspace]` table, provided the project is that folder or one of its listed
 ## members. A project whose folder is directly inside a folder named `deps` is a package and has none. A manifest above
-## that cannot be read or parsed is passed over. The table is
-## checked in full only when the project is in the workspace: a project below a broken table that does not list it
-## builds as if the table were not there, unless the project folder is the root itself, which reports the table.
-## A bad table is PKG-MANIFEST-INVALID.
+## that cannot be read or parsed is passed over. The table is checked in full only when the project is in the
+## workspace: a project below a broken table that does not list it builds as if the table were not there, unless the
+## project folder is the root itself, which reports the table. A bad table is PKG-MANIFEST-INVALID.
 export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[Members]
   if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
     return ok(none())
