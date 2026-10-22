@@ -448,7 +448,7 @@ def test_a_path_longer_than_max_path_works_exactly_when_long_paths_are_enabled(r
         assert seen == ["false", "false", '"error"', "false"]
 
 
-@pytest.mark.skipif(os.name != "nt", reason="reads the resources of the binary with the Windows loader (not under Wine)")
+@pytest.mark.skipif(os.name != "nt", reason="host-only: reads the resources of the binary with the Windows loader")
 def test_the_binary_carries_a_manifest_that_declares_long_path_awareness():
     """vm/agentica.rc embeds vm/agentica.manifest as the application manifest (RT_MANIFEST, resource 1). It replaces
     the default manifest of MinGW's gcc and keeps what that one asks for (asInvoker)."""
