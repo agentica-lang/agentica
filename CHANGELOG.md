@@ -76,8 +76,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- On Windows, `System.exit` closes open TCP and TLS sockets instead of
-  resetting them, so the peer reads the end of input.
+- On Windows, open TCP and TLS sockets are closed at the end of a run (for
+  example `System.exit`) instead of reset, so the peer reads the end of input.
 
 ## [0.8.1] - 2026-10-22
 

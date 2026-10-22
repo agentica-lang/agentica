@@ -18,6 +18,7 @@ import signal
 import socket
 import ssl
 import subprocess
+import sys
 import threading
 import time
 
@@ -795,9 +796,12 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
 # Processes, the child channel and the Test protocol run on several schedulers: every libuv step is a request to the
 # I/O thread, which owns each child's handles and buffers (§16.9). The children are Python programs; those that print
 # their process id, watch another one end, read the child channel or record themselves are modes of CHILD, and a
-# program gets PYTHON and CHILD as its first two arguments (CHILD_ARGS).
+# program gets the interpreter, its flags and CHILD as its first three arguments (CHILD_ARGS). CHILD needs neither the
+# environment nor site-packages (-I -S), and starts faster without them. It runs on the base interpreter of a venv: on
+# Windows a venv's python.exe is a launcher that starts the interpreter and only then puts it in a job that ends it
+# with the launcher, so a launcher that the end of a run kills in between leaves the interpreter running.
 CHILD = str(FIXTURES / "multicore-child.py")
-CHILD_ARGS = (PYTHON, CHILD)
+CHILD_ARGS = (getattr(sys, "_base_executable", PYTHON), "-IS", CHILD)
 POSIX_SIGNALS = host_only(WINDOWS or not hasattr(signal, "SIGTERM"), "Windows has no POSIX stop signals")
 MULTICORE_CHILDREN = {"AGENTICA_SCHEDULERS": SCHEDULERS}
 
@@ -873,12 +877,12 @@ end
 
 def watch(pid: String) -> Process
   args = System.args()
-  return Process.spawn(args[0], [args[1], "watch", pid], 5000).unwrap!
+  return Process.spawn(args[0], [args[1], args[2], "watch", pid], 5000).unwrap!
 end
 
 def main() -> Void
   args = System.args()
-  p = Process.spawn_captured(args[0], [args[1], "quiet"], ".", 5000).unwrap!
+  p = Process.spawn_captured(args[0], [args[1], args[2], "quiet"], ".", 5000).unwrap!
   r = Task.spawn(&reader, p)
   w = Task.spawn(&waiter, p)
   s = Task.spawn(&sender, p)
@@ -892,7 +896,7 @@ def main() -> Void
   IO.inspect(Process.read_line(p, 100))
   Process.close(p)
   IO.inspect(Process.wait(p, 100))
-  owned = Process.spawn(args[0], [args[1], "sleep"], 5000).unwrap!
+  owned = Process.spawn(args[0], [args[1], args[2], "sleep"], 5000).unwrap!
   pid = Process.read_line(owned, 20000).unwrap!
   o = Task.spawn_owning(&reader, owned)
   Task.sleep(20)
@@ -986,14 +990,14 @@ end
 
 def main() -> Void
   args = System.args()
-  plain = Process.spawn(args[0], [args[1], "sleep"], 5000).unwrap!
-  captured = Process.spawn_captured(args[0], [args[1], "sleep"], ".", 5000).unwrap!
+  plain = Process.spawn(args[0], [args[1], args[2], "sleep"], 5000).unwrap!
+  captured = Process.spawn_captured(args[0], [args[1], args[2], "sleep"], ".", 5000).unwrap!
   pids = "#{Process.read_line(plain, 20000).unwrap!} #{Process.read_line(captured, 20000).unwrap!}"
   Task.spawn(&read, plain)
   Task.spawn(&wait, captured)
   puts(pids)
   IO.flush()
-  if args[2] == "exit"
+  if args[3] == "exit"
     Task.spawn(&leave, 3)
   end
   Task.sleep(60000)
@@ -1112,16 +1116,16 @@ end
 def parent(p: Process) -> Result[Int]
   Task.spawn_owning(&closer, p)
   line = Process.read_line(p, 5000)
-  return ok(10 / (List.size(System.args()) - 2))
+  return ok(10 / (List.size(System.args()) - 3))
 end
 
 def main() -> Void
   args = System.args()
-  p = Process.spawn(args[0], [args[1], "cat"], 5000).unwrap!
+  p = Process.spawn(args[0], [args[1], args[2], "cat"], 5000).unwrap!
   pid = Process.read_line(p, 20000).unwrap!
   t = Task.spawn_owning(&parent, p)
   puts(Task.await(t).ok?)
-  watcher = Process.spawn(args[0], [args[1], "watch", pid], 5000).unwrap!
+  watcher = Process.spawn(args[0], [args[1], args[2], "watch", pid], 5000).unwrap!
   IO.inspect(Process.read_line(watcher, 20000))
   puts(Task.pending_count())
 end
@@ -1160,19 +1164,19 @@ def holder(p: Process) -> Result[Int]
   Task.spawn(&reader, p)
   Task.spawn(&sender, p)
   started = Process.read_line(p, 30000).unwrap!
-  return ok(10 / (List.size(System.args()) - 2) + started.length)
+  return ok(10 / (List.size(System.args()) - 3) + started.length)
 end
 
 def main() -> Void
   args = System.args()
-  p = Process.spawn_channel(args[0], [args[1], "channel"], ".", 5000).unwrap!
+  p = Process.spawn_channel(args[0], [args[1], args[2], "channel"], ".", 5000).unwrap!
   r = Task.spawn(&reader, p)
   s = Task.spawn(&sender, p)
   puts(Process.read_line(p, 30000).unwrap!)
   Process.close(p)
   puts(Task.await(r))
   puts(Task.await(s))
-  q = Process.spawn_channel(args[0], [args[1], "channel"], ".", 5000).unwrap!
+  q = Process.spawn_channel(args[0], [args[1], args[2], "channel"], ".", 5000).unwrap!
   t = Task.spawn_owning(&holder, q)
   puts(Task.await(t).ok?)
   Process.close(q)
@@ -1203,20 +1207,20 @@ def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats
 
 
 # A spawn whose START is still in the I/O thread's inbox when main returns must not start a child after the end of the
-# run has reaped the children: nobody would kill it. Each child (CHILD's record mode) creates a file named by its
-# process id in the folder of its run, then runs for ever.
+# run has reaped the children: nobody would kill it. Each child (CHILD's record mode) writes a growing count to a file
+# named by its process id in the folder of its run, for ever.
 SPAWN_AT_END = r"""def spawner(dir: String) -> Int
   args = System.args()
   n = 0
   while n < 100000
-    p = Process.spawn(args[0], [args[1], "record", dir], 5000)
+    p = Process.spawn(args[0], [args[1], args[2], "record", dir], 5000)
     n = n + 1
   end
   return n
 end
 
 def main() -> Void
-  dir = System.args()[2]
+  dir = System.args()[3]
   Task.spawn(&spawner, dir)
   Task.spawn(&spawner, dir)
   Task.spawn(&spawner, dir)
@@ -1226,19 +1230,41 @@ end
 """
 
 
-def recorded_alive(folders):
-    """The ids recorded in `folders` (SPAWN_AT_END's children) whose process is still running."""
-    return [entry.name for folder in folders for entry in folder.iterdir() if process_alive(entry.name)]
+def recorded_running(folders):
+    """The ids of the SPAWN_AT_END children in `folders` that still run: those whose count moves within half a second.
+    Not process_alive on the id: Windows soon gives the id of a child that ended to another process."""
+    def counts():
+        found = {}
+        for folder in folders:
+            for entry in folder.iterdir():
+                try:
+                    found[entry.name] = entry.read_text()
+                except OSError:
+                    found[entry.name] = None  # read while the child rewrites it
+        return found
+
+    before = counts()
+    time.sleep(0.5)
+    after = counts()
+    return [pid for pid, count in after.items() if before.get(pid) != count]
 
 
 @RACE
 def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeats):
     # Three tasks spawn children in a loop while main returns: every child that started is killed by the end of the
-    # run, and a spawn still queued then starts none. A child left behind runs for ever, so once its file is there it
-    # is found alive: each run's children are checked after the run, and all of them again at the end, after a pause
-    # that leaves a late child the time to start and record itself.
+    # run, and a spawn still queued then starts none. A child left behind runs for ever, so once its file is there its
+    # count keeps moving: each run's children are checked after the run, and all of them again at the end, after a
+    # pause that leaves a late child the time to start and record itself.
     bytecode = program(tmp_path, "spawn_at_end", SPAWN_AT_END)
     folders = []
+    # The ids that the last check found running: the only ones the cleanup kills, so an id that an unrelated process
+    # took over after a recorded child ended is never killed.
+    left = []
+
+    def none_left(chosen):
+        left[:] = recorded_running(chosen)
+        return not left
+
     try:
         # A run without the fix leaves a child behind about half the time: ten make it near certain.
         for k in range(10 * repeats):
@@ -1250,13 +1276,13 @@ def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeat
                                     stdin=subprocess.DEVNULL, capture_output=True, text=True, env=vm_environment(),
                                     timeout=60, check=False)
             assert (result.returncode, result.stdout, result.stderr) == (0, "done\n", "")
-            assert wait_until(lambda: not recorded_alive(folders[-1:]), timeout=3), recorded_alive(folders[-1:])
+            assert wait_until(lambda: none_left(folders[-1:]), timeout=3), left
+        # A fixed pause, not a wait for the check to pass: a child that has not recorded itself yet would pass it.
         time.sleep(scaled(2))
-        assert not recorded_alive(folders)
+        assert none_left(folders), left
     finally:
-        for folder in folders:
-            for entry in folder.iterdir():
-                kill_process(entry.name)
+        for pid in left:
+            kill_process(pid)
 
 
 UNITS = r"""def square(n: Int) -> Int
