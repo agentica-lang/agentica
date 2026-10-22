@@ -10,7 +10,7 @@ import os
 import pytest
 
 from tests.agentica_test import cli, run
-from tests.package_support import (BANG, GREET, LEAKS_THE_CACHE, MAIN, assert_at_key, cached_files, dependency,  # noqa: F401
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency,  # noqa: F401
                                     environment, git, install, lock_entry, no_git_path, package_hash, remotes, ws)
 
 
@@ -33,7 +33,6 @@ def one_package(ws, remotes, files=None):
     return commit
 
 
-@LEAKS_THE_CACHE
 def test_install_fetches_a_tag_and_a_commit_then_a_program_runs_from_the_cache_with_no_git(ws, remotes, tmp_path):
     tools_files = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk",
                    ".gitattributes": "*.agc text eol=crlf\n"}

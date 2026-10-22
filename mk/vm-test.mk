@@ -155,7 +155,7 @@ vm-lint-check: $(OSSL_DEP) $(GC_DIR)/extra/gc.c $(YY_DIR)/src/yyjson.c $(PICO_DI
 
 vm-lint-release vm-lint-sanitize vm-lint-gcstress: vm-lint-check
 
-# With libffi (Linux x86_64, Windows x64) the lint reads vm/ffi_libffi.c, and vm/ffi_none.c is empty, as in the build.
+# With libffi (Linux x86_64, Windows x64, macOS) the lint reads vm/ffi_libffi.c, and vm/ffi_none.c is empty, as in the build.
 LINT = printf '%s\n' $(VM_LINT_SRC) | xargs -P $(JOBS) -I{} $(CLANG_TIDY) --quiet {} -- $(VM_WARN) $(OSSL_INC) \
   $(if $(FFI_NAMES),-DAGC_FFI -I $(FFI_INC))
 

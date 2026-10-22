@@ -38,8 +38,8 @@ joined the pool, and the pool waited for a FIFO that never wrote.
   (`vm/output.c`), the `File` calls (`vm/files.c`) and the waits of
   `Native.wait_readable` and `wait_writable` on a descriptor of native code
   (`vm/ffi.c`), which poll a new open or a duplicate of the descriptor that the
-  job owns (`agc_ffi_wait_fd_open`): its timer is the timeout, its `cancel`
-  half stops the poll, and its end closes that descriptor.
+  poller owns (`agc_poller_open_copy`): the job's timer is the timeout, its
+  `cancel` half stops the poll, and its end closes that descriptor.
 - A descriptor picks one of the two by what it is, never by how it was named.
   `vm/files.c` opens with `O_NONBLOCK`, then `fstat` (regular files, block
   devices and directories go to the pool) and an `epoll_ctl` probe. Only `EPERM`
