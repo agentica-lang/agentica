@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Windows: `Native.wait_readable` and `Native.wait_writable` wait on a native
+  library's socket; any other value is an error.
+
 ### Changed
 
 - **Breaking:** the extern type `C.Int` is now `C.Int32`, so both widths are

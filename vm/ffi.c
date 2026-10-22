@@ -8,6 +8,7 @@
  * descriptor of native code. Service layer.
  */
 #include "ffi_os.h"
+#include "net_os.h"
 #include "services.h"
 
 #include <errno.h>
@@ -88,9 +89,10 @@ typedef enum { BYTES_OK, BYTES_RANGE, BYTES_TAG } bytes_outcome;
 /* One Native.wait_readable or wait_writable, in malloc memory. The task's descriptor FD is never polled itself: the
    poller polls a new open of its file, or a duplicate (agc_poller_open_copy), which it owns and closes once its wait is
    over. So the native code keeps its descriptor whatever happens to the wait, a descriptor the loop already watches can
-   still be waited on, and two tasks can wait on one descriptor. The copy is made on the I/O thread when the job starts,
-   so a descriptor closed before then fails the wait (EBADF). `more`, `ready`, `cancel`, `pause` and `drop` run on the I/O thread; `done` and `expired`
-   on the scheduler that resumes the task, after the job's outcome has published what the I/O thread wrote. */
+   still be waited on, and two tasks can wait on one descriptor (not on one Windows socket: EBUSY). The copy is made on
+   the I/O thread when the job starts, so a descriptor closed before then fails the wait (EBADF). `more`, `ready`,
+   `cancel`, `pause` and `drop` run on the I/O thread; `done` and `expired` on the scheduler that resumes the task,
+   after the job's outcome has published what the I/O thread wrote. */
 typedef struct {
   agc_vm *vm;
   agc_io_job *job;
@@ -796,7 +798,8 @@ static bool wait_begin(void *data, agc_io_job *job) {
   int err = 0;
   w->poller = agc_poller_open_copy(w->vm, w->fd, &err);
   if (!w->poller) {
-    w->err = err ? err : EIO;
+    /* ERR is libuv's code, negated: the errno on POSIX, mapped to one on Windows. */
+    w->err = err ? agc_net_errno(-err) : EIO;
     agc_io_ready(job);
     return false;
   }
