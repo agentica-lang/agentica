@@ -8,6 +8,7 @@ std/logger.agc
 std/prelude/lazy.agc
 std/prelude/list.agc
 std/prelude/map.agc
+std/prelude/string.agc
 std/queue.agc
 std/test/child.agc
 std/test/report.agc

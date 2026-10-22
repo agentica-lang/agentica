@@ -9151,69 +9151,65 @@
     {
       "program": [
         "def main() -> Void",
-        "  xs = [1, 2]",
-        "  puts(xs.select do |x| x > 1 end)",
+        "  puts((1..2).select do |x| x > 1 end)",
         "end",
         "",
         ""
       ],
       "code": "CHECK-UNKNOWN-METHOD",
       "start": [
-        3,
+        2,
         8
       ],
-      "covers": "xs.select do |x| x > 1 end",
+      "covers": "(1..2).select do |x| x > 1 end",
       "help": true
     },
     {
       "program": [
         "def main() -> Void",
-        "  xs = [1, 2]",
-        "  puts(xs.collect do |x| x end)",
+        "  puts((1..2).collect do |x| x end)",
         "end",
         "",
         ""
       ],
       "code": "CHECK-UNKNOWN-METHOD",
       "start": [
-        3,
+        2,
         8
       ],
-      "covers": "xs.collect do |x| x end",
+      "covers": "(1..2).collect do |x| x end",
       "help": true
     },
     {
       "program": [
         "def main() -> Void",
-        "  xs = [1, 2]",
-        "  puts(xs.detect do |x| x > 1 end)",
+        "  puts((1..2).detect do |x| x > 1 end)",
         "end",
         "",
         ""
       ],
       "code": "CHECK-UNKNOWN-METHOD",
       "start": [
-        3,
+        2,
         8
       ],
-      "covers": "xs.detect do |x| x > 1 end",
+      "covers": "(1..2).detect do |x| x > 1 end",
       "help": true
     },
     {
       "program": [
         "def main() -> Void",
-        "  xs = [1, 2]",
-        "  puts(xs.inject(0) do |a, x| a + x end)",
+        "  puts((1..2).inject(0) do |a, x| a + x end)",
         "end",
         "",
         ""
       ],
       "code": "CHECK-UNKNOWN-METHOD",
       "start": [
-        3,
+        2,
         8
       ],
-      "covers": "xs.inject(0) do |a, x| a + x end",
+      "covers": "(1..2).inject(0) do |a, x| a + x end",
       "help": true
     },
     {

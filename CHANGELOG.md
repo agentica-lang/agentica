@@ -19,6 +19,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   task until a descriptor of native code can be read or written.
 - `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
   `List`.
+- Ruby's other method names work: `collect`, `select`, `inject`, `detect`,
+  `member?` and `key?`; `help` and the diagnostics show `map`, `select`,
+  `reduce`, `find`, `include?` and `key?`.
+- `List.first` and `List.last` (`RUNTIME-INDEX-OUT-OF-RANGE` on an empty list)
+  and `empty?` on `List`, `Map` and `String`.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and

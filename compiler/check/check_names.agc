@@ -40,7 +40,7 @@ end
 
 ## The methods a receiver kind has, as Ruby names them: its aliases and the builtins of its module, without
 ## duplicates. A builtin that has a Ruby name (`strip`) is listed under it, not under its own (`trim`), which still
-## works; `length` and `size` are both listed.
+## works; a synonym (`collect` for `map`, `size` for `String.length`) is accepted but not listed.
 export def method_names(cx: State.Cx, kind: String) -> List[String]
   names: List[String] = []
   seen: Set[String] = Set.new([])
@@ -56,7 +56,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
   end
   unique: List[String] = []
   for name in names
-    if !seen.include?(name) and ruby_method?(cx, kind, name)
+    if !seen.include?(name) and ruby_method?(cx, kind, name) and !RubyForm.synonym?("#{kind}.#{name}")
       seen = seen.add(name)
       unique = unique.push(name)
     end

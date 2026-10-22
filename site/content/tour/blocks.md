@@ -25,7 +25,7 @@ The last expression is the block's value. A short block fits on one line:
 
 ```agentica
 def main() -> Void
-  evens = [1, 2, 3, 4].filter do |x| x % 2 == 0 end
+  evens = [1, 2, 3, 4].select do |x| x % 2 == 0 end
   puts(evens)
 end
 ```
@@ -160,7 +160,7 @@ A line that starts with a dot and a name continues the line before it, so a long
 ```agentica
 def main() -> Void
   scores = [3, 8, 5, 10, 1]
-    .filter do |x| x > 2 end   # drop the small ones
+    .select do |x| x > 2 end   # drop the small ones
     # then double what is left
     .map do |x|
       x * 2
