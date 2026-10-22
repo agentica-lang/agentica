@@ -275,6 +275,7 @@ RESOURCE_EXTERN = """extern "{library}"
   def peer_ptr_echo(p: C.Pointer) -> C.Pointer
   def peer_ptr_static() -> C.Pointer
   def peer_ptr_read(p: C.Pointer) -> C.Int
+  def peer_res_bytes(res: Res, bytes: C.Bytes, n: C.Int) -> C.Int
 end
 
 def get(res: Res) -> Int
@@ -338,13 +339,15 @@ end
 
 
 # A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
-# anything is copied or called; Task.spawn_owning of a closed resource is RUNTIME-HANDLE-NOT-OWNED.
+# the call; a closed resource is found first, even with a bad byte. Task.spawn_owning of a closed resource is
+# RUNTIME-HANDLE-NOT-OWNED.
 @ON_LINUX_ONLY
 @pytest.mark.parametrize("case, code, line", [
     ("closed", "RUNTIME-NATIVE-CLOSED", 4),
     ("owned", "RUNTIME-NATIVE-CLOSED", 4),
     ("handed", "RUNTIME-HANDLE-NOT-OWNED", RESOURCE_EXTERN.count("\n") + 10),
     ("byte", "RUNTIME-INVALID-NUMBER", 11),
+    ("both", "RUNTIME-NATIVE-CLOSED", 15),
 ])
 def test_a_closed_resource_and_a_bad_byte_stop_the_call(tmp_path, peer, case, code, line):
     main = """def main() -> Void
@@ -357,6 +360,9 @@ def test_a_closed_resource_and_a_bad_byte_stop_the_call(tmp_path, peer, case, co
   elsif arg == "handed"
     Native.close(res)
     Task.await(Task.spawn_owning(&get, res))
+  elsif arg == "both"
+    Native.close(res)
+    puts(peer_res_bytes(res, [1, 256], 2))
   else
     puts(peer_bytes_sum([1, 256], 2))
   end

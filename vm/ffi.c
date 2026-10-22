@@ -283,9 +283,10 @@ static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
 }
 
 /* The end of the run (release_handles) and the dropped result of a cancelled compute call (discard in vm/loop.c): the
-   free runs unless a compute call still holds the resource, which the end of the run does not wait for. Both run
-   without rt->sync, which is safe: discard drops a resource that compute_done made a moment before, which no other
-   task has seen, and at the end of the run only one thread is left. */
+   free runs unless a compute call still holds the resource, which the end of the run does not wait for. Neither needs
+   rt->sync: discard drops a resource that compute_done made a moment before, which no other task has seen (at more
+   than one scheduler it runs inside agc_io_service, which holds the lock anyway), and at the end of the run only one
+   thread is left. */
 static void release_resource(void *native) {
   agc_c_resource *res = native;
   if (!res->freed && !res->jobs) call_free(res);
@@ -322,7 +323,7 @@ static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) 
 /* Checks argument V against its C type before anything is allocated, so a failure (agc_fail longjmps) leaks
    nothing. A C.Int that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and cutting
    them short would call the function with another value. The items of a C.Bytes are checked while they are copied
-   (copy_bytes), and whether a resource is closed after that (check_open). */
+   (copy_bytes), and whether a resource is closed before and after that (check_open). */
 static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t span) {
   switch (type) {
     case AGC_C_INT: {
@@ -370,18 +371,22 @@ static agc_c_value c_argument(agc_vm *vm, agc_c_type type, agc_value v, uint8_t 
 /* A malloc'd copy of a C.Bytes argument into *OUT, made in one walk of the list. An item outside 0..255 (C cannot
    take it) or not an Int (invalid bytecode) gives no copy. It runs without rt->sync (a List is immutable) and never
    fails: the caller fails once it holds the lock again. */
-static bytes_outcome copy_bytes(const agc_list *bytes, uint8_t **out) {
+static bytes_outcome copy_bytes(agc_vm *vm, const agc_list *bytes, uint8_t **out) {
   size_t n = agc_list_len(bytes);
   uint8_t *copy = malloc(n ? n : 1);
   if (!copy) agc_out_of_memory();
   for (size_t k = 0; k < n; k++) {
     agc_value item = agc_list_get(bytes, k);
-    bytes_outcome bad = item.tag != AGC_T_INT ? BYTES_TAG : item.as.i < 0 || item.as.i > 255 ? BYTES_RANGE : BYTES_OK;
-    if (bad != BYTES_OK) {
+    if (!agc_is(item, AGC_T_INT)) {
       free(copy);
-      return bad;
+      return BYTES_TAG;
     }
-    copy[k] = (uint8_t)item.as.i;
+    int64_t byte = agc_as_int(vm, item);
+    if (byte < 0 || byte > 255) {
+      free(copy);
+      return BYTES_RANGE;
+    }
+    copy[k] = (uint8_t)byte;
   }
   *out = copy;
   return BYTES_OK;
@@ -411,7 +416,7 @@ static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *
     if (e->params[k] != AGC_C_BYTES) continue;
     const agc_list *list = agc_as_list(vm, agc_list_get(values, k));
     items += agc_list_len(list);
-    bad = copy_bytes(list, &bytes[k]);
+    bad = copy_bytes(vm, list, &bytes[k]);
   }
   if (unlock) agc_sync_take(vm);
   agc_charge(vm, items);
@@ -421,12 +426,13 @@ static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *
   agc_fail(vm, "RUNTIME-INVALID-NUMBER", "a C.Bytes item is not a byte (0 to 255)", span);
 }
 
-/* A closed resource fails: its pointer is freed, or about to be. Under rt->sync, after the byte copies are made, so
-   no close comes between this check and the call; a failure frees the copies. */
+/* A closed resource fails: its pointer is freed, or about to be. Under rt->sync. The call checks once before the
+   byte copies (BYTES NULL), so a closed resource fails first, and once after them, with the lock taken again, so no
+   close comes between this check and the call; a failure then frees the copies. */
 static void check_open(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint8_t **bytes, uint32_t span) {
   for (uint32_t k = 0; k < e->count; k++)
     if (e->params[k] == AGC_C_RESOURCE && agc_as_c_resource(vm, agc_list_get(values, k))->closed) {
-      free_bytes(e, bytes);
+      if (bytes) free_bytes(e, bytes);
       agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "a native call takes a resource that is closed", span);
     }
 }
@@ -520,6 +526,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   for (uint32_t k = 0; k < e->count; k++) check_argument(vm, e->params[k], agc_list_get(values, k), span);
   /* The loop is made first: a loop that cannot start fails here, before the copies exist. */
   if (e->compute) (void)agc_io_loop(vm);
+  check_open(vm, e, values, NULL, span);
   uint8_t *bytes[AGC_FFI_MAX_PARAMS];
   copy_byte_arguments(vm, e, values, bytes, span);
   check_open(vm, e, values, bytes, span);

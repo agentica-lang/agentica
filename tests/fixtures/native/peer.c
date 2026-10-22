@@ -189,6 +189,9 @@ int32_t peer_bytes_sum(const uint8_t *bytes, int32_t n) {
   return sum;
 }
 
+/* For a resource with C.Bytes: the value plus the sum of the N bytes. */
+int32_t peer_res_bytes(void *p, const uint8_t *bytes, int32_t n) { return peer_res_get(p) + peer_bytes_sum(bytes, n); }
+
 /* For C.Pointer. */
 static int32_t somewhere = 42;
 void *peer_ptr_echo(void *p) { return p; }

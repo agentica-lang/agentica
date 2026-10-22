@@ -34,8 +34,9 @@ The exact rule behind a checker error or a core question. Builtin methods and
   constant. An `extern "LIB"` block declares native functions, which count as
   `def`s, and resources, which count as types (`native.md`).
 - Order is checked: module doc and `import`s, constants, `struct`, `enum`,
-  aliases and `extern` resources (any order), `export def`, then private `def`. The first declaration
-  out of place is `CHECK-DECL-ORDER`. A function may call one declared later.
+  aliases and `extern` resources (any order), `export def`, then private `def`.
+  The first declaration out of place is `CHECK-DECL-ORDER`. A function may call
+  one declared later.
 - A constant is `NAME = expr` or `NAME: Type = expr` (the type also types `[]`,
   `{}` and `Set.new([])`). The name is capitals, digits and `_`, at least two
   characters, capital first (`MAX_DEPTH`), else `PARSE-CONSTANT-NAME`. `IO`,
