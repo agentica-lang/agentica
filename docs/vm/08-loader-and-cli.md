@@ -262,7 +262,8 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   stream until `FrontEnd.stdin_bytes` opens it (before that `IO.gets` gives EOF,
   so the program keeps the real one) and no channel to a parent process; the
   user's `--deny-*` flags do not reach it, because `agentica test` starts the
-  runner (the user's program never runs in that runtime). If it calls
+  runner (the user's program never runs in that runtime); they reach the test
+  and step VMs. If it calls
   `FrontEnd.hand_off` and its run ends with status 0, C retires that runtime:
   the same steps as the end of any run (`agc_launch_settle`: children stopped,
   output and files flushed), then the event loop is closed and the heap is

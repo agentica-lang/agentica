@@ -42,8 +42,9 @@ First batch, as soon as possible:
 1. FFI-a: the core of [#534](https://github.com/sonic182/agentica/issues/534)
    (extern blocks, `C.*` types, `resource`, the three call kinds,
    `Native.wait_readable/wait_writable`, `--deny-native`), with system or
-   local libraries. PR 1 of the split (core calls) is done (#553), and
-   PR 4 (`compute def`) is done (#559).
+   local libraries. PR 1 of the split (core calls) is done (#553), PR 4
+   (`compute def`) is done (#559), and PR 6 (`agentica test` takes the deny
+   flags) is done (#560).
 2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
    bytecode, so unchanged programs skip the front end.
 3. Packages [45b](../future/45-packages.md) (`fetch`), then 45c (`add`,

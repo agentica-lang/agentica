@@ -213,7 +213,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   --deny-fs in `vm/files.c` (`fs_denied`, every row but `Path.join`, and the
   line reader and writer) and for TLS files in `vm/tcp.c`, --deny-env in
   `vm/system.c`. `vm/launch.c` expands --sandbox and turns on --deny-native
-  for any of them; `agentica test` refuses them. The end of a run kills and
+  for any of them; `agentica test` passes them to the user's code only (test
+  files, step programs, programs under test). The end of a run kills and
   reaps directly spawned children. Expected operations return Results.
 - `tests/test_process.py` uses independent Node standard-library children and a
   Python one (`tests/fixtures/process-peer.py`). Node is required in CI; local

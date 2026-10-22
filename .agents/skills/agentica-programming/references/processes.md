@@ -26,8 +26,8 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 - Launching needs no flag. With `agentica --deny-run file.agc` (or
   `--sandbox`) every start returns an error that begins with `denied:
   --deny-run` (in every task), and extern blocks are refused as with
-  `--deny-native`. `agentica test` refuses every `--deny-*` flag and
-  `--sandbox`.
+  `--deny-native`. `agentica test` gives the `--deny-*` flags and `--sandbox`
+  to the test files, step programs and programs under test.
 - A bare name (no `/`) is looked up in each `PATH` entry in order. The working
   directory is never added (empty entries are skipped): run a program in the
   current directory as `./name`. An explicit relative entry such as `.` or `bin`

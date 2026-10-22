@@ -30,3 +30,11 @@ def test_bdd_handlers_and_programs_under_test_can_spawn(tmp_path):
     result = cli_run("test", feature, "--steps", steps, "--json")
     assert result.code == 0, (result.stdout, result.stderr)
     assert json.loads(result.stdout)["passed"] == 2
+    # --deny-run reaches the step program's VM, not the runner: the step that starts a program under test fails.
+    denied = cli_run("test", feature, "--steps", steps, "--json", "--deny-run")
+    assert denied.code == 1, (denied.stdout, denied.stderr)
+    scenarios = {item["name"]: item for item in json.loads(denied.stdout)["files"][0]["scenarios"]}
+    error = scenarios["child"]["error"]
+    assert error["code"] == "RUNTIME-BDD-IO"
+    assert error["message"].startswith("denied: --deny-run")
+    assert scenarios["handler"]["status"] == "failed"

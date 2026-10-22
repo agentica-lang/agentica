@@ -427,11 +427,6 @@ def test(session: Session, words: List[String]) -> Int
   if options.schedulers != ""
     return emit(Reply.failed(2, "agentica: test does not take --schedulers; set AGENTICA_SCHEDULERS instead\n"))
   end
-  # The VMs of the test files do not get the --deny-* flags either, and dropping one would run code that the flag
-  # refuses. The step programs must start the programs under test, so --deny-run cannot reach them as it is.
-  if options.deny.size > 0
-    return emit(Reply.failed(2, "agentica: test does not take #{options.deny[0]} yet\n"))
-  end
   driver: List[String] = [
     "--vm", binary, "--version", session.settings.version, "--style", options.style,
     "--test-timeout-ms", "30000",
@@ -443,11 +438,12 @@ def test(session: Session, words: List[String]) -> Int
   for steps in options.steps
     driver = driver.concat(["--steps", steps])
   end
+  # The --deny-* flags and --sandbox in front of `test` mean the same as after it, where the driver reads them.
+  driver = driver.concat(options.deny)
   case Opts.parse(driver.concat(words))
     Opts.Parsed.Broken(message) ->
       return emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))
     Opts.Parsed.Usage(message, shown) -> return finish(Report.usage(message, shown))
-    Opts.Parsed.Refused(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
     Opts.Parsed.Ready(ready) -> return finish(Driver.run(ready, session.settings))
   end
 end

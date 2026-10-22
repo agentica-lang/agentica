@@ -245,7 +245,8 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
   `--sandbox`, or `agentica run --deny-run`) every start returns an error that
   begins with `denied: --deny-run`, in every task, and extern blocks are refused
   as with `--deny-native`. The flag precedes the source file; later arguments
-  reach `System.args`. `agentica test` does not take it yet.
+  reach `System.args`. Under `agentica test` a step program cannot start a
+  program under test.
 - A command without `/` is looked up in each `PATH` entry, in order. An empty
   entry is skipped, so `./name` runs a program in the working directory; a
   relative entry such as `.` resolves against it. A command with `/` is a path
@@ -383,8 +384,8 @@ end
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses
   a program that declares any extern function before anything runs:
-  `RUNTIME-NATIVE-DENIED`, exit 2. `agentica test` does not take the option
-  yet.
+  `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica test` such a test file is
+  a file error with that code.
 - Native calls work on Linux x86_64. Elsewhere a program that declares an
   extern function is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2
   (issue #548). `check`, `compile` and the queries work on every system.
