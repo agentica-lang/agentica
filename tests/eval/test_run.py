@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import uuid
 from argparse import Namespace
+from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 
@@ -612,6 +613,28 @@ class MainTests(unittest.TestCase):
                          (True, 3, 0.04, 0.05))
         self.assertIn("stopped_for_budget: true (3 runs not started)", summary)
         self.assertIn("cost: $0.0400 (cap $0.05)", summary)
+
+    def test_the_queue_goes_rep_by_rep_and_a_budget_stop_keeps_every_task_and_arm_within_one_rep(self) -> None:
+        grid = run.run_order(["t1", "t2"], ["skill", "typed-python"], {"typed-python": ["t2"]}, 2)
+
+        self.assertEqual(grid, [("t1", "skill", 1), ("t2", "skill", 1), ("t2", "typed-python", 1),
+                                ("t1", "skill", 2), ("t2", "skill", 2), ("t2", "typed-python", 2)])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.runtime_root(directory)
+            self.main(root, ["--tasks", "t1", "t2", "--arms", "skill", "typed-python", "--reps", "3",
+                             "--max-cost", "0.11"], "pass", cost=0.02)
+            (results,) = (root / "eval" / "results").iterdir()
+            summary = (results / "summary.md").read_text(encoding="utf-8")
+
+        # 0.08 + 0.02 fits under 0.11, 0.10 + 0.02 does not: five runs, the fifth being rep 2 of the first pair.
+        started = Counter(self.tasks_run)
+        self.assertEqual(len(self.tasks_run), 5)
+        self.assertEqual(self.tasks_run[:4], [("t1", "skill"), ("t1", "typed-python"), ("t2", "skill"), ("t2", "typed-python")])
+        self.assertEqual(len(started), 4)
+        self.assertLessEqual(max(started.values()) - min(started.values()), 1)
+        self.assertIn("reps completed (of 3): 2: t1/skill", summary)
+        self.assertIn("reps completed (of 3): 1: t1/typed-python, t2/skill, t2/typed-python", summary)
 
     def test_without_a_cap_every_run_starts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
