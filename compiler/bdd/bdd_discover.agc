@@ -39,7 +39,8 @@ end
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every
 ## folder below it, except the `deps/` of a project (a folder that holds an `agentica.toml`): those are packages
-## installed for the build, not tests of the project. A link to a folder is skipped. A path to a file is taken whatever its name is.
+## installed for the build, not tests of the project. A link to a folder is skipped. A path to a file is taken
+## whatever its name is.
 export def discover(given: List[String]) -> List[Entry]
   found = Found(problems: [], files: [])
   for text in given

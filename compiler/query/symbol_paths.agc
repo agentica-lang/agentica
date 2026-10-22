@@ -1,10 +1,11 @@
 ## The files a `symbol` query starts from (docs/future/39-semantic-cli.md, 39.4): the `PATH...` of the command line,
 ## each a file or a folder. A folder means every `*.agc` file under it, recursively, without hidden folders,
 ## `agc_libs/` folders and the `deps/` of a project (a folder beside an `agentica.toml`: the installed packages, not
-## the project's own modules; name `deps/NAME` as a path to read one), in bytewise order of the path; a link is never followed, so a file reached twice is not read
-## twice. `.agc` and `agc_libs` are compared without regard to case, as the package hash does (package_hash.agc). The
-## arguments keep their order, and a file named twice (by another spelling too) comes once. The folders are read
-## through the Workspace of the settings, so the query stays in the pure core.
+## the project's own modules; name `deps/NAME` as a path to read one), in bytewise order of the path; a link is never
+## followed, so a file reached twice is not read twice. `.agc` and `agc_libs` are compared without regard to case, as
+## the package hash does (package_hash.agc). The arguments keep their order, and a file named twice (by another
+## spelling too) comes once. The folders are read through the Workspace of the settings, so the query stays in the pure
+## core.
 
 import Problems from "../diagnostics/problem"
 import Paths from "../modules/import_path"

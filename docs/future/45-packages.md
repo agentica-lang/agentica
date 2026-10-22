@@ -196,18 +196,19 @@ decided in each phase.
     install`. Every build still hashes each package it loads against the lock,
     so an edited `deps/` is `PKG-HASH-MISMATCH`. A declared name never reaches
     the `pkg/` search, because a `pkg/` import would load an unhashed copy.
-  - The copy is made from the hashed cache folder, never from git. The folder
-    of a locked package is the tool's to replace: an edited file, a stale file
-    or a link of that name is replaced by the locked files when `install` runs
-    again. The new folder is built in a hidden folder of `deps/`, hashed, and
-    swapped in with two renames.
+  - The copy is made from the hashed cache folder, never from git. The folder of
+    a locked package is the tool's to replace: a link of that name, or a folder
+    whose `.agc` files differ from the lock (an edited, added or missing file),
+    is replaced by the locked files when `install` runs again. The new folder is
+    built in a hidden folder of `deps/`, hashed, and swapped in with two
+    renames.
   - Other entries of `deps/` stay. A dropped package is moved aside and removed
     without following links.
   - `deps/` must be a real folder, never a link, and nothing is written through
     a link (`PKG-SYMLINK`). A write that fails is `PKG-WRITE`.
   - The new folder is made with the ordinary mode; only its private staging
-    parent is 0700. A killed command can leave `.tmp-*` or `.old-*` folders in
-    `deps/`, which are safe to delete.
+    parent is 0700. A killed command can leave `.tmp-*` or `.old-*` entries in
+    `deps/`; the next command removes the ones older than ten minutes.
   - The tool writes no `.gitignore` in `deps/`: committing it is the project's
     choice (`_build/` gets one). `agc_libs/` stays for local libraries.
 - The lock writer sorts the `[[package]]` tables by name and writes their keys

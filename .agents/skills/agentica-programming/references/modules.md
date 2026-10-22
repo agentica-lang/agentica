@@ -211,12 +211,15 @@ import Sqlite from "pkg/sqlite/db"
   folder of a package the lock dropped.
 - `deps/<name>/` holds the `.agc` files and the `agentica.toml` of each locked
   package, direct or not, flat (for a `subdir`, that folder only). `install`
-  replaces the folder of each locked package whatever it held (run it again to
-  restore an edited file) and leaves every other entry of `deps/` alone (a
-  killed run may leave a hidden `.tmp-*` or `.old-*` folder; delete it). The
+  replaces the folder of each locked package that is not a real folder or whose
+  `.agc` files differ from the lock (run it again to restore an edited file)
+  and leaves every other entry of `deps/` alone (a killed run may leave a
+  hidden `.tmp-*` or `.old-*` entry; the next command removes it once it is
+  older than ten minutes). The
   tool writes no `.gitignore` there: commit `deps/` or ignore it. `deps/` as a
   symbolic link is `PKG-SYMLINK`; a failed write is `PKG-WRITE` (after `add` or
-  `update` saved the lock, run `agentica install` to finish `deps/`). `test` and
+  `update` saved the lock, run `agentica install` to write the locked packages
+  into `deps/`). `test` and
   `symbol` walks skip the `deps/` of a project. `agc_libs/` stays for local
   libraries.
 - The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte

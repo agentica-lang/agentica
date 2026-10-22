@@ -309,7 +309,8 @@ import Sqlite from "pkg/sqlite/db"
   `dependencies.<name>.git` (or `.tag`, `.ref`, `.subdir`), the same codes as
   `install`. Nothing is written when a step before the lock fails, and the lock
   is written before the manifest and `deps/` after both: if `deps/` cannot be
-  written, `agentica install` makes it match the lock again. A file that cannot
+  written, `agentica install` writes the locked packages into it (it removes
+  no folder). A file that cannot
   be written is `PKG-WRITE`; each file is written to a new file beside it that
   is renamed into place, and the old one is put back if a step fails. A
   manifest that changed while the packages were fetched is not overwritten
@@ -344,7 +345,8 @@ import Sqlite from "pkg/sqlite/db"
   - Both refresh `deps/` as `install` writes it, for every package of the new
     lock, and remove the folder of a package that the old lock had and the new
     one lacks. If `deps/` cannot be written, the lock is saved already and the
-    help says to run `agentica install`.
+    help says to run `agentica install` to write the locked packages into
+    `deps/`.
   - The answer lists `added NAME@VERSION`, `updated NAME@VERSION` (another
     commit or pin) and `removed NAME`, one per line, or `nothing to update`;
     a package with a `subdir` adds ` (folder DIR)` after `NAME@VERSION`. With
@@ -353,20 +355,23 @@ import Sqlite from "pkg/sqlite/db"
   `deps/<name>/` beside `agentica.toml`, like `mix deps.get`: the files the hash
   covers and the `agentica.toml` of the package (for a `subdir`, of that folder
   only: the cache holds nothing else). `install`, `add` and `update` copy them
-  from the cache into a hidden `.tmp-*` folder of `deps/`, hash the copy
-  against the lock (`PKG-HASH-MISMATCH` at `package[n].hash`), and swap it for
-  the old `deps/<name>/` in two renames, so the old folder stays if a step
-  fails. The folder of a locked package is replaced whatever it held (an edited
-  file, a stale file, a link), and running `install` again is how to restore
-  it. A folder that is a real folder with the locked hash is left as it is, so
-  its files keep their times. Hidden `.tmp-*` and `.old-*` entries of `deps/`,
-  left by a killed command, are removed first (never through a link). The new
-  folder has the ordinary mode (not the private one of the staging folder). A
+  from the cache into a hidden `.tmp-*` folder of `deps/`, hash the copy against
+  the lock (`PKG-HASH-MISMATCH` at `package[n].hash`), and swap it for the old
+  `deps/<name>/` in two renames, so the old folder stays if a step fails. The
+  folder of a locked package is replaced when it is not a real folder (a link,
+  say) or its `.agc` files differ from the lock (an edited, added or missing
+  file), and running `install` again is how to restore it. A real folder whose
+  `.agc` files have the locked hash is left as it is, so its files keep their
+  times, and so do other files in it (a note, say). Hidden `.tmp-*` and `.old-*`
+  entries of `deps/` left by a killed command are removed first when they are
+  older than ten minutes (a younger one may belong to a command that is still
+  running), judged by their own time and never through a link. The new folder
+  has the ordinary mode (not the private one of the staging folder). A
   `PKG-WRITE` that could not put an old folder back names the `.old-*` folder
-  that holds it; the next command removes it, after writing the locked files
-  again from the cache. A folder of a package
-  that `update` or `add` dropped from the lock is moved aside and removed
-  without following links (a link is removed as a link). Nothing else in
+  that holds it; `install` writes the package again from the cache, and the next
+  command removes that folder once it is older than ten minutes. A folder of a
+  package that `update` or `add` dropped from the lock is moved aside and
+  removed without following links (a link is removed as a link). Nothing else in
   `deps/` is touched, and the tool writes no `.gitignore` there: a project may
   commit `deps/` or ignore it. `deps/` itself must be a real folder: a symbolic
   link is `PKG-SYMLINK`, and a file or a write that fails is `PKG-WRITE` (the

@@ -1,11 +1,12 @@
 ## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and `agentica update [NAME]`
 ## (docs/future/45-packages.md, 45.9). Both work on the project of the working folder, resolve its packages
 ## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache, write agentica.lock
-## and refresh deps/ (io/package_deps.agc: every package of the new lock is written, and a package the old lock had and
-## the new one lacks is removed). `add` also puts the dependency in agentica.toml, with one line added and nothing else
-## changed (packages/manifest_edit.agc). The lock is written first: a lock with more packages than the manifest needs is
-## still good, while a manifest that names a package the lock lacks is PKG-LOCK-STALE. deps/ is written last, because it
-## can be made again from the lock (`agentica install`). Nothing is written when anything before the lock fails.
+## and refresh deps/ (io/package_deps.agc: every package of the new lock is written, and a package the old lock had
+## and the new one lacks is removed). `add` also puts the dependency in agentica.toml, with one line added and nothing
+## else changed (packages/manifest_edit.agc). The lock is written first: a lock with more packages than the manifest
+## needs is still good, while a manifest that names a package the lock lacks is PKG-LOCK-STALE. deps/ is written last,
+## because `agentica install` can write it again from the lock. Nothing is written when anything before the lock
+## fails.
 
 import PackageDeps from "../io/package_deps"
 import PackageResolve from "../io/package_resolve"
@@ -29,7 +30,7 @@ WRITE_TIMEOUT_MS = 60_000
 LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to make it match agentica.toml again"
 
 # More help for a deps/ that could not be written after the lock was.
-DEPS_PENDING = "agentica.lock was written already, so run `agentica install` to finish deps/"
+DEPS_PENDING = "agentica.lock was written already; run `agentica install` to write the locked packages into deps/"
 
 # What `add` was asked: the local name and where the package comes from.
 struct Request
@@ -193,7 +194,7 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
 end
 
 # Writes the packages of the new lock to deps/ and removes those the old lock had and the new one lacks. Only a project
-# that has a lock gets a deps/ folder. The lock is saved by now, so a failure says how to finish deps/.
+# that has a lock gets a deps/ folder. The lock is saved by now, so a failure says how to write deps/.
 def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lock.Locked]) -> Result[Void]
   deps = PackageImport.scope_of(Project.Project.Declared(found)).deps
   old = found.lock.packages.map do |locked| locked.name end

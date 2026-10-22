@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import stat
+import time
 from pathlib import Path
 
 import pytest
@@ -123,17 +124,24 @@ def test_install_again_puts_the_locked_files_back_replaces_a_link_and_leaves_oth
     before = greet.stat().st_mtime_ns
     assert install(ws, remotes)[1] is None
     assert greet.stat().st_mtime_ns == before
-    # Leftovers of a killed command (.old-* and .tmp-*, a link among them) are removed without following links; any
-    # other hidden entry stays.
+    # Leftovers of a killed command (.old-* and .tmp-*, a link among them) that are older than ten minutes are removed,
+    # without following links; a younger one (a command may still be using it) and any other hidden entry stay.
     (deps / ".old-1-greeter").mkdir()
     (deps / ".old-1-greeter" / "x.agc").write_text("# old\n", encoding="utf-8")
     (deps / ".tmp-2").mkdir()
     os.symlink(outside, deps / ".tmp-3")
+    (deps / ".tmp-fresh").mkdir()
+    os.symlink(outside, deps / ".old-fresh")
     (deps / ".keep").write_text("keep\n", encoding="utf-8")
+    long_ago = time.time() - 3600
+    for name in (".old-1-greeter", ".tmp-2", ".tmp-3"):
+        os.utime(deps / name, (long_ago, long_ago), follow_symlinks=False)
     assert install(ws, remotes)[1] is None
-    assert sorted(os.listdir(deps)) == [".keep", "gone", "greeter", "notes.txt", "tools"]
+    assert sorted(os.listdir(deps)) == [".keep", ".old-fresh", ".tmp-fresh", "gone", "greeter", "notes.txt", "tools"]
     assert cached_files(outside) == ["keep.agc"]
     (deps / ".keep").unlink()
+    (deps / ".old-fresh").unlink()
+    (deps / ".tmp-fresh").rmdir()
     # An edited copy and a stale file are gone after the next install, and no staging folder stays behind.
     (deps / "greeter" / "greet.agc").write_text("# edited\n", encoding="utf-8")
     (deps / "greeter" / "stale.agc").write_text("# stale\n", encoding="utf-8")
@@ -219,7 +227,6 @@ def test_a_write_that_fails_keeps_the_old_copy_and_leaves_no_hidden_folder(proje
     assert (deps / "greeter" / "stale.agc").exists()
 
 
-
 TEST_FILE = 'def main() -> Void\n  Test.run([Test.test("t") do ok() end])\nend\n'
 MODULE = 'export def mine() -> Int\n  return 1\nend\n'
 
@@ -255,6 +262,7 @@ def test_update_that_cannot_write_deps_has_saved_the_lock_and_says_so(project, r
     result = run(cli() + ["--json", "update"], cwd=ws.project, env=environment(ws, remotes))
     problem = json.loads(result.stderr)
     assert (result.code, problem["code"]) == (1, "PKG-SYMLINK")
-    assert problem.get("help")
+    # The one help the test reads: it is the behavior under test (PKG-SYMLINK has a help of its own).
+    assert "agentica install" in problem.get("help", "")
     assert (ws.project / "agentica.lock").read_text(encoding="utf-8") != before
     assert os.listdir(outside) == []

@@ -1,19 +1,21 @@
-## Writes the locked packages into `deps/<name>/` of the project (docs/grammar/05b-modules.md), one flat folder for each
-## package of the build, direct or not, and removes the ones the lock dropped. This is the only place a build reads a
-## package from. The files come from the cache folder of the commit, which `install` filled and hashed: the .agc files
-## the hash covers and the manifest of the package (for a `subdir`, the cache folder holds that folder alone). They are
-## built in a hidden folder of deps/, hashed against the lock, and swapped for the old `deps/<name>/` in two renames, so
-## a build never sees a half-written copy and a failure leaves the old copy.
+## Writes the locked packages into `deps/<name>/` of the project (docs/grammar/05b-modules.md), one flat folder for
+## each package of the build, direct or not, and removes the ones the lock dropped. This is the only place a build
+## reads a package from. The files come from the cache folder of the commit, which `install` filled and hashed: the
+## .agc files the hash covers and the manifest of the package (for a `subdir`, the cache folder holds that folder
+## alone). They are built in a hidden folder of deps/, hashed against the lock, and swapped for the old `deps/<name>/`
+## in two renames, so a build never sees a half-written copy and a failure leaves the old copy. A folder that is a real
+## folder with the locked hash is left as it is.
 ##
 ## The staging folder is a private (0700) parent, and the copy is a child of it made with the ordinary mode, because
 ## the folder that ends up as deps/<name>/ keeps its mode through the renames and other users must read it. A killed
-## command can leave a hidden `.tmp-*` or `.old-*` folder in deps/, which is safe to delete.
+## command can leave a hidden `.tmp-*` or `.old-*` entry in deps/; the next command removes the ones older than ten
+## minutes (a younger one may belong to a command that is still running).
 ##
 ## Nothing is written outside deps/: the staging folder is made there, new and private, with names the cache gave, and
 ## deps/ itself must be a real folder, never a link. The folder of a package is owned by the tool: whatever was there
-## (an edited copy, a stale file, a link) is replaced by the locked files. A dropped package is moved aside by name and
-## then removed without following links (Path.remove), so a link in its place is removed as a link. Other entries of
-## deps/ stay, and the tool writes no .gitignore there: committing deps/ is the project's choice.
+## (an edited .agc file, a stale one, a link) is replaced by the locked files. A dropped package is moved aside by name
+## and then removed without following links (Path.remove), so a link in its place is removed as a link. Other entries
+## of deps/ stay, and the tool writes no .gitignore there: committing deps/ is the project's choice.
 
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
@@ -29,6 +31,8 @@ import SaveFile from "save_file"
 # The deadline of one file-system call, in milliseconds.
 FS_TIMEOUT_MS = 60_000
 TEMP_TRIES = 5
+# How old a hidden .tmp-* or .old-* entry of deps/ must be before the next command removes it.
+LEFTOVER_SECONDS = 600
 # The manifest of a package, copied when the cache holds it as a regular file.
 MANIFEST_FILE = "agentica.toml"
 
@@ -42,7 +46,8 @@ end
 
 ## Writes the locked packages into `deps`, the deps/ folder of the project, in the order given, and then removes the
 ## folders of the `dropped` names that are not among them. `packages` are in the order of `lock_file`, whose entries
-## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill it).
+## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill
+## it).
 export def sync(
   settings: Env.Settings,
   lock_file: String,
@@ -123,8 +128,10 @@ def folder?(kind: Kind) -> Bool
 end
 
 # Removes what a killed or failed command left in deps/: hidden `.tmp-*` and `.old-*` entries, which a package name
-# (letters, digits and a few signs, never a leading dot) cannot be. Path.remove does not follow links, and a deps/ that
-# is not a real folder is left alone (the writes refuse it later). A leftover that cannot be removed stays.
+# (letters, digits and a few signs, never a leading dot) cannot be, once they are older than LEFTOVER_SECONDS by their
+# own modification time (a younger one may be the staging of a command that is still running). The time is read with
+# File.lstat, so a link is judged by itself, and Path.remove does not follow links. A deps/ that is not a real folder
+# is left alone (the writes refuse it later). A leftover that cannot be removed or looked at stays.
 def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
   here = try kind_of(workspace, deps)
   if !folder?(here)
@@ -134,9 +141,14 @@ def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
   if !listed.ok?
     return ok()
   end
+  now = Time.now_ms() / 1000
   for entry in listed.unwrap!
     if entry.name.starts_with?(".tmp-") or entry.name.starts_with?(".old-")
-      Path.remove(Paths.join(deps, entry.name), FS_TIMEOUT_MS)
+      path = Paths.join(deps, entry.name)
+      info = File.lstat(path, FS_TIMEOUT_MS)
+      if info.ok? and now - info.unwrap!.modified_seconds > LEFTOVER_SECONDS
+        Path.remove(path, FS_TIMEOUT_MS)
+      end
     end
   end
   return ok()
@@ -308,6 +320,7 @@ def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: Stri
       back = Path.rename(backup, target, FS_TIMEOUT_MS)
       if !back.ok?
         message = "cannot write #{target}, and the old copy could not be put back: it is in #{backup}"
+        message = "#{message} (install writes the package again from the cache)"
         return error(write_failure(target, message, "#{placed.message}; #{back.message}"))
       end
     end

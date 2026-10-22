@@ -1,11 +1,12 @@
 ## `agentica install`: fills the package cache from agentica.lock and writes every locked package into `deps/<name>/`
 ## beside agentica.toml (docs/grammar/05b-modules.md). The project is the one of the working folder, found as a build
 ## finds it (the nearest agentica.toml going up), and the lock is read as a build reads it, so a manifest that asks for
-## more than the lock holds is PKG-LOCK-STALE. The lock is never written. A package that is in the cache with the locked
-## hash is left alone and git does not run for it; the others are fetched (io/package_fetch.agc), one after the other,
-## and the first failure stops the command. When all are in the cache, the manifest of each package is checked against
-## the lock, as a build checks it, and only then are the files written to deps/ (io/package_deps.agc), so a lock that
-## cannot be built writes nothing. A folder of deps/ that the lock does not name is left as it is.
+## more than the lock holds is PKG-LOCK-STALE. The lock is never written. A package that is in the cache with the
+## locked hash is left alone and git does not run for it; the others are fetched (io/package_fetch.agc), one after the
+## other, and the first failure stops the command. When all are in the cache, the manifest of each package is checked
+## against the lock, as a build checks it, and only then are the files written to deps/ (io/package_deps.agc), so a
+## cache or a manifest that fails those checks writes nothing there. A folder of deps/ that the lock does not name is
+## left as it is.
 
 import PackageDeps from "../io/package_deps"
 import PackageFetch from "../io/package_fetch"
