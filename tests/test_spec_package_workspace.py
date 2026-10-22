@@ -13,11 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run
+from tests.agentica_test import cli, run
 from tests.package_support import (assert_at_key, cached_files, dependency, environment, git, inline_table,  # noqa: F401
-                                    remotes, ws)
+                                    no_git_path, remotes, ws)
 
-pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
 REPOSITORY = "owner/agentica-packages"
 TABLE = '[workspace]\nrepository = "%s"\nmembers = ["sqlite", "common"]\n'
@@ -84,16 +83,15 @@ def test_a_member_reads_its_sibling_from_the_folder_and_an_edit_there_is_seen_wi
         'version = 1\n\n[[package]]\nname = "common"\ngit = "%s"\nsubdir = "common"\ntag = "common-1"\n'
         'workspace = true\n' % url)
     # `install` fetches nothing and writes no deps/ folder, and a build needs neither git nor a cache.
-    no_git = tmp_path / "no-git"
-    no_git.mkdir()
-    installed, _ = at(sqlite, ws, remotes, "install", PATH=str(no_git))
+    no_git = no_git_path(tmp_path)
+    installed, _ = at(sqlite, ws, remotes, "install", PATH=no_git)
     assert (installed.code, installed.stdout) == (0, "in the workspace common@workspace\n"), installed.stderr
     assert not (sqlite / "deps").exists() and not ws.pkg_root.exists()
-    ran, _ = at(sqlite, ws, remotes, "main.agc", PATH=str(no_git))
+    ran, _ = at(sqlite, ws, remotes, "main.agc", PATH=no_git)
     assert (ran.code, ran.stdout) == (0, "sqlite+common v1\n"), ran.stderr
     # An edit in the sibling is the next run, with no tag, no install and no new lock (the bytecode cache sees it too).
     (repo / "common" / "util.agc").write_text(shout("v2"), encoding="utf-8")
-    ran, _ = at(sqlite, ws, remotes, "main.agc", PATH=str(no_git))
+    ran, _ = at(sqlite, ws, remotes, "main.agc", PATH=no_git)
     assert (ran.code, ran.stdout) == (0, "sqlite+common v2\n"), ran.stderr
     # The root of the workspace is in it too, and a project below a member that is not one is not.
     (repo / "main.agc").write_text('import Db from "pkg/sqlite/db"\n\ndef main() -> Void\n  puts(Db.open())\nend\n',
@@ -102,7 +100,7 @@ def test_a_member_reads_its_sibling_from_the_folder_and_an_edit_there_is_seen_wi
     assert (added.code, problem) == (0, None), added.stderr
     assert 'name = "sqlite"' in (repo / "agentica.lock").read_text(encoding="utf-8")
     assert not (repo / "deps").exists()
-    ran, _ = at(repo, ws, remotes, "main.agc", PATH=str(no_git))
+    ran, _ = at(repo, ws, remotes, "main.agc", PATH=no_git)
     assert (ran.code, ran.stdout) == (0, "sqlite+common v2\n"), ran.stderr
 
 

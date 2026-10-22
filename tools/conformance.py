@@ -52,6 +52,8 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 # its line here in the same pull request.
 KNOWN_ISSUES: dict[int, str] = {
     548: "native calls (extern functions) are not built on macOS yet; macOS refuses them at load",
+    598: "the package cache keeps a hidden .tmp-* folder (a bare git repository) after every fetch on Windows: "
+         "git writes its objects read-only and Path.remove refuses them",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
@@ -72,9 +74,7 @@ WINDOWS_ONLY_MODULES = frozenset({
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py",
-    "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_spec_package_add.py",
-    "tests/test_spec_package_fetch.py", "tests/test_spec_package_subdir.py", "tests/test_spec_package_deps.py",
-    "tests/test_spec_package_workspace.py", "tests/test_spec_packages.py",
+    "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_spec_packages.py",
     "tests/test_spec_symbol.py", "tests/test_spec_type_at.py", "tests/test_std_analysis.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_file_lines.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_single_binary.py", "tests/test_bytecode_cache.py",

@@ -6,16 +6,15 @@ the first two. Cases assert codes and the file and key path, never message text 
 """
 import json
 import os
-import shutil
 from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run
-from tests.package_support import (assert_at_key, cached_files, command, dependency, environment, git,  # noqa: F401
-                                    inline_table, lock_entry, package_hash, problem_of, remotes, run_json, ws)
+from tests.agentica_test import cli, run
+from tests.package_support import (LEAKS_THE_CACHE, assert_at_key, build, cached_files, command, dependency,  # noqa: F401
+                                    environment, git, inline_table, lock_entry, no_git_path, package_hash, problem_of,
+                                    remotes, remove_tree, run_json, ws)
 
-pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
 REPOSITORY = "owner/agentica-packages"
 SQLITE = {"db.agc": 'export def open() -> String\n  return "sqlite"\nend\n', "util/text.agc": "# text\n"}
@@ -72,10 +71,7 @@ def project(ws, remotes):
     return commit
 
 
-def build(ws, remotes, **extra):
-    return run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment(ws, remotes, **extra))
-
-
+@LEAKS_THE_CACHE
 def test_two_folders_of_one_repository_are_two_packages_and_install_keeps_only_the_declared_folders(ws, remotes, tmp_path):
     commit = project(ws, remotes)
     result, problem = run_json("install", ws, remotes)
@@ -95,9 +91,8 @@ def test_two_folders_of_one_repository_are_two_packages_and_install_keeps_only_t
     assert not [name for name in os.listdir(ws.pkg_root) if name.startswith(".")]
 
     # The program builds and runs from deps/ with no git: a build never fetches.
-    empty = tmp_path / "no-git"
-    empty.mkdir()
-    ran = build(ws, remotes, PATH=str(empty))
+    empty = no_git_path(tmp_path)
+    ran = build(ws, remotes, PATH=empty)
     assert (ran.code, ran.stdout) == (0, "sqlite postgres\n"), ran.stderr
 
 
@@ -232,14 +227,13 @@ def test_install_writes_one_deps_folder_for_each_package_with_only_its_folder_an
     assert cached_files(deps / "postgres") == ["db.agc"]
     assert package_hash(deps / "sqlite") == ws.locked[0]["hash"]
     # No cache, no git: deps/ is enough, and the stored names are the paths inside the folders.
-    shutil.rmtree(ws.pkg_root)
-    empty = tmp_path / "no-git"
-    empty.mkdir()
-    ran = build(ws, remotes, PATH=str(empty))
+    remove_tree(ws.pkg_root)
+    empty = no_git_path(tmp_path)
+    ran = build(ws, remotes, PATH=empty)
     assert (ran.code, ran.stdout) == (0, "sqlite postgres\n"), ran.stderr
     out = tmp_path / "deps.agcb"
     assert run(cli() + ["compile", str(ws.project / "main.agc"), "-o", str(out)], cwd=ws.project,
-               env=environment(ws, remotes, PATH=str(empty))).code == 0
+               env=environment(ws, remotes, PATH=empty)).code == 0
     assert b"pkg/sqlite@sqlite-0.1.0/db.agc" in out.read_bytes()
     # An edit in the folder of one package is a hash mismatch for that package only.
     (deps / "postgres" / "db.agc").write_text("# edited\n", encoding="utf-8")
@@ -263,10 +257,9 @@ def test_add_with_subdir_writes_the_key_in_the_manifest_and_the_lock(ws, remotes
     lock_entry(ws, remotes, REPOSITORY, POSTGRES, commit, tag="sqlite-0.1.0", name="postgres", subdir="postgres")
     assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == ws.lock_text()
     # What `add` wrote is what `install` and a build read, with no git.
-    empty = tmp_path / "no-git"
-    empty.mkdir()
-    assert run_json("install", ws, remotes, PATH=str(empty))[1] is None
-    ran = build(ws, remotes, PATH=str(empty))
+    empty = no_git_path(tmp_path)
+    assert run_json("install", ws, remotes, PATH=empty)[1] is None
+    ran = build(ws, remotes, PATH=empty)
     assert (ran.code, ran.stdout) == (0, "sqlite postgres\n"), ran.stderr
 
 
@@ -312,10 +305,9 @@ def test_a_package_can_declare_another_folder_of_its_own_repository(ws, remotes,
     assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == lock
     # `add` wrote both folders to deps/, so the program runs with no cache and no git.
     assert sorted(os.listdir(ws.deps)) == ["common", "postgres"]
-    shutil.rmtree(ws.pkg_root)
-    empty = tmp_path / "no-git"
-    empty.mkdir()
-    ran = build(ws, remotes, PATH=str(empty))
+    remove_tree(ws.pkg_root)
+    empty = no_git_path(tmp_path)
+    ran = build(ws, remotes, PATH=empty)
     assert (ran.code, ran.stdout) == (0, "postgres+common\n"), ran.stderr
 
 
