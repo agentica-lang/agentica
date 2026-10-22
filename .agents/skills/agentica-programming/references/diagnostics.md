@@ -130,8 +130,8 @@ and a task's crash line (`"task":true`) carry it too.
   `.agc` or another extension too); a cycle; an unknown or private imported
   name. A private struct cannot be built or updated with `.with` from another
   module. `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME` (`modules.md`).
-- `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in the
-  package cache, or a package file imports a `pkg/` name its own `agentica.toml`
+- `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in
+  `deps/` (run `agentica install`), or a package file imports a `pkg/` name its own `agentica.toml`
   does not declare.
 - `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
   `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`: `agentica.toml` or `agentica.lock` is
@@ -139,7 +139,7 @@ and a task's crash line (`"task":true`) carry it too.
   the project and its packages (conflict). The report names the file and a key
   path such as `dependencies.sqlite.git` (`key_path` in `--json`), or a line and
   column for a TOML syntax error; a missing or unreadable file has only its
-  name. The manifests of all locked packages in the cache are checked before any
+  name. The manifests of all locked packages in `deps/` are checked before any
   file loads, imported or not.
 - `QUERY-USAGE`: a wrong question to `outline`, `type-at`, `symbol` or `refs`: a
   missing or extra argument, an unknown option, `--stdin` without a file, a bad
@@ -154,12 +154,11 @@ and a task's crash line (`"task":true`) carry it too.
   of a line or file, or (for `refs`) a module alias or path in an import line.
   The span is the position; exit 2.
 - `PKG-HASH-MISMATCH`, `PKG-SYMLINK`: the `.agc` files of a package in
-  `agc_libs/<name>/` or the cache (or just fetched by `install`) are not the
-  ones the lock hashes (edited, added or missing), or one is a symbolic link or
+  `deps/<name>/` or the cache (or just fetched by `install`) are not the ones
+  the lock hashes (edited, added or missing), or one is a symbolic link or
   submodule, or the package's `agentica.toml` is not a regular file. Run
-  `agentica vendor` again for a vendored copy; remove the folder and run
-  `agentica install` for the cache. `agc_libs/` itself as a link is
-  `PKG-SYMLINK` for `vendor`.
+  `agentica install` again for `deps/`; remove the cache folder and run it for
+  the cache. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
 - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
   `agentica install` failed: git did not start or failed, the tag or commit does
   not exist, a copied path is unsafe, a file is over 1 MiB (16 MiB in all) or
@@ -174,8 +173,8 @@ and a task's crash line (`"task":true`) carry it too.
   manifest; the manifest has a layout the one-line edit cannot handle (write the
   line by hand); or `agentica.lock` or `agentica.toml` cannot be written. Fetch
   errors of a new pin are the codes of `install`, at `dependencies.<name>.git`
-  (or `.tag`, `.ref`). `agentica vendor` gives `PKG-WRITE` too, at the
-  `agc_libs/` file it cannot write.
+  (or `.tag`, `.ref`). Writing `deps/` gives `PKG-WRITE` too, at the file
+  it cannot write.
 - `CHECK-IMPORT-RENAME`: `import {A as b}` where the new name breaks the case
   rule of what it renames (struct or enum capitalized, function lowercase,
   constant a constant name).

@@ -1,4 +1,4 @@
-## Finds the module an import names: a std/ module in the stdlib/ folder, a package of the cache that the manifest
+## Finds the module an import names: a std/ module in the stdlib/ folder, a package of deps/ that the manifest
 ## declares as pkg/NAME/ (packages/package_import.agc), a pkg/ library in the search roots, or a file next to the
 ## importing one. A module is known by its key: the canonical path of a file, or std/NAME.agc for a standard module.
 
@@ -67,7 +67,7 @@ end
 export def search_roots(settings: Env.Settings, libs_dir: String) -> Result[List[String]]
   here = Source.position(0, 1, 0)
   site = Failure.Site(file: libs_dir, span: Source.Span(start: here, stop: here))
-  return library_roots(settings, libs_dir, false, site)
+  return library_roots(settings, libs_dir, site)
 end
 
 ## Finds the module that the import path file (already ending in .agc) names, from the importer. A failure is
@@ -146,10 +146,10 @@ def pkg(
   try Paths.validate_library_path(file, site)
   case try Packages.match_import(build.scope, importer.origin, file, site)
     Packages.Match.Library ->
-      key = try library(settings, build.libs_dir, Packages.locked_module?(build.scope, file), file, site)
+      key = try library(settings, build.libs_dir, file, site)
       return ok(plain(build, key))
     Packages.Match.Package(name, rest) ->
-      located = try Packages.open_package(settings.workspace, settings.env, build.scope, name, rest, site)
+      located = try Packages.open_package(settings.workspace, build.scope, name, rest, site)
       scope = build.scope.with(opened: located.opened)
       return ok(Resolution(key: located.file, origin: located.origin, name: located.name, scope: scope))
   end
@@ -188,16 +188,13 @@ def std_exists?(settings: Env.Settings, file: String) -> Bool
   end
 end
 
-# `vendored` is true for a module of a locked package that the importing manifest did not declare: agc_libs/ is skipped
-# for it, since its folder there is a vendored copy of that package, not a library (the other roots still apply).
 def library(
   settings: Env.Settings,
   libs_dir: String,
-  vendored: Bool,
   file: String,
   site: Failure.Site,
 ) -> Result[String]
-  roots = try library_roots(settings, libs_dir, vendored, site)
+  roots = try library_roots(settings, libs_dir, site)
   rest = file.slice(4, file.length - 4)
   for root in roots
     candidate = Paths.join(root, rest)
@@ -215,7 +212,6 @@ end
 def library_roots(
   settings: Env.Settings,
   libs_dir: String,
-  vendored: Bool,
   site: Failure.Site,
 ) -> Result[List[String]]
   on_windows = settings.env.windows
@@ -236,9 +232,6 @@ def library_roots(
     configured = configured.push(entry)
   end
   first = [Paths.join(libs_dir, "agc_libs")]
-  if vendored
-    first = []
-  end
   roots = first.concat(configured).concat(user_roots(settings.env, on_windows))
   if on_windows
     return ok(roots)

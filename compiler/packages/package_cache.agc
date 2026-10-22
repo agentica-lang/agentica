@@ -1,5 +1,6 @@
 ## Where the files of a package are kept (docs/grammar/05b-modules.md): a folder for each commit of each package,
-## under the cache root. The build only reads it; filling it is the job of install (a later phase).
+## under the cache root. It is a download cache: `install`, `add` and `update` fill it and write deps/ from it, and a
+## build never reads it.
 
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"

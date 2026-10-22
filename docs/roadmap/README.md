@@ -50,7 +50,7 @@ First batch, as soon as possible:
    bytecode, so unchanged programs skip the front end. Done: `_build/bytecode/`
    in the project, for `agentica FILE.agc` and `agentica test`.
 3. Packages [45](../future/45-packages.md): done. 45b (`install`, the fetch),
-   45c (`add`, `update`) and 45d (`vendor`) are built; FFI-b is the rest.
+   45c (`add`, `update`) and `deps/` (#578) are built; FFI-b is the rest.
 4. FFI-b: native libraries in packages (`[native]` in `agentica.toml`, hashes
    in the lock); needs 45b.
 
@@ -550,7 +550,8 @@ Packages ([§45](../future/45-packages.md)), with no row. It is item 3 of the
 list after 0.8.0 above, before FFI-b (item 4). The owner answered §45.14 on
 2026-10-20. Done: the TOML parser `std/toml` (45-0), the manifest, the lock and
 `pkg/<name>/` imports from the cache (45a), fetch and `install` (45b), `add`
-and `update` (45c), and `vendor` (45d). Packages are complete except FFI-b.
+and `update` (45c), and the `deps/` folder (#578). Packages are complete except
+FFI-b.
 
 After steps 1–2, target everyday scripts and automation. After steps 13 and 15
 (real applications and MCP), target larger general-purpose programs. Keep
