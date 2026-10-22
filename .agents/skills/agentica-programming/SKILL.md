@@ -15,10 +15,11 @@ does not exist; `agentica help NAME` prints a builtin's signature.
 ## Run and check
 
 `agentica F.agc ARGS` checks, then runs (`def main() -> Void`); `agentica check
-F.agc` only checks. Exit 0 is done. Exit 1 prints the first diagnostic (stable
-code, span, a `help` line): fix it and rerun. Exit 2 is bad usage. A check does
-not test behavior: run all cases in one command, `for f in cases/*.txt; do
-agentica p.agc < "$f" || break; done`.
+F.agc` only checks (use the path you are given if `agentica` is not on PATH).
+Exit 0 is done. Exit 1 prints the first diagnostic (stable code, span, a `help`
+line): fix it and rerun. Exit 2 is bad usage. A check does not test behavior:
+run all cases in one command, `for f in cases/*.txt; do agentica p.agc < "$f" ||
+break; done`.
 
 ## Rules agents break
 
@@ -46,7 +47,7 @@ Read only what the task needs.
 | `modules.md` | several files, `std/`, `pkg/`, packages |
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
-| `processes.md` | Process, stdin bytes, flush, `System.env` |
+| `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid` |
 | `network.md` | TCP, TLS, HTTP client and server |
 | `tasks.md` | Task, Channel, timeouts, cancel |
 | `lazy.md` | Lazy pipelines, endless sources, big files |

@@ -76,38 +76,13 @@ end
 
 `try` works in every block of a `Lazy` method (a step, `Lazy.produce`, a
 terminal), whatever the block gives; the block still ends with a plain value,
-not `ok(...)`. A failed `try` ends the pipeline: no later item is pulled, a file
+not `ok(...)`: `words.lazy.map do |w| try parse(w) * 10 end.to_a` is the first
+`parse` error. A failed `try` ends the pipeline: no later item is pulled, a file
 of the run is closed, and the terminal returns the error. A block nested in a
 `Lazy` block (`xs.map do ... end` inside a step) follows the usual rule: `try`
 there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
 
-```ruby
-def parse(text: String) -> Result[Int]
-  return text.to_i
-end
-
-def main() -> Void
-  words = ["1", "2", "x"]
-  puts(words.lazy.map do |w| try parse(w) * 10 end.first(2))   # ok([10, 20])
-  puts(words.lazy.map do |w| try parse(w) * 10 end.to_a)       # error("cannot convert \"x\" to Int")
-end
-```
-
 ## Files and channels
-
-```ruby
-def main() -> Void
-  head = File.foreach("app.log", 4096, 1000).first(10)        # opens, reads 10 lines, closes
-  bad = File.foreach("app.log", 4096, 1000).filter do |line| line.include?("ERROR") end.each do |line|
-    puts(line)
-    ok()
-  end
-  puts(head.ok? and bad.ok?)
-  jobs: Channel[Int] = Channel.new(8)
-  Task.spawn(&produce, jobs)                                  # sends into jobs, then jobs.close
-  puts(jobs.lazy(5000).reduce(0) do |sum, n| sum + n end)     # ok(sum), or error("channel: timed out")
-end
-```
 
 - `File.foreach` opens nothing until a terminal starts, and the terminal closes
   the file before it returns, on every path (end, `first`/`find` had enough, an
@@ -129,22 +104,10 @@ end
 
 ## write_lines
 
-```ruby
-def cents(line: String) -> Result[Int]
-  return line.split(",")[1].to_i
-end
-
-def main() -> Void
-  done = File.foreach("ledger.csv", 4096, 1000).drop(1).map do |line|
-    "#{try cents(line) * 100}"
-  end.write_lines("out.txt", 1000)                            # ok(), or the first error
-  puts(done)
-end
-```
-
 - `write_lines(path, timeout_ms)` takes a `Lazy[String]` (a `Lazy[Int]` is
   `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates the
-  file and writes each item and `\n`.
+  file and writes each item and `\n`: `File.foreach(src, 4096, 1000).drop(1).map
+  do |line| ... end.write_lines("out.txt", 1000)` is `ok()` or the first error.
 - The file opens before the first item is pulled (a failed open reads nothing)
   and is flushed and closed before the terminal returns, on every path. What was
   written before an error stays. A crash or cancel of the task closes it at the

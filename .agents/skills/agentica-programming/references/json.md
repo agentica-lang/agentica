@@ -81,22 +81,9 @@ JSON.list(j: Json) -> Result[List[Json]]
 ## Prefer structs for fixed shapes
 
 Struct fields may differ in type; maps and lists hold one type. For a protocol
-envelope, declare the struct and encode it directly instead of wrapping every
-scalar with `JSON.from`:
-
-```ruby
-struct RpcResponse
-  jsonrpc: String
-  id: Json
-  result: Json
-end
-
-def reply(id: Json, result: Json) -> Void
-  response = RpcResponse(jsonrpc: "2.0", id: id, result: result)
-  puts(JSON.encode(response))
-  IO.flush()
-end
-```
+envelope, declare the struct (`struct RpcResponse` with `jsonrpc: String`, `id:
+Json`, `result: Json`) and `puts(JSON.encode(RpcResponse(...)))`, then
+`IO.flush()`, instead of wrapping every scalar with `JSON.from`.
 
 - Use a separate shape for each message kind, so only its fields are emitted.
 - `ok` and `error` are reserved field names, so a JSON-RPC error envelope cannot

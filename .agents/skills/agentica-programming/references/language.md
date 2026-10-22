@@ -397,21 +397,6 @@ error(message: String) -> Result[T]
 - `Result.Ok(x)` and `Result.Err(m)` equal `ok(x)` and `error(m)`, as values and
   `case` patterns (`Result.Ok(_)` also for `Result[Void]`).
 
-```ruby
-def read_age(text: String) -> Result[Int]
-  age = try text.to_i
-  return ok(age)
-end
-
-def main() -> Void
-  age = read_age("bad")
-  if !age.ok?
-    puts(age.message)
-  end
-  puts(age.unwrap_or(0).to_s)
-end
-```
-
 ## Forms from other languages
 
 Rejected with a `help` line that names the Agentica form: `let x = 5`, `match`,

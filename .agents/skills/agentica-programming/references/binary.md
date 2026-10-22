@@ -50,19 +50,6 @@ Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
 - No mutable buffers and no `Bytes` type: writers return new lists, which the
   program joins.
 
-```ruby
-import Binary from "std/binary"
-
-def main() -> Void
-  header = Binary.write_u16_be(513).unwrap!
-  data = Binary.concat([header, Binary.write_f64_le(1.5)])
-  puts(data)                        # [2, 1, 0, 0, 0, 0, 0, 0, 248, 63]
-  puts(Binary.read_u16_be(data, 0)) # ok(513)
-  puts(Binary.read_f64_le(data, 2)) # ok(1.5)
-  puts(Binary.read_u32_be(data, 8)) # error("u32 at offset 8 is outside a list of length 10")
-end
-```
-
 ## Bit operations
 
 ```text

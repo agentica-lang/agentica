@@ -35,15 +35,14 @@ index 5 is outside a list of length 3
 ```
 
 Each line is a function and the place it runs (the error for the first, the
-call it waits on for the others). A block is `block`; a builtin that runs one
-(`xs.map`) has no line. `(after a tail call)` marks a frame whose callers a tail
-call (`return f(x)`) removed. `walk at tree.agc:9:12 (9998 times)` is one line
-for a recursion. After merging, the 15 innermost and 5 outermost lines show,
-with `... 312 frames not shown ...` between. A task ends with `task spawned at
-file:line:column`. A runtime trace names files as you can open them from the
-working directory (a standard module as `std/NAME.agc`); compile-time errors
-show the first file as typed and imports by absolute path. A name longer than
-256 bytes is cut and ends with `...`. `--json` adds `stack` (objects with
+call it waits on for the others); a block is `block`, and a builtin that runs
+one (`xs.map`) has no line. `(after a tail call)` marks a frame whose callers a
+tail call removed; `walk at tree.agc:9:12 (9998 times)` is one line for a
+recursion. The 15 innermost and 5 outermost lines show, with `... 312 frames
+not shown ...` between. A task ends with `task spawned at file:line:column`.
+Runtime traces name files as you can open them from the working directory (a
+standard module as `std/NAME.agc`); compile-time errors show the first file as
+typed and imports by absolute path. `--json` adds `stack` (objects with
 `column`, `file`, `function`, `line`, and `repeat` or `tail`), `stack_omitted`
 and, for a task, `spawned_at`; `RUNTIME-STEP-LIMIT`, `RUNTIME-STACK-OVERFLOW`
 and a task's crash line (`"task":true`) carry it too.

@@ -99,19 +99,6 @@ HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
   (`response.body`), `header_timeout_ms` (`request_timeout_ms`), and `read`,
   `trailers`, `close_body`, `request_stream` (one whole `HTTP.request`).
 
-```ruby
-import HTTP from "std/http"
-
-def main() -> Void
-  client = Result.unwrap!(HTTP.client(HTTP.client_options()))
-  case HTTP.get(client, "http://127.0.0.1:8080/health")
-    ok(response) -> puts("#{response.status} #{response.body}")
-    error(message) -> IO.warn(message)
-  end
-  HTTP.close_client(client)
-end
-```
-
 ## HTTP server (`std/http`)
 
 ```text

@@ -1,11 +1,11 @@
 # Builtins
 
 Signatures of the core namespaces. `agentica help NAME` prints one. A name from
-another language (`strip`, `String.to_i`, `value!`) prints the builtins it stands
-for (`--json`: `{"alias", "builtins", "hints"}`); one with only a hint (`len`,
-`int`) prints it and exits 2, as does an unknown name. Builtin namespaces and
-type names are reserved: no declaration, local, parameter, field or import alias
-may use them. `ok` and `error` are calls, never declared names.
+another language (`strip`, `String.to_i`, `value!`) prints the builtins it
+stands for (`--json`: `{"alias", "builtins", "hints"}`); one with only a hint
+(`len`, `int`) prints it and exits 2, as does an unknown name. Builtin
+namespaces and type names are reserved: no declaration, local, parameter, field
+or import alias may use them. `ok` and `error` are calls, never declared names.
 
 ## Output, input, system
 
@@ -27,7 +27,7 @@ System.args() -> List[String]           # the ARGS after the file
 System.exit(code: Int) -> Void
 Time.now_ms() -> Int                    # wall clock, Unix ms; may jump
 Time.monotonic_ms() -> Int              # never goes backward; use for durations
-Time.monotonic_ns() -> Int              # same clock in nanoseconds
+Time.monotonic_ns() -> Int              # nanoseconds; same origin as monotonic_ms
 Random.int(min: Int, max: Int) -> Int   # both ends inclusive; min > max halts (RUNTIME-INVALID-RANGE)
 Random.float() -> Float                 # 0.0 up to, not including, 1.0
 ```
@@ -231,15 +231,11 @@ structs and enums have no methods. `.call(...)` invokes a function value. An
 unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the type's
 methods.
 
-Write the Ruby names, which are the same call as the Agentica name:
-
-- `String`: `size` (`length`); `to_i`, `to_i!`, `to_f`, `to_f!` (`to_int`,
-  `to_int!`, `to_float`, `to_float!`); `strip` (`trim`); `include?`,
-  `start_with?`, `end_with?` (`contains?`, `starts_with?`, `ends_with?`).
-- `List`: `length` (`size`); `push` (`append`); `join` on `List[String]`.
-- `Int`: `to_s`, `to_f`. `Float`: `to_s`, `to_i`, `to_i!`.
-- Any data value: `to_s` (the text `"#{x}"` gives), `inspect` (the text
-  `IO.inspect(x)` prints).
+Write the Ruby method names; each is the same call as its Agentica name
+(`agentica help NAME` shows the target): `strip`, `include?`, `start_with?`,
+`end_with?`, `to_i`, `to_f`, `to_i!`, `to_f!`, `size` on a String, `length` on a
+List, `push`, `join` on a `List[String]`, `to_s` and `inspect` on any data
+value, `n.to_f`, `x.to_i`.
 
 Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A
 negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is

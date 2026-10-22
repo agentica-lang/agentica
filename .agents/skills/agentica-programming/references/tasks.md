@@ -99,27 +99,6 @@ cycle). The timed form takes no part in a cycle: a task that timed-awaits its
 own handle, or two that timed-await each other, get `Await.TimedOut` after the
 timeout, and a plain await of a task waiting with a timeout does not halt.
 
-```ruby
-def double(inbox: Channel[Int]) -> Int
-  n = inbox.recv(10000).unwrap!
-  return n * 2
-end
-
-def main() -> Void
-  inbox: Channel[Int] = Channel.new(1)
-  task = Task.spawn(&double, inbox)
-  case Task.await(task, 20)
-    Await.Done(n) -> puts("done #{n}")
-    Await.TimedOut -> puts("still working")
-  end
-  inbox.send(21, 1000)
-  case Task.await(task, 10000)
-    Await.Done(n) -> puts("done #{n}")
-    Await.TimedOut -> puts("gave up")
-  end
-end
-```
-
 ## Cancel
 
 `Task.cancel(task)` stops a task you no longer need (such as an owner task that
@@ -310,22 +289,6 @@ requests. There is no shared mutable state (the one exception is the
 `Enumerator` or `Fiber`; a `Lazy` is a recipe one terminal runs in the calling
 task, not a producer. A producer task sending into a channel is the generator:
 its capacity gives backpressure and `recv` is `next`.
-
-```ruby
-def count(inbox: Channel[Int]) -> Int
-  total = 0
-  while true
-    case inbox.recv(1000)
-      ok(n) -> total += n
-      error(_) ->
-        if inbox.closed?
-          break
-        end
-    end
-  end
-  return total
-end
-```
 
 ## One form per job
 
