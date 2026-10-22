@@ -15,9 +15,9 @@ method exists: ask `agentica help NAME`.
 Work loop: write `p.agc`, `agentica check p.agc`, run `agentica p.agc < input`.
 `agentica help NAME` prints a builtin's signature (Ruby names work: `split`,
 `include?`). `agentica doc std/NAME` prints the API of a std/ module (`http`,
-`queue`, `binary`, `logger`, `toml`); `JSON` and `File` are builtins, so use
-`agentica help JSON.parse`. A diagnostic has a stable code and a `help` line:
-read it, fix it.
+`queue`, `binary`, `logger`, `toml`; `import HTTP from "std/http"`); `JSON` and
+`File` are builtins, so use `agentica help JSON.parse`. A diagnostic has a
+stable code and a `help` line: read it, fix it.
 
 ```ruby
 def main() -> Void
@@ -35,9 +35,11 @@ end
 
 ## Gotchas
 
-- `case x` arms are `pattern -> stmt`, ending with `_ ->` unless an enum case
-  lists every variant (else `CHECK-UNREACHABLE-CASE-ARM`); no `when`, `match`,
-  `let`, `;`, `continue` (`next`) or `loop do` (`while true`).
+- `case x` arms are `pattern -> stmt` (or a block). An enum or Result lists
+  every variant (`ok(n)`, `error(m)`) and no `_`
+  (`CHECK-UNREACHABLE-CASE-ARM`); other values end with `_ ->`
+  (`CHECK-NON-EXHAUSTIVE-CASE`). No `when`, `match`, `let`, `;`, `continue`
+  (`next`) or `loop do` (`while true`).
 - A blank line follows every `end` of a `def`, `struct`, `enum`. The top level
   holds only declarations, in this order: `NAME = 1` constants, `struct` and
   `enum`, then `def`s.
