@@ -29,7 +29,8 @@ check a signature with `agentica help NAME`.
    as compact text; `--json` as one object.
 4. Exit 0 and the output the request asks for mean done. A check does not test
    runtime behavior.
-5. `agentica help NAME` prints a signature (unknown name: exit 2); `agentica
+5. `agentica help NAME` prints a signature (a Ruby or Python name such as
+   `strip` answers with the Agentica builtin; unknown name: exit 2); `agentica
    doc PATH` prints the exported API of a file or `std/` module. Questions about
    code, without reading it: `agentica outline`, `type-at`, `refs` and `symbol`
    (`references/queries.md`). Run flags: `--deny-run`, `--deny-net`,
