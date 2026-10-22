@@ -1953,7 +1953,7 @@ end
 
 def ended_middle(e: Ending) -> Result[Channel[Int]]
   if e.kind.starts_with?("map")
-    results = Task.map([e.up], 1, 20, &hand_on)
+    results = Task.map([e.up], 1, 200, &hand_on)
     return e.up.recv(5000)
   end
   middle = Task.spawn(&hand_on, e.up)
@@ -2018,8 +2018,12 @@ def main() -> Void
     end
   end
   for kind in ["map-cancel", "map-crash", "middle-cancel", "middle-crash"]
+    rounds = 100
+    if kind.starts_with?("map")
+      rounds = 20
+    end
     round = 0
-    while round < 100
+    while round < rounds
       up: Channel[Channel[Int]] = Channel.new(1)
       down: Channel[Channel[Int]] = Channel.new(1)
       owner = Task.spawn(&ending, Ending(kind: kind, up: up, down: down))
@@ -2050,11 +2054,14 @@ def test_handles_held_by_cancelled_descendants_are_closed_when_the_await_of_thei
     # cancel holds already: the owner cancels the middle task (or Task.map times out the item) whose child owns a
     # channel and keeps running, the child moves up to the owner, then the owner crashes or is cancelled. The owner's
     # end must wait for the child through the top of its holder chain; a send to the child's channel right after the
-    # await must fail. Before that fix about half of those rounds sent. 100 rounds of each kind per run.
+    # await must fail. Before that fix about half of those rounds sent. 100 rounds of each kind per run, 20 of the map-*
+    # kinds: the item's 200 ms deadline counts from its spawn and must leave it time to send its channel up, which 20 ms
+    # did not on a loaded runner (#528), and every map round waits out the whole deadline.
     bytecode = program(tmp_path, "owner_descendants", OWNER_DESCENDANTS)
     kinds = ["cancel-busy", "cancel-nested", "crash-busy", "crash-nested", "crash-wait"]
     expected = [f"{kind}: network: listener is closed x100" for kind in kinds]
-    expected += [f"{kind}: channel: closed x100" for kind in ["map-cancel", "map-crash", "middle-cancel", "middle-crash"]]
+    expected += [f"{kind}: channel: closed x20" for kind in ["map-cancel", "map-crash"]]
+    expected += [f"{kind}: channel: closed x100" for kind in ["middle-cancel", "middle-crash"]]
     for _ in range(repeats):
         result = vm(bytecode, timeout=120)
         assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
