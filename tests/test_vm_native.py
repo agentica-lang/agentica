@@ -1,7 +1,8 @@
 """Native calls (the extern blocks of docs/grammar/05-syntax.md and 06d-io-and-network.md) through the product CLI.
 
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows) for
-each module run, so every C type crosses a real ABI. Native calls exist on Linux x86_64 and Windows x64 for now:
+each module run, so every C type crosses a real ABI; two cases also call the system libsqlite3.so.0 on Linux, which
+CI installs. Native calls exist on Linux x86_64 and Windows x64 for now:
 elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
 test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* has
 no Windows port yet (#568). Tests assert codes and spans, never messages (AGENTS.md).

@@ -13,6 +13,7 @@ RUN apt-get update \
       ca-certificates \
       git \
       libgc-dev \
+      libsqlite3-0 \
       libssl-dev \
       nodejs \
       pkg-config \
