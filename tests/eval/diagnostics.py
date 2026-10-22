@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 RESULTS = Path(__file__).resolve().parent / "results"
-RUN_NAME = re.compile(r"^(?P<task>t\d+-[a-z0-9-]+?)-(?P<arm>skill|grammar|binary|typed-python|python)-\d+$")
+RUN_NAME = re.compile(r"^(?P<task>t\d+-[a-z0-9-]+?)-(?P<arm>skill-minimal|skill|grammar|binary|typed-python|python)-\d+$")
 HEADER = re.compile(
     r'(?:error\[|^\[|"code"\s*:\s*")(?P<code>(?:LEX|PARSE|CHECK|RUNTIME)-[A-Z0-9-]+)',
     re.MULTILINE,
