@@ -19,6 +19,9 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
    vendored one gets the same define from the Makefile. */
 #define GC_THREADS
 #include <gc.h>
+#ifdef _WIN32
+#include <signal.h>
+#endif
 #endif
 
 #ifdef AGC_NO_GC
@@ -56,9 +59,25 @@ static void on_gc_abort(const char *message) {
 }
 #endif
 
+#ifndef AGC_NO_GC
+/* A collection stops the other registered threads wherever they are; on Windows (SuspendThread) one may be inside
+   malloc and hold the process heap's lock. The collecting thread must not malloc until the world starts again, but
+   Boehm's mark phase, built with GCC for Windows, sets a SIGSEGV handler with signal() (GC_mark_some), and the UCRT's
+   signal() mallocs the calling thread's own copy of the signal table the first time that thread calls it. A thread's
+   first collection then waited for ever on the heap lock that a stopped thread held (#528). So each thread that may
+   collect calls signal() once before it is registered, while no collection can stop it, and keeps its handler. */
+static void own_signal_table(void) {
+#ifdef _WIN32
+  void (*kept)(int) = signal(SIGSEGV, SIG_DFL);
+  if (kept != SIG_ERR) (void)signal(SIGSEGV, kept);
+#endif
+}
+#endif
+
 void agc_init(void) {
 #ifndef AGC_NO_GC
   if (GC_is_init_called()) return;
+  own_signal_table();
   GC_set_all_interior_pointers(1);
   GC_INIT();
   GC_set_oom_fn(on_gc_oom);
@@ -84,6 +103,7 @@ bool agc_gc_thread_enter(void) {
 #else
   struct GC_stack_base base;
   if (GC_get_stack_base(&base) != GC_SUCCESS) return false;
+  own_signal_table();
   /* GC_DUPLICATE: the collector knows the thread already (it started it, or it was registered before). */
   int status = GC_register_my_thread(&base);
   return status == GC_SUCCESS || status == GC_DUPLICATE;

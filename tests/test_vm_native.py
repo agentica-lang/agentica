@@ -457,7 +457,8 @@ end
 
 
 # Native.string_at reads up to the NUL, or exactly the length given (the NUL and a cut character included, which
-# becomes U+FFFD); Native.bytes_at copies bytes. NULL with length 0 is empty, as C means it. Native.pointer makes the pointer of an integer, which C sees as that
+# becomes U+FFFD); Native.bytes_at copies bytes. NULL with length 0 is empty, as C means it. Native.pointer makes the
+# pointer of an integer, which C sees as that
 # integer, and a pointer's value makes the same pointer again.
 @NATIVE_CALLS
 def test_memory_that_c_returns_is_read_as_text_or_bytes(tmp_path, peer):
@@ -1191,7 +1192,8 @@ SQLITE_MEMORY_EXTERN = SQLITE_OUT_EXTERN.replace("  def sqlite3_column_text(stmt
 
 # A blob and a text bound with SQLITE_TRANSIENT (SQLite copies them: the C.String and C.Bytes copies live only during
 # the call) come back through sqlite3_column_blob and sqlite3_column_text with their lengths; a row of SQL NULLs gives
-# NULL pointers, and an empty blob a NULL pointer with length 0, which reads as []. sqlite3_exec writes its error message to an out pointer, which string_at reads and sqlite3_free
+# NULL pointers, and an empty blob a NULL pointer with length 0, which reads as []. sqlite3_exec writes its error
+# message to an out pointer, which string_at reads and sqlite3_free
 # frees; a statement that works leaves it NULL.
 @NATIVE_CALLS
 @NO_SYSTEM_SQLITE
