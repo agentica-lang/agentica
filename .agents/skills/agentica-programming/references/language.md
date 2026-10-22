@@ -85,7 +85,7 @@ The exact rule behind a checker error or a core question. Builtin methods and
   lines = File.foreach(path, 65536, 1000)
     .drop(1)                          # header
     .map do |line| parse(line) end
-    .filter(&big?)
+    .select(&big?)
   ```
 - Reserved words: `def struct enum case do import export end if elsif else
   while for in return try true false nil and or not`. `value.with(...)` is
@@ -198,7 +198,7 @@ end
 - Calls nest 10000 deep at most (`RUNTIME-STACK-OVERFLOW`). Tail calls do not
   count: only `return f(...)` whose value is directly a user-function call
   (`return 1 + f(n - 1)` and builtin calls are not). Recurse over big inputs in
-  tail form with an accumulator, or use `for`, `map`, `filter`, `each`:
+  tail form with an accumulator, or use `for`, `map`, `select`, `each`:
   `return count(n - 1, acc + 1)` runs 1,000,000 calls.
 - A non-Void function must `return` on every path (`CHECK-MISSING-RETURN`); a
   loop does not count (put a `return` after `while true`) and the last

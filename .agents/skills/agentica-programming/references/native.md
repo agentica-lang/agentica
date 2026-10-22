@@ -19,7 +19,11 @@ end
   default `PARSE-EXTERN-DEFAULT`. `##` docs go on the `def` lines.
 - The library is a plain string: a name without `/` (the system looks it up) or
   an absolute path, else `PARSE-EXTERN-LIBRARY`. It opens at the first call; not
-  found is `RUNTIME-NATIVE-LOAD`.
+  found is `RUNTIME-NATIVE-LOAD`. The working directory is never searched. On
+  Windows a name (`"ucrtbase.dll"`) is looked up next to `agentica.exe` and in
+  System32, not in `PATH`; an absolute path is `"C:\\libs\\x.dll"` (escaped
+  backslashes), and its DLLs are searched in its folder and the default
+  folders, never in `PATH` (put `libgcc_s_seh-1.dll` next to a MinGW DLL).
 - A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
   is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""` for now.
 - A `def` call blocks timers, I/O and other tasks until it returns: keep such
@@ -44,9 +48,10 @@ end
   descriptor; a socket or an eventfd is polled through a duplicate and becomes
   non-blocking. Closing the descriptor does not end a wait (it times out unless
   the file becomes ready). A cancel stops the wait.
-- Linux x86_64 only for now: elsewhere a program with an extern function or a
-  `Native.wait_*` call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`
-  (exit 2). `check` works everywhere.
+- Linux x86_64 and Windows x64 for now (`Native.wait_*` returns an error on
+  Windows): elsewhere a program with an extern function or a `Native.wait_*`
+  call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check`
+  works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
 - Functions count as `def`s for the declaration order. A wrong signature is

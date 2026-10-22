@@ -1,11 +1,21 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
-   the cache of prepared calls, and agc_ffi_refusal at load. Calls into libm run only in a build with libffi. */
+   the cache of prepared calls, and agc_ffi_refusal at load. Calls into the math library run only in a build with
+   libffi. */
 #include "../core.h"
 #include "../services.h"
 
 #include <assert.h>
 #include <setjmp.h>
 #include <string.h>
+
+/* The math library and the C library, found by name by the system loader; on Windows the UCRT holds both. */
+#ifdef _WIN32
+#define LIBM "ucrtbase.dll"
+#define LIBC "ucrtbase.dll"
+#else
+#define LIBM "libm.so.6"
+#define LIBC "libc.so.6"
+#endif
 
 #ifdef AGC_FFI
 #define AGC_FFI_BUILT true
@@ -32,12 +42,12 @@ static void fails(const char *signature, const agc_value *items, size_t n, const
 
 static void test_bad_signatures(void) {
   agc_value one = agc_float(0.0);
-  const char *bad[] = {"", "d", "dd", "dd cos", "zd cos libm.so.6", "dz cos libm.so.6", "dv cos libm.so.6",
-                       "dd  libm.so.6", " cos libm.so.6"};
+  const char *bad[] = {"", "d", "dd", "dd cos", "zd cos " LIBM, "dz cos " LIBM, "dv cos " LIBM,
+                       "dd  " LIBM, " cos " LIBM};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);
-  memcpy(wide + 66, " f libm.so.6", 13);
+  memcpy(wide + 66, " f " LIBM, sizeof " f " LIBM);
   fails(wide, NULL, 0, "RUNTIME-INTERNAL");
   fails("dd cos ", &one, 1, "RUNTIME-NATIVE-LOAD");
 }
@@ -45,27 +55,27 @@ static void test_bad_signatures(void) {
 static void test_calls(void) {
 #ifdef AGC_FFI
   agc_value zero = agc_float(0.0);
-  assert(agc_as_float(&vm, native_call("dd cos libm.so.6", &zero, 1)) == 1.0);
+  assert(agc_as_float(&vm, native_call("dd cos " LIBM, &zero, 1)) == 1.0);
   /* The second call finds the prepared one; a wrong count or type still fails. */
-  assert(agc_as_float(&vm, native_call("dd cos libm.so.6", &zero, 1)) == 1.0);
-  fails("dd cos libm.so.6", NULL, 0, "RUNTIME-INTERNAL");
+  assert(agc_as_float(&vm, native_call("dd cos " LIBM, &zero, 1)) == 1.0);
+  fails("dd cos " LIBM, NULL, 0, "RUNTIME-INTERNAL");
   agc_value word = text("x");
-  fails("dd cos libm.so.6", &word, 1, "RUNTIME-INTERNAL");
+  fails("dd cos " LIBM, &word, 1, "RUNTIME-INTERNAL");
   agc_value big = agc_int(INT64_C(1) << 31);
-  fails("ii abs libc.so.6", &big, 1, "RUNTIME-INTEGER-OVERFLOW");
+  fails("ii abs " LIBC, &big, 1, "RUNTIME-INTEGER-OVERFLOW");
   agc_value nul = agc_string_value(agc_make_string("a\0b", 3, 3));
-  fails("ls strlen libc.so.6", &nul, 1, "RUNTIME-INVALID-CHARACTER");
+  fails("ls strlen " LIBC, &nul, 1, "RUNTIME-INVALID-CHARACTER");
   agc_value small = agc_int(-(INT64_C(1) << 31));
-  assert(agc_as_int(&vm, native_call("ii abs libc.so.6", &small, 1)) == INT32_MIN);
+  assert(agc_as_int(&vm, native_call("ii abs " LIBC, &small, 1)) == INT32_MIN);
   agc_value s = text("h\xc3\xa9llo");
-  assert(agc_as_int(&vm, native_call("ls strlen libc.so.6", &s, 1)) == 6);
-  fails("v no_such_function_here libc.so.6", NULL, 0, "RUNTIME-NATIVE-LOAD");
+  assert(agc_as_int(&vm, native_call("ls strlen " LIBC, &s, 1)) == 6);
+  fails("v no_such_function_here " LIBC, NULL, 0, "RUNTIME-NATIVE-LOAD");
   fails("v f libnot_there_at_all.so", NULL, 0, "RUNTIME-NATIVE-LOAD");
 #else
-  fails("dd cos libm.so.6", NULL, 0, "RUNTIME-NATIVE-LOAD");
+  fails("dd cos " LIBM, NULL, 0, "RUNTIME-NATIVE-LOAD");
 #endif
   vm.rt->no_files = true;
-  fails("dd cos libm.so.6", NULL, 0, "RUNTIME-NATIVE-DENIED");
+  fails("dd cos " LIBM, NULL, 0, "RUNTIME-NATIVE-DENIED");
   vm.rt->no_files = false;
 }
 

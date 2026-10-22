@@ -6,20 +6,23 @@ description: Functions for Map[K, V]. Each one is also a method on maps.
 
 Maps are immutable and keep the order in which keys were added. Keys are `Int` or `String`.
 
-## size
+## size and empty?
 
 ```text
 Map.size(map: Map[K, V]) -> Int
+Map.empty?(map: Map[K, V]) -> Bool
 ```
 
 ```agentica
 def main() -> Void
   puts({"a": 1, "b": 2}.size)
+  puts({"a": 1, "b": 2}.empty?)
 end
 ```
 
 ```output
 2
+false
 ```
 
 `size` is O(1): the map keeps its count.
@@ -50,17 +53,19 @@ false
 
 `map[key]` also reads a value, and stops the program when the key is missing.
 
-## has_key?
+## has_key? and key?
 
 ```text
 Map.has_key?(map: Map[K, V], key: K) -> Bool
 ```
 
+`m.key?(k)` is the Ruby name of `Map.has_key?`.
+
 ```agentica
 def main() -> Void
   m = {1: "one"}
-  puts(m.has_key?(1))
-  puts(m.has_key?(2))
+  puts(m.key?(1))
+  puts(m.key?(2))
 end
 ```
 
@@ -154,18 +159,18 @@ x=1
 y=2
 ```
 
-## filter
+## filter and select
 
 ```text
 Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
 ```
 
-Keeps the entries for which the function gives `true`, in insertion order. O(n), like `each`.
+Keeps the entries for which the function gives `true`, in insertion order. O(n), like `each`. `m.select` is the Ruby name.
 
 ```agentica
 def main() -> Void
   stock = {"apple": 3, "fig": 0, "kiwi": 7}
-  puts(stock.filter do |name, count| count > 0 end)
+  puts(stock.select do |name, count| count > 0 end)
 end
 ```
 

@@ -51,8 +51,9 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
 KNOWN_ISSUES: dict[int, str] = {
-    568: "the bytecode cache trusts any real folder on Windows (no owner or ACL check), and its link cases have no test",
-    548: "native calls (extern functions) are built on Linux x86_64 only; macOS and Windows refuse them at load",
+    568: "the bytecode cache trusts any real folder on Windows (no owner or ACL check), and its link cases have no test; "
+         "Native.wait_* has no Windows port (libuv polls only sockets there)",
+    548: "native calls (extern functions) are not built on macOS yet; macOS refuses them at load",
 }
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).

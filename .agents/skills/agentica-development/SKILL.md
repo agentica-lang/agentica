@@ -31,7 +31,8 @@ change needs.
   `check_tables.agc`); every user-facing text (help, diagnostics, docs, site,
   skills) shows only the Ruby form (`s.strip`, not `String.trim`). A non-Ruby
   habit gets a `help:` hint, not a second accepted form. Exception: Ruby's own
-  synonyms for one small cosmetic thing (`length`, `size`) are all accepted.
+  synonyms are all accepted (`length`/`size`, `collect`, `inject`, `detect`,
+  `member?`; `ruby_synonyms`), and the texts show only the most common one.
   Issue #574 proposes making the Ruby name the only accepted name.
 - Rules in `AGENTS.md` are defaults; a PR may relax one if it says which and
   why.
