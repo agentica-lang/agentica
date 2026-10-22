@@ -1,13 +1,12 @@
 /*
- * The native calls of a build without libffi (every system but Linux x86_64
- * and Windows x64 for now, issue #548): nothing can be prepared, so a program
+ * The native calls of a build without libffi (every system but Linux x86_64,
+ * Windows x64 and macOS): nothing can be prepared, so a program
  * with extern functions is refused at load (agc_ffi_refusal). Adapter layer;
  * the other half is ffi_libffi.c.
  */
 #ifndef AGC_FFI
 #include "ffi_os.h"
 
-#include <errno.h>
 #include <stdio.h>
 
 bool agc_ffi_supported(void) { return false; }
@@ -30,12 +29,4 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
   (void)args;
   (void)result;
 }
-
-int agc_ffi_wait_fd_open(int fd) {
-  (void)fd;
-  errno = ENOSYS;
-  return -1;
-}
-
-void agc_ffi_wait_fd_close(int fd) { (void)fd; }
 #endif

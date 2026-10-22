@@ -1,12 +1,11 @@
 """Native calls (the extern blocks of docs/grammar/05-syntax.md and 06d-io-and-network.md) through the product CLI.
 
-The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows) for
-each module run, so every C type crosses a real ABI; two cases also call the system libsqlite3.so.0 on Linux, which
-CI installs. Native calls exist on Linux x86_64 and Windows x64 for now:
-elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
-test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). On Windows
-Native.wait_* polls only sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert codes and spans, never
-messages (AGENTS.md).
+The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows, a
+dylib on macOS) for each module run, so every C type crosses a real ABI; three cases also call the system SQLite
+(libsqlite3.so.0 on Linux, which CI installs, and libsqlite3.dylib on macOS). Native calls exist on Linux x86_64,
+Windows x64 and macOS: elsewhere a program that declares extern functions is refused at load with
+RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. On Windows Native.wait_* polls only
+sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert codes and spans, never messages (AGENTS.md).
 """
 import ctypes
 import json
@@ -16,16 +15,18 @@ import time
 
 import pytest
 
-from tests.agentica_test import (FIXTURES, TARGET_OS, WINDOWS, cli, host_only, known_issue, require, run, tool,
-                                 vm_environment)
+from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, host_only, require, run, tool, vm_environment
 
+MACOS = TARGET_OS == "darwin"
+# The systems whose build has libffi; the others refuse native code at load, and the call cases skip there.
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
-    (WINDOWS and platform.machine() in ("AMD64", "x86_64"))
-NATIVE_CALLS = known_issue(not NATIVE, 548, "native calls are built on Linux x86_64 and Windows x64 only")
+    (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
+NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux x86_64, Windows x64 and macOS only")
 
-# The C library and the math library, found by name by the system loader. On Windows the UCRT holds both.
-LIBC = "ucrtbase.dll" if WINDOWS else "libc.so.6"
-LIBM = "ucrtbase.dll" if WINDOWS else "libm.so.6"
+# The C library and the math library, found by name by the system loader. On Windows the UCRT holds both, and on
+# macOS libSystem (in the dyld shared cache, not on disk).
+LIBC = "ucrtbase.dll" if WINDOWS else "libSystem.B.dylib" if MACOS else "libc.so.6"
+LIBM = "ucrtbase.dll" if WINDOWS else "libSystem.B.dylib" if MACOS else "libm.so.6"
 
 PEER_EXTERN = """extern "{library}"
   def peer_add(a: C.Int, b: C.Int) -> C.Int
@@ -48,14 +49,19 @@ end
 """
 
 
+def library_name(name):
+    """The file name of the shared library NAME: libNAME.so, NAME.dll on Windows, libNAME.dylib on macOS."""
+    return name + ".dll" if WINDOWS else "lib%s.dylib" % name if MACOS else "lib%s.so" % name
+
+
 def shared_library(tmp_path_factory, name, *flags, folder=None):
-    """Build tests/fixtures/native/NAME.c into a shared library (libNAME.so, or NAME.dll on Windows) in FOLDER (a new
-    one by default), with the extra compiler FLAGS, and return its absolute path."""
+    """Build tests/fixtures/native/NAME.c into a shared library (library_name) in FOLDER (a new one by default), with
+    the extra compiler FLAGS, and return its absolute path."""
     folder = folder or tmp_path_factory.mktemp("native")
-    out = folder / (name + ".dll" if WINDOWS else "lib%s.so" % name)
-    pic = [] if WINDOWS else ["-fPIC"]
-    subprocess.run([tool("cc"), "-shared", *pic, "-O1", "-o", str(out), str(FIXTURES / "native" / (name + ".c")),
-                    *flags], check=True)
+    out = folder / library_name(name)
+    kind = ["-shared"] if WINDOWS else ["-dynamiclib"] if MACOS else ["-shared", "-fPIC"]
+    subprocess.run([tool("cc"), *kind, "-O1", "-o", str(out), str(FIXTURES / "native" / (name + ".c")), *flags],
+                   check=True)
     return out
 
 
@@ -135,13 +141,13 @@ def test_a_system_library_is_found_by_its_name(tmp_path):
     assert (result.code, result.stdout) == (0, "1024.0\n")
 
 
-# A bare name is searched in the system's folders only, never in the working directory (dlopen's rule; on Windows the
-# loader's own search would take it). A relative path resolves against the working directory too, so it is refused:
-# the front end refuses "lib/x.so", and on Windows the loader refuses "lib\x.dll" and "C:x.dll", which the front end
-# cannot tell from a name.
+# A bare name is searched in the system's folders only, never in the working directory (dlopen's rule on Linux; on
+# Windows and macOS the loader's own search would take it). A relative path resolves against the working directory too,
+# so it is refused: the front end refuses "lib/x.so", and on Windows the loader refuses "lib\x.dll" and "C:x.dll", which
+# the front end cannot tell from a name.
 @NATIVE_CALLS
 def test_a_library_is_not_searched_in_the_working_directory(tmp_path, peer):
-    here = "agentica_peer_here.dll" if WINDOWS else "libagentica_peer_here.so"
+    here = library_name("agentica_peer_here")
     (tmp_path / "lib").mkdir()
     for folder in (tmp_path, tmp_path / "lib"):
         (folder / here).write_bytes(peer.read_bytes())
@@ -149,7 +155,8 @@ def test_a_library_is_not_searched_in_the_working_directory(tmp_path, peer):
     for name in names:
         text = 'extern "%s"\n  def peer_add(a: C.Int, b: C.Int) -> C.Int\nend\n\n' \
                'def main() -> Void\n  puts(peer_add(1, 2))\nend\n' % name
-        result = agentica("--json", program(tmp_path, text), cwd=tmp_path, env={"LD_LIBRARY_PATH": None})
+        result = agentica("--json", program(tmp_path, text), cwd=tmp_path,
+                          env={"LD_LIBRARY_PATH": None, "DYLD_LIBRARY_PATH": None})
         assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3)), name
 
 
@@ -661,7 +668,7 @@ WAIT_EXTERN = """extern "{library}"
   def peer_pipe_fill() -> Void
   def peer_pipe_blocking() -> Void
   def peer_nonblocking(fd: C.Int) -> C.Int
-  def peer_dev_null() -> C.Int
+  def peer_regular_file() -> C.Int
   def peer_open_fds() -> C.Int
 end
 
@@ -673,7 +680,8 @@ end
 
 
 # Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
-# scheduler up; the write end is writable at once.
+# scheduler up; the write end is writable at once. On Windows one socket takes one wait at a time (two polls of one
+# socket would cancel each other in a busy loop in libuv), so one of the two tasks gets an error at once.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
@@ -691,7 +699,13 @@ def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, sch
 end
 """
     result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
-    assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
+    if not WINDOWS:
+        assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
+        return
+    assert (result.code, result.stderr) == (0, "")
+    lines = result.stdout.split("\n")
+    assert lines[:2] + lines[4:] == ["main runs", "1", "1", "ok()", ""], result.stdout
+    assert sorted(line[:44] for line in lines[2:4]) == ['error("native: cannot wait on the descriptor', "ok()"]
 
 
 # The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a
@@ -727,7 +741,7 @@ def main() -> Void
   puts(Native.wait_readable(fd, 0))
   puts(Native.wait_readable(-1, 30))
   puts(first_line(Native.wait_readable(1_000_000, 30)))
-  puts(first_line(Native.wait_writable(peer_dev_null(), 30)))
+  puts(first_line(Native.wait_writable(peer_regular_file(), 30)))
 end
 """
     result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
@@ -736,6 +750,40 @@ end
         'error("native: timed out")', 'error("native: timed out")',
         'error("native: timeout must be positive milliseconds")', 'error("native: invalid descriptor")',
         "native: cannot wait on the descriptor", "native: cannot wait on the descriptor", "",
+    ]
+
+
+# With no data, a named FIFO and a terminal master wait until the timeout, and they are ready once data comes. On macOS
+# the wait polls a FIFO with poll(2) and does not take the end-of-file probe of a file stream for readiness; a terminal
+# master is polled through a duplicate, since opening its path again (/dev/ptmx) makes a new terminal, and it stays
+# blocking after the wait.
+@NATIVE_CALLS
+@host_only(WINDOWS, "Windows waits only on sockets")
+def test_a_wait_on_a_named_fifo_or_a_terminal_master_waits_for_data(tmp_path, peer):
+    main = """extern "{library}"
+  def peer_fifo(path: C.String) -> C.Int
+  def peer_fifo_put() -> C.Int
+  def peer_pty() -> C.Int
+  def peer_pty_put() -> C.Int
+end
+
+def main() -> Void
+  fifo = peer_fifo(System.args()[0])
+  puts(Native.wait_readable(fifo, 30))
+  puts(peer_fifo_put())
+  puts(Native.wait_readable(fifo, 1_000))
+  master = peer_pty()
+  puts(Native.wait_readable(master, 30))
+  puts(peer_nonblocking(master))
+  puts(peer_pty_put())
+  puts(Native.wait_readable(master, 1_000))
+end
+"""
+    text = WAIT_EXTERN.format(library=literal(peer)) + main.replace("{library}", literal(peer))
+    result = agentica(program(tmp_path, text), tmp_path / "fifo")
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        'error("native: timed out")', "1", "ok()", 'error("native: timed out")', "0", "1", "ok()", "",
     ]
 
 
@@ -785,13 +833,13 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
 
 
-# On Windows a wait takes only a socket: a C runtime descriptor (stdin, 0) and a file handle (the NUL device) are errors
-# at once. Elsewhere stdin (a pipe) can be polled, so the run only has to end.
+# On Windows a wait takes only a socket: a C runtime descriptor (stdin, 0) and a file handle are errors at once.
+# Elsewhere stdin (a pipe) can be polled and a regular file cannot, so the run only has to end.
 @NATIVE_CALLS
 def test_a_wait_on_windows_refuses_a_value_that_is_not_a_socket(tmp_path, peer):
     main = """def main() -> Void
   puts(Native.wait_readable(0, 10))
-  puts(Native.wait_writable(peer_dev_null(), 10))
+  puts(Native.wait_writable(peer_regular_file(), 10))
 end
 """
     result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
@@ -868,7 +916,8 @@ def test_a_library_with_an_unbound_symbol_is_a_load_error_and_keeps_earlier_outp
         assert (result.code, result.stdout, result.stderr) == (0, "before\n1\n", "")
         shared_library(tmp_path_factory, "nowhere", folder=folder)
     else:
-        library = shared_library(tmp_path_factory, "unbound")
+        # A macOS dylib must name the library of each symbol unless the symbol is looked up at load.
+        library = shared_library(tmp_path_factory, "unbound", *(["-Wl,-undefined,dynamic_lookup"] if MACOS else []))
     result = agentica("--json", program(tmp_path, text % literal(library)))
     assert result.stdout == "before\n"
     assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3))
@@ -947,9 +996,9 @@ def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
     assert agentica("test", cwd=tmp_path).code == 0
 
 
-# A real library, not the peer: the system SQLite of Linux. sqlite3_malloc and sqlite3_free are a resource, and
+# A real library, not the peer: the system SQLite of Linux or macOS. sqlite3_malloc and sqlite3_free are a resource, and
 # sqlite3_msize reads the block; the full case opens a database and queries it through out parameters.
-SQLITE_LIBRARY = "libsqlite3.so.0"
+SQLITE_LIBRARY = "libsqlite3.dylib" if MACOS else "libsqlite3.so.0"
 
 SQLITE_EXTERN = """extern "%s"
   resource Block, free: sqlite3_free
@@ -963,8 +1012,8 @@ end
 """ % SQLITE_LIBRARY
 
 # libsqlite3.so.0 is a Linux system library: CI installs libsqlite3-0, and a missing library fails there and skips
-# on a local run. Windows has no such library; the systems without native calls skip with the port issue (#548).
-NO_SYSTEM_SQLITE = host_only(WINDOWS, "Windows has no libsqlite3.so.0 (a Linux system library)")
+# on a local run. macOS has /usr/lib/libsqlite3.dylib (in the dyld shared cache); Windows has no system SQLite.
+NO_SYSTEM_SQLITE = host_only(WINDOWS, "Windows has no system SQLite library")
 
 
 @pytest.fixture(scope="module")

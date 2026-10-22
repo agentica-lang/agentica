@@ -11,6 +11,7 @@
 
 #include <assert.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,7 @@
 #include <windows.h>
 #include <io.h>
 #else
+#include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 #endif
@@ -89,6 +91,9 @@ struct agc_loop {
   HANDLE driver;
   size_t stop_signal_count;
   bool stop_grace_init, parent_check_init;
+  /* The pollers of the Native.wait_* that poll now, linked by `next_wait`: one wait per socket at a time
+     (agc_poller_open_copy). I/O role only. */
+  struct agc_poller *waits;
 #else
   uv_timer_t stop_grace;
   bool stop_grace_init;
@@ -169,6 +174,12 @@ struct agc_poller {
 #endif
   /* On Windows a Winsock SOCKET (only Native.wait_* polls there), which the poller closes with closesocket. */
   int fd;
+#ifdef _WIN32
+  /* A Native.wait_*'s poller while it is on loop->waits: the native code's socket, and the next poller of the list. */
+  int given;
+  bool waiting;
+  struct agc_poller *next_wait;
+#endif
   void (*ready)(void *data, int status);
   void *data;
 };
@@ -713,6 +724,7 @@ static agc_loop *new_loop(agc_vm *vm) {
   loop->driver = NULL;
   loop->stop_signal_count = 0;
   loop->stop_grace_init = loop->parent_check_init = false;
+  loop->waits = NULL;
 #else
   loop->stop_grace_init = false;
 #if defined(__APPLE__)
@@ -1227,18 +1239,47 @@ int agc_fd_reopen(int fd, int access) {
 }
 #endif
 
-/* The libuv half of an open, on the loop's thread. 0 or a libuv error. */
-static int poller_init(agc_poller *p) {
+#if defined(__linux__) || defined(__APPLE__)
+/* A terminal master (libuv's uv__tty_is_slave asks the same): opening its path again (/dev/ptmx) makes a new
+   terminal. */
+static bool pty_master(int fd) {
+#ifdef __APPLE__
+  char name[256];
+  return ioctl(fd, TIOCPTYGNAME, name) == 0;
+#else
+  unsigned int number;
+  return ioctl(fd, TIOCGPTN, &number) == 0;
+#endif
+}
+
+/* A new open of the file of FD with its access mode (agc_fd_reopen), so FD keeps its flags; a duplicate, which shares
+   them, when that cannot be done (a socket, a terminal master, an eventfd). FLAGS gets FD's flags and SHARED whether
+   the copy is such a duplicate (agc_fd_reopen's duplicate of a macOS pipe is polled by poll(2), which leaves the flags
+   alone). -1 with errno. */
+static int fd_copy(int fd, int *flags, bool *shared) {
+  *flags = fcntl(fd, F_GETFL);
+  if (*flags < 0) return -1;
+  int again = pty_master(fd) ? -1 : agc_fd_reopen(fd, *flags & O_ACCMODE);
+  *shared = again < 0;
+  return again >= 0 ? again : fcntl(fd, F_DUPFD_CLOEXEC, 3);
+}
+#endif
+
+/* The libuv half of an open, on the loop's thread. 0 or a libuv error. PROBE: a named FIFO on macOS also reports
+   ready when poll(2) says nothing, so a file stream reads its end (kqueue misses it); a plain wait leaves it off. */
+static int poller_init(agc_poller *p, bool probe) {
   int rc;
 #ifdef __APPLE__
   struct stat info;
   p->timed = fstat(p->fd, &info) == 0 && S_ISFIFO(info.st_mode);
   if (p->timed) {
     char path[1024];
-    p->named = fcntl(p->fd, F_GETPATH, path) == 0;
+    p->named = probe && fcntl(p->fd, F_GETPATH, path) == 0;
     rc = uv_timer_init(&p->loop->uv, &p->timer);
     p->timer.data = p;
   } else
+#else
+  (void)probe;
 #endif
   {
 #ifdef _WIN32
@@ -1258,14 +1299,14 @@ static void poller_unmade(uv_handle_t *handle) { free(handle->data); }
 /* Only on the loop's thread, so that its caller learns of a failure at once (a failed open returns NULL with ERR set)
    and can fall back: a file's `more` step, the stdin poller set up before the schedulers start, and the standard
    streams at launch. */
-agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
+static agc_poller *poller_open(agc_vm *vm, int fd, bool probe, int *err) {
   agc_loop *loop = loop_of(vm);
   if (!on_io_thread(loop)) agc_internal_abort("a scheduler thread opened a poller");
   agc_poller *p = calloc(1, sizeof(agc_poller));
   if (!p) agc_out_of_memory();
   p->fd = fd;
   p->loop = loop;
-  int rc = poller_init(p);
+  int rc = poller_init(p, probe);
   if (rc != 0) {
     *err = -rc;
 #ifdef _WIN32
@@ -1281,6 +1322,78 @@ agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   }
   return p;
 }
+
+agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) { return poller_open(vm, fd, true, err); }
+
+#ifdef _WIN32
+/* libuv's fast poll of a socket is exclusive, and a duplicate shares the AFD endpoint of FD: two live polls of one
+   socket would cancel each other in a loop. So a second wait on a socket that is polled already is refused (EBUSY). */
+static agc_poller **wait_of(agc_loop *loop, int given) {
+  agc_poller **at = &loop->waits;
+  while (*at && (*at)->given != given) at = &(*at)->next_wait;
+  return at;
+}
+
+/* The poll of P stopped: its socket can be waited on again. */
+static void wait_ended(agc_poller *p) {
+  if (!p->waiting) return;
+  agc_poller **at = &p->loop->waits;
+  while (*at != p) at = &(*at)->next_wait;
+  *at = p->next_wait;
+  p->waiting = false;
+}
+
+/* FD is a Winsock SOCKET of the native code (a library's connection). The poller polls a duplicate of it
+   (WSADuplicateSocketW), which shares its non-blocking mode: uv_poll makes both non-blocking, and Winsock cannot read
+   the mode back to restore it. Any other value fails in WSADuplicateSocketW (ENOTSOCK). ERR is libuv's code negated. */
+agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
+  agc_loop *loop = loop_of(vm);
+  if (*wait_of(loop, fd)) {
+    *err = -UV_EBUSY;
+    return NULL;
+  }
+  WSAPROTOCOL_INFOW info;
+  SOCKET copy = INVALID_SOCKET;
+  if (WSADuplicateSocketW((SOCKET)(uintptr_t)(unsigned)fd, GetCurrentProcessId(), &info) == 0)
+    copy = WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &info, 0,
+                      WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+  if (copy == INVALID_SOCKET) {
+    *err = -uv_translate_sys_error(WSAGetLastError());
+    return NULL;
+  }
+  if (copy > (SOCKET)INT_MAX) {
+    closesocket(copy);
+    *err = -UV_EMFILE;
+    return NULL;
+  }
+  agc_poller *p = poller_open(vm, (int)copy, false, err);
+  if (!p) {
+    closesocket(copy);
+    return NULL;
+  }
+  p->given = fd;
+  p->waiting = true;
+  p->next_wait = loop->waits;
+  loop->waits = p;
+  return p;
+}
+#else
+agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
+  int flags = 0;
+  bool shared = false;
+  int copy = fd_copy(fd, &flags, &shared);
+  if (copy < 0) {
+    *err = errno;
+    return NULL;
+  }
+  agc_poller *p = poller_open(vm, copy, false, err);
+  /* uv_poll_init made the shared description non-blocking; the poll needs only readiness, so the native code gets its
+     flags back (as vm/input.c does for stdin). */
+  if (shared) (void)fcntl(copy, F_SETFL, flags);
+  if (!p) close(copy);
+  return p;
+}
+#endif
 
 static void poller_start(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data) {
   p->ready = ready;
@@ -1315,6 +1428,9 @@ void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int 
 
 static void poller_pause_run(void *data) {
   agc_poller *p = data;
+#ifdef _WIN32
+  wait_ended(p);
+#endif
 #ifdef __APPLE__
   if (p->timed) {
     uv_timer_stop(&p->timer);
@@ -1330,6 +1446,9 @@ void agc_poller_pause(agc_poller *p) { call_on(p->loop, poller_pause_run, p); }
 
 static void poller_close_run(void *data) {
   agc_poller *p = data;
+#ifdef _WIN32
+  wait_ended(p);
+#endif
 #ifdef __APPLE__
   if (p->timed) {
     uv_close((uv_handle_t *)&p->timer, poller_closed);

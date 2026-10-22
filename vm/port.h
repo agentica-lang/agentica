@@ -689,6 +689,11 @@ int agc_fd_reopen(int fd, int access);
 #endif
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err);
+/* For Native.wait_*: a poller of a copy of FD (a new open of its file, else a duplicate whose flags are put back), which
+   the poller owns, so FD keeps its flags. It reports only what poll(2) does. On Windows FD is a Winsock SOCKET and the
+   copy a duplicate socket, which shares FD's mode: FD becomes non-blocking, and a second wait on FD while one polls is
+   refused (EBUSY). On the loop's thread; NULL with ERR, libuv's code negated (the errno on POSIX). */
+agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err);
 void agc_poller_wait(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data);
 void agc_poller_pause(agc_poller *p);
 void agc_poller_close(agc_poller *p);

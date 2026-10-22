@@ -61,6 +61,4 @@ int agc_net_errno(int uv_error) {
     default: return EIO;
   }
 }
-
-int agc_net_socket_errno(int wsa_error) { return agc_net_errno(uv_translate_sys_error(wsa_error)); }
 #endif

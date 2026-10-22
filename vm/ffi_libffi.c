@@ -1,6 +1,6 @@
 /*
- * The native calls of a build with libffi (AGC_FFI: Linux x86_64 and Windows
- * x64 for now): the loader (dlopen and dlsym, or LoadLibraryExW and
+ * The native calls of a build with libffi (AGC_FFI: Linux x86_64, Windows x64
+ * and macOS): the loader (dlopen and dlsym, or LoadLibraryExW and
  * GetProcAddress) finds the function, ffi_prep_cif describes its signature
  * once and ffi_call calls it. Adapter layer; ffi.c converts the values and
  * ffi_none.c is the other half. Design: docs/grammar/06d-io-and-network.md.
@@ -11,21 +11,18 @@
 
 #include <errno.h>
 #include <ffi.h>
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
 #include "file_io.h"
-#include "net_os.h"
 
-#include <winsock2.h>
 #include <windows.h>
 #else
 #include <dlfcn.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
+
+/* The paths that the POSIX half builds: PATH_MAX on macOS. */
+#define PATH_BUF 1024
 #endif
 
 /* The cif points at types, so both live in one block. */
@@ -138,10 +135,35 @@ static void *library_symbol(void *lib, const char *library, const char *symbol, 
 /* LoadLibraryExW counts references like dlopen: freeing drops only this one. */
 static void library_close(void *lib) { (void)FreeLibrary((HMODULE)lib); }
 #else
+#ifdef __APPLE__
+/* dyld looks a bare name up in DYLD_LIBRARY_PATH, then in /usr/lib (on disk or in the dyld shared cache, where the
+   system libraries live), then in the working directory, which Linux never searches. As /usr/lib/NAME it is looked up
+   the same way without the working directory: DYLD_LIBRARY_PATH applies to the last component of any path. NULL with
+   a message in ERROR when the path does not fit in BUF (PATH_BUF bytes). */
+static const char *loader_path(const char *library, char *buf, char *error, size_t size) {
+  if (strchr(library, '/')) return library;
+  int n = snprintf(buf, PATH_BUF, "/usr/lib/%s", library);
+  if (n > 0 && n < PATH_BUF) return buf;
+  snprintf(error, size, "cannot open %s: the name is too long", library);
+  return NULL;
+}
+#else
+/* dlopen searches a bare name in LD_LIBRARY_PATH, the cache and the system folders, never in the working directory. */
+static const char *loader_path(const char *library, char *buf, char *error, size_t size) {
+  (void)buf;
+  (void)error;
+  (void)size;
+  return library;
+}
+#endif
+
 /* RTLD_NOW binds every symbol of the library at once, so a missing dependency is a load error here and not a crash at
    its first use. */
 static void *library_open(const char *library, char *error, size_t size) {
-  void *lib = dlopen(library, RTLD_NOW | RTLD_LOCAL);
+  char buf[PATH_BUF];
+  const char *path = loader_path(library, buf, error, size);
+  if (!path) return NULL;
+  void *lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
   if (!lib) {
     const char *why = dlerror();
     snprintf(error, size, "cannot open %s: %s", library, why ? why : "unknown error");
@@ -229,49 +251,4 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
     case AGC_C_VOID: break;
   }
 }
-
-#ifdef _WIN32
-/* On Windows only a socket has readiness: FD is a Winsock SOCKET of the native code (a library's connection), and the
-   wait polls a duplicate of it (WSADuplicateSocketW), which shares its non-blocking mode. getsockopt refuses any other
-   value at once (ENOTSOCK), so a file, a pipe or a closed socket is an error, never a wait. */
-int agc_ffi_wait_fd_open(int fd) {
-  SOCKET given = (SOCKET)(uintptr_t)(unsigned)fd;
-  int type, len = sizeof type;
-  WSAPROTOCOL_INFOW info;
-  SOCKET copy = INVALID_SOCKET;
-  if (getsockopt(given, SOL_SOCKET, SO_TYPE, (char *)&type, &len) == 0 &&
-      WSADuplicateSocketW(given, GetCurrentProcessId(), &info) == 0)
-    copy = WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &info, 0,
-                      WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
-  if (copy == INVALID_SOCKET) {
-    errno = agc_net_socket_errno(WSAGetLastError());
-    return -1;
-  }
-  if (copy > (SOCKET)INT_MAX) {
-    closesocket(copy);
-    errno = EMFILE;
-    return -1;
-  }
-  return (int)copy;
-}
-
-void agc_ffi_wait_fd_close(int fd) { (void)closesocket((SOCKET)(uintptr_t)(unsigned)fd); }
-#else
-/* /proc/self/fd/N opens the file again (a pipe, a terminal), with an open file description of its own; a socket
-   cannot be opened that way. */
-int agc_ffi_wait_fd_open(int fd) {
-  int flags = fcntl(fd, F_GETFL);
-  if (flags < 0) return -1;
-  struct stat info;
-  if (fstat(fd, &info) == 0 && !S_ISSOCK(info.st_mode)) {
-    char path[32];
-    snprintf(path, sizeof path, "/proc/self/fd/%d", fd);
-    int again = open(path, (flags & O_ACCMODE) | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
-    if (again >= 0) return again;
-  }
-  return fcntl(fd, F_DUPFD_CLOEXEC, 3);
-}
-
-void agc_ffi_wait_fd_close(int fd) { (void)close(fd); }
-#endif
 #endif

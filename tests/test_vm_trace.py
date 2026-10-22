@@ -540,13 +540,17 @@ def test_task_cancel_traces_at_call_on_the_task_it_names_and_a_plain_line_on_a_d
     source = tmp_path / "stop.agc"
     source.write_text(
         "def leaf(n: Int) -> Void\n  Task.sleep(n)\nend\n\n"
-        "def top(n: Int) -> Void\n  Task.spawn(&leaf, n)\n  Task.sleep(n)\nend\n\n"
-        "def main() -> Void\n  t = Task.spawn(&top, 600000)\n  Task.sleep(1)\n  Task.cancel(t)\n  puts(\"done\")\nend\n",
+        "def top(ready: Channel[Int]) -> Void\n  Task.spawn(&leaf, 600000)\n  ready.send(1, 5000).unwrap!\n  Task.sleep(600000)\nend\n\n"
+        "def main() -> Void\n  ready: Channel[Int] = Channel.new(1)\n  t = Task.spawn(&top, ready)\n"
+        "  ready.recv(5000).unwrap!\n  Task.cancel(t)\n  puts(\"done\")\nend\n",
         encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "stop.agcb")
     path = tmp_path / "stop.trace"
     status, out, err = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": path})
     assert (status, out, err) == (0, b"done\n", b"")
     cancels = [line for line in trace_lines(path) if b" sched cancel task=" in line]
-    assert [re.search(rb" cancel task=([0-9]+)( at=call)?$", line).groups() for line in cancels] == \
-        [(b"3", None), (b"2", b" at=call")], cancels
+    # `top` sends on `ready` after it spawns `leaf`, so the descendant exists when main cancels. With a sleep instead,
+    # main could cancel `top` first: `leaf` was then cancelled at its spawn (` at=spawn`), or never spawned.
+    shapes = [re.search(rb" cancel task=([0-9]+)( at=call)?$", line) for line in cancels]
+    assert all(shapes), cancels
+    assert [shape.groups() for shape in shapes] == [(b"3", None), (b"2", b" at=call")], cancels
