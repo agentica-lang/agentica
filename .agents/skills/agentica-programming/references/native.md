@@ -75,9 +75,9 @@ end
   non-blocking. Closing the descriptor does not end a wait (it times out unless
   the file becomes ready). A cancel stops the wait.
 - Linux x86_64 and Windows x64 for now (`Native.wait_*` is not supported on
-  Windows and returns an error): elsewhere a program with an extern function or a `Native.*` call
-  is refused at load with `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works
-  everywhere.
+  Windows and returns an error): elsewhere a program with an extern function
+  or a `Native.*` call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`
+  (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
 - Functions count as `def`s for the declaration order, resources as types. A

@@ -20,7 +20,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `extern` blocks take `C.Pointer`, `C.Bytes` and `resource Name, free: fn`,
   a C pointer that `Native.close` or the end of the owning task frees once.
 - `extern` blocks call native libraries on Windows x64 too; `Native.wait_*`
-  returns an error there for now.
+  returns an error there.
 - `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
   `List`.
 - Ruby's other method names work: `collect`, `select`, `inject`, `detect`,
