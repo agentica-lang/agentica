@@ -12,12 +12,12 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   per-call cap prevents eager allocations from arbitrary Int sizes; larger
   streams use repeated reads. Port read failures are local Results, not
   exceptions around argument evaluation.
-- `IO.flush` flushes stdout and returns completion. On Linux it returns once the
-  data is in the pipe or file (it can wait for a slow reader, §10.2.2); the
-  other output functions do not wait for it, since the loop writes their buffer
-  as the reader takes it, and none closes a port. On other systems stdout and
-  stderr are blocking `FILE` writes, and a write waits for its reader without a
-  timeout.
+- `IO.flush` flushes stdout and returns completion. On Linux, macOS and
+  Windows it returns once the data is in the pipe or file (it can wait for a
+  slow reader, §10.2.2); the other output functions do not wait for it, since
+  the loop writes their buffer as the reader takes it, and none closes a port.
+  On other systems stdout and stderr are blocking `FILE` writes, and a write
+  waits for its reader without a timeout.
 
 ## JSON
 
@@ -62,13 +62,12 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   returns the cached R, including false/nil/error Results. Sleep takes
   nonnegative milliseconds, zero yields and negative values halt with
   RUNTIME-INVALID-DURATION. `Task`, `Await` and `Channel` are reserved names.
-  `Task.await(task, timeout_ms)` is a second arity
-  of the same catalog row in `compiler/catalog/builtins_data.agc` (rule
-  `TaskAwaitTimeout` in the checker: the task is a `Task`, the timeout an `Int`,
-  the result `Await[R]`) and returns the builtin enum `Await[T]` (`Done(T)`,
-  `TimedOut`); see the next bullet for how a builtin enum is wired. No CPU
-  parallelism. Channels are VM-only builtins in `vm/channel.c`; see
-  `docs/vm/10-io-scheduler.md` §10.2.2.
+  `Task.await(task, timeout_ms)` is a second arity of the same catalog row in
+  `compiler/catalog/builtins_data.agc` (rule `TaskAwaitTimeout` in the checker:
+  the task is a `Task`, the timeout an `Int`, the result `Await[R]`) and returns
+  the builtin enum `Await[T]` (`Done(T)`, `TimedOut`); see the next bullet for
+  how a builtin enum is wired. Channels are VM-only builtins in `vm/channel.c`;
+  see `docs/vm/10-io-scheduler.md` §10.2.2.
 - Entrypoint return cancels pending work and closes the run's resources. A
   diagnostic in `main`, RUNTIME-STEP-LIMIT, RUNTIME-INTERNAL or System.exit ends
   the run; any other diagnostic in a task is a crash that ends only that
@@ -98,7 +97,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   payload. Handles cannot be constructed, compared or JSON encoded.
 - TCP and TLS are C builtins (`vm/tcp.c`, `vm/tls_openssl.c`); HTTP is
   `std/http` in Agentica over the std-only `HttpWire` builtins (`vm/http_*.c`),
-  imported as `HTTP`; the server (20c) runs each connection as a task in the
+  imported as `HTTP`; the server runs each connection as a task in the
   server's task group. See `references/vm-net.md`.
 - tests/test_vm_tcp.py, test_vm_tls.py and test_vm_http.py use independent Node
   and Python standard-library peers. CI installs Node 24 and Python 3; absence
@@ -207,7 +206,6 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   completion positions accept it; reject inferred Void values except statements
   and forwarded Void returns. Nil remains data and requires explicit returns.
   Main and side-effect callbacks return Void. Result[Void] success uses ok().
-  Migrate fixtures by meaning, preserving Nil and false data cases.
 - The --deny-* flags reach the VM: --deny-run in `vm/process.c`, --deny-net
   in `vm/tcp.c` (`net_denied`: every socket and listener starts there),
   --deny-fs in `vm/files.c` (`fs_denied`, every row but `Path.join`, and the
@@ -249,7 +247,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   `concat`, frames) and `std-binary-vectors`, which checks
   `tests/fixtures/vm/std-binary-vectors.stdin` that `python3
   tests/fixtures/std-binary-vectors.py` writes (standard library only; it loads
-  `bits-vectors.py` for the float helpers and checks `struct` against the 13a
+  `bits-vectors.py` for the float helpers and checks `struct` against the
   exact f32 rounding). CI does not run the script: run it by hand and commit
   both files when the vectors change. `tests/test_std_binary.py` checks the
   fixed output.

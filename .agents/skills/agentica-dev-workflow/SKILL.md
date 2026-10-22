@@ -44,8 +44,9 @@ rules live in `AGENTS.md` and `agentica-development`.
   order-dependent cases fail locally.
 - **Speed:** only the author measures, and only when the PR touches the
   interpreter or scheduler hot path: an interleaved A/B against master with
-  medians (`benchmarks/`; code layout alone moves a binary by 20-35 %),
-  numbers in the PR body. Critics and reviewers do not time.
+  medians (`references/bench-eval.md` of agentica-development), numbers in
+  the PR body. Critics and reviewers do not time unless the PR claims a
+  speedup.
 - A local pre-commit hook (untracked) may run `make dup-check` on staged `vm/`
   or `tests/` files and block new clones; refactor them (CI fails on them too).
   Never bypass the hook (`--no-verify`, `core.hooksPath`); install the missing
@@ -65,9 +66,8 @@ rules live in `AGENTS.md` and `agentica-development`.
   host run the same commands.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
-- No plans under `docs/` (`AGENTS.md`). Evidence goes in the PR body; a done
-  phase item is ticked in the roadmap; a local, untracked plan file tracks
-  only the agent's own steps.
+- No plans under `docs/` (`AGENTS.md`); an agent's own steps go in a local,
+  untracked file.
 
 ## 2. Review
 

@@ -4,70 +4,54 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
 
-- **Path:** `vm/loop.c`
-  - **Owns:** The libuv event loop and the resource registry. Details below.
-
-- **Path:** `vm/files.c`
-  - **Owns:** The shared `File`, `Dir` and `Path` builtins (Unix and Windows
-    regular files). Details below.
-
-- **Path:** `vm/file_io.c`, `vm/file_io.h`
-  - **Owns:** Synchronous libuv filesystem adapter: UTF-8 paths, binary
-    descriptors, metadata, directory names and canonical paths. Called by
-    existing pool jobs; no VM state.
-
-- **Path:** `vm/file_windows.c`
-  - **Owns:** Windows UTF-8/native path conversion, drive and UNC resolution,
-    and OS error mapping.
-
-- **Path:** `vm/process_os.h`, `vm/process_posix.c`, `vm/process_windows.c`
-  - **Owns:** The command search rules of `Process.spawn`: what is a path, the
-    PATH list split and quotes, the `.exe`/`.com` allowlist (no PATHEXT) and the
-    names that are refused (trailing dot or space, `:` that is not a drive),
-    and the read of a child's stdout beside libuv for `Process.read_available`
-    (none on Windows). `process.c` keeps the search loop and the file test.
-
-- **Path:** `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`
-  - **Owns:** The ends of a child channel: how the parent makes them (a socket
-    pair, or a pipe per direction on Windows), the `AGENTICA_CHANNEL` value
-    each system understands and how a child takes the inherited descriptors.
-    `duplex.c` keeps the framing, limits, locks and timeouts.
-
-- **Path:** `vm/tree.c`
-  - **Owns:** `agc_tree_refused` (the pure test of the names never removed) and
-    `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with
-    `O_NOFOLLOW`, `unlinkat`, an explicit stack of at most 128 levels, no VM
-    state.
-
-- **Path:** `vm/input.c`
-  - **Owns:** the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or
-    FAILED): one growing buffer in the runtime shared by `gets`, `read`,
-    `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is
-    read on the loop (`watch_stdin`: a pipe or terminal reopened through
-    `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its
-    flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external`
-    job), any other stdin by one pool job; the job's `done` half appends the
-    bytes and wakes the readers waiting in the input's FIFO, and the builtin
-    re-runs (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each
-    task gets it once (`input_seen`); a `scanned` offset keeps line search
-    linear; U+FFFD decoding of consumed bytes, a pending EOF after a peek;
-    Windows reads every stdin kind, the console included, with one blocking
-    `_read` on a reader thread of its own (`agc_stdin_*` in
-    `vm/stdio_windows.c`), never in the pool: an `external` job that an async
-    handle ends, the thread and handle made on the I/O thread at the first read;
-    cancellation detaches the job, and the end of the run does not wait for
-    the read (§14.1)
-
-- **Path:** `vm/output.c`
-  - **Owns:** The writer of stdout and stderr, with a buffer and a waiting queue
-    per stream. It has no OS branch: `vm/stdio_posix.c` and `vm/stdio_windows.c`
-    decide how a descriptor is written (`agc_write_mode`: DISK pool job, POLL on
-    Linux and macOS, STREAM a libuv pipe on Windows, THREAD a pool job for a
-    Windows console or a handle libuv refuses), whether two descriptors are one
-    target, and make the in-memory stream of a notice. A STREAM or THREAD stream
-    has no non-blocking try, so a stop signal and the final notices wait for the
-    request in one shared 200 ms (`settle`, `agc_runtime.settle_by`); the normal
-    end of the run waits within the flush limit.
+- `vm/loop.c`: The libuv event loop and the resource registry. Details below.
+- `vm/files.c`: The shared `File`, `Dir` and `Path` builtins (Unix and Windows
+  regular files). Details below.
+- `vm/file_io.c`, `vm/file_io.h`: Synchronous libuv filesystem adapter: UTF-8
+  paths, binary descriptors, metadata, directory names and canonical paths.
+  Called by existing pool jobs; no VM state.
+- `vm/file_windows.c`: Windows UTF-8/native path conversion, drive and UNC
+  resolution, and OS error mapping.
+- `vm/process_os.h`, `vm/process_posix.c`, `vm/process_windows.c`: The command
+  search rules of `Process.spawn`: what is a path, the PATH list split and
+  quotes, the `.exe`/`.com` allowlist (no PATHEXT) and the names that are
+  refused (trailing dot or space, `:` that is not a drive), and the read of a
+  child's stdout beside libuv for `Process.read_available` (none on Windows).
+  `process.c` keeps the search loop and the file test.
+- `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`: The ends of a
+  child channel: how the parent makes them (a socket pair, or a pipe per
+  direction on Windows), the `AGENTICA_CHANNEL` value each system understands
+  and how a child takes the inherited descriptors. `duplex.c` keeps the framing,
+  limits, locks and timeouts.
+- `vm/tree.c`: `agc_tree_refused` (the pure test of the names never removed) and
+  `agc_remove_tree`, the tree walk of `Path.remove`: `openat` with `O_NOFOLLOW`,
+  `unlinkat`, an explicit stack of at most 128 levels, no VM state.
+- `vm/input.c`: the only stdin reader (`agc_input_*`, status OK, EOF, WAIT or
+  FAILED): one growing buffer in the runtime shared by `gets`, `read`,
+  `read_bytes` and `eof?`; on Linux a pipe, FIFO, terminal or socket stdin is
+  read on the loop (`watch_stdin`: a pipe or terminal reopened through
+  `/proc/self/fd/N` with `O_NONBLOCK` so the inherited description keeps its
+  flags, a socket read with `MSG_DONTWAIT`; an `agc_poller` and an `external`
+  job), any other stdin by one pool job; the job's `done` half appends the bytes
+  and wakes the readers waiting in the input's FIFO, and the builtin re-runs
+  (retry) once data or EOF is in; an EOF read bumps `eof_seq` and each task gets
+  it once (`input_seen`); a `scanned` offset keeps line search linear; U+FFFD
+  decoding of consumed bytes, a pending EOF after a peek; Windows reads every
+  stdin kind, the console included, with one blocking `_read` on a reader thread
+  of its own (`agc_stdin_*` in `vm/stdio_windows.c`), never in the pool: an
+  `external` job that an async handle ends, the thread and handle made on the
+  I/O thread at the first read; cancellation detaches the job, and the end of
+  the run does not wait for the read (§14.1)
+- `vm/output.c`: The writer of stdout and stderr, with a buffer and a waiting
+  queue per stream. It has no OS branch: `vm/stdio_posix.c` and
+  `vm/stdio_windows.c` decide how a descriptor is written (`agc_write_mode`:
+  DISK pool job, POLL on Linux and macOS, STREAM a libuv pipe on Windows, THREAD
+  a pool job for a Windows console or a handle libuv refuses), whether two
+  descriptors are one target, and make the in-memory stream of a notice. A
+  STREAM or THREAD stream has no non-blocking try, so a stop signal and the
+  final notices wait for the request in one shared 200 ms (`settle`,
+  `agc_runtime.settle_by`); the normal end of the run waits within the flush
+  limit.
 
 - `vm/loop.c`
   - the event loop and the resource registry (`docs/vm/10-io-scheduler.md`
@@ -123,7 +107,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - it first releases a handle the request held, handing it to the head
         waiter as `next_owner`)
     - `agc_io_detach` (
-      - 20b: the job of a cancelled task is detached
+      - the job of a cancelled task is detached
       - it ends between turns when the drain meets it, runs `done` and drops the
         result (closing a new handle in it, except a process: `process.c` sets
         `keep_detached` on its resource), never `expired`, so it never closes a
@@ -132,8 +116,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
         pool kinds, may end it early through `drop`, also when its timer fired
         before the cancel
       - a queued job is never swept)
-    - `agc_io_detached` (phase 24: a job with no task from the start, for a
-      crashed task's file close), handle ownership (24b: `agc_own` records a
+    - `agc_io_detached` (a job with no task from the start, for a crashed
+      task's file close), handle ownership (`agc_own` records a
       handle's owner and close and puts it on the owner task's list
       (`owned_prev` and `owned_next` in the resource, `owned` in the task),
       `agc_unregister` takes it off,
@@ -207,17 +191,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - the `File`, `Dir` and `Path` builtins (`agc_file_builtins`, shared with
     Windows;
     `docs/vm/02-reference-behavior.md` §2.8)
-    - argument checks in the evaluator's order (
+    - argument checks in a fixed order (
       - for a handle: arguments and timeout, then the lock, then open and mode)
     - host paths (
       - raw `getcwd` bytes read at start-up by `agc_files_init`, `/` when it
         fails, + `/` collapsing)
     - `malloc`'d `op` requests whose `work` half runs in the libuv pool,
-      Racket's messages (
+      the messages (
       - contract forms cut at 256 characters, `strerror_l` in the message
         locale, the byte string form for invalid UTF-8)
     - `FileHandle` state with its read buffer or its 4096-byte write buffer (
-      - Racket's rule: append when it fits, else write pending and new bytes
+      - append when it fits, else write pending and new bytes
         together
       - flush, close and the end of run write it)
     - the one waiting rule (
@@ -289,7 +273,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     job has no deadline (`NO_DEADLINE`, -1), a failure is `FS_RESOLVE`,
     `filesystem: cannot resolve path` with the path and the OS error text, and
     the result is decoded with `lossy`, one U+FFFD per bad byte)
-  - `File.each_line` (7.2.1h) and `File.foreach` (17e) share one line reader,
+  - `File.each_line` and `File.foreach` share one line reader,
     `agc_line_reader` (`agc_lines_new`, `agc_lines_next`, `agc_lines_stop` in
     `services.h`), a state machine with
     phases START, OPENED, SCAN, READ, CLOSE, CLOSED that a stepper drives one
@@ -315,7 +299,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     timed-out job (so a timed-out close can log it twice, and a handle still
     open when the run ends is released without it).
     `tests/test_vm_lazy_io.py` reads them to see the closes on every platform)
-  - `Lazy.write_lines` (17e) writes through `agc_line_writer` (`agc_writer_new`,
+  - `Lazy.write_lines` writes through `agc_line_writer` (`agc_writer_new`,
     `agc_writer_next`, `agc_writer_stop`), phases START, OPENED, READY, WROTE,
     CLOSE, CLOSING, CLOSED: `OP_OPEN_WRITE`, then each line and its LF into the
     handle's buffer sized to `CHUNK` (64 KiB, not `WRITE_BUFFER`), a full
@@ -324,8 +308,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `LIMIT` is an error; the handle is private, so no handle lock is taken
 - `vm/output.c`
   - the only writer of stdout and stderr (`agc_write`, `agc_output_waiting`,
-    `agc_drain` for `IO.flush`, `agc_flush`; row 7.2.1f,
-    `docs/vm/10-io-scheduler.md` §10.2.2). `agc_output_forward` takes a child's
+    `agc_drain` for `IO.flush`, `agc_flush`; `docs/vm/10-io-scheduler.md`
+    §10.2.2). `agc_output_forward` takes a child's
     stderr on the I/O thread into the notice queue; the bytes take only the
     room the FIFO's head does not need (`spare`), so a waiting print goes
     first. Past `AGC_FORWARD_BOUND` queued it keeps the caller's
@@ -351,7 +335,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - it drains a regular file, a block device or a device epoll refuses
     (`/dev/null`) by one pool job on the original descriptor
   - and it leaves the others (read-only descriptor, failed reopen or `dup`,
-    non-Linux) on the blocking `fwrite` of their `FILE`.
+    systems other than Linux, macOS and Windows) on the blocking `fwrite` of
+    their `FILE`.
   - When stderr is the same file as stdout (`st_dev`, `st_ino`), `err.base`
     points to the stdout stream and they share one ring and FIFO.
   - A write error sets `failed`, drops the data and the notices, and wakes the
@@ -379,7 +364,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Design notes
 
-- **libuv (7h, in: loop, files and tasks)**
+- **libuv (loop, files and tasks)**
   - `docs/vm/10-io-scheduler.md` §10.2.2 describes the loop with its run queue
   - only the thread that owns the loop calls `uv_run` on it (the scheduler with
     N=1 through `agc_io_poll` in `vm/task.c`, the I/O thread with N>1), and
@@ -423,11 +408,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   input closed (`fd = -1`, always EOF) and `System.args` empty, and
   `agc_launch_vm` opens fd 0 (not for the front end of the single binary, which
   reads nothing) and fills `vm->rt->args`, so the C tests and the fuzzer never
-  block on stdin. Stdin text decodes each invalid byte to U+FFFD (Racket ports);
-  arguments decode each invalid byte to `?` and an incomplete sequence at the
-  end to one `?` (Racket in a UTF-8 locale, through glibc `iconv`); the diff
-  test checks this with `LC_ALL=C.UTF-8`. The driver copies a non-file stdin
-  into the VM with a thread that it kills once the VM exits.
+  block on stdin. Stdin text decodes each invalid byte to U+FFFD; arguments
+  decode each invalid byte to `?` and an incomplete sequence at the end to one
+  `?`; the diff test checks this with `LC_ALL=C.UTF-8`. The driver copies a
+  non-file stdin into the VM with a thread that it kills once the VM exits.
 
 ## Native Windows files
 

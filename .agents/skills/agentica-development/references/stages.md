@@ -58,112 +58,50 @@ The parser reads the keyword literals from their kind, not from `value`: `true`,
 ## Diagnostics
 
 `compiler/diagnostics/diagnostic.agc` holds `Diagnostic` (code, message, span,
-optional expected, actual, callee, signature, labels and help). The codes by
-stage:
+optional expected, actual, callee, signature, labels and help). List the codes
+in use with:
 
-- **Stage:** lexer
-  - **Codes:** `LEX-UNEXPECTED-CHAR`, `LEX-UNCLOSED-DELIMITER`,
-    `LEX-UNMATCHED-DELIMITER`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`,
-    `LEX-INVALID-NUMBER`, `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`,
-    `LEX-HEREDOC-ONE-LINE`, `LEX-INVALID-UTF8` (raised by
-    `compiler/io/source_reader.agc` when a source file is read, not by the
-    lexer: the span is one character at the first byte of the first sequence
-    that does not decode)
+```sh
+rg -oNI --no-filename '\b(LEX|PARSE|CHECK|PKG|QUERY|RUNTIME|LOWER|BYTECODE)-[A-Z0-9]+(-[A-Z0-9]+)*' compiler vm/*.c | sort -u
+```
 
-- **Stage:** parser
-  - **Codes:** `PARSE-PIPE-TARGET`, `PARSE-UNEXPECTED-TOKEN`,
-    `PARSE-UNCLOSED-BLOCK`, `PARSE-TOP-LEVEL-STATEMENT`,
-    `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET`,
-    `PARSE-CONSTANT-NAME`, `PARSE-MISSING-BLANK-LINE`, `PARSE-DETACHED-DOC`,
-    `PARSE-TOO-DEEP`, `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`,
-    `PARSE-EXTERN-DEFAULT`, `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`,
-    `PARSE-EXTERN-FREE`, `PARSE-EXTERN-OUT`
+Notes by stage:
 
-- **Stage:** checker
-  - **Codes:** `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`,
-    `CHECK-CONSTANT-TYPE`, `CHECK-VOID-TYPE`, `CHECK-VOID-VALUE`,
-    `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-REDEFINED-NAME`,
-    `CHECK-ARITY`, `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`,
-    `CHECK-TYPE-MISMATCH`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`,
-    `CHECK-EMPTY-SET-TYPE`, `CHECK-RESULT-TYPE`, `CHECK-EXPECTED-TYPE`,
-    `CHECK-TRY-CONTEXT`, `CHECK-UNKNOWN-FIELD`, `CHECK-DUPLICATE-FIELD`,
-    `CHECK-MISSING-FIELD`, `CHECK-UNKNOWN-METHOD`, `CHECK-PIPE-METHOD`,
-    `CHECK-UNUSED-VALUE`, `CHECK-BLOCK-TYPE`, `CHECK-BLOCK-TARGET`,
-    `CHECK-CAPTURED-ASSIGNMENT`, `CHECK-NOT-A-HANDLE`, `CHECK-NOT-A-LIST`,
-    `CHECK-NOT-INDEXABLE`, `CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`,
-    `CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`, `CHECK-SHADOWED-NAME`,
-    `CHECK-ANNOTATION-ON-EXISTING`, `CHECK-IMMUTABLE-ASSIGNMENT`,
-    `CHECK-MISSING-RETURN`, `CHECK-MAIN`, `CHECK-INT-RANGE`, `CHECK-INTERNAL`,
-    `CHECK-MODULE-CONTEXT`, `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`,
-    `CHECK-IMPORT-CYCLE`, `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`,
-    `CHECK-IMPORT-PACKAGE`,
-    `CHECK-DECL-ORDER`, `CHECK-TYPE-ALIAS-CYCLE`, `CHECK-UNKNOWN-VARIANT`,
-    `CHECK-ENUM-POSITIONAL-ARGS`, `CHECK-ENUM-TYPE-INFERENCE`,
-    `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
-    `CHECK-UNREACHABLE-CASE-ARM`, `CHECK-LOOP-CONTROL`, `CHECK-TOO-DEEP`
+- `LEX-INVALID-UTF8` is made by `compiler/syntax/source_file.agc` when a
+  file is read, not by the lexer: the span is one character at the first byte
+  that does not decode.
+- `RUNTIME-` codes come from the VM; `RUNTIME-NATIVE-DENIED` and
+  `RUNTIME-NATIVE-UNSUPPORTED` are raised at load (exit 2).
+- `LOWER-` and `BYTECODE-` codes: `compiler/lower/lowering.agc`,
+  `compiler/bytecode/bytecode_writer.agc` (`docs/vm/03-ir-and-bytecode.md`
+  3.5).
+- **Packages** (`packages/`, `package_import.agc`): manifest, lock, stale
+  and conflict errors are at a key path (`Failure.fail_key`,
+  `Problem.key_path`); a TOML syntax error at its line and column; a missing
+  or unreadable file has no key (`Failure.fail_file`). The manifests of the
+  locked packages are checked before any file loads (`check_manifests`). The
+  hash and link errors are at the import. `agentica install`
+  (`app/cli_install.agc`, `io/package_fetch.agc`) reports at a key of
+  `agentica.lock` (`package[N].tag`, `package[N].subdir`, ...). `install`,
+  `add` and `update` write `deps/<name>/` (`io/package_deps.agc`) and report
+  at the lock too (`PKG-SYMLINK` for a `deps/` that is a link, `PKG-WRITE` at
+  the file). A build reads a package only from `deps/<name>/`
+  (`package_import.agc`; a missing one is `CHECK-IMPORT-PACKAGE`) and hashes
+  it, except a workspace member (`packages/members.agc`: the `[workspace]`
+  table of the project's root, found by walking up), read from its folder
+  with no hash and locked with `workspace = true`. `agentica add` and
+  `update` (`app/cli_add.agc`, `io/package_resolve.agc`) report the fetch
+  codes of a new pin at `dependencies.<name>.git`.
 
-- **Stage:** packages (`packages/`, `package_import.agc`)
-  - **Codes:** `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
-    `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`, `PKG-HASH-MISMATCH`, `PKG-SYMLINK`.
-    Manifest, lock, stale and conflict errors are at a key path
-    (`Failure.fail_key`, `Problem.key_path`); a TOML syntax error is at its line
-    and column; a missing or unreadable file has no key (`Failure.fail_file`).
-    The manifests of the locked packages are checked before any file loads
-    (`check_manifests`). The hash and link errors are at the import.
-    `agentica install` (`app/cli_install.agc`, `io/package_fetch.agc`) adds
-    `PKG-FETCH` (also at `package[N].subdir` when the commit lacks the folder),
-    `PKG-TAG-MOVED`, `PKG-PATH-COLLISION` and
-    `PKG-MANIFEST-MISSING`, and also reports `PKG-HASH-MISMATCH` and
-    `PKG-SYMLINK`, all at a key of `agentica.lock` (`package[N].tag`, ...).
-    `install`, `add` and `update` also write `deps/<name>/`
-    (`io/package_deps.agc`: `sync`, `put`, `remove`) and report those at the
-    lock too, `PKG-SYMLINK` for a deps/ that is a link and `PKG-WRITE` at the
-    file they cannot write. A build reads a package only from `deps/<name>/`
-    (`package_import.agc`, `load`; a missing one is `CHECK-IMPORT-PACKAGE`) and
-    hashes it, except a workspace member (`packages/members.agc`: the
-    `[workspace]` table of the project's root, found by walking up), which is
-    read from its folder with no hash and is locked with `workspace = true`.
-    `agentica add` and `update` (`app/cli_add.agc`, `io/package_resolve.agc`)
-    report the fetch codes of a new pin at `dependencies.<name>.git` of the
-    manifest that asks for it, and add `PKG-DEPENDENCY-EXISTS`,
-    `PKG-DEPENDENCY-UNKNOWN`, `PKG-MANIFEST-EDIT` and `PKG-WRITE`.
-
-- **Stage:** query (`query/`, `outline`, `type-at`, `refs`, `symbol`)
-  - **Codes:** exit 2, at `<arguments>` (line 1, column 1): `QUERY-USAGE` (bad
-    arguments, `--stdin` without a file, a bad `FILE:LINE:COL`, an unreadable
-    path, a folder with no `*.agc`), `QUERY-NOT-FOUND` (`symbol` or `refs` NAME
-    is in no linked module and no builtin), `QUERY-AMBIGUOUS-NAME` (a `refs`
-    NAME that several declarations answer to, `refs_name.agc`).
-    `QUERY-NO-EXPRESSION`, at the position, exit 2: `type-at` or `refs` on no
-    expression or name (`refs` also on a module alias or a path of an import
-    line). The stage reads the words (`query_options.agc`), picks and names the
-    file (`query_files.agc`) and lists the declarations (`outline*.agc`).
-    `outline` only lexes and parses, so its `LEX-` or `PARSE-` keeps its code,
-    exit 1; it reuses `docs/` for the items. `type-at` and `refs` link and
-    check, so they can fail with any `LEX-`, `PARSE-`, `PKG-` or `CHECK-` code,
-    exit 1; `symbol` exits 1 only when no file links.
-
-- **Stage:** runtime (VM)
-  - **Codes:** `RUNTIME-PROCESS-CLOSE`, `RUNTIME-DIVISION-BY-ZERO`,
-    `RUNTIME-INTEGER-OVERFLOW`, `RUNTIME-INDEX-OUT-OF-RANGE`,
-    `RUNTIME-KEY-NOT-FOUND`, `RUNTIME-INVALID-NUMBER`,
-    `RUNTIME-INVALID-CHARACTER`, `RUNTIME-INVALID-RANGE`,
-    `RUNTIME-END-OF-INPUT`, `RUNTIME-UNWRAP-ERROR`, `RUNTIME-JSON-ENCODE`,
-    `RUNTIME-STEP-LIMIT`, `RUNTIME-STACK-OVERFLOW`, `RUNTIME-UNREACHABLE`,
-    `RUNTIME-INTERNAL`, `RUNTIME-INVALID-DURATION`, `RUNTIME-TASK-CANCELLED`,
-    `RUNTIME-TASK-AWAIT-CYCLE`, `RUNTIME-TASK-CRASHED`,
-    `RUNTIME-HANDLE-NOT-OWNED`, `RUNTIME-TEST-ASSERTION`, `RUNTIME-TEST-ERROR`,
-    `RUNTIME-TEST-NAME`, `RUNTIME-TEST-PENDING-TASKS`, `RUNTIME-TEST-RUN`,
-    `RUNTIME-TEST-TIMEOUT`, `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`,
-    `RUNTIME-NATIVE-NULL`,
-    and at load (exit 2)
-    `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`
-
-- **Stage:** lowering (VM)
-  - **Codes:** `LOWER-UNSUPPORTED`, `LOWER-INTERNAL`, `BYTECODE-LIMIT`,
-    `BYTECODE-INTERNAL` (`compiler/lower/lowering.agc`,
-    `compiler/bytecode/bytecode_writer.agc`; see `docs/vm/03-ir-and-bytecode.md`
-    3.5)
+- **Query** (`query/`; `outline`, `type-at`, `refs`, `symbol`): exit 2 at
+  `<arguments>` (line 1, column 1) for `QUERY-USAGE`, `QUERY-NOT-FOUND`
+  (`symbol` or `refs` NAME in no linked module and no builtin) and
+  `QUERY-AMBIGUOUS-NAME` (`refs_name.agc`); `QUERY-NO-EXPRESSION` is at the
+  position. The stage reads the words (`query_options.agc`), picks the file
+  (`query_files.agc`) and lists declarations (`outline*.agc`). `outline` only
+  lexes and parses (its `LEX-` or `PARSE-` exits 1); `type-at` and `refs`
+  link and check, so any `LEX-`, `PARSE-`, `PKG-` or `CHECK-` code can come,
+  exit 1; `symbol` exits 1 only when no file links.
 
 Network and protocol failures otherwise return Results; handler and
 producer diagnostics retain their original code and span.
@@ -260,24 +198,18 @@ returned:
   optional operator, so `a < b < c` and `a == b == c` are
   `PARSE-CHAINED-COMPARISON`, while `a < b == c < d` is valid.
 - Nesting limit (`nesting_limit`, 1000): `enter` counts each statement,
-  expression, prefix operator and type. A chain of binary operators or pipes and
-  each suffix of a postfix expression counts as one more level, and what is
-  parsed after the k-th link starts k levels deeper (`deepen`); beyond the limit
-  is `PARSE-TOO-DEEP` at the current token. The limit bounds the calls of the
-  parser, not the depth of the tree: the right operand of the first link of a
-  chain hangs below the whole chain, so nested chains can build a tree far
-  deeper than 1,000 (measured: 1,990 for two nested chains, about 89,000 for
-  100). A pass that recurses on the tree needs its own stack or limit.
-- Nesting limit of the checker (`compiler/check/check_state.agc`,
-  `nesting_limit`, 1000): each expression and each statement counts as one
-  level, so it bounds the depth of the tree; beyond the limit is
-  `CHECK-TOO-DEEP` at the node, with help to split the code. Alias expansion
-  also stops after 1,000 type references, so repeated aliases cannot grow
-  exponentially in the checker. The parser limit does not bound the tree (a
-  nested chain hangs below its first link), and the checker needs up to 5 VM
-  frames per level (builtins with the nested call as first argument; 3 for `if`,
-  calls and method chains; 6 for each nested block), about 5,000 of the 10,000
-  at the limit.
+  expression, prefix operator and type; each link of a binary chain, pipe or
+  postfix suffix adds one level (`deepen`); beyond it is `PARSE-TOO-DEEP` at
+  the current token. It bounds the parser's calls, not the tree depth (the
+  right operand of a chain's first link hangs below the whole chain, so
+  nested chains build far deeper trees). A pass that recurses on the tree
+  needs its own stack or limit.
+- The checker's own limit (`check_state.agc`, `nesting_limit`, 1000) counts
+  each expression and statement, so it bounds the tree depth: beyond it is
+  `CHECK-TOO-DEEP` at the node. Alias expansion stops after 1,000 type
+  references. The checker needs up to 5 VM frames per level (builtins with
+  the nested call as first argument; 3 for `if`, calls and method chains; 6
+  for each nested block), about 5,000 of the 10,000 at the limit.
 - `type` is contextual: it starts an alias declaration only at the top level
   and remains an ordinary name elsewhere. `case`, `while` and `for` headers
   take an optional `do`. A case arm body is either a NL and a block, or one
@@ -518,24 +450,24 @@ links, checks and lowers it, and hands the bytecode to the VM. A diagnostic is
 printed in the plain form (header, message, source line, caret run) on stderr
 with exit 1. `--dump` pretty-prints the checked tree instead of running it;
 `--dump-ir` prints the lowered program. `compile FILE -o OUT` (first argument
-only, exactly that shape, else usage exit 2) checks, lowers and writes
-bytecode, and it cannot be combined with `--dump` or `--dump-ir` (usage, exit
-2); lowering diagnostics exit 1, an unwritable output prints one line and exits
-2. Arguments after the source file reach the VM as `System.args`, and the
-command exits with the VM's code. No source file exits 2. `check` never runs;
---ai/--json use the same structured diagnostic. `help NAME --json` reads the
-catalog without a source file (unknown target exits 2; with no NAME it prints
-all entries as a JSON array sorted by name); `help` alone (exit 0) prints the
-command summary and the builtin namespaces. `--help` and `help` share one text.
-Help and test handle trailing style options; options on other commands precede
-the command/file so program args stay intact. --max-steps accepts a positive
-integer and reaches only the VM. The --deny-* flags and --sandbox go to the
-VM as typed (`Options.deny`); `test` passes them to the driver.
+only, exactly that shape, else usage exit 2) checks, lowers and writes bytecode,
+and it cannot be combined with `--dump` or `--dump-ir` (usage, exit 2); lowering
+diagnostics exit 1, an unwritable output prints one line and exits 2. Arguments
+after the source file reach the VM as `System.args`, and the command exits with
+the VM's code. No source file exits 2. `check` never runs; --ai/--json use the
+same structured diagnostic. `help NAME --json` reads the catalog without a
+source file (unknown target exits 2; with no NAME it prints all entries as a
+JSON array sorted by name); `help` alone (exit 0) prints the command summary and
+the builtin namespaces. `--help` and `help` share one text. Help and test handle
+trailing style options; options on other commands precede the command/file so
+program args stay intact. --max-steps accepts a positive integer and reaches
+only the VM. The --deny-* flags and --sandbox go to the VM as typed
+(`Options.deny`); `test` passes them to the driver.
 `tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
 `install` is `cli_install.agc` (it takes no word); `add` and `update` are
-`cli_add.agc` (their words are read by hand there). `doc` and the query commands (`outline`, `type-at`, `refs`) are `cli_doc.agc`
-and `cli_query.agc`: the words after the command are read by hand
-(`query/query_options.agc`), and `--stdin FILE` (`type-at --stdin
-FILE:LINE:COL`, likewise `refs`) goes through `with_buffer` in `cli.agc`, as
-`check --stdin` does. `reject` takes the exit status: a `QUERY-` problem exits
-2, any other 1.
+`cli_add.agc` (their words are read by hand there). `doc` and the query commands
+(`outline`, `type-at`, `refs`) are `cli_doc.agc` and `cli_query.agc`: the words
+after the command are read by hand (`query/query_options.agc`), and `--stdin
+FILE` (`type-at --stdin FILE:LINE:COL`, likewise `refs`) goes through
+`with_buffer` in `cli.agc`, as `check --stdin` does. `reject` takes the exit
+status: a `QUERY-` problem exits 2, any other 1.

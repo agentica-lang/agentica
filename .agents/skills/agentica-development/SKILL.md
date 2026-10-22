@@ -20,11 +20,9 @@ Both are linked into one binary. The repo tree is in `AGENTS.md`; this file
 says how to work and which reference to read. Load only the references your
 change needs.
 
-- Every language change goes in `compiler/` (`references/frontend.md`). The
-  data files `compiler/catalog/builtins_data.agc`, `check_tables.agc`,
-  `unicode_table.agc` and `vm/unicode_data.c` are edited by hand.
-- Read the active phase in `docs/roadmap/` first. Build only what it asks: no
-  placeholder modules or nodes for later phases.
+- The rules of `AGENTS.md` apply (front end in `compiler/`, hand-edited data
+  files, no placeholders for later phases). Read the active phase in
+  `docs/roadmap/` first and build only what it asks.
 - One way per thing, and it is the Ruby form (name, method form, syntax), which
   LLMs already know. A different Agentica name is only the internal builtin
   name, with the Ruby name as its alias (`method_aliases` in
@@ -33,9 +31,6 @@ change needs.
   habit gets a `help:` hint, not a second accepted form. Exception: Ruby's own
   synonyms are all accepted (`length`/`size`, `collect`, `inject`, `detect`,
   `member?`; `ruby_synonyms`), and the texts show only the most common one.
-  Issue #574 proposes making the Ruby name the only accepted name.
-- Rules in `AGENTS.md` are defaults; a PR may relax one if it says which and
-  why.
 
 ## Finding code
 
@@ -54,29 +49,22 @@ change needs.
 
 ```sh
 AGENTICA_VM_TRACE=profile dist/agentica check FILE   # step profile (references/vm-build.md)
-make vm-test                  # C tests; one: make build/vm/release/<name>-test
-make fixed-point              # stage2 == stage3 (about 25 s)
-make stage0                   # refresh bootstrap/stage0.agcb (references/ci.md)
+make build/vm/release/<name>-test     # one C test
 poetry run python tools/refreeze.py  # rewrite frozen goldens; --stage, --fast-only
 make vm-golden-check FIXTURES="a b"   # check only those fixtures; make goldens FIXTURES=... rewrites them
 make dup-check                # jscpd: a new copy fails CI; share a helper instead
 ```
 
 Run what the change touches and the affected example with `dist/agentica`.
-Make runs one pytest process per module, so keep xdist off. Fast cases go in
-`tests/test_<area>.py`; slow ones (`@slow` on unittest, `pytest.mark.slow` on
-pytest) run only in CI (`make test-slow`). Destructive filesystem cases never
-run on the host (`references/ci.md`).
+Make runs one pytest process per module, so keep xdist off.
 
 ## Stage contract
 
 - One entry per stage: `Lexer.lex`, `Parser.parse`, `Linker.link_file`,
   `Checker.check`, `Lowering.lower`, `Writer.write` (`references/stages.md`).
-- Return the next data or one diagnostic; stop at the first error.
-- Never print or crash. `compiler/app/cli.agc` prints the diagnostic and exits
-  1.
-- Thread spans through. A runtime error inside a stage is a bug: make it a
-  diagnostic (`*-INTERNAL` for an impossible state).
+- The contract is in `AGENTS.md` ("Stages"). `compiler/app/cli.agc` prints
+  the diagnostic and exits 1. Thread spans through; an impossible state is a
+  `*-INTERNAL` diagnostic.
 
 ## Where new code goes
 
@@ -107,13 +95,10 @@ list gives the homes.
   body in `stdlib/prelude/` (`references/stages.md`, "Compiler prelude").
 - `std/` module: `stdlib/<name>.agc`, listed in `stdlib/MODULES`, with a doc on
   the module and each export (`references/library-notes.md`).
-- Test: `tests/test_<area>.py`. A language rule goes in
-  `tests/test_spec_<area>.py` through `--json check FILE`, asserting the code
-  and the span, never the message. VM behavior: a fixture in
+- Test: `tests/test_<area>.py`; a language rule in
+  `tests/test_spec_<area>.py` (`AGENTS.md`); VM behavior: a fixture in
   `tests/fixtures/vm/` with its `.expected`.
-- Language rule: `docs/grammar/`, the site page and
-  `.agents/skills/agentica-programming/` change together. `.agc` style:
-  `agentica-code-guidelines`.
+- `.agc` style: `agentica-code-guidelines`.
 
 ## VM rules in short
 
@@ -130,20 +115,15 @@ list gives the homes.
 
 ## When to read a reference
 
-- `repo-map.md`: which file in `compiler/`, `vm/`, `tests/` or `stdlib/` owns
-  something.
-- `frontend.md`: compiler edit recipes, the stage and golden contract, gotchas,
-  diagnostics; differential checks for performance changes.
-- `stages.md`: token kinds, diagnostic codes, AST nodes, per-stage notes, the
-  command line.
-- `language-notes.md`: core language rules: Result and `try`, collections,
-  ranges, file modules, methods, interpolation, blocks, hints, enums, functions.
-- `library-notes.md`: a library area (stdio, JSON, tasks, TCP/TLS/HTTP, files,
-  processes, Int and Float bits, std/binary) or `stdlib/` style.
-- `bdd.md`: `agentica test`: `compiler/bdd/bdd_driver.agc`, `std/bdd`,
-  `stdlib/test/`, step programs and handlers.
-- `vm.md`: any VM work: pipeline, layers, rules, index of `vm-*.md`.
-- `ci.md`: `.github/workflows/`, Makefile and `mk/`, new VM files, peers,
-  fixtures, jscpd, CI jobs, releases, `CHANGELOG.md`.
-- `site.md`: `site/`, or a language rule or builtin shown on a site page.
-- `bench-eval.md`: `benchmarks/`, `make bench`, `tests/eval/`, measuring speed.
+| `references/` | When |
+|---|---|
+| `repo-map.md` | which file in `compiler/`, `vm/`, `tests/` or `stdlib/` owns something |
+| `frontend.md` | compiler edit recipes, the stage and golden contract, gotchas, refreeze; differential checks for speed changes |
+| `stages.md` | token kinds, diagnostic codes, AST nodes, per-stage notes, the command line |
+| `language-notes.md` | core language rules: Result and `try`, collections, ranges, modules, methods, interpolation, blocks, hints, enums, functions |
+| `library-notes.md` | a library area (stdio, JSON, tasks, TCP/TLS/HTTP, logging, files, processes, bits, std/binary, std/toml) or `stdlib/` style |
+| `bdd.md` | `agentica test`: the driver, `std/bdd`, `stdlib/test/`, step programs |
+| `vm.md` | any VM work: pipeline, layers, rules, index of `vm-*.md` |
+| `ci.md` | `.github/workflows/`, Makefile and `mk/`, new VM files, peers, fixtures, jscpd, releases, stage0 |
+| `site.md` | `site/`, or a language rule or builtin shown on a site page |
+| `bench-eval.md` | `benchmarks/`, `make bench`, `tests/eval/`, measuring speed |

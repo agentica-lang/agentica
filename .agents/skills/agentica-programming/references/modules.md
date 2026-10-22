@@ -200,17 +200,17 @@ import Sqlite from "pkg/sqlite/db"
   `subdir`, holding only that folder). `agentica install` (no arguments; the
   project of the working folder) fills it with the system `git`, writes `deps/`
   from it and never writes the lock. A package already cached with the locked
-  hash is not fetched, so a full cache needs no git and no network. A fetch gets the tag (or the locked
-  commit) without a checkout and copies the `.agc` files (each at most 1 MiB)
-  and the root `agentica.toml`. It fails with `PKG-TAG-MOVED` (the tag is
-  another commit than the lock), `PKG-HASH-MISMATCH` (the files are not the
-  locked ones; a cached folder is never overwritten), `PKG-SYMLINK`,
-  `PKG-PATH-COLLISION` (two paths differing only in case), `PKG-FETCH` (git
-  failed, no such tag or commit, cache not writable) and `PKG-MANIFEST-MISSING`
-  (no `agentica.toml`). Each names `agentica.lock` and the entry's key, such as
-  `package[0].tag`. `<cache>` is `$XDG_CACHE_HOME/agentica/pkg` when
-  `XDG_CACHE_HOME` is absolute, else `~/.cache/agentica/pkg`; on Windows
-  `%LOCALAPPDATA%\agentica\cache\pkg`.
+  hash is not fetched, so a full cache needs no git and no network. A fetch gets
+  the tag (or the locked commit) without a checkout and copies the `.agc` files
+  (each at most 1 MiB) and the root `agentica.toml`. It fails with
+  `PKG-TAG-MOVED` (the tag is another commit than the lock), `PKG-HASH-MISMATCH`
+  (the files are not the locked ones; a cached folder is never overwritten),
+  `PKG-SYMLINK`, `PKG-PATH-COLLISION` (two paths differing only in case),
+  `PKG-FETCH` (git failed, no such tag or commit, cache not writable) and
+  `PKG-MANIFEST-MISSING` (no `agentica.toml`). Each names `agentica.lock` and
+  the entry's key, such as `package[0].tag`. `<cache>` is
+  `$XDG_CACHE_HOME/agentica/pkg` when `XDG_CACHE_HOME` is absolute, else
+  `~/.cache/agentica/pkg`; on Windows `%LOCALAPPDATA%\agentica\cache\pkg`.
 - `add` and `update` run `git` as `install` does and write `agentica.lock`
   (every package of the build, sorted by name, and no other). `add` puts one
   line in `[dependencies]` of `agentica.toml` and changes no other byte; a name
