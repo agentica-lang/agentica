@@ -292,7 +292,8 @@ Every failure is an error value. The checks run in this order:
   absolute form of 1024 bytes or more. On Windows `.` and `..` are dropped
   before a link is followed, a name under a file gives ENOENT, `/` takes the
   working directory's drive, and an absolute form of 260 characters or more
-  fails (the binary has no long-path manifest).
+  fails unless `LongPathsEnabled` is 1 (the binary's manifest declares
+  `longPathAware`).
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2);

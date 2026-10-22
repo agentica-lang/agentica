@@ -1,9 +1,11 @@
 ## The lock agentica.lock (docs/grammar/05b-modules.md): one entry for each package of the build, by local name,
 ## flat: the name, the git source (the URL and, when the package is a folder of the repository, its subdir) and its pin
-## (a tag or a ref), the exact commit and the hash of its .agc files. A
-## failure is PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one file; project.agc checks
-## it against the manifest, and package_import.agc against the manifest of each package it loads. `encode` is the
-## writer (docs/future/45-packages.md, 45.9): the file is the tool's own, so it is written whole.
+## (a tag or a ref), the exact commit and the hash of its .agc files. A package that is a member of the workspace of
+## the project (members.agc) has `workspace = true` in place of the commit and the hash: it is read from its folder,
+## so it has neither. A failure is PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one
+## file; project.agc checks it against the manifest, and package_import.agc against the manifest of each package it
+## loads. `encode` is the writer (docs/future/45-packages.md, 45.9): the file is the tool's own, so it is written
+## whole.
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
@@ -12,19 +14,21 @@ import Reader from "toml_read"
 
 # The keys of the lock and of a [[package]] table. A package has exactly one of tag and ref.
 TOP_KEYS = ["version", "package"]
-PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash"]
+PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace"]
 
 LOCK_FORMAT = 1
 HASH_PREFIX = "sha256:"
 HASH_LENGTH = 71
 HEX = Set.new("0123456789abcdef".split(""))
 
-## One locked package. commit is the full git commit; hash is `sha256:` and 64 hex digits.
+## One locked package. commit is the full git commit; hash is `sha256:` and 64 hex digits. A workspace member (member
+## is true) has "" for both: its files are the ones in the member's folder.
 export struct Locked
   name: String
   source: GitSource.Source
   commit: String
   hash: String
+  member: Bool
 end
 
 ## A read lock. packages are in the order of the file.
@@ -87,7 +91,17 @@ export def find(lock: Lock, name: String) -> Result[Locked]
   return error("#{name} is not in the lock")
 end
 
-# The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, commit, hash.
+## `name@version` for the messages and the stored names of a package's files: the tag, the first characters of the
+## commit, or `workspace` for a member.
+export def label(locked: Locked) -> String
+  if locked.member
+    return "#{locked.name}@workspace"
+  end
+  return "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
+end
+
+# The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, then commit and hash,
+# or `workspace = true` for a member.
 def package_table(locked: Locked) -> Toml.Value
   pin = Toml.Value.Str(locked.source.ref)
   pin_key = "ref"
@@ -99,14 +113,21 @@ def package_table(locked: Locked) -> Toml.Value
   if locked.source.subdir != ""
     keys = keys.put("subdir", Toml.Value.Str(locked.source.subdir))
   end
-  keys = keys.put(pin_key, pin).put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
-  return Toml.Value.Table(keys)
+  keys = keys.put(pin_key, pin)
+  if locked.member
+    return Toml.Value.Table(keys.put("workspace", Toml.Value.Bool(true)))
+  end
+  return Toml.Value.Table(keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash)))
 end
 
 def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Locked]
   entries = try Reader.table(reading, value, path)
   try Reader.known_keys(reading, entries, PACKAGE_KEYS, path)
-  for key in ["name", "git", "commit", "hash"]
+  required = ["name", "git", "commit", "hash"]
+  if entries.has_key?("workspace")
+    required = ["name", "git"]
+  end
+  for key in required
     if !entries.has_key?(key)
       return error(Reader.fail(reading, Reader.child(path, key), "missing key"))
     end
@@ -117,6 +138,9 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
     return error(Reader.fail_help(reading, Reader.child(path, "name"), "not a package name", problem))
   end
   source = try source_of(reading, entries, path)
+  if entries.has_key?("workspace")
+    return member_of(reading, entries, path, name, source)
+  end
   commit = try text_of(reading, entries, path, "commit")
   problem = GitSource.commit_problem(commit)
   if problem != ""
@@ -129,7 +153,31 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
   if hash.length != HASH_LENGTH or !hash.starts_with?(HASH_PREFIX) or !hex?(hash.slice(HASH_PREFIX.length, 64))
     return error(Reader.fail(reading, Reader.child(path, "hash"), "a hash is sha256: and 64 lowercase hex digits"))
   end
-  return ok(Locked(name: name, source: source, commit: commit, hash: hash))
+  return ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false))
+end
+
+# A workspace member: `workspace = true`, a subdir (the member's folder) and neither a commit nor a hash.
+def member_of(
+  reading: Reader.Reading,
+  entries: Map[String, Toml.Value],
+  path: String,
+  name: String,
+  source: GitSource.Source,
+) -> Result[Locked]
+  here = Reader.child(path, "workspace")
+  flag = try Reader.boolean(reading, entries["workspace"], here)
+  if !flag
+    return error(Reader.fail_help(reading, here, "workspace is true", "leave the key out for a fetched package"))
+  end
+  if source.subdir == ""
+    return error(Reader.fail(reading, Reader.child(path, "subdir"), "a workspace member is a folder: missing key"))
+  end
+  for key in ["commit", "hash"]
+    if entries.has_key?(key)
+      return error(Reader.fail(reading, Reader.child(path, key), "a workspace member has no commit and no hash"))
+    end
+  end
+  return ok(Locked(name: name, source: source, commit: "", hash: "", member: true))
 end
 
 def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]

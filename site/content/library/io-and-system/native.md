@@ -36,7 +36,7 @@ end
 | `C.Pointer` | `void *` | `C.Pointer` |
 | `C.Bytes` | `const uint8_t *` (parameters only) | `List[Int]` |
 
-A result may also be `Void`, and a block may declare resources (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
+A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
 - A `C.Int` argument outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""` for now, and bytes that are not UTF-8 become U+FFFD.
@@ -69,6 +69,82 @@ end
 - A `compute def` call keeps its resource arguments until it returns: if the resource is closed meanwhile, or its task is cancelled, the free runs when the call ends.
 - Every resource result is a new pointer that your program owns. A function that returns a pointer its library keeps (a borrowed one) must be declared `-> C.Pointer`, or the pointer is freed twice. The free function cannot also be declared with `def` in its block (`PARSE-EXTERN-FREE`); the check is per block, so do not declare it in another block either.
 - A resource is a type: `export resource` makes it importable, and its lines come before the functions that use it. Resources and `C.Pointer` do not convert into each other. `IO.inspect` prints `<Stream>`; a resource has no `to_s` and no JSON.
+
+## Out parameters
+
+A C function that gives a value through a pointer, such as `int sqlite3_open(const char *filename, sqlite3 **db)`, declares that parameter with `out`. The caller does not pass it: C writes into a slot that is zeroed before the call, and the call returns a record with the C result as `result` and one field per out parameter, named after it.
+
+- The record is a struct named after the C name in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
+- An out parameter is `C.Int`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
+- An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it.
+- A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.
+
+## A real library: SQLite
+
+The raw `extern` layer stays private, and safe functions on top of it return `Result`. This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on Windows, give the name or absolute path of a SQLite DLL.
+
+```agentica {mode="check"}
+SQLITE_OK = 0
+SQLITE_ROW = 100
+SQLITE_DONE = 101
+
+extern "libsqlite3.so.0"
+  resource Db, free: sqlite3_close_v2
+  resource Stmt, free: sqlite3_finalize
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
+  def sqlite3_errstr(code: C.Int) -> C.String
+  def sqlite3_errmsg(db: Db) -> C.String
+  def sqlite3_prepare_v2(db: Db, sql: C.String, bytes: C.Int, out stmt: Stmt, out tail: C.Pointer) -> C.Int
+  compute def sqlite3_step(stmt: Stmt) -> C.Int
+  def sqlite3_column_int(stmt: Stmt, col: C.Int) -> C.Int
+  def sqlite3_column_text(stmt: Stmt, col: C.Int) -> C.String
+end
+
+## Opens a database. A failed open may still give a handle, which is closed here.
+def open(path: String) -> Result[Db]
+  opened = sqlite3_open(path)
+  if opened.result != SQLITE_OK
+    Native.close(opened.db)
+    return error("sqlite: #{sqlite3_errstr(opened.result)}")
+  end
+  return ok(opened.db)
+end
+
+## Prepares one statement, or gives SQLite's message.
+def prepare(db: Db, sql: String) -> Result[Stmt]
+  prepared = sqlite3_prepare_v2(db, sql, -1)
+  if prepared.result != SQLITE_OK
+    return error("sqlite: #{sqlite3_errmsg(db)}")
+  end
+  return ok(prepared.stmt)
+end
+
+## Runs a statement that returns no rows.
+def run(db: Db, sql: String) -> Result[Void]
+  stmt = try prepare(db, sql)
+  if sqlite3_step(stmt) != SQLITE_DONE
+    message = sqlite3_errmsg(db)
+    Native.close(stmt)
+    return error("sqlite: #{message}")
+  end
+  Native.close(stmt)
+  return ok()
+end
+
+def main() -> Void
+  db = open(":memory:").unwrap!
+  run(db, "create table langs (id integer, name text)").unwrap!
+  run(db, "insert into langs values (1, 'Ruby'), (2, 'Agentica')").unwrap!
+  query = prepare(db, "select id, name from langs order by id").unwrap!
+  while sqlite3_step(query) == SQLITE_ROW
+    puts("#{sqlite3_column_int(query, 0)} #{sqlite3_column_text(query, 1)}")
+  end
+  Native.close(query)
+  IO.inspect(prepare(db, "select from nowhere"))   # error("sqlite: near \"from\": syntax error")
+  IO.inspect(open("/no/such/dir/x.db"))            # error("sqlite: unable to open database file")
+  Native.close(db)
+end
+```
 
 ## The block
 

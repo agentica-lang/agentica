@@ -1,9 +1,9 @@
 ## The project of a build (docs/grammar/05b-modules.md): the manifest agentica.toml that is nearest to
-## the root file, going up from its folder, and the lock beside it. A build with no manifest is as before. A manifest
-## that declares dependencies needs a lock that has every one of them, from the same source and with the same pin: that
-## is checked here, once, before any file is loaded, and the build never writes the lock. The manifest of each locked
-## package that is in deps/ is checked against the lock just after, also before any file is loaded
-## (package_import.agc, check_manifests).
+## the root file, going up from its folder, the lock beside it and the workspace the project is in, if any. A build
+## with no manifest is as before. A manifest that declares dependencies needs a lock that has every one of them, from
+## the same source and with the same pin: that is checked here, once, before any file is loaded, and the build never
+## writes the lock. The manifest of each locked package that is in deps/ (or in a workspace member's folder) is
+## checked against the lock just after, also before any file is loaded (package_import.agc, check_manifests).
 
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
@@ -11,17 +11,19 @@ import Workspace from "../modules/workspace"
 import GitSource from "git_source"
 import Lock from "lock"
 import Manifest from "manifest"
+import Members from "members"
 
 # The names of the two files, beside each other in the folder of the project.
 MANIFEST_FILE = "agentica.toml"
 LOCK_FILE = "agentica.lock"
 
-## A manifest, the folder that holds it and the lock that goes with it (empty when the manifest declares no
-## dependency).
+## A manifest, the folder that holds it, the lock that goes with it (empty when the manifest declares no dependency)
+## and the workspace of the project (members.agc; none when the project is in no workspace).
 export struct Found
   dir: String
   manifest: Manifest.Manifest
   lock: Lock.Lock
+  members: Members.Members
 end
 
 ## No manifest above the root file, or one.
@@ -38,9 +40,10 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
     return ok(Project.Bare)
   end
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
+  members = try Members.find(workspace, dir)
   empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [])
   if manifest.dependencies.size == 0
-    return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: empty)))
+    return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: empty, members: members)))
   end
   if !workspace.file_exists.call(empty.file)
     return error(
@@ -53,8 +56,8 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
     )
   end
   lock = try Lock.read(workspace, empty.file)
-  try check_dependencies(lock, manifest, false)
-  return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock)))
+  try check_dependencies(lock, manifest, members, false)
+  return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
 end
 
 ## Finds the project of the commands that write the lock (`add`, `update`). The manifest is read as `find` reads it,
@@ -66,11 +69,12 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Re
     return ok(Project.Bare)
   end
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
+  members = try Members.find(workspace, dir)
   lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [])
   if workspace.file_exists.call(lock.file)
     lock = try Lock.read(workspace, lock.file)
   end
-  return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock)))
+  return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
 end
 
 ## The local names of the dependencies of the root project, in the order of the manifest.
@@ -93,8 +97,14 @@ end
 ## Checks the dependencies of a manifest against the lock: each must be in the lock, with the same source and pin. A
 ## missing one is PKG-LOCK-STALE. One with another source is PKG-LOCK-STALE for the manifest of the project (the lock
 ## is out of date) and PKG-SOURCE-CONFLICT for the manifest of a package, `of_package` (one name cannot stand for two
-## sources in one build). The failure names the manifest and `dependencies.<name>`.
-export def check_dependencies(lock: Lock.Lock, manifest: Manifest.Manifest, of_package: Bool) -> Result[Void]
+## sources in one build). A dependency that is a member of the workspace `members` must be locked as a member, and any
+## other as a fetched package: the same two codes. The failure names the manifest and `dependencies.<name>`.
+export def check_dependencies(
+  lock: Lock.Lock,
+  manifest: Manifest.Manifest,
+  members: Members.Members,
+  of_package: Bool,
+) -> Result[Void]
   for dependency in manifest.dependencies
     path = "dependencies.#{dependency.name}"
     found = Lock.find(lock, dependency.name)
@@ -105,6 +115,16 @@ export def check_dependencies(lock: Lock.Lock, manifest: Manifest.Manifest, of_p
     if !GitSource.same?(dependency.source, locked.source)
       wanted = GitSource.describe(dependency.source)
       message = "#{dependency.name} is #{wanted}, but #{LOCK_FILE} has #{GitSource.describe(locked.source)}"
+      if of_package
+        return error(conflict(manifest.file, path, message))
+      end
+      return error(stale(manifest.file, path, message))
+    end
+    if Members.member?(members, dependency.source) != locked.member
+      message = "#{dependency.name} is a workspace member, but #{LOCK_FILE} has it fetched"
+      if locked.member
+        message = "#{dependency.name} is not a workspace member of this project, but #{LOCK_FILE} has it as one"
+      end
       if of_package
         return error(conflict(manifest.file, path, message))
       end

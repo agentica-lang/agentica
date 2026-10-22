@@ -212,3 +212,36 @@ static int32_t somewhere = 42;
 void *peer_ptr_echo(void *p) { return p; }
 void *peer_ptr_static(void) { return &somewhere; }
 int32_t peer_ptr_read(void *p) { return *(int32_t *)p; }
+
+/* For out parameters: one of each type, with an out resource of peer_res_open(N). */
+int32_t peer_out_all(int32_t n, int32_t *i, int64_t *l, double *d, bool *b, void **p, void **res) {
+  *i = n + 1;
+  *l = (int64_t)n * 3000000000;
+  *d = n / 4.0;
+  *b = n > 0;
+  *p = &somewhere;
+  *res = peer_res_open(n);
+  return n * 2;
+}
+
+/* An open that fails and writes NULL, as sqlite3_open does when it has no memory. */
+int32_t peer_out_null(void **res) {
+  *res = NULL;
+  return -1;
+}
+
+/* A function that leaves its out slot as it found it. */
+int32_t peer_out_untouched(void **res) {
+  (void)res;
+  return 0;
+}
+
+/* A Void function with an out parameter. */
+void peer_out_twice(int32_t n, int32_t *twice) { *twice = 2 * n; }
+
+/* A compute call that opens its out resource once peer_set_flag has run. */
+int32_t peer_out_open_later(int32_t value, int32_t limit_ms, void **res) {
+  peer_wait_flag(limit_ms);
+  *res = peer_res_open(value);
+  return value;
+}

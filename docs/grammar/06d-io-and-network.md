@@ -220,10 +220,11 @@ Signatures are in
   relative path starts at the working directory. `.`, `..` and repeated `/` are
   removed, and `..` after a link follows the link's target. The length of the
   path has no buffer limit in the VM; the system's own limit applies to the
-  absolute form of the path (1024 bytes or more fail on macOS, 260 characters or
-  more on Windows). In the result, each byte that is not part of a valid
-  UTF-8 sequence becomes U+FFFD, as in `Dir.list` names. The call has no timeout
-  argument; it runs in the pool of file threads and does not stop other tasks.
+  absolute form of the path (1024 bytes or more fail on macOS, and 260
+  characters or more on Windows unless long paths are on). In the result, each
+  byte that is not part of a valid UTF-8 sequence becomes U+FFFD, as in
+  `Dir.list` names. The call has no timeout argument; it runs in the pool of
+  file threads and does not stop other tasks.
   Where the systems differ, the difference is the system's:
   - macOS accepts a `/` after a file (`file/` gives the file); Linux and Windows
     give an error.
@@ -231,9 +232,10 @@ Signatures are in
     so `link/..` is the folder that holds the link, not the parent of its
     target, and `missing/..` is not an error. A name under a file gives
     ENOENT (Linux and macOS: ENOTDIR). The path starts with a drive letter
-    (`/` is the drive of the working directory, such as `C:/`). A path whose
-    absolute form is 260 characters or more is an error, and so is `Dir.mkdir`
-    of one, because the binary does not opt in to long paths.
+    (`/` is the drive of the working directory, such as `C:/`). The binary
+    opts in to long paths in its manifest, so a path whose absolute form is
+    260 characters or more works when the machine sets `LongPathsEnabled` to
+    1; otherwise it is an error, and so is `Dir.mkdir` of one.
 
 ### Processes
 
@@ -400,6 +402,19 @@ end
   stops at the block, so do not declare it in another one either. `IO.inspect`
   prints `<Db>`; `to_s` is `CHECK-TYPE-MISMATCH` and JSON `CHECK-NOT-ENCODABLE`,
   as for other handles.
+- An `out` parameter (section 5) gets a pointer to a slot that is zeroed before
+  the call: an `int *` for `C.Int`, a `void **` for `C.Pointer` or a resource.
+  The call returns the function's record, with the C result as `result` and
+  each value C left in a slot as the field of its name:
+  `opened = Raw.sqlite3_open(path)`, then `opened.result` and `opened.db`. An
+  out resource that is not NULL is a new resource that the calling task owns,
+  as for a resource result. A NULL one (C wrote NULL or left the slot alone)
+  is a resource that is closed already: nothing ever frees it, `Native.close`
+  does nothing, and a call that takes it is `RUNTIME-NATIVE-CLOSED`; check the
+  C result before using it. In a `compute def` call C fills the slots on the
+  pool thread; a cancel drops the record, and an out resource of a call that
+  ran is freed once when it returns. `C.String` and `C.Bytes` cannot be out
+  parameters (take a `char **` as an out `C.Pointer`).
 - A `def` call blocks timers, I/O and other tasks until it returns, and the step
   limit cannot stop it in the middle. Native code must retry calls cut
   short by `EINTR`: GC signals can interrupt sleeps and polls.

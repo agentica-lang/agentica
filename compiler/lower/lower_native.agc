@@ -1,9 +1,11 @@
 ## Extern functions: the body of a function of an `extern "library"` block is one call of the Native.call builtin,
 ## which the VM answers with libffi (vm/ffi.c). Its arguments are the signature string and a List of the parameters:
 ## "CODES SYMBOL LIBRARY", the codes of Ast.Native, the C name and the library as written (it may hold spaces, so it is
-## last). A function that returns a resource (result code r) has two more words after SYMBOL: the C name of the
-## resource's free function and the resource's name as written, "CODES SYMBOL FREE NAME LIBRARY". A compute def puts
-## "compute " in front: the VM then runs the call on its compute pool while the task waits.
+## last). Each resource that the call makes adds two words after SYMBOL, the C name of its free function and the
+## resource's name as written: the result's first (result code r), then each out resource's (code R) in order,
+## "CODES SYMBOL FREE NAME ... LIBRARY". A compute def puts "compute " in front: the VM then runs the call on its
+## compute pool while the task waits. A function with out parameters gets from Native.call a List of the record's
+## fields, in order (the C result, unless Void, then each out value), and builds its record from it.
 
 import Ast from "../syntax/ast"
 import Ir from "ir"
@@ -25,11 +27,14 @@ export def lower(cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native
   if native.compute
     kind = "compute "
   end
-  symbol = native.symbol
+  words = [native.symbol]
   if native.free != ""
-    symbol = "#{symbol} #{native.free} #{native.resource}"
+    words = words.concat([native.free, native.resource])
   end
-  signature = "#{kind}#{native.codes} #{symbol} #{native.library}"
+  for out in native.outs
+    words = words.concat([out.free, out.name])
+  end
+  signature = "#{kind}#{native.codes} #{words.join(" ")} #{native.library}"
   body = [
     Ir.instr("step", [], index, [span]),
     Ir.Instr(op: "const", args: [count], imm: Ir.Imm.Text(signature), name: "", file: index, spans: [span]),
@@ -42,8 +47,30 @@ export def lower(cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native
       file: index,
       spans: [span, span, span],
     ),
-    Ir.instr("return", [count], index, [span]),
   ]
+  slots = count + 2
+  if record?(native)
+    info = cx.structs[function.result.name]
+    fields = info.fields.size
+    # The fields go to count+1 .. count+fields, read with the index in the register after them.
+    position = count + 1 + fields
+    field = 0
+    while field < fields
+      body = body.push(
+        Ir.Instr(op: "const", args: [position], imm: Ir.Imm.Int(field), name: "", file: index, spans: [span]),
+      )
+      body = body.push(Ir.instr("list-get", [count + 1 + field, count, position], index, [span]))
+      field += 1
+    end
+    body = body.push(Ir.instr("struct", [count, count + 1, info.index], index, [span]))
+    slots = position + 1
+  end
+  body = body.push(Ir.instr("return", [count], index, [span]))
   name = function.name
-  return ok(Ir.Function(name: name, params: count, captures: 0, slots: count + 2, body: body, file: index, span: span))
+  return ok(Ir.Function(name: name, params: count, captures: 0, slots: slots, body: body, file: index, span: span))
+end
+
+# Whether the function has out parameters: one of the codes is a capital.
+def record?(native: Ast.Native) -> Bool
+  return native.codes.split("").any? do |code: String| "ILDBPR".contains?(code) end
 end

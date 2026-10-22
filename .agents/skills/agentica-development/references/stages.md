@@ -77,7 +77,7 @@ stage:
     `PARSE-CONSTANT-NAME`, `PARSE-MISSING-BLANK-LINE`, `PARSE-DETACHED-DOC`,
     `PARSE-TOO-DEEP`, `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`,
     `PARSE-EXTERN-DEFAULT`, `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`,
-    `PARSE-EXTERN-FREE`
+    `PARSE-EXTERN-FREE`, `PARSE-EXTERN-OUT`
 
 - **Stage:** checker
   - **Codes:** `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`,
@@ -120,7 +120,9 @@ stage:
     lock too, `PKG-SYMLINK` for a deps/ that is a link and `PKG-WRITE` at the
     file they cannot write. A build reads a package only from `deps/<name>/`
     (`package_import.agc`, `load`; a missing one is `CHECK-IMPORT-PACKAGE`) and
-    hashes it.
+    hashes it, except a workspace member (`packages/members.agc`: the
+    `[workspace]` table of the project's root, found by walking up), which is
+    read from its folder with no hash and is locked with `workspace = true`.
     `agentica add` and `update` (`app/cli_add.agc`, `io/package_resolve.agc`)
     report the fetch codes of a new pin at `dependencies.<name>.git` of the
     manifest that asks for it, and add `PKG-DEPENDENCY-EXISTS`,

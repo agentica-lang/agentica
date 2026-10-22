@@ -225,8 +225,11 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   Windows (`OS=Windows_NT`, MSYS2 UCRT64) in one block: Linux values by
   default, Windows overrides `EXE`, the PIE/RELRO flags, `-lpthread` and
   `-municode` and defaults `CC` to `gcc` (UCRT64 has no `cc`), and Darwin
-  only drops `-pie` and RELRO. Every binary target ends in `$(EXE)` (`.exe` on
-  Windows); the front end is embedded as ELF, Mach-O or COFF data. The
+  only drops `-pie` and RELRO. On Windows `vm/agentica.rc` (the
+  `longPathAware` manifest) is compiled with `windres`, derived from `CC`
+  (`WINDRES=` overrides it), and replaces MinGW's default manifest. Every
+  binary target ends in `$(EXE)` (`.exe` on Windows); the front end is
+  embedded as ELF, Mach-O or COFF data. The
   `platforms.yml` matrix is in `references/ci.md`. Platform code follows
   "Platform code" in `references/vm-c.md`.
 

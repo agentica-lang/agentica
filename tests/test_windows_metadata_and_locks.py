@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import ctypes
 import os
+import re
 import stat
 
 import pytest
 
-from tests.agentica_test import TARGET_OS, compile_agc, run_vm, start_vm, vm_environment
+from tests.agentica_test import TARGET_OS, binary, compile_agc, run_vm, start_vm, vm_environment
 from tests.vm_os_support import compile_work_text, root, work
-from tests.windows_support import kernel32_file_api
+from tests.windows_support import kernel32_file_api, long_paths_enabled
 
 # The documented Windows values: mode carries the read-only attribute only, and both owner ids are 0.
 WRITABLE_MODE = 0o666
@@ -414,3 +415,66 @@ def test_overlong_line_returns_error_and_handle_can_be_closed(tmp_path, work):
     lines = result.stdout.splitlines()
     assert lines[0].startswith("error("), lines
     assert lines[1] == "true"
+
+
+LONG_PATH_PROGRAM = """\
+def main() -> Void
+  long = System.args()[0]
+  file = long + "/f.txt"
+  IO.inspect(Dir.mkdir(long, 60000).ok?)
+  IO.inspect(File.write_text(file, "data", 60000).ok?)
+  IO.inspect(File.read_text(file, 60000).unwrap_or("error"))
+  IO.inspect(Path.real(long).ok?)
+end
+"""
+
+
+@REQUIRES_WINDOWS_VM
+@pytest.mark.skipif(os.environ.get("AGENTICA_TEST_WINE") == "1", reason="Wine has no LongPathsEnabled registry value")
+def test_a_path_longer_than_max_path_works_exactly_when_long_paths_are_enabled(root, work):
+    """agentica.exe declares longPathAware, so Windows lifts the 260-character limit for it when LongPathsEnabled is 1.
+    With 0 (or no value) the calls fail as before the manifest: Dir.mkdir already fails at about 248 characters."""
+    bytecode = compile_work_text(work, LONG_PATH_PROGRAM, "windows-long-path")
+    long = str(root) + ("/" + "x" * 100) * 4
+    assert len(long) > 300
+    result = run_vm(bytecode, args=[long], env=vm_environment(), cwd=root)
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    seen = result.stdout.split("\n")[:4]
+    if long_paths_enabled():
+        assert seen == ["true", "true", '"data"', "true"]
+        with open("\\\\?\\" + long.replace("/", "\\") + "\\f.txt", encoding="utf-8") as file:
+            assert file.read() == "data"
+    else:
+        assert seen == ["false", "false", '"error"', "false"]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="host-only: reads the resources of the binary with the Windows loader")
+def test_the_binary_carries_a_manifest_that_declares_long_path_awareness():
+    """vm/agentica.rc embeds vm/agentica.manifest as the application manifest (RT_MANIFEST, resource 1). It replaces
+    the default manifest of MinGW's gcc and keeps what that one asks for (asInvoker)."""
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.LoadLibraryExW.argtypes = [wintypes.LPCWSTR, wintypes.HANDLE, wintypes.DWORD]
+    kernel32.LoadLibraryExW.restype = wintypes.HMODULE
+    kernel32.FindResourceW.argtypes = [wintypes.HMODULE, ctypes.c_void_p, ctypes.c_void_p]
+    kernel32.FindResourceW.restype = ctypes.c_void_p
+    kernel32.SizeofResource.argtypes = [wintypes.HMODULE, ctypes.c_void_p]
+    kernel32.SizeofResource.restype = wintypes.DWORD
+    kernel32.LoadResource.argtypes = [wintypes.HMODULE, ctypes.c_void_p]
+    kernel32.LoadResource.restype = ctypes.c_void_p
+    kernel32.LockResource.argtypes = [ctypes.c_void_p]
+    kernel32.LockResource.restype = ctypes.c_void_p
+    kernel32.FreeLibrary.argtypes = [wintypes.HMODULE]
+    load_library_as_datafile, rt_manifest = 0x2, 24
+    module = kernel32.LoadLibraryExW(str(binary()), None, load_library_as_datafile)
+    assert module, ctypes.WinError(ctypes.get_last_error())
+    try:
+        found = kernel32.FindResourceW(module, 1, rt_manifest)
+        assert found, ctypes.WinError(ctypes.get_last_error())
+        size = kernel32.SizeofResource(module, found)
+        text = ctypes.string_at(kernel32.LockResource(kernel32.LoadResource(module, found)), size).decode("utf-8")
+    finally:
+        kernel32.FreeLibrary(module)
+    assert re.search(r"<ws2:longPathAware>\s*true\s*</ws2:longPathAware>", text), text
+    assert 'xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings"' in text
+    assert 'requestedExecutionLevel level="asInvoker"' in text

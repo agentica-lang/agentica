@@ -181,12 +181,16 @@ end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then
 ## constants, then struct, enum, type alias and resource (exported or not), then export def, then def. The span is of
-## the declaration out of place; the help names the group it belongs to. This is a style rule with no meaning for
-## evaluation.
+## the declaration out of place; the help names the group it belongs to. The record of an extern function with out
+## parameters (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with no
+## meaning for evaluation.
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
   for decl in declarations
     group = rank(decl)
+    if record?(unwrap(decl))
+      group = highest
+    end
     if group < highest
       problem = Diag.fail(
         "CHECK-DECL-ORDER",
@@ -220,6 +224,14 @@ def rank(decl: Ast.Decl) -> Int
         _ -> return 3
       end
     Ast.Decl.Function(node) -> return 4
+  end
+end
+
+# Whether the declaration is the record that the parser made for an extern function.
+def record?(decl: Ast.Decl) -> Bool
+  case decl
+    Ast.Decl.Struct(node) -> return node.record_of != ""
+    _ -> return false
   end
 end
 
