@@ -208,22 +208,6 @@ class NoCliArmTests(unittest.TestCase):
             self.assertTrue((root / "work-skill" / "skills" / "agentica-programming" / "references" / "queries.md").is_file())
             self.assertIn("Use the agentica-programming skill.", run.prompt(root / "work-skill-nocli", "skill-nocli"))
 
-    def test_the_minimal_arm_installs_only_the_one_file_skill_under_the_skill_name(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.prepare_in(root, "skill-minimal", "skill")
-            installed = root / "work-skill-minimal" / "skills" / "agentica-programming"
-            text = (installed / "SKILL.md").read_text(encoding="utf-8")
-
-            self.assertEqual([path.name for path in installed.iterdir()], ["SKILL.md"])
-            self.assertEqual(text, (run.MINIMAL_SKILL / "SKILL.md").read_text(encoding="utf-8"))
-            self.assertTrue(text.startswith("---\nname: agentica-programming\n"))
-            self.assertLessEqual(len(text.encode()), 3072)
-            self.assertTrue((root / "work-skill" / "skills" / "agentica-programming" / "references").is_dir())
-            self.assertEqual(run.prompt(root / "work-skill-minimal", "skill-minimal"), run.prompt(root / "work-skill", "skill"))
-            self.assertIn("skill-minimal", run.ARMS)
-            self.assertNotIn("skill-minimal", run.DEFAULT_ARMS)
-
     def test_a_skill_that_still_names_the_commands_stops_the_arm(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             skill = Path(directory) / "skill"
@@ -592,20 +576,6 @@ class MainTests(unittest.TestCase):
         (root / "dist" / "runtime" / "bin").mkdir(parents=True, exist_ok=True)
         (root / "dist" / "runtime" / "bin" / "agentica").write_text("binary")
         return root
-
-    def test_run_json_records_the_minimal_skill_only_when_the_arm_runs(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = self.runtime_root(directory)
-            self.main(root, ["--tasks", "t1", "--arms", "skill", "skill-minimal"], "pass")
-            with_arm = self.result_info(root)
-        with tempfile.TemporaryDirectory() as directory:
-            root = self.runtime_root(directory)
-            self.main(root, ["--tasks", "t1", "--arms", "skill"], "pass")
-            without_arm = self.result_info(root)
-
-        self.assertEqual(with_arm["skill_minimal_sha256"], run.skill_digest(run.MINIMAL_SKILL))
-        self.assertIn("skill_minimal_commit", with_arm)
-        self.assertNotIn("skill_minimal_sha256", without_arm)
 
     def test_an_arm_runs_only_on_its_task_subset(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

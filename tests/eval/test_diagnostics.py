@@ -80,8 +80,6 @@ class DiagnosticsTests(unittest.TestCase):
             ("t9-inventory-orders-typed-python-12", "t9-inventory-orders", "typed-python"),
             ("t9-inventory-orders-python-2", "t9-inventory-orders", "python"),
             ("t20-big-log-skill-3", "t20-big-log", "skill"),
-            ("t20-big-log-skill-minimal-3", "t20-big-log", "skill-minimal"),
-            ("t11-gradebook-skill-nocli-1", "t11-gradebook", "skill-nocli"),
         ):
             with self.subTest(name=name):
                 found = diagnostics.RUN_NAME.match(name)

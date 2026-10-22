@@ -106,14 +106,6 @@ The arms are the context an agent gets:
   outline`, `type-at`, `symbol`, `refs`), for the measurement of [§39.12](
   future/39-semantic-cli.md). It is opt-in: `--arms` must name it. See "The
   no-CLI arm".
-- `skill-minimal`: the `skill` arm with a one-file minimal skill in place of the
-  full one (what Agentica is, the work loop, one program and about 15 gotchas
-  taken from real diagnostics; the rest comes from `agentica help NAME` and the
-  diagnostics). The text is `skills/agentica-programming-minimal/SKILL.md` in
-  this folder, kept out of `.agents/skills/` so no agent finds two skills for
-  one job. The sandbox installs it as `agentica-programming`, the prompt is the
-  `skill` arm's, and `run.json` has `skill_minimal_commit` and
-  `skill_minimal_sha256`. Opt-in.
 - `grammar`: `docs/grammar.md` and `examples/`, without the skill. The grammar
   arm's text changed in this PR (the `agentica help` pointer in its prompt, and
   no dead file links), so older grammar-arm results are not comparable.
@@ -153,10 +145,10 @@ python3 tests/eval/diagnostics.py
 ```
 
 `--tasks` picks tasks (the default is all twenty). `--arms` picks arms (the
-default is the first five; `skill-nocli` and `skill-minimal` are opt-in).
-`--arm-tasks ARM=TASK,TASK` limits one arm to some of the tasks (full task
-names, all in `--tasks`; repeat the option for another arm). `--max-cost USD` is
-a soft cap on the cost of the round (see "The budget cap"). `--sandbox firejail
+default is the first five; `skill-nocli` is opt-in). `--arm-tasks
+ARM=TASK,TASK` limits one arm to some of the tasks (full task names, all in
+`--tasks`; repeat the option for another arm). `--max-cost USD` is a soft cap on
+the cost of the round (see "The budget cap"). `--sandbox firejail
 --chroot-root PATH` is the other sandbox; you prepare its rootfs yourself, and
 it needs `mypy` for the typed arm. Docker is the only sandbox tested with the
 typed arm, the drivers and the loopback peers; Firejail is untested for them.
