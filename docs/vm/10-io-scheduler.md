@@ -424,16 +424,17 @@ section says how the scheduler and the loop keep them.
   when a read is asked for, and wakes the loop with an async handle. It reads a
   console with `ReadConsoleW` and hands the text on as UTF-8 (a high surrogate
   waits for its low half, and bytes that do not fit wait for the next read);
-  Ctrl+Z at the start of a line is EOF, as with `ReadFile`. It reads anything
-  else with `_read` in binary mode. The handle keeps the loop alive only while a
-  read is out. The thread and its handle are made on the I/O thread at the first
-  read, after the job's start. Stop signals are handled by libuv on the loop,
-  independently of the reader. A cancelled reader leaves the read in flight, as
-  on Unix, and its bytes or EOF go to the next reader. At the end of the run the
-  read is cancelled where Windows can (`CancelSynchronousIo`, a pipe); a read
-  that cannot be cancelled ends with the process, or, in an in-process harness,
-  when input comes, and then touches nothing of the closed loop. Other
-  unsupported hosts keep a blocking read on the interpreter thread.
+  Ctrl+Z at the start of a read (a line, in practice) is EOF, as with
+  `ReadFile`. It reads anything else with `_read` in binary mode. The handle
+  keeps the loop alive only while a read is out. The thread and its handle are
+  made on the I/O thread at the first read, after the job's start. Stop signals
+  are handled by libuv on the loop, independently of the reader. A cancelled
+  reader leaves the read in flight, as on Unix, and its bytes or EOF go to the
+  next reader. At the end of the run the read is cancelled where Windows can
+  (`CancelSynchronousIo`, a pipe); a read that cannot be cancelled ends with the
+  process, or, in an in-process harness, when input comes, and then touches
+  nothing of the closed loop. Other unsupported hosts keep a blocking read on
+  the interpreter thread.
 - **stdout and stderr (row 7.2.1f, `vm/output.c`).** Each stream has one output
   buffer, a `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of
   waiting writers. `puts`, `print`, `IO.inspect` and `IO.warn` copy their whole

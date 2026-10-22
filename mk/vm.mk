@@ -257,7 +257,7 @@ $(VM_STAMP): FORCE
 
 $(VM_OBJ_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
-	@{ echo '$(VM_CC) $(VM_CFLAGS)'; $(VM_CC) --version 2>/dev/null | head -n 1; } > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+	@{ echo '$(VM_CC) $(VM_CFLAGS) $(if $(VM_RES),$(WINDRES))'; $(VM_CC) --version 2>/dev/null | head -n 1; } > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 $(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := -U NDEBUG
 

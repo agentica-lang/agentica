@@ -404,6 +404,7 @@ static int console_read(agc_stdin_reader *r, HANDLE console, size_t room) {
       errno = EIO;
       return -1;
     }
+    /* Accepted edge: after a held high surrogate, a 0-unit read drops it, and a Ctrl+Z is text, not the end. */
     if (got == 0 || (!start && units[0] == 0x1A)) {
       r->high = 0;
       return 0;
