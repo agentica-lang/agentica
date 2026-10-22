@@ -4,8 +4,8 @@ The peer is tests/fixtures/native/peer.c, built with the system C compiler into 
 each module run, so every C type crosses a real ABI; two cases also call the system libsqlite3.so.0 on Linux, which
 CI installs. Native calls exist on Linux x86_64 and Windows x64 for now:
 elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
-test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* has
-no Windows port yet (#568). Tests assert codes and spans, never messages (AGENTS.md).
+test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* is
+not supported on Windows. Tests assert codes and spans, never messages (AGENTS.md).
 """
 import ctypes
 import json
@@ -21,8 +21,8 @@ from tests.agentica_test import (FIXTURES, TARGET_OS, WINDOWS, cli, host_only, k
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64"))
 NATIVE_CALLS = known_issue(not NATIVE, 548, "native calls are built on Linux x86_64 and Windows x64 only")
-# libuv polls only sockets on Windows, and the peer's descriptors are pipes.
-NATIVE_WAITS = known_issue(WINDOWS, 568, "Native.wait_* has no Windows port yet")
+# Native.wait_* is not supported on Windows: libuv polls only sockets there, and the peer's descriptors are pipes.
+NATIVE_WAITS = host_only(WINDOWS, "Native.wait_* is not supported on Windows (libuv polls only sockets there)")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both.
 LIBC = "ucrtbase.dll" if WINDOWS else "libc.so.6"
@@ -700,7 +700,7 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
 
 
-# On Windows a wait is not ported yet (#568): it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
+# On Windows a wait is not supported: it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
 # can be polled, so the run only has to end.
 @NATIVE_CALLS
 def test_a_wait_on_windows_returns_an_error(tmp_path):

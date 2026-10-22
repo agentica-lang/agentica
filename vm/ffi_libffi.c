@@ -228,8 +228,8 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
 }
 
 #ifdef _WIN32
-/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor: no wait yet
-   (issue #568). */
+/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor: a wait is not
+   supported there. */
 int agc_ffi_wait_fd_open(int fd) {
   (void)fd;
   errno = ENOSYS;
