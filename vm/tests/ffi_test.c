@@ -144,7 +144,7 @@ static agc_value field(agc_value list, size_t k) { return agc_list_get(agc_as_li
 
 static void test_outs(void) {
 #ifdef AGC_FFI
-  /* An out C.Int and an out C.Double, after the C result. */
+  /* An out C.Int32 and an out C.Double, after the C result. */
   agc_value eight = agc_float(8.0);
   agc_value split = native_call("ddI frexp " LIBM, &eight, 1);
   assert(agc_list_len(agc_as_list(&vm, split)) == 2);
