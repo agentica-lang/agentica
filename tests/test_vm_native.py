@@ -9,6 +9,7 @@ no Windows port yet (#568). Tests assert codes and spans, never messages (AGENTS
 import json
 import platform
 import subprocess
+import time
 
 import pytest
 
@@ -73,8 +74,9 @@ def program(tmp_path, text, name="program.agc"):
     return path
 
 
-def agentica(*words, **options):
-    return run(cli() + [str(word) for word in words], env=vm_environment(), **options)
+def agentica(*words, env=None, **options):
+    """Run the CLI with WORDS; ENV adds to (or, with None values, removes from) the VM's environment."""
+    return run(cli() + [str(word) for word in words], env=vm_environment(env), **options)
 
 
 def diagnostic(result, status):
@@ -145,7 +147,7 @@ def test_a_library_is_not_searched_in_the_working_directory(tmp_path, peer):
     for name in names:
         text = 'extern "%s"\n  def peer_add(a: C.Int, b: C.Int) -> C.Int\nend\n\n' \
                'def main() -> Void\n  puts(peer_add(1, 2))\nend\n' % name
-        result = agentica("--json", program(tmp_path, text), cwd=tmp_path)
+        result = agentica("--json", program(tmp_path, text), cwd=tmp_path, env={"LD_LIBRARY_PATH": None})
         assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3)), name
 
 
@@ -206,7 +208,8 @@ def test_a_compute_call_waits_while_other_tasks_run(tmp_path, peer, schedulers):
   puts(peer_half(5))
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
+    source = program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main)
+    result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stdout, result.stderr) == (0, "1\n1\nccc\n2.5\n", "")
 
 
@@ -234,7 +237,8 @@ def main() -> Void
   puts(peer_word(3))
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
+    source = program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main)
+    result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == ['error("task: cancelled")', "0", "ddd", ""]
 
@@ -263,6 +267,29 @@ end
 """
     result = agentica("--schedulers", "4", program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "10650.0\n", "")
+
+
+# The run ends (main returns, or System.exit) while a compute call naps for 3 seconds on a pool thread: the VM does not
+# wait for the call, so the run takes far less than the nap.
+@NATIVE_CALLS
+@pytest.mark.parametrize("ending, code", [("puts(\"done\")", 0), ("System.exit(3)", 3)])
+def test_the_run_ends_while_a_compute_call_runs(tmp_path, peer, ending, code):
+    main = """def nap(ms: Int) -> Int
+  return peer_nap(ms)
+end
+
+def main() -> Void
+  napper = Task.spawn(&nap, 3_000)
+  Task.sleep(50)
+  %s
+end
+""" % ending
+    source = program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main)
+    start = time.monotonic()
+    result = agentica(source, timeout=20)
+    assert (result.code, result.stderr) == (code, "")
+    assert result.stdout == ("done\n" if code == 0 else "")
+    assert time.monotonic() - start < 2.0
 
 
 # One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
@@ -430,6 +457,16 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
 
 
+# On Windows a wait is not ported yet (#568): it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
+# can be polled, so the run only has to end.
+@NATIVE_CALLS
+def test_a_wait_on_windows_returns_an_error(tmp_path):
+    result = agentica(program(tmp_path, 'def main() -> Void\n  puts(Native.wait_readable(0, 10))\nend\n'))
+    assert (result.code, result.stderr) == (0, "")
+    if WINDOWS:
+        assert result.stdout.startswith('error("native: '), result.stdout
+
+
 WAIT_ONLY = """def main() -> Void
   puts("started")
   puts(Native.wait_writable(1, 1_000))
@@ -481,20 +518,23 @@ end
     assert diagnostic(agentica("--json", program(tmp_path, text), case), 1) == (code, (line, 3))
 
 
-# On Windows a DLL cannot be linked with an undefined symbol, so unbound.dll imports it from nowhere.dll, which is built
-# again without it: the loader finds nowhere.dll next to unbound.dll, and the missing function stops the load.
+# On Windows a DLL cannot be linked with an undefined symbol, so unbound.dll imports it from nowhere.dll. With the
+# symbol the call runs, which proves that the folder of an absolute path is searched for its DLLs; nowhere.dll is then
+# built again without it, and the missing function stops the load.
 @NATIVE_CALLS
 def test_a_library_with_an_unbound_symbol_is_a_load_error_and_keeps_earlier_output(tmp_path, tmp_path_factory):
+    text = 'extern "%s"\n  def unbound_call() -> C.Int\nend\n\n' \
+           'def main() -> Void\n  puts("before")\n  puts(unbound_call())\nend\n'
     if WINDOWS:
         folder = tmp_path_factory.mktemp("native")
         nowhere = shared_library(tmp_path_factory, "nowhere", "-DAGENTICA_TEST_DEFINE_NOWHERE", folder=folder)
         library = shared_library(tmp_path_factory, "unbound", str(nowhere), folder=folder)
+        result = agentica(program(tmp_path, text % literal(library)))
+        assert (result.code, result.stdout, result.stderr) == (0, "before\n1\n", "")
         shared_library(tmp_path_factory, "nowhere", folder=folder)
     else:
         library = shared_library(tmp_path_factory, "unbound")
-    text = 'extern "%s"\n  def unbound_call() -> C.Int\nend\n\n' \
-           'def main() -> Void\n  puts("before")\n  puts(unbound_call())\nend\n' % literal(library)
-    result = agentica("--json", program(tmp_path, text))
+    result = agentica("--json", program(tmp_path, text % literal(library)))
     assert result.stdout == "before\n"
     assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3))
 

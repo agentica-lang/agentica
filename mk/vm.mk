@@ -84,17 +84,6 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
   unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
 endif
-# libffi for the native calls (vm/ffi_libffi.c), compiled from its sources like libuv, with the two headers that its
-# configure script would write made by the rules below. Linux x86_64 and Windows x64 (MinGW gcc, libffi's X86_WIN64
-# target: ffiw64.c and win64.S) for now (issue #548): elsewhere vm/ffi_none.c refuses a program with extern functions.
-FFI_NAMES :=
-FFI_TARGET := X86_64
-ifeq ($(VM_OS),Windows_NT)
-FFI_NAMES := prep_cif types x86/ffiw64 x86/win64
-FFI_TARGET := X86_WIN64
-else ifeq ($(shell uname -s) $(shell uname -m),Linux x86_64)
-FFI_NAMES := prep_cif types x86/ffi64 x86/ffiw64 x86/unix64 x86/win64
-endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 PKG_CONFIG ?= pkg-config
 GC_MIN := 8.2.0
@@ -147,6 +136,21 @@ VM_BUILD := build/vm/release
 YY_CFLAGS := -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
 OSSL_CFLAGS := -fstack-protector-strong -D_FORTIFY_SOURCE=2
 FUZZ_RUNS ?= 100000
+endif
+# libffi for the native calls (vm/ffi_libffi.c), compiled from its sources like libuv, with the two headers that its
+# configure script would write made by the rules below. Linux x86_64 and Windows x64 (MinGW gcc, libffi's X86_WIN64
+# target: ffiw64.c and win64.S) for now (issue #548), as the compiler's target says: elsewhere (macOS, arm64)
+# vm/ffi_none.c refuses a program with extern functions.
+FFI_MACHINE := $(shell $(VM_CC) -dumpmachine 2>/dev/null)
+FFI_NAMES :=
+FFI_TARGET := X86_64
+ifneq ($(filter x86_64-%,$(FFI_MACHINE)),)
+ifeq ($(VM_OS),Windows_NT)
+FFI_NAMES := prep_cif types x86/ffiw64 x86/win64
+FFI_TARGET := X86_WIN64
+else ifneq ($(findstring -linux,$(FFI_MACHINE)),)
+FFI_NAMES := prep_cif types x86/ffi64 x86/ffiw64 x86/unix64 x86/win64
+endif
 endif
 ifeq ($(TRACE),0)
 VM_CFLAGS += -DAGC_TRACE_BUILD=0

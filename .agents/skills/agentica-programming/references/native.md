@@ -22,7 +22,8 @@ end
   found is `RUNTIME-NATIVE-LOAD`. The working directory is never searched. On
   Windows a name (`"ucrtbase.dll"`) is looked up next to `agentica.exe` and in
   System32, not in `PATH`; an absolute path is `"C:\\libs\\x.dll"` (escaped
-  backslashes) and its folder is searched for its DLLs.
+  backslashes), and its DLLs are searched in its folder and the default
+  folders, never in `PATH` (put `libgcc_s_seh-1.dll` next to a MinGW DLL).
 - A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
   is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""` for now.
 - A `def` call blocks timers, I/O and other tasks until it returns: keep such

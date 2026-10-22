@@ -1,5 +1,6 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
-   the cache of prepared calls, and agc_ffi_refusal at load. Calls into the math library run only in a build with libffi. */
+   the cache of prepared calls, and agc_ffi_refusal at load. Calls into the math library run only in a build with
+   libffi. */
 #include "../core.h"
 #include "../services.h"
 
