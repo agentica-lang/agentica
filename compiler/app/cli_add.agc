@@ -204,6 +204,9 @@ def report(old: Lock.Lock, packages: List[Lock.Locked], added: String) -> String
   ordered = packages.sort_by do |item| item.name end
   for locked in ordered
     label = "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
+    if locked.source.subdir != ""
+      label = "#{label} (folder #{locked.source.subdir})"
+    end
     before = Lock.find(old, locked.name)
     if !before.ok? or locked.name == added
       lines = lines.push("added #{label}")

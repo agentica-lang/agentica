@@ -125,7 +125,7 @@ def test_the_hash_ignores_a_change_outside_the_folder_and_update_keeps_it(ws, re
                              tag="sqlite-0.1.0")
     assert second != first
     plain = run(cli() + ["update", "sqlite"], cwd=ws.project, env=environment(ws, remotes))
-    assert (plain.code, plain.stdout) == (0, "updated sqlite@sqlite-0.1.0\n"), plain.stderr
+    assert (plain.code, plain.stdout) == (0, "updated sqlite@sqlite-0.1.0 (folder sqlite)\n"), plain.stderr
     after = (ws.project / "agentica.lock").read_text(encoding="utf-8")
     # The commit is the new one, the hash of sqlite/ is the old one, and postgres (not asked to move) is untouched.
     assert after != before
@@ -137,7 +137,7 @@ def test_the_hash_ignores_a_change_outside_the_folder_and_update_keeps_it(ws, re
 
 @pytest.mark.parametrize("subdir", [
     "../sqlite", "sqlite/..", "/sqlite", "sqlite/", "a//b", "", ".", ".hidden", "sqlite/.git", "agc_libs", "a/AGC_LIBS/b",
-    "a b", "a\\b", "a:b", "sqlite.", "con", "a/nul.txt", "a@b", "x" * 257,
+    "a b", "a\\b", "a:b", "sqlite.", "con", "a/nul.txt", "a@b", "x" * 129,
 ], ids=lambda value: value or "empty")
 def test_a_bad_subdir_in_the_manifest_is_pkg_manifest_invalid_at_its_key(ws, remotes, subdir):
     ws.write_manifest({"sqlite": dependency(url(remotes), tag="v1", subdir=subdir)})
@@ -155,7 +155,7 @@ def test_a_subdir_that_is_not_text_is_refused_and_a_good_one_is_not(ws, remotes)
             '[dependencies]\nsqlite = { git = "%s", tag = "v1", subdir = %s }\n' % (url(remotes), value), encoding="utf-8")
         assert_at_key(problem_of(ws, remotes), "PKG-MANIFEST-INVALID", ws.project / "agentica.toml",
                       "dependencies.sqlite.subdir")
-    for good in ("sqlite", "a/b-c/d_e.f", "A1"):
+    for good in ("sqlite", "a/b-c/d_e.f", "A1", "x" * 128):
         ws.write_manifest({"sqlite": dependency(url(remotes), tag="v1", subdir=good)})
         # The manifest is good: the next failure is the lock, which has no such entry.
         assert problem_of(ws, remotes)["code"] == "PKG-LOCK-STALE"
@@ -260,7 +260,7 @@ def test_add_with_subdir_writes_the_key_in_the_manifest_and_the_lock(ws, remotes
     for name, tag, subdir in [("sqlite", "sqlite-0.1.0", "sqlite"), ("postgres", "sqlite-0.1.0", "postgres")]:
         result = run(cli() + ["add", name, url(remotes), "--subdir", subdir, "--tag", tag], cwd=ws.project,
                      env=environment(ws, remotes))
-        assert (result.code, result.stdout) == (0, "added %s@%s\n" % (name, tag)), result.stderr
+        assert (result.code, result.stdout) == (0, "added %s@%s (folder %s)\n" % (name, tag, subdir)), result.stderr
     text = (ws.project / "agentica.toml").read_text(encoding="utf-8")
     assert text == ('name = "app"\n\n[dependencies]\nsqlite = %s\npostgres = %s\n' % (
         inline_table(dependency(url(remotes), tag="sqlite-0.1.0", subdir="sqlite")),
@@ -291,3 +291,76 @@ def test_add_refuses_a_bad_or_repeated_subdir_as_a_usage_error_and_a_missing_fol
     assert_at_key(problem, "PKG-FETCH", ws.project / "agentica.toml", "dependencies.sqlite.subdir")
     assert (ws.project / "agentica.toml").read_text(encoding="utf-8") == 'name = "app"\n'
     assert not (ws.project / "agentica.lock").exists()
+
+
+def test_a_package_can_declare_another_folder_of_its_own_repository(ws, remotes, tmp_path):
+    manifest = 'name = "postgres"\n\n[dependencies]\ncommon = %s\n' % inline_table(
+        dependency(url(remotes), tag="common-1", subdir="common"))
+    files = {"postgres/agentica.toml": manifest,
+             "postgres/db.agc": 'import Common from "pkg/common/util"\n\nexport def open() -> String\n'
+                                '  return "postgres+" + Common.name()\nend\n',
+             "common/util.agc": 'export def name() -> String\n  return "common"\nend\n'}
+    remotes.publish(REPOSITORY, files, tag="postgres-0.1.0")
+    tag_too(remotes, "common-1")
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    (ws.project / "main.agc").write_text('import Db from "pkg/postgres/db"\n\ndef main() -> Void\n  puts(Db.open())\nend\n',
+                                         encoding="utf-8")
+    result = run(cli() + ["add", "postgres", url(remotes), "--tag", "postgres-0.1.0", "--subdir", "postgres"],
+                 cwd=ws.project, env=environment(ws, remotes))
+    # Both are locked, the sibling folder because the package asks for it.
+    assert (result.code, result.stdout) == (
+        0, "added common@common-1 (folder common)\nadded postgres@postgres-0.1.0 (folder postgres)\n"), result.stderr
+    lock = (ws.project / "agentica.lock").read_text(encoding="utf-8")
+    assert lock.count('subdir = "common"') == 1 and lock.count('subdir = "postgres"') == 1
+    ran = build(ws, remotes)
+    assert (ran.code, ran.stdout) == (0, "postgres+common\n"), ran.stderr
+    again = run(cli() + ["update"], cwd=ws.project, env=environment(ws, remotes))
+    assert (again.code, again.stdout) == (0, "nothing to update\n"), again.stderr
+    assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == lock
+    # Vendored, both folders are copies and the program runs with no cache and no git.
+    assert run_json("vendor", ws, remotes)[1] is None
+    assert sorted(os.listdir(ws.project / "agc_libs")) == ["common", "postgres"]
+    shutil.rmtree(ws.pkg_root)
+    empty = tmp_path / "no-git"
+    empty.mkdir()
+    ran = build(ws, remotes, PATH=str(empty))
+    assert (ran.code, ran.stdout) == (0, "postgres+common\n"), ran.stderr
+
+
+def test_a_symlink_to_a_source_file_inside_the_folder_is_refused_and_a_submodule_below_it_is_not(ws, remotes):
+    commit = remotes.publish(REPOSITORY, tree(), tag="sqlite-0.1.0", links={"sqlite/alias.agc": "db.agc"})
+    lock_entry(ws, remotes, REPOSITORY, SQLITE, commit, tag="sqlite-0.1.0", name="sqlite", subdir="sqlite")
+    ws.write_manifest({"sqlite": dependency(url(remotes), tag="sqlite-0.1.0", subdir="sqlite")})
+    ws.write_lock()
+    _, problem = run_json("install", ws, remotes)
+    assert_at_key(problem, "PKG-SYMLINK", ws.project / "agentica.lock", "package[0]")
+    assert not ws.folder(url(remotes), commit, "sqlite").exists()
+    # A submodule that is not named like a source file is left out, as in a package that is a whole repository.
+    commit = remotes.publish(REPOSITORY, tree(), tag="sqlite-0.1.0", gitlinks=["sqlite/vendor"])
+    ws.locked.clear()
+    lock_entry(ws, remotes, REPOSITORY, SQLITE, commit, tag="sqlite-0.1.0", name="sqlite", subdir="sqlite")
+    ws.write_lock()
+    result, problem = run_json("install", ws, remotes)
+    assert (result.code, problem) == (0, None), result.stderr
+    assert cached_files(ws.folder(url(remotes), commit, "sqlite")) == ["db.agc", "util/text.agc"]
+
+
+def test_a_commit_pin_with_a_subdir_is_stored_by_the_short_commit_and_update_does_not_move_it(ws, remotes):
+    commit = remotes.publish(REPOSITORY, tree(), tag="sqlite-0.1.0")
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    (ws.project / "main.agc").write_text('import Db from "pkg/sqlite/db"\n\ndef main() -> Void\n  puts(Db.open())\nend\n',
+                                         encoding="utf-8")
+    result = run(cli() + ["add", "sqlite", url(remotes), "--ref", commit, "--subdir", "sqlite"], cwd=ws.project,
+                 env=environment(ws, remotes))
+    assert (result.code, result.stdout) == (0, "added sqlite@%s (folder sqlite)\n" % commit[:12]), result.stderr
+    lock_entry(ws, remotes, REPOSITORY, SQLITE, commit, ref=commit, name="sqlite", subdir="sqlite")
+    assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == ws.lock_text()
+    out = ws.base / "ref.agcb"
+    assert run(cli() + ["compile", str(ws.project / "main.agc"), "-o", str(out)], cwd=ws.project,
+               env=environment(ws, remotes)).code == 0
+    assert ("pkg/sqlite@%s/db.agc" % commit[:12]).encode() in out.read_bytes()
+    # The folder changes in a later commit; a commit pin stays where it is.
+    remotes.publish(REPOSITORY, tree(sqlite={"db.agc": "# new\n"}), tag="sqlite-0.1.0")
+    again = run(cli() + ["update"], cwd=ws.project, env=environment(ws, remotes))
+    assert (again.code, again.stdout) == (0, "nothing to update\n"), again.stderr
+    assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == ws.lock_text()

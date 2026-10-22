@@ -153,13 +153,12 @@ def strip_query_docs(skill: Path) -> None:
         (skill / "references" / name).unlink()
     core = skill / "SKILL.md"
     text = core.read_text(encoding="utf-8")
-    text = re.sub(r"^- `references/(?:queries|analysis)\.md`:.*\n(?:  .*\n)*", "", text, flags=re.MULTILINE)
-    text = re.sub(r"\s*Questions about\s+code, without reading it:.*?\(`references/queries\.md`\)\.", "", text, flags=re.DOTALL)
+    text = re.sub(r"^\| `(?:queries|analysis)\.md` \|.*\n", "", text, flags=re.MULTILINE)
     core.write_text(text, encoding="utf-8")
     codes = skill / "references" / "diagnostics.md"
     text = codes.read_text(encoding="utf-8")
-    text = re.sub(r"^- \*\*Code:\*\* `QUERY-.*\n(?:  .*\n)*\n?", "", text, flags=re.MULTILINE)
-    text = re.sub(r"; `QUERY-` is a mistake in the question of.*?`refs`\.", ".", text, flags=re.DOTALL)
+    text = re.sub(r"^- `QUERY-.*\n(?:  .*\n)*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\s*`QUERY-` is a\s+bad\s+question\s+to.*?`refs`\.", "", text, flags=re.DOTALL)
     codes.write_text(text, encoding="utf-8")
     for path in sorted(skill.rglob("*.md")):
         found = QUERY_MENTION.search(path.read_text(encoding="utf-8"))

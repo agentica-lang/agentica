@@ -24,7 +24,7 @@ MAX_NAME = 64
 MAX_TAG = 128
 MIN_REF = 7
 MAX_REF = 64
-MAX_SUBDIR = 256
+MAX_SUBDIR = 128
 HTTPS = "https://"
 # The first characters of a commit in the stored name of a file of a package that is pinned by a ref.
 SHORT_COMMIT = 12
@@ -98,8 +98,9 @@ end
 ## Why text is not a subdir, or "". A subdir is the folder of the repository that holds the package: a relative path of
 ## plain folder names joined by `/`, each with only letters, digits, `.`, `_` and `-`. No part is empty, hidden (so not
 ## `.` or `..`) or `agc_libs`, which the hash leaves out, and the parts are safe names for the cache folder (they do
-## not end in `.` and are not Windows device names). At most 256 characters. It holds no `@`, so the cache can join
-## the parts.
+## not end in `.` and are not Windows device names). It holds no `@`, so the cache can join the parts. At most 128
+## characters: the cache folder `<commit>@<subdir>` is one path component, which a file system limits to 255 bytes, and
+## a SHA-256 commit takes 64 of them.
 export def subdir_problem(subdir: String) -> String
   if subdir.length == 0 or subdir.length > MAX_SUBDIR
     return "a subdir has 1 to #{MAX_SUBDIR} characters"

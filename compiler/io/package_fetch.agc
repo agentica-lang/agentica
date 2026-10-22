@@ -4,10 +4,10 @@
 ## ls-tree` and `git cat-file`, so `.gitattributes` does not change the bytes; only the `.agc` files and the manifest
 ## are copied (package_tree.agc), and the hash of what was copied must be the hash of the lock. A package that is a
 ## folder of the repository (`subdir`) is fetched the same way, but only the files of that folder are read and kept, in
-## a cache folder of its own (package_cache.agc). The files are built in
-## a folder of the cache root and renamed into place in one step, so the cache never holds half a package. A folder
-## that is already in place is hashed, never overwritten. A failure is a packed failure that names the lock and the
-## key of the entry (link_failure.agc, fail_key).
+## a cache folder of its own (package_cache.agc). The files are built in a folder of the cache root and renamed into
+## place in one step, so the cache never holds half a package. A folder that is already in place is hashed, never
+## overwritten. A failure is a packed failure that names the lock and the key of the entry (link_failure.agc,
+## fail_key).
 ##
 ## `fill` fetches what the lock names. `resolve` (for `add` and `update`) fetches a pin that has no commit or hash yet,
 ## learns both from what it fetched, and puts the files in the cache by the same steps.
@@ -198,20 +198,29 @@ end
 
 # The files of the commit that the hash covers (and the manifest) go to scratch.files. For a package that is a folder
 # of the repository the listing is the tree `<commit>:<subdir>`, so its paths are relative to the folder and nothing
-# outside it is listed, read or written. git refuses a path that is missing, a file, a link or a submodule there:
-# PKG-FETCH at the subdir key.
+# outside it is listed, read or written.
 def copy_tree(place: Place, scratch: Scratch, commit: String, subdir: String) -> Result[Void]
   tree = commit
-  key = "git"
   if subdir != ""
     tree = "#{commit}:#{subdir}"
-    key = "subdir"
+    try check_subdir(place, scratch, tree)
   end
-  listing = try git_text(place, scratch, key, inside(scratch, ["ls-tree", "-r", "-z", "-l", tree]))
+  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", tree]))
   case Tree.plan(listing)
     Tree.Plan.Refused(fault) -> return error(fail(place, fault.code, fault.key, fault.message, fault.help))
     Tree.Plan.Files(blobs) -> return copy_blobs(place, scratch, blobs)
   end
+end
+
+# The subdir must be a folder of the commit. Only this question is answered at the subdir key: the commit was fetched
+# and peeled already, so a path that git cannot find, or that is a file, a link or a submodule (git cannot read the
+# commit it names), is the entry's fault, while a later failure of git (ls-tree, a damaged repository) is git's.
+def check_subdir(place: Place, scratch: Scratch, tree: String) -> Result[Void]
+  kind = try git_at(place, scratch, "subdir", inside(scratch, ["cat-file", "-t", tree]))
+  if String.from_bytes(kind).unwrap_or("").trim != "tree"
+    return error(fail(place, "PKG-FETCH", "subdir", "#{tree} is not a folder", ""))
+  end
+  return ok()
 end
 
 def resolve_into(
@@ -276,7 +285,7 @@ end
 # The commit that the fetched pin points to (a tag is peeled).
 def peel(place: Place, scratch: Scratch) -> Result[String]
   arguments = ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]
-  peeled = try git_text(place, scratch, "git", inside(scratch, arguments))
+  peeled = try git_text(place, scratch, inside(scratch, arguments))
   return ok(peeled.trim)
 end
 
@@ -386,8 +395,8 @@ def git_at(place: Place, scratch: Scratch, key: String, arguments: List[String])
   end
 end
 
-def git_text(place: Place, scratch: Scratch, key: String, arguments: List[String]) -> Result[String]
-  output = try git_at(place, scratch, key, arguments)
+def git_text(place: Place, scratch: Scratch, arguments: List[String]) -> Result[String]
+  output = try git(place, scratch, arguments)
   text = String.from_bytes(output)
   if !text.ok?
     return error(fail(place, "PKG-FETCH", "git", "git gave text that is not UTF-8", ""))
