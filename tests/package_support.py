@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, run, tool, vm_environment
+from tests.agentica_test import WINDOWS, cli, known_issue, run, tool, vm_environment
 
 COMMIT = "a" * 40
 
@@ -273,6 +273,21 @@ def command(ws, remotes, *words, **extra):
     return result, json.loads(result.stderr) if result.code == 1 else None
 
 
+def plain(ws, remotes, *words, **extra):
+    """The result of running agentica with these words in the project folder."""
+    return run(cli() + list(words), cwd=ws.project, env=environment(ws, remotes, **extra))
+
+
+def build(ws, remotes, **extra):
+    """The result of running main.agc of the project."""
+    return plain(ws, remotes, str(ws.project / "main.agc"), **extra)
+
+
+def install(ws, remotes, *words, **extra):
+    """The result of `--json install` in the project folder, and the problem it reported, or None for a success."""
+    return run_json("install", ws, remotes, *words, **extra)
+
+
 def problem_of(ws, remotes, **extra):
     """The problem that `--json check` reports for main.agc of the project, or None."""
     return command(ws, remotes, "check", str(ws.project / "main.agc"), **extra)[1]
@@ -287,7 +302,8 @@ def assert_at_key(problem, code, file, key_path):
 def no_git_path(base):
     """A PATH on which `git` cannot be found. On POSIX it is an empty folder. A Windows binary may load its DLLs through
     PATH (a build that links OpenSSL dynamically), so there it is the PATH of the process without the folders that
-    hold git."""
+    hold git. On a local build that links OpenSSL dynamically, the DLLs can sit in a folder that holds git too (MSYS2
+    UCRT64): dropping that folder stops the VM from starting."""
     if os.name != "nt":
         empty = Path(base) / "no-git"
         empty.mkdir(exist_ok=True)
@@ -297,12 +313,22 @@ def no_git_path(base):
 
 
 def remove_tree(path):
-    """shutil.rmtree that also removes read-only files: git writes its objects read-only, and Windows will not delete a
-    read-only file."""
+    """shutil.rmtree. On Windows it also removes read-only files: git writes its objects read-only, the package cache
+    keeps them after a fetch (issue 598), and Windows will not delete a read-only file."""
+    if os.name != "nt":
+        shutil.rmtree(path)
+        return
+
     def make_writable(function, name, error):
         os.chmod(name, stat.S_IWRITE)
         function(name)
     shutil.rmtree(path, onexc=make_writable)
+
+
+# The fetch leaves a hidden .tmp-* folder in the package cache on Windows (issue 598): the cases that assert none is left.
+LEAKS_THE_CACHE = known_issue(
+    WINDOWS, 598, "the package cache keeps a .tmp-* folder after a fetch, because git writes its objects read-only and "
+                  "Path.remove refuses them")
 
 
 def cached_files(folder):

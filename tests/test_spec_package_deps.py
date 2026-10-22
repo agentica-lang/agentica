@@ -16,9 +16,9 @@ from pathlib import Path
 import pytest
 
 from tests.agentica_test import cli, run, vm_environment
-from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment,  # noqa: F401
-                                    git, lock_entry, no_git_path, package_hash, problem_of, remotes, remove_tree, run_json,
-                                    ws)
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, build, cached_files, dependency,  # noqa: F401
+                                    environment, git, install, lock_entry, no_git_path, package_hash, problem_of, remotes,
+                                    remove_tree, ws)
 
 
 # root can write into a folder whatever its mode, so the case that needs a read-only one does not hold for it.
@@ -28,16 +28,6 @@ GREETER = "owner/greeter"
 TOOLS = "owner/tools"
 TOOLS_FILES = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk"}
 GREETER_FILES = {"greet.agc": GREET, "util/more.agc": "# more\n"}
-
-
-def install(ws, remotes, *words, **extra):
-    """The result of `--json install` in the project folder, and the problem it reported, or None for a success."""
-    return run_json("install", ws, remotes, *words, **extra)
-
-
-def build(ws, remotes, **extra):
-    """The result of running main.agc, which imports greeter, which imports tools."""
-    return run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment(ws, remotes, **extra))
 
 
 @pytest.fixture

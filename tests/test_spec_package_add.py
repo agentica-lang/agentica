@@ -13,19 +13,14 @@ import time
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, known_issue, run
-from tests.package_support import (BANG, GREET, MAIN, assert_at_key, command, dependency, environment,  # noqa: F401
-                                    git, inline_table, lock_entry, no_git_path, remotes, ws)
+from tests.package_support import (BANG, GREET, LEAKS_THE_CACHE, MAIN, assert_at_key, command, dependency,  # noqa: F401
+                                    environment, git, inline_table, lock_entry, no_git_path, plain, remotes, ws)
 
 
 GREETER = "owner/greeter"
 TOOLS = "owner/tools"
 GREETER_FILES = {"greet.agc": GREET, "agentica.toml": None}
 TOOLS_FILES = {"bang.agc": BANG}
-
-
-def plain(ws, remotes, *words, **extra):
-    return run(cli() + list(words), cwd=ws.project, env=environment(ws, remotes, **extra))
 
 
 def tools_manifest(remotes, tag="v1"):
@@ -59,7 +54,7 @@ def read(ws, name):
     return (ws.project / name).read_bytes().decode("utf-8")
 
 
-@known_issue(WINDOWS, 598, "the package cache keeps a .tmp-* folder after a fetch, because git writes its objects read-only and Path.remove refuses them")
+@LEAKS_THE_CACHE
 def test_add_writes_the_manifest_and_the_lock_with_the_dependencies_of_the_package_and_a_program_runs(ws, remotes, tmp_path):
     tools_commit = remotes.publish(TOOLS, TOOLS_FILES, tag="v1", annotated=False)
     files, greeter_commit = publish_greeter(remotes)
@@ -327,14 +322,19 @@ def manifest_edited_during_the_fetch(ws, tmp_path, manifest):
     stop = threading.Event()
     edited = threading.Event()
 
+    failure = []
+
     def edit():
-        while not stop.is_set():
-            if ws.pkg_root.is_dir() and any(ws.pkg_root.glob(".tmp-*")):
-                with open(manifest, "a", encoding="utf-8", newline="\n") as handle:
-                    handle.write("# edited meanwhile\n")
-                edited.set()
-                return
-            time.sleep(0.001)
+        try:
+            while not stop.is_set():
+                if ws.pkg_root.is_dir() and any(ws.pkg_root.glob(".tmp-*")):
+                    with open(manifest, "a", encoding="utf-8", newline="\n") as handle:
+                        handle.write("# edited meanwhile\n")
+                    edited.set()
+                    return
+                time.sleep(0.001)
+        except Exception as error:
+            failure.append(error)
 
     thread = threading.Thread(target=edit)
     thread.start()
@@ -343,6 +343,8 @@ def manifest_edited_during_the_fetch(ws, tmp_path, manifest):
     finally:
         stop.set()
         thread.join()
+    if failure:
+        raise failure[0]
     assert edited.is_set(), "the command ended before its fetch started"
 
 
