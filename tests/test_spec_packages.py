@@ -4,7 +4,6 @@ Each case builds a project folder with its deps/ folder by hand (no fetching), r
 the root file and asserts the code and where it is: the span of the import, or the file and key path of a manifest or
 lock error. Message and help text are not asserted (AGENTS.md).
 """
-import contextlib
 import json
 import os
 import shutil
@@ -12,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
+from tests.agentica_test import WINDOWS, cli, host_only, run, unreadable, vm_environment
 from tests.package_support import COMMIT, Workspace, dependency, package_hash
 
 # No AGENTICA_PATH roots and no user data folder, so only what a case builds resolves; deps/ is each case's own.
@@ -650,28 +649,6 @@ def test_a_manifest_or_lock_error_with_a_key_shows_the_key_in_the_plain_and_ai_f
     assert "  key: package[0].hash" in ai
     assert not [line for line in ai if line.startswith("  source:")]
     assert [line for line in ai if line.startswith("  at: ")] == ["  at: " + head]
-
-
-@contextlib.contextmanager
-def unreadable(path):
-    """While the block runs, `path` cannot be read. POSIX: mode 000. Windows has no mode to take, but a file that a
-    process has locked (an editor, for instance) cannot be read."""
-    if os.name != "nt":
-        path.chmod(0o000)
-        try:
-            yield
-        finally:
-            path.chmod(0o600)
-        return
-    import msvcrt
-    size = path.stat().st_size
-    with open(path, "r+b") as handle:
-        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, size)
-        try:
-            yield
-        finally:
-            handle.seek(0)
-            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, size)
 
 
 @pytest.mark.skipif(ROOT_USER, reason="root can read any file")

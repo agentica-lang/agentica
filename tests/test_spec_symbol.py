@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, cli, run, vm_environment
+from tests.agentica_test import cli, run, unreadable, vm_environment
 from tests.span_support import end, problem, start, where
 
 ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
@@ -287,16 +287,13 @@ def test_a_root_that_is_not_utf8_is_skipped_with_its_lexer_diagnostic_and_the_ot
     problem(symbol("found", "binary.agc", cwd=tmp_path), "LEX-INVALID-UTF8", 1)
 
 
-@pytest.mark.skipif(not POSIX_PYTHON or ROOT_USER, reason="host-only: a file mode binds a POSIX user, not root")
+@pytest.mark.skipif(ROOT_USER, reason="root can read any file")
 def test_a_root_that_cannot_be_read_is_skipped_and_the_others_answer(tmp_path):
     (tmp_path / "good.agc").write_text("def found() -> Int\n  return 1\nend\n", encoding="utf-8")
     locked = tmp_path / "locked.agc"
     locked.write_text("def found() -> Int\n  return 2\nend\n", encoding="utf-8")
-    locked.chmod(0)
-    try:
+    with unreadable(locked):
         report = answer("found", cwd=tmp_path)
-    finally:
-        locked.chmod(0o644)
     assert [m["module"] for m in report["matches"]] == ["good.agc"]
     [skipped] = report["skipped"]
     assert skipped["file"] == "locked.agc"
