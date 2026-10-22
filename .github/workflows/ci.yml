@@ -100,6 +100,7 @@ jobs:
       - run: |
           python3 --version
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
+          dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
       - name: Build the binary and C tests, then run the BDD specs on the Actions runner
         run: make -j"$(nproc)" vm-test test-bdd
         env:
