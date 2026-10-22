@@ -22,10 +22,10 @@ and report if any check before it fails.
 
 - The version is SemVer with no `v`: `0.5.0`, or `0.5.0-beta.1` for a
   pre-release.
-- **Beta policy (owner, 2026-10-20):** every release is a beta
-  (`X.Y.Z-beta.N`) while Windows lacks a feature that Linux and macOS have
-  (`site/content/vm.md` lists what Windows runs). The first release without a
-  suffix comes when Windows matches them. Ask the owner if unsure.
+- **Beta policy:** a release is a beta (`X.Y.Z-beta.N`) while a system lacks
+  a feature that the others have (new VM features land on Linux first). From
+  0.8.1 to 0.9.0 every release was a beta until Windows matched (#568); 0.9.0
+  is the first stable one since. Ask the owner if unsure.
 - A tag containing `-` is published as a GitHub pre-release
   (`--prerelease` in the `publish` job).
 - The previous version is in `VERSION`, and `git tag --sort=-creatordate`
@@ -99,7 +99,7 @@ git push origin <version>
 
 - the key user-visible points;
 - the breaking changes;
-- for a beta, what is missing on Windows;
+- for a beta, what is missing on which system;
 - a link to the CHANGELOG section for the details.
 
 Do not list PRs; the details stay in `CHANGELOG.md`.
