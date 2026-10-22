@@ -3,12 +3,12 @@
 Signatures of the core namespaces. A row written `x.name(...)` is a Ruby name:
 write it in method form only (`String.strip(s)` is `CHECK-UNKNOWN-NAME`). Other
 rows may be written either way (`String.length(s)` or `s.length`). `agentica
-help NAME` prints a signature. A Ruby or other name (`strip`, `value!`) prints
-the builtin it stands for, under its Agentica name (`--json`: `{"alias",
-"builtins", "hints"}`); one with only a hint (`len`, `int`) prints it and exits
-2, as does an unknown name. Builtin namespaces and type names are reserved: no
-declaration, local, parameter, field or import alias may use them. `ok` and
-`error` are calls, never declared names.
+help NAME` prints a signature in method form (`s.strip()`; `--json` adds
+`ruby`). A Ruby or other name (`strip`, `value!`) prints the builtin it stands
+for (`--json`: `{"alias", "builtins", "hints"}`); one with only a hint (`len`,
+`int`) prints it and exits 2, as does an unknown name. Builtin namespaces and
+type names are reserved: no declaration, local, parameter, field or import alias
+may use them. `ok` and `error` are calls, never declared names.
 
 ## Output, input, system
 
@@ -236,8 +236,8 @@ methods.
 
 Write the Ruby method names: `strip`, `include?`, `start_with?`, `end_with?`,
 `to_i`, `to_f`, `to_i!`, `to_f!`, `push`, `join` on a `List[String]`, `to_s` and
-`inspect` on any data value, `n.to_f`, `x.to_i`. `length` is the String's and
-`size` the List's, Map's, Set's and Range's.
+`inspect` on any data value, `n.to_f`, `x.to_i`. `length` and `size` both work
+on String, List, Map, Set and Range.
 
 Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A
 negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is

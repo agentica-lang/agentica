@@ -5,7 +5,7 @@
 import Builtins from "../catalog/builtins"
 import {PUBLIC_NAMES} from "../catalog/builtins"
 import Model from "../catalog/builtin_model"
-import RubyForm from "../catalog/ruby_form"
+import RubyForm from "../check/ruby_form"
 import CatalogJson from "../catalog/catalog_json"
 import Tables from "../check/check_tables"
 import Ast from "../syntax/ast"
@@ -20,7 +20,8 @@ import Texts from "cli_text"
 ## A NAME that is not a builtin but a name from another language (`strip`, `String.to_i`, `value!`) answers with the
 ## builtins it stands for (cli_alias.agc), each under a line such as "`NAME` is written `.strip`" when NAME is not how
 ## Ruby writes it, then the hints of the checker for that name on other types; as JSON it is {"alias": NAME,
-## "builtins": [the object of each builtin], "hints": {"Kind.name": text}}. A name with a foreign-language hint of its own (`int`) gets that hint and exit 2.
+## "builtins": [the object of each builtin], "hints": {"Kind.name": text}}. A name with a foreign-language hint of its
+## own (`int`) gets that hint and exit 2.
 export def help(words: List[String], style: String) -> Reply.Reply
   rest = words
   as_json = style == "json"
@@ -29,7 +30,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
     rest = rest.take(rest.size - 1)
   end
   if rest.size == 1 and as_json
-    return Reply.printed("#{JSON.encode(CatalogJson.catalog())}\n")
+    return Reply.printed("#{JSON.encode(CatalogJson.catalog(&RubyForm.signature))}\n")
   elsif rest.size == 1
     return Reply.printed("#{Texts.summary_text()}#{namespaces_text()}\n")
   elsif rest.size != 2
@@ -41,7 +42,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
     return renamed(name, as_json)
   end
   if as_json
-    return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!))}\n")
+    return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!, &RubyForm.signature))}\n")
   end
   return Reply.printed(block(name, entry.unwrap!))
 end
@@ -62,7 +63,9 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
   if as_json
     answer = JSON.object({
       "alias": JSON.from(name),
-      "builtins": JSON.array(entries.map do |entry: Model.Builtin| CatalogJson.builtin(entry) end),
+      "builtins": JSON.array(
+        entries.map do |entry: Model.Builtin| CatalogJson.builtin(entry, &RubyForm.signature) end,
+      ),
       "hints": JSON.from(hints),
     })
     return Reply.printed("#{JSON.encode(answer)}\n")
@@ -72,8 +75,8 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
   return Reply.printed(blocks.concat(notes).join("\n"))
 end
 
-# The text of one builtin for the name asked: a line when the name is not how Ruby writes it, then the signature of each
-# form in the Ruby method form (`s.strip() -> String`) when the builtin has one, then the description.
+# The text of one builtin for the name asked: a line when the name is not how Ruby writes it, then the signature of
+# each form in the Ruby method form (`s.strip() -> String`) when the builtin has one, then the description.
 def block(name: String, entry: Model.Builtin) -> String
   asked = name.split(".")
   method = asked[asked.size - 1]
@@ -94,8 +97,8 @@ def form_text(form: Model.Builtin, method: String) -> String
   return ruby
 end
 
-# "`trim` is written `.strip`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in Agentica" for a
-# rename of a builtin that has no Ruby form, else nothing. `written` is the method the form is shown with.
+# "`trim` is written `.strip`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in Agentica" for
+# a rename of a builtin that has no Ruby form, else nothing. `written` is the method the form is shown with.
 def rename_line(name: String, target: String, written: String) -> String
   asked = name.split(".")
   method = asked[asked.size - 1]

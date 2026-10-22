@@ -4,6 +4,7 @@
 
 import Builtins from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
+import RubyForm from "../check/ruby_form"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import DocModel from "../docs/doc_model"
 import Definitions from "../query/definitions"
@@ -94,7 +95,7 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
   signatures: List[String] = []
   case found.builtin
     Ast.Optional.Present(entry) ->
-      help = CatalogJson.builtin(entry)
+      help = CatalogJson.builtin(entry, &RubyForm.signature)
       signatures = Builtins.signature(entry).split("\n")
     Ast.Optional.Absent -> help = help
   end
@@ -192,7 +193,7 @@ def symbol(match: Symbol.Match) -> Model.Symbol
     Symbol.Extra.Field(written) -> type = written
     Symbol.Extra.Variant(types) -> payload = types
     Symbol.Extra.Builtin(entry) ->
-      help = CatalogJson.builtin(entry)
+      help = CatalogJson.builtin(entry, &RubyForm.signature)
       signatures = Builtins.signature(entry).split("\n")
   end
   return Model.Symbol(

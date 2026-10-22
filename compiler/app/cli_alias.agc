@@ -5,7 +5,7 @@
 
 import {PUBLIC_NAMES} from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
-import RubyForm from "../catalog/ruby_form"
+import RubyForm from "../check/ruby_form"
 import Tables from "../check/check_tables"
 
 # A name that stands for more builtins than this is too vague to list (`new`, `read`).

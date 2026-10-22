@@ -2,7 +2,7 @@
 ## that depend only on types or names. A help is a String, and "" means there is none.
 
 import Model from "../catalog/builtin_model"
-import RubyForm from "../catalog/ruby_form"
+import RubyForm from "ruby_form"
 import Ast from "../syntax/ast"
 import Suggest from "../syntax/suggest"
 import Types from "../syntax/types"

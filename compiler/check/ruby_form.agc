@@ -1,13 +1,13 @@
-## The Ruby form of a builtin, which `agentica help`, the JSON catalog and the helps of the checker show instead of the
-## name of the builtin: `String.trim` is written `s.strip()`, `Result.ok?` is written `r.ok?()`. Both names are accepted
-## (check_tables.agc, `method_aliases`); only the text speaks Ruby. A builtin has a method form when a method alias
-## points to it (`String.strip`) or when it is a method of its own kind (`Result.ok?`, the same rule as the checker's
-## `catalog_method`). A builtin that is no method of any kind (`File.read`) has none.
+## The Ruby form of a builtin, which `agentica help`, the JSON catalog and the helps of the checker show instead of
+## the name of the builtin: `String.trim` is written `s.strip()`, `Result.ok?` is written `r.ok?()`. Both names are
+## accepted (check_tables.agc, `method_aliases`); only the text speaks Ruby. A builtin has a method form when a method
+## alias points to it (`String.strip`) or when it is a method of its own kind (`Result.ok?`, the same rule as the
+## checker's `catalog_method`). A builtin that is no method of any kind (`File.read`) has none.
 
 import Types from "../syntax/types"
-import Model from "builtin_model"
-import {ENTRIES} from "builtins"
-import Tables from "../check/check_tables"
+import Model from "../catalog/builtin_model"
+import {ENTRIES} from "../catalog/builtins"
+import Tables from "check_tables"
 
 ## `Kind.method` of the Ruby method form of the builtin `name` (`String.strip` for `String.trim`), or "" when it has
 ## none.

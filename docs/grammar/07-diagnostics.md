@@ -108,7 +108,8 @@ A method hint is given only when the suggested method exists for the receiver's
 type:
 
 - **Written:** `len(x)`, `x.len`
-  - **Help:** `x.size` for lists and maps, `s.length` for strings
+  - **Help:** `.length` or `.size`, which both work on a String, List, Map,
+    Set and Range
 
 - **Written:** `str(x)`, `x.to_string()`
   - **Help:** `x.to_s` or `"#{x}"`

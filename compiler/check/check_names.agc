@@ -3,7 +3,7 @@
 ## returns the receiver (to_s on a String).
 
 import {ENTRIES} from "../catalog/builtins"
-import RubyForm from "../catalog/ruby_form"
+import RubyForm from "ruby_form"
 import T from "../syntax/types"
 import State from "check_state"
 
