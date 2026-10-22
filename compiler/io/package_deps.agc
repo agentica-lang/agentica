@@ -48,7 +48,7 @@ end
 ## folders of the `dropped` names that are not among them. `packages` are in the order of `lock_file`, whose entries
 ## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill
 ## it), except a workspace member, which has no folder in deps/: its entry is skipped, and a folder of deps/ that the
-## name had before is removed like that of a dropped package.
+## name has is removed like that of a dropped package.
 export def sync(
   settings: Env.Settings,
   lock_file: String,
@@ -59,7 +59,7 @@ export def sync(
   workspace = settings.workspace
   try sweep(workspace, deps)
   if packages.size > 0
-    cache = try PackageFetch.cache_root(settings.env, lock_file)
+    cache = try PackageFetch.cache_for(settings.env, lock_file, packages)
     for index in 0...packages.size
       locked = packages[index]
       if locked.member
@@ -76,7 +76,9 @@ export def sync(
   end
   fetched = packages.filter do |locked| !locked.member end
   kept = Set.new(fetched.map do |locked| locked.name end)
-  for name in dropped
+  members = packages.filter do |locked| locked.member end
+  gone = dropped.concat(members.map do |locked| locked.name end)
+  for name in gone
     if !kept.include?(name)
       try remove(workspace, deps, name)
     end

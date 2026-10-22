@@ -60,6 +60,16 @@ def at(folder, ws, remotes, *words, **extra):
     return result, problem
 
 
+def publish_tags(remotes, files, *tags):
+    """Publishes the files as the repository and tags that commit with every tag; returns the commit."""
+    commit = remotes.publish(REPOSITORY, files, tag=tags[0])
+    work = remotes.work / REPOSITORY
+    for tag in tags[1:]:
+        remotes.git("tag", "-f", tag, cwd=work)
+        remotes.git("push", "--quiet", "--force", "origin", "refs/tags/" + tag, cwd=work)
+    return commit
+
+
 def test_a_member_reads_its_sibling_from_the_folder_and_an_edit_there_is_seen_with_no_tag_or_install(
         ws, remotes, tmp_path):
     repo = tmp_path / "repo"
@@ -102,10 +112,7 @@ def test_the_same_member_from_outside_the_repository_goes_through_the_cache_and_
     repo = tmp_path / "repo"
     files = files_of(remotes, sqlite_manifest_extra="\n[workspace]\nunknown = 1\n")
     lay_out(repo, files)
-    remotes.publish(REPOSITORY, files, tag="sqlite-1")
-    work = remotes.work / REPOSITORY
-    remotes.git("tag", "-f", "common-1", cwd=work)
-    remotes.git("push", "--quiet", "--force", "origin", "refs/tags/common-1", cwd=work)
+    publish_tags(remotes, files, "sqlite-1", "common-1")
     url = remotes.url(REPOSITORY)
     main = 'import Db from "pkg/sqlite/db"\n\ndef main() -> Void\n  puts(Db.open())\nend\n'
     outside = ws.project
@@ -145,8 +152,9 @@ def test_a_bad_workspace_table_is_pkg_manifest_invalid_at_its_key(ws, remotes, t
     # A member folder with no manifest is the case "ghost": the folder exists, its agentica.toml does not.
     (repo / "ghost").mkdir()
     (repo / "main.agc").write_text('def main() -> Void\n  puts("x")\nend\n', encoding="utf-8")
-    # A project of the repository finds the table above it, whichever folder it is in.
-    for folder in (repo, repo / "sqlite"):
+    # The project that is the root, or a listed member, reports the table.
+    # (When the table does not list sqlite, only the root is in the workspace: see the next test.)
+    for folder in (repo, repo / "sqlite") if '"sqlite"' in table else (repo,):
         problem = at(folder, ws, remotes, "--json", "check", "main.agc")[1]
         assert_at_key(problem, "PKG-MANIFEST-INVALID", repo / "agentica.toml", key)
 
@@ -172,3 +180,74 @@ def test_the_lock_must_agree_with_whether_the_dependency_is_a_member(ws, remotes
     shutil.copytree(sqlite, away, ignore=shutil.ignore_patterns("_build"))
     assert_at_key(at(away, ws, remotes, "--json", "check", "main.agc")[1], "PKG-LOCK-STALE", away / "agentica.toml",
                   "dependencies.common")
+
+
+@pytest.mark.parametrize("table", ['[workspace]\nrepository = "%s"\nmembers = ["ghost"]\n', "workspace = 5\n"],
+                         ids=["ghost-member", "not-a-table"])
+def test_a_project_that_a_broken_table_does_not_list_builds_as_if_the_table_were_not_there(
+        ws, remotes, tmp_path, table):
+    repo = tmp_path / "repo"
+    lay_out(repo, {"agentica.toml": table.replace("%s", remotes.url(REPOSITORY)), "app/agentica.toml": 'name = "app"\n',
+                   "app/main.agc": 'def main() -> Void\n  puts("app")\nend\n'})
+    ran, _ = at(repo / "app", ws, remotes, "main.agc")
+    assert (ran.code, ran.stdout) == (0, "app\n"), ran.stderr
+
+
+def test_a_lock_of_members_alone_needs_no_cache_folder(ws, remotes, tmp_path):
+    repo = tmp_path / "repo"
+    lay_out(repo, files_of(remotes))
+    no_home = {"HOME": None, "XDG_CACHE_HOME": None}
+    for words in (["add", "sqlite", remotes.url(REPOSITORY), "--tag", "sqlite-1", "--subdir", "sqlite"],
+                  ["update"], ["install"]):
+        result, problem = at(repo, ws, remotes, "--json", *words, **no_home)
+        assert (result.code, problem) == (0, None), (words, result.stderr)
+    assert not (repo / "deps").exists()
+
+
+def test_a_fetched_package_that_depends_on_a_member_reads_it_from_the_folder(ws, remotes, tmp_path):
+    # The package lives in another repository and declares the member as a user outside would: with the tag that
+    # the remote does not have. In the workspace of the project the member is the working copy.
+    repo = tmp_path / "repo"
+    url = remotes.url(REPOSITORY)
+    library = {"agentica.toml": 'name = "lib"\n\n[dependencies]\ncommon = %s\n' % inline_table(
+                   dependency(url, tag="common-1", subdir="common")),
+               "x.agc": 'import Util from "pkg/common/util"\n\nexport def go() -> String\n'
+                        '  return "lib+" + Util.shout()\nend\n'}
+    remotes.publish("other/lib", library, tag="v1")
+    files = files_of(remotes)
+    files["agentica.toml"] += '\n[dependencies]\nlib = %s\n' % inline_table(
+        dependency(remotes.url("other/lib"), tag="v1"))
+    files["main.agc"] = 'import Lib from "pkg/lib/x"\n\ndef main() -> Void\n  puts(Lib.go())\nend\n'
+    lay_out(repo, files)
+    result, problem = at(repo, ws, remotes, "--json", "update")
+    assert (result.code, problem) == (0, None), result.stderr
+    lock = (repo / "agentica.lock").read_text(encoding="utf-8")
+    assert lock.count("workspace = true") == 1 and lock.count("commit = ") == 1
+    assert sorted(os.listdir(repo / "deps")) == ["lib"]
+    ran, _ = at(repo, ws, remotes, "main.agc")
+    assert (ran.code, ran.stdout) == (0, "lib+common v1\n"), ran.stderr
+    (repo / "common" / "util.agc").write_text(shout("v2"), encoding="utf-8")
+    ran, _ = at(repo, ws, remotes, "main.agc")
+    assert (ran.code, ran.stdout) == (0, "lib+common v2\n"), ran.stderr
+
+
+def test_a_name_that_becomes_a_member_loses_its_deps_folder_and_install_removes_a_stale_one(ws, remotes, tmp_path):
+    repo = tmp_path / "repo"
+    files = files_of(remotes, root_manifest='name = "root"\n')
+    lay_out(repo, files)
+    publish_tags(remotes, files, "sqlite-1", "common-1")
+    sqlite = repo / "sqlite"
+    # With no [workspace] table, common is fetched and written to deps/.
+    assert at(sqlite, ws, remotes, "--json", "update")[1] is None
+    assert (sqlite / "deps" / "common" / "util.agc").is_file()
+    # The table appears: update locks common as a member and removes the folder of deps/.
+    (repo / "agentica.toml").write_text(TABLE % remotes.url(REPOSITORY), encoding="utf-8")
+    result, _ = at(sqlite, ws, remotes, "update")
+    assert (result.code, result.stdout) == (0, "updated common@workspace (folder common)\n"), result.stderr
+    assert "workspace = true" in (sqlite / "agentica.lock").read_text(encoding="utf-8")
+    assert not (sqlite / "deps" / "common").exists()
+    # A folder that comes back (a checkout of an old deps/, say) is removed by install as well.
+    (sqlite / "deps" / "common").mkdir()
+    (sqlite / "deps" / "common" / "old.agc").write_text("# old\n", encoding="utf-8")
+    assert at(sqlite, ws, remotes, "--json", "install")[1] is None
+    assert not (sqlite / "deps" / "common").exists()

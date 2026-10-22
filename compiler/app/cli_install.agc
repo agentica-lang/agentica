@@ -32,7 +32,7 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   if lock.packages.size == 0
     return ok("nothing to install\n")
   end
-  cache = try cache_of(settings, lock)
+  cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
   lines: List[String] = []
   for index in 0...lock.packages.size
     locked = lock.packages[index]
@@ -71,7 +71,7 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   if lock.packages.size == 0
     return ok()
   end
-  cache = try cache_of(settings, lock)
+  cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
   folders: Map[String, String] = {}
   for locked in lock.packages
     if locked.member
@@ -82,12 +82,4 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   end
   try PackageImport.check_folders(settings.workspace, scope, folders)
   return ok()
-end
-
-# The cache root, which only a lock with a fetched package needs: a lock of members alone needs no HOME.
-def cache_of(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
-  if lock.packages.all? do |locked| locked.member end
-    return ok("")
-  end
-  return PackageFetch.cache_root(settings.env, lock.file)
 end

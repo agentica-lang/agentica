@@ -70,6 +70,15 @@ export def cache_root(env: Env.Env, file: String) -> Result[String]
   return ok(cache)
 end
 
+## Like `cache_root`, for the packages of a lock: a lock of workspace members alone fetches nothing and needs no cache,
+## so it gives "" for it and fails only when a package has to be fetched.
+export def cache_for(env: Env.Env, file: String, packages: List[Lock.Locked]) -> Result[String]
+  if packages.all? do |locked| locked.member end
+    return ok("")
+  end
+  return cache_root(env, file)
+end
+
 ## Puts the files of the locked package into the cache under `cache` (a folder; PackageCache.root).
 export def fill(workspace: Workspace.Workspace, cache: String, place: Place, locked: Lock.Locked) -> Result[Filled]
   target = PackageCache.folder(cache, locked.source, locked.commit)

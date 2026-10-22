@@ -45,7 +45,8 @@ export def resolve(
   old: Lock.Lock,
   refresh: Refresh,
 ) -> Result[List[Lock.Locked]]
-  cache = try PackageFetch.cache_root(settings.env, old.file)
+  # Only a package that is fetched needs the cache, so a manifest of workspace members alone works with no HOME.
+  cache = ""
   queue = manifest.dependencies.map do |dependency|
     Wanted(name: dependency.name, source: dependency.source, asked_in: manifest.file)
   end
@@ -58,6 +59,9 @@ export def resolve(
     if found.has_key?(wanted.name)
       try agree(found[wanted.name], wanted)
       next
+    end
+    if cache == "" and !Members.member?(members, wanted.source)
+      cache = try PackageFetch.cache_root(settings.env, old.file)
     end
     locked = try settle(settings, cache, members, old, refresh, wanted)
     found = found.put(wanted.name, locked)

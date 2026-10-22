@@ -1,14 +1,13 @@
-## Imports of packages (docs/grammar/05b-modules.md). `pkg/<name>/<module>` is a package import when
-## <name> is declared by the manifest of the importing file: the manifest of the project for a file of the project, the
-## manifest of the package for a file of a package. The files come only from `deps/<name>/` beside the manifest of the
-## project, where `agentica install` wrote them (io/package_deps.agc); the global package cache is a download cache and
-## a build never reads it. The first time a build loads a package, the hash of its .agc files must be the hash in the
-## lock; a folder that differs is an error. A package that the lock marks as a member of the workspace of the project
-## (members.agc) is the exception: its files are read from the member's folder, with no hash, so an edit there is seen
-## at once. Before any file is loaded, the manifests of the locked packages that are in
-## deps/ are checked against the lock (check_manifests). A name that the importing manifest does not declare is a
-## library of the pkg/ roots (resolve_import.agc) for a file of the project; a file of a package may import only what
-## its own manifest declares.
+## Imports of packages (docs/grammar/05b-modules.md). `pkg/<name>/<module>` is a package import when <name> is declared
+## by the manifest of the importing file: the manifest of the project for a file of the project, the manifest of the
+## package for a file of a package. The files come only from `deps/<name>/` beside the manifest of the project, where
+## `agentica install` wrote them (io/package_deps.agc); the global package cache is a download cache and a build never
+## reads it. The first time a build loads a package, the hash of its .agc files must be the hash in the lock; a folder
+## that differs is an error. A package that the lock marks as a member of the workspace of the project (members.agc) is
+## the exception: its files are read from the member's folder, with no hash, so an edit there is seen at once. Before
+## any file is loaded, the manifests of the locked packages that are in deps/ are checked against the lock
+## (check_manifests). A name that the importing manifest does not declare is a library of the pkg/ roots
+## (resolve_import.agc) for a file of the project; a file of a package may import only what its own manifest declares.
 
 import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
@@ -170,12 +169,11 @@ export def stay_inside(origin: Origin, file: String, site: Failure.Site) -> Resu
 end
 
 ## Checks the manifest of every package of the lock that is in deps/ (or, for a member, in its folder) against the
-## lock, before any file is loaded, so
-## one name with two sources anywhere in the tree (PKG-SOURCE-CONFLICT), or a name the lock lacks (PKG-LOCK-STALE), is
-## reported whether or not an import reaches that package. What cannot be looked at safely is left for the import that
-## loads it: a package that is not in deps/, a folder that cannot be listed and a manifest that is not a regular file
-## report their own diagnostic there (and nothing is read from them here). It gives the scope with the names that the
-## manifests declare, so that loading a package does not list its folder again.
+## lock, before any file is loaded, so one name with two sources anywhere in the tree (PKG-SOURCE-CONFLICT), or a name
+## the lock lacks (PKG-LOCK-STALE), is reported whether or not an import reaches that package. What cannot be looked at
+## safely is left for the import that loads it: a package that is not in deps/, a folder that cannot be listed and a
+## manifest that is not a regular file report their own diagnostic there (and nothing is read from them here). It gives
+## the scope with the names that the manifests declare, so that loading a package does not list its folder again.
 export def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Result[Scope]
   folders: Map[String, String] = {}
   for locked in scope.lock.packages

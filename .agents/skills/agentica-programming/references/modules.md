@@ -156,8 +156,9 @@ import Sqlite from "pkg/sqlite/db"
   `members = ["sqlite", "postgres"]` (folders written like a `subdir`, each
   with its own `agentica.toml`); a bad table is `PKG-MANIFEST-INVALID` at
   `workspace.<key>` or `workspace.members[n]`. A project that is the root or
-  a member (found by going up to the nearest manifest with the table, never
-  into a package of `deps/`) reads a dependency whose `git` is the
+  a member (found by going up to the nearest manifest with the table; a table
+  that does not list the project is ignored for it; a package of `deps/` is
+  never in a workspace) reads a dependency whose `git` is the
   `repository` and whose `subdir` is a member from that member's folder: no
   fetch, no copy to `deps/`, no hash, so an edit is seen at once. Its manifest
   entry stays normal (`git`, `tag`, `subdir`); its lock entry has

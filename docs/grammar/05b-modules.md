@@ -195,11 +195,14 @@ import Sqlite from "pkg/sqlite/db"
 - A project is in a workspace when its folder (the folder of its nearest
   manifest) is the root of the workspace or a member. The root is the nearest
   `agentica.toml`, going up from the project folder, that has a `[workspace]`
-  table; the table is checked when it is found, whether or not the project is
-  listed in it. The search stops at the root of the file system, and at a
-  project folder whose parent folder is named `deps`: a package of `deps/` is
-  never in a workspace. A manifest above the project that cannot be read or
-  parsed is skipped. The `[workspace]` table of a package that is in the cache
+  table. The project is in it when its folder is that root, or its path from
+  the root is one of the `members`; only then is the table checked in full. A
+  table that does not list the project, even a broken one, is the same as no
+  table for it (a project that is the root itself reports a broken table). The
+  search stops at the root of the file system, and a project whose folder is
+  directly inside a folder named `deps` is a package of `deps/` and is never in
+  a workspace. A manifest above the project that cannot be read or parsed is
+  skipped. The `[workspace]` table of a package that is in the cache
   or in `deps/` is never read, so it is not checked.
 - In a workspace, a dependency whose `git` is the `repository` (with or without
   a `.git` at the end) and whose `subdir` is a member is a workspace member,
@@ -216,8 +219,9 @@ import Sqlite from "pkg/sqlite/db"
   say the same as the workspace: a member locked as a fetched package, or a
   package locked as a member for a project that is not in the workspace, is
   `PKG-LOCK-STALE` at the project's manifest and `PKG-SOURCE-CONFLICT` at a
-  package's. Outside the repository nothing changes: the same dependency is
-  fetched and locked with a commit and a hash.
+  package's. `install`, `add` and `update` remove a `deps/` folder that has
+  the name of a member. Outside the repository nothing changes: the same
+  dependency is fetched and locked with a commit and a hash.
 - The import is `pkg/<name>/<module path>`, with no extension:
   `"pkg/sqlite/util/json"` loads `util/json.agc` of the package. `pkg/sqlite`
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the

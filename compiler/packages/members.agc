@@ -30,24 +30,26 @@ export def none() -> Members
 end
 
 ## Finds the workspace of the project whose manifest is in `project_dir` (a canonical path): the nearest manifest going
-## up, from that folder, that has a `[workspace]` table, provided the project is that folder or a member of it. It
-## stops at the first such manifest and at a project that is inside a deps/ folder. A manifest above the project that
-## cannot be read or parsed is not looked at further (it is not the manifest of the project, and a build of the project
-## does not depend on it); the table of the one found is checked, and a bad one is PKG-MANIFEST-INVALID.
+## up, from that folder, that has a `[workspace]` table, provided the project is that folder or one of its listed
+## members. A project whose folder is directly inside a folder named `deps` is a package and has none. A manifest above
+## that cannot be read or parsed is passed over. The table is
+## checked in full only when the project is in the workspace: a project below a broken table that does not list it
+## builds as if the table were not there, unless the project folder is the root itself, which reports the table.
+## A bad table is PKG-MANIFEST-INVALID.
 export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[Members]
+  if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
+    return ok(none())
+  end
   here = project_dir
   while here != ""
-    parent = Paths.directory_of(here)
-    if Paths.last_part(parent) == DEPS_FOLDER
-      return ok(none())
-    end
     file = Paths.join(here, MANIFEST_FILE)
     if workspace.file_exists.call(file)
-      tables = try declared(workspace, file)
+      tables = declared(workspace, file)
       if tables.size > 0
         return belongs(workspace, here, file, tables[0], project_dir)
       end
     end
+    parent = Paths.directory_of(here)
     if parent == here
       return ok(none())
     end
@@ -73,47 +75,79 @@ export def folder_of(members: Members, source: GitSource.Source) -> String
   return Paths.join(members.root, source.subdir)
 end
 
-# The `workspace` table of the manifest at file, as its entries: a list of one table, or of none when the file has no
-# such table. A file that cannot be read or parsed has none here: the project's own manifest was read before and
-# reports its own failure.
-def declared(workspace: Workspace.Workspace, file: String) -> Result[List[Map[String, Toml.Value]]]
+# The value of the `workspace` key of the manifest at file, as a list of one value, or of none when the file has no
+# such key. A file that cannot be read or parsed has none here: the project's own manifest was read before and reports
+# its own failure.
+def declared(workspace: Workspace.Workspace, file: String) -> List[Toml.Value]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = Reader.read_text(workspace, reading)
   if !text.ok?
-    return ok([])
+    return []
   end
   root = Reader.parse(reading, text.unwrap!)
   if !root.ok? or !root.unwrap!.has_key?("workspace")
-    return ok([])
+    return []
   end
-  table = try Reader.table(reading, root.unwrap!["workspace"], "workspace")
-  return ok([table])
+  return [root.unwrap!["workspace"]]
 end
 
-# The checked table of the manifest at root_dir, and the answer for the project: the workspace when the project is the
-# root or a member, else none.
+# The answer for the project when the manifest at root_dir has the `workspace` value: the workspace when the project is
+# the root or is listed in its members (and the table is good), else none. Whether the project is listed is read from
+# the raw value, so a table that is broken elsewhere is not looked at for a project that is not in it.
 def belongs(
   workspace: Workspace.Workspace,
   root_dir: String,
   file: String,
-  table: Map[String, Toml.Value],
+  value: Toml.Value,
   project_dir: String,
 ) -> Result[Members]
+  if root_dir != project_dir and !listed?(value, relative_to(root_dir, project_dir))
+    return ok(none())
+  end
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
+  table = try Reader.table(reading, value, "workspace")
   try Reader.known_keys(reading, table, TABLE_KEYS, "workspace")
   repository = try repository_of(reading, table)
   folders = try folders_of(workspace, reading, table, root_dir)
-  members = Members(root: root_dir, repository: repository, folders: folders)
-  if root_dir == project_dir
-    return ok(members)
+  return ok(Members(root: root_dir, repository: repository, folders: folders))
+end
+
+# The path of dir below root_dir, written with "/": "" when dir is not below it.
+def relative_to(root_dir: String, dir: String) -> String
+  prefix = root_dir
+  if !prefix.ends_with?("/")
+    prefix = "#{prefix}/"
   end
-  for folder in folders
-    path = Paths.join(root_dir, folder)
-    if path == project_dir or workspace.real_path.call(path).unwrap_or(path) == project_dir
-      return ok(members)
-    end
+  if !dir.starts_with?(prefix)
+    return ""
   end
-  return ok(none())
+  return dir.slice(prefix.length, dir.length - prefix.length)
+end
+
+# Whether the raw `workspace` value lists the folder `relative` among its members: false for anything that is not a
+# table with a `members` array.
+def listed?(value: Toml.Value, relative: String) -> Bool
+  if relative == ""
+    return false
+  end
+  case value
+    Toml.Value.Table(entries) ->
+      if !entries.has_key?("members")
+        return false
+      end
+      case entries["members"]
+        Toml.Value.Array(items) -> return items.any? do |item| names?(item, relative) end
+        _ -> return false
+      end
+    _ -> return false
+  end
+end
+
+def names?(item: Toml.Value, relative: String) -> Bool
+  case item
+    Toml.Value.Str(content) -> return content == relative
+    _ -> return false
+  end
 end
 
 def repository_of(reading: Reader.Reading, table: Map[String, Toml.Value]) -> Result[String]
