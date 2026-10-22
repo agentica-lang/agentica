@@ -365,10 +365,10 @@ end
   found is `RUNTIME-NATIVE-LOAD` at the extern function. The working directory
   is never searched. On Windows a name (`"ucrtbase.dll"`, `"winsqlite3.dll"`)
   is looked up in the folder of `agentica.exe` and the system folder, not in
-  `PATH`; an absolute path is written with escaped backslashes (`"C:\\libs\\x.dll"`), and the DLLs
-  it needs are searched in its folder and the default folders, never in `PATH`
-  (a MinGW DLL that needs `libgcc_s_seh-1.dll` must have it next to it). A
-  relative path there
+  `PATH`; an absolute path is written with escaped backslashes
+  (`"C:\\libs\\x.dll"`), and the DLLs it needs are searched in its folder and
+  the default folders, never in `PATH` (a MinGW DLL that needs
+  `libgcc_s_seh-1.dll` must have it next to it). A relative path there
   (`"lib\\x.dll"`, `"C:x.dll"`) is `RUNTIME-NATIVE-LOAD`.
 - An argument is checked before the call: a `C.Int` outside 32 bits is
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is

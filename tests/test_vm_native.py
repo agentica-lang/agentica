@@ -2,7 +2,7 @@
 
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows) for
 each module run, so every C type crosses a real ABI; three cases also call the system SQLite (libsqlite3.so.0 on
-Linux, which CI installs; winsqlite3.dll on Windows, which ships in System32). Native calls exist on Linux x86_64 and Windows x64 for now:
+Linux, which CI installs; winsqlite3.dll on Windows). Native calls exist on Linux x86_64 and Windows x64 for now:
 elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
 test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* is
 not supported on Windows. Tests assert codes and spans, never messages (AGENTS.md).
@@ -963,13 +963,14 @@ end
 
 @pytest.fixture(scope="module")
 def sqlite():
-    """Skip (a failure in CI) when the system SQLite library is not installed. CI installs libsqlite3-0 on Linux;
-    winsqlite3.dll is part of Windows 10 and later. The systems without native calls skip with the port issue (#548)."""
+    """Skip (a failure in CI) when the system SQLite library is not installed."""
+    hint = ""
+    if not WINDOWS:
+        hint = " (Debian: apt install libsqlite3-0)"
     try:
         ctypes.CDLL(SQLITE_LIBRARY)
     except OSError:
-        require(False, SQLITE_LIBRARY + " is required (" + (
-            "it ships in System32 on Windows 10 and later" if WINDOWS else "Debian: apt install libsqlite3-0") + ")")
+        require(False, SQLITE_LIBRARY + " is required" + hint)
 
 
 @NATIVE_CALLS
