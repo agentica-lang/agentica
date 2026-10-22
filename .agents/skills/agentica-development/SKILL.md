@@ -25,6 +25,14 @@ change needs.
   `unicode_table.agc` and `vm/unicode_data.c` are edited by hand.
 - Read the active phase in `docs/roadmap/` first. Build only what it asks: no
   placeholder modules or nodes for later phases.
+- One way per thing, and it is the Ruby form (name, method form, syntax), which
+  LLMs already know. A different Agentica name is only the internal builtin
+  name, with the Ruby name as its alias (`method_aliases` in
+  `check_tables.agc`); every user-facing text (help, diagnostics, docs, site,
+  skills) shows only the Ruby form (`s.strip`, not `String.trim`). A non-Ruby
+  habit gets a `help:` hint, not a second accepted form. Exception: Ruby's own
+  synonyms for one small cosmetic thing (`length`, `size`) are all accepted.
+  Issue #574 proposes making the Ruby name the only accepted name.
 - Rules in `AGENTS.md` are defaults; a PR may relax one if it says which and
   why.
 
@@ -75,15 +83,17 @@ Recipes for each kind are in `references/frontend.md` ("Common tasks"); this
 list gives the homes.
 
 - Keyword, operator, AST node, syntax: `compiler/syntax/` (lexer tables,
-  `ast.agc`, the parser), with a golden.
+  `ast.agc`, the parser), with a golden. Use the Ruby syntax when Ruby has one.
 - Diagnostic code: where the problem is found, with its stage prefix (`LEX-`,
   `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-`, `stages.md`), or
   `PKG-` (`Failure.fail_key` for a key path in `agentica.toml` or
-  `agentica.lock`).
+  `agentica.lock`). Its `help:` names the Ruby form.
 - Builtin: catalog row in `compiler/catalog/builtins_data.agc` (golden in
   `tests/fixtures/frontend/catalog/`), checker rule, `VM_BUILTINS` in
   `compiler/lower/lower_tables.agc` (`tests/test_frontend_catalog.py` checks
-  every key), C in `vm/`, a golden (`references/vm-builtins.md`).
+  every key), C in `vm/`, a golden (`references/vm-builtins.md`). Name it as
+  Ruby does; if the name differs, add the Ruby alias (`help` and the
+  diagnostics then show the Ruby form).
 - VM form or opcode: `compiler/lower/lower_*.agc`; `OPCODES` in
   `compiler/bytecode/bytecode_tables.agc` mirrors `agc_opcode` in
   `vm/value.h` (same order); `vm/loader.c`, `vm/interp.c`; a golden

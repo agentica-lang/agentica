@@ -88,7 +88,7 @@ expected Int, found String
 
 3 |   count = "two"
   |           ^^^^^
-  = help: convert it with String.to_int!(...)
+  = help: convert it with s.to_i!
 ```
 
 - Exit code `1`: the program has an error. Exit code `2`: a bad command or an unreadable file.
@@ -102,7 +102,7 @@ agentica help String.split    # `agentica help` alone lists commands and namespa
 ```
 
 ```text
-String.split(s: String, separator: String) -> List[String]
+s.split(separator: String) -> List[String]
 Split text; an empty separator gives characters.
 ```
 

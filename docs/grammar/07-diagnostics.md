@@ -108,7 +108,8 @@ A method hint is given only when the suggested method exists for the receiver's
 type:
 
 - **Written:** `len(x)`, `x.len`
-  - **Help:** `x.size` for lists and maps, `s.length` for strings
+  - **Help:** `.length` or `.size`, which both work on a String, List, Map,
+    Set and Range
 
 - **Written:** `str(x)`, `x.to_string()`
   - **Help:** `x.to_s` or `"#{x}"`
@@ -295,7 +296,7 @@ type:
   - **Help:** `s.split("")`, and `s.at(i)` for one character
 
 - **Written:** `s.matches?(...)`, `s.match?(...)`, `s.scan(...)`
-  - **Help:** no regular expressions: `contains?`, `starts_with?`, `ends_with?`,
+  - **Help:** no regular expressions: `include?`, `start_with?`, `end_with?`,
     `index_of`
 
 - **Written:** `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`,
@@ -356,7 +357,7 @@ type:
     parentheses and use `.` on the result: `(x \|> f()).unwrap!`
 
 - **Written:** `x \|> String.trim()` (`CHECK-PIPE-METHOD`)
-  - **Help:** the method form: `x.trim`
+  - **Help:** the method form: `x.strip`
 
 - **Written:** `break if x`, `next if x`
   - **Help:** `if x`, then `break` on its own line, then `end`

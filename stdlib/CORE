@@ -33,6 +33,7 @@ check/checker.agc
 check/const_walk.agc
 check/defaults.agc
 check/prelude_files.agc
+check/ruby_form.agc
 diagnostics/diagnostic.agc
 diagnostics/diagnostic_json.agc
 diagnostics/diagnostic_model.agc

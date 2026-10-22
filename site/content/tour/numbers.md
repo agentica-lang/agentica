@@ -44,7 +44,7 @@ end
 true
 ```
 
-`1_`, `1__0`, `1_.5` and `1._5` are `LEX-INVALID-NUMBER`. `String.to_int` and `to_f` reject a `_` in text.
+`1_`, `1__0`, `1_.5` and `1._5` are `LEX-INVALID-NUMBER`. `s.to_i` and `s.to_f` reject a `_` in text.
 
 ## Division
 
@@ -77,14 +77,14 @@ end
 
 ## Mixing Int and Float
 
-The two sides of an operator must have the same type. Convert with `to_f` or `Float.to_int!`.
+The two sides of an operator must have the same type. Convert with `to_f` or `to_i!`.
 
 ```agentica
 def main() -> Void
   count = 3
   price = 2.5
   puts(count.to_f * price)
-  puts(Float.to_int!(7.9))
+  puts(7.9.to_i!)
 end
 ```
 

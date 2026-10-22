@@ -5,6 +5,7 @@
 import Builtins from "../catalog/builtins"
 import {PUBLIC_NAMES} from "../catalog/builtins"
 import Model from "../catalog/builtin_model"
+import RubyForm from "../check/ruby_form"
 import CatalogJson from "../catalog/catalog_json"
 import Tables from "../check/check_tables"
 import Ast from "../syntax/ast"
@@ -17,9 +18,10 @@ import Texts from "cli_text"
 ## A trailing `--json` asks for the JSON form: of the one builtin, or of every public builtin as an array (sorted by
 ## name, each element as `help NAME --json` prints it) when there is no NAME. Nothing else takes an option.
 ## A NAME that is not a builtin but a name from another language (`strip`, `String.to_i`, `value!`) answers with the
-## builtins it stands for (cli_alias.agc), each under a line such as "`NAME` is called `Y` in Agentica", then the hints
-## of the checker for that name on other types; as JSON it is {"alias": NAME, "builtins": [the object of each builtin],
-## "hints": {"Kind.name": text}}. A name with a foreign-language hint of its own (`int`) gets that hint and exit 2.
+## builtins it stands for (cli_alias.agc), each under a line such as "`NAME` is written `.strip`" when NAME is not how
+## Ruby writes it, then the hints of the checker for that name on other types; as JSON it is {"alias": NAME,
+## "builtins": [the object of each builtin], "hints": {"Kind.name": text}}. A name with a foreign-language hint of its
+## own (`int`) gets that hint and exit 2.
 export def help(words: List[String], style: String) -> Reply.Reply
   rest = words
   as_json = style == "json"
@@ -28,7 +30,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
     rest = rest.take(rest.size - 1)
   end
   if rest.size == 1 and as_json
-    return Reply.printed("#{JSON.encode(CatalogJson.catalog())}\n")
+    return Reply.printed("#{JSON.encode(CatalogJson.catalog(&RubyForm.signature))}\n")
   elsif rest.size == 1
     return Reply.printed("#{Texts.summary_text()}#{namespaces_text()}\n")
   elsif rest.size != 2
@@ -40,9 +42,9 @@ export def help(words: List[String], style: String) -> Reply.Reply
     return renamed(name, as_json)
   end
   if as_json
-    return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!))}\n")
+    return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!, &RubyForm.signature))}\n")
   end
-  return Reply.printed("#{Builtins.signature(entry.unwrap!)}\n#{entry.unwrap!.description}\n")
+  return Reply.printed(block(name, entry.unwrap!))
 end
 
 # The answer for a name that is no builtin: the hint of the checker for a name from another language that has one
@@ -61,26 +63,56 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
   if as_json
     answer = JSON.object({
       "alias": JSON.from(name),
-      "builtins": JSON.array(entries.map do |entry: Model.Builtin| CatalogJson.builtin(entry) end),
+      "builtins": JSON.array(
+        entries.map do |entry: Model.Builtin| CatalogJson.builtin(entry, &RubyForm.signature) end,
+      ),
       "hints": JSON.from(hints),
     })
     return Reply.printed("#{JSON.encode(answer)}\n")
   end
-  blocks = entries.map do |entry: Model.Builtin|
-    "#{rename_line(name, entry.name)}\n#{Builtins.signature(entry)}\n#{entry.description}\n"
-  end
+  blocks = entries.map do |entry: Model.Builtin| block(name, entry) end
   notes = hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}\n" end
   return Reply.printed(blocks.concat(notes).join("\n"))
 end
 
-# "`strip` is called `String.trim` in Agentica" for a real rename, "`trim` is the method `String.trim`" when `name`
-# is the method name of `target` already (with or without its type).
-def rename_line(name: String, target: String) -> String
+# The text of one builtin for the name asked: a line when the name is not how Ruby writes it, then the signature of
+# each form in the Ruby method form (`s.strip() -> String`) when the builtin has one, then the description.
+def block(name: String, entry: Model.Builtin) -> String
   asked = name.split(".")
-  if asked[asked.size - 1] == target.split(".")[1]
-    return "`#{name}` is the method `#{target}`"
+  method = asked[asked.size - 1]
+  written = RubyForm.method_name(entry.name)
+  if written != "" and RubyForm.written_as?(entry.name, method)
+    written = method
   end
-  return "`#{name}` is called `#{target}` in Agentica"
+  forms = [entry].concat(entry.alternatives).map do |form: Model.Builtin| form_text(form, written) end
+  return "#{rename_line(name, entry.name, written)}#{forms.join("\n")}\n#{entry.description}\n"
+end
+
+# The signature of a form: in the Ruby form written with `method`, else as the catalog has it.
+def form_text(form: Model.Builtin, method: String) -> String
+  ruby = RubyForm.signature_as(form, method)
+  if ruby == ""
+    return Builtins.form_signature(form)
+  end
+  return ruby
+end
+
+# "`trim` is written `.strip`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in Agentica" for
+# a rename of a builtin that has no Ruby form, else nothing. `written` is the method the form is shown with.
+def rename_line(name: String, target: String, written: String) -> String
+  asked = name.split(".")
+  method = asked[asked.size - 1]
+  if written != ""
+    if method == written
+      return ""
+    end
+    return "`#{name}` is written `.#{written}`\n"
+  end
+  own = target.split(".")
+  if method == own[own.size - 1]
+    return ""
+  end
+  return "`#{name}` is called `#{target}` in Agentica\n"
 end
 
 # `; HINT` when the checker has help for this foreign name (`Hash.new`, `String.chomp`, `select`), else `; did you
@@ -97,8 +129,8 @@ def suggestion(name: String) -> String
   if hints.size > 0
     return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ")
   end
-  case Suggest.did_you_mean(name, PUBLIC_NAMES)
-    Ast.Optional.Present(text) -> return "; #{text}"
+  case Suggest.closest_among(name, PUBLIC_NAMES, [])
+    Ast.Optional.Present(found) -> return "; did you mean \"#{RubyForm.shown(found)}\"?"
     Ast.Optional.Absent -> return ""
   end
 end

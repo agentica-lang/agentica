@@ -3,6 +3,7 @@
 ## returns the receiver (to_s on a String).
 
 import {ENTRIES} from "../catalog/builtins"
+import RubyForm from "ruby_form"
 import T from "../syntax/types"
 import State from "check_state"
 
@@ -37,7 +38,9 @@ export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
   return catalog_method(cx, kind, name)
 end
 
-## The methods a receiver kind has: its aliases and the builtins of its module, without duplicates.
+## The methods a receiver kind has, as Ruby names them: its aliases and the builtins of its module, without
+## duplicates. A builtin that has a Ruby name (`strip`) is listed under it, not under its own (`trim`), which still
+## works; `length` and `size` are both listed.
 export def method_names(cx: State.Cx, kind: String) -> List[String]
   names: List[String] = []
   seen: Set[String] = Set.new([])
@@ -53,7 +56,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
   end
   unique: List[String] = []
   for name in names
-    if !seen.include?(name)
+    if !seen.include?(name) and ruby_method?(cx, kind, name)
       seen = seen.add(name)
       unique = unique.push(name)
     end
@@ -62,20 +65,10 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
 end
 
 ## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase,
-## String.to_int is the alias to_i. "" when there is none.
+## String.trim is strip. "" when there is none for that kind.
 export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
-  dot = name.index_of(".")
-  if dot.ok?
-    suffix = name.slice(dot.unwrap! + 1, name.length - dot.unwrap! - 1)
-    if resolve_method(cx, kind, suffix) == name
-      return suffix
-    end
-  end
-  prefix = "#{kind}."
-  for key in cx.help.aliases.keys.sort
-    if key.starts_with?(prefix) and cx.help.aliases[key] == name
-      return key.slice(prefix.length, key.length - prefix.length)
-    end
+  if RubyForm.method_key(name).starts_with?("#{kind}.")
+    return RubyForm.method_name(name)
   end
   return ""
 end
@@ -154,16 +147,32 @@ def result_help(cx: State.Cx, name: String) -> String
   return text
 end
 
-# A method another language names differently: the Agentica method of that kind, if there is one.
+# True when `name` is a Ruby name of the method it resolves to (`strip`, not `trim`), or has no builtin (`to_s`).
+def ruby_method?(cx: State.Cx, kind: String, name: String) -> Bool
+  resolved = resolve_method(cx, kind, name)
+  return RubyForm.method_name(resolved) == "" or RubyForm.ruby_name?(kind, name, resolved)
+end
+
+# A method another language names differently: the Ruby names of the methods of that kind that it stands for, if
+# there are any (`len` is `.length` or `.size` on a String).
 def renamed_help(cx: State.Cx, kind: String, name: String) -> String
   candidates = cx.help.foreign_methods.get(name)
   if !candidates.ok?
     return ""
   end
+  found: List[String] = []
   for candidate in candidates.unwrap!
-    if resolve_method(cx, kind, candidate) != ""
-      return "use .#{candidate}"
+    resolved = resolve_method(cx, kind, candidate)
+    if resolved != ""
+      written = RubyForm.method_name(resolved)
+      if written == "" or RubyForm.ruby_name?(kind, candidate, resolved)
+        written = candidate
+      end
+      found = found.push(written)
     end
   end
-  return ""
+  if found.size == 0
+    return ""
+  end
+  return "use #{found.uniq.map do |written: String| ".#{written}" end.join(" or ")}"
 end

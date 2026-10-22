@@ -592,8 +592,8 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
   either_string = T.is?(sides.left, "String") or T.is?(sides.right, "String")
   if either_int and either_float
     return (
-      "make both sides the same type: n.to_f (Float.from_int) turns the Int into a Float, " +
-      "x.to_i! (Float.to_int!) truncates the Float"
+      "make both sides the same type: n.to_f turns the Int into a Float, " +
+      "x.to_i! truncates the Float"
     )
   elsif either_string and (either_int or either_float)
     if with_to_s

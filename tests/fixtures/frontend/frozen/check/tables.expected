@@ -30,6 +30,9 @@ export def method_aliases() -> Map[String, String]
     "List.join": "String.join",
     "List.length": "List.size",
     "List.push": "List.append",
+    "Map.length": "Map.size",
+    "Range.length": "Range.size",
+    "Set.length": "Set.size",
     "String.end_with?": "String.ends_with?",
     "String.include?": "String.contains?",
     "String.size": "String.length",
@@ -41,6 +44,13 @@ export def method_aliases() -> Map[String, String]
     "String.to_i!": "String.to_int!",
     "String.to_s": "self",
   }
+end
+
+## The aliases of `method_aliases` that are a second Ruby name of a builtin whose own name is Ruby already: Ruby has
+## both `length` and `size`, so Agentica accepts both and its texts show the name of the builtin. Every other alias is
+## the Ruby name of a builtin that has a different name here (`strip` for `String.trim`), and the texts show it.
+export def ruby_synonyms() -> List[String]
+  return ["List.length", "Map.length", "Range.length", "Set.length", "String.size"]
 end
 
 ## The help for a name used as a function or type that another language has.
@@ -84,7 +94,7 @@ export def foreign_names() -> Map[String, String]
     "input": "use gets, which returns Result[String]; gets! halts at the end of input",
     "inspect": "use x.inspect for the debug text, or IO.inspect(x) to print it and get x back",
     "int": "use s.to_i or f.to_i (both give a Result), or s.to_i! / f.to_i! to halt on failure",
-    "len": "use x.size for lists and maps, or s.length for strings",
+    "len": "use x.length or x.size, which both work on a String, List, Map, Set and Range",
     "next": "next is a statement on its own line inside while or for",
     "nil?": "compare with nil: x == nil",
     "null": "use nil",
@@ -101,10 +111,10 @@ export def foreign_methods() -> Map[String, List[String]]
   return {
     "contains": ["contains?", "include?"],
     "endswith": ["end_with?"],
+    "include": ["include?"],
     "includes": ["contains?", "include?"],
     "includes?": ["contains?", "include?"],
     "len": ["size", "length"],
-    "length": ["size"],
     "lower": ["downcase"],
     "ok!": ["unwrap!"],
     "startswith": ["start_with?"],
@@ -180,15 +190,15 @@ export def foreign_kind_methods() -> Map[String, String]
     ),
     "String.lstrip": "use s.strip, which trims both ends",
     "String.match": (
-      "there are no regular expressions; use s.contains?(part), s.starts_with?(part), s.ends_with?(part) or " +
+      "there are no regular expressions; use s.include?(part), s.start_with?(part), s.end_with?(part) or " +
       "s.index_of(part)"
     ),
     "String.match?": (
-      "there are no regular expressions; use s.contains?(part), s.starts_with?(part), s.ends_with?(part) or " +
+      "there are no regular expressions; use s.include?(part), s.start_with?(part), s.end_with?(part) or " +
       "s.index_of(part)"
     ),
     "String.matches?": (
-      "there are no regular expressions; use s.contains?(part), s.starts_with?(part), s.ends_with?(part) or " +
+      "there are no regular expressions; use s.include?(part), s.start_with?(part), s.end_with?(part) or " +
       "s.index_of(part)"
     ),
     "String.numeric?": (
@@ -197,7 +207,7 @@ export def foreign_kind_methods() -> Map[String, String]
     "String.ord": "use s.code for the code point of a one-character string",
     "String.rstrip": "use s.strip, which trims both ends",
     "String.scan": (
-      "there are no regular expressions; use s.contains?(part), s.starts_with?(part), s.ends_with?(part) or " +
+      "there are no regular expressions; use s.include?(part), s.start_with?(part), s.end_with?(part) or " +
       "s.index_of(part)"
     ),
     "String.sub": "use s.replace(old, new)",

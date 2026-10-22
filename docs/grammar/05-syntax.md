@@ -284,9 +284,9 @@ name, a field, an index, a method chain such as `f(1).g`, a literal) is
 `PARSE-PIPE-TARGET` at the right side; wrap the expression in parentheses and
 use `.` on the result, as in `(x |> f()).unwrap!`. A builtin that has a method
 form for the type of the left value is `CHECK-PIPE-METHOD` at the right side,
-with the method form as help: `x |> String.trim()` gives `x.trim`. So `|>` is
+with the method form as help: `x |> String.trim()` gives `x.strip`. So `|>` is
 for user functions and for builtins without a method form, and the two styles
-mix: `s.trim |> try parse() |> try validate()`. `|>` binds lower than `+` and
+mix: `s.strip |> try parse() |> try validate()`. `|>` binds lower than `+` and
 `-` and higher than the comparisons, and groups from left to right: `a + 1 |>
 f()` is `f(a + 1)`, `x |> f() == y` is `f(x) == y`, and `x |> f() |> g()` is
 `g(f(x))`. `try` and unary operators bind tighter: `try x |> f()` is `f(try x)`.

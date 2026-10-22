@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   compute pool while the task waits and other tasks run.
 - `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable` park a
   task until a descriptor of native code can be read or written.
+- `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
+  `List`.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and
@@ -49,10 +51,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   in folders: the lock keeps it, the hash, the cache and `agc_libs/` cover only
   that folder, and `agentica add NAME URL --tag TAG --subdir DIR` writes it.
 - `agentica help NAME` answers a name from Ruby, Python or JS (`strip`,
-  `String.to_i`, `value!`) with the Agentica builtin it stands for, and gives
+  `String.to_i`, `value!`) with the builtin it stands for, and gives
   a hint for names such as `len`; `--json` gives
   `{"alias": NAME, "builtins": [...], "hints": {...}}`. An unknown method
-  (`r.value!`, `m.length`, `xs.contains?`) suggests the Agentica method.
+  (`r.value!`, `m.len`, `xs.contains?`) suggests the Ruby method.
+
+### Changed
+
+- `agentica help`, `help --json` (a new `ruby` field) and the helps of
+  diagnostics show the Ruby form of a builtin (`s.strip`, not `String.trim`);
+  both names are still accepted.
 
 ### Removed
 
