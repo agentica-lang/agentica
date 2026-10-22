@@ -155,10 +155,10 @@ python3 tests/eval/diagnostics.py
 `--tasks` picks tasks (the default is all twenty). `--arms` picks arms (the
 default is the first five; `skill-nocli` and `skill-minimal` are opt-in).
 `--arm-tasks ARM=TASK,TASK` limits one arm to some of the tasks (full task
-names, all in `--tasks`; repeat the option for another arm). `--max-cost USD`
-is a soft cap on the cost of the round (see "The budget cap"). `--sandbox
-firejail --chroot-root PATH` is the other sandbox; you prepare its rootfs
-yourself, and it needs `mypy` for the typed arm. Docker is the only sandbox tested with the
+names, all in `--tasks`; repeat the option for another arm). `--max-cost USD` is
+a soft cap on the cost of the round (see "The budget cap"). `--sandbox firejail
+--chroot-root PATH` is the other sandbox; you prepare its rootfs yourself, and
+it needs `mypy` for the typed arm. Docker is the only sandbox tested with the
 typed arm, the drivers and the loopback peers; Firejail is untested for them.
 The results go to `tests/eval/results/`, which is not versioned. Each run
 directory has a `run.json` with the commit, the commit of the last change to the
