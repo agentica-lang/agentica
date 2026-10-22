@@ -751,6 +751,12 @@
   "stdout": "",
   "written": []
  },
+ "[[\"help\", \"String.chomp\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin String.chomp; use s.strip to remove surrounding whitespace; IO.gets already drops the line ending\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"help\", \"String.compare\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
@@ -775,6 +781,12 @@
   "stdout": "String.split(s: String, separator: String) -> List[String]\nSplit text; an empty separator gives characters.\n",
   "written": []
  },
+ "[[\"help\", \"String.to_i\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "`String.to_i` is called `String.to_int` in Agentica\nString.to_int(s: String) -> Result[Int]\nParse signed decimal Int as a Result.\n",
+  "written": []
+ },
  "[[\"help\", \"Task.await\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
@@ -796,6 +808,12 @@
  "[[\"help\", \"a\", \"b\", \"c\"], {}]": {
   "code": 2,
   "stderr": "usage: agentica help [NAME] [--json]\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"help\", \"int\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin int; use s.to_i or f.to_i (both give a Result), or s.to_i! / f.to_i! to halt on failure\n",
   "stdout": "",
   "written": []
  },
