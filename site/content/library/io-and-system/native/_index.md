@@ -41,6 +41,6 @@ The rest of the section has its own pages:
 
 ## Running
 
-- A `def` call blocks timers, I/O and other tasks until it returns, so keep such calls short, and use `compute def` for the long ones. `--max-steps` cannot stop a call in the middle.
+- A `def` call blocks timers, I/O and other tasks until it returns, so keep such calls short, and use [`compute def`](/library/io-and-system/native/compute/) for the long ones. `--max-steps` cannot stop a call in the middle.
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
 - Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.*` builtin before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.
