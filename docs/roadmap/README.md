@@ -45,7 +45,7 @@ First batch, as soon as possible:
    local libraries. PR 1 of the split (core calls) is done (#553), PR 4
    (`compute def`) is done (#559), PR 5 (`Native.wait_readable/wait_writable`)
    is done (#561), PR 6 (`agentica test` takes the deny flags) is done
-   (#560), and PR 2 (opaque values) is done (#N).
+   (#560), and PR 2 (opaque values) is done (#572).
 2. [#375](https://github.com/sonic182/agentica/issues/375): cache compiled
    bytecode, so unchanged programs skip the front end.
 3. Packages [45](../future/45-packages.md): done. 45b (`install`, the fetch),
