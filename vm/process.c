@@ -1182,7 +1182,7 @@ static bool begin_spawn(void *data, agc_io_job *job) {
 /* dir is NULL for Process.spawn; "." keeps the VM's directory. The command
    resolves before the child changes directory (§10.4). */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel) {
-  if (!vm->rt->allow_run) return agc_error_value("process: spawning requires --allow-run");
+  if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
   bool valid = command->bytes > 0 && no_nul(command);

@@ -238,7 +238,7 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
     return "RUNTIME-NATIVE-UNSUPPORTED";
   }
   if (deny) {
-    *message = "this program declares extern functions, and --deny-native refuses native code";
+    *message = "this program declares extern functions, and --deny-native (or any --deny-* flag) refuses native code";
     return "RUNTIME-NATIVE-DENIED";
   }
   return NULL;

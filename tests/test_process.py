@@ -2,7 +2,7 @@
 
 fixtures/process-peer.js is the child (modes echo, exit, hold, stubborn, ...); fixtures/process-peer.py (standard
 library) reports argv, the environment and the working directory.
-Each case writes an Agentica program, runs it with `--allow-run --json` and
+Each case writes an Agentica program, runs it with `--json` and
 compares its output, or its diagnostic code taken from the last line of stderr.
 """
 import json
@@ -46,10 +46,10 @@ def write(tmp_path, name, text):
     return path
 
 
-def run_program(tmp_path, text, allowed=True, limit=None, env=None):
+def run_program(tmp_path, text, denied=False, limit=None, env=None):
     """Returns (result, stdout, stderr): result is None for a clean run, the diagnostic code for a failure
     that printed one (stderr then loses that last line), else the exit status."""
-    args = (["--allow-run"] if allowed else []) + ["--json"] + (["--max-steps", str(limit)] if limit else [])
+    args = (["--deny-run"] if denied else []) + ["--json"] + (["--max-steps", str(limit)] if limit else [])
     result = cli_run(*args, write(tmp_path, "program.agc", text), env=env)
     lines = result.stderr.strip("\n").split("\n") if result.stderr.strip("\n") else []
     problem = None
@@ -83,10 +83,10 @@ def test_cli_capability_guards_execution_while_check_and_help_work_without_it(tm
             "  Result.unwrap!(Process.wait(p, 30000))")
     file = write(tmp_path, "program.agc", program(node, "args", body))
     assert tuple(cli_run("check", file)) == (0, "check ok\n", "")
-    denied = cli_run("--json", file, "--allow-run")
+    denied = cli_run("--json", "--deny-run", file, "--deny-run")
     assert denied.code == 1
     assert json.loads(denied.stderr)["code"] == "RUNTIME-UNWRAP-ERROR"
-    assert tuple(cli_run("--allow-run", file, "--allow-run")) == (0, '[]\n["--allow-run"]\n', "")
+    assert tuple(cli_run(file, "--deny-run")) == (0, '[]\n["--deny-run"]\n', "")
     help_result = cli_run("help", "Process.send", "--json")
     assert help_result.code == 0
     assert json.loads(help_result.stdout)["result"] == "Result[Void]"
@@ -106,7 +106,7 @@ def test_a_bare_command_is_searched_in_path(tmp_path):
     text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn(%s, [%s, "args", "x"], 5000))\n'
             '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))\nend\n\n'
             % (agc_literal(name), agc_literal(PEER)))
-    result = cli_run("--allow-run", write(tmp_path, "program.agc", text))
+    result = cli_run(write(tmp_path, "program.agc", text))
     assert tuple(result) == (0, '["x"]\n', "")
 
 
@@ -132,7 +132,7 @@ def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_p
     old = str(elsewhere)
 
     def spawned(path):
-        result = cli_run("--allow-run", program_file, env={name: path}, cwd=here)
+        result = cli_run(program_file, env={name: path}, cwd=here)
         assert result.code == 0, result.stderr
         return result.stdout
 
@@ -146,11 +146,11 @@ def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_p
 def test_permission_literal_argv_and_inherited_task_capability(tmp_path):
     node = tool("node")
     text = program(node, "args", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(Process.wait(p, 5000))",
-                   "", ', "a b;$x", "--allow-run"')
-    denied, out, _ = run_program(tmp_path, text, allowed=False)
+                   "", ', "a b;$x", "--deny-run"')
+    denied, out, _ = run_program(tmp_path, text, denied=True)
     assert denied == "RUNTIME-UNWRAP-ERROR"
     assert out == ""
-    assert output(tmp_path, text) == '["a b;$x","--allow-run"]\nok(0)\n'
+    assert output(tmp_path, text) == '["a b;$x","--deny-run"]\nok(0)\n'
 
 
 def test_arguments_with_backslashes_quotes_and_interpolation_marks_reach_the_child_unchanged(tmp_path):
@@ -291,7 +291,7 @@ def python_child(mode, words=(), dir=None, timeout=5000):
             '  Process.close(p)\nend\n\n' % start)
 
 
-WORDS = ["back\\slash\\", 'say "hi"', "#{x}", "tail\\\\", "", "ñ 🙂 ^&|<>%PATH%", "two  spaces", "-", "--allow-run"]
+WORDS = ["back\\slash\\", 'say "hi"', "#{x}", "tail\\\\", "", "ñ 🙂 ^&|<>%PATH%", "two  spaces", "-", "--deny-run"]
 
 
 def test_arguments_reach_an_independent_python_child_unchanged(tmp_path):

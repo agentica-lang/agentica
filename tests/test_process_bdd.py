@@ -1,4 +1,4 @@
-"""`Process` inside `agentica test`: handlers always spawn, programs under test need --allow-run.
+"""`Process` inside `agentica test`: handlers and programs under test can both start programs.
 
 A module of its own: the case runs `agentica test`, which the Wine check of the Windows job cannot do (Wine makes no
 owner-only folder, which the run directory of the driver is), so the Wine list leaves it out.
@@ -9,7 +9,7 @@ from tests.agentica_test import tool
 from tests.test_process import cli_run, program, spawn
 
 
-def test_bdd_handlers_can_always_spawn_and_programs_under_test_need_allow_run(tmp_path):
+def test_bdd_handlers_and_programs_under_test_can_spawn(tmp_path):
     node = tool("node")
     directory = tmp_path
     feature = directory / "process.feature"
@@ -27,12 +27,6 @@ def test_bdd_handlers_can_always_spawn_and_programs_under_test_need_allow_run(tm
         + '  checked = BDD.assert(ctx, Result.unwrap!(Process.read_line(p, 5000)) == "[\\"handler\\"]", "argv")\n'
         + "  Result.unwrap!(Process.wait(p, 5000))\n  return checked\nend\n\n"
         + 'def main() -> Void\n  BDD.run([BDD.step("the handler can spawn", &handler)])\nend\n')
-    args = ["test", feature, "--steps", steps, "--json"]
-    denied = cli_run(*args)
-    assert denied.code == 1, (denied.stdout, denied.stderr)
-    report = json.loads(denied.stdout)
-    assert report["passed"] == 1, json.dumps(report)
-    assert [item["status"] for item in report["files"][0]["scenarios"]] == ["failed", "passed"], json.dumps(report)
-    allowed = cli_run(*args, "--allow-run")
-    assert allowed.code == 0, (allowed.stdout, allowed.stderr)
-    assert json.loads(allowed.stdout)["passed"] == 2
+    result = cli_run("test", feature, "--steps", steps, "--json")
+    assert result.code == 0, (result.stdout, result.stderr)
+    assert json.loads(result.stdout)["passed"] == 2

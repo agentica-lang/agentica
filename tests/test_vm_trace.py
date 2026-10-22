@@ -31,14 +31,14 @@ GC_LINE = re.compile(
     rb"^agc-trace \+[0-9]+\.[0-9]{6} gc collect at=(turn|end) count=[0-9]+ heap=[0-9]+ free=[0-9]+ since=[0-9]+$")
 CATEGORY = re.compile(rb"^agc-trace \S+ (\S+)")
 
-# (fixture, stdin sidecar, --allow-run, categories that must show up in the trace)
+# (fixture, stdin sidecar, categories that must show up in the trace)
 CASES = [
-    ("task-stdin", "task-stdin.stdin", False, ["loader", "sched", "io"]),
-    ("process-streams", None, True, ["loader", "sched", "io", "proc"]),
-    ("files-handles", None, False, ["loader", "sched", "io"]),
-    ("task-file-shared", None, False, ["loader", "sched", "io"]),
-    ("task-fail", None, False, ["loader", "sched"]),
-    ("tls-echo", None, False, ["loader", "sched", "io", "tls"]),
+    ("task-stdin", "task-stdin.stdin", ["loader", "sched", "io"]),
+    ("process-streams", None, ["loader", "sched", "io", "proc"]),
+    ("files-handles", None, ["loader", "sched", "io"]),
+    ("task-file-shared", None, ["loader", "sched", "io"]),
+    ("task-fail", None, ["loader", "sched"]),
+    ("tls-echo", None, ["loader", "sched", "io", "tls"]),
 ]
 
 
@@ -82,12 +82,12 @@ def trace_lines(path):
     return data[:max(0, len(data) - 1)].split(b"\n")
 
 
-def run_vm(vm, bytecode, settings=None, stdin_file=None, allow_run=False, args=(), tmp=None):
+def run_vm(vm, bytecode, settings=None, stdin_file=None, args=(), tmp=None):
     """The VM on `bytecode`; `settings` are extra environment variables; tmp is made fresh and empty."""
     if tmp is not None:
         fresh_directory(tmp)
     env = vm_environment(settings)
-    arguments = [*vm, *(["--allow-run"] if allow_run else []), "--", bytecode, *args]
+    arguments = [*vm, "--", bytecode, *args]
     return vm_run(arguments, env, stdin_file)
 
 
@@ -130,17 +130,17 @@ def run_closed(vm, redirect, bytecode, stdin_file):
     return vm_run(["sh", "-c", script, vm[0], bytecode, stdin_file], vm_environment())
 
 
-def check_case(vm, tmp_path, name, stdin, allow_run, categories):
+def check_case(vm, tmp_path, name, stdin, categories):
     work = tmp_path / ("agentica-trace-%s" % name)
     work.mkdir()
     bytecode = compile_fixture(VM_FIXTURES / (name + ".agc"), work)
     stdin_file = VM_FIXTURES / stdin if stdin else None
     tmp = work / (name + "-tmp")
     args = fixture_args(name, tmp)
-    plain = run_vm(vm, bytecode, stdin_file=stdin_file, allow_run=allow_run, args=args, tmp=tmp)
+    plain = run_vm(vm, bytecode, stdin_file=stdin_file, args=args, tmp=tmp)
     path = work / (name + ".trace")
     traced = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "all", "AGENTICA_VM_TRACE_FILE": path},
-                    stdin_file, allow_run, args, tmp)
+                    stdin_file, args, tmp)
     assert traced == plain
     assert path.stat().st_mode & 0o077 == 0
     lines = trace_lines(path)

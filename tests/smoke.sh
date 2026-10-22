@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.." || exit 1
 xargs -d '\n' -P "$(nproc)" -I{} bash -c 'out=$({} 2>&1) || { echo "::error::failed: {}"; echo "$out"; exit 1; }' <<'LIST'
-dist/agentica --allow-run examples/process-tool.agc
+dist/agentica examples/process-tool.agc
 dist/agentica examples/dispatch.agc
 dist/agentica examples/concurrency.agc
 dist/agentica examples/hello.agc

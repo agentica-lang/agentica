@@ -32,7 +32,6 @@ export struct Config
   empty_path: String
   empty_message: String
   style: String
-  allow_run: Bool
   seeded: Bool
   seed: Int
   only: String
@@ -62,7 +61,7 @@ end
 ## the report at `report_file`. The child gets this program's process id with --driver-pid, so it ends if this program
 ## does.
 export def run(options: Opts.Options, program: Program, config_file: String, report_file: String) -> Ran
-  words = ["run", "--allow-run"]
+  words = ["run"]
   if options.seeded
     words = words.concat(["--seed", options.seed.to_s])
   end

@@ -539,9 +539,9 @@ runs the golden tests with the full sweep (`make vm-diff-test`),
   `agentica test` for unit tests (passing and failing) and for a BDD spec
   with a step program and a predefined `Given the Agentica program` step,
   files (write, append, read, rename, list, stat, remove), processes
-  (`--allow-run` spawning the packaged binary), and loopback TCP and HTTP
-  (`std/http` client and server), which must pass on all four. TLS is covered
-  by the OpenSSL version line only (it needs certificates).
+  (spawning the packaged binary, refused with `--deny-run`), and loopback TCP
+  and HTTP (`std/http` client and server), which must pass on all four. TLS is
+  covered by the OpenSSL version line only (it needs certificates).
 - The `collect` job (every run) downloads the artifacts without merging, runs
   `tools/release.py collect` (exactly the four archives of `VERSION`: nothing
   missing, extra or duplicated; each archive verified) and uploads

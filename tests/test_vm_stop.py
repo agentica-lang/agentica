@@ -178,7 +178,7 @@ def test_a_stop_signal_takes_the_exit_path_children_die_buffered_file_data_is_wr
 ):
     for mode, number in (("sleep", signal.SIGTERM), ("spin", signal.SIGINT), ("sleep", signal.SIGHUP)):
         path = tmp_path / ("out-%s-%d.txt" % (mode, number))
-        vm = launch(adopt, "default", "--allow-run", "--", bytecode(child_program(), tmp_path, "program-%s" % mode),
+        vm = launch(adopt, "default", "--", bytecode(child_program(), tmp_path, "program-%s" % mode),
                     path, mode, capture_stderr=True)
         pid = int(vm.next_line(WAIT_SECONDS))
         os.kill(vm.process.pid, number)
@@ -208,7 +208,7 @@ def test_an_outside_sigalrm_keeps_its_default_action(tmp_path, adopt):
 def test_a_second_stop_signal_before_the_children_are_stopped_waits_for_them(tmp_path, adopt):
     path = tmp_path / "out.txt"
     code = bytecode(child_program("trap '' TERM; "), tmp_path)
-    vm = adopt(start_vm(code, path, "sleep", flags=["--allow-run"]))
+    vm = adopt(start_vm(code, path, "sleep"))
     pid = int(vm.next_line(WAIT_SECONDS))
     os.kill(vm.process.pid, signal.SIGTERM)
     time.sleep(0.1)
@@ -271,7 +271,7 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
     child writes its pid to a file there, since the test does not read the console.
     """
     if os.name != "nt":
-        cli_child = adopt(Child(cli() + ["--allow-run", source, path, "sleep"],
+        cli_child = adopt(Child(cli() + [source, path, "sleep"],
                                 env=vm_environment(), capture_stderr=True))
         pid = int(cli_child.next_line(6 * WAIT_SECONDS))
         os.killpg(cli_child.process.pid, signal.SIGINT)
@@ -296,7 +296,7 @@ def ctrl_c_through_the_cli(request, adopt, source, path):
         assert wait_until(lambda: not process_alive(child_pid()), WAIT_SECONDS, 0.1), "the VM ended the child"
         seen_gone.append(True)
 
-    command = cli() + ["--allow-run", source, path, "sleep", PYTHON, WINDOWS_CHILD, pid_file]
+    command = cli() + [source, path, "sleep", PYTHON, WINDOWS_CHILD, pid_file]
     status, shown = run_on_console(command, vm_environment(), WAIT_SECONDS, during=press_ctrl_c)
     assert status == 128 + signal.SIGINT, shown
     return child_pid()

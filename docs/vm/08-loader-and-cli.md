@@ -191,7 +191,7 @@ byte of a file with a type table, an Updates section or Globals.
   `agentica` again (the BDD driver) uses the path in `Settings.self_path`.
 - `agentica test` runs in the binary (`docs/bdd.md`). The BDD driver is part of
   the front end (`compiler/bdd/bdd_driver.agc`). It compiles the test files to a
-  private run directory and starts the runner with `agentica run --allow-run
+  private run directory and starts the runner with `agentica run
   --driver-pid PID --embedded runner -- CONFIG` (`PID` is its own). The runner
   starts one VM per scenario or test file with the same command. The runner and
   the default step program are carried by the binary, compiled at build time
@@ -260,29 +260,30 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   `AGENTICA_SCHEDULERS` are checked before the front end runs, as `agentica run`
   checks them at its start. The front end has no step limit, no standard input
   stream until `FrontEnd.stdin_bytes` opens it (before that `IO.gets` gives EOF,
-  so the program keeps the real one) and no channel to a parent process; it has
-  `--allow-run`, because `agentica test` starts the runner (the user's program
-  never runs in that runtime). If it calls `FrontEnd.hand_off` and its run ends
-  with status 0, C retires that runtime: the same steps as the end of any run
-  (`agc_launch_settle`: children stopped, output and files flushed), then the
-  event loop is closed and the heap is collected once. Any other end of the
-  front end (a usage error, a problem in the user's file, a crash, a stop
-  signal) is the end of the process, with the status the front end gave, except
-  for a crash (a runtime error in the front end), which is status 2. The program
-  is then loaded from the bytes it handed over, with the full version check, and
-  runs in a new runtime with the options it was given. A bad option or bytecode
-  is exit 2 with `agentica: ...`. The stop signal handlers and the wake handle
-  of the loop are set again for the second runtime (`unwatch_stop` in
-  `vm/loop.c` releases the first one). If the event loop of the front end cannot
-  be closed (an operation of its is still running), the run ends with status 1
-  and `agentica: internal error: the front end left an operation running`,
-  because the program must not share a process with anything of the compiler.
+  so the program keeps the real one) and no channel to a parent process; the
+  user's `--deny-run` does not reach it, because `agentica test` starts the
+  runner (the user's program never runs in that runtime). If it calls
+  `FrontEnd.hand_off` and its run ends with status 0, C retires that runtime:
+  the same steps as the end of any run (`agc_launch_settle`: children stopped,
+  output and files flushed), then the event loop is closed and the heap is
+  collected once. Any other end of the front end (a usage error, a problem in
+  the user's file, a crash, a stop signal) is the end of the process, with the
+  status the front end gave, except for a crash (a runtime error in the front
+  end), which is status 2. The program is then loaded from the bytes it handed
+  over, with the full version check, and runs in a new runtime with the options
+  it was given. A bad option or bytecode is exit 2 with `agentica: ...`. The
+  stop signal handlers and the wake handle of the loop are set again for the
+  second runtime (`unwatch_stop` in `vm/loop.c` releases the first one). If the
+  event loop of the front end cannot be closed (an operation of its is still
+  running), the run ends with status 1 and `agentica: internal error: the front
+  end left an operation running`, because the program must not share a process
+  with anything of the compiler.
 - **What a front end may hand over, and trust.** The front end that C loads is
   fully trusted: it runs with the user's rights, can read files and, through the
-  options it hands over, give the program `--allow-run`. That is why
+  options it hands over, drop the user's `--deny-run`. That is why
   `--front-end FILE` is for the build and the tests only, is not in the help,
   and has the same standing as the binary itself. The options it may pass are
-  exactly `--ai`, `--json`, `--allow-run`, `--deny-native`, `--max-steps N`,
+  exactly `--ai`, `--json`, `--deny-run`, `--deny-native`, `--max-steps N`,
   `--seed N`, `--flush-timeout MS`, `--schedulers N` and `--source-root DIR`,
   each once, and nothing else; no positional word, no `--version`.
   `--driver-pid` is refused (exit 2): it says which process started this one,

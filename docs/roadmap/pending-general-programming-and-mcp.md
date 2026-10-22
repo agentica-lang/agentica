@@ -13,7 +13,7 @@ returns, `ok()` for `Result[Void]`. Rules in the grammar.
 
 **Done:** `Process` handles over the VM (no shell interpolation),
 full-operation deadlines, 1 MiB per-call limits, strict UTF-8 lines, cleanup
-of direct children on close/return/exit, `--allow-run` off by default. API in
+of direct children on close/return/exit, off with `--deny-run`. API in
 the builtin catalog ([`06b-builtins.md`](../grammar/06b-builtins.md)).
 
 ### 1. Everyday library (remaining phase 5n and supporting utilities)

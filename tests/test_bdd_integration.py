@@ -241,7 +241,7 @@ def test_a_failed_scenario_leaves_no_process_of_its_program_behind(tmp_path, cle
                            "And the program exits with code 0 within 200 milliseconds\n")})
     pid_file = directory / "pid.txt"
     kill_at_end(cleanup, lambda: [pid_file.read_text().strip()] if pid_file.exists() else [])
-    report = json_test("--allow-run", directory / "holder.feature")
+    report = json_test(directory / "holder.feature")
     assert codes(report) == ["RUNTIME-BDD-TIMEOUT"]
     pid = pid_file.read_text().strip()
     assert wait_until(lambda: not process_alive(pid), scaled(5)), pid
@@ -387,7 +387,7 @@ def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and
     program_pid_file = directory / "program-pid.txt"  # Windows only: the holder writes its own pid
     kill_at_end(cleanup, lambda: processes_mentioning(temporary) + [
         file.read_text().strip() for file in (pid_file, program_pid_file) if file.exists()])
-    driver = Child(cli() + ["test", "--allow-run", directory / "holder.feature"], env=env)
+    driver = Child(cli() + ["test", directory / "holder.feature"], env=env)
     cleanup(driver.stop)
     assert wait_until(
         lambda: pid_file.exists() and any(c.isdigit() for c in pid_file.read_text()), scaled(20))

@@ -65,7 +65,7 @@ def test_child_side_lines_partial_lines_eof_timeouts_and_no_channel(bytecode, no
 def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, node):
     def ask(mode):
         """Run the program in `mode`; it spawns the peer as its child."""
-        result = run_vm(bytecode, "--allow-run", args=[mode, node, PEER])
+        result = run_vm(bytecode, args=[mode, node, PEER])
         assert result.code == 0, result.stderr
         return result.stdout
 
@@ -98,7 +98,7 @@ def test_a_child_ends_when_its_parent_is_killed(tmp_path, request, adopt, node):
     source = tmp_path / "parent.agc"
     source.write_text(PARENT_PROGRAM, encoding="utf-8")
     mark = tmp_path / "mark.txt"
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "parent.agcb"), node, PEER, mark, flags=["--allow-run"]))
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "parent.agcb"), node, PEER, mark))
     pid = vm.next_line(WAIT).strip()
     request.addfinalizer(lambda: kill_process(pid))
     assert process_alive(pid)

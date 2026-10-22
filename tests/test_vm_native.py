@@ -196,13 +196,15 @@ end
 """
 
 
+# Native code could start programs itself, so any --deny-* flag turns on --deny-native.
 @ON_LINUX_ONLY
-def test_deny_native_refuses_the_program_at_load(tmp_path):
+@pytest.mark.parametrize("flag", ["--deny-native", "--deny-run"])
+def test_deny_native_refuses_the_program_at_load(tmp_path, flag):
     source = program(tmp_path, EXTERN_FIRST)
-    assert diagnostic(agentica("--json", "--deny-native", source), 2) == ("RUNTIME-NATIVE-DENIED", (7, 3))
+    assert diagnostic(agentica("--json", flag, source), 2) == ("RUNTIME-NATIVE-DENIED", (7, 3))
     bytecode = tmp_path / "program.agcb"
     assert agentica("compile", source, "-o", bytecode).code == 0
-    result = agentica("run", "--json", "--deny-native", "--", bytecode)
+    result = agentica("run", "--json", flag, "--", bytecode)
     assert result.stdout == ""
     assert diagnostic(result, 2) == ("RUNTIME-NATIVE-DENIED", (7, 3))
     result = agentica("run", "--", bytecode)
@@ -223,6 +225,9 @@ def test_other_systems_refuse_extern_at_load(tmp_path):
         assert diagnostic(result, 2) == ("RUNTIME-NATIVE-UNSUPPORTED", (7, 3))
 
 
-def test_test_refuses_deny_native(tmp_path):
-    result = agentica("--deny-native", "test", cwd=tmp_path)
-    assert result.code == 2
+@pytest.mark.parametrize("flag", ["--deny-native", "--deny-run"])
+def test_test_refuses_deny_native(tmp_path, flag):
+    # In front of `test` or after it, the same refusal: no report, exit 2.
+    for words in ([flag, "test"], ["test", flag], ["--json", "test", flag]):
+        result = agentica(*words, cwd=tmp_path)
+        assert (result.code, result.stdout) == (2, ""), words

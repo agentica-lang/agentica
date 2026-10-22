@@ -443,7 +443,7 @@ program needs it.
   (not the 4 KiB of `File.write`, which would make a file job per 4 KiB), and a
   line over 1 MiB is an error, as `File.write` refuses such a text. There is no
   `buffer_bytes` argument: the reader needs one to bound a line, the writer does
-  not. There is no permission flag for files (`--allow-run` is for processes
+  not. There is no permission flag for files (`--deny-run` is for processes
   only).
 
 **Later.** An Elixir-style `transform` (an accumulator, 0 to n items out per

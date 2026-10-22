@@ -208,8 +208,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   and forwarded Void returns. Nil remains data and requires explicit returns.
   Main and side-effect callbacks return Void. Result[Void] success uses ok().
   Migrate fixtures by meaning, preserving Nil and false data cases.
-- --allow-run defaults off and reaches the VM. `agentica test --allow-run`
-  passes it to step handlers and programs under test. The end of a run kills and
+- --deny-run reaches the VM (`vm/process.c`) and turns on --deny-native
+  (`vm/launch.c`); `agentica test` refuses it. The end of a run kills and
   reaps directly spawned children. Expected operations return Results.
 - `tests/test_process.py` uses independent Node standard-library children and a
   Python one (`tests/fixtures/process-peer.py`). Node is required in CI; local

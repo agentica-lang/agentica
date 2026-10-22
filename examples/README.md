@@ -28,8 +28,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The
 - [`file-summary.agc`](file-summary.agc): read a file given as an argument.
 - [`concurrency.agc`](concurrency.agc): lightweight tasks with `Task.spawn` and
   `Task.await`.
-- [`process-tool.agc`](process-tool.agc): run another program; needs
-  `--allow-run`, as in `dist/agentica --allow-run examples/process-tool.agc`.
+- [`process-tool.agc`](process-tool.agc): run another program.
 - [`tcp_echo.agc`](tcp_echo.agc): a TCP echo: read a line from a socket and send
   it back.
 - [`http_get.agc`](http_get.agc): an HTTP client with `import HTTP from

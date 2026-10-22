@@ -20,7 +20,7 @@ make test-bdd
 `agentica test` builds and installs nothing.
 
 ```text
-agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--ai|--json] [--allow-run]
+agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--ai|--json]
 ```
 
 - **Discovery.** With no paths, `specs/` and `test/` are searched; a missing
@@ -42,8 +42,9 @@ agentica [--ai|--json] [--allow-run] [--seed N] test [PATH...] [--steps FILE] [-
   every step program, test file and program under test. A failing run's text
   report shows it on the summary line, so `--seed N` replays the run. The JSON
   report always has it; a usage report has `null` when no `--seed` was given.
-- **`--allow-run`** lets programs under test start programs. Step handlers
-  always can.
+- **Permissions.** Step handlers and programs under test can start programs.
+  `agentica test` refuses `--deny-run` and `--deny-native` (exit 2): the step
+  programs start the programs under test, and the flags do not reach them yet.
 - **Exit codes.** 0 when every scenario passes and there is at least one; 1 for
   verification failures or an empty suite; 2 for usage errors and any
   `RUNTIME-BDD-INFRA`. All three output formats give the same verdict.
@@ -153,7 +154,7 @@ steps"). Each is a handler in `std/bdd`:
 
 - **Step:** `the Agentica program {string}`
   - **What it does and its errors:** `Process.spawn_captured` of `agentica
-    [--allow-run] [--seed N] --max-steps 1000000 PATH` in the feature's
+    [--seed N] --max-steps 1000000 PATH` in the feature's
     directory, 30 s to start. A missing `.agc` file is `RUNTIME-BDD-PROGRAM`; a
     missing `agentica` is `RUNTIME-BDD-INFRA`.
 
@@ -237,9 +238,8 @@ compile, does not list its steps, or has a bad pattern is one file error, and
 then no scenario runs.
 
 - **Host access.** BDD gives no isolation from the host: programs run with the
-  user's permissions and environment. Each scenario child runs with
-  `--allow-run`. Programs under test start with the same `agentica` command,
-  `--max-steps 1000000`, and `--allow-run` only when `agentica test` has it.
+  user's permissions and environment. Programs under test start with the same
+  `agentica` command and `--max-steps 1000000`.
 - **Limits.** A scenario has a 30-second deadline from the start of its child.
   Program-driving calls without a timeout get 5 seconds, and starting a program
   gets 30. The scenario child has 1,000,000 steps per step plus 1,000,000, and
@@ -297,9 +297,8 @@ agentica test [PATH...] [--steps FILE]
 - **One step program, two modes.** The list child and the scenario child are the
   same `.agcb`, chosen by `System.args`, so step numbers match.
 - **Scenario child.** Started with `--json` (so a crash leaves its diagnostic as
-  the last stderr line), `--allow-run`, and `--max-steps` of 1,000,000 times the
-  number of steps plus one. The list child is the same with `list` and a
-  30-second limit.
+  the last stderr line) and `--max-steps` of 1,000,000 times the number of
+  steps plus one. The list child is the same with `list` and a 30-second limit.
 - **Protocol.** One JSON record per line, on the child channel: a bidirectional
   socket pair of its own, opened by `Process.spawn_channel` and found by the
   child on descriptor 3 (`docs/vm/10-io-processes.md` §10.4). A record is plain
@@ -309,8 +308,7 @@ agentica test [PATH...] [--steps FILE]
   runner sends a step only after the previous one ended.
 
 - **Direction:** runner to child
-  - **Record:** settings, once (`base`, `agentica`, `allow_run`, `seeded`,
-    `seed`)
+  - **Record:** settings, once (`base`, `agentica`, `seeded`, `seed`)
   - **Meaning:** Where programs resolve and run, how to start `agentica`, and
     what to pass on
 

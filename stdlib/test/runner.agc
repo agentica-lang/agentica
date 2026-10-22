@@ -23,7 +23,6 @@ struct Config
   empty_path: String
   empty_message: String
   style: String
-  allow_run: Bool
   seeded: Bool
   seed: Int
   only: String
@@ -201,7 +200,6 @@ def seeded(config: Config, seed: Int) -> Config
     empty_path: config.empty_path,
     empty_message: config.empty_message,
     style: config.style,
-    allow_run: config.allow_run,
     seeded: true,
     seed: seed,
     only: config.only,
@@ -332,7 +330,6 @@ def run_child(config: Config, base: String, item: Gherkin.Scenario, found: List[
   fields: Map[String, Json] = {
     "base": JSON.from(base),
     "agentica": JSON.from(config.agentica),
-    "allow_run": JSON.from(config.allow_run),
     "seeded": JSON.from(config.seeded),
     "seed": JSON.from(config.seed),
   }
@@ -536,7 +533,6 @@ end
 def vm_args(config: Config, steps: Int, mode: String) -> List[String]
   options = [
     "run",
-    "--allow-run",
     "--json",
     "--max-steps",
     steps.to_s,

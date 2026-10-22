@@ -372,7 +372,7 @@ def run_to_file(tmp_path, name, program, stderr_file=None):
     out_file = bytecode.with_suffix(".out")
     err_file = bytecode.with_suffix(".err") if stderr_file is True else stderr_file
     start = time.monotonic()
-    result = run([*vm_command(), "--allow-run", "--flush-timeout", "20000", "--", bytecode], timeout=PEER_LIMIT,
+    result = run([*vm_command(), "--flush-timeout", "20000", "--", bytecode], timeout=PEER_LIMIT,
                  env=vm_environment(), stdout_to=out_file, stderr_to=err_file)
     elapsed = time.monotonic() - start
     if stderr_file is None:
@@ -655,8 +655,7 @@ def test_a_stderr_lost_after_the_program_wrote_to_it_fails_the_run_only_if_a_lat
     # stderr is the stdout pipe; its reader takes the program's line and goes away, so only the child's bytes fail.
     early = 'IO.warn("early")\n  Task.sleep(300)'
     program = CHILD_STDERR_PROGRAM % (early, agc_literal(PYTHON), late)
-    summary, out, _ = run_case(tmp_path, "child-gone", program, peer=["--merge", "--close-after", "6"],
-                               vm=["--allow-run"])
+    summary, out, _ = run_case(tmp_path, "child-gone", program, peer=["--merge", "--close-after", "6"])
     assert out.startswith(b"early\n")
     assert summary["status"] == status
 
@@ -762,7 +761,7 @@ end
 def test_a_child_stderr_forwarded_to_a_stderr_nobody_reads_yet_does_not_stop_a_timer_task(tmp_path, schedulers):
     # The reader of the VM's stderr starts only after the ticker is done; the child's 2 MiB then all arrive.
     delay = scaled(3.0)
-    vm = ["--allow-run", "--schedulers", str(schedulers)]
+    vm = ["--schedulers", str(schedulers)]
     summary, out, err = run_case(tmp_path, "forward", FORWARD_PROGRAM, peer=["--error-delay", str(delay)], vm=vm)
     assert summary["status"] == 0
     lines = lines_of(out)
@@ -794,7 +793,7 @@ end
 @pytest.mark.parametrize("schedulers", [1, 4])
 def test_a_child_that_keeps_writing_stderr_does_not_hold_back_a_warn_of_the_program(tmp_path, schedulers):
     # The reader takes 8 KiB every 2 ms, so the child's bytes need about 2 s; the warn waits only for its room.
-    vm = ["--allow-run", "--schedulers", str(schedulers)]
+    vm = ["--schedulers", str(schedulers)]
     summary, out, _ = run_case(tmp_path, "streaming", STREAMING_PROGRAM, peer=["--merge", "--chunk", "8192",
                                                                              "--pause", "0.002"], vm=vm)
     assert summary["status"] == 0
@@ -842,7 +841,7 @@ def test_a_child_moves_on_while_the_program_keeps_warning_records_that_fill_the_
     limit = scaled(10000)
     program = FULL_RING_PROGRAM % (agc_literal(PYTHON), FULL_RING_CHILD, limit)
     bytecode = compile_text(program, "full-ring", tmp_path)
-    process = subprocess.Popen([*vm_command(), "--allow-run", "--schedulers", str(schedulers), "--", bytecode],
+    process = subprocess.Popen([*vm_command(), "--schedulers", str(schedulers), "--", bytecode],
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=vm_environment())
     children = 0
     tail = b""
@@ -871,7 +870,6 @@ def test_a_reader_that_leaves_once_only_child_bytes_are_pending_keeps_the_exit_c
     program = STREAMING_PROGRAM.replace('  puts("took #{Time.monotonic_ms() - start}")\n', "").replace(
         "IO.inspect(Process.wait(child, 60000))", "Process.wait(child, 60000)")
     summary, out, _ = run_case(tmp_path, "streaming-gone", program, peer=["--merge", "--chunk", "8192", "--pause",
-                                                                          "0.002", "--close-after", "3000000"],
-                               vm=["--allow-run"])
+                                                                          "0.002", "--close-after", "3000000"])
     assert STREAMING_WARN.encode() + b"\n" in out
     assert summary["status"] == 0

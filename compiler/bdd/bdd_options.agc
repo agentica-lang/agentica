@@ -3,9 +3,9 @@
 ## `agentica test` (cli.agc, which calls the driver in its own process) gives the driver `DRIVER_OPTIONS -- ARGUMENTS`.
 ## The driver options say what only the front end knows: `--vm PATH` (the binary, which the driver starts as `agentica
 ## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
-## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`, `--allow-run`,
+## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
-## `--only TEXT`, `--json`, `--ai` and `--allow-run`.
+## `--only TEXT`, `--json` and `--ai`.
 
 ## Everything a run needs.
 export struct Options
@@ -13,7 +13,6 @@ export struct Options
   version: String
   agentica: List[String]
   style: String
-  allow_run: Bool
   seeded: Bool
   seed: Int
   test_timeout_ms: Int
@@ -23,10 +22,12 @@ export struct Options
 end
 
 ## What the arguments are: options to run with; a usage error of the user (RUNTIME-BDD-USAGE, with the options read so
-## far, which say how to report it); or a mistake in the driver options, which is a bug of the caller.
+## far, which say how to report it); a flag that `agentica test` refuses, as it does in front of `test`; or a mistake
+## in the driver options, which is a bug of the caller.
 export enum Parsed
   Ready(Options)
   Usage(String, Options)
+  Refused(String)
   Broken(String)
 end
 
@@ -37,7 +38,6 @@ export def parse(arguments: List[String]) -> Parsed
     version: "",
     agentica: [],
     style: "plain",
-    allow_run: false,
     seeded: false,
     seed: 0,
     test_timeout_ms: 30_000,
@@ -48,10 +48,7 @@ export def parse(arguments: List[String]) -> Parsed
   at = 0
   while at < arguments.size and arguments[at] != "--"
     word = arguments[at]
-    if word == "--allow-run"
-      options = options.with(allow_run: true)
-      at += 1
-    elsif at + 1 >= arguments.size
+    if at + 1 >= arguments.size
       return Parsed.Broken("#{word} needs a value")
     else
       options = option(options, word, arguments[at + 1])
@@ -112,9 +109,8 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       at += 2
     elsif word == "--json" or word == "--ai"
       at += 1
-    elsif word == "--allow-run"
-      shown = shown.with(allow_run: true)
-      at += 1
+    elsif word == "--deny-run" or word == "--deny-native"
+      return Parsed.Refused("test does not take #{word} yet")
     elsif word.starts_with?("--")
       return Parsed.Usage("unknown option #{word}", shown)
     else

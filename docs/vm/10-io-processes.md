@@ -1,7 +1,8 @@
 ### 10.4 Processes
 
-- `--allow-run` is the VM's own flag, checked inside `Process.spawn` at call
-  time, for every task and handler.
+- `--deny-run` is the VM's own flag, checked inside every `Process` start at
+  call time, for every task and handler. A denied start is an error `Result`
+  that begins with `denied: --deny-run`.
 - The VM resolves the executable itself, with the rule of the grammar
   (Processes): a command with `/` resolves against the program's working
   directory, and a bare name is looked up in each `PATH` entry in order. Empty
@@ -70,7 +71,7 @@ systems get none.
   `send_bytes` and `close_stdin` take the writer lock. `wait` and `close` take
   neither. A reader parked on a silent child never blocks a writer, and a
   lock-wait timeout leaves the process running.
-- **Spawn.** Checks, in order: `--allow-run`; a nonempty command with no NUL;
+- **Spawn.** Checks, in order: `--deny-run`; a nonempty command with no NUL;
   the timeout. A path that does not exist, or is a directory, gives
   `process: executable is unavailable`. The pipes are real pipes, not
   socketpairs. The first spawn marks every inherited descriptor above 2
@@ -328,7 +329,7 @@ uses a pipe per direction (below).
     1 MiB and the cap 64 MiB (10.7)
 
 - **Limit:** Process launch
-  - **Value:** `--allow-run`
+  - **Value:** off with `--deny-run`
 
 - **Limit:** Windows programs other than `.exe`, `.com`
   - **Value:** rejected

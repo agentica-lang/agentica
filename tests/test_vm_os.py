@@ -192,7 +192,7 @@ def test_a_child_does_not_keep_the_lock_after_the_handle_closes(root, work, adop
     path = root / "lock"
     path.write_text("")
     bytecode = compile_work_text(work, CONTENTION_PROGRAM, "contention")
-    holder = adopt(start_vm(bytecode, str(path), "spawn", flags=("--allow-run",), stdin=True, cwd=root))
+    holder = adopt(start_vm(bytecode, str(path), "spawn", stdin=True, cwd=root))
     assert holder.next_line() == "true"
     assert holder.next_line() == "closed"
     # The `sleep` child is alive and was started after the lock was taken, yet the lock is free.
@@ -223,7 +223,7 @@ end
 def test_children_never_get_the_metrics_variables_but_the_program_reads_them(root, work):
     extra = {"AGENTICA_VM_METRICS": "9465", "AGENTICA_VM_METRICS_FILE": "/nowhere/metrics.prom",
              "AGENTICA_VM_METRICS_KEPT": "kept", "OTHER_VARIABLE": "stays"}
-    lines = run_program(root, work, ENV_PROGRAM, "env", flags=("--allow-run",), env=extra)
+    lines = run_program(root, work, ENV_PROGRAM, "env", env=extra)
     assert lines[0] == "own 9465 /nowhere/metrics.prom"
     # Only the exact names go; a longer name that starts with them is an ordinary variable.
     assert sorted(lines[1:]) == ["AGENTICA_VM_METRICS_KEPT=kept", "OTHER_VARIABLE=stays"]

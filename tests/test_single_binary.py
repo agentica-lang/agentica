@@ -34,6 +34,8 @@ SPAWN_CALL = (
     if TARGET_OS == "windows"
     else 'Process.spawn_captured("sh", ["-c", "echo child"], ".", 5000)'
 )
+# The start of the error of a Process start under --deny-run, which programs may test.
+DENIED = "denied: --deny-run"
 SPAWN = (
     "def main() -> Void\n"
     f"  r = {SPAWN_CALL}\n"
@@ -130,7 +132,7 @@ def test_a_front_end_that_stops_with_an_error_ends_with_status_2_not_the_status_
 
 def test_a_front_end_without_the_path_of_the_binary_cannot_test():
     """The front end started as an ordinary program has no --self: `test` says so and exits 2."""
-    got = run_vm(STAGE2, "--allow-run", args=["--version", version(), "--stdlib", STDLIB, "--", "test", "x"],
+    got = run_vm(STAGE2, args=["--version", version(), "--stdlib", STDLIB, "--", "test", "x"],
                  env=vm_environment())
     assert (got.code, got.stdout) == (2, "")
     assert "the test command needs the path of the binary" in got.stderr
@@ -172,8 +174,10 @@ def test_run_runs_a_compiled_file_with_the_vm_flags_and_no_front_end(tmp_path):
     draws = [agentica("run", "--seed", seed, "--", compiled["random"]).stdout for seed in "445"]
     assert draws[0] == draws[1]
     assert draws[0] != draws[2]
-    assert "--allow-run" in agentica("run", "--", compiled["spawn"]).stdout
-    assert agentica("run", "--allow-run", "--", compiled["spawn"]).stdout == "spawned\n"
+    # The check is in the VM, so bytecode cannot skip it; the refusal is an error Result with a stable prefix.
+    assert agentica("run", "--", compiled["spawn"]).stdout == "spawned\n"
+    denied = agentica("run", "--deny-run", "--", compiled["spawn"])
+    assert (denied.code, denied.stdout.startswith(DENIED)) == (0, True), denied
     # The words after the file are the program's, flags included; its input and exit status are the process's.
     got = agentica("run", "--", compiled["args"], "--seed", "x", stdin="typed\n")
     assert (got.code, got.stdout) == (3, 'args ["--seed", "x"]\nline ok("typed")\n')
@@ -188,7 +192,8 @@ def test_run_checks_its_command_line_and_names_itself_in_its_messages(tmp_path):
     for words, message in (
             ([], "usage: agentica run "),
             (["--seed", "x", "--", compiled], "agentica run: --seed needs an integer from 0 to 2147483647\n"),
-            (["--bogus", "--", compiled], "agentica run: unknown option --bogus\n")):
+            (["--bogus", "--", compiled], "agentica run: unknown option --bogus\n"),
+            (["--allow-run", "--", compiled], "agentica run: unknown option --allow-run\n")):
         got = agentica("run", *words)
         assert (got.code, got.stdout) == (2, "")
         assert got.stderr.startswith(message.rstrip("\n")), got.stderr
@@ -251,9 +256,9 @@ def test_the_vm_options_apply_to_the_program_only(tmp_path):
     seeded = [agentica("--seed", seed, "random.agc", cwd=directory).stdout for seed in ("4", "4", "5")]
     assert seeded[0] == seeded[1]
     assert seeded[0] != seeded[2]
-    denied = agentica("spawn.agc", cwd=directory)
-    assert "--allow-run" in denied.stdout
-    assert agentica("--allow-run", "spawn.agc", cwd=directory).stdout == "spawned\n"
+    assert agentica("spawn.agc", cwd=directory).stdout == "spawned\n"
+    denied = agentica("--deny-run", "spawn.agc", cwd=directory)
+    assert (denied.code, denied.stdout.startswith(DENIED)) == (0, True), denied
 
 
 def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_does_not(tmp_path):

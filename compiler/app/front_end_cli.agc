@@ -2,7 +2,7 @@
 ## typed after `agentica`; front_end.agc has read the inputs (the version, the std/ provider, the path of the binary).
 ##
 ## A program is run by FrontEnd.hand_off: C ends this front end's run and starts the program in a new runtime, so the
-## program never sees the compiler, `--max-steps`, `--seed` and `--allow-run` apply to it alone, and its standard
+## program never sees the compiler, `--max-steps`, `--seed` and `--deny-run` apply to it alone, and its standard
 ## streams are the real ones. Exit status: 0, 1 for a problem in the user's program, 2 for a usage error or a file that
 ## cannot be read or written; after a hand-off, the status of the program.
 ##

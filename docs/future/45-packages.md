@@ -233,9 +233,8 @@ decision, then the rejected options.
 7. **Hashing at build.** Every build hashes each package it loads, so a changed
    vendored file is caught. Rejected: hashing only at install and vendor, which
    trusts the cache.
-8. **Who may run git.** The package commands turn on the run grant for their own
-   process. `agentica FILE` never runs git. Rejected: a `--allow-run` flag that
-   the user passes to the package commands.
+8. **Who may run git.** The package commands start it from their own process.
+   `agentica FILE` never runs git.
 9. **Where `agc_libs/` sits.** Beside `agentica.toml` when a manifest exists,
    and beside the root program otherwise. Rejected: always beside the root
    program.

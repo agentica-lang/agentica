@@ -38,7 +38,7 @@ MYPY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:python3?\s+-m\s+)?(?:\S*/)?mypy\
 # renamed binary of the skill-nocli arm (`agentica-real`).
 # Global options may come first: flags, `--` and the four that take a value.
 QUERY_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?agentica(?:-real)?\s+"
-                           r"(?:(?:--(?:json|ai|partial|allow-run|dump|dump-ir)|--)\s+"
+                           r"(?:(?:--(?:json|ai|partial|deny-run|deny-native|dump|dump-ir)|--)\s+"
                            r"|--(?:max-steps|seed|flush-timeout|schedulers|steps)\s+\S+\s+)*"
                            r"(?:outline|type-at|symbol|refs)(?=\s|$)")
 READ_COMMAND = re.compile(COMMAND_PREFIX + r"(?:\S*/)?(?:cat|rg|sed|head|grep|tail)(?=\s|$)")

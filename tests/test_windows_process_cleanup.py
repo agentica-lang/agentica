@@ -41,7 +41,7 @@ end
 OUTER_PROGRAM = """\
 def main() -> Void
   args = System.args()
-  words = ["run", "--allow-run", "--", args[1], args[3], args[4]]
+  words = ["run", "--", args[1], args[3], args[4]]
   child = Result.unwrap!(Process.spawn_captured(args[0], words, ".", 60000))
   puts(Result.unwrap!(Process.read_line(child, 60000)))
   IO.flush()
@@ -98,7 +98,7 @@ def pids_of(line, request):
 def test_closing_a_captured_vm_child_ends_the_child_and_its_own_child(adopt, request, tmp_path, mode):
     inner = bytecode(INNER_PROGRAM, tmp_path, "captured-inner")
     outer = bytecode(OUTER_PROGRAM, tmp_path, "captured-outer")
-    parent = adopt(start_vm(outer, vm_binary(), inner, mode, PYTHON, PEER, flags=["--allow-run"]))
+    parent = adopt(start_vm(outer, vm_binary(), inner, mode, PYTHON, PEER))
     pids = pids_of(parent.next_line(WAIT), request)
     assert len(pids) == 2
     if mode == "timeout":
@@ -116,7 +116,7 @@ def test_closing_a_captured_vm_child_ends_the_child_and_its_own_child(adopt, req
 def test_close_never_waits_for_a_captured_child_and_one_that_ignores_the_console_signals_is_killed(
         adopt, request, tmp_path, child_code, then):
     grace = bytecode(CLOSE_PROGRAM, tmp_path, "captured-grace")
-    vm = adopt(start_vm(grace, PYTHON, child_code, then, flags=["--allow-run"]))
+    vm = adopt(start_vm(grace, PYTHON, child_code, then))
     pid = pids_of(vm.next_line(WAIT), request)[0]
     # A close that waited for the child would end by the 1-second timer of the close: above this bound, which leaves
     # room for a slow runner.

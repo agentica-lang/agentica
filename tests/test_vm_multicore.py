@@ -88,7 +88,7 @@ def golden_outcome(path, tmp_path, flags, env=None):
         directory = diff.fresh_tmp(tmp_path)
         try:
             result = diff.untmp(directory, diff.run_vm_process(
-                fixture, diff.allow_options(fixture) + diff.style_options("json") + root, bytecode,
+                fixture, diff.deny_options(fixture) + diff.style_options("json") + root, bytecode,
                 diff.tmp_args(fixture, directory), cwd=tmp_path, env=env))
         finally:
             shutil.rmtree(directory, ignore_errors=True)
@@ -842,7 +842,7 @@ def test_children_of_tasks_on_several_schedulers_send_read_wait_and_close(tmp_pa
     expected = "".join('ok() ok("got-%d") ok(7) err-%d\n' % (k, k) for k in range(1, 9))
     expected += "".join("ok(%d)\n" % k for k in range(1, 9))
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", args=(PYTHON,), timeout=120)
+        result = vm(bytecode, args=(PYTHON,), timeout=120)
         assert (result.code, result.stdout, result.stderr) == (0, expected, "")
 
 
@@ -910,7 +910,7 @@ def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_i
                                                     'error("process: process is closed")', 'error("task: cancelled")',
                                                     'ok("gone")']
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", timeout=60)
+        result = vm(bytecode, timeout=60)
         assert (result.code, result.stdout.splitlines(), result.stderr) == (0, expected, "")
 
 
@@ -961,7 +961,7 @@ def test_process_exits_and_lines_that_race_a_deadline_give_the_result_or_the_tim
     waits = {"ok(4)", 'error("network: operation timed out")'}
     reads = {'ok("hi")', 'error("network: operation timed out") then error("process: process is closed")'}
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", args=DEADLINE_CHILDREN, timeout=60)
+        result = vm(bytecode, args=DEADLINE_CHILDREN, timeout=60)
         assert (result.code, result.stderr) == (0, "")
         first, second = result.stdout.split("--\n")
         assert set(first.splitlines()) <= waits and set(second.splitlines()) <= reads, result.stdout
@@ -1002,7 +1002,7 @@ def test_a_stop_signal_or_an_exit_kills_the_children_of_a_run_on_several_schedul
     # A plain and a captured child, each with a task parked on it; the run gets SIGTERM, or a task calls
     # System.exit(3) on its scheduler. The run ends with the signal or 3, and both children are gone.
     bytecode = program(tmp_path, "proc_stop", PROC_STOP)
-    process = subprocess.Popen([*vm_command(), *FLAGS, "--allow-run", "--", bytecode, mode], stdin=subprocess.DEVNULL,
+    process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, mode], stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
                                text=True)
     pids = []
@@ -1096,7 +1096,7 @@ def test_the_child_channel_between_two_runs_on_several_schedulers(tmp_path, repe
     replies = ",".join(sorted("echo:%d" % (base + k) for base in (0, 100, 200, 300) for k in range(25)))
     expected = "ok()\n%s\nok(\"end:process: end of input\")\nerror(\"process: end of input\")\nok(0)\n" % replies
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", args=(vm_command()[0], bytecode), env=MULTICORE_CHILDREN, timeout=60)
+        result = vm(bytecode, args=(vm_command()[0], bytecode), env=MULTICORE_CHILDREN, timeout=60)
         assert (result.code, result.stdout, result.stderr) == (0, expected, "")
 
 
@@ -1133,7 +1133,7 @@ def test_a_crash_cancels_a_task_inside_process_close_on_another_scheduler(tmp_pa
     # left.
     bytecode = program(tmp_path, "proc_close_cancel", PROC_CLOSE_CANCEL)
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", timeout=60)
+        result = vm(bytecode, timeout=60)
         assert (result.code, result.stdout) == (0, 'false\nok("gone")\n0\n')
         assert "RUNTIME-DIVISION-BY-ZERO" in result.stderr
 
@@ -1194,7 +1194,7 @@ def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats
     bytecode = program(tmp_path, "proc_channel_close", PROC_CHANNEL_CLOSE)
     reads = {'error("process: channel is closed")', 'error("process: process is closed")'}
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", timeout=60)
+        result = vm(bytecode, timeout=60)
         assert result.code == 0, result.stderr
         started, read, send, crashed, pending = result.stdout.splitlines()
         assert (started, send, crashed, pending) == ("started", 'error("process: channel is closed")', "false", "0")
@@ -1240,7 +1240,7 @@ def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeat
     bytecode = program(tmp_path, "spawn_at_end", SPAWN_AT_END)
     mark = "agc-orphan-%d-%d" % (os.getpid(), repeats)
     # Not run(): it kills the run's process group at the end, which would hide a child left behind.
-    command = [*vm_command(), *FLAGS, "--allow-run", "--", bytecode, mark]
+    command = [*vm_command(), *FLAGS, "--", bytecode, mark]
     try:
         # A run without the fix leaves a child behind about half the time: ten make it near certain.
         for _ in range(10 * repeats):
@@ -1298,7 +1298,7 @@ def same_report(tmp_path, name, text):
     same report, which is returned."""
     source = tmp_path / name
     source.write_text(text, encoding="utf-8")
-    command = [vm_command()[0], "test", "--allow-run", "--json", str(source)]
+    command = [vm_command()[0], "test", "--json", str(source)]
     one = run(command, env=vm_environment({"AGENTICA_SCHEDULERS": "1"}))
     several = run(command, env=vm_environment(MULTICORE_CHILDREN))
     assert (several.code, several.stderr) == (one.code, one.stderr) == (1, "")
@@ -1851,7 +1851,7 @@ def test_handles_of_a_crashed_owner_are_closed_when_its_await_returns(tmp_path, 
     expected = ['accept: network: listener is closed x40', 'peer: error("network: end of input") x40',
                 'send: error("network: socket is closed") x40', 'wait: error("process: process is closed") x40']
     for _ in range(repeats):
-        result = vm(bytecode, "--allow-run", args=(PYTHON,), timeout=120)
+        result = vm(bytecode, args=(PYTHON,), timeout=120)
         assert (result.code, result.stdout.splitlines()) == (0, expected), result.stderr
 
 

@@ -403,6 +403,6 @@ it is the first word; `cli.agc` answers a later `run` with a usage error.
 the help texts as data.
 
 To run a `compiler/` change without the build chain:
-`dist/agentica run --allow-run -- build/stage/stage2.agcb --version V --stdlib
+`dist/agentica run -- build/stage/stage2.agcb --version V --stdlib
 stdlib --self PATH -- WORDS`
 (`tests.agentica_test.front_end_command` builds it).

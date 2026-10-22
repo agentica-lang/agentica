@@ -40,7 +40,6 @@ def windows_gap(number, why):
 
 
 PLAIN = Fixture()
-ALLOWED = Fixture(allow_run=True)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -268,7 +267,7 @@ def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_again
     none = str(folder / "none")
     for search in [none, ":" + none, "bin:" + none, ".:" + none]:
         want = expected(search.startswith("bin:") or search.startswith(".:"))
-        assert run_vm(ALLOWED, bytecode, None, cwd=folder, env={"PATH": search}) == want, search
+        assert run_vm(PLAIN, bytecode, None, cwd=folder, env={"PATH": search}) == want, search
 
 
 @posix_only("SIGTERM; Windows has Ctrl+Break, which test_windows_console_stop.py sends to end the VM, its child and the buffered file")
@@ -279,7 +278,7 @@ def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(ado
         "60000))\n  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(20000)\nend\n",
         encoding="utf-8")
     driver = adopt(Child(
-        cli() + ["--allow-run", program], env=vm_environment({"TMPDIR": tmp_path}),
+        cli() + [program], env=vm_environment({"TMPDIR": tmp_path}),
         cwd=tmp_path, capture_stderr=True))
     pid = driver.next_line(RUN_TIMEOUT)
     request.addfinalizer(lambda: kill_alive([pid]))
@@ -299,14 +298,14 @@ def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_
     outer = compile_program(
         tmp_path, "captured-outer",
         "def main() -> Void\n  args = System.args()\n"
-        "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"run\", \"--allow-run\", \"--\", args[1]], \".\", "
+        "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"run\", \"--\", args[1]], \".\", "
         "60000))\n  puts(Result.unwrap!(Process.read_line(child, 60000)))\n"
         "  if args[2] == \"close\"\n    Process.close(child)\n  else\n    IO.inspect(Process.read_line(child, 200))\n"
         "  end\nend\n")
     for mode in ["close", "timeout"]:
         pids = []
         request.addfinalizer(lambda found=pids: kill_alive(found))
-        result = run_vm(ALLOWED, outer, None, extra=[str(vm_binary()), str(inner), mode], cwd=tmp_path)
+        result = run_vm(PLAIN, outer, None, extra=[str(vm_binary()), str(inner), mode], cwd=tmp_path)
         lines = words(result[1])
         pids.extend(word for word in (lines[0].split() if lines else []) if word.isdigit())
         assert result[0] == 0, mode
@@ -334,7 +333,7 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
     for mode in ["wait", "exit", "quick"]:
         pids = []
         request.addfinalizer(lambda found=pids: kill_alive(found))
-        result = run_vm(ALLOWED, bytecode, None, extra=[mode], cwd=tmp_path, env={"AGENTICA_VM_TRACE": "io"})
+        result = run_vm(PLAIN, bytecode, None, extra=[mode], cwd=tmp_path, env={"AGENTICA_VM_TRACE": "io"})
         lines = words(result[1])
         if lines and lines[0].isdigit():
             pids.append(lines[0])
@@ -364,7 +363,7 @@ def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_u
         "  puts(\"#{out.stdout.inspect} #{out.stderr.length} #{String.code(out.stderr)} #{out.truncated}\")\n"
         "  Process.close(p)\nend\n")
     child = PYTHON_OUTPUT_CHILD if os.name == "nt" else SHELL_OUTPUT_CHILD
-    assert run_vm(ALLOWED, bytecode, None, extra=child, cwd=tmp_path) == \
+    assert run_vm(PLAIN, bytecode, None, extra=child, cwd=tmp_path) == \
         (0, "error(\"network: operation timed out\")\n\"hi\\n\" 1 65533 false\n", "")
 
 
@@ -382,7 +381,7 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
         "  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\n  puts(\"survived\")\nend\n")
     arguments = [sys.executable, "import os,time;print(os.getpid(),flush=True);time.sleep(30)"] if windows else []
     # Nothing reads the VM's stdout after the first line, so its 1 MiB write blocks: the state under test.
-    child = adopt(Child([*vm_command(), "--allow-run", "--", bytecode, *arguments], env=vm_environment(),
+    child = adopt(Child([*vm_command(), "--", bytecode, *arguments], env=vm_environment(),
                         cwd=tmp_path, read_stdout=False,
                         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if windows else 0))
     pid = child.process.stdout.readline().decode().strip()
@@ -406,7 +405,7 @@ def test_a_child_does_not_inherit_descriptors_the_vm_inherited(tmp_path):
         "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", "
         "\"if [ -e /dev/fd/7 ]; then echo leaked; else echo private; fi\"], 60000))\n"
         "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  Process.close(p)\nend\n")
-    result = execute(["/bin/sh", "-c", "exec 7</dev/null; exec \"$0\" run --allow-run -- \"$1\"", vm_binary(), bytecode],
+    result = execute(["/bin/sh", "-c", "exec 7</dev/null; exec \"$0\" run -- \"$1\"", vm_binary(), bytecode],
                      cwd=tmp_path, env=vm_environment())
     assert result == (0, "private\n", "")
 
@@ -561,7 +560,7 @@ def test_options_arguments_and_removed_flags(tmp_path):
     limited = agentica(temp, tmp_path, "--json", "--max-steps", "3", calls)
     assert (limited[0], outcome(limited)[3]) == (1, "RUNTIME-STEP-LIMIT")
     no_bytecode(temp, "--max-steps 3")
-    with_args = agentica(temp, tmp_path, "--json", calls, "first", "--allow-run", "--json")
+    with_args = agentica(temp, tmp_path, "--json", calls, "first", "--deny-run", "--json")
     assert with_args[:2] == cli_expected("calls.agc")[:2]
     deep = tmp_path / "deep.agc"
     deep.write_text(
@@ -571,8 +570,8 @@ def test_options_arguments_and_removed_flags(tmp_path):
     for removed in ["--vm", "--legacy-eval"]:
         assert agentica(temp, tmp_path, removed, str(deep))[:2] == (1, ""), removed
     denied = cli_fixture("spawn-denied.agc")
-    assert outcome(agentica(temp, tmp_path, "--json", denied)) == cli_expected("spawn-denied.agc")
-    assert agentica(temp, tmp_path, "--allow-run", "--json", denied)[0] == 0
+    assert outcome(agentica(temp, tmp_path, "--deny-run", "--json", denied)) == cli_expected("spawn-denied.agc")
+    assert agentica(temp, tmp_path, "--json", denied)[0] == 0
     random = cli_fixture("random.agc")
     seeded = agentica(temp, tmp_path, "--seed", "77", random)
     assert seeded[0] == 0

@@ -141,7 +141,7 @@ def alive(pid):
 def start_with_child(tmp_path, adopt):
     """The VM in its own process group with a child that ignores Ctrl+Break: (the file it writes, the VM, the child pid)."""
     path = tmp_path / "out.txt"
-    vm = adopt(start_vm(bytecode(CHILD_PROGRAM, tmp_path), path, PYTHON, CHILD, flags=["--allow-run"],
+    vm = adopt(start_vm(bytecode(CHILD_PROGRAM, tmp_path), path, PYTHON, CHILD,
                         creationflags=NEW_GROUP))
     return path, vm, int(vm.next_line(WAIT_SECONDS))
 

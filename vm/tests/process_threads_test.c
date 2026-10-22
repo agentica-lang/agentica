@@ -275,7 +275,6 @@ int main(void) {
 #if defined(__linux__) || defined(__APPLE__)
   agc_test_deadline(120);
   agc_test_io_vm(&vm);
-  vm.rt->allow_run = true;
   one = vm.task;
   two = agc_alloc(sizeof(agc_task));
   test_a_child_through_posted_steps();

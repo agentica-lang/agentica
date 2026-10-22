@@ -441,10 +441,10 @@ def smoke(archive: Path, platform: str, binary: Path | None) -> None:
                  out.stdout == "uno\ndos ñ\n\nmovida ✓.txt\n11\n0\n", out)
 
         (work / "process.agc").write_text(PROCESS, encoding="utf-8")
-        out = s.run("--allow-run", "process.agc", str(exe))
+        out = s.run("process.agc", str(exe))
         s.expect("processes: spawn the packaged binary", out.stdout == f"{ver}\n0\n", out)
-        out = s.run("process.agc", str(exe), code=None)
-        s.expect("processes need --allow-run", out.returncode != 0, out)
+        out = s.run("--deny-run", "process.agc", str(exe), code=1)
+        s.expect("--deny-run refuses processes", "denied: --deny-run" in out.stderr, out)
 
         network_smoke(s, work)
         print(f"smoke passed: {s.checks} checks on {archive.name}")
