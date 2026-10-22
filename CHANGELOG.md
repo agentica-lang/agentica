@@ -13,6 +13,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `extern` blocks call C functions of native libraries, with `C.Int`,
   `C.Int64`, `C.Double`, `C.Bool` and `C.String` (Linux x86_64 for now);
   `--deny-native` refuses such a program at load.
+- `compute def` in an `extern` block runs a long native call on the VM's
+  compute pool while the task waits and other tasks run.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and

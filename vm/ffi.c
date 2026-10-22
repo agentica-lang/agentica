@@ -3,7 +3,9 @@
  * program lowers to (docs/grammar/06d-io-and-network.md, "Native code"), and
  * agc_ffi_refusal, the check at load. It reads the signature string, keeps
  * one prepared call per signature, converts Agentica values to C and back,
- * and leaves dlopen and libffi to the adapter (ffi_os.h). Service layer.
+ * runs a fast call on the scheduler and a compute call on the compute pool
+ * (agc_io_compute), and leaves dlopen and libffi to the adapter (ffi_os.h).
+ * Service layer.
  */
 #include "ffi_os.h"
 #include "services.h"
@@ -15,6 +17,9 @@
 /* The turn cost of one call, besides the size of its arguments and result: a fast call runs on the scheduler and
    cannot be stopped in the middle, so it is charged as a long builtin. */
 #define FFI_CALL_COST 64
+/* The word in front of the signature of a compute def (compiler/lower/lower_native.agc). */
+#define COMPUTE_PREFIX "compute "
+#define COMPUTE_PREFIX_LEN (sizeof COMPUTE_PREFIX - 1)
 /* The most signatures one run prepares. A program has one per extern function; only hand-made bytecode can build
    more, so the cap bounds the table without limiting a real program. */
 #define FFI_MAX_CALLS 65536
@@ -27,7 +32,17 @@ typedef struct {
   agc_c_type params[AGC_FFI_MAX_PARAMS];
   agc_c_type result;
   uint32_t count;
+  bool compute;
 } ffi_entry;
+
+/* One compute call, in malloc memory: the C arguments copied on the scheduler (each C.String a malloc'd copy), and the
+   result, which the pool thread stores with a malloc'd copy of a C.String result, made right after the call, before a
+   later call can reuse the text the function returned. The entry is never freed, so the pool thread may read it. */
+typedef struct {
+  const ffi_entry *entry;
+  agc_c_value out;
+  agc_c_value in[];
+} compute_call;
 
 /* The prepared calls of the run, by signature string, in malloc memory (no GC pointers): open addressing over a
    power-of-two table, kept at most half full. Native.call is a shared builtin, so in a shared VM it runs with
@@ -60,11 +75,16 @@ static _Noreturn void bad_signature(agc_vm *vm, uint32_t span) {
 }
 
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter, a space, the C name, a space, and the library
-   (which may hold spaces). The front end writes it (compiler/lower/lower_native.agc); the bytecode may hold anything,
-   so every part is checked here. */
+   (which may hold spaces), with "compute " in front for a compute def. The front end writes it
+   (compiler/lower/lower_native.agc); the bytecode may hold anything, so every part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *data = text->data;
   size_t len = text->bytes;
+  bool compute = len >= COMPUTE_PREFIX_LEN && memcmp(data, COMPUTE_PREFIX, COMPUTE_PREFIX_LEN) == 0;
+  if (compute) {
+    data += COMPUTE_PREFIX_LEN;
+    len -= COMPUTE_PREFIX_LEN;
+  }
   const char *first = memchr(data, ' ', len);
   if (!first) bad_signature(vm, span);
   size_t codes = (size_t)(first - data);
@@ -73,6 +93,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   if (!second || second == symbol || codes == 0 || codes - 1 > AGC_FFI_MAX_PARAMS) bad_signature(vm, span);
   ffi_entry *e = calloc(1, sizeof(ffi_entry));
   if (!e) agc_out_of_memory();
+  e->compute = compute;
   if (!c_type_of(data[0], true, &e->result)) {
     free(e);
     bad_signature(vm, span);
@@ -209,9 +230,58 @@ static agc_value result_value(agc_c_type type, const agc_c_value *r) {
   return agc_void();
 }
 
-/* Native.call(signature, arguments): one call of an extern function, on the scheduler. The arguments are a List with
-   one value per parameter, of the Agentica type the checker gave it. Every argument is checked before the first
-   C.String copy is made, and nothing between the copies and their free can fail. */
+static void free_strings(const ffi_entry *e, agc_c_value *in) {
+  for (uint32_t k = 0; k < e->count; k++)
+    if (e->params[k] == AGC_C_STRING) free((char *)in[k].s);
+}
+
+static void compute_free(void *data) {
+  compute_call *c = data;
+  free_strings(c->entry, c->in);
+  if (c->entry->result == AGC_C_STRING) free((char *)c->out.s);
+  free(c);
+}
+
+/* On a pool thread: C values only, no GC memory. */
+static void compute_work(void *data) {
+  compute_call *c = data;
+  agc_ffi_invoke(c->entry->call, c->in, &c->out);
+  if (c->entry->result == AGC_C_STRING && c->out.s) {
+    size_t n = strlen(c->out.s);
+    char *copy = malloc(n + 1);
+    if (!copy) agc_out_of_memory();
+    memcpy(copy, c->out.s, n + 1);
+    c->out.s = copy;
+  }
+}
+
+/* On the scheduler that resumes the task: the result becomes a value there. For a cancelled task it runs too and the
+   value is dropped (the detached end of the job). */
+static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  compute_call *c = data;
+  agc_value v = result_value(c->entry->result, &c->out);
+  compute_free(c);
+  return v;
+}
+
+/* Never reached: the job has no deadline and nothing else wakes the task. Should it be, there is no value of the
+   call's type to give, so the run ends with RUNTIME-INTERNAL; the job stays (the work may still use its data), which
+   the end of the run does not mind. */
+static agc_value compute_expired(agc_vm *vm, void *data, agc_value context) {
+  (void)data;
+  (void)context;
+  agc_fail(vm, "RUNTIME-INTERNAL", "a compute call ended without its result", 0);
+}
+
+static const agc_io_kind compute_io = {compute_work, compute_done, compute_expired, compute_free, false, "compute",
+                                       NULL, false, NULL};
+
+/* Native.call(signature, arguments): one call of an extern function, on the scheduler, or for a compute def on the
+   compute pool while the task waits. The arguments are a List with one value per parameter, of the Agentica type the
+   checker gave it. Every argument is checked before the first C.String copy is made, and nothing between the copies
+   and their free (or the start of the compute job, which then owns them) can fail. */
 static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span) {
   /* The fuzzer runs hand-made bytecode with no_files: it must open no library. */
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
@@ -220,13 +290,23 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   if (agc_list_len(values) != e->count)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
   for (uint32_t k = 0; k < e->count; k++) check_argument(vm, e->params[k], agc_list_get(values, k), span);
+  agc_charge(vm, FFI_CALL_COST);
+  if (e->compute) {
+    /* The loop is made first: a loop that cannot start fails here, before the copies exist. */
+    (void)agc_io_loop(vm);
+    compute_call *c = malloc(agc_size_add(sizeof(compute_call), agc_size_mul(e->count, sizeof(agc_c_value))));
+    if (!c) agc_out_of_memory();
+    c->entry = e;
+    c->out = (agc_c_value){0};
+    for (uint32_t k = 0; k < e->count; k++) c->in[k] = c_argument(vm, e->params[k], agc_list_get(values, k));
+    agc_io_compute(vm, &compute_io, c);
+    return agc_void();
+  }
   agc_c_value in[AGC_FFI_MAX_PARAMS];
   for (uint32_t k = 0; k < e->count; k++) in[k] = c_argument(vm, e->params[k], agc_list_get(values, k));
   agc_c_value out = {0};
   agc_ffi_invoke(e->call, in, &out);
-  for (uint32_t k = 0; k < e->count; k++)
-    if (e->params[k] == AGC_C_STRING) free((char *)in[k].s);
-  agc_charge(vm, FFI_CALL_COST);
+  free_strings(e, in);
   return result_value(e->result, &out);
 }
 

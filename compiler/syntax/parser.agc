@@ -1759,7 +1759,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
   return decl_at(node, stop, body.ids)
 end
 
-# extern "library" NL, then [##doc] [export] def members, then end. Each member is a function with no body
+# extern "library" NL, then [##doc] [export] [compute] def members, then end. Each member is a function with no body
 # (Ast.Native), so the later stages see ordinary functions.
 def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   library = pos + 1
@@ -1813,10 +1813,15 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       if exported
         at += 1
       end
-      if e.tokens[at].kind != "def"
-        return error(Base.found(e, at, "def or end in an extern block"))
+      start = at
+      compute = compute_start?(e, at)
+      if compute
+        at += 1
       end
-      member = try parse_extern_function(e, at, next_id, taken.doc, name)
+      if e.tokens[at].kind != "def"
+        return error(Base.found(e, at, "def, compute def or end in an extern block"))
+      end
+      member = try parse_extern_function(e, start, at, next_id, taken.doc, name)
       node = member.node
       member_ids = member.ids
       if exported
@@ -1833,9 +1838,11 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
 end
 
-# def name(params) -> Type NL in an extern block: a C name, C types, no defaults.
+# [compute] def name(params) -> Type NL in an extern block: a C name, C types, no defaults. start is the first token
+# (compute or def) and pos the def.
 def parse_extern_function(
   e: Base.Env,
+  start: Int,
   pos: Int,
   ids: Int,
   doc: Ast.Optional[String],
@@ -1900,8 +1907,10 @@ def parse_extern_function(
       result: returned.type,
       body: [],
       doc: doc,
-      native: Ast.Optional.Present(Ast.Native(library: library, symbol: name, codes: codes.join(""))),
-      span: Base.span_from(e, pos, stop),
+      native: Ast.Optional.Present(
+        Ast.Native(library: library, symbol: name, codes: codes.join(""), compute: start != pos),
+      ),
+      span: Base.span_from(e, start, stop),
     ),
   )
   return decl_at(node, stop, result.ids)
@@ -1985,7 +1994,7 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
     return kind == "type-name"
   end
   if member == "extern"
-    return kind == "def" or kind == "export"
+    return kind == "def" or kind == "export" or compute_start?(e, pos)
   end
   return (
     kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, pos) or
@@ -2282,6 +2291,11 @@ def declaration_start?(e: Base.Env, at: Int) -> Bool
     kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, at) or
     (kind == "name" and e.tokens[at].lexeme == "type") or extern_start?(e, at)
   )
+end
+
+# `compute` is a plain name: inside an extern block, before def, it makes the function a compute call.
+def compute_start?(e: Base.Env, at: Int) -> Bool
+  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "compute" and Base.kind_at(e, at + 1) == "def"
 end
 
 # `extern` is a plain name: it starts a block only at the top level and before a string.

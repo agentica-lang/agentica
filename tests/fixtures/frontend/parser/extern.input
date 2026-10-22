@@ -8,4 +8,6 @@ end
 extern "/opt/lib/my peer.so"
   def peer(a: C.Int, b: C.Bool, s: C.String) -> C.String
   def tick() -> Void
+  ## Runs on the compute pool.
+  compute def crunch(n: C.Int64) -> C.Double
 end

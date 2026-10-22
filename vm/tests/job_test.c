@@ -81,6 +81,22 @@ static void gate_drop(void *data) {
 
 static const agc_io_kind gate_io = {gate_work, gate_done, gate_expired, gate_drop, false, "gate", NULL, false, NULL};
 
+/* A compute job has no context: its `done` gives the value the work wrote. */
+static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
+  (void)vm;
+  (void)context;
+  gate *g = data;
+  finished_calls++;
+  int64_t value = g->value;
+  uv_sem_destroy(&g->entered);
+  uv_sem_destroy(&g->go);
+  free(g);
+  return agc_int(value);
+}
+
+static const agc_io_kind compute_io = {gate_work, compute_done, gate_expired, gate_drop, false, "compute", NULL, false,
+                                       NULL};
+
 /* The `done` half owns the data it is given, so it frees it; a job that is dropped or expired leaves it to `drop`. */
 static agc_value idle_done(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
@@ -210,11 +226,17 @@ static void test_completion_before_timer(void) {
   finished_calls = 0;
 }
 
-/* A cancel sets the outcome to CANCELLED: a completion that comes later does not wake the task, and the detached
-   ending takes the result and frees the job. */
-static void test_cancel_before_completion(void) {
-  gate *g = new_gate();
-  agc_task *task = park_on(g, 60000);
+static agc_task *park_compute(gate *g) {
+  agc_task *task = vm.task;
+  running();
+  agc_io_compute(&vm, &compute_io, g);
+  park(task);
+  return task;
+}
+
+/* A cancel while the work runs sets the outcome to CANCELLED: a completion that comes later does not wake the task,
+   and the detached ending takes the result and frees the job. */
+static void cancel_while_working(gate *g, agc_task *task) {
   uv_sem_wait(&g->entered);
   agc_io_detach(&vm, task);
   uv_sem_post(&g->go);
@@ -224,6 +246,30 @@ static void test_cancel_before_completion(void) {
   assert(finished_calls == 1 && dropped == 0);
   finished_calls = 0;
   task->state = AGC_TASK_RUNNING;
+}
+
+static void test_cancel_before_completion(void) {
+  gate *g = new_gate();
+  cancel_while_working(g, park_on(g, 60000));
+}
+
+/* A compute job's work runs on the compute pool, and its end wakes the task as a pool job's does. */
+static void test_compute_job_wakes_its_task(void) {
+  gate *g = new_gate();
+  agc_task *task = park_compute(g);
+  uv_sem_wait(&g->entered);
+  uv_sem_post(&g->go);
+  wait_woken(task);
+  assert(take(task) == 7);
+  settle_loop();
+  assert(dropped == 0 && finished_calls == 1);
+  finished_calls = 0;
+}
+
+/* A cancel detaches a compute job while its work runs: the work goes on, and its result is dropped once it ends. */
+static void test_cancel_during_compute(void) {
+  gate *g = new_gate();
+  cancel_while_working(g, park_compute(g));
 }
 
 static void ready_later(void *arg) {
@@ -905,6 +951,8 @@ int main(void) {
   test_timer_before_completion();
   test_completion_before_timer();
   test_cancel_before_completion();
+  test_compute_job_wakes_its_task();
+  test_cancel_during_compute();
   test_request_from_another_thread();
   test_start_queued_then_ended_inline();
   test_finish_from_another_thread();

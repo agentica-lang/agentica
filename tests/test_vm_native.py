@@ -141,6 +141,126 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "1600\n", "")
 
 
+COMPUTE_EXTERN = """extern "{library}"
+  compute def peer_wait_flag(limit_ms: C.Int) -> C.Int
+  def peer_set_flag() -> Void
+  def peer_returned() -> C.Int
+  compute def peer_word(n: C.Int) -> C.String
+  compute def peer_half(n: C.Int64) -> C.Double
+  compute def peer_bump() -> Void
+  def peer_bumps() -> C.Int
+  compute def peer_nap(ms: C.Int) -> C.Int
+  def peer_naps() -> C.Int
+end
+
+"""
+
+
+# The compute call returns 1 only once main's fast call has set the flag. On one scheduler that proves the waiting task
+# gave the scheduler to main; a call that held it would return 0 after 20 seconds.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_compute_call_waits_while_other_tasks_run(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  waiter = Task.spawn(&peer_wait_flag, 20_000)
+  Task.sleep(20)
+  peer_set_flag()
+  puts(Task.await(waiter))
+  peer_bump()
+  puts(peer_bumps())
+  puts(peer_word(2))
+  puts(peer_half(5))
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "1\n1\nccc\n2.5\n", "")
+
+
+# A cancelled task stops waiting at once; its call runs on to its end, and the result is dropped.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_cancel_drops_the_result_of_a_compute_call(tmp_path, peer, schedulers):
+    main = """def wait_flag(limit: Int) -> Result[Int]
+  return ok(peer_wait_flag(limit))
+end
+
+def main() -> Void
+  waiter = Task.spawn(&wait_flag, 20_000)
+  Task.sleep(20)
+  Task.cancel(waiter)
+  puts(Task.await(waiter))
+  puts(peer_returned())
+  peer_set_flag()
+  n = 0
+  while peer_returned() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  Task.sleep(20)
+  puts(peer_word(3))
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ['error("task: cancelled")', "0", "ddd", ""]
+
+
+@ON_LINUX_ONLY
+def test_many_compute_calls_at_once(tmp_path, peer):
+    main = """def work(n: Int) -> Float
+  letter = String.from_code(97 + n % 26)
+  if peer_word(n) != letter + letter + letter
+    return -1000.0
+  end
+  return peer_half(n) + 3.0
+end
+
+def main() -> Void
+  tasks: List[Task[Float]] = []
+  for n in 1..200
+    tasks = tasks.push(Task.spawn(&work, n))
+  end
+  sum = 0.0
+  for task in tasks
+    sum += Task.await(task)
+  end
+  puts(sum)
+end
+"""
+    result = agentica("--schedulers", "4", program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "10650.0\n", "")
+
+
+# One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
+# cancelled, the waiting calls are never made: only the first nap is counted, even after a second nap would have ended.
+@ON_LINUX_ONLY
+def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
+    main = """def nap(ms: Int) -> Result[Int]
+  return ok(peer_nap(ms))
+end
+
+def main() -> Void
+  tasks: List[Task[Result[Int]]] = []
+  for k in 1..50
+    tasks = tasks.push(Task.spawn(&nap, 100))
+  end
+  Task.sleep(20)
+  for task in tasks
+    Task.cancel(task)
+  end
+  n = 0
+  while peer_naps() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  Task.sleep(250)
+  puts(peer_naps())
+end
+"""
+    result = agentica("--schedulers", "1", program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
+
+
 @ON_LINUX_ONLY
 @pytest.mark.parametrize("case, code, line", [
     ("lib", "RUNTIME-NATIVE-LOAD", 2),

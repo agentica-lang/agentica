@@ -142,10 +142,16 @@ def doc_attr(doc: Ast.Optional[String]) -> String
   return text_attr(" doc=", doc)
 end
 
-# The library and the C type codes of an extern function; nothing for an ordinary one.
+# The library and the C type codes of an extern function, and compute=true for a compute def; nothing for an ordinary
+# function.
 def native_attr(native: Ast.Optional[Ast.Native]) -> String
   case native
-    Ast.Optional.Present(link) -> return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}"
+    Ast.Optional.Present(link) ->
+      compute = ""
+      if link.compute
+        compute = " compute=true"
+      end
+      return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{compute}"
     Ast.Optional.Absent -> return ""
   end
 end

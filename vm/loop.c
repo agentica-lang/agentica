@@ -121,6 +121,8 @@ struct agc_loop {
   uv_thread_t owner;
   /* agc_io_hand_off: the drain gives detached jobs to the schedulers. */
   bool hand_off;
+  /* The compute pool (vm/compute.c), made by the first compute job's START; I/O role only. */
+  agc_compute *compute;
 };
 
 /* A job is malloc memory with up to three libuv pieces (pool work or a wait on the loop, the one timer) and its
@@ -147,7 +149,8 @@ struct agc_io_job {
   _Atomic uint64_t ended_ns;
   _Atomic int refs, outcome;
   _Atomic bool busy, detached, ended, start_failed, timer_fired, dropping, on_loop;
-  bool timer_open, timer_live, queued, dead, flush;
+  /* `compute`: the work goes to the compute pool, not the libuv pool (agc_io_compute); set before the START. */
+  bool timer_open, timer_live, queued, dead, flush, compute;
   /* I/O role only: the job has no task for the I/O role any more (started detached, or its DETACH request ran), so the
      drain may end it; until then a ready detached job waits for its DETACH, which reads `data`. */
   bool detach_seen;
@@ -437,6 +440,32 @@ int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
 
 static int queue_work(agc_loop *loop, job *j) { return agc_io_queue_work(&loop->uv, &j->work, run_work, work_finished); }
 
+/* The compute pool's half of a job, as libuv's run_work and work_finished are the pool's: the work on a pool thread,
+   then its end on the loop's thread. A job whose task was cancelled while it waited in the pool's queue skips its work
+   (a native call not made, so none of its effects happen); its `done` then gets the data as it was and builds a value
+   that the detached end drops. A work already running runs to its end. */
+static void run_compute(void *item) {
+  job *j = item;
+  if (!atomic_load(&j->detached)) j->kind->work(j->data);
+}
+
+static void compute_finished(void *item) { work_finished(&((job *)item)->work, 0); }
+
+/* The pool is made at its first job, with one thread per scheduler, and its threads start as the work needs them,
+   under pool_enter like the libuv pool's, so they keep the stop signals blocked. */
+static int submit_compute(agc_loop *loop, job *j) {
+  if (!loop->compute) {
+    int64_t n = loop->vm->rt->schedulers;
+    loop->compute = agc_compute_open(&loop->uv, n < 1 ? 1u : n > 1024 ? 1024u : (uint32_t)n, compute_finished);
+    if (!loop->compute) return -1;
+  }
+  pool_mask saved;
+  pool_enter(&saved);
+  bool queued = agc_compute_submit(loop->compute, run_compute, j);
+  pool_leave(&saved);
+  return queued ? 0 : -1;
+}
+
 /* The deadline of the job's work or wait has passed: the job has timed out. */
 static void timer_fired(uv_timer_t *timer) {
   job *j = timer_job((uv_handle_t *)timer);
@@ -472,7 +501,7 @@ static void close_timer(job *j) {
    timer and the job. `ended` is set before those requests are posted, and the I/O thread runs requests one at a time,
    so a START that reads it clear runs before any of them. The wait piece was never started: give its count back.
    A uv_queue_work that fails is known only here, on the I/O thread, after the task was parked: the outcome becomes
-   EXPIRED with `start_failed` set, the task then fails in agc_io_finish ("cannot queue file work"), and a detached
+   EXPIRED with `start_failed` set, the task then fails in agc_io_finish ("cannot queue pool work"), and a detached
    job drops its data in end_detached (with a trace line, since nobody else would hear of it). A wait on the loop
    (no pool work) with a `more` step starts its wait here, before the timer is armed, so the deadline always finds
    the wait started and `pause` can stop it; posted as a second request, the wait could start after the deadline.
@@ -496,7 +525,7 @@ static void start_pieces(job *j, int64_t timeout_ms) {
     uv_timer_start(&j->timer, timer_fired, (uint64_t)timeout_ms, 0);
     j->timer_open = j->timer_live = true;
   }
-  if (j->kind->work && queue_work(loop, j) != 0) {
+  if (j->kind->work && (j->compute ? submit_compute(loop, j) : queue_work(loop, j)) != 0) {
     atomic_store(&j->start_failed, true);
     end_wait(j, AGC_JOB_EXPIRED);
   }
@@ -675,6 +704,7 @@ static agc_loop *new_loop(agc_vm *vm) {
   loop->inbox = NULL;
   loop->shared = false;
   loop->hand_off = false;
+  loop->compute = NULL;
   atomic_init(&loop->closed, false);
   loop->owner = uv_thread_self();
 #if defined(_WIN32)
@@ -1352,6 +1382,7 @@ static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value
   atomic_init(&j->on_loop, false);
   j->detach_seen = task == NULL;
   j->flush = (flags & AGC_JOB_FLUSH) != 0;
+  j->compute = (flags & AGC_JOB_COMPUTE) != 0;
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
   r->context = context;
@@ -1393,6 +1424,15 @@ agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_va
 
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
   return start_job(vm, kind, data, context, -1, NULL, NULL, flags);
+}
+
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
+  if (!kind->work || kind->external || kind->cancel)
+    agc_fail(vm, "RUNTIME-INTERNAL", "a compute job needs pool work and nothing else", 0);
+  agc_task_parking(vm);
+  job *j = start_job(vm, kind, data, agc_void(), -1, vm->task, NULL, AGC_JOB_COMPUTE);
+  agc_task_park(vm, false);
+  return j;
 }
 
 /* A wait on the loop is over (a service callback): a pool job's work is not, so it is not ended from here. */
@@ -1582,7 +1622,7 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   if (atomic_load(&j->start_failed)) {
     close_pending(vm, context);
     release(j);
-    agc_fail(vm, "RUNTIME-INTERNAL", "cannot queue file work", 0);
+    agc_fail(vm, "RUNTIME-INTERNAL", "cannot queue pool work", 0);
   }
   job_trace trace = trace_of(r, j);
   bool done = agc_job_outcome_of(&j->outcome) == AGC_JOB_DONE;
@@ -1788,6 +1828,12 @@ static bool close_all(agc_vm *vm) {
     if (j->kind->external || atomic_load(&j->on_loop)) abandon_wait(j);
     close_timer(j);
   }
+  /* The work that ended is finished first (its job then goes the way of the others); work still running is left to its
+     thread, and its job stays registered, so the close is not settled. */
+  if (vm->rt->loop && vm->rt->loop->compute) {
+    agc_compute_close(vm->rt->loop->compute);
+    vm->rt->loop->compute = NULL;
+  }
   agc_input_close(vm);
   agc_output_close(vm);
   release_handles(vm);
@@ -1857,6 +1903,12 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
   (void)data;
   (void)context;
   (void)flags;
+  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+}
+
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
+  (void)kind;
+  (void)data;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 
