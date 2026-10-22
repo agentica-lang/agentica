@@ -149,6 +149,8 @@ COMPUTE_EXTERN = """extern "{library}"
   compute def peer_half(n: C.Int64) -> C.Double
   compute def peer_bump() -> Void
   def peer_bumps() -> C.Int
+  compute def peer_nap(ms: C.Int) -> C.Int
+  def peer_naps() -> C.Int
 end
 
 """
@@ -189,8 +191,10 @@ def main() -> Void
   puts(Task.await(waiter))
   puts(peer_returned())
   peer_set_flag()
-  while peer_returned() == 0
+  n = 0
+  while peer_returned() == 0 and n < 2000
     Task.sleep(1)
+    n += 1
   end
   Task.sleep(20)
   puts(peer_word(3))
@@ -204,7 +208,11 @@ end
 @ON_LINUX_ONLY
 def test_many_compute_calls_at_once(tmp_path, peer):
     main = """def work(n: Int) -> Float
-  return peer_half(n) + peer_word(n).size.to_f
+  letter = String.from_code(97 + n % 26)
+  if peer_word(n) != letter + letter + letter
+    return -1000.0
+  end
+  return peer_half(n) + 3.0
 end
 
 def main() -> Void
@@ -221,6 +229,36 @@ end
 """
     result = agentica("--schedulers", "4", program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "10650.0\n", "")
+
+
+# One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
+# cancelled, the waiting calls are never made: only the first nap is counted, even after a second nap would have ended.
+@ON_LINUX_ONLY
+def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
+    main = """def nap(ms: Int) -> Result[Int]
+  return ok(peer_nap(ms))
+end
+
+def main() -> Void
+  tasks: List[Task[Result[Int]]] = []
+  for k in 1..50
+    tasks = tasks.push(Task.spawn(&nap, 100))
+  end
+  Task.sleep(20)
+  for task in tasks
+    Task.cancel(task)
+  end
+  n = 0
+  while peer_naps() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  Task.sleep(250)
+  puts(peer_naps())
+end
+"""
+    result = agentica("--schedulers", "1", program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
 
 
 @ON_LINUX_ONLY

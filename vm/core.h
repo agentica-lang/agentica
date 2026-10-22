@@ -103,11 +103,12 @@ void agc_runq_on_idle(agc_runq *q, void (*fn)(void *data), void *data);
 bool agc_runq_quiet(agc_runq *q, uint64_t *epoch);
 bool agc_runq_still_quiet(agc_runq *q, uint64_t epoch);
 /* Scheduler threads, as libuv threads (vm/sync.c): an array of N ids, the start of one with its entry and argument
- * (false when the system refuses), and its join. */
+ * (false when the system refuses), and its join or detach (a thread that is never joined: a busy compute thread). */
 void *agc_threads_new(size_t n);
 void agc_threads_free(void *threads);
 bool agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg);
 void agc_thread_join(void *threads, size_t k);
+void agc_thread_detach(void *threads, size_t k);
 /* The end of a run with several schedulers (vm/task.c): the first caller of agc_run_over records the end (the
  * caller's failure, or an end it wrote into its own record) and every caller ends the run queue and wakes the I/O
  * thread. agc_run_stall is the end of a run where every task waits and nothing can wake one. */
@@ -150,8 +151,8 @@ void agc_inbox_wake(agc_inbox *in);
  * agc_io_compute starts, on at most SIZE threads of its own, in the order it came. open, submit and close run on LOOP's
  * thread. submit gives ITEM to WORK on a pool thread and returns false when no thread exists and none can start;
  * FINISHED(ITEM) runs on LOOP's thread once the work is over. The pool keeps the loop alive while items run. close
- * drops the items no thread took, joins the idle threads and leaves a thread that still works to end by itself, after
- * which its item is never finished. */
+ * drops the items no thread took, joins the idle threads and detaches a thread that still works, which ends by itself
+ * after its work, and its item is never finished. */
 typedef struct agc_compute agc_compute;
 agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item));
 bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item);

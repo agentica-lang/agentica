@@ -71,5 +71,6 @@ end
 ```
 
 - The result is the plain C value, as for `def`. Write `export compute def` to export one.
-- Nothing stops a compute call in the middle: it has no timeout, and `--max-steps` does not end it. A cancelled task stops waiting at once; the call runs on, and its result is dropped. The program does not wait for it at the end.
+- Nothing stops a compute call in the middle: it has no timeout, and `--max-steps` does not end it. For a limit, run the call in a task and use `Task.await(task, ms)`. A cancel skips a call that has not started; a running call runs on, the cancelled task stops waiting at once, and the result is dropped. The program does not wait for a running call at the end.
+- A call that never returns holds a pool thread for the rest of the run. Once `--schedulers` such calls are stuck, every later compute call waits.
 - The arguments are copied before the call and a `C.String` result as it returns. The function runs on another thread, so it must be safe to call from one.

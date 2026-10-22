@@ -32,9 +32,6 @@
 #endif
 #endif
 
-/* A start_job flag of agc_io_compute, beside the public AGC_JOB_FLUSH and AGC_JOB_QUIET. */
-#define JOB_COMPUTE 4u
-
 /* Every resource of the run, in an array that the scheduler and the I/O role both reach. `lock` protects the array and
    the ids (a leaf lock: no other lock is taken while it is held, though agc_alloc may run under it; solo until
    agc_share). A job keeps its own resource in `res`, so the I/O role never looks a job up by slot, which unregister
@@ -444,10 +441,12 @@ int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
 static int queue_work(agc_loop *loop, job *j) { return agc_io_queue_work(&loop->uv, &j->work, run_work, work_finished); }
 
 /* The compute pool's half of a job, as libuv's run_work and work_finished are the pool's: the work on a pool thread,
-   then its end on the loop's thread. */
+   then its end on the loop's thread. A job whose task was cancelled while it waited in the pool's queue skips its work
+   (a native call not made, so none of its effects happen); its `done` then gets the data as it was and builds a value
+   that the detached end drops. A work already running runs to its end. */
 static void run_compute(void *item) {
   job *j = item;
-  j->kind->work(j->data);
+  if (!atomic_load(&j->detached)) j->kind->work(j->data);
 }
 
 static void compute_finished(void *item) { work_finished(&((job *)item)->work, 0); }
@@ -1383,7 +1382,7 @@ static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value
   atomic_init(&j->on_loop, false);
   j->detach_seen = task == NULL;
   j->flush = (flags & AGC_JOB_FLUSH) != 0;
-  j->compute = (flags & JOB_COMPUTE) != 0;
+  j->compute = (flags & AGC_JOB_COMPUTE) != 0;
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
   r->context = context;
@@ -1431,7 +1430,7 @@ agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
   if (!kind->work || kind->external || kind->cancel)
     agc_fail(vm, "RUNTIME-INTERNAL", "a compute job needs pool work and nothing else", 0);
   agc_task_parking(vm);
-  job *j = start_job(vm, kind, data, agc_void(), -1, vm->task, NULL, JOB_COMPUTE);
+  job *j = start_job(vm, kind, data, agc_void(), -1, vm->task, NULL, AGC_JOB_COMPUTE);
   agc_task_park(vm, false);
   return j;
 }

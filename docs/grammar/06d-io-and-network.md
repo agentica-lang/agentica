@@ -369,11 +369,15 @@ end
 - A `compute def` call runs on the VM's compute pool (one thread per
   scheduler, calls in the order they come), and the calling task waits while
   other tasks run. Its result is the plain C value, as for `def`. Nothing stops
-  it in the middle: it has no timeout, the step limit does not end it, and a
-  cancelled task stops waiting while the call runs on and its result is
-  dropped. The end of the run does not wait for it. The arguments are copied
-  before the call, a `C.String` result is copied as it returns, and the
-  function runs on another thread, so it must be safe to call from one.
+  it in the middle: it has no timeout, and the step limit does not end it. For
+  a limit, run the call in a task and use `Task.await(task, ms)`. A cancel
+  skips a call that has not started; a running call runs on, the cancelled
+  task stops waiting, and the result is dropped. A call that never returns
+  holds a pool thread for the rest of the run, and once `--schedulers` such
+  calls are stuck, every later compute call waits. The end of the run does not
+  wait for a running call. The arguments are copied before the call, a
+  `C.String` result is copied as it returns, and the function runs on another
+  thread, so it must be safe to call from one.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag) refuses

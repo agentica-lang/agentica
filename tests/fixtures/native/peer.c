@@ -10,7 +10,7 @@
 
 static char shout[64];
 static int32_t bumps;
-static atomic_int flag, returned;
+static atomic_int flag, returned, naps;
 
 int32_t peer_add(int32_t a, int32_t b) { return a + b; }
 int64_t peer_mul64(int64_t a, int64_t b) { return a * b; }
@@ -65,3 +65,13 @@ const char *peer_word(int32_t n) {
 }
 
 double peer_half(int64_t n) { return (double)n / 2.0; }
+
+/* Sleeps MS milliseconds, then counts one nap. */
+int32_t peer_nap(int32_t ms) {
+  struct timespec nap = {ms / 1000, (long)(ms % 1000) * 1000000L};
+  while (nanosleep(&nap, &nap) != 0) {}
+  atomic_fetch_add(&naps, 1);
+  return ms;
+}
+
+int32_t peer_naps(void) { return atomic_load(&naps); }

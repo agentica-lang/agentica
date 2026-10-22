@@ -64,7 +64,8 @@ typedef struct agc_native agc_native;
  * while the job still owns `data` (a pool work may be using it) and the owner's count is given back after it, so a
  * raise would leak the job, and at N > 1 the count cannot go back first because the I/O thread would then `drop`
  * the data under the call. Every `expired` in the tree (task, process, tcp, duplex, files, http_server, output) only
- * unlinks requests, shuts or closes handles and builds a value, and none calls agc_fail. */
+ * unlinks requests, shuts or closes handles and builds a value, and none calls agc_fail, except the compute call's
+ * (vm/ffi.c), which cannot be reached and ends the run with RUNTIME-INTERNAL if it ever is. */
 typedef struct {
   void (*work)(void *data);
   agc_value (*done)(agc_vm *vm, void *data, agc_value context);
@@ -657,6 +658,8 @@ agc_loop *agc_loop_of_uv(struct uv_loop_s *uv);
 bool agc_io_here(agc_vm *vm);
 #define AGC_JOB_FLUSH 1u
 #define AGC_JOB_QUIET 2u
+/* Internal to vm/loop.c: set by agc_io_compute, never passed to agc_io_detached. */
+#define AGC_JOB_COMPUTE 4u
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);
 /* agc_io_start for a native call that may run without bound (a `compute def`): the kind's `work` runs on the compute
    pool (vm/compute.c), never on the libuv pool, which takes only bounded work (docs/vm/14-core-invariants.md §14.1).

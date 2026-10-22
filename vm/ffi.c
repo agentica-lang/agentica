@@ -266,13 +266,13 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   return v;
 }
 
-/* Never reached: the job has no deadline and nothing else wakes the task. It must not raise, and the work may still
-   use the data, which the job keeps for `drop`. */
+/* Never reached: the job has no deadline and nothing else wakes the task. Should it be, there is no value of the
+   call's type to give, so the run ends with RUNTIME-INTERNAL; the job stays (the work may still use its data), which
+   the end of the run does not mind. */
 static agc_value compute_expired(agc_vm *vm, void *data, agc_value context) {
-  (void)vm;
   (void)data;
   (void)context;
-  return agc_void();
+  agc_fail(vm, "RUNTIME-INTERNAL", "a compute call ended without its result", 0);
 }
 
 static const agc_io_kind compute_io = {compute_work, compute_done, compute_expired, compute_free, false, "compute",

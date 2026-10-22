@@ -371,9 +371,10 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   ends goes back to the loop's thread through the pool's own inbox, which exists
   at N = 1 too and keeps the loop alive only while items run, and ends the job
   as libuv's `after_work` does. So a compute job is a pool job: no deadline, no
-  cancel half, and a cancel detaches it and drops the result once the call
-  returns. The end of the run does not wait for it; `agc_io_close` (harnesses,
-  the front end) joins the idle threads and leaves a busy one to end by itself.
+  cancel half, and a cancel detaches it. A detached item still in the queue
+  skips its `work`; a running one drops the result once the call returns. The
+  end of the run does not wait for it; `agc_io_close` (harnesses, the front
+  end) joins the idle threads and leaves a busy one to end by itself.
 - **Services.** Service code makes its handles through `agc_loop_uv` (§15.1).
   The libuv part of its `done`, `expired`, cancel and `drop` halves, and the
   poller calls of builtins, run where the half runs. At N > 1 the steps of the

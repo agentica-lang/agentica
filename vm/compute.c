@@ -17,8 +17,9 @@ typedef struct {
   bool busy, join;
 } worker;
 
-/* malloc memory, no GC pointer. `lock` guards the queue, the counts, the workers' flags and `closed`; `refs` counts the
-   loop's hold and one per started thread, and the last one out frees the pool. `running` (items given and not yet
+/* malloc memory, no GC pointer. `lock` guards the queue, the counts, the workers' flags and `closed`; `queued` is the
+   length of the queue, `idle` the threads waiting for an item; `refs` counts the loop's hold and one per started
+   thread, and the last one out frees the pool. `running` (items given and not yet
    finished) belongs to the loop's thread, which alone may ref or unref the inbox's handle. */
 struct agc_compute {
   uv_mutex_t lock;
@@ -26,7 +27,7 @@ struct agc_compute {
   agc_request *first, *last;
   void *threads;
   worker *workers;
-  uint32_t size, started, idle, refs;
+  uint32_t size, started, idle, queued, refs;
   bool closed;
   agc_inbox *done;
   void (*finished)(void *item);
@@ -61,6 +62,7 @@ static void serve(void *arg) {
     agc_request *item = pool->first;
     pool->first = item->next;
     if (!pool->first) pool->last = NULL;
+    pool->queued--;
     w->busy = true;
     uv_mutex_unlock(&pool->lock);
     item->call(item->subject);
@@ -126,8 +128,15 @@ bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item)
   if (!entry) agc_out_of_memory();
   *entry = (agc_request){NULL, 0, item, 0, work};
   uv_mutex_lock(&pool->lock);
-  /* A new thread only when no thread is free for the item: the pool grows to its size under load and no further. */
-  if (pool->idle == 0 && pool->started < pool->size) {
+  if (pool->last)
+    pool->last->next = entry;
+  else
+    pool->first = entry;
+  pool->last = entry;
+  pool->queued++;
+  /* A new thread when the queue holds more items than threads wait for: a woken thread leaves `idle` only once it has
+     the lock, so a burst of items still finds threads to start. The pool grows to its size under load and no further. */
+  if (pool->queued > pool->idle && pool->started < pool->size) {
     uint32_t k = pool->started;
     pool->workers[k] = (worker){pool, false, false};
     if (agc_thread_start(pool->threads, k, serve, &pool->workers[k])) {
@@ -136,15 +145,12 @@ bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item)
     }
   }
   if (pool->started == 0) {
+    pool->first = pool->last = NULL;
+    pool->queued = 0;
     uv_mutex_unlock(&pool->lock);
     free(entry);
     return false;
   }
-  if (pool->last)
-    pool->last->next = entry;
-  else
-    pool->first = entry;
-  pool->last = entry;
   uv_cond_signal(&pool->wake);
   uv_mutex_unlock(&pool->lock);
   if (pool->running++ == 0) agc_inbox_keep(pool->done, true);
@@ -160,14 +166,19 @@ void agc_compute_close(agc_compute *pool) {
     free(item);
   }
   pool->first = pool->last = NULL;
+  pool->queued = 0;
   uv_cond_broadcast(&pool->wake);
   uint32_t started = pool->started;
   for (uint32_t k = 0; k < started; k++) pool->workers[k].join = !pool->workers[k].busy;
   uv_mutex_unlock(&pool->lock);
-  /* An idle thread ends at once. A thread inside a native call cannot be stopped: it is never joined, ends after the
-     call and drops the result, and the last thread out frees the pool. */
-  for (uint32_t k = 0; k < started; k++)
-    if (pool->workers[k].join) agc_thread_join(pool->threads, k);
+  /* An idle thread ends at once. A thread inside a native call cannot be stopped: it is detached, ends after the call
+     and drops the result, and the last thread out frees the pool. */
+  for (uint32_t k = 0; k < started; k++) {
+    if (pool->workers[k].join)
+      agc_thread_join(pool->threads, k);
+    else
+      agc_thread_detach(pool->threads, k);
+  }
   agc_inbox_close(pool->done);
   uv_mutex_lock(&pool->lock);
   bool last = let_go(pool);
