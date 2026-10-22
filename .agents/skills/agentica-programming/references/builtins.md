@@ -1,11 +1,11 @@
 # Builtins
 
-Signatures of the core namespaces. `agentica help NAME` prints one, and also
-resolves a name from another language (`strip`, `String.to_i`, `len`, `value!`)
-to the Agentica builtin it stands for (`--json`: `{"alias", "builtins",
-"hints"}`); an unknown name exits 2. Builtin namespaces and type names are
-reserved: no declaration, local, parameter, field or import alias may use them.
-`ok` and `error` are calls, never declared names.
+Signatures of the core namespaces. `agentica help NAME` prints one. A name from
+another language (`strip`, `String.to_i`, `value!`) prints the builtins it stands
+for (`--json`: `{"alias", "builtins", "hints"}`); one with only a hint (`len`,
+`int`) prints it and exits 2, as does an unknown name. Builtin namespaces and
+type names are reserved: no declaration, local, parameter, field or import alias
+may use them. `ok` and `error` are calls, never declared names.
 
 ## Output, input, system
 
