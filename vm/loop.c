@@ -1334,6 +1334,8 @@ static void poller_start(agc_poller *p, bool writing, void (*ready)(void *data, 
   p->ready = ready;
   p->data = data;
   if (p->given >= 0 && !p->waiting && agc_poll_one_wait()) {
+    /* Unreachable today: ffi.c starts each wait once, and agc_poller_open_copy already refused a busy socket. A caller
+       that restarts a paused poller must read STATUS, as wait_ready in ffi.c does not. */
     if (*wait_of(p->loop, p->given)) {
       ready(data, UV_EBUSY);
       return;

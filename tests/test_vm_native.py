@@ -756,7 +756,7 @@ def run_wait(tmp_path, peer, main, *args, **kwargs):
 # Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
 # scheduler up; the write end is writable at once.
 @NATIVE_CALLS
-@host_only(WINDOWS, "one Windows socket takes one wait at a time (test_a_second_wait_on_a_windows_socket_is_refused)")
+@host_only(WINDOWS, "one Windows socket takes one wait at a time (test_a_second_wait_on_one_descriptor)")
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -782,7 +782,7 @@ end
 # the second wait waits too and times out, so the case runs on every system.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-def test_a_second_wait_on_a_windows_socket_is_refused(tmp_path, peer, schedulers):
+def test_a_second_wait_on_one_descriptor(tmp_path, peer, schedulers):
     main = """def main() -> Void
   fd = peer_pipe()
   base = peer_open_fds()
