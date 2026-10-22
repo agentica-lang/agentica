@@ -293,8 +293,8 @@ its capacity gives backpressure and `recv` is `next`.
 ## One form per job
 
 - Change, select or combine list items: `map`, `filter`, `reduce` (eager).
-- A running total or a value built in a loop: `reduce`; a `for` only where a
-  block cannot assign the variables you update.
+- A running total or a value built in a loop: `reduce`; a `for` loop (its body
+  can assign outer variables) only to update several at once.
 - Run over a list at the same time, a few at a time, a timeout each, results in
   input order: `Task.map(items, limit, timeout_ms)`.
 - Long-lived workers, producer and consumer, flows of unknown length, results in

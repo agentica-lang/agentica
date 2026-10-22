@@ -323,7 +323,7 @@ Operators, from highest to lowest precedence:
 - `x |> f(a)` means `f(x, a)`. The right side is a call with parentheses
   (`f(a)`, `Alias.f(a)`), optionally after `try`, else `PARSE-PIPE-TARGET`;
   pipes group left. A builtin with a method form is written with `.`
-  (`CHECK-PIPE-METHOD`: `x.strip`, not `x |> String.strip()`). A multi-line
+  (`CHECK-PIPE-METHOD`: `x.upcase`, not `x |> String.upcase()`). A multi-line
   chain goes in parentheses, one step per line; a leading `|>` does not continue
   a line, unlike a leading `.name`.
 

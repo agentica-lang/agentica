@@ -74,7 +74,7 @@ String.slice(s: String, start: Int, length: Int) -> String   # bad range halts
 String.index_of(s: String, part: String) -> Result[Int]      # first match; error if absent
 String.at(s: String, index: Int) -> String               # one character; halts outside
 String.reverse(s: String) -> String
-String.code(c: String) -> Int                            # c.code: code point of one character; other lengths halt
+c.code() -> Int                                          # code point of one character; other lengths halt
 String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
 String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
 n.to_s() -> String                                       # Int
@@ -237,7 +237,7 @@ methods.
 Write the Ruby method names: `strip`, `include?`, `start_with?`, `end_with?`,
 `to_i`, `to_f`, `to_i!`, `to_f!`, `push`, `join` on a `List[String]`, `to_s` and
 `inspect` on any data value, `n.to_f`, `x.to_i`. `length` is the String's and
-`size` the List's, Map's and Set's.
+`size` the List's, Map's, Set's and Range's.
 
 Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A
 negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is

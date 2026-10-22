@@ -193,8 +193,8 @@ and a task's crash line (`"task":true`) carry it too.
   or Int-keyed maps.
 - `CHECK-IMMUTABLE-ASSIGNMENT`: assignment to a `for` variable.
 - `CHECK-INT-RANGE`: an integer literal that does not fit in `Int`.
-- `CHECK-PIPE-METHOD`: `x |> String.strip()`: a builtin with a method form for
-  the left value is written with `.` (`x.strip`).
+- `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
+  the left value is written with `.` (`x.upcase`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method
   call on a struct, or `.with(...)` on a non-struct. Common foreign names get
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
