@@ -30,12 +30,22 @@ end
   absolute path. `DYLD_*` variables do not pass through a shebang or a shell
   (SIP drops them).
 - A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
-  is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""` for now.
+  is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""`: when
+  NULL matters, declare `-> C.Pointer` and use `Native.string_at`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as
   `<C.Pointer>`. `C.Bytes` is a parameter only: a `List[Int]` of bytes (an
   item outside 0..255 is `RUNTIME-INVALID-NUMBER`) that C gets as a
   `const uint8_t *` copy valid during the call; pass the length separately.
+- Memory C returns: `Native.string_at(p) -> String` (up to the NUL),
+  `Native.string_at(p, length)` (exactly `length` bytes, NULs included) and
+  `Native.bytes_at(p, length) -> List[Int]` copy it; bytes that are not UTF-8
+  become U+FFFD. NULL with length 0 reads as empty (an empty SQLite blob);
+  other NULL is `RUNTIME-NATIVE-NULL` (test with `Native.null?` first), checked
+  before a negative length (`RUNTIME-INVALID-COUNT`); a length past what C
+  owns is undefined behavior. `Native.pointer(n)` is the pointer with value `n`
+  (`SQLITE_TRANSIENT` is `Native.pointer(-1)`). A `char **` out parameter
+  read with `string_at` is then freed by its C function (`sqlite3_free`).
 - `[export] resource Db, free: db_close` in a block declares a resource type,
   freed by `void db_close(void *)` of the same library. Declare it above the
   `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is

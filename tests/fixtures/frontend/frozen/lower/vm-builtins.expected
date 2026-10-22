@@ -125,9 +125,12 @@ Map.keys
 Map.put
 Map.size
 Map.values
+Native.bytes_at
 Native.close
 Native.null
 Native.null?
+Native.pointer
+Native.string_at
 Native.wait_readable
 Native.wait_writable
 Path.cwd

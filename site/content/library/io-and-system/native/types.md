@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, resources that own a C pointer, and out parameters.
+description: The C types of an extern block, reading memory that C returns, resources that own a C pointer, and out parameters.
 ---
 
 ## Types
@@ -19,9 +19,37 @@ description: The C types of an extern block, resources that own a C pointer, and
 A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
 - A `C.Int` argument outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
-- The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""` for now, and bytes that are not UTF-8 become U+FFFD.
+- The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.string_at` (below).
 - A `C.Bytes` argument is a list of bytes: C gets a copy, valid only during the call, and an item outside 0 to 255 fails with `RUNTIME-INVALID-NUMBER`. Pass the length as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
 - A `C.Pointer` is a C pointer that your program passes back to C. It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it. Pointers have no `==`, and `IO.inspect` prints `<C.Pointer>`.
+
+## Reading memory that C returns
+
+A function that returns a pointer and a length, or text that may be NULL, is declared `-> C.Pointer`, and your program copies the memory:
+
+- `Native.string_at(p)` copies the NUL-terminated text at `p`, and `Native.string_at(p, length)` exactly `length` bytes, NUL bytes included. Bytes that are not UTF-8 become U+FFFD.
+- `Native.bytes_at(p, length)` copies `length` bytes into a `List[Int]`.
+- A NULL `p` with length 0 reads as `""` or `[]`, as C means it (SQLite gives NULL for an empty blob). Any other NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. Then a negative length fails with `RUNTIME-INVALID-COUNT`: the pointer is checked first. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
+- `Native.pointer(n)` is the pointer with the integer value `n`, for sentinels such as `SQLITE_TRANSIENT`, which is `Native.pointer(-1)`.
+
+```agentica {mode="check"}
+extern "libsqlite3.so.0"
+  resource Db, free: sqlite3_close_v2
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
+  def sqlite3_exec(db: Db, sql: C.String, callback: C.Pointer, arg: C.Pointer, out errmsg: C.Pointer) -> C.Int
+  def sqlite3_free(p: C.Pointer) -> Void
+end
+
+def main() -> Void
+  db = sqlite3_open(":memory:").db
+  failed = sqlite3_exec(db, "select from nowhere", Native.null(), Native.null())
+  if !Native.null?(failed.errmsg)
+    puts(Native.string_at(failed.errmsg))   # near "from": syntax error
+    sqlite3_free(failed.errmsg)
+  end
+  Native.close(db)
+end
+```
 
 ## Resources
 

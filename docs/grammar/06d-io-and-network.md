@@ -380,7 +380,8 @@ end
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
   it may read only during the call. A `C.String` result is copied; `NULL` reads
-  as `""` for now, and bytes that are not UTF-8 become U+FFFD.
+  as `""`, and bytes that are not UTF-8 become U+FFFD. A result that may be
+  NULL is declared `-> C.Pointer` and read with `Native.string_at`.
 - `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
@@ -388,6 +389,17 @@ end
   `List[Int]` whose items are bytes (an item outside 0 to 255 is
   `RUNTIME-INVALID-NUMBER`). C gets a `const uint8_t *` to a copy, valid only
   during the call; pass the length as a parameter of its own.
+- Memory that C returns is read through its `C.Pointer`:
+  `Native.string_at(p)` copies the NUL-terminated text, `Native.string_at(p,
+  length)` exactly `length` bytes (NUL bytes included), and
+  `Native.bytes_at(p, length)` gives the bytes as a `List[Int]`. Bytes that are
+  not UTF-8 become U+FFFD. A NULL `p` with length 0 reads as empty (C's way
+  to say empty: SQLite gives NULL for an empty blob); any other NULL `p` is
+  `RUNTIME-NATIVE-NULL` at the pointer, checked first, and then a negative
+  length is `RUNTIME-INVALID-COUNT` at the length. A pointer or a
+  length that C does not own is undefined behavior, like a wrong signature, and
+  is not checked. `Native.pointer(n)` is the `C.Pointer` with the integer value
+  `n`, for sentinels such as `SQLITE_TRANSIENT` (`Native.pointer(-1)`).
 - `resource Db, free: db_close` declares a resource: a nominal type for the
   pointers that the block's functions return, freed by `void db_close(void *)`
   of the same library. A function declared `-> Db` gives a `Result[Db]`: a NULL
