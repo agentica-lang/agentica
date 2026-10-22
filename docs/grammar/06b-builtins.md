@@ -17,10 +17,10 @@ and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and
 
 `x.to_s` is the text `"#{x}"` gives: a `String` as is, a `Json` as its JSON
 text, and any other data value in its `inspect` form (`[1, 2]`, `ok(3)`,
-`Item(name: "a")`). Inside a list, a `Json` shows as `<Json>`. Functions, tasks
-and handles have no `to_s`, so printing or interpolating one is
-`CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`. `x.inspect` keeps a
-string's quotes; it is for display, not valid source.
+`Item(name: "a")`). Inside a list, a `Json` shows as `<Json>`. Functions, tasks,
+handles, `C.Pointer` values and resources have no `to_s`, so printing or
+interpolating one is `CHECK-TYPE-MISMATCH`. Unlike Ruby, `nil.to_s` is `"nil"`.
+`x.inspect` keeps a string's quotes; it is for display, not valid source.
 
 Values are immutable: a method never changes its receiver, so `xs.push(2)`
 returns a new list. A builtin without effects whose non-Void result is dropped

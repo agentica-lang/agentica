@@ -166,6 +166,7 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
     Ast.Decl.Struct(node) -> return [node.name]
     Ast.Decl.Enum(node) -> return [node.name]
     Ast.Decl.TypeAlias(node) -> return [node.name]
+    Ast.Decl.Resource(node) -> return [node.name]
     Ast.Decl.Constant(node) -> return [node.name]
     Ast.Decl.Import(_) -> return []
     Ast.Decl.Export(_) -> return []
@@ -197,6 +198,7 @@ def declaration_sites(scan: Scan, declaration: Ast.Decl) -> List[Site]
     Ast.Decl.TypeAlias(node) ->
       head = defined(scan, named(node.name), node.name_span)
       return head.concat(type_sites(scan, node.target, node.type_parameters))
+    Ast.Decl.Resource(node) -> return defined(scan, named(node.name), node.name_span)
     Ast.Decl.Constant(node) ->
       head = defined(scan, named(node.name), node.name_span).concat(optional_type_sites(scan, node.type, []))
       return head.concat(walk(scan, [Walk.Node.Expr(node.value)]))

@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -128,3 +129,66 @@ int32_t peer_open_fds(void) {
   closedir(dir);
   return n;
 }
+
+/* For resources: a malloc'd struct that peer_res_free frees and counts. peer_res_hold, a compute call, marks it busy
+   until peer_set_flag has run (or LIMIT_MS passed), so a free that comes while C still uses it is counted apart. */
+typedef struct {
+  int32_t value;
+  atomic_int busy;
+} peer_res;
+
+static atomic_int res_frees, res_busy_frees;
+
+void *peer_res_open(int32_t value) {
+  if (value < 0) return NULL;
+  peer_res *r = malloc(sizeof *r);
+  if (!r) return NULL;
+  r->value = value;
+  atomic_init(&r->busy, 0);
+  return r;
+}
+
+void peer_res_free(void *p) {
+  peer_res *r = p;
+  if (atomic_load(&r->busy)) atomic_fetch_add(&res_busy_frees, 1);
+  atomic_fetch_add(&res_frees, 1);
+  free(r);
+}
+
+int32_t peer_res_get(void *p) { return ((peer_res *)p)->value; }
+int32_t peer_res_frees(void) { return atomic_load(&res_frees); }
+int32_t peer_res_busy_frees(void) { return atomic_load(&res_busy_frees); }
+
+static atomic_int res_holding;
+
+int32_t peer_res_hold(void *p, int32_t limit_ms) {
+  peer_res *r = p;
+  atomic_store(&r->busy, 1);
+  atomic_store(&res_holding, 1);
+  peer_wait_flag(limit_ms);
+  int32_t value = r->value;
+  atomic_store(&r->busy, 0);
+  return value;
+}
+
+/* 1 once a peer_res_hold has started. */
+int32_t peer_res_holding(void) { return atomic_load(&res_holding); }
+
+/* A compute call that opens a resource once peer_set_flag has run. */
+void *peer_res_open_later(int32_t value, int32_t limit_ms) {
+  peer_wait_flag(limit_ms);
+  return peer_res_open(value);
+}
+
+/* For C.Bytes: the sum of the N bytes. */
+int32_t peer_bytes_sum(const uint8_t *bytes, int32_t n) {
+  int32_t sum = 0;
+  for (int32_t k = 0; k < n; k++) sum += bytes[k];
+  return sum;
+}
+
+/* For C.Pointer. */
+static int32_t somewhere = 42;
+void *peer_ptr_echo(void *p) { return p; }
+void *peer_ptr_static(void) { return &somewhere; }
+int32_t peer_ptr_read(void *p) { return *(int32_t *)p; }

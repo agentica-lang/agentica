@@ -119,6 +119,10 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_HTTP_SERVER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpServer>");
   if (agc_is(v, AGC_T_CHANNEL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Channel>");
   if (agc_is(v, AGC_T_LAZY)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Lazy>");
+  if (agc_is(v, AGC_T_C_POINTER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<C.Pointer>");
+  /* A long resource name is cut to fit the scalar buffer. */
+  if (agc_is(v, AGC_T_C_RESOURCE))
+    return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<%.*s>", AGC_SCALAR_TEXT - 3, agc_as_c_resource(vm, v)->name);
   if (agc_is(v, AGC_T_RANGE)) {
     const agc_range *r = agc_as_range(vm, v);
     return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%" PRId64 "%s%" PRId64, r->start, r->exclusive ? "..." : "..",

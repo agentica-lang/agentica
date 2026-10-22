@@ -431,6 +431,8 @@ def rename_help(kind: Declarations.Kind) -> String
     Declarations.Kind.Enum -> return "an enum is renamed to another type name, which starts with a capital letter"
     Declarations.Kind.TypeAlias ->
       return "a type alias is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.Resource ->
+      return "a resource is renamed to another type name, which starts with a capital letter"
     Declarations.Kind.Constant -> return "a constant is renamed to another constant name, in capitals with underscores"
     _ -> return "a function is renamed to another lowercase name"
   end

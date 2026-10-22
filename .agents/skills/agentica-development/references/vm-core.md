@@ -102,7 +102,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - **Owns:** native calls: `Native.call` (`agc_ffi_builtins`, the builtin that
     each `extern` function lowers to, with a signature string
     `"CODES SYMBOL LIBRARY"` from `compiler/lower/lower_native.agc`), the cache
-    of prepared calls, and `agc_ffi_refusal`, which `agc_launch_native` calls at
+    of prepared calls, the resources that extern functions return
+    (`agc_c_resource` in `vm/value.h`: a registry entry owned like a handle,
+    freed by `Native.close` or the owner's end; a compute call holds its
+    resource arguments in `jobs` and the last one runs a deferred free), and
+    `agc_ffi_refusal`, which `agc_launch_native` calls at
     load (`--deny-native`, systems without libffi). A `compute def`'s signature
     starts with `compute `: the call goes to the compute pool (`vm/compute.c`)
     through `agc_io_compute` in `vm/loop.c`, and the task parks.

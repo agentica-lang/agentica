@@ -34,6 +34,7 @@ def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
     Ast.Decl.TypeAlias(node) ->
       target = try rewrite_payload(cx, node.type_parameters, node.target)
       return ok(Ast.Decl.TypeAlias(node.with(name: Resolve.identity(cx, node.name), target: target)))
+    Ast.Decl.Resource(node) -> return ok(Ast.Decl.Resource(node.with(name: Resolve.identity(cx, node.name))))
     Ast.Decl.Constant(node) -> return rewrite_constant(cx, node)
     _ -> return ok(decl)
   end

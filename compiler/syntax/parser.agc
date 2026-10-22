@@ -36,9 +36,14 @@ COMPOUND_OPERATORS: Map[String, String] = {
 }
 
 # The C types an extern function may take, with their codes (Ast.Native) and the Agentica types the program sees.
-EXTERN_CODES = {"C.Int": "i", "C.Int64": "l", "C.Double": "d", "C.Bool": "b", "C.String": "s"}
-EXTERN_TYPES = {"i": "Int", "l": "Int", "d": "Float", "b": "Bool", "s": "String", "v": "Void"}
-EXTERN_TYPES_HELP = "extern functions take and return C.Int, C.Int64, C.Double, C.Bool or C.String, or return Void"
+EXTERN_CODES = {
+  "C.Int": "i", "C.Int64": "l", "C.Double": "d", "C.Bool": "b", "C.String": "s", "C.Pointer": "p", "C.Bytes": "y",
+}
+EXTERN_TYPES = {"i": "Int", "l": "Int", "d": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "v": "Void"}
+EXTERN_TYPES_HELP = (
+  "extern functions take and return C.Int, C.Int64, C.Double, C.Bool, C.String, C.Pointer or a resource of the " +
+  "block, take C.Bytes, or return Void"
+)
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
 EXTERN_MAX_PARAMS = 64
@@ -107,10 +112,25 @@ struct DeclsAt
   ids: Int
 end
 
-# A type of an extern signature: its code and the type as the program sees it.
+# A type of an extern signature: its code, the type as the program sees it, and the next free node id.
 struct ExternType
   code: String
   type: Ast.TypeRef
+  ids: Int
+end
+
+# A member of an extern block and the block with it.
+struct MemberAt
+  decl: DeclAt
+  block: ExternBlock
+end
+
+# What the members of an extern block see of the block: its library, the free function of each resource declared so
+# far, by name, and the C names of the functions declared so far.
+struct ExternBlock
+  library: String
+  resources: Map[String, String]
+  symbols: Set[String]
 end
 
 struct FieldAt
@@ -1759,8 +1779,9 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
   return decl_at(node, stop, body.ids)
 end
 
-# extern "library" NL, then [##doc] [export] [compute] def members, then end. Each member is a function with no body
-# (Ast.Native), so the later stages see ordinary functions.
+# extern "library" NL, then [##doc] [export] members, then end. A member is [compute] def, a function with no body
+# (Ast.Native), so the later stages see ordinary functions, or resource Name, free: c_name. A resource names a type
+# that the members below it may use; no def of the block may be its free function, which the VM alone calls.
 def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   library = pos + 1
   if Base.kind_at(e, library) == "string" and Base.heredoc?(e.tokens[library])
@@ -1799,6 +1820,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
     )
   end
   cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
+  block = ExternBlock(library: name, resources: {}, symbols: Set.new([]))
   nodes: List[Ast.Decl] = []
   next_id = ids
   looping = true
@@ -1813,15 +1835,9 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       if exported
         at += 1
       end
-      start = at
-      compute = compute_start?(e, at)
-      if compute
-        at += 1
-      end
-      if e.tokens[at].kind != "def"
-        return error(Base.found(e, at, "def, compute def or end in an extern block"))
-      end
-      member = try parse_extern_function(e, start, at, next_id, taken.doc, name)
+      taken_member = try parse_extern_member(e, at, next_id, taken.doc, block)
+      member = taken_member.decl
+      block = taken_member.block
       node = member.node
       member_ids = member.ids
       if exported
@@ -1838,6 +1854,85 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
 end
 
+# One member of an extern block at pos (after its doc and export), and the block with it.
+def parse_extern_member(
+  e: Base.Env,
+  pos: Int,
+  ids: Int,
+  doc: Ast.Optional[String],
+  block: ExternBlock,
+) -> Result[MemberAt]
+  if resource_start?(e, pos)
+    member = try parse_resource(e, pos, ids, doc, block)
+    named = block.resources.put(e.tokens[pos + 1].lexeme, e.tokens[pos + 5].lexeme)
+    return ok(MemberAt(decl: member, block: block.with(resources: named)))
+  end
+  at = pos
+  if compute_start?(e, at)
+    at += 1
+  end
+  if e.tokens[at].kind != "def"
+    return error(Base.found(e, at, "def, compute def, resource or end in an extern block"))
+  end
+  member = try parse_extern_function(e, pos, at, ids, doc, block)
+  return ok(MemberAt(decl: member, block: block.with(symbols: block.symbols.add(e.tokens[at + 1].lexeme))))
+end
+
+# `resource` is a plain name: inside an extern block, before a type name, it declares a resource.
+def resource_start?(e: Base.Env, at: Int) -> Bool
+  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "resource" and Base.kind_at(e, at + 1) == "type-name"
+end
+
+# resource Name, free: c_name NL in an extern block. pos is the word resource.
+def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], block: ExternBlock) -> Result[DeclAt]
+  after_name = try Base.expect(e, pos + 1, "type-name", "a resource name", false)
+  after_comma = try Base.expect(e, after_name, "comma", "\",\"", false)
+  after_word = try expect_word(e, after_comma, "free", "write resource Name, free: c_function")
+  after_colon = try Base.expect(e, after_word, "colon", "\":\"", false)
+  after_free = try Base.expect(e, after_colon, "name", "the C name of the free function", true)
+  free = e.tokens[after_colon].lexeme
+  if free.ends_with?("?") or free.ends_with?("!")
+    return error(c_name_failure(e, after_colon, free))
+  end
+  if block.symbols.include?(free)
+    return error(free_failure(e, after_colon, free))
+  end
+  stop = try expect_statement_end(e, after_free, "a newline after the resource")
+  node = Ast.Decl.Resource(
+    Ast.ResourceDecl(
+      id: ids,
+      name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
+      free: free,
+      doc: doc,
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+  return decl_at(node, stop, ids)
+end
+
+def c_name_failure(e: Base.Env, at: Int, name: String) -> String
+  return Base.bail(
+    e,
+    at,
+    "PARSE-EXTERN-NAME",
+    "\"#{name}\" is not a C function name",
+    Base.hint("an extern function is named as in C: letters, digits and _, without ? or !"),
+  )
+end
+
+# PARSE-EXTERN-FREE at the name: a def of the free function would let the program free the pointer that the VM frees
+# again on close or at the end of the owning task.
+def free_failure(e: Base.Env, at: Int, name: String) -> String
+  return Base.bail(
+    e,
+    at,
+    "PARSE-EXTERN-FREE",
+    "\"#{name}\" is the free function of a resource of this block, so it cannot also be declared with def",
+    Base.hint("close the resource with Native.close(resource), which calls #{name} once"),
+  )
+end
+
 # [compute] def name(params) -> Type NL in an extern block: a C name, C types, no defaults. start is the first token
 # (compute or def) and pos the def.
 def parse_extern_function(
@@ -1846,20 +1941,15 @@ def parse_extern_function(
   pos: Int,
   ids: Int,
   doc: Ast.Optional[String],
-  library: String,
+  block: ExternBlock,
 ) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
   name = e.tokens[pos + 1].lexeme
   if name.ends_with?("?") or name.ends_with?("!")
-    return error(
-      Base.bail(
-        e,
-        pos + 1,
-        "PARSE-EXTERN-NAME",
-        "\"#{name}\" is not a C function name",
-        Base.hint("an extern function is named as in C: letters, digits and _, without ? or !"),
-      ),
-    )
+    return error(c_name_failure(e, pos + 1, name))
+  end
+  if block.resources.values.any? do |free: String| free == name end
+    return error(free_failure(e, pos + 1, name))
   end
   after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
   params = try parse_parameters(e, after_open, ids)
@@ -1867,8 +1957,10 @@ def parse_extern_function(
   after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
   result = try Base.parse_type(e, after_arrow, params.ids)
   stop = try expect_statement_end(e, result.pos, "a newline after the extern function")
+  next_id = result.ids
   codes: List[String] = []
-  returned = try extern_type(result.node, true)
+  returned = try extern_type(result.node, true, block, next_id)
+  next_id = returned.ids
   codes = codes.push(returned.code)
   if params.nodes.size > EXTERN_MAX_PARAMS
     return error(
@@ -1894,13 +1986,20 @@ def parse_extern_function(
         )
       Ast.Optional.Absent -> codes = codes
     end
-    taken = try extern_type(param.type, false)
+    taken = try extern_type(param.type, false, block, next_id)
+    next_id = taken.ids
     codes = codes.push(taken.code)
     typed = typed.push(param.with(type: taken.type))
   end
+  resource = ""
+  free = ""
+  if returned.code == "r"
+    resource = result.node.name
+    free = block.resources[resource]
+  end
   node = Ast.Decl.Function(
     Ast.FunctionDecl(
-      id: result.ids,
+      id: next_id,
       name: name,
       name_span: e.tokens[pos + 1].span,
       params: typed,
@@ -1908,23 +2007,34 @@ def parse_extern_function(
       body: [],
       doc: doc,
       native: Ast.Optional.Present(
-        Ast.Native(library: library, symbol: name, codes: codes.join(""), compute: start != pos),
+        Ast.Native(
+          library: block.library,
+          symbol: name,
+          codes: codes.join(""),
+          compute: start != pos,
+          resource: resource,
+          free: free,
+        ),
       ),
       span: Base.span_from(e, start, stop),
     ),
   )
-  return decl_at(node, stop, result.ids)
+  return decl_at(node, stop, next_id)
 end
 
-# The code and the Agentica type of a C type of an extern signature, or PARSE-EXTERN-TYPE at it. Void is a result only.
-def extern_type(ref: Ast.TypeRef, result: Bool) -> Result[ExternType]
+# The code and the Agentica type of a C type of an extern signature, or PARSE-EXTERN-TYPE at it. Void is a result only,
+# and C.Bytes (a List[Int] of bytes) a parameter only. A resource of the block is the resource as a parameter, and a
+# Result of it as a result (NULL is an error). ids is the first free node id, for the types this adds.
+def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) -> Result[ExternType]
   code = ""
   if ref.args.size == 0
     found = EXTERN_CODES.get(ref.name)
-    if found.ok?
+    if found.ok? and !(result and found.unwrap! == "y")
       code = found.unwrap!
     elsif result and ref.name == "Void"
       code = "v"
+    elsif block.resources.has_key?(ref.name)
+      code = "r"
     end
   end
   if code == ""
@@ -1937,7 +2047,17 @@ def extern_type(ref: Ast.TypeRef, result: Bool) -> Result[ExternType]
       ),
     )
   end
-  return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code])))
+  if code == "r" and result
+    wrapped = Ast.TypeRef(id: ids, name: "Result", args: [ref], span: ref.span)
+    return ok(ExternType(code: code, type: wrapped, ids: ids + 1))
+  elsif code == "r"
+    return ok(ExternType(code: code, type: ref, ids: ids))
+  elsif code == "y"
+    item = Ast.TypeRef(id: ids, name: "Int", args: [], span: ref.span)
+    list = Ast.TypeRef(id: ids + 1, name: "List", args: [item], span: ref.span)
+    return ok(ExternType(code: code, type: list, ids: ids + 2))
+  end
+  return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: ids))
 end
 
 def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[FieldAt]
@@ -1994,7 +2114,7 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
     return kind == "type-name"
   end
   if member == "extern"
-    return kind == "def" or kind == "export" or compute_start?(e, pos)
+    return kind == "def" or kind == "export" or compute_start?(e, pos) or resource_start?(e, pos)
   end
   return (
     kind == "def" or kind == "struct" or kind == "enum" or kind == "export" or constant_start?(e, pos) or

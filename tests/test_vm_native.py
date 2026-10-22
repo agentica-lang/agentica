@@ -261,6 +261,182 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
 
 
+RESOURCE_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  def peer_res_open(value: C.Int) -> Res
+  def peer_res_get(res: Res) -> C.Int
+  compute def peer_res_hold(res: Res, limit_ms: C.Int) -> C.Int
+  compute def peer_res_open_later(value: C.Int, limit_ms: C.Int) -> Res
+  def peer_res_holding() -> C.Int
+  def peer_res_frees() -> C.Int
+  def peer_res_busy_frees() -> C.Int
+  def peer_set_flag() -> Void
+  def peer_bytes_sum(bytes: C.Bytes, n: C.Int) -> C.Int
+  def peer_ptr_echo(p: C.Pointer) -> C.Pointer
+  def peer_ptr_static() -> C.Pointer
+  def peer_ptr_read(p: C.Pointer) -> C.Int
+end
+
+def get(res: Res) -> Int
+  return peer_res_get(res)
+end
+
+def open_one(n: Int) -> Int
+  res = peer_res_open(n).unwrap!
+  return peer_res_get(res)
+end
+
+def hold(res: Res) -> Result[Int]
+  return ok(peer_res_hold(res, 20_000))
+end
+
+def wait_for(frees: Int) -> Void
+  n = 0
+  while peer_res_frees() < frees and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+def wait_holding() -> Void
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+"""
+
+
+# Native.close frees once and a second close does nothing; a NULL result is an error value; C.Bytes and C.Pointer
+# cross. The peer counts each free, and frees the memory, so a double free would also crash the run.
+@ON_LINUX_ONLY
+def test_a_resource_is_freed_once_and_null_is_an_error(tmp_path, peer):
+    main = """def main() -> Void
+  res = peer_res_open(7).unwrap!
+  IO.inspect(res)
+  puts(peer_res_get(res))
+  Native.close(res)
+  Native.close(res)
+  puts(peer_res_frees())
+  IO.inspect(peer_res_open(-1))
+  puts(peer_bytes_sum([1, 2, 255], 3))
+  puts(peer_bytes_sum([], 0))
+  puts(Native.null?(peer_ptr_echo(Native.null())))
+  p = peer_ptr_static()
+  puts(Native.null?(p))
+  puts(peer_ptr_read(peer_ptr_echo(p)))
+  IO.inspect(p)
+end
+"""
+    result = agentica(program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "<Res>", "7", "1", 'error("peer_res_open returned NULL")', "258", "0", "true", "false", "42", "<C.Pointer>", "",
+    ]
+
+
+# A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
+# anything is copied or called; Task.spawn_owning of a closed resource is RUNTIME-HANDLE-NOT-OWNED.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("case, code, line", [
+    ("closed", "RUNTIME-NATIVE-CLOSED", 4),
+    ("owned", "RUNTIME-NATIVE-CLOSED", 4),
+    ("handed", "RUNTIME-HANDLE-NOT-OWNED", RESOURCE_EXTERN.count("\n") + 10),
+    ("byte", "RUNTIME-INVALID-NUMBER", 11),
+])
+def test_a_closed_resource_and_a_bad_byte_stop_the_call(tmp_path, peer, case, code, line):
+    main = """def main() -> Void
+  res = peer_res_open(3).unwrap!
+  arg = System.args()[0]
+  if arg == "closed"
+    Native.close(res)
+  elsif arg == "owned"
+    puts(Task.await(Task.spawn_owning(&get, res)))
+  elsif arg == "handed"
+    Native.close(res)
+    Task.await(Task.spawn_owning(&get, res))
+  else
+    puts(peer_bytes_sum([1, 256], 2))
+  end
+  puts(peer_res_get(res))
+end
+"""
+    result = agentica("--json", program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main), case)
+    assert (diagnostic(result, 1)[0], diagnostic(result, 1)[1][0]) == (code, line)
+    assert result.stdout == ("3\n" if case == "owned" else "")
+
+
+# The task that opened a resource owns it: its end frees what it did not close, and Task.spawn_owning hands it on.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_the_end_of_the_owning_task_frees_a_resource(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  sum = 0
+  for n in 1..20
+    sum += Task.await(Task.spawn(&open_one, n))
+  end
+  puts(sum)
+  puts(peer_res_frees())
+  res = peer_res_open(5).unwrap!
+  puts(Task.await(Task.spawn_owning(&get, res)))
+  puts(peer_res_frees())
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "210\n20\n5\n21\n", "")
+
+
+# A compute call holds its resource until C returns: a close by another task, or a cancel that ends the owning task,
+# marks it closed, and the free runs only when the call ends, never while the pool thread still uses the pointer.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("spawn, stop, awaited", [
+    ("Task.spawn_owning", "Task.cancel(holder)", 'error("task: cancelled")'),
+    ("Task.spawn", "Native.close(res)", "ok(9)"),
+])
+def test_a_compute_call_keeps_its_resource_until_it_returns(tmp_path, peer, schedulers, spawn, stop, awaited):
+    main = """def main() -> Void
+  res = peer_res_open(9).unwrap!
+  holder = %s(&hold, res)
+  wait_holding()
+  %s
+  puts(peer_res_frees())
+  peer_set_flag()
+  puts(Task.await(holder))
+  wait_for(1)
+  puts(peer_res_frees())
+  puts(peer_res_busy_frees())
+end
+""" % (spawn, stop)
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["0", awaited, "1", "0", ""]
+
+
+# The resource that a cancelled compute call returns is dropped with its result, and so freed: nothing leaks.
+@ON_LINUX_ONLY
+def test_a_dropped_compute_result_frees_its_resource(tmp_path, peer):
+    main = """def later(n: Int) -> Result[Int]
+  res = try peer_res_open_later(n, 20_000)
+  return ok(peer_res_get(res))
+end
+
+def main() -> Void
+  opener = Task.spawn(&later, 3)
+  Task.sleep(20)
+  Task.cancel(opener)
+  puts(Task.await(opener))
+  peer_set_flag()
+  wait_for(1)
+  puts(peer_res_frees())
+end
+"""
+    result = agentica("--schedulers", "2", program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\n', "")
+
+
 WAIT_EXTERN = """extern "{library}"
   def peer_pipe() -> C.Int
   def peer_pipe_writer() -> C.Int

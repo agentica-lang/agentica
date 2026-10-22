@@ -208,9 +208,9 @@ export ENUMS: List[Model.EnumDef] = [
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
 
-## The builtin types with no structure: handles and TestCase.
+## The builtin types with no structure: handles, TestCase and C.Pointer (a C pointer of native code).
 export OPAQUE_TYPES: List[String] = [
-  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase",
+  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "C.Pointer",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -2403,6 +2403,39 @@ ROWS_28: List[Model.Builtin] = [
       implementation: "Map.values",
       effects: [],
       description: "Return values in insertion order.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.close",
+      parameters: [Model.Named(name: "resource", type: Types.Type.Var("R"))],
+      result: Types.Type.Void,
+      rule: Model.Rule.NativeClose,
+      implementation: "Native.close",
+      effects: ["native"],
+      description: (
+        "Free a resource of an extern block with its free function, once; a closed resource is left as it is and " +
+        "a native call with it fails with RUNTIME-NATIVE-CLOSED."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.null",
+      parameters: [],
+      result: Types.Type.Opaque("C.Pointer"),
+      rule: Model.Rule.Plain,
+      implementation: "Native.null",
+      effects: ["native"],
+      description: "The NULL C.Pointer.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.null?",
+      parameters: [Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer"))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Plain,
+      implementation: "Native.null?",
+      effects: ["native"],
+      description: "True when the C.Pointer is NULL.",
       alternatives: [],
     ),
     Model.Builtin(

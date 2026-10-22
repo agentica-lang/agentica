@@ -1,5 +1,5 @@
-## The checking rules of the Map, Set, Task, Channel and Profile builtins A rule takes the call (State.Site) and
-## returns the new state with the type of the call.
+## The checking rules of the Map, Set, Task, Channel, Profile and Native builtins A rule takes the call (State.Site)
+## and returns the new state with the type of the call.
 
 import Model from "../catalog/builtin_model"
 import {HANDLES} from "../catalog/builtins"
@@ -12,11 +12,12 @@ import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
 
-## Checks a call of a Task, Channel, Map, Set or Profile builtin by its rule. Any other rule is the caller's.
+## Checks a call of a Task, Channel, Map, Set, Profile or Native builtin by its rule. Any other rule is the caller's.
 export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
     Model.Rule.TaskSpawn -> return check_spawn(cx, st, site, false)
     Model.Rule.TaskSpawnOwning -> return check_spawn(cx, st, site, true)
+    Model.Rule.NativeClose -> return check_native_close(cx, st, site)
     Model.Rule.TaskAwait -> return check_await(cx, st, site)
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
     Model.Rule.TaskMap -> return check_task_map(cx, st, site)
@@ -54,7 +55,8 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
         "CHECK-NOT-A-HANDLE",
         "Task.spawn_owning gives a handle to the new task, but the argument is #{T.to_text(handed.type)}",
         Ast.expr_span(site.args[1]),
-        "pass a FileHandle, Socket, Listener, Process, HttpServer or Channel; Task.spawn passes any other value",
+        "pass a FileHandle, Socket, Listener, Process, HttpServer, Channel or resource; Task.spawn passes any other " +
+        "value",
       ),
     )
   end
@@ -62,7 +64,25 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
 end
 
 def handle?(cx: State.Cx, type: T.Type) -> Bool
-  return T.is?(type, "Opaque") and HANDLES.include?(T.name(type))
+  return T.is?(type, "Opaque") and (HANDLES.include?(T.name(type)) or cx.resources.include?(T.name(type)))
+end
+
+# Native.close: one argument, a resource of an extern block.
+def check_native_close(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  target = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  if !T.is?(target.type, "Opaque") or !cx.resources.include?(T.name(target.type))
+    return error(
+      State.fail_help(
+        cx,
+        target.st,
+        "CHECK-TYPE-MISMATCH",
+        "Native.close requires a resource, found #{T.to_text(target.type)}",
+        Ast.expr_span(site.args[0]),
+        "a resource is a type declared with resource Name, free: c_function in an extern block",
+      ),
+    )
+  end
+  return ok(State.Out(st: target.st, type: T.Type.Void))
 end
 
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]

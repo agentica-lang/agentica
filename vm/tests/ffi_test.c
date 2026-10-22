@@ -1,5 +1,6 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
-   the cache of prepared calls, and agc_ffi_refusal at load. Calls into libm run only in a build with libffi. */
+   the cache of prepared calls, a resource made by libc's malloc and freed once by Native.close, and agc_ffi_refusal at
+   load. Calls into libm and libc run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
 
@@ -33,7 +34,8 @@ static void fails(const char *signature, const agc_value *items, size_t n, const
 static void test_bad_signatures(void) {
   agc_value one = agc_float(0.0);
   const char *bad[] = {"", "d", "dd", "dd cos", "zd cos libm.so.6", "dz cos libm.so.6", "dv cos libm.so.6",
-                       "dd  libm.so.6", " cos libm.so.6"};
+                       "dd  libm.so.6", " cos libm.so.6", "yd cos libm.so.6", "rd cos libm.so.6",
+                       "rd cos free libm.so.6", "rd cos  Mem libm.so.6"};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);
@@ -69,6 +71,31 @@ static void test_calls(void) {
   vm.rt->no_files = false;
 }
 
+static agc_value native_close(agc_value resource) { return agc_ffi_builtins[1].fn(&vm, &resource, 0); }
+
+static void test_resources(void) {
+#ifdef AGC_FFI
+  agc_value size = agc_int(16);
+  agc_value made = native_call("rl malloc free Mem libc.so.6", &size, 1);
+  agc_c_resource *res = agc_as_c_resource(&vm, agc_as_result(&vm, made)->value);
+  assert(res->pointer && strcmp(res->name, "Mem") == 0 && !res->closed);
+  agc_value held = agc_as_result(&vm, made)->value;
+  assert(agc_as_int(&vm, native_call("lr malloc_usable_size libc.so.6", &held, 1)) >= 16);
+  native_close(held);
+  assert(res->closed && res->freed);
+  native_close(held);
+  fails("lr malloc_usable_size libc.so.6", &held, 1, "RUNTIME-NATIVE-CLOSED");
+  fails("rl malloc no_free_function_here Mem libc.so.6", &size, 1, "RUNTIME-NATIVE-LOAD");
+  /* C.Bytes: a copy of the bytes, here read by strlen up to the 0 item. */
+  agc_value items[3] = {agc_int(97), agc_int(255), agc_int(0)};
+  agc_value bytes = agc_list_value(agc_list_from_array(items, 3));
+  assert(agc_as_int(&vm, native_call("ly strlen libc.so.6", &bytes, 1)) == 2);
+  items[1] = agc_int(256);
+  bytes = agc_list_value(agc_list_from_array(items, 3));
+  fails("ly strlen libc.so.6", &bytes, 1, "RUNTIME-INVALID-NUMBER");
+#endif
+}
+
 static void test_refusal(void) {
   agc_function functions[2];
   memset(functions, 0, sizeof functions);
@@ -95,6 +122,7 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   test_bad_signatures();
   test_calls();
+  test_resources();
   test_refusal();
   return 0;
 }

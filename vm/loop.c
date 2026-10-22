@@ -276,6 +276,7 @@ agc_resource *agc_owned_of(agc_vm *vm, agc_value v) {
   if (agc_is(v, AGC_T_LISTENER)) return agc_as_listener(vm, v)->state;
   if (agc_is(v, AGC_T_PROCESS)) return agc_as_process(vm, v)->state;
   if (agc_is(v, AGC_T_HTTP_SERVER)) return agc_as_http_server(vm, v)->state;
+  if (agc_is(v, AGC_T_C_RESOURCE)) return agc_as_c_resource(vm, v)->state;
   return NULL;
 }
 

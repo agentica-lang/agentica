@@ -23,6 +23,8 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   return NULL;
 }
 
+void agc_ffi_discard(agc_ffi_call *call) { (void)call; }
+
 void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) {
   (void)call;
   (void)args;

@@ -227,6 +227,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.ResultDefault -> return "ResultDefault"
     Model.Rule.ResultMessage -> return "ResultMessage"
     Model.Rule.ResultOk -> return "ResultOk"
+    Model.Rule.NativeClose -> return "NativeClose"
     Model.Rule.ResultUnwrap -> return "ResultUnwrap"
     Model.Rule.SetAdd -> return "SetAdd"
     Model.Rule.SetCombine -> return "SetCombine"

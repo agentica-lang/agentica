@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   compute pool while the task waits and other tasks run.
 - `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable` park a
   task until a descriptor of native code can be read or written.
+- `extern` blocks take `C.Pointer`, `C.Bytes` and `resource Name, free: fn`,
+  a C pointer that `Native.close` or the end of the owning task frees once.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and

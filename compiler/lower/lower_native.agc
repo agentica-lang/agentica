@@ -1,7 +1,9 @@
 ## Extern functions: the body of a function of an `extern "library"` block is one call of the Native.call builtin,
 ## which the VM answers with libffi (vm/ffi.c). Its arguments are the signature string and a List of the parameters:
 ## "CODES SYMBOL LIBRARY", the codes of Ast.Native, the C name and the library as written (it may hold spaces, so it is
-## last). A compute def puts "compute " in front: the VM then runs the call on its compute pool while the task waits.
+## last). A function that returns a resource (result code r) has two more words after SYMBOL: the C name of the
+## resource's free function and the resource's name as written, "CODES SYMBOL FREE NAME LIBRARY". A compute def puts
+## "compute " in front: the VM then runs the call on its compute pool while the task waits.
 
 import Ast from "../syntax/ast"
 import Ir from "ir"
@@ -23,7 +25,11 @@ export def lower(cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native
   if native.compute
     kind = "compute "
   end
-  signature = "#{kind}#{native.codes} #{native.symbol} #{native.library}"
+  symbol = native.symbol
+  if native.free != ""
+    symbol = "#{symbol} #{native.free} #{native.resource}"
+  end
+  signature = "#{kind}#{native.codes} #{symbol} #{native.library}"
   body = [
     Ir.instr("step", [], index, [span]),
     Ir.Instr(op: "const", args: [count], imm: Ir.Imm.Text(signature), name: "", file: index, spans: [span]),
