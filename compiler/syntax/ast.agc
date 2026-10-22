@@ -57,6 +57,7 @@ export enum Decl
   Struct(StructDecl)
   Enum(EnumDecl)
   TypeAlias(TypeAliasDecl)
+  Resource(ResourceDecl)
   Constant(ConstDecl)
 end
 
@@ -117,13 +118,16 @@ end
 
 ## The C side of an extern function: the library it is in, as written, its C name (the linker renames the function,
 ## never this), the codes of its C types, the result's first and then one per parameter (i C.Int, l C.Int64,
-## d C.Double, b C.Bool, s C.String, v Void), and whether it is a `compute def`, which runs on the VM's compute pool
-## while the task waits.
+## d C.Double, b C.Bool, s C.String, p C.Pointer, y C.Bytes, r a resource of the block, v Void), and whether it is a
+## `compute def`, which runs on the VM's compute pool while the task waits. A function that returns a resource has the
+## resource's name as written and the C name of its free function; both are "" otherwise.
 export struct Native
   library: String
   symbol: String
   codes: String
   compute: Bool
+  resource: String
+  free: String
 end
 
 ## One parameter of a function, with its default value when `NAME: type = expression` gave one. The default is an
@@ -176,6 +180,17 @@ export struct TypeAliasDecl
   name_span: Source.Span
   type_parameters: List[String]
   target: TypeRef
+  doc: Optional[String]
+  span: Source.Span
+end
+
+## A resource of an extern block (`resource Db, free: db_close`): a nominal type for the C pointers that the block's
+## functions return, and the C name of the function of the same library that frees one.
+export struct ResourceDecl
+  id: Int
+  name: String
+  name_span: Source.Span
+  free: String
   doc: Optional[String]
   span: Source.Span
 end

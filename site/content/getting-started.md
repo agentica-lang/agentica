@@ -184,7 +184,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--deny-net` | makes `TCP` and `TLS` connects and listens (so `std/http` too) return an error that begins with `denied: --deny-net` |
 | `--deny-fs` | makes every `File`, `Dir` and `Path` call except `Path.join`, and `Lazy.write_lines`, return an error that begins with `denied: --deny-fs` |
 | `--deny-env` | makes `System.env` return an error that begins with `denied: --deny-env`; the locale of error texts still follows `LANG` |
-| `--deny-native` | refuses a program that declares an `extern` block or calls a `Native.wait_*` before it runs (`RUNTIME-NATIVE-DENIED`, exit 2). Every `--deny-*` flag turns it on |
+| `--deny-native` | refuses a program that declares an `extern` block or calls a `Native.*` builtin before it runs (`RUNTIME-NATIVE-DENIED`, exit 2). Every `--deny-*` flag turns it on |
 | `--sandbox` | all the `--deny-*` flags: use it to run code you do not trust. A program that can start processes escapes a single flag; use `--sandbox`, or add `--deny-run`. `agentica test` gives them to the test files, the step programs and the programs under test, not to its runner |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
 | `--no-cache` | compiles the program again and does not keep its bytecode (see [Bytecode cache](#bytecode-cache)) |

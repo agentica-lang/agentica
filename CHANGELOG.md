@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   compute pool while the task waits and other tasks run.
 - `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable` park a
   task until a descriptor of native code can be read or written.
+- `extern` blocks take `C.Pointer`, `C.Bytes` and `resource Name, free: fn`,
+  a C pointer that `Native.close` or the end of the owning task frees once.
 - `extern` blocks call native libraries on Windows x64 too; `Native.wait_*`
   returns an error there for now.
 - `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
@@ -73,6 +75,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `--allow-run` is gone: programs may start processes by
   default.
+
+### Fixed
+
+- On Windows, open TCP and TLS sockets are closed at the end of a run (for
+  example `System.exit`) instead of reset, so the peer reads the end of input.
 
 ## [0.8.1] - 2026-10-22
 

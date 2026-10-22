@@ -352,8 +352,9 @@ end
 ```
 
 - The C types are `C.Int` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
-  (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Bool` (`bool`, `Bool`)
-  and `C.String` (a `const char *`, `String`); a result may also be `Void`. A
+  (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Bool` (`bool`, `Bool`),
+  `C.String` (a `const char *`, `String`), `C.Pointer`, `C.Bytes` and the
+  resources of the block (below); a result may also be `Void`. A
   function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 - The library is a plain string literal: a name without `/`, which the system
   loader looks up, or an absolute path. Anything else is
@@ -372,6 +373,33 @@ end
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
   it may read only during the call. A `C.String` result is copied; `NULL` reads
   as `""` for now, and bytes that are not UTF-8 become U+FFFD.
+- `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
+  It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
+  Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
+- `C.Bytes` is a parameter only (as a result it is `PARSE-EXTERN-TYPE`): a
+  `List[Int]` whose items are bytes (an item outside 0 to 255 is
+  `RUNTIME-INVALID-NUMBER`). C gets a `const uint8_t *` to a copy, valid only
+  during the call; pass the length as a parameter of its own.
+- `resource Db, free: db_close` declares a resource: a nominal type for the
+  pointers that the block's functions return, freed by `void db_close(void *)`
+  of the same library. A function declared `-> Db` gives a `Result[Db]`: a NULL
+  result is `error("SYMBOL returned NULL")`, anything else is `ok` with a new
+  resource that the calling task owns. A resource argument is always a live
+  pointer: a call with a closed one is `RUNTIME-NATIVE-CLOSED`, before any
+  argument is copied. `Native.close(r)` runs `free` once and marks the resource
+  closed; closing it again does nothing. If the owning task ends first (return,
+  crash or cancel), its end runs `free`, as for a handle (section 6c), and
+  `Task.spawn_owning` hands a resource to another task. When `main` returns, the
+  program ends without freeing what is still open. A `compute def` call holds
+  its resource arguments until it returns: a close or the owner's end meanwhile
+  marks them closed, and `free` runs when the call ends. A resource and a
+  `C.Pointer` do not convert into each other. Every resource result is a new
+  pointer that the program owns: a function that returns a pointer it keeps (a
+  borrowed one) must be declared `-> C.Pointer`, or its pointer is freed twice.
+  A `def` of `db_close` in the same block is `PARSE-EXTERN-FREE`; the check
+  stops at the block, so do not declare it in another one either. `IO.inspect`
+  prints `<Db>`; `to_s` is `CHECK-TYPE-MISMATCH` and JSON `CHECK-NOT-ENCODABLE`,
+  as for other handles.
 - A `def` call blocks timers, I/O and other tasks until it returns, and the step
   limit cannot stop it in the middle. Native code must retry calls cut
   short by `EINTR`: GC signals can interrupt sleeps and polls.
@@ -406,7 +434,7 @@ end
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses
-  a program that declares any extern function or calls a `Native.wait_*`
+  a program that declares any extern function or calls a `Native.*` builtin
   before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica
   test` such a test file is a file error with that code.
 - Native calls work on Linux x86_64 and Windows x64, and waits on Linux

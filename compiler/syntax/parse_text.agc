@@ -127,6 +127,9 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         lines = print_variant(lines, child, variant)
       end
       return lines
+    Ast.Decl.Resource(node) ->
+      attrs = "#{name_attr(node.name)} free=#{Text.quote(node.free)}#{doc_attr(node.doc)}"
+      return out.push(head(at, role, "resource-decl", node.id, node.span, attrs))
     Ast.Decl.TypeAlias(node) ->
       attrs = name_attr(node.name)
       if node.type_parameters.size > 0
@@ -142,14 +145,17 @@ def doc_attr(doc: Ast.Optional[String]) -> String
   return text_attr(" doc=", doc)
 end
 
-# The library and the C type codes of an extern function, and compute=true for a compute def; nothing for an ordinary
-# function.
+# The library and the C type codes of an extern function, compute=true for a compute def, and the resource and its free
+# function for one that returns a resource; nothing for an ordinary function.
 def native_attr(native: Ast.Optional[Ast.Native]) -> String
   case native
     Ast.Optional.Present(link) ->
       compute = ""
       if link.compute
         compute = " compute=true"
+      end
+      if link.free != ""
+        compute += " resource=#{Text.quote(link.resource)} free=#{Text.quote(link.free)}"
       end
       return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{compute}"
     Ast.Optional.Absent -> return ""

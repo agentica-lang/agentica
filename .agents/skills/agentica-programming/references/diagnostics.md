@@ -264,14 +264,17 @@ and a task's crash line (`"task":true`) carry it too.
 - `RUNTIME-TEST-TIMEOUT`: under `agentica test`, a test ran longer than 30
   seconds; the rest of its file is not executed.
 - `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`,
-  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`: an `extern` signature with a
-  non-C type (the span is the type), a name with `?` or `!`, a parameter with a
-  default, more than 64 parameters, or a library that is not a name without `/`
-  or an absolute path (`native.md`).
-- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`:
-  the library or function of an extern call was not found (at the extern
-  function); or, at load with exit 2, `--deny-native` refused a program with an
-  extern function or a `Native.wait_*` call, or the system has no native calls.
+  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`, `PARSE-EXTERN-FREE`: an
+  `extern` signature with a type that is not a C type or a resource declared
+  above in the block (the span is the type), a name with `?` or `!`, a
+  parameter with a default, more than 64 parameters, a library that is not a
+  name without `/` or an absolute path, or a `def` of the block's `free:`
+  function (`native.md`).
+- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-DENIED`,
+  `RUNTIME-NATIVE-UNSUPPORTED`: the library or function of an extern call was
+  not found (at the extern function); a call took a closed resource; or, at
+  load with exit 2, `--deny-native` refused a program with an extern function
+  or a `Native.*` call, or the system has no native calls.
 - `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything
   runs); an interpreter bug to report.
 

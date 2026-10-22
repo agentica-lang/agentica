@@ -26,6 +26,32 @@ end
   folders, never in `PATH` (put `libgcc_s_seh-1.dll` next to a MinGW DLL).
 - A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
   is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""` for now.
+- `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
+  (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as
+  `<C.Pointer>`. `C.Bytes` is a parameter only: a `List[Int]` of bytes (an
+  item outside 0..255 is `RUNTIME-INVALID-NUMBER`) that C gets as a
+  `const uint8_t *` copy valid during the call; pass the length separately.
+- `[export] resource Db, free: db_close` in a block declares a resource type,
+  freed by `void db_close(void *)` of the same library. Declare it above the
+  `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is
+  `error("db_open returned NULL")`); the resource is owned by the calling
+  task. `Native.close(db)` frees once (a second close does nothing); a call
+  with a closed resource is `RUNTIME-NATIVE-CLOSED`. The owner's end frees
+  what it did not close; `Task.spawn_owning(&f, db)` hands it on; `main`'s
+  return frees nothing. A `compute def` call keeps its resource until it
+  returns (a close or cancel meanwhile defers the free). A function that
+  returns a borrowed pointer must be `-> C.Pointer`, or it is freed twice. A
+  `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
+  never declare it in another). Resources and `C.Pointer` do not convert; no
+  `to_s` or JSON; inspects as `<Db>`.
+
+  ~~~ruby
+  extern "libc.so.6"
+    resource Stream, free: fclose
+    def fopen(path: C.String, mode: C.String) -> Stream
+    def fputs(text: C.String, stream: Stream) -> C.Int
+  end
+  ~~~
 - A `def` call blocks timers, I/O and other tasks until it returns: keep such
   calls short. Native code must retry on `EINTR` (GC signals cut sleeps and
   polls short).
@@ -49,10 +75,10 @@ end
   non-blocking. Closing the descriptor does not end a wait (it times out unless
   the file becomes ready). A cancel stops the wait.
 - Linux x86_64 and Windows x64 for now (`Native.wait_*` returns an error on
-  Windows): elsewhere a program with an extern function or a `Native.wait_*`
-  call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check`
-  works everywhere.
+  Windows): elsewhere a program with an extern function or a `Native.*` call
+  is refused at load with `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works
+  everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
-- Functions count as `def`s for the declaration order. A wrong signature is
-  undefined behavior in C: copy it from the C header.
+- Functions count as `def`s for the declaration order, resources as types. A
+  wrong signature is undefined behavior in C: copy it from the C header.

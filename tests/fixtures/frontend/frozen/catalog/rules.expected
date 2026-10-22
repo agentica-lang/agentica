@@ -32,6 +32,7 @@ MapKeys
 MapPut
 MapSize
 MapValues
+NativeClose
 Ok
 OkVoid
 Plain

@@ -38,10 +38,11 @@ caller still owns it, and any task that holds the handle can use it until its
 owner closes it. `Task.spawn_owning(&f, handle)` is the one way to hand a handle
 over. It starts the task as `Task.spawn` does and gives it a handle that the
 caller owns, so the new task closes it when it ends. A server handed over this
-way takes its listener with it. The argument must be a handle type or a
-`Channel[T]`, or the checker gives `CHECK-NOT-A-HANDLE`; at run time a handle
-that the caller does not own, that was already handed over or that is closed is
-`RUNTIME-HANDLE-NOT-OWNED` in the caller. A crash or an end never closes an
+way takes its listener with it. The argument must be a handle type, a
+resource of native code (section 6d) or a `Channel[T]`, or the checker gives
+`CHECK-NOT-A-HANDLE`; at run time a handle that the caller does not own, that
+was already handed over or that is closed is `RUNTIME-HANDLE-NOT-OWNED` in the
+caller. A crash or an end never closes an
 `HttpClient`. A `Channel` has no opener: it is unowned until
 `Task.spawn_owning(&f, channel)` gives it to the new task, and then it is
 closed when that task ends, as in [Channels](#channels). The first hand-off of
