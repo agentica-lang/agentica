@@ -105,7 +105,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     of prepared calls, the resources that extern functions return
     (`agc_c_resource` in `vm/value.h`: a registry entry owned like a handle,
     freed by `Native.close` or the owner's end; a compute call holds its
-    resource arguments in `jobs` and the last one runs a deferred free), and
+    resource arguments in `jobs` and the last one runs a deferred free), the
+    zeroed slots of `out` parameters (capital codes; the call gives a List
+    that the lowered body turns into the function's record, and a detached
+    compute call frees its out resources in `done`), and
     `agc_ffi_refusal`, which `agc_launch_native` calls at
     load (`--deny-native`, systems without libffi). A `compute def`'s signature
     starts with `compute `: the call goes to the compute pool (`vm/compute.c`)

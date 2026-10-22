@@ -96,7 +96,11 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = print_type(lines, child, "result", node.result)
       return print_stmts(lines, child, "body", node.body)
     Ast.Decl.Struct(node) ->
-      lines = out.push(head(at, role, "struct-decl", node.id, node.span, name_attr(node.name) + doc_attr(node.doc)))
+      attrs = name_attr(node.name) + doc_attr(node.doc)
+      if node.record_of != ""
+        attrs += " record-of=#{Text.quote(node.record_of)}"
+      end
+      lines = out.push(head(at, role, "struct-decl", node.id, node.span, attrs))
       for field in node.fields
         lines = print_field(lines, child, field)
       end
@@ -145,8 +149,9 @@ def doc_attr(doc: Ast.Optional[String]) -> String
   return text_attr(" doc=", doc)
 end
 
-# The library and the C type codes of an extern function, compute=true for a compute def, and the resource and its free
-# function for one that returns a resource; nothing for an ordinary function.
+# The library and the C type codes of an extern function, compute=true for a compute def, the resource and its free
+# function for one that returns a resource, and each out resource with its free function; nothing for an ordinary
+# function.
 def native_attr(native: Ast.Optional[Ast.Native]) -> String
   case native
     Ast.Optional.Present(link) ->
@@ -156,6 +161,9 @@ def native_attr(native: Ast.Optional[Ast.Native]) -> String
       end
       if link.free != ""
         compute += " resource=#{Text.quote(link.resource)} free=#{Text.quote(link.free)}"
+      end
+      for out in link.outs
+        compute += " out=#{Text.quote(out.name)} free=#{Text.quote(out.free)}"
       end
       return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{compute}"
     Ast.Optional.Absent -> return ""

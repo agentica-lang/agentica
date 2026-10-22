@@ -44,6 +44,10 @@ EXTERN_TYPES_HELP = (
   "extern functions take and return C.Int, C.Int64, C.Double, C.Bool, C.String, C.Pointer or a resource " +
   "declared above in the same block, take C.Bytes, or return Void"
 )
+EXTERN_OUT_HELP = (
+  "an out parameter is C.Int, C.Int64, C.Double, C.Bool, C.Pointer or a resource of the block; " +
+  "take a char ** as an out C.Pointer"
+)
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
 EXTERN_MAX_PARAMS = 64
@@ -100,8 +104,10 @@ struct GuardAt
   ids: Int
 end
 
+# The parameters, whether each is an `out` parameter of an extern function, the next position and the next free id.
 struct ParamsAt
   nodes: List[Ast.Param]
+  outs: List[Bool]
   pos: Int
   ids: Int
 end
@@ -119,10 +125,17 @@ struct ExternType
   ids: Int
 end
 
-# A member of an extern block and the block with it.
+# A member of an extern block and the block with it, and the record of a function with out parameters (none or one).
 struct MemberAt
   decl: DeclAt
   block: ExternBlock
+  records: List[Ast.Decl]
+end
+
+# An extern function and its record (none or one), with the next position and the next free node id.
+struct ExternAt
+  decl: DeclAt
+  records: List[Ast.Decl]
 end
 
 # What the members of an extern block see of the block: its library, the free function of each resource declared so
@@ -1691,15 +1704,35 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   )
 end
 
-def parse_parameters(e: Base.Env, pos: Int, ids: Int) -> Result[ParamsAt]
+# The parameters of a def up to ")". extern is true in an extern block, where `out NAME: type` marks an out parameter;
+# elsewhere that is PARSE-EXTERN-OUT at the word out.
+def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[ParamsAt]
   nodes: List[Ast.Param] = []
+  outs: List[Bool] = []
   if e.tokens[pos].kind == "right-paren"
-    return ok(ParamsAt(nodes: nodes, pos: pos, ids: ids))
+    return ok(ParamsAt(nodes: nodes, outs: outs, pos: pos, ids: ids))
   end
   cursor = pos
   next_id = ids
   looping = true
   while looping
+    start = cursor
+    out = out_start?(e, cursor)
+    if out and !extern
+      return error(
+        Base.bail(
+          e,
+          cursor,
+          "PARSE-EXTERN-OUT",
+          "only a function of an extern block has out parameters",
+          Base.hint("return the values in a struct"),
+        ),
+      )
+    end
+    if out
+      cursor += 1
+    end
+    outs = outs.push(out)
     after_name = try Base.expect(e, cursor, "name", "a parameter name", false)
     colon = try Base.expect(e, after_name, "colon", "\":\"", false)
     type = try Base.parse_type(e, colon, next_id)
@@ -1721,7 +1754,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int) -> Result[ParamsAt]
         name_span: e.tokens[cursor].span,
         type: type.node,
         default: default,
-        span: Base.span_from(e, cursor, after_type),
+        span: Base.span_from(e, start, after_type),
       ),
     )
     cursor = after_type
@@ -1735,7 +1768,12 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int) -> Result[ParamsAt]
       looping = false
     end
   end
-  return ok(ParamsAt(nodes: nodes, pos: cursor, ids: next_id))
+  return ok(ParamsAt(nodes: nodes, outs: outs, pos: cursor, ids: next_id))
+end
+
+# `out` is a plain name: before a parameter name it marks an out parameter.
+def out_start?(e: Base.Env, at: Int) -> Bool
+  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "out" and Base.kind_at(e, at + 1) == "name"
 end
 
 def decl_at(node: Ast.Decl, pos: Int, ids: Int) -> Result[DeclAt]
@@ -1745,7 +1783,7 @@ end
 def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
   after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
-  params = try parse_parameters(e, after_open, ids)
+  params = try parse_parameters(e, after_open, ids, false)
   after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
   if e.tokens[after_params].kind == "left-brace"
     return error(
@@ -1840,9 +1878,18 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       block = taken_member.block
       node = member.node
       member_ids = member.ids
+      span = Base.span_from(e, taken.pos, member.pos)
+      for record in taken_member.records
+        if exported
+          wrapped = Ast.ExportDecl(id: member_ids, declaration: record, doc: Ast.Optional.Absent, span: span)
+          nodes = nodes.push(Ast.Decl.Export(wrapped))
+          member_ids += 1
+        else
+          nodes = nodes.push(record)
+        end
+      end
       if exported
-        span = Base.span_from(e, taken.pos, member.pos)
-        node = Ast.Decl.Export(Ast.ExportDecl(id: member.ids, declaration: member.node, doc: taken.doc, span: span))
+        node = Ast.Decl.Export(Ast.ExportDecl(id: member_ids, declaration: member.node, doc: taken.doc, span: span))
         member_ids += 1
       end
       nodes = nodes.push(node)
@@ -1865,7 +1912,7 @@ def parse_extern_member(
   if resource_start?(e, pos)
     member = try parse_resource(e, pos, ids, doc, block)
     named = block.resources.put(e.tokens[pos + 1].lexeme, e.tokens[pos + 5].lexeme)
-    return ok(MemberAt(decl: member, block: block.with(resources: named)))
+    return ok(MemberAt(decl: member, block: block.with(resources: named), records: []))
   end
   at = pos
   if compute_start?(e, at)
@@ -1875,7 +1922,8 @@ def parse_extern_member(
     return error(Base.found(e, at, "def, compute def, resource or end in an extern block"))
   end
   member = try parse_extern_function(e, pos, at, ids, doc, block)
-  return ok(MemberAt(decl: member, block: block.with(symbols: block.symbols.add(e.tokens[at + 1].lexeme))))
+  symbols = block.symbols.add(e.tokens[at + 1].lexeme)
+  return ok(MemberAt(decl: member.decl, block: block.with(symbols: symbols), records: member.records))
 end
 
 # `resource` is a plain name: inside an extern block, before a type name, it declares a resource.
@@ -1934,7 +1982,8 @@ def free_failure(e: Base.Env, at: Int, name: String) -> String
 end
 
 # [compute] def name(params) -> Type NL in an extern block: a C name, C types, no defaults. start is the first token
-# (compute or def) and pos the def.
+# (compute or def) and pos the def. A function with out parameters takes only the others, and returns its record, made
+# here (Ast.StructDecl.record_of): the C result as `result` (none for Void), then each out value, named after it.
 def parse_extern_function(
   e: Base.Env,
   start: Int,
@@ -1942,7 +1991,7 @@ def parse_extern_function(
   ids: Int,
   doc: Ast.Optional[String],
   block: ExternBlock,
-) -> Result[DeclAt]
+) -> Result[ExternAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
   name = e.tokens[pos + 1].lexeme
   if name.ends_with?("?") or name.ends_with?("!")
@@ -1952,7 +2001,7 @@ def parse_extern_function(
     return error(free_failure(e, pos + 1, name))
   end
   after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
-  params = try parse_parameters(e, after_open, ids)
+  params = try parse_parameters(e, after_open, ids, true)
   after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
   after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
   result = try Base.parse_type(e, after_arrow, params.ids)
@@ -1973,6 +2022,9 @@ def parse_extern_function(
     )
   end
   typed: List[Ast.Param] = []
+  fields: List[Ast.FieldDecl] = []
+  outs: List[Ast.NativeResource] = []
+  index = 0
   for param in params.nodes
     case param.default
       Ast.Optional.Present(value) ->
@@ -1988,8 +2040,18 @@ def parse_extern_function(
     end
     taken = try extern_type(param.type, false, block, next_id)
     next_id = taken.ids
-    codes = codes.push(taken.code)
-    typed = typed.push(param.with(type: taken.type))
+    if params.outs[index]
+      field = try out_field(param, taken, returned.code)
+      codes = codes.push(taken.code.upcase)
+      fields = fields.push(field)
+      if taken.code == "r"
+        outs = outs.push(Ast.NativeResource(name: param.type.name, free: block.resources[param.type.name]))
+      end
+    else
+      codes = codes.push(taken.code)
+      typed = typed.push(param.with(type: taken.type))
+    end
+    index += 1
   end
   resource = ""
   free = ""
@@ -1997,13 +2059,54 @@ def parse_extern_function(
     resource = result.node.name
     free = block.resources[resource]
   end
+  span = Base.span_from(e, start, stop)
+  records: List[Ast.Decl] = []
+  result_type = returned.type
+  if fields.size > 0
+    record = record_name(name)
+    if record == ""
+      return error(
+        Base.bail(
+          e,
+          pos + 1,
+          "PARSE-EXTERN-OUT",
+          "\"#{name}\" gives no name for the record of its out parameters",
+          Base.hint("the record is named after the C name in CamelCase, so the name needs a letter after its _"),
+        ),
+      )
+    end
+    if returned.code != "v"
+      first = Ast.FieldDecl(
+        id: next_id,
+        name: "result",
+        name_span: result.node.span,
+        type: returned.type,
+        doc: Ast.Optional.Absent,
+        span: result.node.span,
+      )
+      fields = [first].concat(fields)
+      next_id += 1
+    end
+    made = Ast.StructDecl(
+      id: next_id,
+      name: record,
+      name_span: e.tokens[pos + 1].span,
+      fields: fields,
+      doc: Ast.Optional.Absent,
+      record_of: name,
+      span: span,
+    )
+    records = records.push(Ast.Decl.Struct(made))
+    result_type = Ast.TypeRef(id: next_id + 1, name: record, args: [], span: result.node.span)
+    next_id += 2
+  end
   node = Ast.Decl.Function(
     Ast.FunctionDecl(
       id: next_id,
       name: name,
       name_span: e.tokens[pos + 1].span,
       params: typed,
-      result: returned.type,
+      result: result_type,
       body: [],
       doc: doc,
       native: Ast.Optional.Present(
@@ -2014,12 +2117,61 @@ def parse_extern_function(
           compute: start != pos,
           resource: resource,
           free: free,
+          outs: outs,
         ),
       ),
-      span: Base.span_from(e, start, stop),
+      span: span,
     ),
   )
-  return decl_at(node, stop, next_id)
+  decl = try decl_at(node, stop, next_id)
+  return ok(ExternAt(decl: decl, records: records))
+end
+
+# The field of the record for an out parameter, of the parameter's Agentica type (a resource itself, not a Result), or
+# PARSE-EXTERN-OUT: at the type for C.String and C.Bytes (who frees what C writes there is not known), and at the
+# name for `result`, which the C result takes unless it is Void.
+def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast.FieldDecl]
+  if taken.code == "s" or taken.code == "y"
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-OUT",
+        "#{param.type.name} cannot be an out parameter",
+        param.type.span,
+        Base.hint(EXTERN_OUT_HELP),
+      ),
+    )
+  end
+  if param.name == "result" and result != "v"
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-OUT",
+        "an out parameter cannot be named result, which holds the C result",
+        param.name_span,
+        Base.hint("give the out parameter another name"),
+      ),
+    )
+  end
+  field = Ast.FieldDecl(
+    id: param.id,
+    name: param.name,
+    name_span: param.name_span,
+    type: taken.type,
+    doc: Ast.Optional.Absent,
+    span: param.span,
+  )
+  return ok(field)
+end
+
+# The name of the record of an extern function with out parameters: its C name in CamelCase (sqlite3_open is
+# Sqlite3Open), or "" when that does not start with a letter.
+def record_name(name: String) -> String
+  pieces = name.split("_").filter do |piece: String| piece != "" end
+  words = pieces.map do |piece: String| piece.slice(0, 1).upcase + piece.slice(1, piece.size - 1) end
+  joined = words.join("")
+  if joined == "" or !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(joined.slice(0, 1))
+    return ""
+  end
+  return joined
 end
 
 # The code and the Agentica type of a C type of an extern signature, or PARSE-EXTERN-TYPE at it. Void is a result only,
@@ -2176,6 +2328,7 @@ def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]
       name_span: e.tokens[pos + 1].span,
       fields: fields,
       doc: doc,
+      record_of: "",
       span: Base.span_from(e, pos, stop),
     ),
   )

@@ -565,6 +565,84 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "0\n0\n", "")
 
 
+OUT_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  def peer_out_all(
+    n: C.Int, out i: C.Int, out l: C.Int64, out d: C.Double, out b: C.Bool, out p: C.Pointer, out res: Res,
+  ) -> C.Int
+  def peer_out_null(out res: Res) -> C.Int
+  def peer_out_untouched(out res: Res) -> C.Int
+  def peer_out_twice(n: C.Int, out twice: C.Int) -> Void
+  compute def peer_out_open_later(value: C.Int, limit_ms: C.Int, out res: Res) -> C.Int
+  def peer_res_get(res: Res) -> C.Int
+  def peer_res_frees() -> C.Int
+  def peer_ptr_read(p: C.Pointer) -> C.Int
+  def peer_set_flag() -> Void
+end
+
+def wait_for(frees: Int) -> Void
+  n = 0
+  while peer_res_frees() < frees and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+"""
+
+
+# The out values come back as the fields of the call's record, after the C result. A NULL out resource, written by C
+# or left in the zeroed slot, is a closed resource: a close does nothing, nothing frees it (the peer would crash on a
+# NULL free), and a call with it is RUNTIME-NATIVE-CLOSED.
+@NATIVE_CALLS
+def test_out_parameters_are_the_fields_of_the_result(tmp_path, peer):
+    main = """def main() -> Void
+  all = peer_out_all(5)
+  puts([all.result, all.i, all.l, peer_ptr_read(all.p), peer_res_get(all.res)])
+  puts(all.d)
+  puts(all.b)
+  Native.close(all.res)
+  missing = peer_out_null()
+  puts(missing.result)
+  Native.close(missing.res)
+  Native.close(peer_out_untouched().res)
+  puts(peer_out_twice(21).twice)
+  puts(peer_res_frees())
+  puts(peer_res_get(missing.res))
+end
+"""
+    result = agentica("--json", program(tmp_path, OUT_EXTERN.format(library=literal(peer)) + main))
+    assert diagnostic(result, 1) == ("RUNTIME-NATIVE-CLOSED", (10, 3))
+    assert result.stdout.split("\n") == ["[10, 6, 15000000000, 42, 5]", "1.25", "true", "-1", "42", "1", ""]
+
+
+# A compute call fills its out slots on the pool thread. Its task gets a resource that it owns (its end frees it); a
+# cancel while C runs drops the result, and the out resource is freed once, when the call returns.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_compute_call_gives_its_out_resource_or_frees_it_when_cancelled(tmp_path, peer, schedulers):
+    main = """def later(n: Int) -> Result[Int]
+  opened = peer_out_open_later(n, 20_000)
+  return ok(peer_res_get(opened.res))
+end
+
+def main() -> Void
+  opener = Task.spawn(&later, 3)
+  Task.sleep(20)
+  Task.cancel(opener)
+  puts(Task.await(opener))
+  peer_set_flag()
+  wait_for(1)
+  puts(peer_res_frees())
+  puts(Task.await(Task.spawn(&later, 4)))
+  wait_for(2)
+  puts(peer_res_frees())
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, OUT_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\nok(4)\n2\n', "")
+
+
 WAIT_EXTERN = """extern "{library}"
   def peer_pipe() -> C.Int
   def peer_pipe_writer() -> C.Int
@@ -856,7 +934,7 @@ def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
 
 
 # A real library, not the peer: the system SQLite of Linux. sqlite3_malloc and sqlite3_free are a resource, and
-# sqlite3_msize reads the block (the full open/exec/query case waits for the out parameters of FFI-a PR 3).
+# sqlite3_msize reads the block; the full case opens a database and queries it through out parameters.
 SQLITE_LIBRARY = "libsqlite3.so.0"
 
 SQLITE_EXTERN = """extern "%s"
@@ -912,3 +990,64 @@ end
     result = agentica("--json", program(tmp_path, SQLITE_EXTERN + main))
     assert diagnostic(result, 1)[0] == "RUNTIME-NATIVE-CLOSED"
     assert result.stdout == "true\n"
+
+
+SQLITE_OUT_EXTERN = """extern "%s"
+  resource Db, free: sqlite3_close_v2
+  resource Stmt, free: sqlite3_finalize
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
+  def sqlite3_errcode(db: Db) -> C.Int
+  def sqlite3_errmsg(db: Db) -> C.String
+  def sqlite3_prepare_v2(db: Db, sql: C.String, bytes: C.Int, out stmt: Stmt, out tail: C.Pointer) -> C.Int
+  compute def sqlite3_step(stmt: Stmt) -> C.Int
+  def sqlite3_column_int(stmt: Stmt, col: C.Int) -> C.Int
+  def sqlite3_column_text(stmt: Stmt, col: C.Int) -> C.String
+end
+
+""" % SQLITE_LIBRARY
+
+
+# sqlite3_open gives an out Db and sqlite3_prepare_v2 an out Stmt (and the tail as a C.Pointer). A table gets two
+# rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource.
+@NATIVE_CALLS
+@NO_SYSTEM_SQLITE
+def test_the_system_sqlite_opens_a_database_and_queries_it_through_out_parameters(tmp_path, sqlite):
+    main = """def open(path: String) -> Result[Db]
+  opened = sqlite3_open(path)
+  if opened.result != SQLITE_OK
+    return error("sqlite open: #{sqlite3_errmsg(opened.db)}")
+  end
+  return ok(opened.db)
+end
+
+def run(db: Db, sql: String) -> Int
+  prepared = sqlite3_prepare_v2(db, sql, -1)
+  if prepared.result != SQLITE_OK
+    return prepared.result
+  end
+  code = sqlite3_step(prepared.stmt)
+  Native.close(prepared.stmt)
+  return code
+end
+
+def main() -> Void
+  db = open(":memory:").unwrap!
+  puts(run(db, "create table t (id integer, name text)"))
+  puts(run(db, "insert into t values (1, 'one')"))
+  puts(run(db, "insert into t values (2, 'two')"))
+  query = sqlite3_prepare_v2(db, "select id, name from t order by id", -1)
+  puts(query.result)
+  while sqlite3_step(query.stmt) == SQLITE_ROW
+    puts("#{sqlite3_column_int(query.stmt, 0)} #{sqlite3_column_text(query.stmt, 1)}")
+  end
+  Native.close(query.stmt)
+  bad = sqlite3_prepare_v2(db, "select from nowhere", -1)
+  puts([bad.result, sqlite3_errcode(db)])
+  puts(sqlite3_errmsg(db).end_with?("syntax error"))
+  Native.close(bad.stmt)
+  Native.close(db)
+end
+"""
+    result = agentica(program(tmp_path, "SQLITE_OK = 0\nSQLITE_ROW = 100\n\n" + SQLITE_OUT_EXTERN + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["101", "101", "101", "0", "1 one", "2 two", "[1, 1]", "true", ""]
