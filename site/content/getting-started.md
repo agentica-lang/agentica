@@ -195,6 +195,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `install` | fills the package cache from `agentica.lock` with the system `git` (see the modules tour); never changes the lock |
 | `add NAME URL --tag TAG`, `add NAME URL --ref COMMIT` | adds a dependency to `agentica.toml` and writes `agentica.lock`, fetching with the system `git` (see the modules tour) |
 | `update [NAME]` | fetches the tag pins again (all, or the dependency `NAME`) and rewrites `agentica.lock` |
+| `vendor` | does what `install` does, then copies the locked packages into `agc_libs/NAME/` next to `agentica.toml`; a build reads a copy before the cache (see the modules tour) |
 | `compile FILE -o OUT` | writes VM bytecode |
 | `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
 | `--version` | prints the version |

@@ -33,6 +33,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `agentica update [NAME]` takes the tags again and rewrites the lock.
   **Breaking:** `add` and `update` are commands now, so scripts with those
   names run as `agentica ./add` and `agentica ./update`.
+- `agentica vendor` copies the locked packages into `agc_libs/<name>/`, and a
+  build reads that copy before the cache, checking its hash against the lock.
+  **Breaking:** `vendor` is a command now, so a script named `vendor` runs as
+  `agentica ./vendor`, and a folder `agc_libs/<name>/` with the name of a
+  declared dependency is read as its vendored copy, so it must be the locked
+  files.
 
 ### Removed
 

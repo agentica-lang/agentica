@@ -420,17 +420,27 @@ def test_an_undeclared_name_falls_back_to_the_pkg_roots_and_the_project_cannot_r
 
 
 def test_a_declared_name_shadows_a_library_of_the_same_name(ws):
-    # agc_libs/greeter/greet.agc exists, but the manifest declares greeter, so the package is the one that loads.
-    (ws.project / "agc_libs" / "greeter").mkdir(parents=True)
-    (ws.project / "agc_libs" / "greeter" / "greet.agc").write_text(
+    # AGENTICA_PATH holds a greeter/greet.agc, but the manifest declares greeter, so the package is the one that loads.
+    root = ws.base / "libs"
+    (root / "greeter").mkdir(parents=True)
+    (root / "greeter" / "greet.agc").write_text(
         'export def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
-    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
+    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws, AGENTICA_PATH=str(root)))
     assert (ran.code, ran.stdout) == (0, "HELLO ANA!\n"), ran.stderr
     # Undeclared, the same import is the library.
     ws.write_manifest({"tools": TOOLS})
     ws.write_lock()
-    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
+    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws, AGENTICA_PATH=str(root)))
     assert (ran.code, ran.stdout) == (0, "library\n"), ran.stderr
+
+
+def test_agc_libs_of_a_declared_name_is_the_vendored_copy_and_must_be_the_locked_files(ws):
+    # A library folder that has the name of a declared package is read as its vendored copy (agentica vendor), so it
+    # is hashed against the lock and, being other files, is PKG-HASH-MISMATCH; the cache is not used instead.
+    (ws.project / "agc_libs" / "greeter").mkdir(parents=True)
+    (ws.project / "agc_libs" / "greeter" / "greet.agc").write_text(
+        'export def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
+    assert_at_import(check(ws), "PKG-HASH-MISMATCH")
 
 
 def test_the_manifest_directory_holds_agc_libs_when_there_is_a_manifest(ws):

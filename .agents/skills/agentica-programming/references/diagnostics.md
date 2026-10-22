@@ -252,11 +252,13 @@ there, at a character boundary, and ends with `...`.
     expression
 
 - **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
-  - **Meaning:** the `.agc` files of a package in the cache (or just fetched by
-    `install`) are not the ones the lock hashes (an edited, added or missing
-    file), or one is a symbolic link or submodule, or the `agentica.toml` of the
-    package is not a regular file; remove the folder and run `agentica install`
-    again
+  - **Meaning:** the `.agc` files of a package in `agc_libs/<name>/` or the
+    cache (or just fetched by `install`) are not the ones the lock hashes (an
+    edited, added or missing file), or one is a symbolic link or submodule, or
+    the `agentica.toml` of the package is not a regular file; for a vendored
+    copy run `agentica vendor` again, for the cache remove the folder and run
+    `agentica install` again; `agc_libs/` itself as a link is `PKG-SYMLINK` for
+    `vendor`
 
 - **Code:** `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`,
   `PKG-MANIFEST-MISSING`
@@ -276,7 +278,8 @@ there, at a character boundary, and ends with `...`.
     the manifest; the manifest has a layout that the one-line edit cannot handle
     (write the line by hand); or `agentica.lock` or `agentica.toml` cannot be
     written. The fetch errors of a new pin are the codes of `install`, at the
-    manifest key `dependencies.<name>.git` (or `.tag`, `.ref`)
+    manifest key `dependencies.<name>.git` (or `.tag`, `.ref`). `agentica
+    vendor` gives `PKG-WRITE` too, at the `agc_libs/` file it cannot write
 
 - **Code:** `CHECK-IMPORT-RENAME`
   - **Meaning:** `import {A as b}` where the new name breaks the case rule of

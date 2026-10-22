@@ -23,8 +23,8 @@ export enum Hashed
   Unreadable(String)
 end
 
-# The .agc files of a folder, or the reason it cannot be hashed.
-enum Listing
+## The .agc files of a folder, or the reason it cannot be hashed.
+export enum Listing
   Files(List[String])
   Stopped(Hashed)
 end
@@ -35,6 +35,40 @@ export def hash_folder(workspace: Workspace.Workspace, root: String) -> Hashed
     Listing.Stopped(reason) -> return reason
     Listing.Files(paths) -> return hash_files(workspace, root, paths.sort)
   end
+end
+
+## The relative paths of the .agc files the hash covers (`vendor` copies them), walking the folders with an explicit
+## stack.
+export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
+  files: List[String] = []
+  pending = [""]
+  while pending.size > 0
+    folder = pending[pending.size - 1]
+    pending = pending.take(pending.size - 1)
+    entries = workspace.list_folder.call(join(root, folder))
+    if !entries.ok?
+      return Listing.Stopped(Hashed.Unreadable(entries.message))
+    end
+    for entry in entries.unwrap!
+      path = join(folder, entry.name)
+      case entry.kind
+        Workspace.EntryKind.Directory ->
+          if !skipped_folder?(entry.name, folder == "")
+            pending = pending.push(path)
+          end
+        Workspace.EntryKind.Link ->
+          if source_file?(entry.name)
+            return Listing.Stopped(Hashed.Link(path))
+          end
+        Workspace.EntryKind.File ->
+          if source_file?(entry.name)
+            files = files.push(path)
+          end
+        _ -> next
+      end
+    end
+  end
+  return Listing.Files(files)
 end
 
 ## Whether a file name is a source file of a package: it ends in `.agc`, in any case.
@@ -88,39 +122,6 @@ def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]
     pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
   end
   return Hashed.Hash("sha256:#{hex(Crypto.sha256(concat_all(pieces)))}")
-end
-
-# The relative paths of the .agc files, walking the folders with an explicit stack.
-def list_files(workspace: Workspace.Workspace, root: String) -> Listing
-  files: List[String] = []
-  pending = [""]
-  while pending.size > 0
-    folder = pending[pending.size - 1]
-    pending = pending.take(pending.size - 1)
-    entries = workspace.list_folder.call(join(root, folder))
-    if !entries.ok?
-      return Listing.Stopped(Hashed.Unreadable(entries.message))
-    end
-    for entry in entries.unwrap!
-      path = join(folder, entry.name)
-      case entry.kind
-        Workspace.EntryKind.Directory ->
-          if !skipped_folder?(entry.name, folder == "")
-            pending = pending.push(path)
-          end
-        Workspace.EntryKind.Link ->
-          if source_file?(entry.name)
-            return Listing.Stopped(Hashed.Link(path))
-          end
-        Workspace.EntryKind.File ->
-          if source_file?(entry.name)
-            files = files.push(path)
-          end
-        _ -> next
-      end
-    end
-  end
-  return Listing.Files(files)
 end
 
 # Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".
