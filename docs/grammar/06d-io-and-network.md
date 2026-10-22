@@ -345,7 +345,7 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
 
 An `extern` block (section 5) declares C functions of a native library, which a
 program then calls like any `def`. Pages for people:
-[`library/io-and-system/native.md`][agentica-link-4].
+[`library/io-and-system/native/_index.md`][agentica-link-4].
 
 ```ruby
 extern "libm.so.6"
@@ -474,4 +474,4 @@ end
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
 [agentica-link-2]: ../../site/content/library/io-and-system/files.md
 [agentica-link-3]: ../../site/content/library/io-and-system/process.md
-[agentica-link-4]: ../../site/content/library/io-and-system/native.md
+[agentica-link-4]: ../../site/content/library/io-and-system/native/_index.md
