@@ -53,11 +53,12 @@ The lowerer rejects a form it does not handle yet with `LOWER-UNSUPPORTED` at
 the node's span (3.5). It never guesses.
 
 **Trust model.** A `.agcb` file is untrusted input. Whatever it contains, the VM
-must not have memory errors, must not run child processes when the VM itself
-got `--deny-run`, and must stop within `--max-steps` when a limit is given.
-Native code (`extern`) and processes are allowed by default, so untrusted
-bytecode must run with `--deny-run`, which turns on `--deny-native` too: native
-code could start programs itself. A file that passes the loader
+must not have memory errors, must not do what its own `--deny-*` flags turn
+off, and must stop within `--max-steps` when a limit is given. Native code
+(`extern`), processes, the network, files and the environment are allowed by
+default, so untrusted bytecode must run with `--sandbox`: every `--deny-*`
+flag, checked inside the builtins, and `--deny-native`, since native code could
+do all of it. A file that passes the loader
 can still compute wrong values or end with `RUNTIME-INTERNAL`. That is the whole
 guarantee. `--max-steps` bounds instructions, not memory. One `CONCAT` or
 `INSPECT` costs time and memory in proportion to its strings, so a file can

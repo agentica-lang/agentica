@@ -4,7 +4,7 @@ weight: 3
 description: Start other programs, talk to them through their input and output, and wait for them.
 ---
 
-A program can start other programs unless it runs with `--deny-run`. Then every start returns an error that begins with `denied: --deny-run`, and extern blocks are refused as with `--deny-native`:
+A program can start other programs unless it runs with `--deny-run` (or `--sandbox`). Then every start returns an error that begins with `denied: --deny-run`, and extern blocks are refused as with `--deny-native`:
 
 ```sh
 agentica --deny-run tool.agc

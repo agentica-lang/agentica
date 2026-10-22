@@ -49,7 +49,7 @@ before
 System.env(name: String) -> Result[String]
 ```
 
-Reads an environment variable of the program. No flag is needed. There is no call that lists all variables.
+Reads an environment variable of the program. With `--deny-env` (or `--sandbox`) it returns an error that begins with `denied: --deny-env`. There is no call that lists all variables.
 
 - A variable that is not set is an error. A variable set to the empty string is `ok("")`.
 - A name that is empty, or has `=` or a NUL in it, is an error.

@@ -65,12 +65,13 @@ Crypto.sha256(data: List[Int]) -> List[Int]   # 32 digest bytes; an item outside
   in the pipe, so it can wait for a slow reader. On other systems, output does
   not auto-flush. For stdio protocols, write one compact JSON message per line,
   flush after each response, and send logs to `IO.warn`.
-- `System.env` needs no flag. A value that is not UTF-8 is decoded with U+FFFD
-  for each bad byte. The home directory is `System.env("HOME")`. There is no
-  call that lists the variables. `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the
-  VM set itself are hidden. A child from `Process.spawn` also does not get
-  `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE`, but `System.env` shows
-  them to you.
+- `System.env` needs no flag; `--deny-env` makes it an error starting `denied:
+  --deny-env` (`System.os` and `System.pid` stay on). A value that is not UTF-8
+  is decoded with U+FFFD for each bad byte. The home directory is
+  `System.env("HOME")`. There is no call that lists the variables.
+  `AGENTICA_CHANNEL` and a `UV_USE_IO_URING` the VM set itself are hidden. A
+  child from `Process.spawn` also does not get `AGENTICA_VM_METRICS` or
+  `AGENTICA_VM_METRICS_FILE`, but `System.env` shows them to you.
 - `System.pid` needs no flag. Pass it to a VM you start with `--driver-pid`:
   that VM checks that its parent is this process.
 - `FrontEnd.hand_off` and `FrontEnd.std_source` are for the compiler's own front

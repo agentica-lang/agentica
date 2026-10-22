@@ -36,6 +36,18 @@ SPAWN_CALL = (
 )
 # The start of the error of a Process start under --deny-run, which programs may test.
 DENIED = "denied: --deny-run"
+# One call of each family that a --deny-* flag turns off (a hermetic one: localhost, port 0), with its flag.
+FAMILIES = (
+    ("net", 'TCP.listen("127.0.0.1", 0)', "--deny-net"),
+    ("fs", 'File.read_text("main.agc", 5000)', "--deny-fs"),
+    ("env", 'System.env("PATH")', "--deny-env"),
+    ("run", SPAWN_CALL, "--deny-run"),
+)
+# Prints one line for each family: `NAME allowed`, or `NAME ` and the error.
+FAMILY_CALLS = "def main() -> Void\n" + "".join(
+    f"  {name} = {call}\n  if {name}.ok?\n    puts(\"{name} allowed\")\n  else\n"
+    f"    puts(\"{name} #{{{name}.message}}\")\n  end\n"
+    for name, call, _ in FAMILIES) + "end\n"
 SPAWN = (
     "def main() -> Void\n"
     f"  r = {SPAWN_CALL}\n"
@@ -259,6 +271,24 @@ def test_the_vm_options_apply_to_the_program_only(tmp_path):
     assert agentica("spawn.agc", cwd=directory).stdout == "spawned\n"
     denied = agentica("--deny-run", "spawn.agc", cwd=directory)
     assert (denied.code, denied.stdout.startswith(DENIED)) == (0, True), denied
+
+
+@pytest.mark.parametrize("flag", [None, "--deny-net", "--deny-fs", "--deny-env", "--deny-run", "--sandbox"])
+def test_each_deny_flag_turns_its_family_into_an_error_result(tmp_path, flag):
+    """The check is in the VM builtins, so a source file and compiled bytecode get the same error Result, with a stable
+    prefix the program can test; the program goes on and exits 0. --sandbox is every --deny-* flag."""
+    directory = make_suite(tmp_path, {"main.agc": FAMILY_CALLS})
+    compiled = compile_agc(directory / "main.agc", directory / "main.agcb")
+    flags = [flag] if flag else []
+    for got in (agentica(*flags, "main.agc", cwd=directory), agentica("run", *flags, "--", compiled, cwd=directory)):
+        assert got.code == 0, got
+        lines = got.stdout.splitlines()
+        assert [line.split(" ")[0] for line in lines] == [name for name, _, _ in FAMILIES], got
+        for (name, _, family), line in zip(FAMILIES, lines):
+            if flag in (family, "--sandbox"):
+                assert line.startswith(f"{name} denied: {family}"), line
+            else:
+                assert "denied:" not in line, line
 
 
 def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_does_not(tmp_path):

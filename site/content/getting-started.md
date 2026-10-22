@@ -180,8 +180,12 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--seed N` | makes `Random` repeat the same numbers |
 | `--flush-timeout MS` | waits at most `MS` ms for file data and output at the end, then warns. Default 30000, most 86400000. Env `AGENTICA_FLUSH_TIMEOUT_MS` |
 | `--schedulers N` | scheduler threads, 1 to 1024; default one per logical core. Env `AGENTICA_SCHEDULERS` (empty counts as unset). `--schedulers 1` runs one task at a time, in a fixed order. A bad value exits with code 2; `agentica test` takes only the env |
-| `--deny-run` | makes `Process.spawn` and the other starts return an error that begins with `denied: --deny-run`; also turns on `--deny-native`. `agentica test` does not take it yet |
-| `--deny-native` | refuses a program that declares an `extern` block before it runs (`RUNTIME-NATIVE-DENIED`, exit 2) |
+| `--deny-run` | makes `Process.spawn` and the other starts return an error that begins with `denied: --deny-run` |
+| `--deny-net` | makes `TCP` and `TLS` connects and listens (so `std/http` too) return an error that begins with `denied: --deny-net` |
+| `--deny-fs` | makes every `File`, `Dir` and `Path` call except `Path.join`, and `Lazy.write_lines`, return an error that begins with `denied: --deny-fs` |
+| `--deny-env` | makes `System.env` return an error that begins with `denied: --deny-env` |
+| `--deny-native` | refuses a program that declares an `extern` block before it runs (`RUNTIME-NATIVE-DENIED`, exit 2). Every `--deny-*` flag turns it on |
+| `--sandbox` | all the `--deny-*` flags: use it to run code you do not trust. `agentica test` takes none of them yet |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
