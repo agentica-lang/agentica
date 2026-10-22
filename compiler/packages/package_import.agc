@@ -224,7 +224,7 @@ def source_of(workspace: Workspace.Workspace, env: Env.Env, scope: Scope, locked
   if cache == ""
     return Source(folder: "", vendored: false)
   end
-  return Source(folder: PackageCache.folder(cache, locked.source.git, locked.commit), vendored: false)
+  return Source(folder: PackageCache.folder(cache, locked.source, locked.commit), vendored: false)
 end
 
 # The name of a package file in the program and in the .agcb: it does not depend on the cache folder of the machine.

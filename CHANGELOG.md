@@ -43,6 +43,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   dependency is read as its vendored copy, so it must be the locked files; and
   the `pkg/` library search skips `agc_libs/<name>/` for a locked package the
   importing manifest did not declare.
+- A git dependency takes `subdir`, so one repository can hold several packages
+  in folders: the lock keeps it, the hash, the cache and `agc_libs/` cover only
+  that folder, and `agentica add NAME URL --tag TAG --subdir DIR` writes it.
 - `agentica help NAME` answers a name from Ruby, Python or JS (`strip`,
   `String.to_i`, `value!`) with the builtin it stands for, and gives
   a hint for names such as `len`; `--json` gives

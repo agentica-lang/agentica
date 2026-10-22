@@ -2,10 +2,12 @@
 ## its commit: a depth-1 fetch of the tag (or of the commit) into a bare repository made for the purpose, with no hooks
 ## and no working tree, so nothing of the package runs. The files of the commit are read from its tree with `git
 ## ls-tree` and `git cat-file`, so `.gitattributes` does not change the bytes; only the `.agc` files and the manifest
-## are copied (package_tree.agc), and the hash of what was copied must be the hash of the lock. The files are built in
-## a folder of the cache root and renamed into place in one step, so the cache never holds half a package. A folder
-## that is already in place is hashed, never overwritten. A failure is a packed failure that names the lock and the
-## key of the entry (link_failure.agc, fail_key).
+## are copied (package_tree.agc), and the hash of what was copied must be the hash of the lock. A package that is a
+## folder of the repository (`subdir`) is fetched the same way, but only the files of that folder are read and kept, in
+## a cache folder of its own (package_cache.agc). The files are built in a folder of the cache root and renamed into
+## place in one step, so the cache never holds half a package. A folder that is already in place is hashed, never
+## overwritten. A failure is a packed failure that names the lock and the key of the entry (link_failure.agc,
+## fail_key).
 ##
 ## `fill` fetches what the lock names. `resolve` (for `add` and `update`) fetches a pin that has no commit or hash yet,
 ## learns both from what it fetched, and puts the files in the cache by the same steps.
@@ -70,7 +72,7 @@ end
 
 ## Puts the files of the locked package into the cache under `cache` (a folder; PackageCache.root).
 export def fill(workspace: Workspace.Workspace, cache: String, place: Place, locked: Lock.Locked) -> Result[Filled]
-  target = PackageCache.folder(cache, locked.source.git, locked.commit)
+  target = PackageCache.folder(cache, locked.source, locked.commit)
   seen = try inspect(workspace, place, target, locked)
   case seen
     Seen.Matches -> return ok(Filled.Present)
@@ -189,18 +191,36 @@ def fetch_into(
   try init_repository(place, scratch, locked)
   try fetch_pin(place, scratch, locked)
   try check_commit(place, scratch, locked)
-  try copy_tree(place, scratch, locked.commit)
+  try copy_tree(place, scratch, locked.commit, locked.source.subdir)
   try check_hash(workspace, place, scratch.files, locked)
   return move_into_place(workspace, place, scratch.files, target, locked)
 end
 
-# The files of the commit that the hash covers (and the manifest) go to scratch.files.
-def copy_tree(place: Place, scratch: Scratch, commit: String) -> Result[Void]
-  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", commit]))
+# The files of the commit that the hash covers (and the manifest) go to scratch.files. For a package that is a folder
+# of the repository the listing is the tree `<commit>:<subdir>`, so its paths are relative to the folder and nothing
+# outside it is listed, read or written.
+def copy_tree(place: Place, scratch: Scratch, commit: String, subdir: String) -> Result[Void]
+  tree = commit
+  if subdir != ""
+    tree = "#{commit}:#{subdir}"
+    try check_subdir(place, scratch, tree)
+  end
+  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", tree]))
   case Tree.plan(listing)
     Tree.Plan.Refused(fault) -> return error(fail(place, fault.code, fault.key, fault.message, fault.help))
     Tree.Plan.Files(blobs) -> return copy_blobs(place, scratch, blobs)
   end
+end
+
+# The subdir must be a folder of the commit. Only this question is answered at the subdir key: the commit was fetched
+# and peeled already, so a path that git cannot find, or that is a file, a link or a submodule (git cannot read the
+# commit it names), is the entry's fault, while a later failure of git (ls-tree, a damaged repository) is git's.
+def check_subdir(place: Place, scratch: Scratch, tree: String) -> Result[Void]
+  kind = try git_at(place, scratch, "subdir", inside(scratch, ["cat-file", "-t", tree]))
+  if String.from_bytes(kind).unwrap_or("").trim != "tree"
+    return error(fail(place, "PKG-FETCH", "subdir", "#{tree} is not a folder", ""))
+  end
+  return ok()
 end
 
 def resolve_into(
@@ -216,10 +236,10 @@ def resolve_into(
   if pin.source.ref != "" and commit != pin.source.ref
     return error(fail(place, "PKG-FETCH", "ref", "git fetched #{commit}, not #{pin.source.ref}", ""))
   end
-  try copy_tree(place, scratch, commit)
+  try copy_tree(place, scratch, commit, pin.source.subdir)
   hash = try hash_of(workspace, place, pin, scratch.files)
   locked = Lock.Locked(name: pin.name, source: pin.source, commit: commit, hash: hash)
-  target = PackageCache.folder(cache, locked.source.git, commit)
+  target = PackageCache.folder(cache, locked.source, commit)
   try move_into_place(workspace, place, scratch.files, target, locked)
   return ok(locked)
 end
@@ -264,7 +284,8 @@ end
 
 # The commit that the fetched pin points to (a tag is peeled).
 def peel(place: Place, scratch: Scratch) -> Result[String]
-  peeled = try git_text(place, scratch, inside(scratch, ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]))
+  arguments = ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]
+  peeled = try git_text(place, scratch, inside(scratch, arguments))
   return ok(peeled.trim)
 end
 
@@ -355,6 +376,12 @@ end
 # Runs git in the temporary folder; a git that does not start, one whose output cannot be read and a non-zero status
 # are PKG-FETCH at the git key, the last with the start of git's errors.
 def git(place: Place, scratch: Scratch, arguments: List[String]) -> Result[List[Int]]
+  return git_at(place, scratch, "git", arguments)
+end
+
+# The same, with a non-zero status reported at `key`: a command that fails because of one value of the entry (the
+# subdir that the commit lacks) names that value.
+def git_at(place: Place, scratch: Scratch, key: String, arguments: List[String]) -> Result[List[Int]]
   case GitProcess.run(arguments, scratch.temp)
     GitProcess.Ran.Missing(message) ->
       return error(fail(place, "PKG-FETCH", "git", "cannot run git: #{message}", "install git and put it on PATH"))
@@ -362,7 +389,7 @@ def git(place: Place, scratch: Scratch, arguments: List[String]) -> Result[List[
       return error(fail(place, "PKG-FETCH", "git", "cannot read the output of git: #{message}", ""))
     GitProcess.Ran.Exited(status, output, errors) ->
       if status != 0
-        return error(fail(place, "PKG-FETCH", "git", "git exited with status #{status}", brief(errors)))
+        return error(fail(place, "PKG-FETCH", key, "git exited with status #{status}", brief(errors)))
       end
       return ok(output)
   end

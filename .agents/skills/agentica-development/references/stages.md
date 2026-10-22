@@ -110,7 +110,8 @@ stage:
     The manifests of the locked packages are checked before any file loads
     (`check_manifests`). The hash and link errors are at the import.
     `agentica install` (`app/cli_install.agc`, `io/package_fetch.agc`) adds
-    `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION` and
+    `PKG-FETCH` (also at `package[N].subdir` when the commit lacks the folder),
+    `PKG-TAG-MOVED`, `PKG-PATH-COLLISION` and
     `PKG-MANIFEST-MISSING`, and also reports `PKG-HASH-MISMATCH` and
     `PKG-SYMLINK`, all at a key of `agentica.lock` (`package[N].tag`, ...).
     `agentica vendor` (`app/cli_vendor.agc`, `io/package_vendor.agc`) reports

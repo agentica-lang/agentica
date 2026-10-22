@@ -33,10 +33,14 @@ end
 
 # The values were checked (GitSource), so they hold no quote or backslash and need no escape.
 def inline_table(source: GitSource.Source) -> String
+  pin = "ref = \"#{source.ref}\""
   if source.tag != ""
-    return "{ git = \"#{source.git}\", tag = \"#{source.tag}\" }"
+    pin = "tag = \"#{source.tag}\""
   end
-  return "{ git = \"#{source.git}\", ref = \"#{source.ref}\" }"
+  if source.subdir != ""
+    return "{ git = \"#{source.git}\", #{pin}, subdir = \"#{source.subdir}\" }"
+  end
+  return "{ git = \"#{source.git}\", #{pin} }"
 end
 
 # The line of `[dependencies]`, maybe with a comment after it; -1 when there is none.

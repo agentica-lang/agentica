@@ -23,9 +23,15 @@ export def root(env: Env.Env) -> String
   return ""
 end
 
-## The folder of one commit of the package at this git URL: `<root>/<host>/<owner>/<repo>/<commit>`. The commit in the
-## path means two versions never share a folder, and the URL (not the local name) decides the place, so two projects
-## that name one repository differently share its folder.
-export def folder(root: String, git: String, commit: String) -> String
-  return Paths.join(Paths.join(root, GitSource.cache_path(git)), commit)
+## The folder of one commit of the package at this git source: `<root>/<host>/<owner>/<repo>/<commit>`. The commit in
+## the path means two versions never share a folder, and the URL (not the local name) decides the place, so two
+## projects that name one repository differently share its folder. A package that is a folder of the repository
+## (`subdir`) has a folder of its own that holds only the files of that folder: `<commit>@<subdir>` with the `/` of the
+## subdir written `@`, which a subdir never holds, so two folders of one commit never share a cache folder or nest.
+export def folder(root: String, source: GitSource.Source, commit: String) -> String
+  name = commit
+  if source.subdir != ""
+    name = "#{commit}@#{source.subdir.split("/").join("@")}"
+  end
+  return Paths.join(Paths.join(root, GitSource.cache_path(source.git)), name)
 end
