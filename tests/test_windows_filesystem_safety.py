@@ -20,7 +20,7 @@ from tests.agentica_test import compile_agc, run_vm, start_vm, vm_environment
 from tests.remove_sandbox_support import require_remove_sandbox
 # sandbox_root as root: these isolated tests require the Docker or Actions sandbox,
 # unlike the plain root fixture shared by the non-destructive suites.
-from tests.vm_os_support import _RaceCase, compile_work_text, sandbox_root as root, work
+from tests.vm_os_support import _RaceCase, compile_work_text, sandbox_root as root, symlink, work
 from tests.windows_support import assert_rename_race, kernel32_file_api, without_backup_restore_privileges
 
 REMOVE_PROGRAM = """\
@@ -648,15 +648,8 @@ def test_symlinks_are_removed_and_renamed_without_touching_their_targets(root, w
     target_file = root / "symlink-target.txt"
     target_file.write_text("file target", encoding="utf-8")
     dir_link, file_link = root / "dir-link", root / "file-link"
-    for link, target, flags in (
-        (dir_link, target_dir, ["/D"]),
-        (file_link, target_file, []),
-    ):
-        made = subprocess.run(
-            ["cmd.exe", "/d", "/c", "mklink", *flags, str(link), str(target)],
-            capture_output=True, text=True, check=False,
-        )
-        assert made.returncode == 0, made.stdout + made.stderr
+    symlink(target_dir, dir_link, directory=True)
+    symlink(target_file, file_link)
 
     remove = compile_work_text(work, REMOVE_PROGRAM, "windows-remove-symlink")
     for link in (file_link, dir_link):
@@ -669,11 +662,7 @@ def test_symlinks_are_removed_and_renamed_without_touching_their_targets(root, w
     assert (target_dir / "keep").read_text(encoding="utf-8") == "dir target"
 
     # A symlink renames as a link: the target keeps its contents.
-    made = subprocess.run(
-        ["cmd.exe", "/d", "/c", "mklink", "/D", str(dir_link), str(target_dir)],
-        capture_output=True, text=True, check=False,
-    )
-    assert made.returncode == 0, made.stdout + made.stderr
+    symlink(target_dir, dir_link, directory=True)
     moved = root / "moved-dir-link"
     rename = compile_work_text(work, RACE_PROGRAM, "windows-rename-symlink")
     result = run_vm(
@@ -695,11 +684,7 @@ def test_existing_and_broken_link_targets_are_never_replaced_or_followed(root, w
     else:
         referent.write_text("referent sentinel", encoding="utf-8")
     link = root / "link"
-    made = subprocess.run(
-        ["cmd.exe", "/d", "/c", "mklink", *(["/D"] if directory else []), str(link), str(referent)],
-        capture_output=True, text=True, check=False,
-    )
-    assert made.returncode == 0, made.stdout + made.stderr
+    symlink(referent, link, directory)
     source = root / "source"
     source.write_text("source sentinel", encoding="utf-8")
     identity = link.lstat().st_ino

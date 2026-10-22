@@ -177,8 +177,9 @@ Read first: `references/vm.md`.
   and one pty, crash diagnostics that wait for a full stderr and arrive whole,
   a print cut by the end of run not holding a queued notice or the exit, `File`
   on `/dev/stdout` and `/dev/stderr`, and a reader that went away
-  (`RUNTIME-INTERNAL`, exit 1). Runs on Linux, macOS and Windows; the socket,
-  pty, `/dev/full` and `/dev/stdout` cases are Unix only, and the merged-pipe
+  (`RUNTIME-INTERNAL`, exit 1; a stderr that cannot be written is a file
+  opened for reading only). Runs on Linux, macOS and Windows; the socket, pty
+  and `/dev/stdout` cases are Unix only, and the merged-pipe
   order case is skipped under Wine, which does not tell the two descriptors of
   one pipe apart.
 - `tests/test_vm_test_protocol.py`: a Python peer

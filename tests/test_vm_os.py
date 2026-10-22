@@ -11,7 +11,7 @@ import stat
 import pytest
 
 from tests.agentica_test import WINDOWS, host_only, run_vm, start_vm, vm_environment
-from tests.vm_os_support import CONTENTION_PROGRAM, compile_work_text, root, run_program, work
+from tests.vm_os_support import CONTENTION_PROGRAM, compile_work_text, root, run_program, symlink, work
 
 MODES_PROGRAM = """\
 def main() -> Void
@@ -26,9 +26,14 @@ def main() -> Void
   IO.inspect(File.write_bytes(file, [1, 2, 255], 5000).ok?)
   IO.inspect(File.close(file, 5000).ok?)
   IO.inspect(File.open(path, "create_private", 5000).ok?)
-  IO.inspect(File.open(base + "/dangling", "create_private", 5000).ok?)
   IO.inspect(File.open(base + "/missing/child", "create_private", 5000).ok?)
   IO.inspect(File.open(path, "readwrite", 5000))
+end
+"""
+
+DANGLING_PROGRAM = """\
+def main() -> Void
+  IO.inspect(File.open(System.args()[0] + "/dangling", "create_private", 5000).ok?)
 end
 """
 
@@ -91,44 +96,53 @@ def main() -> Void
 end
 """
 
-@host_only(WINDOWS, "the mode bits 0600 and 0700 and a dangling link; Windows has no mode bits (test_windows_metadata_and_locks.py checks that private entries report owner 0)")
 def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(root, work):
-    # With umask 0 only the mode the VM asks for can explain 0600 and 0700.
-    old_umask = os.umask(0)
+    # With umask 0 only the mode the VM asks for can explain 0600 and 0700. Windows has no mode bits, so it checks the
+    # results and the contents only (test_windows_metadata_and_locks.py checks that private entries report owner 0).
+    old_umask = None if WINDOWS else os.umask(0)
     try:
-        os.symlink(root / "dangling-target", root / "dangling")
         lines = run_program(root, work, MODES_PROGRAM, "modes", root)
-        assert lines[:9] == ["true", "false", "false", "true", "true", "true", "false", "false", "false"]
-        assert lines[9] == 'error("filesystem: mode must be read, write, append, or create_private")'
-        assert stat.S_IMODE((root / "private").stat().st_mode) == 0o700
+        assert lines[:8] == ["true", "false", "false", "true", "true", "true", "false", "false"]
+        assert lines[8] == 'error("filesystem: mode must be read, write, append, or create_private")'
         secret = root / "private" / "secret.bin"
-        assert stat.S_IMODE(secret.stat().st_mode) == 0o600
+        if not WINDOWS:
+            assert stat.S_IMODE((root / "private").stat().st_mode) == 0o700
+            assert stat.S_IMODE(secret.stat().st_mode) == 0o600
         assert secret.read_bytes() == b"top secret\n\x01\x02\xff"
-        # O_EXCL does not follow the dangling link, so the target was not created through it.
-        assert not (root / "dangling-target").exists()
-        assert (root / "dangling").is_symlink()
         assert not (root / "no").exists()
     finally:
-        os.umask(old_umask)
+        if old_umask is not None:
+            os.umask(old_umask)
 
-@host_only(WINDOWS, "POSIX mode bits, owners and symbolic links against Python's lstat; Windows has none (test_windows_metadata_and_locks.py checks its read-only attribute and owner 0)")
-def test_lstat_describes_links_themselves_and_reports_mode_and_owner_like_python(root, work):
+def test_create_private_never_follows_a_dangling_link(root, work):
+    symlink(root / "dangling-target", root / "dangling")
+    assert run_program(root, work, DANGLING_PROGRAM, "dangling", root) == ["false"]
+    # O_EXCL does not follow the dangling link, so the target was not created through it.
+    assert not (root / "dangling-target").exists()
+    assert (root / "dangling").is_symlink()
+
+def test_lstat_describes_links_themselves_and_reports_kind_size_and_time_like_python(root, work):
+    # Mode, owner and group are POSIX facts: Windows compares the kind, the size and the time only
+    # (test_windows_metadata_and_locks.py checks its read-only attribute and owner 0).
     (root / "file").write_text("hello")
-    os.chmod(root / "file", 0o640)
     (root / "dir").mkdir()
-    (root / "sticky").mkdir()
-    os.chmod(root / "sticky", 0o1777)
-    os.symlink("file", root / "link-file")
-    os.symlink("dir", root / "link-dir")
-    os.symlink("nowhere", root / "dangling")
-    names = ["file", "dir", "sticky", "link-file", "link-dir", "dangling", "missing"]
+    symlink("file", root / "link-file")
+    symlink("dir", root / "link-dir", directory=True)
+    symlink("nowhere", root / "dangling")
+    names = ["file", "dir", "link-file", "link-dir", "dangling", "missing"]
+    if not WINDOWS:
+        os.chmod(root / "file", 0o640)
+        (root / "sticky").mkdir()
+        os.chmod(root / "sticky", 0o1777)
+        names.insert(2, "sticky")
     lines = run_program(root, work, LSTAT_PROGRAM, "lstat", root, *names)
 
-    def expected(label, info):
+    def expected(label, name, info):
         if info is None:
             return "%s error" % label
         kind = "directory" if stat.S_ISDIR(info.st_mode) else "link" if stat.S_ISLNK(info.st_mode) else "file"
-        size = 0 if kind == "directory" else info.st_size
+        # The size of a link is the length of its text (Python's lstat says 0 for it on Windows).
+        size = 0 if kind == "directory" else len(os.fsencode(os.readlink(root / name))) if kind == "link" else info.st_size
         return "%s %s %d %d %d %d %d" % (label, kind, size, stat.S_IMODE(info.st_mode), info.st_uid, info.st_gid,
                                         info.st_mtime_ns // 10**9)
 
@@ -138,20 +152,30 @@ def test_lstat_describes_links_themselves_and_reports_mode_and_owner_like_python
         except OSError:
             return None
 
+    def shown(line):
+        # "lstat name kind size mode uid gid time": the mode, the owner and the group go on Windows.
+        words = line.split()
+        return " ".join(words[:4] + words[7:]) if WINDOWS and len(words) > 3 else line
+
     want = []
     for name in names:
-        want.append(expected("lstat " + name, seen(os.lstat, name)))
-        want.append(expected("stat " + name, seen(os.stat, name)))
-    assert lines == want
-    # The spot checks the TMPDIR check and the sweep depend on: a link is itself, the sticky bit is in the mode.
-    assert lines[0].startswith("lstat file file 5 416 "), lines[0]
-    assert lines[4].startswith("lstat sticky directory 0 1023 "), lines[4]
-    assert lines[6].startswith("lstat link-file link 4 "), lines[6]
-    assert lines[7].startswith("stat link-file file 5 "), lines[7]
-    assert lines[8].startswith("lstat link-dir link 3 "), lines[8]
-    assert lines[9].startswith("stat link-dir directory 0 "), lines[9]
-    assert lines[10].startswith("lstat dangling link 7 "), lines[10]
-    assert lines[11:] == ["stat dangling error", "lstat missing error", "stat missing error"]
+        want.append(expected("lstat " + name, name, seen(os.lstat, name)))
+        want.append(expected("stat " + name, name, seen(os.stat, name)))
+    assert [shown(line) for line in lines] == [shown(line) for line in want]
+    # The spot checks the TMPDIR check and the sweep depend on: a link is itself (its size is the length of its text),
+    # the sticky bit is in the mode.
+    by_label = {" ".join(line.split()[:2]): line for line in lines}
+    assert by_label["lstat file"].split()[2:4] == ["file", "5"]
+    assert by_label["lstat link-file"].split()[2:4] == ["link", "4"]
+    assert by_label["stat link-file"].split()[2:4] == ["file", "5"]
+    assert by_label["lstat link-dir"].split()[2:4] == ["link", "3"]
+    assert by_label["stat link-dir"].split()[2:4] == ["directory", "0"]
+    assert by_label["lstat dangling"].split()[2:4] == ["link", "7"]
+    assert [by_label[label] for label in ("stat dangling", "lstat missing", "stat missing")] == [
+        "stat dangling error", "lstat missing error", "stat missing error"]
+    if not WINDOWS:
+        assert by_label["lstat file"].startswith("lstat file file 5 416 ")
+        assert by_label["lstat sticky"].startswith("lstat sticky directory 0 1023 ")
 
 def test_try_lock_on_two_handles_of_one_file_is_released_by_close(root, work):
     lines = run_program(root, work, LOCK_PROGRAM, "lock", root / "lock")

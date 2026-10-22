@@ -50,8 +50,7 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
-KNOWN_ISSUES: dict[int, str] = {
-}
+KNOWN_ISSUES: dict[int, str] = {}
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
 TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier only", "no cases in this tier")
@@ -65,19 +64,19 @@ WINDOWS_ONLY_MODULES = frozenset({
 
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
-# descriptor flags and colon names (and a system SQLite library, and Native.wait_*, which libuv cannot poll there, both
-# in tests/test_vm_native.py); macOS lacks /dev/full and non-UTF-8 names; both lack sched_setaffinity; the other
-# systems lack the Windows-only modules above.
+# descriptor flags and colon names (and the descriptor flags, FIFOs and ptys of the Native.wait_* cases in
+# tests/test_vm_native.py, where Windows waits only on sockets); macOS lacks non-UTF-8 names and a way to limit the
+# CPUs of a process; the other systems lack the Windows-only modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py",
     "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_spec_packages.py",
-    "tests/test_spec_symbol.py", "tests/test_spec_type_at.py", "tests/test_std_analysis.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_file_lines.py",
+    "tests/test_spec_type_at.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_file_lines.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
-    "tests/test_vm_multicore.py", "tests/test_single_binary.py", "tests/test_bytecode_cache.py",
+    "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py",
     "tests/test_vm_native.py",
 })
-_NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_vm_stdout.py", "tests/test_single_binary.py"})
+_NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_single_binary.py"})
 HOST_ONLY_ALLOWED = {
     "linux-x86_64": WINDOWS_ONLY_MODULES,
     "windows-x86_64": _NEEDS_POSIX,

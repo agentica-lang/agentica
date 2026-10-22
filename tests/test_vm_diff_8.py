@@ -17,8 +17,8 @@ import time
 import pytest
 
 from tests.agentica_test import (FIFO_FILE_REASON, RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
-                                 host_only, kill_process, process_alive, scaled, vm_binary, vm_command, vm_environment,
-                                 wait_until)
+                                 host_only, kill_process, process_alive, scaled, tool as find_tool, vm_binary,
+                                 vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
     check_limited, check_runaway, check_steps, check_sweep, check_text_format, decode, exit_status, execute,
@@ -32,11 +32,6 @@ def posix_only(why):
     """A case about a capability that Windows lacks (POSIX signals, descriptor numbers, shell scripts); the reason names
     what the Windows counterpart checks."""
     return pytest.mark.skipif(os.name != "posix", reason="host-only: " + why)
-
-
-def windows_gap(number, why):
-    """A case whose behavior exists on Windows but whose test needs /bin/sh, a POSIX signal or a FIFO: an open issue."""
-    return pytest.mark.skipif(os.name != "posix", reason="known-issue: #%d %s" % (number, why))
 
 
 PLAIN = Fixture()
@@ -243,11 +238,13 @@ def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_th
         os.close(held)
 
 
-@posix_only("#!/bin/sh scripts found through a colon separated PATH; Windows has no #! scripts (test_process.py searches PATH with a copy of node.exe)")
 def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_against_the_working_directory(tmp_path):
+    # The tool prints "ran x" for the argument x: a #!/bin/sh script, and on Windows (which has no #! scripts) a copy of
+    # node.exe, which needs nothing beside it, as in test_process.py.
+    arguments = '["-e", "console.log(\'ran \' + process.argv[1])", "x"]' if WINDOWS else '["x"]'
     bytecode = compile_program(
         tmp_path, "path-lookup",
-        "def show(name: String) -> Void\n  case Process.spawn(name, [\"x\"], 60000)\n"
+        "def show(name: String) -> Void\n  case Process.spawn(name, " + arguments + ", 60000)\n"
         "    ok(p) ->\n"
         "      puts(\"#{name}: #{Process.read_line(p, 60000)} #{Process.wait(p, 60000)}\")\n"
         "      Process.close(p)\n    error(message) -> puts(\"#{name}: #{message}\")\n  end\nend\n\n"
@@ -256,8 +253,11 @@ def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_again
     folder = tmp_path / "lookup"
     (folder / "bin").mkdir(parents=True)
     for tool in [folder / "agc-tool", folder / "bin" / "agc-tool"]:
-        tool.write_text("#!/bin/sh\necho \"ran $1\"\n", encoding="utf-8")
-        tool.chmod(0o755)
+        if WINDOWS:
+            shutil.copy(find_tool("node"), tool.with_name(tool.name + ".exe"))
+        else:
+            tool.write_text("#!/bin/sh\necho \"ran $1\"\n", encoding="utf-8")
+            tool.chmod(0o755)
 
     def expected(found):
         return (0, "agc-tool: " + ("ok(\"ran x\") ok(0)" if found else "process: executable is unavailable")
@@ -265,8 +265,9 @@ def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_again
                 + "bin: process: executable is unavailable\n", "")
 
     none = str(folder / "none")
-    for search in [none, ":" + none, "bin:" + none, ".:" + none]:
-        want = expected(search.startswith("bin:") or search.startswith(".:"))
+    for entries in [[none], ["", none], ["bin", none], [".", none]]:
+        search = os.pathsep.join(entries)
+        want = expected(entries[0] in ("bin", "."))
         assert run_vm(PLAIN, bytecode, None, cwd=folder, env={"PATH": search}) == want, search
 
 
@@ -608,18 +609,24 @@ def test_compile_exits_1_on_a_diagnostic_and_2_on_an_unwritable_output(tmp_path)
 # What the binary does with its own standard input and its environment.
 
 
-@host_only(WINDOWS, "opens a directory as a descriptor to use as standard input, which Windows refuses")
 def test_a_standard_input_that_cannot_be_read_is_an_internal_error(tmp_path):
     temp = cli_temp(tmp_path)
     gets = cli_fixture("io-gets.agc")
-    # A directory opens for reading and fails on the first read.
-    descriptor = os.open(tmp_path, os.O_RDONLY)
+    # A directory opens for reading and fails on the first read. Windows refuses to open a directory as a descriptor, so
+    # there it is the write end of a pipe, which fails on the first read too.
+    if WINDOWS:
+        held = list(os.pipe())
+        descriptor = held[1]
+    else:
+        descriptor = os.open(tmp_path, os.O_RDONLY)
+        held = [descriptor]
     try:
         process = subprocess.run(cli() + ["--json", gets], stdin=descriptor, capture_output=True,
                                  env=vm_environment({"TMPDIR": temp}), cwd=tmp_path,
                                  timeout=RUN_TIMEOUT)
     finally:
-        os.close(descriptor)
+        for fd in held:
+            os.close(fd)
     assert process.returncode == 1
     last = decode(process.stderr).strip().split("\n")[-1]
     assert json.loads(last)["code"] == "RUNTIME-INTERNAL"

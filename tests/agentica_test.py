@@ -18,6 +18,7 @@ import threading
 import time
 import unittest
 from collections import namedtuple
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -357,8 +358,10 @@ def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=Non
     hang fails one test) and on any interruption of the wait, Ctrl-C included:
     the new session no longer receives the terminal's SIGINT by itself.
     """
-    # A stream sent to a file (stdout_to, stderr_to: a path such as /dev/full, opened for writing) is not captured: "".
-    files = [open(path, "wb") if path is not None else None for path in (stdout_to, stderr_to)]
+    # A stream sent to a file (stdout_to, stderr_to: a path, opened for writing, or an open file that the caller closes
+    # itself, such as one opened read-only to make every write fail) is not captured: "".
+    targets = (stdout_to, stderr_to)
+    files = [open(path, "wb") if path is not None and not hasattr(path, "fileno") else path for path in targets]
     try:
         process = subprocess.Popen(
             [str(part) for part in argv],
@@ -375,8 +378,8 @@ def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=Non
             _kill_and_collect(process)
             raise
     finally:
-        for file in files:
-            if file is not None:
+        for file, target in zip(files, targets):
+            if file is not None and file is not target:
                 file.close()
     return Result(process.returncode, (out or b"").decode(errors="replace"), (err or b"").decode(errors="replace"))
 
@@ -672,6 +675,28 @@ def wait_readable(fd, timeout):
         if time.monotonic() >= deadline:
             return False
         time.sleep(0.01)
+
+
+@contextmanager
+def unreadable(path):
+    """While the block runs, `path` cannot be read. POSIX: mode 000. Windows has no mode to take, but a file that a
+    process has locked (an editor, for instance) cannot be read."""
+    if os.name != "nt":
+        path.chmod(0o000)
+        try:
+            yield
+        finally:
+            path.chmod(0o600)
+        return
+    import msvcrt
+    size = path.stat().st_size
+    with open(path, "r+b") as handle:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, size)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, size)
 
 
 def process_alive(pid):

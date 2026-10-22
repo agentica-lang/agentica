@@ -170,7 +170,7 @@ int agc_fs_private_create(const char *path, bool directory) {
                            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
     } else {
       file = CreateFileW(wide, GENERIC_WRITE | READ_CONTROL | FILE_READ_ATTRIBUTES, FILE_SHARE_READ, &attributes, CREATE_NEW,
-                         FILE_ATTRIBUTE_NORMAL, NULL);
+                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, NULL);
       made = file != INVALID_HANDLE_VALUE;
     }
   }

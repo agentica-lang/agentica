@@ -1,6 +1,7 @@
 /* The independent peer of the native calls (tests/test_vm_native.py): a shared library that the test builds with the
-   system C compiler, so each C type crosses the boundary through a real ABI. On Windows it is a DLL without the
-   descriptor functions, which Native.wait_* needs: it is not supported on Windows (libuv polls only sockets there). */
+   system C compiler, so each C type crosses the boundary through a real ABI. On Windows it is a DLL linked with
+   ws2_32, and the "pipe" of the descriptor functions is a connected loopback TCP pair: Native.wait_* polls only
+   sockets there. */
 #define _GNU_SOURCE
 #include <ctype.h>
 #include <stdatomic.h>
@@ -10,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
+#include <winsock2.h>
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
@@ -118,7 +120,102 @@ int32_t peer_write_stalled(void) {
 
 int32_t peer_write_started(void) { return atomic_load(&stalled); }
 
-#ifndef _WIN32
+#ifdef _WIN32
+/* For Native.wait_readable and wait_writable: a non-blocking connected pair of loopback TCP sockets that the peer owns,
+   as a library owns its socket. Windows has no socketpair: the pair is a listen on 127.0.0.1 port 0, a connect and an
+   accept. Small buffers let peer_pipe_fill fill it quickly. */
+static SOCKET pipe_fds[2] = {INVALID_SOCKET, INVALID_SOCKET};
+
+static void set_nonblocking(SOCKET s, u_long on) { (void)ioctlsocket(s, FIONBIO, &on); }
+
+/* Opens the pair and returns its read end, or -1. */
+int32_t peer_pipe(void) {
+  WSADATA data;
+  if (WSAStartup(MAKEWORD(2, 2), &data) != 0) return -1;
+  struct sockaddr_in at = {0};
+  at.sin_family = AF_INET;
+  at.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  int len = sizeof at, small = 4096;
+  SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  pipe_fds[1] = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (listener == INVALID_SOCKET || pipe_fds[1] == INVALID_SOCKET) return -1;
+  (void)setsockopt(listener, SOL_SOCKET, SO_RCVBUF, (const char *)&small, sizeof small);
+  (void)setsockopt(pipe_fds[1], SOL_SOCKET, SO_SNDBUF, (const char *)&small, sizeof small);
+  if (bind(listener, (struct sockaddr *)&at, sizeof at) != 0 || listen(listener, 1) != 0 ||
+      getsockname(listener, (struct sockaddr *)&at, &len) != 0 ||
+      connect(pipe_fds[1], (struct sockaddr *)&at, sizeof at) != 0)
+    return -1;
+  pipe_fds[0] = accept(listener, NULL, NULL);
+  closesocket(listener);
+  if (pipe_fds[0] == INVALID_SOCKET) return -1;
+  set_nonblocking(pipe_fds[0], 1);
+  set_nonblocking(pipe_fds[1], 1);
+  return (int32_t)pipe_fds[0];
+}
+
+int32_t peer_pipe_writer(void) { return (int32_t)pipe_fds[1]; }
+
+/* Writes one byte into the pair; 1 when it went in. */
+int32_t peer_pipe_put(void) { return (int32_t)send(pipe_fds[1], "x", 1, 0); }
+
+/* Reads what the pair holds; the number of bytes read. */
+int32_t peer_pipe_take(void) {
+  char buf[256];
+  int32_t total = 0;
+  int n;
+  while ((n = recv(pipe_fds[0], buf, sizeof buf, 0)) > 0) total += n;
+  return total;
+}
+
+/* Writes until the pair is full, so its write end no longer polls writable. */
+void peer_pipe_fill(void) {
+  char buf[4096];
+  memset(buf, 'y', sizeof buf);
+  while (send(pipe_fds[1], buf, sizeof buf, 0) > 0) {}
+}
+
+/* Makes both ends of the pair blocking. */
+void peer_pipe_blocking(void) {
+  for (int k = 0; k < 2; k++) set_nonblocking(pipe_fds[k], 0);
+}
+
+/* Winsock cannot read back the non-blocking mode of a socket: -1. */
+int32_t peer_nonblocking(int32_t fd) {
+  (void)fd;
+  return -1;
+}
+
+/* A value that is not a socket: the handle of a regular file, deleted when it closes. */
+int32_t peer_regular_file(void) {
+  char dir[MAX_PATH], path[MAX_PATH];
+  if (!GetTempPathA(sizeof dir, dir) || !GetTempFileNameA(dir, "agc", 0, path)) return -1;
+  HANDLE h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+                         FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, NULL);
+  return h == INVALID_HANDLE_VALUE ? -1 : (int32_t)(intptr_t)h;
+}
+
+/* 1 when S is a socket on the local address of either end of the pair. */
+static int32_t of_pair(SOCKET s) {
+  struct sockaddr_in at, end;
+  int type, len = sizeof type;
+  if (getsockopt(s, SOL_SOCKET, SO_TYPE, (char *)&type, &len) != 0) return 0;
+  len = sizeof at;
+  if (getsockname(s, (struct sockaddr *)&at, &len) != 0 || at.sin_family != AF_INET) return 0;
+  for (int k = 0; k < 2; k++) {
+    len = sizeof end;
+    if (getsockname(pipe_fds[k], (struct sockaddr *)&end, &len) == 0 && end.sin_port == at.sin_port) return 1;
+  }
+  return 0;
+}
+
+/* The number of sockets open on the pair (its two ends and their duplicates). A process's handle count also moves with
+   threads and with libuv's own sockets, so the handle values are probed instead. */
+int32_t peer_open_fds(void) {
+  int32_t n = 0;
+  for (uintptr_t h = 4; h < 65536; h += 4) n += of_pair((SOCKET)h);
+  return n;
+}
+#else
 /* For Native.wait_readable and wait_writable: a non-blocking pipe that the peer owns, as a library owns its socket. */
 static int pipe_fds[2] = {-1, -1};
 

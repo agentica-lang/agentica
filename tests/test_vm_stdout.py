@@ -5,13 +5,13 @@ socket, a pty or a merged pipe, reads them slowly (or never), and prints a
 JSON summary: the exit status and when the reader started, the VM exited, and
 the first error byte arrived. Programs that need no peer run with their
 streams on files. The cases run on Linux, macOS and Windows; the few that need
-a Unix descriptor kind (a pty, /dev/full, /dev/stdout) are marked "host-only:"
+a Unix descriptor kind (a pty, /dev/stdout) are marked "host-only:"
 with the reason. On Windows the socket cases use a Winsock socket that is not in overlapped mode.
 """
+import contextlib
 import json
 import re
 import subprocess
-import sys
 import time
 
 import pytest
@@ -30,9 +30,6 @@ pty_stdout = pytest.mark.skipif(
     WINDOWS, reason="host-only: needs a Unix pseudo terminal; test_windows_console_stop.py has the ConPTY cases")
 dev_stdout = pytest.mark.skipif(
     WINDOWS, reason="host-only: /dev/stdout and /dev/stderr are Unix paths that Windows does not have")
-dev_full = pytest.mark.skipif(
-    not sys.platform.startswith("linux") or WINDOWS,
-    reason="host-only: needs /dev/full (Linux); a reader that went away is the case of the same name on every system")
 not_wine = pytest.mark.skipif(UNDER_WINE, reason="Wine does not show that two descriptors are one pipe")
 not_wine_child = pytest.mark.skipif(
     UNDER_WINE, reason="Wine runs the Windows binary, which starts neither /bin/sh nor a Linux Python")
@@ -364,7 +361,8 @@ def run_case(tmp_path, name, program, peer=(), vm=(), env=None):
 
 
 def run_to_file(tmp_path, name, program, stderr_file=None):
-    """Run the VM with stdout on a file. stderr_file: None captures it, True sends it to a file, a string is a path.
+    """Run the VM with stdout on a file. stderr_file: None captures it, True sends it to a file, a string is a path,
+    an open file is the stream itself (see read_only_stderr).
 
     Returns (exit code, seconds, stdout text, stderr text).
     """
@@ -380,6 +378,15 @@ def run_to_file(tmp_path, name, program, stderr_file=None):
     else:
         errors = bytecode.with_suffix(".err").read_text(errors="replace") if stderr_file is True else ""
     return result.code, elapsed, out_file.read_text(errors="replace"), errors
+
+
+@contextlib.contextmanager
+def read_only_stderr(tmp_path):
+    """A stderr on which every write fails, on every system: a file that was opened for reading only."""
+    path = tmp_path / "read-only-stderr"
+    path.write_bytes(b"")
+    with open(path, "rb") as handle:
+        yield handle
 
 
 def lines_of(data):
@@ -619,9 +626,9 @@ def test_a_crash_notice_waits_for_a_stderr_that_is_full_and_then_arrives_whole(t
     assert len([line for line in lines if re.fullmatch(r"warn [0-9]+ w+", line)]) == 200
 
 
-@dev_full
 def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(tmp_path):
-    status, _, out, _ = run_to_file(tmp_path, "full-stderr", WARN_LAST_PROGRAM, stderr_file="/dev/full")
+    with read_only_stderr(tmp_path) as stderr:
+        status, _, out, _ = run_to_file(tmp_path, "full-stderr", WARN_LAST_PROGRAM, stderr_file=stderr)
     assert status == 1
     assert out == "done\n"
 
@@ -638,11 +645,11 @@ end
 """
 
 
-@dev_full
 @not_wine_child
 def test_a_stderr_that_only_a_child_wrote_to_and_cannot_be_written_keeps_the_exit_code_0(tmp_path):
     program = CHILD_STDERR_PROGRAM % ("", agc_literal(PYTHON), 'puts("done")')
-    status, _, out, _ = run_to_file(tmp_path, "child-full-stderr", program, stderr_file="/dev/full")
+    with read_only_stderr(tmp_path) as stderr:
+        status, _, out, _ = run_to_file(tmp_path, "child-full-stderr", program, stderr_file=stderr)
     assert status == 0
     assert out == "done\n"
 

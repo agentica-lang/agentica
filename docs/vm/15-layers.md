@@ -62,7 +62,9 @@ Notes on the choices:
   (§14.1). `builtins.c` holds the core builtins and `agc_find_builtin`, which
   the loader calls. `stdio_posix.c` and `stdio_windows.c` are the
   operating-system side of `output.c`, one file per family. `output.c` has no
-  `#ifdef` for an OS.
+  `#ifdef` for an OS. `poll_posix.c` and `poll_windows.c` are core in the same
+  way: the operating-system side of the copy that a `Native.wait_*` poller of
+  `loop.c` polls.
 - **`stream.c` is a service.** It is the kit the stream services share; only
   `duplex.c`, `process.c` and `tcp.c` use it.
 - **`duplex.c` is a service (25c).** It owns the child channel: one

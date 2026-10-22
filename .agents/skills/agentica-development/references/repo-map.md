@@ -87,7 +87,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   value.h port.h core.h services.h  # the layer headers (references/vm.md "Which layer")
   list_impl.h     # private list layout: list.c, interp.c and vm/tests/list_test.c only
   value.c         # values and memory; the only file that includes gc.h or calls GC_*
-  *_os.h *_posix.c *_windows.c  # a system difference sits behind an `_os.h` header with one file per system (duplex, process, system, net; stdio, tls_trust)
+  *_os.h *_posix.c *_windows.c  # a system difference sits behind an `_os.h` header with one file per system (duplex, process, system, net; stdio, poll, tls_trust)
   agentica.c      # the binary's main: `run` (the VM with its flags), else the front end in a first runtime, retired at the hand-off, then the program in a second
   embedded.h      # the symbols of the generated embedded.s: the front end, the BDD runner and step program, and the std/ sources (references/vm-build.md)
   tools/          # check-layers.sh and its self-test, gen-embedded.sh (references/vm-build.md)

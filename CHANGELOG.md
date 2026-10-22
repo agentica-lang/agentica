@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Windows: `Native.wait_readable` and `Native.wait_writable` wait on a native
+  library's socket; any other value is an error.
+
 ### Changed
 
 - **Breaking:** the extern type `C.Int` is now `C.Int32`, so both widths are
@@ -17,6 +22,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - On Windows a program no longer hangs at its end while a `compute def` call
   still runs and holds the lock of a C stream other than stdout or stderr.
+- On Windows, `File.open(path, "create_private")` no longer follows a dangling
+  link.
 
 ## [0.9.0-beta.2] - 2026-10-22
 

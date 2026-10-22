@@ -4,7 +4,6 @@ fixtures/analysis/driver.agc) that calls the library, and the CLI with `--json` 
 streams. The driver is compiled once for the module (it compiles the core of the front end with it); each case is a run
 of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
 import json
-import os
 import shutil
 
 import pytest
@@ -371,7 +370,6 @@ def test_a_manifest_that_appears_is_seen_by_the_next_question_though_the_root_is
     assert counted(out, "roots", "checks") == [(1, 1)]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="host-only: symbolic links need privileges on Windows")
 def test_two_spellings_of_one_file_keep_their_own_name_in_a_cached_diagnostic(driver, project):
     """real.agc and its link have one key; a root cached under one spelling must not answer for the other."""
     (project / "link.agc").symlink_to(project / "type_error.agc")

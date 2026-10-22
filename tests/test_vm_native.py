@@ -2,10 +2,11 @@
 
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows, a
 dylib on macOS) for each module run, so every C type crosses a real ABI; four cases also call the system SQLite
-(libsqlite3.so.0 on Linux, which CI installs, and libsqlite3.dylib on macOS). Native calls exist on Linux x86_64,
-Windows x64 and macOS: elsewhere a program that declares extern functions is refused at load with
-RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. Native.wait_* is not supported on
-Windows. Tests assert codes and spans, never messages (AGENTS.md).
+(libsqlite3.so.0 on Linux, which CI installs; libsqlite3.dylib on macOS; winsqlite3.dll on Windows). Native calls
+exist on Linux x86_64, Windows x64 and macOS: elsewhere a program that declares extern functions is refused at load
+with RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. On Windows Native.wait_* polls
+only sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert codes and spans, never messages
+(AGENTS.md).
 """
 import ctypes
 import json
@@ -22,8 +23,6 @@ MACOS = TARGET_OS == "darwin"
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
 NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux x86_64, Windows x64 and macOS only")
-# Native.wait_* is not supported on Windows: libuv polls only sockets there, and the peer's descriptors are pipes.
-NATIVE_WAITS = host_only(WINDOWS, "Native.wait_* is not supported on Windows (libuv polls only sockets there)")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both, and on
 # macOS libSystem (in the dyld shared cache, not on disk).
@@ -75,7 +74,7 @@ def literal(path):
 @pytest.fixture(scope="module")
 def peer(tmp_path_factory):
     """The path of the peer library, built once for the module."""
-    return shared_library(tmp_path_factory, "peer")
+    return shared_library(tmp_path_factory, "peer", *(["-lws2_32"] if WINDOWS else []))
 
 
 def program(tmp_path, text, name="program.agc"):
@@ -773,10 +772,6 @@ WAIT_EXTERN = """extern "{library}"
   def peer_nonblocking(fd: C.Int32) -> C.Int32
   def peer_regular_file() -> C.Int32
   def peer_open_fds() -> C.Int32
-  def peer_fifo(path: C.String) -> C.Int32
-  def peer_fifo_put() -> C.Int32
-  def peer_pty() -> C.Int32
-  def peer_pty_put() -> C.Int32
 end
 
 def wait(fd: Int) -> Result[Void]
@@ -786,10 +781,15 @@ end
 """
 
 
+def run_wait(tmp_path, peer, main, *args, **kwargs):
+    """Runs MAIN after WAIT_EXTERN; ARGS go before the program on the command line."""
+    return agentica(*args, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main), **kwargs)
+
+
 # Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
 # scheduler up; the write end is writable at once.
 @NATIVE_CALLS
-@NATIVE_WAITS
+@host_only(WINDOWS, "one Windows socket takes one wait at a time (test_a_second_wait_on_one_descriptor)")
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -805,14 +805,49 @@ def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, sch
   puts(Native.wait_writable(peer_pipe_writer(), 1_000))
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
+    result = run_wait(tmp_path, peer, main, "--schedulers", schedulers)
     assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
+
+
+# On Windows one socket takes one wait at a time: two polls of one socket would cancel each other in a busy loop in
+# libuv. While a task waits (its duplicate is open; on one scheduler main runs, so the task parked), a second wait is an
+# error at once; once the wait has ended ready, and again after a timeout, the socket can be waited on again. Elsewhere
+# the second wait waits too and times out, so the case runs on every system.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_second_wait_on_one_descriptor(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  fd = peer_pipe()
+  base = peer_open_fds()
+  first = Task.spawn(&wait, fd)
+  n = 0
+  while peer_open_fds() == base and n < 5000
+    Task.sleep(1)
+    n += 1
+  end
+  puts(Native.wait_readable(fd, 30))
+  puts(peer_pipe_put())
+  puts(Task.await(first))
+  puts(peer_pipe_take())
+  puts(Native.wait_readable(fd, 30))
+  puts(peer_pipe_put())
+  puts(Native.wait_readable(fd, 1_000))
+  puts(peer_pipe_take())
+end
+"""
+    result = run_wait(tmp_path, peer, main, "--schedulers", schedulers)
+    assert (result.code, result.stderr) == (0, "")
+    lines = result.stdout.split("\n")
+    second = 'error("native: cannot wait on the descriptor' if WINDOWS else 'error("native: timed out")'
+    assert lines[0].startswith(second), result.stdout
+    assert lines[1:] == ["1", "ok()", "1", 'error("native: timed out")', "1", "ok()", "1", ""], result.stdout
 
 
 # The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a
 # terminal, say) stays blocking after the wait, whether it ended ready or at its timeout.
 @NATIVE_CALLS
-@NATIVE_WAITS
+@host_only(WINDOWS, "a pipe opened again keeps its own flags; Windows waits only on sockets, whose duplicate shares the "
+                    "non-blocking mode, and Winsock cannot read that mode back")
 def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
     main = """def main() -> Void
   fd = peer_pipe()
@@ -823,12 +858,11 @@ def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
   puts(peer_nonblocking(peer_pipe_writer()))
 end
 """
-    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
+    result = run_wait(tmp_path, peer, main)
     assert (result.code, result.stdout, result.stderr) == (0, 'error("native: timed out")\nok()\n0\n0\n', "")
 
 
 @NATIVE_CALLS
-@NATIVE_WAITS
 def test_a_wait_times_out_and_refuses_what_it_cannot_poll(tmp_path, peer):
     main = """def first_line(result: Result[Void]) -> String
   return result.message.split("\\n")[0]
@@ -845,7 +879,7 @@ def main() -> Void
   puts(first_line(Native.wait_writable(peer_regular_file(), 30)))
 end
 """
-    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
+    result = run_wait(tmp_path, peer, main)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         'error("native: timed out")', 'error("native: timed out")',
@@ -859,9 +893,16 @@ end
 # master is polled through a duplicate, since opening its path again (/dev/ptmx) makes a new terminal, and it stays
 # blocking after the wait.
 @NATIVE_CALLS
-@NATIVE_WAITS
+@host_only(WINDOWS, "Windows waits only on sockets")
 def test_a_wait_on_a_named_fifo_or_a_terminal_master_waits_for_data(tmp_path, peer):
-    main = """def main() -> Void
+    main = """extern "{library}"
+  def peer_fifo(path: C.String) -> C.Int32
+  def peer_fifo_put() -> C.Int32
+  def peer_pty() -> C.Int32
+  def peer_pty_put() -> C.Int32
+end
+
+def main() -> Void
   fifo = peer_fifo(System.args()[0])
   puts(Native.wait_readable(fifo, 30))
   puts(peer_fifo_put())
@@ -873,7 +914,8 @@ def test_a_wait_on_a_named_fifo_or_a_terminal_master_waits_for_data(tmp_path, pe
   puts(Native.wait_readable(master, 1_000))
 end
 """
-    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main), tmp_path / "fifo")
+    text = WAIT_EXTERN.format(library=literal(peer)) + main.replace("{library}", literal(peer))
+    result = agentica(program(tmp_path, text), tmp_path / "fifo")
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         'error("native: timed out")', "1", "ok()", 'error("native: timed out")', "0", "1", "ok()", "",
@@ -883,7 +925,6 @@ end
 # The wait polls a duplicate of the descriptor: a cancel closes the duplicate once (the count of open descriptors goes
 # back), and the peer's own descriptor still works.
 @NATIVE_CALLS
-@NATIVE_WAITS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_cancel_stops_a_wait_and_closes_its_duplicate(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -910,13 +951,12 @@ def test_a_cancel_stops_a_wait_and_closes_its_duplicate(tmp_path, peer, schedule
   puts(peer_pipe_take())
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
+    result = run_wait(tmp_path, peer, main, "--schedulers", schedulers)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == ["1", 'error("task: cancelled")', "0", "ok()", "1", ""]
 
 
 @NATIVE_CALLS
-@NATIVE_WAITS
 def test_the_run_ends_while_a_task_waits(tmp_path, peer):
     main = """def main() -> Void
   waiter = Task.spawn(&wait, peer_pipe())
@@ -924,18 +964,25 @@ def test_the_run_ends_while_a_task_waits(tmp_path, peer):
   puts("done")
 end
 """
-    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main), timeout=10)
+    result = run_wait(tmp_path, peer, main, timeout=10)
     assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
 
 
-# On Windows a wait is not supported: it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
-# can be polled, so the run only has to end.
+# On Windows a wait takes only a socket: a C runtime descriptor (stdin, 0) and a file handle are errors at once.
+# Elsewhere stdin (a pipe) can be polled and a regular file cannot, so the run only has to end.
 @NATIVE_CALLS
-def test_a_wait_on_windows_returns_an_error(tmp_path):
-    result = agentica(program(tmp_path, 'def main() -> Void\n  puts(Native.wait_readable(0, 10))\nend\n'))
+def test_a_wait_on_windows_refuses_a_value_that_is_not_a_socket(tmp_path, peer):
+    main = """def main() -> Void
+  puts(Native.wait_readable(0, 10))
+  puts(Native.wait_writable(peer_regular_file(), 10))
+end
+"""
+    result = run_wait(tmp_path, peer, main)
     assert (result.code, result.stderr) == (0, "")
     if WINDOWS:
-        assert result.stdout.startswith('error("native: '), result.stdout
+        lines = result.stdout.split("\n")
+        assert len(lines) == 3 and lines[2] == "", result.stdout
+        assert all(line.startswith('error("native: cannot wait on the descriptor') for line in lines[:2]), result.stdout
 
 
 WAIT_ONLY = """def main() -> Void
@@ -1084,9 +1131,11 @@ def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
     assert agentica("test", cwd=tmp_path).code == 0
 
 
-# A real library, not the peer: the system SQLite of Linux or macOS. sqlite3_malloc and sqlite3_free are a resource, and
-# sqlite3_msize reads the block; the full case opens a database and queries it through out parameters.
-SQLITE_LIBRARY = "libsqlite3.dylib" if MACOS else "libsqlite3.so.0"
+# A real library, not the peer: the system SQLite. sqlite3_malloc and sqlite3_free are a resource, and sqlite3_msize
+# reads the block; the full case opens a database and queries it through out parameters. Windows 10 and later ship
+# winsqlite3.dll in System32 with the same sqlite3_* C API (a bare name, which the VM loads from the system folders).
+# macOS has /usr/lib/libsqlite3.dylib (in the dyld shared cache).
+SQLITE_LIBRARY = "winsqlite3.dll" if WINDOWS else "libsqlite3.dylib" if MACOS else "libsqlite3.so.0"
 
 SQLITE_EXTERN = """extern "%s"
   resource Block, free: sqlite3_free
@@ -1099,22 +1148,20 @@ end
 
 """ % SQLITE_LIBRARY
 
-# libsqlite3.so.0 is a Linux system library: CI installs libsqlite3-0, and a missing library fails there and skips
-# on a local run. macOS has /usr/lib/libsqlite3.dylib (in the dyld shared cache); Windows has no system SQLite.
-NO_SYSTEM_SQLITE = host_only(WINDOWS, "Windows has no system SQLite library")
-
 
 @pytest.fixture(scope="module")
 def sqlite():
     """Skip (a failure in CI) when the system SQLite library is not installed."""
+    hint = ""
+    if TARGET_OS.startswith("linux"):
+        hint = " (Debian: apt install libsqlite3-0)"
     try:
         ctypes.CDLL(SQLITE_LIBRARY)
     except OSError:
-        require(False, SQLITE_LIBRARY + " is required (Debian: apt install libsqlite3-0)")
+        require(False, SQLITE_LIBRARY + " is required" + hint)
 
 
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_answers_its_version_and_whether_a_statement_is_complete(tmp_path, sqlite):
     main = """def main() -> Void
   puts(sqlite3_libversion_number() >= 3_000_000)
@@ -1128,7 +1175,6 @@ end
 
 
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_a_block_of_sqlite_malloc_is_a_resource_that_close_frees(tmp_path, sqlite):
     main = """def main() -> Void
   block = sqlite3_malloc(64).unwrap!
@@ -1162,7 +1208,6 @@ end
 # rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. An open
 # that fails (SQLITE_CANTOPEN, 14) still gives a live handle, which the wrapper reads and closes.
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_opens_a_database_and_queries_it_through_out_parameters(tmp_path, sqlite):
     main = """def open(path: String) -> Result[Db]
   opened = sqlite3_open(path)
@@ -1229,7 +1274,6 @@ SQLITE_MEMORY_EXTERN = SQLITE_OUT_EXTERN.replace("  def sqlite3_column_text(stmt
 # message to an out pointer, which string_at reads and sqlite3_free
 # frees; a statement that works leaves it NULL.
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tmp_path, sqlite):
     main = """def main() -> Void
   transient = Native.pointer(-1)
