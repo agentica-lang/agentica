@@ -20,7 +20,7 @@ def main() -> Void
 end
 ```
 
-- Native calls work on Linux x86_64 and Windows x64 for now, and `Native.wait_*` on Linux x86_64 (not supported on Windows, where it returns an error). On other systems a program that declares an extern function or calls a `Native.*` builtin is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
+- Native calls and `Native.wait_*` work on Linux x86_64 and Windows x64 for now (on Windows the wait takes only a socket). On other systems a program that declares an extern function or calls a `Native.*` builtin is refused before it runs (`RUNTIME-NATIVE-UNSUPPORTED`, exit 2); `check` and `compile` work everywhere.
 - Native code runs with your program's rights, and a wrong signature is undefined behavior in C: declare each function exactly as its C header does.
 - Put `##` docs on the `def` lines inside the block.
 
@@ -212,4 +212,5 @@ A library's connect loop waits the same way, with `try Native.wait_readable(sock
 - The wait watches a new open of the descriptor's file, so the library keeps its descriptor and its flags, and two tasks may wait on one descriptor. A socket, or a file that cannot be opened again (an eventfd), is watched through a duplicate, which puts the descriptor in non-blocking mode.
 - If the library closes the descriptor during a wait, the wait goes on and ends at its timeout (`native: timed out`) unless the file becomes ready.
 - A cancel stops the wait; the end of the program does not wait for it.
+- On Windows only a socket can be waited on: the number is the library's Winsock `SOCKET`, watched through a duplicate socket, which puts it in non-blocking mode. Any other value (a C runtime descriptor, a file or pipe handle, a closed socket) gives an error that starts with `native: `.
 - `--deny-native` refuses a program that calls them, as it refuses extern functions: a descriptor comes from native code.

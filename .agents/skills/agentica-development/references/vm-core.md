@@ -115,8 +115,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     through `agc_io_compute` in `vm/loop.c`, and the task parks.
     `Native.wait_readable` and `wait_writable` are a wait on the loop
     (`agc_io_start_then`, a poller on a new open or a duplicate of the
-    descriptor from `agc_ffi_wait_fd_open` in the adapter, the job's
-    timer, the `cancel` half); every `Native.*` import counts as native code
+    descriptor from `agc_ffi_wait_fd_open` in the adapter; on Windows a
+    duplicate Winsock socket, polled with `uv_poll_init_socket`), the job's
+    timer, the `cancel` half; every `Native.*` import counts as native code
     for the refusal at load. The adapter
     `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64 and Windows x64) opens
     libraries with `dlopen` or `LoadLibraryExW` and calls with libffi;

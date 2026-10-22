@@ -11,12 +11,15 @@
 
 #include <errno.h>
 #include <ffi.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
 #include "file_io.h"
+#include "net_os.h"
 
+#include <winsock2.h>
 #include <windows.h>
 #else
 #include <dlfcn.h>
@@ -228,15 +231,31 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
 }
 
 #ifdef _WIN32
-/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor: a wait is not
-   supported there. */
+/* On Windows only a socket has readiness: FD is a Winsock SOCKET of the native code (a library's connection), and the
+   wait polls a duplicate of it (WSADuplicateSocketW), which shares its non-blocking mode. getsockopt refuses any other
+   value at once (ENOTSOCK), so a file, a pipe or a closed socket is an error, never a wait. */
 int agc_ffi_wait_fd_open(int fd) {
-  (void)fd;
-  errno = ENOSYS;
-  return -1;
+  SOCKET given = (SOCKET)(uintptr_t)(unsigned)fd;
+  int type, len = sizeof type;
+  WSAPROTOCOL_INFOW info;
+  SOCKET copy = INVALID_SOCKET;
+  if (getsockopt(given, SOL_SOCKET, SO_TYPE, (char *)&type, &len) == 0 &&
+      WSADuplicateSocketW(given, GetCurrentProcessId(), &info) == 0)
+    copy = WSASocketW(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO, &info, 0,
+                      WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT);
+  if (copy == INVALID_SOCKET) {
+    errno = agc_net_socket_errno(WSAGetLastError());
+    return -1;
+  }
+  if (copy > (SOCKET)INT_MAX) {
+    closesocket(copy);
+    errno = EMFILE;
+    return -1;
+  }
+  return (int)copy;
 }
 
-void agc_ffi_wait_fd_close(int fd) { (void)fd; }
+void agc_ffi_wait_fd_close(int fd) { (void)closesocket((SOCKET)(uintptr_t)(unsigned)fd); }
 #else
 /* /proc/self/fd/N opens the file again (a pipe, a terminal), with an open file description of its own; a socket
    cannot be opened that way. */

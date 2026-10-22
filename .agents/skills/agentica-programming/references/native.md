@@ -98,9 +98,11 @@ end
   of the file, so the descriptor keeps its flags and two tasks may wait on one
   descriptor; a socket or an eventfd is polled through a duplicate and becomes
   non-blocking. Closing the descriptor does not end a wait (it times out unless
-  the file becomes ready). A cancel stops the wait.
-- Linux x86_64 and Windows x64 for now (`Native.wait_*` is not supported on
-  Windows and returns an error): elsewhere a program with an extern function
+  the file becomes ready). A cancel stops the wait. On Windows only a socket
+  works: `fd` is the library's Winsock `SOCKET` (polled through a duplicate,
+  so it becomes non-blocking); any other value is an error starting
+  `native: `.
+- Linux x86_64 and Windows x64 for now: elsewhere a program with an extern function
   or a `Native.*` call is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`
   (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a

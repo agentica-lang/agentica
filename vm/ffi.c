@@ -7,6 +7,7 @@
  * the waits of a task on a descriptor of native code. Service layer.
  */
 #include "ffi_os.h"
+#include "net_os.h"
 #include "services.h"
 
 #include <errno.h>
@@ -747,7 +748,8 @@ static bool wait_begin(void *data, agc_io_job *job) {
   int err = 0;
   w->poller = agc_poller_open(w->vm, w->fd, &err);
   if (!w->poller) {
-    w->err = err ? err : EIO;
+    /* ERR is libuv's code, negated: the errno on POSIX, mapped to one on Windows. */
+    w->err = err ? agc_net_errno(-err) : EIO;
     agc_io_ready(job);
     return false;
   }

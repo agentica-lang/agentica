@@ -4,8 +4,9 @@ The peer is tests/fixtures/native/peer.c, built with the system C compiler into 
 each module run, so every C type crosses a real ABI; two cases also call the system libsqlite3.so.0 on Linux, which
 CI installs. Native calls exist on Linux x86_64 and Windows x64 for now:
 elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
-test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* is
-not supported on Windows. Tests assert codes and spans, never messages (AGENTS.md).
+test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). On Windows
+Native.wait_* polls only sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert codes and spans, never
+messages (AGENTS.md).
 """
 import ctypes
 import json
@@ -21,8 +22,6 @@ from tests.agentica_test import (FIXTURES, TARGET_OS, WINDOWS, cli, host_only, k
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64"))
 NATIVE_CALLS = known_issue(not NATIVE, 548, "native calls are built on Linux x86_64 and Windows x64 only")
-# Native.wait_* is not supported on Windows: libuv polls only sockets there, and the peer's descriptors are pipes.
-NATIVE_WAITS = host_only(WINDOWS, "Native.wait_* is not supported on Windows (libuv polls only sockets there)")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both.
 LIBC = "ucrtbase.dll" if WINDOWS else "libc.so.6"
@@ -68,7 +67,7 @@ def literal(path):
 @pytest.fixture(scope="module")
 def peer(tmp_path_factory):
     """The path of the peer library, built once for the module."""
-    return shared_library(tmp_path_factory, "peer")
+    return shared_library(tmp_path_factory, "peer", *(["-lws2_32"] if WINDOWS else []))
 
 
 def program(tmp_path, text, name="program.agc"):
@@ -676,7 +675,6 @@ end
 # Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
 # scheduler up; the write end is writable at once.
 @NATIVE_CALLS
-@NATIVE_WAITS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -699,7 +697,8 @@ end
 # The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a
 # terminal, say) stays blocking after the wait, whether it ended ready or at its timeout.
 @NATIVE_CALLS
-@NATIVE_WAITS
+@host_only(WINDOWS, "a pipe opened again keeps its own flags; Windows waits only on sockets, whose duplicate shares the "
+                    "non-blocking mode, and Winsock cannot read that mode back")
 def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
     main = """def main() -> Void
   fd = peer_pipe()
@@ -715,7 +714,6 @@ end
 
 
 @NATIVE_CALLS
-@NATIVE_WAITS
 def test_a_wait_times_out_and_refuses_what_it_cannot_poll(tmp_path, peer):
     main = """def first_line(result: Result[Void]) -> String
   return result.message.split("\\n")[0]
@@ -744,7 +742,6 @@ end
 # The wait polls a duplicate of the descriptor: a cancel closes the duplicate once (the count of open descriptors goes
 # back), and the peer's own descriptor still works.
 @NATIVE_CALLS
-@NATIVE_WAITS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_cancel_stops_a_wait_and_closes_its_duplicate(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -777,7 +774,6 @@ end
 
 
 @NATIVE_CALLS
-@NATIVE_WAITS
 def test_the_run_ends_while_a_task_waits(tmp_path, peer):
     main = """def main() -> Void
   waiter = Task.spawn(&wait, peer_pipe())
@@ -789,14 +785,21 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
 
 
-# On Windows a wait is not supported: it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
-# can be polled, so the run only has to end.
+# On Windows a wait takes only a socket: a C runtime descriptor (stdin, 0) and a file handle (the NUL device) are errors
+# at once. Elsewhere stdin (a pipe) can be polled, so the run only has to end.
 @NATIVE_CALLS
-def test_a_wait_on_windows_returns_an_error(tmp_path):
-    result = agentica(program(tmp_path, 'def main() -> Void\n  puts(Native.wait_readable(0, 10))\nend\n'))
+def test_a_wait_on_windows_refuses_a_value_that_is_not_a_socket(tmp_path, peer):
+    main = """def main() -> Void
+  puts(Native.wait_readable(0, 10))
+  puts(Native.wait_writable(peer_dev_null(), 10))
+end
+"""
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     if WINDOWS:
-        assert result.stdout.startswith('error("native: '), result.stdout
+        lines = result.stdout.split("\n")
+        assert len(lines) == 3 and lines[2] == "", result.stdout
+        assert all(line.startswith('error("native: cannot wait on the descriptor') for line in lines[:2]), result.stdout
 
 
 WAIT_ONLY = """def main() -> Void

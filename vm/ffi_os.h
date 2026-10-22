@@ -54,8 +54,10 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result);
 /* The descriptor that a Native.wait_* polls in place of FD, which stays as the native code left it: a new open of
    the same file with FD's access mode (non-blocking, close-on-exec), so FD's own flags do not change. A socket, and
    a file that cannot be opened again (an eventfd, a FIFO with no reader), get a duplicate instead, which shares FD's
-   flags: polling puts both in non-blocking mode. -1 with errno when neither works (EBADF for a closed FD, ENOSYS in a
-   build without native calls, and on Windows for now). wait_fd_close closes what wait_fd_open returned. */
+   flags: polling puts both in non-blocking mode. On Windows FD is a Winsock SOCKET, and the wait polls a duplicate
+   socket (WSADuplicateSocketW). -1 with errno when neither works (EBADF for a closed FD, ENOTSOCK on Windows for a
+   value that is not a socket, ENOSYS in a build without native calls). wait_fd_close closes what wait_fd_open
+   returned. */
 int agc_ffi_wait_fd_open(int fd);
 void agc_ffi_wait_fd_close(int fd);
 

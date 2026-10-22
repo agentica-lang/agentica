@@ -12,4 +12,9 @@
 /* The positive C errno for a negative libuv error code. */
 int agc_net_errno(int uv_error);
 
+#ifdef _WIN32
+/* The C errno for a Winsock error (WSAGetLastError). */
+int agc_net_socket_errno(int wsa_error);
+#endif
+
 #endif

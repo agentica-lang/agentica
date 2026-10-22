@@ -167,6 +167,7 @@ struct agc_poller {
   uv_timer_t timer;
   bool timed, writing, named;
 #endif
+  /* On Windows a Winsock SOCKET (only Native.wait_* polls there), which the poller closes with closesocket. */
   int fd;
   void (*ready)(void *data, int status);
   void *data;
@@ -1185,7 +1186,7 @@ static void poll_ready(uv_poll_t *handle, int status, int events) {
 static void poller_closed(uv_handle_t *handle) {
   agc_poller *p = handle->data;
 #ifdef _WIN32
-  _close(p->fd);
+  closesocket((SOCKET)(uintptr_t)(unsigned)p->fd);
 #else
   close(p->fd);
 #endif
@@ -1240,11 +1241,19 @@ static int poller_init(agc_poller *p) {
   } else
 #endif
   {
+#ifdef _WIN32
+    rc = uv_poll_init_socket(&p->loop->uv, &p->handle, (SOCKET)(uintptr_t)(unsigned)p->fd);
+#else
     rc = uv_poll_init(&p->loop->uv, &p->handle, p->fd);
+#endif
     p->handle.data = p;
   }
   return rc;
 }
+
+#ifdef _WIN32
+static void poller_unmade(uv_handle_t *handle) { free(handle->data); }
+#endif
 
 /* Only on the loop's thread, so that its caller learns of a failure at once (a failed open returns NULL with ERR set)
    and can fall back: a file's `more` step, the stdin poller set up before the schedulers start, and the standard
@@ -1258,8 +1267,16 @@ agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   p->loop = loop;
   int rc = poller_init(p);
   if (rc != 0) {
-    free(p);
     *err = -rc;
+#ifdef _WIN32
+    /* libuv's Windows init can fail after it has put the handle in the loop: close it there, and leave the socket to
+       the caller. */
+    if (p->handle.type == UV_POLL) {
+      uv_close((uv_handle_t *)&p->handle, poller_unmade);
+      return NULL;
+    }
+#endif
+    free(p);
     return NULL;
   }
   return p;

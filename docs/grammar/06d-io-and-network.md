@@ -445,18 +445,20 @@ end
   `fd`, and a descriptor that is closed or cannot be polled (a regular file,
   `/dev/null`) give an error that starts with `native: `. A close of `fd`
   during a wait does not end it: it ends at its timeout unless the file
-  becomes ready. A cancel stops the wait.
+  becomes ready. A cancel stops the wait. On Windows only a socket can be
+  waited on: `fd` is a Winsock `SOCKET` of the library, polled through a
+  duplicate socket, which puts it in non-blocking mode. Any other value (a
+  C runtime descriptor, a file or pipe handle, a closed socket) gives an
+  error that starts with `native: `.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses
   a program that declares any extern function or calls a `Native.*` builtin
   before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica
   test` such a test file is a file error with that code.
-- Native calls work on Linux x86_64 and Windows x64, and waits on Linux
-  x86_64. `Native.wait_*` is not supported on Windows: it returns an error
-  that starts with `native: ` (libuv polls only sockets there). Elsewhere such a
-  program is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2 (issue
-  #548).
+- Native calls and waits work on Linux x86_64 and Windows x64 (waits on
+  sockets only on Windows). Elsewhere such a program is refused at load with
+  `RUNTIME-NATIVE-UNSUPPORTED`, exit 2 (issue #548).
   `check`, `compile` and the queries work on every system.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
   native code runs with the rights of the program.
