@@ -359,7 +359,12 @@ end
   loader looks up, or an absolute path. Anything else is
   `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
   functions and stays open; a library, dependency or function that cannot be
-  found is `RUNTIME-NATIVE-LOAD` at the extern function.
+  found is `RUNTIME-NATIVE-LOAD` at the extern function. The working directory
+  is never searched. On Windows a name (`"ucrtbase.dll"`) is looked up in the
+  folder of `agentica.exe` and the system folder, not in `PATH`; an absolute
+  path is written with escaped backslashes (`"C:\\libs\\x.dll"`), and its
+  folder is searched for the DLLs it needs. A relative path there
+  (`"lib\\x.dll"`, `"C:x.dll"`) is `RUNTIME-NATIVE-LOAD`.
 - An argument is checked before the call: a `C.Int` outside 32 bits is
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
@@ -402,8 +407,11 @@ end
   a program that declares any extern function or calls a `Native.wait_*`
   before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica
   test` such a test file is a file error with that code.
-- Native calls and waits work on Linux x86_64. Elsewhere such a program is
-  refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2 (issue #548).
+- Native calls work on Linux x86_64 and Windows x64, and waits on Linux
+  x86_64. On Windows a `Native.wait_*` returns an error that starts with
+  `native: ` (libuv polls only sockets there; issue #568). Elsewhere such a
+  program is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2 (issue
+  #548).
   `check`, `compile` and the queries work on every system.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
   native code runs with the rights of the program.

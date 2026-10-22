@@ -31,7 +31,7 @@
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
-# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser, libuv and (Linux x86_64) libffi for this mode (no libgc with SANITIZE=1)
+# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser, libuv and (Linux x86_64, Windows x64) libffi for this mode (no libgc with SANITIZE=1)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
@@ -85,13 +85,15 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
 endif
 # libffi for the native calls (vm/ffi_libffi.c), compiled from its sources like libuv, with the two headers that its
-# configure script would write made by the rules below. Linux x86_64 only for now (issue #548): elsewhere vm/ffi_none.c
-# refuses a program with extern functions.
+# configure script would write made by the rules below. Linux x86_64 and Windows x64 (MinGW gcc, libffi's X86_WIN64
+# target: ffiw64.c and win64.S) for now (issue #548): elsewhere vm/ffi_none.c refuses a program with extern functions.
 FFI_NAMES :=
-ifneq ($(VM_OS),Windows_NT)
-ifeq ($(shell uname -s) $(shell uname -m),Linux x86_64)
+FFI_TARGET := X86_64
+ifeq ($(VM_OS),Windows_NT)
+FFI_NAMES := prep_cif types x86/ffiw64 x86/win64
+FFI_TARGET := X86_WIN64
+else ifeq ($(shell uname -s) $(shell uname -m),Linux x86_64)
 FFI_NAMES := prep_cif types x86/ffi64 x86/ffiw64 x86/unix64 x86/win64
-endif
 endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 PKG_CONFIG ?= pkg-config
@@ -318,14 +320,14 @@ $(VM_BUILD)/libuv.a: $(UV_OBJS) | $(UV_DIR)/src/uv-common.c
 $(FFI_DIR)/include/ffi.h.in:
 	@echo "missing $(FFI_DIR): run git submodule update --init" >&2; exit 1
 
-# What libffi's configure would find on Linux x86_64 with gcc or clang: the version comes from configure.ac, so a
-# submodule bump follows it.
+# What libffi's configure would find on Linux x86_64 with gcc or clang, and on Windows x64 with MinGW gcc (no hidden
+# symbols in PE objects): the version comes from configure.ac, so a submodule bump follows it.
 $(FFI_INC)/ffi.h: $(VM_TP_STAMP) | $(FFI_DIR)/include/ffi.h.in
 	@mkdir -p $(dir $@)
 	version=$$(sed -n 's/^AC_INIT(\[libffi\],\[\([0-9.]*\)\].*/\1/p' $(FFI_DIR)/configure.ac); \
 	  number=$$(echo "$$version" | awk -F. '{print $$1 * 10000 + $$2 * 100 + $$3}'); \
 	  [ -n "$$version" ] || { echo "cannot read the libffi version from $(FFI_DIR)/configure.ac" >&2; exit 1; }; \
-	  sed -e "s/@VERSION@/$$version/" -e 's/@TARGET@/X86_64/g' -e 's/@HAVE_LONG_DOUBLE@/1/' \
+	  sed -e "s/@VERSION@/$$version/" -e 's/@TARGET@/$(FFI_TARGET)/g' -e 's/@HAVE_LONG_DOUBLE@/1/' \
 	    -e "s/@FFI_VERSION_STRING@/$$version/" -e "s/@FFI_VERSION_NUMBER@/$$number/" \
 	    -e 's/@FFI_EXEC_TRAMPOLINE_TABLE@/0/g' $(FFI_DIR)/include/ffi.h.in > $@.new && mv $@.new $@
 
@@ -335,10 +337,16 @@ $(FFI_INC)/ffitarget.h: $(VM_TP_STAMP) | $(FFI_DIR)/include/ffi.h.in
 
 $(FFI_INC)/fficonfig.h: $(VM_TP_STAMP)
 	@mkdir -p $(dir $@)
+ifeq ($(VM_OS),Windows_NT)
+	@printf '%s\n' '#define STDC_HEADERS 1' '#define HAVE_MEMCPY 1' '#define HAVE_LONG_DOUBLE 1' \
+	  '#define HAVE_AS_X86_PCREL 1' '#define FFI_NO_RAW_API 1' \
+	  '#ifdef LIBFFI_ASM' '#define FFI_HIDDEN(name)' '#else' '#define FFI_HIDDEN' '#endif' > $@
+else
 	@printf '%s\n' '#define STDC_HEADERS 1' '#define HAVE_MEMCPY 1' '#define HAVE_LONG_DOUBLE 1' \
 	  '#define HAVE_AS_X86_PCREL 1' '#define HAVE_RO_EH_FRAME 1' '#define EH_FRAME_FLAGS "a"' '#define FFI_NO_RAW_API 1' \
 	  '#ifdef LIBFFI_ASM' '#define FFI_HIDDEN(name) .hidden name' '#else' \
 	  '#define FFI_HIDDEN __attribute__ ((visibility ("hidden")))' '#endif' > $@
+endif
 
 $(VM_BUILD)/ffi/%.o: $(FFI_DIR)/src/%.c $(FFI_HEADERS)
 	@mkdir -p $(dir $@)

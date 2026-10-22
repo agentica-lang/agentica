@@ -83,6 +83,8 @@ static wchar_t *native_path(const char *path) {
   return wide;
 }
 
+wchar_t *agc_fs_wide(const char *path) { return native_path(path); }
+
 static TOKEN_USER *current_user(void) {
   HANDLE token;
   if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &token)) return NULL;
