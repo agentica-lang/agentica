@@ -353,11 +353,12 @@ extern "libm.so.6"
 end
 ```
 
-- The C types are `C.Int` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
+- The C types are `C.Int32` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
   (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Bool` (`bool`, `Bool`),
   `C.String` (a `const char *`, `String`), `C.Pointer`, `C.Bytes` and the
-  resources of the block (below); a result may also be `Void`. A
-  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
+  resources of the block (below); a result may also be `Void`. `C.Int` is
+  `PARSE-EXTERN-TYPE`: write the width. A function takes at most 64
+  parameters (`PARSE-EXTERN-ARITY`).
 - The library is a plain string literal: a name without `/`, which the system
   loader looks up, or an absolute path. Anything else is
   `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
@@ -376,7 +377,7 @@ end
   absolute path. macOS drops `DYLD_*` variables when a protected program
   (`/usr/bin/env`, `/bin/sh`) starts agentica, so `DYLD_LIBRARY_PATH` does not
   pass through a shebang line or a shell.
-- An argument is checked before the call: a `C.Int` outside 32 bits is
+- An argument is checked before the call: a `C.Int32` outside 32 bits is
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
   it may read only during the call. A `C.String` result is copied; `NULL` reads
@@ -421,7 +422,7 @@ end
   prints `<Db>`; `to_s` is `CHECK-TYPE-MISMATCH` and JSON `CHECK-NOT-ENCODABLE`,
   as for other handles.
 - An `out` parameter (section 5) gets a pointer to a slot that is zeroed before
-  the call: an `int *` for `C.Int`, a `void **` for `C.Pointer` or a resource.
+  the call: an `int *` for `C.Int32`, a `void **` for `C.Pointer` or a resource.
   The call returns the function's record, with the C result as `result` and
   each value C left in a slot as the field of its name:
   `opened = Raw.sqlite3_open(path)`, then `opened.result` and `opened.db`. An

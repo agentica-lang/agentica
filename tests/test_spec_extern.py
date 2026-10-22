@@ -18,7 +18,7 @@ VALID = """extern "libm.so.6"
 end
 
 extern "/opt/peer/libpeer.so"
-  def peer(a: C.Int, b: C.Bool, s: C.String) -> Void
+  def peer(a: C.Int32, b: C.Bool, s: C.String) -> Void
   compute def tick() -> Void
 end
 
@@ -70,16 +70,25 @@ def test_a_private_extern_function_is_not_exported(tmp_path):
 
 
 @pytest.mark.parametrize("signature, start, stop", [
-    ("def f(x: Float) -> C.Int", (2, 12), (2, 17)),
-    ("def f(x: C.Int) -> Int", (2, 22), (2, 25)),
+    ("def f(x: Float) -> C.Int32", (2, 12), (2, 17)),
+    ("def f(x: C.Int32) -> Int", (2, 24), (2, 27)),
     ("def f(x: C.Float) -> Void", (2, 12), (2, 19)),
-    ("def f(x: C.Int) -> C.Bytes", (2, 22), (2, 29)),
+    ("def f(x: C.Int32) -> C.Bytes", (2, 24), (2, 31)),
     ("def f(x: Void) -> Void", (2, 12), (2, 16)),
-    ("def f(x: List[C.Int]) -> Void", (2, 12), (2, 23)),
+    ("def f(x: List[C.Int32]) -> Void", (2, 12), (2, 25)),
+    ("def f(x: C.Int) -> Void", (2, 12), (2, 17)),
+    ("def f(x: C.Int32) -> C.Int", (2, 24), (2, 29)),
 ])
 def test_only_c_types_cross_an_extern_signature(tmp_path, signature, start, stop):
     text = 'extern "libc.so.6"\n  %s\nend\n' % signature
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-TYPE", start, stop)
+
+
+def test_c_int_is_refused_with_the_widths_to_write(tmp_path):
+    result = check(source(tmp_path, 'extern "libc.so.6"\n  def abs(n: C.Int) -> C.Int32\nend\n'))
+    problem = problem_of(result)
+    assert at(problem) == ("PARSE-EXTERN-TYPE", (2, 14), (2, 19))
+    assert "C.Int32" in json.dumps(problem["help"])
 
 
 def test_an_extern_function_has_a_c_name(tmp_path):
@@ -88,18 +97,18 @@ def test_an_extern_function_has_a_c_name(tmp_path):
 
 
 def test_an_extern_parameter_has_no_default(tmp_path):
-    text = 'extern "libc.so.6"\n  def abs(n: C.Int = 1) -> C.Int\nend\n'
+    text = 'extern "libc.so.6"\n  def abs(n: C.Int32 = 1) -> C.Int32\nend\n'
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-EXTERN-DEFAULT", (2, 11))
 
 
 @pytest.mark.parametrize("text, start", [
-    ('extern "libc.so.6"\n  def abs(n: C.Int) -> C.Int\n    return 1\n  end\nend\n', (3, 5)),
+    ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n    return 1\n  end\nend\n', (3, 5)),
     ('extern "libc.so.6"\n  struct S\n  end\nend\n', (2, 3)),
-    ('extern "libc.so.6"\n  def abs(n: C.Int) -> C.Int\n', (3, 1)),
-    ('extern "libc.so.6" def abs(n: C.Int) -> C.Int\nend\n', (1, 20)),
-    ('extern <<~A\n  a\n  b\nA\n  def abs(n: C.Int) -> C.Int\nend\n', (1, 8)),
-    ('extern "libc.so.6"\n  compute export def abs(n: C.Int) -> C.Int\nend\n', (2, 3)),
-    ('extern "libc.so.6"\n  compute abs(n: C.Int) -> C.Int\nend\n', (2, 3)),
+    ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n', (3, 1)),
+    ('extern "libc.so.6" def abs(n: C.Int32) -> C.Int32\nend\n', (1, 20)),
+    ('extern <<~A\n  a\n  b\nA\n  def abs(n: C.Int32) -> C.Int32\nend\n', (1, 8)),
+    ('extern "libc.so.6"\n  compute export def abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
+    ('extern "libc.so.6"\n  compute abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
 ])
 def test_an_extern_block_holds_only_signatures(tmp_path, text, start):
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-UNEXPECTED-TOKEN", start)
@@ -112,22 +121,22 @@ def test_an_extern_block_holds_only_signatures(tmp_path, text, start):
     ('"lib#{1}.so"', 20),
 ])
 def test_a_library_is_a_system_name_or_an_absolute_path(tmp_path, library, stop):
-    text = 'extern %s\n  def abs(n: C.Int) -> C.Int\nend\n' % library
+    text = 'extern %s\n  def abs(n: C.Int32) -> C.Int32\nend\n' % library
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-LIBRARY", (1, 8), (1, stop))
 
 
 def test_an_extern_function_takes_at_most_64_parameters(tmp_path):
-    params = ", ".join("p%d: C.Int" % k for k in range(64))
+    params = ", ".join("p%d: C.Int32" % k for k in range(64))
     ok = 'extern "libc.so.6"\n  def f(%s) -> Void\nend\n' % params
     assert check(source(tmp_path, ok)).code == 0
-    over = 'extern "libc.so.6"\n  def f(%s, extra: C.Int) -> Void\nend\n' % params
+    over = 'extern "libc.so.6"\n  def f(%s, extra: C.Int32) -> Void\nend\n' % params
     start = len("  def f(%s, " % params) + 1
     assert at(problem_of(check(source(tmp_path, over)))) == (
-        "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: C.Int")))
+        "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: C.Int32")))
 
 
 def test_an_extern_block_follows_the_blank_line_rule(tmp_path):
-    text = 'def main() -> Void\nend\nextern "libc.so.6"\n  def abs(n: C.Int) -> C.Int\nend\n'
+    text = 'def main() -> Void\nend\nextern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\nend\n'
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-MISSING-BLANK-LINE", (3, 1))
 
 
@@ -172,8 +181,8 @@ extern "/opt/peer/libpeer.so"
   ## An open database.
   export resource Db, free: db_close
   export def db_open(path: C.String) -> Db
-  def db_exec(db: Db, sql: C.String, blob: C.Bytes, n: C.Int) -> C.Int
-  compute def db_wait(db: Db) -> C.Int
+  def db_exec(db: Db, sql: C.String, blob: C.Bytes, n: C.Int32) -> C.Int32
+  compute def db_wait(db: Db) -> C.Int32
   def db_handle(db: Db) -> C.Pointer
   def raw_len(p: C.Pointer) -> C.Int64
 end
@@ -268,7 +277,7 @@ def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, s
 
 @pytest.mark.parametrize("members, code, start", [
     ("  def db_open() -> Db\n  resource Db, free: db_close", "PARSE-EXTERN-TYPE", (2, 20)),
-    ('  resource Db, free: db_close\nend\n\nextern "/opt/libdb.so"\n  def db_use(db: Db) -> C.Int', "PARSE-EXTERN-TYPE",
+    ('  resource Db, free: db_close\nend\n\nextern "/opt/libdb.so"\n  def db_use(db: Db) -> C.Int32', "PARSE-EXTERN-TYPE",
      (6, 18)),
     ("  resource Db, free: db_close?", "PARSE-EXTERN-NAME", (2, 22)),
     ("  resource Db free: db_close", "PARSE-UNEXPECTED-TOKEN", (2, 15)),
@@ -302,8 +311,8 @@ def test_resource_is_still_a_name_elsewhere(tmp_path):
 
 
 OUTS = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n' \
-       '  export def db_open(name: C.String, out db: Db, out code: C.Int64) -> C.Int\n' \
-       '  def db_fill(out n: C.Int, out x: C.Double, out on: C.Bool, out p: C.Pointer) -> Void\n' \
+       '  export def db_open(name: C.String, out db: Db, out code: C.Int64) -> C.Int32\n' \
+       '  def db_fill(out n: C.Int32, out x: C.Double, out on: C.Bool, out p: C.Pointer) -> Void\n' \
        'end\n\ndef main() -> Void\n%s\nend\n'
 
 
@@ -341,20 +350,20 @@ def test_the_record_of_an_exported_extern_function_is_imported(tmp_path):
 # word out outside an extern block, and at the later of an in and an out parameter of one name. `out` is still a
 # parameter name.
 @pytest.mark.parametrize("text, start, stop", [
-    ('extern "libc.so.6"\n  def f(out s: C.String) -> C.Int\nend\n', (2, 16), (2, 24)),
+    ('extern "libc.so.6"\n  def f(out s: C.String) -> C.Int32\nend\n', (2, 16), (2, 24)),
     ('extern "libc.so.6"\n  def f(out b: C.Bytes) -> Void\nend\n', (2, 16), (2, 23)),
-    ('extern "libc.so.6"\n  def f(out result: C.Int) -> C.Int\nend\n', (2, 13), (2, 19)),
-    ('extern "libc.so.6"\n  def _2(out n: C.Int) -> C.Int\nend\n', (2, 7), (2, 9)),
+    ('extern "libc.so.6"\n  def f(out result: C.Int32) -> C.Int32\nend\n', (2, 13), (2, 19)),
+    ('extern "libc.so.6"\n  def _2(out n: C.Int32) -> C.Int32\nend\n', (2, 7), (2, 9)),
     ('def f(out n: Int) -> Int\n  return n\nend\n', (1, 7), (1, 10)),
-    ('extern "libm.so.6"\n  def frexp(x: C.Double, out x: C.Int) -> C.Double\nend\n', (2, 30), (2, 31)),
-    ('extern "libm.so.6"\n  def f(out x: C.Int, x: C.Double) -> C.Double\nend\n', (2, 23), (2, 24)),
+    ('extern "libm.so.6"\n  def frexp(x: C.Double, out x: C.Int32) -> C.Double\nend\n', (2, 30), (2, 31)),
+    ('extern "libm.so.6"\n  def f(out x: C.Int32, x: C.Double) -> C.Double\nend\n', (2, 25), (2, 26)),
 ])
 def test_an_out_parameter_is_a_c_value_of_an_extern_function(tmp_path, text, start, stop):
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-OUT", start, stop)
 
 
 def test_out_is_still_a_name_and_result_is_an_out_of_a_void_function(tmp_path):
-    text = 'extern "libc.so.6"\n  def f(out result: C.Int) -> Void\nend\n\n' \
+    text = 'extern "libc.so.6"\n  def f(out result: C.Int32) -> Void\nend\n\n' \
            'def g(out: Int) -> Int\n  return out\nend\n\ndef main() -> Void\n  puts(f().result + g(1))\nend\n'
     assert check(source(tmp_path, text)).code == 0
 
@@ -365,8 +374,8 @@ def test_out_is_still_a_name_and_result_is_an_out_of_a_void_function(tmp_path):
 def test_the_record_takes_its_name_and_follows_the_function(tmp_path):
     clash = 'struct DbOpen\n  x: Int\nend\n\n' + OUTS % ""
     assert at(problem_of(check(source(tmp_path, clash))))[:2] == ("CHECK-REDEFINED-NAME", (7, 3))
-    twice = 'extern "libc.so.6"\n  def f(out x: C.Int, out x: C.Int) -> C.Int\nend\n'
-    assert at(problem_of(check(source(tmp_path, twice)))) == ("CHECK-REDEFINED-NAME", (2, 23), (2, 35))
+    twice = 'extern "libc.so.6"\n  def f(out x: C.Int32, out x: C.Int32) -> C.Int32\nend\n'
+    assert at(problem_of(check(source(tmp_path, twice)))) == ("CHECK-REDEFINED-NAME", (2, 25), (2, 39))
     late = 'def main() -> Void\n  puts(db_open().db)\nend\n\n' \
-           'extern "libc.so.6"\n  def db_open(out db: C.Int) -> Void\nend\n'
+           'extern "libc.so.6"\n  def db_open(out db: C.Int32) -> Void\nend\n'
     assert check(source(tmp_path, late)).code == 0

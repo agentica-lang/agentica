@@ -8,7 +8,7 @@ description: The C types of an extern block, reading memory that C returns, reso
 
 | C type | C | In Agentica |
 |---|---|---|
-| `C.Int` | `int` (32 bits) | `Int` |
+| `C.Int32` | `int32_t` / `int` (32 bits) | `Int` |
 | `C.Int64` | `int64_t` | `Int` |
 | `C.Double` | `double` | `Float` |
 | `C.Bool` | `bool` | `Bool` |
@@ -16,9 +16,9 @@ description: The C types of an extern block, reading memory that C returns, reso
 | `C.Pointer` | `void *` | `C.Pointer` |
 | `C.Bytes` | `const uint8_t *` (parameters only) | `List[Int]` |
 
-A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
+`C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
-- A `C.Int` argument outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
+- A `C.Int32` argument outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.string_at` (below).
 - A `C.Bytes` argument is a list of bytes: C gets a copy, valid only during the call, and an item outside 0 to 255 fails with `RUNTIME-INVALID-NUMBER`. Pass the length as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
 - A `C.Pointer` is a C pointer that your program passes back to C. It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it. Pointers have no `==`, and `IO.inspect` prints `<C.Pointer>`.
@@ -35,8 +35,8 @@ A function that returns a pointer and a length, or text that may be NULL, is dec
 ```agentica {mode="check"}
 extern "libsqlite3.so.0"
   resource Db, free: sqlite3_close_v2
-  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
-  def sqlite3_exec(db: Db, sql: C.String, callback: C.Pointer, arg: C.Pointer, out errmsg: C.Pointer) -> C.Int
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
+  def sqlite3_exec(db: Db, sql: C.String, callback: C.Pointer, arg: C.Pointer, out errmsg: C.Pointer) -> C.Int32
   def sqlite3_free(p: C.Pointer) -> Void
 end
 
@@ -60,7 +60,7 @@ extern "libc.so.6"
   ## A C stream.
   resource Stream, free: fclose
   def fopen(path: C.String, mode: C.String) -> Stream
-  def fputs(text: C.String, stream: Stream) -> C.Int
+  def fputs(text: C.String, stream: Stream) -> C.Int32
 end
 
 def main() -> Void
@@ -83,6 +83,6 @@ end
 A C function that gives a value through a pointer, such as `int sqlite3_open(const char *filename, sqlite3 **db)`, declares that parameter with `out`. The caller does not pass it: C writes into a slot that is zeroed before the call, and the call returns a record with the C result as `result` and one field per out parameter, named after it.
 
 - The record is a struct named after the C name in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
-- An out parameter is `C.Int`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
+- An out parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
 - An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it.
 - A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.

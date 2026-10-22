@@ -31,19 +31,19 @@ LIBC = "ucrtbase.dll" if WINDOWS else "libSystem.B.dylib" if MACOS else "libc.so
 LIBM = "ucrtbase.dll" if WINDOWS else "libSystem.B.dylib" if MACOS else "libm.so.6"
 
 PEER_EXTERN = """extern "{library}"
-  def peer_add(a: C.Int, b: C.Int) -> C.Int
+  def peer_add(a: C.Int32, b: C.Int32) -> C.Int32
   def peer_mul64(a: C.Int64, b: C.Int64) -> C.Int64
   def peer_scale(x: C.Double, k: C.Double) -> C.Double
   def peer_not(b: C.Bool) -> C.Bool
   def peer_len(s: C.String) -> C.Int64
   def peer_upper(s: C.String) -> C.String
   def peer_bump() -> Void
-  def peer_bumps() -> C.Int
+  def peer_bumps() -> C.Int32
   def peer_null() -> C.String
   def peer_bad_utf8() -> C.String
-  def peer_sum9(a: C.Int, b: C.Int, c: C.Int, d: C.Int, e: C.Int, f: C.Int, g: C.Int, h: C.Int, i: C.Int64) -> C.Int64
+  def peer_sum9(a: C.Int32, b: C.Int32, c: C.Int32, d: C.Int32, e: C.Int32, f: C.Int32, g: C.Int32, h: C.Int32, i: C.Int64) -> C.Int64
   def peer_mix(
-    a: C.Int, b: C.Double, c: C.Int64, d: C.Bool, s: C.String, e: C.Double, f: C.Double, g: C.Double, h: C.Double,
+    a: C.Int32, b: C.Double, c: C.Int64, d: C.Bool, s: C.String, e: C.Double, f: C.Double, g: C.Double, h: C.Double,
     i: C.Double, j: C.Double, k: C.Double, l: C.Double,
   ) -> C.Double
 end
@@ -155,7 +155,7 @@ def test_a_library_is_not_searched_in_the_working_directory(tmp_path, peer):
         (folder / here).write_bytes(peer.read_bytes())
     names = [here] + (["lib\\\\" + here, tmp_path.drive + here] if WINDOWS else [])
     for name in names:
-        text = 'extern "%s"\n  def peer_add(a: C.Int, b: C.Int) -> C.Int\nend\n\n' \
+        text = 'extern "%s"\n  def peer_add(a: C.Int32, b: C.Int32) -> C.Int32\nend\n\n' \
                'def main() -> Void\n  puts(peer_add(1, 2))\nend\n' % name
         result = agentica("--json", program(tmp_path, text), cwd=tmp_path,
                           env={"LD_LIBRARY_PATH": None, "DYLD_LIBRARY_PATH": None})
@@ -189,15 +189,15 @@ end
 
 
 COMPUTE_EXTERN = """extern "{library}"
-  compute def peer_wait_flag(limit_ms: C.Int) -> C.Int
+  compute def peer_wait_flag(limit_ms: C.Int32) -> C.Int32
   def peer_set_flag() -> Void
-  def peer_returned() -> C.Int
-  compute def peer_word(n: C.Int) -> C.String
+  def peer_returned() -> C.Int32
+  compute def peer_word(n: C.Int32) -> C.String
   compute def peer_half(n: C.Int64) -> C.Double
   compute def peer_bump() -> Void
-  def peer_bumps() -> C.Int
-  compute def peer_nap(ms: C.Int) -> C.Int
-  def peer_naps() -> C.Int
+  def peer_bumps() -> C.Int32
+  compute def peer_nap(ms: C.Int32) -> C.Int32
+  def peer_naps() -> C.Int32
 end
 
 """
@@ -335,19 +335,19 @@ end
 
 RESOURCE_EXTERN = """extern "{library}"
   resource Res, free: peer_res_free
-  def peer_res_open(value: C.Int) -> Res
-  def peer_res_get(res: Res) -> C.Int
-  compute def peer_res_hold(res: Res, limit_ms: C.Int) -> C.Int
-  compute def peer_res_open_later(value: C.Int, limit_ms: C.Int) -> Res
-  def peer_res_holding() -> C.Int
-  def peer_res_frees() -> C.Int
-  def peer_res_busy_frees() -> C.Int
+  def peer_res_open(value: C.Int32) -> Res
+  def peer_res_get(res: Res) -> C.Int32
+  compute def peer_res_hold(res: Res, limit_ms: C.Int32) -> C.Int32
+  compute def peer_res_open_later(value: C.Int32, limit_ms: C.Int32) -> Res
+  def peer_res_holding() -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_res_busy_frees() -> C.Int32
   def peer_set_flag() -> Void
-  def peer_bytes_sum(bytes: C.Bytes, n: C.Int) -> C.Int
+  def peer_bytes_sum(bytes: C.Bytes, n: C.Int32) -> C.Int32
   def peer_ptr_echo(p: C.Pointer) -> C.Pointer
   def peer_ptr_static() -> C.Pointer
-  def peer_ptr_read(p: C.Pointer) -> C.Int
-  def peer_res_bytes(res: Res, bytes: C.Bytes, n: C.Int) -> C.Int
+  def peer_ptr_read(p: C.Pointer) -> C.Int32
+  def peer_res_bytes(res: Res, bytes: C.Bytes, n: C.Int32) -> C.Int32
 end
 
 def get(res: Res) -> Int
@@ -449,7 +449,7 @@ end
 MEMORY_EXTERN = """extern "{library}"
   def peer_text() -> C.Pointer
   def peer_ptr_static() -> C.Pointer
-  def peer_ptr_read(p: C.Pointer) -> C.Int
+  def peer_ptr_read(p: C.Pointer) -> C.Int32
   def peer_ptr_value(p: C.Pointer) -> C.Int64
 end
 
@@ -590,8 +590,8 @@ end
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_cancelled_compute_call_that_never_ran_gives_no_result(tmp_path, peer, schedulers):
     main = """extern "{library}"
-  compute def peer_word(n: C.Int) -> C.String
-  def peer_res_opens() -> C.Int
+  compute def peer_word(n: C.Int32) -> C.String
+  def peer_res_opens() -> C.Int32
 end
 
 def later(n: Int) -> Result[Int]
@@ -644,15 +644,15 @@ end
 OUT_EXTERN = """extern "{library}"
   resource Res, free: peer_res_free
   def peer_out_all(
-    n: C.Int, out i: C.Int, out l: C.Int64, out d: C.Double, out b: C.Bool, out p: C.Pointer, out res: Res,
-  ) -> C.Int
-  def peer_out_null(out res: Res) -> C.Int
-  def peer_out_untouched(out res: Res) -> C.Int
-  def peer_out_twice(n: C.Int, out twice: C.Int) -> Void
-  compute def peer_out_open_later(value: C.Int, limit_ms: C.Int, out res: Res) -> C.Int
-  def peer_res_get(res: Res) -> C.Int
-  def peer_res_frees() -> C.Int
-  def peer_ptr_read(p: C.Pointer) -> C.Int
+    n: C.Int32, out i: C.Int32, out l: C.Int64, out d: C.Double, out b: C.Bool, out p: C.Pointer, out res: Res,
+  ) -> C.Int32
+  def peer_out_null(out res: Res) -> C.Int32
+  def peer_out_untouched(out res: Res) -> C.Int32
+  def peer_out_twice(n: C.Int32, out twice: C.Int32) -> Void
+  compute def peer_out_open_later(value: C.Int32, limit_ms: C.Int32, out res: Res) -> C.Int32
+  def peer_res_get(res: Res) -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_ptr_read(p: C.Pointer) -> C.Int32
   def peer_set_flag() -> Void
 end
 
@@ -695,7 +695,7 @@ end
 # The record of an exported extern function is exported with it: another file names its type and reads its fields.
 @NATIVE_CALLS
 def test_the_record_of_an_out_call_crosses_an_import(tmp_path, peer):
-    program(tmp_path, 'extern "%s"\n  export def peer_out_twice(n: C.Int, out twice: C.Int) -> Void\nend\n'
+    program(tmp_path, 'extern "%s"\n  export def peer_out_twice(n: C.Int32, out twice: C.Int32) -> Void\nend\n'
             % literal(peer), "raw.agc")
     main = program(tmp_path, 'import Raw from "./raw"\n\ndef twice(made: Raw.PeerOutTwice) -> Int\n'
                    '  return made.twice\nend\n\ndef main() -> Void\n  puts(twice(Raw.peer_out_twice(4)))\nend\n')
@@ -731,19 +731,19 @@ end
 
 
 WAIT_EXTERN = """extern "{library}"
-  def peer_pipe() -> C.Int
-  def peer_pipe_writer() -> C.Int
-  def peer_pipe_put() -> C.Int
-  def peer_pipe_take() -> C.Int
+  def peer_pipe() -> C.Int32
+  def peer_pipe_writer() -> C.Int32
+  def peer_pipe_put() -> C.Int32
+  def peer_pipe_take() -> C.Int32
   def peer_pipe_fill() -> Void
   def peer_pipe_blocking() -> Void
-  def peer_nonblocking(fd: C.Int) -> C.Int
-  def peer_regular_file() -> C.Int
-  def peer_open_fds() -> C.Int
-  def peer_fifo(path: C.String) -> C.Int
-  def peer_fifo_put() -> C.Int
-  def peer_pty() -> C.Int
-  def peer_pty_put() -> C.Int
+  def peer_nonblocking(fd: C.Int32) -> C.Int32
+  def peer_regular_file() -> C.Int32
+  def peer_open_fds() -> C.Int32
+  def peer_fifo(path: C.String) -> C.Int32
+  def peer_fifo_put() -> C.Int32
+  def peer_pty() -> C.Int32
+  def peer_pty_put() -> C.Int32
 end
 
 def wait(fd: Int) -> Result[Void]
@@ -934,8 +934,8 @@ def test_what_c_cannot_take_stops_the_run_at_the_extern_function(tmp_path, case,
 end
 
 extern "LIBC"
-  def no_such_function_here() -> C.Int
-  def abs(n: C.Int) -> C.Int
+  def no_such_function_here() -> C.Int32
+  def abs(n: C.Int32) -> C.Int32
   def strlen(s: C.String) -> C.Int64
 end
 
@@ -961,7 +961,7 @@ end
 # built again without it, and the missing function stops the load.
 @NATIVE_CALLS
 def test_a_library_with_an_unbound_symbol_is_a_load_error_and_keeps_earlier_output(tmp_path, tmp_path_factory):
-    text = 'extern "%s"\n  def unbound_call() -> C.Int\nend\n\n' \
+    text = 'extern "%s"\n  def unbound_call() -> C.Int32\nend\n\n' \
            'def main() -> Void\n  puts("before")\n  puts(unbound_call())\nend\n'
     if WINDOWS:
         folder = tmp_path_factory.mktemp("native")
@@ -984,7 +984,7 @@ EXTERN_FIRST = """def main() -> Void
 end
 
 extern "%s"
-  def abs(n: C.Int) -> C.Int
+  def abs(n: C.Int32) -> C.Int32
 end
 """ % LIBC
 
@@ -1023,7 +1023,7 @@ def test_other_systems_refuse_extern_at_load(tmp_path):
 
 
 EXTERN_TEST = """extern "%s"
-  def abs(n: C.Int) -> C.Int
+  def abs(n: C.Int32) -> C.Int32
 end
 
 def main() -> Void
@@ -1057,10 +1057,10 @@ SQLITE_LIBRARY = "libsqlite3.dylib" if MACOS else "libsqlite3.so.0"
 
 SQLITE_EXTERN = """extern "%s"
   resource Block, free: sqlite3_free
-  def sqlite3_libversion_number() -> C.Int
+  def sqlite3_libversion_number() -> C.Int32
   def sqlite3_libversion() -> C.String
-  def sqlite3_complete(sql: C.String) -> C.Int
-  def sqlite3_malloc(size: C.Int) -> Block
+  def sqlite3_complete(sql: C.String) -> C.Int32
+  def sqlite3_malloc(size: C.Int32) -> Block
   def sqlite3_msize(block: Block) -> C.Int64
 end
 
@@ -1113,13 +1113,13 @@ end
 SQLITE_OUT_EXTERN = """extern "%s"
   resource Db, free: sqlite3_close_v2
   resource Stmt, free: sqlite3_finalize
-  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
-  def sqlite3_errcode(db: Db) -> C.Int
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
+  def sqlite3_errcode(db: Db) -> C.Int32
   def sqlite3_errmsg(db: Db) -> C.String
-  def sqlite3_prepare_v2(db: Db, sql: C.String, bytes: C.Int, out stmt: Stmt, out tail: C.Pointer) -> C.Int
-  compute def sqlite3_step(stmt: Stmt) -> C.Int
-  def sqlite3_column_int(stmt: Stmt, col: C.Int) -> C.Int
-  def sqlite3_column_text(stmt: Stmt, col: C.Int) -> C.String
+  def sqlite3_prepare_v2(db: Db, sql: C.String, bytes: C.Int32, out stmt: Stmt, out tail: C.Pointer) -> C.Int32
+  compute def sqlite3_step(stmt: Stmt) -> C.Int32
+  def sqlite3_column_int(stmt: Stmt, col: C.Int32) -> C.Int32
+  def sqlite3_column_text(stmt: Stmt, col: C.Int32) -> C.String
 end
 
 """ % SQLITE_LIBRARY
@@ -1179,13 +1179,13 @@ end
 
 # The memory that SQLite returns (#592): the extern block above with sqlite3_column_text as a C.Pointer, which is NULL
 # for SQL NULL, and the functions that take or give memory.
-SQLITE_MEMORY_EXTERN = SQLITE_OUT_EXTERN.replace("  def sqlite3_column_text(stmt: Stmt, col: C.Int) -> C.String\n", """\
-  def sqlite3_column_text(stmt: Stmt, col: C.Int) -> C.Pointer
-  def sqlite3_column_blob(stmt: Stmt, col: C.Int) -> C.Pointer
-  def sqlite3_column_bytes(stmt: Stmt, col: C.Int) -> C.Int
-  def sqlite3_bind_text(stmt: Stmt, index: C.Int, text: C.String, bytes: C.Int, destructor: C.Pointer) -> C.Int
-  def sqlite3_bind_blob(stmt: Stmt, index: C.Int, blob: C.Bytes, bytes: C.Int, destructor: C.Pointer) -> C.Int
-  def sqlite3_exec(db: Db, sql: C.String, callback: C.Pointer, arg: C.Pointer, out errmsg: C.Pointer) -> C.Int
+SQLITE_MEMORY_EXTERN = SQLITE_OUT_EXTERN.replace("  def sqlite3_column_text(stmt: Stmt, col: C.Int32) -> C.String\n", """\
+  def sqlite3_column_text(stmt: Stmt, col: C.Int32) -> C.Pointer
+  def sqlite3_column_blob(stmt: Stmt, col: C.Int32) -> C.Pointer
+  def sqlite3_column_bytes(stmt: Stmt, col: C.Int32) -> C.Int32
+  def sqlite3_bind_text(stmt: Stmt, index: C.Int32, text: C.String, bytes: C.Int32, destructor: C.Pointer) -> C.Int32
+  def sqlite3_bind_blob(stmt: Stmt, index: C.Int32, blob: C.Bytes, bytes: C.Int32, destructor: C.Pointer) -> C.Int32
+  def sqlite3_exec(db: Db, sql: C.String, callback: C.Pointer, arg: C.Pointer, out errmsg: C.Pointer) -> C.Int32
   def sqlite3_free(p: C.Pointer) -> Void
 """)
 
