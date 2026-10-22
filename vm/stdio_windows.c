@@ -3,8 +3,7 @@
  * notices; this file decides how a handle is written (a file or a console by a pool thread, a pipe by a libuv stream),
  * whether two descriptors are one target, does the writes, makes the in-memory stream of a notice, reads stdin on a
  * thread of its own, at the exit shuts down the sending side of a socket, and ends the process (agc_exit_now). The
- * Linux and macOS side is
- * vm/stdio_posix.c. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
+ * Linux and macOS side is vm/stdio_posix.c. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
  */
 #ifdef _WIN32
 #include "core.h"
