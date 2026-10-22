@@ -188,7 +188,8 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
 
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
    then standard output and the files, then the exit. Nothing else is
-   drained: the OS frees descriptors and memory. */
+   drained: the sockets are closed in goodbye (agc_io_goodbye), and the OS
+   frees the other descriptors and the memory. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_processes_stop(vm);
   agc_io_children_stopped();

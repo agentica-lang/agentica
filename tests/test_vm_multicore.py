@@ -18,7 +18,9 @@ import signal
 import socket
 import ssl
 import subprocess
+import sys
 import threading
+import time
 
 import pytest
 
@@ -27,7 +29,7 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, compile_text, host_only, kill_process, known_issue,
+from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, compile_text, host_only, kill_process,
                                  process_alive, run, scaled, vm_command, vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
@@ -792,9 +794,14 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
 
 
 # Processes, the child channel and the Test protocol run on several schedulers: every libuv step is a request to the
-# I/O thread, which owns each child's handles and buffers (§16.9). Most children are Python programs; the cases whose
-# children are sh scripts that need POSIX process ids, descriptor 3 or ps do not run on Windows yet (#486).
-SH_CHILDREN = known_issue(WINDOWS, 486, "the children are sh scripts that need POSIX process ids, descriptor 3 or ps")
+# I/O thread, which owns each child's handles and buffers (§16.9). The children are Python programs; those that print
+# their process id, watch another one end, read the child channel or record themselves are modes of CHILD, and a
+# program gets the interpreter, its flags and CHILD as its first three arguments (CHILD_ARGS). CHILD needs neither the
+# environment nor site-packages (-I -S), and starts faster without them. It runs on the base interpreter of a venv: on
+# Windows a venv's python.exe is a launcher that starts the interpreter and only then puts it in a job that ends it
+# with the launcher, so a launcher that the end of a run kills in between leaves the interpreter running.
+CHILD = str(FIXTURES / "multicore-child.py")
+CHILD_ARGS = (getattr(sys, "_base_executable", PYTHON), "-IS", CHILD)
 POSIX_SIGNALS = host_only(WINDOWS or not hasattr(signal, "SIGTERM"), "Windows has no POSIX stop signals")
 MULTICORE_CHILDREN = {"AGENTICA_SCHEDULERS": SCHEDULERS}
 
@@ -869,12 +876,13 @@ def sender(p: Process) -> Result[Void]
 end
 
 def watch(pid: String) -> Process
-  script = "while kill -0 #{pid} 2>/dev/null; do sleep 0.02; done; echo gone"
-  return Process.spawn("sh", ["-c", script], 5000).unwrap!
+  args = System.args()
+  return Process.spawn(args[0], [args[1], args[2], "watch", pid], 5000).unwrap!
 end
 
 def main() -> Void
-  p = Process.spawn_captured("sh", ["-c", "exec sleep 60"], ".", 5000).unwrap!
+  args = System.args()
+  p = Process.spawn_captured(args[0], [args[1], args[2], "quiet"], ".", 5000).unwrap!
   r = Task.spawn(&reader, p)
   w = Task.spawn(&waiter, p)
   s = Task.spawn(&sender, p)
@@ -888,18 +896,17 @@ def main() -> Void
   IO.inspect(Process.read_line(p, 100))
   Process.close(p)
   IO.inspect(Process.wait(p, 100))
-  owned = Process.spawn("sh", ["-c", "echo $$; exec sleep 60"], 5000).unwrap!
-  pid = Process.read_line(owned, 5000).unwrap!
+  owned = Process.spawn(args[0], [args[1], args[2], "sleep"], 5000).unwrap!
+  pid = Process.read_line(owned, 20000).unwrap!
   o = Task.spawn_owning(&reader, owned)
   Task.sleep(20)
   Task.cancel(o)
   IO.inspect(Task.await(o))
-  IO.inspect(Process.read_line(watch(pid), 5000))
+  IO.inspect(Process.read_line(watch(pid), 20000))
 end
 """
 
 
-@SH_CHILDREN
 @RACE
 def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_its_child(tmp_path, repeats):
     # A read, a wait and a 1 MiB send that the child never reads are parked on one child and cancelled from main:
@@ -910,7 +917,7 @@ def test_process_waits_cancelled_from_other_schedulers_end_and_the_owner_kills_i
                                                     'error("process: process is closed")', 'error("task: cancelled")',
                                                     'ok("gone")']
     for _ in range(repeats):
-        result = vm(bytecode, timeout=60)
+        result = vm(bytecode, args=CHILD_ARGS, timeout=60)
         assert (result.code, result.stdout.splitlines(), result.stderr) == (0, expected, "")
 
 
@@ -982,14 +989,15 @@ def leave(code: Int) -> Int
 end
 
 def main() -> Void
-  plain = Process.spawn("sh", ["-c", "echo $$; exec sleep 60"], 5000).unwrap!
-  captured = Process.spawn_captured("sh", ["-c", "echo $$; exec sleep 60"], ".", 5000).unwrap!
-  pids = "#{Process.read_line(plain, 5000).unwrap!} #{Process.read_line(captured, 5000).unwrap!}"
+  args = System.args()
+  plain = Process.spawn(args[0], [args[1], args[2], "sleep"], 5000).unwrap!
+  captured = Process.spawn_captured(args[0], [args[1], args[2], "sleep"], ".", 5000).unwrap!
+  pids = "#{Process.read_line(plain, 20000).unwrap!} #{Process.read_line(captured, 20000).unwrap!}"
   Task.spawn(&read, plain)
   Task.spawn(&wait, captured)
   puts(pids)
   IO.flush()
-  if System.args()[0] == "exit"
+  if args[3] == "exit"
     Task.spawn(&leave, 3)
   end
   Task.sleep(60000)
@@ -997,12 +1005,12 @@ end
 """
 
 
-@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), pytest.param("exit", marks=SH_CHILDREN)])
+@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), "exit"])
 def test_a_stop_signal_or_an_exit_kills_the_children_of_a_run_on_several_schedulers(tmp_path, mode):
     # A plain and a captured child, each with a task parked on it; the run gets SIGTERM, or a task calls
     # System.exit(3) on its scheduler. The run ends with the signal or 3, and both children are gone.
     bytecode = program(tmp_path, "proc_stop", PROC_STOP)
-    process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, mode], stdin=subprocess.DEVNULL,
+    process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, *CHILD_ARGS, mode], stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
                                text=True)
     pids = []
@@ -1108,23 +1116,22 @@ end
 def parent(p: Process) -> Result[Int]
   Task.spawn_owning(&closer, p)
   line = Process.read_line(p, 5000)
-  return ok(10 / List.size(System.args()))
+  return ok(10 / (List.size(System.args()) - 3))
 end
 
 def main() -> Void
-  p = Process.spawn("sh", ["-c", "echo $$; exec cat"], 5000).unwrap!
-  pid = Process.read_line(p, 5000).unwrap!
+  args = System.args()
+  p = Process.spawn(args[0], [args[1], args[2], "cat"], 5000).unwrap!
+  pid = Process.read_line(p, 20000).unwrap!
   t = Task.spawn_owning(&parent, p)
   puts(Task.await(t).ok?)
-  script = "while kill -0 #{pid} 2>/dev/null; do sleep 0.02; done; echo gone"
-  watcher = Process.spawn("sh", ["-c", script], 5000).unwrap!
-  IO.inspect(Process.read_line(watcher, 5000))
+  watcher = Process.spawn(args[0], [args[1], args[2], "watch", pid], 5000).unwrap!
+  IO.inspect(Process.read_line(watcher, 20000))
   puts(Task.pending_count())
 end
 """
 
 
-@SH_CHILDREN
 @RACE
 def test_a_crash_cancels_a_task_inside_process_close_on_another_scheduler(tmp_path, repeats):
     # process-close-cancel without its yield: the closer sends a line to `cat` and then closes the child it owns; the
@@ -1133,15 +1140,13 @@ def test_a_crash_cancels_a_task_inside_process_close_on_another_scheduler(tmp_pa
     # left.
     bytecode = program(tmp_path, "proc_close_cancel", PROC_CLOSE_CANCEL)
     for _ in range(repeats):
-        result = vm(bytecode, timeout=60)
+        result = vm(bytecode, args=CHILD_ARGS, timeout=60)
         assert (result.code, result.stdout) == (0, 'false\nok("gone")\n0\n')
         assert "RUNTIME-DIVISION-BY-ZERO" in result.stderr
 
 
-# The child reads one byte of the channel, then says so on stdout: the sender's 1 MB write has begun and the rest of it
-# stays parked, since the child reads no more.
-CHANNEL_CHILD = "head -c 1 <&3 >/dev/null; echo started; exec sleep 60"
-
+# The child (CHILD's channel mode) reads one byte of the channel, then says so on stdout: the sender's 1 MB write has
+# begun and the rest of it stays parked, since the child reads no more.
 PROC_CHANNEL_CLOSE = r"""def reader(p: Process) -> String
   return Process.channel_read_line(p, 60000).inspect
 end
@@ -1159,19 +1164,19 @@ def holder(p: Process) -> Result[Int]
   Task.spawn(&reader, p)
   Task.spawn(&sender, p)
   started = Process.read_line(p, 30000).unwrap!
-  return ok(10 / List.size(System.args()) + started.length)
+  return ok(10 / (List.size(System.args()) - 3) + started.length)
 end
 
 def main() -> Void
-  script = "CHILD"
-  p = Process.spawn_channel("sh", ["-c", script], ".", 5000).unwrap!
+  args = System.args()
+  p = Process.spawn_channel(args[0], [args[1], args[2], "channel"], ".", 5000).unwrap!
   r = Task.spawn(&reader, p)
   s = Task.spawn(&sender, p)
   puts(Process.read_line(p, 30000).unwrap!)
   Process.close(p)
   puts(Task.await(r))
   puts(Task.await(s))
-  q = Process.spawn_channel("sh", ["-c", script], ".", 5000).unwrap!
+  q = Process.spawn_channel(args[0], [args[1], args[2], "channel"], ".", 5000).unwrap!
   t = Task.spawn_owning(&holder, q)
   puts(Task.await(t).ok?)
   Process.close(q)
@@ -1180,10 +1185,9 @@ def main() -> Void
   end
   puts(Task.pending_count())
 end
-""".replace("CHILD", CHANNEL_CHILD)
+"""
 
 
-@SH_CHILDREN
 @RACE
 def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats):
     # process-channel-close without its 100 ms sleeps: main closes the child once the child has read the first byte of
@@ -1194,7 +1198,7 @@ def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats
     bytecode = program(tmp_path, "proc_channel_close", PROC_CHANNEL_CLOSE)
     reads = {'error("process: channel is closed")', 'error("process: process is closed")'}
     for _ in range(repeats):
-        result = vm(bytecode, timeout=60)
+        result = vm(bytecode, args=CHILD_ARGS, timeout=60)
         assert result.code == 0, result.stderr
         started, read, send, crashed, pending = result.stdout.splitlines()
         assert (started, send, crashed, pending) == ("started", 'error("process: channel is closed")', "false", "0")
@@ -1203,53 +1207,81 @@ def test_a_close_ends_channel_calls_parked_on_other_schedulers(tmp_path, repeats
 
 
 # A spawn whose START is still in the I/O thread's inbox when main returns must not start a child after the end of the
-# run has reaped the children: nobody would kill it.
-SPAWN_AT_END = r"""def spawner(mark: String) -> Int
+# run has reaped the children: nobody would kill it. Each child (CHILD's record mode) writes a growing count to a file
+# named by its process id in the folder of its run, for ever.
+SPAWN_AT_END = r"""def spawner(dir: String) -> Int
+  args = System.args()
   n = 0
   while n < 100000
-    p = Process.spawn("sh", ["-c", "while :; do sleep 0.1; done", mark], 5000)
+    p = Process.spawn(args[0], [args[1], args[2], "record", dir], 5000)
     n = n + 1
   end
   return n
 end
 
 def main() -> Void
-  mark = System.args()[0]
-  Task.spawn(&spawner, mark)
-  Task.spawn(&spawner, mark)
-  Task.spawn(&spawner, mark)
+  dir = System.args()[3]
+  Task.spawn(&spawner, dir)
+  Task.spawn(&spawner, dir)
+  Task.spawn(&spawner, dir)
   Task.sleep(30)
   puts("done")
 end
 """
 
 
-def marked(mark):
-    """The ids of the processes whose command line holds `mark`."""
-    # -ww: without it ps cuts each line at 80 columns when its output is not a terminal.
-    listing = subprocess.run(["ps", "-ww", "-eo", "pid=,args="], capture_output=True, text=True, check=True).stdout
-    return [line.split(None, 1)[0] for line in listing.splitlines() if mark in line]
+def recorded_running(folders):
+    """The ids of the SPAWN_AT_END children in `folders` that still run: those whose count moves within half a second.
+    Not process_alive on the id: Windows soon gives the id of a child that ended to another process."""
+    def counts():
+        found = {}
+        for folder in folders:
+            for entry in folder.iterdir():
+                try:
+                    found[entry.name] = entry.read_text()
+                except OSError:
+                    found[entry.name] = None  # read while the child rewrites it
+        return found
+
+    before = counts()
+    time.sleep(0.5)
+    after = counts()
+    return [pid for pid, count in after.items() if before.get(pid) != count]
 
 
-@SH_CHILDREN
 @RACE
 def test_spawns_racing_the_end_of_the_run_leave_no_child_behind(tmp_path, repeats):
     # Three tasks spawn children in a loop while main returns: every child that started is killed by the end of the
-    # run, and a spawn still queued then starts none. A child left behind loops with the mark as $0; its own children
-    # live 0.1 s, so killing the marked shell leaves nothing.
+    # run, and a spawn still queued then starts none. A child left behind runs for ever, so once its file is there its
+    # count keeps moving: each run's children are checked after the run, and all of them again at the end, after a
+    # pause that leaves a late child the time to start and record itself.
     bytecode = program(tmp_path, "spawn_at_end", SPAWN_AT_END)
-    mark = "agc-orphan-%d-%d" % (os.getpid(), repeats)
-    # Not run(): it kills the run's process group at the end, which would hide a child left behind.
-    command = [*vm_command(), *FLAGS, "--", bytecode, mark]
+    folders = []
+    # The ids that the last check found running: the only ones the cleanup kills, so an id that an unrelated process
+    # took over after a recorded child ended is never killed.
+    left = []
+
+    def none_left(chosen):
+        left[:] = recorded_running(chosen)
+        return not left
+
     try:
         # A run without the fix leaves a child behind about half the time: ten make it near certain.
-        for _ in range(10 * repeats):
-            result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                                    env=vm_environment(), timeout=60, check=False)
+        for k in range(10 * repeats):
+            folder = tmp_path / ("run-%d" % k)
+            folder.mkdir()
+            folders.append(folder)
+            # Not run(): it kills the run's process group at the end, which would hide a child left behind.
+            result = subprocess.run([*vm_command(), *FLAGS, "--", bytecode, *CHILD_ARGS, str(folder)],
+                                    stdin=subprocess.DEVNULL, capture_output=True, text=True, env=vm_environment(),
+                                    timeout=60, check=False)
             assert (result.returncode, result.stdout, result.stderr) == (0, "done\n", "")
-            assert wait_until(lambda: not marked(mark), timeout=3), marked(mark)
+            assert wait_until(lambda: none_left(folders[-1:]), timeout=3), left
+        # A fixed pause, not a wait for the check to pass: a child that has not recorded itself yet would pass it.
+        time.sleep(scaled(2))
+        assert none_left(folders), left
     finally:
-        for pid in marked(mark):
+        for pid in left:
             kill_process(pid)
 
 
@@ -2144,8 +2176,7 @@ end
 """
 
 
-@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), pytest.param("exit", marks=known_issue(
-    WINDOWS, 489, "System.exit resets the open sockets on Windows"))])
+@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), "exit"])
 def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path, mode):
     # A run with a parked accept, a parked TCP read and a parked TLS read gets SIGTERM, or main calls System.exit(3)
     # on its scheduler: the run ends with the signal or 3, and the peer sees EOF on the TCP socket and close_notify on

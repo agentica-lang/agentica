@@ -89,9 +89,7 @@ Weighed later (no fixed order)
     (19c).
 17. [#469](https://github.com/sonic182/agentica/issues/469): the doc site.
 18. `agentica help std/MODULE` (row 22b, part 2).
-19. The Windows issues [#489](https://github.com/sonic182/agentica/issues/489),
-    [#486](https://github.com/sonic182/agentica/issues/486),
-    [#474](https://github.com/sonic182/agentica/issues/474),
+19. The Windows issues [#474](https://github.com/sonic182/agentica/issues/474),
     [#462](https://github.com/sonic182/agentica/issues/462),
     [#457](https://github.com/sonic182/agentica/issues/457),
     [#393](https://github.com/sonic182/agentica/issues/393) and
