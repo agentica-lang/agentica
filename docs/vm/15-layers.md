@@ -121,7 +121,7 @@ allows. Its header, `port.h`, declares every function below.
     `agc_disown` (a server takes its listener off its owner's list),
     `agc_unregister`, `agc_resource_id`, `agc_handle_wait` (the handle's lock
     FIFO); the resource's `goodbye` hook, called through `agc_io_goodbye`
-    (`tcp.c` sets it for TLS `close_notify`); and `keep_detached`, which
+    (`tcp.c` sets it to close a socket, TLS `close_notify` first); and `keep_detached`, which
     `process.c` sets so that `discard` in `loop.c` does not release a process
     whose detached result is dropped
 

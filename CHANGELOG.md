@@ -67,6 +67,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `--allow-run` is gone: programs may start processes by
   default.
 
+### Fixed
+
+- On Windows, `System.exit` closes open TCP and TLS sockets instead of
+  resetting them, so the peer reads the end of input.
+
 ## [0.8.1] - 2026-10-22
 
 ### Added
