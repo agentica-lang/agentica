@@ -303,6 +303,26 @@ class MetricsTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertFalse(run.is_net_command(command))
 
+    def test_pi_usage_gives_the_context_tokens_and_the_cost_split(self) -> None:
+        def message_end(role: str, usage: dict) -> str:
+            return json.dumps({"type": "message_end", "message": {"role": role, "usage": usage}})
+
+        def usage(input: int, cache_read: int, cache_write: int, output: int, cost: tuple[float, ...]) -> dict:
+            names = ("input", "cacheRead", "cacheWrite", "output", "total")
+            return {"input": input, "cacheRead": cache_read, "cacheWrite": cache_write, "output": output,
+                    "cost": dict(zip(names, cost))}
+
+        events = [message_end("assistant", usage(100, 400, 50, 10, (0.5, 0.25, 0.125, 1.0, 1.875))),
+                  message_end("user", usage(7, 7, 7, 7, (9.0, 9.0, 9.0, 9.0, 9.0))),
+                  message_end("assistant", usage(20, 480, 0, 5, (0.25, 0.25, 0.0, 0.5, 1.0)))]
+
+        metrics = run.pi_metrics("\n".join(events))
+
+        self.assertEqual((metrics["tokens_in"], metrics["tokens_cached"], metrics["tokens_cache_write"],
+                          metrics["tokens_out"], metrics["turns"]), (120, 880, 50, 15, 2))
+        self.assertEqual((metrics["cost_input"], metrics["cost_cache"], metrics["cost_output"], metrics["cost"]),
+                         (0.75, 0.625, 1.5, 2.875))
+
     def test_claude_metrics_have_the_check_counters(self) -> None:
         metrics = run.claude_metrics(json.dumps({"usage": {"input_tokens": 3, "output_tokens": 4}, "num_turns": 2}))
 
@@ -675,9 +695,28 @@ class SummaryTests(unittest.TestCase):
             summary = (results / "summary.md").read_text(encoding="utf-8")
 
         self.assertIn("check runs | query runs | refused | read runs | type escapes", summary)
-        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | 4.0 | 2.0 | 3.0 | 1.5 | 1.5 | 5.0 | 1.5 | check:arg-type |",
+        # no token or cost fields in these rows: the context and the cost split are unknown, not 0
+        self.assertIn("| t1 | typed-python | 2 | 1/2 | 50% | 0 | - | - | - | - | 4.0 | 2.0 | 3.0 | 1.5 | 1.5 | 5.0 | 1.5 | check:arg-type |",
                       summary)
         self.assertIn("stopped_for_budget: false", summary)
+
+    def test_summary_shows_the_context_and_the_cost_split(self) -> None:
+        row = {"task": "t1", "arm": "skill", "status": "pass", "passed": 1, "total": 1, "seconds": 1.0,
+               "failure": None, "code": None}
+        rows = [dict(row, tokens_in=100, tokens_out=10, tokens_cached=400, tokens_cache_write=50,
+                     cost_input=0.5, cost_cache=0.25, cost_output=1.0),
+                dict(row, tokens_in=300, tokens_out=30, tokens_cached=600, cost_input=1.5, cost_cache=0.75,
+                     cost_output=2.0)]
+        with tempfile.TemporaryDirectory() as directory:
+            results = Path(directory)
+            (results / "results.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                run.summarize(results)
+            summary = (results / "summary.md").read_text(encoding="utf-8")
+
+        self.assertIn("| tokens | context | cost in $ | cost cache $ | cost out $ |", summary)
+        # tokens: (110 + 330) / 2; context: (550 + 900) / 2, the cache write counted when present
+        self.assertIn("| t1 | skill | 2 | 2/2 | 100% | 220 | 725 | 1.0000 | 0.5000 | 1.5000 | 1.0 |", summary)
 
 
 class DockerBoundaryTests(unittest.TestCase):
