@@ -41,8 +41,8 @@ EXTERN_CODES = {
 }
 EXTERN_TYPES = {"i": "Int", "l": "Int", "d": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "v": "Void"}
 EXTERN_TYPES_HELP = (
-  "extern functions take and return C.Int, C.Int64, C.Double, C.Bool, C.String, C.Pointer or a resource of the " +
-  "block, take C.Bytes, or return Void"
+  "extern functions take and return C.Int, C.Int64, C.Double, C.Bool, C.String, C.Pointer or a resource " +
+  "declared above in the same block, take C.Bytes, or return Void"
 )
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).

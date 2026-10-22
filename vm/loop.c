@@ -443,8 +443,8 @@ static int queue_work(agc_loop *loop, job *j) { return agc_io_queue_work(&loop->
 
 /* The compute pool's half of a job, as libuv's run_work and work_finished are the pool's: the work on a pool thread,
    then its end on the loop's thread. A job whose task was cancelled while it waited in the pool's queue skips its work
-   (a native call not made, so none of its effects happen); its `done` then gets the data as it was and builds a value
-   that the detached end drops. A work already running runs to its end. */
+   (a native call not made, so none of its effects happen); its `done` then sees that the work did not run, builds no
+   result from it, and the detached end drops what it gives. A work already running runs to its end. */
 static void run_compute(void *item) {
   job *j = item;
   if (!atomic_load(&j->detached)) j->kind->work(j->data);

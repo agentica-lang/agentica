@@ -35,7 +35,8 @@ static void test_bad_signatures(void) {
   agc_value one = agc_float(0.0);
   const char *bad[] = {"", "d", "dd", "dd cos", "zd cos libm.so.6", "dz cos libm.so.6", "dv cos libm.so.6",
                        "dd  libm.so.6", " cos libm.so.6", "yd cos libm.so.6", "rd cos libm.so.6",
-                       "rd cos free libm.so.6", "rd cos  Mem libm.so.6"};
+                       "rd cos free libm.so.6", "rd cos  Mem libm.so.6", "rd cos free M\xc3\xa9m libm.so.6",
+                       "rd cos free 1Mem libm.so.6", "rd cos free M.em libm.so.6"};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);

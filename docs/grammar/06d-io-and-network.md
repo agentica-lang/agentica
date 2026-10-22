@@ -382,15 +382,17 @@ end
   argument is copied. `Native.close(r)` runs `free` once and marks the resource
   closed; closing it again does nothing. If the owning task ends first (return,
   crash or cancel), its end runs `free`, as for a handle (section 6c), and
-  `Task.spawn_owning` hands a resource to another task. When `main` returns,
-  the program ends without freeing what is still open. A `compute def` call
-  holds its resource arguments until it returns: a close or the owner's end
-  meanwhile marks them closed, and `free` runs when the call ends. A resource
-  and a `C.Pointer` do not convert into each other. Every resource result is a
-  new pointer that the program owns: a function that returns a pointer it keeps
-  (a borrowed one) must be declared `-> C.Pointer`, or its pointer is freed
-  twice. `IO.inspect` prints `<Db>`; `to_s` is `CHECK-TYPE-MISMATCH` and JSON
-  `CHECK-NOT-ENCODABLE`, as for other handles.
+  `Task.spawn_owning` hands a resource to another task. When `main` returns, the
+  program ends without freeing what is still open. A `compute def` call holds
+  its resource arguments until it returns: a close or the owner's end meanwhile
+  marks them closed, and `free` runs when the call ends. A resource and a
+  `C.Pointer` do not convert into each other. Every resource result is a new
+  pointer that the program owns: a function that returns a pointer it keeps (a
+  borrowed one) must be declared `-> C.Pointer`, or its pointer is freed twice.
+  A `def` of `db_close` in the same block is `PARSE-EXTERN-FREE`; the check
+  stops at the block, so do not declare it in another one either. `IO.inspect`
+  prints `<Db>`; `to_s` is `CHECK-TYPE-MISMATCH` and JSON `CHECK-NOT-ENCODABLE`,
+  as for other handles.
 - A `def` call blocks timers, I/O and other tasks until it returns, and the step
   limit cannot stop it in the middle. Native code must retry calls cut
   short by `EINTR`: GC signals can interrupt sleeps and polls.

@@ -56,11 +56,11 @@ JSON: `{version: 1, command: "outline", file, doc, imports, items}`.
 - `imports`: `{path, alias, names, span}`. `alias` is null for `import {a, B as
   C} from "p"`, whose `names` are `{name, local, span}`.
 - `items`, in source order: `{kind, name, exported, signature, doc, summary,
-  span, name_span}`. `kind` is `function`, `struct`, `enum`, `alias` or
-  `constant`; `summary` is the first paragraph of the `##` doc, or null.
-  A function adds `parameters` (`{name, type, default}`) and `result`; a
-  struct `fields` (`{name, type, doc, name_span}`); an enum `variants`
-  (`{name, payload, doc, name_span}`).
+  span, name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `resource`
+  or `constant`; `summary` is the first paragraph of the `##` doc, or null. A
+  function adds `parameters` (`{name, type, default}`) and `result`; a struct
+  `fields` (`{name, type, doc, name_span}`); an enum `variants` (`{name,
+  payload, doc, name_span}`).
 - A span is `{file, range: {start: {line, column}, end: {line, column}}}`, end
   exclusive. `span` covers the whole declaration (`export` included);
   `name_span` is the name alone, the place to edit.
@@ -92,9 +92,9 @@ in an annotation (`xs: Models.User`), in a type argument (`Models.User` in
 `List[Models.User]`) or in a field or variant payload has the `kind` `type`: the
 span is the name (`Models.User` is one span), the `type` field is that name
 alone as written (`List` on `List[Models.User]`, the alias name for an alias
-use), not the whole annotation, and the definition is the struct, enum or alias (kind `alias`) it names, also
-from an imported file. A builtin type (`Int`, `List`) has no definition.
-`refs` lists these uses as `type`.
+use), not the whole annotation, and the definition is the struct, enum, alias
+(kind `alias`) or resource it names, also from an imported file. A builtin type
+(`Int`, `List`) has no definition. `refs` lists these uses as `type`.
 
 A keyword of an expression (`try`, `do`, `and`, `!`) answers that expression;
 `return`, `end` and `case` are on no expression.
@@ -109,11 +109,11 @@ text, type, span, definition, help}`.
   `expression`. An open set: accept values you do not know.
   `span` is always the whole expression; `text` is its source.
 - `definition`: null, or `{file, range, kind, name, name_span, signature, doc}`.
-  `kind` is `function`, `struct`, `enum`, `alias`, `variant`, `field` or
-  `constant` (`signature` is e.g. `make(name: String) -> User`, `age: Int`,
-  `Circle(Float)`; `doc` is the whole `##` text or null). A local answers with
-  `kind` `parameter`, `local`, `loop` or `pattern`, `signature` `name: Type` and
-  `doc` null; its `range` is the binding node (the whole parameter or
+  `kind` is `function`, `struct`, `enum`, `alias`, `resource`, `variant`,
+  `field` or `constant` (`signature` is e.g. `make(name: String) -> User`, `age:
+  Int`, `Circle(Float)`; `doc` is the whole `##` text or null). A local answers
+  with `kind` `parameter`, `local`, `loop` or `pattern`, `signature` `name:
+  Type` and `doc` null; its `range` is the binding node (the whole parameter or
   assignment), else the name, and `name_span` is where it is bound. A use and
   the binding give the same answer. A name bound in sibling blocks answers its
   own binding; `total += 1` is a use of the binding of `total`; `_` is on no
@@ -188,8 +188,8 @@ src/models.agc:4:3 field User.email: String
 It finds where NAME is declared in the modules linked from PATH (a file or a
 folder; default `.`). NAME is written as the code writes it:
 
-- `total`: a function, struct, enum, alias or constant, private ones too; a bare
-  name lists every module that declares it.
+- `total`: a function, struct, enum, alias, resource or constant, private ones
+  too; a bare name lists every module that declares it.
 - `Models.total`, `Models.User`: through the alias of a whole-module import
   (`import M from "m"`) in a file under PATH; exported names only. After
   `import {make as mk} from "m"`, `symbol mk` is `QUERY-NOT-FOUND`, and `symbol
@@ -209,12 +209,12 @@ disk.
 JSON: `{version: 1, command: "symbol", query, matches, skipped}`.
 
 - `matches[]`: `{kind, name, module, exported, signature, doc, span,
-  name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `constant`,
-  `field`, `variant` or `builtin` (an open set). `name` is the name alone;
-  `module` is the file's name. A `signature` writes its types as the declaring
-  module does. `span` is the declaration (`export` included), so compare
-  `name_span`, not `range`, with a `type-at` definition (its `range` starts
-  after `export`).
+  name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `resource`,
+  `constant`, `field`, `variant` or `builtin` (an open set). `name` is the name
+  alone; `module` is the file's name. A `signature` writes its types as the
+  declaring module does. `span` is the declaration (`export` included), so
+  compare `name_span`, not `range`, with a `type-at` definition (its `range`
+  starts after `export`).
 - A field adds `type` and `struct`; a variant adds `payload` and `enum`. A
   builtin has `help` and null `module`, `span`, `name_span` and `doc`.
 - `skipped[]`: `{file, diagnostic}`, the diagnostic being the first problem of
@@ -234,9 +234,9 @@ a stderr line `partial FILE:LINE:COL: CODE`.
   constant or builtin) it gives `kind` `name` (`builtin`), the span of the
   written name, the definition from the link, and `type` null (text `?`). A
   field, method call or local there gives the first problem.
-- `refs` on a function, struct, enum, alias, constant or variant lists every
-  use, including those in failing functions. A local of a checking function
-  works. A field or a builtin gives the first problem (exit 1).
+- `refs` on a function, struct, enum, alias, resource, constant or variant lists
+  every use, including those in failing functions. A local of a checking
+  function works. A field or a builtin gives the first problem (exit 1).
 - Still exit 1 with or without the option: a program that does not lex, parse
   or link, declarations that fail (their types, `main`, a constant), and a
   field, local or keyword in a failing function. Any other position on no

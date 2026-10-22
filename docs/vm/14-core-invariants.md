@@ -221,10 +221,10 @@ either. Both leave children running.
 ### 14.5 Handles
 
 **Rule (phase 24, 24b).** A handle (file, socket, listener, process, `std/http`
-server, resource of native code) belongs to the task that opened it. A `Channel` has no opener: it is
-unowned until `Task.spawn_owning` hands it to a task, which then owns it like
-any other handle. If that task ends, in any way (return, crash, cancel), without
-closing it, the handle is closed. There is one close path: `finish_task`
+server, resource of native code) belongs to the task that opened it. A
+`Channel` has no opener: it is unowned until `Task.spawn_owning` hands it to a
+task, which then owns it like any other handle. If that task ends, in any way
+(return, crash, cancel), without closing it, the handle is closed. There is one close path: `finish_task`
 (`vm/task.c`) ends every task and closes the handles it still owns through
 `agc_close_owned`. Handing a handle to another task is always explicit, through
 one hand-off form, `Task.spawn_owning` ([handle ownership][task-rules]). It

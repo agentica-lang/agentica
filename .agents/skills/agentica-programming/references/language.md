@@ -9,12 +9,13 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
   constant declarations; no statements run at top level. `export` may prefix a
   function, struct, enum, type alias or constant.
 - Declarations keep one order in every file: the module doc and `import`s, then
-  constants, then `struct`, `enum` and type aliases (exported or not, in any
-  order), then `export def` functions, then private `def` functions. The first
-  declaration out of place is `CHECK-DECL-ORDER`, at its start. The order is
-  style only: a function may call a function declared later.
+  constants, then `struct`, `enum`, type aliases and `extern` resources
+  (exported or not, in any order), then `export def` functions, then private
+  `def` functions. The first declaration out of place is `CHECK-DECL-ORDER`, at
+  its start. The order is style only: a function may call a function declared
+  later.
 - An `extern "LIB"` block of C signatures declares native functions, which
-  count as `def`s (`native.md`).
+  count as `def`s, and resources, which count as types (`native.md`).
 - A constant is `NAME = expr` or `NAME: Type = expr` at the top level. The name
   is capitals, digits and `_`, at least two characters, starting with a capital
   (`MAX_DEPTH`); another spelling is `PARSE-CONSTANT-NAME`, and `IO`, `JSON`,

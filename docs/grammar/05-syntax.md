@@ -67,17 +67,18 @@ scheduler while the task waits (section 6d); `export` comes first. `extern` is
 contextual: it is a keyword only at the start of a top-level declaration, and
 `compute` only before `def` in an extern block.
 
-`resource Name, free: c_name` in an extern block declares a resource: a type
-for the C pointers that the block's functions return, freed by the C function
+`resource Name, free: c_name` in an extern block declares a resource: a type for
+the C pointers that the block's functions return, freed by the C function
 `c_name` of the same library (section 6d). It is a type for the rest of the
-language: `export` makes it importable, and it takes the place of a type in
-the declaration order. A `def` of the block may use it in its signature after
-the line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes the
+language: `export` makes it importable, and it takes the place of a type in the
+declaration order. A `def` of the block may use it in its signature after the
+line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes the
 resource, and a result of the resource is `Result[Name]` for the checker. A
 `def` of the block named like the free function is `PARSE-EXTERN-FREE` at the
-name. `C.Pointer` is the type of a C pointer anywhere in a program; `C.Bytes`
-is a parameter only, a `List[Int]` for the checker. `resource` is a keyword
-only at the start of a member of an extern block.
+name; the check is per block, so another block of the same library may still
+declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
+`C.Bytes` is a parameter only, a `List[Int]` for the checker. `resource` is a
+keyword only at the start of a member of an extern block.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

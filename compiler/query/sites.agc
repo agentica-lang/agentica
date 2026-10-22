@@ -446,12 +446,19 @@ def type_sites(scan: Scan, type: Ast.TypeRef, parameters: List[String]) -> List[
   while at < work.size
     ref = work[at]
     at += 1
-    if ref.args.size > 0 or !parameters.any? do |parameter: String| parameter == ref.name end
+    written = ref.args.size > 0 or !parameters.any? do |parameter: String| parameter == ref.name end
+    if written and !made?(ref)
       out = out.concat(type_name_sites(scan, ref.name, ref.span.start, "type"))
     end
     work = work.concat(ref.args)
   end
   return out
+end
+
+# A type the parser made around a written one, with its span (the Result of an extern function that returns a
+# resource): it is not written, so the name there is its argument's.
+def made?(ref: Ast.TypeRef) -> Bool
+  return ref.args.any? do |arg: Ast.TypeRef| arg.span.start.offset == ref.span.start.offset end
 end
 
 # The position `count` characters further on the same line.

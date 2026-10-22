@@ -393,12 +393,12 @@ and parses the module, so its imports need not exist. Declarations without
 
 `agentica outline FILE [--json] [--stdin FILE]` lists the top-level declarations
 of one file in source order, private ones too: imports, functions, structs with
-their fields, enums with their variants, type aliases and constants, each with
-`exported`, its signature, its `##` doc and summary, and its span and the span
-of its name. FILE is a source file or a `std/` module name. It only lexes and
-parses the file, so its imports need not exist. `--stdin FILE` takes the text of
-FILE from standard input. A lex or parse error exits 1; a mistake in the
-arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
+their fields, enums with their variants, type aliases, resources and constants,
+each with `exported`, its signature, its `##` doc and summary, and its span and
+the span of its name. FILE is a source file or a `std/` module name. It only
+lexes and parses the file, so its imports need not exist. `--stdin FILE` takes
+the text of FILE from standard input. A lex or parse error exits 1; a mistake in
+the arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
 
 `agentica type-at FILE:LINE:COL [--json]` gives the checked type of the
 innermost expression at a position (line and column from 1, in code points as
@@ -407,9 +407,9 @@ names: a function, struct, enum, variant, field or constant, with the span of
 the declaration and of its name, its signature and its `##` doc (null when it
 has none). A type name (in an annotation, a type argument or a field or
 payload type) has the `kind` `type`, the span of the name (`Models.User` is one
-span) and the struct, enum or type alias it names as definition (`alias` kind
-for an alias); a builtin type (`Int`, `List`) has no definition. A type of
-another file is written through the import alias of
+span) and the struct, enum, type alias or resource it names as definition
+(`alias` kind for an alias); a builtin type (`Int`, `List`) has no definition. A
+type of another file is written through the import alias of
 FILE (`Models.User`). On the name of a builtin (`split` in `xs.split(",")`) the
 `kind` is `builtin` and `help` holds the object of `agentica help NAME --json`;
 a builtin has no definition. A local (a parameter, a binding, a `for` variable
@@ -434,26 +434,26 @@ defined in the modules linked from the files under PATH (a file or a folder;
 every `*.agc` file below a folder; default `.`). NAME is written as the code
 writes it: `total`, `User.email`, `Option.Some`, `Models.User` through an import
 alias of a file of PATH, `std/queue.pop`, or a builtin (`Map.get`). Each match
-has its `kind` (`function`, `struct`, `enum`, `alias`, `constant`, `field`,
-`variant` or `builtin`), `module`, `exported` (private declarations too),
-`signature`, `doc` and spans; a builtin has `help`, the object of `agentica help
-NAME --json`. The answer with `--json` is one object, `{version, command, query,
-matches, skipped}`. Only lexing, parsing and linking are needed. The files of
-PATH are linked together; one that does not lex, parse or link is listed under
-`skipped` with its first diagnostic while the others still answer (exit 0). If
-none links, that first diagnostic is the answer and the exit status is 1. A name
-that nothing declares is `QUERY-NOT-FOUND` and exits 2, as is a mistake in the
-arguments (`QUERY-USAGE`). `--stdin FILE` takes the text of FILE from standard
-input and searches it too.
+has its `kind` (`function`, `struct`, `enum`, `alias`, `resource`, `constant`,
+`field`, `variant` or `builtin`), `module`, `exported` (private declarations
+too), `signature`, `doc` and spans; a builtin has `help`, the object of
+`agentica help NAME --json`. The answer with `--json` is one object, `{version,
+command, query, matches, skipped}`. Only lexing, parsing and linking are needed.
+The files of PATH are linked together; one that does not lex, parse or link is
+listed under `skipped` with its first diagnostic while the others still answer
+(exit 0). If none links, that first diagnostic is the answer and the exit status
+is 1. A name that nothing declares is `QUERY-NOT-FOUND` and exits 2, as is a
+mistake in the arguments (`QUERY-USAGE`). `--stdin FILE` takes the text of FILE
+from standard input and searches it too.
 
 `agentica refs NAME|FILE:LINE:COL [PATH...] [--json]` lists every reference to a
 declaration: a function, struct, enum, variant, field (in a read, a construction
-and a `with`), constant, type alias, local or builtin. The declaration is the
-one that NAME names, written and resolved as for `symbol`, or the one the name
-at the position stands for. The files are linked together: FILE and the files
-under PATH for a position, the files under PATH (default `.`) for a NAME, and
-everything they import. One that does not link is listed under `skipped` and the
-others still answer, except FILE, which must link. The program is checked as
+and a `with`), constant, type alias, resource, local or builtin. The declaration
+is the one that NAME names, written and resolved as for `symbol`, or the one the
+name at the position stands for. The files are linked together: FILE and the
+files under PATH for a position, the files under PATH (default `.`) for a NAME,
+and everything they import. One that does not link is listed under `skipped` and
+the others still answer, except FILE, which must link. The program is checked as
 `type-at` checks it, with the same exit codes. The answer is one object,
 `{version, command, query, definition, builtin, references, skipped}`:
 `definition` is the `symbol` match (null for a builtin, which `builtin` names),
@@ -470,10 +470,10 @@ selects the function `total`, not the module; one on a module alias or a path of
 an import line is `QUERY-NO-EXPRESSION`. `--stdin FILE:LINE:COL` takes the text
 of FILE from standard input; with a NAME, `--stdin FILE` searches that text as
 one more file, as for `symbol`. With `--partial` and a position alone (no PATH),
-the references to a function, struct, enum, alias, constant or variant are
-complete even when some functions do not check, and so are those of a local of a
-function that checks; a field or a builtin needs every function checked. A NAME
-or a PATH with `--partial` is `QUERY-USAGE`.
+the references to a function, struct, enum, alias, resource, constant or variant
+are complete even when some functions do not check, and so are those of a local
+of a function that checks; a field or a builtin needs every function checked. A
+NAME or a PATH with `--partial` is `QUERY-USAGE`.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by

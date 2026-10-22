@@ -137,7 +137,7 @@ typedef struct {
   atomic_int busy;
 } peer_res;
 
-static atomic_int res_frees, res_busy_frees;
+static atomic_int res_opens, res_frees, res_busy_frees;
 
 void *peer_res_open(int32_t value) {
   if (value < 0) return NULL;
@@ -145,6 +145,7 @@ void *peer_res_open(int32_t value) {
   if (!r) return NULL;
   r->value = value;
   atomic_init(&r->busy, 0);
+  atomic_fetch_add(&res_opens, 1);
   return r;
 }
 
@@ -156,6 +157,7 @@ void peer_res_free(void *p) {
 }
 
 int32_t peer_res_get(void *p) { return ((peer_res *)p)->value; }
+int32_t peer_res_opens(void) { return atomic_load(&res_opens); }
 int32_t peer_res_frees(void) { return atomic_load(&res_frees); }
 int32_t peer_res_busy_frees(void) { return atomic_load(&res_busy_frees); }
 
@@ -164,14 +166,14 @@ static atomic_int res_holding;
 int32_t peer_res_hold(void *p, int32_t limit_ms) {
   peer_res *r = p;
   atomic_store(&r->busy, 1);
-  atomic_store(&res_holding, 1);
+  atomic_fetch_add(&res_holding, 1);
   peer_wait_flag(limit_ms);
   int32_t value = r->value;
   atomic_store(&r->busy, 0);
   return value;
 }
 
-/* 1 once a peer_res_hold has started. */
+/* How many peer_res_hold calls have started. */
 int32_t peer_res_holding(void) { return atomic_load(&res_holding); }
 
 /* A compute call that opens a resource once peer_set_flag has run. */

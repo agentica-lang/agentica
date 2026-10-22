@@ -245,6 +245,8 @@ def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, s
 
 @pytest.mark.parametrize("members, code, start", [
     ("  def db_open() -> Db\n  resource Db, free: db_close", "PARSE-EXTERN-TYPE", (2, 20)),
+    ('  resource Db, free: db_close\nend\n\nextern "/opt/libdb.so"\n  def db_use(db: Db) -> C.Int', "PARSE-EXTERN-TYPE",
+     (6, 18)),
     ("  resource Db, free: db_close?", "PARSE-EXTERN-NAME", (2, 22)),
     ("  resource Db free: db_close", "PARSE-UNEXPECTED-TOKEN", (2, 15)),
     ("  compute resource Db, free: db_close", "PARSE-UNEXPECTED-TOKEN", (2, 3)),
@@ -252,6 +254,23 @@ def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, s
 def test_a_resource_is_declared_before_use_with_a_c_free_function(tmp_path, members, code, start):
     text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
     assert at(problem_of(check(source(tmp_path, text))))[:2] == (code, start)
+
+
+# A resource is a type name of the file: a second resource, a struct or a reserved type of that name is
+# CHECK-REDEFINED-NAME at the later declaration.
+@pytest.mark.parametrize("text, start", [
+    ('extern "/opt/libdb.so"\n  resource Db, free: db_close\n  resource Db, free: db_free\nend\n', (3, 3)),
+    ('struct Db\n  x: Int\nend\n\nextern "/opt/libdb.so"\n  resource Db, free: db_close\nend\n', (6, 3)),
+    ('extern "/opt/libdb.so"\n  resource Socket, free: db_close\nend\n', (2, 3)),
+])
+def test_a_resource_name_is_not_taken_twice(tmp_path, text, start):
+    assert at(problem_of(check(source(tmp_path, text))))[:2] == ("CHECK-REDEFINED-NAME", start)
+
+
+# C.Pointer is a type of every file, not only of one with an extern block.
+def test_c_pointer_is_a_type_without_an_extern_block(tmp_path):
+    text = "def empty?(p: C.Pointer) -> Bool\n  return Native.null?(p)\nend\n"
+    assert check(source(tmp_path, text)).code == 0
 
 
 def test_resource_is_still_a_name_elsewhere(tmp_path):

@@ -38,16 +38,17 @@ end
   return frees nothing. A `compute def` call keeps its resource until it
   returns (a close or cancel meanwhile defers the free). A function that
   returns a borrowed pointer must be `-> C.Pointer`, or it is freed twice. A
-  `def` of the free function is `PARSE-EXTERN-FREE`. Resources and
-  `C.Pointer` do not convert; no `to_s` or JSON; inspects as `<Db>`.
+  `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
+  never declare it in another). Resources and `C.Pointer` do not convert; no
+  `to_s` or JSON; inspects as `<Db>`.
 
-~~~ruby
-extern "libc.so.6"
-  resource Stream, free: fclose
-  def fopen(path: C.String, mode: C.String) -> Stream
-  def fputs(text: C.String, stream: Stream) -> C.Int
-end
-~~~
+  ~~~ruby
+  extern "libc.so.6"
+    resource Stream, free: fclose
+    def fopen(path: C.String, mode: C.String) -> Stream
+    def fputs(text: C.String, stream: Stream) -> C.Int
+  end
+  ~~~
 - A `def` call blocks timers, I/O and other tasks until it returns: keep such
   calls short. Native code must retry on `EINTR` (GC signals cut sleeps and
   polls short).
@@ -75,5 +76,5 @@ end
   (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
-- Functions count as `def`s for the declaration order, resources as types. A wrong signature is
-  undefined behavior in C: copy it from the C header.
+- Functions count as `def`s for the declaration order, resources as types. A
+  wrong signature is undefined behavior in C: copy it from the C header.

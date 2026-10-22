@@ -437,6 +437,64 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\n', "")
 
 
+# Calls queued behind busy pool threads (one per scheduler) and cancelled there are never made, so their `done` builds
+# no result: no resource is made from a pointer C never returned (its free would get garbage, which ASan catches) and
+# no C.String is read. Every resource opened is freed once, and none while C uses it.
+@ON_LINUX_ONLY
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_cancelled_compute_call_that_never_ran_gives_no_result(tmp_path, peer, schedulers):
+    main = """extern "{library}"
+  compute def peer_word(n: C.Int) -> C.String
+  def peer_res_opens() -> C.Int
+end
+
+def later(n: Int) -> Result[Int]
+  res = try peer_res_open_later(n, 0)
+  return ok(peer_res_get(res))
+end
+
+def word(n: Int) -> Result[String]
+  return ok(peer_word(n))
+end
+
+def main() -> Void
+  res = peer_res_open(1).unwrap!
+  holders: List[Task[Result[Int]]] = []
+  for k in 1..SCHEDULERS
+    holders = holders.push(Task.spawn(&hold, res))
+  end
+  n = 0
+  while peer_res_holding() < SCHEDULERS and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  openers: List[Task[Result[Int]]] = []
+  words: List[Task[Result[String]]] = []
+  for k in 1..20
+    openers = openers.push(Task.spawn(&later, k))
+    words = words.push(Task.spawn(&word, k))
+  end
+  Task.sleep(50)
+  for task in openers
+    Task.cancel(task)
+  end
+  for task in words
+    Task.cancel(task)
+  end
+  peer_set_flag()
+  for task in holders
+    Task.await(task)
+  end
+  Native.close(res)
+  Task.sleep(50)
+  puts(peer_res_opens() - peer_res_frees())
+  puts(peer_res_busy_frees())
+end
+""".replace("SCHEDULERS", schedulers).replace("{library}", str(peer))
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "0\n0\n", "")
+
+
 WAIT_EXTERN = """extern "{library}"
   def peer_pipe() -> C.Int
   def peer_pipe_writer() -> C.Int
