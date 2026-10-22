@@ -6,7 +6,7 @@ description: A real library, SQLite through an extern block, with safe functions
 
 ## A real library: SQLite
 
-The raw `extern` layer stays private, and safe functions on top of it return `Result`. It uses resources and `out` parameters ([Types and resources](/library/io-and-system/native/types/)). This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on macOS the system one is `libsqlite3.dylib`, and on Windows, write `"winsqlite3.dll"`, the SQLite that Windows 10 and later ship in the system folder, with the same functions.
+The raw `extern` layer stays private, and safe functions on top of it return `Result`. It uses resources and `out` parameters ([Types and resources](/library/io-and-system/native/types/)). This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on macOS the system one is `libsqlite3.dylib`, and on Windows, write `"winsqlite3.dll"`, the SQLite that Windows 10 and later ship in the system folder (its version depends on the Windows build).
 
 ```agentica {mode="check"}
 SQLITE_OK = 0
