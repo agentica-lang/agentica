@@ -269,8 +269,8 @@ Weighed later (no fixed order)
 - **Order:** 7.2b
   - **Next work:** **Built (2026-10-21, issue #506):** the semantic CLI and
     `std/analysis` ([§39](../future/39-semantic-cli.md)),
-    front end and CLI only, nothing to run. Open: the 6c round (row 10)
-    measures the commands (§39.12)
+    front end and CLI only, nothing to run. Open: §39.12 measures the
+    commands; round 13 (row 10) found no use, so it is inconclusive
   - **Outcome:** Agents list declarations, find definitions and references
     across modules, and get the checked type at a position, without reading
     whole files or guessing from `rg`
@@ -414,8 +414,9 @@ Weighed later (no fixed order)
 - **Order:** 10
   - **Next work:** Evaluation round: Agentica against typed Python on harder
     tasks (6c), the full round after the pilot of step 7.2.2, with the semantic
-    CLI of row 7.2b (§39.12). The full round has no fixed order (owner,
-    2026-10-21)
+    CLI of row 7.2b (§39.12). Round 13 (2026-10-22, `docs/eval.md`) ran
+    it on 0.8.1: DeepSeek stopped for budget at 13 of 20 tasks, GLM complete,
+    no query use. The full round has no fixed order (owner, 2026-10-21)
   - **Outcome:** Evidence on whether agents do better in Agentica than in typed
     Python
 
