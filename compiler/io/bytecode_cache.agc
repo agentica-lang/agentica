@@ -319,8 +319,8 @@ end
 
 # The folder or the file at `path` must be of this `kind` as it stands (File.lstat: a link is its own kind and is
 # refused) and, where the system has owners and modes (`user` is not -1), be owned by the user of this process and
-# writable by no one else. On Windows any real folder and file pass: nothing tells whose they are (an owner or ACL
-# check and a Windows test of the link and kind checks are open in #568).
+# writable by no one else. On Windows any real folder and file pass: the cache trusts its folder, with no owner or ACL
+# check, and a folder that other users can write is out of scope.
 def private_kind(path: String, kind: String, user: Int) -> Result[Void]
   info = try File.lstat(path, IO_TIMEOUT_MS)
   if info.kind != kind
