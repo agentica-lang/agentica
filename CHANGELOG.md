@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-23
+
+The first stable release since 0.8.1, with the changes of `0.9.0-beta.1` and
+`0.9.0-beta.2` below. Windows and macOS now run every feature that Linux runs.
+
 ### Added
 
 - Windows: `Native.wait_readable` and `Native.wait_writable` wait on a native
@@ -384,7 +389,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0...HEAD
+[0.9.0]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...0.9.0
 [0.9.0-beta.2]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...0.9.0-beta.2
 [0.9.0-beta.1]: https://github.com/sonic182/agentica/compare/0.8.1...0.9.0-beta.1
 [0.8.1]: https://github.com/sonic182/agentica/compare/0.8.0...0.8.1

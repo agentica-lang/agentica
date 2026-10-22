@@ -22,11 +22,21 @@ keeps their records.
 
 - **0.9.0:** the FFI core (FFI-a, issue
   [#534](https://github.com/sonic182/agentica/issues/534)) with its Windows and
-  macOS parity ([#568](https://github.com/sonic182/agentica/issues/568)) is
-  done. The stable 0.9.0 comes next.
-- **0.10:** FFI-b (native libraries in packages: `[native]` in
-  `agentica.toml`, hashes in the lock) and variadic C functions
-  ([#619](https://github.com/sonic182/agentica/issues/619)).
+  macOS parity ([#568](https://github.com/sonic182/agentica/issues/568)),
+  released 2026-10-23.
+- **0.10.0** (owner, 2026-10-23), in this order, one item at a time:
+  1. The JIT groundwork, without tier 2
+     ([#622](https://github.com/sonic182/agentica/issues/622)): opcode and
+     opcode-pair counters, `leaf` builtins, smaller values
+     ([#396](https://github.com/sonic182/agentica/issues/396)), then the
+     helpers by pointer, errors without `longjmp` through compiled code and a
+     W^X code memory.
+  2. The rest of the FFI core: FFI-b (native libraries in packages), variadic
+     C functions ([#619](https://github.com/sonic182/agentica/issues/619)),
+     and from [#594](https://github.com/sonic182/agentica/issues/594) owned
+     buffers and typed memory, `C.Float`, structs by value, function pointers
+     and downloaded prebuilt libraries. No callbacks.
+  3. JIT tier 2 (§22) with our own emitter for x86-64 and arm64 (no sljit).
 
 ### Next, after 0.8.0 (owner, 2026-10-21)
 
