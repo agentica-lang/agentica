@@ -143,7 +143,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return imported(cx, alias, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
-  elsif function_wanted?(want) or std_record?(alias, member, want)
+  elsif function_wanted?(want) or std_record?(alias, member, want) or c_pointer?(alias, member, want)
     return ok("#{alias}.#{member}")
   end
   return error(
@@ -161,6 +161,14 @@ end
 def std_record?(alias: String, member: String, want: Want) -> Bool
   case want
     Want.Type -> return STD_ONLY.has_key?(alias) and RECORDS.has_key?("#{alias}.#{member}")
+    _ -> return false
+  end
+end
+
+# C.Pointer, the builtin type of a C pointer (the extern blocks of native code), which any file may name.
+def c_pointer?(alias: String, member: String, want: Want) -> Bool
+  case want
+    Want.Type -> return alias == "C" and member == "Pointer"
     _ -> return false
   end
 end
@@ -259,7 +267,10 @@ end
 
 def right_kind?(kind: Declarations.Kind, want: Want) -> Bool
   case want
-    Want.Type -> return Declarations.struct?(kind) or Declarations.enum?(kind) or Declarations.type_alias?(kind)
+    Want.Type -> return (
+      Declarations.struct?(kind) or Declarations.enum?(kind) or Declarations.type_alias?(kind) or
+      Declarations.resource?(kind)
+    )
     Want.Enum -> return Declarations.enum?(kind)
     Want.Function -> return Declarations.function?(kind)
   end

@@ -612,3 +612,22 @@ def test_a_file_name_is_not_found_with_a_hint_and_partial_goes_with_a_position_a
     assert "models.agc:LINE:COL" in hinted["help"]
     for words in (["total", "--partial"], [spot("orders.agc", ORDERS, "total"), "models.agc", "--partial"]):
         assert problem(ask(*words, cwd=program), "QUERY-USAGE", 2)["file"] == "<arguments>", words
+
+
+# A resource is found by its definition, through the alias of another file and in the result of its block, where the
+# parser wraps it in Result.
+def test_a_resource_is_found_in_the_signatures_of_its_block_and_of_another_file(tmp_path):
+    db = ('extern "libdb.so"\n  export resource Db, free: db_close\n'
+          "  export def db_open(path: C.String) -> Db\nend\n")
+    use = 'import Raw from "db"\n\nexport def count(db: Raw.Db) -> Int\n  return 0\nend\n'
+    (tmp_path / "db.agc").write_text(db, encoding="utf-8")
+    (tmp_path / "use.agc").write_text(use, encoding="utf-8")
+    for words in (["Raw.Db", "use.agc"], [spot("db.agc", db, "Db,"), "."]):
+        report = told(*words, cwd=tmp_path)
+        definition = report["definition"]
+        assert (definition["kind"], definition["name"], definition["module"]) == ("resource", "Db", "db.agc"), words
+        assert start(definition["name_span"]) == where(db, "Db,"), words
+        assert sorted(places(report)) == [
+            ("db.agc", *where(db, "Db\nend"), "type", "db_open"),
+            ("use.agc", *where(use, "Db)"), "type", "count"),
+        ], words

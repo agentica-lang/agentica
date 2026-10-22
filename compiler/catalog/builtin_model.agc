@@ -42,6 +42,7 @@ export enum Rule
   MapPut
   MapSize
   MapValues
+  NativeClose
   Ok
   OkVoid
   Prelude

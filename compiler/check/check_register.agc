@@ -16,7 +16,8 @@ import Defaults from "defaults"
 
 ## The context with the enums, structs and functions of the program added to the builtin ones.
 export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
-  found = try register_aliases(cx, modules)
+  found = try register_resources(cx, modules)
+  found = try register_aliases(found, modules)
   found = try register_enum_names(found, modules)
   found = try register_structs(found, modules)
   try check_alias_targets(found, modules)
@@ -60,6 +61,24 @@ export def check_main(
       root,
     ),
   )
+end
+
+# The resources of the extern blocks: nominal types with no structure, which every later pass may name.
+def register_resources(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
+  st = State.fresh()
+  found = cx
+  for module in modules
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Resource(node) ->
+          here = found.with(file: module.file)
+          try check_new_name(here, st, node.name, node.name_span)
+          found = here.with(resources: here.resources.add(node.name))
+        _ -> st = st
+      end
+    end
+  end
+  return ok(found)
 end
 
 def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
@@ -187,6 +206,7 @@ def check_new_name(cx: State.Cx, st: State.St, name: String, span: Source.Span) 
     cx.structs.has_key?(name) or
     cx.enums.has_key?(name) or
     cx.aliases.has_key?(name) or
+    cx.resources.include?(name) or
     cx.functions.has_key?(name)
   )
     return error(

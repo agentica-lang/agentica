@@ -22,12 +22,14 @@ function_decl    = "def", NAME, "(", [ parameters ], ")",
 parameters       = parameter, { ",", parameter }, [ "," ] ;
 parameter        = NAME, ":", type, [ "=", expression ] ;
 
-extern_decl      = "extern", STRING, NL, { extern_function }, "end", NL ;
-extern_function  = [ DOC, NL ], [ "export" ], [ "compute" ], "def", NAME, "(",
+extern_decl      = "extern", STRING, NL, { extern_member }, "end", NL ;
+extern_member    = [ DOC, NL ], [ "export" ], ( extern_function | resource_decl ) ;
+extern_function  = [ "compute" ], "def", NAME, "(",
                    [ c_parameter, { ",", c_parameter }, [ "," ] ], ")",
-                   "->", ( c_type | "Void" ), NL ;
-c_parameter      = NAME, ":", c_type ;
-c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" ) ;
+                   "->", ( c_type | TYPE_NAME | "Void" ), NL ;
+resource_decl    = "resource", TYPE_NAME, ",", "free", ":", NAME, NL ;
+c_parameter      = NAME, ":", ( c_type | "C", ".", "Bytes" | TYPE_NAME ) ;
+c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" | "Pointer" ) ;
 
 struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
@@ -64,6 +66,19 @@ and `C.String` as `String`. `compute def` declares a function that runs off the
 scheduler while the task waits (section 6d); `export` comes first. `extern` is
 contextual: it is a keyword only at the start of a top-level declaration, and
 `compute` only before `def` in an extern block.
+
+`resource Name, free: c_name` in an extern block declares a resource: a type for
+the C pointers that the block's functions return, freed by the C function
+`c_name` of the same library (section 6d). It is a type for the rest of the
+language: `export` makes it importable, and it takes the place of a type in the
+declaration order. A `def` of the block may use it in its signature after the
+line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes the
+resource, and a result of the resource is `Result[Name]` for the checker. A
+`def` of the block named like the free function is `PARSE-EXTERN-FREE` at the
+name; the check is per block, so another block of the same library may still
+declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
+`C.Bytes` is a parameter only, a `List[Int]` for the checker. `resource` is a
+keyword only at the start of a member of an extern block.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

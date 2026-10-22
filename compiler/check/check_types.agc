@@ -459,7 +459,8 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
   return resolve_generic(cx, st, ref)
 end
 
-# The type resolved when it has no arguments: a type parameter, Void, a primitive, a handle, an enum or a struct.
+# The type resolved when it has no arguments: a type parameter, Void, a primitive, a handle, a resource, an enum or a
+# struct.
 def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
   name = ref.name
   if cx.type_params.any? do |parameter: String| parameter == name end
@@ -483,7 +484,7 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.Json)
   elsif name == "Range"
     return ok(Types.Type.Range)
-  elsif OPAQUE_TYPES.include?(name)
+  elsif OPAQUE_TYPES.include?(name) or cx.resources.include?(name)
     return ok(Types.Type.Opaque(name))
   end
   return resolve_generic(cx, st, ref)

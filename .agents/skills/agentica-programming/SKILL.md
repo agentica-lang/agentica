@@ -58,7 +58,7 @@ Read only what the task needs.
 | `binary.md` | bytes, bit operations, `Crypto`, `std/binary` (`read_u16_be`, `frame`) |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
-| `native.md` | C functions (`extern`, `compute def`) |
+| `native.md` | C functions (`extern`, `compute def`, `C.Pointer`, resources) |
 | `queries.md` | `outline`, `type-at`, `refs`, `symbol` |
 | `analysis.md` | compiler answers in a program (`std/analysis`) |
 

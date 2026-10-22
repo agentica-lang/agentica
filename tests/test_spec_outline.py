@@ -227,3 +227,18 @@ def test_text_form_lists_one_line_per_declaration(tmp_path):
         "shapes.agc:36:1 def hidden(f: Fn[Int, String]) -> Nowhere.User",
         "",
     ]
+
+
+# A resource of an extern block is an item of its own kind, with its doc, its export and the name of its free function
+# in the signature; the functions of the block follow.
+def test_a_resource_of_an_extern_block_is_a_resource_item(tmp_path):
+    source = ('extern "libdb.so"\n  ## An open database.\n  export resource Db, free: db_close\n'
+              "  def db_open(path: C.String) -> Db\nend\n")
+    (tmp_path / "db.agc").write_text(source, encoding="utf-8")
+    report = answer("db.agc", cwd=tmp_path)
+    assert [(item["kind"], item["name"], item["exported"]) for item in report["items"]] == [
+        ("resource", "Db", True), ("function", "db_open", False),
+    ]
+    db = items_by_name(report)["Db"]
+    assert (db["signature"], db["doc"]) == ("resource Db, free: db_close", "An open database.")
+    assert (start(db["span"]), start(db["name_span"]), end(db["name_span"])) == ((3, 3), (3, 19), (3, 21))

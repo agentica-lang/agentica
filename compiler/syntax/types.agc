@@ -1,10 +1,10 @@
 ## The types the checker works with, as an enum.
 
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
-## TestCase). Struct and Enum hold the linked name; Enum carries its type arguments (none for a plain enum). Var is a
-## type variable of a builtin signature or a generic enum. Fn lists the parameters, then the result. Unknown is no
-## type: the expected type when none is known (Unknown), and the type of a literal the lexer could not
-## classify.
+## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name;
+## Enum carries its type arguments (none for a plain enum). Var is a type variable of a builtin signature or a generic
+## enum. Fn lists the parameters, then the result. Unknown is no type: the expected type when none is known (Unknown),
+## and the type of a literal the lexer could not classify.
 export enum Type
   Int
   Float
@@ -259,7 +259,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.Json -> return "Json"
     Type.Range -> return "Range"
     Type.Unknown -> return "?"
-    Type.Opaque(name) -> return name
+    Type.Opaque(name) -> return written_name(name, written)
     Type.Var(name) -> return name
     Type.Struct(name) -> return written_name(name, written)
     Type.Enum(name, args) -> return enum_text(name, args, written)
