@@ -31,8 +31,8 @@ FAILING = 'def main() -> Void\n  Test.run([Test.test("fine") do\n    error("chan
 
 
 def environment(**extra):
-    """The environment of a case: no cache folder of the harness, so a run keeps its entry next to the sources."""
-    return vm_environment({"AGENTICA_CACHE_DIR": None, **extra})
+    """The environment of a case: no build folder of the harness, so an entry goes to the `_build/` of the sources."""
+    return vm_environment({"AGENTICA_BUILD_DIR": None, **extra})
 
 
 def agentica(folder, *words, **extra):
@@ -92,9 +92,9 @@ def src(tmp_path):
 def test_a_second_run_reads_the_entry_and_an_edit_of_any_source_file_misses(src, tmp_path):
     first = agentica(src, "main.agc")
     assert (first.code, first.stdout) == (0, "one\n"), first.stderr
-    entry = only_entry(src / ".agc_cache")
-    # The folder holds a .gitignore of its own, so the bytecode is not committed by mistake.
-    assert (src / ".agc_cache" / ".gitignore").read_text(encoding="utf-8") == "*\n"
+    entry = only_entry(src / "_build" / "bytecode")
+    # The _build folder holds a .gitignore of its own, so the bytecode is not committed by mistake.
+    assert (src / "_build" / ".gitignore").read_text(encoding="utf-8") == "*\n"
     swap_program(entry, compiled(tmp_path, "other", program("from the entry")))
     kept = stamp(entry)
     second = agentica(src, "main.agc")
@@ -110,7 +110,7 @@ def test_a_second_run_reads_the_entry_and_an_edit_of_any_source_file_misses(src,
 
 def test_check_compile_and_dump_neither_read_nor_write_the_entry(src, tmp_path):
     agentica(src, "main.agc")
-    entry = only_entry(src / ".agc_cache")
+    entry = only_entry(src / "_build" / "bytecode")
     swap_program(entry, compiled(tmp_path, "other", program("from the entry")))
     kept = stamp(entry)
     assert agentica(src, "check", "main.agc").code == 0
@@ -125,12 +125,12 @@ def test_check_compile_and_dump_neither_read_nor_write_the_entry(src, tmp_path):
     (other / "main.agc").write_text(program("x"), encoding="utf-8")
     for words in (("check", "main.agc"), ("compile", "main.agc", "-o", "main.agcb"), ("--dump-ir", "main.agc")):
         assert agentica(other, *words).code == 0
-    assert not (other / ".agc_cache").exists()
+    assert not (other / "_build").exists()
 
 
 def test_a_damaged_entry_is_built_again(src):
     agentica(src, "main.agc")
-    entry = only_entry(src / ".agc_cache")
+    entry = only_entry(src / "_build" / "bytecode")
     good = entry.read_bytes()
     text, bytecode = split(entry)
     # The last line of the text names a source file; a NUL in the path must not stop the front end.
@@ -145,14 +145,14 @@ def test_a_damaged_entry_is_built_again(src):
         assert entry.read_bytes() == good
 
 
-@pytest.mark.parametrize("variable", [False, True], ids=["next to the sources", "AGENTICA_CACHE_DIR"])
+@pytest.mark.parametrize("variable", [False, True], ids=["next to the sources", "AGENTICA_BUILD_DIR"])
 def test_no_cache_neither_reads_nor_writes_and_the_variable_moves_the_entries(src, tmp_path, variable):
     elsewhere = tmp_path / "elsewhere"
-    extra = {"AGENTICA_CACHE_DIR": str(elsewhere)} if variable else {}
+    extra = {"AGENTICA_BUILD_DIR": str(elsewhere)} if variable else {}
     on = agentica(src, "main.agc", **extra)
     assert (on.code, on.stdout) == (0, "one\n"), on.stderr
-    folder = elsewhere if variable else src / ".agc_cache"
-    assert (src / ".agc_cache").exists() != variable
+    folder = (elsewhere if variable else src / "_build") / "bytecode"
+    assert (src / "_build").exists() != variable
     entry = only_entry(folder)
     swap_program(entry, compiled(tmp_path, "other", program("from the entry")))
     kept = stamp(entry)
@@ -172,7 +172,7 @@ def test_a_folder_that_cannot_be_written_still_runs(src):
         src.chmod(stat.S_IRWXU)
     assert (done.code, done.stdout) == (0, "one\n"), done.stderr
     # root writes to a folder whatever its mode, so only the run is checked for it.
-    assert ROOT_USER or not (src / ".agc_cache").exists()
+    assert ROOT_USER or not (src / "_build").exists()
 
 
 def test_a_change_of_the_lock_misses(tmp_path):
@@ -189,7 +189,7 @@ def test_a_change_of_the_lock_misses(tmp_path):
     hermetic = {"AGENTICA_PATH": "", **ws.cache_variables}
     first = agentica(ws.project, "main.agc", **hermetic)
     assert (first.code, first.stdout) == (0, "hi\n"), first.stderr
-    entry = only_entry(ws.project / ".agc_cache")
+    entry = only_entry(ws.project / "_build" / "bytecode")
     kept = stamp(entry)
     # The same lock reads the entry; the lock that names the other commit (same files, same bytes) does not.
     assert agentica(ws.project, "main.agc", **hermetic).stdout == "hi\n"
@@ -206,18 +206,18 @@ def test_agentica_test_reads_and_keeps_the_entry_of_a_test_file(tmp_path):
     folder.mkdir()
     (folder / "one_test.agc").write_text(PASSING, encoding="utf-8")
     cache = tmp_path / "cache"
-    first = agentica(tmp_path, "--json", "test", folder, AGENTICA_CACHE_DIR=str(cache))
+    first = agentica(tmp_path, "--json", "test", folder, AGENTICA_BUILD_DIR=str(cache))
     assert first.code == 0, first.stdout + first.stderr
-    entry = only_entry(cache)
-    assert not (folder / ".agc_cache").exists()
+    entry = only_entry(cache / "bytecode")
+    assert not (folder / "_build").exists()
     swap_program(entry, compiled(tmp_path, "failing_test", FAILING))
     kept = stamp(entry)
-    second = agentica(tmp_path, "--json", "test", folder, AGENTICA_CACHE_DIR=str(cache))
+    second = agentica(tmp_path, "--json", "test", folder, AGENTICA_BUILD_DIR=str(cache))
     assert second.code == 1, second.stdout + second.stderr
     assert "changed" in second.stdout
     assert stamp(entry) == kept
     # --no-cache compiles the file again, and leaves the entry as it is.
-    third = agentica(tmp_path, "--no-cache", "--json", "test", folder, AGENTICA_CACHE_DIR=str(cache))
+    third = agentica(tmp_path, "--no-cache", "--json", "test", folder, AGENTICA_BUILD_DIR=str(cache))
     assert third.code == 0, third.stdout + third.stderr
     assert stamp(entry) == kept
     assert json.loads(third.stdout)["files"]
@@ -229,20 +229,22 @@ LINKS = known_issue(not POSIX_PYTHON, 568, "the link cases of the bytecode cache
 
 
 @POSIX_ONLY
-def test_a_folder_that_others_can_write_is_not_used_and_not_written(src, tmp_path):
+@pytest.mark.parametrize("level", ["_build", "bytecode"])
+def test_a_folder_that_others_can_write_is_not_used_and_not_written(src, tmp_path, level):
     agentica(src, "main.agc")
-    folder = src / ".agc_cache"
-    assert stat.S_IMODE(folder.stat().st_mode) == stat.S_IRWXU
+    folder = src / "_build" / "bytecode"
+    at_level = folder if level == "bytecode" else src / "_build"
+    assert stat.S_IMODE(at_level.stat().st_mode) == stat.S_IRWXU
     entry = only_entry(folder)
     swap_program(entry, compiled(tmp_path, "other", program("from the entry")))
     kept = stamp(entry)
-    folder.chmod(0o770)
+    at_level.chmod(0o770)
     (src / "util.agc").write_text(UTIL % "two", encoding="utf-8")
     done = agentica(src, "main.agc")
     assert (done.code, done.stdout) == (0, "two\n"), done.stderr
     assert stamp(entry) == kept and [path.name for path in folder.iterdir() if ".tmp-" in path.name] == []
     # The same entry in a folder that is private again is read, so it was the mode that kept it out.
-    folder.chmod(0o700)
+    at_level.chmod(0o700)
     (src / "util.agc").write_text(UTIL % "one", encoding="utf-8")
     assert agentica(src, "main.agc").stdout == "from the entry\n"
 
@@ -250,7 +252,7 @@ def test_a_folder_that_others_can_write_is_not_used_and_not_written(src, tmp_pat
 @POSIX_ONLY
 def test_an_entry_that_others_can_write_is_replaced(src, tmp_path):
     agentica(src, "main.agc")
-    entry = only_entry(src / ".agc_cache")
+    entry = only_entry(src / "_build" / "bytecode")
     swap_program(entry, compiled(tmp_path, "other", program("from the entry")))
     entry.chmod(0o666)
     done = agentica(src, "main.agc")
@@ -259,12 +261,10 @@ def test_an_entry_that_others_can_write_is_replaced(src, tmp_path):
 
 
 @LINKS
-def test_links_are_never_followed_to_read_or_to_write(src, tmp_path):
+def test_a_link_in_place_of_the_entry_is_not_read_and_not_written_through(src, tmp_path):
     agentica(src, "main.agc")
-    folder = src / ".agc_cache"
-    entry = only_entry(folder)
+    entry = only_entry(src / "_build" / "bytecode")
     swap_program(entry, compiled(tmp_path, "other", program("from the entry")))
-    # A link in place of the entry: not read, and replaced by a file, never written through.
     target = tmp_path / "target.agcb"
     target.write_bytes(entry.read_bytes())
     entry.unlink()
@@ -273,13 +273,21 @@ def test_links_are_never_followed_to_read_or_to_write(src, tmp_path):
     done = agentica(src, "main.agc")
     assert (done.code, done.stdout) == (0, "one\n"), done.stderr
     assert target.read_bytes() == kept and not entry.is_symlink() and entry.is_file()
-    # A link in place of the folder: not used, nothing is written where it leads.
+
+
+@LINKS
+@pytest.mark.parametrize("level", ["_build", "bytecode"])
+def test_a_link_in_place_of_a_folder_is_not_used_and_nothing_is_written_where_it_leads(src, tmp_path, level):
+    agentica(src, "main.agc")
+    folder = src / "_build" / "bytecode" if level == "bytecode" else src / "_build"
+    swap_program(only_entry(src / "_build" / "bytecode"), compiled(tmp_path, "other", program("from the entry")))
     moved = tmp_path / "moved"
     folder.rename(moved)
     folder.symlink_to(moved)
     before = sorted(path.name for path in moved.iterdir())
+    (src / "util.agc").write_text(UTIL % "two", encoding="utf-8")
     done = agentica(src, "main.agc")
-    assert (done.code, done.stdout) == (0, "one\n"), done.stderr
+    assert (done.code, done.stdout) == (0, "two\n"), done.stderr
     assert sorted(path.name for path in moved.iterdir()) == before and folder.is_symlink()
 
 
@@ -317,7 +325,7 @@ def test_a_library_that_appears_in_an_earlier_folder_of_the_search_misses(tmp_pa
         (where / "x.agc").symlink_to(tmp_path / "x.agc")
     first = agentica(src, "main.agc", **extra)
     assert (first.code, first.stdout) == (0, "later\n"), first.stderr
-    entry = only_entry(src / ".agc_cache")
+    entry = only_entry(src / "_build" / "bytecode")
     kept = stamp(entry)
     assert agentica(src, "main.agc", **extra).stdout == "later\n"
     assert stamp(entry) == kept
@@ -334,7 +342,7 @@ def test_a_change_of_the_library_path_misses(tmp_path):
         (tmp_path / name / "foo.agc").write_text(UTIL % word, encoding="utf-8")
     extra["AGENTICA_PATH"] = str(tmp_path / "one")
     assert agentica(src, "main.agc", **extra).stdout == "from one\n"
-    entry = only_entry(src / ".agc_cache")
+    entry = only_entry(src / "_build" / "bytecode")
     kept = stamp(entry)
     extra["AGENTICA_PATH"] = str(tmp_path / "two")
     again = agentica(src, "main.agc", **extra)
@@ -342,18 +350,23 @@ def test_a_change_of_the_library_path_misses(tmp_path):
     assert stamp(entry) != kept
 
 
-def test_a_manifest_that_appears_in_a_parent_folder_misses(src, tmp_path):
+def test_the_entries_of_a_project_go_to_its_root_and_a_manifest_that_appears_in_a_parent_folder_misses(src):
     inner = src / "inner"
     inner.mkdir()
     (inner / "main.agc").write_text(program("deep"), encoding="utf-8")
     assert agentica(inner, "main.agc").stdout == "deep\n"
-    entry = only_entry(inner / ".agc_cache")
+    # No project: the folder is beside the file.
+    entry = only_entry(inner / "_build" / "bytecode")
     kept = stamp(entry)
     assert agentica(inner, "main.agc").stdout == "deep\n" and stamp(entry) == kept
     (src / "agentica.toml").write_text('name = "app"\n\n[dependencies]\n', encoding="utf-8")
+    # The manifest changes the key, so the old entry is not read, and the new one is in the folder of the project.
     again = agentica(inner, "main.agc")
     assert (again.code, again.stdout) == (0, "deep\n"), again.stderr
-    assert stamp(entry) != kept
+    assert stamp(entry) == kept
+    moved = only_entry(src / "_build" / "bytecode")
+    swap_program(moved, compiled(src.parent, "other", program("from the entry")))
+    assert agentica(inner, "main.agc").stdout == "from the entry\n"
 
 
 @LINKS
@@ -365,7 +378,7 @@ def test_an_import_through_a_link_that_is_retargeted_misses(tmp_path):
     (src / "b.agc").write_text(UTIL % "B", encoding="utf-8")
     (src / "link.agc").symlink_to("a.agc")
     assert agentica(src, "main.agc").stdout == "A\n"
-    entry = only_entry(src / ".agc_cache")
+    entry = only_entry(src / "_build" / "bytecode")
     kept = stamp(entry)
     (src / "link.agc").unlink()
     (src / "link.agc").symlink_to("b.agc")
@@ -376,7 +389,7 @@ def test_an_import_through_a_link_that_is_retargeted_misses(tmp_path):
 
 def test_a_run_that_writes_removes_the_old_temporary_files_and_nothing_else(src):
     agentica(src, "main.agc")
-    folder = src / ".agc_cache"
+    folder = src / "_build" / "bytecode"
     names = ("a.agcb.tmp-1", "b.agcb.tmp-2", "c.txt", "d.agcb.tmp-3")
     old, fresh, other, kept_folder = (folder / name for name in names)
     for path in (old, fresh, other):
@@ -393,7 +406,7 @@ def test_a_run_that_writes_removes_the_old_temporary_files_and_nothing_else(src)
 
 def test_a_folder_at_the_name_of_the_entry_is_not_removed(src):
     agentica(src, "main.agc")
-    entry = only_entry(src / ".agc_cache")
+    entry = only_entry(src / "_build" / "bytecode")
     entry.unlink()
     entry.mkdir()
     (entry / "inside").write_text("x", encoding="utf-8")

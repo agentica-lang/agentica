@@ -1,5 +1,6 @@
 ## The bytecode cache of `agentica FILE.agc` and `agentica test` (issue #375): the compiled program of a root file is
-## kept in `.agc_cache/` next to it (the folder `AGENTICA_CACHE_DIR` names, when set), so a run whose sources did not
+## kept in `_build/bytecode/`, with `_build/` in the folder of the project (the nearest agentica.toml) or, with none,
+## beside the root file. `AGENTICA_BUILD_DIR` names another folder in place of `_build/`. A run whose sources did not
 ## change starts without the front end.
 ##
 ## An entry is one file: a head `AGCCACHE NNNNNNNN\n` with the byte length of the text that follows, that text, then
@@ -16,10 +17,11 @@
 ## The program digest only guards against damage. The loader treats the bytes as untrusted, but anything that can
 ## write the entry can make the user run the bytecode it holds, so the folder and the entry are used only when they
 ## are what this program made: a real folder and a regular file (never a link), owned by the user of the process, and
-## writable by no one else. The folder is made with `Dir.mkdir_private` (mode 0700), the entry is written to a new
-## file made with `create_private` (O_EXCL, no links, mode 0600) under a random name and renamed into place. On Windows
-## there are no mode bits or owner ids to read, so only the link and file-kind checks apply there. Anything that fails
-## these checks turns the cache off for the run.
+## writable by no one else. This holds for `_build/`, for `_build/bytecode/` and for the entry. The folders are made
+## with `Dir.mkdir_private` (mode 0700); the entry is written to a new file made with `create_private` (O_EXCL, no
+## links, mode 0600) under a random name and renamed into place. On Windows there are no mode bits or owner ids to
+## read, so only the link and file-kind checks apply there. Anything that fails these checks turns the cache off for
+## the run.
 ##
 ## The build id is the size and the modification time (in seconds) of the binary, with its path: a rebuild of this
 ## checkout changes the file, and the version alone would not. Two builds of one size that are made within a second, or
@@ -28,9 +30,9 @@
 ## bytes of the program (--dump and --dump-ir do not compile to bytes), so none is in the key.
 ##
 ## The checks are by path (there is no `fstat` on a handle), so a swap of the folder between the check and the open is
-## not closed. It needs write access to the parent of the folder: for `.agc_cache/` that is the folder of the sources,
-## which could be edited just as well; for a folder named by AGENTICA_CACHE_DIR the parent must not be writable by
-## others (a sticky folder such as /tmp is fine).
+## not closed. It needs write access to the parent of the folder: for `_build/` that is the folder of the project,
+## whose sources could be edited just as well; for a folder named by AGENTICA_BUILD_DIR the parent must not be
+## writable by others (a sticky folder such as /tmp is fine).
 ##
 ## Nothing here fails a run: a folder that cannot be written, an entry that cannot be read or a file that is gone is a
 ## miss, and the program is compiled as without the cache. This is front-end I/O, so the --deny-* flags (which are for
@@ -46,12 +48,14 @@ import PackageHash from "../packages/package_hash"
 import Project from "../packages/project"
 import RandomName from "random_name"
 
-# The folder next to the root file, and the variable that names another one.
-CACHE_FOLDER = ".agc_cache"
-CACHE_VARIABLE = "AGENTICA_CACHE_DIR"
+# The folder of the project (or of the root file) that holds the build outputs, the folder of the entries in it, and
+# the variable that names another folder in place of the first.
+BUILD_FOLDER = "_build"
+BYTECODE_FOLDER = "bytecode"
+BUILD_VARIABLE = "AGENTICA_BUILD_DIR"
 
 # The first line of the key; change it when the layout of an entry changes.
-FORMAT = "agentica-cache-2"
+FORMAT = "agentica-cache-3"
 
 # The head of an entry: this word, a space, the length of the text in eight digits, a line feed.
 HEAD_WORD = "AGCCACHE "
@@ -89,10 +93,11 @@ STALE_TEMP_SECONDS = 3600
 MAGIC = "AGCB"
 VERSION_AT = 12
 
-## Where the entry of one root file is and what it must match. `beside` is true for the `.agc_cache/` folder next to
-## the sources, false for the folder of AGENTICA_CACHE_DIR. `libs_dir` is the folder whose agc_libs/ the build reads
-## first (the probes of the `pkg/` imports start there).
+## Where the entry of one root file is and what it must match. `build` is the `_build/` folder and `folder` the
+## `bytecode/` folder in it. `beside` is true for `_build/` of the project, false for the folder of AGENTICA_BUILD_DIR.
+## `libs_dir` is the folder whose agc_libs/ the build reads first (the probes of the `pkg/` imports start there).
 export struct Entry
+  build: String
   folder: String
   file: String
   key: String
@@ -184,21 +189,24 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
     "root #{real}",
     "inputs #{inputs}",
   ].join("\n")
-  override = System.env(CACHE_VARIABLE)
-  folder = Paths.join(root_dir, CACHE_FOLDER)
+  libs_dir = Project.library_dir(project, root_dir)
+  override = System.env(BUILD_VARIABLE)
+  build_dir = Paths.join(libs_dir, BUILD_FOLDER)
   beside = true
   if override.ok? and override.unwrap! != ""
-    folder = override.unwrap!
+    build_dir = override.unwrap!
     beside = false
   end
+  folder = Paths.join(build_dir, BYTECODE_FOLDER)
   name = "#{Paths.last_part(real)}-#{digest(String.to_bytes(real)).slice(0, 16)}.agcb"
   return ok(
     Entry(
+      build: build_dir,
       folder: folder,
       file: Paths.join(folder, name),
       key: key,
       beside: beside,
-      libs_dir: Project.library_dir(project, root_dir),
+      libs_dir: libs_dir,
     ),
   )
 end
@@ -280,6 +288,7 @@ end
 
 def read_entry(entry: Entry, settings: Env.Settings) -> Result[List[Int]]
   user = try own_user()
+  try private_kind(entry.build, "directory", user)
   try private_kind(entry.folder, "directory", user)
   try private_kind(entry.file, "file", user)
   handle = try File.open(entry.file, "read", IO_TIMEOUT_MS)
@@ -469,7 +478,7 @@ end
 # Writes the entry to a new private file beside its place under a name nobody can guess, and renames it there. A
 # rename never replaces (Path.rename), so the old entry is removed first: a reader that comes in between finds none,
 # which is a miss, and a run that dies in between leaves no entry. A file system that cannot rename without replacing
-# (the rename then fails) never gets an entry; the run is not affected. The folder made next to the sources gets a
+# (the rename then fails) never gets an entry; the run is not affected. A `_build/` made by the cache gets a
 # .gitignore of its own, so the bytecode is not committed by mistake.
 def publish(entry: Entry, text: String, program: List[Int]) -> Bool
   if !prepare_folder(entry).ok?
@@ -495,22 +504,31 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
   return true
 end
 
-# The folder must be one this program may trust (private_kind), or be made now with `Dir.mkdir_private`, one level
-# only: the folders above it are made with the default mode when they are missing.
+# Both folders must be ones this program may trust (private_kind), or be made now. The .gitignore goes in `_build/`
+# when the cache makes it there.
 def prepare_folder(entry: Entry) -> Result[Void]
-  if File.lstat(entry.folder, IO_TIMEOUT_MS).ok?
-    user = try own_user()
-    return private_kind(entry.folder, "directory", user)
+  made = try private_folder(entry.build)
+  if made and entry.beside
+    write_private(Paths.join(entry.build, ".gitignore"), String.to_bytes("*\n"))
   end
-  above = Paths.directory_of(entry.folder)
+  try private_folder(entry.folder)
+  return ok()
+end
+
+# A folder that exists must pass private_kind; one that does not is made with `Dir.mkdir_private`, one level only (the
+# folders above it are made with the default mode when they are missing). True when it was made now.
+def private_folder(path: String) -> Result[Bool]
+  if File.lstat(path, IO_TIMEOUT_MS).ok?
+    user = try own_user()
+    try private_kind(path, "directory", user)
+    return ok(false)
+  end
+  above = Paths.directory_of(path)
   if above != ""
     Dir.mkdir(above, IO_TIMEOUT_MS)
   end
-  try Dir.mkdir_private(entry.folder, IO_TIMEOUT_MS)
-  if entry.beside
-    write_private(Paths.join(entry.folder, ".gitignore"), String.to_bytes("*\n"))
-  end
-  return ok()
+  try Dir.mkdir_private(path, IO_TIMEOUT_MS)
+  return ok(true)
 end
 
 # A new file that only this user can use. `create_private` fails on a name that exists and never follows a link.

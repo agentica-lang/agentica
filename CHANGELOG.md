@@ -34,8 +34,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   **Breaking:** `add` and `update` are commands now, so scripts with those
   names run as `agentica ./add` and `agentica ./update`.
 - `agentica FILE.agc` and `agentica test` keep the compiled program in
-  `.agc_cache/` next to the source and skip the front end while the sources
-  are the same; `--no-cache` turns it off and `AGENTICA_CACHE_DIR` moves it.
+  `_build/bytecode/` in the project (or beside the source) and skip the front
+  end while the sources are the same; `--no-cache` turns it off and
+  `AGENTICA_BUILD_DIR` replaces `_build/`.
 - `agentica vendor` copies the locked packages into `agc_libs/<name>/`, and a
   build reads that copy before the cache, checking its hash against the lock.
   **Breaking:** `vendor` is a command now, so a script named `vendor` runs as

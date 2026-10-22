@@ -129,7 +129,7 @@ OPTIONS = [
   "  --no-cache",
   [
     "     compile the program again and do not keep its bytecode; by default the bytecode of a program that ",
-    "did not change is read from .agc_cache/ next to the source file (AGENTICA_CACHE_DIR names another folder)",
+    "did not change is read from _build/bytecode/ in the project (AGENTICA_BUILD_DIR replaces _build/)",
   ].join(""),
   "  --ai",
   "     print diagnostics as compact text for an agent",

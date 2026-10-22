@@ -3,7 +3,7 @@ build/
 tools/jscpd/node_modules/
 tests/eval/results/
 __pycache__/
-.agc_cache/
+_build/
 *.agcb
 !/bootstrap/stage0.agcb
 site/public/

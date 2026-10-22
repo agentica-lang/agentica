@@ -526,17 +526,19 @@ call of a builtin are not tail calls.
 ### The bytecode cache
 
 `agentica FILE.agc` and each test file of `agentica test` keep their compiled
-program in `.agc_cache/` next to the root file (the folder `AGENTICA_CACHE_DIR`
-names, when set). The entry holds the bytes `agentica compile` writes, the
+program in `_build/bytecode/`, with `_build/` in the folder of the nearest
+`agentica.toml` or, with none, beside the root file (`AGENTICA_BUILD_DIR` names
+another folder in place of `_build/`). The entry holds the bytes `agentica compile` writes, the
 version, build and path of the binary, the SHA-256 of every file the front end
 read (with `agentica.toml` and `agentica.lock`), and what the resolver looked
 at: each place of the `pkg/` search that was empty or held a file, and where
 each relative import led. A lookup checks them again; any difference, or a
 damaged entry, compiles the program again and replaces the entry. A run that
 hits has no front-end diagnostics, since the program checked when it was
-cached. The entry is used only when its folder and file are what the cache
-made: a real folder and a regular file, never a link, owned by the user and
-writable by no one else (the folder is made with mode 0700). Otherwise the run
+cached. The entry is used only when `_build/`, `bytecode/` and the file are
+what the cache made: real folders and a regular file, never a link, owned by
+the user and writable by no one else (the folders are made with mode 0700).
+Otherwise the run
 goes on without the cache. On Windows, which has no modes or owner ids to read,
 only the link and file-kind checks apply. `check`, `compile`, `--dump`,
 `--dump-ir`, `check --stdin` and `run` do not use it; `--no-cache` skips it for

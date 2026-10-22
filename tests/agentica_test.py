@@ -27,10 +27,10 @@ FIXTURES = TESTS / "fixtures"
 # The interpreter that runs the tests also runs the Python peers and is the `python3` that VM programs spawn.
 PYTHON = sys.executable
 
-# The programs the tests run keep their bytecode in a folder of this process (removed at its end), not in `.agc_cache/`
+# The programs the tests run keep their bytecode in a folder of this process (removed at its end), not in `_build/`
 # next to the fixtures. tests/test_bytecode_cache.py sets the variable itself where the cache is what it tests.
 _CACHE_DIR = tempfile.mkdtemp(prefix="agentica-test-cache-")
-os.environ.setdefault("AGENTICA_CACHE_DIR", _CACHE_DIR)
+os.environ.setdefault("AGENTICA_BUILD_DIR", _CACHE_DIR)
 atexit.register(shutil.rmtree, _CACHE_DIR, ignore_errors=True)
 
 # The platform the program under test was built for: the host, or "windows" when a Linux or macOS host runs a Windows
