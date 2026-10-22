@@ -132,10 +132,11 @@ fetch of `install` are in 05b. What 45b does, and what 45c adds on it:
 `install` (45b), `add`, `update` (45c) and `vendor` (45d) are built. The exact
 command line is decided in each phase.
 
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole 40-digit id)
-  adds the dependency to `agentica.toml`, rewrites the lock and fills the
-  cache. **Built (45c).** The local name is always an argument (the package's
-  own `name` is not read), and the options come last, in that order. Decided:
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole 40-digit id;
+  `--subdir DIR` for a folder of the repository, #573) adds the dependency to
+  `agentica.toml`, rewrites the lock and fills the cache. **Built (45c).** The
+  local name is always an argument (the package's own `name` is not read), and
+  the options come last, in that order. Decided:
   - It adds one line to the manifest and changes no other byte, so comments,
     blank lines, key order and line endings stay. The line goes after the last
     entry of `[dependencies]`, or in a new `[dependencies]` table at the end

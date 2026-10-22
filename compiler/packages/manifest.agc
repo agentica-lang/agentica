@@ -1,7 +1,7 @@
 ## The manifest agentica.toml (docs/grammar/05b-modules.md): the project's own name, its direct dependencies and
 ## the [style] rules. A dependency is a local name and a git source: `sqlite = { git = "https://host/owner/repo", tag =
-## "v1.2.0" }`, with exactly one of `tag` and `ref`. A failure is PKG-MANIFEST-INVALID, with the file and the key path
-## (toml_read.agc).
+## "v1.2.0" }`, with exactly one of `tag` and `ref`, and an optional `subdir`: the folder of the repository that is the
+## package. A failure is PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc).
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
@@ -11,7 +11,7 @@ import Reader from "toml_read"
 # The keys the manifest knows, and those of [style] and of a dependency.
 TOP_KEYS = ["name", "dependencies", "style"]
 STYLE_KEYS = ["max_line_width"]
-DEPENDENCY_KEYS = ["git", "tag", "ref"]
+DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir"]
 
 ## A direct dependency: the local name (the segment after `pkg/` in an import) and where it comes from.
 export struct Dependency
@@ -92,7 +92,8 @@ def dependencies_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> R
   return ok(found)
 end
 
-# One dependency: `git` and exactly one of `tag` and `ref`; any other key, such as a path or a branch, is refused.
+# One dependency: `git`, exactly one of `tag` and `ref`, and an optional `subdir`; any other key, such as a path or a
+# branch, is refused.
 def source_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[GitSource.Source]
   entries = try Reader.table(reading, value, path)
   try Reader.known_keys(reading, entries, DEPENDENCY_KEYS, path)
@@ -122,7 +123,15 @@ def source_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resul
       return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", ref_problem))
     end
   end
-  return ok(GitSource.Source(git: git, tag: tag, ref: ref))
+  subdir = ""
+  if entries.has_key?("subdir")
+    subdir = try Reader.text(reading, entries["subdir"], Reader.child(path, "subdir"))
+    subdir_problem = GitSource.subdir_problem(subdir)
+    if subdir_problem != ""
+      return error(Reader.fail_help(reading, Reader.child(path, "subdir"), "not a subdir", subdir_problem))
+    end
+  end
+  return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref))
 end
 
 # [style]: today max_line_width, a positive integer. 0 when there is no [style] or no limit.
