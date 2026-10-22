@@ -710,6 +710,10 @@ static void work_stat(op *o) {
   o->size = dir ? 0 : (int64_t)info.size;
   o->mtime = info.mtime;
   o->mode = (int64_t)(info.mode & 07777);
+#ifdef _WIN32
+  /* Windows has no group or other bits: a directory gets both write bits when others may change its entries. */
+  if (dir) o->mode = (o->mode & ~(int64_t)022) | (agc_fs_directory_shared(o->path) ? 022 : 0);
+#endif
   o->user_id = (int64_t)info.uid;
   o->group_id = (int64_t)info.gid;
 }

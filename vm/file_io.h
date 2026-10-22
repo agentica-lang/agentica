@@ -54,6 +54,9 @@ int agc_fs_try_lock(int fd);
 int agc_fs_private_create(const char *path, bool directory);
 int agc_fs_private_read(const char *path, size_t maximum, size_t *size);
 char *agc_fs_absolute(const char *path);
+/* Whether someone other than the user, SYSTEM and Administrators may add, replace or delete entries of the
+   directory at PATH (see file_windows.c); true too when its owner or access list cannot be read. */
+bool agc_fs_directory_shared(const char *path);
 /* PATH (UTF-8) as a malloc'd UTF-16 string for the wide Windows calls; NULL with errno (EINVAL for bad UTF-8, an
    empty path or a device path such as //./x or //?/x, ENOMEM). */
 wchar_t *agc_fs_wide(const char *path);

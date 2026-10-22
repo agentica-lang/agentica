@@ -125,6 +125,52 @@ static bool owner_only(HANDLE file) {
   return valid;
 }
 
+/* The rights that let a holder add, replace or delete the entries of a directory, or give itself those rights. */
+#define CHANGE_ENTRIES (FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_DELETE_CHILD | WRITE_DAC | WRITE_OWNER | \
+                        GENERIC_WRITE | GENERIC_ALL | MAXIMUM_ALLOWED)
+
+static bool trusted_sid(PSID sid, PSID user) {
+  BYTE system[SECURITY_MAX_SID_SIZE], administrators[SECURITY_MAX_SID_SIZE];
+  DWORD system_size = sizeof system, administrators_size = sizeof administrators;
+  return EqualSid(sid, user) ||
+         (CreateWellKnownSid(WinLocalSystemSid, NULL, system, &system_size) && EqualSid(sid, system)) ||
+         (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, administrators, &administrators_size) &&
+          EqualSid(sid, administrators));
+}
+
+/* The Windows form of a temporary folder that is "shared and not sticky" on POSIX: its owner is not the user, SYSTEM
+   or Administrators, or an allow entry of its DACL that applies to the folder itself (not inherit-only) gives a right
+   of CHANGE_ENTRIES to anyone else (Everyone, Users, Authenticated Users, CREATOR OWNER and so on). A missing (NULL)
+   DACL allows everyone. Deny entries are not counted, so the answer errs on the shared side, as does an owner or an
+   access list that cannot be read and an allow entry whose kind names no plain SID (object and compound entries). */
+bool agc_fs_directory_shared(const char *path) {
+  wchar_t *wide = native_path(path);
+  TOKEN_USER *user = wide ? current_user() : NULL;
+  PSID owner = NULL;
+  PACL acl = NULL;
+  PSECURITY_DESCRIPTOR security = NULL;
+  DWORD rc = user ? GetNamedSecurityInfoW(wide, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION |
+                                          DACL_SECURITY_INFORMATION, &owner, NULL, &acl, NULL, &security)
+                  : ERROR_OUTOFMEMORY;
+  bool shared = rc != ERROR_SUCCESS || !owner || !acl || !trusted_sid(owner, user->User.Sid);
+  for (WORD k = 0; !shared && k < acl->AceCount; k++) {
+    void *entry = NULL;
+    if (!GetAce(acl, k, &entry) || !entry) { shared = true; break; }
+    const ACCESS_ALLOWED_ACE *ace = entry;
+    BYTE type = ace->Header.AceType;
+    bool allows = type == ACCESS_ALLOWED_ACE_TYPE || type == ACCESS_ALLOWED_CALLBACK_ACE_TYPE ||
+                  type == ACCESS_ALLOWED_COMPOUND_ACE_TYPE || type == ACCESS_ALLOWED_OBJECT_ACE_TYPE ||
+                  type == ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE;
+    if (!allows || (ace->Header.AceFlags & INHERIT_ONLY_ACE) || !(ace->Mask & CHANGE_ENTRIES)) continue;
+    bool plain = type == ACCESS_ALLOWED_ACE_TYPE || type == ACCESS_ALLOWED_CALLBACK_ACE_TYPE;
+    shared = !plain || !trusted_sid((PSID)&ace->SidStart, user->User.Sid);
+  }
+  if (security) LocalFree(security);
+  free(user);
+  free(wide);
+  return shared;
+}
+
 static void free_security(private_security *security) {
   free(security->acl);
   free(security->user);
