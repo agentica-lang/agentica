@@ -23,8 +23,15 @@ are registered in `stdlib/MODULES`.
   carries the compiled runner; see "Embedded programs" below), and `self_path
   ... FILE.agc` for a program under test (`std/bdd`). The user's `--deny-*`
   flags do not reach the front end, so it can start them; the user's program
-  never runs in that runtime. `agentica test` refuses every `--deny-*` flag and
-  `--sandbox` (`REFUSED` in `bdd_options.agc`). A front end that stops on a
+  never runs in that runtime. `agentica test` takes every `--deny-*` flag and
+  `--sandbox`, in front of `test` or after it, once each (`DENY` in
+  `bdd_options.agc`). The driver adds them after the binary in the config's
+  `agentica` words (no new config field, so the stage0 driver still works with
+  this runner): `std/bdd` starts each program under test with them, and the
+  runner gives them (`deny`, the words after the binary) to every child of the
+  user's code. The runner runs without them. Under `--deny-fs`, `std/bdd`
+  cannot stat a program under test, so its `agentica` command reports a missing
+  file. A front end that stops on a
   runtime error (a bug in the driver) ends the process with status 2 and the
   error on stderr, never the 1 of a failed test run. Without `--self` (the front
   end started as an ordinary program) `test` says so and exits 2.

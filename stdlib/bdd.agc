@@ -300,7 +300,9 @@ def start(ctx: Context, path: String) -> Context
   end
   file = Path.resolve(joined.unwrap_or(path)).unwrap_or(path)
   info = File.stat(file, 5000)
-  if not (info.ok? and file.end_with?(".agc")) or info.unwrap!.kind != "file"
+  # Under --deny-fs this VM cannot look at the file; the agentica command below reads it and says when it is missing.
+  seen = info.ok? or !info.message.start_with?("denied:")
+  if !file.end_with?(".agc") or (seen and !(info.ok? and info.unwrap!.kind == "file"))
     halt("RUNTIME-BDD-PROGRAM", "expected an existing .agc program")
   end
   if settings.agentica.size == 0

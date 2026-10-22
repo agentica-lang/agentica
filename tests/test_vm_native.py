@@ -196,7 +196,7 @@ end
 """
 
 
-# Every --deny-* flag and --sandbox, which `agentica test` refuses.
+# Every --deny-* flag and --sandbox.
 DENY_FLAGS = ["--deny-native", "--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--sandbox"]
 
 
@@ -229,9 +229,30 @@ def test_other_systems_refuse_extern_at_load(tmp_path):
         assert diagnostic(result, 2) == ("RUNTIME-NATIVE-UNSUPPORTED", (7, 3))
 
 
+EXTERN_TEST = """extern "libc.so.6"
+  def abs(n: C.Int) -> C.Int
+end
+
+def main() -> Void
+  Test.run([Test.test("abs") do Test.eq(abs(-1), 1) end])
+end
+"""
+
+
+# `agentica test` gives the flags to the VMs of the test files, not to the runner: in front of `test` or after it, a
+# test file that declares extern functions is a file error, and the other files still run, under --sandbox too.
+@ON_LINUX_ONLY
 @pytest.mark.parametrize("flag", DENY_FLAGS)
-def test_test_refuses_deny_native(tmp_path, flag):
-    # In front of `test` or after it, the same refusal: no report, exit 2.
-    for words in ([flag, "test"], ["test", flag], ["--json", "test", flag]):
+def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
+    (tmp_path / "test").mkdir()
+    program(tmp_path / "test", EXTERN_TEST, "native_test.agc")
+    program(tmp_path / "test", 'def main() -> Void\n  Test.run([Test.test("adds") do Test.eq(1 + 1, 2) end])\nend\n',
+            "plain_test.agc")
+    for words in ([flag, "test", "--json"], ["test", "--json", flag]):
         result = agentica(*words, cwd=tmp_path)
-        assert (result.code, result.stdout) == (2, ""), words
+        assert (result.code, result.stderr) == (1, ""), words
+        report = json.loads(result.stdout)
+        errors = {file["path"].rsplit("/", 1)[-1]: file["error"] and file["error"]["code"] for file in report["files"]}
+        assert errors == {"native_test.agc": "RUNTIME-NATIVE-DENIED", "plain_test.agc": None}, words
+        assert (report["passed"], report["failed"]) == (1, 0), words
+    assert agentica("test", cwd=tmp_path).code == 0
