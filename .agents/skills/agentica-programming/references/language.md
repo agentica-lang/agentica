@@ -25,6 +25,15 @@ The exact rule behind a checker error or a core question. Builtin methods and
   `--flush-timeout`, `--schedulers N`, the `--deny-*` flags, `--sandbox`,
   `--source-root DIR`, `--ai`, `--json`. `agentica run --version` also lists the
   libraries.
+- `agentica F.agc` and `agentica test` keep the compiled program of each root
+  file in `_build/bytecode/`, in the folder of the nearest `agentica.toml`
+  (else beside F), and read it while F, its imports, `agentica.toml`,
+  `agentica.lock` and the places the `pkg/` search looked at are the same (a
+  hit has no front-end diagnostics). A folder or entry that is a link, not
+  yours, or writable by others is not used (`chmod go-w` a folder you made).
+  `--no-cache` skips it for one run; `AGENTICA_BUILD_DIR=DIR` replaces
+  `_build/`; an unwritable folder runs without it. `check`, `compile`,
+  `--dump*` and `run` never use it.
 - Scheduler threads (`--schedulers N`): `tasks.md`.
 
 ## Program shape
@@ -77,7 +86,7 @@ The exact rule behind a checker error or a core question. Builtin methods and
   lines = File.foreach(path, 65536, 1000)
     .drop(1)                          # header
     .map do |line| parse(line) end
-    .filter(&big?)
+    .select(&big?)
   ```
 - Reserved words: `def struct enum case do import export end if elsif else
   while for in return try true false nil and or not`. `value.with(...)` is
@@ -190,7 +199,7 @@ end
 - Calls nest 10000 deep at most (`RUNTIME-STACK-OVERFLOW`). Tail calls do not
   count: only `return f(...)` whose value is directly a user-function call
   (`return 1 + f(n - 1)` and builtin calls are not). Recurse over big inputs in
-  tail form with an accumulator, or use `for`, `map`, `filter`, `each`:
+  tail form with an accumulator, or use `for`, `map`, `select`, `each`:
   `return count(n - 1, acc + 1)` runs 1,000,000 calls.
 - A non-Void function must `return` on every path (`CHECK-MISSING-RETURN`); a
   loop does not count (put a `return` after `while true`) and the last

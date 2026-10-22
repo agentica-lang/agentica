@@ -3,14 +3,19 @@
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
 type. The checker picks the module from the static type (`String`, `List`,
 `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, and `Json` through `JSON`);
-there is no dynamic dispatch. `s.trim` is `String.trim(s)`, but `"a".from_int`
+there is no dynamic dispatch. `s.strip` is `String.trim(s)`, but `"a".from_int`
 is not a method. Without parentheses, `receiver.name` on a non-struct value is a
 method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
 Structs and enums have no methods.
 
-Ruby aliases are the module functions named in the library pages: `size`,
-`length`, `strip`, `include?`, `start_with?`, `end_with?`, `push`, `join`,
-`to_f`, and `to_s` and `inspect` on any data value. Two differ from Ruby: `to_i`
+Ruby aliases are the module functions named in the library pages: `strip`,
+`include?`, `start_with?`, `end_with?`, `push`, `join`, `select`, `key?`,
+`to_f`, and `to_s` and `inspect` on any data value. Ruby's other names for a
+method work too, and the texts show only the first: `length` and `size` on
+`String`, `List`, `Map`, `Set` and `Range`; `collect` for `map`, `inject` for
+`reduce` and `detect` for `find` (on `List` and `Lazy`); `member?` for
+`include?` on `Set` and `Range`; `include?` and `member?` for `key?` on `Map`.
+Two differ from Ruby: `to_i`
 and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and
 `to_i!` and `to_f!` halt on bad text. An unknown method is
 `CHECK-UNKNOWN-METHOD`.
@@ -39,7 +44,7 @@ whose generic functions the checker treats specially. Signatures are in
 and
 [`library/data-structures/set.md`][agentica-link-3].
 
-Callbacks (`List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`,
+Callbacks (`List.map`, `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`,
 and the Enumerable methods below) take a block, `&name` or a function variable.
 Each runs once per element, left to right, under the caller's budget. Parameter
 and return types must match exactly, and a `map` callback returns data, not
@@ -49,10 +54,10 @@ element.
 
 Collection operations preserve their inputs. Costs exclude callback work.
 
-- `List.map` and `List.filter` are O(n). `List.reduce` folds left, calling
+- `List.map` and `List.select` are O(n). `List.reduce` folds left, calling
   `f(accumulator, item)`; an empty list gives the initial value.
-- `List.append` (`push`) takes near constant time, so building a list with n
-  appends is O(n). `List.concat` joins lists of one element type: O(b) when the
+- `xs.push` (`List.append`) takes near constant time, so building a list with
+  n pushes is O(n). `List.concat` joins lists of one element type: O(b) when the
   right list has at most 32 items, otherwise O(a + b). `List.reverse` is O(n).
 - `List.set` and `List.at` are zero-based and take O(log32 n) time (at most four
   steps for a million items). A negative or out-of-range index is
@@ -92,15 +97,19 @@ Collection operations preserve their inputs. Costs exclude callback work.
   The first element wins a tie. A NaN key never wins unless every key is NaN,
   and then the first element wins. `String` keys compare with `String.compare`.
 - `Map.each` calls `f(key, value)` for each entry in insertion order and gives
-  nothing back. `Map.filter` keeps the entries `f(key, value)` accepts, in
+  nothing back. `Map.select` keeps the entries `f(key, value)` accepts, in
   insertion order. Both are O(n).
+- `List.first` and `List.last` give the first and the last element; on an empty
+  list they are `RUNTIME-INDEX-OUT-OF-RANGE` at the call, as `xs[0]` is.
+  `empty?` on a `List`, `Map`, `Set` or `String` tells whether it has no
+  elements, entries or characters.
 - `String.compare(a, b)` (also `a.compare(b)`) gives `-1`, `0` or `1` in the
   order of `sort`: code point order, which is the byte order of UTF-8.
 - These methods are written in Agentica in `stdlib/prelude/` and run in the
   program: they use its step budget, and a runtime error in one is reported at
-  the call in the program (at the argument it names), never in the prelude. They
-  have one name each: `select`, `collect`, `detect`, `inject` and `reject` are
-  `CHECK-UNKNOWN-METHOD`, and so are the same names on a `Range`.
+  the call in the program (at the argument it names), never in the prelude.
+  `reject` is `CHECK-UNKNOWN-METHOD`, and so are `select`, `collect`, `detect`
+  and `inject` on a `Range`.
 - `Map.get` with two arguments gives `ok(value)` or `error(message)`. With
   three, the default is always evaluated; `false` and `nil` are present values.
 - `Map.delete` ignores absent keys and keeps the order of the rest; a key put
@@ -137,7 +146,7 @@ be read twice. The library page is
   values the first did not take (`ok([])` once it is drained); a value a
   terminal took is gone even if a later step dropped it, and `take_while`
   consumes the first value its block rejects.
-- Steps give a new `Lazy`: `map`, `filter`, `take(n)`, `take_while`, `drop(n)`,
+- Steps give a new `Lazy`: `map`, `select`, `take(n)`, `take_while`, `drop(n)`,
   `drop_while`, `flat_map` (the block gives a `List[U]`), `with_index do |x, i|
   ... end` (maps each item with its index from 0), `each_slice(n)`,
   `each_cons(n)` (windows of `n` items; none when the source has fewer) and
@@ -187,18 +196,19 @@ Expected types flow into these operations for empty collections and Results.
 - `String.split(s, sep)` keeps empty parts, so `String.join(String.split(s,
   sep), sep)` gives `s`. `String.split("", sep)` is `[""]`; `String.split(s,
   "")` gives one character per element.
-- `String.to_int!` accepts a signed decimal: `RUNTIME-INVALID-NUMBER` for other
-  text, `RUNTIME-INTEGER-OVERFLOW` outside `Int`. `String.to_float!` rejects
-  text that is not a real decimal with `RUNTIME-INVALID-NUMBER`.
+- `s.to_i!` (`String.to_int!`) accepts a signed decimal:
+  `RUNTIME-INVALID-NUMBER` for other text, `RUNTIME-INTEGER-OVERFLOW` outside
+  `Int`. `s.to_f!` (`String.to_float!`) rejects text that is not a real decimal
+  with `RUNTIME-INVALID-NUMBER`.
 - `String.index_of` gives the character index of the first match (`ok(0)` for an
   empty part), or an error when absent. `String.at` halts with
   `RUNTIME-INDEX-OUT-OF-RANGE` outside the string.
 - `String.code` and `String.from_code` halt with `RUNTIME-INVALID-CHARACTER` on
   other input: a one-character string, or a scalar value (0 to 0x10FFFF, no
   surrogates).
-- `Float.to_int` truncates toward zero; NaN, infinity and results outside `Int`
-  are errors. `Float.to_int!` halts instead, with `RUNTIME-INVALID-NUMBER` or
-  `RUNTIME-INTEGER-OVERFLOW`.
+- `x.to_i` (`Float.to_int`) truncates toward zero; NaN, infinity and results
+  outside `Int` are errors. `x.to_i!` halts instead, with
+  `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
 - `Int.bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right` and
   `shift_right_unsigned` work on the 64-bit two's complement form of their
   arguments and read the result back the same way. They are methods on `Int`
@@ -376,9 +386,13 @@ and `JSON.encode` give its text. Signatures are in
 
 `agentica help NAME --json` prints the name, arity, parameter types, result,
 signature, effects and description, from the catalog that checking and execution
-use. Effects are informational (I/O, tasks, or `test`). An unknown target exits
-2, with a hint when the name is a close builtin or one from another language
-that the checker knows (`Hash.new`, `int`). A name that other languages use for
+use, and `ruby`: the signature in the Ruby method form (`s.strip() -> String`
+for `String.trim`), or null for a builtin with no method form. The help text
+and the helps of diagnostics write that form too (`s.strip`, not `String.trim`),
+while both names stay accepted. Effects are informational (I/O, tasks, or
+`test`). An unknown target exits 2, with a hint when the name is a close
+builtin or one from another language that the checker knows (`Hash.new`,
+`int`). A name that other languages use for
 a builtin (`strip`, `String.to_i`, `value!`) is not unknown: it exits 0 with
 the builtins it stands for, and `--json` prints
 `{"alias": NAME, "builtins": [...], "hints": {...}}`, `builtins` holding what
@@ -522,6 +536,28 @@ Calls nest at most 10000 deep in each task; a deeper call is
 function) replaces the caller's frame and does not count, so deep tail recursion
 runs. A call inside a larger expression, such as `return 1 + f(n - 1)`, and a
 call of a builtin are not tail calls.
+
+### The bytecode cache
+
+`agentica FILE.agc` and each test file of `agentica test` keep their compiled
+program in `_build/bytecode/`, with `_build/` in the folder of the nearest
+`agentica.toml` or, with none, beside the root file (`AGENTICA_BUILD_DIR` names
+another folder in place of `_build/`). The entry holds the bytes `agentica compile` writes, the
+version, build and path of the binary, the SHA-256 of every file the front end
+read (with `agentica.toml` and `agentica.lock`), and what the resolver looked
+at: each place of the `pkg/` search that was empty or held a file, and where
+each relative import led. A lookup checks them again; any difference, or a
+damaged entry, compiles the program again and replaces the entry. A run that
+hits has no front-end diagnostics, since the program checked when it was
+cached. The entry is used only when `_build/`, `bytecode/` and the file are
+what the cache made: real folders and a regular file, never a link, owned by
+the user and writable by no one else (the folders are made with mode 0700).
+Otherwise the run
+goes on without the cache. On Windows, which has no modes or owner ids to read,
+only the link and file-kind checks apply. `check`, `compile`, `--dump`,
+`--dump-ir`, `check --stdin` and `run` do not use it; `--no-cache` skips it for
+one run; a folder that cannot be written is not an error. The `--deny-*` flags
+do not apply to it: they are for the program.
 
 ### Running a compiled program
 

@@ -9,6 +9,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#ifdef _WIN32
+#include <wchar.h>
+#endif
 
 typedef struct {
   uint64_t mode, dev, ino, rdev;
@@ -51,6 +54,9 @@ int agc_fs_try_lock(int fd);
 int agc_fs_private_create(const char *path, bool directory);
 int agc_fs_private_read(const char *path, size_t maximum, size_t *size);
 char *agc_fs_absolute(const char *path);
+/* PATH (UTF-8) as a malloc'd UTF-16 string for the wide Windows calls; NULL with errno (EINVAL for bad UTF-8, an
+   empty path or a device path such as //./x or //?/x, ENOMEM). */
+wchar_t *agc_fs_wide(const char *path);
 #endif
 bool agc_fs_rooted(const char *path, size_t size);
 

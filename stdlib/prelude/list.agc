@@ -253,3 +253,17 @@ def max_by_string(list: List[A], key: Fn[A, String]) -> Result[A]
   end
   return ok(best)
 end
+
+def empty(list: List[A]) -> Bool
+  return list.size == 0
+end
+
+# An empty list fails on the index, exactly like list[0].
+def first(list: List[A]) -> A
+  return list[0]
+end
+
+# On an empty list the index is -1, which is out of range the same way.
+def last(list: List[A]) -> A
+  return list[list.size - 1]
+end

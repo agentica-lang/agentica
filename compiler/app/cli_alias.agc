@@ -1,10 +1,11 @@
 ## The builtins that a name from another language stands for, for `agentica help`: `strip` and `String.strip` are
-## `String.trim`, `len` is `size` or `length` of each type that has one, `value!` is `Result.unwrap!`. The names come
-## from the tables the checker already keeps for its "did you mean" help (check_tables.agc), plus every public builtin
-## whose method name (the part after the dot) is the name asked.
+## `String.trim` (which `help` writes in its Ruby form, `s.strip()`), `len` is `size` or `length` of each type that has
+## one, `value!` is `Result.unwrap!`. The names come from the tables the checker already keeps for its "did you mean"
+## help (check_tables.agc), plus every public builtin whose method name (the part after the dot) is the name asked.
 
 import {PUBLIC_NAMES} from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
+import RubyForm from "../check/ruby_form"
 import Tables from "../check/check_tables"
 
 # A name that stands for more builtins than this is too vague to list (`new`, `read`).
@@ -31,7 +32,9 @@ export def targets(name: String) -> List[String]
   if public.size > MAX_TARGETS
     return []
   end
-  return public
+  # The builtins written as a method of that name come first: `join` is the join of a List before `Path.join`.
+  written = public.filter do |target: String| RubyForm.written_as?(target, method) end
+  return written.concat(public.filter do |target: String| !RubyForm.written_as?(target, method) end)
 end
 
 ## The checker's hints for the methods that a bare `name` is on some type (`List.contains: a List has no ...`), by

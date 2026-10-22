@@ -4,6 +4,7 @@
 
 import Diag from "../diagnostics/diagnostic"
 import Packages from "../packages/package_import"
+import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
 import Paths from "import_path"
 import Env from "link_env"
@@ -58,6 +59,15 @@ export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
       end
       return SourceFile.Read.Unreadable(text.message)
   end
+end
+
+## The folders that a `pkg/` import searches for a library, in order, for a build whose manifest (or root file) is in
+## `libs_dir`: the bytecode cache lists them, to see a library appear in one. A relative AGENTICA_PATH entry is an
+## error.
+export def search_roots(settings: Env.Settings, libs_dir: String) -> Result[List[String]]
+  here = Source.position(0, 1, 0)
+  site = Failure.Site(file: libs_dir, span: Source.Span(start: here, stop: here))
+  return library_roots(settings, libs_dir, false, site)
 end
 
 ## Finds the module that the import path file (already ending in .agc) names, from the importer. A failure is

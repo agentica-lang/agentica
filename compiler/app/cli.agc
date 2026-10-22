@@ -32,6 +32,7 @@ import Ai from "../diagnostics/diagnostic_ai"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Plain from "../diagnostics/diagnostic_plain"
 import Problems from "../diagnostics/problem"
+import BytecodeCache from "../io/bytecode_cache"
 import SaveFile from "../io/save_file"
 import SourceReader from "../io/source_reader"
 import StdinBuffer from "../io/stdin_buffer"
@@ -297,10 +298,27 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
   if verb == "check"
     return verdict(session, source, Core.check(Cache.empty(), session.settings, source))
   end
+  plan = cache_plan(session, verb, source)
+  case BytecodeCache.lookup(plan, session.settings)
+    BytecodeCache.Lookup.Hit(bytes) -> return start(session, rest, bytes)
+    BytecodeCache.Lookup.Miss -> return read(session, verb, rest, plan)
+  end
+end
+
+# The bytecode cache (io/bytecode_cache.agc) serves a run: not `compile`, which is the explicit way to build a file,
+# nor a listing of the tree or the IR, and not `--no-cache`. `check` never gets here.
+def cache_plan(session: Session, verb: String, source: String) -> BytecodeCache.Plan
+  options = session.options
+  wanted = verb != "compile" and !options.no_cache and !options.dump and !options.dump_ir
+  return BytecodeCache.plan(session.settings, source, wanted)
+end
+
+def read(session: Session, verb: String, rest: List[String], plan: BytecodeCache.Plan) -> Int
+  source = rest[0]
   case Front.read_root(session.settings.workspace, source)
     Front.Root.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
     Front.Root.Invalid(problem) -> return reject(session, problem, source, 1)
-    Front.Root.Readable -> return linked(session, verb, rest)
+    Front.Root.Readable -> return linked(session, verb, rest, plan)
   end
 end
 
@@ -318,31 +336,42 @@ def verdict(session: Session, source: String, found: Core.Verdict) -> Int
   end
 end
 
-def linked(session: Session, verb: String, rest: List[String]) -> Int
+def linked(session: Session, verb: String, rest: List[String], plan: BytecodeCache.Plan) -> Int
   source = rest[0]
   case Front.check_file(source, session.settings)
     Front.Outcome.Rejected(problem) -> return reject(session, problem, source, 1)
-    Front.Outcome.Done(front) -> return checked(session, verb, rest, front)
+    Front.Outcome.Done(front) -> return checked(session, verb, rest, front, plan)
   end
 end
 
 # What is done with a program that checked, in a fixed order.
-def checked(session: Session, verb: String, rest: List[String], front: Front.Checked) -> Int
+def checked(
+  session: Session,
+  verb: String,
+  rest: List[String],
+  front: Front.Checked,
+  plan: BytecodeCache.Plan,
+) -> Int
   source = rest[0]
   if session.options.dump
     return emit(Reply.printed("#{CheckText.program_text(front.linked, front.checked)}\n"))
   elsif session.options.dump_ir
     return dump_ir(session, source, front)
   end
-  case Pipeline.build(front, session.settings)
+  case Pipeline.build_cached(front, session.settings, plan)
     Pipeline.Compiled.Rejected(problem) -> return reject(session, problem, source, 1)
     Pipeline.Compiled.Bytes(bytes) ->
       if verb == "compile"
         return save(rest[2], bytes)
       end
-      launch = Launch.Launch(bytes: bytes, flags: vm_flags(session.options, source), arguments: rest.drop(1))
-      return session.hand_off.call(launch)
+      return start(session, rest, bytes)
   end
+end
+
+# Runs the program `bytes`: the VM gets the options in a fixed order, and the program its arguments.
+def start(session: Session, rest: List[String], bytes: List[Int]) -> Int
+  launch = Launch.Launch(bytes: bytes, flags: vm_flags(session.options, rest[0]), arguments: rest.drop(1))
+  return session.hand_off.call(launch)
 end
 
 # `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of the former front
@@ -468,6 +497,9 @@ def test(session: Session, words: List[String]) -> Int
   end
   # The --deny-* flags and --sandbox in front of `test` mean the same as after it, where the driver reads them.
   driver = driver.concat(options.deny)
+  if options.no_cache
+    driver = driver.push("--no-cache")
+  end
   case Opts.parse(driver.concat(words))
     Opts.Parsed.Broken(message) ->
       return emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))

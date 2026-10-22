@@ -18,27 +18,30 @@ export def public(name: String) -> Result[Model.Builtin]
 end
 
 ## Every public builtin, in name order, each as `builtin` gives it.
-export def catalog() -> Json
+export def catalog(ruby: Fn[Model.Builtin, String]) -> Json
   # `unwrap!` cannot fail: PUBLIC_NAMES are keys of the same ENTRIES that `Builtins.lookup` reads.
-  return JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin(Builtins.lookup(name).unwrap!) end)
+  return JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin(Builtins.lookup(name).unwrap!, ruby) end)
 end
 
 ## The JSON of a builtin: one object for a builtin with one form, else the name, the description and the effects of
-## the first form with the object of each form under `overloads`.
-export def builtin(entry: Model.Builtin) -> Json
+## the first form with the object of each form under `overloads`. `ruby` gives the signature of a form in the Ruby
+## method form (`s.strip() -> String` for `String.trim`) or "" for none (check/ruby_form.agc: catalog/ cannot read
+## the checker's alias tables, so the caller passes it); a form has it as `ruby`, or null. `name` and `signature` stay
+## the name of the builtin.
+export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
   if entry.alternatives.size == 0
-    return form_json(entry)
+    return form_json(entry, ruby)
   end
   forms = [entry].concat(entry.alternatives)
   return JSON.object({
     "name": JSON.from(entry.name),
     "description": JSON.from(entry.description),
     "effects": strings(entry.effects),
-    "overloads": JSON.array(forms.map do |form: Model.Builtin| form_json(form) end),
+    "overloads": JSON.array(forms.map do |form: Model.Builtin| form_json(form, ruby) end),
   })
 end
 
-def form_json(form: Model.Builtin) -> Json
+def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
   parameters = form.parameters.map do |parameter: Model.Named|
     JSON.object({"name": JSON.from(parameter.name), "type": JSON.from(Types.to_text(parameter.type))})
   end
@@ -48,9 +51,17 @@ def form_json(form: Model.Builtin) -> Json
     "parameters": JSON.array(parameters),
     "result": JSON.from(Types.to_text(form.result)),
     "signature": JSON.from(Builtins.form_signature(form)),
+    "ruby": text_or_null(ruby.call(form)),
     "effects": strings(form.effects),
     "description": JSON.from(form.description),
   })
+end
+
+def text_or_null(text: String) -> Json
+  if text == ""
+    return JSON.null()
+  end
+  return JSON.from(text)
 end
 
 def strings(items: List[String]) -> Json

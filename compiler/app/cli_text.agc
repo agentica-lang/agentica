@@ -7,8 +7,8 @@
 USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
-    "[--schedulers N] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] [check] ",
-    "<source-file> [args...]",
+    "[--schedulers N] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] [--no-cache] ",
+    "[check] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check --stdin <source-file>",
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
@@ -24,10 +24,10 @@ USAGE = [
   "       agentica [--ai|--json] refs <source-file>:LINE:COL [PATH...] [--json] [--partial]",
   "       agentica [--ai|--json] refs --stdin <source-file>:LINE:COL [PATH...] [--json] [--partial]",
   "       agentica [--ai|--json] install",
-  "       agentica [--ai|--json] add NAME URL --tag TAG|--ref COMMIT",
+  "       agentica [--ai|--json] add NAME URL --tag TAG|--ref COMMIT [--subdir DIR]",
   "       agentica [--ai|--json] update [NAME]",
   "       agentica [--ai|--json] vendor",
-  "       agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
+  "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
 
@@ -46,9 +46,10 @@ SUMMARY = [
   "                                          --steps FILE is the step program of the .feature files",
   "  agentica install                        fetch the packages of agentica.lock into the package cache with git;",
   "                                          the lock is never changed; a package already cached is not fetched",
-  "  agentica add NAME URL --tag TAG|--ref COMMIT",
+  "  agentica add NAME URL --tag TAG|--ref COMMIT [--subdir DIR]",
   "                                          add a dependency to agentica.toml, fetch it with git and write",
-  "                                          agentica.lock (the other lines of agentica.toml stay as they are)",
+  "                                          agentica.lock (the other lines of agentica.toml stay as they are);",
+  "                                          --subdir DIR: the package is that folder of the repository",
   "  agentica update [NAME]                  fetch the tag pins again (all, or the dependency NAME) and rewrite",
   "                                          agentica.lock; a commit pin and a package already locked do not move",
   "  agentica vendor                         fill the cache as install does, then copy the locked packages",
@@ -77,7 +78,7 @@ SUMMARY = [
   "Core rules:",
   "  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").",
   "  - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".",
-  "  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = Map.put(m, k, v).",
+  "  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = m.put(k, v).",
   "  - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):",
   "    use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.",
   [
@@ -126,6 +127,11 @@ OPTIONS = [
   "     print the checked tree instead of running it",
   "  --dump-ir",
   "     print the lowered VM IR instead of running it",
+  "  --no-cache",
+  [
+    "     compile the program again and do not keep its bytecode; by default the bytecode of a program that ",
+    "did not change is read from _build/bytecode/ in the project (AGENTICA_BUILD_DIR replaces _build/)",
+  ].join(""),
   "  --ai",
   "     print diagnostics as compact text for an agent",
   "  --json",

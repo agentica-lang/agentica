@@ -19,6 +19,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   task until a descriptor of native code can be read or written.
 - `extern` blocks take `C.Pointer`, `C.Bytes` and `resource Name, free: fn`,
   a C pointer that `Native.close` or the end of the owning task frees once.
+- `extern` blocks call native libraries on Windows x64 too; `Native.wait_*`
+  returns an error there for now.
+- `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
+  `List`.
+- Ruby's other method names work: `collect`, `select`, `inject`, `detect`,
+  `member?` and `key?`; `help` and the diagnostics show `map`, `select`,
+  `reduce`, `find`, `include?` and `key?`.
+- `List.first` and `List.last` (`RUNTIME-INDEX-OUT-OF-RANGE` on an empty list)
+  and `empty?` on `List`, `Map` and `String`.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and
@@ -35,6 +44,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `agentica update [NAME]` takes the tags again and rewrites the lock.
   **Breaking:** `add` and `update` are commands now, so scripts with those
   names run as `agentica ./add` and `agentica ./update`.
+- `agentica FILE.agc` and `agentica test` keep the compiled program in
+  `_build/bytecode/` in the project (or beside the source) and skip the front
+  end while the sources are the same; `--no-cache` turns it off and
+  `AGENTICA_BUILD_DIR` replaces `_build/`.
 - `agentica vendor` copies the locked packages into `agc_libs/<name>/`, and a
   build reads that copy before the cache, checking its hash against the lock.
   **Breaking:** `vendor` is a command now, so a script named `vendor` runs as
@@ -43,11 +56,20 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   dependency is read as its vendored copy, so it must be the locked files; and
   the `pkg/` library search skips `agc_libs/<name>/` for a locked package the
   importing manifest did not declare.
+- A git dependency takes `subdir`, so one repository can hold several packages
+  in folders: the lock keeps it, the hash, the cache and `agc_libs/` cover only
+  that folder, and `agentica add NAME URL --tag TAG --subdir DIR` writes it.
 - `agentica help NAME` answers a name from Ruby, Python or JS (`strip`,
-  `String.to_i`, `value!`) with the Agentica builtin it stands for, and gives
+  `String.to_i`, `value!`) with the builtin it stands for, and gives
   a hint for names such as `len`; `--json` gives
   `{"alias": NAME, "builtins": [...], "hints": {...}}`. An unknown method
-  (`r.value!`, `m.length`, `xs.contains?`) suggests the Agentica method.
+  (`r.value!`, `m.len`, `xs.contains?`) suggests the Ruby method.
+
+### Changed
+
+- `agentica help`, `help --json` (a new `ruby` field) and the helps of
+  diagnostics show the Ruby form of a builtin (`s.strip`, not `String.trim`);
+  both names are still accepted.
 
 ### Removed
 

@@ -1,6 +1,7 @@
 /*
- * The native calls of a build with libffi (AGC_FFI, Linux x86_64 for now):
- * dlopen and dlsym find the function, ffi_prep_cif describes its signature
+ * The native calls of a build with libffi (AGC_FFI: Linux x86_64 and Windows
+ * x64 for now): the loader (dlopen and dlsym, or LoadLibraryExW and
+ * GetProcAddress) finds the function, ffi_prep_cif describes its signature
  * once and ffi_call calls it. Adapter layer; ffi.c converts the values and
  * ffi_none.c is the other half. Design: docs/grammar/06d-io-and-network.md.
  */
@@ -8,14 +9,21 @@
 #include "ffi_os.h"
 #include "value.h"
 
-#include <dlfcn.h>
-#include <fcntl.h>
+#include <errno.h>
 #include <ffi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include "file_io.h"
+
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#endif
 
 /* The cif points at types, so both live in one block. */
 struct agc_ffi_call {
@@ -42,6 +50,116 @@ static ffi_type *ffi_type_of(agc_c_type type) {
   return &ffi_type_void;
 }
 
+#ifdef _WIN32
+/* The text of the Windows error CODE in UTF-8, without its line break, in BUF (SIZE bytes). */
+static const char *windows_error(DWORD code, char *buf, size_t size) {
+  wchar_t text[256];
+  DWORD n = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, code, 0, text,
+                           sizeof text / sizeof text[0], NULL);
+  while (n && (text[n - 1] == L'\r' || text[n - 1] == L'\n' || text[n - 1] == L' ' || text[n - 1] == L'.')) n--;
+  int len = n ? WideCharToMultiByte(CP_UTF8, 0, text, (int)n, buf, (int)size - 1, NULL, NULL) : 0;
+  if (len <= 0) {
+    snprintf(buf, size, "Windows error %lu", (unsigned long)code);
+  } else {
+    buf[len] = '\0';
+  }
+  return buf;
+}
+
+/* True for a path the front end lets through as absolute ("/x" there): a drive and a separator ("C:\x", "C:/x") or a
+   leading separator ("\x", "\\server\share\x"). */
+static bool absolute_path(const char *path) {
+  if (path[0] == '/' || path[0] == '\\') return true;
+  return ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) && path[1] == ':' &&
+         (path[2] == '/' || path[2] == '\\');
+}
+
+/* A name with no folder in it ("ucrtbase.dll", "sqlite3") is searched like dlopen searches one on Linux: in the
+   system's folders (the folder of agentica.exe, System32 and those added with AddDllDirectory), never in the current
+   folder, which the plain LoadLibraryW would search. An absolute path has its own folder searched for the libraries it
+   needs, as the loader does next to an executable. A relative path ("lib\x.dll", "C:x.dll") is refused like the front
+   end refuses "lib/x.so": it would resolve against the working directory. Error dialogs are off for the call, so a
+   missing dependency is an error code and not a box that waits for a click. */
+static void *library_open(const char *library, char *error, size_t size) {
+  bool path = strpbrk(library, "/\\:") != NULL;
+  if (path && !absolute_path(library)) {
+    snprintf(error, size, "cannot open %s: a library is a name or an absolute path", library);
+    return NULL;
+  }
+  wchar_t *wide = agc_fs_wide(library);
+  if (!wide) {
+    snprintf(error, size, "cannot open %s: %s", library, errno == ENOMEM ? "out of memory" : "not a valid path");
+    return NULL;
+  }
+  DWORD flags = LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
+  if (path) {
+    /* LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR takes only a full path: "/x" gets the current drive, and "/" becomes "\". */
+    DWORD need = GetFullPathNameW(wide, 0, NULL, NULL);
+    wchar_t *full = need ? malloc((size_t)need * sizeof(wchar_t)) : NULL;
+    if (!full || GetFullPathNameW(wide, need, full, NULL) >= need) {
+      free(full);
+      free(wide);
+      snprintf(error, size, "cannot open %s: not a valid path", library);
+      return NULL;
+    }
+    free(wide);
+    wide = full;
+    flags |= LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR;
+  }
+  DWORD old_mode = 0;
+  bool quiet = SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &old_mode);
+  HMODULE lib = LoadLibraryExW(wide, NULL, flags);
+  DWORD code = lib ? 0 : GetLastError();
+  if (quiet) SetThreadErrorMode(old_mode, NULL);
+  free(wide);
+  if (!lib) {
+    char why[512];
+    snprintf(error, size, "cannot open %s: %s", library, windows_error(code, why, sizeof why));
+    return NULL;
+  }
+  return lib;
+}
+
+static void *library_symbol(void *lib, const char *library, const char *symbol, char *error, size_t size) {
+  FARPROC found = GetProcAddress((HMODULE)lib, symbol);
+  if (!found) {
+    char why[512];
+    snprintf(error, size, "%s has no function %s: %s", library, symbol, windows_error(GetLastError(), why, sizeof why));
+    return NULL;
+  }
+  void *pointer;
+  memcpy(&pointer, &found, sizeof pointer);
+  return pointer;
+}
+
+/* LoadLibraryExW counts references like dlopen: freeing drops only this one. */
+static void library_close(void *lib) { (void)FreeLibrary((HMODULE)lib); }
+#else
+/* RTLD_NOW binds every symbol of the library at once, so a missing dependency is a load error here and not a crash at
+   its first use. */
+static void *library_open(const char *library, char *error, size_t size) {
+  void *lib = dlopen(library, RTLD_NOW | RTLD_LOCAL);
+  if (!lib) {
+    const char *why = dlerror();
+    snprintf(error, size, "cannot open %s: %s", library, why ? why : "unknown error");
+  }
+  return lib;
+}
+
+static void *library_symbol(void *lib, const char *library, const char *symbol, char *error, size_t size) {
+  dlerror();
+  void *found = dlsym(lib, symbol);
+  if (!found) {
+    const char *why = dlerror();
+    snprintf(error, size, "%s has no function %s: %s", library, symbol, why ? why : "the symbol is NULL");
+  }
+  return found;
+}
+
+/* dlopen counts references: closing drops only this one, so a failing call repeated in a loop leaks nothing. */
+static void library_close(void *lib) { dlclose(lib); }
+#endif
+
 bool agc_ffi_supported(void) { return true; }
 
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
@@ -50,27 +168,19 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
     snprintf(error, size, "%s has more than %d parameters", symbol, AGC_FFI_MAX_PARAMS);
     return NULL;
   }
-  /* RTLD_NOW binds every symbol of the library at once, so a missing dependency is a load error here and not a
-     crash at its first use. A library that holds the function is never closed: a prepared call keeps pointing into
-     it until the process ends. */
-  void *lib = dlopen(library, RTLD_NOW | RTLD_LOCAL);
-  if (!lib) {
-    const char *why = dlerror();
-    snprintf(error, size, "cannot open %s: %s", library, why ? why : "unknown error");
-    return NULL;
-  }
-  dlerror();
-  void *found = dlsym(lib, symbol);
+  /* A library that holds the function is never closed: a prepared call keeps pointing into it until the process
+     ends. */
+  void *lib = library_open(library, error, size);
+  if (!lib) return NULL;
+  void *found = library_symbol(lib, library, symbol, error, size);
   if (!found) {
-    const char *why = dlerror();
-    snprintf(error, size, "%s has no function %s: %s", library, symbol, why ? why : "the symbol is NULL");
-    /* dlopen counts references: closing drops only this one, so a failing call repeated in a loop leaks nothing. */
-    dlclose(lib);
+    library_close(lib);
     return NULL;
   }
   agc_ffi_call *call = malloc(sizeof(agc_ffi_call));
   if (!call) agc_out_of_memory();
-  /* ISO C cannot convert an object pointer to a function pointer; POSIX guarantees that dlsym's result can be. */
+  /* ISO C cannot convert an object pointer to a function pointer; POSIX and Windows guarantee that the address of a
+     function found by the loader can be. */
   memcpy(&call->fn, &found, sizeof call->fn);
   call->lib = lib;
   call->result = result;
@@ -78,7 +188,7 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   for (uint32_t k = 0; k < count; k++) call->types[k] = ffi_type_of(params[k]);
   if (ffi_prep_cif(&call->cif, FFI_DEFAULT_ABI, count, ffi_type_of(result), call->types) != FFI_OK) {
     free(call);
-    dlclose(lib);
+    library_close(lib);
     snprintf(error, size, "cannot describe the signature of %s", symbol);
     return NULL;
   }
@@ -86,7 +196,7 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
 }
 
 void agc_ffi_discard(agc_ffi_call *call) {
-  dlclose(call->lib);
+  library_close(call->lib);
   free(call);
 }
 
@@ -117,6 +227,17 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
   }
 }
 
+#ifdef _WIN32
+/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor: no wait yet
+   (issue #568). */
+int agc_ffi_wait_fd_open(int fd) {
+  (void)fd;
+  errno = ENOSYS;
+  return -1;
+}
+
+void agc_ffi_wait_fd_close(int fd) { (void)fd; }
+#else
 /* /proc/self/fd/N opens the file again (a pipe, a terminal), with an open file description of its own; a socket
    cannot be opened that way. */
 int agc_ffi_wait_fd_open(int fd) {
@@ -133,4 +254,5 @@ int agc_ffi_wait_fd_open(int fd) {
 }
 
 void agc_ffi_wait_fd_close(int fd) { (void)close(fd); }
+#endif
 #endif

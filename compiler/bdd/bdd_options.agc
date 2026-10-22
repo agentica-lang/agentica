@@ -5,7 +5,8 @@
 ## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
-## `--only TEXT`, `--json`, `--ai`, the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in front of `test`).
+## `--only TEXT`, `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in
+## front of `test`).
 
 # The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
 # the runner. A flag given twice counts once.
@@ -24,6 +25,7 @@ export struct Options
   steps: List[String]
   paths: List[String]
   deny: List[String]
+  no_cache: Bool
 end
 
 ## What the arguments are: options to run with; a usage error of the user (RUNTIME-BDD-USAGE, with the options read so
@@ -48,6 +50,7 @@ export def parse(arguments: List[String]) -> Parsed
     steps: [],
     paths: [],
     deny: [],
+    no_cache: false,
   )
   at = 0
   while at < arguments.size and arguments[at] != "--"
@@ -112,6 +115,9 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       end
       at += 2
     elsif word == "--json" or word == "--ai"
+      at += 1
+    elsif word == "--no-cache"
+      shown = shown.with(no_cache: true)
       at += 1
     elsif DENY.include?(word)
       shown = shown.with(deny: shown.deny.push(word).uniq)

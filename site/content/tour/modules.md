@@ -222,13 +222,23 @@ sqlite = { git = "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }
 json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
 ```
 
-Import a package by its local name, then a path inside the repository, without `.agc`:
+Import a package by its local name, then a path inside the package, without `.agc`:
 
 ```text
 import Sqlite from "pkg/sqlite/db"
 ```
 
 The local name does not have to match the URL, so moving a repository changes only its `git` line.
+
+One repository can hold several packages, each in its own folder. Name the folder with `subdir`, a relative path of plain folder names (letters, digits, `.`, `_` and `-`; no `..`, no leading `/`, no hidden folder, no `agc_libs`), and use prefixed tags for the versions:
+
+```toml
+[dependencies]
+sqlite = { git = "https://github.com/owner/packages", tag = "sqlite-0.1.0", subdir = "sqlite" }
+postgres = { git = "https://github.com/owner/packages", tag = "postgres-0.1.0", subdir = "postgres" }
+```
+
+The folder is the package: it has its own `agentica.toml`, its relative imports cannot leave it, the lock keeps its `subdir`, and the hash covers only its files, so a change in another folder of the repository changes nothing. The cache and `agc_libs/` keep only that folder. A package that needs another folder of its repository declares it as any other dependency. A bad `subdir` is `PKG-MANIFEST-INVALID` at `dependencies.<name>.subdir`.
 
 A declared name comes before the `pkg/` library folders, so it hides a library of the same name there. A file of a package imports only the packages that its own `agentica.toml` declares.
 
@@ -242,7 +252,7 @@ The packages come from `agc_libs/<name>/` next to `agentica.toml` when you have 
 agentica install
 ```
 
-`agentica add` and `agentica update` write the lock, so you do not write it by hand. `add` takes the local name, the `https://` URL and a tag (or a whole commit id with `--ref`), fetches the package and the packages in its own `agentica.toml`, and writes `agentica.lock` and one new line of `[dependencies]` in `agentica.toml`; your comments and the rest of the file stay as they are. `update` fetches the tag pins again, all of them or the one dependency you name, and takes the commit a tag points to now; a pin that is a commit does not move. It also repairs a lock that is missing or out of date after you edit the manifest. Both start `git` and may use the network. Nothing is written if a step fails, and the answer lists what was added, updated or removed.
+`agentica add` and `agentica update` write the lock, so you do not write it by hand. `add` takes the local name, the `https://` URL and a tag (or a whole commit id with `--ref`), and `--subdir DIR` for a folder of the repository, fetches the package and the packages in its own `agentica.toml`, and writes `agentica.lock` and one new line of `[dependencies]` in `agentica.toml`; your comments and the rest of the file stay as they are. `update` fetches the tag pins again, all of them or the one dependency you name, and takes the commit a tag points to now; a pin that is a commit does not move. It also repairs a lock that is missing or out of date after you edit the manifest. Both start `git` and may use the network. Nothing is written if a step fails, and the answer lists what was added, updated or removed.
 
 `agentica vendor` copies the packages of the lock into `agc_libs/<name>/` next to `agentica.toml`, so a project builds with no network and no cache, a CI job for example. It first does what `install` does (a package the cache lacks is fetched with `git`), then copies the locked `.agc` files and each package's `agentica.toml`, and never writes the lock. A build reads `agc_libs/<name>/` before the cache for a declared name, and checks its hash against the lock like the cache's: a copy you edited by hand is `PKG-HASH-MISMATCH`, and the cache is not used instead. Run `vendor` again to put the locked files back. `vendor` replaces only the folders of the locked packages; every other entry of `agc_libs/` stays, including the folder of a package you no longer use. `agc_libs/` itself must be a real folder, not a link (`PKG-SYMLINK`).
 
@@ -252,6 +262,7 @@ agentica vendor
 
 ```sh
 agentica add sqlite https://github.com/owner/sqlite-ac --tag v1.2.0
+agentica add postgres https://github.com/owner/packages --tag postgres-0.1.0 --subdir postgres
 agentica update sqlite
 ```
 

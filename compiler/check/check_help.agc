@@ -2,6 +2,7 @@
 ## that depend only on types or names. A help is a String, and "" means there is none.
 
 import Model from "../catalog/builtin_model"
+import RubyForm from "ruby_form"
 import Ast from "../syntax/ast"
 import Suggest from "../syntax/suggest"
 import Types from "../syntax/types"
@@ -32,7 +33,7 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
   if Types.is?(actual, "Result") and Types.same?(Types.item(actual), expected)
     return (
       "this is #{Types.to_text(actual)}; unwrap it with a ! form (#{unwrap_form(expected)}), " +
-      "with Result.unwrap!(...), or with try inside a function that returns Result"
+      "with r.unwrap!, or with try inside a function that returns Result"
     )
   end
   return convert_help(expected, actual)
@@ -47,10 +48,11 @@ export def foreign(tables: Tables, name: String) -> String
   return ""
 end
 
-## The "did you mean" help for the closest of the candidates and the shared names, or "".
+## The "did you mean" help for the closest of the candidates and the shared names, or "". A builtin that has a Ruby
+## method form is offered in it (`s.strip`, not `String.trim`).
 export def near(name: String, candidates: List[String], shared: List[String]) -> String
-  case Suggest.did_you_mean_among(name, candidates, shared)
-    Ast.Optional.Present(text) -> return text
+  case Suggest.closest_among(name, candidates, shared)
+    Ast.Optional.Present(found) -> return "did you mean \"#{RubyForm.shown(found)}\"?"
     Ast.Optional.Absent -> return ""
   end
 end
@@ -86,22 +88,22 @@ end
 
 def convert_help(expected: Types.Type, actual: Types.Type) -> String
   if Types.is?(expected, "String") and Types.is?(actual, "Int")
-    return "convert it with String.from_int(...)"
+    return "convert it with n.to_s"
   elsif Types.is?(expected, "String") and Types.is?(actual, "Float")
-    return "convert it with String.from_float(...)"
+    return "convert it with x.to_s"
   elsif Types.is?(expected, "Int") and Types.is?(actual, "String")
-    return "convert it with String.to_int!(...)"
+    return "convert it with s.to_i!"
   elsif Types.is?(expected, "Float") and Types.is?(actual, "String")
-    return "convert it with String.to_float!(...)"
+    return "convert it with s.to_f!"
   elsif Types.is?(expected, "Float") and Types.is?(actual, "Int")
-    return "convert it with Float.from_int(...)"
+    return "convert it with n.to_f"
   elsif Types.is?(expected, "Result") and !Types.is?(actual, "Result")
     if Types.is?(Types.item(expected), "Void")
       return "give a Result with ok() or error(\"message\")"
     end
     return "give a Result with ok(...) or error(\"message\")"
   elsif Types.is?(expected, "Int") and Types.is?(actual, "Float")
-    return "convert it with Float.to_int!(...), which truncates"
+    return "convert it with x.to_i!, which truncates"
   end
   return ""
 end

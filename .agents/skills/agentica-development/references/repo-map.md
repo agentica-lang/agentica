@@ -25,6 +25,8 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     host.agc  # workspace_with(std_source): the real Workspace over the std/ reader it is given; workspace(): for `--stdlib` runs; process_env(): the Env of this process
     package_vendor.agc  # put(): one locked package from its cache folder into agc_libs/<name>/ (staged in a hidden folder, hashed, swapped in by renames; never through a link)
     git_process.agc package_fetch.agc package_resolve.agc  # the system `git` as a process; fill(): one locked package into the cache (depth-1 fetch, ls-tree and cat-file, hash check, rename into place); resolve(): a pin that is not locked yet, commit and hash learnt from the fetch; the closure of lock entries for `add` and `update`
+    bytecode_cache.agc  # plan/lookup/store: `_build/bytecode/` in the project or beside the root (AGENTICA_BUILD_DIR replaces `_build/`), one entry per root: a head, a text (key, program digest, `source SHA PATH` lines, `absent`/`present` probes of the resolver), the .agcb bytes; `_build/`, `bytecode/` and the entry must be private (mkdir_private, create_private, lstat checks); used by app/cli.agc (run) and bdd/bdd_compile.agc (test files), through app/pipeline.agc `build_cached`
+    random_name.agc  # hex(): a random name (16 bytes of /dev/urandom; the clock and pid on Windows); hex_of(): bytes as hex
     stdin_buffer.agc  # take(): the standard input as a buffer; over(): a Workspace with it as one file (modules/overlay.agc)
     source_reader.agc  # read, read_shown: a whole file as strict UTF-8 text in chunks (the rules are in syntax/source_file.agc)
   syntax/  # source text, tokens, lexer, parser, AST
@@ -89,9 +91,9 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   agentica.c      # the binary's main: `run` (the VM with its flags), else the front end in a first runtime, retired at the hand-off, then the program in a second
   embedded.h      # the symbols of the generated embedded.s: the front end, the BDD runner and step program, and the std/ sources (references/vm-build.md)
   tools/          # check-layers.sh and its self-test, gen-embedded.sh (references/vm-build.md)
-  ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, resources, Native.wait_*, the refusal at load, libffi on Linux x86_64 (references/vm-core.md)
+  ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, resources, Native.wait_*, the refusal at load, libffi on Linux x86_64 and Windows x64 (references/vm-core.md)
   compute.c       # the compute pool of `compute def` calls: one thread per scheduler, FIFO, apart from the libuv pool (docs/vm/16-architecture.md §16.9)
-  third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl, libffi (Linux x86_64 only) (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
+  third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl, libffi (Linux x86_64 and Windows x64) (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
   tests/          # C tests, plain asserts (references/vm-tests.md)
 tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); references/vm-tests.md says which covers what
   test_spec_<area>.py  # pytest language rules through the CLI (code and span from --json, never message text); shared helpers live in spec_support.py. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.

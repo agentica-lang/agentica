@@ -309,6 +309,11 @@ With 3 reps, that is 15 extra runs per model.
 
 ### The budget cap
 
+The queue goes rep by rep: rep 1 of every task and arm (task by task, then arm
+by arm), then rep 2, and so on; `--jobs` starts runs in that order. A stop then
+leaves every task and arm with the same number of reps, give or take one, and
+when the cap stops the round, `summary.md` lists the reps each one finished.
+
 `--max-cost USD` is a soft cap, not a hard limit; without it there is no cap.
 Before each run starts, the runner adds the cost so far, plus the estimate of
 that run and of every run in flight; if the sum passes the cap, it stops

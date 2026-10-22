@@ -119,10 +119,11 @@ halts with `RUNTIME-FRONT-END-ONLY`.
 A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
 `agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
-id) adds a dependency and writes the lock, `agentica update [NAME]` moves tag
-pins, `agentica install` fills the cache from the lock, and `agentica vendor`
-copies the locked packages into `agc_libs/<name>/`. A declared package neither
-vendored nor in the cache is `CHECK-IMPORT-PACKAGE`.
+id; `--subdir DIR` for a folder of the repository) adds a dependency and writes
+the lock, `agentica update [NAME]` moves tag pins, `agentica install` fills the
+cache from the lock, and `agentica vendor` copies the locked packages into
+`agc_libs/<name>/`. A declared package neither vendored nor in the cache is
+`CHECK-IMPORT-PACKAGE`.
 
 ```toml
 name = "notes"
@@ -142,6 +143,14 @@ import Sqlite from "pkg/sqlite/db"
   `-`, at most 64 characters (the optional top-level `name` follows the same
   rule). Only git sources exist; a `path`, a branch or a version range is
   `PKG-MANIFEST-INVALID`.
+- `subdir = "postgres"` makes the package a folder of the repository (several
+  packages in one repository, prefixed tags such as `postgres-0.1.0`): plain
+  folder names joined by `/`, at most 128 characters, no `..`, no leading `/`,
+  no hidden folder, no `agc_libs`, else `PKG-MANIFEST-INVALID` at
+  `dependencies.<name>.subdir`. The folder holds the package's `agentica.toml`;
+  relative imports cannot leave it; the lock keeps `subdir` and the hash covers
+  only that folder. Another folder of the same repository is a dependency like
+  any other.
 - `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared package.
   A declared name comes before the `pkg/` library folders; an undeclared name is
   the search above. The files of a package come from `agc_libs/<name>/` beside
@@ -172,19 +181,21 @@ import Sqlite from "pkg/sqlite/db"
   (a `version` other than 1, a name twice, a bad value) is `PKG-LOCK-INVALID`; a
   bad manifest `PKG-MANIFEST-INVALID`. Both name a file and a key path.
 - The cache folder of a package is `<cache>/<host>/<owner>/<repo>/<commit>/`,
-  with no `.git` in `<repo>`. `agentica install` (no arguments; the project of
-  the working folder) fills it with the system `git` and never writes the lock.
-  A package already cached with the locked hash is not fetched, so a full cache
-  needs no git and no network. A fetch gets the tag (or the locked commit)
-  without a checkout and copies the `.agc` files (each at most 1 MiB) and the
-  root `agentica.toml`. It fails with `PKG-TAG-MOVED` (the tag is another commit
-  than the lock), `PKG-HASH-MISMATCH` (the files are not the locked ones; a
-  cached folder is never overwritten), `PKG-SYMLINK`, `PKG-PATH-COLLISION` (two
-  paths differing only in case), `PKG-FETCH` (git failed, no such tag or commit,
-  cache not writable) and `PKG-MANIFEST-MISSING` (no `agentica.toml`). Each
-  names `agentica.lock` and the entry's key, such as `package[0].tag`. `<cache>`
-  is `$XDG_CACHE_HOME/agentica/pkg` when `XDG_CACHE_HOME` is absolute, else
-  `~/.cache/agentica/pkg`; on Windows `%LOCALAPPDATA%\agentica\cache\pkg`.
+  with no `.git` in `<repo>` (`<commit>@<subdir>` with `/` written `@` for a
+  `subdir`, holding only that folder). `agentica install` (no arguments; the
+  project of the working folder) fills it with the system `git` and never writes
+  the lock. A package already cached with the locked hash is not fetched, so a
+  full cache needs no git and no network. A fetch gets the tag (or the locked
+  commit) without a checkout and copies the `.agc` files (each at most 1 MiB)
+  and the root `agentica.toml`. It fails with `PKG-TAG-MOVED` (the tag is
+  another commit than the lock), `PKG-HASH-MISMATCH` (the files are not the
+  locked ones; a cached folder is never overwritten), `PKG-SYMLINK`,
+  `PKG-PATH-COLLISION` (two paths differing only in case), `PKG-FETCH` (git
+  failed, no such tag or commit, cache not writable) and `PKG-MANIFEST-MISSING`
+  (no `agentica.toml`). Each names `agentica.lock` and the entry's key, such as
+  `package[0].tag`. `<cache>` is `$XDG_CACHE_HOME/agentica/pkg` when
+  `XDG_CACHE_HOME` is absolute, else `~/.cache/agentica/pkg`; on Windows
+  `%LOCALAPPDATA%\agentica\cache\pkg`.
 - `add` and `update` run `git` as `install` does and write `agentica.lock`
   (every package of the build, sorted by name, and no other). `add` puts one
   line in `[dependencies]` of `agentica.toml` and changes no other byte; a name

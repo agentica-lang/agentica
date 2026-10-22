@@ -6,14 +6,13 @@ writer of `Workspace.lock_text` makes, and the manifest with the text the case e
 writers with the readers (`install` and a build read back what was written). Cases assert codes and the file and key
 path, never message text (AGENTS.md).
 """
-import json
 import os
 
 import pytest
 
 from tests.agentica_test import WINDOWS, cli, host_only, run
-from tests.package_support import (BANG, GREET, MAIN, assert_at_key, dependency, environment, git,  # noqa: F401
-                                    inline_table, lock_entry, remotes, ws)
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, command, dependency, environment,  # noqa: F401
+                                    git, inline_table, lock_entry, remotes, ws)
 
 pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
@@ -21,12 +20,6 @@ GREETER = "owner/greeter"
 TOOLS = "owner/tools"
 GREETER_FILES = {"greet.agc": GREET, "agentica.toml": None}
 TOOLS_FILES = {"bang.agc": BANG}
-
-
-def command(ws, remotes, *words, **extra):
-    """The result of `--json WORDS` in the project folder, and the problem it reported (None for a success)."""
-    result = run(cli() + ["--json", *words], cwd=ws.project, env=environment(ws, remotes, **extra))
-    return result, json.loads(result.stderr) if result.code == 1 else None
 
 
 def plain(ws, remotes, *words, **extra):

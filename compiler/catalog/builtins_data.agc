@@ -1782,7 +1782,7 @@ ROWS_20: List[Model.Builtin] = [
       rule: Model.Rule.ListAppend,
       implementation: "List.append",
       effects: [],
-      description: "Return a new list with this value appended; near constant time.",
+      description: "Return a new list with the value pushed on the end; near constant time.",
       alternatives: [],
     ),
   ]
@@ -1886,6 +1886,16 @@ ROWS_21: List[Model.Builtin] = [
 
 ROWS_22: List[Model.Builtin] = [
     Model.Builtin(
+      name: "List.empty?",
+      parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A")))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Check whether the list has no elements.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "List.filter",
       parameters: [
         Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
@@ -1915,6 +1925,16 @@ ROWS_22: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "List.first",
+      parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A")))],
+      result: Types.Type.Var("A"),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "The first element; an empty list halts with RUNTIME-INDEX-OUT-OF-RANGE.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "List.flat_map",
       parameters: [
         Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
@@ -1941,6 +1961,16 @@ ROWS_22: List[Model.Builtin] = [
         "Group elements by an Int or String key; keys in order of first appearance, elements in " +
         "order; O(n)."
       ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "List.last",
+      parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A")))],
+      result: Types.Type.Var("A"),
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "The last element; an empty list halts with RUNTIME-INDEX-OUT-OF-RANGE.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -2299,6 +2329,16 @@ ROWS_26: List[Model.Builtin] = [
       implementation: "",
       effects: [],
       description: "Call f(key, value) for each entry in insertion order; returns nothing.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Map.empty?",
+      parameters: [Model.Named(name: "map", type: Types.Type.Map(Types.Type.Var("K"), Types.Type.Var("V")))],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Check whether the map has no entries.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -3182,6 +3222,16 @@ ROWS_41: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "String.empty?",
+      parameters: [Model.Named(name: "s", type: Types.Type.String)],
+      result: Types.Type.Bool,
+      rule: Model.Rule.Prelude,
+      implementation: "",
+      effects: [],
+      description: "Check whether the string has no characters.",
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "String.ends_with?",
       parameters: [
         Model.Named(name: "s", type: Types.Type.String),
@@ -3221,7 +3271,7 @@ ROWS_41: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "String.from_float",
       effects: [],
-      description: "Format a float.",
+      description: "Convert a Float to text.",
       alternatives: [],
     ),
   ]
@@ -3234,7 +3284,7 @@ ROWS_42: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "String.from_int",
       effects: [],
-      description: "Format an integer.",
+      description: "Convert an Int to text.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -3403,7 +3453,7 @@ ROWS_45: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "String.trim",
       effects: [],
-      description: "Trim surrounding whitespace.",
+      description: "Strip surrounding whitespace.",
       alternatives: [],
     ),
     Model.Builtin(

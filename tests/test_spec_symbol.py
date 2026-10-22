@@ -158,6 +158,7 @@ def test_a_builtin_carries_the_help_object_and_no_place(program):
             "builtin", name, None, None, None)
         assert found["help"] == json.loads(help_json.stdout)
         assert (found["exported"], found["doc"], found["signature"] != "") == (True, None, True)
+    assert one("String.trim", "orders.agc", cwd=program)["help"]["ruby"] == "s.strip() -> String"
 
 
 def test_a_bare_name_lists_every_module_that_declares_it_in_link_order_and_the_same_alias_for_two_modules(tmp_path):

@@ -1,20 +1,29 @@
 """Native calls (the extern blocks of docs/grammar/05-syntax.md and 06d-io-and-network.md) through the product CLI.
 
-The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library for each module run,
-so every C type crosses a real ABI. Native calls exist on Linux x86_64 only for now: elsewhere a program that declares
-extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load
-checks, and the call cases skip with the port issue (#548). Tests assert codes and spans, never messages (AGENTS.md).
+The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows) for
+each module run, so every C type crosses a real ABI. Native calls exist on Linux x86_64 and Windows x64 for now:
+elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
+test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* has
+no Windows port yet (#568). Tests assert codes and spans, never messages (AGENTS.md).
 """
 import json
 import platform
 import subprocess
+import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, TARGET_OS, cli, known_issue, run, tool, vm_environment
+from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, known_issue, run, tool, vm_environment
 
-NATIVE = TARGET_OS.startswith("linux") and platform.machine() == "x86_64"
-ON_LINUX_ONLY = known_issue(not NATIVE, 548, "native calls are built on Linux x86_64 only")
+NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
+    (WINDOWS and platform.machine() in ("AMD64", "x86_64"))
+NATIVE_CALLS = known_issue(not NATIVE, 548, "native calls are built on Linux x86_64 and Windows x64 only")
+# libuv polls only sockets on Windows, and the peer's descriptors are pipes.
+NATIVE_WAITS = known_issue(WINDOWS, 568, "Native.wait_* has no Windows port yet")
+
+# The C library and the math library, found by name by the system loader. On Windows the UCRT holds both.
+LIBC = "ucrtbase.dll" if WINDOWS else "libc.so.6"
+LIBM = "ucrtbase.dll" if WINDOWS else "libm.so.6"
 
 PEER_EXTERN = """extern "{library}"
   def peer_add(a: C.Int, b: C.Int) -> C.Int
@@ -37,12 +46,20 @@ end
 """
 
 
-def shared_library(tmp_path_factory, name):
-    """Build tests/fixtures/native/NAME.c into a shared library and return its absolute path."""
-    out = tmp_path_factory.mktemp("native") / ("lib%s.so" % name)
-    subprocess.run([tool("cc"), "-shared", "-fPIC", "-O1", "-o", str(out), str(FIXTURES / "native" / (name + ".c"))],
-                   check=True)
+def shared_library(tmp_path_factory, name, *flags, folder=None):
+    """Build tests/fixtures/native/NAME.c into a shared library (libNAME.so, or NAME.dll on Windows) in FOLDER (a new
+    one by default), with the extra compiler FLAGS, and return its absolute path."""
+    folder = folder or tmp_path_factory.mktemp("native")
+    out = folder / (name + ".dll" if WINDOWS else "lib%s.so" % name)
+    pic = [] if WINDOWS else ["-fPIC"]
+    subprocess.run([tool("cc"), "-shared", *pic, "-O1", "-o", str(out), str(FIXTURES / "native" / (name + ".c")),
+                    *flags], check=True)
     return out
+
+
+def literal(path):
+    """PATH as the text of an Agentica string literal: a Windows path has backslashes, which the literal escapes."""
+    return str(path).replace("\\", "\\\\")
 
 
 @pytest.fixture(scope="module")
@@ -57,8 +74,9 @@ def program(tmp_path, text, name="program.agc"):
     return path
 
 
-def agentica(*words, **options):
-    return run(cli() + [str(word) for word in words], env=vm_environment(), **options)
+def agentica(*words, env=None, **options):
+    """Run the CLI with WORDS; ENV adds to (or, with None values, removes from) the VM's environment."""
+    return run(cli() + [str(word) for word in words], env=vm_environment(env), **options)
 
 
 def diagnostic(result, status):
@@ -68,7 +86,7 @@ def diagnostic(result, status):
     return found["code"], (found["range"]["start"]["line"], found["range"]["start"]["column"])
 
 
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 def test_each_c_type_crosses_to_the_peer_and_back(tmp_path, peer):
     main = """def main() -> Void
   puts(peer_add(40, 2))
@@ -90,7 +108,7 @@ def test_each_c_type_crosses_to_the_peer_and_back(tmp_path, peer):
   puts(shout.call("fn"))
 end
 """
-    result = agentica(program(tmp_path, PEER_EXTERN.format(library=peer) + main))
+    result = agentica(program(tmp_path, PEER_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         "42", "-2147483648", "9000000000", "-3.0", "true", "false", "6", "ABC", "2", "0", "a�b", "9000000036",
@@ -98,24 +116,42 @@ end
     ]
 
 
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 def test_an_extern_function_is_exported_and_imported_like_any_function(tmp_path, peer):
-    raw = PEER_EXTERN.format(library=peer).replace("  def peer_add(", "  export def peer_add(")
+    raw = PEER_EXTERN.format(library=literal(peer)).replace("  def peer_add(", "  export def peer_add(")
     program(tmp_path, raw.rstrip("\n") + "\n", "raw.agc")
     main = program(tmp_path, 'import Raw from "./raw"\n\ndef main() -> Void\n  puts(Raw.peer_add(1, 2))\nend\n')
     result = agentica(main)
     assert (result.code, result.stdout, result.stderr) == (0, "3\n", "")
 
 
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 def test_a_system_library_is_found_by_its_name(tmp_path):
-    text = 'extern "libm.so.6"\n  def pow(x: C.Double, y: C.Double) -> C.Double\nend\n\n' \
-           'def main() -> Void\n  puts(pow(2.0, 10.0))\nend\n'
+    text = 'extern "%s"\n  def pow(x: C.Double, y: C.Double) -> C.Double\nend\n\n' \
+           'def main() -> Void\n  puts(pow(2.0, 10.0))\nend\n' % LIBM
     result = agentica(program(tmp_path, text))
     assert (result.code, result.stdout) == (0, "1024.0\n")
 
 
-@ON_LINUX_ONLY
+# A bare name is searched in the system's folders only, never in the working directory (dlopen's rule; on Windows the
+# loader's own search would take it). A relative path resolves against the working directory too, so it is refused:
+# the front end refuses "lib/x.so", and on Windows the loader refuses "lib\x.dll" and "C:x.dll", which the front end
+# cannot tell from a name.
+@NATIVE_CALLS
+def test_a_library_is_not_searched_in_the_working_directory(tmp_path, peer):
+    here = "agentica_peer_here.dll" if WINDOWS else "libagentica_peer_here.so"
+    (tmp_path / "lib").mkdir()
+    for folder in (tmp_path, tmp_path / "lib"):
+        (folder / here).write_bytes(peer.read_bytes())
+    names = [here] + (["lib\\\\" + here, tmp_path.drive + here] if WINDOWS else [])
+    for name in names:
+        text = 'extern "%s"\n  def peer_add(a: C.Int, b: C.Int) -> C.Int\nend\n\n' \
+               'def main() -> Void\n  puts(peer_add(1, 2))\nend\n' % name
+        result = agentica("--json", program(tmp_path, text), cwd=tmp_path, env={"LD_LIBRARY_PATH": None})
+        assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3)), name
+
+
+@NATIVE_CALLS
 def test_calls_from_tasks_on_several_schedulers(tmp_path, peer):
     main = """def work(n: Int) -> Int
   total = 0
@@ -137,7 +173,7 @@ def main() -> Void
   puts(sum)
 end
 """
-    result = agentica("--schedulers", "4", program(tmp_path, PEER_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", "4", program(tmp_path, PEER_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "1600\n", "")
 
 
@@ -158,7 +194,7 @@ end
 
 # The compute call returns 1 only once main's fast call has set the flag. On one scheduler that proves the waiting task
 # gave the scheduler to main; a call that held it would return 0 after 20 seconds.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_compute_call_waits_while_other_tasks_run(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -172,12 +208,13 @@ def test_a_compute_call_waits_while_other_tasks_run(tmp_path, peer, schedulers):
   puts(peer_half(5))
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    source = program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main)
+    result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stdout, result.stderr) == (0, "1\n1\nccc\n2.5\n", "")
 
 
 # A cancelled task stops waiting at once; its call runs on to its end, and the result is dropped.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_cancel_drops_the_result_of_a_compute_call(tmp_path, peer, schedulers):
     main = """def wait_flag(limit: Int) -> Result[Int]
@@ -200,12 +237,13 @@ def main() -> Void
   puts(peer_word(3))
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    source = program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main)
+    result = agentica("--schedulers", schedulers, source)
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == ['error("task: cancelled")', "0", "ddd", ""]
 
 
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 def test_many_compute_calls_at_once(tmp_path, peer):
     main = """def work(n: Int) -> Float
   letter = String.from_code(97 + n % 26)
@@ -227,13 +265,36 @@ def main() -> Void
   puts(sum)
 end
 """
-    result = agentica("--schedulers", "4", program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", "4", program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "10650.0\n", "")
+
+
+# The run ends (main returns, or System.exit) while a compute call naps for 3 seconds on a pool thread: the VM does not
+# wait for the call, so the run takes far less than the nap.
+@NATIVE_CALLS
+@pytest.mark.parametrize("ending, code", [("puts(\"done\")", 0), ("System.exit(3)", 3)])
+def test_the_run_ends_while_a_compute_call_runs(tmp_path, peer, ending, code):
+    main = """def nap(ms: Int) -> Int
+  return peer_nap(ms)
+end
+
+def main() -> Void
+  napper = Task.spawn(&nap, 3_000)
+  Task.sleep(50)
+  %s
+end
+""" % ending
+    source = program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main)
+    start = time.monotonic()
+    result = agentica(source, timeout=20)
+    assert (result.code, result.stderr) == (code, "")
+    assert result.stdout == ("done\n" if code == 0 else "")
+    assert time.monotonic() - start < 2.0
 
 
 # One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
 # cancelled, the waiting calls are never made: only the first nap is counted, even after a second nap would have ended.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 def test_a_cancel_skips_a_compute_call_that_has_not_started(tmp_path, peer):
     main = """def nap(ms: Int) -> Result[Int]
   return ok(peer_nap(ms))
@@ -257,7 +318,7 @@ def main() -> Void
   puts(peer_naps())
 end
 """
-    result = agentica("--schedulers", "1", program(tmp_path, COMPUTE_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", "1", program(tmp_path, COMPUTE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
 
 
@@ -312,7 +373,7 @@ end
 
 # Native.close frees once and a second close does nothing; a NULL result is an error value; C.Bytes and C.Pointer
 # cross. The peer counts each free, and frees the memory, so a double free would also crash the run.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 def test_a_resource_is_freed_once_and_null_is_an_error(tmp_path, peer):
     main = """def main() -> Void
   res = peer_res_open(7).unwrap!
@@ -331,7 +392,7 @@ def test_a_resource_is_freed_once_and_null_is_an_error(tmp_path, peer):
   IO.inspect(p)
 end
 """
-    result = agentica(program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    result = agentica(program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         "<Res>", "7", "1", 'error("peer_res_open returned NULL")', "258", "0", "true", "false", "42", "<C.Pointer>", "",
@@ -341,7 +402,7 @@ end
 # A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
 # the call; a closed resource is found first, even with a bad byte. Task.spawn_owning of a closed resource is
 # RUNTIME-HANDLE-NOT-OWNED.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("case, code, line", [
     ("closed", "RUNTIME-NATIVE-CLOSED", 4),
     ("owned", "RUNTIME-NATIVE-CLOSED", 4),
@@ -369,13 +430,13 @@ def test_a_closed_resource_and_a_bad_byte_stop_the_call(tmp_path, peer, case, co
   puts(peer_res_get(res))
 end
 """
-    result = agentica("--json", program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main), case)
+    result = agentica("--json", program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main), case)
     assert (diagnostic(result, 1)[0], diagnostic(result, 1)[1][0]) == (code, line)
     assert result.stdout == ("3\n" if case == "owned" else "")
 
 
 # The task that opened a resource owns it: its end frees what it did not close, and Task.spawn_owning hands it on.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_the_end_of_the_owning_task_frees_a_resource(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -390,13 +451,13 @@ def test_the_end_of_the_owning_task_frees_a_resource(tmp_path, peer, schedulers)
   puts(peer_res_frees())
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "210\n20\n5\n21\n", "")
 
 
 # A compute call holds its resource until C returns: a close by another task, or a cancel that ends the owning task,
 # marks it closed, and the free runs only when the call ends, never while the pool thread still uses the pointer.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 @pytest.mark.parametrize("spawn, stop, awaited", [
     ("Task.spawn_owning", "Task.cancel(holder)", 'error("task: cancelled")'),
@@ -416,13 +477,13 @@ def test_a_compute_call_keeps_its_resource_until_it_returns(tmp_path, peer, sche
   puts(peer_res_busy_frees())
 end
 """ % (spawn, stop)
-    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == ["0", awaited, "1", "0", ""]
 
 
 # The resource that a cancelled compute call returns is dropped with its result, and so freed: nothing leaks.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 def test_a_dropped_compute_result_frees_its_resource(tmp_path, peer):
     main = """def later(n: Int) -> Result[Int]
   res = try peer_res_open_later(n, 20_000)
@@ -439,14 +500,14 @@ def main() -> Void
   puts(peer_res_frees())
 end
 """
-    result = agentica("--schedulers", "2", program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", "2", program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\n', "")
 
 
 # Calls queued behind busy pool threads (one per scheduler) and cancelled there are never made, so their `done` builds
 # no result: no resource is made from a pointer C never returned (its free would get garbage, which ASan catches) and
 # no C.String is read. Every resource opened is freed once, and none while C uses it.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_cancelled_compute_call_that_never_ran_gives_no_result(tmp_path, peer, schedulers):
     main = """extern "{library}"
@@ -496,8 +557,8 @@ def main() -> Void
   puts(peer_res_opens() - peer_res_frees())
   puts(peer_res_busy_frees())
 end
-""".replace("SCHEDULERS", schedulers).replace("{library}", str(peer))
-    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=peer) + main))
+""".replace("SCHEDULERS", schedulers).replace("{library}", literal(peer))
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "0\n0\n", "")
 
 
@@ -522,7 +583,8 @@ end
 
 # Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
 # scheduler up; the write end is writable at once.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
+@NATIVE_WAITS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -538,13 +600,14 @@ def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, sch
   puts(Native.wait_writable(peer_pipe_writer(), 1_000))
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
 
 
 # The wait polls a new open of the pipe, so the native code's descriptors keep their flags: a blocking descriptor (a
 # terminal, say) stays blocking after the wait, whether it ended ready or at its timeout.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
+@NATIVE_WAITS
 def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
     main = """def main() -> Void
   fd = peer_pipe()
@@ -555,11 +618,12 @@ def test_a_wait_leaves_the_flags_of_the_descriptor_alone(tmp_path, peer):
   puts(peer_nonblocking(peer_pipe_writer()))
 end
 """
-    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, 'error("native: timed out")\nok()\n0\n0\n', "")
 
 
-@ON_LINUX_ONLY
+@NATIVE_CALLS
+@NATIVE_WAITS
 def test_a_wait_times_out_and_refuses_what_it_cannot_poll(tmp_path, peer):
     main = """def first_line(result: Result[Void]) -> String
   return result.message.split("\\n")[0]
@@ -576,7 +640,7 @@ def main() -> Void
   puts(first_line(Native.wait_writable(peer_dev_null(), 30)))
 end
 """
-    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         'error("native: timed out")', 'error("native: timed out")',
@@ -587,7 +651,8 @@ end
 
 # The wait polls a duplicate of the descriptor: a cancel closes the duplicate once (the count of open descriptors goes
 # back), and the peer's own descriptor still works.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
+@NATIVE_WAITS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_cancel_stops_a_wait_and_closes_its_duplicate(tmp_path, peer, schedulers):
     main = """def main() -> Void
@@ -614,12 +679,13 @@ def test_a_cancel_stops_a_wait_and_closes_its_duplicate(tmp_path, peer, schedule
   puts(peer_pipe_take())
 end
 """
-    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=peer) + main))
+    result = agentica("--schedulers", schedulers, program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == ["1", 'error("task: cancelled")', "0", "ok()", "1", ""]
 
 
-@ON_LINUX_ONLY
+@NATIVE_CALLS
+@NATIVE_WAITS
 def test_the_run_ends_while_a_task_waits(tmp_path, peer):
     main = """def main() -> Void
   waiter = Task.spawn(&wait, peer_pipe())
@@ -627,8 +693,18 @@ def test_the_run_ends_while_a_task_waits(tmp_path, peer):
   puts("done")
 end
 """
-    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=peer) + main), timeout=10)
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main), timeout=10)
     assert (result.code, result.stdout, result.stderr) == (0, "done\n", "")
+
+
+# On Windows a wait is not ported yet (#568): it returns an error at once. Elsewhere stdin (a pipe) is a descriptor that
+# can be polled, so the run only has to end.
+@NATIVE_CALLS
+def test_a_wait_on_windows_returns_an_error(tmp_path):
+    result = agentica(program(tmp_path, 'def main() -> Void\n  puts(Native.wait_readable(0, 10))\nend\n'))
+    assert (result.code, result.stderr) == (0, "")
+    if WINDOWS:
+        assert result.stdout.startswith('error("native: '), result.stdout
 
 
 WAIT_ONLY = """def main() -> Void
@@ -647,7 +723,7 @@ def test_a_program_that_waits_is_native_code(tmp_path, flag):
     assert diagnostic(result, 2) == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED", (1, 1))
 
 
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("case, code, line", [
     ("lib", "RUNTIME-NATIVE-LOAD", 2),
     ("sym", "RUNTIME-NATIVE-LOAD", 6),
@@ -659,7 +735,7 @@ def test_what_c_cannot_take_stops_the_run_at_the_extern_function(tmp_path, case,
   def gone() -> Void
 end
 
-extern "libc.so.6"
+extern "LIBC"
   def no_such_function_here() -> C.Int
   def abs(n: C.Int) -> C.Int
   def strlen(s: C.String) -> C.Int64
@@ -678,15 +754,27 @@ def main() -> Void
   end
 end
 """
+    text = text.replace("LIBC", LIBC)
     assert diagnostic(agentica("--json", program(tmp_path, text), case), 1) == (code, (line, 3))
 
 
-@ON_LINUX_ONLY
+# On Windows a DLL cannot be linked with an undefined symbol, so unbound.dll imports it from nowhere.dll. With the
+# symbol the call runs, which proves that the folder of an absolute path is searched for its DLLs; nowhere.dll is then
+# built again without it, and the missing function stops the load.
+@NATIVE_CALLS
 def test_a_library_with_an_unbound_symbol_is_a_load_error_and_keeps_earlier_output(tmp_path, tmp_path_factory):
-    library = shared_library(tmp_path_factory, "unbound")
     text = 'extern "%s"\n  def unbound_call() -> C.Int\nend\n\n' \
-           'def main() -> Void\n  puts("before")\n  puts(unbound_call())\nend\n' % library
-    result = agentica("--json", program(tmp_path, text))
+           'def main() -> Void\n  puts("before")\n  puts(unbound_call())\nend\n'
+    if WINDOWS:
+        folder = tmp_path_factory.mktemp("native")
+        nowhere = shared_library(tmp_path_factory, "nowhere", "-DAGENTICA_TEST_DEFINE_NOWHERE", folder=folder)
+        library = shared_library(tmp_path_factory, "unbound", str(nowhere), folder=folder)
+        result = agentica(program(tmp_path, text % literal(library)))
+        assert (result.code, result.stdout, result.stderr) == (0, "before\n1\n", "")
+        shared_library(tmp_path_factory, "nowhere", folder=folder)
+    else:
+        library = shared_library(tmp_path_factory, "unbound")
+    result = agentica("--json", program(tmp_path, text % literal(library)))
     assert result.stdout == "before\n"
     assert diagnostic(result, 1) == ("RUNTIME-NATIVE-LOAD", (2, 3))
 
@@ -696,10 +784,10 @@ EXTERN_FIRST = """def main() -> Void
   puts(abs(-1))
 end
 
-extern "libc.so.6"
+extern "%s"
   def abs(n: C.Int) -> C.Int
 end
-"""
+""" % LIBC
 
 
 # Every --deny-* flag and --sandbox.
@@ -707,7 +795,7 @@ DENY_FLAGS = ["--deny-native", "--deny-run", "--deny-net", "--deny-fs", "--deny-
 
 
 # Native code could do what any other flag turns off, so every --deny-* flag turns on --deny-native.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("flag", DENY_FLAGS)
 def test_deny_native_refuses_the_program_at_load(tmp_path, flag):
     source = program(tmp_path, EXTERN_FIRST)
@@ -735,19 +823,19 @@ def test_other_systems_refuse_extern_at_load(tmp_path):
         assert diagnostic(result, 2) == ("RUNTIME-NATIVE-UNSUPPORTED", (7, 3))
 
 
-EXTERN_TEST = """extern "libc.so.6"
+EXTERN_TEST = """extern "%s"
   def abs(n: C.Int) -> C.Int
 end
 
 def main() -> Void
   Test.run([Test.test("abs") do Test.eq(abs(-1), 1) end])
 end
-"""
+""" % LIBC
 
 
 # `agentica test` gives the flags to the VMs of the test files, not to the runner: in front of `test` or after it, a
 # test file that declares extern functions is a file error, and the other files still run, under --sandbox too.
-@ON_LINUX_ONLY
+@NATIVE_CALLS
 @pytest.mark.parametrize("flag", DENY_FLAGS)
 def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
     (tmp_path / "test").mkdir()

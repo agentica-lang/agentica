@@ -1,8 +1,9 @@
 /*
  * The platform half of the native calls (docs/grammar/06d-io-and-network.md,
  * "Native code"): open a library, find a symbol and call it with C values.
- * ffi_libffi.c does it with dlopen and libffi where the build has libffi
- * (AGC_FFI: Linux x86_64 for now); ffi_none.c says no elsewhere. No VM values.
+ * ffi_libffi.c does it with the system loader and libffi where the build has
+ * libffi (AGC_FFI: Linux x86_64 and Windows x64 for now); ffi_none.c says no
+ * elsewhere. No VM values.
  */
 #ifndef AGC_FFI_OS_H
 #define AGC_FFI_OS_H
@@ -36,10 +37,10 @@ typedef struct agc_ffi_call agc_ffi_call;
 /* True when this build can call native code. */
 bool agc_ffi_supported(void);
 
-/* Opens LIBRARY (a name the system loader searches, or a path with a "/"), finds SYMBOL in it and prepares the call
-   of RESULT SYMBOL(PARAMS[0..COUNT)). NULL with a message in ERROR (SIZE bytes) when the library or the symbol is
-   missing, COUNT is above AGC_FFI_MAX_PARAMS or the build cannot call native code. A library that holds SYMBOL
-   stays open until the process ends. */
+/* Opens LIBRARY (a name the system loader searches, or a path: with a "/", and on Windows also a "\" or a drive),
+   finds SYMBOL in it and prepares the call of RESULT SYMBOL(PARAMS[0..COUNT)). NULL with a message in ERROR (SIZE
+   bytes) when the library or the symbol is missing, COUNT is above AGC_FFI_MAX_PARAMS or the build cannot call native
+   code. A library that holds SYMBOL stays open until the process ends. */
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, char *error, size_t size);
 
@@ -54,7 +55,7 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result);
    the same file with FD's access mode (non-blocking, close-on-exec), so FD's own flags do not change. A socket, and
    a file that cannot be opened again (an eventfd, a FIFO with no reader), get a duplicate instead, which shares FD's
    flags: polling puts both in non-blocking mode. -1 with errno when neither works (EBADF for a closed FD, ENOSYS in a
-   build without native calls). wait_fd_close closes what wait_fd_open returned. */
+   build without native calls, and on Windows for now). wait_fd_close closes what wait_fd_open returned. */
 int agc_ffi_wait_fd_open(int fd);
 void agc_ffi_wait_fd_close(int fd);
 

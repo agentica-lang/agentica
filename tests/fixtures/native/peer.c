@@ -1,20 +1,35 @@
 /* The independent peer of the native calls (tests/test_vm_native.py): a shared library that the test builds with the
-   system C compiler, so each C type crosses the boundary through a real ABI. */
+   system C compiler, so each C type crosses the boundary through a real ABI. On Windows it is a DLL without the
+   descriptor functions, which Native.wait_* needs and which have no Windows port yet (#568). */
 #define _GNU_SOURCE
 #include <ctype.h>
-#include <dirent.h>
-#include <fcntl.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dirent.h>
+#include <fcntl.h>
 #include <time.h>
 #include <unistd.h>
+#endif
 
 static char shout[64];
 static int32_t bumps;
 static atomic_int flag, returned, naps;
+
+/* Sleeps MS milliseconds. */
+static void sleep_ms(int32_t ms) {
+#ifdef _WIN32
+  Sleep((DWORD)ms);
+#else
+  struct timespec nap = {ms / 1000, (long)(ms % 1000) * 1000000L};
+  while (nanosleep(&nap, &nap) != 0) {}
+#endif
+}
 
 int32_t peer_add(int32_t a, int32_t b) { return a + b; }
 int64_t peer_mul64(int64_t a, int64_t b) { return a * b; }
@@ -50,8 +65,7 @@ int32_t peer_wait_flag(int32_t limit_ms) {
   int32_t found = 0;
   for (int32_t k = 0; k < limit_ms && !found; k++) {
     found = atomic_load(&flag);
-    struct timespec nap = {0, 1000000L};
-    while (!found && nanosleep(&nap, &nap) != 0) {}
+    if (!found) sleep_ms(1);
   }
   atomic_fetch_add(&returned, 1);
   return found;
@@ -72,14 +86,14 @@ double peer_half(int64_t n) { return (double)n / 2.0; }
 
 /* Sleeps MS milliseconds, then counts one nap. */
 int32_t peer_nap(int32_t ms) {
-  struct timespec nap = {ms / 1000, (long)(ms % 1000) * 1000000L};
-  while (nanosleep(&nap, &nap) != 0) {}
+  sleep_ms(ms);
   atomic_fetch_add(&naps, 1);
   return ms;
 }
 
 int32_t peer_naps(void) { return atomic_load(&naps); }
 
+#ifndef _WIN32
 /* For Native.wait_readable and wait_writable: a non-blocking pipe that the peer owns, as a library owns its socket. */
 static int pipe_fds[2] = {-1, -1};
 
@@ -129,6 +143,7 @@ int32_t peer_open_fds(void) {
   closedir(dir);
   return n;
 }
+#endif
 
 /* For resources: a malloc'd struct that peer_res_free frees and counts. peer_res_hold, a compute call, marks it busy
    until peer_set_flag has run (or LIMIT_MS passed), so a free that comes while C still uses it is counted apart. */
