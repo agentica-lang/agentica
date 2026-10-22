@@ -49,6 +49,28 @@ A result may also be `Void`. A function takes at most 64 parameters (`PARSE-EXTE
 
 ## Running
 
-- A call blocks timers, I/O and other tasks until it returns, so keep calls short. `--max-steps` cannot stop a call in the middle.
+- A `def` call blocks timers, I/O and other tasks until it returns, so keep such calls short, and use `compute def` for the long ones. `--max-steps` cannot stop a call in the middle.
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
 - Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). `agentica test` does not take the option yet.
+
+## Compute calls
+
+A function declared with `compute def` runs on the VM's compute pool, one thread per scheduler, and the calling task waits while the other tasks go on. Use it for a call that may take long: a query, a compression, a model step.
+
+```agentica {mode="check"}
+extern "libsqlite3.so.0"
+  ## Sleeps for ms milliseconds off the scheduler.
+  compute def sqlite3_sleep(ms: C.Int) -> C.Int
+end
+
+def main() -> Void
+  sleeper = Task.spawn(&sqlite3_sleep, 200)
+  puts("main goes on")
+  puts(Task.await(sleeper))
+end
+```
+
+- The result is the plain C value, as for `def`. Write `export compute def` to export one.
+- Nothing stops a compute call in the middle: it has no timeout, and `--max-steps` does not end it. For a limit, run the call in a task and use `Task.await(task, ms)`. A cancel skips a call that has not started; a running call runs on, the cancelled task stops waiting at once, and the result is dropped. The program does not wait for a running call at the end.
+- A call that never returns holds a pool thread for the rest of the run. Once `--schedulers` such calls are stuck, every later compute call waits.
+- The arguments are copied before the call and a `C.String` result as it returns. The function runs on another thread, so it must be safe to call from one.

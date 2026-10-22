@@ -23,7 +23,7 @@ parameters       = parameter, { ",", parameter }, [ "," ] ;
 parameter        = NAME, ":", type, [ "=", expression ] ;
 
 extern_decl      = "extern", STRING, NL, { extern_function }, "end", NL ;
-extern_function  = [ DOC, NL ], [ "export" ], "def", NAME, "(",
+extern_function  = [ DOC, NL ], [ "export" ], [ "compute" ], "def", NAME, "(",
                    [ c_parameter, { ",", c_parameter }, [ "," ] ], ")",
                    "->", ( c_type | "Void" ), NL ;
 c_parameter      = NAME, ":", c_type ;
@@ -60,8 +60,10 @@ library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc goes on a
 `export` makes it importable, it takes the place of a `def` in the declaration
 order, the whole block needs the blank line of a declaration, and the checker
 sees `C.Int` and `C.Int64` as `Int`, `C.Double` as `Float`, `C.Bool` as `Bool`
-and `C.String` as `String`. `extern` is contextual: it is a keyword only at the
-start of a top-level declaration.
+and `C.String` as `String`. `compute def` declares a function that runs off the
+scheduler while the task waits (section 6d); `export` comes first. `extern` is
+contextual: it is a keyword only at the start of a top-level declaration, and
+`compute` only before `def` in an extern block.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

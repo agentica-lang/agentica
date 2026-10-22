@@ -151,3 +151,5 @@ bool agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg)
 }
 
 void agc_thread_join(void *threads, size_t k) { (void)uv_thread_join(&((uv_thread_t *)threads)[k]); }
+
+void agc_thread_detach(void *threads, size_t k) { (void)uv_thread_detach(&((uv_thread_t *)threads)[k]); }

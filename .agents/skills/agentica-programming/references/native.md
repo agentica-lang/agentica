@@ -23,9 +23,16 @@ end
 - A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a
   `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
   `""` for now.
-- A call blocks timers, I/O and other tasks until it returns: keep calls
-  short. Native code must retry on `EINTR` (GC signals cut sleeps and polls
-  short).
+- A `def` call blocks timers, I/O and other tasks until it returns: keep such
+  calls short. Native code must retry on `EINTR` (GC signals cut sleeps and
+  polls short).
+- `[export] compute def f(...) -> T` runs the call on the VM's compute pool
+  (one thread per scheduler) while the task waits and other tasks run; for long
+  calls. Same plain result. No timeout, `--max-steps` cannot end it; for a
+  limit, run it in a task and use `Task.await(task, ms)`. A cancel skips a call
+  not yet started; a running one runs on and its result is dropped. A call that
+  never returns holds a pool thread; once `--schedulers` are stuck, later
+  compute calls wait. The function must be safe to call from another thread.
 - Linux x86_64 only for now: elsewhere the program is refused at load with
   `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses

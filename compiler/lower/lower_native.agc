@@ -1,7 +1,7 @@
 ## Extern functions: the body of a function of an `extern "library"` block is one call of the Native.call builtin,
 ## which the VM answers with libffi (vm/ffi.c). Its arguments are the signature string and a List of the parameters:
 ## "CODES SYMBOL LIBRARY", the codes of Ast.Native, the C name and the library as written (it may hold spaces, so it is
-## last).
+## last). A compute def puts "compute " in front: the VM then runs the call on its compute pool while the task waits.
 
 import Ast from "../syntax/ast"
 import Ir from "ir"
@@ -19,7 +19,11 @@ export def lower(cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native
   if count > MAX_PARAMS
     return error(Lowering.unsupported(cx, "extern functions with more than #{MAX_PARAMS} parameters", span))
   end
-  signature = "#{native.codes} #{native.symbol} #{native.library}"
+  kind = ""
+  if native.compute
+    kind = "compute "
+  end
+  signature = "#{kind}#{native.codes} #{native.symbol} #{native.library}"
   body = [
     Ir.instr("step", [], index, [span]),
     Ir.Instr(op: "const", args: [count], imm: Ir.Imm.Text(signature), name: "", file: index, spans: [span]),

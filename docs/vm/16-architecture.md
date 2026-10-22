@@ -32,6 +32,9 @@ enforces it.
 - **libuv thread pool:** bounded blocking work only: regular files and
   directories, DNS, and the TLS setup jobs that load CA, certificate and key
   files (§14.1). Its threads never touch GC memory.
+- **Compute pool:** the native calls of `compute def`, which may run without
+  bound: at most one thread per scheduler, FIFO, apart from the libuv pool
+  (§16.9). Its threads never touch GC memory.
 - **Handles and their owner tasks:** a socket, listener, pipe, terminal, process
   or poller is a libuv handle on the I/O loop for its whole life. The task that
   opened it owns it (§14.5). A regular file is not a handle on the loop: pool
@@ -359,6 +362,19 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   entry. libuv callbacks put the job on a ready list. The scheduler drains it
   after `uv_run` and queues the tasks. That drain is the push of §16.4, and it
   keeps a woken task behind the one whose turn just ended.
+- **Compute pool** (`vm/compute.c`). `agc_io_compute` starts a job whose `work`
+  is a native call; its START gives the work to the compute pool instead of the
+  libuv pool. The pool is made at the first such START, on the loop's thread,
+  with N threads at most, started when an item finds none free, with the stop
+  signals blocked. The arguments are copied on the scheduler and the result is
+  built by the `done` half on the scheduler that resumes the task. An item that
+  ends goes back to the loop's thread through the pool's own inbox, which exists
+  at N = 1 too and keeps the loop alive only while items run, and ends the job
+  as libuv's `after_work` does. So a compute job is a pool job: no deadline, no
+  cancel half, and a cancel detaches it. A detached item still in the queue
+  skips its `work`; a running one drops the result once the call returns. The
+  end of the run does not wait for it; `agc_io_close` (harnesses, the front
+  end) joins the idle threads and leaves a busy one to end by itself.
 - **Services.** Service code makes its handles through `agc_loop_uv` (§15.1).
   The libuv part of its `done`, `expired`, cancel and `drop` halves, and the
   poller calls of builtins, run where the half runs. At N > 1 the steps of the

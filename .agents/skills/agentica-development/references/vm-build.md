@@ -29,7 +29,7 @@ AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded AGENTICA_VM_TRACE_FILE=
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
-make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, outcome, run queue, wake, job, sync, output, timers, threads, net, process threads) under TSan
+make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, compute pool, outcome, run queue, wake, job, sync, output, timers, threads, net, process threads) under TSan
 make vm-tsan-run                     # a TSan agentica (front end of the release build) running tests/test_vm_multicore.py and the modules of test-multicore-modules
 make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (--schedulers 4), then test-multicore-modules
 make test-multicore-modules          # the TCP, TLS, HTTP, process and BDD modules with every VM on 4 schedulers

@@ -116,12 +116,14 @@ export struct FunctionDecl
 end
 
 ## The C side of an extern function: the library it is in, as written, its C name (the linker renames the function,
-## never this), and the codes of its C types, the result's first and then one per parameter (i C.Int, l C.Int64,
-## d C.Double, b C.Bool, s C.String, v Void).
+## never this), the codes of its C types, the result's first and then one per parameter (i C.Int, l C.Int64,
+## d C.Double, b C.Bool, s C.String, v Void), and whether it is a `compute def`, which runs on the VM's compute pool
+## while the task waits.
 export struct Native
   library: String
   symbol: String
   codes: String
+  compute: Bool
 end
 
 ## One parameter of a function, with its default value when `NAME: type = expression` gave one. The default is an

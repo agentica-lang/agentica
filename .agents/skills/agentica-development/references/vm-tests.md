@@ -56,12 +56,17 @@ Read first: `references/vm.md`.
   its answer catches a lost wake (not the order of publish and send, which
   holds by construction); an inbox that is not kept does not hold the loop. It
   is closed only after the producers are joined.
+- `vm/tests/compute_test.c`: the compute pool (`vm/compute.c`): order on one
+  thread, growth to the pool's size and no further, every end on the loop's
+  thread, an idle pool that lets the loop end, and a close that leaves a busy
+  thread alone.
 - `vm/tests/outcome_test.c`: the job outcome and count of `core.h`: threads
   race to settle one outcome (the first wins), and only the last
   `agc_job_unref` sees zero.
 - `vm/tests/job_test.c`: a job on the loop with a pool work held by a
   semaphore, so the test orders the events (timer before completion and the
-  reverse, cancel before completion) and the requests of a second thread
+  reverse, cancel before completion, the same two for a compute job of
+  `agc_io_compute`) and the requests of a second thread
   through the inbox (`agc_io_share`). `sweep` asserts that a freed job is on no
   list (catches a double drop). Not caught: the task recorded after the START
   post (a window of a few instructions, no hook) and `agc_io_finish` without
