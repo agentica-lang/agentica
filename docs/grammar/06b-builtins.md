@@ -382,8 +382,9 @@ use, and `ruby`: the signature in the Ruby method form (`s.strip() -> String`
 for `String.trim`), or null for a builtin with no method form. The help text
 and the helps of diagnostics write that form too (`s.strip`, not `String.trim`),
 while both names stay accepted. Effects are informational (I/O, tasks, or
-`test`). An unknown target exits 2, with a hint when the name is a close builtin or one from another language
-that the checker knows (`Hash.new`, `int`). A name that other languages use for
+`test`). An unknown target exits 2, with a hint when the name is a close
+builtin or one from another language that the checker knows (`Hash.new`,
+`int`). A name that other languages use for
 a builtin (`strip`, `String.to_i`, `value!`) is not unknown: it exits 0 with
 the builtins it stands for, and `--json` prints
 `{"alias": NAME, "builtins": [...], "hints": {...}}`, `builtins` holding what
