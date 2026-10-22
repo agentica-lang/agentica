@@ -27,12 +27,26 @@ export def method_aliases() -> Map[String, String]
     "Float.to_s": "String.from_float",
     "Int.to_f": "Float.from_int",
     "Int.to_s": "String.from_int",
+    "Lazy.collect": "Lazy.map",
+    "Lazy.detect": "Lazy.find",
+    "Lazy.inject": "Lazy.reduce",
+    "Lazy.select": "Lazy.filter",
+    "List.collect": "List.map",
+    "List.detect": "List.find",
+    "List.inject": "List.reduce",
     "List.join": "String.join",
     "List.length": "List.size",
     "List.push": "List.append",
+    "List.select": "List.filter",
+    "Map.include?": "Map.has_key?",
+    "Map.key?": "Map.has_key?",
     "Map.length": "Map.size",
+    "Map.member?": "Map.has_key?",
+    "Map.select": "Map.filter",
     "Range.length": "Range.size",
+    "Range.member?": "Range.include?",
     "Set.length": "Set.size",
+    "Set.member?": "Set.include?",
     "String.end_with?": "String.ends_with?",
     "String.include?": "String.contains?",
     "String.size": "String.length",
@@ -47,10 +61,15 @@ export def method_aliases() -> Map[String, String]
 end
 
 ## The aliases of `method_aliases` that are a second Ruby name of a builtin whose own name is Ruby already: Ruby has
-## both `length` and `size`, so Agentica accepts both and its texts show the name of the builtin. Every other alias is
-## the Ruby name of a builtin that has a different name here (`strip` for `String.trim`), and the texts show it.
+## both `length` and `size`, `map` and `collect`, so Agentica accepts both and its texts show the name of the builtin
+## (`map`, `reduce`, `find`, `include?`, `size`). Every other alias is the Ruby name of a builtin that has a different
+## name here (`strip` for `String.trim`, `select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
 export def ruby_synonyms() -> List[String]
-  return ["List.length", "Map.length", "Range.length", "Set.length", "String.size"]
+  return [
+    "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect", "List.inject", "List.length",
+    "Map.include?", "Map.length", "Map.member?", "Range.length", "Range.member?", "Set.length", "Set.member?",
+    "String.size",
+  ]
 end
 
 ## The help for a name used as a function or type that another language has.
@@ -132,31 +151,25 @@ end
 export def foreign_kind_methods() -> Map[String, String]
   return {
     "Int.chr": "use String.from_code(n) for the character of a code point",
-    "List.collect": "use xs.map do |x| ... end; each method has one name",
     "List.contains": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.contains?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
-    "List.count": "xs.size counts all elements; count those that pass a test with xs.filter do |x| ... end.size",
-    "List.detect": "use xs.find do |x| ... end, which gives a Result",
+    "List.count": "xs.size counts all elements; count those that pass a test with xs.select do |x| ... end.size",
     "List.include?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.includes": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.includes?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
-    "List.inject": "use xs.reduce(initial) do |acc, x| ... end",
-    "List.reject": "use xs.filter do |x| !cond end to keep the elements that fail the test",
-    "List.select": "use xs.filter do |x| ... end; each method has one name",
-    "Map.contains": "use m.has_key?(key)",
-    "Map.contains?": "use m.has_key?(key)",
-    "Map.include?": "use m.has_key?(key)",
-    "Map.includes?": "use m.has_key?(key)",
+    "List.reject": "use xs.select do |x| !cond end to keep the elements that fail the test",
+    "Map.contains": "use m.key?(key)",
+    "Map.contains?": "use m.key?(key)",
+    "Map.includes?": "use m.key?(key)",
     "Map.count": "use m.size",
-    "Map.key?": "use m.has_key?(key)",
     "Range.collect": "a range has no map; use (1..5).to_a.map do |x| ... end",
     "Range.detect": "a range has no find; use (1..5).to_a.find do |x| ... end",
     "Range.drop": "a range has no drop; use (1..5).to_a.drop(n)",
     "Range.find": "a range has no find; use (1..5).to_a.find do |x| ... end",
     "Range.inject": "a range has no reduce; use (1..5).to_a.reduce(0) do |acc, x| ... end",
     "Range.map": "a range has no map; use (1..5).to_a.map do |x| ... end",
-    "Range.reject": "a range has no reject; use (1..5).to_a.filter do |x| !cond end",
-    "Range.select": "a range has no select; use (1..5).to_a.filter do |x| ... end",
+    "Range.reject": "a range has no reject; use (1..5).to_a.select do |x| !cond end",
+    "Range.select": "a range has no select; use (1..5).to_a.select do |x| ... end",
     "Range.sum": "a range has no sum; use (1..5).to_a.sum",
     "Range.take": "a range has no take; use (1..5).to_a.take(n)",
     "Set.contains": "use s.include?(x)",
@@ -165,7 +178,6 @@ export def foreign_kind_methods() -> Map[String, String]
     "Set.has?": "use s.include?(x)",
     "Set.includes": "use s.include?(x)",
     "Set.includes?": "use s.include?(x)",
-    "Set.member?": "use s.include?(x)",
     "Set.push": "sets are immutable; use s.add(x) and assign the result: s = s.add(x)",
     "Set.remove": "use s.delete(x) and assign the result: s = s.delete(x)",
     "String.blank?": "compare the trimmed length: s.strip.length == 0",
@@ -178,7 +190,6 @@ export def foreign_kind_methods() -> Map[String, String]
     "String.count": "count a non-empty part with s.split(part).size - 1; s.length counts the characters",
     "String.drop": "use s.split(\"\").drop(n).join(\"\") for all but the first n characters; n may exceed the length",
     "String.each_char": "s.split(\"\") gives the characters as a List[String]; s.at(i) reads one character",
-    "String.empty?": "compare the length: s.length == 0",
     "String.error?": "error? is not a String method; only a Result has ok? and message (!r.ok? tests for an error)",
     "String.gsub": "use s.replace(old, new)",
     "String.index": "use s.index_of(part), which gives a Result[Int]",

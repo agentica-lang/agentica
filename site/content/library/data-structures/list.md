@@ -4,13 +4,16 @@ weight: 1
 description: Functions for List[T]. Each one is also a method on lists.
 ---
 
-Lists are immutable: every function gives a new list. `xs.length` is `xs.size`, `push` is `append`.
+Lists are immutable: every function gives a new list. `xs.length` is `xs.size`, `push` is `append`, `select` is `filter`.
 
 ## Build and read
 
 ```text
 List.size(list: List[T]) -> Int
+List.empty?(list: List[T]) -> Bool
 List.at(list: List[T], index: Int) -> T
+List.first(list: List[T]) -> T
+List.last(list: List[T]) -> T
 List.append(list: List[T], value: T) -> List[T]
 List.set(list: List[T], index: Int, value: T) -> List[T]
 List.concat(a: List[T], b: List[T]) -> List[T]
@@ -19,6 +22,7 @@ List.reverse(list: List[T]) -> List[T]
 ```
 
 - `at` is `list[index]`, and `set` replaces one element. A bad index stops the program. Both are O(log32 n): at most four steps for a million items. A new list shares all but the path to the element.
+- `first` and `last` give the first and the last element. On an empty list they stop the program with `RUNTIME-INDEX-OUT-OF-RANGE`, as `xs[0]` does; test with `empty?` first.
 - `append` is near constant time, so n appends cost O(n).
 - `concat` takes time in the size of `b` when `b` has 32 items or fewer. A longer `b` copies both lists.
 
@@ -26,7 +30,10 @@ List.reverse(list: List[T]) -> List[T]
 def main() -> Void
   xs = [1, 2]
   puts(xs.size)                # 2
+  puts(xs.empty?)              # false
   puts(xs.at(1))               # 2, the same as xs[1]
+  puts(xs.first)
+  puts(xs.last)
   puts(xs.push(9))             # xs is still [1, 2]
   puts(xs.set(0, 7))
   puts(xs.concat([3]))
@@ -37,6 +44,9 @@ end
 
 ```output
 2
+false
+2
+1
 2
 [1, 2, 9]
 [7, 2]
@@ -108,7 +118,7 @@ end
 ["a", "bb", "ccc"]
 ```
 
-## map, filter and reduce
+## map, select and reduce
 
 ```text
 List.map(list: List[A], f: Fn[A, B]) -> List[B]
@@ -116,12 +126,12 @@ List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
 List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B
 ```
 
-`filter` keeps the elements for which the function gives `true`. `reduce` combines from left to right, starting with `initial`.
+`select` (the function is `List.filter`) keeps the elements for which the function gives `true`. `reduce` combines from left to right, starting with `initial`.
 
 ```agentica
 def main() -> Void
   puts([1, 2, 3].map do |x| x * 10 end)
-  puts([1, 2, 3, 4].filter do |x| x % 2 == 1 end)
+  puts([1, 2, 3, 4].select do |x| x % 2 == 1 end)
   puts([1, 2, 3].reduce(0) do |sum, x| sum + x end)
 end
 ```
@@ -369,4 +379,4 @@ ok("pear")
 
 These are O(n), less when they stop early. They are written in Agentica (`stdlib/prelude/`), so they count `--max-steps` per element, not counting your function.
 
-Each method has one name: `select`, `collect`, `detect`, `inject` and `reject` are `CHECK-UNKNOWN-METHOD`. Use `filter`, `map`, `find`, `reduce` and `xs.filter do |x| !cond end`.
+`reject` is `CHECK-UNKNOWN-METHOD`. Write `xs.select do |x| !cond end`.

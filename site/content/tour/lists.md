@@ -112,13 +112,13 @@ y
 
 ## Transform
 
-`map`, `filter` and `reduce` take a block and give a new value:
+`map`, `select` and `reduce` take a block and give a new value:
 
 ```agentica
 def main() -> Void
   xs = [1, 2, 3, 4, 5]
   puts(xs.map do |x| x * x end)
-  puts(xs.filter do |x| x > 2 end)
+  puts(xs.select do |x| x > 2 end)
   puts(xs.reduce(0) do |sum, x| sum + x end)
 end
 ```

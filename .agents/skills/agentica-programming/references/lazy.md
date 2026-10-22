@@ -21,7 +21,7 @@ Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]  # ch.lazy(ms): va
 
 # Steps: each gives a new Lazy and runs nothing
 Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]
-Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
+lazy.select(f: Fn[A, Bool]) -> Lazy[A]
 Lazy.take(lazy: Lazy[A], count: Int) -> Lazy[A]               # count < 0 is RUNTIME-INVALID-COUNT
 Lazy.take_while(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
 Lazy.drop(lazy: Lazy[A], count: Int) -> Lazy[A]               # count < 0 is RUNTIME-INVALID-COUNT
@@ -44,7 +44,7 @@ Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Vo
 ```ruby
 def main() -> Void
   naturals = Lazy.produce(1) do |n| n + 1 end
-  odd_squares = naturals.map do |n| n * n end.filter do |n| n % 2 == 1 end
+  odd_squares = naturals.map do |n| n * n end.select do |n| n % 2 == 1 end
   puts(odd_squares.first(3))                                  # ok([1, 9, 25])
   puts((1..7).lazy.each_slice(3).to_a)                        # ok([[1, 2, 3], [4, 5, 6], [7]])
   done = naturals.each do |n|
@@ -64,7 +64,7 @@ end
 - Each item pulled costs one step, each callback a step plus its body. Other
   tasks keep running while a terminal runs. Callbacks run on the calling task; a
   `Lazy` can be shared by tasks.
-- No `filter_map` (write `filter` then `map`) and no tuples (return a struct
+- No `filter_map` (write `select` then `map`) and no tuples (return a struct
   from `with_index` to keep an item and its index).
 - A `Lazy` has no `==`, `to_s` or JSON form; inspect prints `<Lazy>`. A `List`
   method on it (`lz.size`) is `CHECK-UNKNOWN-METHOD`: get a list first with `try

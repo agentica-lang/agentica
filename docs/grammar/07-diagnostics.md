@@ -135,9 +135,8 @@ type:
 - **Written:** `x.nil?`
   - **Help:** `x == nil`
 
-- **Written:** `xs.select`, `xs.collect`, `xs.detect`, `xs.inject`, `xs.reject`
-  - **Help:** `filter`, `map`, `find`, `reduce`; `reject` is `xs.filter do \|x\|
-    !cond end`. Each method has one name
+- **Written:** `xs.reject`
+  - **Help:** `xs.select do \|x\| !cond end`
 
 - **Written:** `(1..5).map`, `.select`, `.find`, `.sum`
   - **Help:** a range has no list methods: `(1..5).to_a.map do \|x\| ... end`

@@ -61,6 +61,7 @@ Bit operations: `binary.md`.
 
 ```text
 String.length(s: String) -> Int                          # Unicode characters
+String.empty?(s: String) -> Bool
 String.upcase(s: String) -> String
 String.downcase(s: String) -> String
 s.strip() -> String
@@ -91,13 +92,16 @@ s.to_f!() -> Float
   `["a", "b", "c"]`.
 - `index_of` and `at` count characters, like `length`. Use `code` and
   `from_code` for character arithmetic. Strings cannot be indexed (`s[0]`).
-- No regex builtin (`=~`, `matches?`). `s.empty?` is `s.length == 0`, `s.chars`
-  is `s.split("")`, `s.ord` is `s.code`, `s.bytes` is `s.to_bytes`.
+- No regex builtin (`=~`, `matches?`). `s.chars` is `s.split("")`, `s.ord` is
+  `s.code`, `s.bytes` is `s.to_bytes`.
 
 ## List
 
 ```text
 List.size(list: List[T]) -> Int
+List.empty?(list: List[T]) -> Bool
+List.first(list: List[T]) -> T                           # halts when empty (RUNTIME-INDEX-OUT-OF-RANGE), like xs[0]
+List.last(list: List[T]) -> T                            # halts when empty
 xs.push(value: T) -> List[T]                             # near constant time: n pushes build a list in O(n)
 List.set(list: List[T], index: Int, value: T) -> List[T] # 0..length-1, else RUNTIME-INDEX-OUT-OF-RANGE; O(log32 n)
 List.repeat(value: T, count: Int) -> List[T]             # count 0..1048576, else RUNTIME-INVALID-COUNT
@@ -107,7 +111,7 @@ List.take(list: List[T], count: Int) -> List[T]          # count above length is
 List.drop(list: List[T], count: Int) -> List[T]          # same count rules as take
 List.at(list: List[T], index: Int) -> T                  # halts (RUNTIME-INDEX-OUT-OF-RANGE); O(log32 n)
 List.map(list: List[A], f: Fn[A, B]) -> List[B]          # f returns data, not Void
-List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]
+list.select(f: Fn[A, Bool]) -> List[A]
 List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B   # folds left: f(acc, item); empty gives initial
 List.each(list: List[A], f: Fn[A, Void]) -> Void
 List.any?(list: List[A], f: Fn[A, Bool]) -> Bool         # stops at the first true
@@ -130,16 +134,15 @@ List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]   # NaN keys never win un
 List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run in a terminal (lazy.md)
 ```
 
-- `map`, `filter`, `reduce` are O(n); `sort`, `sort_by` O(n log n); callbacks
+- `map`, `select`, `reduce` are O(n); `sort`, `sort_by` O(n log n); callbacks
   run once per element, left to right, under the caller's execution budget.
 - `find` to `max_by` are written in Agentica: O(n), 4 to 28 steps per element
   (`performance.md`); a runtime error in one is reported at your call.
-- Each method has one name: `select`, `collect`, `detect`, `inject`, `reject`
-  are `CHECK-UNKNOWN-METHOD` (use `filter`, `map`, `find`, `reduce`, or
-  `xs.filter do |x| !cond end`). A List has no `contains?` or `include?`: use
-  `xs.any? do |x| x == v end` or a Set. A range has none of these:
-  `(1..5).to_a.map do ... end`. A block after `each_slice` is
-  `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ... end`.
+- `reject` is `CHECK-UNKNOWN-METHOD` (use `xs.select do |x| !cond end`). A List
+  has no `contains?` or `include?`: use `xs.any? do |x| x == v end` or a Set. A
+  range has none of these: `(1..5).to_a.map do ... end`. A block after
+  `each_slice` is `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ...
+  end`.
 - Callback types must match exactly. A callback given as `&name`, a `Fn`
   variable or a block with typed parameters (`do |x: Int|`) types empty lists
   and empty reduce starts. `List.repeat(x, 0)` is an empty list of the inferred
@@ -153,16 +156,17 @@ List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run i
 Map.size(map: Map[K, V]) -> Int                          # O(1)
 Map.keys(map: Map[K, V]) -> List[K]                      # insertion order; O(n)
 Map.values(map: Map[K, V]) -> List[V]                    # same order as keys; O(n)
-Map.has_key?(map: Map[K, V], key: K) -> Bool
+Map.empty?(map: Map[K, V]) -> Bool
+m.key?(key: K) -> Bool
 Map.get(map: Map[K, V], key: K) -> Result[V]             # ok(value), or error when the key is missing
 Map.get(map: Map[K, V], key: K, default: V) -> V         # default is evaluated eagerly
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]   # returns a new map
 Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignored; O(n)
 Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void      # f(key, value) in insertion order
-Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]   # keeps the entries f accepts, in order
+m.select(f: Fn[K, V, Bool]) -> Map[K, V]                 # keeps the entries f accepts, in order
 ```
 
-- Lookup, `has_key?` and `put` are effectively constant time (a persistent
+- Lookup, `key?` and `put` are effectively constant time (a persistent
   32-way HAMT). `m[key]` on a missing key is `RUNTIME-KEY-NOT-FOUND`.
 - `false` and `nil` are present values. Deleting keeps the order of the rest;
   re-inserting puts a key at the end; `put` on an existing key keeps its place.
@@ -198,7 +202,7 @@ Range.include?(r: Range, value: Int) -> Bool
 Range.each(r: Range, f: Fn[Int, Void]) -> Void
 Range.first(r: Range) -> Result[Int]                     # error("the range is empty") when empty
 Range.last(r: Range) -> Result[Int]                      # last included value: (1...5).last is ok(4)
-Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.filter do ... end.first(3) (lazy.md)
+Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.select do ... end.first(3) (lazy.md)
 ```
 
 - An end before the start is an empty range. Ranges bind looser than every other
@@ -235,9 +239,9 @@ unknown method is `CHECK-UNKNOWN-METHOD`, with a suggestion or the type's
 methods.
 
 Write the Ruby method names: `strip`, `include?`, `start_with?`, `end_with?`,
-`to_i`, `to_f`, `to_i!`, `to_f!`, `push`, `join` on a `List[String]`, `to_s` and
-`inspect` on any data value, `n.to_f`, `x.to_i`. `length` and `size` both work
-on String, List, Map, Set and Range.
+`to_i`, `to_f`, `to_i!`, `to_f!`, `push`, `select`, `key?`, `join` on a
+`List[String]`, `to_s` and `inspect` on any data value, `n.to_f`, `x.to_i`.
+`length` and `size` both work on String, List, Map, Set and Range.
 
 Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A
 negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is

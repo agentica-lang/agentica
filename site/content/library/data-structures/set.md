@@ -100,7 +100,7 @@ Set["b", "c", "a"]
 Set.include?(set: Set[T], value: T) -> Bool
 ```
 
-Tests membership. It takes effectively constant time, like `Map.has_key?`.
+Tests membership. It takes effectively constant time, like `Map.key?`.
 
 ```agentica
 def main() -> Void

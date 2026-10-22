@@ -62,7 +62,7 @@ def main() -> Void
     Todo(title: "write code", done: false),
     Todo(title: "review code", done: true)
   ]
-  pending = tasks.filter do |task| !task.done end
+  pending = tasks.select do |task| !task.done end
   pending.each do |task|
     puts("todo: #{task.title}")
   end
@@ -89,7 +89,7 @@ Reading input:
 ```ruby
 def parse_numbers(line: String) -> Result[List[Int]]
   numbers: List[Int] = []
-  words = line.strip.split(" ").filter do |w| w != "" end
+  words = line.strip.split(" ").select do |w| w != "" end
   for word in words
     n = try word.to_i
     numbers = numbers.push(n)

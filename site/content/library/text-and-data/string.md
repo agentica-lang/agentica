@@ -20,24 +20,29 @@ Some methods have Ruby names too:
 | `s.to_f`, `s.to_f!` | `String.to_float(s)`, `String.to_float!(s)` |
 | `xs.join(sep)` on a `List[String]` | `String.join(xs, sep)` |
 
-## length
+## length and empty?
 
 ```text
 String.length(s: String) -> Int
+String.empty?(s: String) -> Bool
 ```
 
-Counts Unicode characters.
+`length` counts Unicode characters. `empty?` is true when there are none.
 
 ```agentica
 def main() -> Void
   puts("hello".length)
   puts(String.length("café"))
+  puts("".empty?)
+  puts("hello".empty?)
 end
 ```
 
 ```output
 5
 4
+true
+false
 ```
 
 ## upcase and downcase

@@ -11,7 +11,7 @@ Use a `Lazy` for an endless source, for the lines of a big file or the values of
 ```agentica
 def main() -> Void
   squares = Lazy.produce(1) do |n| n + 1 end.map do |n| n * n end
-  puts(squares.filter do |n| n % 2 == 1 end.first(3))
+  puts(squares.select do |n| n % 2 == 1 end.first(3))
   puts((1..10).lazy.each_slice(4).to_a)
 end
 ```
@@ -60,7 +60,7 @@ A read error (invalid UTF-8, a line over the buffer), a missing file or a bad ti
 ```agentica {mode="check"}
 def main() -> Void
   head = File.foreach("server.log", 4096, 1000).first(10)
-  errors = File.foreach("server.log", 4096, 1000).filter do |line| line.include?("ERROR") end.each do |line|
+  errors = File.foreach("server.log", 4096, 1000).select do |line| line.include?("ERROR") end.each do |line|
     puts(line)
     ok()
   end
@@ -94,7 +94,7 @@ ok([1, 2])
 ok([9, 16, 25, 36])
 ```
 
-## map, filter and flat_map
+## map, select and flat_map
 
 ```text
 Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]
@@ -102,12 +102,12 @@ Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]
 Lazy.flat_map(lazy: Lazy[A], f: Fn[A, List[B]]) -> Lazy[B]
 ```
 
-`flat_map` gives the items of the lists its block returns, in order. There is no `filter_map`: write `filter` then `map`.
+`select` is the method of `Lazy.filter`. `flat_map` gives the items of the lists its block returns, in order. There is no `filter_map`: write `select` then `map`.
 
 ```agentica
 def main() -> Void
   xs = [1, 2, 3, 4]
-  puts(xs.lazy.filter do |x| x % 2 == 0 end.map do |x| x * 10 end.to_a)
+  puts(xs.lazy.select do |x| x % 2 == 0 end.map do |x| x * 10 end.to_a)
   puts(xs.lazy.flat_map do |x| [x, -x] end.first(5))
 end
 ```
