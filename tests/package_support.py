@@ -160,10 +160,10 @@ class Remotes:
         assert done.returncode == 0, (arguments, done.stderr)
         return done.stdout.strip()
 
-    def publish(self, path, files, tag=None, annotated=True, links=None):
+    def publish(self, path, files, tag=None, annotated=True, links=None, gitlinks=None):
         """Commits `files` ({path: bytes or str}) as the whole tree of the repository `owner/repo`, tags the commit
         (`tag`, annotated unless told otherwise) and pushes it to the bare repository. `links` maps a path to the target
-        of a symbolic link. Returns the commit."""
+        of a symbolic link, and `gitlinks` the paths of submodule entries (mode 160000). Returns the commit."""
         work = self.work / path
         bare = self.root / path
         if not work.exists():
@@ -182,6 +182,8 @@ class Remotes:
         for relative, destination in (links or {}).items():
             os.symlink(destination, work / relative)
         self.git("add", "-A", cwd=work)
+        for relative in gitlinks or []:
+            self.git("update-index", "--add", "--cacheinfo", "160000,%s,%s" % ("1" * 40, relative), cwd=work)
         self.git("commit", "--quiet", "--allow-empty", "-m", "release", cwd=work)
         commit = self.git("rev-parse", "HEAD", cwd=work)
         pushed = ["push", "--quiet", "--force", "origin", "HEAD:refs/heads/main"]

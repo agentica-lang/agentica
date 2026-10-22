@@ -10,6 +10,10 @@ MANIFEST_FILE = "agentica.toml"
 # The end of a record of `git ls-tree -z`. A string literal has no escape for it.
 NUL = String.from_bytes([0]).unwrap!
 
+# The most a file of a package may hold, and all the copied files together. The VM keeps at most 1 MiB of the output
+# of a child that was not read yet (docs/grammar/06d-io-and-network.md), and a file is a list of bytes in memory.
+MAX_FILE_BYTES = 1_048_576
+MAX_TOTAL_BYTES = 16_777_216
 COLLISION_HELP = "rename one of them, so that the package works on a case-insensitive file system"
 
 # The modes of git that are not a regular file: a symbolic link and a gitlink (a submodule).
@@ -40,6 +44,7 @@ end
 struct Line
   mode: String
   oid: String
+  size: Int
   path: String
 end
 
@@ -48,6 +53,7 @@ end
 ## PKG-FETCH. Hidden folders, `agc_libs/` at the root and files that are not `.agc` are left out, as in the hash.
 export def plan(listing: String) -> Plan
   chosen: List[Blob] = []
+  total = 0
   folded: Map[String, String] = {}
   for record in listing.split(NUL)
     if record == ""
@@ -72,6 +78,15 @@ export def plan(listing: String) -> Plan
     elsif !safe?(parts)
       return Plan.Refused(refusal("PKG-FETCH", "#{found.path} is not a safe path for a file", ""))
     end
+    if found.size > MAX_FILE_BYTES
+      message = "#{found.path} is #{found.size} bytes, and a file of a package is at most #{MAX_FILE_BYTES} bytes"
+      return Plan.Refused(refusal("PKG-FETCH", message, "split the file, or leave it out of the package"))
+    end
+    total += found.size
+    if total > MAX_TOTAL_BYTES
+      message = "the files of the package are over #{MAX_TOTAL_BYTES} bytes together, at #{found.path}"
+      return Plan.Refused(refusal("PKG-FETCH", message, "a package holds at most #{MAX_TOTAL_BYTES} bytes of files"))
+    end
     key = PackageHash.fold(found.path)
     if folded.has_key?(key)
       message = "#{folded[key]} and #{found.path} differ only in case"
@@ -94,7 +109,9 @@ def parse(record: String) -> Result[Line]
     return error("git ls-tree gave a line with #{fields.size} fields")
   end
   path = record.slice(tab.unwrap! + 1, record.length - tab.unwrap! - 1)
-  return ok(Line(mode: fields[0], oid: fields[2], path: path))
+  # A gitlink has no size ("-"); it is refused by its mode before its size matters.
+  size = fields[3].to_i
+  return ok(Line(mode: fields[0], oid: fields[2], size: size.unwrap_or(0), path: path))
 end
 
 # Whether the path is under a folder the hash leaves out.
@@ -116,7 +133,8 @@ def copied?(parts: List[String], name: String, mode: String) -> Bool
   return PackageHash.source_file?(name)
 end
 
-# No empty, `.` or `..` part and no backslash or colon, which a file system could read as another place.
+# No empty, `.` or `..` part and no backslash or colon, which a file system could read as another place. Git does not
+# normally let a tree hold `.` or `..`, but a fetch need not check objects: this is defence in depth.
 def safe?(parts: List[String]) -> Bool
   for part in parts
     if part == "" or part == "." or part == ".." or part.contains?("\\") or part.contains?(":")

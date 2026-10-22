@@ -20,7 +20,6 @@ import GitProcess from "git_process"
 
 # The deadline of one file-system call, in milliseconds.
 FS_TIMEOUT_MS = 60_000
-WRITE_CHUNK_BYTES = 262_144
 TEMP_TRIES = 5
 # Where the fetched pin lands in the temporary repository. It is not under refs/tags/, so the name cannot clash with a
 # tag of the repository.
@@ -38,6 +37,13 @@ end
 export struct Place
   file: String
   entry: String
+end
+
+# The temporary folder of one fetch: the bare repository, and the files that are copied out of it. git runs in `temp`.
+struct Scratch
+  temp: String
+  repo: String
+  files: String
 end
 
 # What a folder of the cache holds under the commit: nothing, or the locked files.
@@ -103,8 +109,12 @@ def fetch(
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
   end
-  filled = fetch_into(workspace, place, made.unwrap!, target, locked)
-  Path.remove(made.unwrap!, FS_TIMEOUT_MS)
+  temp = made.unwrap!
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  filled = fetch_into(workspace, place, scratch, target, locked)
+  # A folder that cannot be removed stays hidden in the cache root, and the result of the install stands: the failure
+  # to clean up is not worth failing a fetch that worked (or hiding the error of one that did not).
+  Path.remove(temp, FS_TIMEOUT_MS)
   return filled
 end
 
@@ -127,52 +137,50 @@ end
 def fetch_into(
   workspace: Workspace.Workspace,
   place: Place,
-  temp: String,
+  scratch: Scratch,
   target: String,
   locked: Lock.Locked,
 ) -> Result[Filled]
-  repo = Paths.join(temp, "repo.git")
-  files = Paths.join(temp, "files")
-  try init_repository(place, repo, locked)
-  try fetch_pin(place, repo, locked)
-  try check_commit(place, repo, locked)
-  listing = try git_text(place, ["--git-dir=#{repo}", "ls-tree", "-r", "-z", "-l", locked.commit])
+  try init_repository(place, scratch, locked)
+  try fetch_pin(place, scratch, locked)
+  try check_commit(place, scratch, locked)
+  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", locked.commit]))
   case Tree.plan(listing)
     Tree.Plan.Refused(fault) -> return error(fail(place, fault.code, fault.key, fault.message, fault.help))
-    Tree.Plan.Files(blobs) -> try copy_blobs(place, repo, files, blobs)
+    Tree.Plan.Files(blobs) -> try copy_blobs(place, scratch, blobs)
   end
-  try check_hash(workspace, place, files, locked)
-  return move_into_place(workspace, place, files, target, locked)
+  try check_hash(workspace, place, scratch.files, locked)
+  return move_into_place(workspace, place, scratch.files, target, locked)
 end
 
 # An empty template, so a hook from the user's template folder cannot run.
-def init_repository(place: Place, repo: String, locked: Lock.Locked) -> Result[Void]
+def init_repository(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Void]
   arguments = ["init", "--bare", "--quiet", "--template="]
   if locked.commit.length == 64
     arguments = arguments.push("--object-format=sha256")
   end
-  try git(place, arguments.push(repo))
+  try git(place, scratch, arguments.push(scratch.repo))
   return ok()
 end
 
 # The url is passed as written: git's own url.<base>.insteadOf settings apply to it, and the lock keeps what the
 # manifest says (45.6).
-def fetch_pin(place: Place, repo: String, locked: Lock.Locked) -> Result[Void]
+def fetch_pin(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Void]
   wanted = "refs/tags/#{locked.source.tag}"
   if locked.source.tag == ""
     wanted = locked.commit
   end
   arguments = [
-    "--git-dir=#{repo}", "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "--",
-    locked.source.git, "+#{wanted}:#{PINNED}",
+    "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "--", locked.source.git,
+    "+#{wanted}:#{PINNED}",
   ]
-  try git(place, arguments)
+  try git(place, scratch, inside(scratch, arguments))
   return ok()
 end
 
 # The fetched pin must be the locked commit; a tag that now points elsewhere is a moved tag, never a new lock.
-def check_commit(place: Place, repo: String, locked: Lock.Locked) -> Result[Void]
-  peeled = try git_text(place, ["--git-dir=#{repo}", "rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"])
+def check_commit(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Void]
+  peeled = try git_text(place, scratch, inside(scratch, ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]))
   commit = peeled.trim
   if commit == locked.commit
     return ok()
@@ -184,18 +192,19 @@ def check_commit(place: Place, repo: String, locked: Lock.Locked) -> Result[Void
   return error(fail(place, "PKG-FETCH", "commit", "git fetched #{commit}, not #{locked.commit}", ""))
 end
 
-def copy_blobs(place: Place, repo: String, files: String, blobs: List[Tree.Blob]) -> Result[Void]
-  made = Dir.mkdir(files, FS_TIMEOUT_MS)
+def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result[Void]
+  made = Dir.mkdir(scratch.files, FS_TIMEOUT_MS)
   if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make #{files}", made.message))
+    return error(fail(place, "PKG-FETCH", "", "cannot make #{scratch.files}", made.message))
   end
   for blob in blobs
-    data = try git(place, ["--git-dir=#{repo}", "cat-file", "blob", blob.oid])
-    try write_file(place, Paths.join(files, blob.path), data)
+    data = try git(place, scratch, inside(scratch, ["cat-file", "blob", blob.oid]))
+    try write_file(place, Paths.join(scratch.files, blob.path), data)
   end
   return ok()
 end
 
+# A file is at most Tree.MAX_FILE_BYTES (1 MiB, the most File.write_bytes takes in one call), so it goes in one write.
 def write_file(place: Place, path: String, data: List[Int]) -> Result[Void]
   folder = Paths.directory_of(path)
   made = Dir.mkdir(folder, FS_TIMEOUT_MS)
@@ -207,14 +216,10 @@ def write_file(place: Place, path: String, data: List[Int]) -> Result[Void]
     return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", opened.message))
   end
   handle = opened.unwrap!
-  at = 0
-  while at < data.size
-    wrote = File.write_bytes(handle, data.drop(at).take(WRITE_CHUNK_BYTES), FS_TIMEOUT_MS)
-    if !wrote.ok?
-      File.close(handle, FS_TIMEOUT_MS)
-      return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", wrote.message))
-    end
-    at += WRITE_CHUNK_BYTES
+  wrote = File.write_bytes(handle, data, FS_TIMEOUT_MS)
+  if !wrote.ok?
+    File.close(handle, FS_TIMEOUT_MS)
+    return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", wrote.message))
   end
   closed = File.close(handle, FS_TIMEOUT_MS)
   if !closed.ok?
@@ -261,11 +266,19 @@ def move_into_place(
   end
 end
 
-# Runs git; a failure to start it and a non-zero status are PKG-FETCH at the git key, with the start of git's errors.
-def git(place: Place, arguments: List[String]) -> Result[List[Int]]
-  case GitProcess.run(arguments)
-    GitProcess.Ran.Unavailable(message) ->
+# The arguments of a git command that works on the temporary repository.
+def inside(scratch: Scratch, arguments: List[String]) -> List[String]
+  return ["--git-dir=#{scratch.repo}"].concat(arguments)
+end
+
+# Runs git in the temporary folder; a git that does not start, one whose output cannot be read and a non-zero status
+# are PKG-FETCH at the git key, the last with the start of git's errors.
+def git(place: Place, scratch: Scratch, arguments: List[String]) -> Result[List[Int]]
+  case GitProcess.run(arguments, scratch.temp)
+    GitProcess.Ran.Missing(message) ->
       return error(fail(place, "PKG-FETCH", "git", "cannot run git: #{message}", "install git and put it on PATH"))
+    GitProcess.Ran.Broken(message) ->
+      return error(fail(place, "PKG-FETCH", "git", "cannot read the output of git: #{message}", ""))
     GitProcess.Ran.Exited(status, output, errors) ->
       if status != 0
         return error(fail(place, "PKG-FETCH", "git", "git exited with status #{status}", brief(errors)))
@@ -274,8 +287,8 @@ def git(place: Place, arguments: List[String]) -> Result[List[Int]]
   end
 end
 
-def git_text(place: Place, arguments: List[String]) -> Result[String]
-  output = try git(place, arguments)
+def git_text(place: Place, scratch: Scratch, arguments: List[String]) -> Result[String]
+  output = try git(place, scratch, arguments)
   text = String.from_bytes(output)
   if !text.ok?
     return error(fail(place, "PKG-FETCH", "git", "git gave text that is not UTF-8", ""))

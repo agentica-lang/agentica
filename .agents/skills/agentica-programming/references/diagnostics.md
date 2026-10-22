@@ -261,10 +261,11 @@ there, at a character boundary, and ends with `...`.
 - **Code:** `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`,
   `PKG-MANIFEST-MISSING`
   - **Meaning:** `agentica install` failed: git did not start or failed, the
-    tag or commit does not exist, a copied path is unsafe or the cache cannot be
-    written (`PKG-FETCH`, git's message in the help); the tag now points to
-    another commit than `agentica.lock` (the lock is not changed); two package
-    paths differ only in case; or no `agentica.toml` was found. The report names
+    tag or commit does not exist, a copied path is unsafe, a file is over 1 MiB
+    (16 MiB in all) or the cache cannot be written (`PKG-FETCH`, git's message
+    in the help); the tag now points to another commit than `agentica.lock` (the
+    lock is not changed); two package paths differ only in case (only case is
+    compared); or no `agentica.toml` was found. The report names
     the file and the key path of the entry, such as `package[0].tag`
 
 - **Code:** `CHECK-IMPORT-RENAME`

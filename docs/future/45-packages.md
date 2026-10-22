@@ -109,7 +109,16 @@ fetch of `install` are in 05b. What 45b does, and what it leaves for 45c and
   `PKG-SOURCE-CONFLICT`). Pending (45c): when `add` or `update` writes the lock,
   a name the lock lacks is added to it.
 - Two copied `.agc` paths that differ only in case are `PKG-PATH-COLLISION`, so
-  the package works on case-insensitive file systems.
+  the package works on case-insensitive file systems. Only case is folded: not
+  Unicode normalisation (macOS) or Windows device names; the lock hash still
+  catches whatever such a file system makes of them.
+- A copied file is at most 1 MiB and all of them 16 MiB, else `PKG-FETCH` names
+  the file and the limit: the VM keeps 1 MiB of a child's unread output, and
+  the files are held in memory.
+- git inherits the environment and may ask for a password on a terminal; each
+  read of its output has a 5 minute deadline. Git runs in the temporary folder,
+  never in the working folder. A killed install can leave a hidden `.tmp-*`
+  folder in the cache root, which is safe to delete.
 - A symbolic link or gitlink among the copied files is `PKG-SYMLINK`.
 - The fill goes into a temporary folder that is renamed into place. If the
   target exists, its hash is checked: a match is a success, and a mismatch is

@@ -221,32 +221,37 @@ import Sqlite from "pkg/sqlite/db"
   `%LOCALAPPDATA%/agentica/cache/pkg/` (no cache when it is unset or relative;
   `XDG_CACHE_HOME` and `HOME` are not read). A declared package that is not in
   the cache is `CHECK-IMPORT-PACKAGE`.
-- `agentica install` fills the cache from the lock and never writes the lock.
-  It takes no argument; the project is the nearest `agentica.toml` going up from
+- `agentica install` fills the cache from the lock and never writes the lock. It
+  takes no argument; the project is the nearest `agentica.toml` going up from
   the working folder (none is `PKG-MANIFEST-MISSING`), and the lock is checked
   against the manifest as a build checks it (`PKG-LOCK-STALE`). For each locked
-  package, in the order of the file: a folder of the commit that is in the
-  cache and has the locked hash is left alone and git does not run; a folder
-  with another hash is `PKG-HASH-MISMATCH` and is never overwritten; else the
-  package is fetched. The fetch runs the system `git` (its config, SSH keys and
+  package, in the order of the file: a folder of the commit that is in the cache
+  and has the locked hash is left alone and git does not run; a folder with
+  another hash is `PKG-HASH-MISMATCH` and is never overwritten; else the package
+  is fetched. The fetch runs the system `git` (its config, SSH keys and
   credential helpers apply; a `url.<base>.insteadOf` setting applies to the
   `git` value, which the lock keeps as written): a depth-1 fetch of the tag, or
   of the locked commit for a `ref`, into a temporary bare repository with no
   hooks and no working tree. The fetched commit must be the locked `commit`,
-  else `PKG-TAG-MOVED`. The files are read from the commit tree with
-  `git ls-tree` and `git cat-file`, so `.gitattributes` changes nothing. Only
-  the files the hash covers and the `agentica.toml` at the root are copied. A
+  else `PKG-TAG-MOVED`. The files are read from the commit tree with `git
+  ls-tree` and `git cat-file`, so `.gitattributes` changes nothing. Only the
+  files the hash covers and the `agentica.toml` at the root are copied. A
   symbolic link or submodule named `*.agc` or `agentica.toml` is `PKG-SYMLINK`,
-  two copied paths that differ only in case are `PKG-PATH-COLLISION`, and the
-  hash of the copy must be the locked hash (`PKG-HASH-MISMATCH`). The copy is
-  built in a hidden folder of the cache root and renamed into place in one
-  step. A git that cannot start or fails, a missing tag or commit, an unsafe
-  path and a cache that cannot be written are `PKG-FETCH`. These failures name
-  `agentica.lock` and the key of the entry (`package[1].tag`, `package[1].hash`;
-  `package[1].git` for `PKG-FETCH`; `package[1]` for the others). The first
-  failure stops the command. When every package is in the cache, the manifest of
-  each is checked against the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`).
-  The command starts git even under `--deny-run`, which only limits programs.
+  two copied paths that differ only in case are `PKG-PATH-COLLISION` (only case:
+  not Unicode normalisation or Windows device names, which the hash still
+  catches), a file over 1 MiB, or all files over 16 MiB, is `PKG-FETCH` naming
+  the file, and the hash of the copy must be the locked hash
+  (`PKG-HASH-MISMATCH`). The copy is built in a hidden `.tmp-*` folder of the
+  cache root and renamed into place in one step (a killed install may leave that
+  folder; delete it). git may ask for a password on a terminal; each read of its
+  output has a 5 minute deadline. A git that cannot start or fails, a missing
+  tag or commit, an unsafe path and a cache that cannot be written are
+  `PKG-FETCH`. These failures name `agentica.lock` and the key of the entry
+  (`package[1].tag`, `package[1].hash`; `package[1].git` when git itself
+  failed; `package[1]` for the others). The first failure stops the command.
+  When every package is in the cache, the manifest of each is checked against
+  the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`). The command starts git
+  even under `--deny-run`, which only limits programs.
 - The hash covers the `.agc` files of the package folder. Their paths are
   relative to it, written with `/`, in bytewise order; for each file, its path,
   a zero byte, its size in decimal, a zero byte and its bytes. The hash is

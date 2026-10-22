@@ -183,18 +183,33 @@ def test_a_repository_that_git_cannot_fetch_is_pkg_fetch(ws, remotes, tmp_path):
     assert_at_key(problem, "PKG-FETCH", ws.project / "agentica.lock", "package[0].git")
 
 
-@pytest.mark.parametrize("files, links, code", [
-    ({"a.agc": "# a\n"}, {"b.agc": "a.agc"}, "PKG-SYMLINK"),
+@pytest.mark.parametrize("files, extra, code", [
+    ({"a.agc": "# a\n"}, {"links": {"b.agc": "a.agc"}}, "PKG-SYMLINK"),
+    ({"a.agc": "# a\n"}, {"gitlinks": ["sub.agc"]}, "PKG-SYMLINK"),
     ({"a.agc": "# a\n", "A.agc": "# A\n"}, {}, "PKG-PATH-COLLISION"),
     ({"x/a.agc": "# 1\n", "X/a.agc": "# 2\n"}, {}, "PKG-PATH-COLLISION"),
-], ids=["a symbolic link named like a source file", "two files that differ in case", "two folders that differ in case"])
-def test_a_commit_that_cannot_be_a_package_is_refused(ws, remotes, files, links, code):
-    commit = remotes.publish(GREETER, files, tag="v1.0.0", links=links)
+    ({"a\\b.agc": "# a\n"}, {}, "PKG-FETCH"),
+    ({"big.agc": "# " + "x" * (1 << 20) + "\n"}, {}, "PKG-FETCH"),
+], ids=["a symbolic link named like a source file", "a submodule named like a source file",
+        "two files that differ in case", "two folders that differ in case", "a backslash in a name",
+        "a file over 1 MiB"])
+def test_a_commit_that_cannot_be_a_package_is_refused(ws, remotes, files, extra, code):
+    commit = remotes.publish(GREETER, files, tag="v1.0.0", **extra)
     lock_entry(ws, remotes, GREETER, files, commit, tag="v1.0.0")
     project(ws, {"greeter": dependency(remotes.url(GREETER), tag="v1.0.0")})
     _, problem = install(ws, remotes)
     assert_at_key(problem, code, ws.project / "agentica.lock", "package[0]")
     assert not ws.folder(remotes.url(GREETER), commit).exists()
+
+
+def test_a_file_of_the_largest_size_is_fetched(ws, remotes):
+    # 1 MiB is the limit of a file, and git's output for it is larger than the VM keeps of a child's output at once:
+    # it is read as it arrives.
+    big = "# " + "x" * ((1 << 20) - 3) + "\n"
+    commit = one_package(ws, remotes, {"big.agc": big})
+    result, problem = install(ws, remotes)
+    assert (result.code, problem) == (0, None), result.stderr
+    assert (ws.folder(remotes.url(GREETER), commit) / "big.agc").read_bytes() == big.encode("utf-8")
 
 
 def test_install_never_changes_the_lock_and_a_manifest_that_asks_for_more_is_stale(ws, remotes):

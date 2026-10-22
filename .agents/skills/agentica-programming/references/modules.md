@@ -173,19 +173,18 @@ import Sqlite from "pkg/sqlite/db"
   bad lock (a `version` other than 1, a name twice, a bad value) is
   `PKG-LOCK-INVALID`; a bad manifest is `PKG-MANIFEST-INVALID`. Both name a
   file and a key path.
-- The cache folder of a package is
-  `<cache>/<host>/<owner>/<repo>/<commit>/`, with no `.git` in `<repo>`.
-  `agentica install` (no arguments; the project of the working folder) fills it
-  with the system `git` and never writes the lock. A package already cached
-  with the locked hash is not fetched, so a full cache needs no git and no
-  network. A fetch gets the tag (or the locked commit) without a checkout and
-  copies the `.agc` files and the root `agentica.toml`. It fails with
-  `PKG-TAG-MOVED` (the tag is another commit than the lock), `PKG-HASH-MISMATCH`
-  (the files are not the locked ones; a cached folder is never overwritten),
-  `PKG-SYMLINK`, `PKG-PATH-COLLISION` (two paths that differ only in case),
-  `PKG-FETCH` (git failed, no such tag or commit, cache not writable) and
-  `PKG-MANIFEST-MISSING` (no `agentica.toml`). Each names `agentica.lock` and
-  the key of the entry, such as `package[0].tag`.
+- The cache folder of a package is `<cache>/<host>/<owner>/<repo>/<commit>/`,
+  with no `.git` in `<repo>`. `agentica install` (no arguments; the project of
+  the working folder) fills it with the system `git` and never writes the lock.
+  A package already cached with the locked hash is not fetched, so a full cache
+  needs no git and no network. A fetch gets the tag (or the locked commit)
+  without a checkout and copies the `.agc` files (each at most 1 MiB) and the
+  root `agentica.toml`. It fails with `PKG-TAG-MOVED` (the tag is another commit
+  than the lock), `PKG-HASH-MISMATCH` (the files are not the locked ones; a
+  cached folder is never overwritten), `PKG-SYMLINK`, `PKG-PATH-COLLISION` (two
+  paths that differ only in case), `PKG-FETCH` (git failed, no such tag or
+  commit, cache not writable) and `PKG-MANIFEST-MISSING` (no `agentica.toml`).
+  Each names `agentica.lock` and the key of the entry, such as `package[0].tag`.
   `<cache>` is `$XDG_CACHE_HOME/agentica/pkg` when `XDG_CACHE_HOME` is an
   absolute path, else `~/.cache/agentica/pkg`; on Windows it is
   `%LOCALAPPDATA%\agentica\cache\pkg`.
