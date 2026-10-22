@@ -528,8 +528,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   approximate at N > 1. Each scheduler takes steps from the shared budget in
   batches of up to `AGC_TURN_STEPS`, so the limit can trip while other
   schedulers still hold unused steps of their batch.
-- **Stall.** At N > 1 the I/O thread runs the check when it has nothing to do,
-  not the packed word of §10.2.3. Every scheduler waits on an empty queue
+- **Stall.** At N > 1 the I/O thread runs the check when it has nothing to do
+  (not from `uv_run`'s return value). Every scheduler waits on an empty queue
   (`agc_runq_quiet`, with an epoch that any wake moves). The inbox and the ready
   list are empty, no timer is armed, and the loop has no live handle except the
   inbox's own handle, which is unref'd. The I/O thread then reads the epoch
@@ -692,12 +692,8 @@ already use a runnext slot and a short spin (§16.9, "Wakes between schedulers")
   (`vm/tcp.c`) calls `uv_accept` on the I/O thread. A TLS child finishes its
   handshake there, and the request hands the child to `accept_done`.
 - **stdout and stderr on the loop** (row 7.2.1f, built). The per-stream lock of
-  §10.2.3 cannot be held across a park, so the second option is taken: a short
-  lock around each stream's buffer and FIFO, never held across a park, and a
-  single writer on the loop (the I/O thread), as §10.2.2 specifies. At N = 1 the
-  scheduler and the loop share a thread, so the lock matters only from N > 1. No
-  scheduler blocks in a stdout write for a stream on the loop, so only the
-  blocking fallback keeps a lock across a write.
+  §10.2.3 cannot be held across a park, so each stream has a short lock around
+  its buffer and FIFO and a single writer on the loop (§16.8, §10.2.2).
 - **The blocking fallback at the end of the run** (open). The end of the run
   waits for the schedulers (built; §16.9, "Threads"). What stays open is the
   blocking fallback (one scheduler only, §16.9, "`--schedulers N`"). A scheduler

@@ -1,9 +1,8 @@
 ## 15. VM layers
 
-**Status:** built. The owner planned it on 2026-10-13 as row 7.2.1b of the
-[roadmap](../roadmap/README.md) (checklist in
-[`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). No behavior change: the goldens
-do not move. It follows the architecture note [§16](16-architecture.md).
+**Status:** built (row 7.2.1b of the [roadmap](../roadmap/README.md),
+checklist in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). It follows the
+architecture note [§16](16-architecture.md).
 
 The C VM has three layers (core, services, adapters) with one-way dependencies,
 a driver that wires them, one port between the services and the core, one header
@@ -310,49 +309,16 @@ release objects locally too, to cover code that a configuration turns off.
 
 ### 15.6 Violations found
 
-Found by listing the `agc_` calls that cross files (rule 7 of §15.5 now checks
-them with `nm`). Each row is a place where the core names a service, or a layer
-reaches past the port. V1 to V5 are fixed; the others are accepted, with the
-reason.
+Each row is a place where the core names a service, or a layer reaches past
+the port (rule 7 of §15.5 checks them with `nm`). V1 to V5 are fixed; the
+others are accepted, with the reason.
 
-- **#:** V1
-  - **Where:** `text.c`, `equal.c`
-  - **What:** `to_s`, `inspect` and `==` of a `Json` value called
-    `agc_json_encode` in `json.c` (a service)
-  - **Fix:** **Moved (done).** The Json value is a core type, so its writer and
-    node code are in `json_value.c`. `json.c` keeps the yyjson parser, the
-    `JSON.*` builtins and `agc_json_to_float`; `json_typed.c` keeps
-    `agc_json_decode` and `agc_json_schema`
-
-- **#:** V2
-  - **Where:** `builtins.c`
-  - **What:** the builtin table list named every service's table
-  - **Fix:** **Moved (done)**, in the same order (`agc_find_builtin` returns the
-    first match), to the driver file `builtin_tables.c` as `agc_builtin_tables`
-    and `agc_builtin_table_count`. The list is the one place that wires the
-    services in
-
-- **#:** V3
-  - **Where:** `loop.c` (`discard`)
-  - **What:** `discard` (a detached job's result) skipped `AGC_T_PROCESS` by
-    name
-  - **Fix:** **Port data (done).** The tag check became the resource field
-    `keep_detached`, which `process.c` sets
-
-- **#:** V4
-  - **Where:** `task.c`
-  - **What:** `await_task` and `builtin_unobserved_crash` built their error with
-    `agc_error_value`, which was defined in `stream.c` (a service)
-  - **Fix:** **Moved (done)** to `value.c`
-
-- **#:** V5
-  - **Where:** `testing.c`
-  - **What:** `Test.run` had its own wait on a target task, the waiting half of
-    `await_task` without its crashed and cancelled branches
-  - **Fix:** **Port function (done).** `agc_task_join` in `task.c` does the
-    wait. If the target is done it clears `awaiting` and returns false. Else it
-    sets `awaiting`, queues the task on the target's waiters, parks (with retry)
-    and returns true. `await_task` handles the result after false
+- **V1 to V5, fixed:** the Json writer moved to the core (`json_value.c`); V2:
+  the builtin table list moved to the driver file `builtin_tables.c`
+  (`agc_builtin_tables`, in the old order, since `agc_find_builtin` returns the
+  first match), the one place that wires the services in; `discard` reads the
+  resource field `keep_detached` instead of a tag; `agc_error_value` moved to
+  `value.c`; `Test.run` waits through the port function `agc_task_join`.
 
 - **#:** V6
   - **Where:** `testing.c` (`cancel_leftovers`, `unobserved_of`, `observe_test`)
@@ -412,8 +378,7 @@ reason.
 Not violations: `loader.c` calls `agc_find_builtin` (core), and the core's other
 cross-file calls stay inside the core.
 
-### 15.7 Implementation PRs
+### 15.7 New files
 
-Both implementation PRs are done. A PR that adds a `vm/*.c` file puts it in a
-layer list, and a reviewer checks a new port function against §14 like any core
-change.
+A PR that adds a `vm/*.c` file puts it in a layer list, and a reviewer checks a
+new port function against §14 like any core change.

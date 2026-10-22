@@ -304,20 +304,9 @@ Items in the plan to re-check with this rule before they start:
     add on the allocation path while nobody asks (§28.12): it must pass the
     overhead check or change rule 4 of §28.2 first.
 
-- **Item:** VM layers (7l in [`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers); its
-  first part is row 7.2.1b, §15)
-  - **Question:** Does each layer replace code, or only add a boundary? (§15
-    answers for the first part.)
-
 - **Item:** JIT (7m, §22)
   - **Question:** Required by the roadmap; it must keep the same five rules and
     add no runtime of its own.
-
-- **Item:** Multicore schedulers (in progress, §16 and §10.2.3)
-  - **Question:** Started by the owner's decision of 2026-10-19: schedulers that
-    pull from one global run queue, and one I/O thread with the only loop. Each
-    rule above must still hold as §16.6 maps it, with one exit path for the
-    process (`end_run` on the I/O thread).
 
 - **Item:** K I/O threads, local run queues with work stealing (§16.10)
   - **Question:** Only if measurements ask. Does the model of §16 stop being
