@@ -206,6 +206,21 @@ def icacls(path: str | Path, *arguments: str) -> None:
     assert changed.returncode == 0, changed.stdout + changed.stderr
 
 
+@contextmanager
+def access_denied(path: str | Path, rights: str):
+    """Deny `rights` (icacls letters such as `RD` or `WD,AD`) on `path` to the current user and to Everyone, and remove
+    the denials on exit. The runner's backup and restore privileges bypass the list: run the code that must be refused
+    inside `without_backup_restore_privileges()` too."""
+    who = ["*" + current_user_sid(), "*S-1-1-0"]
+    try:
+        for name in who:
+            icacls(path, "/deny", "%s:(%s)" % (name, rights))
+        yield
+    finally:
+        for name in who:
+            icacls(path, "/remove:d", name)
+
+
 def processes_mentioning(text: str | Path) -> list[int]:
     """The ids of the processes whose command line contains `text` (without regard to case or the direction of the
     slashes), the Windows counterpart of reading /proc/<pid>/cmdline."""

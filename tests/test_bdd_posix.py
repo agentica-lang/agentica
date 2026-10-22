@@ -1,11 +1,12 @@
 """`agentica test` cases that need a POSIX system: file modes and links, and the first binary of the bootstrap (its
 driver is the one of stage0, which does not know the Windows temporary folder).
 
-On Windows the cases are skipped one by one (host-only). A folder made unreadable with chmod, a symbolic link and a
-name that is not valid UTF-8 do not exist there, and a temporary folder that cannot be written with chmod has a
-counterpart in tests/test_windows_process_cleanup.py (an access list). Every other `agentica test` case is in
+On Windows the cases that need a mode bit or a name that is not valid UTF-8 are skipped (host-only): a temporary
+folder that cannot be written with chmod has a counterpart in tests/test_windows_process_cleanup.py (an access list).
+The discovery case runs there with an access list instead of chmod. Every other `agentica test` case is in
 tests/test_bdd.py, which every system runs, the cases of a crashed runner (a stand-in for the binary) included.
 """
+import contextlib
 import json
 import os
 
@@ -21,29 +22,42 @@ ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 BOOTSTRAP = ROOT / "build" / "vm" / "release" / "bootstrap" / ("agentica.exe" if os.name == "nt" else "agentica")
 
 
-@host_only(WINDOWS, "a folder made unreadable with chmod 000, symbolic links and a name that is not valid UTF-8 do not exist on Windows")
-def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_files_and_skips_folder_links(bdd, request):
+def test_discovery_reports_unreadable_folders_broken_links_bad_names_and_large_files_and_skips_folder_links(bdd):
     directory = bdd.suite({
         "a.feature": "Feature: A\nScenario: a\nThen the remembered number is 1\nWhen I remember 1\n"})
     locked = os.path.join(directory, "locked")
     os.mkdir(locked)
     with open(os.path.join(locked, "hidden.feature"), "w") as hidden:
         hidden.write("Feature: Hidden\nScenario: hidden\nThen an assertion fails\n")
-    os.chmod(locked, 0o000)
-    # Registered after the directory's own cleanup, so it runs first and lets rmtree enter the folder.
-    request.addfinalizer(lambda: os.chmod(locked, 0o700))
-    os.symlink(".", os.path.join(directory, "self"))
-    os.symlink("missing.feature", os.path.join(directory, "broken.feature"))
-    # APFS refuses a name that is not valid UTF-8 (EILSEQ), so on macOS the case checks the other entries only.
-    try:
-        with open(os.path.join(os.fsencode(directory), b"bad\xff.feature"), "w") as bad:
-            bad.write("Feature: Bad\n")
-        bad_name = [("bad\ufffd.feature", "RUNTIME-BDD-INFRA")]
-    except OSError:
+    # Closed before the suite's own cleanup, so rmtree can enter the folder again.
+    with contextlib.ExitStack() as unlocked:
+        if WINDOWS:
+            # Windows has no mode 000: an access list denies listing the folder. The restore privilege of an
+            # elevated runner would bypass the list in the VM, so the privilege is off for the whole run.
+            from tests.windows_support import access_denied, without_backup_restore_privileges
+            unlocked.enter_context(without_backup_restore_privileges())
+            unlocked.enter_context(access_denied(locked, "RD"))
+            with pytest.raises(PermissionError):
+                os.listdir(locked)
+        else:
+            os.chmod(locked, 0o000)
+            unlocked.callback(os.chmod, locked, 0o700)
+        # Windows needs the right to make symbolic links (Developer Mode or an administrator), as test_bdd.py does.
+        os.symlink(".", os.path.join(directory, "self"), target_is_directory=True)
+        os.symlink("missing.feature", os.path.join(directory, "broken.feature"))
+        # A name that is not valid UTF-8 does not exist on Windows, and APFS refuses it (EILSEQ), so there the case
+        # checks the other entries only.
         bad_name = []
-    with open(os.path.join(directory, "big.feature"), "w") as big:
-        big.write("Feature: Big\n" + "#" * 1048576)
-    status, report = bdd.json_test(directory, "--steps", HANDLERS)
+        if not WINDOWS:
+            try:
+                with open(os.path.join(os.fsencode(directory), b"bad\xff.feature"), "w") as bad:
+                    bad.write("Feature: Bad\n")
+                bad_name = [("bad\ufffd.feature", "RUNTIME-BDD-INFRA")]
+            except OSError:
+                pass
+        with open(os.path.join(directory, "big.feature"), "w") as big:
+            big.write("Feature: Big\n" + "#" * 1048576)
+        status, report = bdd.json_test(directory, "--steps", HANDLERS)
     assert status == 2
     codes = []
     for file in report["files"]:
