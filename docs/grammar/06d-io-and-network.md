@@ -369,7 +369,13 @@ end
   it needs are searched in its folder and the default folders, never in `PATH`
   (a MinGW DLL that needs `libgcc_s_seh-1.dll` must have it next to it). A
   relative path there
-  (`"lib\\x.dll"`, `"C:x.dll"`) is `RUNTIME-NATIVE-LOAD`.
+  (`"lib\\x.dll"`, `"C:x.dll"`) is `RUNTIME-NATIVE-LOAD`. On macOS a name
+  (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and in
+  `DYLD_LIBRARY_PATH`), which finds the system libraries in the dyld shared
+  cache (`"libSystem.B.dylib"` has libc and libm); any other library needs an
+  absolute path. macOS drops `DYLD_*` variables when a protected program
+  (`/usr/bin/env`, `/bin/sh`) starts agentica, so `DYLD_LIBRARY_PATH` does not
+  pass through a shebang line or a shell.
 - An argument is checked before the call: a `C.Int` outside 32 bits is
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
@@ -435,15 +441,17 @@ end
   of native code (a socket, a pipe) can be read or written, while other tasks
   run. This is how a library in non-blocking mode (libpq, curl multi) waits:
   `try Native.wait_readable(Raw.PQsocket(conn), 5_000)`. The wait polls a
-  new open of the file of `fd` (`/proc/self/fd`), so the native code keeps its
-  descriptor and its flags, and two tasks may wait on one descriptor. A socket,
-  or a file that cannot be opened again (an eventfd), is polled through a
-  duplicate instead, which puts `fd` in non-blocking mode. An error or a
+  new open of the file of `fd` (`/proc/self/fd`, `F_GETPATH` on macOS), so the
+  native code keeps its descriptor and its flags, and two tasks may wait on one
+  descriptor. A socket, a terminal master, or a file that cannot be opened
+  again (an eventfd, a pipe on macOS), is polled through a duplicate instead,
+  and its flags are put back after the poll starts. An error or a
   hang-up on the descriptor ends the wait with `ok` too, as in poll(2): the
   next native call reports it. After `timeout_ms` (positive) the result is
   `error("native: timed out")`. A timeout that is not positive, a negative
   `fd`, and a descriptor that is closed or cannot be polled (a regular file,
-  `/dev/null`) give an error that starts with `native: `. A close of `fd`
+  `/dev/null` on Linux; macOS calls it always ready) give an error that starts
+  with `native: `. A close of `fd`
   during a wait does not end it: it ends at its timeout unless the file
   becomes ready. A cancel stops the wait.
 - Native code is allowed by default and can start programs itself.
@@ -452,14 +460,16 @@ end
   a program that declares any extern function or calls a `Native.*` builtin
   before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica
   test` such a test file is a file error with that code.
-- Native calls work on Linux x86_64 and Windows x64, and waits on Linux
-  x86_64. `Native.wait_*` is not supported on Windows: it returns an error
-  that starts with `native: ` (libuv polls only sockets there). Elsewhere such a
-  program is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2 (issue
-  #548).
+- Native calls work on Linux x86_64, Windows x64 and macOS (x86_64 and
+  arm64), and waits on Linux x86_64 and macOS. `Native.wait_*` is not
+  supported on Windows: it returns an error that starts with `native: ` (libuv
+  polls only sockets there). Elsewhere such a program is refused at load with
+  `RUNTIME-NATIVE-UNSUPPORTED`, exit 2.
   `check`, `compile` and the queries work on every system.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
-  native code runs with the rights of the program.
+  native code runs with the rights of the program. A variadic C function
+  (`printf`) cannot be declared: a fixed signature for it is undefined
+  behavior, and on Apple arm64 its extra arguments come out wrong.
 
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
 [agentica-link-2]: ../../site/content/library/io-and-system/files.md

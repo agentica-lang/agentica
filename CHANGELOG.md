@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `extern` blocks and `Native.wait_*` work on macOS (x86_64 and arm64).
+
 ### Fixed
 
 - Windows: `install`, `add` and `update` no longer leave temporary git folders
