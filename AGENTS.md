@@ -166,11 +166,12 @@ phase 13).
 - When a phase item is done, tick it in the roadmap and update the
   development skill.
 - When the language or a builtin changes, update `docs/grammar/`, the site
-  page and the programming skill together: core rules in
-  `.agents/skills/agentica-programming/SKILL.md` (keep it near 2,000 tokens)
-  and `references/language.md`; library detail in its `references/<area>.md`
-  plus its row in the "When to read a reference" table. The skill is
-  self-contained and does not read the grammar.
+  page and the programming skill together. Keep
+  `.agents/skills/agentica-programming/SKILL.md` as short as possible: a table
+  of references with a one-line summary each, plus only what nearly every task
+  needs. Core rules go in `references/language.md`; library detail in its
+  `references/<area>.md` plus its row in the table. The skill is self-contained
+  and does not read the grammar.
 - A user-visible change adds an entry under `## [Unreleased]` in
   `CHANGELOG.md`: one short line per change, for users (details belong in the
   PR and docs); mark a breaking change `**Breaking:**`.

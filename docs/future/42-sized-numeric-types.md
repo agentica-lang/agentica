@@ -143,8 +143,8 @@ conversion.
   would make each of them a conversion. Messages print the canonical `Int` and
   `Float`. The alias holds only while `Int` is 64 bits on every target (§42.1,
   §42.16).
-- **`Int` and `Float` stay the default spellings** in the cheat sheet, the
-  examples and the builtin signatures. Reason: agents learn one name for the
+- **`Int` and `Float` stay the default spellings** in the examples and the
+  builtin signatures. Reason: agents learn one name for the
   common case, and the new names are for the cases that need a width.
 - **No `Byte`.** `UInt8` is the byte type. Reason: a `Byte` alias would be a
   second name for one type, and it reads like `Bytes` (§12.5).
@@ -603,8 +603,8 @@ standard library only, and the checker goldens of the Agentica front end against
   `RUNTIME-INTEGER-OVERFLOW` for each direction and for `MIN / -1`;
   `RUNTIME-INVALID-COUNT` for a negative shift count.
 - **Docs in each step.** The grammar (`04-lexical.md`, `06-semantics.md`,
-  `06b-builtins.md`, `07-diagnostics.md`), the programming skill (kept near
-  2,000 tokens), the site numbers page (and `binary.md` in step 3), the
+  `06b-builtins.md`, `07-diagnostics.md`), the programming skill (a short
+  `SKILL.md`; the rules in its references), the site numbers page (and `binary.md` in step 3), the
   development skill's VM references, and a `CHANGELOG.md` entry under
   `## [Unreleased]`, with `**Breaking:**` for the reserved names (step 1) and
   the binary API (step 3).

@@ -1,7 +1,7 @@
 # Binary data (`std/binary`)
 
 `import Binary from "std/binary"`. Binary data is a `List[Int]` with each item
-in `0 .. 255`, like `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and
+in `0 .. 255`, as `IO.read_bytes`, `File.read_bytes`, `TCP.recv_bytes` and
 `Process.read_bytes` give. The module is written in Agentica on the bit builtins
 below.
 
@@ -20,26 +20,26 @@ Binary.frame(payload: List[Int]) -> Result[List[Int]]
 Binary.read_frame_length(data: List[Int], offset: Int, max: Int) -> Result[Int]
 ```
 
-- `_be` is big-endian (network order), `_le` is little-endian. `u8` and `i8`
-  have no suffix. Signed types use two's complement. `offset` is zero-based.
+- `_be` is big-endian (network order), `_le` little-endian; `u8` and `i8` have
+  no suffix. Signed types use two's complement. `offset` is zero-based.
 - A reader never halts: every problem is an `error(...)`. A writer that can fail
   (a value outside its type) returns a `Result`; `write_i64_*`, `write_f32_*`
   and `write_f64_*` return a plain `List[Int]`, so `try` on them is a check
   error.
-- `u64` is `0 .. 9223372036854775807`: `read_u64_*` returns an error for a top
-  bit set and `write_u64_*` rejects a negative value. For all 64 bits (hashes,
-  IDs) use `read_i64_*` and `write_i64_*`, which read and write the same bytes.
+- `u64` is `0 .. 9223372036854775807`: `read_u64_*` errors on a top bit set and
+  `write_u64_*` rejects a negative value. For all 64 bits (hashes, IDs) use
+  `read_i64_*` and `write_i64_*`, which read and write the same bytes.
 - Floats: `write_f64_*` writes `Float.to_bits`, `write_f32_*` writes
   `Float.to_bits32` (it rounds). Every NaN is written as the canonical NaN, so a
-  NaN pattern with another payload reads and writes back canonical. `-0.0`,
-  infinities and subnormals are exact.
-- `concat` joins any number of parts in O(n log k). A loop of `out =
-  List.concat(out, part)` copies the whole output each time and is O(n²). Build
+  NaN with another payload reads and writes back canonical. `-0.0`, infinities
+  and subnormals are exact.
+- `concat` joins any number of parts in O(n log k); a loop of `out =
+  List.concat(out, part)` copies the output each time and is O(n²). Build
   `parts` with `map`: `values.map do |v| Binary.write_i64_be(v) end`.
 - `frame(payload)` is the 4-byte big-endian length, then the payload.
   `read_frame_length(data, offset, max)` returns the length, or an error above
   `max` (and for a negative `max`), so a program rejects a hostile length before
-  it reads the body. Then it reads that many bytes itself (`TCP.recv_bytes` and
+  it reads the body; then it reads that many bytes itself (`TCP.recv_bytes` and
   `Process.read_bytes` may return fewer).
 - Errors, in this order (the first that applies): `frame limit -1 is negative`;
   `u32 at offset 10 is outside a list of length 12` (offset below 0 or above
@@ -56,15 +56,12 @@ import Binary from "std/binary"
 def main() -> Void
   header = Binary.write_u16_be(513).unwrap!
   data = Binary.concat([header, Binary.write_f64_le(1.5)])
-  puts(data)
-  puts(Binary.read_u16_be(data, 0))
-  puts(Binary.read_f64_le(data, 2))
-  puts(Binary.read_u32_be(data, 8))
+  puts(data)                        # [2, 1, 0, 0, 0, 0, 0, 0, 248, 63]
+  puts(Binary.read_u16_be(data, 0)) # ok(513)
+  puts(Binary.read_f64_le(data, 2)) # ok(1.5)
+  puts(Binary.read_u32_be(data, 8)) # error("u32 at offset 8 is outside a list of length 10")
 end
 ```
-
-It prints `[2, 1, 0, 0, 0, 0, 0, 0, 248, 63]`, `ok(513)`, `ok(1.5)` and
-`error("u32 at offset 8 is outside a list of length 10")`.
 
 ## Bit operations
 
@@ -89,11 +86,11 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
 
 ## Text bytes and hashing
 
-- `String.from_bytes` decodes strictly. A byte read can split a UTF-8
-  character, so decode complete sequences only, and switch to text reads only
-  at character boundaries. `String.to_bytes(s)` encodes text for
-  `TCP.send_bytes`, `File.write_bytes` and the like.
-- `Crypto.sha256(data: List[Int]) -> List[Int]` hashes bytes (a `List[Int]`, as
-  the byte reads give) with OpenSSL and returns the 32 digest bytes. An item
-  outside 0..255 halts (`RUNTIME-INVALID-NUMBER`). Its time grows with the list.
-  `Crypto` is a reserved type name.
+- `String.from_bytes` decodes strictly. A byte read can split a UTF-8 character,
+  so decode complete sequences only and switch to text reads only at character
+  boundaries. `String.to_bytes(s)` encodes text for `TCP.send_bytes`,
+  `File.write_bytes` and the like.
+- `Crypto.sha256(data: List[Int]) -> List[Int]` hashes bytes with OpenSSL and
+  returns the 32 digest bytes. An item outside 0..255 halts
+  (`RUNTIME-INVALID-NUMBER`). Its time grows with the list. `Crypto` is a
+  reserved type name.

@@ -1,16 +1,16 @@
 # Lazy
 
-`Lazy[T]` is a lazy pipeline: a source and steps. Building one runs nothing. A
-terminal runs it and pulls one item at a time through every step, so no step
+`Lazy[T]` is a pipeline: a source and steps. Building one runs nothing. A
+terminal runs it, pulling one item at a time through every step, so no step
 builds a whole list. Each terminal runs the source again from the start (a
 channel cannot be read twice: a second terminal goes on where the first
 stopped). A `Lazy` is a recipe, not a cursor: there is no `next`, `yield`,
-`Enumerator.new` or generator (a producer is a task that sends into a
-`Channel`, `references/tasks.md`).
+`Enumerator.new` or generator (a producer is a task sending into a `Channel`,
+`tasks.md`).
 
-Use it for an endless source, the lines of a big file, the values of a
-channel, or when only the first results of a long chain are needed. To walk a
-whole list, use the eager `List` methods.
+Use it for an endless source, the lines of a big file, the values of a channel,
+or when only the first results of a long chain are needed. To walk a whole list
+use the eager `List` methods.
 
 ```text
 List.lazy(list: List[A]) -> Lazy[A]
@@ -58,26 +58,28 @@ def main() -> Void
 end
 ```
 
-- `take`, `take_while`, `first` and `find` stop the source, so an endless
-  source ends. `to_a`, `reduce` and `each` on an endless source never end;
+- `take`, `take_while`, `first` and `find` stop the source, so an endless source
+  ends. `to_a`, `reduce` and `each` on an endless source never end;
   `--max-steps` stops them (`RUNTIME-STEP-LIMIT`).
 - Each item pulled costs one step, each callback a step plus its body. Other
-  tasks keep running while a terminal runs. Callbacks run on the calling task;
-  a `Lazy` can be shared by tasks.
-- No `filter_map`: write `filter` then `map`. No tuples: to keep an item and
-  its index, return a struct from `with_index`.
-- A `Lazy` has no `==`, `to_s` or JSON form. A `List` method on it (`lz.size`)
-  is `CHECK-UNKNOWN-METHOD`: get a list first with `try lz.to_a`. A step only
-  `Lazy` has, on a list or range (`xs.each_cons(2)`), is `CHECK-UNKNOWN-METHOD`:
-  write `xs.lazy.each_cons(2)`.
+  tasks keep running while a terminal runs. Callbacks run on the calling task; a
+  `Lazy` can be shared by tasks.
+- No `filter_map` (write `filter` then `map`) and no tuples (return a struct
+  from `with_index` to keep an item and its index).
+- A `Lazy` has no `==`, `to_s` or JSON form; inspect prints `<Lazy>`. A `List`
+  method on it (`lz.size`) is `CHECK-UNKNOWN-METHOD`: get a list first with `try
+  lz.to_a`. A step only `Lazy` has, on a list or range (`xs.each_cons(2)`), is
+  `CHECK-UNKNOWN-METHOD`: write `xs.lazy.each_cons(2)`.
 - Steps are methods: `lz |> Lazy.map() do ... end` is `CHECK-PIPE-METHOD`.
 
 ## try in the blocks
 
 `try` works in every block of a `Lazy` method (a step, `Lazy.produce`, a
 terminal), whatever the block gives; the block still ends with a plain value,
-not `ok(...)`. A failed `try` ends the pipeline: no later item is pulled, a
-file of the run is closed, and the terminal returns the error.
+not `ok(...)`. A failed `try` ends the pipeline: no later item is pulled, a file
+of the run is closed, and the terminal returns the error. A block nested in a
+`Lazy` block (`xs.map do ... end` inside a step) follows the usual rule: `try`
+there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
 
 ```ruby
 def parse(text: String) -> Result[Int]
@@ -90,10 +92,6 @@ def main() -> Void
   puts(words.lazy.map do |w| try parse(w) * 10 end.to_a)       # error("cannot convert \"x\" to Int")
 end
 ```
-
-- A block nested in a `Lazy` block (`xs.map do ... end` inside a step) follows
-  the usual rule: `try` there is `CHECK-TRY-CONTEXT` unless that block returns
-  a Result.
 
 ## Files and channels
 
@@ -120,10 +118,10 @@ end
 - `File.foreach(...).each do ... end` with no step in between, written as one
   chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line(path, n, ms) do |line|
   ... end`.
-- `ch.lazy(timeout_ms)`: each wait for a value obeys the timeout; a timeout
-  ends the terminal with `error("channel: timed out")`. The timeout rules differ
-  from `File.foreach`: a negative timeout is `RUNTIME-INVALID-DURATION` (not an
-  error Result), and `ch.lazy(0)` is valid (only what is already there).
+- `ch.lazy(timeout_ms)`: each wait for a value obeys the timeout; a timeout ends
+  the terminal with `error("channel: timed out")`. Unlike `File.foreach`, a
+  negative timeout is `RUNTIME-INVALID-DURATION` (not an error Result), and
+  `ch.lazy(0)` is valid (only what is already there).
 - A value a terminal took is gone even if a later step dropped it; `take`,
   `first` and `find` take only what they need, `take_while` consumes the first
   value it rejects. A second terminal on a drained, closed channel gives
@@ -147,10 +145,10 @@ end
 - `write_lines(path, timeout_ms)` takes a `Lazy[String]` (a `Lazy[Int]` is
   `CHECK-TYPE-MISMATCH`: `map` to a String first). It creates or truncates the
   file and writes each item and `\n`.
-- The file opens before the first item is pulled (a failed open reads
-  nothing) and is flushed and closed before the terminal returns, on every
-  path. What was written before an error stays. A crash or cancel of the task
-  closes it at the task's end.
-- A timeout `<= 0`, a bad path, a failed open, write or close, and a line over
-  1 MiB end the terminal with an error Result. `timeout_ms` bounds the open,
-  each 64 KiB write and the close.
+- The file opens before the first item is pulled (a failed open reads nothing)
+  and is flushed and closed before the terminal returns, on every path. What was
+  written before an error stays. A crash or cancel of the task closes it at the
+  task's end.
+- A timeout `<= 0`, a bad path, a failed open, write or close, and a line over 1
+  MiB end the terminal with an error Result. `timeout_ms` bounds the open, each
+  64 KiB write and the close.

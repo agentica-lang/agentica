@@ -275,7 +275,7 @@ For `--agent pi`, every row and `summary.md` count, next to the checks:
 gets (the skill in the repository is never edited):
 
 - The skill copy has no `references/queries.md` and no `references/analysis.md`,
-  and none of the lines that point to them: the bullets and the sentence in
+  and none of the lines that point to them: their two table rows in
   `SKILL.md`, and the `QUERY-` codes of `references/diagnostics.md`. The
   runner stops when any file of the copy still names a query command, so a
   change to the skill cannot leak one unnoticed.
