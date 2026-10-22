@@ -1,0 +1,3 @@
+/* The resources of agentica.exe: the application manifest (vm/agentica.manifest), as resource 1 of type 24
+   (CREATEPROCESS_MANIFEST_RESOURCE_ID of RT_MANIFEST). mk/vm.mk compiles it with windres on Windows. */
+1 24 "agentica.manifest"

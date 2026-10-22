@@ -15,6 +15,18 @@ from typing import Any
 from tests.agentica_test import Result, TestCase, run_vm, start_vm, vm_environment
 
 
+def long_paths_enabled() -> bool:
+    """True when Windows lifts the MAX_PATH limit for a program that declares longPathAware in its manifest, as
+    agentica.exe does: the LongPathsEnabled value of the registry is 1. False with no registry (Wine runs Python on
+    Linux)."""
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem") as key:
+            return winreg.QueryValueEx(key, "LongPathsEnabled")[0] == 1
+    except (ImportError, OSError):
+        return False
+
+
 def kernel32_file_api() -> Any:
     """Return kernel32 with correctly typed CreateFileW and CloseHandle calls."""
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
