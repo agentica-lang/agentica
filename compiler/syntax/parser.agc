@@ -2049,7 +2049,7 @@ def parse_extern_function(
           "PARSE-EXTERN-OUT",
           "the parameter \"#{param.name}\" is declared twice",
           param.name_span,
-          Base.hint("give the out parameter another name"),
+          Base.hint("give one of them another name"),
         ),
       )
     end

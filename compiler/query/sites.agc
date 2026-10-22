@@ -239,10 +239,10 @@ def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
 end
 
 # Whether the function is an extern function with out parameters, whose result is its record: one of its codes is a
-# capital (Ast.Native).
+# capital (Ast.Native), whatever the type, so a new type code needs no change here.
 def record_result?(node: Ast.FunctionDecl) -> Bool
   case node.native
-    Ast.Optional.Present(native) -> return native.codes.split("").any? do |code: String| "ILDBPR".contains?(code) end
+    Ast.Optional.Present(native) -> return native.codes.split("").any? do |code: String| code != code.downcase end
     Ast.Optional.Absent -> return false
   end
 end
