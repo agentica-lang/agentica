@@ -544,11 +544,10 @@ header and the entry.
   are reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not
   bump it: an older VM rejects the file as an unknown opcode.
 - The C loader is the only reader of this format and has no compatibility
-  shims, with one transitional exception: the loader also reads format 5, which
-  has no prelude flag, as long as `bootstrap/stage0.agcb` is in format 5 (the
-  first binary of the bootstrap runs the programs that its stage0 compiler
-  writes in that format). Refreshing stage0 (`references/ci.md` of the
-  development skill) lets a later change remove it.
+  shims, with one transitional exception: the loader still reads format 5,
+  which has no prelude flag (`AGC_FORMAT_PREVIOUS`). It was kept while
+  `bootstrap/stage0.agcb` wrote format 5; the checked-in stage0 now writes
+  format 6, so a later change can remove it.
 
 ### 4.7 The prelude
 

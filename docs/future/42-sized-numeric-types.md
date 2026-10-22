@@ -572,42 +572,23 @@ should have made.
 - **Step 4: typed storage, if measured.** §42.12.
 
 Tests, for each step: goldens for the VM, an independent Python peer with the
-standard library only, and the checker goldens of the Agentica front end against
-`agentica check --json`, each asserting the code and the span.
+standard library only, and checker goldens that assert the code and the span.
 
-- **Vectors (Python peer).** A generator computes every result with Python's
-  unbounded integers, masked to the width, and writes the input of a fixture, as
-  the binary work does. It covers: edge values of each type (the smallest, the
-  largest, zero, one, minus one); each operation on those values; each bit
-  method and count (0, 1, width - 1, width, 63, 64); each conversion, including
-  the plain and Result forms; `UInt64` values above 2^63, and `UInt64` lists
-  sorted in unsigned order. CI never runs Python for this.
-- **Float32 vectors.** The generator computes the exact result of each operation
-  with `fractions.Fraction` and rounds it to binary32 with integer arithmetic.
-  It does not use the double-rounding argument, so it is independent of §42.9.
-  It also covers ties near 1.0, the largest finite value and the tie above it,
-  subnormal ties, overflow to infinity, the Int-to-Float32 cases of §42.9
-  (`9007199791611905` and `2^60 + 2^36 + 1`), and the shortest printing. The
-  shortest printing tries each candidate of 1 to 9 digits and checks it with
-  exact `Fraction` arithmetic: the candidate, as an exact decimal, must round to
-  the value under the rule above, ties to even. It does not round through a
-  `double` or call `struct`, so it repeats neither the double rounding of §42.9
-  nor the C loop, and it does not use `repr`.
-- **Round trips.** `to_uint8` then `to_int` gives back the value; `read` of
-  `write` gives back the value for each type (step 3); `strtof` of the printed
-  text gives back the Float32; `wrap_` of a value in range gives that value.
-- **Errors.** Goldens hold each diagnostic code and its span: `CHECK-INT-RANGE`
-  for a literal and for a negative literal of an unsigned type;
-  `CHECK-TYPE-MISMATCH` for mixed types and for unary minus on an unsigned type;
-  `CHECK-MAP-KEY-TYPE` for a float key; `CHECK-FLOAT-RANGE`;
-  `RUNTIME-INTEGER-OVERFLOW` for each direction and for `MIN / -1`;
-  `RUNTIME-INVALID-COUNT` for a negative shift count.
-- **Docs in each step.** The grammar (`04-lexical.md`, `06-semantics.md`,
-  `06b-builtins.md`, `07-diagnostics.md`), the programming skill (a short
-  `SKILL.md`; the rules in its references), the site numbers page (and
-  `binary.md` in step 3), the development skill's VM references, and a
-  `CHANGELOG.md` entry under `## [Unreleased]`, with `**Breaking:**` for the
-  reserved names (step 1) and the binary API (step 3).
+- **Integer vectors.** Python's unbounded integers, masked to the width, give
+  every result: edge values of each type, each operation and bit method on
+  them, each conversion, and `UInt64` above 2^63 (unsigned order).
+- **Float32 vectors.** The exact result of each operation with
+  `fractions.Fraction`, rounded to binary32 with integer arithmetic, so the
+  peer is independent of the double-rounding argument of §42.9; the shortest
+  printing is checked by trying each candidate of 1 to 9 digits with exact
+  arithmetic, never through a `double`, `struct` or `repr`. It covers ties,
+  subnormals, overflow and the Int-to-Float32 cases of §42.9.
+- **Round trips** of the conversions, of `read` and `write` (step 3) and of
+  `strtof` on the printed text.
+- **Errors:** `CHECK-INT-RANGE`, `CHECK-TYPE-MISMATCH` (mixed types, unary
+  minus on an unsigned type), `CHECK-MAP-KEY-TYPE`, `CHECK-FLOAT-RANGE`,
+  `RUNTIME-INTEGER-OVERFLOW` (each direction and `MIN / -1`) and
+  `RUNTIME-INVALID-COUNT`.
 
 ### 42.14 Freeze and bootstrap impact
 

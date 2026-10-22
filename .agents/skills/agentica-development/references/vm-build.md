@@ -71,12 +71,10 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   `references/bdd.md`). A new VM option goes in `agc_launch_parse` and in the
   pass-through list of the front end (`compiler/app/cli_options.agc` and the
   hand-off check in `vm/agentica.c`). A new builtin goes into `VM_BUILTINS`
-  with its C implementation. There is no `AGENTICA_VM`: no code reads it, and
-  `AGENTICA_VM_BINARY` is a test knob only (the Python tests run that build of
-  the binary: the GC stress, the vendored link, a sanitizer build).
-  `tests/test_vm_diff_8.py` checks the CLI against the goldens, including that
-  the removed `--vm` and `--legacy-eval` flags are unknown and that
-  `AGENTICA_VM` changes nothing.
+  with its C implementation. `AGENTICA_VM_BINARY` is a test knob only (the
+  Python tests run that build of the binary: the GC stress, the vendored link,
+  a sanitizer build). `tests/test_vm_diff_8.py` checks the CLI against the
+  goldens.
 
 - Each mode compiles `vm/*.c`, `vm/tests/*.c` and the drivers once into
   `$(VM_BUILD)/obj/` with `-MMD -MP` (dependency files beside the objects),
@@ -260,10 +258,9 @@ Under `vm/third_party/`; `git submodule status` shows the pins.
   `references/vm-c.md`. `#ifdef SIGPIPE`, not `#ifdef _WIN32`,
   guards the signal. `_Exit` is C11; mingw-w64 still provides `write`,
   `open`, `read`, `fstat` and `ssize_t` with `-std=c11`, but its `struct
-  stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. A Windows port of
-  the binary would open its input with `_wopen` on the original UTF-16
-  argument, never through `open` (ANSI code page) or a UTF-8 round trip (a
-  lone surrogate would become U+FFFD and name another file).
+  stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. Windows opens
+  files through libuv (`vm/file_io.c`, UTF-16 underneath), never through
+  `open` (ANSI code page).
 - libgc without `NO_EXECUTE_PERMISSION` maps writable and executable pages,
   and macOS on arm64 aborts with `Cannot allocate executable pages` as soon
   as the heap grows (the loader test does). Interior pointers on the stack

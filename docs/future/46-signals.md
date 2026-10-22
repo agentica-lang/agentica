@@ -661,42 +661,23 @@ The tests are hermetic, Linux only, and follow the process-test rule of
 
 ### 46.7 Phases
 
-- **46a: subscription.** The `Signal` enum and its names (46.3.1). The option
-  (A) or (B) of 46.3.1 is decided in this PR. The masks and the handler change
-  in `vm/loop.c`, the stop set grows by USR1, USR2 and QUIT, and the EINTR retry
-  goes in `vm/output.c` (46.3.2). Quit takes the `_exit(131)` path (46.3.3). The
-  fixture `struct Signal` in `tests/fixtures/vm/http-server-close.agc` is
-  renamed, since the reserved name collides with it. Tests: cases 1, 3 without
-  the child, and 6 of 46.6. Docs: a Signals subsection in
-  `docs/grammar/06c-tasks-and-tests.md`, the reserved name in
-  `docs/grammar/04-lexical.md`, the site page, the programming skill, and a
-  `CHANGELOG.md` entry under `## [Unreleased]`, marked `**Breaking:**` since
-  `Signal` becomes a reserved builtin name, noting the USR1, USR2 and QUIT
-  change.
-- **46b: sending.** The builtins `Process.signal`, `Process.spawn_group`,
+- **46a: subscription.** The `Signal` enum and its names (46.3.1); the PR
+  decides between options (A) and (B) of 46.3.1 (option (A) needs a front-end
+  change). The stop set grows by USR1, USR2 and QUIT, writes retry on EINTR
+  (46.3.2), and Quit takes the `_exit(131)` path (46.3.3). **Breaking:**
+  `Signal` becomes a reserved builtin name.
+- **46b: sending.** `Process.signal`, `Process.spawn_group`,
   `Process.signal_group` and `System.signal`, with the pidfd probe and
-  `--deny-run`. The group close and the end-of-run group kill for group
-  children. Tests: cases 2, 4 and 5 of 46.6. Docs:
-  `docs/grammar/06d-io-and-network.md` (Processes), the site Process page, the
-  programming skill's processes reference, `docs/vm/10-io-processes.md` §10.4
-  and a `CHANGELOG.md` entry.
-- **46c: the driver.** Obsolete as written: it forwarded a break at once from
-  the Racket driver to a VM in its own process group (46.8, question 7). Since
-  step 8d-2 an ordinary run is the process of the binary (46.1), so there is no
-  driver to forward. A container runs `agentica` directly.
+  `--deny-run`; the group close and the end-of-run group kill for group
+  children.
+- **46c: the driver.** Obsolete: it forwarded a break from the Racket driver,
+  and since step 8d-2 an ordinary run is the process of the binary (46.1). A
+  container runs `agentica` directly.
 - **46d: graceful HTTP stop.** A drain in `std/http`: stop accepting, and wait
-  for the handlers to finish, up to a deadline. It is a separate change in
-  Agentica code, and it does not need the VM work of 46a or 46b in full. It
-  comes after 46b by the owner's order.
-- **Separate changes, outside §46:** `File.copy` that keeps the mode, and
-  `System.hostname`. Reaping orphans as PID 1 is also separate (46.8, question
-  10).
-
-The compiler catalog (`compiler/catalog/builtins_data.agc`) is edited by hand in
-the same PR as each builtin row, and its golden is refreshed with
-`tools/refreeze.py`. Row 7.2.7 allows the table rows and the `vm-builtins`
-names. The naming choice of 46.3.1 is the case that needs care, since option (A)
-needs a front-end change.
+  for the handlers to finish, up to a deadline. Agentica code, after 46b by the
+  owner's order.
+- **Separate changes, outside §46:** `File.copy` that keeps the mode,
+  `System.hostname`, and reaping orphans as PID 1 (46.8, question 10).
 
 ### 46.8 Open questions
 
@@ -747,12 +728,8 @@ as the recommendation, except question 12.
    reload, and the program decides. **Recommendation:** (b). It costs nothing
    once 46a exists, and the VM reloads nothing.
 
-7. **The driver's 2-second wait.** Options: (a) keep it, and tell containers to
-   run `agentica run` on the compiled file. (b) forward the break at once and
-   drop the second copy that comes from the terminal. This is fragile. (c) start
-   the VM in its own process group and forward the signal once.
-   **Recommendation:** (a) now, and (c) in 46c, after a test with terminal
-   input. Moot since step 8d-2: there is no Racket driver (46.7, 46c).
+7. **The driver's 2-second wait.** Moot since step 8d-2: there is no Racket
+   driver (46.7, 46c).
 
 8. **The pid API shape.** Options: (a) `System.signal(pid, sig, comm)` with a
    pidfd and the name check. (b) `System.signal(pid, sig)` with no check, and a
@@ -794,13 +771,10 @@ as the recommendation, except question 12.
 
 ### 46.9 Implementation (row 7.8)
 
-One PR per item, each with its own tests and docs. 46a subscription and 46b
-sending are VM C code and may run earlier, when no other VM PR is waiting; 46d
-(`std/http` drain) comes after 46b. Docs: the grammar (tasks, Processes,
-reserved names), the site Process and Test pages, the programming skill,
-`docs/vm/10-io-processes.md` §10.4, and CHANGELOG entries (46a breaking).
+One PR per item. 46a and 46b are VM C code and may run earlier, when no other
+VM PR is waiting; 46d comes after 46b.
 
 Done when: a program handles TERM, INT, HUP, USR1 and USR2 and stops its
 children before it exits, with QUIT as the force path; it sends signals to its
 own children and to a pid it did not start; `std/http` drains its handlers on a
-stop; and the tests of §46.6 pass.
+stop; and the behaviors of §46.6 hold.

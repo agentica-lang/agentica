@@ -40,73 +40,47 @@ phase 13).
 
 ## Commands
 
-- `poetry install --only test --no-root`: install the pytest test environment.
-- `make`: build `dist/agentica` (`git submodule update --init` first). On Linux
-  it uses system libgc and OpenSSL by default (checked with `pkg-config`). Use
-  `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored` to link the vendored
-  versions of those two libraries statically (not a fully static binary). The
-  build links a first binary with `bootstrap/stage0.agcb`, compiles the front
-  end three times and links the final binary. `make fixed-point` checks it once
-  more. `make vm-test`: the C tests. `make test-cli`: the command line tests on
-  the binary. `make stage0` refreshes `bootstrap/stage0.agcb` (see
-  `references/ci.md` of the development skill).
+- `poetry install --only test --no-root`: the pytest environment.
+- `make`: build `dist/agentica` (`git submodule update --init` first). Linux
+  uses system libgc and OpenSSL (`pkg-config`);
+  `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored` links the vendored
+  ones statically. The build links a first binary with
+  `bootstrap/stage0.agcb`, compiles the front end three times and links the
+  final binary. `make fixed-point` checks it once more; `make stage0`
+  refreshes the seed (`references/ci.md` of the development skill).
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: a
   subset. `make test` alone runs everything (`JOBS=8` sets the workers).
+- `make vm-test`: the C tests. `make test-cli`: the command line tests.
+  `make smoke`; `make site` before merging a site change.
 - `dist/agentica file.agc` runs a program; `... check file.agc` checks;
   `dist/agentica run -- file.agcb` runs compiled bytecode.
-- `make test-slow`: the `@slow` cases; CI only.
-- `make tests KIND=fast|files|slow|all` selects a whole group: `files` holds
-  the destructive filesystem cases, which run only in the local Docker sandbox
-  (`DOCKER=1` puts any group there, `WINE=1` runs its Windows checks under
-  Wine) and in the scratch of an ephemeral CI runner. Encapsulation and the
-  Actions route: `references/ci.md` of the development skill.
+- `make test-slow`: the `@slow` cases (sets `AGENTICA_TEST_SLOW=1`); CI only.
 - `make vm-tsan`: the C tests of the code that threads share under
-  ThreadSanitizer, in a build without libgc; CI runs it in the sanitizer job.
-- `make test-shared`: the binary test modules (`VM_PY_TESTS`) with
-  `AGENTICA_VM_TEST_SHARED=1`, so every lock and held check of the shared state
-  is on at one scheduler; CI runs it after `make test`.
-- `make smoke`, `make site` (before merging a site change).
-- `make goldens` rewrites the VM goldens, the CLI output golden
-  (`tests/fixtures/cli/forms.json`) and the fast-tier front-end goldens; commit
-  them. The slow-tier manifests of `tests/fixtures/frontend/frozen/` need the
-  full `python3 tools/refreeze.py`.
-- CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are make
-  targets, so they run locally the same way.
+  ThreadSanitizer, in a build without libgc. `make test-shared`: the binary
+  test modules with every lock and held check of the shared state on. Run
+  both when you change shared-state C code; CI runs them too.
+- `make tests KIND=files` (the destructive filesystem cases) runs only in the
+  Docker sandbox or an ephemeral CI runner, never on the host
+  (`references/ci.md` of the development skill).
+- `make goldens` rewrites the VM goldens, `tests/fixtures/cli/forms.json` and
+  the fast-tier front-end goldens; commit them. The slow-tier manifests of
+  `tests/fixtures/frontend/frozen/` need the full `python3 tools/refreeze.py`.
+- The CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are
+  make targets, so they run locally the same way.
 
 ## Where to read
 
-- **Task:** any change to compiler/, vm/, tests/, CI
-  - **Read:** `.agents/skills/agentica-development/SKILL.md`, then only the
-    references it names
-
-- **Task:** a C VM PR review
-  - **Read:** `.agents/skills/vm-c-critic/`
-
-- **Task:** taking a PR from branch to merge (reviews, fixes, CI, merge)
-  - **Read:** `.agents/skills/agentica-dev-workflow/`
-
-- **Task:** cutting a release or beta (version bump, tag, notes, Pages)
-  - **Read:** `.agents/skills/agentica-release/`
-
-- **Task:** writing or updating docs, a site page, a skill, a CHANGELOG
-  entry, a doc comment or a PR body
-  - **Read:** `.agents/skills/documentation-writing/`
-
-- **Task:** language rules
-  - **Read:** `docs/grammar/`
-
-- **Task:** writing `.agc` programs
-  - **Read:** `.agents/skills/agentica-programming/`
-
-- **Task:** writing or reviewing `.agc` style
-  - **Read:** `.agents/skills/agentica-code-guidelines/`
-    (`site/content/style.md` is its page for people)
-
-- **Task:** `site/` or `benchmarks/`
-  - **Read:** `.agents/skills/agentica-development/SKILL.md`
-
-- **Task:** what is planned or done
-  - **Read:** `docs/roadmap/README.md`
+| Task | Read |
+|---|---|
+| any change to compiler/, vm/, tests/, CI, `site/` or `benchmarks/` | `.agents/skills/agentica-development/SKILL.md`, then only the references it names |
+| a C VM PR review | `.agents/skills/vm-c-critic/` |
+| a PR from branch to merge (reviews, fixes, CI, merge) | `.agents/skills/agentica-dev-workflow/` |
+| a release or beta (version bump, tag, notes, Pages) | `.agents/skills/agentica-release/` |
+| docs, a site page, a skill, a CHANGELOG entry, a doc comment or a PR body | `.agents/skills/documentation-writing/` |
+| language rules | `docs/grammar/` |
+| writing `.agc` programs | `.agents/skills/agentica-programming/` |
+| writing or reviewing `.agc` style | `.agents/skills/agentica-code-guidelines/` (`site/content/style.md` is its page for people) |
+| what is planned or done | `docs/roadmap/README.md` |
 
 ## Rules
 
@@ -145,44 +119,37 @@ phase 13).
   phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Python tests run with pytest (a test-only Poetry dependency) and live in
-  `tests/test_<area>.py`; `make test` runs each module in its own pytest
-  process, `JOBS` at a time. `unittest.TestCase` modules (deriving from
-  `tests.agentica_test.TestCase`) stay supported and are collected by pytest.
-  Node and Python test peers (curl included) use the standard library only.
-  The VM's C dependencies are the submodules in `vm/third_party`; the only
-  other dev-tool dependencies are the pinned jscpd in `tools/jscpd` and the
-  site highlighter in `site/highlight` (vscode-textmate and
-  vscode-oniguruma).
+- Python tests use pytest (a test-only Poetry dependency) and live in
+  `tests/test_<area>.py`; `make test` runs each module in its own process.
+  `unittest.TestCase` modules (from `tests.agentica_test.TestCase`) are
+  collected too. Node and Python peers (curl included) use the standard
+  library only. Dependencies: the C submodules in `vm/third_party`, the
+  pinned jscpd in `tools/jscpd` and the site highlighter in `site/highlight`;
+  nothing else.
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external
   services, everything cleaned up. TCP/HTTP interop uses an independent
   protocol implementation as the peer. Fixtures go in `tests/fixtures/`.
-  CI installs the tools and fails if one is missing; local runs may report a
-  skip.
+  CI installs the tools and fails if one is missing; local runs may skip.
 - Two test tiers: fast is the default; slow cases (frozen corpus, generated
-  inputs, stress) use `@slow` on unittest classes or `pytest.mark.slow` on
-  pytest functions. `make test-slow` sets `AGENTICA_TEST_SLOW=1`; CI runs it,
-  while local runs use only fast tests (`make test TESTS=...`). Sanitizers,
-  gc-stress, fuzz, smoke and full sweeps are slow by nature.
+  inputs, stress) use `@slow` (unittest) or `pytest.mark.slow` and run only
+  in CI. Sanitizers, gc-stress, fuzz and full sweeps are slow by nature.
 - When a phase item is done, tick it in the roadmap and update the
   development skill.
 - When the language or a builtin changes, update `docs/grammar/`, the site
   page and the programming skill together. Keep
-  `.agents/skills/agentica-programming/SKILL.md` as short as possible: a table
-  of references with a one-line summary each, plus only what nearly every task
-  needs. Core language rules go in the `references/language-*.md` files; library
-  detail goes in its `references/<area>.md` plus its row in the table. The skill
-  is self-contained and does not read the grammar.
+  `.agents/skills/agentica-programming/SKILL.md` as short as possible (the
+  table of references and what nearly every task needs): language rules go in
+  its `references/language-*.md`, library detail in `references/<area>.md`.
+  The skill is self-contained and does not read the grammar.
 - A user-visible change adds an entry under `## [Unreleased]` in
   `CHANGELOG.md`: one short line per change, for users (details belong in the
   PR and docs); mark a breaking change `**Breaking:**`.
-- Do not create new files under `docs/` (the Markdown tree outside Hugo's
-  `site/content/`) unless the user asks for them or suggests one and accepts
-  it. Record progress and evidence in the PR, the roadmap checklist or the
-  CHANGELOG instead. Existing files are updated in place. Change docs only
-  when strictly necessary (`.agents/skills/documentation-writing/`).
+- Do not create new files under `docs/` (outside Hugo's `site/content/`)
+  unless the user asks for one or accepts your suggestion. Progress and
+  evidence go in the PR, the roadmap checklist or the CHANGELOG. Change docs
+  only when strictly necessary (`.agents/skills/documentation-writing/`).
 - Prose wrapping: `site/content/` keeps one line per paragraph or list item.
   Markdown prose in `docs/` and `.agents/skills/` wraps at 80 characters;
   code blocks keep their line breaks.

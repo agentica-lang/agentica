@@ -360,11 +360,10 @@ programming skill state these differences next to the literal.
 
 ### 48.8 Tests
 
-- **Goldens** in `tests/fixtures/vm/regex-*.agc` (`make goldens`): the syntax of
-  48.4, leftmost-first alternation, the zero-length rules, templates, `split`,
-  the limits and the round trip of `escape`, with hand-checked expected output
-  (`docs/vm/README.md` §1).
-- **Python peer** in `tests/test_regex.py` (standard library only). The peer
+- **Goldens:** the syntax of 48.4, leftmost-first alternation, the zero-length
+  rules, templates, `split`, the limits and the round trip of `escape`, with
+  hand-checked expected output (`docs/vm/README.md` §1).
+- **Python peer** (standard library only). The peer
   runs each pattern through `re` with `re.ASCII`, after two mechanical
   translations: `\z` to `\Z` and `(?<name>` to `(?P<name>`. Patterns that Python
   still rejects, such as mid-pattern flags and `\x{...}`, are not compared; the
@@ -388,22 +387,15 @@ programming skill state these differences next to the literal.
 
 ### 48.9 Phases
 
-Each item has its own PR, with its own tests and docs, as phase 27 does.
-
 - **48a: `std/regex` in Agentica.** The parser, compiler and Pike VM; `compile`,
   `match`, `match?`, `find_all`, `replace`, `split`, `escape` and `named`; the
-  limits; goldens, peer, ReDoS test and benchmark. Docs: the site page
-  `site/content/library/text-and-data/regex.md`, the programming skill (the "no
-  regex" line of `SKILL.md`, a `references/regex.md` and its row), and a
-  `CHANGELOG.md` entry under `[Unreleased]`. The page carries the warning of
-  48.5 about `"#{name}"` and `"${name}"`.
+  limits; goldens, peer, ReDoS test and benchmark. The site page carries the
+  warning of 48.5 about `"#{name}"` and `"${name}"`.
 - **48b: the regex literal (48.6).** The lexer rule, the scanners, the node,
   `CHECK-INVALID-REGEX`, `CHECK-REGEX-IMPORT` and the lowering. `compiler/`
-  only, after 48a. Tests: lexer goldens for each case of 48.6, a golden for each
-  code with its span, and a check that a literal equals `Regex.compile` of its
-  body and mapped flags. Docs: `docs/grammar/04-lexical.md`, `06-semantics.md`,
-  `07-diagnostics.md`, and the programming skill, which shows the literal as the
-  normal form with the Ruby differences.
+  only, after 48a. A test checks that a literal equals `Regex.compile` of its
+  body and mapped flags. The programming skill shows the literal as the normal
+  form, with the Ruby differences.
 - **48c: C matcher, if measured.** A stepper with the same API and one STEP per
   resume (48.3). The PR records the numbers and the threshold.
 - **48d: Unicode classes and case folding.** `\p{L}`, `\pN`, scripts, and `(?i)`

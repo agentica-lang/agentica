@@ -430,68 +430,24 @@ roadmap's "Designed, not scheduled" paragraph says where the types wait.
 
 ### 41.14 Docs of the implementation PR
 
-- Grammar: `docs/grammar/04-lexical.md` (reserved builtin names),
-  `docs/grammar/06b-builtins.md` (the records, the `Time` functions, the
-  construction rule and the JSON lines of 41.18),
-  `docs/grammar/07-diagnostics.md` (the new code), and the logging section of
-  `docs/grammar/06d-io-and-network.md` with the logger site page (log time with
-  six fraction digits, 41.11).
-- Programming skill: a new `references/dates.md` with its row in the "When to
-  read a reference" table, and the `Time` lines of `references/builtins.md`.
-- Site: a new `dates-and-times.md` page with runnable examples.
-- `CHANGELOG.md` under `## [Unreleased]`: the new functions, and **Breaking:**
-  for the reserved names.
-
-When the feature lands, its text moves to the grammar and the site, and §41 is
-deleted from `docs/future/`, following the working rule of
-`docs/future/README.md`.
+The grammar, the programming skill (a `references/dates.md`), a site page and a
+**Breaking:** CHANGELOG entry for the reserved names. When the feature lands,
+§41 leaves `docs/future/` (`docs/future/README.md`).
 
 ### 41.15 Tests
 
-The independent counterpart is a Python generator (standard library only,
-`datetime` and `timedelta`, fixed seed) that writes the input of a golden
-fixture, as in the binary work. The vectors:
-
-- Civil and Unix: the epoch; -1 us and -86400000001 us (before 1970); the bounds
-  of years 1 and 9999 (41.8); leap days 2000-02-29 and 2400-02-29, and the
-  invalid 1900-02-29 and 2100-02-29; every month end of years 1, 4, 100, 400,
-  1900, 2000, 2026 and 9999; every day of 1899 to 1901 and of 9998 to 9999.
-- Across the epoch: `add_us(from_unix_us(-1), 1)` is
-  1970-01-01T00:00:00.000000Z, and `add_us(from_unix_us(0), -1)` is
-  1969-12-31T23:59:59.999999Z. These check the floor division of 41.9 on
-  negative microseconds.
-- Offsets: -1439, -720, 0, 840 (+14:00) and 1439 minutes, each with a reading,
-  both ways. The two edge readings of 41.8 with offsets: 0001-01-01T00:00:00 at
-  +1439 and 9999-12-31T23:59:59.999999 at -1439. Their UTC readings are out of
-  range, so `with_offset(dt, 0)` is an error for each.
-- Fractions: `.000000`, `.999999`, `.000001`, and seven and nine digits
-  (truncated to microseconds: `.1234567` gives 123456).
-- Text: `format` and `parse` with `Z`, `+02:00`, and lowercase `t` and `z`;
-  `format_time` and `parse_time` for 00:00:00.000000 and 23:59:59.999999.
-- Calendar queries for the same dates, and `add_days`, `days_between`,
-  `compare_date` and `compare_time` for seeded random pairs.
-
-Round trips: `parse(format(dt))` gives back `dt` for every vector without extra
-fraction digits; `from_unix_us(to_unix_us(dt))` equals `with_offset(dt, 0)` when
-that is ok, and is an error exactly when it is; `parse_naive(format_naive(n))`
-gives back `n`; `parse_time(format_time(t))` gives back `t`;
-`add_days(a, days_between(a, b))` gives `b`. For seeded random `DateTime` pairs,
-`add_us(a, us_between(a, b))` has the instant of `b` (`compare` gives 0) when it
-is ok, and is an error exactly when its reading at the offset of `a` is outside
-years 1 to 9999. Records have no `==` (41.2), so the checks use `compare`. The
-naive form, `add_us_naive(a, us_between_naive(a, b))`, gives back `b`.
-
-Errors: a golden prints the message of every error for fixed bad inputs (each
-range check of 41.3, second 60, an out-of-range `from_unix` and `from_unix_us`,
-every parse error of 41.6, and results that leave the range) and the accepted
-bounds 0001-01-01 and 9999-12-31.
-
-Checker (goldens of the Agentica front end against `agentica check --json`,
-each asserting the code and the span): a user `struct Date` gives
-`CHECK-REDEFINED-NAME`; `Date(...)` and `TimeOfDay(...)` give
-`CHECK-NOT-CONSTRUCTIBLE`; `Time.compare` with a naive and an aware argument
-gives `CHECK-TYPE-MISMATCH`; and an `enum` with variants `Date` and `DateTime`
-checks ok (41.2).
+The independent peer is a Python generator (standard library only, `datetime`
+and `timedelta`, fixed seed) that writes the input of a golden fixture. The
+vectors cover the epoch and the microseconds before it (the floor division of
+41.9), the bounds of years 1 and 9999 at the extreme offsets (41.8), leap and
+non-leap century days, every month end of a few edge years, offsets from -1439
+to 1439 minutes, fractions of six, seven and nine digits (truncated to
+microseconds), and the `Z`, `+02:00` and lowercase forms. Round trips: `parse`
+of `format`, `from_unix_us` of `to_unix_us`, the naive and time forms, and
+`add_days` of `days_between`; records have no `==` (41.2), so checks use
+`compare`. Every error message of 41.3 and 41.6 has a golden, and the checker
+codes (`CHECK-REDEFINED-NAME`, `CHECK-NOT-CONSTRUCTIBLE`, `CHECK-TYPE-MISMATCH`
+for a naive and an aware argument) are asserted with their spans.
 
 ### 41.16 Later
 

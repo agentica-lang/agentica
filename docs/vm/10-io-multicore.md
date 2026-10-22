@@ -12,8 +12,7 @@ that still apply.
   does not imply one scheduler; at N>1 only per-task random values repeat
   (7.4). The thread split and shared queue are in §16.2–16.3.
 - **Run queue and idle schedulers.** FIFO order, push/pop and condvar rules are
-  specified in §16.3. Requeueing a preempted task does not change the packed
-  Stall-check word: it remains live.
+  specified in §16.3.
 - **Waking.** State/results are published before enqueueing (§16.3–16.4):
   the I/O thread on job completion, or a scheduler after await/lock completion
   or cancellation. Release/acquire ordering or the per-task lock makes results
@@ -50,64 +49,30 @@ that still apply.
     WOKEN, when the wait turns out to be unneeded. `agc_task_park` only says
     that the turn ends in a wait.
   - A waker CASes PARKED to READY, not to WOKEN, and pushes: READY means "in the
-    run queue", and the scheduler sets READY to RUNNING when it pops the task.
-    On PARKING it CASes to WOKEN and queues nothing.
-  - The end of the turn is in the scheduler (`agc_task_end_turn`). It traces,
-    reads the cancel flag (an atomic) and ends a cancelled task first. Then it
-    does the CAS from PARKING to PARKED (`agc_task_commit_park`): from then on a
-    waker may queue the task and another scheduler may run it. The one thing it
-    does after that is read the cancel flag again (a cancel can fall between the
-    first read and the CAS) and claim the task by a CAS from PARKED to READY, to
-    end it. A CAS that finds WOKEN queues the task, so the turn yields.
+    run queue". The end of the turn (`agc_task_end_turn`,
+    `agc_task_commit_park`) is in §16.9, "Atomic task states".
   - A yield after WOKEN does not skip anything the waker prepared. A task that
     parked on a job has `parked` set, and `resume` takes the job's result and
     writes it to `park_reg` when the task runs again, whichever way it got
     there; a retry park (`agc_task_park(vm, true)`) runs the builtin again. So
     for a park that does not retry (the job path) the waker never writes the
     register, and WOKEN needs only the yield.
-  - A job's task is recorded before the job is started: `start_job` sets the
-    resource's `task` and the task's `parked` before it posts the start request
-    (§16.4), so a completion that follows at once finds the task. The outcome
-    of the job (§16.5, rule 3) is an atomic that the first writer sets by CAS;
-    the resumed task reads it in `agc_io_finish`, and a task that resumes with
-    it still pending (woken by a lock hand-on or an awaited task) sets
-    EXPIRED itself. The job is freed by its reference count (§16.9).
   - The re-check of the wait condition after the registration belongs to each
     builtin; with one thread it cannot change between the check and the
     registration. Waiter lists and FIFOs that more than one thread touches get
     their locks with those threads (§16.11).
-- **Channel lock (17b).** Each channel has a short lock. `send`, `recv`,
-  `close`, a wake, a hand-on and a cancelled waiter that leaves its FIFO take
-  it, and it is never held across a park. Ring growth copies the slots under the
-  lock: an accepted exception, bounded by the capacity and charged as turn cost.
-  The lock orders the write of a value before its read on another scheduler. As
-  built, the waiter's deadline is a timer of the task (§16.9, "Timers"),
-  not a job: a wake or a hand-on and the fire of the timer are two wakers, the
-  state CAS lets one win, and both run under `rt->sync`, so the retry of the
-  woken waiter sees either its reservation or the passed deadline, and a value
-  or slot it does not take is passed to the next waiter, so nothing is lost.
-  With N=1 the lock is not needed, and the VM does not take one. Each task also
-  writes its `awaiting` field before it parks, under the target's lock (Park and
-  wake protocol), so two tasks that close a cycle at the same time cannot both
-  miss it: the second to take the lock sees the first's field.
-- **Task.map group lock (17a, planned for N>1; not built).** Each `Task.map`
-  group will have a small lock for its running list, its ended list and its
-  counters. The step function on the caller's scheduler and the end hook of an
-  item, which `finish_task` calls on the item's scheduler, will take it; it is
-  never held across a park or a cancel (`agc_task_cancel` takes the locks of the
-  tasks it reaches, so the step function copies the item it expires out of the
-  list, drops the lock and then cancels). The hook adds the item to the ended
-  list under the lock and wakes the caller (a hint, as everywhere). The caller
-  alone writes a result slot, from the ended list or when it expires an item, so
-  each slot is written once, by whichever of the item's end and its deadline the
-  caller sees first; an item that ends after it timed out finds itself off the
-  running list and does nothing. With a cancelled caller the hook sees the
-  cancel flag of the item and does not wake the caller. An item that still has a
-  file close pending is not settled; the hook puts itself back on the task and
-  runs again from `agc_task_close_done`, on the scheduler that finishes the
-  close (unless the item timed out meanwhile, when it is already settled and the
-  hook does nothing). With N=1 the lock is not needed, and the VM does not take
-  one (as built).
+- **Channels (17b).** A channel's waiter lists change under `rt->sync`, the one
+  coarse lock (§16.9), never held across a park. Ring growth copies the slots
+  under the lock: an accepted exception, bounded by the capacity and charged as
+  turn cost. The lock orders the write of a value before its read on another
+  scheduler. The waiter's deadline is a timer of the task (§16.9, "Timers"): a
+  wake or a hand-on and the fire of the timer are two wakers, the state CAS lets
+  one win, so the retry of the woken waiter sees either its reservation or the
+  passed deadline, and a value or slot it does not take is passed to the next
+  waiter, so nothing is lost. Each task also writes its `awaiting` field before
+  it parks, under the lock (Park and wake protocol), so two tasks that close a
+  cycle at the same time cannot both miss it: the second to take the lock sees
+  the first's field.
 - **State split.** As built (`vm/port.h`): `agc_runtime` (shared),
   `struct agc_vm` (the scheduler: the context every builtin gets, with `rt`, the
   current `task`, the turn counters and the `fail` jmp_buf), and `agc_task`.
@@ -177,19 +142,8 @@ that still apply.
   handles" check of 10.2.1 still holds. As built, `agc_io_share` makes the
   inbox (`vm/inbox.c`) and gives the loop to the thread that calls it; until it
   runs, every request executes on the thread that posts it.
-- **Stall check.** For N>1 it uses only atomic counters, never `uv_run`'s return
-  value. One 64-bit atomic word packs the idle scheduler count and the live
-  count (jobs and timers started on the loop or the pool, requests in the inbox,
-  wakes not yet taken, and ready tasks in the run queue), so the check reads one
-  snapshot. The inbox's `uv_async_t` is not counted. A pending request or wake
-  counts as live: the sender increments before it pushes, and the receiver
-  decrements when it takes the item. Every hand-on of liveness increments the
-  new item before it decrements the old one, or does both in one CAS on the
-  word. A scheduler leaves idle before it pops a task. The check runs on every
-  change that makes idle == N and live == 0. The thread that makes that change,
-  if tasks are still parked, fails the run with `RUNTIME-INTERNAL` and wakes the
-  other schedulers (10.2.1, Stall check). As built the check is not this word:
-  the I/O thread runs it when it has nothing to do (§16.9, "Stall").
+- **Stall check.** At N>1 the I/O thread runs it when it has nothing to do
+  (§16.9, "Stall"); it never uses `uv_run`'s return value.
 - **Shutdown.** `end_run` runs on the I/O thread; it does not close each handle
   or free the loop (§14.4; §10.2.2, "End of run").
 - **GC.** Boehm is built with `GC_THREADS`, `PARALLEL_MARK` and

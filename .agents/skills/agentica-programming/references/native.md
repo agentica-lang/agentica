@@ -31,8 +31,8 @@ end
   absolute path. `DYLD_*` variables do not pass through a shebang or a shell
   (SIP drops them).
 - A `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a
-  `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""`: when
-  NULL matters, declare `-> C.Pointer` and use `Native.string_at`.
+  `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
+  `""`: when NULL matters, declare `-> C.Pointer` and use `Native.string_at`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as
   `<C.Pointer>`. `C.Bytes` is a parameter only: a `List[Int]` of bytes (an

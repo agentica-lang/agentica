@@ -320,29 +320,14 @@ existing context.
 
 ### 29.8 Tests and docs
 
-**Tests** (VM only):
-
-- Golden fixtures with the test CA of `tests/fixtures/tls/`: a server and a
-  client context, a TLS echo (listener and client in two tasks), one context
-  shared by three concurrent connections, `TLS.upgrade` on both sides, and the
-  creation errors (a missing file, a key that does not match, an empty
-  `cert_file`) as `error` results. `RUNTIME-TLS-CONTEXT-ROLE` for a server
-  context in `TLS.connect`, a client context in `TLS.listen`, and a non-empty
-  `host` in a server-side `TLS.upgrade`, each at its argument span.
-- Independent Python `ssl` peers on port 0 in `tests/test_vm_tls.py`: a wrong
-  hostname, a self-signed server without `ca_file`, a `ca_file` that excludes
-  system roots (the cases of §10.3), STARTTLS in both directions; a `ca_file`
-  replaced on disk after the context is built does not change that context.
-- A C test that a context dropped while a socket made from it is open stays
-  valid until the socket closes, and that the finalizer runs only from
-  `GC_invoke_finalizers` (under the GC stress build).
-- Checker tests for the hints of 29.5 (codes and spans).
-
-**Docs:** the grammar (the context API, the records, reserved names, the §7
-hints), the programming skill (build one context at start-up and share it;
-`RUNTIME-TLS-CONTEXT-ROLE`), the site network page (runnable examples in
-`mode="check"`, since they touch the network), `docs/vm/10-io-tls.md` §10.3, and
-`docs/vm/05-values-execution-builtins.md` §5.3.
+VM only: golden fixtures with the test CA of `tests/fixtures/tls/`, independent
+Python `ssl` peers on port 0 (the hostname and CA cases of §10.3 and STARTTLS
+both ways), and checker tests for the hints of 29.5. Two behaviors need their
+own test: a `ca_file` replaced on disk after the context is built does not
+change that context, and a context dropped while a socket made from it is open
+stays valid until the socket closes (its finalizer runs only from
+`GC_invoke_finalizers`, under the GC stress build). The programming skill
+teaches: build one context at start-up and share it.
 
 ### 29.9 Implementation (row 7.4)
 

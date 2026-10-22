@@ -4,10 +4,9 @@
 cache imports of 45a, the fetch and `install` of 45b, `add`, `update` and the
 writers of 45c, and the `deps/` folder of #578) are specified in
 [`05b-modules.md`](../grammar/05b-modules.md), the contract. This file keeps
-the decisions. It is item 3 of the list after 0.8.0 in the
-[roadmap](../roadmap/README.md): after the FFI core (issue
-[#534](https://github.com/sonic182/agentica/issues/534)) and before the native
-packages (FFI-b), which are the only part left.
+the decisions. Only the native packages (FFI-b, issue
+[#534](https://github.com/sonic182/agentica/issues/534)) are left; they are
+planned for 0.10.
 
 Decided by the owner:
 
@@ -91,140 +90,46 @@ machine's git config.
 
 ### 45.8 Fetching and the cache
 
-**Built (45b):** the cache layout, the stored names, the hash rule and the
-fetch of `install` are in 05b. What 45b does, and what 45c adds on it:
+**Built (45b).** The cache layout, the fetch, the limits and the codes are in
+[05b](../grammar/05b-modules.md), Packages. The reasons behind the choices:
 
 - Git runs as the system `git`, so the user's git config, SSH keys and
-  credential helpers apply. The tool has no HTTP client and keeps no tokens. The
-  `git` value is fetched as written; a `url.<base>.insteadOf` setting can send
-  it to SSH, and the lock still keeps the value as written (45.6).
-- The fetch is a depth-1 fetch of the tag `refs/tags/<tag>` (or of the commit,
-  for a `ref`) into a bare temporary repository. No working tree is made, so no
-  checkout hook runs. The peeled commit must equal the lock's `commit`.
-- The files are read from that commit's tree with `git ls-tree` and
-  `git cat-file`, so `.gitattributes` does not change the bytes.
-- The package's `agentica.toml` is read from the commit tree. Only its `.agc`
-  files and that manifest are copied. `install` checks the copied manifests as
-  a build does (a name the lock lacks is `PKG-LOCK-STALE`, another source is
-  `PKG-SOURCE-CONFLICT`). `add` and `update` read the same manifests and add the
-  names the lock lacks to the lock they write (45.9).
-- Two copied `.agc` paths that differ only in case are `PKG-PATH-COLLISION`, so
-  the package works on case-insensitive file systems. Only case is folded: not
-  Unicode normalisation (macOS) or Windows device names; the lock hash still
-  catches whatever such a file system makes of them.
-- A copied file is at most 1 MiB and all of them 16 MiB, else `PKG-FETCH` names
-  the file and the limit: the VM keeps 1 MiB of a child's unread output, and
-  the files are held in memory.
-- git inherits the environment and may ask for a password on a terminal; each
-  read of its output has a 5 minute deadline. Git runs in the temporary folder,
-  never in the working folder. A killed install can leave a hidden `.tmp-*`
-  folder in the cache root, which is safe to delete.
-- A symbolic link or gitlink among the copied files is `PKG-SYMLINK`.
-- The fill goes into a temporary folder that is renamed into place. If the
-  target exists, its hash is checked: a match is a success, and a mismatch is
-  `PKG-HASH-MISMATCH`, with nothing overwritten. Not built: the folder is not
-  made read-only after the fill (there is no `chmod` builtin); every build
-  hashes what it loads instead (question 7).
+  credential helpers apply; the tool has no HTTP client and keeps no tokens.
+- The fetch goes into a bare temporary repository with no working tree, so no
+  checkout hook runs, and the files are read from the commit's tree
+  (`git ls-tree`, `git cat-file`), so `.gitattributes` does not change the
+  bytes.
+- Only case is folded for `PKG-PATH-COLLISION`, not Unicode normalisation or
+  Windows device names; the lock hash catches whatever a file system makes of
+  them.
+- The cache folder is not made read-only (there is no `chmod` builtin); every
+  build hashes what it loads instead (45.14, question 7).
 - Only `add`, `install` and `update` run git. A build never fetches.
 
 ### 45.9 Commands and errors
 
-`install` (45b), `add` and `update` (45c) are built. The exact command line is
-decided in each phase.
+**Built.** `install` (45b), `add` and `update` (45c) and `deps/` (#578, 45d):
+the command lines, the files they write and the `PKG-` codes are in
+[05b](../grammar/05b-modules.md) and the programming skill. Decided:
 
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole 40-digit id;
-  `--subdir DIR` for a folder of the repository, #573) adds the dependency to
-  `agentica.toml`, rewrites the lock and fills the cache. **Built (45c).** The
-  local name is always an argument (the package's own `name` is not read), and
-  the options come last, in that order. Decided:
-  - It adds one line to the manifest and changes no other byte, so comments,
-    blank lines, key order and line endings stay. The line goes after the last
-    entry of `[dependencies]`, or in a new `[dependencies]` table at the end
-    of the file. The new text is read back as a manifest before anything is
-    saved; a layout that the edit cannot handle (`dependencies = {}` inline, or
-    dotted keys) is `PKG-MANIFEST-EDIT` and the user writes the line.
-  - The lock lists every package of the build, so `add` fetches the new
-    package and the dependencies in its manifest, and follows theirs. A
-    locked package with the same source is kept (no git when it is cached); a
-    name the lock lacks, or has with another source, is fetched. Two sources for
-    one name are `PKG-SOURCE-CONFLICT`, at the manifest that asked second.
-  - A name that the manifest has is `PKG-DEPENDENCY-EXISTS`: a pin changes by
-    editing the manifest and `update NAME`. No manifest is
-    `PKG-MANIFEST-MISSING`; `add` does not make one.
-  - Nothing is written unless everything worked. The lock is written first
-    (a lock with a spare package is good, a manifest the lock lacks is
-    `PKG-LOCK-STALE`), then the manifest. A write that fails is `PKG-WRITE`; a
-    file is written beside the old one and renamed into place, and a manifest
-    that changed during the fetch is refused (`PKG-WRITE`). If only the
-    manifest write fails, `agentica update` repairs the lock.
-  - A name, URL, tag or commit that the manifest would refuse, and a wrong
-    number of words, are usage errors (exit 2). A `--ref` that is a part of the
-    id is refused: `git fetch` takes whole ids only. Tags are fetched from
-    SHA-1 repositories; a SHA-256 repository works through a `--ref` only.
-- `agentica install` (built, 45b) fills the cache from the lock, writes
-  `deps/` (below) and never changes the lock. A manifest that asks for more
-  than the lock holds fails with `PKG-LOCK-STALE`. It takes no argument and
-  works on the project of the working folder; with `--json` a success prints
-  `{"ok":true}`, else one line for each package (`fetched NAME@VERSION` or `in
-  the cache NAME@VERSION`). A project with no manifest is
-  `PKG-MANIFEST-MISSING`. A cache that is already full needs no `git` and no
-  network.
-- `agentica update [NAME]` re-resolves one package, or all of them, from the
-  manifest pins, and rewrites the lock. **Built (45c).** Decided:
-  - With no name it fetches every tag pin again; with a name (a dependency of
-    the manifest, else `PKG-DEPENDENCY-UNKNOWN`) only that one. A moved tag is
-    the new commit in the lock, which is what `PKG-TAG-MOVED` of `install`
-    asks for. A `ref` never moves, so a package pinned by a commit is not
-    fetched again.
-  - The result is every package of the build and no other, so a package that
-    nothing asks for any more is dropped, and a lock that is missing or stale
-    because the manifest was edited by hand is made right. A project with no
-    dependency and no lock gets no lock.
-  - The lock is the same bytes when nothing moved. The answer lists the
-    `added`, `updated` and `removed` packages, or says `nothing to update`.
-- `deps/` (issue #578). The folders are Elixir-style: the packages of a
-  project are in `deps/` beside `agentica.toml`, the compiled programs in
-  `_build/`. The global cache is only a download cache, so a commit is never
-  fetched twice. **Built.** Decided:
-  - `install` writes each locked package, direct or not, flat into
-    `deps/<name>/` (like `mix deps.get`); with a `subdir`, only that folder.
-    `add` and `update` write it too, after the lock, and remove the folder of a
-    package that the old lock had and the new one lacks. `install` removes
-    nothing.
-  - A build reads `pkg/<name>` only from `deps/<name>/`. A declared name that is
-    not there is `CHECK-IMPORT-PACKAGE`, with a help that says to run `agentica
-    install`. Every build still hashes each package it loads against the lock,
-    so an edited `deps/` is `PKG-HASH-MISMATCH`. A declared name never reaches
-    the `pkg/` search, because a `pkg/` import would load an unhashed copy.
-  - The copy is made from the hashed cache folder, never from git. The folder of
-    a locked package is the tool's to replace: a link of that name, or a folder
-    whose `.agc` files differ from the lock (an edited, added or missing file),
-    is replaced by the locked files when `install` runs again. The new folder is
-    built in a hidden folder of `deps/`, hashed, and swapped in with two
-    renames.
-  - Other entries of `deps/` stay. A dropped package is moved aside and removed
-    without following links.
-  - `deps/` must be a real folder, never a link, and nothing is written through
-    a link (`PKG-SYMLINK`). A write that fails is `PKG-WRITE`.
-  - The new folder is made with the ordinary mode; only its private staging
-    parent is 0700. A killed command can leave `.tmp-*` or `.old-*` entries in
-    `deps/`; the next command removes the ones older than ten minutes.
-  - The tool writes no `.gitignore` in `deps/`: committing it is the project's
-    choice (`_build/` gets one). `agc_libs/` stays for local libraries.
-- The lock writer sorts the `[[package]]` tables by name and writes their keys
-  in the order of 05b, so a rewrite with no change makes no diff.
+- `add` adds one line to the manifest and changes no other byte (comments, key
+  order and line endings stay); a layout it cannot edit is `PKG-MANIFEST-EDIT`,
+  and the user writes the line. The local name is always an argument; the
+  package's own `name` is not read.
+- Nothing is written unless everything worked: the lock first (a lock with a
+  spare package is good, a manifest the lock lacks is `PKG-LOCK-STALE`), then
+  the manifest, each beside the old file and renamed into place.
+- `install` never changes the lock; only `add` and `update` write it, and an
+  unchanged `update` writes the same bytes. The lock writer sorts packages by
+  name and keys in the order of 05b, so a rewrite with no change makes no diff.
+- `deps/` is Elixir-style: the packages of a project are in `deps/` beside
+  `agentica.toml`, the compiled programs in `_build/`, and the global cache is
+  only a download cache. A build reads a declared `pkg/<name>` only from
+  `deps/<name>/`, never from the `pkg/` search, because that would load an
+  unhashed copy. Committing `deps/` is the project's choice: the tool writes no
+  `.gitignore` there.
 - The package commands grant the run permission to their own process (45.14,
   question 8). `agentica FILE` never runs git.
-- Codes of 45b, all with the lock and the key of the entry:
-  - `PKG-FETCH`: git did not start or failed, the tag or the commit is not in
-    the repository, a copied path is unsafe, or the cache cannot be written.
-    Git's message goes in the help.
-  - `PKG-TAG-MOVED`: the tag points to another commit than the lock says.
-  - `PKG-PATH-COLLISION`: two copied `.agc` paths differ only in case, in a file
-    or folder name.
-  - `PKG-MANIFEST-MISSING`: `install` found no `agentica.toml`.
-
-  The codes are in 05b and in the programming skill's diagnostics reference.
 
 ### 45.10 Native code
 
@@ -236,46 +141,25 @@ breaks "no code runs at install", comes later and needs its own grant.
 
 ### 45.11 Testing plan
 
-**Built:** the `std/toml` tests (goldens from toml-test, an independent
-`tomllib` peer, round trips), the manifest and lock tests in
-`tests/test_spec_packages.py`, and the fetch tests of 45b in
-`tests/test_spec_package_fetch.py` (end to end, offline, moved tag, hash
-mismatch, fetch errors, links and case collisions) and the writer tests of 45c
-in `tests/test_spec_package_add.py` (below), and the `deps/` tests in
-`tests/test_spec_package_deps.py` (layout, a missing folder, an edited file,
-other entries left alone, links, a dropped package, a build with no cache and no
-git), which run through the CLI. The pending tests are below.
+**Built.** The tests are `tests/test_spec_packages.py`,
+`test_spec_package_fetch.py`, `test_spec_package_add.py` and
+`test_spec_package_deps.py`, through the CLI. The decisions that stay:
 
-- The fetch and writer tests use a bare git repository in a temporary folder
-  as the remote. 45b needs no knob of the tool: a throwaway `HOME` has a
-  `.gitconfig` whose `url.<base>.insteadOf` sends `https://example.test/` to
-  `file://` paths, as any user can. The commit and hash checks still apply to
-  what it serves. No test touches the network or the real git config.
-- Tests go through the CLI with `--json check`. They assert codes and spans, or
-  file and key paths, never message text (AGENTS.md). Git tests need `git`: CI
-  installs it and fails if it is missing.
-- Each pending error code gets a test that asserts the code. The round trips
-  of 45c compare bytes: a lock made by an independent Python writer goes
-  through `update` unchanged, a lock written by `add` equals the Python
-  writer's text, and a manifest keeps every byte but the new line, in several
-  layouts (comments, CRLF, no final newline, sub-tables). Also: end to end (45b,
-  45c: `add`, then `install`, then a program imports `pkg/name/mod` and
-  prints); offline (45b: with the cache
-  filled and no `git` on `PATH`, a build passes, which proves that a build never
-  fetches); moved tag (45b: a fetched tag that does not peel to the locked
-  commit gives `PKG-TAG-MOVED`).
+- The remote is a bare git repository in a temporary folder: a throwaway `HOME`
+  has a `.gitconfig` whose `url.<base>.insteadOf` sends `https://example.test/`
+  to `file://` paths, as any user can, so the tool needs no test knob and the
+  commit and hash checks still apply. No test touches the network or the real
+  git config.
+- The writers of 45c are checked by byte round trips against an independent
+  Python writer (`update` keeps its lock unchanged; `add` writes its text; a
+  manifest keeps every byte but the new line, in several layouts).
+- A build with the cache filled and no `git` on `PATH` passes, which proves
+  that a build never fetches.
 
 ### 45.12 Phases
 
-- **45b. Fetch and install. Done.** The git fetch, the commit check, the hash
-  check, the cache fill, `install` and the fetch errors (45.8, 45.9).
-- **45c. Add and update. Done.** `add`, `update`, the lock writer and the
-  manifest writer, with the rules of 45.7. The round trip of 45.11.
-- **45d. The `deps/` folder. Done.** The build reads `deps/<name>/` only
-  (45.9).
-
-Each phase updates [`05b-modules.md`](../grammar/05b-modules.md), the
-programming skill and the CHANGELOG, because import behavior changes for users.
+45-0, 45a, 45b (fetch and `install`), 45c (`add`, `update`) and 45d (`deps/`)
+are done; native packages (FFI-b, 45.10) are the part left.
 
 ### 45.13 Not now
 

@@ -26,12 +26,8 @@ to 11; faster lists (8d) have their own place in the order (step 8).
   front first; no `==`, like `List`, and not JSON-encodable at first. `pop`
   waits for tuples (the "Later" item below). `Queue` becomes a reserved name,
   so `std/queue` stays as a deprecated `StringQueue` alias (a breaking change
-  for `as Queue`): 8c renames the documented alias in `README.md`,
-  `examples/queue.agc`, `docs/grammar.md`, the programming skill's modules
-  reference and the tests, keeps `stdlib/queue.agc` and its `std/` coverage,
-  and notes the break in the changelog. `std/queue` is removed later, in its
-  own PR, only when 8c has landed and another `std/` module (such as
-  `std/binary`, phase 13) covers the `std/` path.
+  for `as Queue`, noted in the changelog). `std/queue` is removed later, in its
+  own PR, once another `std/` module covers the `std/` path.
 - [x] 8d Faster lists: a persistent vector behind `List` on the VM, no language
   change (design, representation, costs: [`docs/vm/17-lists.md`](../vm/17-lists.md)).
   `push` and `set` are near constant time, indexing takes at most 4 loads up to

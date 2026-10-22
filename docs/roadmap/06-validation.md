@@ -16,28 +16,12 @@ arm. A pilot comes first, at order step 7.2.2 (decided by the owner on
 2026-10-13); the full round has no fixed order (owner, 2026-10-21), and order
 step 11 (multicore) does not wait for it.
 
-- [x] Pilot (order step 7.2.2), done on 2026-10-14 (rounds 9 to 11 of
-  `docs/eval.md`): a regression round of the `binary` arm on the VM, and the
-  Agentica `skill` arm against the typed Python arm on 20 tasks (t1–t8 and the
-  harder t9–t20 below), the same agent and budget, 3 reps per cell. The results
-  decide the order of the roadmap rows after 7.2.2 (the owner's order of
-  2026-10-14 is in [`README.md`](README.md)). The pilot does not tick the run
-  and record items below: the full round does, with enough reps.
-- [x] Typed Python arm in `tests/eval/run.py`: the agent writes Python with type
-  hints and checks them with `mypy --strict` (pinned in `tests/eval/Dockerfile`;
-  `docs/eval.md`, "The typed Python arm"). A solution that fails the checker
-  counts as a failing run.
-- [x] Harder tasks t9 to t20 under `tests/eval/tasks/`, each with hidden tests
-  and reference solutions in Agentica and typed Python (both pass the hidden
-  tests and their checker): modify an existing program of a few hundred lines;
-  introduce a type change that crosses a program (a field type, an enum variant,
-  or a Result in place of a plain value, followed through every use); add error
-  handling to a program that halts on bad input; repair a broken integration
-  (for example an HTTP client or server with the wrong JSON shape, or a file
-  pipeline with a wrong path or format). Integration tasks stay hermetic:
-  localhost, port 0, fixtures in the task directory.
-  `python3 tests/eval/run.py --check-references` grades every reference in
-  Docker (`docs/eval.md`).
+- [x] Pilot (order step 7.2.2, rounds 9 to 11 of `docs/eval.md`), the typed
+  Python arm (`mypy --strict`, "The typed Python arm" of `docs/eval.md`; a
+  solution that fails the checker counts as a failing run), and the harder tasks
+  t9 to t20 (modify a program, a type change across a program, error handling,
+  a broken integration; hermetic), each with hidden tests and reference
+  solutions in both languages (`--check-references`).
 - [ ] Run the Agentica skill arm and the typed Python arm with the same model
   and budget, with enough reps per cell that the spread between reps is smaller
   than the differences reported (round 1 had too few). Measure hidden tests
@@ -54,8 +38,7 @@ step 11 (multicore) does not wait for it.
   but is inconclusive: `query_runs` was 0 in all 225 runs, so `skill` and
   `skill-nocli` did not differ; repeat after the skill presents the commands
   differently.
-- [x] Record the results in a new section of `docs/eval.md`, with the skill
-  commit, the checker version and the model (round 13, 2026-10-22).
+- [x] Record the results in `docs/eval.md` (round 13, 2026-10-22).
 
 **Done when:** the results show, per task kind, whether agents pass more hidden
 tests or spend fewer tokens and repairs in Agentica than in typed Python, and
