@@ -92,6 +92,14 @@ export def integer(reading: Reading, value: Toml.Value, path: String) -> Result[
   end
 end
 
+## The value of a boolean, or a failure.
+export def boolean(reading: Reading, value: Toml.Value, path: String) -> Result[Bool]
+  case value
+    Toml.Value.Bool(flag) -> return ok(flag)
+    _ -> return error(fail(reading, path, "expected true or false"))
+  end
+end
+
 ## Fails on the first key of a table (at path) that is not in allowed, in the order the file wrote them.
 export def known_keys(
   reading: Reading,

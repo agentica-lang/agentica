@@ -1,7 +1,8 @@
 ## The manifest agentica.toml (docs/grammar/05b-modules.md): the project's own name, its direct dependencies and
 ## the [style] rules. A dependency is a local name and a git source: `sqlite = { git = "https://host/owner/repo", tag =
 ## "v1.2.0" }`, with exactly one of `tag` and `ref`, and an optional `subdir`: the folder of the repository that is the
-## package. A failure is PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc).
+## package. A failure is PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table
+## is known here but read by members.agc, and only for the manifest of the project: the manifest of a package skips it.
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
@@ -9,7 +10,7 @@ import Toml from "std/toml"
 import Reader from "toml_read"
 
 # The keys the manifest knows, and those of [style] and of a dependency.
-TOP_KEYS = ["name", "dependencies", "style"]
+TOP_KEYS = ["name", "dependencies", "style", "workspace"]
 STYLE_KEYS = ["max_line_width"]
 DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir"]
 

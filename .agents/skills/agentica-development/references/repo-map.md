@@ -48,7 +48,7 @@ compiler/         # the front end in Agentica (§18.3): one folder per context, 
     link_env.agc    # Env and Settings (with the Workspace)
     link.agc link_text.agc  # entry: prints the text form of the linked program of each root file argument (flags: --stdlib=, --agentica-path=, --xdg-data-home=, --xdg-cache-home=, --home=, --local-app-data=, --ids)
   packages/  # §45: the manifest, the lock, the download cache and the deps/ imports (core: no I/O, only the Workspace)
-    project.agc manifest.agc lock.agc  # the nearest agentica.toml and its lock checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path
+    project.agc manifest.agc lock.agc members.agc  # the nearest agentica.toml and its lock checks (PKG-LOCK-*); the manifest and the lock as data with PKG-*-INVALID at a key path; the [workspace] table and which dependencies are members
     manifest_edit.agc  # §45c: the one line `add` puts in the text of agentica.toml (the lock writer is `Lock.encode`)
     package_tree.agc  # the files a fetch copies, chosen from `git ls-tree -r -z -l` (PKG-SYMLINK, PKG-PATH-COLLISION; text only, no I/O)
     package_import.agc package_cache.agc package_hash.agc  # which pkg/<name>/ imports are packages, the hash check, the stored name; the cache folder of a commit; the hash of the .agc files (Crypto.sha256)

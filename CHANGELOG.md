@@ -59,6 +59,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A git dependency takes `subdir`, so one repository can hold several packages
   in folders: the lock keeps it, the hash, the cache and `deps/` cover only
   that folder, and `agentica add NAME URL --tag TAG --subdir DIR` writes it.
+- A repository of packages can be a workspace: its root `agentica.toml` has a
+  `[workspace]` table with `repository` and `members`. Inside it, a dependency
+  on a member of the same repository is read from the member's folder, with no
+  fetch and no copy in `deps/`, so an edit there is seen at once; the lock
+  records it as `workspace = true`, with no commit and no hash. Outside the
+  repository nothing changes.
 - `agentica help NAME` answers a name from Ruby, Python or JS (`strip`,
   `String.to_i`, `value!`) with the builtin it stands for, and gives
   a hint for names such as `len`; `--json` gives

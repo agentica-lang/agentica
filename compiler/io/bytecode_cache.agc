@@ -44,6 +44,7 @@ import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Resolve from "../modules/resolve_import"
 import Workspace from "../modules/workspace"
+import Members from "../packages/members"
 import PackageHash from "../packages/package_hash"
 import Project from "../packages/project"
 import RandomName from "random_name"
@@ -79,7 +80,8 @@ PRESENT_WORD = "present "
 DIGEST_CHARS = 64
 
 # The files that decide which package or library an import reads, next to the manifest.
-PROJECT_FILES = ["agentica.toml", "agentica.lock"]
+MANIFEST_FILE = "agentica.toml"
+PROJECT_FILES = [MANIFEST_FILE, "agentica.lock"]
 
 # The write bits of the group and of others (020 and 002).
 GROUP_OTHER_WRITE = 18
@@ -224,8 +226,26 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
       for name in PROJECT_FILES
         parts = parts.push("#{name} #{file_digest(workspace, Paths.join(manifest.dir, name))}")
       end
+      parts = parts.concat(workspace_parts(workspace, manifest))
   end
   return ok(digest(String.to_bytes(parts.join("\n"))))
+end
+
+# The workspace of the project (packages/members.agc): the manifest that holds the table, and the manifest of each
+# member the lock names, which decide the packages a build reads from the members' folders. The .agc files of a member
+# are sources of the entry like any other.
+def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> List[String]
+  if found.members.root == ""
+    return []
+  end
+  parts = ["workspace #{found.members.root} #{file_digest(workspace, Paths.join(found.members.root, MANIFEST_FILE))}"]
+  for locked in found.lock.packages
+    if locked.member
+      folder = Members.folder_of(found.members, locked.source)
+      parts = parts.push("member #{folder} #{file_digest(workspace, Paths.join(folder, MANIFEST_FILE))}")
+    end
+  end
+  return parts
 end
 
 # "-" for a file that is not there.

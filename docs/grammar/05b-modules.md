@@ -151,10 +151,10 @@ max_line_width = 119
 import Sqlite from "pkg/sqlite/db"
 ```
 
-- The manifest knows `name`, `[dependencies]` and `[style]`. An unknown key at
-  any level, a value of the wrong form, or a TOML syntax error is
-  `PKG-MANIFEST-INVALID`. `name` is optional and follows the rule of a
-  dependency name below. `max_line_width` is an integer of 1 or more.
+- The manifest knows `name`, `[dependencies]`, `[style]` and `[workspace]`
+  (below). An unknown key at any level, a value of the wrong form, or a TOML
+  syntax error is `PKG-MANIFEST-INVALID`. `name` is optional and follows the
+  rule of a dependency name below. `max_line_width` is an integer of 1 or more.
 - A dependency is a local name and an inline table. The name is the key: a
   lowercase letter, then lowercase letters, digits, `_` and `-`, at most 64
   characters. It is the segment after `pkg/` in an import and has nothing to do
@@ -184,6 +184,44 @@ import Sqlite from "pkg/sqlite/db"
   that needs another folder of its own repository declares it like any other
   dependency (the same `git`, its own `subdir` and pin). Versions use prefixed
   tags (`postgres-0.1.0`).
+- A repository of packages can be a workspace, like an npm workspace. Its root
+  `agentica.toml` has a `[workspace]` table with `repository`, the `git` URL of
+  the repository (the rules of a dependency's `git`), and `members`, a
+  non-empty list of the folders of its packages. A member is written like a
+  `subdir`, appears once, and holds its own `agentica.toml`. An unknown key, a
+  missing key, a bad value or a member that fails these rules is
+  `PKG-MANIFEST-INVALID` at `workspace.repository`, `workspace.members` or
+  `workspace.members[n]`.
+- A project is in a workspace when its folder (the folder of its nearest
+  manifest) is the root of the workspace or a member. The root is the nearest
+  `agentica.toml`, going up from the project folder, that has a `[workspace]`
+  table. The project is in it when its folder is that root, or its path from
+  the root is one of the `members`; only then is the table checked in full. A
+  table that does not list the project, even a broken one, is the same as no
+  table for it (a project that is the root itself reports a broken table). The
+  search stops at the root of the file system, and a project whose folder is
+  directly inside a folder named `deps` is a package of `deps/` and is never in
+  a workspace. A manifest above the project that cannot be read or parsed is
+  skipped. The `[workspace]` table of a package that is in the cache
+  or in `deps/` is never read, so it is not checked.
+- In a workspace, a dependency whose `git` is the `repository` (with or without
+  a `.git` at the end) and whose `subdir` is a member is a workspace member,
+  wherever the manifest that declares it is: the project's own or a package's.
+  It keeps its `git`, `tag` or `ref` and `subdir` in the manifest, which is what
+  a user outside the repository resolves, but it is neither fetched nor copied
+  to `deps/`: the build reads its files from the member's folder, with no hash
+  check, so an edit there is seen by the next build. The folder's own
+  `agentica.toml` declares its dependencies as for any package, and its files
+  keep the rules of a package (relative imports stay inside the folder). The
+  lock entry of a member has `workspace = true` in place of `commit` and
+  `hash`, and needs `subdir`; a `commit` or a `hash` with it, a `workspace`
+  that is not `true` or a missing `subdir` is `PKG-LOCK-INVALID`. The lock must
+  say the same as the workspace: a member locked as a fetched package, or a
+  package locked as a member for a project that is not in the workspace, is
+  `PKG-LOCK-STALE` at the project's manifest and `PKG-SOURCE-CONFLICT` at a
+  package's. `install`, `add` and `update` remove a `deps/` folder that has
+  the name of a member. Outside the repository nothing changes: the same
+  dependency is fetched and locked with a commit and a hash.
 - The import is `pkg/<name>/<module path>`, with no extension:
   `"pkg/sqlite/util/json"` loads `util/json.agc` of the package. `pkg/sqlite`
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
@@ -211,7 +249,8 @@ import Sqlite from "pkg/sqlite/db"
   each name (a name twice is `PKG-LOCK-INVALID`): `name`, `git`, `subdir` (only
   when the dependency has one), `tag` or `ref` (as in the manifest), `commit`
   (40 or 64 lowercase hex digits; it starts with the `ref`) and `hash`
-  (`sha256:` and 64 lowercase hex digits). A bad lock is `PKG-LOCK-INVALID`, a
+  (`sha256:` and 64 lowercase hex digits), or `workspace = true` for a member
+  of the workspace of the project. A bad lock is `PKG-LOCK-INVALID`, a
   bad `subdir` too, at `package[n].subdir`; a lock with no `subdir` reads as
   before. Every dependency of the manifest must be in the lock with the same
   `git` (with or without a `.git` at the end), the same `subdir` (or none) and
@@ -290,8 +329,9 @@ import Sqlite from "pkg/sqlite/db"
   nothing there. A failure in the middle of the copy (a full disk, say) leaves
   `deps/` partly updated: each package folder is either the old one or the new
   one, and `agentica install` finishes the rest. The
-  answer is `fetched NAME@VERSION` or `in the cache NAME@VERSION` for each
-  package, or `nothing to install`. The command starts git even under
+  answer is `fetched NAME@VERSION`, `in the cache NAME@VERSION` or, for a
+  workspace member, `in the workspace NAME@workspace` for each package, or
+  `nothing to install`. The command starts git even under
   `--deny-run`, which only limits programs.
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and
   `agentica update [NAME]` write the lock; they are the only commands that do.
@@ -347,11 +387,14 @@ import Sqlite from "pkg/sqlite/db"
     one lacks. If `deps/` cannot be written, the lock is saved already and the
     help says to run `agentica install` to write the locked packages into
     `deps/`.
+  - A workspace member is locked with no fetch, whether or not its tag exists,
+    and its manifest is read from its folder; its version is `workspace`.
   - The answer lists `added NAME@VERSION`, `updated NAME@VERSION` (another
     commit or pin) and `removed NAME`, one per line, or `nothing to update`;
     a package with a `subdir` adds ` (folder DIR)` after `NAME@VERSION`. With
     `--json` a success prints `{"ok":true}`.
-- `deps/` holds the files of each locked package, direct or not, in
+- `deps/` holds the files of each locked package that is not a workspace
+  member, direct or not, in
   `deps/<name>/` beside `agentica.toml`, like `mix deps.get`: the files the hash
   covers and the `agentica.toml` of the package (for a `subdir`, of that folder
   only: the cache holds nothing else). `install`, `add` and `update` copy them

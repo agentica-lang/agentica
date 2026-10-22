@@ -1,20 +1,21 @@
-## Imports of packages (docs/grammar/05b-modules.md). `pkg/<name>/<module>` is a package import when
-## <name> is declared by the manifest of the importing file: the manifest of the project for a file of the project, the
-## manifest of the package for a file of a package. The files come only from `deps/<name>/` beside the manifest of the
-## project, where `agentica install` wrote them (io/package_deps.agc); the global package cache is a download cache and
-## a build never reads it. The first time a build loads a package, the hash of its .agc files must be the hash in the
-## lock; a folder that differs is an error. Before any file is loaded, the manifests of the locked packages that are in
-## deps/ are checked against the lock (check_manifests). A name that the importing manifest does not declare is a
-## library of the pkg/ roots (resolve_import.agc) for a file of the project; a file of a package may import only what
-## its own manifest declares.
+## Imports of packages (docs/grammar/05b-modules.md). `pkg/<name>/<module>` is a package import when <name> is declared
+## by the manifest of the importing file: the manifest of the project for a file of the project, the manifest of the
+## package for a file of a package. The files come only from `deps/<name>/` beside the manifest of the project, where
+## `agentica install` wrote them (io/package_deps.agc); the global package cache is a download cache and a build never
+## reads it. The first time a build loads a package, the hash of its .agc files must be the hash in the lock; a folder
+## that differs is an error. A package that the lock marks as a member of the workspace of the project (members.agc) is
+## the exception: its files are read from the member's folder, with no hash, so an edit there is seen at once. Before
+## any file is loaded, the manifests of the locked packages that are in deps/ are checked against the lock
+## (check_manifests). A name that the importing manifest does not declare is a library of the pkg/ roots
+## (resolve_import.agc) for a file of the project; a file of a package may import only what its own manifest declares.
 
 import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
-import GitSource from "git_source"
 import Lock from "lock"
 import Manifest from "manifest"
+import Members from "members"
 import PackageHash from "package_hash"
 import Project from "project"
 
@@ -42,12 +43,14 @@ export struct Opened
 end
 
 ## What a build knows when it resolves an import: the deps/ folder of the project ("" when it has no manifest), the
-## names the project declares, the lock, the names that the manifests of the locked packages declare (by package name;
-## check_manifests reads them before any file is loaded), and the packages loaded so far (by name).
+## names the project declares, the lock, the workspace of the project (none when it is in no workspace), the names that
+## the manifests of the locked packages declare (by package name; check_manifests reads them before any file is
+## loaded), and the packages loaded so far (by name).
 export struct Scope
   deps: String
   direct: List[String]
   lock: Lock.Lock
+  members: Members.Members
   declared: Map[String, List[String]]
   opened: Map[String, Opened]
 end
@@ -78,12 +81,20 @@ end
 export def scope_of(project: Project.Project) -> Scope
   case project
     Project.Project.Bare ->
-      return Scope(deps: "", direct: [], lock: Lock.Lock(file: "", packages: []), declared: {}, opened: {})
+      return Scope(
+        deps: "",
+        direct: [],
+        lock: Lock.Lock(file: "", packages: []),
+        members: Members.none(),
+        declared: {},
+        opened: {},
+      )
     Project.Project.Declared(found) ->
       return Scope(
         deps: Paths.join(found.dir, DEPS_FOLDER),
         direct: Project.direct_names(project),
         lock: found.lock,
+        members: found.members,
         declared: {},
         opened: {},
       )
@@ -157,16 +168,16 @@ export def stay_inside(origin: Origin, file: String, site: Failure.Site) -> Resu
   return ok(stored_name(origin.label, inner))
 end
 
-## Checks the manifest of every package of the lock that is in deps/ against the lock, before any file is loaded, so
-## one name with two sources anywhere in the tree (PKG-SOURCE-CONFLICT), or a name the lock lacks (PKG-LOCK-STALE), is
-## reported whether or not an import reaches that package. What cannot be looked at safely is left for the import that
-## loads it: a package that is not in deps/, a folder that cannot be listed and a manifest that is not a regular file
-## report their own diagnostic there (and nothing is read from them here). It gives the scope with the names that the
-## manifests declare, so that loading a package does not list its folder again.
+## Checks the manifest of every package of the lock that is in deps/ (or, for a member, in its folder) against the
+## lock, before any file is loaded, so one name with two sources anywhere in the tree (PKG-SOURCE-CONFLICT), or a name
+## the lock lacks (PKG-LOCK-STALE), is reported whether or not an import reaches that package. What cannot be looked at
+## safely is left for the import that loads it: a package that is not in deps/, a folder that cannot be listed and a
+## manifest that is not a regular file report their own diagnostic there (and nothing is read from them here). It gives
+## the scope with the names that the manifests declare, so that loading a package does not list its folder again.
 export def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Result[Scope]
   folders: Map[String, String] = {}
   for locked in scope.lock.packages
-    folders = folders.put(locked.name, deps_folder(scope, locked.name))
+    folders = folders.put(locked.name, folder_of(scope, locked))
   end
   return check_folders(workspace, scope, folders)
 end
@@ -185,7 +196,7 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
       case shape_of(workspace, real.unwrap!)
         Shape.Absent -> declared = declared.put(locked.name, [])
         Shape.Regular ->
-          names = try read_names(workspace, scope.lock, real.unwrap!)
+          names = try read_names(workspace, scope, real.unwrap!)
           declared = declared.put(locked.name, names)
         Shape.Unsafe(_) -> next
         Shape.Unlisted(_) -> next
@@ -195,9 +206,13 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
   return ok(scope.with(declared: declared))
 end
 
-## The folder of a locked package, `deps/<name>` beside the manifest of the project.
-export def deps_folder(scope: Scope, name: String) -> String
-  return Paths.join(scope.deps, name)
+## The folder of a locked package, `deps/<name>` beside the manifest of the project, or the folder of the workspace
+## member.
+export def folder_of(scope: Scope, locked: Lock.Locked) -> String
+  if locked.member
+    return Members.folder_of(scope.members, locked.source)
+  end
+  return Paths.join(scope.deps, locked.name)
 end
 
 # The name of a package file in the program and in the .agcb: it does not depend on the cache folder of the machine.
@@ -227,16 +242,24 @@ def load(
   locked: Lock.Locked,
   site: Failure.Site,
 ) -> Result[Opened]
-  folder = deps_folder(scope, locked.name)
+  if locked.member and !Members.member?(scope.members, locked.source)
+    message = "#{locked.name} is a workspace member, but this project is not in that workspace"
+    return error(missing(site, message, "run agentica update to lock #{locked.name} as a fetched package"))
+  end
+  folder = folder_of(scope, locked)
   real = workspace.real_path.call(folder)
   if !real.ok? or !workspace.directory_exists.call(real.unwrap!)
+    if locked.member
+      return error(missing(site, "the folder #{folder} of #{locked.name} does not exist", "restore the member folder"))
+    end
     message = "#{locked.name} is not in #{scope.deps}"
     return error(missing(site, message, "run agentica install to write the packages of the lock to #{scope.deps}"))
   end
-  try verify(workspace, locked, real.unwrap!, folder, site)
+  if !locked.member
+    try verify(workspace, locked, real.unwrap!, folder, site)
+  end
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
-  label = "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
-  return ok(Opened(root: real.unwrap!, label: label, names: names))
+  return ok(Opened(root: real.unwrap!, label: Lock.label(locked), names: names))
 end
 
 def verify(
@@ -302,7 +325,7 @@ def names_of(
   if scope.declared.has_key?(locked.name)
     return ok(scope.declared[locked.name])
   end
-  return declared_names(workspace, scope.lock, root, site)
+  return declared_names(workspace, scope, root, site)
 end
 
 # The names the manifest of the package declares, none when it has no manifest. Each must be in the lock with the same
@@ -311,13 +334,13 @@ end
 # manifest that is not a regular file is PKG-SYMLINK at the import, as a link among the .agc files is.
 def declared_names(
   workspace: Workspace.Workspace,
-  lock: Lock.Lock,
+  scope: Scope,
   root: String,
   site: Failure.Site,
 ) -> Result[List[String]]
   case shape_of(workspace, root)
     Shape.Absent -> return ok([])
-    Shape.Regular -> return read_names(workspace, lock, root)
+    Shape.Regular -> return read_names(workspace, scope, root)
     Shape.Unsafe(name) ->
       message = "#{name} in the package is not a regular file"
       return error(Failure.fail_at(site, "PKG-SYMLINK", message, Failure.hint("a manifest is a file of the package")))
@@ -326,9 +349,9 @@ def declared_names(
   end
 end
 
-def read_names(workspace: Workspace.Workspace, lock: Lock.Lock, root: String) -> Result[List[String]]
+def read_names(workspace: Workspace.Workspace, scope: Scope, root: String) -> Result[List[String]]
   manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
-  try Project.check_dependencies(lock, manifest, true)
+  try Project.check_dependencies(scope.lock, manifest, scope.members, true)
   return ok(Manifest.names(manifest))
 end
 
