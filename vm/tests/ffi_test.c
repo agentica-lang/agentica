@@ -72,7 +72,9 @@ static void test_calls(void) {
   vm.rt->no_files = false;
 }
 
+#ifdef AGC_FFI
 static agc_value native_close(agc_value resource) { return agc_ffi_builtins[1].fn(&vm, &resource, 0); }
+#endif
 
 static void test_resources(void) {
 #ifdef AGC_FFI
