@@ -490,8 +490,12 @@ def test_a_list_of_methods_leaves_out_the_synonyms(tmp_path):
 
 def test_first_and_last_halt_on_an_empty_list_and_empty_asks_the_three_kinds(program):
     for method in ("first", "last"):
+        # The halt is at the call, as xs[0] is, never inside the prelude.
         body = "  xs: List[Int] = []\n  puts(xs.%s)" % method
-        assert run_text_io(program, "def main() -> Void\n%s\nend\n\n" % body)[1] == "RUNTIME-INDEX-OUT-OF-RANGE"
+        result = cli_run("--json", program("def main() -> Void\n%s\nend\n\n" % body))
+        found = json.loads([line for line in result.stderr.split("\n") if line][-1])
+        assert found["code"] == "RUNTIME-INDEX-OUT-OF-RANGE"
+        assert found["range"]["start"] == {"line": 3, "column": 8}
     body = ('  xs = [3, 4, 5]\n  e: List[Int] = []\n  m: Map[String, Int] = {"a": 1}\n  n: Map[String, Int] = {}\n'
             '  puts([xs.first, xs.last])\n  puts([xs.empty?, e.empty?, m.empty?, n.empty?, "".empty?, "a".empty?])')
     out, code = run_text_io(program, "def main() -> Void\n%s\nend\n\n" % body)

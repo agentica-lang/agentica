@@ -92,18 +92,23 @@ def form_text(form: Model.Builtin, method: String) -> String
   return ruby
 end
 
-# "`trim` is written `.strip`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in Agentica" for
-# a rename of a builtin that has no Ruby form, else nothing. `written` is the method the form is shown with.
+# "`String.trim` is written `.strip`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in
+# Agentica" for a rename of a builtin that has no Ruby form, else nothing. `written` is the method the form is shown
+# with. A name asked without its type gets the type of `target`, so `help include?` says which type writes `.key?`.
 def rename_line(name: String, target: String, written: String) -> String
   asked = name.split(".")
   method = asked[asked.size - 1]
+  own = target.split(".")
   if written != ""
     if method == written
       return ""
     end
-    return "`#{name}` is written `.#{written}`\n"
+    typed = name
+    if asked.size == 1 and own.size > 1
+      typed = "#{own[0]}.#{name}"
+    end
+    return "`#{typed}` is written `.#{written}`\n"
   end
-  own = target.split(".")
   if method == own[own.size - 1]
     return ""
   end
