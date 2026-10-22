@@ -27,7 +27,7 @@ USAGE = [
   "       agentica [--ai|--json] add NAME URL --tag TAG|--ref COMMIT",
   "       agentica [--ai|--json] update [NAME]",
   "       agentica [--ai|--json] vendor",
-  "       agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT]",
+  "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT]",
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
 

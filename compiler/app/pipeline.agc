@@ -31,7 +31,7 @@ export def build_cached(front: Front.Checked, settings: Env.Settings, plan: Byte
   case built
     Compiled.Rejected(_) -> return built
     Compiled.Bytes(bytes) ->
-      BytecodeCache.store(plan, front.linked.modules, bytes)
+      BytecodeCache.store(plan, settings, front.linked.modules, bytes)
       return built
   end
 end
