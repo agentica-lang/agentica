@@ -29,8 +29,9 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, compile_text, host_only, kill_process,
-                                 process_alive, run, scaled, vm_command, vm_environment, wait_readable, wait_until)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, UNDER_WINE, WINDOWS, compile_text, host_only,
+                                 kill_process, process_alive, run, scaled, vm_command, vm_environment, wait_readable,
+                                 wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -802,7 +803,12 @@ def test_task_map_cancels_tasks_blocked_on_a_fifo(tmp_path, repeats, per_call_ms
 # with the launcher, so a launcher that the end of a run kills in between leaves the interpreter running.
 CHILD = str(FIXTURES / "multicore-child.py")
 CHILD_ARGS = (getattr(sys, "_base_executable", PYTHON), "-IS", CHILD)
-POSIX_SIGNALS = host_only(WINDOWS or not hasattr(signal, "SIGTERM"), "Windows has no POSIX stop signals")
+# The stop of a run: SIGTERM on POSIX, where the run dies by it; Ctrl+Break on Windows, which only a VM in a new process
+# group takes (tests/test_windows_console_stop.py), and the run ends with 128 + SIGBREAK (21).
+STOP_SIGNAL = signal.CTRL_BREAK_EVENT if WINDOWS else signal.SIGTERM
+STOP_STATUS = 128 + 21 if WINDOWS else -signal.SIGTERM
+NEW_GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {}
+STOP_MODE = pytest.param("signal", marks=pytest.mark.skipif(UNDER_WINE, reason="Wine has no console to break"))
 MULTICORE_CHILDREN = {"AGENTICA_SCHEDULERS": SCHEDULERS}
 
 PROC_FAN = r"""def echo(n: Int) -> String
@@ -1005,22 +1011,22 @@ end
 """
 
 
-@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), "exit"])
+@pytest.mark.parametrize("mode", [STOP_MODE, "exit"])
 def test_a_stop_signal_or_an_exit_kills_the_children_of_a_run_on_several_schedulers(tmp_path, mode):
-    # A plain and a captured child, each with a task parked on it; the run gets SIGTERM, or a task calls
-    # System.exit(3) on its scheduler. The run ends with the signal or 3, and both children are gone.
+    # A plain and a captured child, each with a task parked on it; the run gets SIGTERM (Ctrl+Break on Windows), or a
+    # task calls System.exit(3) on its scheduler. The run ends with the signal or 3, and both children are gone.
     bytecode = program(tmp_path, "proc_stop", PROC_STOP)
     process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, *CHILD_ARGS, mode], stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
-                               text=True)
+                               text=True, **NEW_GROUP)
     pids = []
     try:
         pids = process.stdout.readline().split()
         assert len(pids) == 2
         if mode == "signal":
-            process.send_signal(signal.SIGTERM)
+            process.send_signal(STOP_SIGNAL)
         out, err = process.communicate(timeout=30)
-        code = -signal.SIGTERM if mode == "signal" else 3
+        code = STOP_STATUS if mode == "signal" else 3
         assert (process.returncode, out, err) == (code, "", "")
         assert wait_until(lambda: not any(process_alive(pid) for pid in pids), timeout=10)
     finally:
@@ -2176,15 +2182,16 @@ end
 """
 
 
-@pytest.mark.parametrize("mode", [pytest.param("signal", marks=POSIX_SIGNALS), "exit"])
+@pytest.mark.parametrize("mode", [STOP_MODE, "exit"])
 def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path, mode):
-    # A run with a parked accept, a parked TCP read and a parked TLS read gets SIGTERM, or main calls System.exit(3)
+    # A run with a parked accept, a parked TCP read and a parked TLS read gets SIGTERM (Ctrl+Break on Windows), or main
+    # calls System.exit(3)
     # on its scheduler: the run ends with the signal or 3, and the peer sees EOF on the TCP socket and close_notify on
     # the TLS one (a missing close_notify raises SSLEOFError).
     bytecode = program(tmp_path, "net_stop", NET_STOP)
     process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, TLS_DIR, mode], stdin=subprocess.DEVNULL,
                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
-                               text=True)
+                               text=True, **NEW_GROUP)
     try:
         plain_port, secure_port = map(int, process.stdout.readline().split())
         context = ssl.create_default_context(cafile=TLS_DIR + "/ca.pem")
@@ -2193,9 +2200,9 @@ def test_a_stop_signal_or_an_exit_closes_open_sockets_and_tls_sessions(tmp_path,
                                     server_hostname="localhost", suppress_ragged_eofs=False) as secure:
             assert process.stdout.readline() == "ready\n"
             if mode == "signal":
-                process.send_signal(signal.SIGTERM)
+                process.send_signal(STOP_SIGNAL)
             out, err = process.communicate(timeout=30)
-            code = -signal.SIGTERM if mode == "signal" else 3
+            code = STOP_STATUS if mode == "signal" else 3
             assert (process.returncode, out, plain.recv(10), secure.recv(10)) == (code, "", b"", b""), err
     finally:
         if process.poll() is None:
@@ -2338,6 +2345,10 @@ def spinner(n: Int) -> Int
 end
 
 def reader(path: String) -> Result[String]
+  if path == ""
+    Task.sleep(60000)
+    return ok("slept")
+  end
   input = try File.open(path, "read", 60000)
   return File.read_line(input, 60000)
 end
@@ -2345,38 +2356,54 @@ end
 def main() -> Void
   Task.spawn(&spinner, 1)
   Task.spawn(&spinner, 2)
-  waiting = Task.spawn(&reader, System.args()[0])
+  path = ""
+  if System.args().size > 0
+    path = System.args()[0]
+  end
+  waiting = Task.spawn(&reader, path)
   puts("ready")
   IO.inspect(Task.await(waiting))
 end
 """
 
 
-@host_only(WINDOWS or not hasattr(os, "mkfifo") or not hasattr(signal, "SIGTERM"),
-           "Windows has no POSIX stop signals and no FIFO files")
-def test_a_stop_signal_ends_a_run_with_spinners_and_a_blocked_reader(tmp_path):
-    # The I/O thread handles the signal (the schedulers keep it blocked) and ends the run at once, with spinning tasks
-    # and a task blocked on a FIFO that is held open and never written.
+def stop_a_run_with_spinners(tmp_path, *args):
+    """The status and the output of a run with two spinning tasks and a waiting one, after the stop signal."""
     bytecode = program(tmp_path, "spin_wait", SPIN_AND_WAIT)
+    process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, *args], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
+                               text=True, **NEW_GROUP)
+    try:
+        assert process.stdout.readline() == "ready\n"
+        process.send_signal(STOP_SIGNAL)
+        out, _ = process.communicate(timeout=30)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+    return process.returncode, out
+
+
+@pytest.mark.skipif(UNDER_WINE, reason="Wine has no console to break")
+def test_a_stop_signal_ends_a_run_with_spinners_and_a_sleeper(tmp_path):
+    # The I/O thread handles the signal (the schedulers keep it blocked) and ends the run at once, with spinning tasks
+    # and a task asleep. The VM dies by the signal after its exit path (128 + 15 seen by a shell; 128 + 21 on Windows).
+    assert stop_a_run_with_spinners(tmp_path) == (STOP_STATUS, "")
+
+
+@host_only(WINDOWS or not hasattr(os, "mkfifo"),
+           "a task blocked on a FIFO; " + FIFO_FILE_REASON + "; test_a_stop_signal_ends_a_run_with_spinners_and_a_sleeper "
+           "above runs with Ctrl+Break, and test_ctrl_break_ends_a_run_whose_task_waits_for_standard_input in "
+           "test_windows_console_stop.py ends a run whose task waits for a read")
+def test_a_stop_signal_ends_a_run_with_spinners_and_a_blocked_reader(tmp_path):
+    # The same, with a task blocked on a FIFO that is held open and never written.
     fifo = tmp_path / "held"
     os.mkfifo(fifo)
     held = os.open(fifo, os.O_RDWR)
     try:
-        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(fifo)], stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
-                                   text=True)
-        try:
-            assert process.stdout.readline() == "ready\n"
-            process.send_signal(signal.SIGTERM)
-            out, _ = process.communicate(timeout=30)
-        finally:
-            if process.poll() is None:
-                process.kill()
-                process.wait()
+        assert stop_a_run_with_spinners(tmp_path, str(fifo)) == (STOP_STATUS, "")
     finally:
         os.close(held)
-    # The VM dies by the signal after its exit path (128 + 15 seen by a shell).
-    assert (process.returncode, out) == (-signal.SIGTERM, "")
 
 
 def test_a_pending_read_of_standard_input_is_no_stall_on_several_schedulers(tmp_path):

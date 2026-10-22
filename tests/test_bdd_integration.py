@@ -247,7 +247,7 @@ def test_a_failed_scenario_leaves_no_process_of_its_program_behind(tmp_path, cle
     assert wait_until(lambda: not process_alive(pid), scaled(5)), pid
 
 
-@host_only(WINDOWS, "needs the sticky bit and group permission bits of a shared temporary folder; Windows has neither")
+@host_only(WINDOWS, "a shared temporary folder is told apart by the sticky bit and group permission bits, and Windows has neither; the Windows runner assumes a private per-user %TEMP% (no shared-folder check there, by design)")
 def test_a_temporary_directory_others_can_write_to_without_the_sticky_bit_is_refused(tmp_path):
     directory = suite(tmp_path, {})
     temporary = directory / "shared"

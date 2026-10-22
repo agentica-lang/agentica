@@ -430,10 +430,11 @@ Skip rules, checked by the report:
 
 - `host_only(condition, reason)` of `tests/agentica_test.py`: the system really
   lacks a capability (POSIX signals, FIFOs, `/dev/stdin`, mode bits on Windows;
-  `/dev/full` on macOS; Windows handles elsewhere). The reason starts with
-  `host-only:`, names the capability, and, when it names a counterpart test,
-  says what that test checks. A harness limit (a test that uses `/bin/sh` for a
-  behavior Windows has too) or a product gap is not host-only. The pair
+  non-UTF-8 names and CPU limits on macOS; Windows handles elsewhere). The
+  reason starts with `host-only:`, names the capability, and, when it names a
+  counterpart test, says what that test checks. A harness limit (a test that
+  uses `/bin/sh` for a behavior Windows has too) or a product gap is not
+  host-only. The pair
   (module, system) must be in `HOST_ONLY_ALLOWED`, which a reviewer reads; a
   golden fixture named `-posix` or `-windows` is host-only on the other family
   by its name.

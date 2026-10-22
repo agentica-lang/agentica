@@ -7,6 +7,8 @@ front end of their own (tests/fixtures/single-binary/front.agc, loaded with --fr
 with the two FrontEnd builtins. The fixed point is not tested here: `make fixed-point` is a step of CI (the test job
 and the sanitizer job), where it compiles compiler/ three times next to this module.
 """
+import contextlib
+import ctypes
 import os
 import random
 import re
@@ -552,13 +554,44 @@ def test_a_run_that_chooses_no_count_has_one_scheduler_per_logical_core(tmp_path
     assert (got.code, got.stdout, scheduler_counts(got)) == (0, "hello\n", [logical_cores()])
 
 
-@pytest.mark.skipif(not hasattr(os, "sched_setaffinity"), reason="host-only: sched_setaffinity sets the CPUs of a process on Linux only")
+@contextlib.contextmanager
+def windows_one_cpu():
+    """Limit this process, and so the children that it starts meanwhile, to one CPU; the old mask comes back on exit."""
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.GetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.POINTER(ctypes.c_size_t),
+                                                ctypes.POINTER(ctypes.c_size_t)]
+    kernel32.SetProcessAffinityMask.argtypes = [wintypes.HANDLE, ctypes.c_size_t]
+    process = kernel32.GetCurrentProcess()
+    mine, system = ctypes.c_size_t(), ctypes.c_size_t()
+    if not kernel32.GetProcessAffinityMask(process, ctypes.byref(mine), ctypes.byref(system)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    if not kernel32.SetProcessAffinityMask(process, mine.value & -mine.value):  # the lowest CPU of the old mask
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        yield
+    finally:
+        if not kernel32.SetProcessAffinityMask(process, mine.value):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "sched_setaffinity") and os.name != "nt",
+    reason="host-only: macOS cannot limit the CPUs of a process (Linux has sched_setaffinity, Windows "
+           "SetProcessAffinityMask)")
 def test_the_default_count_follows_the_cpus_the_process_may_use(tmp_path, sched_trace):
     """The default is the CPUs of the process (its affinity), not the CPUs of the machine."""
     program = compile_agc(HELLO, tmp_path / "hello.agcb")
-    first = sorted(os.sched_getaffinity(0))[0]
-    got = subprocess.run([*vm_command(), "--", program], env=vm_environment(sched_trace), capture_output=True,
-                         text=True, timeout=scaled(10), preexec_fn=lambda: os.sched_setaffinity(0, {first}))
+    command = [*vm_command(), "--", program]
+    if os.name == "nt":
+        with windows_one_cpu():
+            got = subprocess.run(command, env=vm_environment(sched_trace), capture_output=True, text=True,
+                                 timeout=scaled(10))
+    else:
+        first = sorted(os.sched_getaffinity(0))[0]
+        got = subprocess.run(command, env=vm_environment(sched_trace), capture_output=True, text=True,
+                             timeout=scaled(10), preexec_fn=lambda: os.sched_setaffinity(0, {first}))
     assert (got.returncode, got.stdout, scheduler_counts(got)) == (0, "hello\n", [1])
 
 
