@@ -755,16 +755,10 @@ def run_wait(tmp_path, peer, main, *args, **kwargs):
 
 # Two tasks wait on the pipe's read end at once. On one scheduler, main's write proves that the waiting tasks gave the
 # scheduler up; the write end is writable at once.
-#
-# On Windows one socket takes one wait at a time: two polls of one socket would cancel each other in a busy loop in
-# libuv. While a task waits (its duplicate is open), a second wait is an error at once; once the wait has ended ready,
-# and again after a timeout, the socket can be waited on again.
 @NATIVE_CALLS
+@host_only(WINDOWS, "one Windows socket takes one wait at a time (test_a_second_wait_on_a_windows_socket_is_refused)")
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 def test_a_wait_parks_the_task_until_the_descriptor_is_ready(tmp_path, peer, schedulers):
-    if WINDOWS:
-        windows_socket_takes_one_wait_at_a_time(tmp_path, peer, schedulers)
-        return
     main = """def main() -> Void
   fd = peer_pipe()
   first = Task.spawn(&wait, fd)
@@ -782,7 +776,13 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "main runs\n1\nok()\nok()\n1\nok()\n", "")
 
 
-def windows_socket_takes_one_wait_at_a_time(tmp_path, peer, schedulers):
+# On Windows one socket takes one wait at a time: two polls of one socket would cancel each other in a busy loop in
+# libuv. While a task waits (its duplicate is open; on one scheduler main runs, so the task parked), a second wait is an
+# error at once; once the wait has ended ready, and again after a timeout, the socket can be waited on again. Elsewhere
+# the second wait waits too and times out, so the case runs on every system.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_second_wait_on_a_windows_socket_is_refused(tmp_path, peer, schedulers):
     main = """def main() -> Void
   fd = peer_pipe()
   base = peer_open_fds()
@@ -792,7 +792,7 @@ def windows_socket_takes_one_wait_at_a_time(tmp_path, peer, schedulers):
     Task.sleep(1)
     n += 1
   end
-  puts(Native.wait_readable(fd, 1_000))
+  puts(Native.wait_readable(fd, 30))
   puts(peer_pipe_put())
   puts(Task.await(first))
   puts(peer_pipe_take())
@@ -805,7 +805,8 @@ end
     result = run_wait(tmp_path, peer, main, "--schedulers", schedulers)
     assert (result.code, result.stderr) == (0, "")
     lines = result.stdout.split("\n")
-    assert lines[0].startswith('error("native: cannot wait on the descriptor'), result.stdout
+    second = 'error("native: cannot wait on the descriptor' if WINDOWS else 'error("native: timed out")'
+    assert lines[0].startswith(second), result.stdout
     assert lines[1:] == ["1", "ok()", "1", 'error("native: timed out")', "1", "ok()", "1", ""], result.stdout
 
 

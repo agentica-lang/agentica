@@ -314,6 +314,23 @@ FILE *agc_notice_begin(agc_output *out, agc_notice *n);
 /* VM is the calling thread's context: it owns the stream lock and starts the write. */
 void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode);
 
+/* The OS side of the copy that a Native.wait_* poller polls (vm/poll_posix.c, vm/poll_windows.c); loop.c owns the
+   poller, the one-wait list and the order of the steps. copy_open makes COPY->fd, a descriptor the poller then owns:
+   on POSIX a new open of the file of FD (agc_fd_reopen), or a duplicate when that cannot be done (a socket, a terminal
+   master, an eventfd); on Windows FD is a Winsock SOCKET and the copy a duplicate socket. 0, or a libuv error. copied
+   runs once uv_poll_init has made the copy non-blocking: on POSIX a duplicate gets FD's flags back; Windows cannot read
+   a socket's mode, so FD stays non-blocking. close closes a descriptor that a poller owns. one_wait: whether a
+   descriptor takes one wait at a time (Windows: libuv's fast poll of a socket is exclusive, and every duplicate shares
+   its endpoint). */
+typedef struct {
+  int fd, flags;
+  bool shared;
+} agc_poll_copy;
+int agc_poll_copy_open(int fd, agc_poll_copy *copy);
+void agc_poll_copied(const agc_poll_copy *copy);
+void agc_poll_close(int fd);
+bool agc_poll_one_wait(void);
+
 void agc_stack_capture(const agc_vm *vm, agc_outcome *outcome);
 void agc_print_diagnostic(FILE *err, const agc_program *program, const agc_outcome *outcome, agc_style style,
                           bool task);
