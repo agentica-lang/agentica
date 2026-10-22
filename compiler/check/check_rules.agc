@@ -14,6 +14,7 @@ import Lists from "check_list"
 import PreludeCalls from "check_prelude"
 import State from "check_state"
 import CheckTypes from "check_types"
+import RubyForm from "ruby_form"
 
 ## Checks a call of the builtin entry (the first form of the name). expected is the type the context wants, Unknown
 ## when none.
@@ -56,13 +57,32 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
   return ok(true)
 end
 
-# CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form.
+# CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form. A call
+# written in method form (the receiver is the first argument, a Typed node) names the Ruby method and counts the
+# arguments after the receiver: `s.include?` expects 1, not 2.
 def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> String
-  counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| form.parameters.size.to_s end
+  skipped = 0
+  name = entry.name
+  if method_form?(node) and RubyForm.method_name(entry.name) != ""
+    skipped = 1
+    name = RubyForm.shown(entry.name)
+  end
+  counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| (form.parameters.size - skipped).to_s end
   expected = counts.join(" or ")
-  message = "\"#{entry.name}\" expects #{expected} argument(s), found #{node.args.size}"
+  message = "\"#{name}\" expects #{expected} argument(s), found #{node.args.size - skipped}"
   base = Failure.problem(cx.file, st.signature, "CHECK-ARITY", message, node.span, State.hint_of(""))
   return Failure.pack(base.with(callee: Builtins.signature(entry)))
+end
+
+# True for a call that a method call became: its first argument is the typed receiver.
+def method_form?(node: Ast.Call) -> Bool
+  if node.args.size == 0
+    return false
+  end
+  case node.args[0]
+    Ast.Expr.Typed(found) -> return true
+    _ -> return false
+  end
 end
 
 # CHECK-BLOCK-TARGET when the call has one argument more than a form takes and that last argument is a block, so the

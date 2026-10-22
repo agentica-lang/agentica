@@ -394,6 +394,7 @@ def test_a_builtin_is_answered_with_its_help_object_and_no_definition(program):
     # The same object as `agentica help NAME --json`, name included.
     assert report["help"] == cli_help("String.upcase")
     assert report["help"]["name"] == "String.upcase"
+    assert report["help"]["ruby"] == "s.upcase() -> String"
     # A builtin with two forms answers with its overloads; the bare function `puts` is a builtin too, on its name only.
     overloaded = answer(("orders.agc", where(ORDERS, "table.get", 7)), cwd=program)
     assert (overloaded["kind"], overloaded["help"]) == ("builtin", cli_help("Map.get"))

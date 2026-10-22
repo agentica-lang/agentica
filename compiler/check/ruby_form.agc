@@ -73,7 +73,9 @@ export def written_as?(name: String, method: String) -> Bool
   end
   aliases = Tables.method_aliases()
   for key in Tables.ruby_synonyms()
-    if key.ends_with?(".#{method}") and aliases[key] == name
+    # A synonym that `method_aliases` lacks is skipped (a test keeps the two lists in step).
+    target = aliases.get(key)
+    if key.ends_with?(".#{method}") and target.ok? and target.unwrap! == name
       return true
     end
   end

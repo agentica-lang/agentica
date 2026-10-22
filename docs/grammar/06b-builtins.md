@@ -52,8 +52,8 @@ Collection operations preserve their inputs. Costs exclude callback work.
 
 - `List.map` and `List.filter` are O(n). `List.reduce` folds left, calling
   `f(accumulator, item)`; an empty list gives the initial value.
-- `List.append` (`push`) takes near constant time, so building a list with n
-  appends is O(n). `List.concat` joins lists of one element type: O(b) when the
+- `xs.push` (`List.append`) takes near constant time, so building a list with
+  n pushes is O(n). `List.concat` joins lists of one element type: O(b) when the
   right list has at most 32 items, otherwise O(a + b). `List.reverse` is O(n).
 - `List.set` and `List.at` are zero-based and take O(log32 n) time (at most four
   steps for a million items). A negative or out-of-range index is
@@ -188,18 +188,19 @@ Expected types flow into these operations for empty collections and Results.
 - `String.split(s, sep)` keeps empty parts, so `String.join(String.split(s,
   sep), sep)` gives `s`. `String.split("", sep)` is `[""]`; `String.split(s,
   "")` gives one character per element.
-- `String.to_int!` accepts a signed decimal: `RUNTIME-INVALID-NUMBER` for other
-  text, `RUNTIME-INTEGER-OVERFLOW` outside `Int`. `String.to_float!` rejects
-  text that is not a real decimal with `RUNTIME-INVALID-NUMBER`.
+- `s.to_i!` (`String.to_int!`) accepts a signed decimal:
+  `RUNTIME-INVALID-NUMBER` for other text, `RUNTIME-INTEGER-OVERFLOW` outside
+  `Int`. `s.to_f!` (`String.to_float!`) rejects text that is not a real decimal
+  with `RUNTIME-INVALID-NUMBER`.
 - `String.index_of` gives the character index of the first match (`ok(0)` for an
   empty part), or an error when absent. `String.at` halts with
   `RUNTIME-INDEX-OUT-OF-RANGE` outside the string.
 - `String.code` and `String.from_code` halt with `RUNTIME-INVALID-CHARACTER` on
   other input: a one-character string, or a scalar value (0 to 0x10FFFF, no
   surrogates).
-- `Float.to_int` truncates toward zero; NaN, infinity and results outside `Int`
-  are errors. `Float.to_int!` halts instead, with `RUNTIME-INVALID-NUMBER` or
-  `RUNTIME-INTEGER-OVERFLOW`.
+- `x.to_i` (`Float.to_int`) truncates toward zero; NaN, infinity and results
+  outside `Int` are errors. `x.to_i!` halts instead, with
+  `RUNTIME-INVALID-NUMBER` or `RUNTIME-INTEGER-OVERFLOW`.
 - `Int.bit_and`, `bit_or`, `bit_xor`, `bit_not`, `shift_left`, `shift_right` and
   `shift_right_unsigned` work on the 64-bit two's complement form of their
   arguments and read the result back the same way. They are methods on `Int`
@@ -380,8 +381,8 @@ signature, effects and description, from the catalog that checking and execution
 use, and `ruby`: the signature in the Ruby method form (`s.strip() -> String`
 for `String.trim`), or null for a builtin with no method form. The help text
 and the helps of diagnostics write that form too (`s.strip`, not `String.trim`),
-while both names stay accepted. Effects are informational (I/O, tasks, or `test`). An unknown target exits
-2, with a hint when the name is a close builtin or one from another language
+while both names stay accepted. Effects are informational (I/O, tasks, or
+`test`). An unknown target exits 2, with a hint when the name is a close builtin or one from another language
 that the checker knows (`Hash.new`, `int`). A name that other languages use for
 a builtin (`strip`, `String.to_i`, `value!`) is not unknown: it exits 0 with
 the builtins it stands for, and `--json` prints

@@ -296,7 +296,7 @@ type:
   - **Help:** `s.split("")`, and `s.at(i)` for one character
 
 - **Written:** `s.matches?(...)`, `s.match?(...)`, `s.scan(...)`
-  - **Help:** no regular expressions: `contains?`, `starts_with?`, `ends_with?`,
+  - **Help:** no regular expressions: `include?`, `start_with?`, `end_with?`,
     `index_of`
 
 - **Written:** `s.gsub`, `s.sub`, `s.substring`, `s.substr`, `s.char_at`,

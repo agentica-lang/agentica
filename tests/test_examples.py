@@ -410,12 +410,45 @@ def test_every_alias_of_the_checker_tables_names_a_public_builtin():
     catalog = {builtin["name"] for builtin in json.loads(cli_run("help", "--json").stdout)}
     for target in re.findall(r'": "([A-Za-z]+\.[^"]+)"', check_table("method_aliases")):
         assert target in catalog, target
+    # ruby_form.agc reads each synonym in method_aliases: a synonym that the table lacks would name nothing.
+    aliases = set(re.findall(r'^    "([^"]+)": "', check_table("method_aliases"), re.MULTILINE))
+    synonyms = re.findall(r'"([A-Za-z]+\.[^"]+)"', check_table("ruby_synonyms"))
+    assert synonyms and set(synonyms) <= aliases
     # A foreign method name that stands for no builtin would answer `unknown builtin`. (No name answers with more
     # than the 8 builtins that cli_alias.agc lists, so none is dropped as too vague.)
     # A name with a hint of its own in foreign_names (`len`) answers that hint instead.
     hinted = set(re.findall(r'^    "([^"]+)": ', check_table("foreign_names"), re.MULTILINE))
     for name in re.findall(r'^    "([^"]+)": \[', check_table("foreign_methods"), re.MULTILINE):
         assert cli_run("help", name).code == (2 if name in hinted else 0), name
+
+
+def test_length_and_size_run_on_every_kind(program):
+    body = ('  m: Map[String, Int] = {"a": 1}\n'
+            '  puts("ab".length + "ab".size + [1].length + [1].size + m.length + m.size)\n'
+            '  puts(Set.new([1, 2]).length + Set.new([1, 2]).size)\n  puts((1..4).length)\n  puts((1...4).length)\n'
+            '  puts((1..4).size)')
+    out, code = run_text_io(program, "def main() -> Void\n%s\nend\n\n" % body)
+    assert (out, code) == ("8\n4\n4\n3\n4\n", None)
+
+
+def test_the_helps_of_diagnostics_name_the_ruby_form_not_the_builtin(tmp_path):
+    for expression, code, help_text in [
+            ('String.strip("a")', "CHECK-UNKNOWN-NAME", 'did you mean "s.strip"?'),
+            ('"a" |> String.trim()', "CHECK-PIPE-METHOD", '"a".strip')]:
+        source = "def main() -> Void\n  puts(%s)\nend\n\n" % expression
+        found = check_diagnostic(source, tmp_path)
+        assert (found["code"], found["help"]) == (code, help_text), expression
+    # A call in method form counts the arguments after the receiver and names the Ruby method; the callee note keeps
+    # the signature of the catalog.
+    for expression, name, internal in [('"a".include?()', "s.include?", "String.contains?"),
+                                       ("[1].push()", "list.push", "List.append"),
+                                       ('"a".strip(1)', "s.strip", "String.trim"),
+                                       ("m.length(1)", "map.size", "Map.size")]:
+        source = ("def main() -> Void\n  m: Map[String, Int] = {}\n  puts(%s)\nend\n\n" % expression)
+        found = check_diagnostic(source, tmp_path)
+        assert found["code"] == "CHECK-ARITY", expression
+        assert found["message"].startswith('"%s" expects' % name), expression
+        assert found["callee"].startswith(internal + "("), expression
 
 
 def test_an_unknown_method_suggests_the_ruby_method(tmp_path):
