@@ -53,6 +53,7 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 KNOWN_ISSUES: dict[int, str] = {
     486: "the multicore cases whose children are sh scripts (POSIX process ids, descriptor 3, ps) have no Windows test",
     489: "System.exit resets the open TCP sockets on Windows instead of closing them",
+    568: "the bytecode cache trusts any real folder on Windows (no owner or ACL check), and its link cases have no test",
     548: "native calls (extern functions) are built on Linux x86_64 only; macOS and Windows refuse them at load",
 }
 
@@ -78,7 +79,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_spec_packages.py",
     "tests/test_spec_symbol.py", "tests/test_spec_type_at.py", "tests/test_std_analysis.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_file_lines.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
-    "tests/test_vm_multicore.py", "tests/test_single_binary.py",
+    "tests/test_vm_multicore.py", "tests/test_single_binary.py", "tests/test_bytecode_cache.py",
 })
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_vm_stdout.py", "tests/test_single_binary.py"})
 HOST_ONLY_ALLOWED = {
@@ -103,7 +104,7 @@ AREAS = {
             "tests/test_spec_refs.py", "tests/test_spec_partial.py", "tests/test_examples.py", "tests/test_modules.py",
             "tests/test_source_utf8.py", "tests/test_bdd.py", "tests/test_bdd_posix.py",
             "tests/test_bdd_integration.py", "tests/test_unit_test.py", "tests/test_vm_diff_8.py",
-            "tests/test_single_binary.py", "tests/test_stdlib_distribution.py",
+            "tests/test_single_binary.py", "tests/test_stdlib_distribution.py", "tests/test_bytecode_cache.py",
         ],
     ),
     "spec": (

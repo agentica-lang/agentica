@@ -25,6 +25,15 @@ The exact rule behind a checker error or a core question. Builtin methods and
   `--flush-timeout`, `--schedulers N`, the `--deny-*` flags, `--sandbox`,
   `--source-root DIR`, `--ai`, `--json`. `agentica run --version` also lists the
   libraries.
+- `agentica F.agc` and `agentica test` keep the compiled program of each root
+  file in `_build/bytecode/`, in the folder of the nearest `agentica.toml`
+  (else beside F), and read it while F, its imports, `agentica.toml`,
+  `agentica.lock` and the places the `pkg/` search looked at are the same (a
+  hit has no front-end diagnostics). A folder or entry that is a link, not
+  yours, or writable by others is not used (`chmod go-w` a folder you made).
+  `--no-cache` skips it for one run; `AGENTICA_BUILD_DIR=DIR` replaces
+  `_build/`; an unwritable folder runs without it. `check`, `compile`,
+  `--dump*` and `run` never use it.
 - Scheduler threads (`--schedulers N`): `tasks.md`.
 
 ## Program shape

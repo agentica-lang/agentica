@@ -28,6 +28,7 @@
 ## user with the right to delete entries of the parent (FILE_DELETE_CHILD) could replace the run folder before `lock`
 ## pins it. The owner check of the sweep on Windows is #393; the pin before `lock` is #385.
 
+import RandomName from "../io/random_name"
 import {IO_TIMEOUT} from "bdd_files"
 
 # How many names a run tries before it gives up: a name can be taken, and a hostile user could take names on purpose.
@@ -129,56 +130,9 @@ export def sweep(temporary: String, own: Run) -> Void
   end
 end
 
-## A random name of 32 hex digits. Elsewhere it is 16 bytes of /dev/urandom, so it cannot be guessed (Random.int has a
-## 31-bit seed when the program is run with --seed). Windows has no such file: the name is 8 bytes of Random.int, 4 of
-## the clock and the process id, which is enough there because `Dir.mkdir_private` fails on a name that is taken and
-## makes a folder that only its owner can enter, so a guessed name costs a retry and gives no access.
-export def random_hex() -> Result[String]
-  if windows?()
-    return ok(process_hex())
-  end
-  source = try File.open("/dev/urandom", "read", IO_TIMEOUT)
-  bytes: List[Int] = []
-  while bytes.size < 16
-    got = File.read_bytes(source, 16 - bytes.size, IO_TIMEOUT)
-    if !got.ok? or got.unwrap!.size == 0
-      File.close(source, IO_TIMEOUT)
-      return error("cannot read /dev/urandom")
-    end
-    bytes = bytes.concat(got.unwrap!)
-  end
-  try File.close(source, IO_TIMEOUT)
-  return ok(hex_of(bytes))
-end
-
 # Whether the run is on Windows, where the temporary folder, the random names and the ownership checks differ.
 def windows?() -> Bool
   return System.os() == "windows"
-end
-
-def hex_of(bytes: List[Int]) -> String
-  digits = bytes.map do |byte: Int|
-    "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}"
-  end
-  return digits.join("")
-end
-
-# 8 bytes from Random.int, 4 from the clock and the process id as 4 bytes: 32 digits like the name from /dev/urandom.
-# The clock keeps the names from repeating when the user gives --seed, which makes Random.int deterministic.
-def process_hex() -> String
-  pid = System.pid()
-  now = Time.now_ms()
-  bytes: List[Int] = []
-  while bytes.size < 8
-    bytes = bytes.push(Random.int(0, 255))
-  end
-  for shift in [24, 16, 8, 0]
-    bytes = bytes.push(now.shift_right(shift).bit_and(255))
-  end
-  for shift in [24, 16, 8, 0]
-    bytes = bytes.push(pid.shift_right(shift).bit_and(255))
-  end
-  return hex_of(bytes)
 end
 
 # Removes the run folder and releases its lock. Elsewhere the lock is held until the folder is gone, so no other sweep
@@ -199,7 +153,7 @@ def make_private(temporary: String, prefix: String) -> Result[String]
   last = "no attempt was made"
   attempt = 0
   while attempt < ATTEMPTS
-    name = try random_hex()
+    name = try RandomName.hex()
     path = try Path.join([temporary, "#{prefix}#{name}"])
     made = Dir.mkdir_private(path, IO_TIMEOUT)
     if made.ok?
@@ -220,7 +174,7 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
     lock = try take_lock(current)
     return ok(Run(path: current, lock: lock))
   end
-  name = try random_hex()
+  name = try RandomName.hex()
   final = try Path.join([temporary, "agentica-bdd-#{name}"])
   lock = try take_lock(current)
   renamed = Path.rename(current, final, IO_TIMEOUT)

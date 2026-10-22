@@ -109,7 +109,7 @@ def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compil
   if !written.ok?
     return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
   end
-  return Compile.file(source, settings, "cannot read the runner")
+  return Compile.file(source, settings, "cannot read the runner", false)
 end
 
 # Compiles the step program and the tests, writes the files the runner reads, runs it and reads its report. An error
@@ -125,7 +125,7 @@ def prepare_and_run(
       found.ok? and found.unwrap!.kind == "directory"
     end
   end
-  entries = try compile_tests(Discover.discover(given), directory, settings)
+  entries = try compile_tests(Discover.discover(given), directory, settings, !options.no_cache)
   config = Runner.Config(
     vm: options.vm,
     steps_bytecode: steps.bytecode,
@@ -177,11 +177,11 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
     return ok(Steps(bytecode: "", source: EMBEDDED_STEPS_SOURCE, root: root, failure: "", given: false))
   elsif options.steps.size == 0
     try write_text(source, DEFAULT_STEPS)
-    compiled = Compile.file(source, settings, "cannot read the step program #{source}")
+    compiled = Compile.file(source, settings, "cannot read the step program #{source}", false)
   else
     source = Path.resolve(options.steps[0]).unwrap_or(options.steps[0])
     root = SourceRoot.option(options.steps[0])
-    compiled = Compile.file(source, settings, "cannot read the step program #{options.steps[0]}")
+    compiled = Compile.file(source, settings, "cannot read the step program #{options.steps[0]}", !options.no_cache)
   end
   bytecode = "#{directory}/steps.agcb"
   given = options.steps.size > 0
@@ -199,13 +199,13 @@ end
 # `front_end` for the runner to report, and writes nothing. The other entries (feature files and problems) are not
 # compiled.
 def compile_tests(
-  entries: List[Discover.Entry], directory: String, settings: Env.Settings
+  entries: List[Discover.Entry], directory: String, settings: Env.Settings, cached: Bool
 ) -> Result[List[Discover.Entry]]
   out: List[Discover.Entry] = []
   index = 0
   for entry in entries
     if entry.kind == "tests" and entry.problem == ""
-      out = out.push(try compile_test(entry, "#{directory}/test-#{index}.agcb", settings))
+      out = out.push(try compile_test(entry, "#{directory}/test-#{index}.agcb", settings, cached))
     else
       out = out.push(entry)
     end
@@ -214,9 +214,9 @@ def compile_tests(
   return ok(out)
 end
 
-def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings) -> Result[Discover.Entry]
+def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings, cached: Bool) -> Result[Discover.Entry]
   front_end = ""
-  case Compile.file(entry.path, settings, "cannot read the test file #{entry.path}")
+  case Compile.file(entry.path, settings, "cannot read the test file #{entry.path}", cached)
     Pipeline.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
     Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end

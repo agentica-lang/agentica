@@ -187,6 +187,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--deny-native` | refuses a program that declares an `extern` block or calls a `Native.wait_*` before it runs (`RUNTIME-NATIVE-DENIED`, exit 2). Every `--deny-*` flag turns it on |
 | `--sandbox` | all the `--deny-*` flags: use it to run code you do not trust. A program that can start processes escapes a single flag; use `--sandbox`, or add `--deny-run`. `agentica test` gives them to the test files, the step programs and the programs under test, not to its runner |
 | `--dump`, `--dump-ir` | print the checked tree or the lowered IR instead of running |
+| `--no-cache` | compiles the program again and does not keep its bytecode (see [Bytecode cache](#bytecode-cache)) |
 | `outline --stdin FILE` | lists the declarations of the text on standard input as if `FILE` held it, as `check --stdin FILE` does |
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
@@ -201,6 +202,14 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `--version` | prints the version |
 
 A flag wins over its environment variable.
+
+## Bytecode cache
+
+`agentica FILE.agc` and `agentica test` keep the compiled program of each root file in `_build/bytecode/`, and read it back while the sources are the same. A program that imports `std/analysis` starts in about a tenth of a second instead of six. The entry holds the SHA-256 of every file the program was built from (`agentica.toml` and `agentica.lock` too), what the compiler looked at to find each import (so a library that appears in an earlier folder of the `pkg/` search, a vendored copy, or a link that now leads elsewhere, compiles the program again), and the version and build of the binary. Any change compiles the program again and replaces the entry. There is one entry for each root file and nothing deletes it, so remove the folder when you like. `_build/` is in the folder of the project (the nearest `agentica.toml`) or, for a file outside a project, beside the file. Put `_build/` in your `.gitignore` (when the cache makes `_build/` it adds a `.gitignore` of its own, which `git` honours). Other build outputs may go in `_build/` later.
+
+The entry is bytecode that runs with your rights, so it is used only when `_build/`, `_build/bytecode/` and the file are yours alone: real folders and files (never links), owned by you, with no write bit for the group or others. The cache makes the folder with mode 0700. A folder that fails these checks is not read and not written, and the program runs without the cache, with no message; a shared folder (such as `/tmp`) is not a good place for it. A folder you make yourself (an existing `_build/` of another tool, or for `AGENTICA_BUILD_DIR`) must not be writable by the group or others (`chmod go-w DIR`, since a umask of 002 makes it 0775), or the cache stays off; leave it to the cache to make the folder and it is 0700. A file system that cannot rename without replacing never gets an entry. On Windows, which has no modes or owners to read, only the link and file-kind checks apply.
+
+`AGENTICA_BUILD_DIR` names another folder in place of `_build/`; the entries go in its `bytecode/` folder (its parent is made when missing). `--no-cache` neither reads nor writes the cache for one run. If the folder cannot be made or written the program runs without the cache. `check`, `compile`, `--dump`, `--dump-ir` and `run -- FILE.agcb` do not use it, and a program that does not compile is never cached. The `--deny-*` flags are for the program, not for the compiler, so the compiler still reads and writes the cache under them. If a run stops with `invalid bytecode` from a cached entry (an entry that is not valid bytecode but passes the cache's own checks, which only someone who writes the folder can make), remove `_build/bytecode/`; `--no-cache` runs the program without that entry.
 
 ## Test
 

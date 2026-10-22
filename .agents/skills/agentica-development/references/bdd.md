@@ -120,6 +120,11 @@ are registered in `stdlib/MODULES`.
     path is given (a missing default folder is skipped; nothing found is
     `CHECK-BDD-EMPTY`), and compiles each test file into `test-<n>.agcb` (a
     front-end diagnostic goes to the entry's `front_end` as `--json` writes it)
+  - `bdd_compile.agc` `file` takes the program from the bytecode cache
+    (`io/bytecode_cache.agc`) for a test file and a `--steps` file, not for
+    the driver's own runner and steps; `--no-cache` (in front of `test` or
+    after it, `Opts.Options.no_cache`) turns it off. The programs under test
+    that `std/bdd` starts as `agentica FILE.agc` use the cache like any run
   - the config gains `only`, `test_timeout_ms`, `steps_given` and
     `empty_message`
   - the runner VM's stdin is closed at once, since nothing is read from it
