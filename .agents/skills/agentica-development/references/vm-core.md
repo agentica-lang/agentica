@@ -117,8 +117,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`agc_io_start_then`, a poller on a new open or a duplicate of the
     descriptor from `agc_poller_open_copy` in `vm/loop.c`; on Windows a
     duplicate Winsock socket, polled with `uv_poll_init_socket`, one wait per
-    socket), the job's timer, the `cancel` half; every `Native.*` import
-    counts as native code
+    socket), the job's timer, the `cancel` half. `Native.string_at`,
+    `bytes_at` and `pointer` read memory at a `C.Pointer` and make one; every
+    `Native.*` import counts as native code
     for the refusal at load. The adapter
     `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and macOS) opens
     libraries with `dlopen` or `LoadLibraryExW` and calls with libffi;

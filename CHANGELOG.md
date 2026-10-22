@@ -13,11 +13,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Windows: `Native.wait_readable` and `Native.wait_writable` wait on a native
   library's socket; any other value is an error.
 
+### Changed
+
+- **Breaking:** the extern type `C.Int` is now `C.Int32`, so both widths are
+  explicit (`C.Int32`, `C.Int64`); `C.Int` is `PARSE-EXTERN-TYPE`.
+
 ## [0.9.0-beta.2] - 2026-10-22
 
 ### Added
 
 - `extern` blocks and `Native.wait_*` work on macOS (x86_64 and arm64).
+- `Native.string_at`, `Native.bytes_at` and `Native.pointer` read memory that C
+  returns and make sentinel pointers.
 
 ### Fixed
 

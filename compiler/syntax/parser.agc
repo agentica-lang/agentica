@@ -37,17 +37,19 @@ COMPOUND_OPERATORS: Map[String, String] = {
 
 # The C types an extern function may take, with their codes (Ast.Native) and the Agentica types the program sees.
 EXTERN_CODES = {
-  "C.Int": "i", "C.Int64": "l", "C.Double": "d", "C.Bool": "b", "C.String": "s", "C.Pointer": "p", "C.Bytes": "y",
+  "C.Int32": "i", "C.Int64": "l", "C.Double": "d", "C.Bool": "b", "C.String": "s", "C.Pointer": "p", "C.Bytes": "y",
 }
 EXTERN_TYPES = {"i": "Int", "l": "Int", "d": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "v": "Void"}
 EXTERN_TYPES_HELP = (
-  "extern functions take and return C.Int, C.Int64, C.Double, C.Bool, C.String, C.Pointer or a resource " +
+  "extern functions take and return C.Int32, C.Int64, C.Double, C.Bool, C.String, C.Pointer or a resource " +
   "declared above in the same block, take C.Bytes, or return Void"
 )
 EXTERN_OUT_HELP = (
-  "an out parameter is C.Int, C.Int64, C.Double, C.Bool, C.Pointer or a resource of the block; " +
+  "an out parameter is C.Int32, C.Int64, C.Double, C.Bool, C.Pointer or a resource of the block; " +
   "take a char ** as an out C.Pointer"
 )
+# C.Int was the name of C.Int32 before the widths became explicit; it is refused, with no alias.
+EXTERN_INT_HELP = "write C.Int32 (a 32-bit int) or C.Int64 (a 64-bit integer) instead of C.Int"
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
 EXTERN_MAX_PARAMS = 64
@@ -2223,12 +2225,16 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     end
   end
   if code == ""
+    help = EXTERN_TYPES_HELP
+    if ref.name == "C.Int" and ref.args.size == 0
+      help = EXTERN_INT_HELP
+    end
     return error(
       Base.bail_span(
         "PARSE-EXTERN-TYPE",
         "#{ref.name} is not a C type of an extern function",
         ref.span,
-        Base.hint(EXTERN_TYPES_HELP),
+        Base.hint(help),
       ),
     )
   end

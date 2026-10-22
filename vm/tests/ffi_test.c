@@ -1,6 +1,6 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
-   the cache of prepared calls, a resource made by the C library's malloc and freed once by Native.close, out
-   parameters (a value of each kind, an out resource, a NULL one, and a compute call cancelled with one), and
+   the prepared-call cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one,
+   the reads Native.string_at and bytes_at (NULL, length 0, a negative length, refused under no_files), and
    agc_ffi_refusal at load. Calls into the math and C libraries run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
@@ -144,7 +144,7 @@ static agc_value field(agc_value list, size_t k) { return agc_list_get(agc_as_li
 
 static void test_outs(void) {
 #ifdef AGC_FFI
-  /* An out C.Int and an out C.Double, after the C result. */
+  /* An out C.Int32 and an out C.Double, after the C result. */
   agc_value eight = agc_float(8.0);
   agc_value split = native_call("ddI frexp " LIBM, &eight, 1);
   assert(agc_list_len(agc_as_list(&vm, split)) == 2);
@@ -256,6 +256,47 @@ static void test_refusal(void) {
   assert(AGC_FFI_BUILT ? code == NULL : strcmp(code, "RUNTIME-NATIVE-UNSUPPORTED") == 0);
 }
 
+/* The row of agc_ffi_builtins with this name and arity. */
+static agc_builtin_fn row(const char *name, uint32_t arity) {
+  for (size_t k = 0; k < agc_ffi_builtin_count; k++)
+    if (strcmp(agc_ffi_builtins[k].name, name) == 0 && agc_ffi_builtins[k].arity == arity)
+      return agc_ffi_builtins[k].fn;
+  assert(!"no such row");
+  return NULL;
+}
+
+static void read_fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
+  if (setjmp(vm.fail) == 0) {
+    (void)row(name, arity)(&vm, args, 0);
+    assert(!"the read did not fail");
+  }
+  assert(strcmp(vm.outcome->code, code) == 0);
+}
+
+static void test_reads(void) {
+  static const char data[] = "ab\0c";
+  agc_value at[2] = {agc_c_pointer_value((void *)data), agc_int(4)};
+  assert(agc_as_string(&vm, row("Native.string_at", 1)(&vm, at, 0))->bytes == 2);
+  assert(agc_as_string(&vm, row("Native.string_at", 2)(&vm, at, 0))->bytes == 4);
+  assert(agc_list_len(agc_as_list(&vm, row("Native.bytes_at", 2)(&vm, at, 0))) == 4);
+  /* The pointer first: NULL fails before a negative length, and only NULL with length 0 reads as empty. */
+  agc_value null_at[2] = {agc_c_pointer_value(NULL), agc_int(0)};
+  assert(agc_as_string(&vm, row("Native.string_at", 2)(&vm, null_at, 0))->bytes == 0);
+  assert(agc_list_len(agc_as_list(&vm, row("Native.bytes_at", 2)(&vm, null_at, 0))) == 0);
+  read_fails("Native.string_at", 1, null_at, "RUNTIME-NATIVE-NULL");
+  null_at[1] = agc_int(-1);
+  read_fails("Native.bytes_at", 2, null_at, "RUNTIME-NATIVE-NULL");
+  at[1] = agc_int(-1);
+  read_fails("Native.string_at", 2, at, "RUNTIME-INVALID-COUNT");
+  read_fails("Native.bytes_at", 2, at, "RUNTIME-INVALID-COUNT");
+  vm.rt->no_files = true;
+  at[1] = agc_int(1);
+  read_fails("Native.string_at", 1, at, "RUNTIME-NATIVE-DENIED");
+  read_fails("Native.string_at", 2, at, "RUNTIME-NATIVE-DENIED");
+  read_fails("Native.bytes_at", 2, at, "RUNTIME-NATIVE-DENIED");
+  vm.rt->no_files = false;
+}
+
 int main(void) {
   agc_test_io_vm(&vm);
   test_bad_signatures();
@@ -263,6 +304,7 @@ int main(void) {
   test_resources();
   test_outs();
   test_compute_outs();
+  test_reads();
   test_refusal();
   return 0;
 }

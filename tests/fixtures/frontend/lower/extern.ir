@@ -1,5 +1,5 @@
 program 0:1:1-32:1 entry=9 globals=0
-source 0 "extern.agc" chars=941
+source 0 "extern.agc" chars=949
 struct s0 "PeerAccept" ["result","conn","count"]
 struct s1 "PeerSplit" ["whole"]
 struct s2 "PeerPair" ["result","other"]
