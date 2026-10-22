@@ -234,8 +234,14 @@ A declared name comes before the `pkg/` library folders, so it hides a library o
 
 A manifest that declares dependencies needs an `agentica.lock` beside it. The lock holds the exact commit and a hash of the `.agc` files of every package, direct or not. A build never downloads anything: it finds each package by its commit and checks its hash when an import first loads it.
 
-The packages come from a cache folder, `~/.cache/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, which you fill yourself (on Windows, `%LOCALAPPDATA%\agentica\cache\pkg\`; `XDG_CACHE_HOME` replaces `~/.cache` when it is an absolute path). The commands that fill the cache are planned.
+The packages come from a cache folder, `~/.cache/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, (on Windows, `%LOCALAPPDATA%\agentica\cache\pkg\`; `XDG_CACHE_HOME` replaces `~/.cache` when it is an absolute path). `agentica install` fills it from the lock and never changes the lock.
 
-Problems are reported with `PKG-` codes: a bad manifest or lock, a lock that does not match the manifest, one name with two sources, or a package file that changed. A declared package that is not in the cache is `CHECK-IMPORT-PACKAGE`.
+`agentica install` runs the system `git`, so your git config, SSH keys and credential helpers apply. For each package of the lock that is not in the cache, it fetches the tag (or the locked commit) without a checkout, checks that the commit is the locked one and that the hash of the copied `.agc` files is the locked hash, and puts the files in the cache. A package that is already there with the right hash is not fetched, and a cache that is full needs no `git` and no network. Only the `.agc` files and the `agentica.toml` of the package are copied. If a tag now points to another commit, you get `PKG-TAG-MOVED`; if the files are not the locked ones, `PKG-HASH-MISMATCH`; if git fails, `PKG-FETCH`. Writing the lock (`add`, `update`) and `vendor` are planned.
+
+```sh
+agentica install
+```
+
+Problems are reported with `PKG-` codes: a bad manifest or lock, a lock that does not match the manifest, one name with two sources, or a package file that changed, or a fetch that failed. A declared package that is not in the cache is `CHECK-IMPORT-PACKAGE`.
 
 Import cycles are errors (`CHECK-IMPORT-CYCLE`), and so are missing files (`CHECK-IMPORT-IO`).

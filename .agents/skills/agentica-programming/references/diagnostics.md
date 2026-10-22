@@ -252,10 +252,20 @@ there, at a character boundary, and ends with `...`.
     expression
 
 - **Code:** `PKG-HASH-MISMATCH`, `PKG-SYMLINK`
-  - **Meaning:** the `.agc` files of a package in the cache are not the ones the
-    lock hashes (an edited, added or missing file), or one is a symbolic link,
-    or the `agentica.toml` of the package is not a regular file; remove the
-    folder and fill the cache again
+  - **Meaning:** the `.agc` files of a package in the cache (or just fetched by
+    `install`) are not the ones the lock hashes (an edited, added or missing
+    file), or one is a symbolic link or submodule, or the `agentica.toml` of the
+    package is not a regular file; remove the folder and run `agentica install`
+    again
+
+- **Code:** `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`,
+  `PKG-MANIFEST-MISSING`
+  - **Meaning:** `agentica install` failed: git did not start or failed, the
+    tag or commit does not exist, a copied path is unsafe or the cache cannot be
+    written (`PKG-FETCH`, git's message in the help); the tag now points to
+    another commit than `agentica.lock` (the lock is not changed); two package
+    paths differ only in case; or no `agentica.toml` was found. The report names
+    the file and the key path of the entry, such as `package[0].tag`
 
 - **Code:** `CHECK-IMPORT-RENAME`
   - **Meaning:** `import {A as b}` where the new name breaks the case rule of

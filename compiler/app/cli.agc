@@ -1,7 +1,7 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then does what the
 ## first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a module with
 ## `doc`, list the declarations of a file with `outline`, give the type at a position with `type-at`, list the
-## references to a name with `refs`, or start the tests.
+## references to a name with `refs`, fill the package cache with `install`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -44,6 +44,7 @@ import QueryPosition from "../query/query_position"
 import SourceFile from "../syntax/source_file"
 import CliDoc from "cli_doc"
 import Help from "cli_help"
+import Install from "cli_install"
 import Launch from "cli_launch"
 import Options from "cli_options"
 import CliQuery from "cli_query"
@@ -90,6 +91,8 @@ def dispatch(session: Session) -> Int
     return emit(Help.help(words, session.options.style))
   elsif first == "doc"
     return doc(session, words)
+  elsif first == "install"
+    return install(session, words.drop(1))
   elsif first == "outline" or first == "type-at"
     return query(session, first, words.drop(1))
   elsif first == "symbol"
@@ -123,6 +126,14 @@ end
 # `doc PATH`: a complete answer, or the first problem of the module, shown as a problem of PATH.
 def doc(session: Session, words: List[String]) -> Int
   return answered(session, CliDoc.run(words, session.options.style, session.settings), "")
+end
+
+# `install`: it takes no word; the project is the one of the working folder.
+def install(session: Session, words: List[String]) -> Int
+  if words.size != 0
+    return emit(Reply.failed(2, Texts.usage_text()))
+  end
+  return answered(session, Install.run(session.settings, session.options.style), "")
 end
 
 # What a command gave: print the answer, or reject the first problem of the program. A QUERY- problem is a mistake in

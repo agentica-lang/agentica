@@ -192,6 +192,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
 | `check --stdin FILE` | checks the text on standard input as if `FILE` held it, for an editor buffer that is not saved. `FILE` need not exist, but its folder is where imports, `agentica.toml` and `agc_libs/` are found; other files come from the disk. With `--json`, the diagnostic names `FILE` |
 | `type-at --partial`, `refs FILE:LINE:COL --partial` | answer although some functions do not check, from the ones that do and from the link: the JSON has `"partial": true` and `diagnostics`, and the exit code is 0. `refs` takes it for a position without PATH. `outline` takes the option and ignores it |
+| `install` | fills the package cache from `agentica.lock` with the system `git` (see the modules tour); never changes the lock |
 | `compile FILE -o OUT` | writes VM bytecode |
 | `run [OPTIONS] -- FILE.agcb [ARGS...]` | runs bytecode; `run` must be the first word. Options: the ones above except `--dump*`, plus `--source-root DIR`, `--ai`, `--json`. `run --version` lists the linked libraries |
 | `--version` | prints the version |
