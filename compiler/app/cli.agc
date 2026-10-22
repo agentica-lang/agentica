@@ -1,7 +1,8 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then does what the
 ## first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a module with
 ## `doc`, list the declarations of a file with `outline`, give the type at a position with `type-at`, list the
-## references to a name with `refs`, fill the package cache with `install`, or start the tests.
+## references to a name with `refs`, fill the package cache with `install`, change the packages with `add` and
+## `update`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -42,6 +43,7 @@ import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
 import SourceFile from "../syntax/source_file"
+import Add from "cli_add"
 import CliDoc from "cli_doc"
 import Help from "cli_help"
 import Install from "cli_install"
@@ -93,6 +95,10 @@ def dispatch(session: Session) -> Int
     return doc(session, words)
   elsif first == "install"
     return install(session, words.drop(1))
+  elsif first == "add"
+    return answered(session, Add.add(session.settings, session.options.style, words.drop(1)), "")
+  elsif first == "update"
+    return answered(session, Add.update(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "outline" or first == "type-at"
     return query(session, first, words.drop(1))
   elsif first == "symbol"

@@ -1,8 +1,8 @@
-"""Packages for the tests of the manager (docs/future/45-packages.md, phases 45a and 45b).
+"""Packages for the tests of the manager (docs/future/45-packages.md, phases 45a to 45c).
 
-`Workspace` fills the package cache by hand; `Remotes` makes git repositories that `agentica install` fetches from. `package_hash` is the hash rule of
-docs/grammar/05b-modules.md written again with hashlib and os.walk, as a second implementation to check the Agentica
-one against.
+`Workspace` fills the package cache by hand; `Remotes` makes git repositories that `agentica install`, `add` and
+`update` fetch from. `package_hash` is the hash rule of docs/grammar/05b-modules.md written again with hashlib and
+os.walk, as a second implementation to check the Agentica one against.
 """
 import hashlib
 import json
@@ -11,9 +11,16 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from tests.agentica_test import WINDOWS
+import pytest
+
+from tests.agentica_test import WINDOWS, tool, vm_environment
 
 COMMIT = "a" * 40
+
+# A package that imports another one, and a program that imports it, for the tests that fetch.
+GREET = 'import Tools from "pkg/tools/bang"\n\nexport def hello() -> String\n  return "hello" + Tools.bang()\nend\n'
+BANG = 'export def bang() -> String\n  return "!"\nend\n'
+MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Greet.hello())\nend\n'
 
 
 def package_hash(folder):
@@ -103,8 +110,9 @@ class Workspace:
         self.locked.append(entry)
         return entry
 
-    def write_lock(self, edit=None):
-        """Writes agentica.lock from the packages added so far, sorted by name; `edit` may change the entries first."""
+    def lock_text(self, edit=None):
+        """The text of agentica.lock for the packages added so far, sorted by name; `edit` may change the entries
+        first. It is the layout of docs/grammar/05b-modules.md, which `agentica add` and `update` also write."""
         entries = sorted((dict(entry) for entry in self.locked), key=lambda entry: entry["name"])
         if edit:
             edit(entries)
@@ -115,7 +123,11 @@ class Workspace:
             for key in order + [key for key in entry if key not in order]:
                 if key in entry:
                     text += "%s = %s\n" % (key, json.dumps(entry[key]))
-        (self.project / "agentica.lock").write_text(text, encoding="utf-8")
+        return text
+
+    def write_lock(self, edit=None):
+        """Writes agentica.lock from the packages added so far."""
+        (self.project / "agentica.lock").write_text(self.lock_text(edit), encoding="utf-8")
 
     def write_manifest(self, dependencies, extra=""):
         """Writes agentica.toml with these {name: dependency} entries and any text after them."""
@@ -192,3 +204,48 @@ class Remotes:
             pushed.append("refs/tags/" + tag)
         self.git(*pushed, cwd=work)
         return commit
+
+
+def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None):
+    """Notes the lock entry of a package whose files the remote holds. The hash comes from the Python implementation of
+    the hash rule, over a scratch copy of the .agc files."""
+    scratch = ws.base / ("scratch-" + path.replace("/", "-"))
+    shutil.rmtree(scratch, ignore_errors=True)
+    for relative, content in files.items():
+        if relative.endswith(".agc"):
+            (scratch / relative).parent.mkdir(parents=True, exist_ok=True)
+            (scratch / relative).write_bytes(content if isinstance(content, bytes) else content.encode("utf-8"))
+    entry = {"name": name or path.split("/")[1], "git": remotes.url(path), "commit": commit,
+             "hash": package_hash(scratch) if scratch.exists() else package_hash(ws.base)}
+    entry.update({"tag": tag} if ref is None else {"ref": ref})
+    ws.locked.append(entry)
+    return entry
+
+
+def environment(ws, remotes, **extra):
+    return vm_environment({"AGENTICA_PATH": "", **ws.cache_variables, **remotes.environment, **extra})
+
+
+def assert_at_key(problem, code, file, key_path):
+    assert problem["code"] == code
+    assert Path(problem["file"]) == Path(file)
+    assert problem.get("key_path", "") == key_path
+
+
+def cached_files(folder):
+    return sorted(path.relative_to(folder).as_posix() for path in folder.rglob("*") if path.is_file())
+
+
+@pytest.fixture
+def git():
+    return tool("git")
+
+
+@pytest.fixture
+def remotes(tmp_path, git):
+    return Remotes(tmp_path)
+
+
+@pytest.fixture
+def ws(tmp_path):
+    return Workspace(tmp_path)

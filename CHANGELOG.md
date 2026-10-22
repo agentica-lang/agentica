@@ -28,6 +28,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   system `git`, checks the commit and the hash, and never changes the lock.
   **Breaking:** `install` is a command now, so a script named `install` runs as
   `agentica ./install`.
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`) adds a dependency to
+  `agentica.toml` (one new line, comments stay) and writes `agentica.lock`;
+  `agentica update [NAME]` takes the tags again and rewrites the lock.
+  **Breaking:** `add` and `update` are commands now, so scripts with those
+  names run as `agentica ./add` and `agentica ./update`.
 
 ### Removed
 

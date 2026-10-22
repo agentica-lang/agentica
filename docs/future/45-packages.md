@@ -1,10 +1,10 @@
 ## 45. Packages
 
 **Status:** Designed. The built parts (45-0 `std/toml`, the manifest, the lock
-and the cache imports of 45a, and the fetch and `install` of 45b) are specified
-in
+and the cache imports of 45a, the fetch and `install` of 45b, and `add`,
+`update` and the writers of 45c) are specified in
 [`05b-modules.md`](../grammar/05b-modules.md), the contract. This file keeps
-the decisions and what is pending (45c and 45d). It is item 3 of the list after
+the decisions and what is pending (45d). It is item 3 of the list after
 0.8.0 in the [roadmap](../roadmap/README.md): after the FFI core (issue
 [#534](https://github.com/sonic182/agentica/issues/534)) and before the native
 packages (FFI-b).
@@ -52,8 +52,9 @@ form are decided in 45.14, questions 10 and 11.
 - The manifest is the nearest `agentica.toml` going up to the root of the file
   system, so an unrelated file in a shared parent folder (such as `/tmp`)
   counts. This is a known, breaking choice (CHANGELOG).
-- A package's `name` is the default local name that `agentica add` (45c)
-  proposes. Nothing checks it against the names that others give it.
+- A package's `name` is only a hint for the local name: `agentica add` (45c)
+  takes the local name as an argument and never reads it. Nothing checks it
+  against the names that others give it.
 
 **Pending: the `[style]` rule.** `max_line_width` is the longest line allowed,
 in characters (Unicode code points, not bytes). It counts every line, comments
@@ -68,7 +69,7 @@ stays long.
 ### 45.6 Lock and hash
 
 **Built.** The lock layout, the hash rule and the stale checks are in
-[05b](../grammar/05b-modules.md), Packages. Pending: the lock writer (45c,
+[05b](../grammar/05b-modules.md), Packages. The lock writer is built (45c,
 45.9).
 
 The lock keeps `git` and the pin as the manifests write them, not the URL after
@@ -91,8 +92,7 @@ machine's git config.
 ### 45.8 Fetching and the cache
 
 **Built (45b):** the cache layout, the stored names, the hash rule and the
-fetch of `install` are in 05b. What 45b does, and what it leaves for 45c and
-45d:
+fetch of `install` are in 05b. What 45b does, and what 45c adds on it:
 
 - Git runs as the system `git`, so the user's git config, SSH keys and
   credential helpers apply. The tool has no HTTP client and keeps no tokens. The
@@ -106,8 +106,8 @@ fetch of `install` are in 05b. What 45b does, and what it leaves for 45c and
 - The package's `agentica.toml` is read from the commit tree. Only its `.agc`
   files and that manifest are copied. `install` checks the copied manifests as
   a build does (a name the lock lacks is `PKG-LOCK-STALE`, another source is
-  `PKG-SOURCE-CONFLICT`). Pending (45c): when `add` or `update` writes the lock,
-  a name the lock lacks is added to it.
+  `PKG-SOURCE-CONFLICT`). `add` and `update` read the same manifests and add the
+  names the lock lacks to the lock they write (45.9).
 - Two copied `.agc` paths that differ only in case are `PKG-PATH-COLLISION`, so
   the package works on case-insensitive file systems. Only case is folded: not
   Unicode normalisation (macOS) or Windows device names; the lock hash still
@@ -129,11 +129,34 @@ fetch of `install` are in 05b. What 45b does, and what it leaves for 45c and
 
 ### 45.9 Commands and errors
 
-`install` is built (45b); `add`, `update` and `vendor` are pending (45c, 45d).
+`install` (45b), `add` and `update` (45c) are built; `vendor` is pending (45d).
 The exact command line is decided in each phase.
 
-- `agentica add NAME URL` with a `tag` or a `ref` adds the dependency to
-  `agentica.toml`, rewrites the lock and fills the cache.
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole 40-digit id)
+  adds the dependency to `agentica.toml`, rewrites the lock and fills the
+  cache. **Built (45c).** The local name is always an argument (the package's
+  own `name` is not read), and the options come last, in that order. Decided:
+  - It adds one line to the manifest and changes no other byte, so comments,
+    blank lines, key order and line endings stay. The line goes after the last
+    entry of `[dependencies]`, or in a new `[dependencies]` table at the end
+    of the file. The new text is read back as a manifest before anything is
+    saved; a layout that the edit cannot handle (`dependencies = {}` inline, or
+    dotted keys) is `PKG-MANIFEST-EDIT` and the user writes the line.
+  - The lock lists every package of the build, so `add` fetches the new
+    package and the dependencies in its manifest, and follows theirs. A
+    locked package with the same source is kept (no git when it is cached); a
+    name the lock lacks, or has with another source, is fetched. Two sources for
+    one name are `PKG-SOURCE-CONFLICT`, at the manifest that asked second.
+  - A name that the manifest has is `PKG-DEPENDENCY-EXISTS`: a pin changes by
+    editing the manifest and `update NAME`. No manifest is
+    `PKG-MANIFEST-MISSING`; `add` does not make one.
+  - Nothing is written unless everything worked. The lock is written first
+    (a lock with a spare package is good, a manifest the lock lacks is
+    `PKG-LOCK-STALE`), then the manifest. A write that fails is `PKG-WRITE`.
+  - A name, URL, tag or commit that the manifest would refuse, and a wrong
+    number of words, are usage errors (exit 2). A `--ref` that is a part of the
+    id is refused: `git fetch` takes whole ids only. Tags are fetched from
+    SHA-1 repositories; a SHA-256 repository works through a `--ref` only.
 - `agentica install` (built, 45b) fills the cache from the lock and never
   changes the lock. A manifest that asks for more than the lock holds fails with
   `PKG-LOCK-STALE`. It takes no argument and works on the project of the working
@@ -142,7 +165,18 @@ The exact command line is decided in each phase.
   with no manifest is `PKG-MANIFEST-MISSING`. A cache that is already full needs
   no `git` and no network.
 - `agentica update [NAME]` re-resolves one package, or all of them, from the
-  manifest pins, and rewrites the lock.
+  manifest pins, and rewrites the lock. **Built (45c).** Decided:
+  - With no name it fetches every tag pin again; with a name (a dependency of
+    the manifest, else `PKG-DEPENDENCY-UNKNOWN`) only that one. A moved tag is
+    the new commit in the lock, which is what `PKG-TAG-MOVED` of `install`
+    asks for. A `ref` never moves, so a package pinned by a commit is not
+    fetched again.
+  - The result is every package of the build and no other, so a package that
+    nothing asks for any more is dropped, and a lock that is missing or stale
+    because the manifest was edited by hand is made right. A project with no
+    dependency and no lock gets no lock.
+  - The lock is the same bytes when nothing moved. The answer lists the
+    `added`, `updated` and `removed` packages, or says `nothing to update`.
 - `agentica vendor` copies the locked packages into `agc_libs/<name>/`, after
   it fills the missing cache entries. A CI job without network then builds from
   the copies, and the hash check proves they are the locked files. For a
@@ -181,8 +215,9 @@ breaks "no code runs at install", comes later and needs its own grant.
 `tomllib` peer, round trips), the manifest and lock tests in
 `tests/test_spec_packages.py`, and the fetch tests of 45b in
 `tests/test_spec_package_fetch.py` (end to end, offline, moved tag, hash
-mismatch, fetch errors, links and case collisions), which run through the CLI.
-The pending tests are below.
+mismatch, fetch errors, links and case collisions) and the writer tests of 45c
+in `tests/test_spec_package_add.py` (below), which run through the CLI. The
+pending tests are below.
 
 - The fetch and writer tests use a bare git repository in a temporary folder
   as the remote. 45b needs no knob of the tool: a throwaway `HOME` has a
@@ -192,10 +227,13 @@ The pending tests are below.
 - Tests go through the CLI with `--json check`. They assert codes and spans, or
   file and key paths, never message text (AGENTS.md). Git tests need `git`: CI
   installs it and fails if it is missing.
-- Each pending error code gets a test that asserts the code. Also: a round trip
-  of `agentica.lock` and `agentica.toml` (read, write back, same bytes; 45c);
-  end to end (45b, 45c: `add`, then `install` into an empty cache, then a
-  program imports `pkg/name/mod` and prints); offline (45b: with the cache
+- Each pending error code gets a test that asserts the code. The round trips
+  of 45c compare bytes: a lock made by an independent Python writer goes
+  through `update` unchanged, a lock written by `add` equals the Python
+  writer's text, and a manifest keeps every byte but the new line, in several
+  layouts (comments, CRLF, no final newline, sub-tables). Also: end to end (45b,
+  45c: `add`, then `install`, then a program imports `pkg/name/mod` and
+  prints); offline (45b: with the cache
   filled and no `git` on `PATH`, a build passes, which proves that a build never
   fetches); moved tag (45b: a fetched tag that does not peel to the locked
   commit gives `PKG-TAG-MOVED`).
@@ -204,8 +242,8 @@ The pending tests are below.
 
 - **45b. Fetch and install. Done.** The git fetch, the commit check, the hash
   check, the cache fill, `install` and the fetch errors (45.8, 45.9).
-- **45c. Add and update.** `add`, `update`, the lock writer and the manifest
-  writer, with the rules of 45.7. The round trip of 45.11.
+- **45c. Add and update. Done.** `add`, `update`, the lock writer and the
+  manifest writer, with the rules of 45.7. The round trip of 45.11.
 - **45d. Vendor.** `vendor`, the `agc_libs/<name>/` layout, and the build order
   that prefers a vendored copy of a declared name (45.9).
 

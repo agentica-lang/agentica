@@ -124,8 +124,10 @@ dependencies.
 
 A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
-`agentica.lock`: write the lock by hand and run `agentica install` to fill the
-cache. A declared package that is not in the cache is `CHECK-IMPORT-PACKAGE`.
+`agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
+id) adds a dependency and writes the lock, `agentica update [NAME]` moves tag
+pins, and `agentica install` fills the cache from the lock. A declared package
+that is not in the cache is `CHECK-IMPORT-PACKAGE`.
 
 ```toml
 name = "notes"
@@ -188,6 +190,17 @@ import Sqlite from "pkg/sqlite/db"
   `<cache>` is `$XDG_CACHE_HOME/agentica/pkg` when `XDG_CACHE_HOME` is an
   absolute path, else `~/.cache/agentica/pkg`; on Windows it is
   `%LOCALAPPDATA%\agentica\cache\pkg`.
+- `add` and `update` run `git` as `install` does and write `agentica.lock`
+  (every package of the build, sorted by name, and no other). `add` puts one
+  line in `[dependencies]` of `agentica.toml` and changes no other byte
+  (comments and line endings stay); a name that is a dependency already is
+  `PKG-DEPENDENCY-EXISTS`, and a layout the edit cannot handle (`dependencies =
+  {}`) is `PKG-MANIFEST-EDIT`: write the line by hand. `update` with no name
+  fetches every tag again (a moved tag is the new commit); with a name, that
+  dependency only (not a dependency: `PKG-DEPENDENCY-UNKNOWN`). It also makes a
+  missing or stale lock right. A commit pin never moves. A bad name, URL, tag or
+  commit on the command line is a usage error (exit 2). A lock that cannot be
+  written is `PKG-WRITE`. Nothing is written when a step fails.
 - The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte
   stream. For each `.agc` file below the package folder, in bytewise order of
   its path relative to the folder (written with `/`), the stream holds the

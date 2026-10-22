@@ -6,11 +6,16 @@
 ## a folder of the cache root and renamed into place in one step, so the cache never holds half a package. A folder
 ## that is already in place is hashed, never overwritten. A failure is a packed failure that names the lock and the
 ## key of the entry (link_failure.agc, fail_key).
+##
+## `fill` fetches what the lock names. `resolve` (for `add` and `update`) fetches a pin that has no commit or hash yet,
+## learns both from what it fetched, and puts the files in the cache by the same steps.
 
 import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
+import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
+import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
 import PackageCache from "../packages/package_cache"
 import PackageHash from "../packages/package_hash"
@@ -52,6 +57,17 @@ enum Seen
   Matches
 end
 
+## The folder of the package cache, or the failure for `file` (the lock, whose entries are about to be filled) when the
+## environment leaves no place for it.
+export def cache_root(env: Env.Env, file: String) -> Result[String]
+  cache = PackageCache.root(env)
+  if cache == ""
+    message = "there is no package cache folder: HOME is not set"
+    return error(Failure.fail_file(file, "PKG-FETCH", message, Failure.hint("set HOME or XDG_CACHE_HOME")))
+  end
+  return ok(cache)
+end
+
 ## Puts the files of the locked package into the cache under `cache` (a folder; PackageCache.root).
 export def fill(workspace: Workspace.Workspace, cache: String, place: Place, locked: Lock.Locked) -> Result[Filled]
   target = PackageCache.folder(cache, locked.source.git, locked.commit)
@@ -60,6 +76,35 @@ export def fill(workspace: Workspace.Workspace, cache: String, place: Place, loc
     Seen.Matches -> return ok(Filled.Present)
     Seen.Absent -> return fetch(workspace, cache, place, target, locked)
   end
+end
+
+## Fetches the pin of a package that is not locked yet, for `add` and `update`: the lock entry it gives has the commit
+## that the pin points to and the hash of the files, and the files are in the cache as `fill` would put them. A tag may
+## point anywhere now (that is what `update` is for); a `ref` must be the whole commit, since git cannot fetch an
+## abbreviation. `place` names the dependency in the manifest that asks for it.
+export def resolve(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  name: String,
+  source: GitSource.Source,
+) -> Result[Lock.Locked]
+  if source.ref != "" and source.ref.length != 40 and source.ref.length != 64
+    message = "git fetches a commit by its whole id, and #{source.ref} is only a part of it"
+    return error(fail(place, "PKG-FETCH", "ref", message, "write the 40 (or 64) digits of the commit"))
+  end
+  # A ref is the commit already; a tag's commit is learnt from the fetch.
+  pin = Lock.Locked(name: name, source: source, commit: source.ref, hash: "")
+  made = make_temp(cache)
+  if !made.ok?
+    return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
+  end
+  temp = made.unwrap!
+  scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
+  resolved = resolve_into(workspace, cache, place, scratch, pin)
+  # As in fetch: a temporary folder that cannot be removed does not change the answer.
+  Path.remove(temp, FS_TIMEOUT_MS)
+  return resolved
 end
 
 ## The failure for the key of an entry ("" for the entry as a whole). An empty help is no help.
@@ -144,13 +189,39 @@ def fetch_into(
   try init_repository(place, scratch, locked)
   try fetch_pin(place, scratch, locked)
   try check_commit(place, scratch, locked)
-  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", locked.commit]))
-  case Tree.plan(listing)
-    Tree.Plan.Refused(fault) -> return error(fail(place, fault.code, fault.key, fault.message, fault.help))
-    Tree.Plan.Files(blobs) -> try copy_blobs(place, scratch, blobs)
-  end
+  try copy_tree(place, scratch, locked.commit)
   try check_hash(workspace, place, scratch.files, locked)
   return move_into_place(workspace, place, scratch.files, target, locked)
+end
+
+# The files of the commit that the hash covers (and the manifest) go to scratch.files.
+def copy_tree(place: Place, scratch: Scratch, commit: String) -> Result[Void]
+  listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", commit]))
+  case Tree.plan(listing)
+    Tree.Plan.Refused(fault) -> return error(fail(place, fault.code, fault.key, fault.message, fault.help))
+    Tree.Plan.Files(blobs) -> return copy_blobs(place, scratch, blobs)
+  end
+end
+
+def resolve_into(
+  workspace: Workspace.Workspace,
+  cache: String,
+  place: Place,
+  scratch: Scratch,
+  pin: Lock.Locked,
+) -> Result[Lock.Locked]
+  try init_repository(place, scratch, pin)
+  try fetch_pin(place, scratch, pin)
+  commit = try peel(place, scratch)
+  if pin.source.ref != "" and commit != pin.source.ref
+    return error(fail(place, "PKG-FETCH", "ref", "git fetched #{commit}, not #{pin.source.ref}", ""))
+  end
+  try copy_tree(place, scratch, commit)
+  hash = try hash_of(workspace, place, pin, scratch.files)
+  locked = Lock.Locked(name: pin.name, source: pin.source, commit: commit, hash: hash)
+  target = PackageCache.folder(cache, locked.source.git, commit)
+  try move_into_place(workspace, place, scratch.files, target, locked)
+  return ok(locked)
 end
 
 # An empty template, so a hook from the user's template folder cannot run.
@@ -180,8 +251,7 @@ end
 
 # The fetched pin must be the locked commit; a tag that now points elsewhere is a moved tag, never a new lock.
 def check_commit(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Void]
-  peeled = try git_text(place, scratch, inside(scratch, ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]))
-  commit = peeled.trim
+  commit = try peel(place, scratch)
   if commit == locked.commit
     return ok()
   end
@@ -190,6 +260,12 @@ def check_commit(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[
     return error(fail(place, "PKG-TAG-MOVED", "tag", message, "the lock is not changed; update it on purpose"))
   end
   return error(fail(place, "PKG-FETCH", "commit", "git fetched #{commit}, not #{locked.commit}", ""))
+end
+
+# The commit that the fetched pin points to (a tag is peeled).
+def peel(place: Place, scratch: Scratch) -> Result[String]
+  peeled = try git_text(place, scratch, inside(scratch, ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]))
+  return ok(peeled.trim)
 end
 
 def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result[Void]
@@ -229,13 +305,18 @@ def write_file(place: Place, path: String, data: List[Int]) -> Result[Void]
 end
 
 def check_hash(workspace: Workspace.Workspace, place: Place, files: String, locked: Lock.Locked) -> Result[Void]
+  found = try hash_of(workspace, place, locked, files)
+  if found == locked.hash
+    return ok()
+  end
+  message = "the files fetched for #{locked.name} are not the ones the lock names (#{found})"
+  return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "the lock is not changed; update it on purpose"))
+end
+
+# The hash of the fetched files (the pin's, or the locked entry's, name is only for the messages).
+def hash_of(workspace: Workspace.Workspace, place: Place, locked: Lock.Locked, files: String) -> Result[String]
   case PackageHash.hash_folder(workspace, files)
-    PackageHash.Hashed.Hash(found) ->
-      if found == locked.hash
-        return ok()
-      end
-      message = "the files fetched for #{locked.name} are not the ones the lock names (#{found})"
-      return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "the lock is not changed; update it on purpose"))
+    PackageHash.Hashed.Hash(found) -> return ok(found)
     PackageHash.Hashed.Link(path) ->
       return error(fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", ""))
     PackageHash.Hashed.Unreadable(message) ->

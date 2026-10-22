@@ -1,7 +1,8 @@
 ## The lock agentica.lock (docs/grammar/05b-modules.md): one entry for each package of the build, by local name,
 ## flat: the name, the git source and its pin (a tag or a ref), the exact commit and the hash of its .agc files. A
 ## failure is PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one file; project.agc checks
-## it against the manifest, and package_import.agc against the manifest of each package it loads.
+## it against the manifest, and package_import.agc against the manifest of each package it loads. `encode` is the
+## writer (docs/future/45-packages.md, 45.9): the file is the tool's own, so it is written whole.
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
@@ -61,6 +62,17 @@ export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
   return ok(Lock(file: file, packages: packages))
 end
 
+## The text of a lock with these packages: `version = 1`, then one `[[package]]` for each, sorted by name, with the
+## keys in the order of 05b. The same packages always give the same bytes, so a lock that did not change makes no diff,
+## and `read` gives back what was written.
+export def encode(packages: List[Locked]) -> String
+  sorted = packages.sort_by do |locked| locked.name end
+  tables = sorted.map do |locked| package_table(locked) end
+  root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT), "package": Toml.Value.Array(tables)})
+  # The keys are fixed and every value is a string or the version, so std/toml has no reason to refuse them.
+  return Toml.encode(root).unwrap!
+end
+
 ## The locked package with this name, or an error.
 export def find(lock: Lock, name: String) -> Result[Locked]
   for locked in lock.packages
@@ -69,6 +81,25 @@ export def find(lock: Lock, name: String) -> Result[Locked]
     end
   end
   return error("#{name} is not in the lock")
+end
+
+# The keys of a package, in the order of 05b: name, git, tag or ref, commit, hash.
+def package_table(locked: Locked) -> Toml.Value
+  pin = Toml.Value.Str(locked.source.ref)
+  pin_key = "ref"
+  if locked.source.tag != ""
+    pin = Toml.Value.Str(locked.source.tag)
+    pin_key = "tag"
+  end
+  return Toml.Value.Table(
+    {
+      "name": Toml.Value.Str(locked.name),
+      "git": Toml.Value.Str(locked.source.git),
+      pin_key: pin,
+      "commit": Toml.Value.Str(locked.commit),
+      "hash": Toml.Value.Str(locked.hash),
+    },
+  )
 end
 
 def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Locked]

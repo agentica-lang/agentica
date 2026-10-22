@@ -31,6 +31,12 @@ end
 export def read(workspace: Workspace.Workspace, file: String) -> Result[Manifest]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = try Reader.read_text(workspace, reading)
+  return parse(file, text)
+end
+
+## Reads the manifest text, which is said to come from file. The writer checks the text it is about to save with this.
+export def parse(file: String, text: String) -> Result[Manifest]
+  reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   root = try Reader.parse(reading, text)
   try Reader.known_keys(reading, root, TOP_KEYS, "")
   name = try optional_name(reading, root)

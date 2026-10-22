@@ -57,6 +57,22 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
   return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock)))
 end
 
+## Finds the project of the commands that write the lock (`add`, `update`). The manifest is read as `find` reads it,
+## but the lock is not checked against it: those commands are what makes a missing, stale or partial lock right. A lock
+## that is there must be a good one (PKG-LOCK-INVALID); a lock that is not there is an empty one.
+export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Result[Project]
+  dir = nearest(workspace, root_dir)
+  if dir == ""
+    return ok(Project.Bare)
+  end
+  manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
+  lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [])
+  if workspace.file_exists.call(lock.file)
+    lock = try Lock.read(workspace, lock.file)
+  end
+  return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock)))
+end
+
 ## The local names of the dependencies of the root project, in the order of the manifest.
 export def direct_names(project: Project) -> List[String]
   case project
