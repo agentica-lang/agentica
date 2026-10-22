@@ -10,8 +10,8 @@
 #include <setjmp.h>
 #include <string.h>
 
-/* The math library and the C library, found by name by the system loader; on Windows the UCRT holds both. USABLE_SIZE
-   is the C library's function that gives the usable size of a malloc block. */
+/* The math library and the C library, found by name by the system loader; on Windows the UCRT holds both, and on macOS
+   libSystem. USABLE_SIZE is the C library's function that gives the usable size of a malloc block. */
 #ifdef _WIN32
 #define LIBM "ucrtbase.dll"
 #define LIBC "ucrtbase.dll"
@@ -20,9 +20,15 @@
    it is not set. */
 #define OUT_MEM "iRLs _dupenv_s free Mem " LIBC
 #else
+#ifdef __APPLE__
+#define LIBM "libSystem.B.dylib"
+#define LIBC "libSystem.B.dylib"
+#define USABLE_SIZE "malloc_size"
+#else
 #define LIBM "libm.so.6"
 #define LIBC "libc.so.6"
 #define USABLE_SIZE "malloc_usable_size"
+#endif
 /* int posix_memalign(void **block, size_t alignment, size_t size): the block, or the slot left alone (so NULL, as the
    VM zeroes it) for an alignment that is not a power of two. */
 #define OUT_MEM "iRll posix_memalign free Mem " LIBC

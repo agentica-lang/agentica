@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from tests.package_support import (BANG, GREET, LEAKS_THE_CACHE, MAIN, assert_at_key, command, dependency,  # noqa: F401
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, command, dependency,  # noqa: F401
                                     environment, git, inline_table, lock_entry, no_git_path, plain, remotes, ws)
 
 
@@ -54,7 +54,6 @@ def read(ws, name):
     return (ws.project / name).read_bytes().decode("utf-8")
 
 
-@LEAKS_THE_CACHE
 def test_add_writes_the_manifest_and_the_lock_with_the_dependencies_of_the_package_and_a_program_runs(ws, remotes, tmp_path):
     tools_commit = remotes.publish(TOOLS, TOOLS_FILES, tag="v1", annotated=False)
     files, greeter_commit = publish_greeter(remotes)

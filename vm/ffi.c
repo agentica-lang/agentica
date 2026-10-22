@@ -84,18 +84,20 @@ typedef struct {
 /* How the copy of a C.Bytes argument went (copy_bytes). */
 typedef enum { BYTES_OK, BYTES_RANGE, BYTES_TAG } bytes_outcome;
 
-/* One Native.wait_readable or wait_writable, in malloc memory. The task's descriptor is never polled itself: FD is a
-   new open of its file, or a duplicate (agc_ffi_wait_fd_open), which the poller owns and closes once its wait is over.
-   So the native code keeps its descriptor whatever happens to the wait, a descriptor the loop already watches can
-   still be waited on, and two tasks can wait on one descriptor. `more`, `ready`, `cancel`, `pause` and `drop` run on the I/O thread; `done` and `expired`
+/* One Native.wait_readable or wait_writable, in malloc memory. The task's descriptor FD is never polled itself: the
+   poller polls a new open of its file, or a duplicate (agc_poller_open_copy), which it owns and closes once its wait is
+   over. So the native code keeps its descriptor whatever happens to the wait, a descriptor the loop already watches can
+   still be waited on, and two tasks can wait on one descriptor. The copy is made on the I/O thread when the job starts,
+   so a descriptor closed before then fails the wait (EBADF). `more`, `ready`, `cancel`, `pause` and `drop` run on the I/O thread; `done` and `expired`
    on the scheduler that resumes the task, after the job's outcome has published what the I/O thread wrote. */
 typedef struct {
   agc_vm *vm;
   agc_io_job *job;
   agc_poller *poller;
-  /* The polled descriptor, until the poller takes it. */
+  /* The descriptor of the native code. */
   int fd;
-  /* The errno of a poller that could not be made (a regular file or /dev/null cannot be polled: EPERM), else 0. */
+  /* The errno of a poller that could not be made, else 0: a regular file cannot be polled (EPERM on Linux, EINVAL on
+     macOS). */
   int err;
   bool writing;
 } native_wait;
@@ -745,23 +747,19 @@ static bool wait_begin(void *data, agc_io_job *job) {
   native_wait *w = data;
   w->job = job;
   int err = 0;
-  w->poller = agc_poller_open(w->vm, w->fd, &err);
+  w->poller = agc_poller_open_copy(w->vm, w->fd, &err);
   if (!w->poller) {
     w->err = err ? err : EIO;
     agc_io_ready(job);
     return false;
   }
-  w->fd = -1;
   agc_poller_wait(w->poller, w->writing, wait_ready, w);
   return true;
 }
 
 static void wait_drop(void *data) {
   native_wait *w = data;
-  if (w->poller)
-    agc_poller_close(w->poller);
-  else if (w->fd >= 0)
-    agc_ffi_wait_fd_close(w->fd);
+  if (w->poller) agc_poller_close(w->poller);
   free(w);
 }
 
@@ -812,16 +810,9 @@ static agc_value native_wait_on(agc_vm *vm, agc_value *args, uint32_t span, bool
   int64_t timeout = agc_as_int(vm, args[1]);
   if (timeout <= 0) return agc_error_value("native: timeout must be positive milliseconds");
   if (fd < 0 || fd > INT_MAX) return agc_error_value("native: invalid descriptor");
-  /* The loop is made first: a loop that cannot start fails here, before the descriptor is opened. */
-  (void)agc_io_loop(vm);
-  int polled = agc_ffi_wait_fd_open((int)fd);
-  if (polled < 0) return agc_system_error(vm, "native: cannot wait on the descriptor", errno);
   native_wait *w = malloc(sizeof *w);
-  if (!w) {
-    agc_ffi_wait_fd_close(polled);
-    agc_out_of_memory();
-  }
-  *w = (native_wait){vm, NULL, NULL, polled, 0, writing};
+  if (!w) agc_out_of_memory();
+  *w = (native_wait){vm, NULL, NULL, (int)fd, 0, writing};
   agc_io_start_then(vm, &wait_io, w, agc_void(), timeout, wait_begin);
   return agc_void();
 }
