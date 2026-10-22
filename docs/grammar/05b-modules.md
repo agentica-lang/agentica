@@ -286,7 +286,10 @@ import Sqlite from "pkg/sqlite/db"
   itself failed; `package[1]` for the others). The first failure stops the
   command. When every package is in the cache, the manifest of each is checked
   against the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`), and only then is
-  `deps/` written, so a lock that cannot be built writes nothing there. The
+  `deps/` written, so a cache or a manifest that fails those checks writes
+  nothing there. A failure in the middle of the copy (a full disk, say) leaves
+  `deps/` partly updated: each package folder is either the old one or the new
+  one, and `agentica install` finishes the rest. The
   answer is `fetched NAME@VERSION` or `in the cache NAME@VERSION` for each
   package, or `nothing to install`. The command starts git even under
   `--deny-run`, which only limits programs.
@@ -340,7 +343,8 @@ import Sqlite from "pkg/sqlite/db"
     no dependency and no lock gets none.
   - Both refresh `deps/` as `install` writes it, for every package of the new
     lock, and remove the folder of a package that the old lock had and the new
-    one lacks.
+    one lacks. If `deps/` cannot be written, the lock is saved already and the
+    help says to run `agentica install`.
   - The answer lists `added NAME@VERSION`, `updated NAME@VERSION` (another
     commit or pin) and `removed NAME`, one per line, or `nothing to update`;
     a package with a `subdir` adds ` (folder DIR)` after `NAME@VERSION`. With
@@ -354,17 +358,23 @@ import Sqlite from "pkg/sqlite/db"
   the old `deps/<name>/` in two renames, so the old folder stays if a step
   fails. The folder of a locked package is replaced whatever it held (an edited
   file, a stale file, a link), and running `install` again is how to restore
-  it. The new folder has the ordinary mode (not the private one of the staging
-  folder). A killed command may leave a hidden `.tmp-*` or `.old-*` folder in
-  `deps/`; it is safe to delete, and a `PKG-WRITE` that could not put an old
-  folder back names the `.old-*` folder that holds it. A folder of a package
+  it. A folder that is a real folder with the locked hash is left as it is, so
+  its files keep their times. Hidden `.tmp-*` and `.old-*` entries of `deps/`,
+  left by a killed command, are removed first (never through a link). The new
+  folder has the ordinary mode (not the private one of the staging folder). A
+  `PKG-WRITE` that could not put an old folder back names the `.old-*` folder
+  that holds it; the next command removes it, after writing the locked files
+  again from the cache. A folder of a package
   that `update` or `add` dropped from the lock is moved aside and removed
   without following links (a link is removed as a link). Nothing else in
   `deps/` is touched, and the tool writes no `.gitignore` there: a project may
   commit `deps/` or ignore it. `deps/` itself must be a real folder: a symbolic
   link is `PKG-SYMLINK`, and a file or a write that fails is `PKG-WRITE` (the
   file and no key); nothing is written through a link. `agc_libs/` is not
-  touched: it stays for the libraries of the `pkg/` search.
+  touched: it stays for the libraries of the `pkg/` search. When `agentica test`
+  and `agentica symbol` walk a folder, they skip the `deps/` beside an
+  `agentica.toml`: installed packages are not the tests or modules of the
+  project (a path that names a folder of `deps/` reads it).
 - A build reads `deps/<name>/` of a declared name and hashes it against the
   lock: one that differs (an edited file, an added `.agc` file, a missing one)
   is `PKG-HASH-MISMATCH` at the import, and nothing else is used instead; a
@@ -386,7 +396,10 @@ import Sqlite from "pkg/sqlite/db"
   folder of `deps/` and compares the result with the lock
   (`PKG-HASH-MISMATCH`); a symbolic link named `*.agc` is `PKG-SYMLINK`. A
   package that no import reaches is not hashed. A build changes nothing in
-  `deps/`.
+  `deps/`. The bytecode cache of `agentica FILE.agc` hashes only the files a
+  program reads, so a new unused file in a `deps/` folder is caught by `check`
+  or `--no-cache`, not by a cached run. A committed `deps/` needs no `install`
+  to build.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

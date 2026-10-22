@@ -215,8 +215,10 @@ import Sqlite from "pkg/sqlite/db"
   restore an edited file) and leaves every other entry of `deps/` alone (a
   killed run may leave a hidden `.tmp-*` or `.old-*` folder; delete it). The
   tool writes no `.gitignore` there: commit `deps/` or ignore it. `deps/` as a
-  symbolic link is `PKG-SYMLINK`; a failed write is `PKG-WRITE`. `agc_libs/`
-  stays for local libraries.
+  symbolic link is `PKG-SYMLINK`; a failed write is `PKG-WRITE` (after `add` or
+  `update` saved the lock, run `agentica install` to finish `deps/`). `test` and
+  `symbol` walks skip the `deps/` of a project. `agc_libs/` stays for local
+  libraries.
 - The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte
   stream: for each `.agc` file below the package folder, in bytewise order of
   its path relative to the folder (written with `/`), the path, a zero byte, the

@@ -5,13 +5,15 @@ The remote of every case is a bare git repository in a temporary folder (tests/p
 the git config and the package cache are throwaway, and nothing touches the network. Cases assert codes and the file
 and key path, never message text (AGENTS.md).
 """
+import json
 import os
 import shutil
 import stat
+from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run
+from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
 from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment,  # noqa: F401
                                     git, lock_entry, package_hash, problem_of, remotes, run_json, ws)
 
@@ -116,6 +118,22 @@ def test_install_again_puts_the_locked_files_back_replaces_a_link_and_leaves_oth
     assert cached_files(outside) == ["keep.agc"]
     assert cached_files(deps / "gone") == ["old.agc"]
     assert (deps / "notes.txt").read_text(encoding="utf-8") == "keep\n"
+    # A folder that already has the locked hash is not written again, so the bytecode cache keeps its entries.
+    greet = deps / "greeter" / "greet.agc"
+    before = greet.stat().st_mtime_ns
+    assert install(ws, remotes)[1] is None
+    assert greet.stat().st_mtime_ns == before
+    # Leftovers of a killed command (.old-* and .tmp-*, a link among them) are removed without following links; any
+    # other hidden entry stays.
+    (deps / ".old-1-greeter").mkdir()
+    (deps / ".old-1-greeter" / "x.agc").write_text("# old\n", encoding="utf-8")
+    (deps / ".tmp-2").mkdir()
+    os.symlink(outside, deps / ".tmp-3")
+    (deps / ".keep").write_text("keep\n", encoding="utf-8")
+    assert install(ws, remotes)[1] is None
+    assert sorted(os.listdir(deps)) == [".keep", "gone", "greeter", "notes.txt", "tools"]
+    assert cached_files(outside) == ["keep.agc"]
+    (deps / ".keep").unlink()
     # An edited copy and a stale file are gone after the next install, and no staging folder stays behind.
     (deps / "greeter" / "greet.agc").write_text("# edited\n", encoding="utf-8")
     (deps / "greeter" / "stale.agc").write_text("# stale\n", encoding="utf-8")
@@ -200,3 +218,43 @@ def test_a_write_that_fails_keeps_the_old_copy_and_leaves_no_hidden_folder(proje
     assert sorted(os.listdir(deps)) == ["greeter", "tools"]
     assert (deps / "greeter" / "stale.agc").exists()
 
+
+
+TEST_FILE = 'def main() -> Void\n  Test.run([Test.test("t") do ok() end])\nend\n'
+MODULE = 'export def mine() -> Int\n  return 1\nend\n'
+
+
+def test_the_walks_of_test_and_symbol_skip_the_deps_of_the_project(tmp_path):
+    # Installed packages are not the tests or the modules of the project: `test .` and `symbol` with no path skip the
+    # deps/ beside agentica.toml, while a path that names a folder of deps/ reads it.
+    (tmp_path / "deps" / "tools").mkdir(parents=True)
+    (tmp_path / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    (tmp_path / "mine_test.agc").write_text(TEST_FILE, encoding="utf-8")
+    (tmp_path / "mine.agc").write_text(MODULE, encoding="utf-8")
+    (tmp_path / "deps" / "tools" / "bang_test.agc").write_text(TEST_FILE, encoding="utf-8")
+    (tmp_path / "deps" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
+    ran = run(cli() + ["--json", "test", "."], cwd=tmp_path, env=vm_environment())
+    assert ran.code == 0, ran.stderr
+    assert [Path(item["path"]).name for item in json.loads(ran.stdout)["files"]] == ["mine_test.agc"]
+    ran = run(cli() + ["--json", "test", "deps"], cwd=tmp_path, env=vm_environment())
+    assert [Path(item["path"]).name for item in json.loads(ran.stdout)["files"]] == ["bang_test.agc"]
+    listed = run(cli() + ["--json", "symbol", "bang"], cwd=tmp_path, env=vm_environment())
+    assert json.loads(listed.stderr or listed.stdout)["code"] == "QUERY-NOT-FOUND"
+    named = run(cli() + ["--json", "symbol", "bang", "deps"], cwd=tmp_path, env=vm_environment())
+    assert [item["module"] for item in json.loads(named.stdout)["matches"]] == ["deps/tools/bang.agc"]
+
+
+def test_update_that_cannot_write_deps_has_saved_the_lock_and_says_so(project, remotes, tmp_path):
+    ws = project
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    os.symlink(outside, ws.deps)
+    # The project stops using greeter, so the new lock is empty and the old folders are to be removed from deps/.
+    ws.write_manifest({})
+    before = (ws.project / "agentica.lock").read_text(encoding="utf-8")
+    result = run(cli() + ["--json", "update"], cwd=ws.project, env=environment(ws, remotes))
+    problem = json.loads(result.stderr)
+    assert (result.code, problem["code"]) == (1, "PKG-SYMLINK")
+    assert problem.get("help")
+    assert (ws.project / "agentica.lock").read_text(encoding="utf-8") != before
+    assert os.listdir(outside) == []

@@ -407,6 +407,14 @@ def test_an_undeclared_name_falls_back_to_the_pkg_roots_and_the_project_cannot_r
     assert check(ws, AGENTICA_PATH=str(root)) is None
 
 
+def test_agc_libs_of_a_locked_but_undeclared_name_is_searched(ws):
+    # tools is locked (greeter needs it) and not declared by the project: agc_libs/tools is the project's own library.
+    (ws.project / "agc_libs" / "tools").mkdir(parents=True)
+    (ws.project / "agc_libs" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
+    write_main(ws, 'import Tools from "pkg/tools/bang"\n')
+    assert check(ws) is None
+
+
 def test_a_declared_name_shadows_a_library_of_the_same_name(ws):
     # AGENTICA_PATH holds a greeter/greet.agc, but the manifest declares greeter, so the package is the one that loads.
     root = ws.base / "libs"

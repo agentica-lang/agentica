@@ -28,6 +28,9 @@ WRITE_TIMEOUT_MS = 60_000
 # More help for a manifest that could not be written after the lock was.
 LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to make it match agentica.toml again"
 
+# More help for a deps/ that could not be written after the lock was.
+DEPS_PENDING = "agentica.lock was written already, so run `agentica install` to finish deps/"
+
 # What `add` was asked: the local name and where the package comes from.
 struct Request
   name: String
@@ -190,12 +193,16 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
 end
 
 # Writes the packages of the new lock to deps/ and removes those the old lock had and the new one lacks. Only a project
-# that has a lock gets a deps/ folder.
+# that has a lock gets a deps/ folder. The lock is saved by now, so a failure says how to finish deps/.
 def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lock.Locked]) -> Result[Void]
   deps = PackageImport.scope_of(Project.Project.Declared(found)).deps
   old = found.lock.packages.map do |locked| locked.name end
   ordered = packages.sort_by do |locked| locked.name end
-  return PackageDeps.sync(settings, found.lock.file, deps, ordered, old)
+  done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old)
+  if !done.ok?
+    return error(Failure.add_help(done.message, DEPS_PENDING))
+  end
+  return ok()
 end
 
 # Replaces the file whole (SaveFile.replace puts the old one back if a step fails). A file that cannot be written is

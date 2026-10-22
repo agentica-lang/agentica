@@ -1,6 +1,7 @@
 ## The files a `symbol` query starts from (docs/future/39-semantic-cli.md, 39.4): the `PATH...` of the command line,
-## each a file or a folder. A folder means every `*.agc` file under it, recursively, without hidden folders and
-## `agc_libs/` folders, in bytewise order of the path; a link is never followed, so a file reached twice is not read
+## each a file or a folder. A folder means every `*.agc` file under it, recursively, without hidden folders,
+## `agc_libs/` folders and the `deps/` of a project (a folder beside an `agentica.toml`: the installed packages, not
+## the project's own modules; name `deps/NAME` as a path to read one), in bytewise order of the path; a link is never followed, so a file reached twice is not read
 ## twice. `.agc` and `agc_libs` are compared without regard to case, as the package hash does (package_hash.agc). The
 ## arguments keep their order, and a file named twice (by another spelling too) comes once. The folders are read
 ## through the Workspace of the settings, so the query stays in the pure core.
@@ -13,6 +14,10 @@ import QueryOptions from "query_options"
 
 # The folder a query reads when the command line names none.
 DEFAULT_PATH = "."
+
+# The manifest of a project, and the folder beside it that holds its installed packages.
+MANIFEST_FILE = "agentica.toml"
+DEPS_FOLDER = "deps"
 
 ## One file a query links: the path as it was typed or listed (a diagnostic names it so), and the canonical path that
 ## keys its module, so one file has one root whatever its spelling.
@@ -103,6 +108,7 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
     if !listed.ok?
       return error(here)
     end
+    project = listed.unwrap!.any? do |entry| entry.name == MANIFEST_FILE end
     for entry in listed.unwrap!
       path = child(here, entry.name)
       case entry.kind
@@ -113,7 +119,7 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
         Workspace.EntryKind.Directory ->
           # The package hash decides what a build loads, in any case of the names; `top` is true at every depth, so
           # a nested agc_libs/ is left out too, as the query always did.
-          if !PackageHash.skipped_folder?(entry.name, true)
+          if !PackageHash.skipped_folder?(entry.name, true) and !(project and entry.name == DEPS_FOLDER)
             pending = pending.push(path)
           end
         Workspace.EntryKind.Link -> files = files

@@ -57,6 +57,20 @@ export def hint(text: String) -> Diag.Help
   return Diag.Help.Hint(text)
 end
 
+## The packed failure `text` with `more` added to its help (after the help it has, if any), for a caller that knows
+## what the user should do next.
+export def add_help(text: String, more: String) -> String
+  failure = unpack_failure(text)
+  shown = failure.diagnostic
+  line = more
+  case shown.help
+    Diag.Help.Hint(had) -> line = "#{had}; #{more}"
+    Diag.Help.NoHelp -> line = more
+  end
+  packed = Base.bail_span(shown.code, shown.message, shown.span, hint(line))
+  return "#{failure.file.length}\n#{failure.file}#{failure.key_path.length}\n#{failure.key_path}#{packed}"
+end
+
 ## Reads back the failure that fail_at or from_stage wrote.
 export def unpack_failure(text: String) -> Failure
   file = take_field(text, 0)

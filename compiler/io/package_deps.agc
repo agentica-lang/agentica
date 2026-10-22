@@ -51,6 +51,7 @@ export def sync(
   dropped: List[String],
 ) -> Result[Void]
   workspace = settings.workspace
+  try sweep(workspace, deps)
   if packages.size > 0
     cache = try PackageFetch.cache_root(settings.env, lock_file)
     for index in 0...packages.size
@@ -73,8 +74,9 @@ export def sync(
   return ok()
 end
 
-## Writes the locked package from `source` (its cache folder) into `deps`, the deps/ folder of the project. `place`
-## names the lock entry, for the failures about the package itself.
+## Writes the locked package from `source` (its cache folder) into `deps`, the deps/ folder of the project, unless its
+## folder there is a real folder that already has the locked hash (a rewrite would only change the times of the files
+## and make the bytecode cache miss). `place` names the lock entry, for the failures about the package itself.
 export def put(
   workspace: Workspace.Workspace,
   deps: String,
@@ -82,6 +84,9 @@ export def put(
   place: PackageFetch.Place,
   locked: Lock.Locked,
 ) -> Result[Void]
+  if up_to_date?(workspace, deps, locked)
+    return ok()
+  end
   files = try chosen(workspace, source, place, locked)
   try prepare(workspace, deps)
   parent = try make_stage(deps)
@@ -90,6 +95,51 @@ export def put(
   # only the empty parent is left.
   Path.remove(parent, FS_TIMEOUT_MS)
   return done
+end
+
+# Whether deps/<name> is a folder (never a link) whose .agc files hash to the lock. Anything else, a failed look
+# included, is a reason to write it again.
+def up_to_date?(workspace: Workspace.Workspace, deps: String, locked: Lock.Locked) -> Bool
+  here = kind_of(workspace, deps)
+  if !here.ok? or !folder?(here.unwrap!)
+    return false
+  end
+  target = Paths.join(deps, locked.name)
+  seen = kind_of(workspace, target)
+  if !seen.ok? or !folder?(seen.unwrap!)
+    return false
+  end
+  case PackageHash.hash_folder(workspace, target)
+    PackageHash.Hashed.Hash(found) -> return found == locked.hash
+    _ -> return false
+  end
+end
+
+def folder?(kind: Kind) -> Bool
+  case kind
+    Kind.Folder -> return true
+    _ -> return false
+  end
+end
+
+# Removes what a killed or failed command left in deps/: hidden `.tmp-*` and `.old-*` entries, which a package name
+# (letters, digits and a few signs, never a leading dot) cannot be. Path.remove does not follow links, and a deps/ that
+# is not a real folder is left alone (the writes refuse it later). A leftover that cannot be removed stays.
+def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
+  here = try kind_of(workspace, deps)
+  if !folder?(here)
+    return ok()
+  end
+  listed = workspace.list_folder.call(deps)
+  if !listed.ok?
+    return ok()
+  end
+  for entry in listed.unwrap!
+    if entry.name.starts_with?(".tmp-") or entry.name.starts_with?(".old-")
+      Path.remove(Paths.join(deps, entry.name), FS_TIMEOUT_MS)
+    end
+  end
+  return ok()
 end
 
 # The paths to copy: the .agc files of the hash, and the manifest.

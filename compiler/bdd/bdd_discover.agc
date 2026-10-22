@@ -4,6 +4,10 @@
 
 import {IO_TIMEOUT} from "bdd_files"
 
+# The manifest of a project, and the folder beside it that holds its installed packages.
+MANIFEST_FILE = "agentica.toml"
+DEPS_FOLDER = "deps"
+
 ## One feature file or test file, or one problem of the search, as the runner reads it (stdlib/test/runner.agc,
 ## `Entry`): `problem` is "" for a file to run; `kind` is "tests", "feature" or "" (neither); `bytecode`, `source_root`
 ## and `front_end` are filled in by the driver for a test file.
@@ -34,7 +38,8 @@ end
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every
-## folder below it; a link to a folder is skipped. A path to a file is taken whatever its name is.
+## folder below it, except the `deps/` of a project (a folder that holds an `agentica.toml`): those are packages
+## installed for the build, not tests of the project. A link to a folder is skipped. A path to a file is taken whatever its name is.
 export def discover(given: List[String]) -> List[Entry]
   found = Found(problems: [], files: [])
   for text in given
@@ -73,8 +78,10 @@ def walk(directory: String, found: Found) -> Found
     return problem(found, directory, "cannot list the directory: #{names.message}")
   end
   after = found
+  # The folder `deps/` beside an agentica.toml is the project's installed packages.
+  project = names.unwrap!.any? do |name| name == MANIFEST_FILE end
   for name in names.unwrap!
-    after = visit(Path.join([directory, name]).unwrap_or("#{directory}/#{name}"), name, after)
+    after = visit(Path.join([directory, name]).unwrap_or("#{directory}/#{name}"), name, project, after)
   end
   return after
 end
@@ -82,7 +89,7 @@ end
 # Dir.list decodes a name with a byte that is not UTF-8 as U+FFFD, and no path can be made from that name, so such a
 # name is taken for "not UTF-8" even when the file really has a U+FFFD in its name (the only wrong report). Its kind is
 # unknown, so it is a problem only when its name fits (a file) and a folder with such a name is skipped.
-def visit(path: String, name: String, found: Found) -> Found
+def visit(path: String, name: String, project: Bool, found: Found) -> Found
   bad_name = name.contains?(String.from_code(65_533))
   info = File.lstat(path, IO_TIMEOUT)
   if !info.ok? and bad_name
@@ -96,6 +103,8 @@ def visit(path: String, name: String, found: Found) -> Found
   kind = info.unwrap!.kind
   if bad_name and (kind == "directory" or kind_of(name) != "")
     return problem(found, path, "the file name is not valid UTF-8")
+  elsif kind == "directory" and project and name == DEPS_FOLDER
+    return found
   elsif kind == "directory"
     return walk(path, found)
   elsif kind_of(name) == ""
