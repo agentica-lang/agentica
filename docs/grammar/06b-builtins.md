@@ -377,8 +377,14 @@ and `JSON.encode` give its text. Signatures are in
 `agentica help NAME --json` prints the name, arity, parameter types, result,
 signature, effects and description, from the catalog that checking and execution
 use. Effects are informational (I/O, tasks, or `test`). An unknown target exits
-2. `agentica help --json` with no NAME prints every public builtin as one JSON
-array, sorted by name, each element exactly what `help NAME --json` prints.
+2, with a hint when the name is a close builtin or one from another language
+that the checker knows (`Hash.new`, `int`). A name that other languages use for
+a builtin (`strip`, `String.to_i`, `value!`) is not unknown: it exits 0 with
+the builtins it stands for, and `--json` prints
+`{"alias": NAME, "builtins": [...], "hints": {...}}`, `builtins` holding what
+`help NAME --json` prints for each. `agentica help --json` with no NAME prints
+every public builtin as one JSON array, sorted by name, each element exactly
+what `help NAME --json` prints.
 
 `agentica doc PATH [--json]` prints the exported API of a module with its `##`
 docs (section 4): PATH is a source file or a `std/` module name. It only lexes
