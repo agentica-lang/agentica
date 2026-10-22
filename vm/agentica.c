@@ -114,6 +114,7 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
    * a process with anything of the compiler, so this is the end of the run. */
   if (!agc_io_close(vm)) {
     fprintf(stderr, "%s: internal error: the front end left an operation running\n", name);
+    fflush(stderr);
     agc_launch_exit(1);
   }
 }

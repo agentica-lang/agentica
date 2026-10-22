@@ -243,12 +243,10 @@ void agc_launch_exit(int code) {
   if (sig) agc_io_die_by(sig);
   _exit(code);
 #elif defined(_WIN32)
-  /* The Windows form of _exit. A compute thread may still be inside a native call and hold a lock, such as a C
-     stream's. exit() runs the atexit handlers and flushes every C stream while that thread runs, and ExitProcess (the
-     end of exit and _exit) kills it, then runs the DLLs' detach code, which may wait for its lock forever.
-     TerminateProcess runs neither and does not return; agc_launch_settle has flushed stdout, stderr and the files. */
-  TerminateProcess(GetCurrentProcess(), (UINT)code);
-  ExitProcess((UINT)code);
+  /* Not exit(): it runs the atexit handlers and flushes every C stream while a compute thread may hold a stream's
+     lock, and ExitProcess (the end of exit and _exit) kills that thread, then runs the DLLs' detach code, which may
+     wait for the lock forever. agc_launch_settle has flushed stdout, stderr and the files. */
+  agc_exit_now((unsigned)code);
 #else
   exit(code);
 #endif

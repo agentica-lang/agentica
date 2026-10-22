@@ -16,7 +16,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - On Windows a program no longer hangs at its end while a `compute def` call
-  still runs and holds a C library lock.
+  still runs and holds the lock of a C stream other than stdout or stderr.
 
 ## [0.9.0-beta.2] - 2026-10-22
 

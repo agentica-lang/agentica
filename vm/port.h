@@ -728,6 +728,10 @@ bool agc_memstream_take(FILE *file, agc_memstream *ms, char **text, size_t *len)
    take gives the result in the job's done half: the bytes read, 0 at EOF or -1, and where they are. close, on the I/O
    thread at the end of the run, leaves a read in flight to the thread, which ends when the read returns. */
 agc_stdin_reader *agc_stdin_new(int fd);
+/* The Windows form of _exit (vm/stdio_windows.c): TerminateProcess of the process itself, so no atexit handler, C
+   stream flush or DLL detach code runs. A compute thread may still be inside a native call and hold a lock that
+   those would wait for. ExitProcess only if TerminateProcess fails. */
+_Noreturn void agc_exit_now(unsigned code);
 void agc_stdin_read(agc_vm *vm, agc_stdin_reader *r, agc_io_job *job, size_t room);
 int64_t agc_stdin_take(agc_stdin_reader *r, const uint8_t **data);
 void agc_stdin_close(agc_stdin_reader *r);
