@@ -108,6 +108,18 @@ def main() -> Void
 end
 """
 
+# Three lines typed on the console, written to a file as their UTF-8 bytes, each in brackets; the end of input shows
+# as <end>.
+CONSOLE_LINES = """\
+def main() -> Void
+  out = ""
+  for i in 0..2
+    out = out + "[" + IO.gets().unwrap_or("<end>") + "]"
+  end
+  File.write_text(System.args()[0], out, 1000).unwrap!
+end
+"""
+
 # A task waits for standard input while main waits on it: the stop signal ends the run, not the read.
 WAITING_FOR_INPUT = """\
 def reader(n: Int) -> Result[String]
@@ -219,6 +231,19 @@ def test_a_line_typed_on_the_console_reaches_a_waiting_reader(tmp_path):
                                  vm_environment({"UV_THREADPOOL_SIZE": "1"}), WAIT_SECONDS, typed="typed line\r")
     assert code == 0, ESCAPES.sub("", shown)
     assert result.read_text() == "typed line"
+
+
+def test_non_ascii_text_typed_on_the_console_reaches_the_program_as_utf8(tmp_path):
+    """The console is read as UTF-16 and handed on as UTF-8, whatever its code page, so a letter of two bytes, one of
+    three and one outside the BMP (a surrogate pair) come out as on Linux. The first line is 32000 units, which a read
+    of the 64 KiB buffer takes whole, but 72000 bytes in UTF-8: the bytes that do not fit wait for the next read. Ctrl+Z
+    at the start of a line is the end of input, as it was with ReadFile, and the line after it is still read."""
+    first = "ñ€😀" * 8000
+    result = tmp_path / "result.txt"
+    code, shown = run_on_console([*vm_command(), "--", bytecode(CONSOLE_LINES, tmp_path), result],
+                                 vm_environment(), WAIT_SECONDS, typed=first + "\r\x1a\rñz\r")
+    assert code == 0, ESCAPES.sub("", shown)[-500:]
+    assert result.read_bytes() == ("[" + first + "][<end>][ñz]").encode("utf-8")
 
 
 def test_ctrl_break_ends_a_run_whose_task_waits_for_standard_input(tmp_path, adopt):

@@ -616,3 +616,36 @@ def test_a_problem_in_a_std_module_shows_that_module_not_a_file_of_the_working_f
     assert "std/queue.agc:" in got.stderr
     assert 'return "text"' in got.stderr
     assert "decoy" not in got.stderr
+
+
+@pytest.mark.skipif(os.name != "nt", reason="host-only: reads the resources of the binary with the Windows loader")
+def test_the_windows_binary_carries_a_manifest_that_declares_long_path_awareness():
+    """vm/agentica.rc embeds vm/agentica.manifest as the application manifest (RT_MANIFEST, resource 1). It replaces
+    the default manifest of MinGW's gcc and keeps what that one asks for (asInvoker)."""
+    import ctypes
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.LoadLibraryExW.argtypes = [wintypes.LPCWSTR, wintypes.HANDLE, wintypes.DWORD]
+    kernel32.LoadLibraryExW.restype = wintypes.HMODULE
+    kernel32.FindResourceW.argtypes = [wintypes.HMODULE, ctypes.c_void_p, ctypes.c_void_p]
+    kernel32.FindResourceW.restype = ctypes.c_void_p
+    kernel32.SizeofResource.argtypes = [wintypes.HMODULE, ctypes.c_void_p]
+    kernel32.SizeofResource.restype = wintypes.DWORD
+    kernel32.LoadResource.argtypes = [wintypes.HMODULE, ctypes.c_void_p]
+    kernel32.LoadResource.restype = ctypes.c_void_p
+    kernel32.LockResource.argtypes = [ctypes.c_void_p]
+    kernel32.LockResource.restype = ctypes.c_void_p
+    kernel32.FreeLibrary.argtypes = [wintypes.HMODULE]
+    load_library_as_datafile, rt_manifest = 0x2, 24
+    module = kernel32.LoadLibraryExW(str(binary()), None, load_library_as_datafile)
+    assert module, ctypes.WinError(ctypes.get_last_error())
+    try:
+        found = kernel32.FindResourceW(module, 1, rt_manifest)
+        assert found, ctypes.WinError(ctypes.get_last_error())
+        size = kernel32.SizeofResource(module, found)
+        text = ctypes.string_at(kernel32.LockResource(kernel32.LoadResource(module, found)), size).decode("utf-8")
+    finally:
+        kernel32.FreeLibrary(module)
+    assert re.search(r"<ws2:longPathAware>\s*true\s*</ws2:longPathAware>", text), text
+    assert 'xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings"' in text
+    assert 'requestedExecutionLevel level="asInvoker"' in text

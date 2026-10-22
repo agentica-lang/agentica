@@ -220,8 +220,8 @@ Signatures are in
   relative path starts at the working directory. `.`, `..` and repeated `/` are
   removed, and `..` after a link follows the link's target. The length of the
   path has no buffer limit in the VM; the system's own limit applies to the
-  absolute form of the path (1024 bytes or more fail on macOS, 260 characters or
-  more on Windows). In the result, each byte that is not part of a valid
+  absolute form of the path (1024 bytes or more fail on macOS, and 260
+  characters or more on Windows unless long paths are on). In the result, each byte that is not part of a valid
   UTF-8 sequence becomes U+FFFD, as in `Dir.list` names. The call has no timeout
   argument; it runs in the pool of file threads and does not stop other tasks.
   Where the systems differ, the difference is the system's:
@@ -231,9 +231,10 @@ Signatures are in
     so `link/..` is the folder that holds the link, not the parent of its
     target, and `missing/..` is not an error. A name under a file gives
     ENOENT (Linux and macOS: ENOTDIR). The path starts with a drive letter
-    (`/` is the drive of the working directory, such as `C:/`). A path whose
-    absolute form is 260 characters or more is an error, and so is `Dir.mkdir`
-    of one, because the binary does not opt in to long paths.
+    (`/` is the drive of the working directory, such as `C:/`). The binary
+    opts in to long paths in its manifest, so a path whose absolute form is
+    260 characters or more works when the machine sets `LongPathsEnabled` to
+    1; otherwise it is an error, and so is `Dir.mkdir` of one.
 
 ### Processes
 

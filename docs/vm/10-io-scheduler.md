@@ -418,8 +418,11 @@ section says how the scheduler and the loop keep them.
   of the run is not waited for. On Windows every stdin kind (a pipe, the
   console, a file, `NUL`) is read by one thread of the VM's own
   (`vm/stdio_windows.c`), never by the pool. That thread does one blocking
-  `_read` in binary mode when a read is asked for, and wakes the loop with an
-  async handle. The handle keeps the loop alive only while a read is out. The
+  read when a read is asked for, and wakes the loop with an async handle. It
+  reads a console with `ReadConsoleW` and hands the text on as UTF-8 (a high
+  surrogate waits for its low half, and bytes that do not fit wait for the next
+  read); Ctrl+Z at the start of a line is EOF, as with `ReadFile`. It reads
+  anything else with `_read` in binary mode. The handle keeps the loop alive only while a read is out. The
   thread and its handle are made on the I/O thread at the first read, after the
   job's start. Stop signals are handled by libuv on the loop, independently of
   the reader. A cancelled reader leaves the read in flight, as on Unix, and its

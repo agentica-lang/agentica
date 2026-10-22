@@ -61,6 +61,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica help`, `help --json` (a new `ruby` field) and the helps of
   diagnostics show the Ruby form of a builtin (`s.strip`, not `String.trim`);
   both names are still accepted.
+- Windows: `agentica.exe` declares `longPathAware`, so paths of 260 characters
+  or more work on machines that set `LongPathsEnabled` to 1.
+
+### Fixed
+
+- Windows: non-ASCII text typed on a console reaches standard input reads as
+  UTF-8, not as U+FFFD.
 
 ### Removed
 

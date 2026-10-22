@@ -783,12 +783,49 @@ def test_path_real_gives_what_pythons_os_path_realpath_gives_through_link_chains
         assert os_lines("real", overlong, cwd=root) == ["error", "error"]
 
 
+def long_paths_enabled():
+    """True when Windows lifts the MAX_PATH limit for a program that declares longPathAware in its manifest, as
+    agentica.exe does: the LongPathsEnabled value of the registry is 1."""
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\FileSystem") as key:
+            return winreg.QueryValueEx(key, "LongPathsEnabled")[0] == 1
+    except OSError:
+        return False
+
+
+LONG_PATH_PROGRAM = r"""def main() -> Void
+  long = System.args()[0]
+  file = long + "/f.txt"
+  IO.inspect(Dir.mkdir(long, 60000).ok?)
+  IO.inspect(File.write_text(file, "data", 60000).ok?)
+  IO.inspect(File.read_text(file, 60000).unwrap_or("error"))
+  IO.inspect(Path.real(long).ok?)
+end
+"""
+
+
+@pytest.mark.skipif(not WINDOWS or UNDER_WINE, reason="host-only: the MAX_PATH limit and LongPathsEnabled are Windows")
+def test_a_path_longer_than_max_path_works_on_windows_exactly_when_long_paths_are_enabled(new_dir, run_program):
+    """agentica.exe declares longPathAware, so Windows lifts the 260-character limit for it when LongPathsEnabled is 1.
+    With 0 (or no value) the calls fail as before the manifest: Dir.mkdir already fails at about 248 characters."""
+    long = str(new_dir()) + ("/" + "x" * 100) * 4
+    assert len(long) > 300
+    seen = output_lines(run_program(LONG_PATH_PROGRAM, [long]))
+    if long_paths_enabled():
+        assert seen == ["true", "true", '"data"', "true"]
+        with open("\\\\?\\" + long.replace("/", "\\") + "\\f.txt", encoding="utf-8") as file:
+            assert file.read() == "data"
+    else:
+        assert seen == ["false", "false", '"error"', "false"]
+
+
 def test_path_real_resolves_a_deep_folder_longer_than_a_small_buffer_where_the_system_allows_one(new_dir, os_lines,
                                                                                                 os_peer_lines):
     root = new_dir()
     if WINDOWS:
-        # Windows fails a path whose absolute form is 260 characters or more (the binary has no long-path manifest).
-        # Python makes the folder with the \\?\ prefix, and the VM, given the plain path, cannot reach it.
+        # Python makes the folder with the \\?\ prefix. The VM, given the plain path, reaches it only when Windows
+        # lifts the MAX_PATH limit (long_paths_enabled).
         prefix = "\\\\?\\"
         first = str(root / ("d" * 100))
         here = prefix + str(root)
@@ -797,7 +834,7 @@ def test_path_real_resolves_a_deep_folder_longer_than_a_small_buffer_where_the_s
                 here = here + "\\" + "d" * 100
                 os.mkdir(here)
             seen = os_lines("real", [here[4:], first])
-            assert seen[0] == "error" and seen[1].startswith("ok:"), seen
+            assert seen[0].startswith("ok:") == long_paths_enabled() and seen[1].startswith("ok:"), seen
         finally:
             shutil.rmtree(prefix + first, ignore_errors=True)
         return
