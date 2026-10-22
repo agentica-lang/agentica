@@ -220,6 +220,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.MapPut -> return "MapPut"
     Model.Rule.MapSize -> return "MapSize"
     Model.Rule.MapValues -> return "MapValues"
+    Model.Rule.NativeClose -> return "NativeClose"
     Model.Rule.Ok -> return "Ok"
     Model.Rule.OkVoid -> return "OkVoid"
     Model.Rule.Prelude -> return "Prelude"

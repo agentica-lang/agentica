@@ -72,7 +72,8 @@ def test_a_private_extern_function_is_not_exported(tmp_path):
 @pytest.mark.parametrize("signature, start, stop", [
     ("def f(x: Float) -> C.Int", (2, 12), (2, 17)),
     ("def f(x: C.Int) -> Int", (2, 22), (2, 25)),
-    ("def f(x: C.Pointer) -> Void", (2, 12), (2, 21)),
+    ("def f(x: C.Float) -> Void", (2, 12), (2, 19)),
+    ("def f(x: C.Int) -> C.Bytes", (2, 22), (2, 29)),
     ("def f(x: Void) -> Void", (2, 12), (2, 16)),
     ("def f(x: List[C.Int]) -> Void", (2, 12), (2, 23)),
 ])
@@ -161,3 +162,117 @@ def test_the_waits_take_int_arguments_and_give_a_result(tmp_path):
     source(tmp_path, "export def wait_readable(fd: Int) -> Int\n  return fd\nend\n", "native.agc")
     shadow = 'import Native from "./native"\n\ndef main() -> Void\n  puts(Native.wait_readable(1) + 1)\nend\n'
     assert check(source(tmp_path, shadow)).code == 0
+
+
+RESOURCES = """struct Pool
+  db: Db
+end
+
+extern "/opt/peer/libpeer.so"
+  ## An open database.
+  export resource Db, free: db_close
+  export def db_open(path: C.String) -> Db
+  def db_exec(db: Db, sql: C.String, blob: C.Bytes, n: C.Int) -> C.Int
+  compute def db_wait(db: Db) -> C.Int
+  def db_handle(db: Db) -> C.Pointer
+  def raw_len(p: C.Pointer) -> C.Int64
+end
+
+def use(db: Db) -> Int
+  return db_wait(db)
+end
+
+def main() -> Void
+  db = db_open("x.db").unwrap!
+  pool = Pool(db: db)
+  puts(db_exec(pool.db, "select 1", [0, 255], 2))
+  raw: C.Pointer = db_handle(db)
+  puts(Native.null?(raw) or Native.null?(Native.null()))
+  puts(raw_len(raw))
+  IO.inspect(db)
+  puts(Task.await(Task.spawn_owning(&use, db)))
+  Native.close(db)
+end
+"""
+
+
+# A resource is a type of its own: a function declared -> Db gives Result[Db], a parameter takes the resource, C.Bytes
+# is a List[Int], and C.Pointer is a type any code may name. Task.spawn_owning takes a resource.
+def test_resources_pointers_and_bytes_check(tmp_path):
+    result = check(source(tmp_path, RESOURCES))
+    assert (result.code, result.stdout) == (0, '{"ok":true}\n')
+
+
+def test_an_exported_resource_is_imported_like_a_type(tmp_path):
+    raw = 'extern "/opt/libdb.so"\n  export resource Db, free: db_close\n  export def db_open() -> Db\nend\n'
+    source(tmp_path, raw, "raw.agc")
+    good = 'import Raw from "./raw"\n\ndef shut(db: Raw.Db) -> Void\n  Native.close(db)\nend\n\n' \
+           'def main() -> Void\n  shut(Raw.db_open().unwrap!)\nend\n'
+    assert check(source(tmp_path, good)).code == 0
+    private = raw.replace("export resource", "resource")
+    source(tmp_path, private, "raw.agc")
+    assert at(problem_of(check(source(tmp_path, good))))[0] == "CHECK-IMPORT-NAME"
+
+
+OPENER = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open() -> Db\n  ' \
+         'def db_handle(db: Db) -> C.Pointer\nend\n\ndef main() -> Void\n%s\nend\n'
+
+
+# The checker keeps resources, pointers and Results apart, and pointers and resources have no ==, to_s or JSON.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  db: Db = db_open()", "CHECK-TYPE-MISMATCH", (8, 12), (8, 21)),
+    ("  p: C.Pointer = db_open().unwrap!", "CHECK-TYPE-MISMATCH", (8, 18), (8, 27)),
+    ("  puts(db_handle(Native.null()))", "CHECK-TYPE-MISMATCH", (8, 18), (8, 31)),
+    ("  Native.close(Native.null())", "CHECK-TYPE-MISMATCH", (8, 16), (8, 29)),
+    ("  puts(Native.null() == Native.null())", "CHECK-TYPE-MISMATCH", (8, 22), (8, 24)),
+    ("  puts(db_open().unwrap!)", "CHECK-TYPE-MISMATCH", (8, 8), (8, 25)),
+    ("  puts(JSON.encode(db_open().unwrap!))", "CHECK-NOT-ENCODABLE", (8, 20), (8, 37)),
+])
+def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
+    assert at(problem_of(check(source(tmp_path, OPENER % body)))) == (code, start, stop)
+
+
+# The block's free function is the VM's to call: a def of it, before or after the resource, is PARSE-EXTERN-FREE at
+# the later of the two names.
+@pytest.mark.parametrize("members, start, stop", [
+    ("  resource Db, free: db_close\n  def db_close(db: Db) -> Void", (3, 7), (3, 15)),
+    ("  def db_close(p: C.Pointer) -> Void\n  resource Db, free: db_close", (3, 22), (3, 30)),
+])
+def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, stop):
+    text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
+    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-FREE", start, stop)
+
+
+@pytest.mark.parametrize("members, code, start", [
+    ("  def db_open() -> Db\n  resource Db, free: db_close", "PARSE-EXTERN-TYPE", (2, 20)),
+    ('  resource Db, free: db_close\nend\n\nextern "/opt/libdb.so"\n  def db_use(db: Db) -> C.Int', "PARSE-EXTERN-TYPE",
+     (6, 18)),
+    ("  resource Db, free: db_close?", "PARSE-EXTERN-NAME", (2, 22)),
+    ("  resource Db free: db_close", "PARSE-UNEXPECTED-TOKEN", (2, 15)),
+    ("  compute resource Db, free: db_close", "PARSE-UNEXPECTED-TOKEN", (2, 3)),
+])
+def test_a_resource_is_declared_before_use_with_a_c_free_function(tmp_path, members, code, start):
+    text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
+    assert at(problem_of(check(source(tmp_path, text))))[:2] == (code, start)
+
+
+# A resource is a type name of the file: a second resource, a struct or a reserved type of that name is
+# CHECK-REDEFINED-NAME at the later declaration.
+@pytest.mark.parametrize("text, start", [
+    ('extern "/opt/libdb.so"\n  resource Db, free: db_close\n  resource Db, free: db_free\nend\n', (3, 3)),
+    ('struct Db\n  x: Int\nend\n\nextern "/opt/libdb.so"\n  resource Db, free: db_close\nend\n', (6, 3)),
+    ('extern "/opt/libdb.so"\n  resource Socket, free: db_close\nend\n', (2, 3)),
+])
+def test_a_resource_name_is_not_taken_twice(tmp_path, text, start):
+    assert at(problem_of(check(source(tmp_path, text))))[:2] == ("CHECK-REDEFINED-NAME", start)
+
+
+# C.Pointer is a type of every file, not only of one with an extern block.
+def test_c_pointer_is_a_type_without_an_extern_block(tmp_path):
+    text = "def empty?(p: C.Pointer) -> Bool\n  return Native.null?(p)\nend\n"
+    assert check(source(tmp_path, text)).code == 0
+
+
+def test_resource_is_still_a_name_elsewhere(tmp_path):
+    text = 'def main() -> Void\n  resource = 1\n  puts(resource)\nend\n'
+    assert check(source(tmp_path, text)).code == 0

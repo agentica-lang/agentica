@@ -76,7 +76,8 @@ stage:
     `PARSE-CHAINED-COMPARISON`, `PARSE-INVALID-ASSIGNMENT-TARGET`,
     `PARSE-CONSTANT-NAME`, `PARSE-MISSING-BLANK-LINE`, `PARSE-DETACHED-DOC`,
     `PARSE-TOO-DEEP`, `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`,
-    `PARSE-EXTERN-DEFAULT`, `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`
+    `PARSE-EXTERN-DEFAULT`, `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`,
+    `PARSE-EXTERN-FREE`
 
 - **Stage:** checker
   - **Codes:** `CHECK-CONSTANT-CYCLE`, `CHECK-CONSTANT-EXPRESSION`,
@@ -114,10 +115,12 @@ stage:
     `PKG-TAG-MOVED`, `PKG-PATH-COLLISION` and
     `PKG-MANIFEST-MISSING`, and also reports `PKG-HASH-MISMATCH` and
     `PKG-SYMLINK`, all at a key of `agentica.lock` (`package[N].tag`, ...).
-    `agentica vendor` (`app/cli_vendor.agc`, `io/package_vendor.agc`) reports
-    those at the lock too, `PKG-SYMLINK` for an agc_libs/ that is a link and
-    `PKG-WRITE` at the file it cannot write. A vendored copy `agc_libs/<name>/`
-    is read before the cache (`package_import.agc`, `source_of`) and hashed.
+    `install`, `add` and `update` also write `deps/<name>/`
+    (`io/package_deps.agc`: `sync`, `put`, `remove`) and report those at the
+    lock too, `PKG-SYMLINK` for a deps/ that is a link and `PKG-WRITE` at the
+    file they cannot write. A build reads a package only from `deps/<name>/`
+    (`package_import.agc`, `load`; a missing one is `CHECK-IMPORT-PACKAGE`) and
+    hashes it.
     `agentica add` and `update` (`app/cli_add.agc`, `io/package_resolve.agc`)
     report the fetch codes of a new pin at `dependencies.<name>.git` of the
     manifest that asks for it, and add `PKG-DEPENDENCY-EXISTS`,
@@ -149,7 +152,8 @@ stage:
     `RUNTIME-TASK-AWAIT-CYCLE`, `RUNTIME-TASK-CRASHED`,
     `RUNTIME-HANDLE-NOT-OWNED`, `RUNTIME-TEST-ASSERTION`, `RUNTIME-TEST-ERROR`,
     `RUNTIME-TEST-NAME`, `RUNTIME-TEST-PENDING-TASKS`, `RUNTIME-TEST-RUN`,
-    `RUNTIME-TEST-TIMEOUT`, `RUNTIME-NATIVE-LOAD`, and at load (exit 2)
+    `RUNTIME-TEST-TIMEOUT`, `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`,
+    and at load (exit 2)
     `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`
 
 - **Stage:** lowering (VM)
@@ -525,8 +529,7 @@ the command/file so program args stay intact. --max-steps accepts a positive
 integer and reaches only the VM. The --deny-* flags and --sandbox go to the
 VM as typed (`Options.deny`); `test` passes them to the driver.
 `tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
-`install` and `vendor` are `cli_install.agc` and `cli_vendor.agc` (they take
-no word); `add` and `update` are
+`install` is `cli_install.agc` (it takes no word); `add` and `update` are
 `cli_add.agc` (their words are read by hand there). `doc` and the query commands (`outline`, `type-at`, `refs`) are `cli_doc.agc`
 and `cli_query.agc`: the words after the command are read by hand
 (`query/query_options.agc`), and `--stdin FILE` (`type-at --stdin

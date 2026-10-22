@@ -27,6 +27,7 @@
 
 /* The cif points at types, so both live in one block. */
 struct agc_ffi_call {
+  void *lib;
   void (*fn)(void);
   agc_c_type result;
   uint32_t count;
@@ -40,7 +41,10 @@ static ffi_type *ffi_type_of(agc_c_type type) {
     case AGC_C_INT64: return &ffi_type_sint64;
     case AGC_C_DOUBLE: return &ffi_type_double;
     case AGC_C_BOOL: return &ffi_type_uint8;
-    case AGC_C_STRING: return &ffi_type_pointer;
+    case AGC_C_STRING:
+    case AGC_C_POINTER:
+    case AGC_C_BYTES:
+    case AGC_C_RESOURCE: return &ffi_type_pointer;
     case AGC_C_VOID: break;
   }
   return &ffi_type_void;
@@ -178,6 +182,7 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   /* ISO C cannot convert an object pointer to a function pointer; POSIX and Windows guarantee that the address of a
      function found by the loader can be. */
   memcpy(&call->fn, &found, sizeof call->fn);
+  call->lib = lib;
   call->result = result;
   call->count = count;
   for (uint32_t k = 0; k < count; k++) call->types[k] = ffi_type_of(params[k]);
@@ -190,6 +195,11 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   return call;
 }
 
+void agc_ffi_discard(agc_ffi_call *call) {
+  library_close(call->lib);
+  free(call);
+}
+
 void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) {
   /* ffi_call reads each argument through a pointer to it: every member of the union starts at its first byte, so a
      pointer to the union is a pointer to the member that ffi_type_of named. An integer result is widened to a whole
@@ -200,8 +210,9 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
   double real = 0;
   void *pointer = NULL;
   void *out = &word;
+  bool pointed = call->result == AGC_C_STRING || call->result == AGC_C_POINTER || call->result == AGC_C_RESOURCE;
   if (call->result == AGC_C_DOUBLE) out = &real;
-  if (call->result == AGC_C_STRING) out = &pointer;
+  if (pointed) out = &pointer;
   ffi_call(&call->cif, call->fn, out, slots);
   switch (call->result) {
     case AGC_C_INT: result->i = (int32_t)word; break;
@@ -209,6 +220,9 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
     case AGC_C_DOUBLE: result->d = real; break;
     case AGC_C_BOOL: result->b = (word & 0xFF) != 0; break;
     case AGC_C_STRING: result->s = pointer; break;
+    case AGC_C_POINTER:
+    case AGC_C_RESOURCE: result->p = pointer; break;
+    case AGC_C_BYTES:
     case AGC_C_VOID: break;
   }
 }

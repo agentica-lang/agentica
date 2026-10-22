@@ -115,6 +115,7 @@ def start(linked: Linker.Linked) -> State.Cx
     structs: RECORDS,
     enums: ENUMS,
     aliases: {},
+    resources: Set.new([]),
     functions: {},
     constants: {},
     type_params: [],

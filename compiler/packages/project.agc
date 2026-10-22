@@ -2,7 +2,7 @@
 ## the root file, going up from its folder, and the lock beside it. A build with no manifest is as before. A manifest
 ## that declares dependencies needs a lock that has every one of them, from the same source and with the same pin: that
 ## is checked here, once, before any file is loaded, and the build never writes the lock. The manifest of each locked
-## package that is in the cache is checked against the lock just after, also before any file is loaded
+## package that is in deps/ is checked against the lock just after, also before any file is loaded
 ## (package_import.agc, check_manifests).
 
 import Paths from "../modules/import_path"

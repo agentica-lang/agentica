@@ -130,6 +130,7 @@ def declared_name(declaration: Ast.Decl) -> String
     Ast.Decl.Struct(node) -> return node.name
     Ast.Decl.Enum(node) -> return node.name
     Ast.Decl.TypeAlias(node) -> return node.name
+    Ast.Decl.Resource(node) -> return node.name
     Ast.Decl.Constant(node) -> return node.name
     Ast.Decl.Import(_) -> return ""
     Ast.Decl.Export(_) -> return ""
@@ -145,6 +146,7 @@ def whole(found: Found) -> Definition
     Ast.Decl.Struct(node) -> return top("struct", node.name, module, node.span, node.name_span)
     Ast.Decl.Enum(node) -> return top("enum", node.name, module, node.span, node.name_span)
     Ast.Decl.TypeAlias(node) -> return top("alias", node.name, module, node.span, node.name_span)
+    Ast.Decl.Resource(node) -> return top("resource", node.name, module, node.span, node.name_span)
     Ast.Decl.Constant(node) -> return top("constant", node.name, module, node.span, node.name_span)
     Ast.Decl.Import(node) -> return made("import", "", module, node.span, node.span, nothing_said())
     Ast.Decl.Export(node) -> return made("export", "", module, node.span, node.span, nothing_said())

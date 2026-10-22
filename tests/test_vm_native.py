@@ -1,11 +1,13 @@
 """Native calls (the extern blocks of docs/grammar/05-syntax.md and 06d-io-and-network.md) through the product CLI.
 
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows) for
-each module run, so every C type crosses a real ABI. Native calls exist on Linux x86_64 and Windows x64 for now:
+each module run, so every C type crosses a real ABI; two cases also call the system libsqlite3.so.0 on Linux, which
+CI installs. Native calls exist on Linux x86_64 and Windows x64 for now:
 elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
 test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* has
 no Windows port yet (#568). Tests assert codes and spans, never messages (AGENTS.md).
 """
+import ctypes
 import json
 import platform
 import subprocess
@@ -13,7 +15,8 @@ import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, known_issue, run, tool, vm_environment
+from tests.agentica_test import (FIXTURES, TARGET_OS, WINDOWS, cli, host_only, known_issue, require, run, tool,
+                                 vm_environment)
 
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64"))
@@ -322,6 +325,246 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "1\n", "")
 
 
+RESOURCE_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  def peer_res_open(value: C.Int) -> Res
+  def peer_res_get(res: Res) -> C.Int
+  compute def peer_res_hold(res: Res, limit_ms: C.Int) -> C.Int
+  compute def peer_res_open_later(value: C.Int, limit_ms: C.Int) -> Res
+  def peer_res_holding() -> C.Int
+  def peer_res_frees() -> C.Int
+  def peer_res_busy_frees() -> C.Int
+  def peer_set_flag() -> Void
+  def peer_bytes_sum(bytes: C.Bytes, n: C.Int) -> C.Int
+  def peer_ptr_echo(p: C.Pointer) -> C.Pointer
+  def peer_ptr_static() -> C.Pointer
+  def peer_ptr_read(p: C.Pointer) -> C.Int
+  def peer_res_bytes(res: Res, bytes: C.Bytes, n: C.Int) -> C.Int
+end
+
+def get(res: Res) -> Int
+  return peer_res_get(res)
+end
+
+def open_one(n: Int) -> Int
+  res = peer_res_open(n).unwrap!
+  return peer_res_get(res)
+end
+
+def hold(res: Res) -> Result[Int]
+  return ok(peer_res_hold(res, 20_000))
+end
+
+def wait_for(frees: Int) -> Void
+  n = 0
+  while peer_res_frees() < frees and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+def wait_holding() -> Void
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+"""
+
+
+# Native.close frees once and a second close does nothing; a NULL result is an error value; C.Bytes and C.Pointer
+# cross. The peer counts each free, and frees the memory, so a double free would also crash the run.
+@NATIVE_CALLS
+def test_a_resource_is_freed_once_and_null_is_an_error(tmp_path, peer):
+    main = """def main() -> Void
+  res = peer_res_open(7).unwrap!
+  IO.inspect(res)
+  puts(peer_res_get(res))
+  Native.close(res)
+  Native.close(res)
+  puts(peer_res_frees())
+  IO.inspect(peer_res_open(-1))
+  puts(peer_bytes_sum([1, 2, 255], 3))
+  puts(peer_bytes_sum([], 0))
+  puts(Native.null?(peer_ptr_echo(Native.null())))
+  p = peer_ptr_static()
+  puts(Native.null?(p))
+  puts(peer_ptr_read(peer_ptr_echo(p)))
+  IO.inspect(p)
+end
+"""
+    result = agentica(program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "<Res>", "7", "1", 'error("peer_res_open returned NULL")', "258", "0", "true", "false", "42", "<C.Pointer>", "",
+    ]
+
+
+# A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
+# the call; a closed resource is found first, even with a bad byte. Task.spawn_owning of a closed resource is
+# RUNTIME-HANDLE-NOT-OWNED.
+@NATIVE_CALLS
+@pytest.mark.parametrize("case, code, line", [
+    ("closed", "RUNTIME-NATIVE-CLOSED", 4),
+    ("owned", "RUNTIME-NATIVE-CLOSED", 4),
+    ("handed", "RUNTIME-HANDLE-NOT-OWNED", RESOURCE_EXTERN.count("\n") + 10),
+    ("byte", "RUNTIME-INVALID-NUMBER", 11),
+    ("both", "RUNTIME-NATIVE-CLOSED", 15),
+])
+def test_a_closed_resource_and_a_bad_byte_stop_the_call(tmp_path, peer, case, code, line):
+    main = """def main() -> Void
+  res = peer_res_open(3).unwrap!
+  arg = System.args()[0]
+  if arg == "closed"
+    Native.close(res)
+  elsif arg == "owned"
+    puts(Task.await(Task.spawn_owning(&get, res)))
+  elsif arg == "handed"
+    Native.close(res)
+    Task.await(Task.spawn_owning(&get, res))
+  elsif arg == "both"
+    Native.close(res)
+    puts(peer_res_bytes(res, [1, 256], 2))
+  else
+    puts(peer_bytes_sum([1, 256], 2))
+  end
+  puts(peer_res_get(res))
+end
+"""
+    result = agentica("--json", program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main), case)
+    assert (diagnostic(result, 1)[0], diagnostic(result, 1)[1][0]) == (code, line)
+    assert result.stdout == ("3\n" if case == "owned" else "")
+
+
+# The task that opened a resource owns it: its end frees what it did not close, and Task.spawn_owning hands it on.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_the_end_of_the_owning_task_frees_a_resource(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  sum = 0
+  for n in 1..20
+    sum += Task.await(Task.spawn(&open_one, n))
+  end
+  puts(sum)
+  puts(peer_res_frees())
+  res = peer_res_open(5).unwrap!
+  puts(Task.await(Task.spawn_owning(&get, res)))
+  puts(peer_res_frees())
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "210\n20\n5\n21\n", "")
+
+
+# A compute call holds its resource until C returns: a close by another task, or a cancel that ends the owning task,
+# marks it closed, and the free runs only when the call ends, never while the pool thread still uses the pointer.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("spawn, stop, awaited", [
+    ("Task.spawn_owning", "Task.cancel(holder)", 'error("task: cancelled")'),
+    ("Task.spawn", "Native.close(res)", "ok(9)"),
+])
+def test_a_compute_call_keeps_its_resource_until_it_returns(tmp_path, peer, schedulers, spawn, stop, awaited):
+    main = """def main() -> Void
+  res = peer_res_open(9).unwrap!
+  holder = %s(&hold, res)
+  wait_holding()
+  %s
+  puts(peer_res_frees())
+  peer_set_flag()
+  puts(Task.await(holder))
+  wait_for(1)
+  puts(peer_res_frees())
+  puts(peer_res_busy_frees())
+end
+""" % (spawn, stop)
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["0", awaited, "1", "0", ""]
+
+
+# The resource that a cancelled compute call returns is dropped with its result, and so freed: nothing leaks.
+@NATIVE_CALLS
+def test_a_dropped_compute_result_frees_its_resource(tmp_path, peer):
+    main = """def later(n: Int) -> Result[Int]
+  res = try peer_res_open_later(n, 20_000)
+  return ok(peer_res_get(res))
+end
+
+def main() -> Void
+  opener = Task.spawn(&later, 3)
+  Task.sleep(20)
+  Task.cancel(opener)
+  puts(Task.await(opener))
+  peer_set_flag()
+  wait_for(1)
+  puts(peer_res_frees())
+end
+"""
+    result = agentica("--schedulers", "2", program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\n', "")
+
+
+# Calls queued behind busy pool threads (one per scheduler) and cancelled there are never made, so their `done` builds
+# no result: no resource is made from a pointer C never returned (its free would get garbage, which ASan catches) and
+# no C.String is read. Every resource opened is freed once, and none while C uses it.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_cancelled_compute_call_that_never_ran_gives_no_result(tmp_path, peer, schedulers):
+    main = """extern "{library}"
+  compute def peer_word(n: C.Int) -> C.String
+  def peer_res_opens() -> C.Int
+end
+
+def later(n: Int) -> Result[Int]
+  res = try peer_res_open_later(n, 0)
+  return ok(peer_res_get(res))
+end
+
+def word(n: Int) -> Result[String]
+  return ok(peer_word(n))
+end
+
+def main() -> Void
+  res = peer_res_open(1).unwrap!
+  holders: List[Task[Result[Int]]] = []
+  for k in 1..SCHEDULERS
+    holders = holders.push(Task.spawn(&hold, res))
+  end
+  n = 0
+  while peer_res_holding() < SCHEDULERS and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  openers: List[Task[Result[Int]]] = []
+  words: List[Task[Result[String]]] = []
+  for k in 1..20
+    openers = openers.push(Task.spawn(&later, k))
+    words = words.push(Task.spawn(&word, k))
+  end
+  Task.sleep(50)
+  for task in openers
+    Task.cancel(task)
+  end
+  for task in words
+    Task.cancel(task)
+  end
+  peer_set_flag()
+  for task in holders
+    Task.await(task)
+  end
+  Native.close(res)
+  Task.sleep(50)
+  puts(peer_res_opens() - peer_res_frees())
+  puts(peer_res_busy_frees())
+end
+""".replace("SCHEDULERS", schedulers).replace("{library}", literal(peer))
+    result = agentica("--schedulers", schedulers, program(tmp_path, RESOURCE_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "0\n0\n", "")
+
+
 WAIT_EXTERN = """extern "{library}"
   def peer_pipe() -> C.Int
   def peer_pipe_writer() -> C.Int
@@ -610,3 +853,62 @@ def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
         assert errors == {"native_test.agc": "RUNTIME-NATIVE-DENIED", "plain_test.agc": None}, words
         assert (report["passed"], report["failed"]) == (1, 0), words
     assert agentica("test", cwd=tmp_path).code == 0
+
+
+# A real library, not the peer: the system SQLite of Linux. sqlite3_malloc and sqlite3_free are a resource, and
+# sqlite3_msize reads the block (the full open/exec/query case waits for the out parameters of FFI-a PR 3).
+SQLITE_LIBRARY = "libsqlite3.so.0"
+
+SQLITE_EXTERN = """extern "%s"
+  resource Block, free: sqlite3_free
+  def sqlite3_libversion_number() -> C.Int
+  def sqlite3_libversion() -> C.String
+  def sqlite3_complete(sql: C.String) -> C.Int
+  def sqlite3_malloc(size: C.Int) -> Block
+  def sqlite3_msize(block: Block) -> C.Int64
+end
+
+""" % SQLITE_LIBRARY
+
+# libsqlite3.so.0 is a Linux system library: CI installs libsqlite3-0, and a missing library fails there and skips
+# on a local run. Windows has no such library; the systems without native calls skip with the port issue (#548).
+NO_SYSTEM_SQLITE = host_only(WINDOWS, "Windows has no libsqlite3.so.0 (a Linux system library)")
+
+
+@pytest.fixture(scope="module")
+def sqlite():
+    """Skip (a failure in CI) when the system SQLite library is not installed."""
+    try:
+        ctypes.CDLL(SQLITE_LIBRARY)
+    except OSError:
+        require(False, SQLITE_LIBRARY + " is required (Debian: apt install libsqlite3-0)")
+
+
+@NATIVE_CALLS
+@NO_SYSTEM_SQLITE
+def test_the_system_sqlite_answers_its_version_and_whether_a_statement_is_complete(tmp_path, sqlite):
+    main = """def main() -> Void
+  puts(sqlite3_libversion_number() >= 3_000_000)
+  puts(sqlite3_libversion().start_with?("3."))
+  puts(sqlite3_complete("select 1;"))
+  puts(sqlite3_complete("select"))
+end
+"""
+    result = agentica(program(tmp_path, SQLITE_EXTERN + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "true\ntrue\n1\n0\n", "")
+
+
+@NATIVE_CALLS
+@NO_SYSTEM_SQLITE
+def test_a_block_of_sqlite_malloc_is_a_resource_that_close_frees(tmp_path, sqlite):
+    main = """def main() -> Void
+  block = sqlite3_malloc(64).unwrap!
+  puts(sqlite3_msize(block) >= 64)
+  Native.close(block)
+  Native.close(block)
+  puts(sqlite3_msize(block))
+end
+"""
+    result = agentica("--json", program(tmp_path, SQLITE_EXTERN + main))
+    assert diagnostic(result, 1)[0] == "RUNTIME-NATIVE-CLOSED"
+    assert result.stdout == "true\n"

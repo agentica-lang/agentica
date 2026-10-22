@@ -15,8 +15,9 @@ The prefix is the stage: `LEX-`, `PARSE-`, `CHECK-` (before running), `RUNTIME-`
 question to `outline`, `type-at`, `symbol` or `refs`. With `--json`, the
 diagnostic that ends the run is the last stderr line, after the program's own
 stderr. Expected process failures return error Results. Codes without an entry
-below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (`language.md`) and
-`RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call span).
+below: `CHECK-VOID-TYPE` and `CHECK-VOID-VALUE` (`language-program-types.md`)
+and `RUNTIME-PROCESS-CLOSE` (a failed explicit process cleanup, at the call
+span).
 
 A runtime error in a task with more than one frame, or not `main`, also prints
 the call stack of the failed task, innermost first, in the plain, `--ai` (under
@@ -129,8 +130,8 @@ and a task's crash line (`"task":true`) carry it too.
   `.agc` or another extension too); a cycle; an unknown or private imported
   name. A private struct cannot be built or updated with `.with` from another
   module. `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME` (`modules.md`).
-- `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in the
-  package cache, or a package file imports a `pkg/` name its own `agentica.toml`
+- `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in
+  `deps/` (run `agentica install`), or a package file imports a `pkg/` name its own `agentica.toml`
   does not declare.
 - `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
   `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`: `agentica.toml` or `agentica.lock` is
@@ -138,7 +139,7 @@ and a task's crash line (`"task":true`) carry it too.
   the project and its packages (conflict). The report names the file and a key
   path such as `dependencies.sqlite.git` (`key_path` in `--json`), or a line and
   column for a TOML syntax error; a missing or unreadable file has only its
-  name. The manifests of all locked packages in the cache are checked before any
+  name. The manifests of all locked packages in `deps/` are checked before any
   file loads, imported or not.
 - `QUERY-USAGE`: a wrong question to `outline`, `type-at`, `symbol` or `refs`: a
   missing or extra argument, an unknown option, `--stdin` without a file, a bad
@@ -153,12 +154,11 @@ and a task's crash line (`"task":true`) carry it too.
   of a line or file, or (for `refs`) a module alias or path in an import line.
   The span is the position; exit 2.
 - `PKG-HASH-MISMATCH`, `PKG-SYMLINK`: the `.agc` files of a package in
-  `agc_libs/<name>/` or the cache (or just fetched by `install`) are not the
-  ones the lock hashes (edited, added or missing), or one is a symbolic link or
+  `deps/<name>/` or the cache (or just fetched by `install`) are not the ones
+  the lock hashes (edited, added or missing), or one is a symbolic link or
   submodule, or the package's `agentica.toml` is not a regular file. Run
-  `agentica vendor` again for a vendored copy; remove the folder and run
-  `agentica install` for the cache. `agc_libs/` itself as a link is
-  `PKG-SYMLINK` for `vendor`.
+  `agentica install` again for `deps/`; remove the cache folder and run it for
+  the cache. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
 - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
   `agentica install` failed: git did not start or failed, the tag or commit does
   not exist, a copied path is unsafe, a file is over 1 MiB (16 MiB in all) or
@@ -173,8 +173,8 @@ and a task's crash line (`"task":true`) carry it too.
   manifest; the manifest has a layout the one-line edit cannot handle (write the
   line by hand); or `agentica.lock` or `agentica.toml` cannot be written. Fetch
   errors of a new pin are the codes of `install`, at `dependencies.<name>.git`
-  (or `.tag`, `.ref`). `agentica vendor` gives `PKG-WRITE` too, at the
-  `agc_libs/` file it cannot write.
+  (or `.tag`, `.ref`). Writing `deps/` gives `PKG-WRITE` too, at the file
+  it cannot write.
 - `CHECK-IMPORT-RENAME`: `import {A as b}` where the new name breaks the case
   rule of what it renames (struct or enum capitalized, function lowercase,
   constant a constant name).
@@ -265,14 +265,17 @@ and a task's crash line (`"task":true`) carry it too.
 - `RUNTIME-TEST-TIMEOUT`: under `agentica test`, a test ran longer than 30
   seconds; the rest of its file is not executed.
 - `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`,
-  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`: an `extern` signature with a
-  non-C type (the span is the type), a name with `?` or `!`, a parameter with a
-  default, more than 64 parameters, or a library that is not a name without `/`
-  or an absolute path (`native.md`).
-- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`:
-  the library or function of an extern call was not found (at the extern
-  function); or, at load with exit 2, `--deny-native` refused a program with an
-  extern function or a `Native.wait_*` call, or the system has no native calls.
+  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`, `PARSE-EXTERN-FREE`: an
+  `extern` signature with a type that is not a C type or a resource declared
+  above in the block (the span is the type), a name with `?` or `!`, a
+  parameter with a default, more than 64 parameters, a library that is not a
+  name without `/` or an absolute path, or a `def` of the block's `free:`
+  function (`native.md`).
+- `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-DENIED`,
+  `RUNTIME-NATIVE-UNSUPPORTED`: the library or function of an extern call was
+  not found (at the extern function); a call took a closed resource; or, at
+  load with exit 2, `--deny-native` refused a program with an extern function
+  or a `Native.*` call, or the system has no native calls.
 - `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything
   runs); an interpreter bug to report.
 

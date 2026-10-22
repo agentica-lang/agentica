@@ -94,7 +94,7 @@ def test_two_folders_of_one_repository_are_two_packages_and_install_keeps_only_t
         commit + "@postgres", commit + "@sqlite"]
     assert not [name for name in os.listdir(ws.pkg_root) if name.startswith(".")]
 
-    # The program builds and runs from the cache with no git: a build never fetches.
+    # The program builds and runs from deps/ with no git: a build never fetches.
     empty = tmp_path / "no-git"
     empty.mkdir()
     ran = build(ws, remotes, PATH=str(empty))
@@ -189,7 +189,8 @@ def test_a_package_that_names_another_folder_for_a_name_is_a_source_conflict(ws,
     _, problem = run_json("install", ws, remotes)
     cached = ws.folder(url(remotes), commit, "postgres") / "agentica.toml"
     assert_at_key(problem, "PKG-SOURCE-CONFLICT", cached, "dependencies.common")
-    assert problem_of(ws, remotes)["code"] == "PKG-SOURCE-CONFLICT"
+    # The manifests are checked in the cache before anything is written to deps/.
+    assert not ws.deps.exists()
 
 
 def test_a_relative_import_cannot_leave_the_folder(ws, remotes):
@@ -204,7 +205,7 @@ def test_a_relative_import_cannot_leave_the_folder(ws, remotes):
     # The file is in the repository, one folder up, but the package is the folder: the import is refused at the import.
     problem = problem_of(ws, remotes)
     assert problem["code"] == "CHECK-IMPORT-PATH"
-    assert Path(problem["file"]) == ws.folder(url(remotes), commit, "sqlite") / "db.agc"
+    assert Path(problem["file"]) == ws.deps / "sqlite" / "db.agc"
 
 
 def test_install_refuses_a_subdir_that_the_commit_lacks_or_that_is_not_a_folder(ws, remotes):
@@ -219,38 +220,30 @@ def test_install_refuses_a_subdir_that_the_commit_lacks_or_that_is_not_a_folder(
     assert not ws.folder(url(remotes), commit, "missing").exists()
 
 
-def test_vendor_copies_one_folder_for_each_package_and_a_build_runs_from_the_copies(ws, remotes, tmp_path):
+def test_install_writes_one_deps_folder_for_each_package_with_only_its_folder_and_a_build_needs_no_cache(
+        ws, remotes, tmp_path):
     project(ws, remotes)
-    result, problem = run_json("vendor", ws, remotes)
+    result, problem = run_json("install", ws, remotes)
     assert (result.code, problem) == (0, None), result.stderr
-    libs = ws.project / "agc_libs"
-    assert sorted(os.listdir(libs)) == ["postgres", "sqlite"]
-    assert cached_files(libs / "sqlite") == ["db.agc", "util/text.agc"]
-    assert cached_files(libs / "postgres") == ["db.agc"]
-    assert package_hash(libs / "sqlite") == ws.locked[0]["hash"]
-    # No cache, no git: the copies are enough, and the program is the same one.
+    deps = ws.deps
+    # The files of the folder only: nothing of common/, other/ or the root of the repository, and no .gitignore.
+    assert sorted(os.listdir(deps)) == ["postgres", "sqlite"]
+    assert cached_files(deps / "sqlite") == ["db.agc", "util/text.agc"]
+    assert cached_files(deps / "postgres") == ["db.agc"]
+    assert package_hash(deps / "sqlite") == ws.locked[0]["hash"]
+    # No cache, no git: deps/ is enough, and the stored names are the paths inside the folders.
     shutil.rmtree(ws.pkg_root)
     empty = tmp_path / "no-git"
     empty.mkdir()
     ran = build(ws, remotes, PATH=str(empty))
     assert (ran.code, ran.stdout) == (0, "sqlite postgres\n"), ran.stderr
-    # An edit in the copy of one folder is a hash mismatch for that package only.
-    (libs / "postgres" / "db.agc").write_text("# edited\n", encoding="utf-8")
+    out = tmp_path / "deps.agcb"
+    assert run(cli() + ["compile", str(ws.project / "main.agc"), "-o", str(out)], cwd=ws.project,
+               env=environment(ws, remotes, PATH=str(empty))).code == 0
+    assert b"pkg/sqlite@sqlite-0.1.0/db.agc" in out.read_bytes()
+    # An edit in the folder of one package is a hash mismatch for that package only.
+    (deps / "postgres" / "db.agc").write_text("# edited\n", encoding="utf-8")
     assert problem_of(ws, remotes)["code"] == "PKG-HASH-MISMATCH"
-
-
-def test_the_stored_name_is_the_path_inside_the_folder_so_a_copy_and_the_cache_compile_the_same(ws, remotes, tmp_path):
-    project(ws, remotes)
-    assert run_json("vendor", ws, remotes)[1] is None
-    from_copies = tmp_path / "copies.agcb"
-    assert run(cli() + ["compile", str(ws.project / "main.agc"), "-o", str(from_copies)], cwd=ws.project,
-               env=environment(ws, remotes)).code == 0
-    shutil.rmtree(ws.project / "agc_libs")
-    from_cache = tmp_path / "cache.agcb"
-    assert run(cli() + ["compile", str(ws.project / "main.agc"), "-o", str(from_cache)], cwd=ws.project,
-               env=environment(ws, remotes)).code == 0
-    assert from_cache.read_bytes() == from_copies.read_bytes()
-    assert b"pkg/sqlite@sqlite-0.1.0/db.agc" in from_cache.read_bytes()
 
 
 def test_add_with_subdir_writes_the_key_in_the_manifest_and_the_lock(ws, remotes, tmp_path):
@@ -317,9 +310,8 @@ def test_a_package_can_declare_another_folder_of_its_own_repository(ws, remotes,
     again = run(cli() + ["update"], cwd=ws.project, env=environment(ws, remotes))
     assert (again.code, again.stdout) == (0, "nothing to update\n"), again.stderr
     assert (ws.project / "agentica.lock").read_text(encoding="utf-8") == lock
-    # Vendored, both folders are copies and the program runs with no cache and no git.
-    assert run_json("vendor", ws, remotes)[1] is None
-    assert sorted(os.listdir(ws.project / "agc_libs")) == ["common", "postgres"]
+    # `add` wrote both folders to deps/, so the program runs with no cache and no git.
+    assert sorted(os.listdir(ws.deps)) == ["common", "postgres"]
     shutil.rmtree(ws.pkg_root)
     empty = tmp_path / "no-git"
     empty.mkdir()

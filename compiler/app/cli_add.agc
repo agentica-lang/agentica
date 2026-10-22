@@ -1,11 +1,14 @@
 ## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and `agentica update [NAME]`
 ## (docs/future/45-packages.md, 45.9). Both work on the project of the working folder, resolve its packages
-## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache and write
-## agentica.lock. `add` also puts the dependency in agentica.toml, with one line added and nothing else changed
-## (packages/manifest_edit.agc). The lock is written first:
-## a lock with more packages than the manifest needs is still good, while a manifest that names a package the lock
-## lacks is PKG-LOCK-STALE. Nothing is written when anything before fails.
+## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache, write agentica.lock
+## and refresh deps/ (io/package_deps.agc: every package of the new lock is written, and a package the old lock had
+## and the new one lacks is removed). `add` also puts the dependency in agentica.toml, with one line added and nothing
+## else changed (packages/manifest_edit.agc). The lock is written first: a lock with more packages than the manifest
+## needs is still good, while a manifest that names a package the lock lacks is PKG-LOCK-STALE. deps/ is written last,
+## because `agentica install` can write it again from the lock. Nothing is written when anything before the lock
+## fails.
 
+import PackageDeps from "../io/package_deps"
 import PackageResolve from "../io/package_resolve"
 import SaveFile from "../io/save_file"
 import Env from "../modules/link_env"
@@ -14,6 +17,7 @@ import GitSource from "../packages/git_source"
 import Lock from "../packages/lock"
 import Manifest from "../packages/manifest"
 import ManifestEdit from "../packages/manifest_edit"
+import PackageImport from "../packages/package_import"
 import Project from "../packages/project"
 import Reader from "../packages/toml_read"
 import CliProject from "cli_project"
@@ -24,6 +28,9 @@ import Texts from "cli_text"
 WRITE_TIMEOUT_MS = 60_000
 # More help for a manifest that could not be written after the lock was.
 LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to make it match agentica.toml again"
+
+# More help for a deps/ that could not be written after the lock was.
+DEPS_PENDING = "agentica.lock was written already; run `agentica install` to write the locked packages into deps/"
 
 # What `add` was asked: the local name and where the package comes from.
 struct Request
@@ -126,6 +133,7 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   try unchanged(settings, file, text)
   try save(settings, found.lock.file, Lock.encode(packages), "")
   try save(settings, file, edited, LOCK_WRITTEN)
+  try refresh_deps(settings, found, packages)
   return ok(report(found.lock, packages, request.name))
 end
 
@@ -181,7 +189,21 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
   if packages.size > 0 or settings.workspace.file_exists.call(found.lock.file)
     try save(settings, found.lock.file, Lock.encode(packages), "")
   end
+  try refresh_deps(settings, found, packages)
   return ok(report(found.lock, packages, ""))
+end
+
+# Writes the packages of the new lock to deps/ and removes those the old lock had and the new one lacks. Only a project
+# that has a lock gets a deps/ folder. The lock is saved by now, so a failure says how to write deps/.
+def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lock.Locked]) -> Result[Void]
+  deps = PackageImport.scope_of(Project.Project.Declared(found)).deps
+  old = found.lock.packages.map do |locked| locked.name end
+  ordered = packages.sort_by do |locked| locked.name end
+  done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old)
+  if !done.ok?
+    return error(Failure.add_help(done.message, DEPS_PENDING))
+  end
+  return ok()
 end
 
 # Replaces the file whole (SaveFile.replace puts the old one back if a step fails). A file that cannot be written is

@@ -1,6 +1,6 @@
 """Packages for the tests of the manager (docs/future/45-packages.md, phases 45a to 45c).
 
-`Workspace` fills the package cache by hand; `Remotes` makes git repositories that `agentica install`, `add` and
+`Workspace` fills the deps/ folder of the project by hand (a build reads packages only from there); `Remotes` makes git repositories that `agentica install`, `add` and
 `update` fetch from. `package_hash` is the hash rule of docs/grammar/05b-modules.md written again with hashlib and
 os.walk, as a second implementation to check the Agentica one against.
 """
@@ -91,15 +91,20 @@ class Workspace:
         """The environment that points the compiler at self.cache: the system reads one of the two variables."""
         return {"LOCALAPPDATA": str(self.cache)} if WINDOWS else {"XDG_CACHE_HOME": str(self.cache)}
 
+    @property
+    def deps(self):
+        """The deps/ folder of the project, where a build reads the packages."""
+        return self.project / "deps"
+
     def folder(self, git, commit=COMMIT, subdir=""):
         """Where the cache keeps one commit of a package; a folder of the repository (`subdir`) has the folder
         `<commit>@<subdir with / written @>`."""
         return self.pkg_root / cache_path(git) / (commit + "".join("@" + part for part in subdir.split("/") if part))
 
     def add_package(self, name, git, files, tag=None, ref=None, dependencies=None, commit=COMMIT):
-        """Writes the files of a package into the cache, with the agentica.toml that declares `dependencies` when
+        """Writes the files of a package into `deps/<name>`, with the agentica.toml that declares `dependencies` when
         there are any, and notes its entry for the lock. A package is pinned by `tag`, or by `ref` when it has no tag."""
-        folder = self.folder(git, commit)
+        folder = self.deps / name
         for relative, text in files.items():
             path = folder / relative
             path.parent.mkdir(parents=True, exist_ok=True)

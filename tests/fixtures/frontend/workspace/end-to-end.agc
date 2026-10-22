@@ -9,8 +9,8 @@ import Workspace from "../../../../compiler/modules/workspace"
 
 # Runs the pure core from a file to the bytes of its .agcb (link, check, lower, write) over a Workspace whose files are
 # an in-memory table, then writes the bytes to a file: the only write to the disk. The program imports a sibling
-# module, a package from the package cache (pkg/greet/greet, found through the lock and the hash of its files) and a
-# std/ module that std_source supplies.
+# module, a package from deps/ (pkg/greet/greet, found through the lock and the hash of its files) and a std/ module
+# that std_source supplies.
 #
 # What this proves, and what it does not. The table is keyed under the base folder that the test passes, and the test
 # writes garbage files at the same paths of the disk, so a stage that read any of them (with or without a fallback to
@@ -27,8 +27,7 @@ import Workspace from "../../../../compiler/modules/workspace"
 #   greet    the text of greet.agc
 #   hash     the hash of the package, from tests/package_support.package_hash
 #   out      the file the bytes are written to
-#   windows  (optional) the paths are drive paths and Env.windows is true, so the cache folder of the packages is the
-#            one under %LOCALAPPDATA%
+#   windows  (optional) the paths are drive paths and Env.windows is true
 #
 # It prints "ok", or the code and file of the first problem of a stage.
 
@@ -71,13 +70,9 @@ struct Given
   windows: Bool
 end
 
-# The tree of the project, and the package cache where Env says it is: the XDG folder, or the Windows one.
+# The tree of the project, with the package in its deps/ folder.
 def files_of(given: Given) -> Map[String, String]
   base = given.base
-  pkg_root = "#{base}/cache/agentica/pkg"
-  if given.windows
-    pkg_root = "#{base}/cache/agentica/cache/pkg"
-  end
   manifest = <<~TOML
     name = "app"
 
@@ -99,17 +94,8 @@ def files_of(given: Given) -> Map[String, String]
     "#{base}/project/src/util.agc": UTIL,
     "#{base}/project/agentica.toml": manifest,
     "#{base}/project/agentica.lock": lock,
-    "#{pkg_root}/#{cache_path(given.git)}/#{given.commit}/greet.agc": given.greet,
+    "#{base}/project/deps/greet/greet.agc": given.greet,
   }
-end
-
-# The part of the cache path of a git URL: host/owner/repo, with no scheme and no .git.
-def cache_path(git: String) -> String
-  rest = git.slice("https://".length, git.length - "https://".length)
-  if rest.ends_with?(".git")
-    return rest.slice(0, rest.length - ".git".length)
-  end
-  return rest
 end
 
 def in_memory(files: Map[String, String]) -> Workspace.Workspace

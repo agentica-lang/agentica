@@ -219,11 +219,6 @@ class ModulesStage(PytestStageCase):
                 if line:
                     key, value = line.split("=", 1)
                     env[key] = value.replace("@/", str(destination.resolve()) + "/")
-        if WINDOWS and "XDG_CACHE_HOME" in env:
-            # Windows reads the package cache from %LOCALAPPDATA%/agentica/cache/pkg, not from XDG_CACHE_HOME.
-            local = destination.resolve() / "local"
-            shutil.copytree(Path(env["XDG_CACHE_HOME"]) / "agentica" / "pkg", local / "agentica" / "cache" / "pkg")
-            env["LOCALAPPDATA"] = str(local)
         return env
 
 

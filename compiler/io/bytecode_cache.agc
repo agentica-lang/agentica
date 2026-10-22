@@ -11,8 +11,8 @@
 ## `present PATH<TAB>REAL` for a place that held a file, with the real path it led to. A lookup compares the key,
 ## hashes the files again, checks the probes (`file_exists` and `real_path`, a few `stat`s) and hashes the program, and
 ## any difference is a miss, so the entry is rebuilt. The probes cover a file that appears in an earlier folder of the
-## `pkg/` search, a vendored copy that appears, and a link that is retargeted; a program with no `pkg/` import records
-## one probe for each relative import.
+## `pkg/` search and a link that is retargeted (the files of a package in `deps/` are sources, so an edit there is a
+## miss); a program with no `pkg/` import records one probe for each relative import.
 ##
 ## The program digest only guards against damage. The loader treats the bytes as untrusted, but anything that can
 ## write the entry can make the user run the bytecode it holds, so the folder and the entry are used only when they

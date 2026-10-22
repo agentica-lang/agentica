@@ -46,8 +46,8 @@ export enum Detail
   Plain
 end
 
-## One top-level declaration. `kind` is "function", "struct", "enum", "alias" or "constant"; `span` is the whole
-## declaration, `export` included, and `name_span` the name alone. `agentica doc` lists the exported ones only;
+## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource" or "constant"; `span` is the
+## whole declaration, `export` included, and `name_span` the name alone. `agentica doc` lists the exported ones only;
 ## `agentica outline` lists all of them.
 export struct Item
   kind: String
@@ -131,6 +131,7 @@ def items_of(declaration: Ast.Decl, text: String) -> List[Item]
     Ast.Decl.Struct(node) -> return [struct_item(node, node.doc, node.span, false)]
     Ast.Decl.Enum(node) -> return [enum_item(node, node.doc, node.span, false)]
     Ast.Decl.TypeAlias(node) -> return [alias_item(node, node.doc, node.span, false)]
+    Ast.Decl.Resource(node) -> return [resource_item(node, node.doc, node.span, false)]
     Ast.Decl.Import(_) -> return []
   end
 end
@@ -142,6 +143,7 @@ def inner_items(declaration: Ast.Decl, doc: Ast.Optional[String], span: Source.S
     Ast.Decl.Struct(node) -> return [struct_item(node, doc, span, true)]
     Ast.Decl.Enum(node) -> return [enum_item(node, doc, span, true)]
     Ast.Decl.TypeAlias(node) -> return [alias_item(node, doc, span, true)]
+    Ast.Decl.Resource(node) -> return [resource_item(node, doc, span, true)]
     Ast.Decl.Constant(node) -> return [constant_item(node, span, true)]
     Ast.Decl.Import(_) -> return []
     Ast.Decl.Export(_) -> return []
@@ -233,6 +235,19 @@ def alias_item(node: Ast.TypeAliasDecl, doc: Ast.Optional[String], span: Source.
     name_span: node.name_span,
     exported: exported,
     signature: Signature.alias_text(node),
+    doc: cleaned(chosen(doc, node.doc)),
+    span: span,
+    detail: Detail.Plain,
+  )
+end
+
+def resource_item(node: Ast.ResourceDecl, doc: Ast.Optional[String], span: Source.Span, exported: Bool) -> Item
+  return Item(
+    kind: "resource",
+    name: node.name,
+    name_span: node.name_span,
+    exported: exported,
+    signature: "resource #{node.name}, free: #{node.free}",
     doc: cleaned(chosen(doc, node.doc)),
     span: span,
     detail: Detail.Plain,

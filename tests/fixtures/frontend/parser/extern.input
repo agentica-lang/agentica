@@ -6,7 +6,11 @@ extern "libm.so.6"
 end
 
 extern "/opt/lib/my peer.so"
+  ## A connection.
+  export resource Conn, free: peer_close
+  def peer_open(path: C.String) -> Conn
   def peer(a: C.Int, b: C.Bool, s: C.String) -> C.String
+  def send(conn: Conn, data: C.Bytes, n: C.Int) -> C.Pointer
   def tick() -> Void
   ## Runs on the compute pool.
   compute def crunch(n: C.Int64) -> C.Double

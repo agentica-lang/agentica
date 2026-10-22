@@ -221,10 +221,10 @@ either. Both leave children running.
 ### 14.5 Handles
 
 **Rule (phase 24, 24b).** A handle (file, socket, listener, process, `std/http`
-server) belongs to the task that opened it. A `Channel` has no opener: it is
-unowned until `Task.spawn_owning` hands it to a task, which then owns it like
-any other handle. If that task ends, in any way (return, crash, cancel), without
-closing it, the handle is closed. There is one close path: `finish_task`
+server, resource of native code) belongs to the task that opened it. A
+`Channel` has no opener: it is unowned until `Task.spawn_owning` hands it to a
+task, which then owns it like any other handle. If that task ends, in any way
+(return, crash, cancel), without closing it, the handle is closed. There is one close path: `finish_task`
 (`vm/task.c`) ends every task and closes the handles it still owns through
 `agc_close_owned`. Handing a handle to another task is always explicit, through
 one hand-off form, `Task.spawn_owning` ([handle ownership][task-rules]). It
@@ -263,6 +263,13 @@ already is counted through the top of its holder chain. `HttpWire.server` takes
 the listener off its owner's list, so ending the owner closes both, and a
 hand-off moves both. `Task.spawn_owning` fails with `RUNTIME-HANDLE-NOT-OWNED`
 when the caller does not own the handle or it is closed, before it makes a task.
+
+A resource of native code (`vm/ffi.c`) closes by running its C `free` once,
+on `Native.close` or at its owner's end. A `compute def` call holds its
+resource arguments until the call returns: a close meanwhile marks the
+resource closed and takes it off its owner, and the end of the last such call
+runs the `free` on a scheduler, so C never sees the pointer freed while a pool
+thread uses it. There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

@@ -16,8 +16,11 @@
 #define AGC_FFI_MAX_PARAMS 64
 
 /* The C types of an extern signature: C.Int is int32_t, C.Int64 int64_t, C.Double double, C.Bool _Bool and C.String
-   a NUL-terminated char *. Void is for results only. */
-typedef enum { AGC_C_VOID, AGC_C_INT, AGC_C_INT64, AGC_C_DOUBLE, AGC_C_BOOL, AGC_C_STRING } agc_c_type;
+   a NUL-terminated char *. C.Pointer, C.Bytes (a const uint8_t *) and a resource are each a pointer in C. Void is for
+   results only, and C.Bytes for parameters only. */
+typedef enum {
+  AGC_C_VOID, AGC_C_INT, AGC_C_INT64, AGC_C_DOUBLE, AGC_C_BOOL, AGC_C_STRING, AGC_C_POINTER, AGC_C_BYTES, AGC_C_RESOURCE
+} agc_c_type;
 
 typedef union {
   int32_t i;
@@ -25,6 +28,7 @@ typedef union {
   double d;
   bool b;
   const char *s;
+  void *p;
 } agc_c_value;
 
 /* A prepared call: the function and its signature, in malloc memory that lives as long as the process. */
@@ -39,6 +43,10 @@ bool agc_ffi_supported(void);
    code. A library that holds SYMBOL stays open until the process ends. */
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, char *error, size_t size);
+
+/* Frees a prepared call that no run uses (the free function of a resource was not found), and gives back its hold on
+   the library. */
+void agc_ffi_discard(agc_ffi_call *call);
 
 /* Calls the prepared function with ARGS (one per parameter) and stores its result in RESULT (untouched for Void). */
 void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result);
