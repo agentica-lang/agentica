@@ -27,6 +27,11 @@
 ## left. std/ sources are inside the binary, so they are not in the list. No flag of the command line changes the
 ## bytes of the program (--dump and --dump-ir do not compile to bytes), so none is in the key.
 ##
+## The checks are by path (there is no `fstat` on a handle), so a swap of the folder between the check and the open is
+## not closed. It needs write access to the parent of the folder: for `.agc_cache/` that is the folder of the sources,
+## which could be edited just as well; for a folder named by AGENTICA_CACHE_DIR the parent must not be writable by
+## others (a sticky folder such as /tmp is fine).
+##
 ## Nothing here fails a run: a folder that cannot be written, an entry that cannot be read or a file that is gone is a
 ## miss, and the program is compiled as without the cache. This is front-end I/O, so the --deny-* flags (which are for
 ## the program) do not reach it.
@@ -285,7 +290,8 @@ end
 
 # The folder or the file at `path` must be of this `kind` as it stands (File.lstat: a link is its own kind and is
 # refused) and, where the system has owners and modes (`user` is not -1), be owned by the user of this process and
-# writable by no one else.
+# writable by no one else. On Windows any real folder and file pass: nothing tells whose they are (an owner or ACL
+# check and a Windows test of the link and kind checks are open in #568).
 def private_kind(path: String, kind: String, user: Int) -> Result[Void]
   info = try File.lstat(path, IO_TIMEOUT_MS)
   if info.kind != kind
@@ -298,7 +304,10 @@ def private_kind(path: String, kind: String, user: Int) -> Result[Void]
 end
 
 # The user id of this process, which no builtin gives: the owner of a file made now with `create_private`, in the first
-# temporary folder that takes one. -1 on Windows, where `user_id` is always 0 and means nothing.
+# temporary folder that takes one. The name is random and the file is new and not followed, so a planted name or link
+# cannot give another id; a temporary folder that others can write without the sticky bit could still swap the file
+# between the create and the stat, which is a setting of the user's. -1 on Windows, where `user_id` is always 0 and
+# means nothing.
 def own_user() -> Result[Int]
   if System.os() == "windows"
     return ok(-1)
@@ -459,7 +468,8 @@ end
 
 # Writes the entry to a new private file beside its place under a name nobody can guess, and renames it there. A
 # rename never replaces (Path.rename), so the old entry is removed first: a reader that comes in between finds none,
-# which is a miss, and a run that dies in between leaves no entry. The folder made next to the sources gets a
+# which is a miss, and a run that dies in between leaves no entry. A file system that cannot rename without replacing
+# (the rename then fails) never gets an entry; the run is not affected. The folder made next to the sources gets a
 # .gitignore of its own, so the bytecode is not committed by mistake.
 def publish(entry: Entry, text: String, program: List[Int]) -> Bool
   if !prepare_folder(entry).ok?
@@ -477,7 +487,7 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
     return false
   end
   sweep(entry.folder)
-  Path.remove(entry.file, IO_TIMEOUT_MS)
+  remove_file(entry.file)
   if !Path.rename(temporary, entry.file, IO_TIMEOUT_MS).ok?
     Path.remove(temporary, IO_TIMEOUT_MS)
     return false
@@ -516,6 +526,15 @@ def write_private(path: String, data: List[Int]) -> Result[Void]
     rest = rest.drop(PIECE)
   end
   return File.close(out, IO_TIMEOUT_MS)
+end
+
+# Removes the file or the link at `path` (a link is removed as a link, never followed). A folder in its place stays
+# (the rename then fails and the entry is not written): `Path.remove` would delete the whole folder.
+def remove_file(path: String) -> Void
+  info = File.lstat(path, IO_TIMEOUT_MS)
+  if info.ok? and (info.unwrap!.kind == "file" or info.unwrap!.kind == "link")
+    Path.remove(path, IO_TIMEOUT_MS)
+  end
 end
 
 # Removes the temporary files that a run left (it died between the write and the rename) once they are an hour old.

@@ -95,7 +95,8 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
   file in `.agc_cache/` next to it, and read it while F, its imports,
   `agentica.toml`, `agentica.lock` and the places the `pkg/` search looked at
   are the same (a hit has no front-end diagnostics). A folder or entry that is
-  a link, not yours, or writable by others is not used. `--no-cache` skips it for one run;
+  a link, not yours, or writable by others is not used (`chmod go-w` a folder
+  you made for `AGENTICA_CACHE_DIR`). `--no-cache` skips it for one run;
   `AGENTICA_CACHE_DIR=DIR` keeps the entries in DIR; an unwritable folder runs
   without it. `check`, `compile`, `--dump*` and `run` never use it.
 

@@ -11,7 +11,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, run, vm_environment
+from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, known_issue, run, vm_environment
 from tests.package_support import Workspace, dependency
 
 HEAD_BYTES = 18
@@ -163,7 +163,6 @@ def test_no_cache_neither_reads_nor_writes_and_the_variable_moves_the_entries(sr
     assert again.stdout == "from the entry\n", again.stderr
 
 
-@pytest.mark.skipif(ROOT_USER, reason="root can write to a read-only folder")
 @host_only(WINDOWS, "the folder is made read-only with its mode bits")
 def test_a_folder_that_cannot_be_written_still_runs(src):
     src.chmod(stat.S_IRUSR | stat.S_IXUSR)
@@ -172,7 +171,8 @@ def test_a_folder_that_cannot_be_written_still_runs(src):
     finally:
         src.chmod(stat.S_IRWXU)
     assert (done.code, done.stdout) == (0, "one\n"), done.stderr
-    assert not (src / ".agc_cache").exists()
+    # root writes to a folder whatever its mode, so only the run is checked for it.
+    assert ROOT_USER or not (src / ".agc_cache").exists()
 
 
 def test_a_change_of_the_lock_misses(tmp_path):
@@ -223,7 +223,9 @@ def test_agentica_test_reads_and_keeps_the_entry_of_a_test_file(tmp_path):
     assert json.loads(third.stdout)["files"]
 
 
-POSIX_ONLY = host_only(not POSIX_PYTHON, "file modes, owners and symbolic links bind a POSIX system")
+POSIX_ONLY = host_only(not POSIX_PYTHON, "file modes and owners bind a POSIX system")
+# The link checks work on Windows too, but a symbolic link there needs a privilege the test cannot count on.
+LINKS = known_issue(not POSIX_PYTHON, 568, "the link cases of the bytecode cache have no Windows test")
 
 
 @POSIX_ONLY
@@ -256,7 +258,7 @@ def test_an_entry_that_others_can_write_is_replaced(src, tmp_path):
     assert stat.S_IMODE(entry.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
 
 
-@POSIX_ONLY
+@LINKS
 def test_links_are_never_followed_to_read_or_to_write(src, tmp_path):
     agentica(src, "main.agc")
     folder = src / ".agc_cache"
@@ -297,7 +299,7 @@ def library_project(tmp_path):
 
 @pytest.mark.parametrize("earlier", [
     "agc_libs",
-    pytest.param("agc_libs beside a link", marks=POSIX_ONLY),
+    pytest.param("agc_libs beside a link", marks=LINKS),
     "AGENTICA_PATH",
 ])
 def test_a_library_that_appears_in_an_earlier_folder_of_the_search_misses(tmp_path, earlier):
@@ -354,7 +356,7 @@ def test_a_manifest_that_appears_in_a_parent_folder_misses(src, tmp_path):
     assert stamp(entry) != kept
 
 
-@POSIX_ONLY
+@LINKS
 def test_an_import_through_a_link_that_is_retargeted_misses(tmp_path):
     src = tmp_path / "src"
     src.mkdir()
@@ -370,3 +372,31 @@ def test_an_import_through_a_link_that_is_retargeted_misses(tmp_path):
     again = agentica(src, "main.agc")
     assert (again.code, again.stdout) == (0, "B\n"), again.stderr
     assert stamp(entry) != kept
+
+
+def test_a_run_that_writes_removes_the_old_temporary_files_and_nothing_else(src):
+    agentica(src, "main.agc")
+    folder = src / ".agc_cache"
+    names = ("a.agcb.tmp-1", "b.agcb.tmp-2", "c.txt", "d.agcb.tmp-3")
+    old, fresh, other, kept_folder = (folder / name for name in names)
+    for path in (old, fresh, other):
+        path.write_text("x", encoding="utf-8")
+    kept_folder.mkdir()
+    long_ago = old.stat().st_mtime - 2 * 3600
+    for path in (old, other, kept_folder):
+        os.utime(path, (long_ago, long_ago))
+    (src / "util.agc").write_text(UTIL % "two", encoding="utf-8")
+    assert agentica(src, "main.agc").stdout == "two\n"
+    assert not old.exists()
+    assert fresh.exists() and other.exists() and kept_folder.is_dir()
+
+
+def test_a_folder_at_the_name_of_the_entry_is_not_removed(src):
+    agentica(src, "main.agc")
+    entry = only_entry(src / ".agc_cache")
+    entry.unlink()
+    entry.mkdir()
+    (entry / "inside").write_text("x", encoding="utf-8")
+    done = agentica(src, "main.agc")
+    assert (done.code, done.stdout) == (0, "one\n"), done.stderr
+    assert (entry / "inside").is_file()
