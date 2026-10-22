@@ -4,210 +4,148 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
 
-- **Path:** `vm/value.h`, `vm/port.h`, `vm/core.h`, `vm/services.h`
-  - **Owns:** the layer headers ("Which layer" in `vm.md`). `value.h` has
-    `agc_opcode`, in the same order as `OPCODES` in
-    `compiler/bytecode/bytecode_tables.agc`. `port.h` has the stepper protocol
-    (`agc_stepper`, `agc_step_fn`, `agc_task_stepper`; "Adding a builtin").
+- `vm/value.h`, `vm/port.h`, `vm/core.h`, `vm/services.h`: the layer headers
+  ("Which layer" in `vm.md`). `value.h` has `agc_opcode`, in the same order as
+  `OPCODES` in `compiler/bytecode/bytecode_tables.agc`. `port.h` has the stepper
+  protocol (`agc_stepper`, `agc_step_fn`, `agc_task_stepper`; "Adding a
+  builtin").
+- `vm/tools/check-layers.sh`, `vm/tools/check-layers-test.sh`: the layer check
+  run by `make vm-layers` (`docs/vm/15-layers.md` §15.5); link rules use `nm` on
+  the objects (Linux only). The self-test plants one violation at a time in a
+  temporary copy and rebuilds the object for the link cases
+- `vm/loader.c`: full validation of untrusted `.agcb` input
+  (`docs/vm/08-loader-and-cli.md` §8). It holds the collector off with
+  `agc_gc_pause` and `agc_gc_resume` while it loads (value.c; the GC-stress
+  build ignores them). The struct and enum tables use one variant array sized by
+  a first pass and one shared empty value per nullary variant. Updates
+  (`load_updates`): strictly increasing field indexes below the field count, and
+  the `STRUCT_WITH` operand check against it. Types (`load_types`):
+  back-pointing List/Map entries at most 1024 deep, struct records with unique
+  `json_name`s and `field_types`. Globals (`load_globals`): at most
+  `AGC_MAX_GLOBALS` slots; `check_function` and `check_not_entry` enforce the
+  `GLOBAL_SET` and entry rules (Gotchas of `references/vm-lowering.md`)
+- `vm/value.c`: allocation (and the GC stress hook), `agc_wrong_tag` and the
+  constructors and accessors of the service resources (the common ones are
+  `static inline` in `value.h`), String allocation (`agc_small_string` returns
+  the shared empty String for no bytes and the shared one-character String for
+  one ASCII byte, else a new one; use it wherever a builtin cuts or builds a
+  String from bytes it does not own), UTF-8 checks and code point count
+  (`agc_utf8_count`), `agc_error_value` (an `error` Result from C text),
+  OOM/abort handlers
+- `vm/map.c`: maps and sets: SipHash-1-3 keyed by `vm->hash_key` (from OS
+  entropy in `vm/launch.c`, else a fixed key), the persistent HAMT (`_hash`
+  variants take a given hash, for tests; `agc_map_add_hash` puts only a new key
+  and returns the same map for a member, which `Set.add` and `Set.new` use), and
+  `agc_map_keys` (insertion order from the reversed key list)
+- `vm/list_impl.h`: private to the core: `struct agc_list`, the trie node type
+  and the `static inline` accessors (`list_at` has no bounds check; it reads the
+  tail in line and calls `agc_list_trie_get` of `list.c` for the trie).
+  `list.c`, `interp.c` (`LIST_LEN`, `LIST_GET`, hot in `for` loops) and
+  `vm/tests/list_test.c` include it; `make vm-layers` fails any other include
+- `vm/text.c`: text and debug forms (`agc_text`, `agc_debug`, and
+  `agc_test_text`, the debug form with each `Json` as its canonical text, for
+  `Test.eq`) through one explicit `agc_alloc`'d stack and a growing String,
+  `agc_concat`, and `agc_write_form`, the one `write`-form escaper for Strings
+- `vm/unicode_data.c`: frozen, checked-in Unicode 17.0 data (see its header);
+  edit by hand only for a deliberate Unicode update: write-escape ranges, full
+  case maps, cased and case-ignorable ranges (final sigma)
+- `vm/strings.c`: the `String` builtins (`agc_string_builtins`, one of the
+  tables `agc_find_builtin` loops over) and their helpers. The shared Strings of
+  `rt->chars` and `rt->empty_string` (made in `agc_vm_init`) come back through
+  `agc_small_string` (or an inline check in the hot `piece`), and `trim`,
+  `reverse` and the case maps return their argument when nothing changes. Also
+  UTF-8 encode, `agc_utf8_offset` with each task's one-entry cursor (string,
+  code point index, byte offset), KMP search (`agc_text_find`),
+  `agc_change_case`, `agc_parse_int`, `agc_parse_float`
+- `vm/builtins.c`: the core builtins (`agc_core_builtins`: `IO`, `System`,
+  `List`, `Map`, `Set`, `Result`, `Range`) and `agc_find_builtin`, which matches
+  by implementation key and arity from the import table over
+  `agc_builtin_tables`; `agc_builtin_struct` and `agc_builtin_variant` find a
+  builtin struct or an enum variant by name in the program's tables, else
+  `RUNTIME-INTERNAL`
+- `vm/builtin_tables.c`: `agc_builtin_tables`, the list of every library's own
+  table in lookup order (the first match wins): the one place that names the
+  services' tables; a new builtin library adds its table here and its `extern`
+  to `vm/services.h`
+- `vm/ffi.c`, `vm/ffi_os.h`, `vm/ffi_libffi.c`, `vm/ffi_none.c`: native calls:
+  `Native.call` (`agc_ffi_builtins`, the builtin that each `extern` function
+  lowers to, with a signature string `"CODES SYMBOL LIBRARY"` from
+  `compiler/lower/lower_native.agc`), the cache of prepared calls, the resources
+  that extern functions return (`agc_c_resource` in `vm/value.h`: a registry
+  entry owned like a handle, freed by `Native.close` or the owner's end; a
+  compute call holds its resource arguments in `jobs` and the last one runs a
+  deferred free), the zeroed slots of `out` parameters (capital codes; the call
+  gives a List that the lowered body turns into the function's record, and a
+  detached compute call frees its out resources in `done`), and
+  `agc_ffi_refusal`, which `agc_launch_native` calls at load (`--deny-native`,
+  systems without libffi). A `compute def`'s signature starts with `compute `:
+  the call goes to the compute pool (`vm/compute.c`) through `agc_io_compute` in
+  `vm/loop.c`, and the task parks. `Native.wait_readable` and `wait_writable`
+  are a wait on the loop (`agc_io_start_then`, a poller on a new open or a
+  duplicate of the descriptor from `agc_poller_open_copy` in `vm/loop.c`, whose
+  OS side is `vm/poll_posix.c` and `vm/poll_windows.c`; on Windows a duplicate
+  Winsock socket, one wait per socket), the job's timer, the `cancel` half.
+  `Native.string_at`, `bytes_at` and `pointer` read memory at a `C.Pointer` and
+  make one; every `Native.*` import counts as native code for the refusal at
+  load. The adapter `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and
+  macOS) opens libraries with `dlopen` or `LoadLibraryExW` and calls with
+  libffi; `vm/ffi_none.c` refuses elsewhere
+- `vm/numbers.c`: `Float`, `Time` and `Random` builtins (`agc_number_builtins`)
+- `vm/random.c`: xoshiro256** seeded with splitmix64, both public domain
+  (`docs/vm/05-values-execution-builtins.md` §7.4)
+- `vm/json.c`: the `JSON` builtins (`agc_json_builtins`) and `agc_json_parse`
+  (the control-character pass, top-level numbers and literals by hand, strings,
+  arrays and objects through yyjson with `STOP_WHEN_DONE` and `NUMBER_AS_RAW`,
+  then a copy into GC nodes with an explicit stack;
+  `docs/vm/02-reference-behavior.md` §2.6)
+- `vm/json_value.c`: the `Json` value (`agc_json` nodes, 5.1), in the core
+  because `text.c` and `equal.c` print and compare a Json: `agc_json_encode`
+  (the one `write-json` writer, for `JSON.encode` and the text form of a Json)
+  and `agc_json_from` (builders), both over one explicit stack. The node
+  functions that the parser and the builtins share: `agc_json_pair` is also used
+  by `diag.c` and `testing.c`, and `agc_json_finish` sorts the members by key
+  bytes and drops repeated keys. Also the buffer, stack growth and ASCII helpers
+  (`agc_json_put`, `agc_json_grow`, `agc_json_ascii`)
+- `vm/json_typed.c`: `agc_json_decode` and `agc_json_schema`
+  (`docs/vm/02-reference-behavior.md` §2.7): one explicit frame stack over the
+  Json tree and the type table, the error path built from the frames only on
+  failure; schema marks the types and structs reachable from the target with a
+  queue, then builds their schemas in index order. The builtins in `vm/json.c`
+  find the struct by its linked name (`json_name`)
+- `vm/equal.c`: `agc_equal`, the deep compare of §25.4 for `Test.eq`: one
+  explicit stack of value pairs, one turn unit per pair, Strings through
+  `agc_same_string` (also used by `EQ` and the map key compare), Floats by IEEE
+  754, maps by key in any order, a `Json` by its canonical `agc_json_encode`
+  text, `RUNTIME-INTERNAL` for values with no equality
+- `vm/trace.h`, `vm/trace.c`: VM tracing (`AGENTICA_VM_TRACE`, as built in
+  `docs/vm/08-loader-and-cli.md` §9): the `agc_trace` struct, category bits,
+  `AGC_TRACE_ON` and `AGC_TRACE`; `agc_trace_emit` writes one 512-byte stack
+  line with one `write(2)`
+- `vm/profile.c`: the profile category (`AGENTICA_VM_TRACE=profile`): its
+  counters, the end-of-run report, the `Profile.measure` sections, the folded
+  stacks (`AGENTICA_PROFILE_FORMAT=folded`) and the `Profile` builtins
+- `vm/launch.c`, `vm/launch.h`: driver code shared by the two runs of the binary
+  (`agentica run` and the front end): `agc_launch_parse` (the VM options, with
+  the program name in the messages), seeds, the trace file,
+  `agc_launch_ignore_sigpipe`, `agc_launch_vm` (a runtime from a loaded program;
+  a front end gets `rt->front_end`, no stdin and no parent channel),
+  `agc_launch_settle` / `agc_launch_exit` (the one exit path)
+- `vm/agentica.c`, `vm/embedded.h`: the single binary (Linux): loads the front
+  end with `agc_load_front_end` (any Agentica version), runs it, and when it
+  called `FrontEnd.hand_off` and ended with status 0 retires it
+  (`agc_launch_settle`, `agc_io_close`, `agc_gc_collect`) and runs the handed
+  program in a new runtime; `--front-end FILE.agcb` replaces the carried front
+  end; the embedded data is described by `agc_embedded_data` and
+  `agc_embedded_index` (written by `vm/tools/gen-embedded.sh`)
+- `vm/front_end.c`: `FrontEnd.hand_off`, `FrontEnd.std_source` and
+  `FrontEnd.stdin_bytes` (a service, `agc_front_end_builtins`): they fail with
+  `RUNTIME-FRONT-END-ONLY` when `rt->front_end` is NULL, which it is for every
+  runtime except the front end of the single binary; also `Std.source`
+  (`agc_std_builtins`, not guarded), which reads the std sources of `rt->std`
+- `vm/fuzz.c`, `vm/fuzz_main.c`: `agc_fuzz_one` and the mutation driver (not in
+  the release binary)
 
-- **Path:** `vm/tools/check-layers.sh`, `vm/tools/check-layers-test.sh`
-  - **Owns:** the layer check run by `make vm-layers` (`docs/vm/15-layers.md`
-    §15.5); link rules use `nm` on the objects (Linux only). The self-test
-    plants one violation at a time in a temporary copy and rebuilds the object
-    for the link cases
-
-- **Path:** `vm/loader.c`
-  - **Owns:** full validation of untrusted `.agcb` input
-    (`docs/vm/08-loader-and-cli.md` §8). It holds the collector off with
-    `agc_gc_pause` and `agc_gc_resume` while it loads (value.c; the GC-stress
-    build ignores them). The struct and enum tables use one variant array sized
-    by a first pass and one shared empty value per nullary variant. Updates
-    (`load_updates`): strictly increasing field indexes below the field count,
-    and the `STRUCT_WITH` operand check against it. Types (`load_types`):
-    back-pointing List/Map entries at most 1024 deep, struct records with
-    unique `json_name`s and `field_types`. Globals (`load_globals`): at most
-    `AGC_MAX_GLOBALS` slots; `check_function` and `check_not_entry` enforce the
-    `GLOBAL_SET` and entry rules (Gotchas of `references/vm-lowering.md`)
-
-- **Path:** `vm/value.c`
-  - **Owns:** allocation (and the GC stress hook), `agc_wrong_tag` and the
-    constructors and accessors of the service resources (the common ones are
-    `static inline` in `value.h`), String allocation (`agc_small_string` returns
-    the shared empty String for no bytes and the shared one-character String for
-    one ASCII byte, else a new one; use it wherever a builtin cuts or builds a
-    String from bytes it does not own), UTF-8 checks and code point count
-    (`agc_utf8_count`), `agc_error_value` (an `error` Result from C text),
-    OOM/abort handlers
-
-- **Path:** `vm/map.c`
-  - **Owns:** maps and sets: SipHash-1-3 keyed by `vm->hash_key` (from OS
-    entropy in `vm/launch.c`, else a fixed key), the persistent HAMT (`_hash`
-    variants take a given hash, for tests; `agc_map_add_hash` puts only a new
-    key and returns the same map for a member, which `Set.add` and `Set.new`
-    use), and `agc_map_keys` (insertion order from the reversed key list)
-
-- **Path:** `vm/list_impl.h`
-  - **Owns:** private to the core: `struct agc_list`, the trie node type and
-    the `static inline` accessors (`list_at` has no bounds check; it reads the
-    tail in line and calls `agc_list_trie_get` of `list.c` for the trie).
-    `list.c`, `interp.c` (`LIST_LEN`, `LIST_GET`, hot in `for` loops) and
-    `vm/tests/list_test.c` include it; `make vm-layers` fails any other include
-
-- **Path:** `vm/list.c`
-  - **Owns:** Lists: the persistent vector behind the opaque list API. The
-    layout stays private to this file and `list_impl.h`.
-
-- **Path:** `vm/text.c`
-  - **Owns:** text and debug forms (`agc_text`, `agc_debug`, and
-    `agc_test_text`, the debug form with each `Json` as its canonical text, for
-    `Test.eq`) through one explicit `agc_alloc`'d stack and a growing String,
-    `agc_concat`, and `agc_write_form`, the one Racket `write` escaper for
-    Strings
-
-- **Path:** `vm/unicode_data.c`
-  - **Owns:** frozen, checked-in data (it came from Racket 9.3's Unicode 17.0
-    tables; the header says how a future generator must match it); edit by hand
-    only for a deliberate Unicode update: write-escape ranges, full case maps,
-    cased and case-ignorable ranges (final sigma)
-
-- **Path:** `vm/strings.c`
-  - **Owns:** the `String` builtins (`agc_string_builtins`, one of the tables
-    `agc_find_builtin` loops over) and their helpers. The shared Strings of
-    `rt->chars` and `rt->empty_string` (made in `agc_vm_init`) come back
-    through `agc_small_string` (or an inline check in the hot `piece`), and
-    `trim`, `reverse` and the case maps return their argument when nothing
-    changes. Also UTF-8 encode, `agc_utf8_offset` with each task's one-entry
-    cursor (string, code point index, byte offset), KMP search
-    (`agc_text_find`), `agc_change_case`, `agc_parse_int`, `agc_parse_float`
-
-- **Path:** `vm/interp.c`
-  - **Owns:** The interpreter: one turn of the current task and the step and
-    cost budgets of a turn.
-
-- **Path:** `vm/builtins.c`
-  - **Owns:** the core builtins (`agc_core_builtins`: `IO`, `System`, `List`,
-    `Map`, `Set`, `Result`, `Range`) and `agc_find_builtin`, which matches by
-    implementation key and arity from the import table over
-    `agc_builtin_tables`; `agc_builtin_struct` and `agc_builtin_variant` find a
-    builtin struct or an enum variant by name in the program's tables, else
-    `RUNTIME-INTERNAL`
-
-- **Path:** `vm/builtin_tables.c`
-  - **Owns:** `agc_builtin_tables`, the list of every library's own table in
-    lookup order (the first match wins): the one place that names the services'
-    tables; a new builtin library adds its table here and its `extern` to
-    `vm/services.h`
-
-- **Path:** `vm/ffi.c`, `vm/ffi_os.h`, `vm/ffi_libffi.c`, `vm/ffi_none.c`
-  - **Owns:** native calls: `Native.call` (`agc_ffi_builtins`, the builtin that
-    each `extern` function lowers to, with a signature string
-    `"CODES SYMBOL LIBRARY"` from `compiler/lower/lower_native.agc`), the cache
-    of prepared calls, the resources that extern functions return
-    (`agc_c_resource` in `vm/value.h`: a registry entry owned like a handle,
-    freed by `Native.close` or the owner's end; a compute call holds its
-    resource arguments in `jobs` and the last one runs a deferred free), the
-    zeroed slots of `out` parameters (capital codes; the call gives a List
-    that the lowered body turns into the function's record, and a detached
-    compute call frees its out resources in `done`), and
-    `agc_ffi_refusal`, which `agc_launch_native` calls at
-    load (`--deny-native`, systems without libffi). A `compute def`'s signature
-    starts with `compute `: the call goes to the compute pool (`vm/compute.c`)
-    through `agc_io_compute` in `vm/loop.c`, and the task parks.
-    `Native.wait_readable` and `wait_writable` are a wait on the loop
-    (`agc_io_start_then`, a poller on a new open or a duplicate of the
-    descriptor from `agc_poller_open_copy` in `vm/loop.c`, whose OS side is
-    `vm/poll_posix.c` and `vm/poll_windows.c`; on Windows a duplicate Winsock
-    socket, one wait per socket), the job's timer, the `cancel` half. `Native.string_at`,
-    `bytes_at` and `pointer` read memory at a `C.Pointer` and make one; every
-    `Native.*` import counts as native code
-    for the refusal at load. The adapter
-    `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and macOS) opens
-    libraries with `dlopen` or `LoadLibraryExW` and calls with libffi;
-    `vm/ffi_none.c` refuses elsewhere
-
-- **Path:** `vm/numbers.c`
-  - **Owns:** `Float`, `Time` and `Random` builtins (`agc_number_builtins`)
-
-- **Path:** `vm/random.c`
-  - **Owns:** xoshiro256** seeded with splitmix64, both public domain
-    (`docs/vm/05-values-execution-builtins.md` §7.4)
-
-- **Path:** `vm/json.c`
-  - **Owns:** the `JSON` builtins (`agc_json_builtins`) and `agc_json_parse`
-    (the Racket control-character pass, top-level numbers and literals by hand,
-    strings, arrays and objects through yyjson with `STOP_WHEN_DONE` and
-    `NUMBER_AS_RAW`, then a copy into GC nodes with an explicit stack;
-    `docs/vm/02-reference-behavior.md` §2.6)
-
-- **Path:** `vm/json_value.c`
-  - **Owns:** the `Json` value (`agc_json` nodes, 5.1), in the core because
-    `text.c` and `equal.c` print and compare a Json: `agc_json_encode` (the one
-    `write-json` writer, for `JSON.encode` and the text form of a Json) and
-    `agc_json_from` (builders), both over one explicit stack. The node
-    functions that the parser and the builtins share: `agc_json_pair` is also
-    used by `diag.c` and `testing.c`, and `agc_json_finish` sorts the members
-    by key bytes and drops repeated keys. Also the buffer, stack growth and
-    ASCII helpers (`agc_json_put`, `agc_json_grow`, `agc_json_ascii`)
-
-- **Path:** `vm/json_typed.c`
-  - **Owns:** `agc_json_decode` and `agc_json_schema`
-    (`docs/vm/02-reference-behavior.md` §2.7): one explicit frame stack over the
-    Json tree and the type table, the error path built from the frames only on
-    failure; schema marks the types and structs reachable from the target with a
-    queue, then builds their schemas in index order. The builtins in
-    `vm/json.c` find the struct by its linked name (`json_name`)
-
-- **Path:** `vm/equal.c`
-  - **Owns:** `agc_equal`, the deep compare of §25.4 for `Test.eq`: one
-    explicit stack of value pairs, one turn unit per pair, Strings through
-    `agc_same_string` (also used by `EQ` and the map key compare), Floats by
-    IEEE 754, maps by key in any order, a `Json` by its canonical
-    `agc_json_encode` text, `RUNTIME-INTERNAL` for values with no equality
-
-- **Path:** `vm/diag.c`
-  - **Owns:** Diagnostic output in the plain, `--ai` and `--json` formats, and
-    the stack trace of a runtime error.
-
-- **Path:** `vm/trace.h`, `vm/trace.c`
-  - **Owns:** VM tracing (`AGENTICA_VM_TRACE`, as built in
-    `docs/vm/08-loader-and-cli.md` §9): the `agc_trace` struct, category bits,
-    `AGC_TRACE_ON` and `AGC_TRACE`; `agc_trace_emit` writes one 512-byte stack
-    line with one `write(2)`
-
-- **Path:** `vm/profile.c`
-  - **Owns:** the profile category (`AGENTICA_VM_TRACE=profile`): its counters,
-    the end-of-run report, the `Profile.measure` sections, the folded stacks
-    (`AGENTICA_PROFILE_FORMAT=folded`) and the `Profile` builtins
-
-- **Path:** `vm/launch.c`, `vm/launch.h`
-  - **Owns:** driver code shared by the two runs of the binary (`agentica run`
-    and the front end): `agc_launch_parse` (the VM options, with the program
-    name in the messages), seeds, the trace file, `agc_launch_ignore_sigpipe`,
-    `agc_launch_vm` (a runtime from a loaded program; a front end gets
-    `rt->front_end`, no stdin and no parent channel), `agc_launch_settle` /
-    `agc_launch_exit` (the one exit path)
-
-- **Path:** `vm/agentica.c`, `vm/embedded.h`
-  - **Owns:** the single binary (Linux): loads the front end with
-    `agc_load_front_end` (any Agentica version), runs it, and when it called
-    `FrontEnd.hand_off` and ended with status 0 retires it (`agc_launch_settle`,
-    `agc_io_close`, `agc_gc_collect`) and runs the handed program in a new
-    runtime; `--front-end FILE.agcb` replaces the carried front end; the
-    embedded data is described by `agc_embedded_data` and `agc_embedded_index`
-    (written by `vm/tools/gen-embedded.sh`)
-
-- **Path:** `vm/front_end.c`
-  - **Owns:** `FrontEnd.hand_off`, `FrontEnd.std_source` and
-    `FrontEnd.stdin_bytes` (a service,
-    `agc_front_end_builtins`): they fail with `RUNTIME-FRONT-END-ONLY` when
-    `rt->front_end` is NULL, which it is for every runtime except the front end
-    of the single binary; also `Std.source` (`agc_std_builtins`, not guarded),
-    which reads the std sources of `rt->std`
-
-- **Path:** `vm/fuzz.c`, `vm/fuzz_main.c`
-  - **Owns:** `agc_fuzz_one` and the mutation driver (not in the release binary)
-
-- `vm/list.c`
+- `vm/list.c` (Lists, the persistent vector behind the opaque list API)
   - lists: `struct agc_list` is defined in `list_impl.h` and opaque everywhere
     else, so no other file reads the layout
   - a list has a `kind` that the code decides from the values it stores: 0 for
@@ -244,7 +182,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `List.append`, `List.set` and a `List.concat` with 32 items or fewer cost no
     turn units (the builtin charges `2 * (a + b)` for a longer right list).
   - the gate is `benchmarks/programs/list-build.agc`
-- `vm/interp.c`
+- `vm/interp.c` (one turn of the current task, its step and cost budgets)
   - the turn loop keeps the top frame's code, spans, register window and next
     `pc` in locals and reloads them at `reload:`. An opcode that pushes or
     pops a frame, replaces one, or can move the frame or register arrays
@@ -289,7 +227,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     the raw 8 bytes of the number when a numeric list sorts by itself), with Int
     and Float keys turned into `uint64_t` that order alike, returns the input
     for keys in order and `agc_list_reverse` of it for keys strictly falling
-  - stepper builtins (7.2.1h): `CALL_BUILTIN` sees `t->stepper` and
+  - stepper builtins: `CALL_BUILTIN` sees `t->stepper` and
     `start_stepper` pushes an `AGC_NATIVE_STEPPER` frame whose block is the
     builtin's last argument (protocol: `references/vm-builtins.md`)
   - `call_builtin` (`vm/interp.c`) is the one call of a builtin function: once
@@ -303,12 +241,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - each call costs one step plus the turn cost
   - core code cannot call services, so the function pointer is installed at run
     time
-- `vm/diag.c`
+- `vm/diag.c` (diagnostics in the plain, `--ai` and `--json` forms, the stack
+  trace of a runtime error)
   - formats as `compiler/diagnostics/diagnostic_*.agc`; only the code must
     match
   - a task crash adds ` in a task` (plain, `--ai`) or `"task":true` (`--json`)
   - `agc_crash_text` and the unobserved summary line (`agc_print_unobserved`)
-  - the stack trace of a runtime error (14b): `agc_stack_capture`, called by
+  - the stack trace of a runtime error: `agc_stack_capture`, called by
     `agc_fail` while a task runs, walks the task's frames (native frames
     skipped, equal neighbours merged, 15 innermost and 5 outermost kept) into
     the fixed `outcome.stack`, and the three printers write it (`  = stack,
@@ -330,40 +269,35 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Gotchas
 
-- JSON parsing matches what the old evaluator did (Racket's `read-json` plus its
-  own checks), not RFC 8259 alone: the control-character pass runs first over
+- JSON parsing follows `docs/vm/02-reference-behavior.md` §2.6, not RFC 8259
+  alone: the control-character pass runs first over
   the whole text, a top-level number or literal stops early (`01` is unexpected
   content, `truex` invalid), the finite check comes after the trailing check, a
   mantissa of zeros is `0.0` whatever its sign, and duplicate keys keep the last
-  value (`docs/vm/02-reference-behavior.md` §2.6). yyjson reads numbers as raw
+  value. yyjson reads numbers as raw
   text so the VM converts them itself; never turn on its `ALLOW_*` flags or its
   writer. Bumping yyjson: check out the new tag inside `vm/third_party/yyjson`,
   `git add vm/third_party/yyjson`, and rerun the sanitizer and diff tests.
-- `Random` differs from the evaluator by design: the VM uses xoshiro256** and
-  the evaluator Racket's `random`, so seeded sequences differ between backends
-  (`docs/vm/05-values-execution-builtins.md` §7.4). A `Random` fixture prints
-  only what both share (counts of in-range values, `[0, 1)` checks), never drawn
-  numbers.
-- Float text is not `printf("%.17g")` or "first `%.*e` that round-trips": Racket
+- `Random` is xoshiro256** (`docs/vm/05-values-execution-builtins.md` §7.4).
+  A `Random` fixture prints only properties (counts of in-range values,
+  `[0, 1)` checks), never drawn numbers.
+- Float text is not `printf("%.17g")` or "first `%.*e` that round-trips": it
   breaks exact ties upward and uses the asymmetric interval at powers of two.
   Keep `agc_float_text` as `docs/vm/02-reference-behavior.md` §2.2 describes
-  it, and add any new tricky value to `vm/tests/float_text_test.c` with the text
-  Racket prints.
+  it, and add any new tricky value to `vm/tests/float_text_test.c`.
 - The load budget is 4 bytes per file byte plus 1 MiB. Keep per-entry
   costs low (one array for all variants, sized by a first pass; no
   temporary copies): a real program with 65535 variants must load.
   `load_alloc(0)` returns NULL without charging anything.
-- Callback builtins are native frames, not C calls into the loop: the C
-  table entry has an `agc_native_kind`; `CALL_BUILTIN` copies the
-  arguments into an `agc_native` GC object and pushes a frame with
-  `native` set at `R[a]`; callbacks run at `R[a+1]` with result register
-  `R[a]`, and `return_value` resumes the native frame when it is on top.
-  `frame_count` counts every frame, `depth` only bytecode frames, so the
-  call-depth limit matches the evaluator (callback push fails at the
-  builtin's call span). Deep recursion through a callback must not use
-  `return f(...)` in the block in a fixture: that is a tail call on the
-  VM only.
-- Maps keep insertion order exactly, as the old evaluator did: a HAMT from
+- Callback builtins are native frames, not C calls into the loop: the C table
+  entry has an `agc_native_kind`; `CALL_BUILTIN` copies the arguments into an
+  `agc_native` GC object and pushes a frame with `native` set at `R[a]`;
+  callbacks run at `R[a+1]` with result register `R[a]`, and `return_value`
+  resumes the native frame when it is on top. `frame_count` counts every frame,
+  `depth` only bytecode frames (a callback push past the limit fails at the
+  builtin's call span). Deep recursion through a callback must not use `return
+  f(...)` in the block in a fixture: that is a tail call on the VM only.
+- Maps keep insertion order exactly: a HAMT from
   key to value plus a reversed cons list of keys. A new key conses one cell; a
   replaced key keeps its cell. Never keep order in an array copied on every put.
   The hash is keyed per run, so nothing observable may depend on it; the
@@ -375,7 +309,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   keys. `MAP` and `Map.put` share
   `agc_map_put`; HAMT recursion is bounded by 14 levels, printing nested
   maps goes through the explicit-stack printer.
-- Sets (8b) are the same `agc_map` with nil values under `AGC_T_SET`
+- Sets are the same `agc_map` with nil values under `AGC_T_SET`
   (`agc_set_value`, `agc_as_set`), so they share the trie, the first-insertion
   key list and the persistence; nothing else reads their layout. `Set.add` and
   `Set.new` go through `agc_map_add_hash`, which returns the input map for a
@@ -396,7 +330,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   built it (`a1 = [a0, a0]`, `a2 = [a1, a1]`, ...); printing then ends in the
   out-of-memory exit, as the trust model allows. Never print or compare nested
   values with C recursion.
-- Racket `write` prints the joiners U+200C, U+200D and U+E0020 to U+E007F raw
+- The `write` form prints the joiners U+200C, U+200D and U+E0020 to U+E007F raw
   only after a raw non-blank character, so the debug form has state; see
   `docs/vm/02-reference-behavior.md` §2.3 before touching `agc_write_form`.
 - `--max-steps` bounds instructions, not bytes: string ops cost in
@@ -404,9 +338,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - Strings: `agc_string` keeps the byte and code point counts; build every
   `String` result with a sizing pass then a fill pass (or one copy), never by
   repeated concatenation, and search with the KMP finder in `vm/strings.c`, not
-  a naive loop. Racket's `String.trim` is `\s` only (five ASCII bytes); case
+  a naive loop. `String.trim` is `\s` only (five ASCII bytes); case
   mapping is the tables plus final sigma (`docs/vm/02-reference-behavior.md`
   §2.3), and a new contextual case rule must come with a generator check, not by
-  hand. Float text goes to `strtod` only after the evaluator's pattern check.
+  hand. Float text goes to `strtod` only after the pattern check.
 - `string-trim` in `format-diagnostic-ai` trims only ASCII `[ \t\n\f\r]`,
   not Unicode whitespace; the VM matches that.

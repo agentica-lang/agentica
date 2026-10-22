@@ -5,10 +5,7 @@ the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep
 their names.
 
 `docs/vm/` is the contract (`docs/vm/README.md` gives the file for each
-section), and `docs/roadmap/07-vm.md` lists what is built. When this guide and
-`docs/vm/` disagree, `docs/vm/` wins. The VM is the only backend and the
-reference: roadmap 7i deleted the Racket evaluator. Notes below that compare
-with "the evaluator" record why a rule was copied from it.
+section). When this guide and `docs/vm/` disagree, `docs/vm/` wins.
 
 Every C edit also reads `references/vm-c.md`.
 
@@ -19,7 +16,7 @@ check          (compiler/check/checker.agc)         the type of each expression,
 lower          (compiler/lower/lowering.agc)        checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
 bytecode write (compiler/bytecode/bytecode_writer.agc) IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL; the versioned .agcb file (magic, format version, Agentica version)
 vm/agentica.c dist/agentica WORDS...: the front end (compiler/front_end.agc, carried in the binary) in a first runtime, then the program it hands over in a second (references/vm-core.md)
-vm/agentica.c dist/agentica run [--max-steps N] [--seed N] [--flush-timeout MS] [--schedulers N] [--deny-run|net|fs|env] [--deny-native] [--sandbox] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000; AGENTICA_SCHEDULERS sets the scheduler count, default one per logical core, at most 1024; --schedulers wins)
+vm/agentica.c dist/agentica run [flags] -- file.agcb [args...]   (`dist/agentica run` alone prints the flags and their variables)
 ```
 
 ## Which layer
@@ -74,8 +71,7 @@ error in the same PR, or update their goldens on purpose. Message text,
 spans, stderr wording, OS error text, exact step counts and the step-limit
 span may change, but VM messages must stay clear for agents. Lowering may
 optimize (inline, fold constants, move or merge `STEP`s) as long as the
-goldens hold. Differences from the old evaluator in exit code, stdout or
-code are recorded in `docs/vm/`.
+goldens hold.
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, does nothing its own `--deny-*` flags
@@ -91,40 +87,14 @@ still compute wrong values or end with
 
 ## Read next
 
-- **Read:** `references/vm-c.md`
-  - **When:** writing or reviewing any C in `vm/`: C style, failure and exit,
-    Boehm GC rules
-
-- **Read:** `references/vm-core.md`
-  - **When:** values, lists, maps, strings, text forms, the interpreter,
-    builtins tables, the loader, JSON, diagnostics, tracing
-
-- **Read:** `references/vm-io.md`
-  - **When:** the libuv loop and registry, stdin, stdout and stderr, `File`,
-    `Dir`, `Path`
-
-- **Read:** `references/vm-tasks.md`
-  - **When:** the scheduler, task cancellation, `Channel`, the `Test` builtins,
-    the latency test
-
-- **Read:** `references/vm-net.md`
-  - **When:** processes, the child channel, streams, TCP, TLS (OpenSSL), the
-    HTTP client and server
-
-- **Read:** `references/vm-lowering.md`
-  - **When:** `compiler/lower/*.agc`, `compiler/bytecode/*.agc`, a new form or
-    opcode, linked programs, closures, ranges, Results, tail calls
-
-- **Read:** `references/vm-builtins.md`
-  - **When:** adding or changing a C builtin (`VM_BUILTINS` in
-    `compiler/lower/lower_tables.agc`, the tables) or a trace point
-
-- **Read:** `references/vm-build.md`
-  - **When:** make targets, the golden harness (`tests/vm_diff_support.py`,
-    `make goldens`, the step-limit sweep), submodules (bdwgc, yyjson, libuv,
-    picohttpparser, OpenSSL), sanitizers, fuzzing, portability
-
-- **Read:** `references/vm-tests.md`
-  - **When:** which C test (`vm/tests/`) or unittest module
-    (`tests/test_vm_*.py`) covers a file, the sweep cost rule, and the timing
-    and race rules of the tests
+| Reference | When |
+|---|---|
+| `vm-c.md` | any C in `vm/`: C style, failure and exit, Boehm GC rules |
+| `vm-core.md` | values, lists, maps, strings, text forms, the interpreter, builtin tables, the loader, JSON, diagnostics, tracing |
+| `vm-io.md` | the libuv loop and registry, stdin, stdout, stderr, `File`, `Dir`, `Path` |
+| `vm-tasks.md` | the scheduler, cancellation, `Channel`, the `Test` builtins, the latency test |
+| `vm-net.md` | processes, the child channel, streams, TCP, TLS, the HTTP client and server |
+| `vm-lowering.md` | `compiler/lower/`, `compiler/bytecode/`, a new form or opcode, closures, ranges, Results, tail calls |
+| `vm-builtins.md` | adding or changing a C builtin (`VM_BUILTINS`, the tables) or a trace point |
+| `vm-build.md` | make targets, the golden harness, the step-limit sweep, submodules, sanitizers, fuzzing, portability |
+| `vm-tests.md` | finding the C test or `tests/test_vm_*.py` module of a file, what they cannot see, the sweep cost rule, timing and race rules |

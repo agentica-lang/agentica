@@ -21,9 +21,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    it.
 3. New opcode: append it to `OPCODES` in `compiler/bytecode/bytecode_tables.agc`
    and to `agc_opcode` in `vm/value.h` at the same position (a test compares
-   them). No opcodes for later PRs. A PR that adds opcodes before the PR that
-   emits them says so and names that PR; the loader and interpreter part needs
-   its own `vm-c-critic` review.
+   them). An opcode lands with the lowering that emits it; if a PR adds it
+   earlier it names the PR that emits it. The loader and interpreter part
+   needs its own `vm-c-critic` review.
 4. `vm/loader.c`: validate every operand (register ranges and windows,
    indexes, jump targets, spans). A new file section checks its counts
    against the bytes left and allocates through `load_alloc`, which charges
@@ -34,8 +34,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    `references/vm-core.md`).
 6. Add a fixture to `tests/fixtures/vm/` for each new runtime code or span;
    the diff test sweeps `--max-steps` over it.
-7. Update any rule that changed in `docs/vm/`, tick the roadmap items in
-   `docs/roadmap/07-vm.md`, and keep the guide that owns the change current:
+7. Update any rule that changed in `docs/vm/`, tick the roadmap item, and
+   keep the guide that owns the change current:
    this file for lowering and bytecode, `references/vm-core.md` for the loader
    and the interpreter, `references/vm.md` for the rules every change keeps.
 
@@ -55,8 +55,8 @@ up by name.
 
 ## Gotchas
 
-- Module constants (format version 5; the rules are in the grammar's `Module
-  constants` section): the Globals section is only a `u32` slot count (at most
+- Module constants (the rules are in the grammar's `Module constants`
+  section): the Globals section is only a `u32` slot count (at most
   65,535, else
   `BYTECODE-LIMIT`; `ir-program-globals`). `GLOBAL a bx` reads slot `bx`
   into `R[a]` and `GLOBAL_SET a bx` writes it. The loader allows `GLOBAL_SET`
@@ -66,7 +66,7 @@ up by name.
   call). So a lowering that emits them must put every `GLOBAL_SET` in straight
   line code of the entry (`<start>`), which ends with a tail call of `main`,
   and must never call `<start>` or take `&<start>`.
-- How the lowering handles constants (44a2-2). The linked program is flat, so
+- How the lowering handles constants. The linked program is flat, so
   `compiler/lower/lower_const.agc` decides from the call graph: the functions
   reachable from `main` (calls, `&f`, blocks) keep the constants they read, and
   the constants those read; only kept constants are initialized. A scalar
@@ -85,15 +85,14 @@ up by name.
   `return` after the tail call, as the loader wants of every function. An error
   in an initializer shows the constant's function, then `<start>`, in the stack
   trace (`tests/fixtures/vm/constants-error`).
-- Typed JSON: `lower_program.agc` gives each IR struct its
-  JSON field types when the struct is decodable (greatest fixpoint, so
-  recursive structs stay in), and the bytecode writer interns them into the
-  Types section (format version 3). `$defs` names and the type-argument
-  constant are the linked names (`@2::Point`), not display names: the
-  evaluator's `JSON.schema` prints them, and two imported structs can share
-  a display name. A new decodable kind (enums, `JsonField`) needs a new
-  type kind, loader rules and a format bump.
-- `value.with(...)` lowers to one `STRUCT_WITH` (format version 4): the receiver
+- Typed JSON: `lower_program.agc` gives each IR struct its JSON field types when
+  the struct is decodable (greatest fixpoint, so recursive structs stay in), and
+  the bytecode writer interns them into the Types section. `$defs` names and the
+  type-argument constant are the linked names (`@2::Point`), not display names:
+  `JSON.schema` prints them, and two imported structs can share a display name.
+  A new decodable kind (enums, `JsonField`) needs a new type kind, loader rules
+  and a format bump.
+- `value.with(...)` lowers to one `STRUCT_WITH`: the receiver
   goes in the first slot of a window, the values follow it in field order, and
   the Updates section interns each (struct, field indexes) pair. It beats a
   constructor call for structs of four or more fields (the numbers are in
@@ -102,8 +101,8 @@ up by name.
   struct type and field count at run time, as `agc_struct_def_of` does; the C
   creators already go through `agc_builtin_struct`, so it is a defence.
 - Struct and enum table names are display names: the bytecode writer passes the
-  linked name through the display name (`types.agc`), as the evaluator did when
-  printing (`docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the
+  linked name through the display name (`types.agc`;
+  `docs/vm/02-reference-behavior.md` §2.4). The lowerer keeps the
   unique linked names as its keys and in the IR text. Variant ids are global in
   file order; struct ids and field indexes follow declaration order. Generic
   enums need nothing special: type arguments exist only in the checker.
@@ -166,4 +165,4 @@ up by name.
   statement's `step` (the `after-step` hook in `lower-statement`), and an
   empty body lowers to just the iterable.
 - The `for` iterable is copied into a hidden slot even when it is a local:
-  the body may assign that local, and the evaluator iterates the old list.
+  the body may assign that local, and the loop iterates the old list.

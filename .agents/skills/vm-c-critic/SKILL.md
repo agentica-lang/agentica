@@ -150,14 +150,10 @@ a finding.
   bit-fields.
 - Look for allocation per item where a bulk path exists, and for O(n) work
   where the design promises O(1) or O(log n). Check builders, slices and copies.
-- Speed claims need numbers. When a PR claims one, compare it with master: build
-  `origin/<base>` in a scratch worktree (`git worktree add`, then
-  `git submodule update --init` for the `vm/third_party` libraries; the default
-  build uses the system OpenSSL), alternate the runs of the two binaries and
-  compare medians (method: `references/bench-eval.md` of agentica-development).
-  The same binary can move 20–35 % with code layout alone, so one run proves
-  nothing. Compare peak RSS (`/usr/bin/time -v`) when memory is the claim.
-  Otherwise skip timing.
+- Speed claims need numbers. Only when a PR claims one, compare it with
+  `origin/<base>` built in a scratch worktree: interleaved runs, medians
+  (`references/bench-eval.md` of agentica-development); code layout alone moves
+  a binary by 20–35 %. Peak RSS (`/usr/bin/time -v`) when memory is the claim.
 
 ### Simplicity and architecture
 
@@ -194,9 +190,8 @@ a finding.
 - No `.expected` file changes unless the PR says why. The step counts in goldens
   must not move for a refactor.
 - Docs claims (CHANGELOG, `docs/vm/`, the skills, the site) must match what you
-  ran. Report overstated claims, such as "constant time" for an O(log n) path.
-- Flag doc changes that were not needed: restating the code, per-PR narration,
-  status logs in design docs (`documentation-writing`).
+  ran: report overclaims ("constant time" for an O(log n) path) and doc
+  changes that were not needed (`documentation-writing`).
 
 ## Proving a finding
 
@@ -220,10 +215,9 @@ means a timeout: retry once, then report it.
 - Never run the full `make test`, full golden or vm-diff sweeps,
   `make vm-sanitize-test`, fuzzing or `make smoke`. Run localized tests, for
   example `make test TESTS="tests/test_vm_stdout.py"`. CI covers the rest.
-- A master comparison (see Efficiency) runs in a scratch worktree; remove it
-  afterwards.
-- Put scratch programs under the job's tmp directory, not in the repo. Delete
-  them at the end. Never `pkill -f`, and leave no background processes.
+- Scratch worktrees and programs live outside the repo (the job's tmp
+  directory); remove them at the end. Never `pkill -f`; leave no background
+  process.
 - Never print secrets or the real environment; use `env -i` or explicit
   variables in tests.
 

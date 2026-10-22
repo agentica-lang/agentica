@@ -66,32 +66,29 @@ with a packed `Problem` (`references/stages.md`).
 
 ### Pure core, one port
 
-The folders other than `io/`, `app/`, `bdd/` and `embedded/` are pure (the
-AGENTS.md rule). They never import `io/`, `app/`, `bdd/`, `embedded/` or a
-`std/` module that is not on `PURE_STD_MODULES` in the test (a new std module
-is forbidden by default). When a stage needs the machine it calls a function
-of `Workspace` (`modules/workspace.agc`), a record of function values that
-travels in `Env.Settings.workspace`; the last two (`list_folder`,
-`read_bytes`) serve the package hash. The environment variables and the host
-(`windows`) are data in `Env.Env`. `io/host.agc` builds the real `Workspace`
-and `process_env`; a test can build a `Workspace` over an in-memory tree.
-`embedded/` holds the two programs of `agentica test` that the binary carries.
-The entry programs (`syntax/lex.agc`, `syntax/parse.agc`, `modules/link.agc`,
-`check/check.agc`, `lower/lower.agc`, `bytecode/bytecode.agc`,
-`catalog/catalog.agc`) may call `System.args`, print with `puts` and import the
-`io/` adapters (`bytecode.agc` writes its output through `SaveFile`).
-`tests/test_style_core_purity.py` runs the real lexer over the stage folders
-and fails on a call (`Module.name` as tokens, so strings, comments and builtin
-data rows do not count) or an import; a new entry program needs a line in its
-`ENTRY_PROGRAMS`. A new need of the machine is a new `Workspace` field, built
-in `io/host.agc`. The linker (`modules/`, `packages/`) imports no later stage.
-`catalog/` imports only `syntax/` and itself, so every later stage reads it;
-the code that reads and checks the prelude files is `check/prelude_files.agc`.
+The pure folders (the AGENTS.md rule) may import only the `std/` modules on
+`PURE_STD_MODULES` of the test (a new std module is forbidden by default). When
+a stage needs the machine it calls a function of `Workspace`
+(`modules/workspace.agc`), a record of function values that travels in
+`Env.Settings.workspace`; the last two (`list_folder`, `read_bytes`) serve the
+package hash. The environment variables and the host (`windows`) are data in
+`Env.Env`. `io/host.agc` builds the real `Workspace` and `process_env`; a test
+can build a `Workspace` over an in-memory tree. `embedded/` holds the two
+programs of `agentica test` that the binary carries. The entry programs
+(`syntax/lex.agc`, `syntax/parse.agc`, `modules/link.agc`, `check/check.agc`,
+`lower/lower.agc`, `bytecode/bytecode.agc`, `catalog/catalog.agc`) may call
+`System.args`, print with `puts` and import the `io/` adapters (`bytecode.agc`
+writes its output through `SaveFile`). `tests/test_style_core_purity.py` runs
+the real lexer over the stage folders and fails on a call (`Module.name` as
+tokens, so strings, comments and builtin data rows do not count) or an import; a
+new entry program needs a line in its `ENTRY_PROGRAMS`. A new need of the
+machine is a new `Workspace` field, built in `io/host.agc`. The linker
+(`modules/`, `packages/`) imports no later stage. `catalog/` imports only
+`syntax/` and itself, so every later stage reads it; the code that reads and
+checks the prelude files is `check/prelude_files.agc`.
 
-Order inside a `compiler/` file: imports and module doc, structs and enums,
-exported functions, private functions. Code style follows the speed rules:
-build lists with `push`, strings with `join`, and loops rather than recursion
-over the input.
+Code style follows the speed rules: build lists with `push`, strings with
+`join`, and loops rather than recursion over the input.
 
 ## Text forms and runners
 
@@ -134,8 +131,7 @@ Text-form notes:
 
 ## Rules for the code
 
-- Positions count characters; lines and columns are 1-based; span ends are
-  exclusive.
+- Spans and positions: `references/stages.md` ("Conventions").
 - Node ids follow post-order; the writer and lowering rely on the order the
   function table, registers and first-named sources take. Keep them.
 - Parser tables are module constants (`NESTING_LIMIT`, `LEVELS`,
@@ -329,14 +325,10 @@ are `@slow`. `tests/frontend_support.py` is the helper;
 
 ## Agentica gotchas
 
-- `CHECK-DECL-ORDER` fixes declaration order per file: imports, constants,
-  structs and enums, `export def`, `def`.
-- A `##` doc block sits directly above its declaration. A `#` comment goes in
-  the body or above the block, never between the block and the `def`
-  (`PARSE-DETACHED-DOC`).
+- Declaration order (`CHECK-DECL-ORDER`) and doc placement
+  (`PARSE-DETACHED-DOC`): `agentica-code-guidelines`.
 - `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`). Compare types
   with `Types.same?`; an enum cannot be compared with `==`.
-- `s = s + piece` in a loop is quadratic. Use `push` and `join`.
 - The VM call depth is 10,000 frames. Recurse on the tree only with a bounded
   depth, or use an explicit stack and loops.
 - A value that cannot happen is a `*-INTERNAL` diagnostic, not a crash.
@@ -373,8 +365,7 @@ a blank line and a `#` line both give one `NL`. Stray text after `end` is
   stderr is a stage diagnostic, not a crash.
 - `*-INTERNAL` or a `RUNTIME-` error with a trace in `compiler/` means a stage
   assumed something false or indexed out of range. Find the token or index and
-  turn it into a diagnostic; the roadmap requires Agentica diagnostics, never
-  host tracebacks.
+  turn it into a diagnostic.
 - A stage returns a diagnostic it should not: check the first-error rule and
   that the caller passes the failure on.
 

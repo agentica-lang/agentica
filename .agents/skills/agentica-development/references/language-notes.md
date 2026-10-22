@@ -18,8 +18,6 @@ section for the area you are changing.
 - `--max-steps` counts every expression/statement entry, including loop
   conditions, per run. The CLI validates the input; check never executes. This
   is not a blocking-I/O timeout.
-- A rebase changing AST/diagnostic layouts may leave a stale `dist/agentica`.
-  Use `make clean` and rebuild the binary with make before evaluation.
 
 ## Collections and algorithm examples
 

@@ -1,266 +1,163 @@
 # CI, release and the copy-paste check
 
 Read this before changing `.github/workflows/`, the Makefile or `mk/*.mk`, or
-before adding VM source files, test peers or fixtures. The build and the release
-need only a C toolchain (they start from `bootstrap/stage0.agcb`); Python tests
-run through pytest, with existing `unittest.TestCase` modules supported during
-migration. `vm/unicode_data.c` is frozen, checked-in data (see its header; a
-future generator must reproduce it byte for byte).
+before adding VM source files, test peers or fixtures. The build and the
+release need only a C toolchain (they start from `bootstrap/stage0.agcb`).
+Each `mk/*.mk` file starts with a comment saying what it owns; the targets
+carry comments too, so read them for details not listed here.
 
 ## The checks of ci.yml, sweep.yml and the release are make targets
 
 The steps of `ci.yml` and `sweep.yml`, and the test steps of `release.yml`,
-call `make` targets, so those checks run locally with the same command. In
-those files only setup stays in the YAML: checkout, toolchain and `apt`
-installs, caches and their keys, and the `changes` step of `vm-sanitizers`;
-the release also keeps its `zig` install and `strip` there. A new check in
-`ci.yml` or `sweep.yml` gets a target first (in `.PHONY` and with a one-line
+call `make` targets, so they run locally with the same command. Only setup
+stays in the YAML: checkout, toolchain and `apt` installs, caches and their
+keys, the `changes` step of `vm-sanitizers`, and the release's `zig` install
+and `strip`. A new check gets a target first (in `.PHONY`, with a one-line
 comment), then a step that calls it. Targets that are not obvious:
 
-- `all` (the default goal, also `agentica`) builds `dist/agentica`, the one
-  binary (`docs/future/18-front-end-language.md` §18.2). The chain, all in
-  `build/stage/` and `build/vm/<mode>/`: a first binary
-  (`build/vm/<mode>/bootstrap/agentica`, never shipped) is linked with
-  `bootstrap/stage0.agcb` and the `std/` sources; it compiles `stage1`;
-  `--front-end stage1` compiles `stage2`; `--front-end stage2` compiles
-  `stage3`; make stops unless `stage2 == stage3`; `dist/agentica` is linked
-  with `stage2`. The stages are the same bytes in every mode, and a mode
-  builds only its own first binary. `fixed-point` adds one check:
-  `dist/agentica` compiles the front end with its own embedded sources, and
-  that must be `stage2` again, and compiles `compiler/embedded/runner.agc` and
-  `steps.agc` to the bytes that the binary carries (about 25 s). The first
-  binary of the bootstrap carries no runner and no step program, because it
-  has no `stage2` yet.
-- `dist/agentica` also carries the files of `stdlib/CORE` (paths in `compiler/`,
-  the pure core that `std/analysis` needs) as the std sources
-  `internal/compiler/<path>`; `vm/tools/gen-embedded.sh` takes the list and the
-  `compiler` folder as its last two words. A new import in that core needs a line
-  in `stdlib/CORE` (`tests/test_stdlib_modules.py` checks the list against the
-  imports of `stdlib/analysis.agc`). The first binary carries none of them.
-- Refreshing stage0 (`make stage0`). `bootstrap/stage0.agcb` is a stage2 that
-  was checked in; it is the only seed of the build. Refresh it (1) after a
-  change that the old stage0 cannot compile or load, and (2) before a
-  release. The `stage1` recipe says which case it is: it prints that
-  `bootstrap/stage0.agcb` is too old for this change. Steps: (a) if the old
-  stage0 still compiles `compiler/` (a release refresh, or a change that adds
-  something `compiler/` does not use yet), run `make fixed-point stage0`,
-  check that the diff is only the one binary file, run `make` again (it must
-  build from the new file) and commit it. (b) If it cannot (the change needs
-  the new stage0: a syntax or builtin that `compiler/` itself uses, a new
-  bytecode format version), split it in two PRs, as §18.2 says: the first adds
-  the feature without using it in `compiler/`, and refreshes stage0; the
-  second uses it. When that is not possible, compile `stage1` with another
-  compiler and say so in the PR: `make stage0
-  STAGE1_COMPILER="path/to/agentica"` (a binary built from the parent commit in
-  a second worktree); the later stages still run on the new first binary. A
-  new bytecode format is harder: the new VM cannot load a program in the old
-  format, so the old VM must run the new compiler once by hand. `make` does
-  not automate that; the PR that changes the format writes the commands.
-  `make` fails with a message when stage0 is too old, never with a silent
-  difference. A stage0 is a 3.7 MB blob: refresh it only when needed, so the
-  history stays small. A PR that changes it runs
-  `make stage0-check BASE_STAGE0=<base stage0>` in the `test` job: stage2
-  built from the base branch's stage0 with the PR's `compiler/` must equal the
-  PR's file (the sums go to the job summary). It checks the merge commit, so
-  when another `compiler/` change lands first, merge master and refresh again.
-  Case (b) cannot pass it: say so in the PR, and the owner approves it by
-  hand. The loader still reads format 5 (`AGC_FORMAT_PREVIOUS` in
-  `vm/value.h`) so that the first binary of the bootstrap works with a stage0
-  in that format; the next stage0 refresh makes it unneeded, and a later
-  change removes it.
-- `cli`, `bdd-driver`, `exe` and `vm` are targets that stop with a message
-  (`make vm` would otherwise find the `vm/` folder and do nothing).
-  `test-cli` runs the tests of the product command line (`CLI_TESTS`) on
-  `dist/agentica` (`AGENTICA_TEST_EXECUTABLE`; so the sanitizer job can run
-  the same modules). The option and diagnostic forms of the command line are a
-  golden of the whole output, messages included, in
-  `tests/fixtures/cli/forms.json` (`tests/test_cli_forms.py`, like the VM
-  goldens; `make goldens` rewrites it after an intended change, and the diff is
-  the review).
-- `test` and `test-slow` run pytest on modules named
-  `tests/test_<area>.py` (design in `docs/future/18-front-end-language.md`
-  §18.7). Existing `unittest.TestCase` classes are collected too. `TESTS` is a
-  list of module files or directories (the default `tests/`). A leading
-  `./` and a trailing `/` are ignored; any other path (a file of another kind,
-  a `.py` file outside `tests/test_<area>.py`, a name that is not a folder)
-  fails with a message. A directory adds its own `test_*.py` files and is not
-  searched recursively on purpose: `tests/eval/test_*.py` are not modules for
-  this runner. `PY_ALONE` in `mk/test.mk` (`tests/test_vm_latency.py`,
-  `tests/test_vm_task_map.py`) lists modules that a directory does not pick
-  up: they run when named, as `make vm-latency` and `make vm-task-map` do.
-- `make tests KIND=fast|files|slow|all` is the group selector over those
-  tiers: `fast` is `make test`, `slow` is `make test-slow`, `files` is the
-  destructive filesystem group (Docker locally, Actions scratch in CI) and
-  `all` is the three of them in that order. `DOCKER=1` runs a group in the
-  Ubuntu test container and `WINE=1` runs the Windows checks of it under Wine
-  (`kind=fast` and `files` only). `TESTS=` narrows only host fast/slow runs;
-  Make rejects it for `files`, `all`, Docker and Wine rather than ignoring it.
-  `make test`, `test-slow`, `test-bdd`, `windows-docker-check`,
-  `windows-docker-remove-check` and `windows-docker-remove-wine-check` stay as
-  the explicit forms and delegate to the same routes; an unknown `KIND` fails
-  before anything runs.
-- `tools/refreeze.py` (pytest, run by `make goldens` in Poetry with its
-  `--fast-only` tier; the full run also rewrites the slow-tier manifests)
-  rewrites the frozen goldens that `tests/test_frontend_<stage>.py` compare the
-  Agentica stages with (`references/frontend.md`, "Frozen comparisons"). It is
-  not a CI step.
-- Each Python module runs in its own process (`poetry run py.test
-  tests/test_<area>.py` from the root), run by make itself: `make -k -O
-  -j$(JOBS)` over `py-test/<file>` targets, so a failure shows that module's
-  report and the other modules still run. `-O` needs GNU make 4.0 or newer
-  (macOS ships 3.81; its CI jobs install GNU make as `gmake`). CI installs
-  the test group from `pyproject.toml` and `poetry.lock`; test peers remain
-  standard-library-only. The helpers are in `tests/agentica_test.py` (paths,
-  the VM binary, the CLI, `run` with a timeout, `compile_agc`, temp dirs,
-  `@slow`, `tool` for Node, `Child` and `start_vm` for a peer or VM read line
-  by line, `process_alive` and `wait_until` to check that a test left no
-  process, `make_suite` and `report_cases` for `agentica test --json` suites).
-  A `Child` is killed with its process group when the test ends, also on
-  Ctrl-C or SIGTERM. Without `python3`, `CI` set fails the run and a local
-  run reports a skip; a missing VM binary does the same for a test.
-- `test-slow` runs the slow tier (`AGENTICA_TEST_SLOW=1`). Existing
-  `unittest.TestCase` tests use the `@slow` wrapper; pytest functions use the
-  `slow` marker. mk/test.mk clears the flag for `make test`; local runs use
-  only the fast tier.
-- Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE` (a
-  float, default 1; `ci.yml` and `sweep.yml` set 4 for the slow runners):
-  one test (`tests/agentica_test.py`: SIGALRM per `unittest.TestCase` test,
-  120 s, 900 s for `@slow`; `@timeout(seconds)` overrides it for a method or
-  a class; `faulthandler` kills the module 30 s later if the signal cannot
-  run); one test module (the `MODULE_LIMIT` of `mk/test.mk`:
-  `timeout -k 10` around pytest; 600 s, 1800 s for `make test-slow`); the
-  job `timeout-minutes` of the workflow, which must stay larger than the
-  module limit times the scale. Deadlines that a correct run must beat take
-  `scaled(seconds)` (or `ms` in `tests/test_bdd_integration.py`); a deadline
-  that a test expects to fire, or a bound that measures the product
-  (`LIMIT_MS` of `tests/test_vm_latency.py`, the 200 ms step deadline of the
-  cleanup case), stays unscaled. Step deadlines stay under the 30 s scenario
-  deadline of `agentica test`, which has no flag.
-- `dist/agentica` is a real Makefile rule over every `.agc` under `compiler/`,
-  `stdlib/*.agc`, `VERSION`, the VM objects and `bootstrap/stage0.agcb`, and
-  `test`, `test-bdd`, `test-cli` and `smoke` all use it (`smoke` is the
-  example smoke runs, `tests/smoke.sh`), so a pull never leaves a stale binary
-  and an up-to-date one is not rebuilt. `dist/agentica` is built before
-  `make test` starts its test workers in parallel. The process, module and
-  distribution tests are ordinary modules of `make test`.
-- `vendored-check` links the VM against the vendored OpenSSL and checks it
-  (static, the submodule's version); `vendored-test` adds the TLS and HTTP
-  tests on that binary.
+- `all` (the default goal) builds `dist/agentica`
+  (`docs/future/18-front-end-language.md` §18.2). A first binary
+  (`build/vm/<mode>/bootstrap/agentica`, never shipped, with no runner or
+  step program) is linked with `bootstrap/stage0.agcb` and the `std/`
+  sources; it compiles `stage1`; `--front-end stage1` compiles `stage2`;
+  `--front-end stage2` compiles `stage3`; make stops unless
+  `stage2 == stage3`; `dist/agentica` is linked with `stage2`. The stages are
+  the same bytes in every mode. `fixed-point` adds: `dist/agentica` compiles
+  the front end with its embedded sources to `stage2` again, and compiles
+  `compiler/embedded/runner.agc` and `steps.agc` to the bytes it carries.
+- `dist/agentica` also carries the files of `stdlib/CORE` (the pure core that
+  `std/analysis` needs) as `internal/compiler/<path>`
+  (`vm/tools/gen-embedded.sh`). A new import in that core needs a line in
+  `stdlib/CORE` (`tests/test_stdlib_modules.py` checks it).
+- `dist/agentica` is a real rule over every `.agc` under `compiler/`,
+  `stdlib/*.agc`, `VERSION`, the VM objects and stage0; `test`, `test-bdd`,
+  `test-cli` and `smoke` depend on it, so a pull never leaves a stale binary.
+- `cli`, `bdd-driver`, `exe` and `vm` stop with a message (`make vm` would
+  otherwise find the `vm/` folder and do nothing).
+- `test-cli` runs `CLI_TESTS` on `dist/agentica` (`AGENTICA_TEST_EXECUTABLE`).
+  The option and diagnostic forms of the CLI are one golden of the whole
+  output, messages included: `tests/fixtures/cli/forms.json`
+  (`tests/test_cli_forms.py`; `make goldens` rewrites it, the diff is the
+  review).
+- `test` and `test-slow` run one pytest process per module
+  (`make -k -O -j$(JOBS)` over `py-test/<file>`; `-O` needs GNU make 4.0, so
+  macOS jobs use `gmake`). `TESTS` takes module files or directories; a
+  directory adds only its own `test_*.py`, not subfolders (`tests/eval/` is
+  not part of this runner). `PY_ALONE` modules (`test_vm_latency.py`,
+  `test_vm_task_map.py`) run only when named (`make vm-latency`,
+  `make vm-task-map`). `test-slow` sets `AGENTICA_TEST_SLOW=1`.
+- Test helpers are in `tests/agentica_test.py`: paths, the binary, `run` with
+  a timeout, `compile_agc`, `@slow`, `tool` for Node, `Child` and `start_vm`
+  (a peer or VM read line by line, killed with its process group at the end),
+  `process_alive` and `wait_until` (no process left), `make_suite` and
+  `report_cases` (`agentica test --json`). A missing tool or binary fails
+  when `CI` is set and skips locally.
+- Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE`
+  (default 1; CI sets 4): one test (SIGALRM, 120 s, 900 s for `@slow`;
+  `@timeout(seconds)` overrides; `faulthandler` kills the module 30 s
+  later), one module (`MODULE_LIMIT` of `mk/test.mk`: 600 s, 1800 s slow),
+  and the job's `timeout-minutes`, which must exceed the module limit times
+  the scale. A deadline a correct run must beat uses `scaled(seconds)`; a
+  deadline the test expects to fire, or a bound that measures the product
+  (`LIMIT_MS` of `test_vm_latency.py`), stays unscaled. Step deadlines stay
+  under the 30 s scenario deadline of `agentica test`.
+- `make tests KIND=fast|files|slow|all` selects a group; `DOCKER=1` runs it
+  in the Ubuntu test container, `WINE=1` its Windows checks under Wine
+  (`fast` and `files`). `TESTS=` narrows only host fast and slow runs; make
+  rejects it elsewhere. An unknown `KIND` fails before anything runs.
+- The destructive filesystem group (`ISOLATED_PY_TESTS` of `mk/test.mk`)
+  never runs on the host: `test-py` refuses it. Locally it runs only in
+  Docker (`tools/docker-tests.sh --mode ...`: read-only root and checkout,
+  tmpfs `/tmp`, named volumes for `build/` and `dist/`, no capabilities, no
+  network, bounded memory and time; it never falls back to the host). In CI,
+  `make test-remove-actions` runs it on a GitHub-hosted runner only (it fails
+  elsewhere), each case in its own `RUNNER_TEMP` subtree with an outside
+  sentinel. Wine runs of this group are compatibility checks, not proof of
+  NTFS, ACL or reparse-point behavior.
+- `tools/refreeze.py` (`references/frontend.md`, "Refreeze") rewrites the
+  frozen front-end goldens; `make goldens` runs its `--fast-only` tier. Not a
+  CI step.
+- `vendored-check` links against the vendored libgc and OpenSSL and fails on
+  a dynamic `libgc`, OpenSSL or `msys-2.0.dll`; `vendored-test` adds the TLS
+  and HTTP tests on that binary.
 - `vm-lint` includes the clang-tidy 19 version check; `vm-trace-off` builds
   with `TRACE=0` and checks `--version`.
-- `vm-layers` (Linux only; needs `rg` and `nm`) builds the VM, compiles each
-  `vm/*.h` on its own, runs `vm/tools/check-layers.sh` on the objects of the
-  mode (`docs/vm/15-layers.md` §15.5) and its self-test. A new `vm/*.c` file
-  goes in one list of the script.
-- `vm-sanitize-build` and `vm-sanitize-test` (`SANITIZE_JOBS`, 4) are the
-  Python modules (`VM_PY_TESTS`, the golden shards among them, run with
-  `make test-py`) that run against the binary in the sanitizer job. They and
-  `vm-diff-test` do not depend on `dist/agentica` on purpose: they test the
-  binary that an earlier step built (`SANITIZE=1` makes `dist/agentica` the
-  sanitizer build).
-- VM-only artifacts under `build/` (never shipped, never in user docs): the C
-  test binaries of `vm-test`, `build/vm/<mode>/agentica-vm-fuzz` (the fuzzer
-  links the VM without a front end), the bootstrap first binary, and
-  `build/vm/<mode>/agentica` (a second link of the binary for `vm-gc-stress`
-  and `vendored-check`, so they do not replace `dist/agentica`).
-  `AGENTICA_VM_BINARY=path` makes the Python tests run another build of the
-  binary (`path run ...`).
-- `VM_OS` is the platform the VM is built for: the host by default, or
-  `Windows_NT` for the cross build below. It selects the sources, libraries,
-  linker flags and the embedded object format; `OS`, which Windows sets and no
-  other host does, stays the "is this Windows" test for the rest of the
-  build (`Makefile`, `mk/*.mk`). `RUN_PROGRAM` prefixes build recipes that
-  must execute a program they have just compiled; `VM_TEST_RUNNER` prefixes
-  each C test binary.
-- `vm-test-binaries` builds the C test programs of `vm-test` without running
-  them. `windows-docker-build` uses the pinned image in
-  `tools/windows-check.Dockerfile` (llvm-mingw's UCRT toolchain and Wine) to
-  cross-build `dist/agentica.exe` and those programs. Wine is required in the
-  build container too: the self-hosting bootstrap runs each Windows binary to
-  compile the next stage. `windows-docker-check` uses a second container from
-  the same image to run the C tests and the Windows `platforms.yml` Python
-  modules against wrappers that launch the Windows executable through Wine
-  (`WINDOWS_TEST_MODULES="tests/test_foo.py ..."` selects other fast modules;
-  `WINDOWS_IMAGE` and `WINDOWS_DOCKERFILE` select another image). The cross
-  build selects `VM_OS=Windows_NT`, `AGENTICA_GC=vendored`,
-  `AGENTICA_OPENSSL=vendored` and the COFF embedding. The Wine prefix stays in
-  `build/wine-home`, so it is made once. It needs Docker with BuildKit and
-  the buildx plugin, the network for the pinned toolchain archive and base
-  image, and about 6 GB of disk; no Windows machine. No CI job calls these
-  targets. Wine is not a substitute for native Windows CI; tests relying on
-  Windows process creation, command-line UTF-16 conversion or symlink
-  resolution can differ under Wine.
-  Docker is the local isolation layer for the destructive filesystem group
-  (`make tests KIND=files`, `make test-bdd`). `docker-test-image` builds the
-  Ubuntu test container from `tools/ubuntu-test.Dockerfile` (`TEST_BASE`
-  selects the base), which builds the checkout against the distribution
-  libgc/OpenSSL instead of the vendored ones. `tools/docker-tests.sh
-  --mode fast|files|slow|all|bdd|probe` runs one group in one owned container:
-  read-only root and checkout, disposable `/tmp` tmpfs, two named volumes over
-  `/source/build` and `/source/dist` (named after the image id, so a rebuilt
-  image builds again; `docker volume ls` lists them), no capabilities, no
-  network for the destructive modes, bounded memory/processes/time. The
-  launcher probes those mounts first and always removes only its uniquely
-  named container; it never falls back to the host. Isolated modules cannot be
-  selected through ordinary local `test-py`: `mk/test.mk` points them to
-  `make tests KIND=files`. `make test-remove-actions` is CI-only: it fails
-  unless running on a GitHub-hosted Actions runner; it also runs
-  `windows_remove-test`, the ordinary-file line tests (every OS) and the two
-  portable lock tests (non-Windows). Each case gets a unique `RUNNER_TEMP`
-  subtree and an outside sentinel detects an escape, with bounded subprocesses
-  and cleanup. This is a regression guard on an ephemeral OS-enforced sandbox.
-  The Linux, macOS and Windows platform jobs use that native route, including
-  Windows private-handoff deletion and refusal tests. Wine
-  (`make tests KIND=files WINE=1`, `windows-docker-remove-wine-check`) is
-  optional local compatibility coverage, not proof of native NTFS, ACL or
-  reparse-point behavior, and the container writes its Wine prefix in the
-  disposable `/tmp`. The general `windows-docker-check` mount remains writable
-  and is not the destructive-test sandbox.
-- `vm-diff-build` and `vm-diff-test` are the golden tests
-  (`tests/test_vm_diff_*.py`); `sweep-full` runs them with
-  `AGENTICA_SWEEP=full` (the weekly `sweep.yml`). `test-distribution` is the
-  release's relocated-executable test (`tests/test_stdlib_distribution.py`
-  copies `dist/agentica` alone away from the checkout and runs it, `agentica
-  test` included).
+- `vm-layers` (Linux; needs `rg` and `nm`) compiles each `vm/*.h` alone and
+  runs `vm/tools/check-layers.sh` (`docs/vm/15-layers.md` §15.5). A new
+  `vm/*.c` file goes in one list of that script.
+- `vm-sanitize-build`, `vm-sanitize-test` and `vm-diff-test` do not depend on
+  `dist/agentica` on purpose: they test the binary an earlier step built
+  (`SANITIZE=1` makes `dist/agentica` the sanitizer build).
+- `build/vm/<mode>/agentica` is a second link of the binary for
+  `vm-gc-stress` and `vendored-check`, so they do not replace
+  `dist/agentica`. `AGENTICA_VM_BINARY=path` makes the Python tests use
+  another binary.
+- `VM_OS` is the target platform (`Windows_NT` for the cross build); `OS`
+  stays the "is the host Windows" test. `RUN_PROGRAM` prefixes recipes that
+  run a program they just compiled; `VM_TEST_RUNNER` prefixes each C test.
+- `windows-docker-build` and `windows-docker-check` cross-build
+  `dist/agentica.exe` with llvm-mingw in `tools/windows-check.Dockerfile` and
+  run the C tests and the Windows `platforms.yml` modules under Wine
+  (`WINDOWS_TEST_MODULES=...` picks others). The bootstrap needs Wine to run
+  each stage. They need Docker with buildx and about 6 GB; no CI job calls
+  them. Wine is no substitute for native Windows (process creation, UTF-16
+  command lines and symlinks can differ).
+- `sweep-full` runs the golden shards with `AGENTICA_SWEEP=full`.
+  `test-distribution` copies `dist/agentica` away from the checkout and runs
+  it (`tests/test_stdlib_distribution.py`).
+
+### Refreshing stage0
+
+`bootstrap/stage0.agcb` is a checked-in stage2, the only seed of the build
+(a 3.7 MB blob: refresh it only when needed). Refresh it after a change that
+the old stage0 cannot compile or load (the `stage1` recipe says so), and
+before a release.
+
+- (a) The old stage0 still compiles `compiler/`: run
+  `make fixed-point stage0`, check that the diff is only that file, run
+  `make` again (it must build from the new file) and commit it.
+- (b) It cannot (a syntax or builtin that `compiler/` itself uses, a new
+  bytecode format): split the change in two PRs (§18.2): the first adds the
+  feature without using it in `compiler/` and refreshes stage0; the second
+  uses it. When that is not possible, compile `stage1` with another binary
+  built from the parent commit and say so in the PR:
+  `make stage0 STAGE1_COMPILER="path/to/agentica"`. A new bytecode format
+  needs the old VM to run the new compiler once by hand; the PR that changes
+  the format writes the commands.
+
+A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>`
+in the `test` job: stage2 built from the base stage0 with the PR's
+`compiler/` must equal the PR's file. It checks the merge commit, so when
+another `compiler/` change lands first, merge master and refresh again. Case
+(b) cannot pass it: say so in the PR; the owner approves by hand. The loader
+also accepts format 5 (`AGC_FORMAT_PREVIOUS` in `vm/value.h`), kept for an
+older stage0; the checked-in stage0 is format 6, so it can go.
 
 ## Windows console
 
-`tests/test_windows_console_stop.py` runs on the Windows job (it needs a
-Windows console, so Wine skips it). It starts the VM with
-`CREATE_NEW_PROCESS_GROUP` and sends `CTRL_BREAK_EVENT`: the exit is 149 (128 +
-`SIGBREAK`), a child that ignores the event is stopped, buffered file data is
-written, and a stuck stdout does not hold the exit. Further cases write stdout
-and stderr to a pseudo console (ConPTY), which the VM writes from a pool
-thread with `WriteConsoleW` (text and order; a line longer than the 64 KiB
-buffer, whose first write ends inside a character, with no replacement
-character reaching the console). A new process group turns Ctrl+C off, so
-these cases send Ctrl+Break; libuv reports both events through one console
-handler (`uv_signal_t`).
+These tests need a native Windows console; Wine skips them:
 
-Ctrl+C itself is tested by `test_vm_stop.py` (Ctrl+C through the CLI): the CLI
-runs in a pseudo console and the test types the character 3 into it
-(`run_on_console` of `tests/windows_console_support.py`), which sends
-`CTRL_C_EVENT` to the CLI, the VM and a Python child that ignores it. The
-helper turns Ctrl+C on in the test process first, because a run started from a
-new process group (a service, some job runners) hands "ignore Ctrl+C" to every
-child. `test_vm_diff_8.py` (a stop that arrives while the VM waits for its last
-child) uses Ctrl+Break and a Python child.
+- `tests/test_windows_console_stop.py`: the VM in a new process group gets
+  `CTRL_BREAK_EVENT` (exit 149, 128 + `SIGBREAK`), a child that ignores it is
+  stopped, buffered file data is written, a stuck stdout does not hold the
+  exit. Output through ConPTY (`WriteConsoleW` from a pool thread, a line
+  longer than the 64 KiB buffer). A new process group turns Ctrl+C off, so
+  these cases send Ctrl+Break; libuv reports both through one `uv_signal_t`.
+  It also types a line into the console and keeps a console read waiting
+  while file calls run.
+- `test_vm_stop.py` tests Ctrl+C itself: the CLI runs in a pseudo console
+  and the test types character 3 (`run_on_console` of
+  `tests/windows_console_support.py`, which first turns Ctrl+C on, since a
+  parent in a new process group hands "ignore Ctrl+C" to every child).
+- `tests/test_windows_handle_counts.py` (named pipes,
+  `GetProcessHandleCount`) and `tests/test_windows_process_cleanup.py` (the
+  Windows side of the SIGTERM, SIGKILL and chmod cleanup cases). Other
+  cleanup cases run everywhere; on Windows they use a Python child, the
+  PowerShell process list or a copy of `node.exe`, because the VM starts
+  only `.exe` and `.com` files there.
 
-`tests/test_windows_handle_counts.py` also needs native Windows (named pipes and
-`GetProcessHandleCount`), so it runs on the Windows job and Wine skips it.
-
-`tests/test_windows_process_cleanup.py` is the Windows side of the cleanup
-cases that use SIGTERM, SIGKILL or chmod (those are host-only on Windows and
-name it). Wine skips it. The other cleanup cases run on every system: a
-harness limit is not host-only, so they pick a Python child, the PowerShell
-process list or a copy of `node.exe` with a preloaded script as the binary on
-Windows, because the VM starts only `.exe` and `.com` files there.
-
-`test_windows_console_stop.py` also types a line into the pseudo console and
-reads it, and keeps a console read waiting with one pool thread while file calls
-run. After changing Windows stdin handling, a check on a native Windows terminal
-(not Wine) is still useful but does not block a change. Save this as
-`console-input.agc` in a scratch directory:
+After changing Windows stdin handling, a check on a native terminal is
+useful but does not block. Save as `console-input.agc`:
 
 ```agentica
 def main() -> Void
@@ -270,320 +167,142 @@ def main() -> Void
 end
 ```
 
-1. Run `dist/agentica.exe console-input.agc` without redirecting stdin. After
-   `waiting`, type `hello` and Enter. Expect `ok("hello")` and exit 0.
-2. Run it again, wait for `waiting`, then press Ctrl+C without entering text.
-   Expect a prompt return, no read-error diagnostic and no surviving VM.
-   libuv handles the signal on the loop even if `_read` remains blocked on
-   the reader thread; retrying an interrupted `_read` must not be the signal
-   handler.
-
-The fast `test_platform_bootstrap.py` cases separately check binary stdin
-(NUL, CR/LF, Ctrl+Z and 0xff), an empty open pipe while a timer runs and the
-program exits, and builtin lock repetition, contention and close/reacquire.
-The native C file test also checks Windows-enforced read exclusion.
+1. `dist/agentica.exe console-input.agc` without redirecting stdin; after
+   `waiting`, type `hello` and Enter: `ok("hello")`, exit 0.
+2. Again, and press Ctrl+C at `waiting`: a prompt return, no read-error
+   diagnostic, no surviving VM. libuv handles the signal on the loop even if
+   `_read` stays blocked on the reader thread; retrying an interrupted
+   `_read` must not be the signal handler.
 
 ## Pull requests (`.github/workflows/ci.yml`)
 
-CI runs its checks on pull requests and pushes to `master`, on GitHub-hosted
-Ubuntu runners.
+Runs on pull requests and `master` pushes, on GitHub-hosted Ubuntu. Docs,
+site and Markdown-only changes skip it; a newer push cancels an older run.
 
-- `test`: `make -j vm-test test-bdd` (one make: the C tests run in parallel
-  and `dist/agentica` is built beside them, from `bootstrap/stage0.agcb`),
-  `make test-remove-actions`, `make test JOBS=6` (the whole suite on the
-  binary; it builds the binary first), `make test-shared` (the binary modules
-  again with every shared-state lock on), `make test-multicore-modules`,
-  `make fixed-point` (stage2 == stage3 from stage0, and the binary compiling
-  the front end to stage2 again; about 15 s after `make test` built the
-  stages, as a step of its own so a failure shows alone), the `stage0-check`
-  step, `make test-cli`, `make test-slow` (the `@slow` cases of the test
-  files), `make vm-latency` and `make vm-task-map` alone after that,
-  `make smoke` (in parallel), the vendored OpenSSL check (the last step that
-  builds), and then `make dup-check` (it runs even when an earlier step fails,
-  so a clone or an npm outage does not hide the test results). The vm-latency
-  negative control starts its two VMs together (it can only raise latency, so
-  the control stays valid). The vendored check stays last: it rebuilds
-  `build/vm/release/obj` with other flags, so nothing that builds the binary
-  may run beside it.
-- `dup-check` as a job runs only on `master` pushes (it saves the npm cache).
-- `vm-sanitizers` (`needs: test`, and it still runs when `test` fails):
-  `make vm-lint`, `make vm-trace-off` (only as below), one
-  `make -j vm-test vm-fuzz`, `make vm-layers` (on the sanitizer objects; the
-  job installs ripgrep if `rg` is missing), `make vm-sanitize-build`,
-  `make fixed-point` on the sanitizer binary (about 75 s and 1.8 GB: the VM
-  has no GC then; it runs before `vm-sanitize-test`, whose
-  `tests/test_single_binary.py` needs the sanitizer `dist/agentica` that it
-  built), `make vm-sanitize-test`, `make vm-tsan`, `make vm-tsan-run`, and the
-  GC stress build (which does not run the fixed point: it collects every 64
-  allocations, so it links the `stage2` of the release build and the golden
-  tests compile with `dist/agentica`). `RUNTIME-TEST-TIMEOUT` (a hung test, a
-  30 s deadline with no flag) has coverage only in the slow tier (`@slow` in
-  `tests/test_unit_test.py`). The TCP tests need Node; the TLS tests need Node
-  and Python 3. Both PR jobs set `AGENTICA_SWEEP=sampled`, so their golden and
-  GC-stress runs sample the `--max-steps` sweep with a seed from `GITHUB_SHA`;
-  a failure prints `AGENTICA_SWEEP_SEED`. The full sweep runs locally
-  (`make test`), in `release.yml` (`AGENTICA_SWEEP=full`), and weekly in
-  `sweep.yml` on the release VM.
-- OpenSSL: every CI job builds with the system OpenSSL (the default
-  `AGENTICA_OPENSSL=system`; a guard step installs `libssl-dev pkg-config` when
-  `pkg-config` cannot find OpenSSL 3, a no-op on our runners), the
-  sanitizer and GC-stress builds too, so no job builds an instrumented
-  OpenSSL. Only the release sets `AGENTICA_OPENSSL=vendored`. To keep that path
-  from rotting, the last building step of `test` restores the cached vendored
-  release-mode OpenSSL (restore only) and, on a hit, links
-  `build/vm/release/agentica` against it, checks that `readelf -d`
-  shows no `libssl` or `libcrypto` and that `run --version` names the
-  submodule's version, and runs the TLS and HTTP tests on that binary. On
-  a miss (a new OpenSSL key, such as a submodule bump) it skips;
-  `warm-third-party` runs the same link check on `master`.
-- libgc: pull request jobs build with the system libgc (the default
-  `AGENTICA_GC=system`); the same guard step also installs `libgc-dev` when
-  `pkg-config` cannot find `bdw-gc` 8.2.0 or newer. `GC_MIN` is 8.2.0 because
-  that is the series the VM is tested with; Debian 12 and 13 and Ubuntu 24.04
-  and newer ship 8.2.x, and older systems use `AGENTICA_GC=vendored`. The jobs
-  that run on `push` to `master` (`warm-third-party`), the weekly `sweep.yml`
-  and the release set `AGENTICA_GC: vendored`, so the full sweep tests the GC
-  the release ships and the submodule's `gc.o` stays built for the release and
-  for GC stress, which always uses it. `vendored-check` links
-  with the vendored libgc and OpenSSL and fails on a dynamic `libgc`, OpenSSL
-  or `msys-2.0.dll` (`readelf -d`, `otool -L` or `objdump -p`);
-  the release also checks the unpacked archive. The key of
-  `make -s vm-third-party-key` starts with a `libgc=` line, and the VM flag
-  stamps include the mode. Both modes use the same `build/vm/release/obj`
-  directory; a change of mode changes the stamps, which forces a full
-  recompile and relink. `fuzz.yml` stays on the system default.
-- The `test` and `vm-sanitizers` jobs need Node and Python 3 for the
-  network peers. The golden tests need Python 3 too (the child channel
-  fixtures run through `tests/fixtures/channel-run.py`, and on Windows through
-  `channel-run.js` with Node): `sweep.yml` and the golden step of `release.yml`
-  print `python3 --version` before them, and the goldens fail in CI when it is
-  missing.
-
-### When `vm-sanitizers` runs
-
-The first steps of the `vm-sanitizers` job (the `changes` step, checkout with
-`fetch-depth: 2`) diff the pull request merge commit against its base
-(`git diff HEAD^1 HEAD`) and publish the result as the job output `c`. The
-job builds and tests only when C code or the build changes:
-
-- `vm/` (C sources, headers, `vm/tests`, `vm/tools`, `vm/third_party`);
-- the Makefile and `mk/*.mk`, `.gitmodules`, `.clang-tidy`, `ci.yml`.
-
-Otherwise its steps show as skipped. If the `changes` step does not set its
-outputs, `vm-sanitizers` still runs. A manual run always runs it. Changes to
-`compiler/`, `bootstrap/`, `stdlib/`, `tests/` and `VERSION` skip it on
-purpose: the `test` job still runs the `vm-diff` golden shards and every CLI
-test with the real VM. Keep the `vm-sanitizers` list in `ci.yml` in step with
-new C directories.
-
-Only a manual run, or a pull request that changes `vm/trace.*` or
-`vm/tests/trace_test.c`, also runs `make vm-trace-off` (`make vm-test
-TRACE=0`, then it checks that `run --version` says `trace off`).
-
-Pull requests and `master` pushes that change only docs, the site or
-Markdown skip the whole CI workflow. A newer push cancels an older run.
+- `test` runs `vm-test test-bdd`, `test-remove-actions`, the whole suite,
+  `test-shared`, `test-multicore-modules`, `fixed-point`, `stage0-check`,
+  `test-cli`, `test-slow`, `vm-latency` and `vm-task-map` alone, `smoke`, the
+  vendored check, then `dup-check`. The vendored check is the last step that
+  builds: it rebuilds `build/vm/release/obj` with other flags, so nothing that
+  builds may run beside it. `dup-check` runs even when an earlier step fails.
+- `vm-sanitizers` (`needs: test`, runs even if it fails): `vm-lint`, ASan C
+  tests and fuzz, `vm-layers`, the sanitizer binary's fixed point (about
+  75 s and 1.8 GB: no GC) and Python modules, `vm-tsan`, `vm-tsan-run`, and
+  GC stress (it links the release `stage2`, since it collects every 64
+  allocations). It builds only when the merge commit changes `vm/`, the
+  Makefile, `mk/*.mk`, `.gitmodules`, `.clang-tidy` or `ci.yml` (keep that
+  list in step with new C folders); a manual run always runs it.
+  `vm-trace-off` runs only on a manual run or a change to `vm/trace.*` or
+  `vm/tests/trace_test.c`.
+- Both jobs set `AGENTICA_SWEEP=sampled` (seed from `GITHUB_SHA`; a failure
+  prints `AGENTICA_SWEEP_SEED`). The full sweep runs locally, in the release
+  and weekly in `sweep.yml`.
+- `RUNTIME-TEST-TIMEOUT` has coverage only in the slow tier.
+- Peers: TCP needs Node; TLS needs Node and Python 3; the goldens need
+  Python 3 (`tests/fixtures/channel-run.py`; `channel-run.js` on Windows).
+- PR jobs use the system libgc (`GC_MIN` 8.2.0; older systems use
+  `AGENTICA_GC=vendored`) and OpenSSL 3; a guard step installs the `-dev`
+  packages when `pkg-config` cannot find them. `warm-third-party`, `sweep.yml`
+  and the release use the vendored libgc, and the release the vendored
+  OpenSSL. Both modes share `build/vm/release/obj`; a mode change changes the
+  flag stamps and forces a full rebuild.
 
 ## Conformance matrix (`platforms.yml`)
 
-One job per system, named `conformance <platform>`: `linux-x86_64`
-(`ubuntu-latest`, system libgc and OpenSSL), `windows-x86_64` (`windows-2025`,
-MSYS2 UCRT64), `macos-x86_64` (`macos-15-intel`) and `macos-arm64`
-(`macos-latest`); the last three link the vendored OpenSSL, as the release
-does. It runs on pull requests that carry the `platforms` label and on pushes
-to `master`; a manual dispatch may pick the system OpenSSL instead of the
-vendored one. Each job runs the same steps, so a promise of the language is
-tested on every system or says why not:
+One job per system: `linux-x86_64`, `windows-x86_64` (MSYS2 UCRT64),
+`macos-x86_64` and `macos-arm64`; the last three link the vendored OpenSSL.
+It runs on PRs with the `platforms` label and on `master` pushes. Each job:
+`vm-test`, `vendored-check`, `bootstrap-smoke`, `fixed-point`, then
+`make conformance-area/<area>` per area of `tools/conformance.py`, then
+`make conformance-report` (a job summary, `summary.json`, exit 1 when a
+module did not finish, a case failed, an area has no passed case, or a skip
+is not allowed). `conformance all-systems` merges the four reports and fails
+when a system is missing or a case ran on none.
 
-1. `make vm-test`, `vendored-check` and `bootstrap-smoke` (the first binary,
-   linked with `bootstrap/stage0.agcb`, passes
-   `tests/test_platform_bootstrap.py` alone), then `make fixed-point` (the
-   build from stage0 and stage2 == stage3).
-2. One step per area of `tools/conformance.py`, `make conformance-area/<area>`
-   (it writes JUnit files under `build/conformance/<area>/`): `cli`, `spec`,
-   `golden` (`AGENTICA_SWEEP=sampled`), `library`, `files` (and then
-   `make test-remove-actions`, the destructive cases in the runner scratch),
-   `processes`, `tasks` (one worker, the timing cases), `network` and
-   `multicore` (`test_vm_multicore.py`); on Windows and macOS then
-   `make test-multicore-modules` (`ci.yml` runs it on Linux).
-3. `make conformance-report`: a table in the job summary (also the tier and
-   the golden sweep that ran), `summary.json` with the outcome of every case,
-   and an exit code 1 when a module did not finish, a case failed, an area has
-   no passed case, or a case was skipped for a reason that is not allowed.
-   The destructive group is a row too: `tools/run_remove_actions.py` writes
-   `build/conformance/destructive/remove-actions.xml`.
-
-A last job, `conformance all-systems`, downloads the four `summary.json` files
-(`tools/conformance.py merge`) and fails when a system is missing or a case ran
-on none of them (host-only or open gap everywhere).
-
-The areas are the lists in `tools/conformance.py`. A new `tests/test_*.py` must
-be in an area or in `EXCLUDED` with a reason, or `tests/test_conformance.py`
-fails. Not in the matrix: the Docker and Wine groups, the slow tier,
-sanitizers, fuzz and gc-stress (`ci.yml`, `fuzz.yml`).
-
-Run one system by hand: on that system, `make conformance` (all areas and the
-report, `make conformance-area/<area>` for one; a developer machine reports the
-destructive group as not run, and CI fails if it is missing). The report needs
-`CONFORMANCE_PLATFORM=<name>` only to check a CI job against its name.
+A new `tests/test_*.py` must be in an area or in `EXCLUDED` with a reason
+(`tests/test_conformance.py`). Run one system by hand with `make conformance`.
 
 Skip rules, checked by the report:
 
-- `host_only(condition, reason)` of `tests/agentica_test.py`: the system really
-  lacks a capability (POSIX signals, FIFOs, `/dev/stdin`, mode bits on Windows;
-  non-UTF-8 names and CPU limits on macOS; Windows handles elsewhere). The
-  reason starts with `host-only:`, names the capability, and, when it names a
-  counterpart test, says what that test checks. A harness limit (a test that
-  uses `/bin/sh` for a behavior Windows has too) or a product gap is not
-  host-only. The pair
-  (module, system) must be in `HOST_ONLY_ALLOWED`, which a reviewer reads; a
-  golden fixture named `-posix` or `-windows` is host-only on the other family
-  by its name.
-- `known_issue(condition, number, reason)`: the promise holds on the system but
-  its test is missing, or the product has a bug. The reason is `known-issue:
-  #N ...`, the number is in `KNOWN_ISSUES`, and the report lists every such
-  skip under "Open gaps". Remove the skip, the entry and the issue together.
-- A tool the test needs (Node, `tomllib`, IPv6) is installed by the workflow,
-  and a missing one fails: `tool()` and `require()` fail when `CI` or
-  `AGENTICA_REQUIRE_VM` is set. A skip for a missing tool fails the report.
-- A golden fixture that differs by system is split into a shared fixture and
-  `-posix` / `-windows` parts, so the shared lines run everywhere.
-- A test that cannot pass because of a hosted-runner limit is not skipped
-  silently: say so in the PR.
+- `host_only(condition, reason)` (`tests/agentica_test.py`): the system
+  really lacks a capability (POSIX signals, FIFOs, mode bits on Windows;
+  non-UTF-8 names on macOS). The reason starts with `host-only:`, names the
+  capability and any counterpart test; the (module, system) pair must be in
+  `HOST_ONLY_ALLOWED`. A harness limit or a product gap is not host-only. A
+  golden named `-posix` or `-windows` is host-only on the other family; a
+  golden that differs by system is split into a shared part and those parts.
+- `known_issue(condition, number, reason)`: the promise holds but its test is
+  missing, or the product has a bug. The reason is `known-issue: #N ...`, the
+  number is in `KNOWN_ISSUES`, and the report lists it under "Open gaps".
+  Remove the skip, the entry and the issue together.
+- A tool the test needs is installed by the workflow; a skip for a missing
+  tool fails the report. A hosted-runner limit is said in the PR, not
+  skipped silently.
 
 ## Caches and `master` pushes
 
-- The vendored OpenSSL's headers, `libssl.a`, `libcrypto.a` and stamp are
-  cached for the release mode only, with `actions/cache`. The key is the
-  hash of `make -s vm-openssl-key AGENTICA_OPENSSL=vendored` (the Configure and
-  make command lines, compiler version, OpenSSL version and submodule
-  commit). `warm-third-party` saves it; `test` only restores it. The
-  sanitizer and GC-stress builds of yyjson, picohttpparser, libuv and
-  `build/vm/gc.o` are not cached with `actions/cache`.
-- Every compile goes through ccache when `mk/vm.mk` finds it on `PATH`. The
-  release sets `CCACHE=` (in the job env and on the `make` line) and never
-  uses it, because a PR job can write to a shared cache.
-- `vm-sanitizers` runs its `make` steps with `-j"$(nproc)"`, and
-  `make vm-sanitize-test` runs the Python modules, the golden shards first.
-  `make vm-test` and `make vm-lint` run their C tests and clang-tidy files in
-  parallel (`xargs -P $(JOBS)`).
-- A `master` push runs no tests. It runs only `dup-check` (which also saves
-  the npm cache of jscpd, keyed by `tools/jscpd/package-lock.json`) and
-  `warm-third-party`, which builds the vendored release-mode OpenSSL and runs
-  the vendored link check under the PR jobs' key. It exists because a pull
-  request can restore caches saved on its own merge ref or on `master`, never
-  another pull request's.
+- The vendored release-mode OpenSSL is cached with `actions/cache` (key:
+  `make -s vm-openssl-key AGENTICA_OPENSSL=vendored`); `warm-third-party`
+  saves it on `master`, the PR `test` job only restores it (a PR can restore
+  only caches of its merge ref or `master`). On a miss the vendored check
+  skips.
+- Compiles go through ccache when it is on `PATH`; the release sets `CCACHE=`
+  because PR jobs can write to a shared cache.
+- A `master` push runs no tests: only `dup-check` (it saves the jscpd npm
+  cache) and `warm-third-party`.
 
 ## Other workflows
 
-- `fuzz.yml` (by hand) fuzzes the sanitizer VM with 5 million mutants and a
-  random seed.
-- `sweep.yml` runs by schedule (Monday 03:00 UTC) and by hand: the `vm-diff`
-  shards on the release VM with `AGENTICA_SWEEP=full` (`make sweep-full`).
-  Nothing else in CI runs on a schedule.
-- `site-examples.yml` and `pages.yml`: see `references/site.md`.
+- `fuzz.yml` (by hand): 5 million mutants, random seed.
+- `sweep.yml`: Monday 03:00 UTC and by hand, `make sweep-full` on the
+  release VM. Nothing else runs on a schedule.
+- `site-examples.yml` and `pages.yml`: `references/site.md`.
 
 ## Release (`release.yml`)
 
-Four native packages, one build job each (`linux`, `macos` with a two-row
-matrix, `windows`), all with `AGENTICA_OPENSSL: vendored` and
-`AGENTICA_GC: vendored`, built from `bootstrap/stage0.agcb` (`make vm-test
-fixed-point`). Each needs only a C toolchain:
+Four packages, one job each, vendored libgc and OpenSSL, built from stage0
+(`make vm-test fixed-point`): `linux-x86_64` (`.tar.gz`, pinned `zig cc`
+against glibc 2.28), `windows-x86_64` (`.zip`, MSYS2 UCRT64), `macos-x86_64`
+and `macos-arm64` (`.tar.gz`, `MACOSX_DEPLOYMENT_TARGET=12.0`). Per package:
+build, strip (macOS adds an ad hoc `codesign`; no Developer ID or
+notarization), `make release-check`, `release-package`, `release-smoke`,
+upload. `RELEASE_PLATFORM` names the package. The Linux job also runs the
+full golden sweep, `test-distribution` and the examples.
 
-- `linux-x86_64` (`.tar.gz`): `ubuntu-latest`, pinned `zig cc` against glibc
-  2.28 (`CC` in `GITHUB_ENV`).
-- `windows-x86_64` (`.zip`): `windows-2025`, MSYS2 UCRT64 GCC (the shell is
-  `msys2 {0}`, `PYTHON=python`).
-- `macos-x86_64` (`.tar.gz`): `macos-15-intel`, Apple clang, `gmake`,
-  `MACOSX_DEPLOYMENT_TARGET=12.0`.
-- `macos-arm64` (`.tar.gz`): `macos-latest`, the same.
-
-Per package, in order: build, strip (macOS: `strip -x` then `codesign --force
---sign -`, an ad hoc signature that arm64 needs; there is no Developer ID
-signature or notarization, which need credentials), `make release-check`,
-`make release-package`, `make release-smoke`, upload `agentica-PLATFORM`.
-`RELEASE_PLATFORM` (env, from the matrix) names the package; mk/release.mk
-derives the check format and the architecture from it and
-`tools/release-check.sh` compares that architecture with the machine and with
-the binary, so a runner that is not what its name says fails. The Linux job also
-runs the golden tests with the full sweep (`make vm-diff-test`),
-`make test-distribution` and the examples.
-
-- `tools/release-check.sh elf|macho|pe BINARY ARCH FLOOR` reads the real format
-  with that system's tools. ELF: the glibc floor with `objdump -T` (an empty
-  list is an error with its own message), PIE, BIND_NOW, RELRO, the stack
-  protector, FORTIFY, no NEEDED `libgc`, `libssl` or `libcrypto`. Mach-O:
-  `lipo -archs` is exactly the one architecture, `file`, `vtool` platform and
-  `minos` equal `MACOSX_DEPLOYMENT_TARGET` (the link target of the final
-  binary; it does not prove that every object or API is safe on macOS 12, and
-  CI does not run macOS 12), `otool -L` lists libSystem and system paths only,
-  PIE, stack protector, FORTIFY, a valid code signature. PE: `objdump -f` is
-  `pei-x86-64`, every imported DLL is a Windows system DLL or the Universal C
-  Runtime (never `msys-2.0.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll`,
-  a library of OpenSSL or libgc), and DllCharacteristics has ASLR,
-  high-entropy ASLR and DEP. ELF and Mach-O also run `run --version` and
-  compare its OpenSSL with the submodule's `VERSION.dat`; PE checks it names
-  libgc. A change of a floor or of the allowed DLLs is made in that script.
+- `tools/release-check.sh elf|macho|pe BINARY ARCH FLOOR` checks the format,
+  architecture, hardening flags, the glibc or macOS floor and the allowed
+  libraries or DLLs (no libgc, OpenSSL or MSYS runtime). A change of a floor
+  or of the allowed DLLs goes in that script.
 - `tools/release.py package` writes `agentica-VERSION-PLATFORM.(tar.gz|zip)`
-  with `bin/agentica` (`bin/agentica.exe` on Windows), `LICENSE`, `NOTICE` and
-  the eight files of `licenses/` (the same set on every platform; the names are
-  in `LICENSE_FILES`), then verifies the member list: exactly those files, once
-  each, below one folder; a link or a device is refused. The archive is
-  reproducible (commit time, root owner): the same binary gives the same
-  bytes. The binary itself is not reproducible. A new third-party library adds
-  its license file there.
-- `tools/release.py smoke` (run it as `python -I`) first compares the packaged
-  binary with the checked one, extracts into a folder with spaces and non-ASCII
-  letters away from the checkout, and runs the binary there with a `PATH` of the
-  system folders only (`/usr/bin:/bin`, or `System32` on Windows): `--version`,
-  `run --version`, help, `check` (ok and `CHECK-TYPE-MISMATCH`), running a
-  non-ASCII program, `compile` then `run --`, `--seed`, `std/` imports,
-  `agentica test` for unit tests (passing and failing) and for a BDD spec
-  with a step program and a predefined `Given the Agentica program` step,
-  files (write, append, read, rename, list, stat, remove), processes
-  (spawning the packaged binary, refused with `--deny-run`), and loopback TCP
-  and HTTP (`std/http` client and server), which must pass on all four. TLS is
-  covered by the OpenSSL version line only (it needs certificates).
-- The `collect` job (every run) downloads the artifacts without merging, runs
-  `tools/release.py collect` (exactly the four archives of `VERSION`: nothing
-  missing, extra or duplicated; each archive verified) and uploads
-  `SHA256SUMS`. The `publish` job runs only for a tag push (`version` has
-  checked that the tag is `VERSION`), repeats `collect`, compares the sums, runs
-  `sha256sum -c` and creates the GitHub Release with empty notes. A manual
-  `workflow_dispatch` only uploads the artifacts.
+  with `bin/agentica`, `LICENSE`, `NOTICE` and `licenses/` (`LICENSE_FILES`;
+  a new third-party library adds its license there). The archive is
+  reproducible; the binary is not.
+- `tools/release.py smoke` (`python -I`) runs the extracted binary from a
+  path with spaces and non-ASCII letters, with a system-only `PATH`. TLS is
+  covered by the OpenSSL version line only.
+- `collect` (every run) checks that there are exactly the four archives of
+  `VERSION` and writes `SHA256SUMS`. `publish` runs only for a tag push equal
+  to `VERSION` and creates the GitHub Release with empty notes. A manual
+  `workflow_dispatch` only uploads artifacts.
 
 Before merging a change to `release.yml`, the packaging tools or the binary
-format, dispatch a dry run: `gh workflow run release.yml --ref BRANCH`. The
-tags, the version and the CHANGELOG rules are under "Tags, versions and
-CHANGELOG" below. Refresh `bootstrap/stage0.agcb` before cutting a release.
+format, dispatch a dry run: `gh workflow run release.yml --ref BRANCH`.
 
 ### Tags, versions and CHANGELOG
 
-- The `VERSION` file at the repository root (one line, no `v`) is the single
-  source of the version. `make version` prints it and mk/vm.mk passes it to
-  C as `AGC_VERSION`; `agentica --version` reports it. The Agentica front end
-  takes it as an input (`Settings.version`; `--version V` in the arguments of
-  `compiler/front_end.agc`), and writes it into each `.agcb` header. Keep it in
-  sync with the Git tag.
-- Every PR with a user-visible change adds a short entry under `## [Unreleased]`
-  in `CHANGELOG.md` (Added, Changed, Removed or Fixed; start a change that
-  breaks programs or CLI use with `**Breaking:**`; add the PR number).
-  Internal-only work (CI, refactors, docs) needs none.
-- Cutting a release (the bump PR, the tag, the release notes, the Pages
-  rebuild and the checks after it): `.agents/skills/agentica-release/`.
+- `VERSION` (one line, no `v`) is the single source of the version: C gets it
+  as `AGC_VERSION`, the front end as `Settings.version` (`--version V`), and
+  each `.agcb` header carries it. Keep it equal to the Git tag.
+- CHANGELOG entries: `AGENTS.md`. Sections Added, Changed, Removed, Fixed;
+  add the PR number. Internal-only work (CI, refactors, docs) needs none.
+- Cutting a release: `.agents/skills/agentica-release/`.
 
 ## Copy-paste check (jscpd)
 
-- `make dup-check` runs jscpd over C in `vm/` and Python in `tests/` with
-  `.jscpd.json`. The Python scan skips `tests/eval/tasks/`, whose reference and
-  candidate programs are intentionally paired, and triple-quoted text such as
-  embedded Agentica programs. Its `weak` mode skips comments, so similar file
-  header comments are not clones.
-- jscpd is pinned with its whole dependency tree by
-  `tools/jscpd/package-lock.json` and installed by `npm ci --ignore-scripts`
-  into `tools/jscpd/node_modules`.
-- CI runs it in the `test` job of pull requests and in its own `dup-check`
-  job on `master` pushes, and fails on any clone not in
-  `.jscpd-baseline.json`, so new duplicated code fails CI.
-- Remove the copy instead of growing the baseline. After removing old clones,
-  refresh it with `make dup-baseline` and commit the file. A reviewer must
-  reject a PR that grows the baseline instead of removing a copy.
+- `make dup-check` runs jscpd over C in `vm/` and Python in `tests/`
+  (`.jscpd.json`; it skips `tests/eval/tasks/`, triple-quoted text and
+  comments). jscpd is pinned by `tools/jscpd/package-lock.json` and installed
+  with `npm ci --ignore-scripts`.
+- CI fails on any clone not in `.jscpd-baseline.json`. Remove the copy
+  instead of growing the baseline; a reviewer rejects a PR that grows it.
+  After removing old clones, refresh it with `make dup-baseline`.

@@ -22,7 +22,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    runtime code or span the builtin can raise; add a loader assert if the import
    rules change. The fixture sidecars (`.stdin`, `.args`, `.env` and `.channel`)
    are described under the golden harness in `references/vm-build.md`.
-4. A blocking builtin (7h) checks its arguments, fills a `malloc`'d
+4. A blocking builtin checks its arguments, fills a `malloc`'d
    request (no GC pointers; strings through `agc_cstr` or a `malloc`'d
    copy), and calls `agc_io_start` with an `agc_io_kind`: `work` runs in
    the libuv pool and may only do system calls on that request; `done`

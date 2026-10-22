@@ -131,8 +131,8 @@ and a task's crash line (`"task":true`) carry it too.
   name. A private struct cannot be built or updated with `.with` from another
   module. `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME` (`modules.md`).
 - `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in
-  `deps/` (run `agentica install`), or a package file imports a `pkg/` name its own `agentica.toml`
-  does not declare.
+  `deps/` (run `agentica install`), or a package file imports a `pkg/` name its
+  own `agentica.toml` does not declare.
 - `PKG-MANIFEST-INVALID`, `PKG-LOCK-INVALID`, `PKG-LOCK-MISSING`,
   `PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`: `agentica.toml` or `agentica.lock` is
   bad, missing, or disagrees with the other (stale); one name has two sources in

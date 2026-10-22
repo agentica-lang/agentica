@@ -46,23 +46,15 @@ are registered in `stdlib/MODULES`.
     infrastructure report in the chosen format.
 - `compiler/bdd/bdd_driver.agc` (the driver; `bdd_options.agc` reads the
   arguments, usage errors included)
-  - `bdd_rundir.agc` makes a private 0700 dir `agentica-bdd-new-<hex>` in the
-    temporary directory (`TMPDIR` if it is a folder, else `/var/tmp`,
-    `/usr/tmp`, `/tmp`; the hex is 16 bytes of `/dev/urandom`; 16 tries),
-    refuses a `TMPDIR` without the sticky bit that others can write to, or
-    that its group can write to unless it has the user's uid and gid and no
-    setgid bit (the user-private-group case), locks the dir's `lock` file
-    exclusively for the whole run (`flock`), then renames the dir to
-    `agentica-bdd-<other hex>` with `Path.rename`, which never replaces, so the
-    sweep never sees an unlocked new dir; then it removes the dirs of the same
-    user whose `lock` it can take, left by a killed driver (links and dirs
-    without `lock` are left alone); an `agentica-bdd-new-<hex>` with a free
-    `lock` goes too, once its mtime is over an hour old (a live run is in that
-    state only for a moment)
-  - on Windows (the user-visible differences are in `docs/bdd.md`) the hex is 8
-    bytes of `Random.int`, 4 of the clock and the process id; the lock is
-    `LockFileEx`; the sweep closes the lock before removing the dir (a folder
-    with an open file cannot be removed or renamed)
+  - `bdd_rundir.agc` makes the run dir (the rules: `docs/bdd.md`, "Isolation
+    and process lifetime"): a private 0700 `agentica-bdd-new-<hex>` (16 bytes
+    of `/dev/urandom`, 16 tries; on Windows 8 bytes of `Random.int`, 4 of the
+    clock and the pid), refuses a group-writable `TMPDIR` unless it has the
+    user's uid and gid and no setgid bit (the user-private-group case), locks
+    `lock` for the whole run, then renames the dir with `Path.rename` (never
+    replaces), so the sweep never sees an unlocked new dir. Links and dirs
+    without `lock` are left alone. On Windows the sweep closes the lock before
+    removing the dir (a folder with an open file cannot be removed)
   - it writes the `std/` sources into `std/` of the run dir, compiles the
     step program and discovers the feature files (`bdd_discover.agc`;
     `bdd_compile.agc` is the Agentica pipeline from a file to the bytes, or the
@@ -234,11 +226,8 @@ are registered in `stdlib/MODULES`.
   record and exits 1. When `deliver` cannot send, it warns on stderr with the
   reason and exits 1; a record over 1 MiB (`process: send exceeds`) is replaced
   by a small `RUNTIME-BDD-OUTPUT-LIMIT` fail record.
-- Runtime codes: `RUNTIME-BDD-CONTEXT`, `ASSERTION`, `NO-ASSERTION`,
-  `PREMATURE-EXIT`, `PENDING-TASKS`, `DUPLICATE`, `PATTERN`, `TIMEOUT`,
-  `OUTPUT-LIMIT`, `PROGRAM`, `JSON`, `IO`, `INFRA` and `USAGE` with the same
-  prefix; resolution uses `CHECK-BDD-UNDEFINED`, `AMBIGUOUS` and `EMPTY`; the
-  feature parser `PARSE-GHERKIN-*`. Tests: `tests/test_bdd.py` (the step
+- Codes: `RUNTIME-BDD-*`, `CHECK-BDD-*` and `PARSE-GHERKIN-*` (the list:
+  `docs/bdd.md`, "Diagnostics"). Tests: `tests/test_bdd.py` (the step
   program, isolation, registration, usage), `tests/test_bdd_integration.py`
   (programs under test, limits, seed, cleanup), both running the CLI as a child
   process, the `bdd-*` goldens for `std/bdd/gherkin` and `std/bdd/match`, and
@@ -321,18 +310,6 @@ are registered in `stdlib/MODULES`.
 
 ## Step handlers and programs under test
 
-- Specs are `.feature` files, parsed by `std/bdd/gherkin`, separate
-  from the language parser: English subset only, one `PARSE-GHERKIN-*`
-  diagnostic with a span, Background replay, independent outline rows;
-  unsupported syntax is rejected, never skipped.
-- A handler is `Fn[BDD.Context, List[String], BDD.Context]`: it takes the
-  context and captures and returns the context it changed. All step text
-  resolves before any scenario runs. Then/And/But must add a BDD assertion; an
-  early `System.exit` never approves a step. State belongs to one scenario,
-  which runs in its own child VM, so nothing leaks.
-- Programs under test run on the host with the inherited environment, through
-  the same Agentica command (the binary, `settings.self_path`), with the feature
-  directory as their working directory. The child VM's signal guard stops them
-  when a scenario ends, times out or fails.
-- `make test-bdd` builds the compiled CLI and runs `tests/bdd/specs` with
-  `tests/bdd/handlers.agc`; CI runs it too (`references/ci.md`).
+The rules (Gherkin subset, handler type, assertions, isolation, programs under
+test) are in `docs/bdd.md`. `make test-bdd` builds the CLI and runs
+`tests/bdd/specs` with `tests/bdd/handlers.agc`; CI runs it too.

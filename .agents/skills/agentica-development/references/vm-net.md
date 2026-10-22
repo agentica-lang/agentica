@@ -7,137 +7,114 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Files
 
-- **Path:** `vm/duplex.c`
-  - **Owns:** The child channel and the duplex stream of
-    `Process.spawn_channel`: a libuv stream to read and one to write (one
-    socket on Unix, a pipe per direction on Windows). The ends are made and
-    taken in `duplex_os.h` (`references/vm-io.md`).
-
-- **Path:** `vm/process.c`
-  - **Owns:** The `Process` builtins (off with `--deny-run`), using libuv on
-    Unix and Windows.
-
-- **Path:** `vm/stream.c`
-  - **Owns:** what processes and TCP share (`docs/vm/10-io-tls.md` §10.3.1):
-    `agc_inbuf` (one `malloc`'d input buffer with EOF and a sticky read error;
-    `agc_inbuf_want` gives the read size: 4 KiB or what a byte read still
-    needs), `agc_inbuf_take` (drop the first bytes of the pending data and keep
-    `scanned` right), `agc_inbuf_line` (LF in the first 1 MiB + 1 bytes,
-    searched once per byte through `scanned`, CRLF stripped, a final line only
-    at EOF, the read error when bytes without LF end in an error, the caller's
-    texts for too long and end of input; it says when the line was too long so
-    the caller closes), the same cuts as a `malloc`'d `agc_inbuf_cut` made on
-    the I/O thread, whose value a scheduler builds later, `agc_stream_write`
-    (`uv_try_write`, then one `uv_write` of a `malloc`'d copy in buffers of at
-    most 1 GiB; 0 written, 1 queued, or a libuv error), `agc_new_lock` and
-    `agc_stream_lock` (an unregistered lock record, and the timeout check plus
-    `agc_handle_wait`), and the `network:` timeout texts
-
-- **Path:** `vm/tcp.c`
-  - **Owns:** the `TCP` and `TLS` builtins (`agc_tcp_builtins`; Linux, macOS
-    and Windows; §10.3.1, TLS in §10.3): one `malloc`'d `net`
-    for a socket or a listener
-    (users: the resource and each request; callbacks: a DNS lookup in flight and
-    one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its
-    `uv_connect_t` that finds the `net` through `owner`), registered when the
-    call starts, so a crash or the in-process harnesses' `agc_io_close` closes
-    it; the VM's own end of the run closes no socket one by one (`_exit` does),
-    and only calls the `goodbye` hook for TLS `close_notify`; requests park on
-    `external` jobs (`park`): connect resolves with `uv_getaddrinfo` and tries
-    each address with a fresh link (`attempt` takes its callback as an argument,
-    so no prototype is needed), listen binds every resolved address on one port
-    (one link per address, chained through `next`; `bind_all` retries a port-0
-    listen when a later address finds the port taken), accept is one FIFO for
-    all links that `serve` feeds with `uv_accept` (a failed `uv_accept` closes
-    the listener, since libuv stops watching that link), reads and writes
-    use the `agc_socket` reader and writer locks and `vm/stream.c`; `shut` is
-    the one close (trace `why`), and finishes every waiting request; `no_files`
-    (the fuzzer) makes connect and listen fail with `RUNTIME-INTERNAL`. Every
-    `net` belongs to the I/O thread (§16.9, "Services"): a builtin parks with
-    its `begin_*` step as the START's `more` step, a close or a resource's
-    release posts `release_step` with `agc_loop_call`, `finish` copies what
-    the `done` half needs into the request (`opened`, `closed`, the cut, the
-    write status, the accepted child), and `request_done` reads only that and
-    posts `drop_request`; `users` changes only on the I/O thread, except the
-    first count of a `net` a builtin has just made (`own`, before any other
-    thread sees it), and the `net` fields `id` and `closed` are atomic for the
-    scheduler's checks. `cancel`
-    (`request_cancel`) and `pause` (`stop_request`) touch the request and the
-    `net` only, never the resource. At a detach (a cancelled task),
-    `request_cancel` takes an accept or a read that has taken nothing yet out
-    of its slot at once; a finished one is left to its `done` half,
-    whose result is dropped. At N = 1 every step runs inline, and a
-    read of buffered bytes or a send that goes out at once returns without a
-    park (`agc_io_here`). Tested at N > 1 by `vm/tests/net_test.c` (exact
-    orders), `vm/tests/threads_test.c` and the net programs of
-    `tests/test_vm_multicore.py`
-
-- **Path:** `vm/net.h`
-  - **Owns:** tcp.c's connection object for the HTTP server (`agc_conn`,
-    `agc_conn_*` and `agc_net_close`; `agc_conn_observe` is a watch callback on
-    every state change) and `agc_tls_load_error`. The client has no C side: it
-    is `std/http` on `TCP`/`TLS` sockets (`docs/vm/10-io-http.md` §10.7.1)
-
-- **Path:** `vm/http_parse.h`, `vm/http_pico.c`, `vm/http_body.c`
-  - **Owns:** the HTTP head adapter and body decoder (§10.6, §10.6.1): limits as
-    constants, `agc_http_error` with its status and text,
-    `agc_http_parse_request_head`/`_response_head` (our pre-scan and start-line
-    checks, then picohttpparser, then token, value, obs-fold, Host and status
-    checks), `agc_http_framing`, and the body decoder
-    (`agc_http_body_init/feed/end/free`: Content-Length, chunked with saturating
-    sizes and checked trailers, close-delimited, one `malloc`'d buffer within
-    the limit). In `discard` mode it only counts: `agc_http_body_step` stops
-    after one run of body bytes, and `agc_http_body_skip` counts chunk data the
-    caller read itself. No recursion
-
-- **Path:** `vm/http_fields.h`, `vm/http_fields.c`
-  - **Owns:** what the client and the server share (`agc_http_closes` on a
-    parsed head and `agc_http_list_closes` on a `List[Header]` use one token
-    check): a growable byte buffer, the header writer with its checks and the
-    managed names (`agc_http_put_headers` returns a reason without the `http: `
-    prefix), the kept header fields (names lowercased) and their
-    `List[Header]`, and `agc_http_error_result`
-
-- **Path:** `vm/http_wire.c`
-  - **Owns:** the `HttpWire` functions std/http's client and server read and
-    write with (Linux, macOS and Windows): `chunked`, `chunk`, `chunk_read`,
-    `text`, `encode_request`, `encode_response` and `error_answer`. No I/O and
-    no state: each takes bytes or a record and returns a string or a std-only
-    record (`HttpWire.Chunk`, `HttpWire.Text`, `HttpWire.Reply`). `chunk`
-    rebuilds the decoder from a `Chunk` and checks every field first
-    (`vm/tests/http_wire_test.c`). `agc_http_head_value`,
-    `agc_http_response_value` and `agc_http_text_value` build the `Head`,
-    `Response` and `Text` of the reads in `vm/tcp.c`: `HttpWire.read_head` and
-    `read_response` (the head stays in the input until it is whole, with a scan
-    hint so it is parsed once per line; `read_head`'s `rest` goes back in front
-    first, `agc_inbuf_unread`) and `HttpWire.read_text`, next to
-    `HttpWire.close_write` and `clean_eof?`.
-
-- **Path:** `vm/http_server.c`
-  - **Owns:** The `HttpWire` server task group (Linux, macOS and Windows).
-    The I/O thread owns the server's listener, open count and queue
-    of `accept` and `wait` jobs; builtins change them only by posted steps
-    (`agc_loop_call`), `closed` is atomic, and an accept's done half makes the
-    socket from the connection the I/O thread took (§10.7.2). Runs at N > 1:
-    the HTTP module is in `make test-multicore-modules`, and
-    `tests/test_vm_multicore.py` has a load case with cancels and a close.
-
-- **Path:** `vm/http_service.c`
-  - **Owns:** `HttpWire.service`, `jobs` and `options`
-    (`agc_http_service_builtins`, Linux, macOS and Windows; §10.7.1). `service`
-    runs the client's owner task with `agc_task_service` (`vm/task.c`): a root
-    with no parent, so the client outlives a crash or cancel of its maker,
-    `Task.pending_count` and `Test.test` leave its tasks out, and their timers
-    are weak for the stall check (`rt->timers_weak`). The `HttpClient` value
-    holds the jobs channel and the options. The pool itself (owner, one worker
-    per connection, FIFO, retry) is `stdlib/http.agc`, on `TCP`, `TLS`,
-    `Channel` and `Task`; the workers' sockets are tcp.c sockets, so the end of
-    the run sends their TLS close_notify. `service` builds the client first and
-    passes it to its owner function. The client's TLS context
-    (`HttpWire.connect_tls`, `HttpWire.drop_tls`) is a reference-counted
-    `tls_shared` in `vm/tcp.c`, built once on a pool thread; each connection and
-    the build hold a reference, so `drop_tls` never frees it under a handshake
-
+- `vm/duplex.c`: The child channel and the duplex stream of
+  `Process.spawn_channel`: a libuv stream to read and one to write (one socket
+  on Unix, a pipe per direction on Windows). The ends are made and taken in
+  `duplex_os.h` (`references/vm-io.md`).
+- `vm/process.c`: The `Process` builtins (off with `--deny-run`), using libuv on
+  Unix and Windows.
+- `vm/stream.c`: what processes and TCP share (`docs/vm/10-io-tls.md` §10.3.1):
+  `agc_inbuf` (one `malloc`'d input buffer with EOF and a sticky read error;
+  `agc_inbuf_want` gives the read size: 4 KiB or what a byte read still needs),
+  `agc_inbuf_take` (drop the first bytes of the pending data and keep `scanned`
+  right), `agc_inbuf_line` (LF in the first 1 MiB + 1 bytes, searched once per
+  byte through `scanned`, CRLF stripped, a final line only at EOF, the read
+  error when bytes without LF end in an error, the caller's texts for too long
+  and end of input; it says when the line was too long so the caller closes),
+  the same cuts as a `malloc`'d `agc_inbuf_cut` made on the I/O thread, whose
+  value a scheduler builds later, `agc_stream_write` (`uv_try_write`, then one
+  `uv_write` of a `malloc`'d copy in buffers of at most 1 GiB; 0 written, 1
+  queued, or a libuv error), `agc_new_lock` and `agc_stream_lock` (an
+  unregistered lock record, and the timeout check plus `agc_handle_wait`), and
+  the `network:` timeout texts
+- `vm/tcp.c`: the `TCP` and `TLS` builtins (`agc_tcp_builtins`; Linux, macOS and
+  Windows; §10.3.1, TLS in §10.3): one `malloc`'d `net` for a socket or a
+  listener (users: the resource and each request; callbacks: a DNS lookup in
+  flight and one close callback per `tcp_link`, a `malloc`'d `uv_tcp_t` with its
+  `uv_connect_t` that finds the `net` through `owner`), registered when the call
+  starts, so a crash or the in-process harnesses' `agc_io_close` closes it; the
+  VM's own end of the run closes no socket one by one (`_exit` does), and only
+  calls the `goodbye` hook for TLS `close_notify`; requests park on `external`
+  jobs (`park`): connect resolves with `uv_getaddrinfo` and tries each address
+  with a fresh link (`attempt` takes its callback as an argument, so no
+  prototype is needed), listen binds every resolved address on one port (one
+  link per address, chained through `next`; `bind_all` retries a port-0 listen
+  when a later address finds the port taken), accept is one FIFO for all links
+  that `serve` feeds with `uv_accept` (a failed `uv_accept` closes the listener,
+  since libuv stops watching that link), reads and writes use the `agc_socket`
+  reader and writer locks and `vm/stream.c`; `shut` is the one close (trace
+  `why`), and finishes every waiting request; `no_files` (the fuzzer) makes
+  connect and listen fail with `RUNTIME-INTERNAL`. Every `net` belongs to the
+  I/O thread (§16.9, "Services"): a builtin parks with its `begin_*` step as the
+  START's `more` step, a close or a resource's release posts `release_step` with
+  `agc_loop_call`, `finish` copies what the `done` half needs into the request
+  (`opened`, `closed`, the cut, the write status, the accepted child), and
+  `request_done` reads only that and posts `drop_request`; `users` changes only
+  on the I/O thread, except the first count of a `net` a builtin has just made
+  (`own`, before any other thread sees it), and the `net` fields `id` and
+  `closed` are atomic for the scheduler's checks. `cancel` (`request_cancel`)
+  and `pause` (`stop_request`) touch the request and the `net` only, never the
+  resource. At a detach (a cancelled task), `request_cancel` takes an accept or
+  a read that has taken nothing yet out of its slot at once; a finished one is
+  left to its `done` half, whose result is dropped. At N = 1 every step runs
+  inline, and a read of buffered bytes or a send that goes out at once returns
+  without a park (`agc_io_here`). Tested at N > 1 by `vm/tests/net_test.c`
+  (exact orders), `vm/tests/threads_test.c` and the net programs of
+  `tests/test_vm_multicore.py`
+- `vm/net.h`: tcp.c's connection object for the HTTP server (`agc_conn`,
+  `agc_conn_*` and `agc_net_close`; `agc_conn_observe` is a watch callback on
+  every state change) and `agc_tls_load_error`. The client has no C side: it is
+  `std/http` on `TCP`/`TLS` sockets (`docs/vm/10-io-http.md` §10.7.1)
+- `vm/http_parse.h`, `vm/http_pico.c`, `vm/http_body.c`: the HTTP head adapter
+  and body decoder (§10.6, §10.6.1): limits as constants, `agc_http_error` with
+  its status and text, `agc_http_parse_request_head`/`_response_head` (our
+  pre-scan and start-line checks, then picohttpparser, then token, value,
+  obs-fold, Host and status checks), `agc_http_framing`, and the body decoder
+  (`agc_http_body_init/feed/end/free`: Content-Length, chunked with saturating
+  sizes and checked trailers, close-delimited, one `malloc`'d buffer within the
+  limit). In `discard` mode it only counts: `agc_http_body_step` stops after one
+  run of body bytes, and `agc_http_body_skip` counts chunk data the caller read
+  itself. No recursion
+- `vm/http_fields.h`, `vm/http_fields.c`: what the client and the server share
+  (`agc_http_closes` on a parsed head and `agc_http_list_closes` on a
+  `List[Header]` use one token check): a growable byte buffer, the header writer
+  with its checks and the managed names (`agc_http_put_headers` returns a reason
+  without the `http: ` prefix), the kept header fields (names lowercased) and
+  their `List[Header]`, and `agc_http_error_result`
+- `vm/http_wire.c`: the `HttpWire` functions std/http's client and server read
+  and write with (Linux, macOS and Windows): `chunked`, `chunk`, `chunk_read`,
+  `text`, `encode_request`, `encode_response` and `error_answer`. No I/O and no
+  state: each takes bytes or a record and returns a string or a std-only record
+  (`HttpWire.Chunk`, `HttpWire.Text`, `HttpWire.Reply`). `chunk` rebuilds the
+  decoder from a `Chunk` and checks every field first
+  (`vm/tests/http_wire_test.c`). `agc_http_head_value`,
+  `agc_http_response_value` and `agc_http_text_value` build the `Head`,
+  `Response` and `Text` of the reads in `vm/tcp.c`: `HttpWire.read_head` and
+  `read_response` (the head stays in the input until it is whole, with a scan
+  hint so it is parsed once per line; `read_head`'s `rest` goes back in front
+  first, `agc_inbuf_unread`) and `HttpWire.read_text`, next to
+  `HttpWire.close_write` and `clean_eof?`.
+- `vm/http_server.c`: The `HttpWire` server task group (Linux, macOS and
+  Windows). The I/O thread owns the server's listener, open count and queue of
+  `accept` and `wait` jobs; builtins change them only by posted steps
+  (`agc_loop_call`), `closed` is atomic, and an accept's done half makes the
+  socket from the connection the I/O thread took (§10.7.2). Runs at N > 1: the
+  HTTP module is in `make test-multicore-modules`, and
+  `tests/test_vm_multicore.py` has a load case with cancels and a close.
+- `vm/http_service.c`: `HttpWire.service`, `jobs` and `options`
+  (`agc_http_service_builtins`, Linux, macOS and Windows; §10.7.1). `service`
+  runs the client's owner task with `agc_task_service` (`vm/task.c`): a root
+  with no parent, so the client outlives a crash or cancel of its maker,
+  `Task.pending_count` and `Test.test` leave its tasks out, and their timers are
+  weak for the stall check (`rt->timers_weak`). The `HttpClient` value holds the
+  jobs channel and the options. The pool itself (owner, one worker per
+  connection, FIFO, retry) is `stdlib/http.agc`, on `TCP`, `TLS`, `Channel` and
+  `Task`; the workers' sockets are tcp.c sockets, so the end of the run sends
+  their TLS close_notify. `service` builds the client first and passes it to its
+  owner function. The client's TLS context (`HttpWire.connect_tls`,
+  `HttpWire.drop_tls`) is a reference-counted `tls_shared` in `vm/tcp.c`, built
+  once on a pool thread; each connection and the build hold a reference, so
+  `drop_tls` never frees it under a handshake
 - **Path:** `vm/tls.h`, `vm/tls_openssl.c`, `vm/tls_trust.h`, `vm/tls_trust.c`,
   `vm/tls_trust_{posix,darwin,windows}.c`
   - **Owns:** the TLS adapter (`docs/vm/10-io-tls.md` §10.3): our own types
@@ -151,8 +128,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `docs/vm/10-io-tls.md` §10.3
 
 - `vm/duplex.c`
-  - the child channel (25c, service; `docs/vm/10-io-processes.md` §10.4 "As
-    built (25c, the child channel)"; Linux and macOS, a pipe path on Windows):
+  - the child channel (service; `docs/vm/10-io-processes.md` §10.4; Linux and
+    macOS, a pipe path on Windows):
     an `agc_duplex` is one bidirectional libuv pipe over a socket end with an
     `agc_inbuf` (line reads, 1 MiB), at most one reader request and one writer
     request, a reference count (the owner, each request, the pipe handle and the
@@ -237,16 +214,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`agc_each_fd`)
   - executable lookup (`PATH` only for a bare name, the working directory for a
     name with `/`)
-  - captured children (`Process.spawn_captured`, `Process.output`, 21a, §10.4
-    "As built (21a)"): `spawn_child` serves both spawns, `cwd` from `dir`, both
-    pipes read from the spawn on into `out_buf` and `err_kept` held to 1 MiB of
-    capacity (`out_cut`, `err_cut`), `output` a wait like `wait`
-    (`await_child`), and a close
-    that sends `SIGTERM` and starts the 1 s `grace` timer for `SIGKILL`
-    (`retire` closes the timer and the process handle once the child is gone)
+  - captured children (`Process.spawn_captured`, `Process.output`, §10.4):
+    `spawn_child` serves both spawns, `cwd` from `dir`, both pipes read from the
+    spawn on into `out_buf` and `err_kept` held to 1 MiB of capacity (`out_cut`,
+    `err_cut`), `output` a wait like `wait` (`await_child`), and a close that
+    sends `SIGTERM` and starts the 1 s `grace` timer for `SIGKILL` (`retire`
+    closes the timer and the process handle once the child is gone)
   - the end of the run waits for captured children under one `await_exits` bound
     before it kills them (a second bound waits for the exits)
-  - the child channel (25c, §10.4 "As built (25c, the child channel)"):
+  - the child channel (§10.4):
     `Process.spawn_channel` is `spawn_child` with `channel` true:
     `agc_chan_pair` (a `uv_socketpair`, or on Windows two `uv_pipe` pairs whose
     child ends are blocking), stdio slots 3 (and 4) that hand the child ends
@@ -306,7 +282,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Design notes
 
-- **OpenSSL 3.5 (7h, in on Linux)**
+- **OpenSSL 3.5**
   - `AGENTICA_OPENSSL` picks it (`docs/vm/10-dependencies-and-platforms.md`
     §10.0).
   - The default `system` links the system OpenSSL dynamically (`pkg-config`).
@@ -344,12 +320,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `build/vm/flags` records the mode, so switching it relinks.
   - Bumping: fetch the new 3.5.x tag in the submodule, commit it, rebuild with
     `AGENTICA_OPENSSL=vendored`, rerun the TLS, sanitizer and golden tests.
-- **HTTP (7h)**
+- **HTTP**
   - The rules (codes, strict framing, the adapter's checks, the body decoder)
-    are `docs/vm/10-io-http.md` §10.6. Parity with the old evaluator is
-    black-box: well-formed messages give the same status, headers, body and
-    `Result` ok or error, and malformed input is rejected by both. Do not copy
-    evaluator quirks or its order of failing lines.
+    are `docs/vm/10-io-http.md` §10.6.
   - picohttpparser (submodule `vm/third_party/picohttpparser`, MIT or Perl,
     tag v1.4, built at the baseline without `-msse4.2`) parses and validates
     start lines and headers behind `vm/http_parse.h` (our head struct with byte
@@ -366,7 +339,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `phr_decode_chunked`), so bodies stream and are never buffered whole.
   - Tests target the adapter and check rejections and the codes that must
     match, not messages (`docs/vm/10-io-http.md` 10.6).
-- **Processes (7h, in on Linux)**
+- **Processes**
   - `vm/process.c`, `docs/vm/10-io-processes.md` §10.4.
   - The VM resolves the executable itself (`PATH` only for a bare name, never
     the working directory) and passes the absolute path to `uv_spawn`
@@ -374,9 +347,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - all three stdio piped
   - `UV_USE_IO_URING` is dropped from the child's environment only when the VM
     set it.
-  - The evaluator keeps a direction's lock after a stream timeout (a legacy bug;
-    the VM answers "process is closed")
-  - fixtures avoid that path.
+  - After a stream timeout the VM answers "process is closed"; fixtures avoid
+    that path.
   - Pool threads are started with `SIGINT`, `SIGTERM` and `SIGHUP` blocked
     (`agc_io_start` blocks them around `uv_queue_work`)
   - keep that when adding new ways into the libuv pool.
@@ -384,7 +356,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     thread: it only uses lock-free atomics and async-signal-safe calls.
   - The signal tests (`tests/test_vm_stop.py`, `tests/test_vm_diff_8.py`)
     signal the driver and the VM with `os.kill` and bound every wait.
-  - Captured children (21a) are what `std/bdd` runs its scenario VMs with: never
+  - Captured children are what `std/bdd` runs its scenario VMs with: never
     block the VM in their close (only the end-of-run cleanup may wait, bounded),
     and keep the `SIGTERM` first, since the child VM's exit path is what stops
     the programs it started.
@@ -398,7 +370,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Golden fixtures with children keep their step counts independent of timing:
     wait for an event (`wait`, a read, `output`) before a call whose result
     depends on it.
-- **TCP (7h; Linux, macOS, Windows)**: `vm/tcp.c`, `docs/vm/10-io-tls.md`
+- **TCP**: `vm/tcp.c`, `docs/vm/10-io-tls.md`
   §10.3.1 (its "Platforms" item has the host differences). An errno that
   reaches `agc_system_error` goes through `agc_net_errno` (`vm/net_os.h`),
   never a bare `-rc`: Windows libuv codes are not negated errno values. A
@@ -420,7 +392,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   count. Windows takes even a 32 MiB send whole, so a pytest case (no step
   counts) that needs a send to time out loops sends, bounded, until one
   fails (`CLIENT_PROGRAM` in `tests/test_vm_tcp.py`).
-- **TLS (7h; Linux, macOS, Windows)**
+- **TLS**
   - `TLS.connect` and `TLS.listen` in `vm/tcp.c` on the adapter of `vm/tls.h`
     (`docs/vm/10-io-tls.md` §10.3).
   - A secure `net` first loads its config in a pool job (`start_setup`), then
@@ -445,7 +417,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     since the tests and `make goldens` run from different directories).
   - Certificates come from `tests/fixtures/tls/make-certs.sh` (OpenSSL 3.4 or
     newer for the expired one).
-- **HTTP client (20a; Linux, macOS, Windows)**: `stdlib/http.agc` on
+- **HTTP client**: `stdlib/http.agc` on
   `vm/http_service.c`, `vm/http_wire.c` and the reads of `vm/tcp.c` (the
   std-only guard). The `http-client-service` and `test-client-no-leftover`
   fixtures hold the service task's rules. The `http-*` fixtures are their own
@@ -459,7 +431,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   a skip. Bumping picohttpparser (`vm/third_party/picohttpparser`): check out
   the new tag inside it, `git add` it, and rerun `vm/tests/http_parse_test.c`,
   the HTTP goldens and `tests/test_vm_http.py`.
-- **HTTP server (20c; Linux, macOS, Windows)**
+- **HTTP server**
   - `vm/http_server.c` on `vm/net.h`; `vm/http_wire.c` on the same parser and
     `vm/http_fields.c`.
   - The `http-server*` fixtures are their own peers (the `std/http` client, or a

@@ -105,11 +105,10 @@ operating system call differs.
 
 **Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
 `agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
-stack. `System.exit` calls `agc_exit`, which records `AGC_EXITED` and the
-code and `longjmp`s the same way. Only the driver (`vm/launch.c`, with
-`agentica.c`) prints and exits: it
-flushes stdout and maps the code (1..255 as is, anything else 0, like
-Racket's exit handler). SIGPIPE is ignored and every write is checked.
+stack. `System.exit` calls `agc_exit`, which records `AGC_EXITED` and the code
+and `longjmp`s the same way. Only the driver (`vm/launch.c`, with `agentica.c`)
+prints and exits: it flushes stdout and maps the code (1..255 as is, anything
+else 0). SIGPIPE is ignored and every write is checked.
 
 **Boehm GC.**
 - Allocate only through `agc_alloc` (objects that hold `agc_value`s) and
