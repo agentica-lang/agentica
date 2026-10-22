@@ -114,8 +114,9 @@ against, and kept here because no home has them:
 
 ### 39.12 Measuring it: the 6c round
 
-Pending. It runs in the full 6c round (roadmap row 10, phase 6c in
-[`06-validation.md`](../roadmap/06-validation.md)).
+Open. It runs in the full 6c round (roadmap row 10, phase 6c in
+[`06-validation.md`](../roadmap/06-validation.md)). Round 13 (`docs/eval.md`)
+is inconclusive: agents made no query call, so the arms did not differ.
 
 - Count the command calls of each run, next to the file reads (`cat`, `rg`,
   `sed`) and the `agentica check` calls (`tests/eval/run.py`).
