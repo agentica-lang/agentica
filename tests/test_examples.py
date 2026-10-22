@@ -15,6 +15,7 @@ import time
 import pytest
 
 from tests.agentica_test import ROOT, Child, agentica_version, cli, run, scaled, vm_environment, wait_readable
+from tests.spec_support import check_diagnostic
 
 EXAMPLES = ROOT / "examples"
 STEP_BUDGET = "5000000"
@@ -310,6 +311,60 @@ def test_help_reads_the_catalog_without_a_source_file():
     unknown = cli_run("help", "String.to_it", "--json")
     assert unknown.code == 2
     assert re.search("String.to_int", unknown.stderr)
+
+
+def check_table(name):
+    """The text of one function of the checker tables (compiler/check/check_tables.agc)."""
+    text = (ROOT / "compiler" / "check" / "check_tables.agc").read_text(encoding="utf-8")
+    start = text.index("export def %s()" % name)
+    return text[start:text.index("\nend\n", start)]
+
+
+def test_help_answers_the_agentica_name_of_a_name_from_another_language():
+    for name, target in [("String.to_i", "String.to_int"), ("strip", "String.trim"), ("push", "List.append"),
+                         ("value!", "Result.unwrap!"), ("Json.get", "JSON.get")]:
+        found = cli_run("help", name, "--json")
+        assert (found.code, found.stderr) == (0, ""), name
+        data = json.loads(found.stdout)
+        assert data["alias"] == name
+        assert [builtin["name"] for builtin in data["builtins"]] == [target], name
+        text = cli_run("help", name)
+        assert (text.code, text.stderr) == (0, ""), name
+        assert target in text.stdout.splitlines()[0] and name in text.stdout.splitlines()[0], name
+        assert cli_run("--ai", "help", name) == text
+    # A name that fits several types lists each of them, in name order.
+    several = json.loads(cli_run("help", "len", "--json").stdout)
+    names = [builtin["name"] for builtin in several["builtins"]]
+    assert names == sorted(names) and {"List.size", "Map.size", "String.length"} <= set(names)
+    # A kind narrows the answer to that kind.
+    assert [b["name"] for b in json.loads(cli_run("help", "Map.len", "--json").stdout)["builtins"]] == ["Map.size"]
+
+
+def test_help_keeps_the_unknown_builtin_error_for_a_name_with_no_alias():
+    for arguments in [["help", "frobnicate"], ["help", "frobnicate", "--json"], ["--ai", "help", "Nope.frobnicate"]]:
+        result = cli_run(*arguments)
+        assert (result.code, result.stdout) == (2, ""), arguments
+        assert result.stderr.startswith("agentica: unknown builtin "), arguments
+
+
+def test_every_alias_of_the_checker_tables_names_a_public_builtin():
+    catalog = {builtin["name"] for builtin in json.loads(cli_run("help", "--json").stdout)}
+    for target in re.findall(r'": "([A-Za-z]+\.[^"]+)"', check_table("method_aliases")):
+        assert target in catalog, target
+    # A foreign method name that stands for no builtin would answer `unknown builtin`.
+    for name in re.findall(r'^    "([^"]+)": \[', check_table("foreign_methods"), re.MULTILINE):
+        assert cli_run("help", name).code == 0, name
+
+
+def test_an_unknown_method_suggests_the_agentica_method(tmp_path):
+    for expression, suggested in [("r.value!", "unwrap!"), ("r.ok!", "unwrap!"), ("m.length", "size"),
+                                  ("xs.count", "size"), ('"a".contains("a")', "contains?"),
+                                  ("xs.contains?(1)", "any?"), ("(1..3).drop(1)", "drop")]:
+        source = ("def main() -> Void\n  xs: List[Int] = [1]\n  m: Map[String, Int] = {}\n"
+                  "  r: Result[Int] = ok(1)\n  puts(%s)\nend\n\n" % expression)
+        found = check_diagnostic(source, tmp_path)
+        assert found["code"] == "CHECK-UNKNOWN-METHOD", expression
+        assert suggested in found["help"], expression
 
 
 def test_help_lists_the_subcommands_the_core_rules_and_the_builtin_namespaces():

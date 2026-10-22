@@ -41,6 +41,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   dependency is read as its vendored copy, so it must be the locked files; and
   the `pkg/` library search skips `agc_libs/<name>/` for a locked package the
   importing manifest did not declare.
+- `agentica help NAME` answers a name from Ruby, Python or JS (`strip`,
+  `String.to_i`, `len`, `value!`) with the Agentica builtin it stands for;
+  `--json` gives `{"alias": NAME, "builtins": [...]}`. An unknown method
+  (`r.value!`, `m.length`, `xs.contains?`) suggests the Agentica method.
 
 ### Removed
 

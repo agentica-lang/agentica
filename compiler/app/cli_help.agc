@@ -4,15 +4,21 @@
 
 import Builtins from "../catalog/builtins"
 import {PUBLIC_NAMES} from "../catalog/builtins"
+import Model from "../catalog/builtin_model"
 import CatalogJson from "../catalog/catalog_json"
+import Tables from "../check/check_tables"
 import Ast from "../syntax/ast"
 import Suggest from "../syntax/suggest"
+import Alias from "cli_alias"
 import Reply from "cli_reply"
 import Texts from "cli_text"
 
 ## Runs `agentica help` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of it.
 ## A trailing `--json` asks for the JSON form: of the one builtin, or of every public builtin as an array (sorted by
 ## name, each element as `help NAME --json` prints it) when there is no NAME. Nothing else takes an option.
+## A NAME that is not a builtin but a name from another language (`strip`, `String.to_i`, `value!`) answers with the
+## builtins it stands for (cli_alias.agc), each under the line "`NAME` is called `Y` in Agentica"; as JSON it is
+## {"alias": NAME, "builtins": [the object of each builtin]}.
 export def help(words: List[String], style: String) -> Reply.Reply
   rest = words
   as_json = style == "json"
@@ -30,7 +36,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
   name = rest[1]
   entry = CatalogJson.public(name)
   if !entry.ok?
-    return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name)}\n")
+    return renamed(name, as_json)
   end
   if as_json
     return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!))}\n")
@@ -38,8 +44,37 @@ export def help(words: List[String], style: String) -> Reply.Reply
   return Reply.printed("#{Builtins.signature(entry.unwrap!)}\n#{entry.unwrap!.description}\n")
 end
 
-# `; did you mean "NAME"?` when a public name is close, else nothing.
+# The answer for a name that is no builtin: the builtins it stands for, else the unknown-builtin error.
+def renamed(name: String, as_json: Bool) -> Reply.Reply
+  found = Alias.targets(name)
+  if found.size == 0
+    return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name)}\n")
+  end
+  # `unwrap!` cannot fail: targets keeps only public builtins.
+  entries = found.map do |target: String| CatalogJson.public(target).unwrap! end
+  if as_json
+    answer = JSON.object({
+      "alias": JSON.from(name),
+      "builtins": JSON.array(entries.map do |entry: Model.Builtin| CatalogJson.builtin(entry) end),
+    })
+    return Reply.printed("#{JSON.encode(answer)}\n")
+  end
+  blocks = entries.map do |entry: Model.Builtin|
+    "`#{name}` is called `#{entry.name}` in Agentica\n#{Builtins.signature(entry)}\n#{entry.description}\n"
+  end
+  return Reply.printed(blocks.join("\n"))
+end
+
+# `; HINT` when the checker has help for this foreign name (`Hash.new`, `String.chomp`), else `; did you mean "NAME"?`
+# when a public name is close, else nothing.
 def suggestion(name: String) -> String
+  hint = Tables.foreign_names().get(name)
+  if !hint.ok?
+    hint = Tables.foreign_kind_methods().get(name)
+  end
+  if hint.ok?
+    return "; #{hint.unwrap!}"
+  end
   case Suggest.did_you_mean(name, PUBLIC_NAMES)
     Ast.Optional.Present(text) -> return "; #{text}"
     Ast.Optional.Absent -> return ""

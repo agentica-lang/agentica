@@ -67,7 +67,8 @@ BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "List.group_by", "Str
 OPTIONS = [
     ["--version"], ["-h"], ["--help"], ["-hx"], ["-xh"], ["-ab", "c"], ["--foo"], ["+x"], ["-"], ["+"], [],
     ["check"], ["compile"], ["help"], ["help", "Nope"],
-    ["help", "Strin.split"],
+    ["help", "Strin.split"], ["help", "String.to_i"], ["help", "strip", "--json"], ["help", "len"],
+    ["help", "String.chomp"],
     ["help", "a", "b", "c"], ["help", "HttpWire.service"], ["help", "__fail_arg"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps=5", "ok.agc"], ["--seed", "2147483648", "ok.agc"], ["--seed", "007", "ok.agc"],

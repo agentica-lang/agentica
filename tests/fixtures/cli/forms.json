@@ -751,6 +751,12 @@
   "stdout": "",
   "written": []
  },
+ "[[\"help\", \"String.chomp\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin String.chomp; use s.strip to remove surrounding whitespace; IO.gets already drops the line ending\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"help\", \"String.compare\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
@@ -773,6 +779,12 @@
   "code": 0,
   "stderr": "",
   "stdout": "String.split(s: String, separator: String) -> List[String]\nSplit text; an empty separator gives characters.\n",
+  "written": []
+ },
+ "[[\"help\", \"String.to_i\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "`String.to_i` is called `String.to_int` in Agentica\nString.to_int(s: String) -> Result[Int]\nParse signed decimal Int as a Result.\n",
   "written": []
  },
  "[[\"help\", \"Task.await\", \"--json\"], {}]": {
@@ -799,6 +811,12 @@
   "stdout": "",
   "written": []
  },
+ "[[\"help\", \"len\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "`len` is called `List.size` in Agentica\nList.size(list: List[T]) -> Int\nCount list elements.\n\n`len` is called `Map.size` in Agentica\nMap.size(map: Map[K, V]) -> Int\nCount map entries.\n\n`len` is called `Range.size` in Agentica\nRange.size(range: Range) -> Int\nCount the values; halts when the count does not fit in Int.\n\n`len` is called `Set.size` in Agentica\nSet.size(set: Set[T]) -> Int\nCount set elements.\n\n`len` is called `String.length` in Agentica\nString.length(s: String) -> Int\nCount Unicode characters.\n",
+  "written": []
+ },
  "[[\"help\", \"ok\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
@@ -809,6 +827,12 @@
   "code": 0,
   "stderr": "",
   "stdout": "ok(value: T) -> Result[T]\nok() -> Result[Void]\nConstruct a successful Result.\n",
+  "written": []
+ },
+ "[[\"help\", \"strip\", \"--json\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"alias\":\"strip\",\"builtins\":[{\"arity\":1,\"description\":\"Trim surrounding whitespace.\",\"effects\":[],\"name\":\"String.trim\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"signature\":\"String.trim(s: String) -> String\"}]}\n",
   "written": []
  },
  "[[\"help\"], {}]": {
