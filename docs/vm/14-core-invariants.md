@@ -44,6 +44,10 @@ joined the pool, and the pool waited for a FIFO that never wrote.
   cannot be made, is the call's error, never a silent fall back to the pool. A
   whole-file call (`read_text`, `write_text`) opens in the pool, then waits on
   the loop (`agc_io_start_then`).
+- **Native compute calls** (`compute def`) run on the compute pool, VM threads
+  apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
+  bound and cannot be stopped, so it never takes a libuv pool thread, and the
+  end of the run does not wait for it (§14.4). As built.
 
 Known exceptions, as built (the mechanisms are in §10.2.2):
 
@@ -152,12 +156,13 @@ reader slot (`request_cancel` in `vm/tcp.c`), as an HTTP server's waiter does
 stay in the input for the next read, whose reader lock the job's end hands on. A
 wait that has taken something keeps its result: its `done` half runs and the
 result is dropped, so a served accept's socket is closed. A pool job runs to its
-end, which §14.1 keeps bounded except for its explicit stdin exceptions. A pool
-job that goes on to wait on the loop (`agc_io_start_then`, a whole-file call on
-a FIFO) is cancelled only in that loop phase: `cancellable` in `vm/loop.c` calls
-the `cancel` half only for a job with no `work`, or one past it (`on_loop`). A
-pool kind with a `cancel` half that starts with no `more` step is
-`RUNTIME-INTERNAL` when it starts (`start_job`), never later in a cancel.
+end, which §14.1 keeps bounded except for its explicit stdin exceptions. A
+compute call runs to its end too, without bound, and its result is dropped. A
+pool job that goes on to wait on the loop (`agc_io_start_then`, a whole-file
+call on a FIFO) is cancelled only in that loop phase: `cancellable` in
+`vm/loop.c` calls the `cancel` half only for a job with no `work`, or one past
+it (`on_loop`). A pool kind with a `cancel` half that starts with no `more` step
+is `RUNTIME-INTERNAL` when it starts (`start_job`), never later in a cancel.
 `vm/tests/task_cancel_test.c` covers both phases. A task parked in the FIFO of
 stdout or stderr leaves it (`agc_output_leave`, called from `unlink_task`), and
 the next writer is woken if its text now fits; the test cancels the head of a

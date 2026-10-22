@@ -146,6 +146,17 @@ void agc_inbox_post(agc_inbox *in, agc_request *entry);
 void agc_inbox_close(agc_inbox *in);
 void agc_inbox_wake(agc_inbox *in);
 
+/* The compute pool (vm/compute.c, docs/vm/16-architecture.md §16.9, "Compute pool"): the work of the jobs that
+ * agc_io_compute starts, on at most SIZE threads of its own, in the order it came. open, submit and close run on LOOP's
+ * thread. submit gives ITEM to WORK on a pool thread and returns false when no thread exists and none can start;
+ * FINISHED(ITEM) runs on LOOP's thread once the work is over. The pool keeps the loop alive while items run. close
+ * drops the items no thread took, joins the idle threads and leaves a thread that still works to end by itself, after
+ * which its item is never finished. */
+typedef struct agc_compute agc_compute;
+agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item));
+bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item);
+void agc_compute_close(agc_compute *pool);
+
 /* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as
  * AGC_JOB_PENDING and is set once, by the first thread that gets a CAS through (release): the winner owns the wake, a
  * loser changes nothing. A reader takes it with acquire, so it sees what the winner wrote before it. The count starts

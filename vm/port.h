@@ -658,6 +658,11 @@ bool agc_io_here(agc_vm *vm);
 #define AGC_JOB_FLUSH 1u
 #define AGC_JOB_QUIET 2u
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);
+/* agc_io_start for a native call that may run without bound (a `compute def`): the kind's `work` runs on the compute
+   pool (vm/compute.c), never on the libuv pool, which takes only bounded work (docs/vm/14-core-invariants.md §14.1).
+   The task parks; there is no deadline, and like any pool work the call runs to its end, so a cancel only detaches the
+   job and its result is dropped. */
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data);
 #if !defined(_WIN32)
 void agc_io_block_stop(sigset_t *saved);
 #endif

@@ -11,16 +11,21 @@ from tests.agentica_test import cli, run
 VALID = """extern "libm.so.6"
   ## The cosine of x.
   export def cos(x: C.Double) -> C.Double
+  ## Runs on the compute pool.
+  export compute def crunch(n: C.Int64) -> C.Double
 
   def labs(n: C.Int64) -> C.Int64
 end
 
 extern "/opt/peer/libpeer.so"
   def peer(a: C.Int, b: C.Bool, s: C.String) -> Void
+  compute def tick() -> Void
 end
 
 def main() -> Void
   peer(labs(-1), cos(0.0) > 0.5, "x")
+  tick()
+  puts(crunch(3) + 0.5)
 end
 """
 
@@ -92,6 +97,8 @@ def test_an_extern_parameter_has_no_default(tmp_path):
     ('extern "libc.so.6"\n  def abs(n: C.Int) -> C.Int\n', (3, 1)),
     ('extern "libc.so.6" def abs(n: C.Int) -> C.Int\nend\n', (1, 20)),
     ('extern <<~A\n  a\n  b\nA\n  def abs(n: C.Int) -> C.Int\nend\n', (1, 8)),
+    ('extern "libc.so.6"\n  compute export def abs(n: C.Int) -> C.Int\nend\n', (2, 3)),
+    ('extern "libc.so.6"\n  compute abs(n: C.Int) -> C.Int\nend\n', (2, 3)),
 ])
 def test_an_extern_block_holds_only_signatures(tmp_path, text, start):
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-UNEXPECTED-TOKEN", start)
@@ -123,6 +130,12 @@ def test_an_extern_block_follows_the_blank_line_rule(tmp_path):
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-MISSING-BLANK-LINE", (3, 1))
 
 
-def test_extern_is_still_a_name_outside_the_top_level(tmp_path):
-    text = 'def main() -> Void\n  extern = 1\n  puts(extern)\nend\n'
+def test_a_compute_def_belongs_in_an_extern_block(tmp_path):
+    text = 'compute def abs(n: Int) -> Int\n  return n\nend\n'
+    assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-TOP-LEVEL-STATEMENT", (1, 1))
+
+
+def test_extern_and_compute_are_still_names_elsewhere(tmp_path):
+    text = 'def compute(n: Int) -> Int\n  return n\nend\n\n' \
+           'def main() -> Void\n  extern = 1\n  puts(compute(extern))\nend\n'
     assert check(source(tmp_path, text)).code == 0
