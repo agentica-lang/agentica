@@ -4,7 +4,8 @@ fixtures/child-channel.agc is the program; fixtures/child-channel-peer.js is the
 the child side, and it is the child the parent side spawns. The peer opens the channel the way the system does, one
 socket pair at descriptor 3, or one pipe per direction at 3 and 4 on Windows. The cases that need a shell or a
 FIFO are in test_vm_child_channel_posix.py, together with the check that a plain child inherits nothing (the
-`spawning` mode); vm/tests/process_test.c checks that, and the take itself, in C.
+`spawning` mode); vm/tests/process_test.c checks that, and the take itself, in C. The refusal of a descriptor that is
+a file or a device is there for descriptor 3, and here for 3 and 4 as a file and NUL on Windows.
 """
 import json
 import os
@@ -60,6 +61,12 @@ def test_child_side_lines_partial_lines_eof_timeouts_and_no_channel(bytecode, no
         assert answer[name]["stdout"] == bare, name
     for name in ("serve", "idle", "bare", "bare_marker_only", "bare_marker_pair_only"):
         assert answer[name]["exit"] == 0, (name, answer[name]["stderr"])
+    if os.name == "nt":
+        # Descriptors 3 and 4 that are a file, or NUL, are no channel (the POSIX forms: test_vm_child_channel_posix.py).
+        refused = lines('read: error("process: no parent channel")', 'send: error("process: no parent channel")', "ready")
+        for kind in ("file", "device"):
+            assert (answer["pinned"][kind]["exit"], answer["pinned"][kind]["stdout"]) == (0, refused), kind
+        assert answer["pinned"]["file"]["content"] == ""
 
 
 def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, node):

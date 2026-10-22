@@ -5,10 +5,12 @@ fixtures, the compile/run helpers and the embedded Agentica programs; the
 Windows suites reuse the fixtures and the duck-typed TestCase adapter.
 """
 import os
+import subprocess
 
 import pytest
 
-from tests.agentica_test import Child, compile_agc, output_lines, run_vm, vm_binary, vm_command, vm_environment
+from tests.agentica_test import (WINDOWS, Child, compile_agc, output_lines, run_vm, vm_binary, vm_command,
+                                 vm_environment)
 from tests.remove_sandbox_support import require_remove_sandbox
 from tests.windows_support import assert_rename_race
 
@@ -130,6 +132,17 @@ def work(tmp_path):
     path = tmp_path / "work"
     path.mkdir()
     return path.resolve()
+
+
+def symlink(link, target, directory=False):
+    """Make the symbolic link `link` to `target` (a name relative to the link's folder is kept as it is). Windows uses
+    mklink, as its other link tests do: a file link, or a folder link with `directory`."""
+    if not WINDOWS:
+        os.symlink(target, link)
+        return
+    made = subprocess.run(["cmd.exe", "/d", "/c", "mklink", *(["/D"] if directory else []), str(link), str(target)],
+                          capture_output=True, text=True, check=False)
+    assert made.returncode == 0, made.stdout + made.stderr
 
 
 def compile_work_text(work, text, name="program"):

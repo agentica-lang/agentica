@@ -8,7 +8,9 @@
 // when it asks for two extra pipes.
 "use strict";
 const fs = require("fs");
-const { MARKER, launch, writeAll } = require("./child_channel.js");
+const os = require("os");
+const path = require("path");
+const { MARKER, WINDOWS, launch, writeAll } = require("./child_channel.js");
 
 // ---- the parent side: this program drives a VM that is the child ----
 
@@ -48,8 +50,31 @@ function held(vm, bytecode, mode, options) {
   return finish(peer, Date.now());
 }
 
+// Windows: descriptors 3 and 4 that are a file, or NUL, behind the marker "3,4" (the POSIX form, with the descriptor 3
+// of a file, a device or a FIFO, is in child-channel-peer.py): the child must refuse them as a channel.
+async function pinned(vm, bytecode) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "agentica-pinned-"));
+  try {
+    const answers = {};
+    for (const kind of ["file", "device"]) {
+      const target = kind === "file" ? path.join(directory, "plain.txt") : "NUL";
+      const fd = fs.openSync(target, "w+");
+      try {
+        answers[kind] = await held(vm, bytecode, "pinned", { channel: false, pins: [fd, fd] });
+      } finally {
+        fs.closeSync(fd);
+      }
+    }
+    answers.file.content = fs.readFileSync(path.join(directory, "plain.txt"), "utf8");
+    return answers;
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+}
+
 async function drive(vm, bytecode) {
   const answer = {};
+  if (WINDOWS) answer.pinned = await pinned(vm, bytecode);
   answer.serve = await serve(vm, bytecode);
   answer.idle = await held(vm, bytecode, "idle");
   answer.bare = await held(vm, bytecode, "bare", { marker: null });

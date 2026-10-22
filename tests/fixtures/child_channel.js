@@ -114,16 +114,18 @@ function stdoutFile() {
 // Starts `argv` with a channel (or only the marker, or none) and returns the ways to use it.
 // The marker defaults to the one of this system; null leaves it out. `stdin` and `stderr` are "pipe", "ignore" or
 // "inherit" (stdin defaults to "ignore", stderr to "pipe"); `stdout` is "pipe", or "file" for a stdout that keeps its
-// order with the channel (see above), which `takeStdout()` and `stdout()` then read.
+// order with the channel (see above), which `takeStdout()` and `stdout()` then read. `pins` is a list of descriptors
+// of the peer (a file, NUL) that the child gets at 3, 4, ... in place of the channel pipes, to see them refused.
 function launch(
   argv,
-  { channel = true, marker = WINDOWS ? "3,4" : "3", stdin = "ignore", stderr = "pipe", stdout = "pipe" } = {}
+  { channel = true, marker = WINDOWS ? "3,4" : "3", stdin = "ignore", stderr = "pipe", stdout = "pipe", pins = [] } = {}
 ) {
   const env = Object.assign({}, process.env);
   delete env[MARKER];
   if (marker !== null) env[MARKER] = marker;
   const [written, read] = stdout === "file" ? stdoutFile() : [null, null];
   const stdio = [stdin, stdout === "file" ? written : "pipe", stderr];
+  stdio.push(...pins);
   if (channel) stdio.push("pipe");
   if (channel && WINDOWS) stdio.push("pipe");
   let child;
