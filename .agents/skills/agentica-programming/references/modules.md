@@ -200,7 +200,9 @@ import Sqlite from "pkg/sqlite/db"
   dependency only (not a dependency: `PKG-DEPENDENCY-UNKNOWN`). It also makes a
   missing or stale lock right. A commit pin never moves. A bad name, URL, tag or
   commit on the command line is a usage error (exit 2). A lock that cannot be
-  written is `PKG-WRITE`. Nothing is written when a step fails.
+  written, or a manifest that changed during the fetch, is `PKG-WRITE`. Nothing
+  is written when a step fails; if only the manifest write fails, run
+  `agentica update` to make the lock match it again.
 - The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte
   stream. For each `.agc` file below the package folder, in bytewise order of
   its path relative to the folder (written with `/`), the stream holds the

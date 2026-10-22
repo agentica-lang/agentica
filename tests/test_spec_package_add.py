@@ -7,6 +7,7 @@ writers with the readers (`install` and a build read back what was written). Cas
 path, never message text (AGENTS.md).
 """
 import json
+import os
 
 import pytest
 
@@ -53,6 +54,12 @@ def lock_of(ws, *entries):
     return ws.lock_text()
 
 
+def add_greeter_and_tools(ws, remotes):
+    """`add greeter`, which brings tools along: both are added."""
+    result = plain(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0")
+    assert (result.code, result.stdout) == (0, "added greeter@v1.0.0\nadded tools@v1\n"), result.stderr
+
+
 def read(ws, name):
     return (ws.project / name).read_bytes().decode("utf-8")
 
@@ -64,8 +71,7 @@ def test_add_writes_the_manifest_and_the_lock_with_the_dependencies_of_the_packa
     (ws.project / "agentica.toml").write_text(before, encoding="utf-8")
     (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
 
-    result = plain(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0")
-    assert (result.code, result.stdout) == (0, "added greeter@v1.0.0\nadded tools@v1\n"), result.stderr
+    add_greeter_and_tools(ws, remotes)
 
     # The manifest is the old text and one new table; the lock has the dependency of the package too, in the layout of 05b.
     assert read(ws, "agentica.toml") == before + "\n[dependencies]\n" + line(remotes, tag="v1.0.0")
@@ -94,14 +100,15 @@ def test_add_writes_the_manifest_and_the_lock_with_the_dependencies_of_the_packa
      '[dependencies]\n# the helpers\ntools = {tools}  # pinned\n{line}\n# the style\n[style]\nmax_line_width = 100\n'),
     ('[dependencies.tools]\ngit = "{tools_git}"\ntag = "v1"\n', "",
      '[dependencies.tools]\ngit = "{tools_git}"\ntag = "v1"\n\n[dependencies]\n{line}'),
+    ('[dependencies]\r\ntools = {tools}', "", '[dependencies]\r\ntools = {tools}\r\n{line_bare}'),
 ], ids=["an empty file", "no final newline", "blank lines at the end", "CRLF line endings", "an empty table",
-        "an entry, comments and the next table", "sub-tables"])
+        "an entry, comments and the next table", "sub-tables", "CRLF, the last entry has no line ending"])
 def test_add_changes_only_one_line_of_the_manifest_whatever_its_layout(ws, remotes, before, middle, after):
     remotes.publish(TOOLS, TOOLS_FILES, tag="v1", annotated=False)
     remotes.publish(GREETER, {"greet.agc": "# greet\n"}, tag="v1.0.0")
     tools = inline_table(dependency(remotes.url(TOOLS), tag="v1"))
     new = line(remotes, tag="v1.0.0")
-    fill = {"line": new, "line_crlf": new.replace("\n", "\r\n"), "tools": tools, "tools_git": remotes.url(TOOLS)}
+    fill = {"line": new, "line_crlf": new.replace("\n", "\r\n"), "line_bare": new.rstrip("\n"), "tools": tools, "tools_git": remotes.url(TOOLS)}
     (ws.project / "agentica.toml").write_bytes(before.format(**fill).encode("utf-8"))
 
     result, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0")
@@ -278,3 +285,69 @@ def test_a_package_that_asks_for_a_commit_by_a_part_of_its_id_is_pkg_fetch(ws, r
     _, problem = command(ws, remotes, "update")
     folder = ws.folder(remotes.url(GREETER), greeter_commit)
     assert_at_key(problem, "PKG-FETCH", folder / "agentica.toml", "dependencies.tools.ref")
+
+
+def test_packages_that_ask_for_each_other_and_for_themselves_are_locked_once(ws, remotes):
+    # greeter asks for tools and for itself, and tools asks for greeter: a name is settled once, so this ends.
+    tools_manifest_text = 'name = "tools"\n\n[dependencies]\ngreeter = %s\n' % inline_table(
+        dependency(remotes.url(GREETER), tag="v1.0.0"))
+    greeter_manifest = tools_manifest(remotes) + 'greeter = %s\n' % inline_table(
+        dependency(remotes.url(GREETER), tag="v1.0.0"))
+    remotes.publish(TOOLS, {**TOOLS_FILES, "agentica.toml": tools_manifest_text}, tag="v1", annotated=False)
+    publish_greeter(remotes, manifest=greeter_manifest)
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    add_greeter_and_tools(ws, remotes)
+    assert read(ws, "agentica.lock").count("[[package]]") == 2
+
+    # `add` of a name that is locked as the dependency of a package says so, and `update` takes direct names only
+    # and no option.
+    (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    result = plain(ws, remotes, "add", "tools", remotes.url(TOOLS), "--tag", "v1")
+    assert (result.code, result.stdout.splitlines()[0]) == (0, "added tools@v1"), result.stderr
+    _, problem = command(ws, remotes, "update", "greeter")
+    assert_at_key(problem, "PKG-DEPENDENCY-UNKNOWN", ws.project / "agentica.toml", "")
+    for word in ["--help", "-x"]:
+        assert plain(ws, remotes, "update", word).code == 2
+
+
+def git_shim(tmp_path, body):
+    """A folder to put first on PATH whose `git` runs `body` (shell) and then the real git. $PPID is the agentica
+    process, which started git."""
+    folder = tmp_path / "shim"
+    folder.mkdir()
+    script = folder / "git"
+    script.write_text("#!/bin/sh\n%s\nPATH=%s exec git \"$@\"\n" % (body, os.environ["PATH"]), encoding="utf-8")
+    script.chmod(0o755)
+    return str(folder) + os.pathsep + os.environ["PATH"]
+
+
+def test_add_refuses_a_manifest_that_changed_while_the_packages_were_fetched(ws, remotes, tmp_path):
+    remotes.publish(GREETER, {"greet.agc": "# greet\n"}, tag="v1.0.0")
+    manifest = ws.project / "agentica.toml"
+    manifest.write_text('name = "app"\n', encoding="utf-8")
+    path = git_shim(tmp_path, 'echo "# edited meanwhile" >> %s' % manifest)
+    result, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0", PATH=path)
+    assert_at_key(problem, "PKG-WRITE", manifest, "")
+    assert read(ws, "agentica.toml").startswith('name = "app"\n# edited meanwhile\n')
+    assert "greeter" not in read(ws, "agentica.toml")
+    assert sorted(path.name for path in ws.project.iterdir()) == ["agentica.toml"]
+
+
+def test_a_manifest_that_cannot_be_written_after_the_lock_is_pkg_write_and_update_repairs_it(ws, remotes, tmp_path):
+    files = {"greet.agc": "# greet\n"}
+    remotes.publish(GREETER, files, tag="v1.0.0")
+    manifest = ws.project / "agentica.toml"
+    manifest.write_text('name = "app"\n', encoding="utf-8")
+    # A folder where the new manifest is written first makes that write fail, after the lock was written.
+    path = git_shim(tmp_path, 'mkdir -p %s/agentica.toml.new-$PPID' % ws.project)
+    result, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0", PATH=path)
+    assert_at_key(problem, "PKG-WRITE", manifest, "")
+    assert "agentica update" in problem["help"]
+    assert read(ws, "agentica.toml") == 'name = "app"\n'
+    assert read(ws, "agentica.lock").count("[[package]]") == 1
+    assert not [entry for entry in ws.project.iterdir() if ".new-" in entry.name or ".old-" in entry.name]
+
+    # The lock has a package that the manifest does not ask for: `update` makes them agree again.
+    result = plain(ws, remotes, "update")
+    assert (result.code, result.stdout) == (0, "removed greeter\n"), result.stderr
+    assert read(ws, "agentica.lock") == "version = 1\n"

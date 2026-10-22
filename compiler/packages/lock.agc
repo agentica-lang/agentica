@@ -68,7 +68,10 @@ end
 export def encode(packages: List[Locked]) -> String
   sorted = packages.sort_by do |locked| locked.name end
   tables = sorted.map do |locked| package_table(locked) end
-  root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT), "package": Toml.Value.Array(tables)})
+  root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT)})
+  if tables.size > 0
+    root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT), "package": Toml.Value.Array(tables)})
+  end
   # The keys are fixed and every value is a string or the version, so std/toml has no reason to refuse them.
   return Toml.encode(root).unwrap!
 end

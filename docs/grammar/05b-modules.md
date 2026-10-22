@@ -267,7 +267,13 @@ import Sqlite from "pkg/sqlite/db"
   names the manifest that asks for it and `dependencies.<name>.git` (or `.tag`,
   `.ref`), the same codes as `install`. Nothing is written when a step fails,
   and the lock is written before the manifest. A file that cannot be written is
-  `PKG-WRITE`. The lock is sorted by name, in the layout above,
+  `PKG-WRITE`; each file is written to a new file beside it that is renamed
+  into place, and the old one is put back if a step fails. A manifest that
+  changed while the packages were fetched is not overwritten (`PKG-WRITE`,
+  nothing written), and a manifest that cannot be written after the lock was
+  says so in the help: `agentica update` makes the lock match it again. The
+  lock is sorted by name (just `version = 1` when it is empty), in the layout
+  above,
   so it has the same bytes when nothing changed.
   - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
     that order. The commit of `--ref` is the whole id (40 or, for SHA-256, 64

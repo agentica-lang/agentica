@@ -21,6 +21,8 @@ import Texts from "cli_text"
 
 # The deadline of the write of a file, in milliseconds.
 WRITE_TIMEOUT_MS = 60_000
+# More help for a manifest that could not be written after the lock was.
+LOCK_WRITTEN = "; agentica.lock was written already, so run `agentica update` to make it match agentica.toml again"
 
 # What `add` was asked: the local name and where the package comes from.
 struct Request
@@ -39,7 +41,8 @@ end
 
 ## Runs `update`. `words` are the ones after the command: none for every package, or the name of a dependency.
 export def update(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
-  if words.size > 1
+  # A word that starts with "-" is an option nobody knows, not a name.
+  if words.size > 1 or (words.size == 1 and words[0].starts_with?("-"))
     return Reply.Answer.Printed(Reply.failed(2, Texts.usage_text()))
   end
   name = ""
@@ -97,9 +100,21 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   edited = ManifestEdit.add_dependency(text, request.name, request.source)
   manifest = try added_manifest(found.manifest, edited, request)
   packages = try PackageResolve.resolve(settings, manifest, found.lock, PackageResolve.Refresh(all: false, name: ""))
-  try save(found.lock.file, Lock.encode(packages))
-  try save(file, edited)
-  return ok(report(found.lock, packages))
+  try unchanged(settings, file, text)
+  try save(settings, found.lock.file, Lock.encode(packages), "")
+  try save(settings, file, edited, LOCK_WRITTEN)
+  return ok(report(found.lock, packages, request.name))
+end
+
+# The fetch takes a while, and the edit is of the text read before it: a manifest changed meanwhile is not overwritten.
+def unchanged(settings: Env.Settings, file: String, text: String) -> Result[Void]
+  now = Reader.read_text(settings.workspace, Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID"))
+  if now.ok? and now.unwrap! == text
+    return ok()
+  end
+  message = "#{file} changed while the packages were fetched"
+  help = Failure.hint("nothing was written; run the command again")
+  return error(Failure.fail_file(file, "PKG-WRITE", message, help))
 end
 
 # The manifest as the edit made it, which must be the old one and one more dependency: an odd layout (the table written
@@ -141,30 +156,33 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
   packages = try PackageResolve.resolve(settings, manifest, found.lock, refresh)
   # A project with no dependency and no lock stays as it is: nothing asks for a lock.
   if packages.size > 0 or settings.workspace.file_exists.call(found.lock.file)
-    try save(found.lock.file, Lock.encode(packages))
+    try save(settings, found.lock.file, Lock.encode(packages), "")
   end
-  return ok(report(found.lock, packages))
+  return ok(report(found.lock, packages, ""))
 end
 
-# Writes the whole file. It is small and written in one call; a file that cannot be written is PKG-WRITE.
-def save(file: String, text: String) -> Result[Void]
-  written = SaveFile.bytes(file, String.to_bytes(text), WRITE_TIMEOUT_MS)
+# Replaces the file whole (SaveFile.replace puts the old one back if a step fails). A file that cannot be written is
+# PKG-WRITE; `later` is more help for the user, when a file was written before this one.
+def save(settings: Env.Settings, file: String, text: String, later: String) -> Result[Void]
+  replacing = settings.workspace.file_exists.call(file)
+  written = SaveFile.replace(file, String.to_bytes(text), replacing, WRITE_TIMEOUT_MS)
   if !written.ok?
     message = "cannot write #{file}"
-    return error(Failure.fail_file(file, "PKG-WRITE", message, Failure.hint(written.message)))
+    return error(Failure.fail_file(file, "PKG-WRITE", message, Failure.hint("#{written.message}#{later}")))
   end
   return ok()
 end
 
 # What changed in the lock, one line each in the order of the new lock: added, updated (another commit or pin),
-# removed. Nothing changed is said once.
-def report(old: Lock.Lock, packages: List[Lock.Locked]) -> String
+# removed. Nothing changed is said once. `added` is the name `add` was asked for, which is always said to be added,
+# even when the lock had it already as a dependency of a package.
+def report(old: Lock.Lock, packages: List[Lock.Locked], added: String) -> String
   lines: List[String] = []
   ordered = packages.sort_by do |item| item.name end
   for locked in ordered
     label = "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
     before = Lock.find(old, locked.name)
-    if !before.ok?
+    if !before.ok? or locked.name == added
       lines = lines.push("added #{label}")
     elsif before.unwrap!.commit != locked.commit or !GitSource.same?(before.unwrap!.source, locked.source)
       lines = lines.push("updated #{label}")

@@ -24,6 +24,10 @@ export def add_dependency(text: String, name: String, source: GitSource.Source) 
   at = after_last_entry(lines, header)
   # A CRLF file splits at the LF, so each of its lines keeps the CR: the new line needs one too.
   carriage = newline.slice(0, newline.length - 1)
+  if at == lines.size
+    # The entry is the last line, which has no line ending: it gets one, and the new line has none, as the file had.
+    return lines.take(at - 1).push("#{lines[at - 1]}#{carriage}").push(entry).join("\n")
+  end
   return lines.take(at).push("#{entry}#{carriage}").concat(lines.drop(at)).join("\n")
 end
 

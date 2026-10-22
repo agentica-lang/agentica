@@ -152,7 +152,10 @@ The exact command line is decided in each phase.
     `PKG-MANIFEST-MISSING`; `add` does not make one.
   - Nothing is written unless everything worked. The lock is written first
     (a lock with a spare package is good, a manifest the lock lacks is
-    `PKG-LOCK-STALE`), then the manifest. A write that fails is `PKG-WRITE`.
+    `PKG-LOCK-STALE`), then the manifest. A write that fails is `PKG-WRITE`; a
+    file is written beside the old one and renamed into place, and a manifest
+    that changed during the fetch is refused (`PKG-WRITE`). If only the
+    manifest write fails, `agentica update` repairs the lock.
   - A name, URL, tag or commit that the manifest would refuse, and a wrong
     number of words, are usage errors (exit 2). A `--ref` that is a part of the
     id is refused: `git fetch` takes whole ids only. Tags are fetched from
