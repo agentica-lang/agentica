@@ -114,7 +114,7 @@ export def resolve(
   scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
   resolved = resolve_into(workspace, cache, place, scratch, pin)
   # As in fetch: a temporary folder that cannot be removed does not change the answer.
-  Path.remove(temp, FS_TIMEOUT_MS)
+  remove_temp(temp)
   return resolved
 end
 
@@ -170,8 +170,24 @@ def fetch(
   filled = fetch_into(workspace, place, scratch, target, locked)
   # A folder that cannot be removed stays hidden in the cache root, and the result of the install stands: the failure
   # to clean up is not worth failing a fetch that worked (or hiding the error of one that did not).
-  Path.remove(temp, FS_TIMEOUT_MS)
+  remove_temp(temp)
   return filled
+end
+
+# git writes its objects read-only and Path.remove refuses a read-only entry on Windows, so `attrib` clears the
+# attribute of the whole tree first. A failure of either step leaves the folder, as before. attrib runs in the working
+# folder, not in `temp`: a running child holds its folder open on Windows, and then Path.remove could not remove it.
+def remove_temp(temp: String) -> Void
+  if System.os() == "windows"
+    pattern = Paths.join(temp, "*").replace("/", "\\")
+    spawned = Process.spawn_captured("attrib", ["-R", "/S", "/D", pattern], ".", FS_TIMEOUT_MS)
+    if spawned.ok?
+      child = spawned.unwrap!
+      Process.wait(child, FS_TIMEOUT_MS)
+      Process.close(child)
+    end
+  end
+  Path.remove(temp, FS_TIMEOUT_MS)
 end
 
 # A new folder that only this process uses: mkdir_private fails when the name exists, so two installs never share one.

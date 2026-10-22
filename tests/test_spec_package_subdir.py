@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from tests.agentica_test import cli, run
-from tests.package_support import (LEAKS_THE_CACHE, assert_at_key, build, cached_files, command, dependency,  # noqa: F401
+from tests.package_support import (assert_at_key, build, cached_files, command, dependency,  # noqa: F401
                                     environment, git, inline_table, lock_entry, no_git_path, package_hash, problem_of,
                                     remotes, remove_tree, run_json, ws)
 
@@ -71,7 +71,6 @@ def project(ws, remotes):
     return commit
 
 
-@LEAKS_THE_CACHE
 def test_two_folders_of_one_repository_are_two_packages_and_install_keeps_only_the_declared_folders(ws, remotes, tmp_path):
     commit = project(ws, remotes)
     result, problem = run_json("install", ws, remotes)
