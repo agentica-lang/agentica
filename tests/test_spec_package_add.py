@@ -13,7 +13,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import cli, run
+from tests.agentica_test import WINDOWS, cli, known_issue, run
 from tests.package_support import (BANG, GREET, MAIN, assert_at_key, command, dependency, environment,  # noqa: F401
                                     git, inline_table, lock_entry, no_git_path, remotes, ws)
 
@@ -59,6 +59,7 @@ def read(ws, name):
     return (ws.project / name).read_bytes().decode("utf-8")
 
 
+@known_issue(WINDOWS, 598, "the package cache keeps a .tmp-* folder after a fetch, because git writes its objects read-only and Path.remove refuses them")
 def test_add_writes_the_manifest_and_the_lock_with_the_dependencies_of_the_package_and_a_program_runs(ws, remotes, tmp_path):
     tools_commit = remotes.publish(TOOLS, TOOLS_FILES, tag="v1", annotated=False)
     files, greeter_commit = publish_greeter(remotes)

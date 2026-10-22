@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import cli, run
+from tests.agentica_test import WINDOWS, cli, known_issue, run
 from tests.package_support import (assert_at_key, cached_files, command, dependency, environment, git,  # noqa: F401
                                     inline_table, lock_entry, no_git_path, package_hash, problem_of, remotes, remove_tree,
                                     run_json, ws)
@@ -75,6 +75,7 @@ def build(ws, remotes, **extra):
     return run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment(ws, remotes, **extra))
 
 
+@known_issue(WINDOWS, 598, "the package cache keeps a .tmp-* folder after a fetch, because git writes its objects read-only and Path.remove refuses them")
 def test_two_folders_of_one_repository_are_two_packages_and_install_keeps_only_the_declared_folders(ws, remotes, tmp_path):
     commit = project(ws, remotes)
     result, problem = run_json("install", ws, remotes)

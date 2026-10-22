@@ -53,6 +53,8 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 KNOWN_ISSUES: dict[int, str] = {
     568: "the bytecode cache trusts any real folder on Windows (no owner or ACL check), and its link cases have no test; "
          "Native.wait_* has no Windows port (libuv polls only sockets there)",
+    598: "the package cache keeps a hidden .tmp-* folder (a bare git repository) after every fetch on Windows: "
+         "git writes its objects read-only and Path.remove refuses them",
     548: "native calls (extern functions) are not built on macOS yet; macOS refuses them at load",
 }
 

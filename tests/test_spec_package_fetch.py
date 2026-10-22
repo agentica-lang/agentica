@@ -9,7 +9,7 @@ import os
 
 import pytest
 
-from tests.agentica_test import cli, run
+from tests.agentica_test import WINDOWS, cli, known_issue, run
 from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment, git,  # noqa: F401
                                     lock_entry, no_git_path, package_hash, remotes, run_json, ws)
 
@@ -38,6 +38,7 @@ def one_package(ws, remotes, files=None):
     return commit
 
 
+@known_issue(WINDOWS, 598, "the package cache keeps a .tmp-* folder after a fetch, because git writes its objects read-only and Path.remove refuses them")
 def test_install_fetches_a_tag_and_a_commit_then_a_program_runs_from_the_cache_with_no_git(ws, remotes, tmp_path):
     tools_files = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk",
                    ".gitattributes": "*.agc text eol=crlf\n"}
