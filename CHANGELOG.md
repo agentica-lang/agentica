@@ -17,8 +17,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   compute pool while the task waits and other tasks run.
 - `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable` park a
   task until a descriptor of native code can be read or written.
+- `extern` blocks call native libraries on Windows x64 too; `Native.wait_*`
+  returns an error there for now.
 - `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
   `List`.
+- Ruby's other method names work: `collect`, `select`, `inject`, `detect`,
+  `member?` and `key?`; `help` and the diagnostics show `map`, `select`,
+  `reduce`, `find`, `include?` and `key?`.
+- `List.first` and `List.last` (`RUNTIME-INDEX-OUT-OF-RANGE` on an empty list)
+  and `empty?` on `List`, `Map` and `String`.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and

@@ -420,7 +420,7 @@ more = Map.put(stock, "kiwi", 7)
 - Maps are immutable: there is no `m[key] = value`, and `Map.put` returns a new
   map. There is no map equality and no `for` over a map; iterate `Map.keys`,
   which is in insertion order.
-- Lookup, `Map.has_key?` and `Map.put` take effectively constant time;
+- Lookup, `Map.key?` and `Map.put` take effectively constant time;
   `Map.keys` is O(n).
 
 ### Sets

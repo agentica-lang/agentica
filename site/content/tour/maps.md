@@ -58,7 +58,7 @@ def main() -> Void
   puts(stock.get("kiwi", 0))
   puts(stock.get("apple"))
   puts(stock.get("kiwi").ok?)
-  puts(stock.has_key?("apple"))
+  puts(stock.key?("apple"))
 end
 ```
 

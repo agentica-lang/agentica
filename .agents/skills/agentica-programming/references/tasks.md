@@ -214,7 +214,7 @@ Every call has a timeout: 0 tries once, a negative value is
 in order and waiting tasks are served in the order they began waiting.
 
 `ch.lazy(timeout_ms)` reads the channel as a `Lazy` until it is closed and
-drained (`lazy.md`): `jobs.lazy(5000).filter do |n| n > 0 end.reduce(0) do |s,
+drained (`lazy.md`): `jobs.lazy(5000).select do |n| n > 0 end.reduce(0) do |s,
 n| s + n end`.
 
 `closed?` is `true` once the channel is closed and every value was received,
@@ -292,7 +292,7 @@ its capacity gives backpressure and `recv` is `next`.
 
 ## One form per job
 
-- Change, select or combine list items: `map`, `filter`, `reduce` (eager).
+- Change, select or combine list items: `map`, `select`, `reduce` (eager).
 - A running total or a value built in a loop: `reduce`; a `for` loop (its body
   can assign outer variables) only to update several at once.
 - Run over a list at the same time, a few at a time, a timeout each, results in

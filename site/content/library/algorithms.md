@@ -54,7 +54,7 @@ def shortest_path(graph: Map[String, List[String]], start: String, goal: String)
       return ok(steps)
     end
     for next in graph.get(node, [])
-      if not distance.has_key?(next)
+      if not distance.key?(next)
         distance = distance.put(next, steps + 1)
         queue = queue.push(next)
       end
@@ -97,7 +97,7 @@ def fib(n: Int, cache: Map[Int, Int]) -> Memo
   if n < 2
     return Memo(value: n, cache: cache)
   end
-  if cache.has_key?(n)
+  if cache.key?(n)
     return Memo(value: cache[n], cache: cache)
   end
   left = fib(n - 1, cache)

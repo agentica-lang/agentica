@@ -9,9 +9,13 @@ method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a field.
 Structs and enums have no methods.
 
 Ruby aliases are the module functions named in the library pages: `strip`,
-`include?`, `start_with?`, `end_with?`, `push`, `join`, `to_f`, and `to_s` and
-`inspect` on any data value. `length` and `size` both work on `String`, `List`,
-`Map`, `Set` and `Range`, as in Ruby. Two differ from Ruby: `to_i`
+`include?`, `start_with?`, `end_with?`, `push`, `join`, `select`, `key?`,
+`to_f`, and `to_s` and `inspect` on any data value. Ruby's other names for a
+method work too, and the texts show only the first: `length` and `size` on
+`String`, `List`, `Map`, `Set` and `Range`; `collect` for `map`, `inject` for
+`reduce` and `detect` for `find` (on `List` and `Lazy`); `member?` for
+`include?` on `Set` and `Range`; `include?` and `member?` for `key?` on `Map`.
+Two differ from Ruby: `to_i`
 and `to_f` on text return a `Result` (`"abc".to_i` is an error, not `0`), and
 `to_i!` and `to_f!` halt on bad text. An unknown method is
 `CHECK-UNKNOWN-METHOD`.
@@ -40,7 +44,7 @@ whose generic functions the checker treats specially. Signatures are in
 and
 [`library/data-structures/set.md`][agentica-link-3].
 
-Callbacks (`List.map`, `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`,
+Callbacks (`List.map`, `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`,
 and the Enumerable methods below) take a block, `&name` or a function variable.
 Each runs once per element, left to right, under the caller's budget. Parameter
 and return types must match exactly, and a `map` callback returns data, not
@@ -50,7 +54,7 @@ element.
 
 Collection operations preserve their inputs. Costs exclude callback work.
 
-- `List.map` and `List.filter` are O(n). `List.reduce` folds left, calling
+- `List.map` and `List.select` are O(n). `List.reduce` folds left, calling
   `f(accumulator, item)`; an empty list gives the initial value.
 - `xs.push` (`List.append`) takes near constant time, so building a list with
   n pushes is O(n). `List.concat` joins lists of one element type: O(b) when the
@@ -93,15 +97,19 @@ Collection operations preserve their inputs. Costs exclude callback work.
   The first element wins a tie. A NaN key never wins unless every key is NaN,
   and then the first element wins. `String` keys compare with `String.compare`.
 - `Map.each` calls `f(key, value)` for each entry in insertion order and gives
-  nothing back. `Map.filter` keeps the entries `f(key, value)` accepts, in
+  nothing back. `Map.select` keeps the entries `f(key, value)` accepts, in
   insertion order. Both are O(n).
+- `List.first` and `List.last` give the first and the last element; on an empty
+  list they are `RUNTIME-INDEX-OUT-OF-RANGE` at the call, as `xs[0]` is.
+  `empty?` on a `List`, `Map`, `Set` or `String` tells whether it has no
+  elements, entries or characters.
 - `String.compare(a, b)` (also `a.compare(b)`) gives `-1`, `0` or `1` in the
   order of `sort`: code point order, which is the byte order of UTF-8.
 - These methods are written in Agentica in `stdlib/prelude/` and run in the
   program: they use its step budget, and a runtime error in one is reported at
-  the call in the program (at the argument it names), never in the prelude. They
-  have one name each: `select`, `collect`, `detect`, `inject` and `reject` are
-  `CHECK-UNKNOWN-METHOD`, and so are the same names on a `Range`.
+  the call in the program (at the argument it names), never in the prelude.
+  `reject` is `CHECK-UNKNOWN-METHOD`, and so are `select`, `collect`, `detect`
+  and `inject` on a `Range`.
 - `Map.get` with two arguments gives `ok(value)` or `error(message)`. With
   three, the default is always evaluated; `false` and `nil` are present values.
 - `Map.delete` ignores absent keys and keeps the order of the rest; a key put
@@ -138,7 +146,7 @@ be read twice. The library page is
   values the first did not take (`ok([])` once it is drained); a value a
   terminal took is gone even if a later step dropped it, and `take_while`
   consumes the first value its block rejects.
-- Steps give a new `Lazy`: `map`, `filter`, `take(n)`, `take_while`, `drop(n)`,
+- Steps give a new `Lazy`: `map`, `select`, `take(n)`, `take_while`, `drop(n)`,
   `drop_while`, `flat_map` (the block gives a `List[U]`), `with_index do |x, i|
   ... end` (maps each item with its index from 0), `each_slice(n)`,
   `each_cons(n)` (windows of `n` items; none when the source has fewer) and

@@ -187,7 +187,7 @@ Calls the block with each line, without its line ending (LF and CRLF; a last lin
 - `buffer_bytes` is the longest line, counting its ending: 1024 to 16777216, else `RUNTIME-INVALID-COUNT` before the file opens. A longer line ends the call with `error("filesystem: line exceeds buffer_bytes")`.
 - `timeout_ms` (positive) limits each read, the open and the close, not the whole call. A silent pipe ends the call with an error.
 - The text is strict UTF-8: invalid bytes end the call with an error.
-- For a chain of steps over the lines (`filter`, `map`, `first(n)` ...), use [`File.foreach`](/library/data-structures/lazy/#fileforeach), a `Lazy[String]` with the same reads. To write the lines of a `Lazy[String]` to a file, use [`write_lines`](/library/data-structures/lazy/#write_lines).
+- For a chain of steps over the lines (`select`, `map`, `first(n)` ...), use [`File.foreach`](/library/data-structures/lazy/#fileforeach), a `Lazy[String]` with the same reads. To write the lines of a `Lazy[String]` to a file, use [`write_lines`](/library/data-structures/lazy/#write_lines).
 
 ```agentica {mode="check"}
 def main() -> Void
