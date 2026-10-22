@@ -18,7 +18,8 @@ from tests.agentica_test import (FIXTURES, PYTHON, kill_process, run, run_vm, sc
                                  vm_command, vm_environment)
 from tests.test_bdd import assert_unwritable_temporary_is_an_infrastructure_error, bdd  # noqa: F401  (a fixture)
 from tests.test_process_lifecycle import bytecode, gone
-from tests.windows_support import COPY_PROGRAM, current_user_sid, icacls, without_backup_restore_privileges
+from tests.windows_support import (COPY_PROGRAM, access_denied, icacls,
+                                    without_backup_restore_privileges)
 
 pytestmark = pytest.mark.skipif(os.name != "nt", reason="host-only: TerminateProcess, job objects and access lists exist on Windows only")
 
@@ -183,15 +184,11 @@ def test_the_hidden_driver_pid_flag_loads_only_a_private_input_and_then_deletes_
 # lets the write through, and the test process gives up the backup and restore privileges that the runner enables:
 # with them, NTFS lets a process create entries in a folder whatever its access list says (the privileges are
 # inherited by the children, the VM among them). The probes show which side failed if the folder is still writable.
-def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error_that_names_it(bdd, request):
+def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error_that_names_it(bdd):
     scratch = bdd.make_suite({"nothing.txt": ""}, "agentica-bdd-readonly-")
     temporary = scratch / "tmp"
     temporary.mkdir()
-    denied = ["*" + current_user_sid(), "*S-1-1-0"]
-    request.addfinalizer(lambda: [icacls(temporary, "/remove:d", who) for who in denied])
-    with without_backup_restore_privileges():
-        for who in denied:
-            icacls(temporary, "/deny", who + ":(WD,AD)")
+    with without_backup_restore_privileges(), access_denied(temporary, "WD,AD"):
         with pytest.raises(PermissionError):
             (temporary / "probe-folder").mkdir()
         with pytest.raises(PermissionError):

@@ -134,9 +134,9 @@ def work(tmp_path):
     return path.resolve()
 
 
-def symlink(link, target, directory=False):
-    """Make the symbolic link `link` to `target` (a name relative to the link's folder is kept as it is). Windows uses
-    mklink, as its other link tests do: a file link, or a folder link with `directory`."""
+def symlink(target, link, directory=False):
+    """Make the symbolic link `link` to `target`, arguments in the order of `os.symlink` (a name relative to the
+    link's folder is kept as it is). Windows uses mklink: a file link, or a folder link with `directory`."""
     if not WINDOWS:
         os.symlink(target, link)
         return

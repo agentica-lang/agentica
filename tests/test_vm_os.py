@@ -10,7 +10,7 @@ import stat
 
 import pytest
 
-from tests.agentica_test import WINDOWS, host_only, known_issue, run_vm, start_vm, vm_environment
+from tests.agentica_test import WINDOWS, host_only, run_vm, start_vm, vm_environment
 from tests.vm_os_support import CONTENTION_PROGRAM, compile_work_text, root, run_program, symlink, work
 
 MODES_PROGRAM = """\
@@ -114,9 +114,8 @@ def test_private_create_and_mkdir_set_owner_only_modes_and_never_reuse_a_path(ro
         if old_umask is not None:
             os.umask(old_umask)
 
-@known_issue(WINDOWS, 615, "File.open create_private follows a dangling link and creates its target")
 def test_create_private_never_follows_a_dangling_link(root, work):
-    symlink(root / "dangling", root / "dangling-target")
+    symlink(root / "dangling-target", root / "dangling")
     assert run_program(root, work, DANGLING_PROGRAM, "dangling", root) == ["false"]
     # O_EXCL does not follow the dangling link, so the target was not created through it.
     assert not (root / "dangling-target").exists()
@@ -127,9 +126,9 @@ def test_lstat_describes_links_themselves_and_reports_kind_size_and_time_like_py
     # (test_windows_metadata_and_locks.py checks its read-only attribute and owner 0).
     (root / "file").write_text("hello")
     (root / "dir").mkdir()
-    symlink(root / "link-file", "file")
-    symlink(root / "link-dir", "dir", directory=True)
-    symlink(root / "dangling", "nowhere")
+    symlink("file", root / "link-file")
+    symlink("dir", root / "link-dir", directory=True)
+    symlink("nowhere", root / "dangling")
     names = ["file", "dir", "link-file", "link-dir", "dangling", "missing"]
     if not WINDOWS:
         os.chmod(root / "file", 0o640)
