@@ -9,19 +9,13 @@ import os
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run
-from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment, git,  # noqa: F401
-                                    lock_entry, package_hash, remotes, run_json, ws)
+from tests.agentica_test import cli, run
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency,  # noqa: F401
+                                    environment, git, install, lock_entry, no_git_path, package_hash, remotes, ws)
 
-pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
 GREETER = "owner/greeter"
 TOOLS = "owner/tools"
-
-
-def install(ws, remotes, *words, **extra):
-    """The result of `--json install` in the project folder, and the problem it reported, or None for a success."""
-    return run_json("install", ws, remotes, *words, **extra)
 
 
 def project(ws, dependencies):
@@ -67,11 +61,10 @@ def test_install_fetches_a_tag_and_a_commit_then_a_program_runs_from_the_cache_w
     assert not [name for name in os.listdir(ws.pkg_root) if name.startswith(".")]
 
     # The program builds and runs with no git on PATH: a build never fetches.
-    empty = tmp_path / "no-git"
-    empty.mkdir()
-    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment(ws, remotes, PATH=str(empty)))
+    empty = no_git_path(tmp_path)
+    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment(ws, remotes, PATH=empty))
     assert (ran.code, ran.stdout) == (0, "hello!\n"), ran.stderr
-    again = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, PATH=str(empty)))
+    again = run(cli() + ["install"], cwd=ws.project, env=environment(ws, remotes, PATH=empty))
     assert again.code == 0, again.stderr
 
 
@@ -124,10 +117,9 @@ def test_a_repository_that_git_cannot_fetch_is_pkg_fetch(ws, remotes, tmp_path):
         _, problem = install(ws, remotes)
         assert_at_key(problem, "PKG-FETCH", ws.project / "agentica.lock", "package[0].git")
     # No git on PATH.
-    empty = tmp_path / "no-git"
-    empty.mkdir()
+    empty = no_git_path(tmp_path)
     project(ws, {"greeter": dependency(remotes.url(GREETER), tag="v1.0.0")})
-    _, problem = install(ws, remotes, PATH=str(empty))
+    _, problem = install(ws, remotes, PATH=empty)
     assert_at_key(problem, "PKG-FETCH", ws.project / "agentica.lock", "package[0].git")
 
 

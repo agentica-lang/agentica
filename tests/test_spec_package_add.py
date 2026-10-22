@@ -6,24 +6,21 @@ writer of `Workspace.lock_text` makes, and the manifest with the text the case e
 writers with the readers (`install` and a build read back what was written). Cases assert codes and the file and key
 path, never message text (AGENTS.md).
 """
+import contextlib
 import os
+import threading
+import time
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run
-from tests.package_support import (BANG, GREET, MAIN, assert_at_key, command, dependency, environment,  # noqa: F401
-                                    git, inline_table, lock_entry, remotes, ws)
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, command, dependency,  # noqa: F401
+                                    environment, git, inline_table, lock_entry, no_git_path, plain, remotes, ws)
 
-pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
 GREETER = "owner/greeter"
 TOOLS = "owner/tools"
 GREETER_FILES = {"greet.agc": GREET, "agentica.toml": None}
 TOOLS_FILES = {"bang.agc": BANG}
-
-
-def plain(ws, remotes, *words, **extra):
-    return run(cli() + list(words), cwd=ws.project, env=environment(ws, remotes, **extra))
 
 
 def tools_manifest(remotes, tag="v1"):
@@ -74,11 +71,10 @@ def test_add_writes_the_manifest_and_the_lock_with_the_dependencies_of_the_packa
     assert not [path for path in ws.pkg_root.iterdir() if path.name.startswith(".")]
 
     # What was written is what a build and `install` read: the program runs from the cache with no git on PATH.
-    empty = tmp_path / "no-git"
-    empty.mkdir()
-    ran = plain(ws, remotes, str(ws.project / "main.agc"), PATH=str(empty))
+    empty = no_git_path(tmp_path)
+    ran = plain(ws, remotes, str(ws.project / "main.agc"), PATH=empty)
     assert (ran.code, ran.stdout) == (0, "hello!\n"), ran.stderr
-    installed = plain(ws, remotes, "install", PATH=str(empty))
+    installed = plain(ws, remotes, "install", PATH=empty)
     assert (installed.stdout) == "in the cache greeter@v1.0.0\nin the cache tools@v1\n", installed.stderr
 
 
@@ -314,12 +310,61 @@ def git_shim(tmp_path, body):
     return str(folder) + os.pathsep + os.environ["PATH"]
 
 
+@contextlib.contextmanager
+def manifest_edited_during_the_fetch(ws, tmp_path, manifest):
+    """While the block runs, the manifest gets one more line after `add` read it and before it writes. It yields the
+    environment that the command needs. POSIX: a `git` shim edits it. Windows starts only .exe files, so a shim of
+    shell cannot stand in: a thread edits the manifest as soon as the fetch has made its folder in the cache."""
+    if os.name != "nt":
+        yield {"PATH": git_shim(tmp_path, 'echo "# edited meanwhile" >> %s' % manifest)}
+        return
+    stop = threading.Event()
+    edited = threading.Event()
+
+    failure = []
+
+    def edit():
+        try:
+            while not stop.is_set():
+                if ws.pkg_root.is_dir() and any(ws.pkg_root.glob(".tmp-*")):
+                    with open(manifest, "a", encoding="utf-8", newline="\n") as handle:
+                        handle.write("# edited meanwhile\n")
+                    edited.set()
+                    return
+                time.sleep(0.001)
+        except Exception as error:
+            failure.append(error)
+
+    thread = threading.Thread(target=edit)
+    thread.start()
+    try:
+        yield {}
+    finally:
+        stop.set()
+        thread.join()
+    if failure:
+        raise failure[0]
+    assert edited.is_set(), "the command ended before its fetch started"
+
+
+@contextlib.contextmanager
+def manifest_not_writable(ws, tmp_path, manifest):
+    """While the block runs, `add` can read the manifest but not write it, after it wrote the lock. It yields the
+    environment that the command needs. POSIX: the `git` shim makes a folder where the new manifest is written first.
+    Windows: a process that holds the manifest open (an editor, for instance) stops the rename that replaces it."""
+    if os.name != "nt":
+        yield {"PATH": git_shim(tmp_path, 'mkdir -p %s/agentica.toml.new-$PPID' % ws.project)}
+        return
+    with open(manifest, "rb"):
+        yield {}
+
+
 def test_add_refuses_a_manifest_that_changed_while_the_packages_were_fetched(ws, remotes, tmp_path):
     remotes.publish(GREETER, {"greet.agc": "# greet\n"}, tag="v1.0.0")
     manifest = ws.project / "agentica.toml"
     manifest.write_text('name = "app"\n', encoding="utf-8")
-    path = git_shim(tmp_path, 'echo "# edited meanwhile" >> %s' % manifest)
-    result, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0", PATH=path)
+    with manifest_edited_during_the_fetch(ws, tmp_path, manifest) as extra:
+        result, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0", **extra)
     assert_at_key(problem, "PKG-WRITE", manifest, "")
     assert read(ws, "agentica.toml").startswith('name = "app"\n# edited meanwhile\n')
     assert "greeter" not in read(ws, "agentica.toml")
@@ -331,9 +376,9 @@ def test_a_manifest_that_cannot_be_written_after_the_lock_is_pkg_write_and_updat
     remotes.publish(GREETER, files, tag="v1.0.0")
     manifest = ws.project / "agentica.toml"
     manifest.write_text('name = "app"\n', encoding="utf-8")
-    # A folder where the new manifest is written first makes that write fail, after the lock was written.
-    path = git_shim(tmp_path, 'mkdir -p %s/agentica.toml.new-$PPID' % ws.project)
-    result, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0", PATH=path)
+    # The write of the manifest fails after the lock was written.
+    with manifest_not_writable(ws, tmp_path, manifest) as extra:
+        result, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1.0.0", **extra)
     assert_at_key(problem, "PKG-WRITE", manifest, "")
     assert "agentica update" in problem["help"]
     assert read(ws, "agentica.toml") == 'name = "app"\n'

@@ -5,6 +5,7 @@ The remote of every case is a bare git repository in a temporary folder (tests/p
 the git config and the package cache are throwaway, and nothing touches the network. Cases assert codes and the file
 and key path, never message text (AGENTS.md).
 """
+import contextlib
 import json
 import os
 import shutil
@@ -14,11 +15,11 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
-from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment,  # noqa: F401
-                                    git, lock_entry, package_hash, problem_of, remotes, run_json, ws)
+from tests.agentica_test import cli, run, vm_environment
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, build, cached_files, dependency,  # noqa: F401
+                                    environment, git, install, lock_entry, no_git_path, package_hash, problem_of, remotes,
+                                    remove_tree, ws)
 
-pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
 # root can write into a folder whatever its mode, so the case that needs a read-only one does not hold for it.
 ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
@@ -27,16 +28,6 @@ GREETER = "owner/greeter"
 TOOLS = "owner/tools"
 TOOLS_FILES = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk"}
 GREETER_FILES = {"greet.agc": GREET, "util/more.agc": "# more\n"}
-
-
-def install(ws, remotes, *words, **extra):
-    """The result of `--json install` in the project folder, and the problem it reported, or None for a success."""
-    return run_json("install", ws, remotes, *words, **extra)
-
-
-def build(ws, remotes, **extra):
-    """The result of running main.agc, which imports greeter, which imports tools."""
-    return run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment(ws, remotes, **extra))
 
 
 @pytest.fixture
@@ -52,6 +43,48 @@ def project(ws, remotes):
     ws.write_lock()
     (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
     return ws
+
+
+def make_old(path, seconds=3600):
+    """Sets the modification time of `path` itself, not of what a link leads to, to `seconds` ago. Python cannot do it
+    for a link on Windows (`os.utime` has no `follow_symlinks=False` there), so that is one call of the Windows API."""
+    when = time.time() - seconds
+    if os.name != "nt":
+        os.utime(path, (when, when), follow_symlinks=False)
+        return
+    import ctypes
+    from ctypes import byref, c_void_p, c_wchar_p, wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = [c_wchar_p, wintypes.DWORD, wintypes.DWORD, c_void_p, wintypes.DWORD, wintypes.DWORD,
+                                     c_void_p]
+    kernel32.CreateFileW.restype = c_void_p
+    kernel32.SetFileTime.argtypes = [c_void_p, c_void_p, c_void_p, c_void_p]
+    kernel32.CloseHandle.argtypes = [c_void_p]
+    ticks = int((when + 11644473600) * 10_000_000)  # 100 ns since 1601, as FILETIME counts
+    stamp = wintypes.FILETIME(ticks & 0xFFFFFFFF, ticks >> 32)
+    # FILE_WRITE_ATTRIBUTES, shared with all, OPEN_EXISTING, BACKUP_SEMANTICS (a folder) | OPEN_REPARSE_POINT (the link).
+    handle = kernel32.CreateFileW(str(path), 0x100, 7, None, 3, 0x02000000 | 0x00200000, None)
+    assert handle not in (None, c_void_p(-1).value), ctypes.WinError(ctypes.get_last_error())
+    try:
+        assert kernel32.SetFileTime(handle, None, None, byref(stamp)), ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+@contextlib.contextmanager
+def write_blocked(package):
+    """While the block runs, a write of the folder `package` of deps/ fails. POSIX: deps/ is read-only. Windows has no
+    such mode, but a file that a process holds open (an editor, for instance) stops the rename of the folder that holds
+    it."""
+    if os.name == "nt":
+        with open(package / "stale.agc", "rb"):
+            yield
+        return
+    package.parent.chmod(0o555)
+    try:
+        yield
+    finally:
+        package.parent.chmod(0o755)
 
 
 def test_install_writes_every_locked_package_flat_into_deps_and_a_build_runs_with_no_cache_and_no_git(
@@ -74,10 +107,9 @@ def test_install_writes_every_locked_package_flat_into_deps_and_a_build_runs_wit
     assert stat.S_IMODE((deps / "greeter" / "greet.agc").stat().st_mode) & 0o044 == 0o044 & ~umask
 
     # The cache is only a download cache: with it gone, and no git and no HOME, the build still runs.
-    shutil.rmtree(ws.pkg_root)
-    empty = tmp_path / "no-git"
-    empty.mkdir()
-    ran = build(ws, remotes, PATH=str(empty), HOME=None, XDG_CACHE_HOME=None)
+    remove_tree(ws.pkg_root)
+    empty = no_git_path(tmp_path)
+    ran = build(ws, remotes, PATH=empty, HOME=None, XDG_CACHE_HOME=None)
     assert (ran.code, ran.stdout) == (0, "hello!\n"), ran.stderr
 
 
@@ -133,9 +165,8 @@ def test_install_again_puts_the_locked_files_back_replaces_a_link_and_leaves_oth
     (deps / ".tmp-fresh").mkdir()
     os.symlink(outside, deps / ".old-fresh")
     (deps / ".keep").write_text("keep\n", encoding="utf-8")
-    long_ago = time.time() - 3600
     for name in (".old-1-greeter", ".tmp-2", ".tmp-3"):
-        os.utime(deps / name, (long_ago, long_ago), follow_symlinks=False)
+        make_old(deps / name)
     assert install(ws, remotes)[1] is None
     assert sorted(os.listdir(deps)) == [".keep", ".old-fresh", ".tmp-fresh", "gone", "greeter", "notes.txt", "tools"]
     assert cached_files(outside) == ["keep.agc"]
@@ -217,11 +248,8 @@ def test_a_write_that_fails_keeps_the_old_copy_and_leaves_no_hidden_folder(proje
     deps = ws.deps
     assert install(ws, remotes)[1] is None
     (deps / "greeter" / "stale.agc").write_text("# stale\n", encoding="utf-8")
-    deps.chmod(0o555)
-    try:
+    with write_blocked(deps / "greeter"):
         _, problem = install(ws, remotes)
-    finally:
-        deps.chmod(0o755)
     assert problem["code"] == "PKG-WRITE"
     assert sorted(os.listdir(deps)) == ["greeter", "tools"]
     assert (deps / "greeter" / "stale.agc").exists()

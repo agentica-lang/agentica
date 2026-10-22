@@ -453,8 +453,8 @@ end
   before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. Under `agentica
   test` such a test file is a file error with that code.
 - Native calls work on Linux x86_64 and Windows x64, and waits on Linux
-  x86_64. On Windows a `Native.wait_*` returns an error that starts with
-  `native: ` (libuv polls only sockets there; issue #568). Elsewhere such a
+  x86_64. `Native.wait_*` is not supported on Windows: it returns an error
+  that starts with `native: ` (libuv polls only sockets there). Elsewhere such a
   program is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2 (issue
   #548).
   `check`, `compile` and the queries work on every system.

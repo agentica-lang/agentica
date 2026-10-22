@@ -1,6 +1,6 @@
 /* The independent peer of the native calls (tests/test_vm_native.py): a shared library that the test builds with the
    system C compiler, so each C type crosses the boundary through a real ABI. On Windows it is a DLL without the
-   descriptor functions, which Native.wait_* needs and which have no Windows port yet (#568). */
+   descriptor functions, which Native.wait_* needs: it is not supported on Windows (libuv polls only sockets there). */
 #define _GNU_SOURCE
 #include <ctype.h>
 #include <stdatomic.h>
