@@ -45,6 +45,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `help` and diagnostics show the Ruby form of a builtin (`s.strip`); both
   names still work.
+- Windows: `agentica.exe` is long-path aware, so paths of 260 characters or
+  more work when `LongPathsEnabled` is set.
 
 ### Removed
 
@@ -55,6 +57,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - On Windows, open TCP and TLS sockets are closed, not reset, at the end of a
   run.
+- Windows: non-ASCII text typed on a console reaches standard input as UTF-8.
 
 ## [0.8.1] - 2026-10-22
 

@@ -197,6 +197,11 @@ export CCACHE_BASEDIR ?= $(CURDIR)
 VM_OBJ := $(VM_BUILD)/obj
 VM_OBJS := $(patsubst vm/%.c,$(VM_OBJ)/%.o,$(VM_SRC))
 VM_OBJ_STAMP := $(VM_BUILD)/obj-flags
+# The resources of agentica.exe (Windows only): the application manifest of vm/agentica.manifest, which declares
+# longPathAware, compiled by windres. It replaces the default manifest that MinGW's gcc links, and keeps what that one says.
+# WINDRES follows CC: x86_64-w64-mingw32-gcc gives x86_64-w64-mingw32-windres.
+VM_RES := $(if $(filter Windows_NT,$(VM_OS)),$(VM_OBJ)/agentica-res.o)
+WINDRES ?= $(patsubst %gcc,%windres,$(patsubst %clang,%windres,$(VM_CC)))
 VM_YY := $(VM_BUILD)/yyjson.o
 VM_PICO := $(VM_BUILD)/picohttpparser.o
 VM_UV := $(if $(UV_NAMES),$(VM_BUILD)/libuv.a)
@@ -252,7 +257,7 @@ $(VM_STAMP): FORCE
 
 $(VM_OBJ_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
-	@{ echo '$(VM_CC) $(VM_CFLAGS)'; $(VM_CC) --version 2>/dev/null | head -n 1; } > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+	@{ echo '$(VM_CC) $(VM_CFLAGS) $(if $(VM_RES),$(WINDRES))'; $(VM_CC) --version 2>/dev/null | head -n 1; } > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 $(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := -U NDEBUG
 
@@ -261,6 +266,10 @@ $(VM_OBJ)/tls_openssl.o $(VM_OBJ)/digest_openssl.o: $(OSSL_DEP)
 $(VM_OBJ)/%.o: vm/%.c $(VM_OBJ_STAMP) | $(OSSL_DEP) $(GC_DEP)
 	@mkdir -p $(dir $@)
 	$(CCACHE) $(VM_CC) $(VM_CFLAGS) $(DEBUG_MAP) $(VM_OBJ_FLAGS) -MMD -MP -c $< -o $@
+
+$(VM_OBJ)/agentica-res.o: vm/agentica.rc vm/agentica.manifest $(VM_OBJ_STAMP)
+	@mkdir -p $(VM_OBJ)
+	$(WINDRES) -I vm -O coff vm/agentica.rc $@
 
 -include $(wildcard $(VM_OBJ)/*.d $(VM_OBJ)/tests/*.d)
 

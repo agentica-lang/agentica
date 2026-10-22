@@ -270,11 +270,10 @@ then no scenario runs.
   folder, the run directory has its final name from the start (there is no
   `-new-` name and no rename), and the sweep takes a directory only when it is
   a minute old. Windows has no sticky bit, so nothing checks the temporary
-  folder: the protection assumes a folder that only the user can modify (the
-  default per-user `%TEMP%`), because another user who can delete entries of
-  that folder could swap the run directory before its `lock` pins it. The
-  owner check of the sweep on Windows is issue #393 and pinning the run
-  directory before `lock` exists is #385.
+  folder: the run assumes a temporary folder that only the user can modify (the
+  default per-user `%TEMP%`). A shared multi-user temporary folder is out of
+  scope, because another user who can delete entries of that folder could swap
+  the run directory before its `lock` pins it.
 - **Shared resources.** Test files and scenarios run one at a time, each in its
   own child VM, next to other programs. A fixed temporary file name or port can
   collide with another run; use port 0 and a fresh temporary directory.

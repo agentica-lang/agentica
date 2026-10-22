@@ -8,8 +8,6 @@
     "error(\"filesystem: cannot resolve path\\n  path: @tmp/a/b/c/f.txt/x\\n  system error: No such file or directory; errno=2\")",
     "true",
     "true",
-    "false",
-    "false",
     ""
   ],
   "stderr": []
