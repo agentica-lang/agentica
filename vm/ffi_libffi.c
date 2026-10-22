@@ -6,10 +6,6 @@
  * ffi_none.c is the other half. Design: docs/grammar/06d-io-and-network.md.
  */
 #ifdef AGC_FFI
-#ifdef __APPLE__
-/* F_GETPATH. */
-#define _DARWIN_C_SOURCE
-#endif
 #include "ffi_os.h"
 #include "value.h"
 
@@ -24,12 +20,8 @@
 #include <windows.h>
 #else
 #include <dlfcn.h>
-#include <fcntl.h>
-#include <limits.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
-/* The paths that the POSIX half builds: PATH_MAX on macOS, which F_GETPATH needs. */
+/* The paths that the POSIX half builds: PATH_MAX on macOS. */
 #define PATH_BUF 1024
 #endif
 
@@ -155,9 +147,6 @@ static const char *loader_path(const char *library, char *buf, char *error, size
   snprintf(error, size, "cannot open %s: the name is too long", library);
   return NULL;
 }
-
-/* macOS has no /proc: F_GETPATH names the file of FD (a terminal, say). A pipe and a socket have no name. */
-static bool fd_path(int fd, char *buf, size_t size) { return size >= PATH_MAX && fcntl(fd, F_GETPATH, buf) != -1; }
 #else
 /* dlopen searches a bare name in LD_LIBRARY_PATH, the cache and the system folders, never in the working directory. */
 static const char *loader_path(const char *library, char *buf, char *error, size_t size) {
@@ -165,12 +154,6 @@ static const char *loader_path(const char *library, char *buf, char *error, size
   (void)error;
   (void)size;
   return library;
-}
-
-/* /proc/self/fd/N opens the file of FD again (a pipe, a terminal), with an open file description of its own. */
-static bool fd_path(int fd, char *buf, size_t size) {
-  int n = snprintf(buf, size, "/proc/self/fd/%d", fd);
-  return n > 0 && (size_t)n < size;
 }
 #endif
 
@@ -268,31 +251,4 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
     case AGC_C_VOID: break;
   }
 }
-
-#ifdef _WIN32
-/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor: no wait yet
-   (issue #568). */
-int agc_ffi_wait_fd_open(int fd) {
-  (void)fd;
-  errno = ENOSYS;
-  return -1;
-}
-
-void agc_ffi_wait_fd_close(int fd) { (void)fd; }
-#else
-/* A file with a path (fd_path) is opened again; a socket, and on macOS a pipe, cannot be opened that way. */
-int agc_ffi_wait_fd_open(int fd) {
-  int flags = fcntl(fd, F_GETFL);
-  if (flags < 0) return -1;
-  struct stat info;
-  char path[PATH_BUF];
-  if (fstat(fd, &info) == 0 && !S_ISSOCK(info.st_mode) && fd_path(fd, path, sizeof path)) {
-    int again = open(path, (flags & O_ACCMODE) | O_NONBLOCK | O_NOCTTY | O_CLOEXEC);
-    if (again >= 0) return again;
-  }
-  return fcntl(fd, F_DUPFD_CLOEXEC, 3);
-}
-
-void agc_ffi_wait_fd_close(int fd) { (void)close(fd); }
-#endif
 #endif

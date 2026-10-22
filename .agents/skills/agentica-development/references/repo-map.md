@@ -93,7 +93,7 @@ vm/               # the C11 bytecode VM, linked into dist/agentica; layers in re
   tools/          # check-layers.sh and its self-test, gen-embedded.sh (references/vm-build.md)
   ffi.c ffi_os.h ffi_libffi.c ffi_none.c  # native calls of extern functions: Native.call, resources, Native.wait_*, the refusal at load, libffi on Linux x86_64, Windows x64 and macOS (references/vm-core.md)
   compute.c       # the compute pool of `compute def` calls: one thread per scheduler, FIFO, apart from the libuv pool (docs/vm/16-architecture.md §16.9)
-  third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl, libffi (Linux x86_64 and Windows x64) (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
+  third_party/    # submodules bdwgc, yyjson (only its reader), libuv, picohttpparser, openssl, libffi (Linux x86_64, Windows x64 and macOS) (pins: docs/vm/10-dependencies-and-platforms.md); AGENTICA_GC=vendored and AGENTICA_OPENSSL=vendored build bdwgc and OpenSSL (Perl needed), the Linux default links the system libgc and OpenSSL 3
   tests/          # C tests, plain asserts (references/vm-tests.md)
 tests/            # pytest modules (test_<area>.py; existing unittest.TestCase modules remain supported); references/vm-tests.md says which covers what
   test_spec_<area>.py  # pytest language rules through the CLI (code and span from --json, never message text); shared helpers live in spec_support.py. Covers lexer, parser, module linker, checker, bytecode writer and diagnostic text.

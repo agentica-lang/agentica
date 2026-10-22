@@ -28,6 +28,7 @@
 #include <windows.h>
 #include <io.h>
 #else
+#include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 #endif
@@ -1226,18 +1227,43 @@ int agc_fd_reopen(int fd, int access) {
 }
 #endif
 
-/* The libuv half of an open, on the loop's thread. 0 or a libuv error. */
-static int poller_init(agc_poller *p) {
+#if defined(__linux__) || defined(__APPLE__)
+/* A terminal master (libuv's uv__tty_is_slave asks the same): opening its path again (/dev/ptmx) makes a new terminal. */
+static bool pty_master(int fd) {
+#ifdef __APPLE__
+  char name[256];
+  return ioctl(fd, TIOCPTYGNAME, name) == 0;
+#else
+  unsigned int number;
+  return ioctl(fd, TIOCGPTN, &number) == 0;
+#endif
+}
+
+/* A new open of the file of FD with its access mode (agc_fd_reopen), so FD keeps its flags; a duplicate, which shares
+   them, when that cannot be done (a socket, a terminal master, an eventfd, a pipe on macOS). -1 with errno. */
+static int fd_copy(int fd) {
+  int flags = fcntl(fd, F_GETFL);
+  if (flags < 0) return -1;
+  int again = pty_master(fd) ? -1 : agc_fd_reopen(fd, flags & O_ACCMODE);
+  return again >= 0 ? again : fcntl(fd, F_DUPFD_CLOEXEC, 3);
+}
+#endif
+
+/* The libuv half of an open, on the loop's thread. 0 or a libuv error. PROBE: a named FIFO on macOS also reports
+   ready when poll(2) says nothing, so a file stream reads its end (kqueue misses it); a plain wait leaves it off. */
+static int poller_init(agc_poller *p, bool probe) {
   int rc;
 #ifdef __APPLE__
   struct stat info;
   p->timed = fstat(p->fd, &info) == 0 && S_ISFIFO(info.st_mode);
   if (p->timed) {
     char path[1024];
-    p->named = fcntl(p->fd, F_GETPATH, path) == 0;
+    p->named = probe && fcntl(p->fd, F_GETPATH, path) == 0;
     rc = uv_timer_init(&p->loop->uv, &p->timer);
     p->timer.data = p;
   } else
+#else
+  (void)probe;
 #endif
   {
     rc = uv_poll_init(&p->loop->uv, &p->handle, p->fd);
@@ -1249,14 +1275,14 @@ static int poller_init(agc_poller *p) {
 /* Only on the loop's thread, so that its caller learns of a failure at once (a failed open returns NULL with ERR set)
    and can fall back: a file's `more` step, the stdin poller set up before the schedulers start, and the standard
    streams at launch. */
-agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
+static agc_poller *poller_open(agc_vm *vm, int fd, bool probe, int *err) {
   agc_loop *loop = loop_of(vm);
   if (!on_io_thread(loop)) agc_internal_abort("a scheduler thread opened a poller");
   agc_poller *p = calloc(1, sizeof(agc_poller));
   if (!p) agc_out_of_memory();
   p->fd = fd;
   p->loop = loop;
-  int rc = poller_init(p);
+  int rc = poller_init(p, probe);
   if (rc != 0) {
     free(p);
     *err = -rc;
@@ -1264,6 +1290,29 @@ agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) {
   }
   return p;
 }
+
+agc_poller *agc_poller_open(agc_vm *vm, int fd, int *err) { return poller_open(vm, fd, true, err); }
+
+#ifdef _WIN32
+/* libuv polls only sockets on Windows, and a library's socket is a SOCKET, not a C runtime descriptor (issue #568). */
+agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
+  (void)vm;
+  (void)fd;
+  *err = ENOSYS;
+  return NULL;
+}
+#else
+agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
+  int copy = fd_copy(fd);
+  if (copy < 0) {
+    *err = errno;
+    return NULL;
+  }
+  agc_poller *p = poller_open(vm, copy, false, err);
+  if (!p) close(copy);
+  return p;
+}
+#endif
 
 static void poller_start(agc_poller *p, bool writing, void (*ready)(void *data, int status), void *data) {
   p->ready = ready;

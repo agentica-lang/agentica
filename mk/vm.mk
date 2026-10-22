@@ -200,7 +200,7 @@ GC_KEY = { echo '$(GC_COMPILE)'; $(CC) --version 2>/dev/null | head -n 1; $(call
 TP_KEY = { echo '$(shell uname -s) $(shell uname -m) $(OS)'; \
   echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) | $(AR) rcs'; $(VM_CC) --version 2>/dev/null | head -n 1; \
   $(AR) --version 2>/dev/null | head -n 1; \
-  echo '$(FFI_COMPILE) | $(FFI_NAMES)'; \
+  echo '$(FFI_COMPILE) | $(FFI_NAMES) | $(FFI_TARGET) $(FFI_DIR_TARGET) $(FFI_LONG_DOUBLE) $(FFI_TRAMPOLINE_TABLE) $(FFI_APPLE)'; \
   $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); \
   $(if $(FFI_NAMES),$(call SUBMODULE_KEY,$(FFI_DIR));) }
 ifeq ($(origin CCACHE),undefined)

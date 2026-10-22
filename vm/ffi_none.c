@@ -7,7 +7,6 @@
 #ifndef AGC_FFI
 #include "ffi_os.h"
 
-#include <errno.h>
 #include <stdio.h>
 
 bool agc_ffi_supported(void) { return false; }
@@ -30,12 +29,4 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
   (void)args;
   (void)result;
 }
-
-int agc_ffi_wait_fd_open(int fd) {
-  (void)fd;
-  errno = ENOSYS;
-  return -1;
-}
-
-void agc_ffi_wait_fd_close(int fd) { (void)fd; }
 #endif

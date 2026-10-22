@@ -368,9 +368,12 @@ end
   (a MinGW DLL that needs `libgcc_s_seh-1.dll` must have it next to it). A
   relative path there
   (`"lib\\x.dll"`, `"C:x.dll"`) is `RUNTIME-NATIVE-LOAD`. On macOS a name
-  (`"libsqlite3.dylib"`) is opened as `/usr/lib/NAME`: dyld looks it up in
-  `DYLD_LIBRARY_PATH`, then in `/usr/lib` or the dyld shared cache, which
-  holds the system libraries (`"libSystem.B.dylib"` has libc and libm).
+  (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and in
+  `DYLD_LIBRARY_PATH`), which finds the system libraries in the dyld shared
+  cache (`"libSystem.B.dylib"` has libc and libm); any other library needs an
+  absolute path. macOS drops `DYLD_*` variables when a protected program
+  (`/usr/bin/env`, `/bin/sh`) starts agentica, so `DYLD_LIBRARY_PATH` does not
+  pass through a shebang line or a shell.
 - An argument is checked before the call: a `C.Int` outside 32 bits is
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
@@ -438,10 +441,10 @@ end
   `try Native.wait_readable(Raw.PQsocket(conn), 5_000)`. The wait polls a
   new open of the file of `fd` (`/proc/self/fd`, `F_GETPATH` on macOS), so the
   native code keeps its descriptor and its flags, and two tasks may wait on one
-  descriptor. A socket, or a file that cannot be opened again (an eventfd, a
-  pipe on macOS), is polled through a duplicate instead, which puts a socket in
-  non-blocking mode (macOS polls a pipe with poll(2), which leaves its flags
-  alone). An error or a
+  descriptor. A socket, a terminal master, or a file that cannot be opened
+  again (an eventfd, a pipe on macOS), is polled through a duplicate instead,
+  which puts `fd` in non-blocking mode (macOS polls a pipe with poll(2), which
+  leaves its flags alone). An error or a
   hang-up on the descriptor ends the wait with `ok` too, as in poll(2): the
   next native call reports it. After `timeout_ms` (positive) the result is
   `error("native: timed out")`. A timeout that is not positive, a negative
@@ -463,7 +466,9 @@ end
   `RUNTIME-NATIVE-UNSUPPORTED`, exit 2.
   `check`, `compile` and the queries work on every system.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
-  native code runs with the rights of the program.
+  native code runs with the rights of the program. A variadic C function
+  (`printf`) cannot be declared: a fixed signature for it is undefined
+  behavior, and on Apple arm64 its extra arguments come out wrong.
 
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
 [agentica-link-2]: ../../site/content/library/io-and-system/files.md

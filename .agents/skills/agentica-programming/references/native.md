@@ -24,9 +24,11 @@ end
   System32, not in `PATH`; an absolute path is `"C:\\libs\\x.dll"` (escaped
   backslashes), and its DLLs are searched in its folder and the default
   folders, never in `PATH` (put `libgcc_s_seh-1.dll` next to a MinGW DLL).
-  On macOS a name (`"libsqlite3.dylib"`) is looked up in `DYLD_LIBRARY_PATH`
-  and `/usr/lib` (the system libraries are in the dyld shared cache; libc and
-  libm are `"libSystem.B.dylib"`); give a Homebrew library its absolute path.
+  On macOS a name (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and
+  in `DYLD_LIBRARY_PATH`): the system libraries, in the dyld shared cache
+  (libc and libm are `"libSystem.B.dylib"`); any other library needs an
+  absolute path. `DYLD_*` variables do not pass through a shebang or a shell
+  (SIP drops them).
 - A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
   is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""` for now.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
@@ -99,10 +101,10 @@ end
   `/dev/null` on Linux): an error starting `native: `. An error or hang-up on
   the descriptor gives `ok` (the next native call reports it). It polls a new
   open of the file, so the descriptor keeps its flags and two tasks may wait on
-  one descriptor; a socket or an eventfd is polled through a duplicate and
-  becomes non-blocking (a macOS pipe is polled through a duplicate too, flags
-  kept). Closing the descriptor does not end a wait (it times out unless the
-  file becomes ready). A cancel stops the wait.
+  one descriptor; a socket, a terminal master or an eventfd is polled through a
+  duplicate and becomes non-blocking (a macOS pipe is polled through a
+  duplicate too, flags kept). Closing the descriptor does not end a wait (it
+  times out unless the file becomes ready). A cancel stops the wait.
 - Linux x86_64, Windows x64 and macOS (`Native.wait_*` returns an error on
   Windows): elsewhere a program with an extern function or a `Native.*` call
   is refused at load with `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works
@@ -110,4 +112,6 @@ end
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
 - Functions count as `def`s for the declaration order, resources as types. A
-  wrong signature is undefined behavior in C: copy it from the C header.
+  wrong signature is undefined behavior in C: copy it from the C header. No
+  variadic functions (`printf`): a fixed signature is undefined behavior, and
+  wrong on Apple arm64.

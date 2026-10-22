@@ -145,9 +145,9 @@ def test_a_system_library_is_found_by_its_name(tmp_path):
 
 
 # A bare name is searched in the system's folders only, never in the working directory (dlopen's rule on Linux; on
-# Windows and macOS the loader's own search would take it). A relative path resolves against the working directory too, so it is refused:
-# the front end refuses "lib/x.so", and on Windows the loader refuses "lib\x.dll" and "C:x.dll", which the front end
-# cannot tell from a name.
+# Windows and macOS the loader's own search would take it). A relative path resolves against the working directory too,
+# so it is refused: the front end refuses "lib/x.so", and on Windows the loader refuses "lib\x.dll" and "C:x.dll", which
+# the front end cannot tell from a name.
 @NATIVE_CALLS
 def test_a_library_is_not_searched_in_the_working_directory(tmp_path, peer):
     here = library_name("agentica_peer_here")
@@ -673,6 +673,10 @@ WAIT_EXTERN = """extern "{library}"
   def peer_nonblocking(fd: C.Int) -> C.Int
   def peer_regular_file() -> C.Int
   def peer_open_fds() -> C.Int
+  def peer_fifo(path: C.String) -> C.Int
+  def peer_fifo_put() -> C.Int
+  def peer_pty() -> C.Int
+  def peer_pty_put() -> C.Int
 end
 
 def wait(fd: Int) -> Result[Void]
@@ -747,6 +751,30 @@ end
         'error("native: timed out")', 'error("native: timed out")',
         'error("native: timeout must be positive milliseconds")', 'error("native: invalid descriptor")',
         "native: cannot wait on the descriptor", "native: cannot wait on the descriptor", "",
+    ]
+
+
+# With no data, a named FIFO and a terminal master wait until the timeout, and they are ready once data comes. On macOS
+# the wait polls a FIFO with poll(2) and does not take the end-of-file probe of a file stream for readiness; a terminal
+# master is polled through a duplicate, since opening its path again (/dev/ptmx) makes a new terminal.
+@NATIVE_CALLS
+@NATIVE_WAITS
+def test_a_wait_on_a_named_fifo_or_a_terminal_master_waits_for_data(tmp_path, peer):
+    main = """def main() -> Void
+  fifo = peer_fifo(System.args()[0])
+  puts(Native.wait_readable(fifo, 30))
+  puts(peer_fifo_put())
+  puts(Native.wait_readable(fifo, 1_000))
+  master = peer_pty()
+  puts(Native.wait_readable(master, 30))
+  puts(peer_pty_put())
+  puts(Native.wait_readable(master, 1_000))
+end
+"""
+    result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main), tmp_path / "fifo")
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        'error("native: timed out")', "1", "ok()", 'error("native: timed out")', "1", "ok()", "",
     ]
 
 
