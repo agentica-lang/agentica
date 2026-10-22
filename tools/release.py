@@ -396,7 +396,8 @@ def smoke(archive: Path, platform: str, binary: Path | None) -> None:
         out = s.run("--help")
         s.expect("--help lists the commands", "agentica check" in out.stdout and "agentica test" in out.stdout, out)
         out = s.run("help", "String.split")
-        s.expect("help NAME describes a builtin", "String.split" in out.stdout, out)
+        # help shows the Ruby form of a builtin (`s.split(...)`), not its internal name.
+        s.expect("help NAME describes a builtin", "s.split(" in out.stdout, out)
 
         (work / "hola mundo ✓.agc").write_text(HELLO, encoding="utf-8")
         (work / "bad.agc").write_text(BAD, encoding="utf-8")
