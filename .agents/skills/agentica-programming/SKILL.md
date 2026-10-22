@@ -41,7 +41,10 @@ Read only what the task needs.
 
 | File in `references/` | Covers |
 |---|---|
-| `language.md` | types, constants, `case`, blocks, `Result`/`try`, heredocs, defaults, CLI flags |
+| `language-running.md` | `agentica` flags, `compile` and `run` of bytecode, the cache, `--sandbox` |
+| `language-program-types.md` | file shape, constants, `def`, `struct`, `enum`, types, `Void`, defaults |
+| `language-statements-expressions.md` | `case`, loops, assignment, literals, heredocs, operators, pipes, foreign forms |
+| `language-blocks-results.md` | blocks and closures, `Fn` values, `Result`, `try` |
 | `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, System, Time, Random, `to_s`; Ruby names |
 | `examples.md` | complete programs to start from |
 | `diagnostics.md` | meaning and fix of a diagnostic code, call stacks |
