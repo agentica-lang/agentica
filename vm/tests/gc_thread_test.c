@@ -110,7 +110,8 @@ static DWORD WINAPI watchdog(LPVOID arg) {
 }
 
 static void collect_beside_a_held_heap(void) {
-  HANDLE *events[] = {&holder_in, &collector_in, &dog_in, &take_heap, &heap_held, &heap_free, &collect_go, &collect_done};
+  HANDLE *events[] = {&holder_in, &collector_in, &dog_in, &take_heap,
+                      &heap_held, &heap_free, &collect_go, &collect_done};
   for (size_t k = 0; k < sizeof events / sizeof events[0]; k++) {
     *events[k] = CreateEventW(NULL, TRUE, FALSE, NULL);
     assert(*events[k]);
@@ -129,6 +130,9 @@ static void collect_beside_a_held_heap(void) {
   atomic_store(&armed, true);
   SetEvent(collect_go);
   WaitForSingleObject(collect_done, INFINITE);
+  /* The hook ran (the world was stopped); the holder is let go either way, so a failure never hangs the join. */
+  assert(!atomic_load(&armed));
+  SetEvent(take_heap);
   SetEvent(heap_free);
   assert(uv_thread_join(&holder) == 0);
   assert(uv_thread_join(&collector) == 0);
