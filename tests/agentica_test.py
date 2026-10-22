@@ -18,6 +18,7 @@ import threading
 import time
 import unittest
 from collections import namedtuple
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -672,6 +673,28 @@ def wait_readable(fd, timeout):
         if time.monotonic() >= deadline:
             return False
         time.sleep(0.01)
+
+
+@contextmanager
+def unreadable(path):
+    """While the block runs, `path` cannot be read. POSIX: mode 000. Windows has no mode to take, but a file that a
+    process has locked (an editor, for instance) cannot be read."""
+    if os.name != "nt":
+        path.chmod(0o000)
+        try:
+            yield
+        finally:
+            path.chmod(0o600)
+        return
+    import msvcrt
+    size = path.stat().st_size
+    with open(path, "r+b") as handle:
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, size)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, size)
 
 
 def process_alive(pid):
