@@ -20,10 +20,11 @@ end
 - The library is a plain string: a name without `/` (the system looks it up) or
   an absolute path, else `PARSE-EXTERN-LIBRARY`. It opens at the first call; not
   found is `RUNTIME-NATIVE-LOAD`. The working directory is never searched. On
-  Windows a name (`"ucrtbase.dll"`) is looked up next to `agentica.exe` and in
-  System32, not in `PATH`; an absolute path is `"C:\\libs\\x.dll"` (escaped
-  backslashes), and its DLLs are searched in its folder and the default
-  folders, never in `PATH` (put `libgcc_s_seh-1.dll` next to a MinGW DLL).
+  Windows a name (`"ucrtbase.dll"`, `"winsqlite3.dll"`) is looked up next to
+  `agentica.exe` and in System32, not in `PATH`; an absolute path is
+  `"C:\\libs\\x.dll"` (escaped backslashes), and its DLLs are searched in its
+  folder and the default folders, never in `PATH` (put `libgcc_s_seh-1.dll` next
+  to a MinGW DLL).
 - A `C.Int` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a `C.String`
   is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as `""` for now.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL

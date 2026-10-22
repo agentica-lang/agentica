@@ -1,8 +1,8 @@
 """Native calls (the extern blocks of docs/grammar/05-syntax.md and 06d-io-and-network.md) through the product CLI.
 
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows) for
-each module run, so every C type crosses a real ABI; two cases also call the system libsqlite3.so.0 on Linux, which
-CI installs. Native calls exist on Linux x86_64 and Windows x64 for now:
+each module run, so every C type crosses a real ABI; three cases also call the system SQLite (libsqlite3.so.0 on
+Linux, which CI installs; winsqlite3.dll on Windows, which ships in System32). Native calls exist on Linux x86_64 and Windows x64 for now:
 elsewhere a program that declares extern functions is refused at load with RUNTIME-NATIVE-UNSUPPORTED, which
 test_other_systems_refuse_extern_at_load checks, and the call cases skip with the port issue (#548). Native.wait_* is
 not supported on Windows. Tests assert codes and spans, never messages (AGENTS.md).
@@ -944,9 +944,10 @@ def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
     assert agentica("test", cwd=tmp_path).code == 0
 
 
-# A real library, not the peer: the system SQLite of Linux. sqlite3_malloc and sqlite3_free are a resource, and
-# sqlite3_msize reads the block; the full case opens a database and queries it through out parameters.
-SQLITE_LIBRARY = "libsqlite3.so.0"
+# A real library, not the peer: the system SQLite. sqlite3_malloc and sqlite3_free are a resource, and sqlite3_msize
+# reads the block; the full case opens a database and queries it through out parameters. Windows 10 and later ship
+# winsqlite3.dll in System32 with the same sqlite3_* C API (a bare name, which the VM loads from the system folders).
+SQLITE_LIBRARY = "winsqlite3.dll" if WINDOWS else "libsqlite3.so.0"
 
 SQLITE_EXTERN = """extern "%s"
   resource Block, free: sqlite3_free
@@ -959,22 +960,19 @@ end
 
 """ % SQLITE_LIBRARY
 
-# libsqlite3.so.0 is a Linux system library: CI installs libsqlite3-0, and a missing library fails there and skips
-# on a local run. Windows has no such library; the systems without native calls skip with the port issue (#548).
-NO_SYSTEM_SQLITE = host_only(WINDOWS, "Windows has no libsqlite3.so.0 (a Linux system library)")
-
 
 @pytest.fixture(scope="module")
 def sqlite():
-    """Skip (a failure in CI) when the system SQLite library is not installed."""
+    """Skip (a failure in CI) when the system SQLite library is not installed. CI installs libsqlite3-0 on Linux;
+    winsqlite3.dll is part of Windows 10 and later. The systems without native calls skip with the port issue (#548)."""
     try:
         ctypes.CDLL(SQLITE_LIBRARY)
     except OSError:
-        require(False, SQLITE_LIBRARY + " is required (Debian: apt install libsqlite3-0)")
+        require(False, SQLITE_LIBRARY + " is required (" + (
+            "it ships in System32 on Windows 10 and later" if WINDOWS else "Debian: apt install libsqlite3-0") + ")")
 
 
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_answers_its_version_and_whether_a_statement_is_complete(tmp_path, sqlite):
     main = """def main() -> Void
   puts(sqlite3_libversion_number() >= 3_000_000)
@@ -988,7 +986,6 @@ end
 
 
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_a_block_of_sqlite_malloc_is_a_resource_that_close_frees(tmp_path, sqlite):
     main = """def main() -> Void
   block = sqlite3_malloc(64).unwrap!
@@ -1022,7 +1019,6 @@ end
 # rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. An open
 # that fails (SQLITE_CANTOPEN, 14) still gives a live handle, which the wrapper reads and closes.
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_opens_a_database_and_queries_it_through_out_parameters(tmp_path, sqlite):
     main = """def open(path: String) -> Result[Db]
   opened = sqlite3_open(path)

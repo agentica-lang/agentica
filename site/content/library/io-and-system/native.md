@@ -81,7 +81,7 @@ A C function that gives a value through a pointer, such as `int sqlite3_open(con
 
 ## A real library: SQLite
 
-The raw `extern` layer stays private, and safe functions on top of it return `Result`. This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on Windows, give the name or absolute path of a SQLite DLL.
+The raw `extern` layer stays private, and safe functions on top of it return `Result`. This program opens an in-memory database, fills a table and reads it back. It names the Linux library, `libsqlite3.so.0`; on Windows, write `"winsqlite3.dll"`, the SQLite that Windows 10 and later ship in the system folder, with the same functions.
 
 ```agentica {mode="check"}
 SQLITE_OK = 0
