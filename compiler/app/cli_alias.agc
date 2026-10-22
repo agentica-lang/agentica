@@ -34,6 +34,22 @@ export def targets(name: String) -> List[String]
   return public
 end
 
+## The checker's hints for the methods that a bare `name` is on some type (`List.contains: a List has no ...`), by
+## `Kind.name`. A name with a dot has none: its own hint is looked up whole.
+export def kind_hints(name: String) -> Map[String, String]
+  hints = Tables.foreign_kind_methods()
+  found: Map[String, String] = {}
+  if name.contains?(".")
+    return found
+  end
+  for key in hints.keys.sort
+    if key.ends_with?(".#{name}")
+      found = found.put(key, hints[key])
+    end
+  end
+  return found
+end
+
 # The method aliases of the checker: `String.strip` is `String.trim`. `self` (`String.to_s`) is no builtin.
 def from_aliases(method: String, kind: String) -> List[String]
   aliases = Tables.method_aliases()

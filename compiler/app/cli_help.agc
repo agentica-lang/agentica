@@ -17,8 +17,9 @@ import Texts from "cli_text"
 ## A trailing `--json` asks for the JSON form: of the one builtin, or of every public builtin as an array (sorted by
 ## name, each element as `help NAME --json` prints it) when there is no NAME. Nothing else takes an option.
 ## A NAME that is not a builtin but a name from another language (`strip`, `String.to_i`, `value!`) answers with the
-## builtins it stands for (cli_alias.agc), each under the line "`NAME` is called `Y` in Agentica"; as JSON it is
-## {"alias": NAME, "builtins": [the object of each builtin]}.
+## builtins it stands for (cli_alias.agc), each under a line such as "`NAME` is called `Y` in Agentica", then the hints
+## of the checker for that name on other types; as JSON it is {"alias": NAME, "builtins": [the object of each builtin],
+## "hints": {"Kind.name": text}}. A name with a hint of its own for a foreign language (`int`) gets that hint and exit 2.
 export def help(words: List[String], style: String) -> Reply.Reply
   rest = words
   as_json = style == "json"
@@ -44,29 +45,46 @@ export def help(words: List[String], style: String) -> Reply.Reply
   return Reply.printed("#{Builtins.signature(entry.unwrap!)}\n#{entry.unwrap!.description}\n")
 end
 
-# The answer for a name that is no builtin: the builtins it stands for, else the unknown-builtin error.
+# The answer for a name that is no builtin: the hint of the checker for a name from another language that has one
+# (`int`, `Hash.new`: its targets could mislead), else the builtins it stands for, else the unknown-builtin error.
 def renamed(name: String, as_json: Bool) -> Reply.Reply
-  found = Alias.targets(name)
+  found: List[String] = []
+  if !Tables.foreign_names().has_key?(name)
+    found = Alias.targets(name)
+  end
   if found.size == 0
     return Reply.failed(2, "agentica: unknown builtin #{name}#{suggestion(name)}\n")
   end
   # `unwrap!` cannot fail: targets keeps only public builtins.
   entries = found.map do |target: String| CatalogJson.public(target).unwrap! end
+  hints = Alias.kind_hints(name)
   if as_json
     answer = JSON.object({
       "alias": JSON.from(name),
       "builtins": JSON.array(entries.map do |entry: Model.Builtin| CatalogJson.builtin(entry) end),
+      "hints": JSON.from(hints),
     })
     return Reply.printed("#{JSON.encode(answer)}\n")
   end
   blocks = entries.map do |entry: Model.Builtin|
-    "`#{name}` is called `#{entry.name}` in Agentica\n#{Builtins.signature(entry)}\n#{entry.description}\n"
+    "#{rename_line(name, entry.name)}\n#{Builtins.signature(entry)}\n#{entry.description}\n"
   end
-  return Reply.printed(blocks.join("\n"))
+  notes = hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}\n" end
+  return Reply.printed(blocks.concat(notes).join("\n"))
 end
 
-# `; HINT` when the checker has help for this foreign name (`Hash.new`, `String.chomp`), else `; did you mean "NAME"?`
-# when a public name is close, else nothing.
+# "`strip` is called `String.trim` in Agentica" for a real rename, "`trim` is the method `String.trim`" when `name`
+# is the method name of `target` already (with or without its type).
+def rename_line(name: String, target: String) -> String
+  asked = name.split(".")
+  if asked[asked.size - 1] == target.split(".")[1]
+    return "`#{name}` is the method `#{target}`"
+  end
+  return "`#{name}` is called `#{target}` in Agentica"
+end
+
+# `; HINT` when the checker has help for this foreign name (`Hash.new`, `String.chomp`, `select`), else `; did you
+# mean "NAME"?` when a public name is close, else nothing.
 def suggestion(name: String) -> String
   hint = Tables.foreign_names().get(name)
   if !hint.ok?
@@ -74,6 +92,10 @@ def suggestion(name: String) -> String
   end
   if hint.ok?
     return "; #{hint.unwrap!}"
+  end
+  hints = Alias.kind_hints(name)
+  if hints.size > 0
+    return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ")
   end
   case Suggest.did_you_mean(name, PUBLIC_NAMES)
     Ast.Optional.Present(text) -> return "; #{text}"
