@@ -2,7 +2,7 @@
 
 **Status:** Built. The parts (45-0 `std/toml`, the manifest, the lock and the
 cache imports of 45a, the fetch and `install` of 45b, `add`, `update` and the
-writers of 45c, and `vendor` of 45d) are specified in
+writers of 45c, and the `deps/` folder of #578) are specified in
 [`05b-modules.md`](../grammar/05b-modules.md), the contract. This file keeps
 the decisions. It is item 3 of the list after 0.8.0 in the
 [roadmap](../roadmap/README.md): after the FFI core (issue
@@ -28,8 +28,8 @@ Decided by the owner:
   scripts, and pip has run `setup.py` at install. This design does not.
 - **One import form.** A package has one local name, and `pkg/<name>/<module>`
   is the only way to import it. The name does not depend on the URL.
-- **Offline after one fetch.** A package in the cache, or vendored, needs no
-  network to build.
+- **Offline after one fetch.** A package in `deps/` needs no network and no
+  cache to build.
 - **Hermetic tests.** A local git repository stands in for the remote (45.11).
 
 Not in v1: a central registry, a version solver and publishing commands (45.13).
@@ -125,12 +125,12 @@ fetch of `install` are in 05b. What 45b does, and what 45c adds on it:
   `PKG-HASH-MISMATCH`, with nothing overwritten. Not built: the folder is not
   made read-only after the fill (there is no `chmod` builtin); every build
   hashes what it loads instead (question 7).
-- Only `add`, `install`, `update` and `vendor` run git. A build never fetches.
+- Only `add`, `install` and `update` run git. A build never fetches.
 
 ### 45.9 Commands and errors
 
-`install` (45b), `add`, `update` (45c) and `vendor` (45d) are built. The exact
-command line is decided in each phase.
+`install` (45b), `add` and `update` (45c) are built. The exact command line is
+decided in each phase.
 
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole 40-digit id;
   `--subdir DIR` for a folder of the repository, #573) adds the dependency to
@@ -161,13 +161,14 @@ command line is decided in each phase.
     number of words, are usage errors (exit 2). A `--ref` that is a part of the
     id is refused: `git fetch` takes whole ids only. Tags are fetched from
     SHA-1 repositories; a SHA-256 repository works through a `--ref` only.
-- `agentica install` (built, 45b) fills the cache from the lock and never
-  changes the lock. A manifest that asks for more than the lock holds fails with
-  `PKG-LOCK-STALE`. It takes no argument and works on the project of the working
-  folder; with `--json` a success prints `{"ok":true}`, else one line for each
-  package (`fetched NAME@VERSION` or `in the cache NAME@VERSION`). A project
-  with no manifest is `PKG-MANIFEST-MISSING`. A cache that is already full needs
-  no `git` and no network.
+- `agentica install` (built, 45b) fills the cache from the lock, writes
+  `deps/` (below) and never changes the lock. A manifest that asks for more
+  than the lock holds fails with `PKG-LOCK-STALE`. It takes no argument and
+  works on the project of the working folder; with `--json` a success prints
+  `{"ok":true}`, else one line for each package (`fetched NAME@VERSION` or `in
+  the cache NAME@VERSION`). A project with no manifest is
+  `PKG-MANIFEST-MISSING`. A cache that is already full needs no `git` and no
+  network.
 - `agentica update [NAME]` re-resolves one package, or all of them, from the
   manifest pins, and rewrites the lock. **Built (45c).** Decided:
   - With no name it fetches every tag pin again; with a name (a dependency of
@@ -181,42 +182,34 @@ command line is decided in each phase.
     dependency and no lock gets no lock.
   - The lock is the same bytes when nothing moved. The answer lists the
     `added`, `updated` and `removed` packages, or says `nothing to update`.
-- `agentica vendor` copies the locked packages into `agc_libs/<name>/`, after
-  it fills the missing cache entries. A CI job without network then builds from
-  the copies, and the hash check proves they are the locked files. For a
-  declared name, the build reads `agc_libs/<name>/` first and the cache second.
-  A copy whose hash does not match is an error, never a silent fallback.
-  `vendor` writes only the paths of locked packages. It leaves other files in
-  `agc_libs/` alone, the `pkg/` libraries of 05b included. A declared name never
-  reaches the `pkg/` search, because a `pkg/` import would load an unhashed
-  copy. **Built (45d).** Decided:
-  - It does what `install` does first (the same fetch, hash and manifest
-    checks, the same `git` only for what the cache lacks), then copies from
-    the cache, never from git: the copy is the hashed cache folder, so it is
-    the locked files. It takes no argument and writes no lock.
-  - The folder of a locked package is the package's to replace. A copy edited
-    by hand, with a stale or added file, or a link of that name, is replaced by
-    the locked files when `vendor` runs again; that is how a
-    `PKG-HASH-MISMATCH` of a copy is repaired. The new copy is built in a
-    hidden folder of `agc_libs/`, hashed, and swapped in with two renames.
-  - It does not remove anything else. The folder of a package that is no
-    longer locked stays (it is an ordinary `pkg/` library folder then), and the
-    user deletes it. Not removing keeps the rule "writes only the paths of
-    locked packages" and cannot delete a library installed by hand.
-  - `agc_libs/` must be a real folder, never a link, and nothing is written
-    through a link (`PKG-SYMLINK`). A write that fails is `PKG-WRITE`.
-  - The `pkg/` library search skips `agc_libs/<name>/` for a locked name the
-    importing manifest did not declare, so vendoring does not let the project
-    import a package that only another package declared. The cost: a library
-    installed by hand in `agc_libs/` under the name of a locked package is not
-    found any more (the other roots still are).
+- `deps/` (issue #578). The folders are Elixir-style: the packages of a
+  project are in `deps/` beside `agentica.toml`, the compiled programs in
+  `_build/`. The global cache is only a download cache, so a commit is never
+  fetched twice. **Built.** Decided:
+  - `install` writes each locked package, direct or not, flat into
+    `deps/<name>/` (like `mix deps.get`); with a `subdir`, only that folder.
+    `add` and `update` write it too, after the lock, and remove the folder of a
+    package that the old lock had and the new one lacks. `install` removes
+    nothing.
+  - A build reads `pkg/<name>` only from `deps/<name>/`. A declared name that is
+    not there is `CHECK-IMPORT-PACKAGE`, with a help that says to run `agentica
+    install`. Every build still hashes each package it loads against the lock,
+    so an edited `deps/` is `PKG-HASH-MISMATCH`. A declared name never reaches
+    the `pkg/` search, because a `pkg/` import would load an unhashed copy.
+  - The copy is made from the hashed cache folder, never from git. The folder
+    of a locked package is the tool's to replace: an edited file, a stale file
+    or a link of that name is replaced by the locked files when `install` runs
+    again. The new folder is built in a hidden folder of `deps/`, hashed, and
+    swapped in with two renames.
+  - Other entries of `deps/` stay. A dropped package is moved aside and removed
+    without following links.
+  - `deps/` must be a real folder, never a link, and nothing is written through
+    a link (`PKG-SYMLINK`). A write that fails is `PKG-WRITE`.
   - The new folder is made with the ordinary mode; only its private staging
-    parent is 0700. A killed `vendor` can leave `.tmp-*` or `.old-*` folders in
-    `agc_libs/`, which are safe to delete.
-  - The build looks at `agc_libs/<name>/` beside the manifest of the project
-    for every locked name, those of packages too (the lock is one list). The
-    manifest of the package is copied, so a build reads the names it declares
-    from the copy. The stored names are the same as from the cache.
+    parent is 0700. A killed command can leave `.tmp-*` or `.old-*` folders in
+    `deps/`, which are safe to delete.
+  - The tool writes no `.gitignore` in `deps/`: committing it is the project's
+    choice (`_build/` gets one). `agc_libs/` stays for local libraries.
 - The lock writer sorts the `[[package]]` tables by name and writes their keys
   in the order of 05b, so a rewrite with no change makes no diff.
 - The package commands grant the run permission to their own process (45.14,
@@ -247,10 +240,10 @@ breaks "no code runs at install", comes later and needs its own grant.
 `tests/test_spec_packages.py`, and the fetch tests of 45b in
 `tests/test_spec_package_fetch.py` (end to end, offline, moved tag, hash
 mismatch, fetch errors, links and case collisions) and the writer tests of 45c
-in `tests/test_spec_package_add.py` (below), and the `vendor` tests of 45d in
-`tests/test_spec_package_vendor.py` (copies and layout, a copy read before the
-cache, an edited copy, other entries left alone, links, a build with no cache
-and no git), which run through the CLI. The pending tests are below.
+in `tests/test_spec_package_add.py` (below), and the `deps/` tests in
+`tests/test_spec_package_deps.py` (layout, a missing folder, an edited file,
+other entries left alone, links, a dropped package, a build with no cache and no
+git), which run through the CLI. The pending tests are below.
 
 - The fetch and writer tests use a bare git repository in a temporary folder
   as the remote. 45b needs no knob of the tool: a throwaway `HOME` has a
@@ -277,8 +270,8 @@ and no git), which run through the CLI. The pending tests are below.
   check, the cache fill, `install` and the fetch errors (45.8, 45.9).
 - **45c. Add and update. Done.** `add`, `update`, the lock writer and the
   manifest writer, with the rules of 45.7. The round trip of 45.11.
-- **45d. Vendor. Done.** `vendor`, the `agc_libs/<name>/` layout, and the build
-  order that prefers a vendored copy of a declared name (45.9).
+- **45d. The `deps/` folder. Done.** The build reads `deps/<name>/` only
+  (45.9).
 
 Each phase updates [`05b-modules.md`](../grammar/05b-modules.md), the
 programming skill and the CHANGELOG, because import behavior changes for users.
@@ -323,8 +316,8 @@ decision, then the rejected options.
    hashed. The manifest of a package is kept but not hashed. Rejected for v1: a
    `files` list in the manifest.
 7. **Hashing at build.** Every build hashes each package it loads, so a changed
-   vendored file is caught. Rejected: hashing only at install and vendor, which
-   trusts the cache.
+   file of `deps/` is caught. Rejected: hashing only at install, which trusts
+   `deps/`.
 8. **Who may run git.** The package commands start it from their own process.
    `agentica FILE` never runs git.
 9. **Where `agc_libs/` sits.** Beside `agentica.toml` when a manifest exists,

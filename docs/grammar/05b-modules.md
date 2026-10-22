@@ -130,9 +130,10 @@ search goes up to the root of the file system, so an `agentica.toml` in a shared
 parent folder (such as `/tmp`) is read and checked for every script below it,
 and a bad one there is `PKG-MANIFEST-INVALID` for each of them. Without a
 manifest nothing changes. A build reads the manifest and the lock and loads
-packages from `agc_libs/` (`agentica vendor`) or from a cache that `agentica
-install` fills (see below). A build never runs git and never uses the network.
-`agentica add` and `agentica update` write the lock (see below).
+packages only from `deps/` beside `agentica.toml`, which `agentica install`
+writes (see below). A build never runs git and never uses the network, and it
+never reads the package cache. `agentica add` and `agentica update` write the
+lock (see below).
 
 ```toml
 name = "notes"
@@ -187,15 +188,15 @@ import Sqlite from "pkg/sqlite/db"
   `"pkg/sqlite/util/json"` loads `util/json.agc` of the package. `pkg/sqlite`
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
   importing file declares is a package, and it comes first: it shadows a library
-  of the same name in the `pkg/` roots. Its files come from `agc_libs/<name>/`
-  beside `agentica.toml` when that entry exists (the vendored copy, see
-  `agentica vendor` below; a library folder of that name there is read as one
-  and fails the hash), else from the cache. A name that is not
-  declared is the `pkg/` library search above, unchanged. Since the prefix is
-  `pkg/`, a package import never clashes with a local file or folder.
+  of the same name in the `pkg/` roots, `agc_libs/` included. Its files come
+  only from `deps/<name>/` beside `agentica.toml`, one flat folder for each
+  locked package, including the ones that packages import (the lock is one list,
+  so one folder for each name). A name that is not declared is the `pkg/`
+  library search above, unchanged. Since the prefix is `pkg/`, a package import
+  never clashes with a local file or folder.
 - Which manifest decides: the manifest of the project for the files of the
   project (and of the `pkg/` libraries it loads), the manifest of the package
-  itself, read from its folder in the cache, for the files of a package. A
+  itself, read from its folder in `deps/`, for the files of a package. A
   package file imports only the packages its own manifest declares; a `pkg/`
   name it did not declare is `CHECK-IMPORT-PACKAGE`, and the project cannot
   import the dependencies of a package unless it declares them too. A package
@@ -215,19 +216,19 @@ import Sqlite from "pkg/sqlite/db"
   before. Every dependency of the manifest must be in the lock with the same
   `git` (with or without a `.git` at the end), the same `subdir` (or none) and
   the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`. The same check runs
-  on the manifest of every locked package that is in the cache: a name the lock
+  on the manifest of every locked package that is in `deps/`: a name the lock
   lacks is `PKG-LOCK-STALE`, and a name with another source than the lock is
-  `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of the
-  manifest in the cache. One name with two different sources anywhere in the
+  `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of that
+  manifest. One name with two different sources anywhere in the
   tree (the project and a package, or two packages) is `PKG-SOURCE-CONFLICT`;
   the source is the `git`, the `subdir` and the pin; there are no versions to
   compare and no ranges to solve. Both checks run once for every command that
   loads code, before any file is read, so a conflict is reported whether or not
-  an import reaches that package. A package that is neither vendored nor in the
-  cache, one whose folder cannot be listed and one whose manifest is not a
-  regular file are left for the import that loads them (so a conflict in them
-  shows only then). A manifest that is a symbolic link, a folder or a pipe is
-  `PKG-SYMLINK` and is never opened. The build never writes the lock.
+  an import reaches that package. A package that is not in `deps/`, one whose
+  folder cannot be listed and one whose manifest is not a regular file are left
+  for the import that loads them (so a conflict in them shows only then). A
+  manifest that is a symbolic link, a folder or a pipe is `PKG-SYMLINK` and is
+  never opened. The build never writes the lock.
 - Manifest and lock errors have no source span. They name the file and the key
   path, such as `dependencies.sqlite.git` or `package[1].hash` (`[n]` counts
   from 0); a TOML syntax error has the line and column instead. In the plain
@@ -236,7 +237,9 @@ import Sqlite from "pkg/sqlite/db"
   file. A failure about the file as a whole (a lock that is missing, a file that
   cannot be read) has no key: the plain and `--ai` forms show the file name
   alone, and `--json` has no `key_path` and a `range` at line 0, column 0.
-- The cache holds one folder for each commit:
+- The package cache is a download cache, so that a commit is never fetched
+  twice; `install`, `add` and `update` fill it and write `deps/` from it. It
+  holds one folder for each commit:
   `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, from the `git`
   URL of the lock. Two names for one repository are two packages, each with its
   own lock entry. A package with a `subdir` has the folder `<commit>@<subdir>`
@@ -247,8 +250,10 @@ import Sqlite from "pkg/sqlite/db"
   absolute, else `~/.cache` is used (no cache when `HOME` is unset too). On
   Windows the folder is `%LOCALAPPDATA%/agentica/cache/pkg/` (no cache when it
   is unset or relative; `XDG_CACHE_HOME` and `HOME` are not read). A declared
-  package that is not in the cache, and not vendored, is `CHECK-IMPORT-PACKAGE`.
-- `agentica install` fills the cache from the lock and never writes the lock. It
+  package that is not in `deps/` is `CHECK-IMPORT-PACKAGE`, whose help says to
+  run `agentica install`.
+- `agentica install` fills the cache from the lock, writes `deps/` (below) and
+  never writes the lock. It
   takes no argument; the project is the nearest `agentica.toml` going up from
   the working folder (none is `PKG-MANIFEST-MISSING`), and the lock is checked
   against the manifest as a build checks it (`PKG-LOCK-STALE`). For each locked
@@ -280,8 +285,11 @@ import Sqlite from "pkg/sqlite/db"
   the entry (`package[1].tag`, `package[1].hash`; `package[1].git` when git
   itself failed; `package[1]` for the others). The first failure stops the
   command. When every package is in the cache, the manifest of each is checked
-  against the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`). The command starts
-  git even under `--deny-run`, which only limits programs.
+  against the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`), and only then is
+  `deps/` written, so a lock that cannot be built writes nothing there. The
+  answer is `fetched NAME@VERSION` or `in the cache NAME@VERSION` for each
+  package, or `nothing to install`. The command starts git even under
+  `--deny-run`, which only limits programs.
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and
   `agentica update [NAME]` write the lock; they are the only commands that do.
   Both work on the project of the working folder (no manifest is
@@ -296,13 +304,15 @@ import Sqlite from "pkg/sqlite/db"
   else is fetched, and the commit and the hash are read from what git gave; a
   fetch error of such a pin names the manifest that asks for it and
   `dependencies.<name>.git` (or `.tag`, `.ref`, `.subdir`), the same codes as
-  `install`. Nothing is written when a step fails, and the lock is written
-  before the manifest. A file that cannot be written is `PKG-WRITE`; each file
-  is written to a new file beside it that is renamed into place, and the old one
-  is put back if a step fails. A manifest that changed while the packages were
-  fetched is not overwritten (`PKG-WRITE`, nothing written), and a manifest that
-  cannot be written after the lock was says so in the help: `agentica update`
-  makes the lock match it again. The lock is sorted by name (just `version = 1`
+  `install`. Nothing is written when a step before the lock fails, and the lock
+  is written before the manifest and `deps/` after both: if `deps/` cannot be
+  written, `agentica install` makes it match the lock again. A file that cannot
+  be written is `PKG-WRITE`; each file is written to a new file beside it that
+  is renamed into place, and the old one is put back if a step fails. A
+  manifest that changed while the packages were fetched is not overwritten
+  (`PKG-WRITE`, nothing written), and a manifest that cannot be written after
+  the lock was says so in the help: `agentica update` makes the lock match it
+  again. The lock is sorted by name (just `version = 1`
   when it is empty), in the layout above, so it has the same bytes when nothing
   changed.
   - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
@@ -328,49 +338,41 @@ import Sqlite from "pkg/sqlite/db"
     again. It also fixes a lock that is missing or stale (a manifest edited by
     hand) and drops the packages that nothing asks for any more. A project with
     no dependency and no lock gets none.
+  - Both refresh `deps/` as `install` writes it, for every package of the new
+    lock, and remove the folder of a package that the old lock had and the new
+    one lacks.
   - The answer lists `added NAME@VERSION`, `updated NAME@VERSION` (another
     commit or pin) and `removed NAME`, one per line, or `nothing to update`;
     a package with a `subdir` adds ` (folder DIR)` after `NAME@VERSION`. With
     `--json` a success prints `{"ok":true}`.
-- `agentica vendor` copies the locked packages into `agc_libs/<name>/` beside
-  `agentica.toml`, so a project builds with no network and no cache (a CI job,
-  say). It takes no argument and works on the project of the working folder like
-  `install`, and starts by doing what `install` does: a package that the cache
-  lacks is fetched with `git`, a cache folder with another hash is
-  `PKG-HASH-MISMATCH`, and the manifests are checked against the lock. It never
-  writes the lock. Then, for each locked package, the files the hash covers and
-  the `agentica.toml` of the package (for a `subdir`, of that folder only: the
-  cache holds nothing else) are copied from the cache into a hidden folder of
-  `agc_libs/`, hashed against the lock, and swapped for the old
-  `agc_libs/<name>/` in two renames, so the old copy stays if a step fails; the
-  folder of a locked package is replaced whatever it held (an edited copy, a
-  stale file, a link, a `pkg/` library of that name), and running `vendor` again
-  is how to restore it. The new folder has the ordinary mode (not the private
-  one of the staging folder). A killed `vendor` may leave a hidden `.tmp-*` or
-  `.old-*` folder in `agc_libs/`; it is safe to delete, and a `PKG-WRITE` that
-  could not put an old copy back names the `.old-*` folder that holds it. It
-  writes nothing but those folders: other entries of `agc_libs/`, the `pkg/`
-  libraries and the folders of packages that are no longer locked included, are
-  left alone. `agc_libs/` itself must be a real folder: a symbolic link is
-  `PKG-SYMLINK`, and a file or a write that fails is `PKG-WRITE` (the file and
-  no key); nothing is written through a link. A package that fails the hash or
-  the fetch names `agentica.lock` and its key as `install` does. The answer is
-  `vendored NAME@VERSION` for each package, `nothing to vendor` for an empty
-  lock, and `{"ok":true}` with `--json`.
-- A build reads `agc_libs/<name>/` of a declared name before the cache,
-  including for the packages that packages import (the lock is one list, so one
-  folder for each name). The copy is hashed against the lock as the cache is:
-  one that differs (an edited file, an added `.agc` file, a missing one) is
-  `PKG-HASH-MISMATCH` at the import, and the cache is not used instead; an
-  entry that is not a folder is `CHECK-IMPORT-PACKAGE`. The stored names of the
-  files do not depend on where they were read, so the bytecode is the same from
-  a copy and from the cache. A link to a folder at `agc_libs/<name>` is
-  followed when a build reads it (the hash covers what is behind it); `vendor`
-  replaces the link itself. A name the project does not declare is the `pkg/`
-  library search, except that `agc_libs/` is skipped for the name of a locked
-  package, whose folder there is a vendored copy: the project reaches the same
-  packages with and without `vendor` (a library of that name in the other
-  roots is still found).
+- `deps/` holds the files of each locked package, direct or not, in
+  `deps/<name>/` beside `agentica.toml`, like `mix deps.get`: the files the hash
+  covers and the `agentica.toml` of the package (for a `subdir`, of that folder
+  only: the cache holds nothing else). `install`, `add` and `update` copy them
+  from the cache into a hidden `.tmp-*` folder of `deps/`, hash the copy
+  against the lock (`PKG-HASH-MISMATCH` at `package[n].hash`), and swap it for
+  the old `deps/<name>/` in two renames, so the old folder stays if a step
+  fails. The folder of a locked package is replaced whatever it held (an edited
+  file, a stale file, a link), and running `install` again is how to restore
+  it. The new folder has the ordinary mode (not the private one of the staging
+  folder). A killed command may leave a hidden `.tmp-*` or `.old-*` folder in
+  `deps/`; it is safe to delete, and a `PKG-WRITE` that could not put an old
+  folder back names the `.old-*` folder that holds it. A folder of a package
+  that `update` or `add` dropped from the lock is moved aside and removed
+  without following links (a link is removed as a link). Nothing else in
+  `deps/` is touched, and the tool writes no `.gitignore` there: a project may
+  commit `deps/` or ignore it. `deps/` itself must be a real folder: a symbolic
+  link is `PKG-SYMLINK`, and a file or a write that fails is `PKG-WRITE` (the
+  file and no key); nothing is written through a link. `agc_libs/` is not
+  touched: it stays for the libraries of the `pkg/` search.
+- A build reads `deps/<name>/` of a declared name and hashes it against the
+  lock: one that differs (an edited file, an added `.agc` file, a missing one)
+  is `PKG-HASH-MISMATCH` at the import, and nothing else is used instead; a
+  folder that is not there, or an entry that is not a folder, is
+  `CHECK-IMPORT-PACKAGE`. The stored names of the files do not depend on where
+  they were read. A link to a folder at `deps/<name>` is followed when a build
+  reads it (the hash covers what is behind it); `install` replaces the link
+  itself. A name the project does not declare is the `pkg/` library search.
 - The hash covers the `.agc` files of the package folder (for a `subdir`, that
   folder of the repository, so a change in another folder does not change it).
   Their paths are relative to it, written with `/`, in bytewise order; for each
@@ -381,16 +383,16 @@ import Sqlite from "pkg/sqlite/db"
   case, so `x.AGC` is hashed and `AGC_LIBS/` is left out on every system), so
   the `agentica.toml` of a package is not hashed: it can only choose among the
   names of the lock. The first time a build loads a package, it hashes the
-  folder (the vendored copy, else the cache) and compares the result with the
-  lock (`PKG-HASH-MISMATCH`); a symbolic link named `*.agc` is `PKG-SYMLINK`. A
-  package that no import reaches is not hashed. Nothing in the cache or in
-  `agc_libs/` is changed.
+  folder of `deps/` and compares the result with the lock
+  (`PKG-HASH-MISMATCH`); a symbolic link named `*.agc` is `PKG-SYMLINK`. A
+  package that no import reaches is not hashed. A build changes nothing in
+  `deps/`.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package
   pinned by a `ref` it is `pkg/<name>@<first 12 digits of the commit>/...`. So
-  the bytes do not depend on the cache folder or on a vendored copy. Diagnostics
-  inside a package name the real file, in the cache or in `agc_libs/`.
+  the bytes do not depend on the folder of the project. Diagnostics inside a
+  package name the real file in `deps/`.
 
 #### String queue (`std/queue`)
 

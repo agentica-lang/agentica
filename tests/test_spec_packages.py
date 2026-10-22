@@ -1,11 +1,12 @@
 """Package imports, the manifest and the lock, through the CLI (docs/future/45-packages.md, phase 45a).
 
-Each case builds a project folder and a package cache folder by hand (there is no fetching yet), runs `--json check` on
+Each case builds a project folder with its deps/ folder by hand (no fetching), runs `--json check` on
 the root file and asserts the code and where it is: the span of the import, or the file and key path of a manifest or
 lock error. Message and help text are not asserted (AGENTS.md).
 """
 import json
 import os
+import shutil
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ import pytest
 from tests.agentica_test import POSIX_PYTHON, WINDOWS, cli, host_only, run, vm_environment
 from tests.package_support import COMMIT, Workspace, dependency, package_hash
 
-# No AGENTICA_PATH roots and no user data folder, so only what a case builds resolves; the cache is each case's own.
+# No AGENTICA_PATH roots and no user data folder, so only what a case builds resolves; deps/ is each case's own.
 HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
             "LOCALAPPDATA": "/nonexistent-agentica-xdg"}
 
@@ -36,7 +37,7 @@ MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Gree
 
 
 def build(base):
-    """A workspace whose project depends on greeter, which depends on tools: both are in the cache and the lock."""
+    """A workspace whose project depends on greeter, which depends on tools: both are in deps/ and the lock."""
     workspace = Workspace(base)
     workspace.add_package("tools", TOOLS_GIT, {"bang.agc": BANG}, ref="bbbbbbb", commit=TOOLS_COMMIT)
     workspace.add_package("greeter", GREETER_GIT, {"greet.agc": GREET, "util/shout.agc": SHOUT}, tag="v1.2.3",
@@ -103,11 +104,11 @@ def write_main(ws, text):
     (ws.project / "main.agc").write_text(text + "\ndef main() -> Void\nend\n", encoding="utf-8")
 
 
-def test_a_package_import_runs_from_the_cache_and_stores_logical_paths(ws, tmp_path):
+def test_a_package_import_runs_from_deps_and_stores_logical_paths(ws, tmp_path):
     # The program imports greeter, which imports its own util/shout and its dependency tools by pkg/tools/.
     ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.base, env=environment(ws))
     assert (ran.code, ran.stdout) == (0, "HELLO ANA!\n"), ran.stderr
-    # The .agcb names each package file by name, version and path, so its bytes do not depend on the cache folder.
+    # The .agcb names each package file by name, version and path, so its bytes do not depend on the folder of the project.
     built = []
     for index in range(2):
         other = build(tmp_path / ("copy%d" % index))
@@ -126,7 +127,7 @@ def test_a_package_import_runs_from_the_cache_and_stores_logical_paths(ws, tmp_p
 
 def test_the_hash_covers_the_agc_files_only_and_matches_a_second_implementation(ws):
     # Non-.agc files, a hidden folder and the agc_libs folder of the package are not hashed: adding them changes nothing.
-    folder = ws.folder(GREETER_GIT)
+    folder = ws.deps / "greeter"
     (folder / "README.md").write_text("not code", encoding="utf-8")
     (folder / ".git").mkdir()
     (folder / ".git" / "x.agc").write_text("junk", encoding="utf-8")
@@ -144,7 +145,7 @@ def test_the_hash_covers_the_agc_files_only_and_matches_a_second_implementation(
     (ws.project / "big.agc").write_text(
         'import Core from "pkg/big/core"\n\ndef main() -> Void\n  puts(Core.one())\nend\n', encoding="utf-8")
     assert check(ws, "big.agc") is None
-    assert package_hash(ws.folder("https://github.com/big/pack")).startswith("sha256:")
+    assert package_hash(ws.deps / "big").startswith("sha256:")
 
 
 def deps(line):
@@ -321,8 +322,8 @@ def test_the_same_spelling_of_a_git_URL_with_or_without_dot_git_is_one_source(ws
 
 
 def test_one_name_with_two_sources_in_the_tree_is_a_conflict(ws):
-    # The manifest of greeter, in the cache, asks for another tag of tools than the lock (and the project) has.
-    manifest = ws.folder(GREETER_GIT) / "agentica.toml"
+    # The manifest of greeter, in deps/, asks for another tag of tools than the lock (and the project) has.
+    manifest = ws.deps / "greeter" / "agentica.toml"
     manifest.write_text('[dependencies]\ntools = { git = "%s", tag = "v9.9.9" }\n' % TOOLS_GIT, encoding="utf-8")
     assert_at_key(check(ws), "PKG-SOURCE-CONFLICT", manifest, "dependencies.tools")
     # The same name from another repository.
@@ -344,15 +345,15 @@ def test_the_project_and_a_package_may_declare_one_name_with_the_same_source(ws)
     assert check(ws) is None
 
 
-def test_a_cache_that_does_not_match_the_lock_is_refused_when_the_package_is_loaded(ws):
-    greet = ws.folder(GREETER_GIT) / "greet.agc"
+def test_a_folder_of_deps_that_does_not_match_the_lock_is_refused_when_the_package_is_loaded(ws):
+    greet = ws.deps / "greeter" / "greet.agc"
     original = greet.read_bytes()
     greet.write_bytes(original + b"# changed\n")
     assert_at_import(check(ws), "PKG-HASH-MISMATCH")
     greet.write_bytes(original)
     assert check(ws) is None
     # A new .agc file changes the listing, so it changes the hash too.
-    (ws.folder(GREETER_GIT) / "extra.agc").write_text("# new\n", encoding="utf-8")
+    (ws.deps / "greeter" / "extra.agc").write_text("# new\n", encoding="utf-8")
     assert_at_import(check(ws), "PKG-HASH-MISMATCH")
     # The hash is checked for what a build loads: a file that imports nothing from the package never pays for it.
     (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
@@ -361,37 +362,17 @@ def test_a_cache_that_does_not_match_the_lock_is_refused_when_the_package_is_loa
 
 @pytest.mark.skipif(not POSIX_PYTHON, reason="host-only: a symbolic link needs no privilege on POSIX only")
 def test_a_symbolic_link_among_the_agc_files_of_a_package_is_refused(ws):
-    folder = ws.folder(GREETER_GIT)
+    folder = ws.deps / "greeter"
     (folder / "linked.agc").symlink_to(folder / "greet.agc")
     assert_at_import(check(ws), "PKG-SYMLINK")
 
 
-def test_a_package_that_is_not_in_the_cache_says_so(ws, tmp_path):
-    ws.cache.rename(tmp_path / "moved")
+def test_a_declared_package_missing_from_deps_says_so_and_the_cache_is_not_needed(ws, tmp_path):
+    # A build reads only deps/: it needs no package cache, and a package that deps/ lacks is CHECK-IMPORT-PACKAGE.
+    shutil.rmtree(ws.cache, ignore_errors=True)
+    assert check(ws, XDG_CACHE_HOME="relative", HOME=None, LOCALAPPDATA=None) is None
+    (ws.deps / "greeter").rename(tmp_path / "moved")
     assert_at_import(check(ws), "CHECK-IMPORT-PACKAGE")
-    # With no cache folder at all (no usable XDG_CACHE_HOME and no HOME), the import says so as well.
-    problem = check(ws, XDG_CACHE_HOME="relative", HOME=None, LOCALAPPDATA=None)
-    assert_at_import(problem, "CHECK-IMPORT-PACKAGE")
-
-
-def test_the_cache_folder_follows_the_environment_of_the_system(ws, tmp_path):
-    # Where the cache is: XDG_CACHE_HOME, else ~/.cache, and %LOCALAPPDATA%/agentica/cache on Windows.
-    home = tmp_path / "home"
-    if WINDOWS:
-        # ws.cache already holds agentica/cache/pkg, the layout under %LOCALAPPDATA%.
-        data = ws.cache
-        # XDG_CACHE_HOME and HOME are not read on Windows.
-        problem = check(ws, XDG_CACHE_HOME=str(tmp_path / "nowhere"), HOME=str(home), LOCALAPPDATA=str(data))
-        assert problem is None
-        assert_at_import(check(ws, HOME=str(home), LOCALAPPDATA="relative"), "CHECK-IMPORT-PACKAGE")
-        return
-    (home / ".cache").mkdir(parents=True)
-    ws.cache.rename(home / ".cache")
-    assert check(ws, XDG_CACHE_HOME="relative", HOME=str(home)) is None
-    assert check(ws, XDG_CACHE_HOME="", HOME=str(home)) is None
-    assert_at_import(check(ws, XDG_CACHE_HOME=str(tmp_path / "nowhere"), HOME=str(home)), "CHECK-IMPORT-PACKAGE")
-    # LOCALAPPDATA is read on Windows only.
-    assert check(ws, XDG_CACHE_HOME="relative", HOME=str(home), LOCALAPPDATA=str(tmp_path / "nowhere")) is None
 
 
 IMPORT_CASES = [
@@ -414,11 +395,12 @@ def test_an_undeclared_name_falls_back_to_the_pkg_roots_and_the_project_cannot_r
     # pkg/tools/ is today's library search: nothing there.
     write_main(ws, 'import Tools from "pkg/tools/bang"\n')
     assert_at_import(check(ws), "CHECK-IMPORT-IO")
-    # agc_libs/tools is where `vendor` puts the locked package, not a library, so the search skips it ...
+    # deps/tools is the locked package, never a library, but agc_libs/ is the project's own: a library there is found.
     (ws.project / "agc_libs" / "tools").mkdir(parents=True)
     (ws.project / "agc_libs" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
-    assert_at_import(check(ws), "CHECK-IMPORT-IO")
-    # ... and the other roots are searched as before.
+    assert check(ws) is None
+    (ws.project / "agc_libs" / "tools" / "bang.agc").unlink()
+    # The other roots are searched as before.
     root = ws.base / "libs"
     (root / "tools").mkdir(parents=True)
     (root / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
@@ -440,12 +422,18 @@ def test_a_declared_name_shadows_a_library_of_the_same_name(ws):
     assert (ran.code, ran.stdout) == (0, "library\n"), ran.stderr
 
 
-def test_agc_libs_of_a_declared_name_is_the_vendored_copy_and_must_be_the_locked_files(ws):
-    # A library folder that has the name of a declared package is read as its vendored copy (agentica vendor), so it
-    # is hashed against the lock and, being other files, is PKG-HASH-MISMATCH; the cache is not used instead.
+def test_agc_libs_of_a_declared_name_is_not_read_and_a_file_edited_in_deps_is_a_hash_mismatch(ws):
+    # A declared name shadows the library roots, agc_libs/ included, so a library of that name changes nothing ...
     (ws.project / "agc_libs" / "greeter").mkdir(parents=True)
     (ws.project / "agc_libs" / "greeter" / "greet.agc").write_text(
         'export def hello(name: String) -> String\n  return "library"\nend\n', encoding="utf-8")
+    assert check(ws) is None
+    # ... while a file of deps/greeter that is not the locked one is PKG-HASH-MISMATCH at the import.
+    (ws.deps / "greeter" / "greet.agc").write_text("# edited\n", encoding="utf-8")
+    assert_at_import(check(ws), "PKG-HASH-MISMATCH")
+    # A file added to the folder changes the hash too.
+    (ws.deps / "greeter" / "greet.agc").write_text(GREET, encoding="utf-8")
+    (ws.deps / "greeter" / "extra.agc").write_text("# extra\n", encoding="utf-8")
     assert_at_import(check(ws), "PKG-HASH-MISMATCH")
 
 
@@ -489,7 +477,7 @@ def test_a_package_file_may_import_only_inside_itself_and_what_its_manifest_decl
     (ws.project / "agc_libs" / "other" / "x.agc").write_text(ONE, encoding="utf-8")
     problem = check(ws)
     assert problem["code"] == code
-    assert Path(problem["file"]) == ws.folder(GREETER_GIT, "c" * 40) / "greet.agc"
+    assert Path(problem["file"]) == ws.deps / "greeter" / "greet.agc"
     assert start(problem) == (1, 1)
 
 
@@ -499,12 +487,12 @@ USE_ALONE = 'import Alone from "pkg/alone/one"\n'
 
 
 def add_alone(ws, files=None, **extra):
-    """Adds the package `alone` (in the cache, the lock and the manifest of the project) and a file that imports it."""
+    """Adds the package `alone` (in deps/, the lock and the manifest of the project) and a file that imports it."""
     ws.add_package("alone", ALONE_GIT, files or {"one.agc": ONE}, tag="v1.0.0", **extra)
     ws.write_manifest({"greeter": GREETER, "alone": dependency(ALONE_GIT, tag="v1.0.0")})
     ws.write_lock()
     (ws.project / "use.agc").write_text(USE_ALONE + "\ndef main() -> Void\nend\n", encoding="utf-8")
-    return ws.folder(ALONE_GIT)
+    return ws.deps / "alone"
 
 
 @host_only(WINDOWS, "a symbolic link needs a privilege that Windows does not give by default")
@@ -588,7 +576,7 @@ def test_a_package_with_no_manifest_declares_nothing(ws):
     assert Path(problem["file"]) == folder / "one.agc"
 
 
-def test_two_local_names_for_one_repository_are_two_packages_in_one_cache_folder(ws):
+def test_two_local_names_for_one_repository_are_two_packages(ws):
     ws.add_package("alone", ALONE_GIT, {"one.agc": ONE}, tag="v1.0.0")
     ws.add_package("other", ALONE_GIT, {"one.agc": ONE}, tag="v1.0.0")
     ws.write_manifest({"alone": dependency(ALONE_GIT, tag="v1.0.0"), "other": dependency(ALONE_GIT, tag="v1.0.0")})
@@ -605,7 +593,7 @@ def test_two_local_names_for_one_repository_are_two_packages_in_one_cache_folder
 
 def test_a_conflict_in_a_package_that_no_import_reaches_is_still_reported(ws):
     # The manifest of greeter asks for another tag of tools than the lock has, and the build imports nothing.
-    manifest = ws.folder(GREETER_GIT) / "agentica.toml"
+    manifest = ws.deps / "greeter" / "agentica.toml"
     manifest.write_text('[dependencies]\ntools = { git = "%s", tag = "v9.9.9" }\n' % TOOLS_GIT, encoding="utf-8")
     (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
     assert_at_key(check(ws, "plain.agc"), "PKG-SOURCE-CONFLICT", manifest, "dependencies.tools")
@@ -614,12 +602,11 @@ def test_a_conflict_in_a_package_that_no_import_reaches_is_still_reported(ws):
     assert_at_key(check(ws, "plain.agc"), "PKG-LOCK-STALE", manifest, "dependencies.more")
 
 
-def test_a_locked_package_that_is_not_in_the_cache_fails_only_when_it_is_imported(ws):
-    import shutil
-    shutil.rmtree(ws.folder(TOOLS_GIT, TOOLS_COMMIT))
+def test_a_locked_package_that_is_not_in_deps_fails_only_when_it_is_imported(ws):
+    shutil.rmtree(ws.deps / "tools")
     (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
     assert check(ws, "plain.agc") is None
-    # greeter is there, and imports tools from the cache: the missing package is told at that import.
+    # greeter is there, and imports tools from deps/: the missing package is told at that import.
     problem = check(ws)
     assert problem["code"] == "CHECK-IMPORT-PACKAGE"
 

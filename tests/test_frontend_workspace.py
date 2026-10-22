@@ -3,7 +3,7 @@
 fixtures/frontend/workspace/in-memory.agc builds a Workspace over an in-memory table of files and links two roots with
 it: a program with an import, and one whose import is missing. Nothing it links exists on the disk, so a read that
 bypassed the Workspace would fail the first root. fixtures/frontend/workspace/end-to-end.agc goes on through the
-checker, the lowering and the writer, for a program with a sibling module, a package from the package cache and a std/
+checker, the lowering and the writer, for a program with a sibling module, a package from deps/ and a std/
 module from std_source, and writes the .agcb, which the test then runs with the CLI.
 
 The end-to-end case is the dynamic proof for reads: its table is keyed under a folder of the test, where the test has
@@ -15,7 +15,7 @@ the disk after it: tests/test_style_core_purity.py is the static half, and cover
 import pytest
 
 from tests.agentica_test import FIXTURES, ROOT, WINDOWS, cli, run
-from tests.package_support import COMMIT, cache_path, package_hash
+from tests.package_support import COMMIT, package_hash
 
 PROGRAM = FIXTURES / "frontend" / "workspace" / "in-memory.agc"
 END_TO_END = FIXTURES / "frontend" / "workspace" / "end-to-end.agc"
@@ -39,15 +39,14 @@ def test_the_linker_reads_files_from_a_workspace_that_is_not_the_disk():
     ]
 
 
-def write_decoys(root, windows):
+def write_decoys(root):
     """Garbage at every path that the fixture keeps in memory, under `root`."""
-    pkg = "cache/agentica/cache/pkg" if windows else "cache/agentica/pkg"
     for relative in [
         "project/src/main.agc",
         "project/src/util.agc",
         "project/agentica.toml",
         "project/agentica.lock",
-        f"{pkg}/{cache_path(GIT)}/{COMMIT}/greet.agc",
+        "project/deps/greet/greet.agc",
     ]:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,7 +63,7 @@ def test_the_whole_pure_core_compiles_a_program_over_an_in_memory_workspace(tmp_
     if windows:
         base, decoys = "C:/mem", None if WINDOWS else tmp_path / "C:" / "mem"
     if decoys is not None:
-        write_decoys(decoys, windows)
+        write_decoys(decoys)
 
     package = tmp_path / "greet-package"
     package.mkdir()

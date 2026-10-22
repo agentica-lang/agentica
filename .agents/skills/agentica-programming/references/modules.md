@@ -120,10 +120,10 @@ A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
 `agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
 id; `--subdir DIR` for a folder of the repository) adds a dependency and writes
-the lock, `agentica update [NAME]` moves tag pins, `agentica install` fills the
-cache from the lock, and `agentica vendor` copies the locked packages into
-`agc_libs/<name>/`. A declared package neither vendored nor in the cache is
-`CHECK-IMPORT-PACKAGE`.
+the lock, `agentica update [NAME]` moves tag pins, and `agentica install`
+writes every locked package into `deps/<name>/` beside `agentica.toml` (through
+a download cache). A build reads packages only from `deps/`; a declared package
+missing there is `CHECK-IMPORT-PACKAGE`.
 
 ```toml
 name = "notes"
@@ -152,10 +152,9 @@ import Sqlite from "pkg/sqlite/db"
   only that folder. Another folder of the same repository is a dependency like
   any other.
 - `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared package.
-  A declared name comes before the `pkg/` library folders; an undeclared name is
-  the search above. The files of a package come from `agc_libs/<name>/` beside
-  `agentica.toml` when that entry exists (its vendored copy, never read as a
-  library), else from the cache.
+  A declared name comes before the `pkg/` library folders (`agc_libs/` too); an
+  undeclared name is the search above. The files of a package come only from
+  `deps/<name>/` beside `agentica.toml`, never from the cache.
 - A file of a package imports only the names of its own `agentica.toml`, and its
   own modules by relative paths inside the package.
 - A manifest with dependencies needs `agentica.lock` beside it. Only the
@@ -183,9 +182,9 @@ import Sqlite from "pkg/sqlite/db"
 - The cache folder of a package is `<cache>/<host>/<owner>/<repo>/<commit>/`,
   with no `.git` in `<repo>` (`<commit>@<subdir>` with `/` written `@` for a
   `subdir`, holding only that folder). `agentica install` (no arguments; the
-  project of the working folder) fills it with the system `git` and never writes
-  the lock. A package already cached with the locked hash is not fetched, so a
-  full cache needs no git and no network. A fetch gets the tag (or the locked
+  project of the working folder) fills it with the system `git`, writes `deps/`
+  from it and never writes the lock. A package already cached with the locked
+  hash is not fetched, so a full cache needs no git and no network. A fetch gets the tag (or the locked
   commit) without a checkout and copies the `.agc` files (each at most 1 MiB)
   and the root `agentica.toml`. It fails with `PKG-TAG-MOVED` (the tag is
   another commit than the lock), `PKG-HASH-MISMATCH` (the files are not the
@@ -207,27 +206,24 @@ import Sqlite from "pkg/sqlite/db"
   commit pin never moves. A bad name, URL, tag or commit on the command line is
   a usage error (exit 2). A lock that cannot be written, or a manifest that
   changed during the fetch, is `PKG-WRITE`. Nothing is written when a step
-  fails; if only the manifest write fails, run `agentica update` to make the
-  lock match it again.
-- `agentica vendor` (no arguments) does what `install` does, then copies the
-  `.agc` files and the `agentica.toml` of every locked package from the cache
-  into `agc_libs/<name>/` beside `agentica.toml`, so a build needs no network
-  and no cache. It never writes the lock. It replaces the folder of each locked
-  package whatever it held (run it again to restore an edited copy) and leaves
-  every other entry of `agc_libs/` alone, folders of packages no longer locked
-  included (a killed run may leave a hidden `.tmp-*` or `.old-*` folder; delete
-  it). The `pkg/` library search skips `agc_libs/<name>/` for a locked package
-  the importing manifest did not declare. `agc_libs/` as a symbolic link is
-  `PKG-SYMLINK`; a failed write is `PKG-WRITE`. A build hashes a vendored copy
-  as it hashes the cache: a copy that differs is `PKG-HASH-MISMATCH`, and the
-  cache is not used instead.
+  before the lock fails; if only the manifest write fails, run `agentica update`
+  to make the lock match it again. Both then refresh `deps/` and remove the
+  folder of a package the lock dropped.
+- `deps/<name>/` holds the `.agc` files and the `agentica.toml` of each locked
+  package, direct or not, flat (for a `subdir`, that folder only). `install`
+  replaces the folder of each locked package whatever it held (run it again to
+  restore an edited file) and leaves every other entry of `deps/` alone (a
+  killed run may leave a hidden `.tmp-*` or `.old-*` folder; delete it). The
+  tool writes no `.gitignore` there: commit `deps/` or ignore it. `deps/` as a
+  symbolic link is `PKG-SYMLINK`; a failed write is `PKG-WRITE`. `agc_libs/`
+  stays for local libraries.
 - The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte
   stream: for each `.agc` file below the package folder, in bytewise order of
   its path relative to the folder (written with `/`), the path, a zero byte, the
   size in decimal, a zero byte and the file bytes. Hidden folders (any depth),
   `agc_libs/` at the package root and non-`.agc` files are left out, so the
-  package's `agentica.toml` is not hashed. A build hashes a package (vendored
-  copy, else cache) the first time an import loads it; a difference is
+  package's `agentica.toml` is not hashed. A build hashes a package (its
+  `deps/` folder) the first time an import loads it; a difference is
   `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc` is `PKG-SYMLINK`.
 
 ## String queue (`std/queue`)

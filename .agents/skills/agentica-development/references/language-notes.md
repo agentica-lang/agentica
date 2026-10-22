@@ -135,7 +135,7 @@ section for the area you are changing.
   canonical symlink containment. Other paths remain source-relative, unless
   their first part is a package name the importing file declares (the project's
   manifest, or the package's own for a package file; `package_import.agc`). Then
-  the files come from the cache folder of the locked commit, hashed once per
+  the files come from `deps/<name>/` beside `agentica.toml`, hashed once per
   build, and a package file may not import outside its package. `agc_libs/` of
   `pkg/` sits beside `agentica.toml` when there is one. No package registry,
   wildcard imports, module state, cycles, or receiver attachment.

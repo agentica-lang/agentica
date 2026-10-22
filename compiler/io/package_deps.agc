@@ -1,21 +1,28 @@
-## Puts a locked package into `agc_libs/<name>/` of the project (docs/future/45-packages.md, 45.9). The files come from
-## the cache folder of the commit, which `install` filled and hashed: the .agc files the hash covers and the manifest
-## of the package. They are built in a hidden folder of agc_libs/, hashed against the lock, and swapped for the old
-## `agc_libs/<name>/` in two renames, so a build never sees a half-written copy and a failure leaves the old copy.
+## Writes the locked packages into `deps/<name>/` of the project (docs/grammar/05b-modules.md), one flat folder for each
+## package of the build, direct or not, and removes the ones the lock dropped. This is the only place a build reads a
+## package from. The files come from the cache folder of the commit, which `install` filled and hashed: the .agc files
+## the hash covers and the manifest of the package (for a `subdir`, the cache folder holds that folder alone). They are
+## built in a hidden folder of deps/, hashed against the lock, and swapped for the old `deps/<name>/` in two renames, so
+## a build never sees a half-written copy and a failure leaves the old copy.
 ##
 ## The staging folder is a private (0700) parent, and the copy is a child of it made with the ordinary mode, because
-## the folder that ends up as agc_libs/<name>/ keeps its mode through the renames and other users must read it. A
-## killed vendor can leave a hidden `.tmp-*` or `.old-*` folder in agc_libs/, which is safe to delete.
+## the folder that ends up as deps/<name>/ keeps its mode through the renames and other users must read it. A killed
+## command can leave a hidden `.tmp-*` or `.old-*` folder in deps/, which is safe to delete.
 ##
-## Nothing is written outside agc_libs/: the staging folder is made there, new and private, with names the cache gave,
-## and agc_libs/ itself must be a real folder, never a link. The folder of the package is owned by `vendor`: whatever
-## was there (an edited copy, a stale file, a link) is replaced by the locked files. Other entries of agc_libs/ stay.
+## Nothing is written outside deps/: the staging folder is made there, new and private, with names the cache gave, and
+## deps/ itself must be a real folder, never a link. The folder of a package is owned by the tool: whatever was there
+## (an edited copy, a stale file, a link) is replaced by the locked files. A dropped package is moved aside by name and
+## then removed without following links (Path.remove), so a link in its place is removed as a link. Other entries of
+## deps/ stay, and the tool writes no .gitignore there: committing deps/ is the project's choice.
 
 import Paths from "../modules/import_path"
+import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
 import Lock from "../packages/lock"
+import PackageCache from "../packages/package_cache"
 import PackageHash from "../packages/package_hash"
+import Reader from "../packages/toml_read"
 import PackageFetch from "package_fetch"
 import SaveFile from "save_file"
 
@@ -33,20 +40,53 @@ enum Kind
   Other
 end
 
-## Vendors the locked package from `source` (its cache folder) into `libs`, the agc_libs/ folder of the project.
-## `place` names the lock entry, for the failures about the package itself.
+## Writes the locked packages into `deps`, the deps/ folder of the project, in the order given, and then removes the
+## folders of the `dropped` names that are not among them. `packages` are in the order of `lock_file`, whose entries
+## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill it).
+export def sync(
+  settings: Env.Settings,
+  lock_file: String,
+  deps: String,
+  packages: List[Lock.Locked],
+  dropped: List[String],
+) -> Result[Void]
+  workspace = settings.workspace
+  if packages.size > 0
+    cache = try PackageFetch.cache_root(settings.env, lock_file)
+    for index in 0...packages.size
+      locked = packages[index]
+      place = PackageFetch.Place(file: lock_file, entry: Reader.item("package", index))
+      folder = PackageCache.folder(cache, locked.source, locked.commit)
+      source = workspace.real_path.call(folder)
+      if !source.ok?
+        return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{folder}", source.message))
+      end
+      try put(workspace, deps, source.unwrap!, place, locked)
+    end
+  end
+  kept = Set.new(packages.map do |locked| locked.name end)
+  for name in dropped
+    if !kept.include?(name)
+      try remove(workspace, deps, name)
+    end
+  end
+  return ok()
+end
+
+## Writes the locked package from `source` (its cache folder) into `deps`, the deps/ folder of the project. `place`
+## names the lock entry, for the failures about the package itself.
 export def put(
   workspace: Workspace.Workspace,
-  libs: String,
+  deps: String,
   source: String,
   place: PackageFetch.Place,
   locked: Lock.Locked,
 ) -> Result[Void]
   files = try chosen(workspace, source, place, locked)
-  try prepare(workspace, libs)
-  parent = try make_stage(libs)
-  done = stage_and_swap(workspace, libs, parent, source, files, place, locked)
-  # A staging folder that cannot be removed stays hidden in agc_libs/ and does not change the answer. After a swap
+  try prepare(workspace, deps)
+  parent = try make_stage(deps)
+  done = stage_and_swap(workspace, deps, parent, source, files, place, locked)
+  # A staging folder that cannot be removed stays hidden in deps/ and does not change the answer. After a swap
   # only the empty parent is left.
   Path.remove(parent, FS_TIMEOUT_MS)
   return done
@@ -94,21 +134,21 @@ def regular?(kind: Workspace.EntryKind) -> Bool
   end
 end
 
-# agc_libs/ must be a folder of the project that is not a link, else the writes below could land outside it.
-def prepare(workspace: Workspace.Workspace, libs: String) -> Result[Void]
-  kind = try kind_of(workspace, libs)
+# deps/ must be a folder of the project that is not a link, else the writes below could land outside it.
+def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
+  kind = try kind_of(workspace, deps)
   case kind
     Kind.Absent ->
-      made = Dir.mkdir(libs, FS_TIMEOUT_MS)
+      made = Dir.mkdir(deps, FS_TIMEOUT_MS)
       if !made.ok?
-        return error(write_failure(libs, "cannot make #{libs}", made.message))
+        return error(write_failure(deps, "cannot make #{deps}", made.message))
       end
       return ok()
     Kind.Folder -> return ok()
     Kind.Link ->
-      help = Failure.hint("vendor writes only inside agc_libs/; make it a folder")
-      return error(Failure.fail_file(libs, "PKG-SYMLINK", "#{libs} is a symbolic link", help))
-    Kind.Other -> return error(write_failure(libs, "#{libs} is not a folder", "remove it, then run vendor again"))
+      help = Failure.hint("install writes only inside deps/; make it a folder")
+      return error(Failure.fail_file(deps, "PKG-SYMLINK", "#{deps} is a symbolic link", help))
+    Kind.Other -> return error(write_failure(deps, "#{deps} is not a folder", "remove it, then run install again"))
   end
 end
 
@@ -130,18 +170,18 @@ def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
   return ok(Kind.Absent)
 end
 
-# A new folder that only this process uses: mkdir_private fails when the name exists, so two vendors never share one.
-def make_stage(libs: String) -> Result[String]
+# A new folder that only this process uses: mkdir_private fails when the name exists, so two commands never share one.
+def make_stage(deps: String) -> Result[String]
   failure = "no free name"
   for attempt in 0...TEMP_TRIES
-    name = Paths.join(libs, ".tmp-#{unique()}")
+    name = Paths.join(deps, ".tmp-#{unique()}")
     made = Dir.mkdir_private(name, FS_TIMEOUT_MS)
     if made.ok?
       return ok(name)
     end
     failure = made.message
   end
-  return error(write_failure(libs, "cannot make a folder in #{libs}", failure))
+  return error(write_failure(deps, "cannot make a folder in #{deps}", failure))
 end
 
 def unique() -> String
@@ -150,7 +190,7 @@ end
 
 def stage_and_swap(
   workspace: Workspace.Workspace,
-  libs: String,
+  deps: String,
   parent: String,
   source: String,
   files: List[String],
@@ -178,7 +218,7 @@ def stage_and_swap(
     PackageHash.Hashed.Unreadable(message) ->
       return error(write_failure(stage, "cannot read the copy of #{locked.name}", message))
   end
-  return swap(workspace, libs, stage, locked.name)
+  return swap(workspace, deps, stage, locked.name)
 end
 
 def copy(workspace: Workspace.Workspace, source: String, stage: String, path: String) -> Result[Void]
@@ -201,9 +241,9 @@ end
 
 # The old folder, a link or a file of that name is moved aside first (Path.rename never replaces), the staged folder
 # takes its place, and the old one is removed. A rename that fails puts the old one back.
-def swap(workspace: Workspace.Workspace, libs: String, stage: String, name: String) -> Result[Void]
-  target = Paths.join(libs, name)
-  backup = Paths.join(libs, ".old-#{unique()}-#{name}")
+def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: String) -> Result[Void]
+  target = Paths.join(deps, name)
+  backup = Paths.join(deps, ".old-#{unique()}-#{name}")
   seen = try kind_of(workspace, target)
   replacing = !absent?(seen)
   if replacing
@@ -227,6 +267,30 @@ def swap(workspace: Workspace.Workspace, libs: String, stage: String, name: Stri
     # The new copy stands; an old one that cannot be removed is only a spare hidden folder.
     Path.remove(backup, FS_TIMEOUT_MS)
   end
+  return ok()
+end
+
+# Takes the folder (or link, or file) of a dropped package out of deps/ by a rename, then removes it. Path.remove does
+# not follow links, and the rename means a build that comes in between finds the package missing, never half removed.
+# A deps/ that does not exist has nothing to remove, and one that is a link is refused as `put` refuses it.
+def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Void]
+  here = try kind_of(workspace, deps)
+  if absent?(here)
+    return ok()
+  end
+  try prepare(workspace, deps)
+  target = Paths.join(deps, name)
+  seen = try kind_of(workspace, target)
+  if absent?(seen)
+    return ok()
+  end
+  backup = Paths.join(deps, ".old-#{unique()}-#{name}")
+  moved = Path.rename(target, backup, FS_TIMEOUT_MS)
+  if !moved.ok?
+    return error(write_failure(target, "cannot remove #{target}", moved.message))
+  end
+  # An old folder that cannot be removed is only a spare hidden folder.
+  Path.remove(backup, FS_TIMEOUT_MS)
   return ok()
 end
 

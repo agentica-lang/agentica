@@ -60,7 +60,6 @@ modules/workspace.agc
 packages/git_source.agc
 packages/lock.agc
 packages/manifest.agc
-packages/package_cache.agc
 packages/package_hash.agc
 packages/package_import.agc
 packages/project.agc
