@@ -129,13 +129,17 @@ static bool owner_only(HANDLE file) {
 #define CHANGE_ENTRIES (FILE_ADD_FILE | FILE_ADD_SUBDIRECTORY | FILE_DELETE_CHILD | WRITE_DAC | WRITE_OWNER | \
                         GENERIC_WRITE | GENERIC_ALL | MAXIMUM_ALLOWED)
 
-static bool trusted_sid(PSID sid, PSID user) {
-  BYTE system[SECURITY_MAX_SID_SIZE], administrators[SECURITY_MAX_SID_SIZE];
-  DWORD system_size = sizeof system, administrators_size = sizeof administrators;
-  return EqualSid(sid, user) ||
-         (CreateWellKnownSid(WinLocalSystemSid, NULL, system, &system_size) && EqualSid(sid, system)) ||
-         (CreateWellKnownSid(WinBuiltinAdministratorsSid, NULL, administrators, &administrators_size) &&
-          EqualSid(sid, administrators));
+static bool well_known(PSID sid, WELL_KNOWN_SID_TYPE type) {
+  BYTE known[SECURITY_MAX_SID_SIZE];
+  DWORD size = sizeof known;
+  return CreateWellKnownSid(type, NULL, known, &size) && EqualSid(sid, known);
+}
+
+/* The user, SYSTEM and Administrators. OWNER RIGHTS (what Python's mkdir with mode 0700 grants) names the owner, which
+   the caller has already checked to be one of them. */
+static bool trusted_sid(PSID sid, PSID user, bool owner_checked) {
+  return EqualSid(sid, user) || well_known(sid, WinLocalSystemSid) || well_known(sid, WinBuiltinAdministratorsSid) ||
+         (owner_checked && well_known(sid, WinCreatorOwnerRightsSid));
 }
 
 /* The Windows form of a temporary folder that is "shared and not sticky" on POSIX: its owner is not the user, SYSTEM
@@ -152,7 +156,7 @@ bool agc_fs_directory_shared(const char *path) {
   DWORD rc = user ? GetNamedSecurityInfoW(wide, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION |
                                           DACL_SECURITY_INFORMATION, &owner, NULL, &acl, NULL, &security)
                   : ERROR_OUTOFMEMORY;
-  bool shared = rc != ERROR_SUCCESS || !owner || !acl || !trusted_sid(owner, user->User.Sid);
+  bool shared = rc != ERROR_SUCCESS || !owner || !acl || !trusted_sid(owner, user->User.Sid, false);
   for (WORD k = 0; !shared && k < acl->AceCount; k++) {
     void *entry = NULL;
     if (!GetAce(acl, k, &entry) || !entry) { shared = true; break; }
@@ -163,7 +167,7 @@ bool agc_fs_directory_shared(const char *path) {
                   type == ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE;
     if (!allows || (ace->Header.AceFlags & INHERIT_ONLY_ACE) || !(ace->Mask & CHANGE_ENTRIES)) continue;
     bool plain = type == ACCESS_ALLOWED_ACE_TYPE || type == ACCESS_ALLOWED_CALLBACK_ACE_TYPE;
-    shared = !plain || !trusted_sid((PSID)&ace->SidStart, user->User.Sid);
+    shared = !plain || !trusted_sid((PSID)&ace->SidStart, user->User.Sid, true);
   }
   if (security) LocalFree(security);
   free(user);

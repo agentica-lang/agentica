@@ -43,7 +43,7 @@ Run it:
 agentica test specs/
 ```
 
-Exit code `0`: every scenario passes. `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
+Exit code `0`: every scenario passes. `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit, or on Windows one whose access list lets other users change its entries: set `TMPDIR`, or `TMP` on Windows, to a private folder).
 
 - `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.

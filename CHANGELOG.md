@@ -80,6 +80,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - On Windows, open TCP and TLS sockets are closed at the end of a run (for
   example `System.exit`) instead of reset, so the peer reads the end of input.
+- Windows: `agentica test` refuses a temporary folder that other users can
+  change, and `File.stat` gives such a directory the group and other write
+  bits.
 
 ## [0.8.1] - 2026-10-22
 

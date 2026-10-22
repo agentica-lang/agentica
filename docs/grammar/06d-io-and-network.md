@@ -176,11 +176,15 @@ Signatures are in
 - `File.stat` follows symlinks and gives `FileInfo(kind, size_bytes,
   modified_seconds, mode, user_id, group_id)`; `mode` is the permission bits
   with setuid, setgid and sticky (`st_mode & 07777`) as an `Int`. Windows has
-  no Unix permission bits and no Unix owner ids: there `mode` carries only the
+  no Unix permission bits and no Unix owner ids: there `mode` carries the
   read-only attribute (0666 for an object that is writable, 0444 when the
   attribute is set, and no `setuid`, `setgid` or sticky bit either way), and
-  `user_id` and `group_id` are always 0. A 0 there is not the owner, and `mode`
-  says nothing about the object's ACL or DACL. `File.lstat` gives the same
+  `user_id` and `group_id` are always 0. A 0 there is not the owner. For a
+  directory, the group and other write bits (020 and 002) are set only when its
+  owner is not the user, SYSTEM or Administrators, or an allow entry of its
+  DACL lets anyone else add, replace or delete its entries (or change the
+  DACL); so a directory only those can change is 0644. Otherwise `mode` says
+  nothing about the ACL. `File.lstat` gives the same
   record without following a final symlink: `kind` is `"link"` and the other
   fields describe the link itself. `Dir.list` gives immediate entry
   names, sorted. `Dir.mkdir` creates parents.

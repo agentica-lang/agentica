@@ -269,12 +269,12 @@ then no scenario runs.
   On Windows the folder is the first of `TMPDIR`, `TMP` and `TEMP` that is a
   folder, the run directory has its final name from the start (there is no
   `-new-` name and no rename), and the sweep takes a directory only when it is
-  a minute old. Windows has no sticky bit, so nothing checks the temporary
-  folder: the protection assumes a folder that only the user can modify (the
-  default per-user `%TEMP%`), because another user who can delete entries of
-  that folder could swap the run directory before its `lock` pins it. The
-  owner check of the sweep on Windows is issue #393 and pinning the run
-  directory before `lock` exists is #385.
+  a minute old. Windows has no sticky bit: the run fails with
+  `RUNTIME-BDD-INFRA` when the temporary folder's owner is not the user,
+  SYSTEM or Administrators, or its access list lets anyone else add, replace
+  or delete its entries, since such a user could swap the run directory before
+  its `lock` pins it or own run directories that the sweep would take. The
+  default per-user `%TEMP%` passes; set `TMP` to a private folder otherwise.
 - **Shared resources.** Test files and scenarios run one at a time, each in its
   own child VM, next to other programs. A fixed temporary file name or port can
   collide with another run; use port 0 and a fresh temporary directory.

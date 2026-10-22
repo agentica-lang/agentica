@@ -10,11 +10,13 @@ import pytest
 
 from tests.agentica_test import TARGET_OS, compile_agc, run_vm, start_vm, vm_environment
 from tests.vm_os_support import compile_work_text, root, work
-from tests.windows_support import kernel32_file_api
+from tests.windows_support import icacls, kernel32_file_api
 
-# The documented Windows values: mode carries the read-only attribute only, and both owner ids are 0.
+# The documented Windows values: a file's mode carries the read-only attribute only, and both owner ids are 0. A
+# folder has the group and other write bits only when others may change its entries (its owner and DACL).
 WRITABLE_MODE = 0o666
 READ_ONLY_MODE = 0o444
+PRIVATE_DIRECTORY_MODE = 0o644
 
 METADATA_PROGRAM = """\
 def main() -> Void
@@ -221,7 +223,26 @@ def test_a_directory_reports_the_same_zero_owner(root, work):
     directory = root / "directory"
     directory.mkdir()
     kind, mode, user_id, group_id = _metadata(bytecode, directory, root)
-    assert (kind, mode, user_id, group_id) == ("directory", str(WRITABLE_MODE), "0", "0")
+    assert (kind, mode, user_id, group_id) == ("directory", str(PRIVATE_DIRECTORY_MODE), "0", "0")
+
+
+# The test's own folder inherits the per-user temporary folder's access list (the user, SYSTEM, Administrators). An
+# entry that lets Everyone or Users write gives it the group and other write bits; one that only lets them read does not.
+@REQUIRES_WINDOWS_VM
+@pytest.mark.parametrize(("who", "rights", "mode"), [
+    ("*S-1-1-0", "(OI)(CI)(M)", WRITABLE_MODE),
+    ("*S-1-5-32-545", "(AD)", WRITABLE_MODE),
+    ("*S-1-5-32-545", "(DC)", WRITABLE_MODE),
+    ("*S-1-1-0", "(OI)(CI)(RX)", PRIVATE_DIRECTORY_MODE),
+    ("*S-1-3-0", "(OI)(CI)(IO)(F)", PRIVATE_DIRECTORY_MODE),
+])
+def test_a_directory_has_the_group_and_other_write_bits_when_others_may_change_its_entries(root, work, who, rights,
+                                                                                          mode):
+    bytecode = compile_work_text(work, METADATA_PROGRAM, "windows-metadata")
+    directory = root / "directory"
+    directory.mkdir()
+    icacls(directory, "/grant", who + ":" + rights)
+    assert _metadata(bytecode, directory, root)[:2] == ["directory", str(mode)]
 
 
 # Wine answers access denied for the restricted creators: it does not implement the owner and DACL the adapter sets
@@ -236,7 +257,7 @@ def test_the_restricted_creators_make_entries_that_report_the_same_zero_owner(ro
     result = run_vm(bytecode, args=[str(private_file), str(private_directory)], env=vm_environment(), cwd=root)
     assert (result.code, result.stderr) == (0, ""), result.stderr
     assert result.stdout.splitlines() == [
-        f"file {WRITABLE_MODE} 0 0", f"directory {WRITABLE_MODE} 0 0",
+        f"file {WRITABLE_MODE} 0 0", f"directory {PRIVATE_DIRECTORY_MODE} 0 0",
     ]
     assert _metadata(metadata_bytecode, private_file, root)[2:] == ["0", "0"]
     assert private_directory.is_dir()

@@ -58,9 +58,11 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 - `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes:
   Int, modified_seconds: Int, mode: Int, user_id: Int, group_id: Int)`;
   directory sizes are zero; `mode` is the permission bits with setuid, setgid
-  and sticky (384 is `rw-------`). On Windows `mode` is only the read-only
+  and sticky (384 is `rw-------`). On Windows `mode` is the read-only
   attribute (438 = octal 666 writable, 292 = octal 444 read-only) and `user_id`
-  and `group_id` are always 0 (not the owner; nothing about the ACL).
+  and `group_id` are always 0 (not the owner); a directory that only the user,
+  SYSTEM and Administrators can change (owner and DACL) has no group or other
+  write bits (420 = octal 644).
   `File.lstat` does not follow a final symlink: `kind` is `"link"`.
 - `Dir.list` returns immediate entry names sorted by name. `Dir.mkdir` creates
   parents and succeeds if the directory exists. `Dir.mkdir_private` makes one

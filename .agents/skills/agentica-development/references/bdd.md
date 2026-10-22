@@ -62,7 +62,10 @@ are registered in `stdlib/MODULES`.
   - on Windows (the user-visible differences are in `docs/bdd.md`) the hex is 8
     bytes of `Random.int`, 4 of the clock and the process id; the lock is
     `LockFileEx`; the sweep closes the lock before removing the dir (a folder
-    with an open file cannot be removed or renamed)
+    with an open file cannot be removed or renamed); the same shared check
+    refuses the temporary folder, because `File.stat` of a Windows dir sets
+    the 022 bits from its owner and DACL (`agc_fs_directory_shared` in
+    `vm/file_windows.c`)
   - it writes the `std/` sources into `std/` of the run dir, compiles the
     step program and discovers the feature files (`bdd_discover.agc`;
     `bdd_compile.agc` is the Agentica pipeline from a file to the bytes, or the

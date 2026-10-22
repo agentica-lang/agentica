@@ -9,14 +9,18 @@ tests/test_bdd.py). The cases here have no POSIX form, and the POSIX cases they 
   children, never waits, and a child that ignores the console signals is stopped".
 - The input of --driver-pid is private when its access list names only its owner, where POSIX reads mode 600.
 - A temporary folder cannot be written when its access list denies the user, where POSIX uses chmod 0500.
+- A temporary folder is shared when its access list lets others change its entries, where POSIX reads the mode and the
+  sticky bit.
 """
+import json
 import os
+import time
 
 import pytest
 
 from tests.agentica_test import (FIXTURES, PYTHON, kill_process, run, run_vm, scaled, start_vm, vm_binary,
                                  vm_command, vm_environment)
-from tests.test_bdd import assert_unwritable_temporary_is_an_infrastructure_error, bdd  # noqa: F401  (a fixture)
+from tests.test_bdd import assert_unwritable_temporary_is_an_infrastructure_error, bdd, file_error  # noqa: F401
 from tests.test_process_lifecycle import bytecode, gone
 from tests.windows_support import COPY_PROGRAM, current_user_sid, icacls, without_backup_restore_privileges
 
@@ -198,3 +202,36 @@ def test_a_temporary_directory_that_cannot_be_written_is_an_infrastructure_error
             (temporary / "probe-file").write_text("x")
         # libuv maps ERROR_ACCESS_DENIED to EPERM, so the text is not "Permission denied" as it is for chmod.
         assert_unwritable_temporary_is_an_infrastructure_error(bdd, scratch, temporary, "Operation not permitted")
+
+
+# The Windows form of "shared and not sticky" (#385, #393). A run folder in a temporary folder where others may add,
+# replace or delete entries could be replaced before its lock pins it, and the sweep there could take another user's
+# run folder, whose user id is 0 like ours. So the run refuses such a folder before it sweeps: the old run folder put
+# there stays. In a folder only the user may change, the same run works and sweeps that folder. The check reads the
+# access list, so the backup and restore privileges of the runner do not change it. TMPDIR is removed, so the run takes
+# TMP, the first variable that GetTempPath reads.
+@pytest.mark.parametrize(("who", "rights"), [("*S-1-1-0", "(OI)(CI)(M)"), ("*S-1-5-32-545", "(OI)(CI)(AD,WD,DC)")])
+def test_a_temporary_directory_that_others_can_change_is_refused_and_a_private_one_is_used(bdd, who, rights):
+    scratch = bdd.make_suite({"nothing.txt": ""}, "agentica-bdd-shared-")
+    temporary = scratch / "tmp"
+    temporary.mkdir()
+    old_run = temporary / "agentica-bdd-0123abcd"
+    old_run.mkdir()
+    (old_run / "lock").write_text("")
+    an_hour_ago = time.time() - 3600
+    os.utime(old_run, (an_hour_ago, an_hour_ago))
+
+    def status_and_code():
+        result = bdd.agentica_test("--json", scratch, cwd=scratch,
+                                   env={"TMPDIR": None, "TMP": temporary, "TEMP": temporary})
+        assert result.stderr == ""
+        return [result.code, file_error(json.loads(result.stdout))["code"]]
+
+    icacls(temporary, "/grant", who + ":" + rights)
+    assert status_and_code() == [2, "RUNTIME-BDD-INFRA"]
+    assert os.listdir(temporary) == [old_run.name]
+
+    icacls(temporary, "/remove:g", who)
+    icacls(temporary, "/inheritance:r", "/grant:r", "*" + current_user_sid() + ":(OI)(CI)(F)")
+    assert status_and_code() == [1, "CHECK-BDD-EMPTY"]
+    assert os.listdir(temporary) == []

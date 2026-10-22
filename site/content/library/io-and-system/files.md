@@ -64,7 +64,7 @@ File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
 Gives a `FileInfo`: `kind` (`"file"` or `"directory"`), `size_bytes`, `modified_seconds`, `mode`, `user_id`, `group_id`. A symbolic link is followed.
 
 - `mode` is the permission bits as an `Int`, with setuid, setgid and sticky: `rw-------` is 384 (octal 600).
-- Windows has no Unix bits or owner ids: `mode` is only the read-only attribute (438 writable, 292 read-only; it says nothing about the ACL), and `user_id` and `group_id` are always 0, which is not the owner.
+- Windows has no Unix bits or owner ids: `mode` is the read-only attribute (438 writable, 292 read-only), and `user_id` and `group_id` are always 0, which is not the owner. A directory gets the group and other write bits only when its owner or its access list lets someone other than you, SYSTEM and Administrators add, replace or delete its entries, so a directory only those can change is 420 (octal 644).
 
 ```agentica {mode="check"}
 def main() -> Void
