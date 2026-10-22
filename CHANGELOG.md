@@ -8,84 +8,45 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0-beta.1] - 2026-10-22
+
 ### Added
 
-- `extern` blocks call C functions of native libraries, with `C.Int`,
-  `C.Int64`, `C.Double`, `C.Bool` and `C.String` (Linux x86_64 for now);
-  `--deny-native` refuses such a program at load.
-- `compute def` in an `extern` block runs a long native call on the VM's
-  compute pool while the task waits and other tasks run.
-- `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable` park a
-  task until a descriptor of native code can be read or written.
-- `extern` blocks take `C.Pointer`, `C.Bytes` and `resource Name, free: fn`,
-  a C pointer that `Native.close` or the end of the owning task frees once.
-- `extern` blocks call native libraries on Windows x64 too; `Native.wait_*`
-  returns an error there.
-- `out` parameters of extern functions:
-  `def sqlite3_open(name: C.String, out db: Db) -> C.Int` returns a record with
-  `result` and one field per out value.
-- `length` and `size` both work on `Map`, `Set` and `Range`, as on `String` and
-  `List`.
-- Ruby's other method names work: `collect`, `select`, `inject`, `detect`,
-  `member?` and `key?`; `help` and the diagnostics show `map`, `select`,
-  `reduce`, `find`, `include?` and `key?`.
-- `List.first` and `List.last` (`RUNTIME-INDEX-OUT-OF-RANGE` on an empty list)
-  and `empty?` on `List`, `Map` and `String`.
-- `--deny-run` makes every `Process` start return an error, and turns on
-  `--deny-native` too.
-- `--deny-net`, `--deny-fs` and `--deny-env` make network, file and
-  `System.env` calls return an error; `--sandbox` turns on every `--deny-*`
-  flag.
-- `agentica test` takes the `--deny-*` flags and `--sandbox`, for the test
-  files, the step programs and the programs under test.
-- `agentica install` fetches the packages of `agentica.lock` with the system
-  `git` into a download cache, checks the commit and the hash, writes each
-  package into `deps/<name>/` beside `agentica.toml`, and never changes the
-  lock.
-  **Breaking:** `install` is a command now, so a script named `install` runs as
-  `agentica ./install`.
-- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`) adds a dependency to
-  `agentica.toml` (one new line, comments stay) and writes `agentica.lock`;
-  `agentica update [NAME]` takes the tags again and rewrites the lock. Both
-  refresh `deps/` and remove the folder of a package the lock dropped.
-  **Breaking:** `add` and `update` are commands now, so scripts with those
-  names run as `agentica ./add` and `agentica ./update`.
-- `agentica FILE.agc` and `agentica test` keep the compiled program in
-  `_build/bytecode/` in the project (or beside the source) and skip the front
-  end while the sources are the same; `--no-cache` turns it off and
-  `AGENTICA_BUILD_DIR` replaces `_build/`.
-- A build reads a package only from `deps/<name>/` beside `agentica.toml`,
-  checking its hash against the lock; a declared package missing there is
-  `CHECK-IMPORT-PACKAGE` and the help says to run `agentica install`. The tool
-  writes no `.gitignore` in `deps/`: commit it or ignore it. `agc_libs/` stays
-  for local libraries. There is no `agentica vendor`: `deps/` is the local copy.
-- A git dependency takes `subdir`, so one repository can hold several packages
-  in folders: the lock keeps it, the hash, the cache and `deps/` cover only
-  that folder, and `agentica add NAME URL --tag TAG --subdir DIR` writes it.
-- A repository of packages can be a workspace: its root `agentica.toml` has a
-  `[workspace]` table with `repository` and `members`. Inside it, a dependency
-  on a member of the same repository is read from the member's folder, with no
-  fetch and no copy in `deps/`, so an edit there is seen at once; the lock
-  records it as `workspace = true`, with no commit and no hash. Outside the
-  repository nothing changes.
-- `agentica help NAME` answers a name from Ruby, Python or JS (`strip`,
-  `String.to_i`, `value!`) with the builtin it stands for, and gives
-  a hint for names such as `len`; `--json` gives
-  `{"alias": NAME, "builtins": [...], "hints": {...}}`. An unknown method
-  (`r.value!`, `m.len`, `xs.contains?`) suggests the Ruby method.
+- `extern` blocks call C functions of native libraries on Linux x86_64 and
+  Windows x64; `--deny-native` refuses such a program.
+- Native types `C.Int`, `C.Int64`, `C.Double`, `C.Bool`, `C.String`,
+  `C.Pointer`, `C.Bytes`, and `resource Name, free: fn` freed once.
+- `out` parameters of extern functions return a record with `result` and one
+  field per out value.
+- `compute def` runs a long native call on the compute pool while other tasks
+  run.
+- `Native.wait_readable` and `Native.wait_writable` park a task on a native
+  descriptor (Linux only for now).
+- `length` and `size` work on `Map`, `Set` and `Range`.
+- Ruby synonyms `collect`, `select`, `inject`, `detect`, `member?` and `key?`.
+- `List.first`, `List.last`, and `empty?` on `List`, `Map` and `String`.
+- `--deny-run` (which also denies native calls), `--deny-net`, `--deny-fs`,
+  `--deny-env` and `--sandbox`, also for `agentica test`.
+- `agentica install` fetches the packages of `agentica.lock` into `deps/`;
+  `add` and `update` edit `agentica.toml` and the lock. **Breaking:** scripts
+  named `install`, `add` or `update` run as `agentica ./NAME`.
+- Builds read packages only from `deps/<name>/`; `agc_libs/` stays for local
+  libraries.
+- Git dependencies take `subdir` (`agentica add ... --subdir DIR`), so one
+  repository can hold several packages.
+- Workspaces: a `[workspace]` table lets members of one repository use each
+  other's folders directly.
+- Compiled programs are cached in `_build/bytecode/` (`AGENTICA_BUILD_DIR`
+  moves it); `--no-cache` turns it off.
+- `agentica help NAME` maps Ruby, Python and JS names to the builtin, and
+  unknown methods suggest the Ruby one.
 
 ### Changed
 
-- `agentica help`, `help --json` (a new `ruby` field) and the helps of
-  diagnostics show the Ruby form of a builtin (`s.strip`, not `String.trim`);
-  both names are still accepted.
-- Windows: `agentica.exe` declares `longPathAware`, so paths of 260 characters
-  or more work on machines that set `LongPathsEnabled` to 1.
-
-### Fixed
-
-- Windows: non-ASCII text typed on a console reaches standard input reads as
-  UTF-8, not as U+FFFD.
+- `help` and diagnostics show the Ruby form of a builtin (`s.strip`); both
+  names still work.
+- Windows: `agentica.exe` is long-path aware, so paths of 260 characters or
+  more work when `LongPathsEnabled` is set.
 
 ### Removed
 
@@ -94,8 +55,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- On Windows, open TCP and TLS sockets are closed at the end of a run (for
-  example `System.exit`) instead of reset, so the peer reads the end of input.
+- On Windows, open TCP and TLS sockets are closed, not reset, at the end of a
+  run.
+- Windows: non-ASCII text typed on a console reaches standard input as UTF-8.
 
 ## [0.8.1] - 2026-10-22
 
@@ -387,7 +349,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.8.1...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...HEAD
+[0.9.0-beta.1]: https://github.com/sonic182/agentica/compare/0.8.1...0.9.0-beta.1
 [0.8.1]: https://github.com/sonic182/agentica/compare/0.8.0...0.8.1
 [0.8.0]: https://github.com/sonic182/agentica/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/sonic182/agentica/compare/0.6.0...0.7.0
