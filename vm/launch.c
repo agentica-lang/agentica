@@ -242,6 +242,11 @@ void agc_launch_exit(int code) {
      SIG alone before it raises it. */
   if (sig) agc_io_die_by(sig);
   _exit(code);
+#elif defined(_WIN32)
+  /* Not exit(): it runs the atexit handlers and flushes every C stream while a compute thread may hold a stream's
+     lock, and ExitProcess (the end of exit and _exit) kills that thread, then runs the DLLs' detach code, which may
+     wait for the lock forever. agc_launch_settle has flushed stdout, stderr and the files. */
+  agc_exit_now((unsigned)code);
 #else
   exit(code);
 #endif

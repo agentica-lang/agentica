@@ -2,8 +2,8 @@
  * The Windows side of the standard output and error streams. vm/output.c owns the ring, the queue of writers and the
  * notices; this file decides how a handle is written (a file or a console by a pool thread, a pipe by a libuv stream),
  * whether two descriptors are one target, does the writes, makes the in-memory stream of a notice, reads stdin on a
- * thread of its own, and at the exit shuts down the sending side of a socket. The Linux and macOS side is
- * vm/stdio_posix.c. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
+ * thread of its own, at the exit shuts down the sending side of a socket, and ends the process (agc_exit_now). The
+ * Linux and macOS side is vm/stdio_posix.c. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2.
  */
 #ifdef _WIN32
 #include "core.h"
@@ -545,5 +545,10 @@ void agc_stdin_close(agc_stdin_reader *r) {
     uv_sleep(1);
   }
   uv_close((uv_handle_t *)&r->wake, reader_closed);
+}
+
+void agc_exit_now(unsigned code) {
+  TerminateProcess(GetCurrentProcess(), code);
+  ExitProcess(code);
 }
 #endif

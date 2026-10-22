@@ -1116,7 +1116,7 @@ static const int stop_signal_numbers[] = {SIGINT, SIGBREAK, SIGHUP};
 static void stop_force_exit(uv_timer_t *timer) {
   (void)timer;
   int sig = atomic_load(&stop_status()->now);
-  if (sig) ExitProcess((UINT)(128 + sig));
+  if (sig) agc_exit_now((unsigned)(128 + sig));
 }
 
 static void stop_parent_check(uv_timer_t *timer) {
@@ -1133,12 +1133,12 @@ static void stop_received(uv_signal_t *handle, int sig) {
   agc_loop *loop = handle->data;
   int none = 0;
   if (atomic_compare_exchange_strong(&stop_status()->signal, &none, sig)) return;
-  if (!atomic_load(&stop_status()->held)) ExitProcess((UINT)(128 + sig));
+  if (!atomic_load(&stop_status()->held)) agc_exit_now((unsigned)(128 + sig));
   none = 0;
   if (atomic_compare_exchange_strong(&stop_status()->now, &none, sig) && loop->stop_grace_init)
     uv_timer_start(&loop->stop_grace, stop_force_exit, 3000, 0);
   else if (!loop->stop_grace_init)
-    ExitProcess((UINT)(128 + sig));
+    agc_exit_now((unsigned)(128 + sig));
 }
 
 void agc_io_watch_stop(agc_vm *vm, int64_t driver) {
@@ -1178,7 +1178,7 @@ int agc_io_stop_signal(void) { return atomic_load(&stop_status()->signal); }
 void agc_io_children_stopped(void) {
   atomic_store(&stop_status()->held, false);
   int sig = atomic_load(&stop_status()->now);
-  if (sig) ExitProcess((UINT)(128 + sig));
+  if (sig) agc_exit_now((unsigned)(128 + sig));
 }
 
 /* Windows has no signal mask: a console control event is handled where libuv delivers it. */

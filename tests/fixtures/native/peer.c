@@ -7,10 +7,13 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
 #include <winsock2.h>
+#include <fcntl.h>
+#include <io.h>
 #include <windows.h>
 #else
 #include <dirent.h>
@@ -22,7 +25,7 @@
 
 static char shout[64];
 static int32_t bumps;
-static atomic_int flag, returned, naps;
+static atomic_int flag, returned, naps, stalled;
 
 /* Sleeps MS milliseconds. */
 static void sleep_ms(int32_t ms) {
@@ -95,6 +98,27 @@ int32_t peer_nap(int32_t ms) {
 }
 
 int32_t peer_naps(void) { return atomic_load(&naps); }
+
+/* Writes through the C library into a pipe that nobody reads, as a library that logs to a stalled pipe does: once the
+   pipe is full, the call waits inside fwrite and holds the stream's lock. It returns only if the write fails.
+   peer_write_started is 1 once the writes have begun. */
+int32_t peer_write_stalled(void) {
+  int fds[2];
+#ifdef _WIN32
+  if (_pipe(fds, 4096, _O_BINARY) != 0) return -1;
+  FILE *log = _fdopen(fds[1], "wb");
+#else
+  if (pipe(fds) != 0) return -1;
+  FILE *log = fdopen(fds[1], "wb");
+#endif
+  if (!log) return -1;
+  static char block[1 << 16];
+  atomic_store(&stalled, 1);
+  for (;;)
+    if (fwrite(block, 1, sizeof block, log) != sizeof block) return -1;
+}
+
+int32_t peer_write_started(void) { return atomic_load(&stalled); }
 
 #ifdef _WIN32
 /* For Native.wait_readable and wait_writable: a non-blocking connected pair of loopback TCP sockets that the peer owns,

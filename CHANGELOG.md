@@ -20,6 +20,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- On Windows a program no longer hangs at its end while a `compute def` call
+  still runs and holds the lock of a C stream other than stdout or stderr.
 - On Windows, `File.open(path, "create_private")` no longer follows a dangling
   link.
 

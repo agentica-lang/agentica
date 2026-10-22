@@ -266,6 +266,11 @@ void agc_io_children_stopped(void);
 /* Dies by the stop signal SIG in the calling thread (default action, SIG unblocked, raise); returns only if the
    signal does not end the process. */
 void agc_io_die_by(int sig);
+#else
+/* The Windows form of _exit (vm/stdio_windows.c): TerminateProcess of the process itself, so no atexit handler, C
+   stream flush or DLL detach code runs. A compute thread may still be inside a native call and hold a lock that
+   those would wait for. ExitProcess only if TerminateProcess fails. */
+_Noreturn void agc_exit_now(unsigned code);
 #endif
 void agc_io_goodbye(agc_vm *vm);
 void agc_io_flush_files(agc_vm *vm);
