@@ -11,9 +11,9 @@ current status; linked sections keep requirements, rationale and alternatives.
 
 ## Files
 
-Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33 and 35–37 have no file of their own:
-they are built or decided, and their content lives in the grammar, `docs/vm/`,
-the roadmap or §18. §31 (BDD) is built and specified in
+Sections 1, 2, 5, 8–12, 14, 21, 23, 24, 33, 35–37 and 49 have no file of their
+own: they are built or decided, and their content lives in the grammar,
+`docs/vm/`, the roadmap or §18. §31 (BDD) is built and specified in
 [`docs/bdd.md`](../bdd.md); §34 stays here as the VM record of built
 small-value sharing. §40 (native code and FFI) was replaced by issue
 [#534](https://github.com/sonic182/agentica/issues/534), which holds its design.
@@ -27,7 +27,7 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
   - Title: Standard library and function values
   - File:
     [`04-stdlib-and-function-values.md`](04-stdlib-and-function-values.md)
-  - Status: Mostly landed; the rest is planned
+  - Status: Built; two rules wait for a home in the grammar
 
 - §: 6
   - Title: Native runtime
@@ -144,14 +144,13 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
 - §: 41
   - Title: Dates and times
   - File: [`41-dates-and-times.md`](41-dates-and-times.md)
-  - Status: Designed by the owner's scope of 2026-10-14; the types wait
-    until after the bootstrap (§18, 41.13); `Time.monotonic_ns` may land earlier
+  - Status: Designed by the owner's scope of 2026-10-14, not scheduled
+    (41.13); `Time.monotonic_ns` has landed
 
 - §: 42
   - Title: Sized numeric types
   - File: [`42-sized-numeric-types.md`](42-sized-numeric-types.md)
-  - Status: Designed by the owner's scope of 2026-10-14; implement after the
-    bootstrap (§18)
+  - Status: Designed by the owner's scope of 2026-10-14, not scheduled
 
 - §: 43
   - Title: Language server (LSP)
@@ -162,38 +161,27 @@ small-value sharing. §40 (native code and FFI) was replaced by issue
 - §: 45
   - Title: Packages
   - File: [`45-packages.md`](45-packages.md)
-  - Status: 45-0 (`std/toml`), 45a (manifest, lock, `pkg/<name>/`
-    imports from the cache), 45b (fetch, `install`), 45c (`add`, `update`) and
-    45d (`vendor`) built; only FFI-b is left. Order: issue
-    [#534](https://github.com/sonic182/agentica/issues/534). Form: issue #468
+  - Status: Built (45-0, 45a to 45d); only FFI-b is left, for 0.10 (issue
+    [#534](https://github.com/sonic182/agentica/issues/534))
 
 - §: 46
   - Title: Signals
   - File: [`46-signals.md`](46-signals.md)
-  - Status: Scheduled on 2026-10-15, after the bootstrap (§46, row 7.8):
-    catch TERM and
-    INT for a safe shutdown, forward signals to children, signal a process
-    group (item 20 of the order after 0.8.0 in the roadmap); 46a and 46b may
-    run earlier when no other VM PR is waiting
+  - Status: Weighed later (row 7.8): catch TERM and INT for a safe shutdown,
+    forward signals to children, signal a process group; 46a and 46b may run
+    earlier when no other VM PR is waiting
 
 - §: 47
   - Title: Code formatter (`agentica fmt`)
   - File: [`47-formatter.md`](47-formatter.md)
-  - Status: Deferred until after the bootstrap (port step 8, row 7.9),
-    decided by the owner on 2026-10-15; 47d waits for the LSP (§43)
+  - Status: Second batch of the order after 0.8.0 (row 7.9); 47d waits for the
+    LSP (§43)
 
 - §: 48
   - Title: Regular expressions
   - File: [`48-regex.md`](48-regex.md)
-  - Status: Decided by the owner on 2026-10-15; deferred until after the
-    bootstrap (row 7.10): `std/regex` in Agentica first, then
-    the regex literal `/pattern/flags`
-
-- §: 49
-  - Title: Type aliases
-  - File: [`49-type-aliases.md`](49-type-aliases.md)
-  - Status: Built (row 7.12): simple transparent aliases (49a) and generic ones
-    (49b); compiler/ only
+  - Status: Weighed later (row 7.10): `std/regex` in Agentica first, then the
+    regex literal `/pattern/flags`
 
 - §: 50
   - Title: Test functions without `main`

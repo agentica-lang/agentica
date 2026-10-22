@@ -638,94 +638,39 @@ Agentica, no builtin, no link to the VM's endpoint.
 ### 28.8 Tests
 
 All hermetic: localhost, port 0, temporary directories, no external service.
-Expected values come from fixtures whose numbers are known. The cases that
-matter:
+The test list is decided in each PR. Decisions that stay:
 
-- **The format is read by an independent parser:** a small parser of the text
-  format in Python's standard library (one `# TYPE` per name before its
-  samples, names and label names match the Prometheus patterns, `_total` only on
-  counters, histogram buckets non-decreasing with `le="+Inf"` equal to
-  `_count`). No other tool (such as `promtool`) is used, since a new tool needs
-  the user's approval.
-- **Known numbers:** a fixture that spawns 10 tasks and awaits them gives
-  `agentica_vm_tasks_spawned_total 11` and `agentica_vm_tasks_finished_total 11`
-  in the last file (10 from `tasks_done`, plus main once the outcome is known),
-  and a scrape while main waits shows spawned minus finished of at least 1. An
-  allocation-heavy fixture gives `agentica_vm_gc_collections_total` above 0 (not
-  checked on a sanitizer build, which has no collector), and a child that exits
-  3 gives `agentica_vm_processes_exited_total{exit="nonzero"} 1`. A failing
-  fixture gives `agentica_vm_exit_code 1` and its `RUNTIME-` code.
-- **Nothing changes for the program:** golden fixtures (tasks, files, processes,
-  a runtime failure, a `--max-steps` stop) run with the endpoint on (scraped
-  every 100 ms during the run) and with the file on; exit code, stdout and
-  stderr must be byte for byte the goldens, and the `--max-steps` fixture must
-  stop at the same place.
-- **The endpoint never keeps the VM alive:** a program that ends while a client
-  holds a connection open, or has sent half a request, exits within 5 seconds of
-  `main` ending (about the 1-second join at most).
-- **The 503 and the 5-second deadline** must not depend on machine speed: a
-  test-only switch, `AGENTICA_VM_TEST_METRICS_TIMES=budget_ms,deadline_ms`, read
-  once at start-up into the runtime config like `AGENTICA_VM_TEST_NO_TURN_COST`,
-  replaces the 4-second snapshot budget and the 5-second deadline. A silent
-  client and one that sends a byte every 50 ms are both closed at the deadline,
-  and a fifth connection is closed at once. The 503 test scrapes during a
-  fixture of long sorts, and reads the port from the `metrics listen` trace line
-  in `AGENTICA_VM_TRACE_FILE`, so the golden stderr stays unchanged.
-- **File mode:** a reader loop finds a whole, parsable file at every read while
-  the program runs (atomic rename); a symlink at the path gives the `cannot
-  write` line and no output; other files with temp-like names do not stop the
-  write; the file has mode 0644 even under `umask 077`; old temp files are
-  removed only as 28.5 says (the path check takes the expected owner's uid as a
-  parameter, and the writer takes its random source as a parameter, so a C test
-  covers another user's file and the `EEXIST` retry without a second user). A
-  program killed with `SIGKILL` before its first periodic write leaves a file
-  with no `agentica_vm_exit_code`.
-- **Children:** a `Process.spawn` child that prints its environment does not
-  see the two metrics variables, does not see a `UV_USE_IO_URING` that the VM
-  set, and still sees one the user set; a scenario run by `agentica test` does
-  not see the metrics variables either.
-- **Lazy start** (18c): a program keeps CPU tasks ready for 3 seconds before the
-  first scrape; in that scrape the run-queue histogram has the same count at
-  `le="1"` as at `le="+Inf"`, so no task was measured from boot. The same holds
-  in file mode for tasks that main spawns in its first turn.
-- **Off means off:** the Makefile `unexport`s the metrics variables (and the
-  test-only switch) next to the trace variables, and every test that removes
-  `AGENTICA_VM_TRACE` removes them too, so a developer's setting cannot change
-  expected output. The `vm-sanitizers` CI job also builds `make vm-test
-  METRICS=0`, and `agentica run --version` says `metrics off` there.
-- **Timing-sensitive cases** run alone, like `make vm-latency`: they are listed
-  in `PY_ALONE` in mk/test.mk, with a `make vm-metrics-timing` target and
-  their own CI step after `make vm-latency`. Their bounds are several times the
-  expected time.
-- **Overhead check** (manual, like `make bench`; not in `make test` or CI, where
-  timing is noisy): a CPU-heavy program from `benchmarks/programs/` (`calls` and
-  `knight-tour`, with `--size` set so a run takes at least 10 seconds) runs
-  three ways: metrics off; the endpoint on with no scraper; the endpoint on with
-  a Python scraper every second. Expected median wall-time overhead against
-  "off": about 0 (the same code path); about 0 (one flag load per turn of about
-  2000 steps); below 2% (the hooks, including one clock read per dequeue for the
-  run-queue histogram, and a snapshot per second). A run that goes over the
-  bound blocks the PR until the hook is made cheaper or dropped. The numbers go
-  in `docs/vm-benchmarks.md` with the 18b and 18c PRs.
+- The text format is checked by an independent parser in Python's standard
+  library, not by `promtool` (a new tool needs the user's approval).
+- Golden fixtures (tasks, files, processes, a runtime failure, a `--max-steps`
+  stop) give byte-identical output with the endpoint on and scraped, and with
+  the file on.
+- The snapshot budget and the deadline come from a test-only switch,
+  `AGENTICA_VM_TEST_METRICS_TIMES=budget_ms,deadline_ms`, read once at start-up,
+  so no test depends on machine speed. Timing-sensitive cases run alone, like
+  `make vm-latency`.
+- The Makefile `unexport`s the metrics variables next to the trace variables,
+  so a developer's setting cannot change expected output; a `METRICS=0` build
+  runs in the sanitizer job.
+- **Overhead gate** (manual, like `make bench`): a CPU-heavy program of at least
+  10 seconds, with metrics off, the endpoint on and idle, and the endpoint
+  scraped every second. Expected overhead: about 0, about 0, and below 2%. A run
+  over the bound blocks the PR until the hook is made cheaper or dropped. The
+  numbers go in `docs/vm-benchmarks.md`.
 
 ### 28.9 Where the code goes
 
-The metrics code follows the C rules of the development skill. All state is in
-the runtime, the scheduler and the thread's own `malloc`'d struct: no mutable
-globals. The build has a `METRICS=0` switch, and the `.prom` path check
-(`lstat` before `rename`) is new code, apart from the trace file's `fstat`
-check.
+All state is in the runtime, the scheduler and the thread's own `malloc`'d
+struct: no mutable globals. The build has a `METRICS=0` switch, and the `.prom`
+path check (`lstat` before `rename`) is new code, apart from the trace file's
+`fstat` check.
 
-Multicore (`docs/vm/10-io-multicore.md` §10.2.3): the snapshot design stays;
-the run-queue delay hook is revisited then (28.4). Each scheduler has its own
-counts, observe word and snapshot part; the metrics thread sums the parts. An
-idle scheduler waits on the run queue's condvar, not in `uv_run` (§16.3), so how
-a request wakes it changes then. Scheduler 0 reads the GC (with Boehm's thread
-support on, through `GC_get_prof_stats`, which takes the GC lock) and the
-shared atomics. No lock and no atomic add on the hot path.
-
-Each PR documents its part in `docs/vm/08-loader-and-cli.md` §9 and
-`docs/vm/10-io-scheduler.md`.
+Multicore (`docs/vm/10-io-multicore.md` §10.2.3): each scheduler has its own
+counts, observe word and snapshot part, and the metrics thread sums the parts.
+Scheduler 0 reads the GC (`GC_get_prof_stats`, which takes the GC lock) and the
+shared atomics. No lock and no atomic add on the hot path. An idle scheduler
+waits on the run queue's condvar, not in `uv_run` (§16.3), so a request wakes
+it there.
 
 ### 28.10 Tracing and metrics
 

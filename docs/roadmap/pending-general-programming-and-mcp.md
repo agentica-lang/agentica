@@ -1,20 +1,8 @@
 ## Pending work: General programming and MCP (after the VM)
 
-### Completed: Strict Void prerequisite
-
-**Done:** no-value completion separated from `Nil`; `main() -> Void`, explicit
-returns, `ok()` for `Result[Void]`. Rules in the grammar.
-
-### Completed: Files and paths
-
-**Done.** Rules in the grammar and the programming skill.
-
-### Completed: Processes (phase 5l)
-
-**Done:** `Process` handles over the VM (no shell interpolation),
-full-operation deadlines, 1 MiB per-call limits, strict UTF-8 lines, cleanup
-of direct children on close/return/exit, off with `--deny-run`. API in
-the builtin catalog ([`06b-builtins.md`](../grammar/06b-builtins.md)).
+Done and specified in the grammar: strict `Void`, files and paths, processes
+(5l), typed JSON, builders and schemas (5f2, 5i), and modules and imports (3,
+3a).
 
 ### 1. Everyday library (remaining phase 5n and supporting utilities)
 
@@ -32,15 +20,6 @@ Keep names and argument order consistent with the existing builtin library.
 
 **Milestone:** useful everyday scripts and automation using files, processes and
 the basic library.
-
-### 2. Typed JSON, builders and schemas
-
-**Done (phases 5f2, 5i).** Rules in the grammar and the builtin catalog.
-
-### 3. Modules and imports
-
-**Done (phases 3, 3a).** Rules in
-[`05b-modules.md`](../grammar/05b-modules.md).
 
 ### 7. Real applications
 

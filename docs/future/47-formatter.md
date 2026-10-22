@@ -362,46 +362,26 @@ file with `FMT-UNSUPPORTED` (a proposal), and it never guesses.
 
 ### 47.7 Tests
 
-`tests/test_fmt.py`, each test running the `agentica fmt` binary in a temporary
-folder that it cleans up.
+The checks that decide the design (the case list is decided in the PRs):
 
-- **The normal form.** `agentica fmt --tree FILE` prints the normal form of the
-  tree, and the round trip compares the normal form of the input with that of
-  the output. The normal form has one line per node, in the text form of the
-  tree (`tests/fixtures/frontend/parser/*.ast`) with the id and the span
-  removed. Grouping parentheses are absent, since the tree has none. A `+` chain
-  of string literals and interpolations is flattened into one list of parts,
-  with adjacent text parts merged and empty ones dropped. The `parenthesized`
-  flag of a call is kept. After the tree, one line per comment gives its words,
-  in source order. The comparison is on the normal form, so folding the pieces
-  of a string, and dropping grouping parentheses, do not count as changes.
-- **Goldens** (fast tier): `tests/fixtures/fmt/NAME.input` and `NAME.output`,
-  one case for each rule of 47.5 and each position of 47.4. They also cover:
-  CRLF input (the output is LF, and `--check` lists the file); comments inside
-  brackets and argument lists, and between case arms; a comment-only file; an
-  interpolation with nested quotes and a `#` in the text
-  (`"#{xs.join(", ")} # not a comment"`); an unbreakable long string and an
-  unbreakable long identifier (the output keeps them, and `fmt --check` passes);
-  heredocs.
-- **Round trip** (fast tier, every golden): the normal form of the input equals
-  the normal form of the output. This catches a printer that drops a
-  parenthesis, changes an operator or splits a word.
-- **Idempotence:** `fmt(fmt(x)) == fmt(x)` on every golden (fast tier), and on
-  every `.agc` file under `compiler/`, `stdlib/`, `examples/` and
-  `tests/fixtures/**` that parses (slow tier). A fixture that does not parse is
-  an error fixture: `fmt` refuses it with the code its golden names.
-- **Independent peer** (fast tier, standard library only). It checks the output
-  without the Agentica parser: no tabs, no trailing spaces, LF newlines, a final
-  newline, and no line over the width except a line that is one word too long to
-  break.
-- **Refusal and CLI** (fast tier). A lexer error and a parser error exit 1 with
-  their code, and the file is left alone. `--check` exits 1 and lists the
-  changed files. `-` reads standard input.
-- **Width in CI:** `agentica check` runs over `compiler/` and `stdlib/`, and
-  reports `CHECK-LINE-TOO-LONG` (47c). The stage stops at its first error, so
-  one run reports the first long line of each file. CI lists the failing files.
-  The one-time reformat of `stdlib/` moves line numbers in the `std/`
-  stack-trace goldens, so that PR runs `make goldens`.
+- **The normal form.** `agentica fmt --tree FILE` prints the tree with ids,
+  spans and grouping parentheses removed, a `+` chain of string pieces
+  flattened into one list of parts, and one line per comment with its words.
+  The **round trip** compares the normal form of the input with that of the
+  output on every golden, so folding string pieces and dropping grouping
+  parentheses do not count as changes, and a printer that drops a parenthesis,
+  changes an operator or splits a word is caught.
+- **Goldens:** one case for each rule of 47.5 and each comment position of
+  47.4, plus CRLF input, a comment-only file, an interpolation with a `#` in
+  the text, unbreakable long strings and names, and heredocs.
+- **Idempotence:** `fmt(fmt(x)) == fmt(x)` on every golden (fast tier) and on
+  every `.agc` file of the repo that parses (slow tier).
+- **Independent peer** (standard library only): no tabs, no trailing spaces, LF
+  newlines, a final newline, and no line over the width except one word too long
+  to break.
+- **Width in CI:** `agentica check` reports `CHECK-LINE-TOO-LONG` (47c). The
+  one-time reformat of `stdlib/` moves line numbers in the `std/` stack-trace
+  goldens.
 
 ### 47.8 Phases
 
@@ -424,14 +404,12 @@ below; there is no separate roadmap phase file.
   `std/toml`, the exit codes of 47.2, `FMT-USAGE`, and the refusal of a file
   that does not parse. The width rule of §45.5 is added to `agentica check` as
   `CHECK-LINE-TOO-LONG`, which replaces `tests/test_style_line_width.py`
-  (question 9 in 47.9). The phase adds a CHANGELOG entry under `[Unreleased]`
-  and a site page for the command. The only `[style]` key is `max_line_width`.
+  (question 9 in 47.9). The only `[style]` key is `max_line_width`.
 - **47d: LSP "format document" (§43).** One request that returns the whole-file
   edit of `format_text`. It is outside the order of row 7.9, and it waits for
   the language server, which is not scheduled (§43.1).
 
-Each phase has its own PR, with its own tests and docs. 47b needs 47a, and 47c
-needs 47b.
+47b needs 47a, and 47c needs 47b.
 
 ### 47.9 Open questions
 

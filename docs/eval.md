@@ -106,9 +106,9 @@ The arms are the context an agent gets:
   outline`, `type-at`, `symbol`, `refs`), for the measurement of [§39.12](
   future/39-semantic-cli.md). It is opt-in: `--arms` must name it. See "The
   no-CLI arm".
-- `grammar`: `docs/grammar.md` and `examples/`, without the skill. The grammar
-  arm's text changed in this PR (the `agentica help` pointer in its prompt, and
-  no dead file links), so older grammar-arm results are not comparable.
+- `grammar`: `docs/grammar.md` and `examples/`, without the skill. Its prompt
+  gained the `agentica help` pointer (commit efba1a0b), so older grammar-arm
+  results are not comparable.
   `agentica help` covers the builtins only, so this arm has no signature source
   for the `std/` modules (`HTTP`, `Queue`, `BDD`).
 - `binary`: only the binary, `agentica check`, and a one-line hint. No docs.
@@ -334,20 +334,8 @@ models, give each its share of the total (one command each, as in the example
 above); a shared total across commands would need a way to read earlier run
 folders, which the runner does not have.
 
-Estimated cost of the 6c round, from the cost per run of rounds 10 and 12 (3
-reps, 20 tasks, `skill-nocli` on the 5 tasks above, at the cost of a `skill`
-run):
-
-| Model | `skill` | `typed-python` | `skill-nocli` | Total | Cap |
-|---|---|---|---|---|---|
-| DeepSeek V4.1 flash | 60 x $0.0082 = $0.49 | 60 x $0.0053 = $0.32 | 15 x $0.0082 = $0.12 | about $0.93 | $1.1 |
-| GLM 5.3 flash | 60 x $0.0056 = $0.34 | 60 x $0.0017 = $0.10 | 15 x $0.0056 = $0.08 | about $0.52 | $0.75 |
-
-About $1.45 for both models, which fits in the $2 of the round. The $2 is a hard
-limit for the owner, and the cap is soft, so the caps are $1.1 and $0.75: at
-`--jobs 2` a command can pass its cap by about $0.06, and the worst case of both
-is about $1.97. The cost of a `skill-nocli` run is a guess
-(its agents cannot use the queries, so it may cost more than a `skill` run).
+For round 13 the owner's hard limit was $2 for both models, so the soft caps
+were $1.1 and $0.75: at `--jobs 2` a command can pass its cap by about $0.06.
 
 ### Hidden cases
 
@@ -379,15 +367,12 @@ two optional files, which the integration and big-data tasks use:
 
 t20 generates its logs (a fixed pseudo-random sequence, 50,000 and 600,000
 lines, with invalid, blank, CRLF and 3,000-character lines), so the repository
-holds no big file. The harness does not limit the memory of the solution. The
-Racket launcher alone uses about 140 MB, so a limit that a streaming Agentica
-program passes and a whole-file Python program fails would need a file much
-bigger than the 128 MB `/tmp` of the container. The task statement says the file
-is big and gives no memory limit. The task statement tells every arm the same
-thing: do not read the whole file into memory, process it line by line, and no
-line is longer than 4000 bytes (the longest generated line is 3,056 bytes). The
-measure is whether the agent streams: in Agentica a whole-file read of more than
-1 MiB fails, and in Python it is allowed and passes. Report t20 apart from the
+holds no big file. The harness does not limit the memory of the solution, and
+the task statement gives no memory limit; it tells every arm the same thing: do
+not read the whole file into memory, process it line by line, and no line is
+longer than 4000 bytes (the longest generated line is 3,056 bytes). The measure
+is whether the agent streams: in Agentica a whole-file read of more than 1 MiB
+fails, and in Python it is allowed and passes. Report t20 apart from the
 cross-arm aggregate, as a streaming probe: it shows whether an agent finds the
 streaming calls of its language, not how well it programs in general, and a
 Python solution that ignores the instruction still passes.
@@ -421,307 +406,44 @@ Python solution that ignores the instruction still passes.
 
 Tokens are input plus output per run. A failing interpreter run is an `agentica`
 call that ended with an error. Rounds 1 to 4 used earlier sandboxes (round 1 had
-none), so they do not validate the current Docker boundary. Round 5 is the first
-run in Docker. Compare rows within a table, not across tables.
+none); round 5 is the first run in Docker. Compare rows within a round, not
+across rounds. With 3 reps per cell, every finding is a direction, not a claim.
+The full tables of rounds 1 to 12 are in git history.
 
-### Round 1: the arms (2026-10-01)
+### Rounds 1 to 12: findings
 
-Five tasks, 3 reps each, DeepSeek V4.1 flash.
-
-| Arm | Passed | Tokens/run | Seconds/run | Failing runs/run |
-|---|---|---|---|---|
-| `python` | 15/15 | 3,506 | 14 | 0 |
-| `skill` | 15/15 | 13,681 | 27 | 0.27 |
-| `grammar` | 15/15 | 15,944 | 32 | 0.40 |
-
-- Every run passed, so these tasks do not separate the arms by accuracy.
-- Agentica used about 4 times the tokens of Python. The skill used 14% fewer
-  than the grammar and examples.
-
-### Rounds 2 to 4: the `binary` arm and the diagnostics (2026-10-01 and 10-02)
-
-| Round | Change | Passed | Tokens/run | Seconds/run | Failing/run |
-|---|---|---|---|---|---|
-| 2 | plain one-caret diagnostics | 15/15 | 38,740 | 120 | 3.2 |
-| 3 | labels, `help` and suggestions | 15/15 | 25,733 | 58 | 2.5 |
-| 4 | round 3, and the prompt names `--help` | 15/15 | 24,574 | 70 | 1.3 |
-
-- Richer diagnostics cut the tokens by about a third and the time by half, with
-  no docs.
-- The `--help` sentence made no visible difference. With 3 reps, the spread
-  inside one cell is as large as these gaps, so treat them as a direction.
-
-### Rounds 5 and 6: the Ruby-style language, `binary` arm (2026-10-10)
-
-Round 6 runs after the parser accepted the forms that round 5 showed agents
-writing (an optional `do`, one-line `case` arms, calls without parentheses) and
-hinted the rest.
-
-| Round | Tasks | Passed | Tokens/run | Seconds/run | Failing/run |
-|---|---|---|---|---|---|
-| 5 | t1 to t5 (15 runs) | 15/15 | 24,526 | 89 | 4.2 |
-| 5 | t6 to t8 (9 runs) | 9/9 | 76,363 | 261 | 12.7 |
-| 6 | t1 to t5 (15 runs) | 14/15 | 31,691 | 99 | 3.1 |
-| 6 | t6 to t8 (9 runs) | 9/9 | 78,694 | 253 | 7.9 |
-
-- Failing interpreter runs fell by about a quarter on t1 to t5 and by about 40%
-  on t6 to t8. Tokens did not fall; with 3 reps, the token means move a lot
-  between rounds.
-- Agents with no docs write what the diagnostics call Ruby: `while cond do`,
-  `case x`, `IO.gets!`, `var x = ...`, `when`. Round 5 showed these as parse
-  errors, and round 6 stopped failing on the accepted ones.
-- One run hit the 10-minute limit: it searched the binary for builtin
-  descriptions instead of writing code.
-
-### Round 7: splitting the skill (2026-10-10)
-
-An A/B of the `skill` arm on all eight tasks, 24 runs each. 7a read one
-17k-token `language.md` up front. 7b read a 5k-token core in `SKILL.md`, and the
-references only when a table said so.
-
-| Round | Passed | Tokens/run | Seconds/run | Failing/run | Cost/run |
-|---|---|---|---|---|---|
-| 7a, old layout | 24/24 | 28,857 | 31 | 0.13 | $0.008 |
-| 7b, split skill | 24/24 | 15,800 | 26 | 0.21 | $0.005 |
-
-The split cut the tokens by 45% and the cost by 39%, with the same accuracy. The
-agents read only the references their task needed.
-
-### Round 8: a second model, GLM 5.3 flash (2026-10-10)
-
-The `binary` arm on the head of PR #33.
-
-| Tasks | Passed | Tokens/run | Seconds/run | Failing/run |
-|---|---|---|---|---|
-| t1 to t5 (15 runs) | 15/15 | 11,821 | 33 | 4.8 |
-| t6 to t8 (9 runs) | 8/9 | 79,286 | 189 | 22.8 |
-
-- GLM used fewer tokens than DeepSeek on t1 to t5, and it hit more errors.
-- Both models wrote the same Ruby and Python forms, so the habits are not one
-  model's quirk. GLM also wrote `puts` with a non-String value and `to_s` on
-  `Bool`. Ruby allows both, and the checker rejected both in those rounds.
-- One t6 run failed a hidden case with a logic error.
-
-### Round 9: regression on the VM (2026-10-14)
-
-The `binary` arm on master `e24fac9` (the C VM runs every program; the evaluator
-is gone), t1 to t8, 3 reps per task, with the models of rounds 6 and 8. It asks
-whether the VM-only language regressed for agents (roadmap row 7.2.2). Tokens
-are input plus output, without cached tokens, as in the rounds above. Both
-models together cost $0.58.
-
-- **Model:** DeepSeek V4.1 flash
-  - **Tasks:** t1 to t5 (15 runs)
-  - **Passed:** 14/15
-  - **Tokens/run:** 21,184
-  - **Seconds/run:** 98
-  - **Failing/run:** 2.7
-  - **Before (round 6 or 8):** 14/15, 31,691, 99, 3.1
-
-- **Model:** DeepSeek V4.1 flash
-  - **Tasks:** t6 to t8 (9 runs)
-  - **Passed:** 9/9
-  - **Tokens/run:** 62,955
-  - **Seconds/run:** 309
-  - **Failing/run:** 7.8
-  - **Before (round 6 or 8):** 9/9, 78,694, 253, 7.9
-
-- **Model:** GLM 5.3 flash
-  - **Tasks:** t1 to t5 (15 runs)
-  - **Passed:** 14/15
-  - **Tokens/run:** 8,456
-  - **Seconds/run:** 39
-  - **Failing/run:** 4.1
-  - **Before (round 6 or 8):** 15/15, 11,821, 33, 4.8
-
-- **Model:** GLM 5.3 flash
-  - **Tasks:** t6 to t8 (9 runs)
-  - **Passed:** 7/9
-  - **Tokens/run:** 25,777
-  - **Seconds/run:** 135
-  - **Failing/run:** 18.2
-  - **Before (round 6 or 8):** 8/9, 79,286, 189, 22.8
-
-- No regression. Accuracy is the same within one run, and tokens fell for both
-  models. With 3 reps, the token means move a lot between rounds, so treat the
-  size of the drop as a direction.
-- The three GLM failures are logic errors, checked by grading the solutions
-  again by hand: a t6 run that does not reject an invalid catalog, a t6 run that
-  filters the wrong items, and a t4 run that fails one of six cases.
-- The DeepSeek failure is a t1 run that hit the 10-minute limit. It searched the
-  binary for builtin descriptions instead of writing code, like the round 6 run.
-- t4 (word count) cost DeepSeek about 60,000 tokens per run, three times the
-  other easy tasks. The most repeated error was `CHECK-CAPTURED-ASSIGNMENT`,
-  about 17 times per run: the agents assign a counter inside an `each` block,
-  Ruby style. PR #195 made its help name the rewrite (`for w in words ... end`).
-- The `binary` arm is not docs-free. Its workspace holds the `raco distribute`
-  bundle, which includes the Racket source of the front end
-  (`lib/plt/agentica/.../main.rkt`), and the agents read it and grep the binary
-  for builtin descriptions. This was true in the earlier rounds too, so the
-  comparison holds.
-
-### Round 10: the 6c pilot, Agentica against typed Python (2026-10-14)
-
-The `skill` arm against the `typed-python` arm (`mypy --strict`) on all twenty
-tasks, 3 reps per cell, master `38fe556`, 60 runs per arm and model. Seconds are
-left out: to finish sooner, the runs went 4 to 6 at a time, next to other
-rounds, so they are not comparable. Rounds 9 to 11 together cost $3.75.
-
-- **Model:** DeepSeek V4.1 flash
-  - **`skill` passed:** 59/60
-  - **`typed-python` passed:** 57/60
-  - **`skill` tokens/run:** 24,444
-  - **`typed-python` tokens/run:** 12,969
-  - **`skill` cost/run:** $0.0082
-  - **`typed-python` cost/run:** $0.0053
-
-- **Model:** GLM 5.3 flash
-  - **`skill` passed:** 58/60
-  - **`typed-python` passed:** 52/60
-  - **`skill` tokens/run:** 15,607
-  - **`typed-python` tokens/run:** 5,035
-  - **`skill` cost/run:** $0.0056
-  - **`typed-python` cost/run:** $0.0017
-
-- **Model:** gpt-oss-120b
-  - **`skill` passed:** 31/60
-  - **`typed-python` passed:** 45/60
-  - **`skill` tokens/run:** 21,980
-  - **`typed-python` tokens/run:** 8,303
-  - **`skill` cost/run:** $0.0087
-  - **`typed-python` cost/run:** $0.0028
-
-- With DeepSeek and GLM, Agentica passed as often as typed Python or more.
-  Almost every failure on both sides is a logic error on a hidden case (GLM's
-  eight typed-Python failures are all logic errors); one GLM Agentica run
-  crashed at run time.
-- Agentica costs 1.5 to 3.3 times more per run. Most of the gap is reading the
-  skill: the tokens per run are two to three times those of Python, and on the
-  easy tasks the skill is most of the cost.
-- Typed Python escaped the checker about 0.5 to 0.9 times per run (`Any`,
-  `cast(`, `no_type_check`, `TYPE_CHECKING`). No DeepSeek or GLM run used
-  `# type: ignore`; gpt-oss tried it 8 times, and those runs failed as `ignore`.
-- gpt-oss did worse in Agentica. It writes C-style code (`;` at the end of a
-  line, braces for blocks), gets `LEX-UNEXPECTED-CHAR` and
-  `LEX-UNMATCHED-DELIMITER`, and in five runs wrote no `solution.agc` (the runs
-  checked by hand wrote `solution.py` instead). Its Agentica failures: 13 logic,
-  7 syntax, 5 no file, 3 check, 1 run time.
-- t20, the streaming probe, reported apart: DeepSeek and GLM passed it 3/3 in
-  both arms; gpt-oss passed 0/3 in Agentica and 3/3 in typed Python.
-- Nemotron Lightning 3.5 (30B, about 3B active) was dropped part way: 1 of 23
-  Agentica runs passed, against 14 of 24 typed-Python runs. It rarely wrote
-  Agentica: it wrote `solution.py` and stopped.
-- With 3 reps per cell, these are directions, not claims. The full round
-  (step 10) needs more reps.
-
-### Round 11: the new `agentica --help` (2026-10-14)
-
-The `binary` arm, t1 to t8, 3 reps, on master `38fe556` plus PR #198, which made
-`agentica --help` and `agentica help` list the subcommands, four core rules
-(calls need parentheses; values are immutable, so assign the result; a block
-cannot assign an outer variable, use `for` or `reduce`; `Result` and `try`) and
-the builtin namespaces. The prompt is the same as in round 9. Run next to round
-10, so seconds are left out.
-
-- **Model:** DeepSeek V4.1 flash
-  - **Tasks:** t1 to t5
-  - **Round 9 (old help):** 14/15, 21,184 tokens, 2.7 failing, $0.0073
-  - **Round 11 (new help):** 15/15, 13,997, 1.2, $0.0048
-
-- **Model:** DeepSeek V4.1 flash
-  - **Tasks:** t6 to t8
-  - **Round 9 (old help):** 9/9, 62,955, 7.8, $0.0271
-  - **Round 11 (new help):** 9/9, 37,996, 5.4, $0.0156
-
-- **Model:** GLM 5.3 flash
-  - **Tasks:** t1 to t5
-  - **Round 9 (old help):** 14/15, 8,456, 4.1, $0.0042
-  - **Round 11 (new help):** 15/15, 6,662, 2.7, $0.0035
-
-- **Model:** GLM 5.3 flash
-  - **Tasks:** t6 to t8
-  - **Round 9 (old help):** 7/9, 25,777, 18.2, $0.0181
-  - **Round 11 (new help):** 8/9, 22,821, 13.7, $0.0156
-
-- **Model:** gpt-oss-120b
-  - **Tasks:** t1 to t5
-  - **Round 9 (old help):** –
-  - **Round 11 (new help):** 10/15, 8,314, 2.8, $0.0032
-
-- **Model:** gpt-oss-120b
-  - **Tasks:** t6 to t8
-  - **Round 9 (old help):** –
-  - **Round 11 (new help):** 0/9, 18,319, 4.4, $0.0072
-
-- The new help cut tokens by a third to a half for DeepSeek and by 10 to 20% for
-  GLM, with fewer failing runs and the same or better accuracy. The agents read
-  `agentica --help` early and use its rules.
-- gpt-oss reads the help but still writes `;` and braces, which the help does
-  not mention, and the lexer diagnostics for them give no hint. It then asks
-  `agentica help while`, which only covers builtins.
-- Nemotron passed 8 of 19 before it was dropped.
-
-### Round 12: the smaller skill and the new hints (2026-10-14)
-
-The `skill` arm on all twenty tasks, 3 reps per cell, with the same prompt and
-tasks as round 10. It ran on master `34ab698`, which has three changes that
-round 10 did not have:
-
-- PR #200: hints for `;` and braces.
-- PR #201: hints for other common errors: `//` comments, single quotes, `Int`
-  and `Float`, foreign `String` methods, `Map.new`, empty literals, a missing
-  return, and top-level statements.
-- PR #204: the `agentica-programming` skill cut from about 5,300 to about 1,600
-  tokens in `SKILL.md`. The core-language detail moved to
-  `references/language.md`.
-
-Seconds are left out, because the runs went in parallel. Round 12 cost $1.10.
-Rounds 9 to 12 together cost $4.85 of the $10 budget.
-
-- **Model:** DeepSeek V4.1 flash
-  - **Round 10 passed:** 59/60
-  - **Round 12 passed:** 59/60
-  - **Round 10 tokens/run:** 24,444
-  - **Round 12 tokens/run:** 21,090
-  - **Round 10 cost/run:** $0.0082
-  - **Round 12 cost/run:** $0.0074
-
-- **Model:** GLM 5.3 flash
-  - **Round 10 passed:** 58/60
-  - **Round 12 passed:** 55/60
-  - **Round 10 tokens/run:** 15,607
-  - **Round 12 tokens/run:** 12,060
-  - **Round 10 cost/run:** $0.0056
-  - **Round 12 cost/run:** $0.0045
-
-- **Model:** gpt-oss-120b
-  - **Round 10 passed:** 31/60
-  - **Round 12 passed:** 30/60
-  - **Round 10 tokens/run:** 21,980
-  - **Round 12 tokens/run:** 17,581
-  - **Round 10 cost/run:** $0.0087
-  - **Round 12 cost/run:** $0.0065
-
-- Tokens per run fell 14% (DeepSeek), 23% (GLM) and 20% (gpt-oss). Cost per run
-  fell 10%, 19% and 26%.
-- Pass rates held within noise for 3 reps. DeepSeek's one failure and all five
-  of GLM's are logic errors on hidden cases: no syntax, check or run-time
-  failure.
-- gpt-oss still fails half of its runs. Its 30 failures are 11 logic, 8 syntax
-  (5 `PARSE-UNEXPECTED-TOKEN`, 2 `LEX-UNEXPECTED-CHAR`, 1
-  `LEX-UNMATCHED-DELIMITER`), 3 check (`CHECK-TYPE-MISMATCH`,
-  `CHECK-REDEFINED-NAME`, `CHECK-EMPTY-MAP-TYPE`), 1 run time
-  (`RUNTIME-INVALID-NUMBER`), and 7 runs that wrote no solution file. It failed
-  t20 3/3 again; DeepSeek and GLM passed t20 3/3 each.
-- The gap to typed Python on cost narrows but stays. Typed Python cost $0.0053,
-  $0.0017 and $0.0028 per run in round 10.
-- With 3 reps, these are directions, not claims.
-
-Round 12 is the last evaluation round until after the bootstrap of the
-self-hosted front end ([§18](future/18-front-end-language.md), roadmap row
-7.2.7) and any improvements that follow it. The owner decided this on
-2026-10-14. The full 6c round (roadmap row 10) waits for that too. See the
-[roadmap](roadmap/README.md).
+- **Round 1** (2026-10-01), five tasks, DeepSeek V4.1 flash: every arm passed
+  15/15, so the easy tasks do not separate the arms. Agentica used about 4
+  times the tokens of Python (`skill` 13,681 per run, `python` 3,506); the skill
+  used 14% fewer than the grammar and examples.
+- **Rounds 2 to 4** (`binary` arm): richer diagnostics (labels, `help`,
+  suggestions) cut tokens by a third and time by half, with no docs. Naming
+  `--help` in the prompt made no visible difference.
+- **Rounds 5 and 6** (2026-10-10, `binary`): agents with no docs write what
+  the diagnostics call Ruby (`while cond do`, `case x`, `var x = ...`, `when`).
+  Accepting those forms cut failing runs by a quarter to 40%; tokens did not
+  fall.
+- **Round 7** (2026-10-10, `skill` A/B): splitting the skill into a 5k-token
+  core and on-demand references cut tokens by 45% and cost by 39%, with the
+  same accuracy.
+- **Round 8** (GLM 5.3 flash, `binary`): a second model wrote the same Ruby and
+  Python forms, so the habits are not one model's quirk.
+- **Round 9** (2026-10-14, `binary` on the VM, row 7.2.2): no regression; tokens
+  fell for both models. The repeated `CHECK-CAPTURED-ASSIGNMENT` on t4 (a
+  counter assigned in an `each` block) got a help naming the `for` rewrite (PR
+  #195).
+- **Round 10** (2026-10-14, the 6c pilot, `skill` against `typed-python`, 20
+  tasks): DeepSeek 59/60 against 57/60, GLM 58/60 against 52/60, gpt-oss-120b
+  31/60 against 45/60. Agentica cost 1.5 to 3.3 times more per run, mostly
+  reading the skill. gpt-oss writes C-style code (`;`, braces) and sometimes no
+  `solution.agc`; Nemotron Lightning 3.5 rarely wrote Agentica and was dropped.
+  Typed Python escaped the checker 0.5 to 0.9 times per run (`Any`, `cast(`).
+- **Round 11** (`binary`, PR #198): `agentica --help` with four core rules and
+  the builtin namespaces cut tokens by a third to a half for DeepSeek and 10%
+  to 20% for GLM, with fewer failing runs.
+- **Round 12** (`skill`, PRs #200, #201, #204: hints for `;`, braces and other
+  foreign habits, and `SKILL.md` cut from about 5,300 to 1,600 tokens): tokens
+  per run fell 14% to 23%, pass rates held. gpt-oss still fails half its runs.
 
 ### Round 13: the 6c round (2026-10-22)
 
@@ -795,47 +517,15 @@ reports it:
   small tasks t3 to t9 have no DeepSeek run.
 - With 3 reps, and 13 tasks for DeepSeek, these are directions, not claims.
 
-### JSON tasks: smoke run (2026-10-03)
-
-One rep per cell, DeepSeek V4.1 flash, 4 runs at a time, 600 s limit. The
-reference solutions passed all 28 hidden-case runs in Docker.
-
-| Task | Arm | Passed | Tokens | Seconds | Failing runs |
-|---|---|---|---|---|---|
-| t6 | `skill` | 8/8 | 17,565 | 74 | 0 |
-| t6 | `grammar` | 8/8 | 22,370 | 82 | 0 |
-| t6 | `binary` | 8/8 | 57,458 | 262 | 6 |
-| t6 | `python` | 8/8 | 10,075 | 61 | 0 |
-| t7 | `skill` | 6/6 | 20,212 | 84 | 0 |
-| t7 | `grammar` | 6/6 | 21,633 | 82 | 0 |
-| t7 | `binary` | 6/6 | 40,301 | 269 | 8 |
-| t7 | `python` | 6/6 | 5,286 | 23 | 0 |
-
-A one-rep smoke run shows that the tasks can be solved and the runner works. It
-does not measure accuracy. The `binary` runs took about three to four times as
-long as the `skill` runs and repaired their interpreter errors.
-
-The `t8-enum-ledger` reference solutions passed all 8 hidden cases in Docker on
-2026-10-04. Its model results are in the t6 to t8 rows above.
-
 ## Diagnostics
 
-Hits of the top codes in the `binary` arm, from `tests/eval/diagnostics.py`, in
-the 2026-10 rounds. A dash means the code was not in that round's top list.
-
-| Code | Round 5 | Round 6 | Round 8 (GLM) |
-|---|---|---|---|
-| `PARSE-UNEXPECTED-TOKEN` | 98 | 47 | 49 |
-| `CHECK-UNKNOWN-NAME` | 23 | 22 | 49 |
-| `CHECK-TYPE-MISMATCH` | 14 | 16 | 72 |
-| `CHECK-MISSING-RETURN` | 11 | 9 | 11 |
-| `CHECK-UNKNOWN-METHOD` | – | – | 42 |
-
-- In those rounds most hits were Python and Ruby habits, not logic errors:
-  `len(s)`, `s.length`, `x.to_i`, `print(x)`, `!a`, `x += 1`. The checker
-  rejected them then, so check the grammar for what the language accepts now.
-- In rounds 2 to 4, failing runs were fixed after the agent read the code and
-  the span, so the diagnostics worked as a repair signal.
+`tests/eval/diagnostics.py` counts the codes the agents saw. In the `binary`
+rounds 5 to 8 the top codes were `PARSE-UNEXPECTED-TOKEN`, `CHECK-UNKNOWN-NAME`,
+`CHECK-TYPE-MISMATCH`, `CHECK-MISSING-RETURN` and `CHECK-UNKNOWN-METHOD`, mostly
+Python and Ruby habits, not logic errors (`len(s)`, `s.length`, `x.to_i`,
+`print(x)`, `x += 1`; check the grammar for what the language accepts now). In
+rounds 2 to 4, agents fixed failing runs after reading the code and the span, so
+the diagnostics worked as a repair signal.
 
 ## What the results do not show
 

@@ -16,10 +16,6 @@ proposed again. This section finalizes the earlier channel proposal and
 answers [section
 25.12.7](25-ruby-typed-idioms.md#25127-lazy-enumerators-and-generators).
 
-**What is asked for:** something like Elixir's `Stream` and `Task.async_stream`,
-Ruby's iterators, generators and accumulators, and faster programs through
-concurrency.
-
 **Rules.** Those of [section 25](25-ruby-typed-idioms.md#25-ruby-typed-idioms):
 one way to do each thing (its Principle and its test), values stay immutable
 with no shared mutable state (the one exception is the `std/logger`
@@ -76,33 +72,6 @@ these, for each job:
 - **Job:** State that several tasks update
   - **The one form:** one owner task that receives messages on a channel (27.5);
     a shared table (§13) when a program needs it
-
-- **§:** 27.1
-  - **Item:** `Task.map`
-  - **Where it lives:** C builtin in the VM scheduler
-  - **Roadmap:** 17a
-
-- **§:** 27.2
-  - **Item:** `Channel[T]`
-  - **Where it lives:** C builtins, a builtin opaque generic
-  - **Roadmap:** 17b
-
-- **§:** 27.3
-  - **Item:** `Task.await(task, timeout_ms)` returning `Await[T]`
-  - **Where it lives:** C builtin and a builtin generic enum
-  - **Roadmap:** 17c
-
-- **§:** 27.4
-  - **Item:** `File.each_line` (step 1) and `Lazy[T]` (step 2)
-  - **Where it lives:** step 1 a C builtin; step 2 prelude signatures over C
-    builtins (`vm/lazy.c`)
-  - **Roadmap:** 17d, 17e
-
-- **§:** 27.5
-  - **Item:** Generators, fibers, Agent-style state, public locks and threads
-  - **Decision:** decided against
-  - **Where it lives:** help hints only
-  - **Roadmap:** none
 
 ### 27.1 `Task.map`
 
@@ -523,10 +492,5 @@ results.
 - **`Process.poll_line(p: Process, timeout_ms: Int) -> Result[String]`** may
   come later, so a loop can alternate requests with polling child output. It is
   not part of the task work, and no application has needed it yet.
-
-Done when: the site examples run on the VM; timed-out items leave no open
-socket, task or shared handle; the pipeline, await-cycle and `Await.TimedOut`
-cases hold; and agents pick `Task.map` for fan-out and channels for pipelines
-(§27.5).
 
 [task-rules]: ../grammar/06c-tasks-and-tests.md#lightweight-tasks

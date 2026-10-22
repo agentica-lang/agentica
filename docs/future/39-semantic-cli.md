@@ -118,14 +118,9 @@ Open. It runs in the full 6c round (roadmap row 10, phase 6c in
 [`06-validation.md`](../roadmap/06-validation.md)). Round 13 (`docs/eval.md`)
 is inconclusive: agents made no query call, so the arms did not differ.
 
-- Count the command calls of each run, next to the file reads (`cat`, `rg`,
-  `sed`) and the `agentica check` calls (`tests/eval/run.py`).
-- Run one extra Agentica arm without the commands, on the tasks that cross a
-  program (a field type, an enum variant, a Result in place of a plain value),
-  with the same model and budget. The arm cannot use them: its skill has no
-  reference to them, and a wrapper `agentica` first on the workspace `PATH`
-  answers the four commands with exit 2. Each refused call is counted. The
-  usage text still names them; that is recorded, not hidden.
+- Count the command calls of each run, and run the `skill-nocli` arm on the
+  tasks that cross a program; the setup is in `docs/eval.md` ("Query-command
+  counts", "The no-CLI arm").
 - Compare hidden tests passed, tokens, repair attempts and time to a correct
   solution.
 - Keep the commands in the skill if agents call them and the arm with them is
