@@ -358,8 +358,10 @@ def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=Non
     hang fails one test) and on any interruption of the wait, Ctrl-C included:
     the new session no longer receives the terminal's SIGINT by itself.
     """
-    # A stream sent to a file (stdout_to, stderr_to: a path such as /dev/full, opened for writing) is not captured: "".
-    files = [open(path, "wb") if path is not None else None for path in (stdout_to, stderr_to)]
+    # A stream sent to a file (stdout_to, stderr_to: a path, opened for writing, or an open file that the caller closes
+    # itself, such as one opened read-only to make every write fail) is not captured: "".
+    targets = (stdout_to, stderr_to)
+    files = [open(path, "wb") if path is not None and not hasattr(path, "fileno") else path for path in targets]
     try:
         process = subprocess.Popen(
             [str(part) for part in argv],
@@ -376,8 +378,8 @@ def run(argv, stdin=None, timeout=RUN_TIMEOUT, cwd=None, env=None, stdout_to=Non
             _kill_and_collect(process)
             raise
     finally:
-        for file in files:
-            if file is not None:
+        for file, target in zip(files, targets):
+            if file is not None and file is not target:
                 file.close()
     return Result(process.returncode, (out or b"").decode(errors="replace"), (err or b"").decode(errors="replace"))
 
