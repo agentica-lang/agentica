@@ -61,8 +61,9 @@ architecture, a library outside that list or missing hardening.
 
 - **Dependency:** libffi
   - **Choice:** Vendored submodule `vm/third_party/libffi` (MIT), tag v3.8.0.
-    It calls the C functions of `extern` blocks. Built on Linux x86_64 only for
-    now (issue #548): its x86-64 sources are compiled per mode into
+    It calls the C functions of `extern` blocks. Built on Linux x86_64 and
+    Windows x64 (MinGW gcc, the `X86_WIN64` target: `ffiw64.c` and `win64.S`)
+    for now (issue #548): its x86-64 sources are compiled per mode into
     `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure
     script would write made by `mk/vm.mk`, and linked statically. Only
     `vm/ffi_libffi.c` includes `ffi.h`.
