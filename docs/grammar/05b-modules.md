@@ -131,8 +131,8 @@ parent folder (such as `/tmp`) is read and checked for every script below it,
 and a bad one there is `PKG-MANIFEST-INVALID` for each of them. Without a
 manifest nothing changes. A build reads the manifest and the lock and loads
 packages from a cache that `agentica install` fills (see below). A build never
-runs git and never uses the network. The other package commands are planned in
-`docs/future/45-packages.md`.
+runs git and never uses the network. `agentica add` and `agentica update` write
+the lock (see below); `vendor` is planned in `docs/future/45-packages.md`.
 
 ```toml
 name = "notes"
@@ -252,6 +252,54 @@ import Sqlite from "pkg/sqlite/db"
   When every package is in the cache, the manifest of each is checked against
   the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`). The command starts git
   even under `--deny-run`, which only limits programs.
+- `agentica add NAME URL --tag TAG` (or `--ref COMMIT`) and `agentica update
+  [NAME]` write the lock; they are the only commands that do. Both work on the
+  project of the working folder (no manifest is `PKG-MANIFEST-MISSING`), read
+  the lock without checking it against the manifest, and fetch as `install`
+  does (the same `git`, the same checks, the same cache), so they may start
+  `git` and need the network for what is new. The lock they write has one entry
+  for every package of the build and no other: the dependencies of the manifest,
+  then those in the manifest of each package they settle, and so on; one name
+  with two sources is `PKG-SOURCE-CONFLICT`, at the manifest that asked second.
+  A locked entry with the source the manifest names is kept, and only its files
+  are put in the cache if they are missing; anything else is fetched, and the
+  commit and the hash are read from what git gave; a fetch error of such a pin
+  names the manifest that asks for it and `dependencies.<name>.git` (or `.tag`,
+  `.ref`), the same codes as `install`. Nothing is written when a step fails,
+  and the lock is written before the manifest. A file that cannot be written is
+  `PKG-WRITE`; each file is written to a new file beside it that is renamed
+  into place, and the old one is put back if a step fails. A manifest that
+  changed while the packages were fetched is not overwritten (`PKG-WRITE`,
+  nothing written), and a manifest that cannot be written after the lock was
+  says so in the help: `agentica update` makes the lock match it again. The
+  lock is sorted by name (just `version = 1` when it is empty), in the layout
+  above,
+  so it has the same bytes when nothing changed.
+  - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
+    that order. The commit of `--ref` is the whole id (40 or, for SHA-256, 64
+    digits), since git fetches no abbreviation (a package whose manifest asks
+    for a part of an id that the lock lacks is `PKG-FETCH` at
+    `dependencies.<name>.ref` of that manifest). The tag of a SHA-1 repository
+    is fetched; a SHA-256 repository takes `--ref`. A name, URL, tag or commit
+    that the manifest would refuse, or any other words, are a usage error (exit
+    code 2). A name that is a dependency already is `PKG-DEPENDENCY-EXISTS`. The
+    manifest gets one new line, `NAME = { git = "URL", tag = "TAG" }`, after the
+    last entry of `[dependencies]` (or in a new `[dependencies]` table at the
+    end of the file); no other byte changes, so comments, blank lines, the
+    order of the keys and the line endings stay. The new text is read as a
+    manifest before it is saved, and a layout the edit cannot handle (the table
+    written as `dependencies = {}`, say) is `PKG-MANIFEST-EDIT`: write the line
+    by hand.
+  - `update` takes no word or the name of a dependency of the manifest (else
+    `PKG-DEPENDENCY-UNKNOWN`). It fetches the tag pins again, all of them or
+    the one named, and takes the commit they point to now, so a moved tag is
+    the new commit and hash in the lock. A pin that is a commit is not fetched
+    again. It also fixes a lock that is missing or stale (a manifest edited by
+    hand) and drops the packages that nothing asks for any more. A project with
+    no dependency and no lock gets none.
+  - The answer lists `added NAME@VERSION`, `updated NAME@VERSION` (another
+    commit or pin) and `removed NAME`, one per line, or `nothing to update`;
+    with `--json` a success prints `{"ok":true}`.
 - The hash covers the `.agc` files of the package folder. Their paths are
   relative to it, written with `/`, in bytewise order; for each file, its path,
   a zero byte, its size in decimal, a zero byte and its bytes. The hash is

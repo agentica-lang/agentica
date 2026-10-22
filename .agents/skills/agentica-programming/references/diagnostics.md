@@ -268,6 +268,16 @@ there, at a character boundary, and ends with `...`.
     compared); or no `agentica.toml` was found. The report names
     the file and the key path of the entry, such as `package[0].tag`
 
+- **Code:** `PKG-DEPENDENCY-EXISTS`, `PKG-DEPENDENCY-UNKNOWN`,
+  `PKG-MANIFEST-EDIT`, `PKG-WRITE`
+  - **Meaning:** `agentica add` or `update` stopped before it wrote anything
+    (except `PKG-WRITE`): the name is a dependency already (change its pin in
+    `agentica.toml`, then `update NAME`); `update NAME` names no dependency of
+    the manifest; the manifest has a layout that the one-line edit cannot handle
+    (write the line by hand); or `agentica.lock` or `agentica.toml` cannot be
+    written. The fetch errors of a new pin are the codes of `install`, at the
+    manifest key `dependencies.<name>.git` (or `.tag`, `.ref`)
+
 - **Code:** `CHECK-IMPORT-RENAME`
   - **Meaning:** `import {A as b}` where the new name breaks the case rule of
     what it renames: a struct or enum gets a capitalized name, a function a

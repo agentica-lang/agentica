@@ -113,6 +113,10 @@ stage:
     `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION` and
     `PKG-MANIFEST-MISSING`, and also reports `PKG-HASH-MISMATCH` and
     `PKG-SYMLINK`, all at a key of `agentica.lock` (`package[N].tag`, ...).
+    `agentica add` and `update` (`app/cli_add.agc`, `io/package_resolve.agc`)
+    report the fetch codes of a new pin at `dependencies.<name>.git` of the
+    manifest that asks for it, and add `PKG-DEPENDENCY-EXISTS`,
+    `PKG-DEPENDENCY-UNKNOWN`, `PKG-MANIFEST-EDIT` and `PKG-WRITE`.
 
 - **Stage:** query (`query/`, `outline`, `type-at`, `refs`, `symbol`)
   - **Codes:** exit 2, at `<arguments>` (line 1, column 1): `QUERY-USAGE` (bad
@@ -516,7 +520,8 @@ the command/file so program args stay intact. --max-steps accepts a positive
 integer and reaches only the VM. The --deny-* flags and --sandbox go to the
 VM as typed (`Options.deny`); `test` passes them to the driver.
 `tests/fixtures/cli/forms.json` freezes the forms (`tests/test_cli_forms.py`).
-`install` is `cli_install.agc` (it takes no word). `doc` and the query commands (`outline`, `type-at`, `refs`) are `cli_doc.agc`
+`install` is `cli_install.agc` (it takes no word); `add` and `update` are
+`cli_add.agc` (their words are read by hand there). `doc` and the query commands (`outline`, `type-at`, `refs`) are `cli_doc.agc`
 and `cli_query.agc`: the words after the command are read by hand
 (`query/query_options.agc`), and `--stdin FILE` (`type-at --stdin
 FILE:LINE:COL`, likewise `refs`) goes through `with_buffer` in `cli.agc`, as

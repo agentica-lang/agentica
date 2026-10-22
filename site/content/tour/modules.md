@@ -236,10 +236,17 @@ A manifest that declares dependencies needs an `agentica.lock` beside it. The lo
 
 The packages come from a cache folder, `~/.cache/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, (on Windows, `%LOCALAPPDATA%\agentica\cache\pkg\`; `XDG_CACHE_HOME` replaces `~/.cache` when it is an absolute path). `agentica install` fills it from the lock and never changes the lock.
 
-`agentica install` runs the system `git`, so your git config, SSH keys and credential helpers apply. For each package of the lock that is not in the cache, it fetches the tag (or the locked commit) without a checkout, checks that the commit is the locked one and that the hash of the copied `.agc` files is the locked hash, and puts the files in the cache. A package that is already there with the right hash is not fetched, and a cache that is full needs no `git` and no network. Only the `.agc` files and the `agentica.toml` of the package are copied, each at most 1 MiB (16 MiB together), and two paths that differ only in case are refused. Git may ask for a password on the terminal, and each git read has a 5 minute deadline. If a tag now points to another commit, you get `PKG-TAG-MOVED`; if the files are not the locked ones, `PKG-HASH-MISMATCH`; if git fails, `PKG-FETCH`. Writing the lock (`add`, `update`) and `vendor` are planned.
+`agentica install` runs the system `git`, so your git config, SSH keys and credential helpers apply. For each package of the lock that is not in the cache, it fetches the tag (or the locked commit) without a checkout, checks that the commit is the locked one and that the hash of the copied `.agc` files is the locked hash, and puts the files in the cache. A package that is already there with the right hash is not fetched, and a cache that is full needs no `git` and no network. Only the `.agc` files and the `agentica.toml` of the package are copied, each at most 1 MiB (16 MiB together), and two paths that differ only in case are refused. Git may ask for a password on the terminal, and each git read has a 5 minute deadline. If a tag now points to another commit, you get `PKG-TAG-MOVED`; if the files are not the locked ones, `PKG-HASH-MISMATCH`; if git fails, `PKG-FETCH`. `vendor` is planned.
 
 ```sh
 agentica install
+```
+
+`agentica add` and `agentica update` write the lock, so you do not write it by hand. `add` takes the local name, the `https://` URL and a tag (or a whole commit id with `--ref`), fetches the package and the packages in its own `agentica.toml`, and writes `agentica.lock` and one new line of `[dependencies]` in `agentica.toml`; your comments and the rest of the file stay as they are. `update` fetches the tag pins again, all of them or the one dependency you name, and takes the commit a tag points to now; a pin that is a commit does not move. It also repairs a lock that is missing or out of date after you edit the manifest. Both start `git` and may use the network. Nothing is written if a step fails, and the answer lists what was added, updated or removed.
+
+```sh
+agentica add sqlite https://github.com/owner/sqlite-ac --tag v1.2.0
+agentica update sqlite
 ```
 
 Problems are reported with `PKG-` codes: a bad manifest or lock, a lock that does not match the manifest, one name with two sources, or a package file that changed, or a fetch that failed. A declared package that is not in the cache is `CHECK-IMPORT-PACKAGE`.

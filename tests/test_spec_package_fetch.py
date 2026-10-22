@@ -7,54 +7,17 @@ Cases assert codes and the file and key path, never message text (AGENTS.md).
 """
 import json
 import os
-from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import WINDOWS, cli, host_only, run, tool, vm_environment
-from tests.package_support import Remotes, Workspace, dependency, package_hash
+from tests.agentica_test import WINDOWS, cli, host_only, run
+from tests.package_support import (BANG, GREET, MAIN, assert_at_key, cached_files, dependency, environment, git,  # noqa: F401
+                                    lock_entry, package_hash, remotes, ws)
 
 pytestmark = host_only(WINDOWS, "the git remote of these cases is a file:// folder, tested on POSIX")
 
 GREETER = "owner/greeter"
 TOOLS = "owner/tools"
-GREET = ('import Tools from "pkg/tools/bang"\n\nexport def hello() -> String\n  return "hello" + Tools.bang()\nend\n')
-BANG = 'export def bang() -> String\n  return "!"\nend\n'
-MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Greet.hello())\nend\n'
-
-
-@pytest.fixture
-def git():
-    return tool("git")
-
-
-@pytest.fixture
-def remotes(tmp_path, git):
-    return Remotes(tmp_path)
-
-
-@pytest.fixture
-def ws(tmp_path):
-    return Workspace(tmp_path)
-
-
-def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None):
-    """Notes the lock entry of a package whose files the remote holds. The hash comes from the Python implementation of
-    the hash rule, over a scratch copy of the .agc files."""
-    scratch = ws.base / ("scratch-" + path.replace("/", "-"))
-    for relative, content in files.items():
-        if relative.endswith(".agc"):
-            (scratch / relative).parent.mkdir(parents=True, exist_ok=True)
-            (scratch / relative).write_bytes(content if isinstance(content, bytes) else content.encode("utf-8"))
-    entry = {"name": name or path.split("/")[1], "git": remotes.url(path), "commit": commit,
-             "hash": package_hash(scratch) if scratch.exists() else package_hash(ws.base)}
-    entry.update({"tag": tag} if ref is None else {"ref": ref})
-    ws.locked.append(entry)
-    return entry
-
-
-def environment(ws, remotes, **extra):
-    return vm_environment({"AGENTICA_PATH": "", **ws.cache_variables, **remotes.environment, **extra})
 
 
 def install(ws, remotes, *words, **extra):
@@ -64,12 +27,6 @@ def install(ws, remotes, *words, **extra):
         assert result.stdout == '{"ok":true}\n'
         return result, None
     return result, json.loads(result.stderr) if result.code == 1 else None
-
-
-def assert_at_key(problem, code, file, key_path):
-    assert problem["code"] == code
-    assert Path(problem["file"]) == Path(file)
-    assert problem.get("key_path", "") == key_path
 
 
 def project(ws, dependencies):
@@ -85,10 +42,6 @@ def one_package(ws, remotes, files=None):
     lock_entry(ws, remotes, GREETER, files, commit, tag="v1.0.0")
     project(ws, {"greeter": dependency(remotes.url(GREETER), tag="v1.0.0")})
     return commit
-
-
-def cached_files(folder):
-    return sorted(path.relative_to(folder).as_posix() for path in folder.rglob("*") if path.is_file())
 
 
 def test_install_fetches_a_tag_and_a_commit_then_a_program_runs_from_the_cache_with_no_git(ws, remotes, tmp_path):
