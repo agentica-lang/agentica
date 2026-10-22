@@ -50,23 +50,22 @@ function held(vm, bytecode, mode, options) {
   return finish(peer, Date.now());
 }
 
-// Windows: descriptors 3 and 4 that are a file, or NUL, behind the marker "3,4" (the POSIX form, with the descriptor 3
-// of a file, a device or a FIFO, is in child-channel-peer.py): the child must refuse them as a channel.
+// Windows: descriptors 3 and 4 that are a file, behind the marker "3,4" (the POSIX form, with the descriptor 3 of a
+// file, a device or a FIFO, is in child-channel-peer.py): the child must refuse them as a channel. (fs.openSync("NUL")
+// does not give the device here: it makes a file called NUL, so a device has no stand-in in this peer.)
 async function pinned(vm, bytecode) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "agentica-pinned-"));
   try {
-    const answers = {};
-    for (const kind of ["file", "device"]) {
-      const target = kind === "file" ? path.join(directory, "plain.txt") : "NUL";
-      const fd = fs.openSync(target, "w+");
-      try {
-        answers[kind] = await held(vm, bytecode, "pinned", { channel: false, pins: [fd, fd] });
-      } finally {
-        fs.closeSync(fd);
-      }
+    const target = path.join(directory, "plain.txt");
+    const fd = fs.openSync(target, "w+");
+    let answer;
+    try {
+      answer = await held(vm, bytecode, "pinned", { channel: false, pins: [fd, fd] });
+    } finally {
+      fs.closeSync(fd);
     }
-    answers.file.content = fs.readFileSync(path.join(directory, "plain.txt"), "utf8");
-    return answers;
+    answer.content = fs.readFileSync(target, "utf8");
+    return answer;
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

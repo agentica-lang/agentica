@@ -13,7 +13,7 @@ from tests.agentica_test import FIXTURES, PYTHON, compile_agc, run, vm_binary
 
 PEER = FIXTURES / "child-channel-peer.py"
 pytestmark = pytest.mark.skipif(
-    os.name != "posix", reason="host-only: descriptor 3 pinned to a file, a device or a FIFO, and a shell child; the Windows channel is two pipes chosen by the marker 3,4, and test_vm_child_channel.py refuses a file and NUL there")
+    os.name != "posix", reason="host-only: descriptor 3 pinned to a file, a device or a FIFO, and a shell child; the Windows channel is two pipes chosen by the marker 3,4, and test_vm_child_channel.py refuses a file there")
 
 
 def lines(*items):
