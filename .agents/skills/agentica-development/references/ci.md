@@ -66,8 +66,11 @@ comment), then a step that calls it. Targets that are not obvious:
   (`fast` and `files`). `TESTS=` narrows only host fast and slow runs; make
   rejects it elsewhere. An unknown `KIND` fails before anything runs.
 - The destructive filesystem group (`ISOLATED_PY_TESTS` of `mk/test.mk`)
-  never runs on the host: `test-py` refuses it. Locally it runs only in
-  Docker (`tools/docker-tests.sh --mode ...`: read-only root and checkout,
+  never runs on the host: `test-py` refuses it; `make test-bdd` also runs
+  through Docker locally. `docker-test-image` builds the Ubuntu test container
+  (`tools/ubuntu-test.Dockerfile`, `TEST_BASE` picks the base). Locally the
+  group runs only in Docker (`tools/docker-tests.sh --mode ...`: read-only
+  root and checkout,
   tmpfs `/tmp`, named volumes for `build/` and `dist/`, no capabilities, no
   network, bounded memory and time; it never falls back to the host). In CI,
   `make test-remove-actions` runs it on a GitHub-hosted runner only (it fails
@@ -217,7 +220,9 @@ It runs on PRs with the `platforms` label and on `master` pushes. Each job:
 `make conformance-report` (a job summary, `summary.json`, exit 1 when a
 module did not finish, a case failed, an area has no passed case, or a skip
 is not allowed). `conformance all-systems` merges the four reports and fails
-when a system is missing or a case ran on none.
+when a system is missing or a case ran on none. Not in the matrix: the Docker
+and Wine groups, the slow tier, sanitizers, fuzz and gc-stress (`ci.yml`,
+`fuzz.yml`).
 
 A new `tests/test_*.py` must be in an area or in `EXCLUDED` with a reason
 (`tests/test_conformance.py`). Run one system by hand with `make conformance`.

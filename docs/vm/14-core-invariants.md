@@ -298,6 +298,9 @@ the caller. A channel never handed over is closed only by `Channel.close`.
 
 Items in the plan to re-check with this rule before they start:
 
+- **Item:** The rest of the VM layers (7l, row 8.1; the first part is §15)
+  - **Question:** Does each layer replace code, or only add a boundary?
+
 - **Item:** VM metrics (phase 18, §28)
   - **Question:** It adds a metrics thread and hooks in the core. Could a dump
     at exit, or an outside reader of the VM's state, do the job? 18d adds one

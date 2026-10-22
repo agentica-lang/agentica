@@ -16,7 +16,7 @@ Makefile, mk/     # the root has the defaults and `help`; one mk/*.mk per area; 
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (references/ci.md)
 compiler/         # the front end (§18.3): one folder per context; a new file goes in the folder of its context; imports across folders are relative (`../syntax/types`); agentica.toml holds [style] (119 columns)
   front_end.agc   # the front end of the single binary (make's stages build it)
-  app/            # the command line (cli*.agc), the pipeline (pipeline.agc: shared by the CLI and the BDD driver), front_end_cli.agc (`--version V [--stdlib DIR] [--self PATH] -- WORDS`)
+  app/            # the command line (cli*.agc), the pipeline (pipeline.agc: shared by the CLI and the BDD driver), front_end_cli.agc (`--version V [--stdlib DIR] [--self PATH] -- WORDS`); `test` calls the BDD driver in process, which starts `settings.self_path run ...`, so a later `run` word is a usage error
   analysis/       # the semantic queries, once (§39): analysis.agc for the CLI and std/analysis; front.agc reads, links and checks for run, compile, test and the queries
   io/             # the adapter to the machine: the only stage code that reads files and the environment (host.agc builds the Workspace); package fetch and deps/, bytecode cache, stdin buffer
   syntax/         # source text, UTF-8 rules (source_file.agc), lexer, parser, AST, types.agc (the Type enum), suggest.agc (did_you_mean), unicode_table.agc (hand-edited, Unicode 17.0)

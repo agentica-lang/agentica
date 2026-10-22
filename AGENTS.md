@@ -54,10 +54,14 @@ phase 13).
   `make smoke`; `make site` before merging a site change.
 - `dist/agentica file.agc` runs a program; `... check file.agc` checks;
   `dist/agentica run -- file.agcb` runs compiled bytecode.
-- CI only: `make test-slow` (the `@slow` cases), `make vm-tsan`,
-  `make test-shared`. `make tests KIND=files` (the destructive filesystem
-  cases) runs only in the Docker sandbox or an ephemeral CI runner; never on
-  the host (`references/ci.md` of the development skill).
+- `make test-slow`: the `@slow` cases (sets `AGENTICA_TEST_SLOW=1`); CI only.
+- `make vm-tsan`: the C tests of the code that threads share under
+  ThreadSanitizer, in a build without libgc. `make test-shared`: the binary
+  test modules with every lock and held check of the shared state on. Run
+  both when you change shared-state C code; CI runs them too.
+- `make tests KIND=files` (the destructive filesystem cases) runs only in the
+  Docker sandbox or an ephemeral CI runner, never on the host
+  (`references/ci.md` of the development skill).
 - `make goldens` rewrites the VM goldens, `tests/fixtures/cli/forms.json` and
   the fast-tier front-end goldens; commit them. The slow-tier manifests of
   `tests/fixtures/frontend/frozen/` need the full `python3 tools/refreeze.py`.

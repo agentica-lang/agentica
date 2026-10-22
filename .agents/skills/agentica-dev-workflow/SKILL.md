@@ -45,8 +45,7 @@ rules live in `AGENTS.md` and `agentica-development`.
 - **Speed:** only the author measures, and only when the PR touches the
   interpreter or scheduler hot path: an interleaved A/B against master with
   medians (`references/bench-eval.md` of agentica-development), numbers in
-  the PR body. Critics and reviewers do not time unless the PR claims a
-  speedup.
+  the PR body. Critics and reviewers do not time.
 - A local pre-commit hook (untracked) may run `make dup-check` on staged `vm/`
   or `tests/` files and block new clones; refactor them (CI fails on them too).
   Never bypass the hook (`--no-verify`, `core.hooksPath`); install the missing

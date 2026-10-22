@@ -54,6 +54,9 @@ What the files cannot see, or how they must run:
 
 ## Gotchas
 
+- The tests that send `SIGHUP` or `SIGINT` (`tests/test_vm_stop.py`) start the
+  VM through the `launch default` mode of `tests/fixtures/stop-peer.py`, so
+  the result does not depend on how the test run was started.
 - Each sweep limit is one VM start, and the start costs more than the run:
   the diff test runs every limit only up to 200 steps; above that it runs 1
   to 100, limits spaced steps / 50 apart, the steps minus 1 and the steps

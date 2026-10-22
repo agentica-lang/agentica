@@ -62,7 +62,7 @@ optional expected, actual, callee, signature, labels and help). List the codes
 in use with:
 
 ```sh
-rg -oNI --no-filename '\b(LEX|PARSE|CHECK|PKG|QUERY|RUNTIME|LOWER|BYTECODE)-[A-Z0-9]+(-[A-Z0-9]+)*' compiler vm/*.c | sort -u
+rg -oNI --no-filename '\b(LEX|PARSE|CHECK|PKG|QUERY|RUNTIME|LOWER|BYTECODE)-[A-Z0-9]+(-[A-Z0-9]+)*' compiler stdlib vm/*.c | sort -u
 ```
 
 Notes by stage:

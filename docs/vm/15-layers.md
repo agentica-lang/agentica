@@ -313,12 +313,14 @@ Each row is a place where the core names a service, or a layer reaches past
 the port (rule 7 of §15.5 checks them with `nm`). V1 to V5 are fixed; the
 others are accepted, with the reason.
 
-- **V1 to V5, fixed:** the Json writer moved to the core (`json_value.c`); V2:
-  the builtin table list moved to the driver file `builtin_tables.c`
-  (`agc_builtin_tables`, in the old order, since `agc_find_builtin` returns the
-  first match), the one place that wires the services in; `discard` reads the
-  resource field `keep_detached` instead of a tag; `agc_error_value` moved to
-  `value.c`; `Test.run` waits through the port function `agc_task_join`.
+- **V1 to V5, fixed:**
+  - V1: the Json writer moved to the core (`json_value.c`).
+  - V2: the builtin table list moved to the driver file `builtin_tables.c`
+    (`agc_builtin_tables`, in the old order, since `agc_find_builtin` returns
+    the first match), the one place that wires the services in.
+  - V3: `discard` reads the resource field `keep_detached` instead of a tag.
+  - V4: `agc_error_value` moved to `value.c`.
+  - V5: `Test.run` waits through the port function `agc_task_join`.
 
 - **#:** V6
   - **Where:** `testing.c` (`cancel_leftovers`, `unobserved_of`, `observe_test`)

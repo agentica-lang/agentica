@@ -399,5 +399,6 @@ the result. Registers, calls, structs, maps and Json values stay `agc_value`.
 **Tests.** `vm/tests/list_test.c` runs the whole API with Int, Float and boxed
 items over the boundary lengths of §17.2 (the million lengths for Int only). It
 builds mixed lists by hand at every boundary, checks that an empty list has no
-kind, and that `-0.0`, NaN and the limits of Int survive each operation. The golden
-`tests/fixtures/vm/list-unboxed.agc` covers the same behavior end to end.
+kind, and that `-0.0`, NaN and the limits of Int survive each operation. The
+golden `tests/fixtures/vm/list-unboxed.agc` covers the same behavior end to
+end.

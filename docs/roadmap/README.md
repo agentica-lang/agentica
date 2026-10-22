@@ -71,7 +71,8 @@ Weighed later (no fixed order):
    names: done in 0.8.1 (#550).
 10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer.
 11. Flaky tests [#528](https://github.com/sonic182/agentica/issues/528) and
-    [#382](https://github.com/sonic182/agentica/issues/382).
+    [#382](https://github.com/sonic182/agentica/issues/382): closed (#603
+    fixed #528; #382 did not recur).
 12. UDP [#450](https://github.com/sonic182/agentica/issues/450) (row 7.5): it
     leaves the core plan and may be a package built on the FFI later.
 13. Strict diagnostics (row 7.6).
