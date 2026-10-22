@@ -6,6 +6,7 @@ description: TCP and TLS sockets and the HTTP/1.1 client and server of std/http.
 
 Network functions return a `Result` and take timeouts in milliseconds.
 
+- With `--deny-net` (or `--sandbox`), every connect and listen returns an error that begins with `denied: --deny-net`, before any DNS lookup. With `--deny-fs`, a TLS call that names a file (a CA file, a certificate or a key) returns `denied: --deny-fs`.
 - Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends.
 - A handle belongs to the task that opened it and closes when that task ends, so open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
 - A timeout covers the whole call, including the wait for another task using the same socket. After a read or write timeout the socket is closed, and later calls fail at once with `network: socket is closed`.

@@ -58,8 +58,9 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   builtin reaches it today.
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
   handles it when `run` is the first word, with the VM flags (`--max-steps`,
-  `--seed`, `--flush-timeout`, `--schedulers`, `--deny-run`, `--ai`, `--json`,
-  `--source-root`, `--version`) and the hidden `--driver-pid PID` and
+  `--seed`, `--flush-timeout`, `--schedulers`, the `--deny-*` flags,
+  `--sandbox`, `--ai`, `--json`, `--source-root`, `--version`) and the hidden
+  `--driver-pid PID` and
   `--embedded NAME` (run the `runner` or `steps` program that the binary
   carries; the front end may not pass it on in a hand-off). The VM then
   deletes its input right after reading it (only a private file is read with

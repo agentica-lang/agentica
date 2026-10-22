@@ -16,7 +16,8 @@
  * defaults and the flags; the seen_ flags say what was typed (the environment may still set the flush timeout and the
  * schedulers). chosen_schedulers, set by agc_launch_env, says the count came from the flag or AGENTICA_SCHEDULERS,
  * not from the default. embedded is the word after --embedded, which only `agentica run` takes: the program is one the
- * binary carries, not a file. */
+ * binary carries, not a file. The deny_ flags are the --deny-* flags after agc_launch_parse applied --sandbox (all of
+ * them) and the rule that any of them turns on deny_native. */
 typedef struct {
   int64_t max_steps, flush_timeout, driver, schedulers;
   uint32_t seed;
@@ -24,7 +25,8 @@ typedef struct {
   const char *source_root;
   const char *embedded;
   size_t source_root_chars;
-  bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, deny_run, deny_native;
+  bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, sandbox, deny_run, deny_net,
+      deny_fs, deny_env, deny_native;
 } agc_launch_options;
 
 typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;

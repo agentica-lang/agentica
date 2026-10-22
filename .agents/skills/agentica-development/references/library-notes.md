@@ -158,7 +158,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   Dir.mkdir is recursive and idempotent, Dir.list is sorted, Path.resolve is
   lexical without symlink resolution, and Path.real is POSIX `realpath` through
   `uv_fs_realpath` in a pool job (no timeout argument; a path that does not
-  exist is an error). System.env (in `vm/process.c`) needs no flag.
+  exist is an error). System.env (in `vm/system.c`) is off with --deny-env.
 - File.each_line is a stepper builtin (`references/vm-io.md`, `vm/interp.c`): it
   reads one line at a time through a buffer of `buffer_bytes + 1` bytes, one
   pool job (regular file) or one poller read (FIFO, pipe, or a device that can
@@ -208,8 +208,12 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   and forwarded Void returns. Nil remains data and requires explicit returns.
   Main and side-effect callbacks return Void. Result[Void] success uses ok().
   Migrate fixtures by meaning, preserving Nil and false data cases.
-- --deny-run reaches the VM (`vm/process.c`) and turns on --deny-native
-  (`vm/launch.c`); `agentica test` refuses it. The end of a run kills and
+- The --deny-* flags reach the VM: --deny-run in `vm/process.c`, --deny-net
+  in `vm/tcp.c` (`net_denied`: every socket and listener starts there),
+  --deny-fs in `vm/files.c` (`fs_denied`, every row but `Path.join`, and the
+  line reader and writer) and for TLS files in `vm/tcp.c`, --deny-env in
+  `vm/system.c`. `vm/launch.c` expands --sandbox and turns on --deny-native
+  for any of them; `agentica test` refuses them. The end of a run kills and
   reaps directly spawned children. Expected operations return Results.
 - `tests/test_process.py` uses independent Node standard-library children and a
   Python one (`tests/fixtures/process-peer.py`). Node is required in CI; local

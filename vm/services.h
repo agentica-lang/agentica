@@ -8,6 +8,12 @@
 
 #include "port.h"
 
+/* The errors of a call that --deny-fs, --deny-net or --deny-env turns off (rt->deny_fs, deny_net, deny_env).
+   Programs may test the prefix up to the flag ("denied: --deny-fs"), so it is stable. */
+#define AGC_DENIED_FS "denied: --deny-fs turns off file access"
+#define AGC_DENIED_NET "denied: --deny-net turns off the network"
+#define AGC_DENIED_ENV "denied: --deny-env turns off environment variables"
+
 struct agc_test_note {
   agc_string *message, *expected, *actual;
   uint32_t span;

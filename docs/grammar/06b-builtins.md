@@ -286,11 +286,11 @@ Expected types flow into these operations for empty collections and Results.
   that is not part of a valid UTF-8 sequence becomes U+FFFD, as in `Dir.list`
   names. The VM hides the variables it keeps for itself, `AGENTICA_CHANNEL` and
   a `UV_USE_IO_URING` that it set itself; a child started with `Process.spawn`
-  does not get them either. No flag is needed, as for files: the permissions of
-  the host user apply. The home directory is `System.env("HOME")`. There is no
-  call that lists the variables. A child started with `Process.spawn` also does
-  not get `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE` (reserved for the
-  VM's own metrics, a later phase), though `System.env` shows them to the
+  does not get them either. With `--deny-env` it returns an error that begins
+  with `denied: --deny-env`. The home directory is `System.env("HOME")`. There
+  is no call that lists the variables. A child started with `Process.spawn` also
+  does not get `AGENTICA_VM_METRICS` or `AGENTICA_VM_METRICS_FILE` (reserved for
+  the VM's own metrics, a later phase), though `System.env` shows them to the
   program.
 - `System.os()` is the operating system of the running program, a `String`:
   `"linux"`, `"macos"` or `"windows"`, and on any other system the lowercase
@@ -496,6 +496,20 @@ task at a time in the order of a single run queue. The front end always compiles
 on one scheduler. `agentica test` refuses the flag (exit 2); the VMs it starts
 read `AGENTICA_SCHEDULERS`.
 
+Everything is allowed by default. `--deny-run`, `--deny-net`, `--deny-fs` and
+`--deny-env` each turn off a family of builtins: a call returns an error that
+begins with `denied: ` and the flag (`denied: --deny-fs`), and the program goes
+on. `--deny-run` turns off the `Process` starts; `--deny-net` every connect and
+listen of `TCP` and `TLS`, so `std/http` too, before any DNS lookup; `--deny-fs`
+every `File`, `Dir` and `Path` call but `Path.join`, `Lazy.write_lines`, and a
+TLS call that names a file; `--deny-env` `System.env` (`System.os` and
+`System.pid` stay on: they hold no secret; the locale of error texts still
+follows `LANG`). Each turns on `--deny-native`, since native code could do the
+same. A program that can start processes escapes a single flag; use
+`--sandbox`, or add `--deny-run`. `--sandbox` is all of them: the one flag for
+code you do not trust. They apply to the program, not to the front end,
+and `agentica test` refuses them (exit 2).
+
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user
 function) replaces the caller's frame and does not count, so deep tail recursion
@@ -509,19 +523,19 @@ call of a builtin are not tail calls.
 front end: nothing is read, checked or compiled. `run` must be the first word
 after `agentica`; after an option it is taken as a source file name and the
 front end answers with a usage error (exit 2). The options are `--max-steps N`,
-`--seed N`, `--flush-timeout MS`, `--schedulers N`, `--deny-run`,
-`--deny-native`, `--source-root DIR` (the folder put before the file names that
-the bytecode stores, except the `std/` modules), `--ai` and `--json`, each at
-most once and with the values and limits they have for `agentica FILE.agc`;
+`--seed N`, `--flush-timeout MS`, `--schedulers N`, the `--deny-*` flags,
+`--sandbox`, `--source-root DIR` (the folder put before the file names that the
+bytecode stores, except the `std/` modules), `--ai` and `--json`, each at most
+once and with the values and limits they have for `agentica FILE.agc`;
 `--version` prints the Agentica version and the versions of the libraries the VM
 links. The words after the file are the program's arguments, even when they look
 like options. The loader treats the file as untrusted, but its native code runs
-unless `--deny-native` is given. A file that is not valid bytecode, or whose
-format or Agentica version is not the binary's, is refused before anything runs;
-a source file also gets the hint to run it as `agentica FILE.agc`. The exit
-status is the program's own: `System.exit(n)`, 1 for a diagnostic, and 2 for a
-command line or a start that fails (a bad option, an unreadable file, bad
-bytecode), with a message that starts `agentica run:`.
+unless a `--deny-*` flag or `--sandbox` is given. A file that is not valid
+bytecode, or whose format or Agentica version is not the binary's, is refused
+before anything runs; a source file also gets the hint to run it as `agentica
+FILE.agc`. The exit status is the program's own: `System.exit(n)`, 1 for a
+diagnostic, and 2 for a command line or a start that fails (a bad option, an
+unreadable file, bad bytecode), with a message that starts `agentica run:`.
 
 [agentica-link-1]: ../../site/content/library/data-structures/list.md
 [agentica-link-2]: ../../site/content/library/data-structures/map.md

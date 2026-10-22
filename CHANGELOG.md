@@ -15,6 +15,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `--deny-native` refuses such a program at load.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
+- `--deny-net`, `--deny-fs` and `--deny-env` make network, file and
+  `System.env` calls return an error; `--sandbox` turns on every `--deny-*`
+  flag.
 
 ### Removed
 

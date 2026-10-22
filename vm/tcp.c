@@ -1268,6 +1268,16 @@ static void no_network(agc_vm *vm, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "network access is off in this run", span);
 }
 
+/* --deny-net and --deny-fs, checked before anything is resolved, opened or allocated: the denied error, or Void.
+   Every socket and listener starts here (a listener for HttpWire.server comes from TCP.listen or TLS.listen), so a
+   denied run has none to accept on. A TLS call that names files (a CA file, a certificate and key) reads the disk. */
+static agc_value net_denied(agc_vm *vm, uint32_t span, bool names_files) {
+  no_network(vm, span);
+  if (vm->rt->deny_net) return agc_error_value(AGC_DENIED_NET);
+  if (names_files && vm->rt->deny_fs) return agc_error_value(AGC_DENIED_FS);
+  return agc_void();
+}
+
 static bool begin_open(void *data, agc_io_job *job) {
   request *q = data;
   net *n = q->n;
@@ -1331,7 +1341,8 @@ static agc_value connect_net(agc_vm *vm, char *name, int64_t port, bool secure, 
 }
 
 static agc_value open_socket(agc_vm *vm, const agc_value *args, uint32_t span, bool secure) {
-  no_network(vm, span);
+  agc_value denied = net_denied(vm, span, secure && agc_as_string(vm, args[2])->bytes > 0);
+  if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, args[0]);
   int64_t port = agc_as_int(vm, args[1]);
   int64_t timeout = agc_as_int(vm, args[secure ? 3 : 2]);
@@ -1351,7 +1362,8 @@ static agc_value open_socket(agc_vm *vm, const agc_value *args, uint32_t span, b
    context that the client's connections share, so it is built once (#394). After HttpWire.drop_tls a call builds
    its own context, as TLS.connect does. */
 static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span) {
-  no_network(vm, span);
+  agc_value denied = net_denied(vm, span, false);
+  if (!agc_is(denied, AGC_T_VOID)) return denied;
   agc_http_client *c = agc_as_http_client(vm, args[0]);
   const agc_string *host = agc_as_string(vm, args[1]);
   int64_t port = agc_as_int(vm, args[2]);
@@ -1361,10 +1373,12 @@ static agc_value builtin_connect_tls(agc_vm *vm, agc_value *args, uint32_t span)
   /* HttpWire.service checked the shape; checked again, since a bad read here goes past the struct. */
   const agc_struct *o = agc_as_struct(vm, c->options);
   if (o->n != AGC_HTTP_OPTIONS_FIELDS) return agc_error_value("http: invalid client options");
+  const agc_string *ca_file = agc_as_string(vm, o->fields[AGC_HTTP_OPTION_CA_FILE]);
+  if (vm->rt->deny_fs && ca_file->bytes > 0) return agc_error_value(AGC_DENIED_FS);
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
   /* HTTP.client refuses a ca_file with NUL, so only bytecode that skipped it gets here. */
-  char *ca = agc_cstr(agc_as_string(vm, o->fields[AGC_HTTP_OPTION_CA_FILE]));
+  char *ca = agc_cstr(ca_file);
   if (!ca) {
     free(name);
     return agc_error_value("http: invalid client options");
@@ -1387,7 +1401,8 @@ static agc_value builtin_drop_tls(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span, bool secure) {
-  no_network(vm, span);
+  agc_value denied = net_denied(vm, span, secure);
+  if (!agc_is(denied, AGC_T_VOID)) return denied;
   const agc_string *host = agc_as_string(vm, args[0]);
   int64_t port = agc_as_int(vm, args[1]);
   if (port < 0 || port > 65535) return agc_error_value("network: port must be 0..65535");

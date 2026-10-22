@@ -7,6 +7,9 @@
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
 ## `--only TEXT`, `--json` and `--ai`.
 
+# The flags of a run that `agentica test` refuses, as it does in front of `test` (cli.agc).
+REFUSED = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
+
 ## Everything a run needs.
 export struct Options
   vm: String
@@ -109,7 +112,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       at += 2
     elsif word == "--json" or word == "--ai"
       at += 1
-    elsif word == "--deny-run" or word == "--deny-native"
+    elsif REFUSED.include?(word)
       return Parsed.Refused("test does not take #{word} yet")
     elsif word.starts_with?("--")
       return Parsed.Usage("unknown option #{word}", shown)

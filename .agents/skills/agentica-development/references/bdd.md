@@ -19,15 +19,15 @@ are registered in `stdlib/MODULES`.
   process, with the settings of the command line: the version, the provider of
   the `std/` sources and `self_path`, the path of the binary). The runner and
   each program under test are children of the same binary: `settings.self_path
-  run [--seed N] --driver-pid PID --embedded runner -- config.jsonl`
-  (the binary carries the compiled runner; see "Embedded programs" below), and
-  `self_path ... FILE.agc` for a program under test (`std/bdd`). The user's
-  `--deny-run` does not reach the front end, so it can start them; the user's
-  program never runs in that runtime. `agentica test` refuses `--deny-run` and
-  `--deny-native`. A front end that stops on a runtime error (a bug
-  in the driver) ends the process with status 2 and the error on stderr, never
-  the 1 of a failed test run. Without `--self` (the front end started as an
-  ordinary program) `test` says so and exits 2.
+  run [--seed N] --driver-pid PID --embedded runner -- config.jsonl` (the binary
+  carries the compiled runner; see "Embedded programs" below), and `self_path
+  ... FILE.agc` for a program under test (`std/bdd`). The user's `--deny-*`
+  flags do not reach the front end, so it can start them; the user's program
+  never runs in that runtime. `agentica test` refuses every `--deny-*` flag and
+  `--sandbox` (`REFUSED` in `bdd_options.agc`). A front end that stops on a
+  runtime error (a bug in the driver) ends the process with status 2 and the
+  error on stderr, never the 1 of a failed test run. Without `--self` (the front
+  end started as an ordinary program) `test` says so and exits 2.
   - the tests that need a fake runner run the front end as an ordinary program
     (the `std/` sources from a folder, so the runner is compiled into the run
     dir) with `--self` naming a shell script that fakes the runner when it is
