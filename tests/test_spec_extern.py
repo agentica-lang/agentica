@@ -139,3 +139,25 @@ def test_extern_and_compute_are_still_names_elsewhere(tmp_path):
     text = 'def compute(n: Int) -> Int\n  return n\nend\n\n' \
            'def main() -> Void\n  extern = 1\n  puts(compute(extern))\nend\n'
     assert check(source(tmp_path, text)).code == 0
+
+
+WAIT = """def connect(fd: Int) -> Result[Void]
+  try Native.wait_readable(fd, 5_000)
+  return Native.wait_writable(fd, 5_000)
+end
+
+def main() -> Void
+  puts(connect(3))
+end
+"""
+
+
+# Native.wait_readable and wait_writable take an Int descriptor and an Int timeout and give a Result[Void]. Native is
+# not a reserved name: an import alias of that name hides the builtins.
+def test_the_waits_take_int_arguments_and_give_a_result(tmp_path):
+    assert check(source(tmp_path, WAIT)).code == 0
+    bad = 'def main() -> Void\n  puts(Native.wait_readable("3", 5_000))\nend\n'
+    assert at(problem_of(check(source(tmp_path, bad)))) == ("CHECK-TYPE-MISMATCH", (2, 29), (2, 32))
+    source(tmp_path, "export def wait_readable(fd: Int) -> Int\n  return fd\nend\n", "native.agc")
+    shadow = 'import Native from "./native"\n\ndef main() -> Void\n  puts(Native.wait_readable(1) + 1)\nend\n'
+    assert check(source(tmp_path, shadow)).code == 0

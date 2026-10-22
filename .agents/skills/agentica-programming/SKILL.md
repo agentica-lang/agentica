@@ -35,7 +35,7 @@ check a signature with `agentica help NAME`.
    (`references/queries.md`). Run flags: `--deny-run`, `--deny-net`,
    `--deny-fs`, `--deny-env` (`Process` starts, network, `File`/`Dir`/`Path`
    but `Path.join`, `System.env` return an error starting `denied: --deny-X`;
-   each implies `--deny-native`), `--deny-native` (refuse `extern`),
+   each implies `--deny-native`), `--deny-native` (refuse native code),
    `--sandbox` (all of them, for untrusted code; a program that can start
    processes escapes a single flag, so use `--sandbox` or add `--deny-run`),
    `--seed N`, `--max-steps N`.
@@ -161,7 +161,8 @@ Read only what the task needs:
 - `references/json.md`: JSON. `references/toml.md`: TOML (`std/toml`).
 - `references/files.md`: files, directories, paths, locks, removing trees.
 - `references/processes.md`: starting programs (`Process`).
-- `references/native.md`: calling C functions (`extern` blocks, `compute def`).
+- `references/native.md`: calling C functions (`extern` blocks, `compute def`,
+  `Native.wait_*`).
 - `references/tasks.md`: concurrency, timed awaits, `Task.cancel`, `Channel`.
 - `references/analysis.md`: compiler answers inside a program (`std/analysis`).
 - `references/binary.md`: `std/binary`. `references/logger.md`: `std/logger`.

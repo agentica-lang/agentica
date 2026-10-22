@@ -379,15 +379,28 @@ end
   wait for a running call. The arguments are copied before the call, a
   `C.String` result is copied as it returns, and the function runs on another
   thread, so it must be safe to call from one.
+- `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable(fd,
+  timeout_ms)` give a `Result[Void]`: the task waits until the descriptor `fd`
+  of native code (a socket, a pipe) can be read or written, while other tasks
+  run. This is how a library in non-blocking mode (libpq, curl multi) waits:
+  `try Native.wait_readable(Raw.PQsocket(conn), 5_000)`. The wait polls a
+  duplicate of `fd`, so the native code keeps its descriptor, two tasks may
+  wait on one descriptor, and the descriptor is put in non-blocking mode. An
+  error or a hang-up on the descriptor ends the wait with `ok` too, as in
+  poll(2): the next native call reports it. After `timeout_ms` (positive) the
+  result is `error("native: timed out")`. A timeout that is not positive, a
+  negative `fd`, and a descriptor that cannot be duplicated or polled (closed,
+  a regular file, `/dev/null`) give an error that starts with `native: `. A
+  cancel stops the wait.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
   `--deny-*` flag, or `--sandbox`) refuses
-  a program that declares any extern function before anything runs:
-  `RUNTIME-NATIVE-DENIED`, exit 2. `agentica test` does not take the option
-  yet.
-- Native calls work on Linux x86_64. Elsewhere a program that declares an
-  extern function is refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2
-  (issue #548). `check`, `compile` and the queries work on every system.
+  a program that declares any extern function or calls a `Native.wait_*`
+  before anything runs: `RUNTIME-NATIVE-DENIED`, exit 2. `agentica test` does
+  not take the option yet.
+- Native calls and waits work on Linux x86_64. Elsewhere such a program is
+  refused at load with `RUNTIME-NATIVE-UNSUPPORTED`, exit 2 (issue #548).
+  `check`, `compile` and the queries work on every system.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
   native code runs with the rights of the program.
 

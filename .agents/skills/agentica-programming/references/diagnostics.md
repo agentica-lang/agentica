@@ -454,7 +454,8 @@ there, at a character boundary, and ends with `...`.
   `RUNTIME-NATIVE-UNSUPPORTED`
   - **Meaning:** the library or function of an extern call was not found (at
     the extern function); or, at load with exit 2, `--deny-native` refused a
-    program with an extern function, or the system has no native calls yet
+    program with an extern function or a `Native.wait_*` call, or the system
+    has no native calls yet
 
 - **Code:** `LOWER-UNSUPPORTED`
   - **Meaning:** the VM cannot run this form; exit 1 before anything runs. Every

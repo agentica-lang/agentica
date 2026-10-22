@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `--deny-native` refuses such a program at load.
 - `compute def` in an `extern` block runs a long native call on the VM's
   compute pool while the task waits and other tasks run.
+- `Native.wait_readable(fd, timeout_ms)` and `Native.wait_writable` park a
+  task until a descriptor of native code can be read or written.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and
