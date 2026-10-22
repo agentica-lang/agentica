@@ -19,7 +19,7 @@ import Texts from "cli_text"
 ## A NAME that is not a builtin but a name from another language (`strip`, `String.to_i`, `value!`) answers with the
 ## builtins it stands for (cli_alias.agc), each under a line such as "`NAME` is called `Y` in Agentica", then the hints
 ## of the checker for that name on other types; as JSON it is {"alias": NAME, "builtins": [the object of each builtin],
-## "hints": {"Kind.name": text}}. A name with a hint of its own for a foreign language (`int`) gets that hint and exit 2.
+## "hints": {"Kind.name": text}}. A name with a foreign-language hint of its own (`int`) gets that hint and exit 2.
 export def help(words: List[String], style: String) -> Reply.Reply
   rest = words
   as_json = style == "json"
