@@ -2,10 +2,11 @@
 
 The peer is tests/fixtures/native/peer.c, built with the system C compiler into a shared library (a DLL on Windows, a
 dylib on macOS) for each module run, so every C type crosses a real ABI; four cases also call the system SQLite
-(libsqlite3.so.0 on Linux, which CI installs, and libsqlite3.dylib on macOS). Native calls exist on Linux x86_64,
-Windows x64 and macOS: elsewhere a program that declares extern functions is refused at load with
-RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. On Windows Native.wait_* polls only
-sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert codes and spans, never messages (AGENTS.md).
+(libsqlite3.so.0 on Linux, which CI installs; libsqlite3.dylib on macOS; winsqlite3.dll on Windows). Native calls
+exist on Linux x86_64, Windows x64 and macOS: elsewhere a program that declares extern functions is refused at load
+with RUNTIME-NATIVE-UNSUPPORTED, which test_other_systems_refuse_extern_at_load checks. On Windows Native.wait_* polls
+only sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert codes and spans, never messages
+(AGENTS.md).
 """
 import ctypes
 import json
@@ -1096,9 +1097,11 @@ def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
     assert agentica("test", cwd=tmp_path).code == 0
 
 
-# A real library, not the peer: the system SQLite of Linux or macOS. sqlite3_malloc and sqlite3_free are a resource, and
-# sqlite3_msize reads the block; the full case opens a database and queries it through out parameters.
-SQLITE_LIBRARY = "libsqlite3.dylib" if MACOS else "libsqlite3.so.0"
+# A real library, not the peer: the system SQLite. sqlite3_malloc and sqlite3_free are a resource, and sqlite3_msize
+# reads the block; the full case opens a database and queries it through out parameters. Windows 10 and later ship
+# winsqlite3.dll in System32 with the same sqlite3_* C API (a bare name, which the VM loads from the system folders).
+# macOS has /usr/lib/libsqlite3.dylib (in the dyld shared cache).
+SQLITE_LIBRARY = "winsqlite3.dll" if WINDOWS else "libsqlite3.dylib" if MACOS else "libsqlite3.so.0"
 
 SQLITE_EXTERN = """extern "%s"
   resource Block, free: sqlite3_free
@@ -1111,22 +1114,20 @@ end
 
 """ % SQLITE_LIBRARY
 
-# libsqlite3.so.0 is a Linux system library: CI installs libsqlite3-0, and a missing library fails there and skips
-# on a local run. macOS has /usr/lib/libsqlite3.dylib (in the dyld shared cache); Windows has no system SQLite.
-NO_SYSTEM_SQLITE = host_only(WINDOWS, "Windows has no system SQLite library")
-
 
 @pytest.fixture(scope="module")
 def sqlite():
     """Skip (a failure in CI) when the system SQLite library is not installed."""
+    hint = ""
+    if TARGET_OS.startswith("linux"):
+        hint = " (Debian: apt install libsqlite3-0)"
     try:
         ctypes.CDLL(SQLITE_LIBRARY)
     except OSError:
-        require(False, SQLITE_LIBRARY + " is required (Debian: apt install libsqlite3-0)")
+        require(False, SQLITE_LIBRARY + " is required" + hint)
 
 
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_answers_its_version_and_whether_a_statement_is_complete(tmp_path, sqlite):
     main = """def main() -> Void
   puts(sqlite3_libversion_number() >= 3_000_000)
@@ -1140,7 +1141,6 @@ end
 
 
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_a_block_of_sqlite_malloc_is_a_resource_that_close_frees(tmp_path, sqlite):
     main = """def main() -> Void
   block = sqlite3_malloc(64).unwrap!
@@ -1174,7 +1174,6 @@ end
 # rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. An open
 # that fails (SQLITE_CANTOPEN, 14) still gives a live handle, which the wrapper reads and closes.
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_opens_a_database_and_queries_it_through_out_parameters(tmp_path, sqlite):
     main = """def open(path: String) -> Result[Db]
   opened = sqlite3_open(path)
@@ -1241,7 +1240,6 @@ SQLITE_MEMORY_EXTERN = SQLITE_OUT_EXTERN.replace("  def sqlite3_column_text(stmt
 # message to an out pointer, which string_at reads and sqlite3_free
 # frees; a statement that works leaves it NULL.
 @NATIVE_CALLS
-@NO_SYSTEM_SQLITE
 def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tmp_path, sqlite):
     main = """def main() -> Void
   transient = Native.pointer(-1)
