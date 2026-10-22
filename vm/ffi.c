@@ -409,15 +409,15 @@ static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) 
 }
 
 /* Checks argument V against its C type before anything is allocated, so a failure (agc_fail longjmps) leaks
-   nothing. A C.Int that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and cutting
-   them short would call the function with another value. The items of a C.Bytes are checked while they are copied
-   (copy_bytes), and whether a resource is closed before and after that (check_open). */
+   nothing. A C.Int32 that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and
+   cutting them short would call the function with another value. The items of a C.Bytes are checked while they are
+   copied (copy_bytes), and whether a resource is closed before and after that (check_open). */
 static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t span) {
   switch (type) {
     case AGC_C_INT: {
       int64_t n = agc_as_int(vm, v);
       if (n < INT32_MIN || n > INT32_MAX)
-        agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a C.Int argument does not fit in 32 bits", span);
+        agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a C.Int32 argument does not fit in 32 bits", span);
       break;
     }
     case AGC_C_INT64: agc_as_int(vm, v); break;

@@ -8,8 +8,8 @@ Many C network libraries (libpq, curl multi, hiredis) have a non-blocking mode: 
 
 ```agentica {mode="check"}
 extern "libc.so.6"
-  def eventfd(initval: C.Int, flags: C.Int) -> C.Int
-  def eventfd_write(fd: C.Int, value: C.Int64) -> C.Int
+  def eventfd(initval: C.Int32, flags: C.Int32) -> C.Int32
+  def eventfd_write(fd: C.Int32, value: C.Int64) -> C.Int32
 end
 
 def ring(fd: Int) -> Int

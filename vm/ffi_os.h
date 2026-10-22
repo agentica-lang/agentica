@@ -15,7 +15,7 @@
 /* The most parameters an extern function may have. */
 #define AGC_FFI_MAX_PARAMS 64
 
-/* The C types of an extern signature: C.Int is int32_t, C.Int64 int64_t, C.Double double, C.Bool _Bool and C.String
+/* The C types of an extern signature: C.Int32 is int32_t, C.Int64 int64_t, C.Double double, C.Bool _Bool and C.String
    a NUL-terminated char *. C.Pointer, C.Bytes (a const uint8_t *) and a resource are each a pointer in C. Void is for
    results only, and C.Bytes for parameters only. */
 typedef enum {

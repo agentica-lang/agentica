@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the extern type `C.Int` is now `C.Int32`, so both widths are
+  explicit (`C.Int32`, `C.Int64`); `C.Int` is `PARSE-EXTERN-TYPE`.
+
 ## [0.9.0-beta.2] - 2026-10-22
 
 ### Added

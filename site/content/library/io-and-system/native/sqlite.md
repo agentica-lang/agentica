@@ -16,13 +16,13 @@ SQLITE_DONE = 101
 extern "libsqlite3.so.0"
   resource Db, free: sqlite3_close_v2
   resource Stmt, free: sqlite3_finalize
-  def sqlite3_open(filename: C.String, out db: Db) -> C.Int
-  def sqlite3_errstr(code: C.Int) -> C.String
+  def sqlite3_open(filename: C.String, out db: Db) -> C.Int32
+  def sqlite3_errstr(code: C.Int32) -> C.String
   def sqlite3_errmsg(db: Db) -> C.String
-  def sqlite3_prepare_v2(db: Db, sql: C.String, bytes: C.Int, out stmt: Stmt, out tail: C.Pointer) -> C.Int
-  compute def sqlite3_step(stmt: Stmt) -> C.Int
-  def sqlite3_column_int(stmt: Stmt, col: C.Int) -> C.Int
-  def sqlite3_column_text(stmt: Stmt, col: C.Int) -> C.String
+  def sqlite3_prepare_v2(db: Db, sql: C.String, bytes: C.Int32, out stmt: Stmt, out tail: C.Pointer) -> C.Int32
+  compute def sqlite3_step(stmt: Stmt) -> C.Int32
+  def sqlite3_column_int(stmt: Stmt, col: C.Int32) -> C.Int32
+  def sqlite3_column_text(stmt: Stmt, col: C.Int32) -> C.String
 end
 
 ## Opens a database. A failed open may still give a handle, which is closed here.

@@ -9,7 +9,7 @@ A function declared with `compute def` runs on the VM's compute pool, one thread
 ```agentica {mode="check"}
 extern "libsqlite3.so.0"
   ## Sleeps for ms milliseconds off the scheduler.
-  compute def sqlite3_sleep(ms: C.Int) -> C.Int
+  compute def sqlite3_sleep(ms: C.Int32) -> C.Int32
 end
 
 def main() -> Void
