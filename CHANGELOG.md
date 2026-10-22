@@ -13,6 +13,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** the extern type `C.Int` is now `C.Int32`, so both widths are
   explicit (`C.Int32`, `C.Int64`); `C.Int` is `PARSE-EXTERN-TYPE`.
 
+### Fixed
+
+- On Windows a program no longer hangs at its end while a `compute def` call
+  still runs and holds a C library lock.
+
 ## [0.9.0-beta.2] - 2026-10-22
 
 ### Added

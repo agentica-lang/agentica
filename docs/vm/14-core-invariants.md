@@ -185,7 +185,10 @@ flush. **When `main` ends, the program ends.** The steps are:
 1. kill child processes (`close_children`, about 2 seconds at most, driving the
    loop for their exit callbacks, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
-3. exit.
+3. exit: `_exit`, and `TerminateProcess` of the process itself on Windows. A
+   compute call may still run there and hold a lock, and neither runs `atexit`
+   handlers, the C streams' flush or the DLLs' detach code, which could wait
+   for it.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush is waited for, no socket is read to its end. `System.exit` and a

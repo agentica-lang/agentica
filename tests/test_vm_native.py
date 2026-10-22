@@ -303,6 +303,32 @@ end
     assert time.monotonic() - start < 2.0
 
 
+# The run ends while a compute call waits inside fwrite to a full pipe, holding the lock of that C stream. On Windows
+# exit() flushes every C stream while the call runs, and ExitProcess (behind exit and _exit) kills the call's thread
+# and then runs the DLLs' detach code, where the C library may flush again and wait for the dead thread's lock (Wine's
+# does). The VM ends the process with TerminateProcess, which runs neither, as _exit does on Linux and macOS.
+@NATIVE_CALLS
+@pytest.mark.parametrize("ending, code", [("", 0), ("System.exit(4)", 4)])
+def test_the_run_ends_while_a_compute_call_holds_a_c_stream(tmp_path, peer, ending, code):
+    main = """extern "%s"
+  compute def peer_write_stalled() -> C.Int32
+end
+
+def write(times: Int) -> Int
+  return peer_write_stalled() * times
+end
+
+def main() -> Void
+  writer = Task.spawn(&write, 1)
+  Task.sleep(100)
+  puts("done")
+  %s
+end
+""" % (literal(peer), ending)
+    result = agentica(program(tmp_path, main), timeout=20)
+    assert (result.code, result.stdout, result.stderr) == (code, "done\n", "")
+
+
 # One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are
 # cancelled, the waiting calls are never made: only the first nap is counted, even after a second nap would have ended.
 @NATIVE_CALLS
