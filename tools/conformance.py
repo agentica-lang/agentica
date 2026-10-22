@@ -72,7 +72,7 @@ WINDOWS_ONLY_MODULES = frozenset({
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py",
     "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_spec_packages.py",
-    "tests/test_spec_symbol.py", "tests/test_spec_type_at.py", "tests/test_std_analysis.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_file_lines.py",
+    "tests/test_spec_type_at.py", "tests/test_vm_child_channel_posix.py", "tests/test_vm_diff_8.py", "tests/test_vm_file_lines.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_single_binary.py", "tests/test_bytecode_cache.py",
     "tests/test_vm_native.py",
