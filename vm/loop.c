@@ -1228,7 +1228,8 @@ int agc_fd_reopen(int fd, int access) {
 #endif
 
 #if defined(__linux__) || defined(__APPLE__)
-/* A terminal master (libuv's uv__tty_is_slave asks the same): opening its path again (/dev/ptmx) makes a new terminal. */
+/* A terminal master (libuv's uv__tty_is_slave asks the same): opening its path again (/dev/ptmx) makes a new
+   terminal. */
 static bool pty_master(int fd) {
 #ifdef __APPLE__
   char name[256];
@@ -1240,11 +1241,14 @@ static bool pty_master(int fd) {
 }
 
 /* A new open of the file of FD with its access mode (agc_fd_reopen), so FD keeps its flags; a duplicate, which shares
-   them, when that cannot be done (a socket, a terminal master, an eventfd, a pipe on macOS). -1 with errno. */
-static int fd_copy(int fd) {
-  int flags = fcntl(fd, F_GETFL);
-  if (flags < 0) return -1;
-  int again = pty_master(fd) ? -1 : agc_fd_reopen(fd, flags & O_ACCMODE);
+   them, when that cannot be done (a socket, a terminal master, an eventfd). FLAGS gets FD's flags and SHARED whether
+   the copy is such a duplicate (agc_fd_reopen's duplicate of a macOS pipe is polled by poll(2), which leaves the flags
+   alone). -1 with errno. */
+static int fd_copy(int fd, int *flags, bool *shared) {
+  *flags = fcntl(fd, F_GETFL);
+  if (*flags < 0) return -1;
+  int again = pty_master(fd) ? -1 : agc_fd_reopen(fd, *flags & O_ACCMODE);
+  *shared = again < 0;
   return again >= 0 ? again : fcntl(fd, F_DUPFD_CLOEXEC, 3);
 }
 #endif
@@ -1303,12 +1307,17 @@ agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
 }
 #else
 agc_poller *agc_poller_open_copy(agc_vm *vm, int fd, int *err) {
-  int copy = fd_copy(fd);
+  int flags = 0;
+  bool shared = false;
+  int copy = fd_copy(fd, &flags, &shared);
   if (copy < 0) {
     *err = errno;
     return NULL;
   }
   agc_poller *p = poller_open(vm, copy, false, err);
+  /* uv_poll_init made the shared description non-blocking; the poll needs only readiness, so the native code gets its
+     flags back (as vm/input.c does for stdin). */
+  if (shared) (void)fcntl(copy, F_SETFL, flags);
   if (!p) close(copy);
   return p;
 }

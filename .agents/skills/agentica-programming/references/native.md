@@ -101,10 +101,10 @@ end
   `/dev/null` on Linux): an error starting `native: `. An error or hang-up on
   the descriptor gives `ok` (the next native call reports it). It polls a new
   open of the file, so the descriptor keeps its flags and two tasks may wait on
-  one descriptor; a socket, a terminal master or an eventfd is polled through a
-  duplicate and becomes non-blocking (a macOS pipe is polled through a
-  duplicate too, flags kept). Closing the descriptor does not end a wait (it
-  times out unless the file becomes ready). A cancel stops the wait.
+  one descriptor (a socket, a terminal master, an eventfd or a macOS pipe is
+  polled through a duplicate, flags kept). Closing the descriptor does not end
+  a wait (it times out unless the file becomes ready). A cancel stops the
+  wait.
 - Linux x86_64, Windows x64 and macOS (`Native.wait_*` returns an error on
   Windows): elsewhere a program with an extern function or a `Native.*` call
   is refused at load with `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works

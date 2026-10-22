@@ -443,8 +443,7 @@ end
   native code keeps its descriptor and its flags, and two tasks may wait on one
   descriptor. A socket, a terminal master, or a file that cannot be opened
   again (an eventfd, a pipe on macOS), is polled through a duplicate instead,
-  which puts `fd` in non-blocking mode (macOS polls a pipe with poll(2), which
-  leaves its flags alone). An error or a
+  and its flags are put back after the poll starts. An error or a
   hang-up on the descriptor ends the wait with `ok` too, as in poll(2): the
   next native call reports it. After `timeout_ms` (positive) the result is
   `error("native: timed out")`. A timeout that is not positive, a negative

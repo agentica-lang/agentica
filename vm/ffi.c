@@ -87,7 +87,8 @@ typedef enum { BYTES_OK, BYTES_RANGE, BYTES_TAG } bytes_outcome;
 /* One Native.wait_readable or wait_writable, in malloc memory. The task's descriptor FD is never polled itself: the
    poller polls a new open of its file, or a duplicate (agc_poller_open_copy), which it owns and closes once its wait is
    over. So the native code keeps its descriptor whatever happens to the wait, a descriptor the loop already watches can
-   still be waited on, and two tasks can wait on one descriptor. `more`, `ready`, `cancel`, `pause` and `drop` run on the I/O thread; `done` and `expired`
+   still be waited on, and two tasks can wait on one descriptor. The copy is made on the I/O thread when the job starts,
+   so a descriptor closed before then fails the wait (EBADF). `more`, `ready`, `cancel`, `pause` and `drop` run on the I/O thread; `done` and `expired`
    on the scheduler that resumes the task, after the job's outcome has published what the I/O thread wrote. */
 typedef struct {
   agc_vm *vm;

@@ -756,7 +756,8 @@ end
 
 # With no data, a named FIFO and a terminal master wait until the timeout, and they are ready once data comes. On macOS
 # the wait polls a FIFO with poll(2) and does not take the end-of-file probe of a file stream for readiness; a terminal
-# master is polled through a duplicate, since opening its path again (/dev/ptmx) makes a new terminal.
+# master is polled through a duplicate, since opening its path again (/dev/ptmx) makes a new terminal, and it stays
+# blocking after the wait.
 @NATIVE_CALLS
 @NATIVE_WAITS
 def test_a_wait_on_a_named_fifo_or_a_terminal_master_waits_for_data(tmp_path, peer):
@@ -767,6 +768,7 @@ def test_a_wait_on_a_named_fifo_or_a_terminal_master_waits_for_data(tmp_path, pe
   puts(Native.wait_readable(fifo, 1_000))
   master = peer_pty()
   puts(Native.wait_readable(master, 30))
+  puts(peer_nonblocking(master))
   puts(peer_pty_put())
   puts(Native.wait_readable(master, 1_000))
 end
@@ -774,7 +776,7 @@ end
     result = agentica(program(tmp_path, WAIT_EXTERN.format(library=literal(peer)) + main), tmp_path / "fifo")
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        'error("native: timed out")', "1", "ok()", 'error("native: timed out")', "1", "ok()", "",
+        'error("native: timed out")', "1", "ok()", 'error("native: timed out")', "0", "1", "ok()", "",
     ]
 
 
