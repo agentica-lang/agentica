@@ -1,7 +1,8 @@
-## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`) and `agentica update [NAME]` (docs/future/45-packages.md,
-## 45.9). Both work on the project of the working folder, resolve its packages (io/package_resolve.agc: git runs for
-## the pins that are new or asked to move), fill the cache and write agentica.lock. `add` also puts the dependency in
-## agentica.toml, with one line added and nothing else changed (packages/manifest_edit.agc). The lock is written first:
+## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and `agentica update [NAME]`
+## (docs/future/45-packages.md, 45.9). Both work on the project of the working folder, resolve its packages
+## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache and write
+## agentica.lock. `add` also puts the dependency in agentica.toml, with one line added and nothing else changed
+## (packages/manifest_edit.agc). The lock is written first:
 ## a lock with more packages than the manifest needs is still good, while a manifest that names a package the lock
 ## lacks is PKG-LOCK-STALE. Nothing is written when anything before fails.
 
@@ -30,7 +31,7 @@ struct Request
   source: GitSource.Source
 end
 
-## Runs `add`. `words` are the ones after the command: NAME URL and `--tag TAG` or `--ref COMMIT`.
+## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, and `--subdir DIR`.
 export def add(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
   asked = request_of(words)
   if !asked.ok?
@@ -52,33 +53,55 @@ export def update(settings: Env.Settings, style: String, words: List[String]) ->
   return CliProject.run(style, settings.workspace) do |dir: String| update_in(settings, dir, name) end
 end
 
-# NAME URL --tag TAG, or --ref COMMIT. A word that is not a good name, URL, tag or commit is refused here, before the
+# NAME URL, then --tag TAG or --ref COMMIT (one of them), and --subdir DIR when the package is a folder of the
+# repository, in any order. A word that is not a good name, URL, tag, commit or subdir is refused here, before the
 # project is read, with the reason of the rule that the manifest applies. The commit is the whole id: git fetches no
 # abbreviation.
 def request_of(words: List[String]) -> Result[Request]
-  if words.size != 4 or (words[2] != "--tag" and words[2] != "--ref")
+  if words.size < 4 or words.size % 2 != 0
     return error(Texts.usage_text())
   end
-  tag = ""
-  ref = ""
+  options: Map[String, String] = {}
+  for at in 1...(words.size / 2)
+    flag = words[at * 2]
+    if (flag != "--tag" and flag != "--ref" and flag != "--subdir") or options.has_key?(flag)
+      return error(Texts.usage_text())
+    end
+    options = options.put(flag, words[at * 2 + 1])
+  end
+  if options.has_key?("--tag") == options.has_key?("--ref")
+    return error(Texts.usage_text())
+  end
+  tag = option_of(options, "--tag")
+  ref = option_of(options, "--ref")
+  subdir = option_of(options, "--subdir")
   problem = GitSource.name_problem(words[0])
   if problem == ""
     problem = GitSource.git_problem(words[1])
   end
-  if problem == "" and words[2] == "--tag"
-    tag = words[3]
+  if problem == "" and tag != ""
     problem = GitSource.tag_problem(tag)
-  elsif problem == ""
-    ref = words[3]
+  elsif problem == "" and ref != ""
     problem = GitSource.ref_problem(ref)
     if problem == "" and ref.length != 40 and ref.length != 64
       problem = "add needs the whole commit: 40 (or 64) lowercase hex digits"
     end
   end
+  if problem == "" and options.has_key?("--subdir")
+    problem = GitSource.subdir_problem(subdir)
+  end
   if problem != ""
     return error("agentica: #{problem}\n")
   end
-  return ok(Request(name: words[0], source: GitSource.Source(git: words[1], tag: tag, ref: ref)))
+  return ok(Request(name: words[0], source: GitSource.Source(git: words[1], subdir: subdir, tag: tag, ref: ref)))
+end
+
+# The value of an option, "" when it was not given.
+def option_of(options: Map[String, String], flag: String) -> String
+  if options.has_key?(flag)
+    return options[flag]
+  end
+  return ""
 end
 
 def add_to(settings: Env.Settings, dir: String, request: Request) -> Result[String]

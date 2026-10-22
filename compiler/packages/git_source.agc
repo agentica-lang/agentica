@@ -24,13 +24,16 @@ MAX_NAME = 64
 MAX_TAG = 128
 MIN_REF = 7
 MAX_REF = 64
+MAX_SUBDIR = 256
 HTTPS = "https://"
 # The first characters of a commit in the stored name of a file of a package that is pinned by a ref.
 SHORT_COMMIT = 12
 
-## A git source: the URL as written, and exactly one of tag and ref ("" for the other).
+## A git source: the URL as written, exactly one of tag and ref ("" for the other), and the folder of the repository
+## that is the package ("" for the repository itself).
 export struct Source
   git: String
+  subdir: String
   tag: String
   ref: String
 end
@@ -92,6 +95,35 @@ export def tag_problem(tag: String) -> String
   return ""
 end
 
+## Why text is not a subdir, or "". A subdir is the folder of the repository that holds the package: a relative path of
+## plain folder names joined by `/`, each with only letters, digits, `.`, `_` and `-`. No part is empty, hidden (so not
+## `.` or `..`) or `agc_libs`, which the hash leaves out, and the parts are safe names for the cache folder (they do
+## not end in `.` and are not Windows device names). At most 256 characters. It holds no `@`, so the cache can join
+## the parts.
+export def subdir_problem(subdir: String) -> String
+  if subdir.length == 0 or subdir.length > MAX_SUBDIR
+    return "a subdir has 1 to #{MAX_SUBDIR} characters"
+  end
+  for part in subdir.split("/")
+    if part == ""
+      return "a subdir is folder names joined by /, with no empty part, no leading / and no final /"
+    end
+    if part.starts_with?(".")
+      return "a subdir has no hidden folder and no . or .. part"
+    end
+    if !part.split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
+      return "the folders of a subdir hold only letters, digits, . _ and -"
+    end
+    if part.ends_with?(".") or WINDOWS_DEVICES.include?(part.split(".")[0].downcase)
+      return "the folders of a subdir do not end in . and are not a Windows device name such as con"
+    end
+    if part.upcase.downcase == "agc_libs"
+      return "a subdir has no agc_libs folder, which a package leaves out"
+    end
+  end
+  return ""
+end
+
 ## Why text is not a ref, or "". A ref is a commit: 7 to 64 lowercase hex digits (a prefix of the commit, or all of
 ## it).
 export def ref_problem(ref: String) -> String
@@ -119,9 +151,10 @@ export def identity(url: String) -> String
   return url
 end
 
-## Whether two sources are the same: the same repository and the same pin.
+## Whether two sources are the same: the same repository, the same folder of it and the same pin.
 export def same?(left: Source, right: Source) -> Bool
-  return identity(left.git) == identity(right.git) and left.tag == right.tag and left.ref == right.ref
+  same_place = identity(left.git) == identity(right.git) and left.subdir == right.subdir
+  return same_place and left.tag == right.tag and left.ref == right.ref
 end
 
 ## The pin as written: the tag, or the ref.
@@ -147,10 +180,14 @@ export def cache_path(url: String) -> String
   return rest.slice(HTTPS.length, rest.length - HTTPS.length)
 end
 
-## The source as the text of a message: the URL and the pin.
+## The source as the text of a message: the URL, the folder when there is one, and the pin.
 export def describe(source: Source) -> String
-  if source.tag != ""
-    return "#{source.git} at tag #{source.tag}"
+  place = source.git
+  if source.subdir != ""
+    place = "#{source.git} (folder #{source.subdir})"
   end
-  return "#{source.git} at ref #{source.ref}"
+  if source.tag != ""
+    return "#{place} at tag #{source.tag}"
+  end
+  return "#{place} at ref #{source.ref}"
 end

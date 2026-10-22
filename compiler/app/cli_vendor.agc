@@ -46,7 +46,7 @@ def copy_all(settings: Env.Settings, found: Project.Found, libs: String) -> Resu
   for index in 0...found.lock.packages.size
     locked = found.lock.packages[index]
     place = PackageFetch.Place(file: found.lock.file, entry: Reader.item("package", index))
-    folder = PackageCache.folder(cache, locked.source.git, locked.commit)
+    folder = PackageCache.folder(cache, locked.source, locked.commit)
     source = settings.workspace.real_path.call(folder)
     if !source.ok?
       return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{folder}", source.message))

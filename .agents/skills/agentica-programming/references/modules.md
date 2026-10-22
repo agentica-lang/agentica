@@ -125,7 +125,7 @@ dependencies.
 A project with an `agentica.toml` in the folder of the root file (or above it)
 can import the packages it declares. A build never downloads and never writes
 `agentica.lock`: `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, the whole
-id) adds a dependency and writes the lock, `agentica update [NAME]` moves tag
+id; add `--subdir DIR` for a folder of the repository) adds a dependency and writes the lock, `agentica update [NAME]` moves tag
 pins, `agentica install` fills the cache from the lock, and `agentica vendor`
 copies the locked packages into `agc_libs/<name>/`. A declared package that is
 neither vendored nor in the cache is `CHECK-IMPORT-PACKAGE`.
@@ -148,6 +148,13 @@ import Sqlite from "pkg/sqlite/db"
   `-`, at most 64 characters (`name` at the top is optional and follows the
   same rule). Only git sources exist; a `path`, a branch or a version range is
   `PKG-MANIFEST-INVALID`.
+- `subdir = "postgres"` makes the package a folder of the repository (several
+  packages in one repository, prefixed tags such as `postgres-0.1.0`): plain
+  folder names joined by `/`, no `..`, no leading `/`, no hidden folder, no
+  `agc_libs`, else `PKG-MANIFEST-INVALID` at `dependencies.<name>.subdir`. The
+  folder holds the package's `agentica.toml`; relative imports cannot leave it;
+  the lock keeps `subdir` and the hash covers only that folder. Another folder
+  of the same repository is a dependency like any other.
 - `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared
   package. A declared name comes before the `pkg/` library folders; an
   undeclared name is the search above. The files of a package come from
@@ -179,7 +186,8 @@ import Sqlite from "pkg/sqlite/db"
   `PKG-LOCK-INVALID`; a bad manifest is `PKG-MANIFEST-INVALID`. Both name a
   file and a key path.
 - The cache folder of a package is `<cache>/<host>/<owner>/<repo>/<commit>/`,
-  with no `.git` in `<repo>`. `agentica install` (no arguments; the project of
+  with no `.git` in `<repo>` (`<commit>@<subdir>` with `/` written `@` for a
+  `subdir`, holding only that folder). `agentica install` (no arguments; the project of
   the working folder) fills it with the system `git` and never writes the lock.
   A package already cached with the locked hash is not fetched, so a full cache
   needs no git and no network. A fetch gets the tag (or the locked commit)

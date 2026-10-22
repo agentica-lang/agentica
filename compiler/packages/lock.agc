@@ -1,5 +1,6 @@
 ## The lock agentica.lock (docs/grammar/05b-modules.md): one entry for each package of the build, by local name,
-## flat: the name, the git source and its pin (a tag or a ref), the exact commit and the hash of its .agc files. A
+## flat: the name, the git source (the URL and, when the package is a folder of the repository, its subdir) and its pin
+## (a tag or a ref), the exact commit and the hash of its .agc files. A
 ## failure is PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one file; project.agc checks
 ## it against the manifest, and package_import.agc against the manifest of each package it loads. `encode` is the
 ## writer (docs/future/45-packages.md, 45.9): the file is the tool's own, so it is written whole.
@@ -11,7 +12,7 @@ import Reader from "toml_read"
 
 # The keys of the lock and of a [[package]] table. A package has exactly one of tag and ref.
 TOP_KEYS = ["version", "package"]
-PACKAGE_KEYS = ["name", "git", "tag", "ref", "commit", "hash"]
+PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash"]
 
 LOCK_FORMAT = 1
 HASH_PREFIX = "sha256:"
@@ -86,7 +87,7 @@ export def find(lock: Lock, name: String) -> Result[Locked]
   return error("#{name} is not in the lock")
 end
 
-# The keys of a package, in the order of 05b: name, git, tag or ref, commit, hash.
+# The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, commit, hash.
 def package_table(locked: Locked) -> Toml.Value
   pin = Toml.Value.Str(locked.source.ref)
   pin_key = "ref"
@@ -94,15 +95,12 @@ def package_table(locked: Locked) -> Toml.Value
     pin = Toml.Value.Str(locked.source.tag)
     pin_key = "tag"
   end
-  return Toml.Value.Table(
-    {
-      "name": Toml.Value.Str(locked.name),
-      "git": Toml.Value.Str(locked.source.git),
-      pin_key: pin,
-      "commit": Toml.Value.Str(locked.commit),
-      "hash": Toml.Value.Str(locked.hash),
-    },
-  )
+  keys = {"name": Toml.Value.Str(locked.name), "git": Toml.Value.Str(locked.source.git)}
+  if locked.source.subdir != ""
+    keys = keys.put("subdir", Toml.Value.Str(locked.source.subdir))
+  end
+  keys = keys.put(pin_key, pin).put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
+  return Toml.Value.Table(keys)
 end
 
 def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Locked]
@@ -143,20 +141,28 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
   if entries.has_key?("tag") == entries.has_key?("ref")
     return error(Reader.fail(reading, path, "a package has a tag or a ref: write exactly one of them"))
   end
+  subdir = ""
+  if entries.has_key?("subdir")
+    subdir = try text_of(reading, entries, path, "subdir")
+    problem = GitSource.subdir_problem(subdir)
+    if problem != ""
+      return error(Reader.fail_help(reading, Reader.child(path, "subdir"), "not a subdir", problem))
+    end
+  end
   if entries.has_key?("tag")
     tag = try text_of(reading, entries, path, "tag")
     problem = GitSource.tag_problem(tag)
     if problem != ""
       return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", problem))
     end
-    return ok(GitSource.Source(git: git, tag: tag, ref: ""))
+    return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ""))
   end
   ref = try text_of(reading, entries, path, "ref")
   problem = GitSource.ref_problem(ref)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", problem))
   end
-  return ok(GitSource.Source(git: git, tag: "", ref: ref))
+  return ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref))
 end
 
 def text_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String, key: String) -> Result[String]

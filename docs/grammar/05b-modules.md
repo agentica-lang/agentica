@@ -140,6 +140,7 @@ name = "notes"
 [dependencies]
 sqlite = { git = "https://github.com/owner/sqlite-ac", tag = "v1.2.0" }
 json5 = { git = "https://gitlab.com/someone/json5", ref = "3f2a9c1" }
+postgres = { git = "https://github.com/owner/packages", tag = "postgres-0.1.0", subdir = "postgres" }
 
 [style]
 max_line_width = 119
@@ -163,9 +164,25 @@ import Sqlite from "pkg/sqlite/db"
   starting with `-`, not ending in `.` and not a Windows device name such as
   `con` or `nul`), and exactly one of `tag` (1 to 128 letters, digits and the
   characters `.`, `_`, `+` and `-`; no `/`, and not starting with `.` or `-`) or
-  `ref` (7 to 64 lowercase hex digits of a commit). Only git sources exist: a
-  `path`, a branch, a version range or another key is `PKG-MANIFEST-INVALID`, at
-  the key path (`dependencies.sqlite.path`).
+  `ref` (7 to 64 lowercase hex digits of a commit), and optionally `subdir`
+  (next item). Only git sources exist: a `path`, a branch, a version range or
+  another key is `PKG-MANIFEST-INVALID`, at the key path
+  (`dependencies.sqlite.path`).
+- `subdir` says that the package is a folder of the repository, not the
+  repository itself, so one repository can hold many packages. It is a relative
+  path of plain folder names joined by `/` (`"postgres"`, `"libs/sql"`). Each
+  name has only letters, digits, `.`, `_` and `-`, and is not empty, hidden (so
+  no `.` or `..`), `agc_libs` (in any case), ending in `.` or a Windows device
+  name such as `con`; the whole path has at most 256 characters. Anything else,
+  a leading or final `/` and a value that is not text included, is
+  `PKG-MANIFEST-INVALID` at `dependencies.<name>.subdir`. The folder is the
+  package: its files are the files of the package, its own `agentica.toml` is
+  the manifest of the package, and relative imports cannot leave it
+  (`CHECK-IMPORT-PATH`), as they cannot leave the repository of a package
+  without `subdir`. A project installs only the folders it declares. A package
+  that needs another folder of its own repository declares it like any other
+  dependency (the same `git`, its own `subdir` and pin). Versions use prefixed
+  tags (`postgres-0.1.0`).
 - The import is `pkg/<name>/<module path>`, with no extension:
   `"pkg/sqlite/util/json"` loads `util/json.agc` of the package. `pkg/sqlite`
   with no module is `CHECK-IMPORT-PATH`. A name that the manifest of the
@@ -190,17 +207,21 @@ import Sqlite from "pkg/sqlite/db"
   `agentica.lock` of a package never is. The lock is TOML: `version = 1` (a
   missing `version` or any other value is `PKG-LOCK-INVALID`), then one
   `[[package]]` for every package of the build, direct or not, one entry for
-  each name (a name twice is `PKG-LOCK-INVALID`): `name`, `git`, `tag` or `ref`
-  (as in the manifest), `commit` (40 or 64 lowercase hex digits; it starts with
-  the `ref`) and `hash` (`sha256:` and 64 lowercase hex digits). A bad lock is
-  `PKG-LOCK-INVALID`. Every dependency of the manifest must be in the lock with
-  the same `git` (with or without a `.git` at the end) and the same `tag` or
-  `ref`, or the lock is `PKG-LOCK-STALE`. The same check runs on the manifest of
+  each name (a name twice is `PKG-LOCK-INVALID`): `name`, `git`, `subdir` (only
+  when the dependency has one), `tag` or `ref` (as in the manifest), `commit`
+  (40 or 64 lowercase hex digits; it starts with the `ref`) and `hash`
+  (`sha256:` and 64 lowercase hex digits). A bad lock is `PKG-LOCK-INVALID`, a
+  bad `subdir` too, at `package[n].subdir`; a lock with no `subdir` reads as
+  before. Every dependency of the manifest must be in the lock with the same
+  `git` (with or without a `.git` at the end), the same `subdir` (or none) and
+  the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`. The same check runs
+  on the manifest of
   every locked package that is in the cache: a name the lock lacks is
   `PKG-LOCK-STALE`, and a name with another source than the lock is
   `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of the
   manifest in the cache. One name with two different sources anywhere in the
   tree (the project and a package, or two packages) is `PKG-SOURCE-CONFLICT`;
+  the source is the `git`, the `subdir` and the pin;
   there are no versions to compare and no ranges to solve. Both checks run once
   for every command that loads code, before any file is read, so a conflict is
   reported whether or not an import reaches that package. A package that is
@@ -220,7 +241,12 @@ import Sqlite from "pkg/sqlite/db"
 - The cache holds one folder for each commit:
   `$XDG_CACHE_HOME/agentica/pkg/<host>/<owner>/<repo>/<commit>/`, from the `git`
   URL of the lock. Two names for one repository are two packages, each with its
-  own lock entry. `XDG_CACHE_HOME` counts when it is absolute, else `~/.cache`
+  own lock entry. A package with a `subdir` has the folder `<commit>@<subdir>`
+  instead, each `/` of the `subdir` written `@` (a `subdir` never holds one),
+  and that folder holds only the files of the `subdir` folder. Two folders of
+  one repository and commit are two cache folders, and a change in another
+  folder of the repository changes neither. `XDG_CACHE_HOME` counts when it is
+  absolute, else `~/.cache`
   is used (no cache when `HOME` is unset too). On Windows the folder is
   `%LOCALAPPDATA%/agentica/cache/pkg/` (no cache when it is unset or relative;
   `XDG_CACHE_HOME` and `HOME` are not read). A declared package that is not in
@@ -239,8 +265,12 @@ import Sqlite from "pkg/sqlite/db"
   hooks and no working tree. The fetched commit must be the locked `commit`,
   else `PKG-TAG-MOVED`. The files are read from the commit tree with `git
   ls-tree` and `git cat-file`, so `.gitattributes` changes nothing. Only the
-  files the hash covers and the `agentica.toml` at the root are copied. A
-  symbolic link or submodule named `*.agc` or `agentica.toml` is `PKG-SYMLINK`,
+  files the hash covers and the `agentica.toml` at the root are copied. With a
+  `subdir`, the tree read is that folder of the commit: the fetch is the same,
+  but nothing outside the folder is listed, read or written; a `subdir` that the
+  commit lacks, or that is a file, a symbolic link or a submodule there, is
+  `PKG-FETCH` at `package[n].subdir`. A symbolic link or submodule named `*.agc`
+  or `agentica.toml` is `PKG-SYMLINK`,
   two copied paths that differ only in case are `PKG-PATH-COLLISION` (only case:
   not Unicode normalisation or Windows device names, which the hash still
   catches), a file over 1 MiB, or all files over 16 MiB, is `PKG-FETCH` naming
@@ -269,7 +299,8 @@ import Sqlite from "pkg/sqlite/db"
   are put in the cache if they are missing; anything else is fetched, and the
   commit and the hash are read from what git gave; a fetch error of such a pin
   names the manifest that asks for it and `dependencies.<name>.git` (or `.tag`,
-  `.ref`), the same codes as `install`. Nothing is written when a step fails,
+  `.ref`, `.subdir`), the same codes as `install`. Nothing is written when a
+  step fails,
   and the lock is written before the manifest. A file that cannot be written is
   `PKG-WRITE`; each file is written to a new file beside it that is renamed
   into place, and the old one is put back if a step fails. A manifest that
@@ -280,14 +311,16 @@ import Sqlite from "pkg/sqlite/db"
   above,
   so it has the same bytes when nothing changed.
   - `add` takes the local name, the `https://` URL and `--tag` or `--ref`, in
-    that order. The commit of `--ref` is the whole id (40 or, for SHA-256, 64
+    that order, then `--subdir DIR` if the package is a folder of the
+    repository. The commit of `--ref` is the whole id (40 or, for SHA-256, 64
     digits), since git fetches no abbreviation (a package whose manifest asks
     for a part of an id that the lock lacks is `PKG-FETCH` at
     `dependencies.<name>.ref` of that manifest). The tag of a SHA-1 repository
     is fetched; a SHA-256 repository takes `--ref`. A name, URL, tag or commit
     that the manifest would refuse, or any other words, are a usage error (exit
     code 2). A name that is a dependency already is `PKG-DEPENDENCY-EXISTS`. The
-    manifest gets one new line, `NAME = { git = "URL", tag = "TAG" }`, after the
+    manifest gets one new line, `NAME = { git = "URL", tag = "TAG" }` (with
+    `subdir = "DIR"` last when asked), after the
     last entry of `[dependencies]` (or in a new `[dependencies]` table at the
     end of the file); no other byte changes, so comments, blank lines, the
     order of the keys and the line endings stay. The new text is read as a
@@ -311,7 +344,8 @@ import Sqlite from "pkg/sqlite/db"
   cache lacks is fetched with `git`, a cache folder with another hash is
   `PKG-HASH-MISMATCH`, and the manifests are checked against the lock. It never
   writes the lock. Then, for each locked package, the files the hash covers and
-  the `agentica.toml` of the package are copied from the cache into a hidden
+  the `agentica.toml` of the package (for a `subdir`, of that folder only: the
+  cache holds nothing else) are copied from the cache into a hidden
   folder of `agc_libs/`, hashed against the lock, and swapped for the old
   `agc_libs/<name>/` in two renames, so the old copy stays if a step fails; the
   folder of a locked package is replaced whatever it held (an edited copy, a
@@ -343,7 +377,9 @@ import Sqlite from "pkg/sqlite/db"
   package, whose folder there is a vendored copy: the project reaches the same
   packages with and without `vendor` (a library of that name in the other
   roots is still found).
-- The hash covers the `.agc` files of the package folder. Their paths are
+- The hash covers the `.agc` files of the package folder (for a `subdir`, that
+  folder of the repository, so a change in another folder does not change it).
+  Their paths are
   relative to it, written with `/`, in bytewise order; for each file, its path,
   a zero byte, its size in decimal, a zero byte and its bytes. The hash is
   `sha256:` and the SHA-256 of that stream in hex (`Crypto.sha256`). Hidden
@@ -357,7 +393,8 @@ import Sqlite from "pkg/sqlite/db"
   package that no import reaches is not hashed. Nothing in the cache or in
   `agc_libs/` is changed.
 - The stored name of a package file in the `.agcb` file is
-  `pkg/<name>@<tag>/path/in/repo.agc`, such as `pkg/sqlite@v1.2.0/db.agc`; for a
+  `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
+  (the path is from the package folder, without the `subdir`); for a
   package pinned by a `ref` it is `pkg/<name>@<first 12 digits of the
   commit>/...`. So the bytes do not depend on the cache folder or on a vendored
   copy. Diagnostics inside a package name the real file, in the cache or in
