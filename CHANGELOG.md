@@ -25,17 +25,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `length` and `size` work on `Map`, `Set` and `Range`.
 - Ruby synonyms `collect`, `select`, `inject`, `detect`, `member?` and `key?`.
 - `List.first`, `List.last`, and `empty?` on `List`, `Map` and `String`.
-- `--deny-run`, `--deny-net`, `--deny-fs`, `--deny-env` and `--sandbox`, also
-  for `agentica test`.
-- `agentica install`, `add` and `update` fetch git packages into `deps/`,
-  checked against `agentica.lock`. **Breaking:** scripts named `install`,
-  `add` or `update` run as `agentica ./NAME`.
+- `--deny-run` (which also denies native calls), `--deny-net`, `--deny-fs`,
+  `--deny-env` and `--sandbox`, also for `agentica test`.
+- `agentica install` fetches the packages of `agentica.lock` into `deps/`;
+  `add` and `update` edit `agentica.toml` and the lock. **Breaking:** scripts
+  named `install`, `add` or `update` run as `agentica ./NAME`.
 - Builds read packages only from `deps/<name>/`; `agc_libs/` stays for local
   libraries.
-- Git dependencies take `subdir`, so one repository can hold several packages.
+- Git dependencies take `subdir` (`agentica add ... --subdir DIR`), so one
+  repository can hold several packages.
 - Workspaces: a `[workspace]` table lets members of one repository use each
   other's folders directly.
-- Compiled programs are cached in `_build/bytecode/`; `--no-cache` turns it off.
+- Compiled programs are cached in `_build/bytecode/` (`AGENTICA_BUILD_DIR`
+  moves it); `--no-cache` turns it off.
 - `agentica help NAME` maps Ruby, Python and JS names to the builtin, and
   unknown methods suggest the Ruby one.
 
