@@ -45,12 +45,17 @@ step 11 (multicore) does not wait for it.
   6a, and separate type errors from logic errors. Runs of the Python checker
   count as check calls, like `agentica check`: a failing checker run is a repair
   attempt, and tokens and repairs are compared with the checker calls included
-  on both sides.
+  on both sides. Round 13 ran it with 3 reps (DeepSeek 13 of 20 tasks, stopped
+  for budget; GLM all 20), so it stays open: the pass-rate gap is within the
+  noise of 3 reps for DeepSeek.
 - [ ] In the full round, measure the semantic CLI (row 7.2b) as
   `docs/future/39-semantic-cli.md` §39.12 says: count its calls, and run one
-  Agentica arm without it on the tasks that cross a program.
-- [ ] Record the results in a new section of `docs/eval.md`, with the skill
-  commit, the checker version and the model.
+  Agentica arm without it on the tasks that cross a program. Round 13 ran both
+  but is inconclusive: `query_runs` was 0 in all 225 runs, so `skill` and
+  `skill-nocli` did not differ; repeat after the skill presents the commands
+  differently.
+- [x] Record the results in a new section of `docs/eval.md`, with the skill
+  commit, the checker version and the model (round 13, 2026-10-22).
 
 **Done when:** the results show, per task kind, whether agents pass more hidden
 tests or spend fewer tokens and repairs in Agentica than in typed Python, and

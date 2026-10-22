@@ -718,6 +718,59 @@ self-hosted front end ([§18](future/18-front-end-language.md), roadmap row
 2026-10-14. The full 6c round (roadmap row 10) waits for that too. See the
 [roadmap](roadmap/README.md).
 
+### Round 13: the 6c round (2026-10-22)
+
+The first full 6c round, from the worktree pinned to tag 0.8.1 (`5a65383`,
+skill commit `95b86f4`), with the `skill`, `typed-python` and `skill-nocli`
+arms, 3 reps. Pi 1.3.0, `mypy` 2.3.1, agent network allowed (`agent_network`
+true; 12 `net_commands`, all on t18). `--check-references` passed all 60 runs.
+The runs went in parallel (`--jobs 2` for DeepSeek), so seconds are rough. Pi
+1.3.0 means tokens are not comparable with rounds 1 to 12; the arms in this
+round are. The round cost $1.52 of the $2.
+
+- **DeepSeek V4.1 flash** (`--max-cost 1.1`, $1.039): the cap stopped it with
+  45 runs not started, so it has t1, t2 and t10 to t20 only (13 tasks, 39 runs
+  per arm), and `skill-nocli` on t11 to t14 (12 runs).
+- **GLM 5.3 flash** (`--max-cost 0.75`, $0.481): complete, 20 tasks, 60 runs per
+  arm, and `skill-nocli` on its 5 tasks (15 runs).
+
+Per run, `skill` against `typed-python` on the tasks both ran:
+
+| Model | Arm | Passed | Tokens in | Tokens out | Cost | Turns | Seconds | Failing runs |
+|---|---|---|---|---|---|---|---|---|
+| DeepSeek | `skill` | 38/39 | 22,170 | 5,792 | $0.0144 | 9.6 | 59 | 0.10 |
+| DeepSeek | `typed-python` | 39/39 | 8,176 | 4,426 | $0.0079 | 5.7 | 41 | 0.05 |
+| GLM | `skill` | 58/60 | 9,302 | 2,858 | $0.0053 | 11.8 | 40 | 0.92 |
+| GLM | `typed-python` | 53/60 | 2,824 | 1,474 | $0.0017 | 6.0 | 22 | 0.28 |
+
+- **The commands were not used.** `query_runs` is 0 in all 225 Pi runs. In the
+  raw logs (`agent.jsonl`), none of the 1,040 bash calls runs `outline`,
+  `type-at`, `symbol` or `refs`, no call names `queries.md` or `analysis.md`,
+  and `skill-nocli` refused 0 calls (`refused_queries` 0). The round cannot
+  show the value of the semantic CLI (§39.12): the measure is inconclusive.
+  The skill names them (`SKILL.md` step 5 and the `references/queries.md`
+  row), so how it presents them is what to change before the next round.
+- **`skill` against `skill-nocli`** (shared tasks: DeepSeek t11 to t14, GLM t9
+  and t11 to t14): 12/12 and 15/15 pass in both arms. Since no run used the
+  commands, the arms differ only by noise. DeepSeek `skill-nocli` took 25,251
+  tokens, 9.5 turns, 5.6 reads and 77 s per run against 22,748, 8.2, 5.0 and
+  50 s; GLM took 11,416 tokens, 9.2 turns, 5.1 reads and 34 s against 11,438,
+  9.1, 4.4 and 37 s.
+- **Pass rates are close.** DeepSeek missed one `skill` run and no
+  `typed-python` run; GLM passed more in Agentica (58 against 53). All failures
+  are logic errors on hidden cases; none is a syntax, check or run-time
+  failure. Agentica: DeepSeek t19 once (0/8); GLM t6 twice (7/8). Typed Python:
+  none for DeepSeek; GLM seven (t6 three times, t2, t16, t18 and t19 once).
+- **Agentica costs more per run:** 1.8 times (DeepSeek) and 3.1 times (GLM),
+  with 2.2 and 2.8 times the tokens, 1.7 and 2.0 times the turns, and 1.4 and
+  1.8 times the seconds. The failing check or run calls per run are also higher
+  (GLM 0.92 against 0.28).
+- **DeepSeek stopped for budget.** Its cost per run was above the estimate
+  ($0.0144 against $0.0082 for `skill`) because the runs go in task-name order
+  (t1, t10 to t19, t2, t20, then t3 to t9), so the larger tasks ran first. The
+  small tasks t3 to t9 have no DeepSeek run.
+- With 3 reps, and 13 tasks for DeepSeek, these are directions, not claims.
+
 ### JSON tasks: smoke run (2026-10-03)
 
 One rep per cell, DeepSeek V4.1 flash, 4 runs at a time, 600 s limit. The
@@ -774,3 +827,4 @@ the 2026-10 rounds. A dash means the code was not in that round's top list.
   6c](roadmap/06-validation.md#phase-6c-agentica-against-typed-python).
 - Time in rounds 10 and 11, which ran next to each other with more runs at a
   time.
+- Whether the semantic CLI helps. In round 13 no agent called it.
