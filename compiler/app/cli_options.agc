@@ -11,8 +11,9 @@ import Texts from "cli_text"
 
 # The options that are given once at most, with the number of values each takes; --steps may repeat.
 ONCE = {
-  "--version": 0, "--deny-run": 0, "--deny-native": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1,
-  "--schedulers": 1, "--dump": 0, "--dump-ir": 0, "--ai": 0, "--json": 0,
+  "--version": 0, "--deny-run": 0, "--deny-net": 0, "--deny-fs": 0, "--deny-env": 0, "--deny-native": 0,
+  "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--dump": 0, "--dump-ir": 0,
+  "--ai": 0, "--json": 0,
 }
 DIGITS = "0123456789"
 
@@ -23,8 +24,7 @@ export struct Options
   seed: String
   flush_timeout: String
   schedulers: String
-  deny_run: Bool
-  deny_native: Bool
+  deny: List[String]
   dump: Bool
   dump_ir: Bool
   steps: List[String]
@@ -52,8 +52,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     seed: "",
     flush_timeout: "",
     schedulers: "",
-    deny_run: false,
-    deny_native: false,
+    deny: [],
     dump: false,
     dump_ir: false,
     steps: [],
@@ -117,9 +116,11 @@ def values(word: String) -> Int
 end
 
 def apply(options: Options, word: String, value: String) -> Applied
+  # The --deny-* flags and --sandbox go to the VM as they are, which applies them (vm/launch.c).
+  if word.starts_with?("--deny-") or word == "--sandbox"
+    return Applied.Changed(options.with(deny: options.deny.push(word)))
+  end
   case word
-    "--deny-run" -> return Applied.Changed(options.with(deny_run: true))
-    "--deny-native" -> return Applied.Changed(options.with(deny_native: true))
     "--dump" -> return Applied.Changed(options.with(dump: true))
     "--dump-ir" -> return Applied.Changed(options.with(dump_ir: true))
     "--ai" -> return Applied.Changed(options.with(style: "ai"))

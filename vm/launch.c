@@ -511,6 +511,17 @@ bool agc_launch_supported(const char *name, agc_launch_options *options) {
   return false;
 }
 
+/* The flag that a --deny-* word or --sandbox sets, or NULL. */
+static bool *deny_flag(agc_launch_options *options, const char *arg) {
+  if (strcmp(arg, "--deny-run") == 0) return &options->deny_run;
+  if (strcmp(arg, "--deny-net") == 0) return &options->deny_net;
+  if (strcmp(arg, "--deny-fs") == 0) return &options->deny_fs;
+  if (strcmp(arg, "--deny-env") == 0) return &options->deny_env;
+  if (strcmp(arg, "--deny-native") == 0) return &options->deny_native;
+  if (strcmp(arg, "--sandbox") == 0) return &options->sandbox;
+  return NULL;
+}
+
 static agc_launch_status refuse(const char *name, const char *message) {
   fprintf(stderr, "%s: %s\n", name, message);
   return AGC_LAUNCH_BAD;
@@ -519,6 +530,7 @@ static agc_launch_status refuse(const char *name, const char *message) {
 agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int *at, agc_launch_options *options) {
   agc_launch_defaults(options);
   bool seen_steps = false, seen_ai = false, seen_json = false, seen_root = false;
+  bool *deny = NULL;
   int i = *at;
   while (i < argc) {
     const char *arg = argv[i];
@@ -536,11 +548,8 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       if (!once(name, json ? &seen_json : &seen_ai, arg)) return AGC_LAUNCH_BAD;
       options->style = json ? AGC_STYLE_JSON : AGC_STYLE_AI;
       i++;
-    } else if (strcmp(arg, "--deny-run") == 0) {
-      if (!once(name, &options->deny_run, arg)) return AGC_LAUNCH_BAD;
-      i++;
-    } else if (strcmp(arg, "--deny-native") == 0) {
-      if (!once(name, &options->deny_native, arg)) return AGC_LAUNCH_BAD;
+    } else if ((deny = deny_flag(options, arg)) != NULL) {
+      if (!once(name, deny, arg)) return AGC_LAUNCH_BAD;
       i++;
     } else if (strcmp(arg, "--max-steps") == 0) {
       if (!once(name, &seen_steps, arg)) return AGC_LAUNCH_BAD;
@@ -587,8 +596,10 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       break;
     }
   }
-  /* Native code can call libc and start a program without Process, so any --deny-* flag turns on --deny-native. */
-  if (options->deny_run) options->deny_native = true;
+  /* --sandbox is every --deny-* flag. Native code can call libc and do what any of them turns off, so each one turns
+     on --deny-native. */
+  if (options->sandbox) options->deny_run = options->deny_net = options->deny_fs = options->deny_env = true;
+  if (options->deny_run || options->deny_net || options->deny_fs || options->deny_env) options->deny_native = true;
   *at = i;
   return AGC_LAUNCH_OK;
 }
@@ -623,6 +634,9 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->style = options->style;
   rt->flush_timeout = options->flush_timeout;
   rt->deny_run = options->deny_run;
+  rt->deny_net = options->deny_net;
+  rt->deny_fs = options->deny_fs;
+  rt->deny_env = options->deny_env;
   rt->drop_uring_env = launch->own_uring_env;
   rt->inherited = launch->inherited;
   rt->front_end = front_end;

@@ -7,7 +7,10 @@ brackets. A handle belongs to the task that opened it and closes when that
 task ends, or when the run ends (see `tasks.md`). A server loop gives each
 accepted connection to its own task with `Task.spawn_owning(&serve, socket)`,
 so a crash in that task closes only that connection. Network access needs no
-CLI permission flag.
+CLI permission flag. With `--deny-net` (or `--sandbox`) every connect and
+listen, `std/http` included, returns an error starting `denied: --deny-net`
+before any DNS lookup; with `--deny-fs` so does a TLS call that names a file,
+with `denied: --deny-fs`.
 
 ```text
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]

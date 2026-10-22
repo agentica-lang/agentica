@@ -1,8 +1,9 @@
 # Files and paths
 
 `File`, `Dir`, `Path`, `FileHandle`, and `FileInfo` are reserved. The
-interpreter uses the host user's filesystem permissions; there is no permission
-flag.
+interpreter uses the host user's filesystem permissions. With `--deny-fs` (or
+`--sandbox`) every call here but `Path.join`, and `Lazy.write_lines`, returns
+an error starting `denied: --deny-fs`.
 
 ```text
 File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]

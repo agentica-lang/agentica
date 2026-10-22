@@ -73,6 +73,7 @@ OPTIONS = [
     ["--max-steps=5", "ok.agc"], ["--seed", "2147483648", "ok.agc"], ["--seed", "007", "ok.agc"],
     ["--seed", "--json", "ok.agc"], ["--seed", "1", "--seed"], ["--seed", "5", "--seed", "6", "ok.agc"],
     ["--ai", "--ai", "check", "ok.agc"], ["--deny-run", "--deny-run", "ok.agc"], ["--allow-run", "ok.agc"],
+    ["--sandbox", "--sandbox", "ok.agc"], ["--sandbox", "--deny-net", "--deny-fs", "--deny-env", "ok.agc"],
     ["--steps"],
     ["--flush-timeout"], ["--flush-timeout", "x", "ok.agc"], ["--flush-timeout", "10000", "ok.agc"],
     ["--schedulers"], ["--schedulers", "x", "ok.agc"], ["--schedulers", "0", "ok.agc"],

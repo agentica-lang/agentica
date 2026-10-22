@@ -19,7 +19,7 @@ check          (compiler/check/checker.agc)         the type of each expression,
 lower          (compiler/lower/lowering.agc)        checked program -> IR, or LOWER-UNSUPPORTED / LOWER-INTERNAL
 bytecode write (compiler/bytecode/bytecode_writer.agc) IR -> bytecode; adjacent STEP merge; BYTECODE-LIMIT / -INTERNAL; the versioned .agcb file (magic, format version, Agentica version)
 vm/agentica.c dist/agentica WORDS...: the front end (compiler/front_end.agc, carried in the binary) in a first runtime, then the program it hands over in a second (references/vm-core.md)
-vm/agentica.c dist/agentica run [--max-steps N] [--seed N] [--flush-timeout MS] [--schedulers N] [--deny-run] [--deny-native] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000; AGENTICA_SCHEDULERS sets the scheduler count, default one per logical core, at most 1024; --schedulers wins)
+vm/agentica.c dist/agentica run [--max-steps N] [--seed N] [--flush-timeout MS] [--schedulers N] [--deny-run|net|fs|env] [--deny-native] [--sandbox] [--ai|--json] [--source-root DIR] -- file.agcb [args...]   (AGENTICA_FLUSH_TIMEOUT_MS sets the flush limit, default 30000; AGENTICA_SCHEDULERS sets the scheduler count, default one per logical core, at most 1024; --schedulers wins)
 ```
 
 ## Which layer
@@ -78,10 +78,10 @@ goldens hold. Differences from the old evaluator in exit code, stdout or
 code are recorded in `docs/vm/`.
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
-memory errors or undefined behavior, runs no children with its own
-`--deny-run`, and stops within `--max-steps`. Native code (`extern`) and
-processes are allowed by default: run untrusted bytecode with `--deny-run`,
-which turns on `--deny-native` too. The loader enforces the
+memory errors or undefined behavior, does nothing its own `--deny-*` flags
+turn off, and stops within `--max-steps`. Everything is allowed by default:
+run untrusted bytecode with `--sandbox` (every `--deny-*` flag, and so
+`--deny-native`). The loader enforces the
 termination rules: every backward jump lands on a `STEP`, every function that
 calls starts with one, and a function without a leading `STEP` has at most 2
 instructions. A file with Globals slots may write them only in the entry

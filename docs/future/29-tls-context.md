@@ -112,8 +112,8 @@ TLS.upgrade(socket: Socket, context: TlsContext, host: String, timeout_ms: Int) 
   (29.6).
 
 **Effects:** `network`, like the other `TLS` builtins. `client_context` and
-`server_context` read files but need no flag, as `TLS.connect` with a `ca_file`
-needs none today.
+`server_context` read files, so `--deny-fs` turns them off, as it does
+`TLS.connect` with a `ca_file`.
 
 ### 29.2 Sharing and immutability
 

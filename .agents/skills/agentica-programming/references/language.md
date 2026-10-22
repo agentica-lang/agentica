@@ -81,10 +81,11 @@ SKILL.md does not answer. Builtin methods and `to_s` are in `builtins.md`.
   all tasks (`RUNTIME-STEP-LIMIT`); it is not an I/O timeout.
 - `agentica compile FILE.agc -o OUT.agcb` writes the bytecode. `agentica run
   [FLAGS] -- OUT.agcb [ARGS...]` runs it on the VM with `--max-steps`, `--seed`,
-  `--flush-timeout`, `--schedulers N`, `--deny-run`, `--source-root DIR`,
-  `--ai` or `--json` before the `--`; the words after the file are the
-  program's. `run` is read only as the first word. The bytecode runs only on the
-  same Agentica version. `agentica run --version` also lists the libraries.
+  `--flush-timeout`, `--schedulers N`, the `--deny-*` flags, `--sandbox`,
+  `--source-root DIR`, `--ai` or `--json` before the `--`; the words after the
+  file are the program's. `run` is read only as the first word. The bytecode
+  runs only on the same Agentica version. `agentica run --version` also lists
+  the libraries.
   `--schedulers N` (1 to 1024, or `AGENTICA_SCHEDULERS`) sets the scheduler
   threads; the default is one per logical core. `--schedulers 1` runs one task
   at a time, in a fixed order. `agentica test` takes only the variable. An

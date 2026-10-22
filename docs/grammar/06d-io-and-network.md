@@ -2,7 +2,8 @@
 
 Networking uses the normal expression syntax and lightweight tasks. The network
 names in §4 are reserved, and handles are opaque: they belong to their run and
-close when it ends. No CLI flag is needed. Signatures and details are in
+close when it ends. No CLI flag is needed; `--deny-net` turns them off
+([`06b-builtins.md`](06b-builtins.md)). Signatures and details are in
 [`library/io-and-system/network.md`][agentica-link-1];
 the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and
 [`docs/vm/10-io-tls.md`](../vm/10-io-tls.md).
@@ -124,7 +125,7 @@ a language feature.
 
 `File`, `Dir`, `Path`, `FileHandle` and `FileInfo` are reserved. A file handle
 is opaque, belongs to one evaluation, and closes when it ends. The host user's
-permissions apply; there is no filesystem permission flag. File operations
+permissions apply; `--deny-fs` turns these calls off. File operations
 accept regular files and symlinks to them, and also FIFOs, pipes and devices
 that can wait, whose calls wait on the event loop; they reject directories, a
 missing path for a read, and a path that reopens a pipe the VM made for itself.
@@ -241,10 +242,10 @@ encoding; `IO.inspect` prints `<Process>`. Signatures are in
 [`library/io-and-system/process.md`][agentica-link-3].
 
 - Starting a program needs no flag. With `agentica --deny-run file.agc` (or
-  `agentica run --deny-run`) every start returns an error that begins with
-  `denied: --deny-run`, in every task, and extern blocks are refused as with
-  `--deny-native`. The flag precedes the source file; later arguments reach
-  `System.args`. `agentica test` does not take it yet.
+  `--sandbox`, or `agentica run --deny-run`) every start returns an error that
+  begins with `denied: --deny-run`, in every task, and extern blocks are refused
+  as with `--deny-native`. The flag precedes the source file; later arguments
+  reach `System.args`. `agentica test` does not take it yet.
 - A command without `/` is looked up in each `PATH` entry, in order. An empty
   entry is skipped, so `./name` runs a program in the working directory; a
   relative entry such as `.` resolves against it. A command with `/` is a path
@@ -380,7 +381,7 @@ end
   thread, so it must be safe to call from one.
 - Native code is allowed by default and can start programs itself.
   `agentica --deny-native file.agc` (and `agentica run --deny-native`, or any
-  `--deny-*` flag) refuses
+  `--deny-*` flag, or `--sandbox`) refuses
   a program that declares any extern function before anything runs:
   `RUNTIME-NATIVE-DENIED`, exit 2. `agentica test` does not take the option
   yet.

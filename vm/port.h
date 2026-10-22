@@ -327,7 +327,7 @@ typedef struct {
   agc_value empty_list, empty_map, empty_set;
   agc_string *empty_string, *chars[AGC_ASCII_CHARS];
   agc_string *cwd;
-  bool no_files, no_turn_cost, deny_run, drop_uring_env, flush_expired;
+  bool no_files, no_turn_cost, deny_run, deny_net, deny_fs, deny_env, drop_uring_env, flush_expired;
   agc_style style;
   int64_t flush_timeout;
   /* The loop clock (ms) at which the one short wait that a stuck stream gets at exit ends; 0 until it starts. A stop

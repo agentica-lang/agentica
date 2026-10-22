@@ -261,7 +261,7 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   checks them at its start. The front end has no step limit, no standard input
   stream until `FrontEnd.stdin_bytes` opens it (before that `IO.gets` gives EOF,
   so the program keeps the real one) and no channel to a parent process; the
-  user's `--deny-run` does not reach it, because `agentica test` starts the
+  user's `--deny-*` flags do not reach it, because `agentica test` starts the
   runner (the user's program never runs in that runtime). If it calls
   `FrontEnd.hand_off` and its run ends with status 0, C retires that runtime:
   the same steps as the end of any run (`agc_launch_settle`: children stopped,
@@ -280,12 +280,13 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   with anything of the compiler.
 - **What a front end may hand over, and trust.** The front end that C loads is
   fully trusted: it runs with the user's rights, can read files and, through the
-  options it hands over, drop the user's `--deny-run`. That is why
+  options it hands over, drop the user's `--deny-*` flags. That is why
   `--front-end FILE` is for the build and the tests only, is not in the help,
   and has the same standing as the binary itself. The options it may pass are
-  exactly `--ai`, `--json`, `--deny-run`, `--deny-native`, `--max-steps N`,
-  `--seed N`, `--flush-timeout MS`, `--schedulers N` and `--source-root DIR`,
-  each once, and nothing else; no positional word, no `--version`.
+  exactly `--ai`, `--json`, `--deny-run`, `--deny-net`, `--deny-fs`,
+  `--deny-env`, `--deny-native`, `--sandbox`, `--max-steps N`, `--seed N`,
+  `--flush-timeout MS`, `--schedulers N` and `--source-root DIR`, each once,
+  and nothing else; no positional word, no `--version`.
   `--driver-pid` is refused (exit 2): it says which process started this one,
   and only that process can say so. So is `--embedded` (exit 2): only
   `agentica run` starts an embedded program. The hand-off takes at most 64

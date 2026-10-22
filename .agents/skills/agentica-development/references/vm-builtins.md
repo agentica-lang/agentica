@@ -70,7 +70,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    cost; the libuv pool is for blocking calls. State goes in `vm->rt` (shared
    runtime), `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files` first
    in file builtins and in `TCP.connect` and `TCP.listen`, so the fuzzer never
-   touches the disk or the network.
+   touches the disk or the network, and then the `--deny-*` flag of the family
+   (`rt->deny_fs`, `deny_net`, `deny_env`, `deny_run`), returning its
+   `denied: --deny-X` error before anything is opened.
 
 Rules for the C code:
 

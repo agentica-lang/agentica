@@ -17,6 +17,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   compute pool while the task waits and other tasks run.
 - `--deny-run` makes every `Process` start return an error, and turns on
   `--deny-native` too.
+- `--deny-net`, `--deny-fs` and `--deny-env` make network, file and
+  `System.env` calls return an error; `--sandbox` turns on every `--deny-*`
+  flag.
 
 ### Removed
 
