@@ -5,10 +5,11 @@
 ## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
-## `--only TEXT`, `--json` and `--ai`.
+## `--only TEXT`, `--json`, `--ai`, the `--deny-*` flags and `--sandbox` (cli.agc adds the ones in front of `test`).
 
-# The flags of a run that `agentica test` refuses, as it does in front of `test` (cli.agc).
-REFUSED = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
+# The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
+# the runner. A flag given twice counts once.
+DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
 
 ## Everything a run needs.
 export struct Options
@@ -22,15 +23,14 @@ export struct Options
   only: String
   steps: List[String]
   paths: List[String]
+  deny: List[String]
 end
 
 ## What the arguments are: options to run with; a usage error of the user (RUNTIME-BDD-USAGE, with the options read so
-## far, which say how to report it); a flag that `agentica test` refuses, as it does in front of `test`; or a mistake
-## in the driver options, which is a bug of the caller.
+## far, which say how to report it); or a mistake in the driver options, which is a bug of the caller.
 export enum Parsed
   Ready(Options)
   Usage(String, Options)
-  Refused(String)
   Broken(String)
 end
 
@@ -47,6 +47,7 @@ export def parse(arguments: List[String]) -> Parsed
     only: "",
     steps: [],
     paths: [],
+    deny: [],
   )
   at = 0
   while at < arguments.size and arguments[at] != "--"
@@ -112,8 +113,9 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       at += 2
     elsif word == "--json" or word == "--ai"
       at += 1
-    elsif REFUSED.include?(word)
-      return Parsed.Refused("test does not take #{word} yet")
+    elsif DENY.include?(word)
+      shown = shown.with(deny: shown.deny.push(word).uniq)
+      at += 1
     elsif word.starts_with?("--")
       return Parsed.Usage("unknown option #{word}", shown)
     else

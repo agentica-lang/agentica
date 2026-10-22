@@ -208,6 +208,30 @@ class UnitTest(TestCase):
         _status, empty = self.json_test(cwd=directory)
         self.assertEqual(file_codes(empty), [("", "CHECK-BDD-EMPTY")])
 
+    def test_deny_flags_reach_the_test_files_and_the_programs_under_test_but_not_the_runner(self):
+        # The runner still reads the folders and starts the children; the user's code runs with --deny-env, given
+        # once in front of `test` and once after it.
+        directory = self.make_temp_dir("agentica-unit-").resolve()
+        (directory / "test").mkdir()
+        (directory / "test" / "env_test.agc").write_text(
+            'def main() -> Void\n  Test.run([\n    Test.test("reads HOME") do\n      Test.eq(try System.env("HOME"), "")\n'
+            '    end,\n  ])\nend\n', encoding="utf-8")
+        (directory / "specs").mkdir()
+        (directory / "specs" / "env.agc").write_text('def main() -> Void\n  puts(System.env("HOME").ok?)\nend\n',
+                                                     encoding="utf-8")
+        (directory / "specs" / "env.feature").write_text(
+            'Feature: env\n  Scenario: the program under test\n    Given the Agentica program "env.agc"\n'
+            '    Then the program exits with code 0 within 5000 milliseconds\n    And stdout is:\n'
+            '      """\n      false\n\n      """\n', encoding="utf-8")
+        result = self.agentica_test("--json", "--deny-env", "test", "specs", cwd=directory, flags=["--deny-env"])
+        self.assertEqual((result.code, result.stderr), (1, ""))
+        report = json.loads(result.stdout)
+        failed = [item for item in report_cases(report) if item["status"] == "failed"]
+        self.assertEqual([item["name"] for item in failed], ["reads HOME"])
+        self.assertEqual(failed[0]["error"]["code"], "RUNTIME-TEST-ERROR")
+        self.assertTrue(failed[0]["error"]["message"].startswith("denied: --deny-env"))
+        self.assertEqual(report["passed"], 1)
+
     def test_the_std_unit_tests_pass(self):
         status, report = self.json_test(STD_TESTS)
         self.assertEqual(status, 0)

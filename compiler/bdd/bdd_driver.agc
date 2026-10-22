@@ -133,7 +133,7 @@ def prepare_and_run(
     steps_root: steps.root,
     steps_error: steps.failure,
     steps_given: steps.given,
-    agentica: options.agentica,
+    agentica: options.agentica.concat(options.deny),
     count: entries.size,
     empty_path: empty_path(given),
     empty_message: empty_message(given),

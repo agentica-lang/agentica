@@ -507,8 +507,9 @@ TLS call that names a file; `--deny-env` `System.env` (`System.os` and
 follows `LANG`). Each turns on `--deny-native`, since native code could do the
 same. A program that can start processes escapes a single flag; use
 `--sandbox`, or add `--deny-run`. `--sandbox` is all of them: the one flag for
-code you do not trust. They apply to the program, not to the front end,
-and `agentica test` refuses them (exit 2).
+code you do not trust. They apply to the program, not to the front end.
+`agentica test` gives them to the test files, the step programs and the
+programs under test, not to its runner.
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user

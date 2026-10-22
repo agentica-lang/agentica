@@ -6,14 +6,15 @@ import Report from "report"
 import Child from "child"
 
 ## The options of a run: the path of the binary (started as `run ...` for each test file), the seed, the `--only` text,
-## the timeout of each test in milliseconds, and the `--source-root` of the file's bytecode ("" for none), so a trace
-## names the file as the report does.
+## the timeout of each test in milliseconds, the `--source-root` of the file's bytecode ("" for none), so a trace
+## names the file as the report does, and the user's `--deny-*` flags and `--sandbox`, which the file's VMs get.
 export struct Settings
   vm: String
   seed: Int
   only: String
   timeout_ms: Int
   source_root: String
+  deny: List[String]
 end
 
 struct UnitTest
@@ -376,9 +377,10 @@ def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List
     settings.seed.to_s,
     "--source-root",
     settings.source_root,
+  ].concat(settings.deny).concat([
     "--",
     bytecode,
     "--agentica-test",
     mode,
-  ]
+  ])
 end

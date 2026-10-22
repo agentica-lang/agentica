@@ -43,9 +43,12 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   report shows it on the summary line, so `--seed N` replays the run. The JSON
   report always has it; a usage report has `null` when no `--seed` was given.
 - **Permissions.** Step handlers and programs under test can start programs.
-  `agentica test` refuses every `--deny-*` flag and `--sandbox` (exit 2): the
-  step programs start the programs under test, and the flags do not reach them
-  yet.
+  `agentica test` takes the `--deny-*` flags and `--sandbox`, in front of
+  `test` or after it. They reach every test file, step program and program
+  under test, not the runner, which still reads the test folders and starts
+  them. With `--deny-run` (or `--sandbox`) a step cannot start a program under
+  test. Under `--deny-fs` a missing program under test shows as exit 2 from
+  its `agentica` command.
 - **Exit codes.** 0 when every scenario passes and there is at least one; 1 for
   verification failures or an empty suite; 2 for usage errors and any
   `RUNTIME-BDD-INFRA`. All three output formats give the same verdict.

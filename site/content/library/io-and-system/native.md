@@ -51,7 +51,7 @@ A result may also be `Void`. A function takes at most 64 parameters (`PARSE-EXTE
 
 - A `def` call blocks timers, I/O and other tasks until it returns, so keep such calls short, and use `compute def` for the long ones. `--max-steps` cannot stop a call in the middle.
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
-- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.wait_*` before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). `agentica test` does not take the option yet.
+- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.wait_*` before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.
 
 ## Compute calls
 

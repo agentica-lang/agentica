@@ -22,6 +22,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `--deny-net`, `--deny-fs` and `--deny-env` make network, file and
   `System.env` calls return an error; `--sandbox` turns on every `--deny-*`
   flag.
+- `agentica test` takes the `--deny-*` flags and `--sandbox`, for the test
+  files, the step programs and the programs under test.
 
 ### Removed
 

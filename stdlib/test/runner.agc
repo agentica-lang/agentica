@@ -18,6 +18,8 @@ struct Config
   steps_root: String
   steps_error: String
   steps_given: Bool
+  # The command that runs a program under test: the binary, then the user's --deny-* flags and --sandbox, which every
+  # child that runs the user's code gets too (see `deny`). The runner itself runs without them.
   agentica: List[String]
   count: Int
   empty_path: String
@@ -181,6 +183,7 @@ def run_entry(config: Config, patterns: List[Match.Pattern], entry: Entry) -> Re
       only: config.only,
       timeout_ms: config.test_timeout_ms,
       source_root: entry.source_root,
+      deny: deny(config),
     )
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
@@ -540,11 +543,16 @@ def vm_args(config: Config, steps: Int, mode: String) -> List[String]
     config.seed.to_s,
     "--source-root",
     config.steps_root,
-  ]
+  ].concat(deny(config))
   if config.steps_bytecode == ""
     return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode])
   end
   return options.concat(["--", config.steps_bytecode, "--agentica-bdd", mode])
+end
+
+# The user's --deny-* flags and --sandbox: the words after the binary in `agentica`.
+def deny(config: Config) -> List[String]
+  return config.agentica.drop(1)
 end
 
 def failure(code: String, message: String, span: Report.Span) -> Report.Verdict
