@@ -4,7 +4,7 @@ weight: 1
 description: Lists, maps, sets, queues, ranges and lazy pipelines, and when to use each.
 ---
 
-- [List](/library/data-structures/list/): values of one type, in order. Walk, sort, map, filter.
+- [List](/library/data-structures/list/): values of one type, in order. Walk, sort, map, select.
 - [Map](/library/data-structures/map/): find a value by key (`Int` or `String`), in insertion order. Lookups and counters.
 - [Set](/library/data-structures/set/): each `Int` or `String` once, in first-added order. Duplicates and membership.
 - [Queue](/library/data-structures/queue/) (`std/queue`): first in, first out, of strings.

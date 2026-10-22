@@ -380,16 +380,18 @@ def test_help_answers_length_and_size_for_every_kind_that_has_them():
     for name in ("length", "size"):
         found = {b["name"] for b in json.loads(cli_run("help", name, "--json").stdout)["builtins"]}
         assert found == kinds, name
-        assert "s.%s() -> Int" % name in cli_run("help", name).stdout.splitlines(), name
+        # The texts show one name: the one of the builtin, whichever of the two was asked.
+        lines = cli_run("help", name).stdout.splitlines()
+        assert "s.length() -> Int" in lines and "s.size() -> Int" not in lines, name
 
 
 def test_help_prints_the_checker_hint_of_a_bare_name_on_other_types():
     found = json.loads(cli_run("help", "contains", "--json").stdout)
     assert "String.contains?" in [builtin["name"] for builtin in found["builtins"]]
     assert "List.contains" in found["hints"]
-    hint_only = cli_run("help", "select")
+    hint_only = cli_run("help", "reject")
     assert (hint_only.code, hint_only.stdout) == (2, "")
-    assert "List.select" in hint_only.stderr
+    assert "List.reject" in hint_only.stderr
 
 
 def test_help_does_not_answer_a_foreign_name_with_a_builtin_that_means_something_else():
@@ -414,6 +416,14 @@ def test_every_alias_of_the_checker_tables_names_a_public_builtin():
     aliases = set(re.findall(r'^    "([^"]+)": "', check_table("method_aliases"), re.MULTILINE))
     synonyms = re.findall(r'"([A-Za-z]+\.[^"]+)"', check_table("ruby_synonyms"))
     assert synonyms and set(synonyms) <= aliases
+    # Two non-synonym aliases of one builtin would make its shown name depend on the sort order of the keys, and a
+    # hint for a name that resolves would never be read.
+    shown = [target for key, target in re.findall(r'^    "([^"]+)": "([^"]+)"', check_table("method_aliases"),
+                                                  re.MULTILINE) if key not in synonyms and target != "self"]
+    assert len(shown) == len(set(shown))
+    hints = set(re.findall(r'^    "([^"]+)": ', check_table("foreign_kind_methods"), re.MULTILINE))
+    # (`String.to_s` returns the receiver: its hint is a remark, not a refusal.)
+    assert not hints & aliases - {"String.to_s"}
     # A foreign method name that stands for no builtin would answer `unknown builtin`. (No name answers with more
     # than the 8 builtins that cli_alias.agc lists, so none is dropped as too vague.)
     # A name with a hint of its own in foreign_names (`len`) answers that hint instead.
@@ -431,6 +441,63 @@ def test_length_and_size_run_on_every_kind(program):
     assert (out, code) == ("8\n4\n4\n3\n4\n", None)
 
 
+SYNONYMS = [
+    ("xs.collect do |x| x * 2 end", "xs.map do |x| x * 2 end"),
+    ("xs.select do |x| x > 1 end", "xs.filter do |x| x > 1 end"),
+    ("xs.inject(10) do |a, x| a + x end", "xs.reduce(10) do |a, x| a + x end"),
+    ("xs.detect do |x| x > 1 end", "xs.find do |x| x > 1 end"),
+    ("m.select do |k, v| v > 1 end", "m.filter do |k, v| v > 1 end"),
+    ("m.key?(\"a\")", "m.has_key?(\"a\")"),
+    ("m.include?(\"a\")", "m.has_key?(\"a\")"),
+    ("m.member?(\"z\")", "m.has_key?(\"z\")"),
+    ("Set.new([1]).member?(1)", "Set.new([1]).include?(1)"),
+    ("(1..3).member?(2)", "(1..3).include?(2)"),
+    ("xs.lazy.collect do |x| x + 1 end.select do |x| x > 2 end.to_a",
+     "xs.lazy.map do |x| x + 1 end.filter do |x| x > 2 end.to_a"),
+]
+
+
+def test_a_ruby_synonym_runs_like_its_base_name(program):
+    for synonym, base in SYNONYMS:
+        outputs = []
+        for expression in (synonym, base):
+            source = ("def main() -> Void\n  xs = [1, 2, 3]\n  m = {\"a\": 1, \"b\": 2}\n"
+                      "  puts(%s)\nend\n\n" % expression)
+            outputs.append(run_text_io(program, source))
+        assert outputs[0] == outputs[1] and outputs[0][1] is None, synonym
+
+
+def test_help_of_a_synonym_resolves_to_the_shown_name():
+    for name, builtin, shown in [("collect", "List.map", "list.map("), ("inject", "List.reduce", "list.reduce("),
+                                 ("detect", "List.find", "list.find("), ("member?", "Set.include?", "set.include?("),
+                                 ("select", "List.filter", "list.select("), ("filter", "List.filter", "list.select("),
+                                 ("key?", "Map.has_key?", "map.key?("), ("has_key?", "Map.has_key?", "map.key?(")]:
+        found = json.loads(cli_run("help", name, "--json").stdout)
+        assert builtin in [entry["name"] for entry in found["builtins"]], name
+        text = cli_run("help", name)
+        assert text.code == 0 and shown in text.stdout, name
+        assert "list.collect(" not in text.stdout and "map.has_key?(" not in text.stdout, name
+
+
+def test_a_list_of_methods_leaves_out_the_synonyms(tmp_path):
+    source = "def main() -> Void\n  xs: List[Int] = [1]\n  puts(xs.zzzzzzzz)\nend\n\n"
+    found = check_diagnostic(source, tmp_path)
+    assert found["code"] == "CHECK-UNKNOWN-METHOD"
+    listed = found["help"].split(": ", 1)[1].split(", ")
+    assert {"map", "select", "reduce", "find", "first", "last", "empty?"} <= set(listed)
+    assert not {"collect", "inject", "detect", "filter", "length"} & set(listed)
+
+
+def test_first_and_last_halt_on_an_empty_list_and_empty_asks_the_three_kinds(program):
+    for method in ("first", "last"):
+        body = "  xs: List[Int] = []\n  puts(xs.%s)" % method
+        assert run_text_io(program, "def main() -> Void\n%s\nend\n\n" % body)[1] == "RUNTIME-INDEX-OUT-OF-RANGE"
+    body = ('  xs = [3, 4, 5]\n  e: List[Int] = []\n  m: Map[String, Int] = {"a": 1}\n  n: Map[String, Int] = {}\n'
+            '  puts([xs.first, xs.last])\n  puts([xs.empty?, e.empty?, m.empty?, n.empty?, "".empty?, "a".empty?])')
+    out, code = run_text_io(program, "def main() -> Void\n%s\nend\n\n" % body)
+    assert (out, code) == ("[3, 5]\n[false, true, false, true, true, false]\n", None)
+
+
 def test_the_helps_of_diagnostics_name_the_ruby_form_not_the_builtin(tmp_path):
     for expression, code, help_text in [
             ('String.strip("a")', "CHECK-UNKNOWN-NAME", 'did you mean "s.strip"?'),
@@ -443,7 +510,10 @@ def test_the_helps_of_diagnostics_name_the_ruby_form_not_the_builtin(tmp_path):
     for expression, name, internal in [('"a".include?()', "s.include?", "String.contains?"),
                                        ("[1].push()", "list.push", "List.append"),
                                        ('"a".strip(1)', "s.strip", "String.trim"),
-                                       ("m.length(1)", "map.size", "Map.size")]:
+                                       ("m.length(1)", "map.size", "Map.size"),
+                                       ("[1].filter(1, 2)", "list.select", "List.filter"),
+                                       ("[1].collect()", "list.map", "List.map"),
+                                       ("m.has_key?()", "map.key?", "Map.has_key?")]:
         source = ("def main() -> Void\n  m: Map[String, Int] = {}\n  puts(%s)\nend\n\n" % expression)
         found = check_diagnostic(source, tmp_path)
         assert found["code"] == "CHECK-ARITY", expression
@@ -457,7 +527,7 @@ def test_an_unknown_method_suggests_the_ruby_method(tmp_path):
                                   ('"a".includes("a")', "include?"), ('"a".include("a")', "include?"),
                                   ("xs.contains?(1)", "any?"), ("(1..3).drop(1)", "to_a"),
                                   ('"abc".take(2)', "join"), ('"abc".drop(1)', "join"),
-                                  ("xs.count do |x| x > 1 end", "filter"), ("xs.count", "filter"),
+                                  ("xs.count do |x| x > 1 end", "select"), ("xs.count", "select"),
                                   ('"abc".count("a")', "split")]:
         source = ("def main() -> Void\n  xs: List[Int] = [1]\n  m: Map[String, Int] = {}\n"
                   "  r: Result[Int] = ok(1)\n  puts(%s)\nend\n\n" % expression)

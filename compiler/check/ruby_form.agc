@@ -92,6 +92,12 @@ export def shown(name: String) -> String
   return "#{entry.unwrap!.parameters[0].name}.#{method}"
 end
 
+## True when the alias key `Kind.method` is a second Ruby name (`List.collect`, `String.size`): accepted, and never
+## shown in a text.
+export def synonym?(key: String) -> Bool
+  return Tables.ruby_synonyms().any? do |known: String| known == key end
+end
+
 # The alias key of each builtin that has a Ruby name of its own; the first key in name order wins.
 def by_builtin() -> Map[String, String]
   aliases = Tables.method_aliases()
@@ -103,8 +109,4 @@ def by_builtin() -> Map[String, String]
     end
   end
   return found
-end
-
-def synonym?(key: String) -> Bool
-  return Tables.ruby_synonyms().any? do |known: String| known == key end
 end

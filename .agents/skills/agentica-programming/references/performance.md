@@ -140,7 +140,7 @@ flamegraph.pl app.folded > app.svg
   0.69 s, 1,000,000 took 10.3 s [one run each]); one `include?` costs about
   0.2 µs. Build a large set once and keep it.
 - A builtin runs to the end of its turn, except the resumable ones (`map`,
-  `filter`, `reduce`, `each`, `any?`, `all?`, `sort_by`), so a 10-second
+  `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`), so a 10-second
   `Set.new` stalls every other task. Keep big builds out of code others wait on.
 - `String.at` and `String.slice` count characters: O(1) on ASCII; on multi-byte
   text each call walks from the nearest of the start, the end or the last
@@ -150,7 +150,7 @@ flamegraph.pl app.folded > app.svg
 
 `find`, `each_with_index`, `flat_map`, `partition`, `take_while`, `drop_while`,
 `each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min_by`, `max_by`, `Map.each`
-and `Map.filter` are written in Agentica and run in your program, so their steps
+and `Map.select` are written in Agentica and run in your program, so their steps
 count against `--max-steps`. Each is one O(n) pass with no list copy per
 element. Their own steps per element (not the block's), on 100,000 elements:
 
@@ -163,7 +163,7 @@ element. Their own steps per element (not the block's), on 100,000 elements:
 | `each_with_index`, `take_while`, `drop_while` | 9 |
 | `tally` (1,000 keys) | 10 |
 | `each_slice(3)` | 11 |
-| `Map.filter` | 11.5 |
+| `Map.select` | 11.5 |
 | `group_by` (1,000 keys) | 14 |
 | `min_by` (`Int`) | 20 |
 | `max_by` (`String`) | 22 |

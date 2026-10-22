@@ -78,17 +78,12 @@ end
 # The text of one builtin for the name asked: a line when the name is not how Ruby writes it, then the signature of
 # each form in the Ruby method form (`s.strip() -> String`) when the builtin has one, then the description.
 def block(name: String, entry: Model.Builtin) -> String
-  asked = name.split(".")
-  method = asked[asked.size - 1]
   written = RubyForm.method_name(entry.name)
-  if written != "" and RubyForm.written_as?(entry.name, method)
-    written = method
-  end
   forms = [entry].concat(entry.alternatives).map do |form: Model.Builtin| form_text(form, written) end
   return "#{rename_line(name, entry.name, written)}#{forms.join("\n")}\n#{entry.description}\n"
 end
 
-# The signature of a form: in the Ruby form written with `method`, else as the catalog has it.
+# The signature of a form: in the Ruby form with the method name `method`, else as the catalog has it.
 def form_text(form: Model.Builtin, method: String) -> String
   ruby = RubyForm.signature_as(form, method)
   if ruby == ""

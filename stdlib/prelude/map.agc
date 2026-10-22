@@ -19,3 +19,7 @@ def filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
   end
   return kept
 end
+
+def empty(map: Map[K, V]) -> Bool
+  return map.size == 0
+end

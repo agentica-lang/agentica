@@ -23,7 +23,7 @@ section for the area you are changing.
 
 ## Collections and algorithm examples
 
-- `List.map/filter/reduce` infer input element types from exact callback
+- `List.map/select/reduce` infer input element types from exact callback
   signatures, including empty lists. Reduce is a left fold with accumulator
   first; its callback result must equal its accumulator type and supplies
   context for the initial value. Map rejects Void results. Traversals preserve
