@@ -27,7 +27,8 @@ MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Gree
 
 def package_hash(folder):
     """sha256: and the hex SHA-256 of: for each .agc file, each file under the native folder at the root (but dotfiles,
-    Thumbs.db and desktop.ini) and the root agentica.toml when the package has native files or a `native` table, in
+    Thumbs.db and desktop.ini) and the root agentica.toml when native holds a file that is not .agc or the manifest has
+    a `native` table, in
     bytewise order of its path from `folder` (written with "/"), the path, a zero byte, the size in decimal, a zero byte
     and the bytes. Hidden folders and the agc_libs folder at the root are left out. The `.agc` extension and the names
     agc_libs and native are compared without regard to case."""
@@ -43,7 +44,7 @@ def package_hash(folder):
                   if (native and not junk(name)) or name.lower().endswith(".agc")]
     manifest = folder / "agentica.toml"
     if manifest.is_file() and not manifest.is_symlink():
-        has_native = any(path.split("/")[0].lower() == "native" for path in paths)
+        has_native = any(path.split("/")[0].lower() == "native" and not path.lower().endswith(".agc") for path in paths)
         try:
             has_native = has_native or "native" in tomllib.loads(manifest.read_text(encoding="utf-8"))
         except (ValueError, UnicodeDecodeError):

@@ -122,7 +122,7 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
   case project
     Project.Project.Bare -> return scope
     Project.Project.Declared(found) ->
-      native = NativeLibrary.resolve(workspace, found.manifest, found.dir, scope.os, false)
+      native = NativeLibrary.resolve(workspace, found.manifest, found.dir, scope.os, false, false)
       return scope.with(natives: native.targets, watched: native.watched)
   end
 end
@@ -376,9 +376,9 @@ end
 
 # The names the manifest of the package declares, none when it has no manifest. Each must be in the lock with the same
 # source (PKG-LOCK-STALE for a missing one, PKG-SOURCE-CONFLICT for another source). The manifest is part of the hash
-# only for a package with native files or a [native] table (package_hash.agc); for any other package it can do no more
-# than this check: pick among the names of the lock and not change one. A manifest that is not a regular file is
-# PKG-SYMLINK at the import, as a link among the .agc files is.
+# only for a package with a native file that is not .agc or a [native] table (package_hash.agc); for any other package
+# it can do no more than this check: pick among the names of the lock and not change one. A manifest that is not a
+# regular file is PKG-SYMLINK at the import, as a link among the .agc files is.
 def declared_names(
   workspace: Workspace.Workspace,
   scope: Scope,
@@ -406,7 +406,7 @@ def natives_of(
   case shape_of(workspace, root)
     Shape.Regular ->
       manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
-      return ok(NativeLibrary.resolve(workspace, manifest, root, scope.os, !member))
+      return ok(NativeLibrary.resolve(workspace, manifest, root, scope.os, true, member))
     _ -> return ok(NativeLibrary.Found(targets: {}, watched: []))
   end
 end

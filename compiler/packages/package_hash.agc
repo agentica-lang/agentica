@@ -1,11 +1,12 @@
 ## The hash of a package (docs/grammar/05b-modules.md). The .agc files of the package folder and every file of its
 ## native/ folder (the native libraries, any name but a dotfile, Thumbs.db and desktop.ini), with paths relative to it
 ## and written with "/", are taken in bytewise order of their paths; for each one the stream holds its path, a zero
-## byte, its size in decimal, a zero byte and its bytes. The agentica.toml at the root joins them when the package has
-## native files or a [native] table, because the manifest then decides which file is opened; for any other package it
-## is not hashed, so those hashes did not change. The hash is `sha256:` and the SHA-256 of that stream in hex. Hidden
-## folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named *.agc, named native at the root
-## or inside native/ is refused, as the fetch refuses it; other links, and other files that are not .agc, are ignored.
+## byte, its size in decimal, a zero byte and its bytes. The agentica.toml at the root joins them when native/ holds a
+## file that is not .agc or the manifest has a [native] table, because the manifest then decides which file is opened;
+## for any other package it is not hashed, so those hashes did not change. The hash is `sha256:` and the SHA-256 of
+## that stream in hex. Hidden folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named
+## *.agc, named native at the root or inside native/ is refused, as the fetch refuses it; other links, and other
+## files that are not .agc, are ignored.
 ##
 ## The names `.agc` and `agc_libs` are compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
 ## out on every system. A case-insensitive file system (macOS, Windows) can open `x.AGC` or `AGC_LIBS/y.agc` by the
@@ -53,8 +54,8 @@ export def hash_folder(workspace: Workspace.Workspace, root: String) -> Hashed
 end
 
 ## Whether the hash of the package folder covers its agentica.toml: the file is a regular file at the root and the
-## package has native files (`paths` are its covered files) or a top-level `native` table. A manifest that cannot be
-## read or parsed is left out; the build reports it where it reads it.
+## package has a file in native/ that is not .agc (`paths` are its covered files) or a top-level `native` table. A
+## manifest that cannot be read or parsed is left out; the build reports it where it reads it.
 export def manifest_hashed?(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Bool
   entries = workspace.list_folder.call(root)
   if !entries.ok?
@@ -64,7 +65,7 @@ export def manifest_hashed?(workspace: Workspace.Workspace, root: String, paths:
   if !present
     return false
   end
-  if paths.any? do |path: String| native_path?(path) end
+  if paths.any? do |path: String| native_path?(path) and !source_file?(path) end
     return true
   end
   read = workspace.read_bytes.call(join(root, MANIFEST_FILE))
@@ -129,6 +130,16 @@ end
 export def native_path?(path: String) -> Bool
   parts = path.split("/")
   return parts.size > 1 and fold(parts[0]) == NATIVE_FOLDER
+end
+
+## The covered files of native/ (relative paths, in bytewise order), none when the folder cannot be listed.
+export def native_files(workspace: Workspace.Workspace, root: String) -> List[String]
+  case list_files(workspace, root)
+    Listing.Files(paths) ->
+      natives = paths.filter do |path: String| native_path?(path) end
+      return natives.sort
+    Listing.Stopped(_) -> return []
+  end
 end
 
 ## Whether the path is the native/ entry of the package root itself (a link named so would hide a folder from the

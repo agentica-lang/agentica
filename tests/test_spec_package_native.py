@@ -172,6 +172,37 @@ def test_a_manifest_without_native_files_or_a_native_table_is_not_part_of_the_ha
     assert check(ws) is None
 
 
+def test_a_native_folder_of_only_agc_modules_keeps_the_old_hash(ws):
+    declare(ws, {"demo.agc": DEMO, "native/more.agc": "# a module\n"}, "# a note\n")
+    assert check(ws) is None
+    (ws.deps / "pkgdemo" / "agentica.toml").write_text(manifest("# another note\n"), encoding="utf-8")
+    assert check(ws) is None
+
+
+def test_a_cached_build_sees_a_manifest_or_a_native_file_changed_in_a_package_with_native_files_and_no_table(ws):
+    # No [native] table, but a file in native/: the manifest is hashed, and the cache entry watches it and the names.
+    pure = 'export def hi() -> String\n  return "hi"\nend\n'
+    declare(ws, {"p.agc": pure, "native/data.bin": b"data"}, "# a note\n")
+    (ws.project / "main.agc").write_text(
+        'import P from "pkg/pkgdemo/p"\n\ndef main() -> Void\n  puts(P.hi())\nend\n', encoding="utf-8")
+    program = str(ws.project / "main.agc")
+
+    def go():
+        return run(cli() + [program], cwd=ws.project, env=environment_of(ws))
+
+    assert go().stdout == "hi\n"
+    assert go().stdout == "hi\n"
+    manifest_file = ws.deps / "pkgdemo" / "agentica.toml"
+    locked = manifest_file.read_text(encoding="utf-8")
+    manifest_file.write_text(manifest("# edited\n"), encoding="utf-8")
+    assert go().code == 1
+    manifest_file.write_text(locked, encoding="utf-8")
+    assert go().stdout == "hi\n"
+    (ws.deps / "pkgdemo" / "native" / "added.bin").write_bytes(b"new")
+    assert go().code == 1
+    assert check(ws)["code"] == "PKG-HASH-MISMATCH"
+
+
 @host_only(WINDOWS, "a symbolic link needs a privilege on Windows")
 def test_a_link_named_native_is_a_symlink_error_in_the_build_and_in_the_fetch(ws, remotes, tmp_path):
     outside = tmp_path / "outside"
@@ -217,6 +248,8 @@ def test_an_extern_name_that_the_manifest_does_not_declare_stays_a_system_librar
     ('[native.pkgdemo]\nlinux = { system = "/usr/lib/libx.so" }\n', "native.pkgdemo.linux.system"),
     ('[native.pkgdemo]\nlinux = { url = "https://example.test/x.so" }\n', "native.pkgdemo.linux.url"),
     ('[native.Demo]\nlinux = { system = "libx.so" }\n', "native.Demo"),
+    ('[native.pkgdemo]\nlinux = { file = "native/Thumbs.db" }\n', "native.pkgdemo.linux.file"),
+    ('[native.pkgdemo]\nlinux = { file = "native/sub/Desktop.INI" }\n', "native.pkgdemo.linux.file"),
 ])
 def test_a_bad_native_table_is_pkg_manifest_invalid_at_its_key(ws, text, key):
     declare(ws, {"demo.agc": DEMO}, text)

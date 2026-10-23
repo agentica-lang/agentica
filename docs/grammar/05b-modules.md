@@ -444,8 +444,9 @@ import Sqlite from "pkg/sqlite/db"
   `.agc` (outside `native/`) are left out (`.agc`, `agc_libs` and `native` are
   compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
   out on every system). The `agentica.toml` of a package is left out too, so it
-  can only choose among the names of the lock, except when the package has
-  files in `native/` or a top-level `[native]` table: the manifest then decides
+  can only choose among the names of the lock, except when `native/` holds a
+  file that is not `.agc` or the manifest has a top-level `[native]` table: it
+  then decides
   which file is opened, so it is added to the stream with the path
   `agentica.toml`, and the hash of any other package is unchanged. The first
   time a build loads a package, it hashes the folder of `deps/` and compares

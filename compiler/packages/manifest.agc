@@ -7,6 +7,7 @@
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
+import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
@@ -216,6 +217,10 @@ def file_problem(file: String) -> String
   end
   if !file.starts_with?("#{NATIVE_FOLDER}/")
     return "a native file is a path in the #{NATIVE_FOLDER}/ folder of the package"
+  end
+  # The hash and the copy leave these names out, so a library there would run unchecked.
+  if file.split("/").any? do |part: String| PackageHash.native_junk?(part) end
+    return "a native file is not Thumbs.db or desktop.ini, which the package leaves out"
   end
   return ""
 end

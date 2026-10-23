@@ -244,8 +244,8 @@ import Sqlite from "pkg/sqlite/db"
   size in decimal, a zero byte and the file bytes. The files are the `.agc`
   files and every file of `native/` at the package root. Hidden folders (any
   depth), `agc_libs/` at the package root, dotfiles and other files are left
-  out. The package's `agentica.toml` is not hashed, except for a package with
-  `native/` files or a `[native]` table. A build hashes a package (its
+  out. The package's `agentica.toml` is not hashed, except for a package with a
+  non-`.agc` file in `native/` or a `[native]` table. A build hashes a package (its
   `deps/` folder) the first time an import loads it; a difference is
   `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc`, `native` or in
   `native/` is `PKG-SYMLINK`.
