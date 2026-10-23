@@ -10,6 +10,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `Analysis.refresh` (`std/analysis`) does not check again the modules that
+  did not change since the last program of the file that checked, nor those
+  that import only such modules, so an editor that refreshes after each edit
+  waits for the edited file and the modules that import it (about a quarter of
+  the time on a file that imports a hundred modules).
 - Loops and function calls run faster: the VM joins each step check, and each
   constant before an integer operator or compare, with the instruction after it
   (integer loops take about half the time they did in 0.9.0).

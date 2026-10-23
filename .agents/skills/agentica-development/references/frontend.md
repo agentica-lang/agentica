@@ -62,7 +62,12 @@ with a packed `Problem` (`references/stages.md`).
   and are not in walk order. Nothing may read a node id except through a node it
   holds (`Linker.parser_ids` is the highest `next_free_id`). A cached root is
   used only when `Cache.find` sees the same fingerprint and texts;
-  `test_std_analysis.py` compares cached and uncached answers.
+  `test_std_analysis.py` compares cached and uncached answers. A root also
+  keeps its last program that checked (`Cache.Good`); a module whose text and
+  shape, and those of everything it imports, are unchanged is not checked
+  again: `check_reuse.agc` copies its entries (types, resolutions, constants)
+  from that program, and the receivers of constant members, which sit at
+  `Linked.receivers` plus the id of the call, move with it.
 
 ### Pure core, one port
 

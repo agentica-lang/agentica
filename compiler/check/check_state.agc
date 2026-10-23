@@ -13,6 +13,10 @@ import Types from "../syntax/types"
 import Help from "check_help"
 import Defaults from "defaults"
 
+# List.repeat halts above this count (RUNTIME-INVALID-COUNT), and a program of about 5.7 MB of source has more node
+# ids.
+MAX_REPEAT = 1_048_576
+
 ## A name in scope: its type, whether it cannot be assigned (a for variable), and how many scopes were open when it was
 ## introduced (a block cannot assign a name from outside it, so the level tells which side a name is on).
 export struct Binding
@@ -124,6 +128,22 @@ end
 ## The deepest nesting of expressions and statements the checker accepts (CHECK-TOO-DEEP beyond it).
 export def nesting_limit() -> Int
   return 1000
+end
+
+## A list of `count` slots with no type, built from repeats of at most MAX_REPEAT, so no runtime error escapes for a
+## huge program.
+export def no_types(count: Int) -> List[Types.Type]
+  types: List[Types.Type] = []
+  left = count
+  while left > 0
+    size = MAX_REPEAT
+    if left < MAX_REPEAT
+      size = left
+    end
+    types = types.concat(List.repeat(Types.Type.Unknown, size))
+    left -= size
+  end
+  return types
 end
 
 ## The state at the start of a function: no names, no types.

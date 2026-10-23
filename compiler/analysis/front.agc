@@ -10,6 +10,7 @@ import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
 import Workspace from "../modules/workspace"
+import Ast from "../syntax/ast"
 import SourceFile from "../syntax/source_file"
 import Cache from "cache"
 
@@ -75,7 +76,7 @@ export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings
   end
   case Cache.find(cache, walked.unwrap!)
     Cache.Found.Hit(root) -> return checked_outcome(root.linked, root.checking)
-    Cache.Found.Miss -> return link_loaded(walked.unwrap!, settings, false)
+    Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
   end
 end
 
@@ -99,7 +100,7 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
     reaching = Cache.restart(cache, loaded)
   end
   case Cache.find(cache, loaded)
-    Cache.Found.Hit(root) -> return Cache.remember(reaching, root, loaded, false)
+    Cache.Found.Hit(root) -> return Cache.remember(reaching, root, loaded, false, 0)
     Cache.Found.Miss -> return solve(cache, reaching, loaded, settings)
   end
 end
@@ -116,10 +117,25 @@ def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
   end
 end
 
-def link_loaded(loaded: Modules.Loaded, settings: Env.Settings, main_required: Bool) -> Outcome
+# Links the modules of a walk and checks them as query_file does, taking from the last good program of the root in
+# `cache` what its unchanged modules left (Cache.reusing).
+def link_reusing(cache: Cache.Cache, loaded: Modules.Loaded, settings: Env.Settings) -> Outcome
   case Linker.link_loaded(loaded, settings)
     Linker.Linking.Failed(failure) -> return Outcome.Rejected(link_problem(failure))
-    Linker.Linking.Done(program) -> return check(program, settings, main_required)
+    Linker.Linking.Done(program) ->
+      return checked_outcome(program, check_reusing(Cache.reusing(cache, loaded), program, settings))
+  end
+end
+
+# The result of checking `program` as query_file does, taking what `reusing` says is unchanged from an earlier check.
+def check_reusing(
+  reusing: Ast.Optional[Checker.Reusing],
+  program: Linker.Linked,
+  settings: Env.Settings,
+) -> Checker.Checking
+  case reusing
+    Ast.Optional.Present(found) -> return Checker.check_query_reusing(program, settings, found)
+    Ast.Optional.Absent -> return Checker.check_query(program, settings)
   end
 end
 
@@ -129,8 +145,9 @@ def solve(cache: Cache.Cache, reaching: Cache.Cache, loaded: Modules.Loaded, set
   case Linker.link_loaded(loaded, settings)
     Linker.Linking.Failed(_) -> return cache
     Linker.Linking.Done(program) ->
-      root = Cache.solved(loaded, program, Checker.check_query(program, settings))
-      return Cache.remember(reaching, root, loaded, true)
+      reusing = Cache.reusing(cache, loaded)
+      root = Cache.solved(loaded, program, check_reusing(reusing, program, settings), Cache.held(cache, loaded))
+      return Cache.remember(reaching, root, loaded, true, Cache.reused_count(reusing))
   end
 end
 

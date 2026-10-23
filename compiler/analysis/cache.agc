@@ -5,6 +5,12 @@
 ## used only when the walk found the same modules with the same texts. So a cache that is stale, or that belongs to
 ## another lineage of the same session, costs time and never gives a wrong answer.
 ##
+## Reuse: a root keeps the last program of it that checked (`Good`). A later check of the root takes from it what the
+## modules that did not change left behind (`reusing`): a module is unchanged when its text and its shape (see
+## `shapes`) are those it had, and so are those of every module it imports, since what a module means depends on
+## them. The checker then checks the changed modules only (Checker.check_query_reusing), so an edit of the root file
+## costs the root file, not the files it imports.
+##
 ## Bounds: at most MAX_ROOTS checked roots, the least recently refreshed leaving first; the parsed files are kept only
 ## while a kept root reaches them.
 ##
@@ -20,25 +26,36 @@ import Ast from "../syntax/ast"
 
 MAX_ROOTS = 16
 
+## The last program of a root that checked: the modules it was made from, their shapes by key, and the result.
+export struct Good
+  loaded: Modules.Loaded
+  shapes: Map[String, String]
+  earlier: Checker.Earlier
+end
+
 ## A root that linked, with what checking it gave (a program or its first problem). `loaded` and `fingerprint` say
-## which modules it was made from; `used` is the clock of the refresh that last wanted it.
+## which modules it was made from; `used` is the clock of the refresh that last wanted it. `good` is the last program
+## of this root that checked, which is the current one when `checking` is a program.
 export struct Root
   loaded: Modules.Loaded
   fingerprint: String
   linked: Linker.Linked
   checking: Checker.Checking
+  good: Ast.Optional[Good]
   used: Int
 end
 
 ## The roots by the canonical key of the root file, the parsed files and the counters of the work done. `checks` counts
-## the roots that `refresh` linked and checked, and `parsed` the files it lexed and parsed (a test reads them to see
-## what a refresh reused).
+## the roots that `refresh` linked and checked, `parsed` the files it lexed and parsed, and `reused` the modules that
+## it did not check again because they and what they import were unchanged (a test reads them to see what a refresh
+## reused).
 export struct Cache
   roots: Map[String, Root]
   parses: Modules.Parses
   clock: Int
   checks: Int
   parsed: Int
+  reused: Int
 end
 
 ## Whether the cache holds the checked program of a walk.
@@ -49,7 +66,7 @@ end
 
 ## A cache that holds nothing.
 export def empty() -> Cache
-  return Cache(roots: {}, parses: Modules.no_parses(), clock: 0, checks: 0, parsed: 0)
+  return Cache(roots: {}, parses: Modules.no_parses(), clock: 0, checks: 0, parsed: 0, reused: 0)
 end
 
 ## The root that was made from the modules of `loaded` with their texts, if the cache has it.
@@ -65,9 +82,64 @@ export def find(cache: Cache, loaded: Modules.Loaded) -> Found
   return Found.Miss
 end
 
-## The root of a program that `loaded` gave and that linked and checked.
-export def solved(loaded: Modules.Loaded, linked: Linker.Linked, checking: Checker.Checking) -> Root
-  return Root(loaded: loaded, fingerprint: fingerprint(loaded), linked: linked, checking: checking, used: 0)
+## The root of a program that `loaded` gave and that linked and checked, or failed to check. `before` is the root that
+## the cache held for the file, if any, whose last good program stays when this one does not check.
+export def solved(
+  loaded: Modules.Loaded,
+  linked: Linker.Linked,
+  checking: Checker.Checking,
+  before: Ast.Optional[Root],
+) -> Root
+  good: Ast.Optional[Good] = Ast.Optional.Absent
+  case before
+    Ast.Optional.Present(root) -> good = root.good
+    Ast.Optional.Absent -> good = good
+  end
+  case checking
+    Checker.Checking.Done(checked) ->
+      good = Ast.Optional.Present(
+        Good(loaded: loaded, shapes: shapes(loaded), earlier: Checker.Earlier(linked: linked, checked: checked)),
+      )
+    Checker.Checking.Failed(_) -> good = good
+  end
+  return Root(
+    loaded: loaded,
+    fingerprint: fingerprint(loaded),
+    linked: linked,
+    checking: checking,
+    good: good,
+    used: 0,
+  )
+end
+
+## The root that the cache holds for the file that `loaded` starts from.
+export def held(cache: Cache, loaded: Modules.Loaded) -> Ast.Optional[Root]
+  key = loaded.order[0]
+  if cache.roots.has_key?(key)
+    return Ast.Optional.Present(cache.roots[key])
+  end
+  return Ast.Optional.Absent
+end
+
+## What the checker may take from the last good program of the root of `loaded`, when some of its modules are
+## unchanged since.
+export def reusing(cache: Cache, loaded: Modules.Loaded) -> Ast.Optional[Checker.Reusing]
+  case held(cache, loaded)
+    Ast.Optional.Absent -> return Ast.Optional.Absent
+    Ast.Optional.Present(root) ->
+      case root.good
+        Ast.Optional.Absent -> return Ast.Optional.Absent
+        Ast.Optional.Present(good) ->
+          if good.loaded.root_dir != loaded.root_dir
+            return Ast.Optional.Absent
+          end
+          clean = unchanged(good, loaded)
+          if clean.size == 0
+            return Ast.Optional.Absent
+          end
+          return Ast.Optional.Present(Checker.Reusing(earlier: good.earlier, clean: clean))
+      end
+  end
 end
 
 ## `cache` with the files of `loaded` among the parsed ones.
@@ -101,8 +173,9 @@ export def crowded?(cache: Cache) -> Bool
 end
 
 ## `cache` with `root` as the root that `loaded` made, the latest used. Roots over the limit and the files that no root
-## reaches are dropped. `computed` is true when `root` was linked and checked for this call.
-export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: Bool) -> Cache
+## reaches are dropped. `computed` is true when `root` was linked and checked for this call, and `reused` is the number
+## of modules it did not check again.
+export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: Bool, reused: Int) -> Cache
   clock = cache.clock + 1
   roots = trimmed(cache.roots.put(loaded.order[0], root.with(used: clock)))
   return pruned(
@@ -111,8 +184,17 @@ export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: 
       clock: clock,
       checks: counted(cache.checks, computed),
       parsed: cache.parsed + loaded.parsed,
+      reused: cache.reused + reused,
     ),
   )
+end
+
+## The number of modules that `reusing` offers the checker.
+export def reused_count(reusing: Ast.Optional[Checker.Reusing]) -> Int
+  case reusing
+    Ast.Optional.Present(found) -> return found.clean.size
+    Ast.Optional.Absent -> return 0
+  end
 end
 
 def counted(count: Int, one: Bool) -> Int
@@ -164,6 +246,38 @@ def fingerprint(loaded: Modules.Loaded) -> String
     parts = parts.push(describe(loaded.modules[key]))
   end
   return parts.join("")
+end
+
+# The shape of each module, by key: what describes it apart from its text, and the keys it imports.
+def shapes(loaded: Modules.Loaded) -> Map[String, String]
+  found: Map[String, String] = {}
+  for key in loaded.order
+    module = loaded.modules[key]
+    found = found.put(key, describe(module) + module.imports.map do |name: String| piece(name) end.join(""))
+  end
+  return found
+end
+
+# The modules of `loaded` that have the text and the shape they have in `good`, and import only such modules.
+def unchanged(good: Good, loaded: Modules.Loaded) -> Set[String]
+  now = shapes(loaded)
+  clean: Map[String, Bool] = {}
+  for key in loaded.order
+    same = good.shapes.has_key?(key) and good.shapes[key] == now[key]
+    clean = clean.put(key, same and good.loaded.modules[key].text == loaded.modules[key].text)
+  end
+  # A module that imports a changed one is changed. A walk of the list settles a chain of imports per pass.
+  settled = false
+  while !settled
+    settled = true
+    for key in loaded.order
+      if clean[key] and loaded.modules[key].imports.any? do |name: String| !clean[name] end
+        clean = clean.put(key, false)
+        settled = false
+      end
+    end
+  end
+  return Set.new(loaded.order.filter do |key: String| clean[key] end)
 end
 
 def describe(module: Modules.Module) -> String
