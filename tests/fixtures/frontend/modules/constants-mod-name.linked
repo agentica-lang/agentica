@@ -1,1 +1,43 @@
-ERROR CHECK-IMPORT-NAME 49:4:8-56:4:15 "a constant is read by its name, not through the module alias" "write import {MAX} from \"lib\", then use MAX\nor let the module export a function and call it as Lib.name()" file="root.agc"
+program #6 0:1:1-62:6:1
+  module "root.agc"
+    declaration: function-decl #5 23:3:1-62:6:1 name="main"
+      result: type-ref #1 37:3:15-41:3:19 name="Void"
+      body: expr-stmt #4 44:4:3-58:5:1
+        value: call #3 44:4:3-57:4:16 name="puts" piped=false
+          arg: const-ref #2 53:4:12-56:4:15 name="@2::MAX"
+  module "lib.agc"
+    declaration: const-decl #1 0:1:1-10:2:1 name="@2::LIMIT"
+      value: literal #0 8:1:9-9:1:10 value=int:4
+    declaration: const-decl #5 32:3:1-55:4:1 name="@2::MAX" doc="The largest value."
+      value: binary #4 45:3:14-54:3:23 op=plus op-span=51:3:20-52:3:21
+        left: const-ref #2 45:3:14-50:3:19 name="@2::LIMIT"
+        right: literal #3 53:3:22-54:3:23 value=int:1
+    declaration: const-decl #9 55:4:1-81:5:1 name="@2::NAMES"
+      value: list-lit #8 70:4:16-80:4:26
+        element: literal #6 71:4:17-74:4:20 value=string:"a"
+        element: literal #7 76:4:22-79:4:25 value=string:"b"
+    declaration: const-decl #17 81:5:1-124:6:1 name="@2::LEVELS"
+      type: type-ref #12 96:5:16-112:5:32 name="Map"
+        arg: type-ref #10 100:5:20-106:5:26 name="String"
+        arg: type-ref #11 108:5:28-111:5:31 name="Int"
+      value: map-lit #16 115:5:35-123:5:43
+        entry: map-entry #15 116:5:36-122:5:42
+          key: literal #13 116:5:36-119:5:39 value=string:"x"
+          value: literal #14 121:5:41-122:5:42 value=int:1
+    declaration: const-decl #19 124:6:1-135:7:1 name="@2::HIDDEN"
+      value: literal #18 133:6:10-134:6:11 value=int:5
+    declaration: const-decl #23 135:7:1-168:8:1 name="@2::CONFIG"
+      value: construct #22 151:7:17-167:7:33 type="@2::Config"
+        arg: named-arg #21 158:7:24-166:7:32 name="port"
+          value: literal #20 164:7:30-166:7:32 value=int:80
+    declaration: struct-decl #26 176:9:8-206:12:1 name="@2::Config"
+      field: field-decl #25 192:10:3-202:11:1 name="port"
+        type: type-ref #24 198:10:9-201:10:12 name="Int"
+    declaration: function-decl #35 214:13:8-259:16:1 name="@2::double"
+      param: param #29 225:13:19-231:13:25 name="x"
+        type: type-ref #28 228:13:22-231:13:25 name="Int"
+      result: type-ref #30 236:13:30-239:13:33 name="Int"
+      body: return-stmt #34 242:14:3-255:15:1
+        value: binary #33 249:14:10-254:14:15 op=multiply op-span=251:14:12-252:14:13
+          left: name-ref #31 249:14:10-250:14:11 name="x"
+          right: literal #32 253:14:14-254:14:15 value=int:2

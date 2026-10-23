@@ -243,6 +243,17 @@ def test_a_constant_is_a_value_wherever_it_is_read(program):
     ]
 
 
+def test_a_constant_read_through_the_alias_is_a_reference_to_the_member_alone(program):
+    reader = "import Models from \"models\"\n\ndef limit() -> Int\n  return Models.LIMIT + 1\nend\n"
+    (program / "reader.agc").write_text(reader, encoding="utf-8")
+    report = answer(("reader.agc", where(reader, "Models.LIMIT", 8)), cwd=program)
+    assert report["definition"]["kind"] == "constant"
+    # Like `Models.make(...)`, the reference is the member, so renaming the constant keeps the alias.
+    found = places(report)[0]
+    assert found == ("reader.agc", *where(reader, "Models.LIMIT", 7), "value", "limit")
+    assert end(report["references"][0]["span"]) == where(reader, "Models.LIMIT", 12)
+
+
 def test_sibling_scopes_keep_their_uses_apart(program):
     first = answer(("orders.agc", where(ORDERS, "for i in names", 4)), cwd=program)
     assert first["definition"]["kind"] == "loop"
