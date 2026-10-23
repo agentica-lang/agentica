@@ -93,13 +93,20 @@ static void link_last(agc_runq *q, agc_task *t) {
 
 /* The caller has set the state of the task already. The link is written under the lock, so whoever pops the task sees
    everything the pusher wrote to it, and the signal comes after the unlock (§16.3, "Wake after publish"). */
-void agc_runq_push(agc_runq *q, agc_task *t) {
+static void push(agc_runq *q, agc_task *t, bool own) {
   if (q->solo) {
     link_last(q, t);
     return;
   }
   uv_mutex_lock(&q->lock);
+  /* An own push into an empty queue neither signals nor tells the spinners: the pusher pops the task next
+     (agc_runq_push_own), and a scheduler that stops spinning still finds it under the lock in its wait. */
+  bool alone = own && !q->first;
   link_last(q, t);
+  if (alone) {
+    uv_mutex_unlock(&q->lock);
+    return;
+  }
   /* A spinner takes the task, or finds it under this lock when it stops spinning: no futex wake. `spinning` is read
      before `work` is published, so a spinner cannot see the task and leave between the two and cost a spare signal. */
   bool wake = atomic_load_explicit(&q->spinning, memory_order_seq_cst) == 0;
@@ -108,6 +115,15 @@ void agc_runq_push(agc_runq *q, agc_task *t) {
   uv_mutex_unlock(&q->lock);
   if (wake) uv_cond_signal(&q->wake);
 }
+
+void agc_runq_push(agc_runq *q, agc_task *t) { push(q, t, false); }
+
+/* The push of the task whose turn just ended on the calling scheduler, when that scheduler pops the queue next (its
+   runnext slot is empty). If the queue was empty, the task is the first one it pops, so no other scheduler is woken for
+   it: one CPU-bound task that yields at every turn would otherwise wake an idle scheduler per turn and move between
+   cores (#627). A queue that already held tasks signals as agc_runq_push does: the caller pops the first of those, and
+   this task needs a scheduler of its own. */
+void agc_runq_push_own(agc_runq *q, agc_task *t) { push(q, t, true); }
 
 static agc_task *take_first(agc_runq *q) {
   agc_task *t = q->first;

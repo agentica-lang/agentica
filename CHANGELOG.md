@@ -14,6 +14,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   constant before an integer operator or compare, with the instruction after it
   (integer loops take about half the time they did in 0.9.0).
 
+### Fixed
+
+- A program with one busy task no longer runs about twice as slow with the
+  default scheduler count: its own scheduler keeps it, and the idle ones stay
+  asleep.
+
 ## [0.9.0] - 2026-10-23
 
 The first stable release since 0.8.1, with the changes of `0.9.0-beta.1` and

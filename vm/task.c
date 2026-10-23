@@ -24,6 +24,19 @@ static void enqueue(agc_vm *vm, agc_task *t) {
   agc_runq_push(vm->rt->runq, t);
 }
 
+/* The end of a turn that leaves T ready (a yield, or a wake during its own turn). A scheduler thread with an empty
+   runnext slot pops the queue next, so it pushes T as its own (agc_runq_push_own): with no other task queued T stays
+   on this scheduler and no idle one is woken (#627). A timer or a service end at this turn boundary may still fill the
+   slot; T then waits for the slot's turns, at most RUNNEXT_LIMIT, as any queued task does. */
+static void requeue(agc_vm *vm, agc_task *t) {
+  if (!vm->runnext_on || vm->runnext) {
+    enqueue(vm, t);
+    return;
+  }
+  atomic_store_explicit(&t->state, AGC_TASK_READY, memory_order_seq_cst);
+  agc_runq_push_own(vm->rt->runq, t);
+}
+
 /* A waker acts only on a task that waits (docs/vm/10-io-multicore.md §10.2.3), and the CAS lets one waker win, so a
    task is queued at most once. A PARKED task is in no queue: the winner makes it READY and pushes it. A PARKING task
    is still in its own turn: the winner only marks it WOKEN and queues nothing; the scheduler finds the mark when it
@@ -624,10 +637,8 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
       finish_task(vm, t);
       agc_sync_drop(vm);
     }
-  } else if (r == AGC_TURN_YIELD) {
-    enqueue(vm, t);
-  } else if (!agc_task_commit_park(t)) {
-    enqueue(vm, t);
+  } else if (r == AGC_TURN_YIELD || !agc_task_commit_park(t)) {
+    requeue(vm, t);
   } else if (atomic_load_explicit(&t->cancelled, memory_order_seq_cst) && agc_task_claim(t)) {
     end_cancelled_locked(vm, t);
   }

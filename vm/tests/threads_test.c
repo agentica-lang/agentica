@@ -1,8 +1,8 @@
 /*
  * Runs with several scheduler threads (§16.9; agc_vm_run with rt->schedulers > 1): a storm of tasks on a channel, a
  * stall that the I/O thread finds (also beside a service task's timer), main failing beside spinners (the run ends
- * once), TCP calls issued and resumed on several schedulers while the I/O thread owns every socket, and a ping-pong
- * that runnext keeps on one scheduler. `make vm-tsan` runs it under ThreadSanitizer.
+ * once), TCP calls issued and resumed on several schedulers while the I/O thread owns every socket, a ping-pong
+ * that runnext keeps on one scheduler, and a lone yielding task that stays on one. `make vm-tsan` runs it under ThreadSanitizer.
  */
 #include "../core.h"
 #include "test_program.h"
@@ -453,6 +453,17 @@ static void test_tcp_over_schedulers(void) {
   }
 }
 
+/* Runs P on four schedulers five times; each run ends normally, and its calls of Test.hop move at most MOST times. */
+static void few_moves(prog *p, uint32_t most) {
+  for (int round = 0; round < 5; round++) {
+    atomic_store(&last_hop, UINT32_MAX);
+    atomic_store(&moves, 0);
+    agc_outcome out = run(p, 4);
+    assert(out.kind == AGC_DONE);
+    assert(atomic_load(&moves) <= most);
+  }
+}
+
 /* A rally on four schedulers stays on one of them (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"). Once
    a send finds the other task PARKED, that task waits in the sender's runnext slot and runs right after the sender
    parks on its own receive, on the same scheduler, and so does every send after it: the other schedulers never get a
@@ -464,17 +475,34 @@ static void test_rally_stays_on_one_scheduler(void) {
   prog *p = agc_alloc(sizeof *p);
   new_prog(p);
   rally_main(p, true);
-  for (int round = 0; round < 5; round++) {
-    atomic_store(&last_hop, UINT32_MAX);
-    atomic_store(&moves, 0);
-    agc_outcome out = run(p, 4);
-    assert(out.kind == AGC_DONE);
-    assert(atomic_load(&moves) <= 8);
-  }
+  few_moves(p, 8);
   prog *q = agc_alloc(sizeof *q);
   new_prog(q);
   rally_main(q, false);
   for (int round = 0; round < 20; round++) assert(run(q, 4).kind == AGC_DONE);
+}
+
+/* One task alone on four schedulers stays on one of them (#627): main calls Test.hop and yields RALLY times. Its yield
+   finds the run queue empty, so it wakes no idle scheduler and its own scheduler takes it back. Only the start may
+   move it, while the other schedulers start and pop once (a few moves). Without that every yield woke an idle
+   scheduler, which often took the task: 60 to 100 moves in 1000 turns. */
+static void test_lone_task_stays_on_one_scheduler(void) {
+  prog *p = agc_alloc(sizeof *p);
+  new_prog(p);
+  emit(p, F_MAIN, AGC_OP_CONST, 1, constant(p, 0));
+  emit(p, F_MAIN, AGC_OP_CONST, 2, constant(p, RALLY));
+  emit(p, F_MAIN, AGC_OP_CONST, 3, constant(p, 1));
+  uint32_t top = here(p, F_MAIN);
+  emit3(p, F_MAIN, AGC_OP_LT_I, 4, 1, 2);
+  uint32_t exit_jump = here(p, F_MAIN);
+  emit(p, F_MAIN, AGC_OP_JUMP_IF_FALSE, 4, 0);
+  call_int(p, F_MAIN, B_HOP, 0);
+  call_int(p, F_MAIN, B_SLEEP, 0);
+  emit3(p, F_MAIN, AGC_OP_ADD_I, 1, 1, 3);
+  emit(p, F_MAIN, AGC_OP_JUMP, 0, top);
+  p->code[F_MAIN][exit_jump].b = (uint16_t)here(p, F_MAIN);
+  emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
+  few_moves(p, 16);
 }
 
 /* Every worker runs once, whichever scheduler takes it, and main sees every send. */
@@ -547,6 +575,7 @@ int main(void) {
   test_tasks_spread_over_schedulers();
   test_tcp_over_schedulers();
   test_rally_stays_on_one_scheduler();
+  test_lone_task_stays_on_one_scheduler();
   fclose(quiet);
 #endif
   puts("threads tests passed");

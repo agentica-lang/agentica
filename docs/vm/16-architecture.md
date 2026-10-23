@@ -566,6 +566,15 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     signal, so the wake is chained: a scheduler that leaves a spin or a wait
     with a task, while more tasks are queued, signals one more waiter. Spinners
     do not count as idle for the stall check. Only the condvar wait does.
+  - A task whose turn ends ready (a yield, or a wake during its own turn) goes
+    back to the queue with `agc_runq_push_own` when its scheduler's slot is
+    empty, so that scheduler pops next. If the queue was empty, the push sends
+    no signal and does not set `work`: the task is the first one its scheduler
+    pops, so it stays on that core. A queue that holds tasks signals as usual.
+    Before, one CPU-bound task woke an idle scheduler at every turn and moved
+    between cores, about twice as slow (#627). A timer or a service end at
+    that turn boundary may fill the slot after the push; the task then waits
+    for the slot's turns (at most `RUNNEXT_LIMIT`), as a queued task does.
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
   cancel flag, and then the state says who ends the task. Exactly one party
   does. A task on a turn (RUNNING, PARKING or WOKEN) is left to its scheduler,

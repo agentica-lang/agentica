@@ -39,6 +39,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   queue counts its idle schedulers for the stall check of the I/O thread
   (`agc_runq_quiet`). Before it waits, an idle scheduler spins (`agc_runq_spin`,
   set up at N > 1), and a push skips the condvar signal while one spins. A task
+  whose turn ends ready goes back with `agc_runq_push_own` (`requeue` in
+  `vm/task.c`), which into an empty queue sends no signal: its own scheduler
+  pops it next, so a lone task stays on one core (#627). A task
   that a scheduler thread wakes goes to its runnext slot (`agc_vm.runnext`,
   taken first by `agc_task_next`, `RUNNEXT_LIMIT` in `vm/task.c`; §16.9, "Wakes
   between schedulers").
