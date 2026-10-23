@@ -12,7 +12,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Loops and function calls run faster: the VM joins each step check, and each
   constant before an integer operator or compare, with the instruction after it
-  (up to about 50 % on integer loops).
+  (integer loops take about half the time they did in 0.9.0).
 
 ## [0.9.0] - 2026-10-23
 

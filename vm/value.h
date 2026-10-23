@@ -182,6 +182,7 @@ typedef enum {
   AGC_FUSED_END,
   AGC_FUSED_CONST_FIRST = AGC_FUSED_CONST_ARITH_I
 } agc_fused_opcode;
+_Static_assert(AGC_FUSED_STEP_CONST_NE < AGC_FUSED_CONST_FIRST, "the STEP forms come before the CONST forms");
 
 typedef struct { uint16_t op, a, b, c; } agc_instr;
 

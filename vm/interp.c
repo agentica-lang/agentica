@@ -965,17 +965,19 @@ static agc_turn_result park_task(agc_task *t) {
 /* The span of the running instruction, read only where a failure or a call needs it. */
 #define SPAN spans[pc - 1]
 
-/* The STEP half of a fused instruction (AGC_FUSED_STEP_*, written by the loader on a STEP whose next instruction has
-   that opcode). It is STEP itself: the same fast path, and the same slow path, which may stop the run at the STEP's
-   span or yield with frame->pc on the next instruction, before it runs, so the resumed task runs it alone. Then the
-   next instruction is fetched as the loop would fetch it, and its case runs it with a direct jump instead of a second
-   dispatch. */
+/* The second instruction of a fused pair, fetched as the loop fetches one. */
 #define FUSED_NEXT()                              \
   do {                                            \
     in = code[pc++];                              \
     bx = (uint32_t)in.b | ((uint32_t)in.c << 16); \
     frame->pc = pc;                               \
   } while (0)
+
+/* The STEP half of a fused instruction (AGC_FUSED_STEP_*, written by the loader on a STEP whose next instruction has
+   that opcode). It is STEP itself: the same fast path, and the same slow path, which may stop the run at the STEP's
+   span or yield with frame->pc on the next instruction, before it runs, so the resumed task runs it alone. Then the
+   next instruction is fetched as the loop would fetch it, and its case runs it with a direct jump instead of a second
+   dispatch. */
 #define FUSED_STEP()                        \
   do {                                      \
     if (vm->next_stop > in.a) {             \
