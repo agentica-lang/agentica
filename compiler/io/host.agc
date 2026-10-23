@@ -35,13 +35,15 @@ end
 
 ## The environment of this process.
 export def process_env() -> Env.Env
+  os = System.os()
   return Env.Env(
     agentica_path: variable("AGENTICA_PATH"),
     xdg_data_home: variable("XDG_DATA_HOME"),
     xdg_cache_home: variable("XDG_CACHE_HOME"),
     home: variable("HOME"),
     local_app_data: variable("LOCALAPPDATA"),
-    windows: System.os() == "windows",
+    windows: os == "windows",
+    os: os,
   )
 end
 

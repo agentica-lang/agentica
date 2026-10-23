@@ -31,9 +31,10 @@ keeps their records.
      ([#396](https://github.com/sonic182/agentica/issues/396)), then the
      helpers by pointer, errors without `longjmp` through compiled code and a
      W^X code memory.
-  2. The rest of the FFI core: FFI-b (native libraries in packages), variadic
-     C functions ([#619](https://github.com/sonic182/agentica/issues/619)),
-     and from [#594](https://github.com/sonic182/agentica/issues/594) owned
+  2. The rest of the FFI core: FFI-b (native libraries in packages; done),
+     variadic C functions
+     ([#619](https://github.com/sonic182/agentica/issues/619)), and from
+     [#594](https://github.com/sonic182/agentica/issues/594) owned
      buffers and typed memory, `C.Float`, structs by value, function pointers
      and downloaded prebuilt libraries. No callbacks.
   3. JIT tier 2 (§22) with our own emitter for x86-64 and arm64 (no sljit).
@@ -56,8 +57,8 @@ First batch:
    done (PRs #553 to #591, and step 1 of #592; release 0.9.0).
 2. [#375](https://github.com/sonic182/agentica/issues/375), cached bytecode
    (`_build/bytecode/`): done.
-3. Packages [§45](../future/45-packages.md): done, except FFI-b.
-4. FFI-b: native libraries in packages; release 0.10 (above).
+3. Packages [§45](../future/45-packages.md): done.
+4. FFI-b: native libraries in packages: done; release 0.10 (above).
 
 Second batch, after the first:
 

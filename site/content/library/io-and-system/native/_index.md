@@ -24,6 +24,8 @@ end
 - Native code runs with your program's rights, and a wrong signature is undefined behavior in C: declare each function exactly as its C header does. A variadic function (`printf`) cannot be declared: a fixed signature for it is undefined behavior, and on Apple arm64 its extra arguments come out wrong.
 - Put `##` docs on the `def` lines inside the block.
 
+A package can ship its library or name a system one in its `agentica.toml` (`[native.NAME]`, one entry for each of `linux`, `macos` and `windows`), and `extern "NAME"` in the package's files then opens the right one by its path in `deps/`. The files of its `native/` folder are hashed with the package, so the lock covers them. See [Packages](/tour/modules/).
+
 The rest of the section has its own pages:
 
 - Use [Types and resources](/library/io-and-system/native/types/) for the C types, reading memory that C returns, resources and out parameters.

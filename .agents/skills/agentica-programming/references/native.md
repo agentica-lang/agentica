@@ -30,6 +30,8 @@ end
   (libc and libm are `"libSystem.B.dylib"`); any other library needs an
   absolute path. `DYLD_*` variables do not pass through a shebang or a shell
   (SIP drops them).
+- A package picks its library per system in its `agentica.toml`
+  (`[native.NAME]`, see `modules.md`); `extern "NAME"` in its files opens it.
 - A `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a
   `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
   `""`: when NULL matters, declare `-> C.Pointer` and use `Native.string_at`.

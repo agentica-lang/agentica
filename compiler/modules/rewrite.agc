@@ -8,6 +8,7 @@
 ## see ast.agc).
 
 import {ENUMS} from "../catalog/builtins"
+import NativeLibrary from "../packages/native_library"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Declarations from "declarations"
@@ -49,9 +50,30 @@ def rewrite_function(cx: Resolve.Context, node: Ast.FunctionDecl) -> Result[Ast.
   end
   result = try rewrite_type(cx, node.result)
   body = try rewrite_stmts(cx, node.body)
+  native = try rewrite_native(cx, node.native)
   return ok(
-    Ast.Decl.Function(node.with(name: Resolve.identity(cx, node.name), params: params, result: result, body: body)),
+    Ast.Decl.Function(
+      node.with(name: Resolve.identity(cx, node.name), params: params, result: result, body: body, native: native),
+    ),
   )
+end
+
+# The library of an extern function of a package that its manifest declares ([native.NAME]) is the file or the system
+# name it says for this system, or the PKG- failure when it says none; any other library stays as written.
+def rewrite_native(cx: Resolve.Context, native: Ast.Optional[Ast.Native]) -> Result[Ast.Optional[Ast.Native]]
+  case native
+    Ast.Optional.Present(found) ->
+      natives = cx.me.origin.natives
+      if !natives.has_key?(found.library)
+        return ok(native)
+      end
+      case natives[found.library]
+        NativeLibrary.Target.File(path) -> return ok(Ast.Optional.Present(found.with(library: path)))
+        NativeLibrary.Target.System(name) -> return ok(Ast.Optional.Present(found.with(library: name)))
+        NativeLibrary.Target.Unusable(failure) -> return error(failure)
+      end
+    Ast.Optional.Absent -> return ok(native)
+  end
 end
 
 # A constant keeps its place, takes its linked name and loses its export (the linked program has no exports).
