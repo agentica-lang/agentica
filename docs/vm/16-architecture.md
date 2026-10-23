@@ -571,8 +571,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     empty, so that scheduler pops next. If the queue was empty, the push sends
     no signal and does not set `work`: the task is the first one its scheduler
     pops, so it stays on that core. A queue that holds tasks signals as usual.
-    Before, one CPU-bound task woke an idle scheduler at every turn and moved
-    between cores, about twice as slow (#627). A timer or a service end at
+    With a plain push, one CPU-bound task would wake an idle scheduler at
+    every turn and move between cores (#627). A timer or a service end at
     that turn boundary may fill the slot after the push; the task then waits
     for the slot's turns (at most `RUNNEXT_LIMIT`), as a queued task does.
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic

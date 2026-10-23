@@ -484,8 +484,8 @@ static void test_rally_stays_on_one_scheduler(void) {
 
 /* One task alone on four schedulers stays on one of them (#627): main calls Test.hop and yields RALLY times. Its yield
    finds the run queue empty, so it wakes no idle scheduler and its own scheduler takes it back. Only the start may
-   move it, while the other schedulers start and pop once (a few moves). Without that every yield woke an idle
-   scheduler, which often took the task: 60 to 100 moves in 1000 turns. */
+   move it, while the other schedulers start and pop once (a few moves). If each yield woke an idle scheduler, that
+   scheduler would often take the task, and it would move dozens of times. */
 static void test_lone_task_stays_on_one_scheduler(void) {
   prog *p = agc_alloc(sizeof *p);
   new_prog(p);
