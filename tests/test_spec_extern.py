@@ -113,22 +113,28 @@ MEMORY = """extern "/opt/libpeer.so"
   def fill(out: C.Pointer, n: C.Int32) -> Void
 end
 
+def fill_two(buf: C.Pointer) -> Void
+  fill(buf, 2)
+end
+
 def main() -> Void
 %s
 end
 """
 
 
-# An owned buffer is a C.Pointer: it goes where a C.Pointer parameter is, and the typed reads and writes take any
-# C.Pointer with an Int offset, giving Int, Float, C.Pointer or a list of Int or Float.
+# An owned buffer is a C.Pointer: it goes where a C.Pointer parameter is, Task.spawn_owning hands it over, and the
+# typed reads and writes take any C.Pointer with an Int offset, giving Int, Float, C.Pointer or a list of Int or Float.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  buf = Native.memory_pointer(16)\n  fill(buf, 4)\n  xs: List[Float] = Native.get_array_of_float32(buf, 0, 4)\n"
      "  n: Int = Native.get_uint8(buf, 0) + Native.get_int64(buf, 8)\n  p: C.Pointer = Native.get_pointer(buf, 8)\n"
      "  Native.put_array_of_int64(buf, 0, [1, 2])\n  Native.put_float32(buf, 0, 1.5)\n  Native.put_pointer(buf, 8, p)\n"
      "  Native.put_string(buf, 0, \"x\")\n  Native.free(buf)\n  puts(xs.size + n)", None, None, None),
-    ("  Native.put_array_of_float32(Native.memory_pointer(8), 0, [1, 2])", "CHECK-TYPE-MISMATCH", (6, 61), (6, 62)),
-    ("  Native.put_int32(Native.memory_pointer(4), 0, 1.5)", "CHECK-TYPE-MISMATCH", (6, 49), (6, 52)),
-    ("  n: Int = Native.get_float64(Native.null(), 0)", "CHECK-TYPE-MISMATCH", (6, 12), (6, 48)),
+    ("  Task.await(Task.spawn_owning(&fill_two, Native.memory_pointer(8)))", None, None, None),
+    ("  Task.await(Task.spawn_owning(&fill_two, 8))", "CHECK-TYPE-MISMATCH", (10, 43), (10, 44)),
+    ("  Native.put_array_of_float32(Native.memory_pointer(8), 0, [1, 2])", "CHECK-TYPE-MISMATCH", (10, 61), (10, 62)),
+    ("  Native.put_int32(Native.memory_pointer(4), 0, 1.5)", "CHECK-TYPE-MISMATCH", (10, 49), (10, 52)),
+    ("  n: Int = Native.get_float64(Native.null(), 0)", "CHECK-TYPE-MISMATCH", (10, 12), (10, 48)),
 ])
 def test_owned_buffers_and_typed_memory_check_as_c_pointers(tmp_path, body, code, start, stop):
     result = check(source(tmp_path, MEMORY % body))

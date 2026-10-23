@@ -509,6 +509,7 @@ static agc_c_value c_argument(agc_vm *vm, agc_c_type type, agc_value v, uint8_t 
     case AGC_C_INT: out.i = (int32_t)agc_as_int(vm, v); break;
     case AGC_C_INT64: out.l = agc_as_int(vm, v); break;
     case AGC_C_DOUBLE: out.d = agc_as_float(vm, v); break;
+    /* An infinity when out of range: every target with native calls is IEEE 754 (C11 Annex F). */
     case AGC_C_FLOAT: out.f = (float)agc_as_float(vm, v); break;
     case AGC_C_BOOL: out.b = agc_as_bool(vm, v); break;
     case AGC_C_STRING: out.s = agc_cstr(agc_as_string(vm, v)); break;
@@ -826,11 +827,13 @@ static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   int64_t size = agc_as_int(vm, args[0]);
   if (size < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "size must be nonnegative", span + 1);
-  if ((uint64_t)size >= SIZE_MAX) agc_out_of_memory();
-  /* The GC struct first: a failed allocation then leaks no memory of calloc. */
+  /* The GC struct first: a failed allocation then leaks no memory of calloc. A size the system cannot give is the
+     program's error, not the VM's out of memory. */
   agc_c_resource *res = agc_alloc(sizeof *res);
-  void *memory = calloc(size ? (size_t)size : 1, 1);
-  if (!memory) agc_out_of_memory();
+  void *memory = (uint64_t)size < SIZE_MAX ? calloc(size ? (size_t)size : 1, 1) : NULL;
+  if (!memory) agc_fail(vm, "RUNTIME-INVALID-COUNT", "the system cannot give a buffer of this size", span + 1);
+  /* Zeroing the memory grows with the size, as the copy of a C.String argument does. */
+  agc_charge_bytes(vm, (size_t)size);
   res->pointer = memory;
   res->free = NULL;
   res->name = BUFFER_NAME;
@@ -858,11 +861,14 @@ static agc_value builtin_native_free(agc_vm *vm, agc_value *args, uint32_t span)
    ever read or written. A C.Pointer of C has no size: NULL fails unless nothing is asked for (a count of 0, the C way
    to say "empty": SQLite gives NULL for an empty blob), a negative offset fails, and any other address is used as it
    is. Native code is trusted: memory that C does not own is undefined behavior, like a wrong signature. Then a
-   negative count fails. Every memory builtin is shared, so it runs under rt->sync and no free comes between this
-   check and the copy. */
-static uint8_t *memory_at(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span) {
+   negative count fails. The memory rows are not shared: a read at a C pointer runs beside the other schedulers. For an
+   owned buffer this takes rt->sync (*LOCKED set), so no free comes between the check and the copy; the caller drops it
+   after the copy (memory_done), and a failure in between leaves it to agc_sync_reset. */
+static uint8_t *memory_at(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span, bool *locked) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   agc_c_resource *res = buffer_of(vm, p);
+  *locked = res != NULL;
+  if (res) agc_sync_take(vm);
   uint8_t *base = res ? res->pointer : agc_as_c_pointer(vm, p);
   if (res && res->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 1);
   if (!base && ask.count != 0) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a memory access at a NULL C.Pointer", span + 1);
@@ -872,34 +878,51 @@ static uint8_t *memory_at(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span
   bool over = __builtin_mul_overflow((uint64_t)ask.count, (uint64_t)ask.size, &bytes);
   if (res && (uint64_t)ask.offset > res->size)
     agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the offset is past the end of the owned buffer", ask.offset_span);
-  if (over || bytes > (res ? res->size - (uint64_t)ask.offset : (uint64_t)PTRDIFF_MAX))
+  if (res && (over || bytes > res->size - (uint64_t)ask.offset))
     agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the memory runs past the end of the owned buffer", ask.count_span);
+  /* A count this large at a C pointer cannot be memory C owns. A smaller wrong one is trusted; a read sizes its list
+     before it reads C memory, so a count too large for the VM's memory ends the run there (out of memory). */
+  if (!res && (over || bytes > (uint64_t)PTRDIFF_MAX))
+    agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the memory is larger than any C object", ask.count_span);
   /* Integer arithmetic: the address of a C pointer is C's to vouch for, and NULL (with nothing asked) stays NULL. */
   return base ? (uint8_t *)(uintptr_t)((uintptr_t)base + (uint64_t)ask.offset) : NULL;
+}
+
+/* Gives back rt->sync that memory_at took for an owned buffer, once the copy is made. */
+static void memory_done(agc_vm *vm, bool locked) {
+  if (locked) agc_sync_drop(vm);
 }
 
 /* Native.string_at(pointer) and string_at(pointer, length): a copy of the NUL-terminated text at the pointer, or of
    exactly LENGTH bytes (NUL bytes included). In an owned buffer the text must end before the buffer does. */
 static agc_value builtin_string_at(agc_vm *vm, agc_value *args, uint32_t span) {
   agc_c_resource *res = buffer_of(vm, args[0]);
-  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, res ? 0 : 1, 1, span + 1, span + 1}, span);
-  if (!res) return text_value(p, strlen((const char *)p));
-  const uint8_t *nul = memchr(p, 0, res->size);
+  bool locked;
+  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, res ? 0 : 1, 1, span + 1, span + 1}, span, &locked);
+  const uint8_t *nul = res ? memchr(p, 0, res->size) : p + strlen((const char *)p);
   if (!nul) agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the owned buffer holds no NUL byte to end the text", span + 1);
-  return text_value(p, (size_t)(nul - p));
+  agc_value text = text_value(p, (size_t)(nul - p));
+  memory_done(vm, locked);
+  return text;
 }
 
 static agc_value builtin_string_at_length(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t n = agc_as_int(vm, args[1]);
-  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span);
-  return text_value(p, (size_t)n);
+  bool locked;
+  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span, &locked);
+  agc_value text = text_value(p, (size_t)n);
+  memory_done(vm, locked);
+  return text;
 }
 
 /* Native.bytes_at(pointer, length): a List of the LENGTH bytes at the pointer. */
 static agc_value builtin_bytes_at(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t n = agc_as_int(vm, args[1]);
-  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span);
-  return agc_list_value(agc_list_of_bytes(p, (size_t)n));
+  bool locked;
+  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span, &locked);
+  agc_list *bytes = agc_list_of_bytes(p, (size_t)n);
+  memory_done(vm, locked);
+  return agc_list_value(bytes);
 }
 
 /* The item of KIND at AT, which may be unaligned (memcpy). */
@@ -948,6 +971,7 @@ static void store_item(agc_vm *vm, item_kind kind, uint8_t *at, agc_value v) {
     case ITEM_INT32:
     case ITEM_UINT32: { uint32_t x = (uint32_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
     case ITEM_INT64: { int64_t x = agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
+    /* Out of range, the conversion gives an infinity: every target with native calls is IEEE 754 (C11 Annex F). */
     case ITEM_FLOAT32: { float x = (float)agc_as_float(vm, v); memcpy(at, &x, sizeof x); break; }
     case ITEM_FLOAT64: { double x = agc_as_float(vm, v); memcpy(at, &x, sizeof x); break; }
     case ITEM_POINTER: { void *x = pointer_of(vm, v); memcpy(at, &x, sizeof x); break; }
@@ -957,27 +981,40 @@ static void store_item(agc_vm *vm, item_kind kind, uint8_t *at, agc_value v) {
 /* Native.get_KIND(pointer, offset): the item at OFFSET bytes past the pointer. */
 static agc_value get_one(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
   memory_ask ask = {agc_as_int(vm, args[1]), 1, ITEM_WIDTHS[kind], span + 2, span + 2};
-  return load_item(kind, memory_at(vm, args[0], ask, span));
+  bool locked;
+  agc_value v = load_item(kind, memory_at(vm, args[0], ask, span, &locked));
+  memory_done(vm, locked);
+  return v;
 }
 
 /* Native.put_KIND(pointer, offset, value): writes VALUE at OFFSET bytes past the pointer. */
 static agc_value put_one(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
   memory_ask ask = {agc_as_int(vm, args[1]), 1, ITEM_WIDTHS[kind], span + 2, span + 2};
-  uint8_t *at = memory_at(vm, args[0], ask, span);
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  /* A buffer stored as a pointer is checked open under rt->sync too. */
+  if (!locked && kind == ITEM_POINTER && buffer_of(vm, args[2])) {
+    agc_sync_take(vm);
+    locked = true;
+  }
   check_item(vm, kind, args[2], span + 3);
   store_item(vm, kind, at, args[2]);
+  memory_done(vm, locked);
   return agc_void();
 }
 
 /* Native.get_array_of_KIND(pointer, offset, count): a List of COUNT items from OFFSET bytes past the pointer. */
 static agc_value get_array(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
   memory_ask ask = {agc_as_int(vm, args[1]), agc_as_int(vm, args[2]), ITEM_WIDTHS[kind], span + 2, span + 3};
-  const uint8_t *at = memory_at(vm, args[0], ask, span);
+  bool locked;
+  const uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
   size_t n = (size_t)ask.count;
   agc_list_builder b;
   agc_list_builder_sized(&b, n);
   for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, load_item(kind, at + k * ask.size));
-  return agc_list_value(agc_list_builder_finish(&b));
+  agc_list *items = agc_list_builder_finish(&b);
+  memory_done(vm, locked);
+  return agc_list_value(items);
 }
 
 /* Native.put_array_of_KIND(pointer, offset, list): writes the items of LIST from OFFSET bytes past the pointer. Every
@@ -986,13 +1023,15 @@ static agc_value put_array(agc_vm *vm, agc_value *args, uint32_t span, item_kind
   const agc_list *items = agc_as_list(vm, args[2]);
   size_t n = agc_list_len(items);
   memory_ask ask = {agc_as_int(vm, args[1]), (int64_t)n, ITEM_WIDTHS[kind], span + 2, span + 3};
-  uint8_t *at = memory_at(vm, args[0], ask, span);
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
   agc_list_cursor c;
   agc_value v;
   agc_list_cursor_begin(&c, items, 0);
   while (agc_list_cursor_next(&c, &v)) check_item(vm, kind, v, span + 3);
   agc_list_cursor_begin(&c, items, 0);
   for (size_t k = 0; agc_list_cursor_next(&c, &v); k++) store_item(vm, kind, at + k * ask.size, v);
+  memory_done(vm, locked);
   return agc_void();
 }
 
@@ -1001,11 +1040,13 @@ static agc_value put_array(agc_vm *vm, agc_value *args, uint32_t span, item_kind
 static agc_value builtin_put_string(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *text = agc_as_string(vm, args[2]);
   memory_ask ask = {agc_as_int(vm, args[1]), (int64_t)text->bytes + 1, 1, span + 2, span + 3};
-  uint8_t *at = memory_at(vm, args[0], ask, span);
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
   if (text->bytes && memchr(text->data, 0, text->bytes))
     agc_fail(vm, "RUNTIME-INVALID-CHARACTER", "the text holds a NUL character", span + 3);
   if (text->bytes) memcpy(at, text->data, text->bytes);
   at[text->bytes] = 0;
+  memory_done(vm, locked);
   return agc_void();
 }
 
@@ -1200,37 +1241,37 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.memory_pointer", 1, builtin_memory_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Native.free", 1, builtin_native_free, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_int8", 2, builtin_get_int8, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_int16", 2, builtin_get_int16, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_int32", 2, builtin_get_int32, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_int64", 2, builtin_get_int64, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_uint8", 2, builtin_get_uint8, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_uint16", 2, builtin_get_uint16, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_uint32", 2, builtin_get_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_float32", 2, builtin_get_float32, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_float64", 2, builtin_get_float64, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.get_pointer", 2, builtin_get_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_int8", 3, builtin_put_int8, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_int16", 3, builtin_put_int16, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_int32", 3, builtin_put_int32, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_int64", 3, builtin_put_int64, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_float32", 3, builtin_put_float32, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_float64", 3, builtin_put_float64, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_pointer", 3, builtin_put_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Native.put_string", 3, builtin_put_string, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.get_array_of_int32", 3, builtin_get_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.get_array_of_int64", 3, builtin_get_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.get_array_of_float32", 3, builtin_get_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.get_array_of_float64", 3, builtin_get_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.put_array_of_int32", 3, builtin_put_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.put_array_of_int64", 3, builtin_put_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
-  {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"Native.get_int8", 2, builtin_get_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_int16", 2, builtin_get_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_int32", 2, builtin_get_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_int64", 2, builtin_get_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_uint8", 2, builtin_get_uint8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_uint16", 2, builtin_get_uint16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_uint32", 2, builtin_get_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_float32", 2, builtin_get_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_float64", 2, builtin_get_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_pointer", 2, builtin_get_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int8", 3, builtin_put_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int16", 3, builtin_put_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int32", 3, builtin_put_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int64", 3, builtin_put_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_float32", 3, builtin_put_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_float64", 3, builtin_put_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_pointer", 3, builtin_put_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_string", 3, builtin_put_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_int32", 3, builtin_get_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_int64", 3, builtin_get_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_float32", 3, builtin_get_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_float64", 3, builtin_get_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_int32", 3, builtin_put_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_int64", 3, builtin_put_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };

@@ -412,11 +412,15 @@ end
   parameter is (a negative size is `RUNTIME-INVALID-COUNT`). The calling task
   owns it like a resource: `Native.free(p)` frees it once (again does nothing),
   the owner's end frees it, and when `main` returns the program ends without
-  freeing it. A `compute def` call holds its buffer arguments as it holds
-  resources: a free meanwhile runs when the call returns. A freed buffer is
-  `RUNTIME-NATIVE-CLOSED` in every later read, write or call; `Native.free` of a
-  pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `IO.inspect` prints
-  `<C.Pointer>`, and `Native.null?` is false.
+  freeing it. `Task.spawn_owning` hands it over (section 6c); a channel send or
+  a task's result does not move it. A size the system cannot give is
+  `RUNTIME-INVALID-COUNT`. A `compute def` call holds its buffer arguments as
+  it holds resources: a free meanwhile runs when the call returns, and a read
+  or write of the buffer meanwhile races with C. A freed buffer is
+  `RUNTIME-NATIVE-CLOSED` in every later read, write or call; `Native.free` of
+  a pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
+  address that nothing tracks, so the buffer it names must outlive C's use.
+  `IO.inspect` prints `<C.Pointer>`, and `Native.null?` is false.
 - Typed memory, at a byte offset past any `C.Pointer` (alignment is not needed):
   `Native.get_int8`, `get_int16`, `get_int32`, `get_int64`, `get_uint8`,
   `get_uint16`, `get_uint32` (an `Int`), `get_float32`, `get_float64` (a

@@ -688,6 +688,7 @@ end
     ("Native.put_string(buf, 0, \"a\" + String.from_code(0))", "RUNTIME-INVALID-CHARACTER", "\"a"),
     ("Native.free(peer_static_floats())", "RUNTIME-NATIVE-NOT-OWNED", "peer_static_floats()"),
     ("Native.memory_pointer(-1)", "RUNTIME-INVALID-COUNT", "-1"),
+    ("Native.memory_pointer(4_611_686_018_427_387_904)", "RUNTIME-INVALID-COUNT", "4_6"),
     ("Native.get_int8(gone, 0)", "RUNTIME-NATIVE-CLOSED", "gone"),
     ("Native.put_pointer(buf, 0, gone)", "RUNTIME-NATIVE-CLOSED", "gone"),
     ("peer_sum_floats(gone, 1)", "RUNTIME-NATIVE-CLOSED", None),
@@ -702,6 +703,32 @@ def test_bounds_null_and_freed_buffers_stop_the_run(tmp_path, peer, line, code, 
     # An extern call fails at its extern function, as for a closed resource.
     where = (BUFFER_EXTERN.count("\n") + 8, text.index(argument) + 1) if argument else (3, 3)
     assert diagnostic(result, 1) == (code, where)
+
+
+# Task.spawn_owning hands an owned buffer to the new task, which uses it and whose end frees it; a pointer that C gave
+# is not the caller's to hand over.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("handed, out, code", [
+    ("buf", "3.5\n", "RUNTIME-NATIVE-CLOSED"),
+    ("peer_static_floats()", "", "RUNTIME-HANDLE-NOT-OWNED"),
+])
+def test_task_spawn_owning_hands_an_owned_buffer_over(tmp_path, peer, schedulers, handed, out, code):
+    main = """def sum(buf: C.Pointer) -> Float
+  return peer_sum_floats(buf, 2)
+end
+
+def main() -> Void
+  buf = Native.memory_pointer(8)
+  Native.put_array_of_float32(buf, 0, [1.5, 2.0])
+  puts(Task.await(Task.spawn_owning(&sum, %s)))
+  puts(Native.get_int8(buf, 0))
+end
+""" % handed
+    text = BUFFER_EXTERN.format(library=literal(peer)) + main
+    result = agentica("--json", "--schedulers", schedulers, program(tmp_path, text))
+    assert result.stdout == out
+    assert diagnostic(result, 1)[0] == code
 
 
 # A compute call holds its buffer arguments: a free while C still reads the memory only marks the buffer freed, and

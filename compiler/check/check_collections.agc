@@ -32,7 +32,8 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
 end
 
 # Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets. The owning form also hands
-# over a handle or channel.
+# over a handle, a channel or an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is
+# RUNTIME-HANDLE-NOT-OWNED).
 def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> Result[State.Out]
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   if !T.is?(callback.type, "Fn") or T.params(callback.type).size != 1
@@ -47,7 +48,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
     )
   end
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
-  if owning and !handle?(cx, handed.type) and !T.is?(handed.type, "Channel")
+  if owning and !handle?(cx, handed.type) and !T.is?(handed.type, "Channel") and !c_pointer?(handed.type)
     return error(
       State.fail_help(
         cx,
@@ -55,12 +56,16 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
         "CHECK-NOT-A-HANDLE",
         "Task.spawn_owning gives a handle to the new task, but the argument is #{T.to_text(handed.type)}",
         Ast.expr_span(site.args[1]),
-        "pass a FileHandle, Socket, Listener, Process, HttpServer, Channel or resource; Task.spawn passes any other " +
-        "value",
+        "pass a FileHandle, Socket, Listener, Process, HttpServer, Channel, resource or owned buffer; Task.spawn " +
+        "passes any other value",
       ),
     )
   end
   return ok(State.Out(st: handed.st, type: T.Type.Task(T.result(callback.type))))
+end
+
+def c_pointer?(type: T.Type) -> Bool
+  return T.is?(type, "Opaque") and T.name(type) == "C.Pointer"
 end
 
 def handle?(cx: State.Cx, type: T.Type) -> Bool

@@ -96,9 +96,12 @@ def main() -> Void
 end
 ```
 
-- The calling task owns the buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. When `main` returns, the program ends without freeing it. A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call.
+- The calling task owns the buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. `free` ends a buffer as `Native.close` ends a resource. When `main` returns, the program ends without freeing it.
+- A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
+- `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A size the system cannot give fails with `RUNTIME-INVALID-COUNT`.
+- A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call. Reading or writing the buffer while such a call runs races with C: wait for the call first.
 - A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`. `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
-- The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)`, `get_int32(offset)`, `put_array_of_float(offset, values)`), as `Native.*` functions that take the pointer first.
+- The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)`, `get_int32(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
 
 Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one that C returned; the offset need not be aligned:
 
@@ -112,7 +115,7 @@ Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one 
 | `Native.string_at(p)` (above) | `Native.put_string(p, offset, text)` | text and a NUL, a C string |
 
 - A `put_int` form takes a value that fits in its bits, read as signed or unsigned: `put_int8` takes -128 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` checks every item before it writes the first.
-- `put_string` writes the bytes of the text and a NUL after them; a NUL in the text fails with `RUNTIME-INVALID-CHARACTER`. Owned C strings and an array of pointers to them (`const char *const *`) are buffers too:
+- `put_string` writes the bytes of the text and a NUL after them; a NUL in the text fails with `RUNTIME-INVALID-CHARACTER`. Owned C strings and an array of pointers to them (`const char *const *`) are buffers too. `put_pointer` stores an address that nothing tracks: keep the buffer it points to unfreed while C uses it.
 
 ```agentica {mode="check"}
 extern "/opt/model/libmodel.so"

@@ -64,7 +64,7 @@ static void test_bad_signatures(void) {
                        "rd cos free " LIBM, "rd cos  Mem " LIBM, "rd cos free M\xc3\xa9m " LIBM,
                        "rd cos free 1Mem " LIBM, "rd cos free M.em " LIBM, ". cos " LIBM, "d.d cos " LIBM,
                        "dd..d cos " LIBM, "dd.d.d cos " LIBM, "dd.b cos " LIBM, "dd.D cos " LIBM, "dd.R cos " LIBM,
-                       "dd.f cos " LIBM, "fF cos " LIBM};
+                       "dd.f cos " LIBM, "Fd cos " LIBM};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);
@@ -369,6 +369,9 @@ static void test_buffers(void) {
   read_fails("Native.get_int32", 2, raw, "RUNTIME-NATIVE-NULL");
   raw[2] = agc_int(0);
   assert(agc_list_len(agc_as_list(&vm, call_row("Native.get_array_of_float32", 3, raw))) == 0);
+  /* A size the system cannot give is the program's error, not the VM's out of memory. */
+  agc_value huge = agc_int(INT64_MAX);
+  read_fails("Native.memory_pointer", 1, &huge, "RUNTIME-INVALID-COUNT");
   vm.rt->no_files = true;
   read_fails("Native.memory_pointer", 1, &size, "RUNTIME-NATIVE-DENIED");
   read_fails("Native.get_int32", 2, raw, "RUNTIME-NATIVE-DENIED");

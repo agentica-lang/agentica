@@ -51,10 +51,14 @@ end
   (`SQLITE_TRANSIENT` is `Native.pointer(-1)`). A `char **` out parameter
   read with `string_at` is then freed by its C function (`sqlite3_free`).
 - Owned buffers: `Native.memory_pointer(size) -> C.Pointer` is `size` zeroed
-  bytes that the task owns (pass it to any `C.Pointer` parameter);
-  `Native.free(p)` frees it once, the owner's end frees the rest; a `compute
-  def` call holds it. A freed one is `RUNTIME-NATIVE-CLOSED`; `Native.free` of
-  C's pointer `RUNTIME-NATIVE-NOT-OWNED`.
+  bytes that the task owns (pass it to any `C.Pointer` parameter; a size the
+  system cannot give is `RUNTIME-INVALID-COUNT`). `Native.free(p)` ends a buffer
+  as `Native.close` ends a resource; the owner's end frees the rest, so a loop
+  that never frees grows. `Task.spawn_owning(&f, buf)` hands it over; a channel
+  send or a task's result does not. A `compute def` call holds it (reading or
+  writing it meanwhile races with C). A freed one is `RUNTIME-NATIVE-CLOSED`;
+  `Native.free` of C's pointer `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores
+  an untracked address: keep the target alive while C uses it.
 - Typed memory at a byte offset of any `C.Pointer` (Ruby `ffi` names):
   `Native.get_int8/16/32/64(p, off)`, `get_uint8/16/32`, `get_float32/64`,
   `get_pointer`; `Native.put_int8/16/32/64(p, off, v)` (signed or unsigned

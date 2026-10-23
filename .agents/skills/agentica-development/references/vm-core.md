@@ -95,8 +95,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`get_*`, `put_*`, `get_array_of_*`, `put_array_of_*`, `put_string`) and
   `string_at`/`bytes_at` go through `memory_at`, which checks a buffer's
   bounds and freed state (`RUNTIME-NATIVE-BOUNDS`, `-CLOSED`) and only NULL and
-  a negative offset of a raw pointer; they are shared rows, so no free comes
-  between the check and the copy. `C.Float` is code `f` (`F` out), refused
+  a negative offset of a raw pointer. Their rows are not shared: `memory_at`
+  takes rt->sync only for a buffer, and the caller drops it after the copy
+  (`memory_done`), so no free comes between the check and the copy while a read
+  of a raw pointer runs beside the other schedulers. `Native.memory_pointer`
+  and `Native.free` are shared rows. `C.Float` is code `f` (`F` out), refused
   after `.`. Every `Native.*` import counts as native code for the refusal at
   load. The adapter `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and
   macOS) opens libraries with `dlopen` or `LoadLibraryExW` and calls with
