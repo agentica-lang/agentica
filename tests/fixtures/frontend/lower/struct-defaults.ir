@@ -1,0 +1,49 @@
+program 0:1:1-19:1 entry=0 globals=0
+source 0 "struct-defaults.agc" chars=308
+struct s0 "Options" ["name","retries","ratio","tags","meta","mode"]
+enum "Mode" v0="Fast"/0 v1="Safe"/0
+fn0 "main" params=0 captures=0 slots=9 entry @ 0:15:1-19:1
+    step @ 0:16:3-17:1
+    step @ 0:16:3-16:35
+    step @ 0:16:8-16:34
+    step @ 0:16:8-16:26
+    step @ 0:16:22-16:25
+    const r2 "a" @ 0:16:22-16:25
+    step @ 0:8:18-8:19
+    const r3 int:3 @ 0:8:18-8:19
+    step @ 0:9:18-9:22
+    step @ 0:9:19-9:22
+    const r8 float:bits:4602678819172646912 @ 0:9:19-9:22
+    neg-f r4 r8 @ 0:9:18-9:19
+    step @ 0:10:24-10:26
+    list r5 r5 0 @ 0:10:24-10:26
+    step @ 0:11:28-11:30
+    map r6 r6 0 @ 0:11:28-11:30
+    step @ 0:12:16-12:25
+    enum r7 r7 v1 @ 0:12:16-12:25
+    struct r1 r2 s0 @ 0:16:8-16:26
+    inspect r0 r1 @ 0:16:8-16:34
+    call-builtin r0 "puts" 1 @ 0:16:3-16:35 0:16:8-16:34
+    step @ 0:17:3-18:1
+    step @ 0:17:3-17:64
+    step @ 0:17:8-17:63
+    step @ 0:17:8-17:55
+    step @ 0:17:22-17:25
+    const r2 "b" @ 0:17:22-17:25
+    step @ 0:17:36-17:37
+    const r3 int:1 @ 0:17:36-17:37
+    step @ 0:17:45-17:54
+    enum r7 r7 v0 @ 0:17:45-17:54
+    step @ 0:9:18-9:22
+    step @ 0:9:19-9:22
+    const r8 float:bits:4602678819172646912 @ 0:9:19-9:22
+    neg-f r4 r8 @ 0:9:18-9:19
+    step @ 0:10:24-10:26
+    list r5 r5 0 @ 0:10:24-10:26
+    step @ 0:11:28-11:30
+    map r6 r6 0 @ 0:11:28-11:30
+    struct r1 r2 s0 @ 0:17:8-17:55
+    inspect r0 r1 @ 0:17:8-17:63
+    call-builtin r0 "puts" 1 @ 0:17:3-17:64 0:17:8-17:63
+    const r0 void @ 0:15:1-19:1
+    return r0 @ 0:15:1-19:1

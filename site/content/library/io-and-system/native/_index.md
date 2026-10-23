@@ -32,6 +32,7 @@ The rest of the section has its own pages:
 - Use [SQLite](/library/io-and-system/native/sqlite/) for a full example: a library behind safe functions that return `Result`.
 - Use [Compute calls](/library/io-and-system/native/compute/) for a call that may take long: the other tasks keep running.
 - Use [Waiting on a descriptor](/library/io-and-system/native/waiting/) to wait for a socket or descriptor without stopping the other tasks.
+- Use [Wrapping a C library](/library/io-and-system/native/wrapping/) to hide the C habits of a library behind a normal API and ship it in a package.
 
 ## The block
 

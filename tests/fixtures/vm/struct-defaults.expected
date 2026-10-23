@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 150,
+  "stdout": [
+    "plain 3 -0.5 none false 0 0 Level.Quiet Tone.Bold",
+    "given 9 -0.5 none false 1 0 Level.Loud Tone.Bold",
+    "Point(x: 0, y: 5)",
+    "Point(x: 4, y: 5)",
+    "Box(width: 1, height: 2, depth: 3)",
+    "Box(width: 1, height: 2, depth: 7)",
+    "Box(width: 0, height: 0, depth: 3)",
+    "Box(width: 8, height: 2, depth: 7)",
+    "0",
+    "1",
+    ""
+  ],
+  "stderr": []
+}

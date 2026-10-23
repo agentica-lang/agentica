@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Default values for struct fields: `retries: Int = 3` in a `struct`. A
+  constructor may leave out a field that has a default. The default follows
+  the rules of a parameter default.
 - A package can ship or name native libraries for its `extern` blocks:
   `[native.NAME]` in its `agentica.toml` picks a file of its `native/` folder
   or a system library name for `linux`, `macos` and `windows`. The files of

@@ -38,11 +38,20 @@ end
 def part_lines(detail: Model.Detail) -> List[String]
   case detail
     Model.Detail.Struct(fields) ->
-      return fields.map do |field: Model.Field| part_line("#{field.name}: #{field.type}", field.doc) end
+      return fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
     Model.Detail.Enum(variants) ->
       return variants.map do |variant: Model.Variant| variant_line(variant) end
     Model.Detail.Function(_, _) -> return []
     Model.Detail.Plain -> return []
+  end
+end
+
+# `name: Type`, with ` = default` as written when the field has one.
+def field_signature(field: Model.Field) -> String
+  typed = "#{field.name}: #{field.type}"
+  case field.default
+    Ast.Optional.Present(written) -> return "#{typed} = #{written}"
+    Ast.Optional.Absent -> return typed
   end
 end
 

@@ -102,7 +102,8 @@ end
   - a function item also has `parameters`, a list of `{name, type, default}`
     (`default` is the source text of the default value, or `null`), and
     `result`, its result type;
-  - a struct item also has `fields`: `[{name, type, doc}]`;
+  - a struct item also has `fields`: `[{name, type, default, doc}]`, with
+    `default` as for a parameter;
   - an enum item also has `variants`: `[{name, payload: [type], doc}]`, with
     `payload` empty for a variant without one;
   - every type is a string, printed as written.

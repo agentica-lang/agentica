@@ -66,6 +66,14 @@ export def argument_for(shape: Shape, count: Int, param: Int) -> Int
   return -1
 end
 
+## True when a struct field has a default value.
+export def field_default?(field: Ast.FieldDecl) -> Bool
+  case field.default
+    Ast.Optional.Present(value) -> return true
+    Ast.Optional.Absent -> return false
+  end
+end
+
 def default?(param: Ast.Param) -> Bool
   case param.default
     Ast.Optional.Present(value) -> return true

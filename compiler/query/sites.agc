@@ -231,11 +231,16 @@ def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
   if node.record_of == ""
     out = defined(scan, named(node.name), node.name_span)
   end
+  roots: List[Walk.Node] = []
   for field in node.fields
     out = out.concat(defined(scan, member("field", node.name, field.name), field.name_span))
     out = out.concat(type_sites(scan, field.type, []))
+    case field.default
+      Ast.Optional.Present(value) -> roots = roots.push(Walk.Node.Expr(value))
+      Ast.Optional.Absent -> roots = roots
+    end
   end
-  return out
+  return out.concat(walk(scan, roots))
 end
 
 # Whether the function is an extern function with out parameters, whose result is its record: one of its codes is a

@@ -61,16 +61,17 @@ export struct Signature
 end
 
 ## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's;
-## functions the program's; constants the type of each module constant by linked name, which grows as the initializers
-## are checked in order. type_params are the type parameters in scope (only while the variants of a generic enum are
-## registered). file is the file of the declaration being checked, texts the source of every file by name. expression
-## checks an expression: the cycle between expressions and statements goes through this field (check_expr.agc puts its
-## own function here), because a module cannot import one that imports it. prelude is true while the files of the
-## compiler prelude are checked (check_prelude.agc): their type variables are opaque types, and a Map key or Set
-## element may be one.
+## field_defaults the names of the fields that have a default value, by struct; functions the program's; constants the
+## type of each module constant by linked name, which grows as the initializers are checked in order. type_params are
+## the type parameters in scope (only while the variants of a generic enum are registered). file is the file of the
+## declaration being checked, texts the source of every file by name. expression checks an expression: the cycle
+## between expressions and statements goes through this field (check_expr.agc puts its own function here), because a
+## module cannot import one that imports it. prelude is true while the files of the compiler prelude are checked
+## (check_prelude.agc): their type variables are opaque types, and a Map key or Set element may be one.
 export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
+  field_defaults: Map[String, Set[String]]
   enums: Map[String, Model.EnumDef]
   aliases: Map[String, Ast.TypeAliasDecl]
   resources: Set[String]

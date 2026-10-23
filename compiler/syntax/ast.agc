@@ -168,12 +168,15 @@ export struct StructDecl
   span: Source.Span
 end
 
-## One field of a struct.
+## One field of a struct, with its default value when `name: Type = expression` gave one. Like a parameter default, it
+## is an ordinary expression of the file; the checker accepts only a constant (CHECK-DEFAULT-VALUE), the linker
+## resolves its names in the file that declares the struct, and a constructor that leaves the field out gets the value.
 export struct FieldDecl
   id: Int
   name: String
   name_span: Source.Span
   type: TypeRef
+  default: Optional[Expr]
   doc: Optional[String]
   span: Source.Span
 end

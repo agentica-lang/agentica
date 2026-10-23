@@ -34,7 +34,7 @@ c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" | 
 
 struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
-field_decl       = [ DOC, NL ], NAME, ":", type, NL ;
+field_decl       = [ DOC, NL ], NAME, ":", type, [ "=", expression ], NL ;
 
 enum_decl        = "enum", TYPE_NAME, [ type_parameters ], NL,
                    variant_decl, { variant_decl }, "end", NL ;
@@ -49,7 +49,9 @@ type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 A parameter may end with a default value, `NAME: type = expression`. The parser
 takes any expression after `=`, so that the checker can say why a default is not
 allowed; the rules are in section 6, "Default parameter values". A block
-parameter (`do |x|`) takes no default.
+parameter (`do |x|`) takes no default. A field of a struct may end with a
+default the same way (`retries: Int = 3`), with the same rules; section 6,
+"Structs and lists", says what a constructor does with it.
 
 An `extern` block declares functions of a native library (section 6d, "Native
 code"). The library is a plain string: a name without `/` or an absolute path
