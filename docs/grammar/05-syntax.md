@@ -63,21 +63,25 @@ with a C name (`PARSE-EXTERN-NAME` at the name). Anything else in the block, a
 body or a library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc
 goes on a `def` inside the block. Each function is a `def` for the rest of the
 language: `export` makes it importable, it takes the place of a `def` in the
-declaration order, the whole block needs the blank line of a declaration, and
-the checker sees `C.Int32` and `C.Int64` as `Int`, `C.Double` and `C.Float` (a
-32-bit `float`) as `Float`, `C.Bool` as `Bool` and `C.String` as `String`.
-`compute def` declares a function that runs off the scheduler while the task
-waits (section 6d); `export` comes first. `extern` is contextual: it is a
-keyword only at the start of a top-level declaration, and `compute` only before
-`def` in an extern block.
+declaration order (except in a block that declares a resource, below), the
+whole block needs the blank line of a declaration, and the checker sees
+`C.Int32` and `C.Int64` as `Int`, `C.Double` and `C.Float` (a 32-bit `float`)
+as `Float`, `C.Bool` as `Bool` and `C.String` as `String`. `compute def`
+declares a function that runs off the scheduler while the task waits (section
+6d); `export` comes first. `extern` is contextual: it is a keyword only at the
+start of a top-level declaration, and `compute` only before `def` in an extern
+block.
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function
 `c_name` of the same library (section 6d). It is a type for the rest of the
 language: `export` makes it importable, and it takes the place of a type in the
-declaration order. A `def` of the block may use it in its signature after the
-line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes the
-resource, and a result of the resource is `Result[Name]` for the checker. A
+declaration order. So does every `def` of a block that declares a resource,
+exported or not: such a block is one declaration among the types, and its
+functions do not count as functions for the order (a block with no resource
+keeps the rule of the `def`). A `def` of the block may use it in its signature
+after the line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes
+the resource, and a result of the resource is `Result[Name]` for the checker. A
 `def` of the block whose C name is the free function is `PARSE-EXTERN-FREE` at
 that name; the check is per block, so another block of the same library may
 still declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
@@ -141,15 +145,15 @@ Declarations follow a fixed order in every file, the root program, imported
 files and embedded `std/` modules alike: the module doc and the imports first,
 then the constants, then `struct`, `enum` and type alias declarations (exported
 or not, in any order among themselves), then `export def` functions, then
-private `def` functions. `type` is contextual in an alias declaration and
-remains an ordinary name elsewhere. The order is a style
-rule only: a function may still call a function, use a struct declared later or
-read a constant in the same group. The first declaration that comes after a
-declaration of a later group is `CHECK-DECL-ORDER`, reported at the start of
-that declaration (at `export` or `import` when it has one), with help that says
-where it goes. The module linker checks it for each file before linking, so a
-file with a parse error reports `PARSE-` first and a file that imports another
-reports its own order first.
+private `def` functions (an extern block that declares a resource goes with the
+types, as a whole). `type` is contextual in an alias declaration and remains an
+ordinary name elsewhere. The order is a style rule only: a function may still
+call a function, use a struct declared later or read a constant in the same
+group. The first declaration that comes after a declaration of a later group is
+`CHECK-DECL-ORDER`, reported at the start of that declaration (at `export` or
+`import` when it has one), with help that says where it goes. The module linker
+checks it for each file before linking, so a file with a parse error reports
+`PARSE-` first and a file that imports another reports its own order first.
 
 A constant is `NAME = expression` or `NAME: Type = expression` at the top level,
 with `export` in front to make it visible to importers. `NAME` is a `TYPE_NAME`

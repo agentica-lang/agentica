@@ -19,26 +19,20 @@ The raw layer is one `extern` block per library. Copy each signature from the C 
 | A call that may take long | a [`compute def`](/library/io-and-system/native/compute/) in the raw layer, so the other tasks keep running; the wrapper calls it like any function |
 | A variadic function | functions of a normal shape (see Variadic functions below) |
 
-A block with a resource must come before every function of the file. Exported functions must come before private ones (`CHECK-DECL-ORDER`). So the wrapper cannot sit in the same file as such a block. Put the block in its own file, `raw.agc`, and export its names. The public file imports it. The public file does not re-export the raw layer: it exports only the wrapper. One file would work if the block's functions were `export def`, but then they would be part of its API. A block without resources can stay private at the end of the public file, as in the examples after this one.
-
-```agentica {file="raw.agc"}
-extern "libc.so.6"
-  export resource Stream, free: fclose
-  export def fopen(path: C.String, mode: C.String) -> Stream
-  export def fputs(text: C.String, stream: Stream) -> C.Int32
-  export compute def fflush(stream: Stream) -> C.Int32
-  export def isatty(fd: C.Int32) -> C.Int32
-end
-```
+A block with a resource sits with the types of the file, at the top and before every function, and its `def`s do not count as functions in the declaration order (`CHECK-DECL-ORDER`). So the wrapper can sit in the same file as the block. Export the resource, so that callers can name the type, and keep the `def`s private: the file exports only the wrapper. A block without a resource has no such rule. Its `def`s count as functions, so it stays at the end of the file, as in the examples after this one.
 
 ```agentica {mode="check"}
-import Raw from "raw"
-
-export type Stream = Raw.Stream
+extern "libc.so.6"
+  export resource Stream, free: fclose
+  def fopen(path: C.String, mode: C.String) -> Stream
+  def fputs(text: C.String, stream: Stream) -> C.Int32
+  compute def fflush(stream: Stream) -> C.Int32
+  def isatty(fd: C.Int32) -> C.Int32
+end
 
 ## Opens a file for appending, or says which path failed.
 export def open_append(path: String) -> Result[Stream]
-  case Raw.fopen(path, "a")
+  case fopen(path, "a")
     Result.Ok(stream) -> return ok(stream)
     Result.Err(_) -> return error("cannot open #{path}")
   end
@@ -46,7 +40,7 @@ end
 
 ## Writes one line.
 export def write_line(stream: Stream, text: String) -> Result[Void]
-  if Raw.fputs("#{text}\n", stream) < 0
+  if fputs("#{text}\n", stream) < 0
     return error("cannot write to the stream")
   end
   return ok()
@@ -54,7 +48,7 @@ end
 
 ## Pushes the buffered text to the file.
 export def flush(stream: Stream) -> Result[Void]
-  if Raw.fflush(stream) != 0
+  if fflush(stream) != 0
     return error("cannot flush the stream")
   end
   return ok()
@@ -62,11 +56,11 @@ end
 
 ## True when the descriptor is a terminal.
 export def tty?(fd: Int) -> Bool
-  return Raw.isatty(fd) == 1
+  return isatty(fd) == 1
 end
 ```
 
-`fopen` is declared `-> Stream`, so the raw call already gives a `Result[Stream]`. The wrapper only replaces its message with one that names the path. The alias `Stream` lets callers name the type without importing `raw.agc`. Callers close the stream with `Native.close`, or the task that owns it frees it when it ends. `fflush` is a `compute def` in the raw layer, and `flush` calls it like any function.
+`fopen` is declared `-> Stream`, so the raw call already gives a `Result[Stream]`. The wrapper only replaces its message with one that names the path. `Stream` is exported, so callers can name the type. Callers close the stream with `Native.close`, or the task that owns it frees it when it ends. `fflush` is a `compute def` in the raw layer, and `flush` calls it like any function.
 
 ## Out parameters
 
@@ -164,4 +158,4 @@ end
 
 ## Shipping it in a package
 
-A package names the library for each system in `[native.NAME]` of its `agentica.toml`. Its `raw.agc` then opens it with `extern "NAME"`. See [Packages](/tour/modules/#packages) for the form, the lock and the error codes. Document the wrapper file as the API of the package.
+A package names the library for each system in `[native.NAME]` of its `agentica.toml`. Its `extern` block then opens it with `extern "NAME"`. See [Packages](/tour/modules/#packages) for the form, the lock and the error codes. Document the wrapper file as the API of the package.

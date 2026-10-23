@@ -53,8 +53,9 @@ Change style only in code you touch. Restyle untouched code separately.
 ## Modules and docs
 
 - Declaration order is fixed (`CHECK-DECL-ORDER`): module doc/imports,
-  constants, structs/enums, `export def`, private `def`. Sort imports by path;
-  put callers before helpers within a group.
+  constants, structs/enums (an `extern` block with a resource goes here, whole),
+  `export def`, private `def`. Sort imports by path; put callers before helpers
+  within a group.
 - Export only names used by other files. Keep one topic per file; split files
   that grow into several topics.
 - Use `import Alias from "path"` for many names or possible collisions;
