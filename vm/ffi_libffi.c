@@ -39,6 +39,7 @@ static ffi_type *ffi_type_of(agc_c_type type) {
     case AGC_C_INT: return &ffi_type_sint32;
     case AGC_C_INT64: return &ffi_type_sint64;
     case AGC_C_DOUBLE: return &ffi_type_double;
+    case AGC_C_FLOAT: return &ffi_type_float;
     case AGC_C_BOOL: return &ffi_type_uint8;
     case AGC_C_STRING:
     case AGC_C_POINTER:
@@ -243,16 +244,19 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
   for (uint32_t k = 0; k < call->count; k++) slots[k] = &args[k];
   ffi_arg word = 0;
   double real = 0;
+  float single = 0;
   void *pointer = NULL;
   void *out = &word;
   bool pointed = call->result == AGC_C_STRING || call->result == AGC_C_POINTER || call->result == AGC_C_RESOURCE;
   if (call->result == AGC_C_DOUBLE) out = &real;
+  if (call->result == AGC_C_FLOAT) out = &single;
   if (pointed) out = &pointer;
   ffi_call(&call->cif, call->fn, out, slots);
   switch (call->result) {
     case AGC_C_INT: result->i = (int32_t)word; break;
     case AGC_C_INT64: result->l = (int64_t)word; break;
     case AGC_C_DOUBLE: result->d = real; break;
+    case AGC_C_FLOAT: result->f = single; break;
     case AGC_C_BOOL: result->b = (word & 0xFF) != 0; break;
     case AGC_C_STRING: result->s = pointer; break;
     case AGC_C_POINTER:

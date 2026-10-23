@@ -248,14 +248,17 @@ struct agc_ffi_call;
    the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
    entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
    it now. A close marks it `closed` and takes it off its owner; the free runs then, or at the end of the last of those
-   calls, so C never sees the pointer freed while a pool thread uses it. Changes under rt->sync. */
+   calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer (Native.memory_pointer) is one
+   too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with free(), and `free` is NULL; the
+   program sees it as a C.Pointer. Changes under rt->sync. */
 typedef struct {
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;
   const char *name;
+  size_t size;
   uint32_t jobs;
-  bool closed, freed;
+  bool closed, freed, buffer;
 } agc_c_resource;
 
 typedef struct {

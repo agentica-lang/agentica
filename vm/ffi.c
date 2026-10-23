@@ -3,9 +3,10 @@
  * to, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per signature,
  * converts values to C and back, runs a fast call on the scheduler and a compute call on the compute pool
  * (agc_io_compute), and leaves dlopen and libffi to the adapter (ffi_os.h). Also the resources that extern functions
- * return (agc_c_resource) with Native.close, Native.null and Native.null?, Native.pointer, the reads of memory that C
- * returns (Native.string_at and bytes_at), and Native.wait_readable and wait_writable, the waits of a task on a
- * descriptor of native code. Service layer.
+ * return (agc_c_resource) with Native.close, Native.null and Native.null?, Native.pointer, the owned buffers of
+ * Native.memory_pointer and Native.free, the reads and writes of memory (Native.string_at, bytes_at, get_*, put_* and
+ * the array forms), and Native.wait_readable and wait_writable, the waits of a task on a descriptor of native code.
+ * Service layer.
  */
 #include "ffi_os.h"
 #include "net_os.h"
@@ -26,6 +27,13 @@
 /* The most signatures one run prepares. A program has one per extern function; only hand-made bytecode can build
    more, so the cap bounds the table without limiting a real program. */
 #define FFI_MAX_CALLS 65536
+/* The largest owned buffer, 256 TiB: more than the user address space of every target with native calls (48-bit
+   virtual addresses on x86_64 and arm64), so no allocator could serve it. A larger size is refused before calloc is
+   asked, so the answer does not depend on the allocator: a sanitizer's allocator ends the process on such a request
+   where libc returns NULL. */
+#define BUFFER_MAX (UINT64_C(1) << 48)
+/* The name an owned buffer inspects as: it is a C.Pointer to the program. */
+#define BUFFER_NAME "C.Pointer"
 
 /* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. */
 typedef struct {
@@ -56,13 +64,14 @@ typedef struct {
 } ffi_entry;
 
 /* One compute call, in malloc memory: the C arguments copied on the scheduler (each C.String and C.Bytes a malloc'd
-   copy), the resource of each resource argument (NULL for the others), which the call holds (`jobs`) until its end on
-   a scheduler, and the result, which the pool thread stores with a malloc'd copy of a C.String result, made right after
-   the call, before a later call can reuse the text the function returned. The entry is never freed, so the pool
-   thread may read it. `slots` and `held` point into the same block, after `in`; the registry keeps each held resource
-   alive. The slot of an out parameter is zeroed on the scheduler, written by C on the pool thread, and read only by
-   `done` after `ran`. `ran` is set by the pool thread once the call is made: the work of a job cancelled while it
-   waited is skipped (run_compute in vm/loop.c), and then `out` and the slots hold no result. */
+   copy), the resource of each resource argument and the owned buffer of each C.Pointer one (NULL for the others),
+   which the call holds (`jobs`) until its end on a scheduler, and the result, which the pool thread stores with a
+   malloc'd copy of a C.String result, made right after the call, before a later call can reuse the text the function
+   returned. The entry is never freed, so the pool thread may read it. `slots` and `held` point into the same block,
+   after `in`; the registry keeps each held resource alive. The slot of an out parameter is zeroed on the scheduler,
+   written by C on the pool thread, and read only by `done` after `ran`. `ran` is set by the pool thread once the call
+   is made: the work of a job cancelled while it waited is skipped (run_compute in vm/loop.c), and then `out` and the
+   slots hold no result. */
 typedef struct {
   const ffi_entry *entry;
   agc_c_value *slots;
@@ -105,6 +114,21 @@ typedef struct {
   bool writing;
 } native_wait;
 
+/* The kinds of item that the typed reads and writes move: Native.get_int8 to get_pointer, put_int8 to put_pointer and
+   the array forms. ITEM_WIDTHS has the size of each. */
+typedef enum {
+  ITEM_INT8, ITEM_INT16, ITEM_INT32, ITEM_INT64, ITEM_UINT8, ITEM_UINT16, ITEM_UINT32, ITEM_FLOAT32, ITEM_FLOAT64,
+  ITEM_POINTER
+} item_kind;
+
+/* What a memory builtin reads or writes: COUNT items of SIZE bytes at OFFSET bytes past its pointer. A bad offset
+   fails at OFFSET_SPAN, and a bad count, or memory that runs past an owned buffer, at COUNT_SPAN. */
+typedef struct {
+  int64_t offset, count;
+  size_t size;
+  uint32_t offset_span, count_span;
+} memory_ask;
+
 /* The prepared calls of the run, by signature string, in malloc memory (no GC pointers): open addressing over a
    power-of-two table, kept at most half full. Native.call is a shared builtin, so in a shared VM it runs with
    rt->sync held and the table needs no lock of its own. Entries live until the process ends, like the libraries. */
@@ -112,6 +136,8 @@ typedef struct agc_ffi_cache {
   ffi_entry **slots;
   size_t size, used;
 } agc_ffi_cache;
+
+static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
 
 static uint64_t text_hash(const char *data, size_t len) {
   uint64_t h = 1469598103934665603ULL;
@@ -123,7 +149,7 @@ static uint64_t text_hash(const char *data, size_t len) {
    can be one. */
 static bool c_type_of(char code, bool result, agc_c_type *type, bool *out) {
   *out = false;
-  if (!result && (code == 'I' || code == 'L' || code == 'D' || code == 'B' || code == 'P' || code == 'R')) {
+  if (!result && code != '\0' && strchr("ILDFBPR", code)) {
     *out = true;
     code = (char)(code - 'A' + 'a');
   }
@@ -131,6 +157,7 @@ static bool c_type_of(char code, bool result, agc_c_type *type, bool *out) {
     case 'i': *type = AGC_C_INT; return true;
     case 'l': *type = AGC_C_INT64; return true;
     case 'd': *type = AGC_C_DOUBLE; return true;
+    case 'f': *type = AGC_C_FLOAT; return true;
     case 'b': *type = AGC_C_BOOL; return true;
     case 's': *type = AGC_C_STRING; return true;
     case 'p': *type = AGC_C_POINTER; return true;
@@ -189,10 +216,10 @@ static void discard_frees(free_list *frees) {
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the
    C name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
    function has a "." among the codes where its variadic part starts, after one parameter at least; the codes after it
-   are never an out parameter or a C.Bool, which C would promote. Each resource the call makes adds two words after the
-   C name, the C name of its free function and the resource's name, an identifier: the result's first (code r), then
-   each out resource's (code R), in order. The front end writes it (compiler/lower/lower_native.agc); the bytecode may
-   hold anything, so every part is checked here. */
+   are never an out parameter, a C.Bool or a C.Float, which C would promote. Each resource the call makes adds two words
+   after the C name, the C name of its free function and the resource's name, an identifier: the result's first (code
+   r), then each out resource's (code R), in order. The front end writes it (compiler/lower/lower_native.agc); the
+   bytecode may hold anything, so every part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
   size_t left = text->bytes;
@@ -228,7 +255,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   if (made) frees.count++;
   for (uint32_t k = 0; k < count; k++) {
     if (!c_type_of(kinds[k + 1], false, &params[k], &out[k])) bad_signature(vm, span);
-    if (k >= fixed && (out[k] || params[k] == AGC_C_BOOL)) bad_signature(vm, span);
+    if (k >= fixed && (out[k] || params[k] == AGC_C_BOOL || params[k] == AGC_C_FLOAT)) bad_signature(vm, span);
     /* C gets a pointer to the slot of an out parameter. */
     c_params[k] = out[k] ? AGC_C_POINTER : params[k];
     outs += out[k];
@@ -350,10 +377,14 @@ static void free_pointer(agc_ffi_call *free_call, void *pointer) {
   agc_ffi_invoke(free_call, &arg, &unused);
 }
 
-/* Calls the free function of the resource, once. */
+/* Calls the free function of the resource, once; an owned buffer is malloc'd memory. */
 static void call_free(agc_c_resource *res) {
   res->closed = res->freed = true;
-  free_pointer(res->free, res->pointer);
+  if (res->buffer) {
+    free(res->pointer);
+  } else {
+    free_pointer(res->free, res->pointer);
+  }
 }
 
 /* Frees the resource and drops its registry entry; under rt->sync, with no compute call holding it. */
@@ -397,8 +428,10 @@ static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, const char *
   res->pointer = pointer;
   res->free = free_call;
   res->name = name;
+  res->size = 0;
   res->jobs = 0;
   res->closed = res->freed = pointer == NULL;
+  res->buffer = false;
   res->state = NULL;
   if (pointer) {
     res->state = agc_register(vm, res, release_resource);
@@ -426,10 +459,26 @@ static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) 
   }
 }
 
+/* The owned buffer that V is, or NULL when V is a plain C.Pointer: both are a C.Pointer to the program. Anything else
+   (only hand-made bytecode passes it) is a wrong tag. */
+static agc_c_resource *buffer_of(agc_vm *vm, agc_value v) {
+  if (agc_is(v, AGC_T_C_POINTER)) return NULL;
+  agc_c_resource *res = agc_as_c_resource(vm, v);
+  if (!res->buffer) agc_wrong_tag(vm);
+  return res;
+}
+
+/* The C pointer of a C.Pointer value: an owned buffer gives its memory. Whether a buffer is closed is checked apart. */
+static void *pointer_of(agc_vm *vm, agc_value v) {
+  agc_c_resource *res = buffer_of(vm, v);
+  return res ? res->pointer : agc_as_c_pointer(vm, v);
+}
+
 /* Checks argument V against its C type before anything is allocated, so a failure (agc_fail longjmps) leaks
    nothing. A C.Int32 that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and
    cutting them short would call the function with another value. The items of a C.Bytes are checked while they are
-   copied (copy_bytes), and whether a resource is closed before and after that (check_open). */
+   copied (copy_bytes), and whether a resource or an owned buffer is closed before and after that (check_open). A
+   C.Float takes any Float: one outside the range of a float becomes an infinity (IEEE 754, C11 Annex F). */
 static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t span) {
   switch (type) {
     case AGC_C_INT: {
@@ -439,7 +488,8 @@ static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t sp
       break;
     }
     case AGC_C_INT64: agc_as_int(vm, v); break;
-    case AGC_C_DOUBLE: agc_as_float(vm, v); break;
+    case AGC_C_DOUBLE:
+    case AGC_C_FLOAT: agc_as_float(vm, v); break;
     case AGC_C_BOOL: agc_as_bool(vm, v); break;
     case AGC_C_STRING: {
       const agc_string *s = agc_as_string(vm, v);
@@ -449,7 +499,7 @@ static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t sp
       agc_charge_bytes(vm, s->bytes);
       break;
     }
-    case AGC_C_POINTER: agc_as_c_pointer(vm, v); break;
+    case AGC_C_POINTER: (void)buffer_of(vm, v); break;
     case AGC_C_BYTES: agc_as_list(vm, v); break;
     case AGC_C_RESOURCE: agc_as_c_resource(vm, v); break;
     case AGC_C_VOID: agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a Void parameter", span);
@@ -464,9 +514,11 @@ static agc_c_value c_argument(agc_vm *vm, agc_c_type type, agc_value v, uint8_t 
     case AGC_C_INT: out.i = (int32_t)agc_as_int(vm, v); break;
     case AGC_C_INT64: out.l = agc_as_int(vm, v); break;
     case AGC_C_DOUBLE: out.d = agc_as_float(vm, v); break;
+    /* An infinity when out of range: every target with native calls is IEEE 754 (C11 Annex F). */
+    case AGC_C_FLOAT: out.f = (float)agc_as_float(vm, v); break;
     case AGC_C_BOOL: out.b = agc_as_bool(vm, v); break;
     case AGC_C_STRING: out.s = agc_cstr(agc_as_string(vm, v)); break;
-    case AGC_C_POINTER: out.p = agc_as_c_pointer(vm, v); break;
+    case AGC_C_POINTER: out.p = pointer_of(vm, v); break;
     case AGC_C_RESOURCE: out.p = agc_as_c_resource(vm, v)->pointer; break;
     case AGC_C_BYTES: out.p = bytes; break;
     case AGC_C_VOID: break;
@@ -532,16 +584,26 @@ static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *
   agc_fail(vm, "RUNTIME-INVALID-NUMBER", "a C.Bytes item is not a byte (0 to 255)", span);
 }
 
-/* A closed resource fails: its pointer is freed, or about to be. Under rt->sync. The call checks once before the
-   byte copies (BYTES NULL), so a closed resource fails first, and once after them, with the lock taken again, so no
-   close comes between this check and the call; a failure then frees the copies. */
+/* The resource or owned buffer that argument K holds (a resource parameter, or a C.Pointer one given a buffer), or
+   NULL. */
+static agc_c_resource *held_by(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint32_t k) {
+  if (e->out[k]) return NULL;
+  if (e->params[k] == AGC_C_RESOURCE) return agc_as_c_resource(vm, agc_list_get(values, e->arg[k]));
+  if (e->params[k] == AGC_C_POINTER) return buffer_of(vm, agc_list_get(values, e->arg[k]));
+  return NULL;
+}
+
+/* A closed resource or owned buffer fails: its pointer is freed, or about to be. Under rt->sync. The call checks once
+   before the byte copies (BYTES NULL), so a closed resource fails first, and once after them, with the lock taken
+   again, so no close comes between this check and the call; a failure then frees the copies. */
 static void check_open(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint8_t **bytes, uint32_t span) {
-  for (uint32_t k = 0; k < e->count; k++)
-    if (e->params[k] == AGC_C_RESOURCE && !e->out[k] &&
-        agc_as_c_resource(vm, agc_list_get(values, e->arg[k]))->closed) {
+  for (uint32_t k = 0; k < e->count; k++) {
+    agc_c_resource *res = held_by(vm, e, values, k);
+    if (res && res->closed) {
       if (bytes) free_bytes(e, bytes);
       agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "a native call takes a resource that is closed", span);
     }
+  }
 }
 
 /* A String copy of the N bytes of C memory at P (NULL when N is 0). Bytes that are not UTF-8 become U+FFFD, as in
@@ -555,6 +617,7 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
     case AGC_C_INT: return agc_int(r->i);
     case AGC_C_INT64: return agc_int(r->l);
     case AGC_C_DOUBLE: return agc_float(r->d);
+    case AGC_C_FLOAT: return agc_float(r->f);
     case AGC_C_BOOL: return agc_bool(r->b);
     case AGC_C_STRING: {
       /* The function keeps the text it returns (Agentica copies it and frees nothing); NULL reads as "". */
@@ -576,6 +639,7 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     case AGC_C_INT: return agc_int(slot->i);
     case AGC_C_INT64: return agc_int(slot->l);
     case AGC_C_DOUBLE: return agc_float(slot->d);
+    case AGC_C_FLOAT: return agc_float(slot->f);
     case AGC_C_BOOL: {
       uint8_t byte;
       memcpy(&byte, slot, 1);
@@ -713,12 +777,9 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
         c->in[k].p = &c->slots[k];
         continue;
       }
-      agc_value v = agc_list_get(values, e->arg[k]);
-      c->in[k] = c_argument(vm, e->params[k], v, bytes[k]);
-      if (e->params[k] == AGC_C_RESOURCE) {
-        c->held[k] = agc_as_c_resource(vm, v);
-        c->held[k]->jobs++;
-      }
+      c->in[k] = c_argument(vm, e->params[k], agc_list_get(values, e->arg[k]), bytes[k]);
+      c->held[k] = held_by(vm, e, values, k);
+      if (c->held[k]) c->held[k]->jobs++;
     }
     agc_io_compute(vm, &compute_io, c);
     return agc_void();
@@ -752,9 +813,10 @@ static agc_value builtin_native_null(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_c_pointer_value(NULL);
 }
 
+/* Native.null?(pointer): an owned buffer is never NULL, even once freed. */
 static agc_value builtin_native_null_p(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return agc_bool(agc_as_c_pointer(vm, args[0]) == NULL);
+  return agc_bool(!buffer_of(vm, args[0]) && agc_as_c_pointer(vm, args[0]) == NULL);
 }
 
 /* Native.pointer(address): the C.Pointer with this integer value, such as SQLITE_TRANSIENT, (void *)-1. */
@@ -763,39 +825,310 @@ static agc_value builtin_native_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_c_pointer_value((void *)(intptr_t)agc_as_int(vm, args[0]));
 }
 
-/* The memory of a read (Native.string_at and bytes_at): the pointer args[0] and, when LENGTH is not NULL, the length
-   args[1], stored there. The pointer is checked first: NULL fails unless the length is 0, the C way to say "empty",
-   which reads nothing (SQLite gives NULL for an empty blob); then a negative length fails. Any other pointer is read
-   as it is: native code is trusted, and a pointer or a length that C does not own is undefined behavior, like a wrong
-   signature. The fuzzer's hand-made bytecode (no_files) may not read memory, as it may not call. */
-static const uint8_t *memory_at(agc_vm *vm, agc_value *args, uint32_t span, size_t *length) {
+/* Native.memory_pointer(size): a new owned buffer of SIZE zeroed bytes (calloc), which the calling task owns like a
+   resource: Native.free, the owner's end or the end of the run frees it. The program sees a C.Pointer. The fuzzer's
+   hand-made bytecode (no_files) may not make one, as it may not call. */
+static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-  const uint8_t *p = agc_as_c_pointer(vm, args[0]);
-  int64_t n = length ? agc_as_int(vm, args[1]) : 1;
-  if (!p && n != 0) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a native read at a NULL C.Pointer", span + 1);
-  if (n < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "length must be nonnegative", span + 2);
-  if (length) *length = (size_t)n;
-  return p;
+  int64_t size = agc_as_int(vm, args[0]);
+  if (size < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "size must be nonnegative", span + 1);
+  /* The GC struct first: a failed allocation then leaks no memory of calloc. A size the system cannot give is the
+     program's error, not the VM's out of memory. */
+  agc_c_resource *res = agc_alloc(sizeof *res);
+  void *memory = (uint64_t)size <= BUFFER_MAX && (uint64_t)size < SIZE_MAX ? calloc(size ? (size_t)size : 1, 1) : NULL;
+  if (!memory) agc_fail(vm, "RUNTIME-INVALID-COUNT", "the system cannot give a buffer of this size", span + 1);
+  /* Zeroing the memory grows with the size, as the copy of a C.String argument does. */
+  agc_charge_bytes(vm, (size_t)size);
+  res->pointer = memory;
+  res->free = NULL;
+  res->name = BUFFER_NAME;
+  res->size = (size_t)size;
+  res->jobs = 0;
+  res->closed = res->freed = false;
+  res->buffer = true;
+  res->state = agc_register(vm, res, release_resource);
+  agc_own(vm, res->state, close_owned);
+  return agc_c_resource_value(res);
+}
+
+/* Native.free(pointer): frees an owned buffer once, as Native.close frees a resource; a C.Pointer that C gave is not
+   the program's to free. */
+static agc_value builtin_native_free(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_c_resource *res = buffer_of(vm, args[0]);
+  if (!res) agc_fail(vm, "RUNTIME-NATIVE-NOT-OWNED", "Native.free takes a buffer of Native.memory_pointer", span + 1);
+  close_resource(vm, res);
+  return agc_void();
+}
+
+/* The address of what a memory builtin reads or writes (ASK) at the pointer P, its first argument (span + 1). The
+   fuzzer's hand-made bytecode (no_files) may not touch memory, as it may not call. An owned buffer knows its size: a
+   freed one is RUNTIME-NATIVE-CLOSED, and any byte before or past it RUNTIME-NATIVE-BOUNDS, so nothing outside it is
+   ever read or written. A C.Pointer of C has no size: NULL fails unless nothing is asked for (a count of 0, the C way
+   to say "empty": SQLite gives NULL for an empty blob), a negative offset fails, and any other address is used as it
+   is. Native code is trusted: memory that C does not own is undefined behavior, like a wrong signature. Then a
+   negative count fails. The memory rows are not shared: a read at a C pointer runs beside the other schedulers. For an
+   owned buffer this takes rt->sync (*LOCKED set), so no free comes between the check and the copy; the caller drops it
+   after the copy (memory_done), and a failure in between leaves it to agc_sync_reset. */
+static uint8_t *memory_at(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span, bool *locked) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  agc_c_resource *res = buffer_of(vm, p);
+  *locked = res != NULL;
+  if (res) agc_sync_take(vm);
+  uint8_t *base = res ? res->pointer : agc_as_c_pointer(vm, p);
+  if (res && res->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span + 1);
+  if (!base && ask.count != 0) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a memory access at a NULL C.Pointer", span + 1);
+  if (ask.offset < 0) agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "a memory offset must be nonnegative", ask.offset_span);
+  if (ask.count < 0) agc_fail(vm, "RUNTIME-INVALID-COUNT", "length must be nonnegative", ask.count_span);
+  uint64_t bytes;
+  bool over = __builtin_mul_overflow((uint64_t)ask.count, (uint64_t)ask.size, &bytes);
+  if (res && (uint64_t)ask.offset > res->size)
+    agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the offset is past the end of the owned buffer", ask.offset_span);
+  if (res && (over || bytes > res->size - (uint64_t)ask.offset))
+    agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the memory runs past the end of the owned buffer", ask.count_span);
+  /* A count this large at a C pointer cannot be memory C owns. A smaller wrong one is trusted; a read sizes its list
+     before it reads C memory, so a count too large for the VM's memory ends the run there (out of memory). */
+  if (!res && (over || bytes > (uint64_t)PTRDIFF_MAX))
+    agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the memory is larger than any C object", ask.count_span);
+  /* Integer arithmetic: the address of a C pointer is C's to vouch for, and NULL (with nothing asked) stays NULL. */
+  return base ? (uint8_t *)(uintptr_t)((uintptr_t)base + (uint64_t)ask.offset) : NULL;
+}
+
+/* Gives back rt->sync that memory_at took for an owned buffer, once the copy is made. */
+static void memory_done(agc_vm *vm, bool locked) {
+  if (locked) agc_sync_drop(vm);
 }
 
 /* Native.string_at(pointer) and string_at(pointer, length): a copy of the NUL-terminated text at the pointer, or of
-   exactly LENGTH bytes (NUL bytes included). */
+   exactly LENGTH bytes (NUL bytes included). In an owned buffer the text must end before the buffer does. */
 static agc_value builtin_string_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  const uint8_t *p = memory_at(vm, args, span, NULL);
-  return text_value(p, strlen((const char *)p));
+  agc_c_resource *res = buffer_of(vm, args[0]);
+  bool locked;
+  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, res ? 0 : 1, 1, span + 1, span + 1}, span, &locked);
+  const uint8_t *nul = res ? memchr(p, 0, res->size) : p + strlen((const char *)p);
+  if (!nul) agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the owned buffer holds no NUL byte to end the text", span + 1);
+  agc_value text = text_value(p, (size_t)(nul - p));
+  memory_done(vm, locked);
+  return text;
 }
 
 static agc_value builtin_string_at_length(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n;
-  const uint8_t *p = memory_at(vm, args, span, &n);
-  return text_value(p, n);
+  int64_t n = agc_as_int(vm, args[1]);
+  bool locked;
+  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span, &locked);
+  agc_value text = text_value(p, (size_t)n);
+  memory_done(vm, locked);
+  return text;
 }
 
 /* Native.bytes_at(pointer, length): a List of the LENGTH bytes at the pointer. */
 static agc_value builtin_bytes_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n;
-  const uint8_t *p = memory_at(vm, args, span, &n);
-  return agc_list_value(agc_list_of_bytes(p, n));
+  int64_t n = agc_as_int(vm, args[1]);
+  bool locked;
+  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span, &locked);
+  agc_list *bytes = agc_list_of_bytes(p, (size_t)n);
+  memory_done(vm, locked);
+  return agc_list_value(bytes);
+}
+
+/* The item of KIND at AT, which may be unaligned (memcpy). */
+static agc_value load_item(item_kind kind, const uint8_t *at) {
+  switch (kind) {
+    case ITEM_INT8: { int8_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_INT16: { int16_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_INT32: { int32_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_INT64: { int64_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_UINT8: { uint8_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_UINT16: { uint16_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_UINT32: { uint32_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_FLOAT32: { float x; memcpy(&x, at, sizeof x); return agc_float(x); }
+    case ITEM_FLOAT64: { double x; memcpy(&x, at, sizeof x); return agc_float(x); }
+    case ITEM_POINTER: { void *x; memcpy(&x, at, sizeof x); return agc_c_pointer_value(x); }
+  }
+  return agc_void();
+}
+
+/* Checks V before an item of KIND is written: an Int that fits in the item's bits read as signed or as unsigned (an
+   int8 takes -128 to 255, the same bits), a Float (a float32 takes any, one outside the range of a float becomes an
+   infinity), or a C.Pointer (an owned buffer, unless freed, gives its address). */
+static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
+  if (kind == ITEM_FLOAT32 || kind == ITEM_FLOAT64) {
+    (void)agc_as_float(vm, v);
+  } else if (kind == ITEM_POINTER) {
+    agc_c_resource *res = buffer_of(vm, v);
+    if (!res) (void)agc_as_c_pointer(vm, v);
+    if (res && res->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span);
+  } else {
+    int64_t n = agc_as_int(vm, v);
+    unsigned bits = (unsigned)ITEM_WIDTHS[kind] * 8;
+    if (bits < 64 && (n < -(INT64_C(1) << (bits - 1)) || n > (INT64_C(1) << bits) - 1))
+      agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "the value does not fit in the memory item", span);
+  }
+}
+
+/* Writes the checked V as the item of KIND at AT, which may be unaligned. An Int keeps its low bits, so 255 and -1 give
+   one int8. */
+static void store_item(agc_vm *vm, item_kind kind, uint8_t *at, agc_value v) {
+  switch (kind) {
+    case ITEM_INT8:
+    case ITEM_UINT8: { uint8_t x = (uint8_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
+    case ITEM_INT16:
+    case ITEM_UINT16: { uint16_t x = (uint16_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
+    case ITEM_INT32:
+    case ITEM_UINT32: { uint32_t x = (uint32_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
+    case ITEM_INT64: { int64_t x = agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
+    /* Out of range, the conversion gives an infinity: every target with native calls is IEEE 754 (C11 Annex F). */
+    case ITEM_FLOAT32: { float x = (float)agc_as_float(vm, v); memcpy(at, &x, sizeof x); break; }
+    case ITEM_FLOAT64: { double x = agc_as_float(vm, v); memcpy(at, &x, sizeof x); break; }
+    case ITEM_POINTER: { void *x = pointer_of(vm, v); memcpy(at, &x, sizeof x); break; }
+  }
+}
+
+/* Native.get_KIND(pointer, offset): the item at OFFSET bytes past the pointer. */
+static agc_value get_one(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
+  memory_ask ask = {agc_as_int(vm, args[1]), 1, ITEM_WIDTHS[kind], span + 2, span + 2};
+  bool locked;
+  agc_value v = load_item(kind, memory_at(vm, args[0], ask, span, &locked));
+  memory_done(vm, locked);
+  return v;
+}
+
+/* Native.put_KIND(pointer, offset, value): writes VALUE at OFFSET bytes past the pointer. */
+static agc_value put_one(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
+  memory_ask ask = {agc_as_int(vm, args[1]), 1, ITEM_WIDTHS[kind], span + 2, span + 2};
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  /* A buffer stored as a pointer is checked open under rt->sync too. */
+  if (!locked && kind == ITEM_POINTER && buffer_of(vm, args[2])) {
+    agc_sync_take(vm);
+    locked = true;
+  }
+  check_item(vm, kind, args[2], span + 3);
+  store_item(vm, kind, at, args[2]);
+  memory_done(vm, locked);
+  return agc_void();
+}
+
+/* Native.get_array_of_KIND(pointer, offset, count): a List of COUNT items from OFFSET bytes past the pointer. */
+static agc_value get_array(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
+  memory_ask ask = {agc_as_int(vm, args[1]), agc_as_int(vm, args[2]), ITEM_WIDTHS[kind], span + 2, span + 3};
+  bool locked;
+  const uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  size_t n = (size_t)ask.count;
+  agc_list_builder b;
+  agc_list_builder_sized(&b, n);
+  for (size_t k = 0; k < n; k++) agc_list_builder_push(&b, load_item(kind, at + k * ask.size));
+  agc_list *items = agc_list_builder_finish(&b);
+  memory_done(vm, locked);
+  return agc_list_value(items);
+}
+
+/* Native.put_array_of_KIND(pointer, offset, list): writes the items of LIST from OFFSET bytes past the pointer. Every
+   item is checked before the first is written, so a bad one leaves the memory as it was. */
+static agc_value put_array(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
+  const agc_list *items = agc_as_list(vm, args[2]);
+  size_t n = agc_list_len(items);
+  memory_ask ask = {agc_as_int(vm, args[1]), (int64_t)n, ITEM_WIDTHS[kind], span + 2, span + 3};
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  agc_list_cursor c;
+  agc_value v;
+  agc_list_cursor_begin(&c, items, 0);
+  while (agc_list_cursor_next(&c, &v)) check_item(vm, kind, v, span + 3);
+  agc_list_cursor_begin(&c, items, 0);
+  for (size_t k = 0; agc_list_cursor_next(&c, &v); k++) store_item(vm, kind, at + k * ask.size, v);
+  memory_done(vm, locked);
+  return agc_void();
+}
+
+/* Native.put_string(pointer, offset, text): the bytes of TEXT and a NUL after them at OFFSET bytes past the pointer,
+   an owned C string; a NUL inside TEXT would cut it short for C, so it fails, as for a C.String argument. */
+static agc_value builtin_put_string(agc_vm *vm, agc_value *args, uint32_t span) {
+  const agc_string *text = agc_as_string(vm, args[2]);
+  memory_ask ask = {agc_as_int(vm, args[1]), (int64_t)text->bytes + 1, 1, span + 2, span + 3};
+  bool locked;
+  uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  if (text->bytes && memchr(text->data, 0, text->bytes))
+    agc_fail(vm, "RUNTIME-INVALID-CHARACTER", "the text holds a NUL character", span + 3);
+  if (text->bytes) memcpy(at, text->data, text->bytes);
+  at[text->bytes] = 0;
+  memory_done(vm, locked);
+  return agc_void();
+}
+
+static agc_value builtin_get_int8(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_INT8);
+}
+static agc_value builtin_get_int16(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_INT16);
+}
+static agc_value builtin_get_int32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_INT32);
+}
+static agc_value builtin_get_int64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_INT64);
+}
+static agc_value builtin_get_uint8(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_UINT8);
+}
+static agc_value builtin_get_uint16(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_UINT16);
+}
+static agc_value builtin_get_uint32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_UINT32);
+}
+static agc_value builtin_get_float32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_FLOAT32);
+}
+static agc_value builtin_get_float64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_FLOAT64);
+}
+static agc_value builtin_get_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_one(vm, args, span, ITEM_POINTER);
+}
+static agc_value builtin_put_int8(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_one(vm, args, span, ITEM_INT8);
+}
+static agc_value builtin_put_int16(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_one(vm, args, span, ITEM_INT16);
+}
+static agc_value builtin_put_int32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_one(vm, args, span, ITEM_INT32);
+}
+static agc_value builtin_put_int64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_one(vm, args, span, ITEM_INT64);
+}
+static agc_value builtin_put_float32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_one(vm, args, span, ITEM_FLOAT32);
+}
+static agc_value builtin_put_float64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_one(vm, args, span, ITEM_FLOAT64);
+}
+static agc_value builtin_put_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_one(vm, args, span, ITEM_POINTER);
+}
+static agc_value builtin_get_ints32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_array(vm, args, span, ITEM_INT32);
+}
+static agc_value builtin_get_ints64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_array(vm, args, span, ITEM_INT64);
+}
+static agc_value builtin_get_floats32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_array(vm, args, span, ITEM_FLOAT32);
+}
+static agc_value builtin_get_floats64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_array(vm, args, span, ITEM_FLOAT64);
+}
+static agc_value builtin_put_ints32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_array(vm, args, span, ITEM_INT32);
+}
+static agc_value builtin_put_ints64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_array(vm, args, span, ITEM_INT64);
+}
+static agc_value builtin_put_floats32(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_array(vm, args, span, ITEM_FLOAT32);
+}
+static agc_value builtin_put_floats64(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_array(vm, args, span, ITEM_FLOAT64);
 }
 
 /* An error or a hang-up on the descriptor ends the wait as readiness does: as with poll(2), the next call of the
@@ -916,6 +1249,34 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.memory_pointer", 1, builtin_memory_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Native.free", 1, builtin_native_free, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Native.get_int8", 2, builtin_get_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_int16", 2, builtin_get_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_int32", 2, builtin_get_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_int64", 2, builtin_get_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_uint8", 2, builtin_get_uint8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_uint16", 2, builtin_get_uint16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_uint32", 2, builtin_get_uint32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_float32", 2, builtin_get_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_float64", 2, builtin_get_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.get_pointer", 2, builtin_get_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int8", 3, builtin_put_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int16", 3, builtin_put_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int32", 3, builtin_put_int32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_int64", 3, builtin_put_int64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_float32", 3, builtin_put_float32, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_float64", 3, builtin_put_float64, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_pointer", 3, builtin_put_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.put_string", 3, builtin_put_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_int32", 3, builtin_get_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_int64", 3, builtin_get_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_float32", 3, builtin_get_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_array_of_float64", 3, builtin_get_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_int32", 3, builtin_put_ints32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_int64", 3, builtin_put_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };

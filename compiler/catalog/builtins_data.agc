@@ -2475,6 +2475,260 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.free",
+      parameters: [Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer"))],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.free",
+      effects: ["native"],
+      description: (
+        "Free an owned buffer of Native.memory_pointer once; a freed buffer is left as it is, and a C.Pointer of C " +
+        "is RUNTIME-NATIVE-NOT-OWNED."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_array_of_float32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "count", type: Types.Type.Int),
+      ],
+      result: Types.Type.List(Types.Type.Float),
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_array_of_float32",
+      effects: ["native"],
+      description: (
+        "Read count 32-bit floats from offset bytes past the C.Pointer into a list; a negative count is " +
+        "RUNTIME-INVALID-COUNT."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_array_of_float64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "count", type: Types.Type.Int),
+      ],
+      result: Types.Type.List(Types.Type.Float),
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_array_of_float64",
+      effects: ["native"],
+      description: (
+        "Read count 64-bit doubles from offset bytes past the C.Pointer into a list; a negative count is " +
+        "RUNTIME-INVALID-COUNT."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_array_of_int32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "count", type: Types.Type.Int),
+      ],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_array_of_int32",
+      effects: ["native"],
+      description: (
+        "Read count signed 32-bit integers from offset bytes past the C.Pointer into a list; a negative count is " +
+        "RUNTIME-INVALID-COUNT."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_array_of_int64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "count", type: Types.Type.Int),
+      ],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_array_of_int64",
+      effects: ["native"],
+      description: (
+        "Read count signed 64-bit integers from offset bytes past the C.Pointer into a list; a negative count is " +
+        "RUNTIME-INVALID-COUNT."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_float32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Float,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_float32",
+      effects: ["native"],
+      description: (
+        "Read a 32-bit float at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds of an " +
+        "owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_float64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Float,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_float64",
+      effects: ["native"],
+      description: (
+        "Read a 64-bit double at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds of an " +
+        "owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_int16",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_int16",
+      effects: ["native"],
+      description: (
+        "Read a signed 16-bit integer at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds " +
+        "of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_int32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_int32",
+      effects: ["native"],
+      description: (
+        "Read a signed 32-bit integer at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds " +
+        "of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_int64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_int64",
+      effects: ["native"],
+      description: (
+        "Read a signed 64-bit integer at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds " +
+        "of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_int8",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_int8",
+      effects: ["native"],
+      description: (
+        "Read a signed 8-bit integer at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds " +
+        "of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_pointer",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Opaque("C.Pointer"),
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_pointer",
+      effects: ["native"],
+      description: (
+        "Read a pointer at offset bytes past the C.Pointer; see Native.memory_pointer for the bounds of an owned " +
+        "buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_uint16",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_uint16",
+      effects: ["native"],
+      description: (
+        "Read an unsigned 16-bit integer at offset bytes past the C.Pointer; see Native.memory_pointer for the " +
+        "bounds of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_uint32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_uint32",
+      effects: ["native"],
+      description: (
+        "Read an unsigned 32-bit integer at offset bytes past the C.Pointer; see Native.memory_pointer for the " +
+        "bounds of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_uint8",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.Int,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_uint8",
+      effects: ["native"],
+      description: (
+        "Read an unsigned 8-bit integer at offset bytes past the C.Pointer; see Native.memory_pointer for the " +
+        "bounds of an owned buffer."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.memory_pointer",
+      parameters: [Model.Named(name: "size", type: Types.Type.Int)],
+      result: Types.Type.Opaque("C.Pointer"),
+      rule: Model.Rule.Plain,
+      implementation: "Native.memory_pointer",
+      effects: ["native"],
+      description: (
+        "A new owned buffer of size zeroed bytes, as a C.Pointer that the calling task owns; Native.free or the " +
+        "owner's end frees it, and every read or write past it is RUNTIME-NATIVE-BOUNDS."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "Native.null",
       parameters: [],
       result: Types.Type.Opaque("C.Pointer"),
@@ -2502,6 +2756,198 @@ ROWS_28: List[Model.Builtin] = [
       implementation: "Native.pointer",
       effects: ["native"],
       description: "The C.Pointer with this integer value, for a sentinel such as SQLITE_TRANSIENT (-1).",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_array_of_float32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "values", type: Types.Type.List(Types.Type.Float)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_array_of_float32",
+      effects: ["native"],
+      description: (
+        "Write the values as 32-bit floats from offset bytes past the C.Pointer; every value is checked before the " +
+        "first write."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_array_of_float64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "values", type: Types.Type.List(Types.Type.Float)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_array_of_float64",
+      effects: ["native"],
+      description: (
+        "Write the values as 64-bit doubles from offset bytes past the C.Pointer; every value is checked before the " +
+        "first write."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_array_of_int32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "values", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_array_of_int32",
+      effects: ["native"],
+      description: (
+        "Write the values as signed 32-bit integers from offset bytes past the C.Pointer; every value is checked " +
+        "before the first write."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_array_of_int64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "values", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_array_of_int64",
+      effects: ["native"],
+      description: (
+        "Write the values as signed 64-bit integers from offset bytes past the C.Pointer; every value is checked " +
+        "before the first write."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_float32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Float),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_float32",
+      effects: ["native"],
+      description: "Write value as a 32-bit float at offset bytes past the C.Pointer.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_float64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Float),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_float64",
+      effects: ["native"],
+      description: "Write value as a 64-bit double at offset bytes past the C.Pointer.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_int16",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Int),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_int16",
+      effects: ["native"],
+      description: (
+        "Write value as a 16-bit integer (-32768 to 65535) at offset bytes past the C.Pointer; a value outside that " +
+        "range is RUNTIME-INTEGER-OVERFLOW."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_int32",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Int),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_int32",
+      effects: ["native"],
+      description: (
+        "Write value as a 32-bit integer (-2147483648 to 4294967295) at offset bytes past the C.Pointer; a value " +
+        "outside that range is RUNTIME-INTEGER-OVERFLOW."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_int64",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Int),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_int64",
+      effects: ["native"],
+      description: "Write value as a 64-bit integer at offset bytes past the C.Pointer.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_int8",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Int),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_int8",
+      effects: ["native"],
+      description: (
+        "Write value as an 8-bit integer (-128 to 255) at offset bytes past the C.Pointer; a value outside that " +
+        "range is RUNTIME-INTEGER-OVERFLOW."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_pointer",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "value", type: Types.Type.Opaque("C.Pointer")),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_pointer",
+      effects: ["native"],
+      description: "Write value as a pointer at offset bytes past the C.Pointer.",
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_string",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "text", type: Types.Type.String),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_string",
+      effects: ["native"],
+      description: (
+        "Write the bytes of text and a NUL after them at offset bytes past the C.Pointer, a C string; a NUL in text " +
+        "is RUNTIME-INVALID-CHARACTER."
+      ),
       alternatives: [],
     ),
     Model.Builtin(

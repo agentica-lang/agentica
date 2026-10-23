@@ -35,8 +35,8 @@ keeps their records.
      variadic C functions
      ([#619](https://github.com/sonic182/agentica/issues/619); done), and from
      [#594](https://github.com/sonic182/agentica/issues/594) owned
-     buffers and typed memory, `C.Float`, structs by value, function pointers
-     and downloaded prebuilt libraries. No callbacks.
+     buffers and typed memory and `C.Float` (done), structs by value, function
+     pointers and downloaded prebuilt libraries. No callbacks.
   3. JIT tier 2 (§22) with our own emitter for x86-64 and arm64 (no sljit).
 
 ### Next, after 0.8.0 (owner, 2026-10-21)

@@ -72,5 +72,5 @@ end
 
 # Whether the function has out parameters: one of the codes is a capital.
 def record?(native: Ast.Native) -> Bool
-  return native.codes.split("").any? do |code: String| "ILDBPR".contains?(code) end
+  return native.codes.split("").any? do |code: String| "ILDFBPR".contains?(code) end
 end

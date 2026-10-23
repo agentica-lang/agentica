@@ -27,6 +27,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32`),
   and `= "c_name"` after the result names the C function, so one function
   can be declared in several shapes.
+- `C.Float` (32-bit `float`) for `extern` parameters, results and out
+  parameters.
+- Owned buffers and typed memory: `Native.memory_pointer`, `Native.free`,
+  `Native.get_int32`, `put_array_of_float32` and the other Ruby `ffi` forms.
 
 ### Changed
 

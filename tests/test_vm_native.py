@@ -547,6 +547,219 @@ def test_deny_native_refuses_the_memory_builtins(tmp_path):
     assert diagnostic(result, 2)[0] == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED")
 
 
+FLOAT_EXTERN = """extern "{library}"
+  def peer_scalef(x: C.Float, k: C.Float) -> C.Float
+  def peer_fmix(
+    a: C.Int32, b: C.Float, c: C.Double, d: C.Float, e: C.Int64, f: C.Float, g: C.Float, h: C.Float, i: C.Float,
+    j: C.Float, k: C.Float, l: C.Float, m: C.Float,
+  ) -> C.Double
+  def peer_out_half(x: C.Float, out half: C.Float) -> Void
+end
+
+"""
+
+
+# C.Float crosses as a 32-bit float: the result is the float widened (0.1 is not exact), floats mixed with integers
+# and doubles past the registers take their places, an out C.Float is written by C, and a Float outside the range of a
+# float becomes an infinity.
+@NATIVE_CALLS
+def test_c_float_crosses_to_the_peer_and_back(tmp_path, peer):
+    main = """def main() -> Void
+  puts(peer_scalef(1.5, -3.0))
+  puts(peer_scalef(0.1, 1.0))
+  puts(peer_fmix(1, 0.5, 2.0, 0.25, 3, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.5))
+  puts(peer_out_half(5.0).half)
+  puts(peer_scalef(1_000_000_000_000_000_000_000_000_000_000_000_000_000.0, 1.0))
+end
+"""
+    result = agentica(program(tmp_path, FLOAT_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["-4.5", "0.10000000149011612", "15.25", "2.5", "+inf.0", ""]
+
+
+BUFFER_EXTERN = """extern "{library}"
+  def peer_fill_floats(out: C.Pointer, n: C.Int32) -> Void
+  def peer_sum_floats(xs: C.Pointer, n: C.Int32) -> C.Double
+  def peer_fill_ints(out: C.Pointer, n: C.Int32) -> Void
+  def peer_sum_int64s(xs: C.Pointer, n: C.Int32) -> C.Int64
+  def peer_strs_len(strs: C.Pointer, n: C.Int32) -> C.Int64
+  def peer_static_floats() -> C.Pointer
+  def peer_static_int64s() -> C.Pointer
+  compute def peer_floats_hold(xs: C.Pointer, n: C.Int32, limit_ms: C.Int32) -> C.Double
+  def peer_res_holding() -> C.Int32
+  def peer_set_flag() -> Void
+end
+
+"""
+
+
+# An owned buffer is a C.Pointer that C fills and reads: typed reads and writes at byte offsets, signed and unsigned,
+# bulk reads and writes of Int and Float lists, a pointer array of owned C strings, and a free that runs once. The
+# typed reads take a C.Pointer that C returns too, as Native.string_at does; a NULL one with count 0 is empty.
+@NATIVE_CALLS
+def test_c_fills_and_reads_an_owned_buffer(tmp_path, peer):
+    main = """def main() -> Void
+  buf = Native.memory_pointer(16)
+  puts(Native.get_array_of_int32(buf, 0, 4))
+  peer_fill_floats(buf, 4)
+  puts(Native.get_array_of_float32(buf, 0, 4))
+  puts(Native.get_float32(buf, 12))
+  Native.put_array_of_float32(buf, 4, [2.0, 3.5, 4.0])
+  puts(peer_sum_floats(buf, 4))
+  peer_fill_ints(buf, 4)
+  puts(Native.get_array_of_int32(buf, 0, 4))
+  puts([Native.get_int8(buf, 0), Native.get_uint8(buf, 0), Native.get_int16(buf, 0), Native.get_uint16(buf, 0)])
+  puts([Native.get_int32(buf, 0), Native.get_uint32(buf, 0), Native.get_int32(buf, 9)])
+  Native.put_int8(buf, 0, 255)
+  Native.put_int16(buf, 2, -2)
+  Native.put_int32(buf, 4, 4_294_967_295)
+  puts([Native.get_int8(buf, 0), Native.get_uint16(buf, 2), Native.get_int32(buf, 4)])
+  wide = Native.memory_pointer(24)
+  Native.put_array_of_int64(wide, 0, [1, -2, 3_000_000_000])
+  puts(peer_sum_int64s(wide, 3))
+  Native.put_int64(wide, 16, -5)
+  Native.put_float64(wide, 8, 2.5)
+  Native.put_float32(wide, 0, 0.1)
+  puts([Native.get_float64(wide, 8), Native.get_float32(wide, 0)])
+  puts(Native.get_int64(wide, 16))
+  puts(Native.get_array_of_float64(wide, 8, 1))
+  puts(Native.get_array_of_int64(wide, 16, 1))
+  Native.put_array_of_float64(wide, 0, [0.5, 1.5])
+  puts(Native.get_array_of_float64(wide, 0, 2))
+  a = Native.memory_pointer(4)
+  b = Native.memory_pointer(6)
+  Native.put_string(a, 0, "abc")
+  Native.put_string(b, 0, "hello")
+  names = Native.memory_pointer(16)
+  Native.put_pointer(names, 0, a)
+  Native.put_pointer(names, 8, b)
+  puts(peer_strs_len(names, 2))
+  puts(Native.string_at(Native.get_pointer(names, 8)))
+  puts(Native.string_at(a))
+  puts(Native.bytes_at(a, 4))
+  puts(Native.string_at(b, 2))
+  IO.inspect(a)
+  puts(Native.null?(a))
+  Native.free(a)
+  Native.free(a)
+  puts(Native.null?(a))
+  puts(Native.get_array_of_int32(Native.memory_pointer(0), 0, 0))
+  floats = peer_static_floats()
+  puts(Native.get_array_of_float32(floats, 0, 3))
+  puts(Native.get_float32(floats, 4))
+  puts(Native.get_array_of_int64(peer_static_int64s(), 0, 2))
+  puts(Native.get_int64(peer_static_int64s(), 8))
+  puts(Native.get_array_of_float64(Native.null(), 0, 0))
+end
+"""
+    result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "[0, 0, 0, 0]", "[0.0, 0.5, 1.0, 1.5]", "1.5", "9.5", "[-3, -2, 1, 6]", "[-3, 253, -3, 65533]",
+        "[-3, 4294967293, 100663296]", "[-1, 65534, -1]", "2999999999", "[2.5, 0.10000000149011612]", "-5",
+        "[2.5]", "[-5]", "[0.5, 1.5]", "8", "hello", "abc", "[97, 98, 99, 0]", "he", "<C.Pointer>", "false", "false",
+        "[]", "[1.5, -2.25, 1.0000000150474662e+30]", "-2.25", "[7, -9]", "-9", "[]", "",
+    ]
+
+
+# An owned buffer knows its size: a read or write before or past it is RUNTIME-NATIVE-BOUNDS (at the offset, or at the
+# count or list that runs past), and a freed one RUNTIME-NATIVE-CLOSED, also as an extern argument. A C pointer has no
+# size, but NULL and a negative offset are refused; a value that does not fit is RUNTIME-INTEGER-OVERFLOW, a NUL in a
+# C string RUNTIME-INVALID-CHARACTER, and Native.free of a pointer that C gave RUNTIME-NATIVE-NOT-OWNED.
+@NATIVE_CALLS
+@pytest.mark.parametrize("line, code, argument", [
+    ("Native.get_int32(buf, 13)", "RUNTIME-NATIVE-BOUNDS", "13"),
+    ("Native.get_int8(buf, 16)", "RUNTIME-NATIVE-BOUNDS", "16"),
+    ("Native.get_int64(buf, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
+    ("Native.get_int8(buf, -1)", "RUNTIME-NATIVE-BOUNDS", "-1"),
+    ("Native.get_array_of_float32(buf, 4, 4)", "RUNTIME-NATIVE-BOUNDS", "4)"),
+    ("Native.get_array_of_int64(buf, 0, 4_611_686_018_427_387_904)", "RUNTIME-NATIVE-BOUNDS", "4_6"),
+    ("Native.get_array_of_int32(buf, 0, -1)", "RUNTIME-INVALID-COUNT", "-1"),
+    ("Native.put_array_of_int64(buf, 8, [1, 2])", "RUNTIME-NATIVE-BOUNDS", "[1"),
+    ("Native.put_string(buf, 0, \"0123456789abcdef\")", "RUNTIME-NATIVE-BOUNDS", "\"0"),
+    ("Native.string_at(full)", "RUNTIME-NATIVE-BOUNDS", "full"),
+    ("Native.bytes_at(buf, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
+    ("Native.get_int32(Native.null(), 0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
+    ("Native.put_float64(Native.null(), 8, 1.0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
+    ("Native.get_int32(peer_static_int64s(), -4)", "RUNTIME-NATIVE-BOUNDS", "-4"),
+    ("Native.put_int8(buf, 0, 256)", "RUNTIME-INTEGER-OVERFLOW", "256"),
+    ("Native.put_int32(buf, 0, -2_147_483_649)", "RUNTIME-INTEGER-OVERFLOW", "-2_"),
+    ("Native.put_array_of_int32(buf, 0, [1, 4_294_967_296])", "RUNTIME-INTEGER-OVERFLOW", "[1"),
+    ("Native.put_string(buf, 0, \"a\" + String.from_code(0))", "RUNTIME-INVALID-CHARACTER", "\"a"),
+    ("Native.free(peer_static_floats())", "RUNTIME-NATIVE-NOT-OWNED", "peer_static_floats()"),
+    ("Native.memory_pointer(-1)", "RUNTIME-INVALID-COUNT", "-1"),
+    ("Native.memory_pointer(4_611_686_018_427_387_904)", "RUNTIME-INVALID-COUNT", "4_6"),
+    ("Native.get_int8(gone, 0)", "RUNTIME-NATIVE-CLOSED", "gone"),
+    ("Native.put_pointer(buf, 0, gone)", "RUNTIME-NATIVE-CLOSED", "gone"),
+    ("peer_sum_floats(gone, 1)", "RUNTIME-NATIVE-CLOSED", None),
+])
+def test_bounds_null_and_freed_buffers_stop_the_run(tmp_path, peer, line, code, argument):
+    text = "  %s" % line if line.startswith(("Native.put", "Native.free")) else "  IO.inspect(%s)" % line
+    main = 'def main() -> Void\n  buf = Native.memory_pointer(16)\n  gone = Native.memory_pointer(4)\n' \
+        '  Native.free(gone)\n  full = Native.memory_pointer(2)\n  Native.put_int16(full, 0, 24_929)\n' \
+        '  puts("before")\n%s\nend\n' % text
+    result = agentica("--json", program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
+    assert result.stdout == "before\n"
+    # An extern call fails at its extern function, as for a closed resource.
+    where = (BUFFER_EXTERN.count("\n") + 8, text.index(argument) + 1) if argument else (3, 3)
+    assert diagnostic(result, 1) == (code, where)
+
+
+# Task.spawn_owning hands an owned buffer to the new task, which uses it and whose end frees it; a pointer that C gave
+# is not the caller's to hand over.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("handed, out, code", [
+    ("buf", "3.5\n", "RUNTIME-NATIVE-CLOSED"),
+    ("peer_static_floats()", "", "RUNTIME-HANDLE-NOT-OWNED"),
+])
+def test_task_spawn_owning_hands_an_owned_buffer_over(tmp_path, peer, schedulers, handed, out, code):
+    main = """def sum(buf: C.Pointer) -> Float
+  return peer_sum_floats(buf, 2)
+end
+
+def main() -> Void
+  buf = Native.memory_pointer(8)
+  Native.put_array_of_float32(buf, 0, [1.5, 2.0])
+  puts(Task.await(Task.spawn_owning(&sum, %s)))
+  puts(Native.get_int8(buf, 0))
+end
+""" % handed
+    text = BUFFER_EXTERN.format(library=literal(peer)) + main
+    result = agentica("--json", "--schedulers", schedulers, program(tmp_path, text))
+    assert result.stdout == out
+    assert diagnostic(result, 1)[0] == code
+
+
+# A compute call holds its buffer arguments: a free while C still reads the memory only marks the buffer freed, and
+# the memory goes when the call returns, so C sums what was written.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_compute_call_keeps_its_buffer_until_it_returns(tmp_path, peer, schedulers):
+    main = """def sum_later(buf: C.Pointer) -> Result[Float]
+  return ok(peer_floats_hold(buf, 64, 20_000))
+end
+
+def main() -> Void
+  buf = Native.memory_pointer(256)
+  for k in 0...64
+    Native.put_float32(buf, k * 4, 1.0)
+  end
+  holder = Task.spawn(&sum_later, buf)
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  Native.free(buf)
+  peer_set_flag()
+  puts(Task.await(holder))
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "ok(64.0)\n", "")
+
+
 # The task that opened a resource owns it: its end frees what it did not close, and Task.spawn_owning hands it on.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])

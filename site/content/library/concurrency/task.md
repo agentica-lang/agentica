@@ -40,7 +40,7 @@ Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 
 Starts `function(handle)` like `Task.spawn` and gives `handle` to the new task in the same call.
 
-- The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`. Anything else (an `Int`, a struct that holds a socket, an `HttpClient`) is `CHECK-NOT-A-HANDLE`.
+- The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer`, `Channel[T]`, or a [native resource or owned buffer](/library/io-and-system/native/types/). Anything else (an `Int`, a struct that holds a socket, an `HttpClient`) is `CHECK-NOT-A-HANDLE`.
 - The caller must own the handle, and can still use it while the new task runs. Otherwise (not owned, already handed over, closed) the caller stops with `RUNTIME-HANDLE-NOT-OWNED` and no task is made.
 - A server loop can give each accepted connection to its own task, so a crash closes only that connection. A handed-over server takes its listener along and keeps serving after its creator ends.
 - A [Channel](/library/concurrency/channel/) has no opener, so any task can make the first hand-off. The ownership rules are in [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel).
