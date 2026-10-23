@@ -258,6 +258,28 @@ static void cap_inside_an_offset(void) {
   assert(agc_emit_end(&e) == 0 && e.len <= e.cap);
 }
 
+/* Every opcode that agc_jit_new accepts has its case in the emitter (jit.c lists the set twice, in `known` and in
+   emit_function): a function of that one opcode then RETURN compiles with `always`. */
+static void every_known_opcode_compiles(void) {
+  static const agc_trace quiet = {0};
+  int accepted = 0;
+  for (uint32_t op = 0; op < AGC_OP_COUNT; op++) {
+    one_function f;
+    memset(&f, 0, sizeof f);
+    emit(&f, (agc_opcode)op, 1, 1, 0);
+    emit(&f, AGC_OP_RETURN, 0, 0, 0);
+    program_of(&f);
+    agc_jit *jit = agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet);
+    if (!jit) continue;
+    accepted++;
+    if (!agc_jit_code_of(jit, 0)) {
+      fprintf(stderr, "jit-test: %s is accepted but not emitted\n", agc_opcode_name(op));
+      assert(0);
+    }
+  }
+  assert(accepted > 0);
+}
+
 /* A function with an instruction the emitter does not know stays out in every mode, and one without a loop with
    `on`; a program where no function is compiled has no JIT at all. */
 static void ineligible(void) {
@@ -328,6 +350,7 @@ int main(void) {
   int_rules();
   string_cost();
   ineligible();
+  every_known_opcode_compiles();
 #else
   /* No emitter on this host: the JIT is never made. */
   agc_program empty = {0};

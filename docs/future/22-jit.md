@@ -100,15 +100,23 @@ instruction keeps the whole function in the interpreter.
   than two Ints. Each function has its own pages (64 MiB in all); when two
   schedulers compile one function at once, the first copy is kept.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
-  and a `skip` line with the first instruction that kept one out, or
-  `loop=none`.
+  and a `skip` line for each function kept out: `pc=N op=OP` (the first
+  instruction the emitter does not know) or `loop=none` when the run starts,
+  and `size` when its code did not fit at compile time.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a hot function without a
   loop that `on` keeps out), `make vm-jit-test` (the goldens and their sweeps
-  and `test_vm_multicore.py` with `AGENTICA_JIT=always`, in CI) and
-  `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, a compile race,
-  also under `make vm-tsan`).
+  and `test_vm_multicore.py` with `AGENTICA_JIT=always`, in CI; the same
+  compiled code as before the loop rule, but the jit copy of the turn loop now
+  runs only for programs with an eligible function, about 60 of the 313
+  goldens) and `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, a
+  compile race, every opcode the walk accepts has its emitter case, also
+  under `make vm-tsan`).
+- Known limits: a function with a loop that is called very often but whose
+  loop rarely runs still pays the entry and the exit at each call; and a
+  program with one eligible function keeps the jit copy of the turn loop (and
+  its layout effect) even if that function never gets hot.
 
 **Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
 never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and
