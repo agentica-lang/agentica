@@ -836,8 +836,9 @@ static inline __attribute__((always_inline)) bool tags_are(const agc_value *a, c
 }
 
 /* 1 when the values are equal, 0 when not, -1 for a pair of values that has no equality (hand-made bytecode): never a
-   raw truthy int from libc, which -1 would be mistaken for. The tag tests come first, so the checked accessors after them never fail (the compiler drops their second test). Kept out
-   of line, as gcc built it before the helpers took pointers: the turn loop is sensitive to its register use. */
+   raw truthy int from libc, which -1 would be mistaken for. The tag tests come first, so the checked accessors after
+   them never fail (the compiler drops their second test). Kept out of line, as gcc built it before the helpers took
+   pointers: the turn loop is sensitive to its register use. */
 static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
   if (tags_are(x, y, AGC_T_INT)) return agc_as_int(vm, *x) == agc_as_int(vm, *y);
   if (tags_are(x, y, AGC_T_FLOAT)) return agc_as_float(vm, *x) == agc_as_float(vm, *y);
