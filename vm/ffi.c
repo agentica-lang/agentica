@@ -27,6 +27,11 @@
 /* The most signatures one run prepares. A program has one per extern function; only hand-made bytecode can build
    more, so the cap bounds the table without limiting a real program. */
 #define FFI_MAX_CALLS 65536
+/* The largest owned buffer, 256 TiB: more than the user address space of every target with native calls (48-bit
+   virtual addresses on x86_64 and arm64), so no allocator could serve it. A larger size is refused before calloc is
+   asked, so the answer does not depend on the allocator: a sanitizer's allocator ends the process on such a request
+   where libc returns NULL. */
+#define BUFFER_MAX (UINT64_C(1) << 48)
 /* The name an owned buffer inspects as: it is a C.Pointer to the program. */
 #define BUFFER_NAME "C.Pointer"
 
@@ -830,7 +835,7 @@ static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   /* The GC struct first: a failed allocation then leaks no memory of calloc. A size the system cannot give is the
      program's error, not the VM's out of memory. */
   agc_c_resource *res = agc_alloc(sizeof *res);
-  void *memory = (uint64_t)size < SIZE_MAX ? calloc(size ? (size_t)size : 1, 1) : NULL;
+  void *memory = (uint64_t)size <= BUFFER_MAX && (uint64_t)size < SIZE_MAX ? calloc(size ? (size_t)size : 1, 1) : NULL;
   if (!memory) agc_fail(vm, "RUNTIME-INVALID-COUNT", "the system cannot give a buffer of this size", span + 1);
   /* Zeroing the memory grows with the size, as the copy of a C.String argument does. */
   agc_charge_bytes(vm, (size_t)size);

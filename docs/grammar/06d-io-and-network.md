@@ -413,10 +413,11 @@ end
   owns it like a resource: `Native.free(p)` frees it once (again does nothing),
   the owner's end frees it, and when `main` returns the program ends without
   freeing it. `Task.spawn_owning` hands it over (section 6c); a channel send or
-  a task's result does not move it. A size the system cannot give is
-  `RUNTIME-INVALID-COUNT`. A `compute def` call holds its buffer arguments as
-  it holds resources: a free meanwhile runs when the call returns, and a read
-  or write of the buffer meanwhile races with C. A freed buffer is
+  a task's result does not move it. A size the system cannot give, and any
+  size above 256 TiB (2^48 bytes), is `RUNTIME-INVALID-COUNT`. A `compute def`
+  call holds its buffer arguments as it holds resources: a free meanwhile runs
+  when the call returns, and a read or write of the buffer meanwhile races with
+  C. A freed buffer is
   `RUNTIME-NATIVE-CLOSED` in every later read, write or call; `Native.free` of
   a pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
   address that nothing tracks, so the buffer it names must outlive C's use.
