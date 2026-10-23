@@ -64,12 +64,13 @@ body or a library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc
 goes on a `def` inside the block. Each function is a `def` for the rest of the
 language: `export` makes it importable, it takes the place of a `def` in the
 declaration order (except in a block that declares a resource, below), the
-whole block needs the blank line of a declaration, and
-the checker sees `C.Int32` and `C.Int64` as `Int`, `C.Double` as `Float`,
-`C.Bool` as `Bool` and `C.String` as `String`. `compute def` declares a function
-that runs off the scheduler while the task waits (section 6d); `export` comes
-first. `extern` is contextual: it is a keyword only at the start of a top-level
-declaration, and `compute` only before `def` in an extern block.
+whole block needs the blank line of a declaration, and the checker sees
+`C.Int32` and `C.Int64` as `Int`, `C.Double` and `C.Float` (a 32-bit `float`)
+as `Float`, `C.Bool` as `Bool` and `C.String` as `String`. `compute def`
+declares a function that runs off the scheduler while the task waits (section
+6d); `export` comes first. `extern` is contextual: it is a keyword only at the
+start of a top-level declaration, and `compute` only before `def` in an extern
+block.
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function
@@ -94,15 +95,15 @@ declares next to it, named after the function in CamelCase (`sqlite3_open` gives
 `Sqlite3Open`): a field `result` with the C result (none for `Void`), then one
 field per out parameter, in order, named after it. The record is exported with
 its function and has no place in the declaration order. An out parameter is
-`C.Int32`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the
-block, whose field is the resource itself, not a `Result`; anything else is
-`PARSE-EXTERN-OUT` at the type. An out parameter named `result` of a function
-with a C result, an in and an out parameter of one name (at the later), and a
-function name with no letter for the record's name, are `PARSE-EXTERN-OUT` at
-that name; `out` before a parameter outside an extern block is
-`PARSE-EXTERN-OUT` at the word. A type of the record's name elsewhere in the
-file, and two out parameters of one name, are `CHECK-REDEFINED-NAME`. `out` is
-a keyword only before a parameter name.
+`C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a
+resource of the block, whose field is the resource itself, not a `Result`;
+anything else is `PARSE-EXTERN-OUT` at the type. An out parameter named
+`result` of a function with a C result, an in and an out parameter of one name
+(at the later), and a function name with no letter for the record's name, are
+`PARSE-EXTERN-OUT` at that name; `out` before a parameter outside an extern
+block is `PARSE-EXTERN-OUT` at the word. A type of the record's name elsewhere
+in the file, and two out parameters of one name, are `CHECK-REDEFINED-NAME`.
+`out` is a keyword only before a parameter name.
 
 The C name of an extern function is its `def` name, or the string after the
 result (`-> C.Int32 = "fcntl"`), so one C function can be declared in several
@@ -113,8 +114,9 @@ variadic arguments, each with the C type the call passes, and they may be
 none. It comes after one parameter at least (`PARSE-EXTERN-VARIADIC-FIXED` at
 the `...`), at most once in a function, and only in an extern block
 (`PARSE-EXTERN-VARIADIC` at the `...`). A variadic parameter is not an out
-parameter and not `C.Bool`, which C promotes to `int`
-(`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count both parts.
+parameter, not `C.Bool`, which C promotes to `int`, and not `C.Float`, which C
+promotes to `double` (`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count
+both parts.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

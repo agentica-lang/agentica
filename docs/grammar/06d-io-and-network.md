@@ -354,11 +354,13 @@ end
 ```
 
 - The C types are `C.Int32` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
-  (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Bool` (`bool`, `Bool`),
-  `C.String` (a `const char *`, `String`), `C.Pointer`, `C.Bytes` and the
-  resources of the block (below); a result may also be `Void`. `C.Int` is
-  `PARSE-EXTERN-TYPE`: write the width. A function takes at most 64
-  parameters (`PARSE-EXTERN-ARITY`).
+  (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Float` (a 32-bit
+  `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a `const char *`,
+  `String`), `C.Pointer`, `C.Bytes` and the resources of the block (below); a
+  result may also be `Void`. `C.Int` is `PARSE-EXTERN-TYPE`: write the width. A
+  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`). A `Float` passed
+  as a `C.Float` is rounded to the nearest float, and one outside its range
+  becomes an infinity.
 - The library is a plain string literal: a name without `/`, which the system
   loader looks up, or an absolute path. Anything else is
   `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
@@ -405,6 +407,44 @@ end
   length that C does not own is undefined behavior, like a wrong signature, and
   is not checked. `Native.pointer(n)` is the `C.Pointer` with the integer value
   `n`, for sentinels such as `SQLITE_TRANSIENT` (`Native.pointer(-1)`).
+- `Native.memory_pointer(size)` makes an owned buffer: `size` zeroed bytes that
+  Agentica allocates, as a `C.Pointer` that goes wherever a `C.Pointer`
+  parameter is (a negative size is `RUNTIME-INVALID-COUNT`). The calling task
+  owns it like a resource: `Native.free(p)` frees it once (again does nothing),
+  the owner's end frees it, and when `main` returns the program ends without
+  freeing it. `Task.spawn_owning` hands it over (section 6c); a channel send or
+  a task's result does not move it. A size the system cannot give, and any
+  size above 256 TiB (2^48 bytes), is `RUNTIME-INVALID-COUNT`. A `compute def`
+  call holds its buffer arguments as it holds resources: a free meanwhile runs
+  when the call returns, and a read or write of the buffer meanwhile races with
+  C. A freed buffer is
+  `RUNTIME-NATIVE-CLOSED` in every later read, write or call; `Native.free` of
+  a pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
+  address that nothing tracks, so the buffer it names must outlive C's use.
+  `IO.inspect` prints `<C.Pointer>`, and `Native.null?` is false.
+- Typed memory, at a byte offset past any `C.Pointer` (alignment is not needed):
+  `Native.get_int8`, `get_int16`, `get_int32`, `get_int64`, `get_uint8`,
+  `get_uint16`, `get_uint32` (an `Int`), `get_float32`, `get_float64` (a
+  `Float`) and `get_pointer` (a `C.Pointer`) take `(p, offset)`;
+  `Native.put_int8` to `put_int64`, `put_float32`, `put_float64` and
+  `put_pointer` take `(p, offset, value)`. A `put_intN` takes an `Int` that
+  fits in N bits as signed or unsigned (`put_int8` takes -128 to 255), else
+  `RUNTIME-INTEGER-OVERFLOW` at the value. `Native.put_string(p, offset, text)`
+  writes the bytes of `text` and a NUL, a C string (a NUL in `text` is
+  `RUNTIME-INVALID-CHARACTER`). In bulk, `Native.get_array_of_int32`,
+  `get_array_of_int64`, `get_array_of_float32` and `get_array_of_float64` take
+  `(p, offset, count)` and give a `List[Int]` or `List[Float]`; the
+  `put_array_of_*` forms take `(p, offset, values)` and check every item before
+  the first is written.
+- An owned buffer knows its size: a read or write that starts before it or runs
+  past its end is `RUNTIME-NATIVE-BOUNDS`, at the offset, or at the count, list
+  or text that runs past; so is `Native.string_at` of a buffer with no NUL, or
+  with a length past its end. Nothing outside the buffer is ever touched. A
+  `C.Pointer` that C gave has no size: a NULL one is `RUNTIME-NATIVE-NULL`
+  (unless the count is 0, as for `Native.bytes_at`) and a negative offset
+  `RUNTIME-NATIVE-BOUNDS`; any other offset and count are trusted, and memory
+  that C does not own is undefined behavior, like a wrong signature. A negative
+  count is `RUNTIME-INVALID-COUNT`.
 - `resource Db, free: db_close` declares a resource: a nominal type for the
   pointers that the block's functions return, freed by `void db_close(void *)`
   of the same library. A function declared `-> Db` gives a `Result[Db]`: a NULL

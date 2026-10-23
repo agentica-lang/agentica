@@ -15,17 +15,19 @@
 /* The most parameters an extern function may have. */
 #define AGC_FFI_MAX_PARAMS 64
 
-/* The C types of an extern signature: C.Int32 is int32_t, C.Int64 int64_t, C.Double double, C.Bool _Bool and C.String
-   a NUL-terminated char *. C.Pointer, C.Bytes (a const uint8_t *) and a resource are each a pointer in C. Void is for
-   results only, and C.Bytes for parameters only. */
+/* The C types of an extern signature: C.Int32 is int32_t, C.Int64 int64_t, C.Double double, C.Float float, C.Bool _Bool
+   and C.String a NUL-terminated char *. C.Pointer, C.Bytes (a const uint8_t *) and a resource are each a pointer in C.
+   Void is for results only, and C.Bytes for parameters only. */
 typedef enum {
-  AGC_C_VOID, AGC_C_INT, AGC_C_INT64, AGC_C_DOUBLE, AGC_C_BOOL, AGC_C_STRING, AGC_C_POINTER, AGC_C_BYTES, AGC_C_RESOURCE
+  AGC_C_VOID, AGC_C_INT, AGC_C_INT64, AGC_C_DOUBLE, AGC_C_FLOAT, AGC_C_BOOL, AGC_C_STRING, AGC_C_POINTER, AGC_C_BYTES,
+  AGC_C_RESOURCE
 } agc_c_type;
 
 typedef union {
   int32_t i;
   int64_t l;
   double d;
+  float f;
   bool b;
   const char *s;
   void *p;

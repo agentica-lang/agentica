@@ -87,7 +87,20 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   OS side is `vm/poll_posix.c` and `vm/poll_windows.c`; on Windows a duplicate
   Winsock socket, one wait per socket), the job's timer, the `cancel` half.
   `Native.string_at`, `bytes_at` and `pointer` read memory at a `C.Pointer` and
-  make one; every `Native.*` import counts as native code for the refusal at
+  make one. `Native.memory_pointer` makes an owned buffer: an `agc_c_resource`
+  with `buffer` set (calloc'd memory of `size` bytes, freed with free() by
+  `Native.free`, the owner's end or the run's end), which the program types as
+  a `C.Pointer` (`buffer_of` and `pointer_of` take either), so an extern call
+  passes it and a compute call holds it. The typed reads and writes
+  (`get_*`, `put_*`, `get_array_of_*`, `put_array_of_*`, `put_string`) and
+  `string_at`/`bytes_at` go through `memory_at`, which checks a buffer's
+  bounds and freed state (`RUNTIME-NATIVE-BOUNDS`, `-CLOSED`) and only NULL and
+  a negative offset of a raw pointer. Their rows are not shared: `memory_at`
+  takes rt->sync only for a buffer, and the caller drops it after the copy
+  (`memory_done`), so no free comes between the check and the copy while a read
+  of a raw pointer runs beside the other schedulers. `Native.memory_pointer`
+  and `Native.free` are shared rows. `C.Float` is code `f` (`F` out), refused
+  after `.`. Every `Native.*` import counts as native code for the refusal at
   load. The adapter `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and
   macOS) opens libraries with `dlopen` or `LoadLibraryExW` and calls with
   libffi; `vm/ffi_none.c` refuses elsewhere
