@@ -423,6 +423,7 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
 end
 
 # The span of the member in `Alias.NAME`, so that a rename of the constant keeps the alias (as for `Alias.f(...)`).
+# The node comes from `parse_qualified_member`, whose span ends at the member.
 def member_only(node: Ast.TypeName, member: String) -> Source.Span
   stop = node.span.stop
   start = Source.Position(offset: stop.offset - member.length, line: stop.line, column: stop.column - member.length)

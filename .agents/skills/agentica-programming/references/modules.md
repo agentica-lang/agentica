@@ -66,9 +66,9 @@ another constant name (capitals and underscores): `{LIMIT as max}` is
 `CHECK-IMPORT-RENAME`. An alias reads it too: `Limits.LIMIT`,
 `Limits.TABLE.size`, `Limits.CONFIG.with(port: 81)`; a private one is
 `CHECK-IMPORT-NAME`, `Limits.LIMIT()` is `CHECK-TYPE-MISMATCH`. An imported
-constant cannot
-equal a constant or another name of the file (`CHECK-REDEFINED-NAME`); a private
-constant cannot be imported (`CHECK-IMPORT-NAME`). The constants of the imported
+constant cannot equal a constant or another name of the file
+(`CHECK-REDEFINED-NAME`); a private constant cannot be imported
+(`CHECK-IMPORT-NAME`). The constants of the imported
 files that the program can reach are built before `main`.
 
 ## Running
