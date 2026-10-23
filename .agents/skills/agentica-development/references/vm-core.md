@@ -164,10 +164,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `vm/jit/` (core, `docs/future/22-jit.md` §22; `--jit`, `AGENTICA_JIT`):
   `jit.h` is the one header, the interpreter's boundary first, then the emitter
   and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. `jit.c`
-  walks a function once: each instruction (fused ones as their STEP or CONST)
-  calls one `agc_emit_*` function, and any other opcode sets `skip` for the
-  function; it maps, seals and publishes the code with a release CAS
-  (`agc_jit_code_of`, which also counts entries for `on`). `emit_x64.c`: the
+  decides every function once in `agc_jit_new` (only known opcodes; for `on`
+  also a backward jump), sets `skip` for the rest and returns NULL when no
+  function is left, so that run takes the plain turn loop; it walks a function
+  once: each instruction (fused ones as their STEP or CONST) calls one
+  `agc_emit_*` function; it maps, seals and publishes the code with a release
+  CAS (`agc_jit_code_of`, which also counts entries for `on`). `emit_x64.c`: the
   machine code of each kind, the exit stubs and the entry table, for the SysV
   and Win64 argument registers (`AGC_JIT_HOST` is 0 elsewhere and nothing is
   compiled). `mem_posix.c`, `mem_windows.c`: W^X pages, written then sealed

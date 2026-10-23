@@ -8,8 +8,9 @@
 
 #include "../core.h"
 
-/* --jit and AGENTICA_JIT: off, on (a function is compiled after AGC_JIT_THRESHOLD entries) and always (at its first
-   entry, for tests). A host without an emitter accepts every mode and runs everything in the interpreter. */
+/* --jit and AGENTICA_JIT: off, on (a function with a loop is compiled after AGC_JIT_THRESHOLD entries) and always
+   (any function the emitter knows, at its first entry, for tests). A host without an emitter accepts every mode and
+   runs everything in the interpreter. */
 typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_THRESHOLD 100
 
@@ -36,11 +37,11 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
 #define AGC_JIT_CALLER
 #endif
 
-/* The JIT of a run. `skip[f]` is set once function f will not be compiled, so the interpreter's reload tests one
-   byte for it; `code[f]` is its code (NULL until compiled), published with a release store after the pages are
-   sealed, so a scheduler that loads it with acquire sees finished code; two schedulers that compile one function at
-   once keep the first and unmap the second. `entries` are the entries counted in the `on` mode, `used` the code
-   memory taken. The code lives until the process exits, like the program. */
+/* The JIT of a run. `skip[f]` is set once function f will not be compiled (by agc_jit_new for most), so the
+   interpreter's reload tests one byte for it; `code[f]` is its code (NULL until compiled), published with a release
+   store after the pages are sealed, so a scheduler that loads it with acquire sees finished code; two schedulers that
+   compile one function at once keep the first and unmap the second. `entries` are the entries counted in the `on`
+   mode, `used` the code memory taken. The code lives until the process exits, like the program. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -51,7 +52,8 @@ typedef struct agc_jit {
   _Atomic size_t used;
 } agc_jit;
 
-/* The JIT of a run, or NULL for AGC_JIT_OFF and on a host without an emitter. TRACE gets the jit category's lines. */
+/* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
+   PROGRAM (then the run has the interpreter of AGC_JIT_OFF). TRACE gets the jit category's lines. */
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace);
 /* The code of FUNCTION, compiled now if this entry makes it hot, or NULL to interpret it. Any scheduler may call it. */
 agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function);

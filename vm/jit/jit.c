@@ -1,7 +1,7 @@
 /*
  * The JIT tier (docs/future/22-jit.md §22): which functions to compile and when, the walk over a function's bytecode
  * that drives the host's emitter, and the code cache of a run. A function is compiled only when every instruction is
- * in the set the emitter knows; any other keeps it in the interpreter. Core layer.
+ * in the set the emitter knows and, for `on`, when it has a loop; any other stays in the interpreter. Core layer.
  */
 #include "jit.h"
 
@@ -17,9 +17,51 @@ static uint32_t plain_op(uint32_t op) {
   return op >= AGC_FUSED_CONST_FIRST ? AGC_OP_CONST : AGC_OP_STEP;
 }
 
+/* True for the instructions the emitter knows: MOVE, CONST, STEP, the Int operators and compares, EQ, NE, the jumps
+   and RETURN. Keep it the same set as the cases of emit_function; jit_test.c compiles a function of each opcode that
+   this accepts. */
+static bool known(uint32_t op) {
+  switch (plain_op(op)) {
+    case AGC_OP_MOVE:
+    case AGC_OP_CONST:
+    case AGC_OP_STEP:
+    case AGC_OP_ADD_I:
+    case AGC_OP_SUB_I:
+    case AGC_OP_MUL_I:
+    case AGC_OP_DIV_I:
+    case AGC_OP_MOD_I:
+    case AGC_OP_NEG_I:
+    case AGC_OP_LT_I:
+    case AGC_OP_LE_I:
+    case AGC_OP_EQ:
+    case AGC_OP_NE:
+    case AGC_OP_JUMP:
+    case AGC_OP_JUMP_IF_FALSE:
+    case AGC_OP_JUMP_IF_TRUE:
+    case AGC_OP_RETURN: return true;
+    default: return false;
+  }
+}
+
+/* Why F stays in the interpreter with MODE, for the trace, or NULL when it may be compiled: the name of the first
+   instruction the emitter does not know, at *PC, or "none" with *PC past the end. With `on`, a function without a loop
+   stays out: it runs each instruction at most once per entry, and the entry, the exit and the RETURN in the
+   interpreter cost more than the few instructions it saves. `always` compiles it, so the tests run the emitter on
+   every function it knows. */
+static const char *kept_out(const agc_function *f, agc_jit_mode mode, uint32_t *pc) {
+  bool loop = false;
+  for (*pc = 0; *pc < f->count; (*pc)++) {
+    agc_instr in = f->code[*pc];
+    if (!known(in.op)) return agc_opcode_name(plain_op(in.op));
+    uint32_t op = plain_op(in.op), bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+    if ((op == AGC_OP_JUMP || op == AGC_OP_JUMP_IF_FALSE || op == AGC_OP_JUMP_IF_TRUE) && bx <= *pc) loop = true;
+  }
+  return mode == AGC_JIT_ON && !loop ? "none" : NULL;
+}
+
 #if AGC_JIT_HOST
-/* The code of F, or 0 with *BAD the pc of the first instruction the emitter does not know (UINT32_MAX when an operand
-   or the code did not fit). The set: MOVE, CONST, STEP, the Int operators and compares, EQ, NE, the jumps and RETURN. */
+/* The size of F's code, or 0 with *BAD the pc of an instruction that has no case here (UINT32_MAX when an operand or
+   the code did not fit). Its cases are the set of `known`, which kept every other function out. */
 static size_t emit_function(agc_emitter *e, const agc_function *f, uint32_t *bad) {
   agc_emit_begin(e, f->count);
   for (uint32_t pc = 0; pc < f->count; pc++) {
@@ -74,9 +116,11 @@ static agc_jit_code compile(agc_jit *jit, uint32_t function) {
   uint32_t bad;
   size_t size = emit_function(&e, f, &bad);
   if (!size) {
-    const char *op = bad < f->count ? agc_opcode_name(plain_op(f->code[bad].op)) : "size";
-    AGC_TRACE(jit->trace, AGC_TRACE_JIT, "skip function=%.*s pc=%" PRIu32 " op=%s", agc_trace_len(f->name->bytes),
-              f->name->data, bad, op);
+    if (bad < f->count)
+      AGC_TRACE(jit->trace, AGC_TRACE_JIT, "skip function=%.*s pc=%" PRIu32 " op=%s", agc_trace_len(f->name->bytes),
+                f->name->data, bad, agc_opcode_name(plain_op(f->code[bad].op)));
+    else
+      AGC_TRACE(jit->trace, AGC_TRACE_JIT, "skip function=%.*s size", agc_trace_len(f->name->bytes), f->name->data);
     return skip(jit, function);
   }
   size_t pages = (size + PAGE - 1) / PAGE * PAGE;
@@ -116,7 +160,24 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function) {
 
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace) {
   if (mode == AGC_JIT_OFF || !AGC_JIT_HOST) return NULL;
-  size_t n = program->function_count ? program->function_count : 1;
+  /* Each function is decided once, here: a function kept out is never counted or walked again, and a run where every
+     function is kept out has no JIT (nothing is allocated), so it runs the plain copy of the turn loop, the code of
+     --jit off. The first pass traces the functions kept out, the second marks them. */
+  bool any = false;
+  for (uint32_t k = 0; k < program->function_count; k++) {
+    const agc_function *f = &program->functions[k];
+    uint32_t pc;
+    const char *op = kept_out(f, mode, &pc);
+    if (!op)
+      any = true;
+    else if (pc < f->count)
+      AGC_TRACE(trace, AGC_TRACE_JIT, "skip function=%.*s pc=%" PRIu32 " op=%s", agc_trace_len(f->name->bytes),
+                f->name->data, pc, op);
+    else
+      AGC_TRACE(trace, AGC_TRACE_JIT, "skip function=%.*s loop=none", agc_trace_len(f->name->bytes), f->name->data);
+  }
+  if (!any) return NULL;
+  size_t n = program->function_count;
   agc_jit *jit = agc_alloc(sizeof *jit);
   jit->program = program;
   jit->mode = mode;
@@ -124,10 +185,11 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   jit->code = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->code));
   jit->entries = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->entries));
   jit->skip = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->skip));
-  for (size_t k = 0; k < n; k++) {
+  for (uint32_t k = 0; k < n; k++) {
+    uint32_t pc;
     atomic_init(&jit->code[k], NULL);
     atomic_init(&jit->entries[k], 0);
-    atomic_init(&jit->skip[k], false);
+    atomic_init(&jit->skip[k], kept_out(&program->functions[k], mode, &pc) != NULL);
   }
   atomic_init(&jit->used, 0);
   return jit;

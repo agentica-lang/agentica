@@ -63,15 +63,29 @@ and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
 `mem_windows.c` hold the code memory. Each file comes with its first use.
 
 **Built (x86-64):** `--jit MODE` (or `AGENTICA_JIT`; the flag wins): `off`,
-the default; `on`, which compiles a function at its 100th entry (a call, a
-return into it, or a turn that starts in it); `always`, at its first entry,
-for tests. Only the user's program is compiled; the front end stays in the
-interpreter. On another architecture every mode runs the interpreter. A
-function is compiled only when each of its instructions is `MOVE`, `CONST`,
-`STEP`, an Int operator or compare (`ADD_I` to `LE_I`), `EQ`, `NE`, a jump or
-`RETURN`, fused or not; any other instruction keeps the whole function in the
-interpreter.
+the default; `on`, which compiles a function that has a loop at its 100th
+entry (a call, a return into it, or a turn that starts in it); `always`, any
+eligible function at its first entry, for tests. Only the user's program is
+compiled; the front end stays in the interpreter. On another architecture
+every mode runs the interpreter. A function is eligible only when each of its
+instructions is `MOVE`, `CONST`, `STEP`, an Int operator or compare (`ADD_I`
+to `LE_I`), `EQ`, `NE`, a jump or `RETURN`, fused or not; any other
+instruction keeps the whole function in the interpreter.
 
+- Decided once: the JIT looks at every function when the run starts. A
+  function that `on` will not compile is never counted or walked again, and
+  when no function is left the run has no JIT: it runs the plain turn loop,
+  the same code as `off`.
+- Why a loop: a function without a backward jump runs each instruction at
+  most once per entry, and the entry, the exit and the `RETURN` in the
+  interpreter cost more than those few instructions save. Blocks of 3 to 7
+  instructions that `filter`, `map` or `reduce` call a million times, and an
+  empty function called 20 million times (about 13 ns more per call), ran
+  slower compiled.
+- Why no JIT when nothing compiles: the jit copy of the turn loop has the same
+  handlers as the plain copy, but its machine code sits at other addresses,
+  which alone made programs that compiled nothing 6 to 10% slower or faster
+  than `off` (list-build slower, calls and string-library faster).
 - Entry: at each reload of the turn loop (a call, a return, the start of a
   turn) the interpreter tests one byte of the function and enters its code at
   `frame->pc` through a table of entry offsets, so a turn that ended inside a
@@ -86,13 +100,23 @@ interpreter.
   than two Ints. Each function has its own pages (64 MiB in all); when two
   schedulers compile one function at once, the first copy is kept.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
-  and a `skip` line with the first instruction that kept one out.
+  and a `skip` line for each function kept out: `pc=N op=OP` (the first
+  instruction the emitter does not know) or `loop=none` when the run starts,
+  and `size` when its code did not fit at compile time.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
-  switching in the middle of a loop, four schedulers), `make vm-jit-test` (the
-  goldens and their sweeps and `test_vm_multicore.py` with
-  `AGENTICA_JIT=always`, in CI) and `vm/tests/jit_test.c` (bytes, exits, the
-  read-execute seal, a compile race, also under `make vm-tsan`).
+  switching in the middle of a loop, four schedulers, a hot function without a
+  loop that `on` keeps out), `make vm-jit-test` (the goldens and their sweeps
+  and `test_vm_multicore.py` with `AGENTICA_JIT=always`, in CI; the same
+  compiled code as before the loop rule, but the jit copy of the turn loop now
+  runs only for programs with an eligible function, about 60 of the 313
+  goldens) and `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, a
+  compile race, every opcode the walk accepts has its emitter case, also
+  under `make vm-tsan`).
+- Known limits: a function with a loop that is called very often but whose
+  loop rarely runs still pays the entry and the exit at each call; and a
+  program with one eligible function keeps the jit copy of the turn loop (and
+  its layout effect) even if that function never gets hot.
 
 **Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
 never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and

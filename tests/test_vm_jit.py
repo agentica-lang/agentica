@@ -1,9 +1,10 @@
 """The JIT tier (`--jit`, docs/future/22-jit.md §22) changes no exit code, output, diagnostic, span or step count.
 
-Each program runs with `--jit off`, `on` and `always`, which compiles every eligible function at its first entry. Its
-eligible functions (Int loops, compares and jumps only) run the STEPs of their loops in compiled code, so the
-`--max-steps` sweep stops inside them, the turns of several tasks end inside them (by steps and by turn cost), their
-failures leave them, `on` switches to them in the middle of a loop, and four schedulers compile and run them at once.
+Each program runs with `--jit off`, `on` and `always`, which compiles every eligible function at its first entry (`on`
+only those with a loop, at their 100th entry). Its eligible functions (Int loops, compares and jumps only) run the
+STEPs of their loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end
+inside them (by steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and
+four schedulers compile and run them at once.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
@@ -196,6 +197,34 @@ end
 """
 
 
+# twice has no loop, so `on` keeps it in the interpreter however often it runs: each entry would run two instructions
+# in compiled code and pay for the entry, the exit and the RETURN in the interpreter. `always` compiles it.
+LOOP_FREE = """def twice(x: Int) -> Int
+  return x + x
+end
+
+def spin(n: Int) -> Int
+  i = 0
+  total = 0
+  while i < n
+    total = total + i % 7
+    i = i + 1
+  end
+  return total
+end
+
+def main() -> Void
+  sum = 0
+  k = 0
+  while k < 300
+    sum = twice(sum % 1000) + spin(k)
+    k += 1
+  end
+  puts(sum)
+end
+"""
+
+
 def runs(bytecode, *flags, env=None, schedulers=1):
     """{mode: (exit code, stdout, stderr)} of one program in each mode."""
     out = {}
@@ -212,13 +241,18 @@ def assert_same(bytecode, *flags, schedulers=1):
     return results["off"]
 
 
-def compiled(bytecode, tmp_path, mode="always"):
-    """The functions the jit trace says were compiled in a run with --jit MODE."""
+def jit_trace(bytecode, tmp_path, mode):
+    """The jit trace lines of a run with --jit MODE."""
     trace = tmp_path / "jit.trace"
     trace.unlink(missing_ok=True)
     run_vm(bytecode, "--jit", mode, "--schedulers", "1",
            env=vm_environment({"AGENTICA_VM_TRACE": "jit", "AGENTICA_VM_TRACE_FILE": trace}))
-    lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
+    return trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
+
+
+def compiled(bytecode, tmp_path, mode="always"):
+    """The functions the jit trace says were compiled in a run with --jit MODE."""
+    lines = jit_trace(bytecode, tmp_path, mode)
     return sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
 
 
@@ -292,6 +326,16 @@ def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_d
     assert compiled(bytecode, tmp_path) == (["same"] if X86_64 else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.endswith("\n24\n"), (stdout, stderr)
+
+
+def test_on_keeps_a_hot_function_without_a_loop_in_the_interpreter(tmp_path):
+    bytecode = compile_text(LOOP_FREE, "loop_free", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["spin"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "always") == (["spin", "twice"] if X86_64 else [])
+    skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=twice " in line]
+    assert len(skips) == (1 if X86_64 else 0) and all(line.endswith(" loop=none") for line in skips), skips
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.count("\n") == 1, stderr
 
 
 def test_a_bad_jit_mode_is_refused(tmp_path):
