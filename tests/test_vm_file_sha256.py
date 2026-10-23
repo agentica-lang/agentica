@@ -93,7 +93,7 @@ def test_sha256_accepts_spaces_and_symlinks(peer, tmp_path):
     result = check_matches_hashlib(peer, tmp_path, name, data)
     target = tmp_path / name
     if sys.platform == "win32":
-        pytest.skip("os.symlink needs a privilege Windows CI lacks")
+        pytest.skip("host-only: a symbolic link needs a privilege on Windows")
     linked = tmp_path / "linked.bin"
     os.symlink(target, linked)
     again = run_vm(peer, args=[str(linked)])
@@ -111,7 +111,7 @@ def test_sha256_refuses_what_is_not_a_regular_file(peer, tmp_path, name):
     assert 'filesystem: path does not refer to a regular file' in result.stderr, result.stderr
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="no FIFO or /dev/null on Windows")
+@pytest.mark.skipif(sys.platform == "win32", reason="host-only: Windows has no FIFO files and no /dev/null")
 def test_sha256_refuses_a_fifo_and_a_device_without_waiting(peer, tmp_path):
     fifo = tmp_path / "waiting"
     os.mkfifo(fifo)
