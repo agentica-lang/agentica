@@ -62,7 +62,8 @@ static void test_bad_signatures(void) {
   const char *bad[] = {"", "d", "dd", "dd cos", "zd cos " LIBM, "dz cos " LIBM, "dv cos " LIBM,
                        "dd  " LIBM, " cos " LIBM, "yd cos " LIBM, "rd cos " LIBM,
                        "rd cos free " LIBM, "rd cos  Mem " LIBM, "rd cos free M\xc3\xa9m " LIBM,
-                       "rd cos free 1Mem " LIBM, "rd cos free M.em " LIBM};
+                       "rd cos free 1Mem " LIBM, "rd cos free M.em " LIBM, ". cos " LIBM, "d.d cos " LIBM,
+                       "dd..d cos " LIBM, "dd.d.d cos " LIBM, "dd.b cos " LIBM, "dd.D cos " LIBM, "dd.R cos " LIBM};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);
@@ -89,6 +90,13 @@ static void test_calls(void) {
   agc_value s = text("h\xc3\xa9llo");
   assert(agc_as_int(&vm, native_call("ls strlen " LIBC, &s, 1)) == 6);
   fails("v no_such_function_here " LIBC, NULL, 0, "RUNTIME-NATIVE-LOAD");
+#ifndef _WIN32
+  /* A variadic call: snprintf(NULL, 0, "%d-%s", 42, "ab") counts 5 characters; the UCRT has no snprintf to export. */
+  agc_value printed[5] = {agc_c_pointer_value(NULL), agc_int(0), text("%d-%s"), agc_int(42), text("ab")};
+  assert(agc_as_int(&vm, native_call("ipls.is snprintf " LIBC, printed, 5)) == 5);
+  agc_value bare[3] = {agc_c_pointer_value(NULL), agc_int(0), text("abc")};
+  assert(agc_as_int(&vm, native_call("ipls. snprintf " LIBC, bare, 3)) == 3);
+#endif
   fails("v f libnot_there_at_all.so", NULL, 0, "RUNTIME-NATIVE-LOAD");
 #else
   fails("dd cos " LIBM, NULL, 0, "RUNTIME-NATIVE-LOAD");

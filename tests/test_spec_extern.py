@@ -135,6 +135,71 @@ def test_an_extern_function_takes_at_most_64_parameters(tmp_path):
         "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: C.Int32")))
 
 
+VARIADIC = """extern "libc.so.6"
+  resource Stream, free: fclose
+  def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32
+  def fcntl_flags(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
+  def fcntl_get(fd: C.Int32, cmd: C.Int32, ...,) -> C.Int32 = "fcntl"
+  compute def fprintf(stream: Stream, format: C.String, ..., a: C.Int64, b: C.Double, c: C.Bytes) -> C.Int32
+  def frexp_into(x: C.Double, out exponent: C.Int32, ..., p: C.Pointer, s: Stream) -> C.Double = "frexp"
+end
+
+def main() -> Void
+  puts(open("x", 0, 420) + fcntl_flags(3, 2, 1) + fcntl_get(3, 1))
+end
+
+def write(s: Stream) -> Int
+  return frexp_into(1.0, Native.null(), s).exponent + fprintf(s, "%d %f", 1, 2.0, [0])
+end
+"""
+
+
+# `...` starts the variadic part, whose parameters are ordinary typed parameters for the checker; `= "symbol"` names
+# the C function, so one C function can be declared in several shapes.
+def test_a_variadic_extern_function_checks_like_any_other(tmp_path):
+    assert check(source(tmp_path, VARIADIC)).code == 0
+    bad = VARIADIC.replace('fcntl_flags(3, 2, 1)', 'fcntl_flags(3, 2, "1")')
+    assert at(problem_of(check(source(tmp_path, bad))))[:2] == ("CHECK-TYPE-MISMATCH", (11, 46))
+
+
+@pytest.mark.parametrize("signature, code, start, stop", [
+    ("def f(...) -> Void", "PARSE-EXTERN-VARIADIC-FIXED", (2, 9), (2, 12)),
+    ("def f(a: C.Int32, ..., ...) -> Void", "PARSE-EXTERN-VARIADIC", (2, 26), (2, 29)),
+    ("def f(a: C.Int32, ..., b: C.Int32, ...) -> Void", "PARSE-EXTERN-VARIADIC", (2, 38), (2, 41)),
+    ("def f(a: C.Int32, ..., b: C.Bool) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 35)),
+    ("def f(a: C.Int32, ..., out b: C.Int32) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 26), (2, 40)),
+    ("def f(a: C.Int32, ..., b: C.Float) -> Void", "PARSE-EXTERN-TYPE", (2, 29), (2, 36)),
+    ('def f(a: C.Int32) -> Void = "a b"', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 36)),
+    ('def f(a: C.Int32) -> Void = "1a"', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 35)),
+    ('def f(a: C.Int32) -> Void = ""', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 33)),
+    ('def f(a: C.Int32) -> Void = "f?"', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 35)),
+    ('def f(a: C.Int32) -> Void = "x#{1}"', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 38)),
+    ("def f(a: C.Int32) -> Void = fcntl", "PARSE-UNEXPECTED-TOKEN", (2, 31), (2, 36)),
+    ("def f(a: C.Int32 ...) -> Void", "PARSE-UNEXPECTED-TOKEN", (2, 20), (2, 23)),
+])
+def test_the_variadic_part_and_the_c_name_have_rules(tmp_path, signature, code, start, stop):
+    text = 'extern "libc.so.6"\n  %s\nend\n' % signature
+    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+
+
+def test_a_variadic_part_belongs_to_an_extern_function(tmp_path):
+    text = "def f(a: Int, ...) -> Void\nend\n"
+    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-VARIADIC", (1, 15), (1, 18))
+
+
+def test_the_c_name_of_a_def_may_not_be_a_free_function(tmp_path):
+    text = 'extern "libc.so.6"\n  resource Stream, free: fclose\n  def done(s: Stream) -> C.Int32 = "fclose"\nend\n'
+    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-FREE", (3, 36), (3, 44))
+
+
+def test_the_variadic_part_counts_toward_64_parameters(tmp_path):
+    params = ", ".join("p%d: C.Int32" % k for k in range(63))
+    ok = 'extern "libc.so.6"\n  def f(first: C.Int32, ..., %s) -> Void\nend\n' % params
+    assert check(source(tmp_path, ok)).code == 0
+    over = 'extern "libc.so.6"\n  def f(first: C.Int32, ..., %s, extra: C.Int32) -> Void\nend\n' % params
+    assert at(problem_of(check(source(tmp_path, over))))[0] == "PARSE-EXTERN-ARITY"
+
+
 def test_an_extern_block_follows_the_blank_line_rule(tmp_path):
     text = 'def main() -> Void\nend\nextern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\nend\n'
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-MISSING-BLANK-LINE", (3, 1))

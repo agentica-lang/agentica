@@ -73,7 +73,7 @@ end
 - `out NAME: T` is an out parameter (`T` is `C.Int32`, `C.Int64`, `C.Double`,
   `C.Bool`, `C.Pointer` or a resource; else `PARSE-EXTERN-OUT`). The caller
   does not pass it; C writes through a pointer to a zeroed slot. The call
-  returns a record named after the C name in CamelCase (`Sqlite3Open`), with
+  returns a record named after the function in CamelCase (`Sqlite3Open`), with
   `result` (the C result; none for `Void`) and one field per out parameter.
   An out resource field is the resource (not a `Result`): owned by the task
   when C wrote a pointer, closed (never freed, calls fail with
@@ -127,7 +127,21 @@ end
   `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
+- Variadic C functions: `...` where the variadic part starts, then the C type
+  of each argument the calls pass. `= "c_name"` after the result names the C
+  function when the `def` name differs, so one function takes several shapes.
+  `...` needs a parameter before it (`PARSE-EXTERN-VARIADIC-FIXED`), once, in
+  an extern block (`PARSE-EXTERN-VARIADIC`); after it no `out` and no `C.Bool`
+  (C promotes it: write `C.Int32`; `PARSE-EXTERN-VARIADIC-TYPE`); the C name
+  is letters, digits and `_` (`PARSE-EXTERN-SYMBOL`). Never declare a variadic
+  function without `...`: on Apple arm64 its arguments go on the stack.
+
+  ~~~ruby
+  extern "libc.so.6"
+    def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32
+    def fcntl_get(fd: C.Int32, cmd: C.Int32, ...) -> C.Int32 = "fcntl"
+    def fcntl_set(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
+  end
+  ~~~
 - Functions count as `def`s for the declaration order, resources as types. A
-  wrong signature is undefined behavior in C: copy it from the C header. No
-  variadic functions (`printf`): a fixed signature is undefined behavior, and
-  wrong on Apple arm64.
+  wrong signature is undefined behavior in C: copy it from the C header.

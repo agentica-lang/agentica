@@ -76,8 +76,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   compute call holds its resource arguments in `jobs` and the last one runs a
   deferred free), the zeroed slots of `out` parameters (capital codes; the call
   gives a List that the lowered body turns into the function's record, and a
-  detached compute call frees its out resources in `done`), and
-  `agc_ffi_refusal`, which `agc_launch_native` calls at load (`--deny-native`,
+  detached compute call frees its out resources in `done`), the `.` code that
+  starts the variadic part (`ffi_prep_cif_var`; no `.agcb` format change, the
+  signature is a string constant), and `agc_ffi_refusal`, which `agc_launch_native` calls at load (`--deny-native`,
   systems without libffi). A `compute def`'s signature starts with `compute `:
   the call goes to the compute pool (`vm/compute.c`) through `agc_io_compute` in
   `vm/loop.c`, and the task parks. `Native.wait_readable` and `wait_writable`

@@ -88,7 +88,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
       return print_decl(lines, child, "declaration", node.declaration)
     Ast.Decl.Function(node) ->
-      attrs = name_attr(node.name) + doc_attr(node.doc) + native_attr(node.native)
+      attrs = name_attr(node.name) + doc_attr(node.doc) + native_attr(node.name, node.native)
       lines = out.push(head(at, role, "function-decl", node.id, node.span, attrs))
       for param in node.params
         lines = print_param(lines, child, param)
@@ -149,23 +149,26 @@ def doc_attr(doc: Ast.Optional[String]) -> String
   return text_attr(" doc=", doc)
 end
 
-# The library and the C type codes of an extern function, compute=true for a compute def, the resource and its free
-# function for one that returns a resource, and each out resource with its free function; nothing for an ordinary
-# function.
-def native_attr(native: Ast.Optional[Ast.Native]) -> String
+# The library and the C type codes of an extern function, its C name when it is not the def's name, compute=true for
+# a compute def, the resource and its free function for one that returns a resource, and each out resource with its
+# free function; nothing for an ordinary function.
+def native_attr(name: String, native: Ast.Optional[Ast.Native]) -> String
   case native
     Ast.Optional.Present(link) ->
-      compute = ""
+      extra = ""
+      if link.symbol != name
+        extra += " symbol=#{Text.quote(link.symbol)}"
+      end
       if link.compute
-        compute = " compute=true"
+        extra += " compute=true"
       end
       if link.free != ""
-        compute += " resource=#{Text.quote(link.resource)} free=#{Text.quote(link.free)}"
+        extra += " resource=#{Text.quote(link.resource)} free=#{Text.quote(link.free)}"
       end
       for out in link.outs
-        compute += " out=#{Text.quote(out.name)} free=#{Text.quote(out.free)}"
+        extra += " out=#{Text.quote(out.name)} free=#{Text.quote(out.free)}"
       end
-      return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{compute}"
+      return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{extra}"
     Ast.Optional.Absent -> return ""
   end
 end

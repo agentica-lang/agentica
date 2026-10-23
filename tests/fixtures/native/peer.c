@@ -4,6 +4,7 @@
    sockets there. */
 #define _GNU_SOURCE
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -63,6 +64,27 @@ int64_t peer_sum9(int32_t a, int32_t b, int32_t c, int32_t d, int32_t e, int32_t
 double peer_mix(int32_t a, double b, int64_t c, bool d, const char *s, double e, double f, double g, double h,
                 double i, double j, double k, double l) {
   return a + b + (double)c + (d ? 1000.0 : 0.0) + (double)strlen(s) + e + f + g + h + i + j + k + l;
+}
+
+/* A variadic function: KINDS names the type of each variadic argument (i int, l int64_t, d double, s a string, which
+   adds its length, y bytes, which add the first byte, p a pointer, which adds its address), and it returns the sum. */
+double peer_vmix(const char *kinds, ...) {
+  va_list args;
+  va_start(args, kinds);
+  double sum = 0;
+  for (const char *kind = kinds; *kind; kind++) {
+    switch (*kind) {
+      case 'i': sum += va_arg(args, int); break;
+      case 'l': sum += (double)va_arg(args, int64_t); break;
+      case 'd': sum += va_arg(args, double); break;
+      case 's': sum += (double)strlen(va_arg(args, const char *)); break;
+      case 'y': sum += *va_arg(args, const uint8_t *); break;
+      case 'p': sum += (double)(intptr_t)va_arg(args, void *); break;
+      default: break;
+    }
+  }
+  va_end(args);
+  return sum;
 }
 
 /* For compute defs, which run on a pool thread. peer_wait_flag returns 1 once peer_set_flag (a fast call from another

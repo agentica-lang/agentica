@@ -33,7 +33,7 @@ keeps their records.
      W^X code memory.
   2. The rest of the FFI core: FFI-b (native libraries in packages; done),
      variadic C functions
-     ([#619](https://github.com/sonic182/agentica/issues/619)), and from
+     ([#619](https://github.com/sonic182/agentica/issues/619); done), and from
      [#594](https://github.com/sonic182/agentica/issues/594) owned
      buffers and typed memory, `C.Float`, structs by value, function pointers
      and downloaded prebuilt libraries. No callbacks.

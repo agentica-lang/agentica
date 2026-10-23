@@ -10,6 +10,7 @@ only sockets, so the peer's "pipe" is a loopback TCP pair there. Tests assert co
 """
 import ctypes
 import json
+import os
 import platform
 import subprocess
 import time
@@ -733,6 +734,128 @@ def test_the_record_of_an_out_call_crosses_an_import(tmp_path, peer):
                    '  return made.twice\nend\n\ndef main() -> Void\n  puts(twice(Raw.peer_out_twice(4)))\nend\n')
     result = agentica(main)
     assert (result.code, result.stdout, result.stderr) == (0, "8\n", "")
+
+
+VARIADIC_EXTERN = """extern "{library}"
+  def vmix_ints(kinds: C.String, ..., a: C.Int32, b: C.Int64, c: C.Int32) -> C.Double = "peer_vmix"
+  def vmix_doubles(kinds: C.String, ..., a: C.Double, b: C.Double) -> C.Double = "peer_vmix"
+  def vmix_none(kinds: C.String, ...) -> C.Double = "peer_vmix"
+  def vmix_wide(
+    kinds: C.String, ..., a: C.Int32, b: C.Double, c: C.Int64, d: C.String, e: C.Bytes, f: C.Pointer, g: C.Double,
+    h: C.Double, i: C.Double, j: C.Double, k: C.Double, l: C.Double, m: C.Double, n: C.Double, o: C.Double,
+    p: C.Int64, q: C.Int32,
+  ) -> C.Double = "peer_vmix"
+  compute def vmix_pool(kinds: C.String, ..., a: C.Double, b: C.Int32) -> C.Double = "peer_vmix"
+end
+
+"""
+
+
+# One variadic C function declared in five shapes with `= "peer_vmix"`: ints, doubles, none, a mix with more
+# arguments than registers (so some go on the stack on every ABI), and a compute def. On Apple arm64 every variadic
+# argument goes on the stack, and on Windows x64 a variadic double goes in an integer register too: a fixed signature
+# would read them wrong there.
+@NATIVE_CALLS
+def test_a_variadic_function_gets_the_arguments_of_its_declared_shape(tmp_path, peer):
+    main = """def main() -> Void
+  puts(vmix_ints("ili", 40, 9_000_000_000, -2))
+  puts(vmix_doubles("dd", 0.25, 1.5))
+  puts(vmix_none(""))
+  puts(
+    vmix_wide(
+      "idlsypdddddddddli", 1, 0.5, 2, "four", [200, 0], Native.pointer(64), 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
+      1.0, 3_000_000_000, -7,
+    ),
+  )
+  puts(vmix_pool("di", 0.5, 8))
+end
+"""
+    result = agentica(program(tmp_path, VARIADIC_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    wide = 1 + 0.5 + 2 + 4 + 200 + 64 + 9 * 1.0 + 3_000_000_000 - 7
+    assert result.stdout.split("\n") == ["9000000038.0", "1.75", "0.0", repr(float(wide)), "8.5", ""]
+
+
+# The C library's own variadic functions: open with O_CREAT and a mode (the mode is the variadic argument), and
+# snprintf with an int, a double, a string and C.Bytes after the format. The buffer is malloc'd, as C.Bytes is a copy
+# that C cannot write back. Windows has these as _open in the UCRT and _snprintf in msvcrt.dll (the UCRT's snprintf is
+# a header inline, not an export), and a mode of _S_IREAD alone makes the file read-only there. The flag values are
+# the target's, not this Python's, which may be Linux under Wine.
+@NATIVE_CALLS
+def test_libc_variadic_functions_open_a_file_with_a_mode_and_format_text(tmp_path):
+    made = tmp_path / "made.txt"
+    if WINDOWS:
+        library, opened, closed, printed, flags, mode = LIBC, "_open", "_close", "_snprintf", 0x0100 | 0x0001, 0x0100
+        text = 'extern "msvcrt.dll"\n  def snprintf(buffer: C.Pointer, size: C.Int64, format: C.String, ..., ' \
+               'a: C.Int32, b: C.Double, c: C.String, d: C.Bytes) -> C.Int32 = "%s"\nend\n\n' % printed
+    else:
+        library, opened, closed, flags, mode = LIBC, "open", "close", (0x200 if MACOS else 0o100) | 0o1, 0o640
+        text = 'extern "%s"\n  def snprintf(buffer: C.Pointer, size: C.Int64, format: C.String, ..., ' \
+               'a: C.Int32, b: C.Double, c: C.String, d: C.Bytes) -> C.Int32\nend\n\n' % library
+    text += """extern "%s"
+  def open_file(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32 = "%s"
+  def close_file(fd: C.Int32) -> C.Int32 = "%s"
+  def malloc(size: C.Int64) -> C.Pointer
+  def free(block: C.Pointer) -> Void
+end
+
+def main() -> Void
+  fd = open_file("%s", %d, %d)
+  puts(fd >= 0)
+  puts(close_file(fd))
+  buffer = malloc(64)
+  puts(snprintf(buffer, 64, "%%d %%.2f %%s %%s", 42, 2.5, "hi", [121, 111, 0]))
+  puts(Native.string_at(buffer))
+  free(buffer)
+end
+""" % (library, opened, closed, literal(made), flags, mode)
+    try:
+        result = agentica(program(tmp_path, text))
+        assert (result.code, result.stderr) == (0, "")
+        assert result.stdout.split("\n") == ["true", "0", "13", "42 2.50 hi yo", ""]
+        if WINDOWS:
+            assert made.stat().st_mode & 0o200 == 0
+        else:
+            umask = os.umask(0)
+            os.umask(umask)
+            assert made.stat().st_mode & 0o777 == 0o640 & ~umask
+    finally:
+        if made.exists():
+            made.chmod(0o600)
+
+
+# fcntl in two shapes of one C function (= "fcntl"): F_GETFD and F_GETFL take no variadic argument, F_SETFD takes an
+# int. The constants are the same on Linux and macOS. On Linux x86_64 syscall(SYS_getpid = 39) gives the process id.
+@NATIVE_CALLS
+@host_only(WINDOWS, "Windows has no fcntl or syscall")
+def test_fcntl_in_two_shapes_and_syscall(tmp_path):
+    made = tmp_path / "flags.txt"
+    flags = (0x200 if MACOS else 0o100) | 0o1
+    main = """extern "%s"
+  def open_file(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32 = "open"
+  def close(fd: C.Int32) -> C.Int32
+  def fcntl_get(fd: C.Int32, cmd: C.Int32, ...) -> C.Int32 = "fcntl"
+  def fcntl_set(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
+  def syscall(number: C.Int64, ...) -> C.Int64
+end
+
+def main() -> Void
+  fd = open_file("%s", %d, 384)
+  puts(fcntl_get(fd, 1))
+  puts(fcntl_set(fd, 2, 1))
+  puts(fcntl_get(fd, 1))
+  puts(fcntl_get(fd, 3) %% 4)
+  puts(close(fd))
+  if System.os == "linux"
+    puts(syscall(39) == System.pid)
+  else
+    puts(true)
+  end
+end
+""" % (LIBC, literal(made), flags)
+    result = agentica(program(tmp_path, main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["0", "0", "1", "1", "0", "true", ""]
 
 
 # A compute call fills its out slots on the pool thread. Its task gets a resource that it owns (its end frees it); a

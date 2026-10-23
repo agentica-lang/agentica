@@ -37,12 +37,16 @@ typedef struct agc_ffi_call agc_ffi_call;
 /* True when this build can call native code. */
 bool agc_ffi_supported(void);
 
+/* The FIXED of agc_ffi_prepare for a function that is not variadic. */
+#define AGC_FFI_NOT_VARIADIC UINT32_MAX
+
 /* Opens LIBRARY (a name the system loader searches, or a path: with a "/", and on Windows also a "\" or a drive),
-   finds SYMBOL in it and prepares the call of RESULT SYMBOL(PARAMS[0..COUNT)). NULL with a message in ERROR (SIZE
+   finds SYMBOL in it and prepares the call of RESULT SYMBOL(PARAMS[0..COUNT)). A variadic function has FIXED
+   parameters before its `...` (1 to COUNT), the others AGC_FFI_NOT_VARIADIC. NULL with a message in ERROR (SIZE
    bytes) when the library or the symbol is missing, COUNT is above AGC_FFI_MAX_PARAMS or the build cannot call native
    code. A library that holds SYMBOL stays open until the process ends. */
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
-                              uint32_t count, char *error, size_t size);
+                              uint32_t count, uint32_t fixed, char *error, size_t size);
 
 /* Frees a prepared call that no run uses (the free function of a resource was not found), and gives back its hold on
    the library. */
