@@ -1,6 +1,7 @@
 ## The module linker: loads the root file and its imports (modules.agc) and rewrites them into one program
 ## (rewrite.agc).
 
+import NativeLibrary from "../packages/native_library"
 import Ast from "../syntax/ast"
 import Declarations from "declarations"
 import Env from "link_env"
@@ -18,6 +19,8 @@ import Rewrite from "rewrite"
 ## declaration and with it the `##` doc that sits on the export, so the docs of a file (`agentica type-at`) are read
 ## from here. named maps each local name of an import list (`create` of `import {make as create} from "models"`) to
 ## the linked name of what it stands for (`@2::make`), so a query can tell which declaration an imported name selects.
+## libraries are the native files of its package that its extern functions name by path (the bytecode cache watches
+## them).
 export struct LinkedModule
   key: String
   file: String
@@ -30,6 +33,7 @@ export struct LinkedModule
   aliases: Map[String, String]
   named: Map[String, String]
   parsed: Ast.Program
+  libraries: List[String]
 end
 
 ## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
@@ -291,6 +295,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
       aliases: module.aliases,
       named: linked_names(module, loaded.modules),
       parsed: module.program,
+      libraries: NativeLibrary.files(module.origin.natives),
     ),
   )
 end

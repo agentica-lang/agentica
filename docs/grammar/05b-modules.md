@@ -151,10 +151,10 @@ max_line_width = 119
 import Sqlite from "pkg/sqlite/db"
 ```
 
-- The manifest knows `name`, `[dependencies]`, `[style]` and `[workspace]`
-  (below). An unknown key at any level, a value of the wrong form, or a TOML
-  syntax error is `PKG-MANIFEST-INVALID`. `name` is optional and follows the
-  rule of a dependency name below. `max_line_width` is an integer of 1 or more.
+- The manifest knows `name`, `[dependencies]`, `[native]`, `[style]` and
+  `[workspace]` (below). An unknown key at any level, a value of the wrong
+  form, or a TOML syntax error is `PKG-MANIFEST-INVALID`. `name` is optional
+  and follows the rule of a dependency name below. `max_line_width` is an integer of 1 or more.
 - A dependency is a local name and an inline table. The name is the key: a
   lowercase letter, then lowercase letters, digits, `_` and `-`, at most 64
   characters. It is the segment after `pkg/` in an import and has nothing to do
@@ -311,10 +311,10 @@ import Sqlite from "pkg/sqlite/db"
   but nothing outside the folder is listed, read or written; a `subdir` that the
   commit lacks, or that is a file, a symbolic link or a submodule there, is
   `PKG-FETCH` at `package[n].subdir`. A symbolic link or submodule named `*.agc`
-  or `agentica.toml` is `PKG-SYMLINK`, two copied paths that differ only in case
-  are `PKG-PATH-COLLISION` (only case: not Unicode normalisation or Windows
-  device names, which the hash still catches), a file over 1 MiB, or all files
-  over 16 MiB, is `PKG-FETCH` naming the file, and the hash of the copy must be
+  or `agentica.toml`, or in `native/`, is `PKG-SYMLINK`, two copied paths that
+  differ only in case are `PKG-PATH-COLLISION` (only case: not Unicode
+  normalisation or Windows device names, which the hash still catches), a file
+  over 1 MiB, or all files over 16 MiB, is `PKG-FETCH` naming the file, and the hash of the copy must be
   the locked hash (`PKG-HASH-MISMATCH`). The copy is built in a hidden `.tmp-*`
   folder of the cache root and renamed into place in one step (a killed install
   may leave that folder; delete it). git may ask for a password on a terminal;
@@ -431,23 +431,68 @@ import Sqlite from "pkg/sqlite/db"
   they were read. A link to a folder at `deps/<name>` is followed when a build
   reads it (the hash covers what is behind it); `install` replaces the link
   itself. A name the project does not declare is the `pkg/` library search.
-- The hash covers the `.agc` files of the package folder (for a `subdir`, that
-  folder of the repository, so a change in another folder does not change it).
+- The hash covers the `.agc` files of the package folder and every file of its
+  `native/` folder at the root (for a `subdir`, that folder of the
+  repository, so a change in another folder does not change it).
   Their paths are relative to it, written with `/`, in bytewise order; for each
   file, its path, a zero byte, its size in decimal, a zero byte and its bytes.
   The hash is `sha256:` and the SHA-256 of that stream in hex (`Crypto.sha256`).
   Hidden folders (any depth), `agc_libs/` at the root and files that are not
-  `.agc` are left out (`.agc` and `agc_libs` are compared without regard to
-  case, so `x.AGC` is hashed and `AGC_LIBS/` is left out on every system), so
+  `.agc` (outside `native/`) are left out (`.agc`, `agc_libs` and `native` are
+  compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
+  out on every system), so
   the `agentica.toml` of a package is not hashed: it can only choose among the
   names of the lock. The first time a build loads a package, it hashes the
   folder of `deps/` and compares the result with the lock
-  (`PKG-HASH-MISMATCH`); a symbolic link named `*.agc` is `PKG-SYMLINK`. A
+  (`PKG-HASH-MISMATCH`); a symbolic link named `*.agc`, or any link in
+  `native/`, is `PKG-SYMLINK`. A
   package that no import reaches is not hashed. A build changes nothing in
   `deps/`. The bytecode cache of `agentica FILE.agc` hashes only the files a
   program reads, so a new unused file in a `deps/` folder is caught by `check`
   or `--no-cache`, not by a cached run. A committed `deps/` needs no `install`
   to build.
+- Native libraries. A package declares them in its own manifest, one table
+  `[native.NAME]` for each library, where `NAME` follows the rule of a
+  dependency name and is what `extern "NAME"` writes in the files of the
+  package. Under it, one key for each system the library exists on: `linux`,
+  `macos` or `windows` (any other key is `PKG-MANIFEST-INVALID`; a macOS file
+  is a universal binary, and `linux` is any Linux the VM supports). Its value
+  is an inline table with exactly one of `file`, a path in the `native/` folder
+  of the package (plain folder names, as a `subdir`; the files of `native/` are
+  copied and hashed with the package, so the lock covers all systems, and each
+  is at most 1 MiB), or `system`, a name for the system loader (no `/`, `\` or
+  `:`; at most 128 characters), for a library the system has
+  (`winsqlite3.dll`). Another key, both keys or none are
+  `PKG-MANIFEST-INVALID` at the key path (`native.sqlite3.linux.file`).
+  ```toml
+  [native.sqlite3]
+  linux = { system = "libsqlite3.so.0" }
+  macos = { system = "libsqlite3.dylib" }
+  windows = { file = "native/windows/sqlite3.dll" }
+  ```
+  - In a file of the package, `extern "NAME"` with a `NAME` that its manifest
+    declares means the entry of the running system, chosen when the file is
+    compiled: a `file` becomes the absolute path of the file in
+    `deps/<package>/`, which the VM opens as it opens any absolute library (no
+    search, and `LD_LIBRARY_PATH` plays no part); a `system` name stays as
+    written. A `NAME` it does not declare stays as written. Nothing else in the
+    program changes, and `--deny-native` and `--sandbox` refuse the program as
+    for any `extern`.
+  - A package that declares the library but has no entry for the running
+    system is `PKG-NATIVE-PLATFORM`, and a `file` that the package lacks is
+    `PKG-NATIVE-MISSING`, when a file of the package that is compiled uses
+    that `NAME`. Both name the `agentica.toml` of the package and the key path
+    (`native.NAME`, `native.NAME.linux.file`), so a package works on the
+    systems it names and is refused only where it is used on another.
+  - A library that is a `file` is checked by the hash of the package when the
+    package is first loaded, so a changed file is `PKG-HASH-MISMATCH`. The
+    entry of the bytecode cache of `agentica FILE.agc` also holds the digest of
+    that file, so a change to it is a cache miss and the build runs again. The
+    bytecode that `agentica compile` writes names the file by its path on this
+    machine.
+  - `[native]` of a project's own manifest is checked but not used: the
+    project's files write the path in `extern`. A workspace member is read from
+    its folder with no hash, as its `.agc` files are.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

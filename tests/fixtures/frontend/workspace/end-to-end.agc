@@ -196,9 +196,10 @@ def main() -> Void
     home: "",
     local_app_data: "",
     windows: false,
+    os: "linux",
   )
   if given.windows
-    env = env.with(xdg_cache_home: "", local_app_data: "#{given.base}/cache", windows: true)
+    env = env.with(xdg_cache_home: "", local_app_data: "#{given.base}/cache", windows: true, os: "windows")
   end
   settings = Env.embedded_settings(in_memory(files_of(given)), env, given.version, false)
   puts(compile("#{given.base}/project/src/main.agc", given.out, settings))

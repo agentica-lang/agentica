@@ -8,6 +8,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A package can ship or name native libraries for its `extern` blocks:
+  `[native.NAME]` in its `agentica.toml` picks a file of its `native/` folder
+  or a system library name for `linux`, `macos` and `windows`. The files of
+  `native/` are part of the package hash in the lock. New codes
+  `PKG-NATIVE-PLATFORM` and `PKG-NATIVE-MISSING`.
+
 ### Changed
 
 - `Analysis.refresh` no longer checks again the modules that did not change,

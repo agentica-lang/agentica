@@ -16,6 +16,7 @@ import Workspace from "../modules/workspace"
 import Lock from "lock"
 import Manifest from "manifest"
 import Members from "members"
+import NativeLibrary from "native_library"
 import PackageHash from "package_hash"
 import Project from "project"
 
@@ -27,11 +28,13 @@ DEPS_FOLDER = "deps"
 
 ## The package a file belongs to. package is its local name, root the real folder of its files in deps/ and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
-## the project.
+## the project. natives says what each `extern "name"` of the package means (native_library.agc); it is empty for the
+## files of the project.
 export struct Origin
   package: String
   root: String
   label: String
+  natives: Map[String, NativeLibrary.Target]
 end
 
 ## A package that the build has loaded and hashed: the same fields as its Origin, and the names its own manifest
@@ -40,14 +43,16 @@ export struct Opened
   root: String
   label: String
   names: List[String]
+  natives: Map[String, NativeLibrary.Target]
 end
 
 ## What a build knows when it resolves an import: the deps/ folder of the project ("" when it has no manifest), the
-## names the project declares, the lock, the workspace of the project (none when it is in no workspace), the names that
-## the manifests of the locked packages declare (by package name; check_manifests reads them before any file is
-## loaded), and the packages loaded so far (by name).
+## names the project declares, the system the build runs on (`os`, for the native libraries), the lock, the workspace
+## of the project (none when it is in no workspace), the names that the manifests of the locked packages declare (by
+## package name; check_manifests reads them before any file is loaded), and the packages loaded so far (by name).
 export struct Scope
   deps: String
+  os: String
   direct: List[String]
   lock: Lock.Lock
   members: Members.Members
@@ -83,6 +88,7 @@ export def scope_of(project: Project.Project) -> Scope
     Project.Project.Bare ->
       return Scope(
         deps: "",
+        os: "",
         direct: [],
         lock: Lock.Lock(file: "", packages: []),
         members: Members.none(),
@@ -92,6 +98,7 @@ export def scope_of(project: Project.Project) -> Scope
     Project.Project.Declared(found) ->
       return Scope(
         deps: Paths.join(found.dir, DEPS_FOLDER),
+        os: "",
         direct: Project.direct_names(project),
         lock: found.lock,
         members: found.members,
@@ -103,7 +110,7 @@ end
 
 ## The origin of a file of the project.
 export def project_origin() -> Origin
-  return Origin(package: "", root: "", label: "")
+  return Origin(package: "", root: "", label: "", natives: {})
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
@@ -155,7 +162,7 @@ export def open_package(
   return ok(
     Located(
       file: target.unwrap!,
-      origin: Origin(package: name, root: package.root, label: package.label),
+      origin: Origin(package: name, root: package.root, label: package.label, natives: package.natives),
       name: stored_name(package.label, inner),
       opened: opened,
     ),
@@ -259,7 +266,8 @@ def load(
     try verify(workspace, locked, real.unwrap!, folder, site)
   end
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
-  return ok(Opened(root: real.unwrap!, label: Lock.label(locked), names: names))
+  natives = try natives_of(workspace, scope, real.unwrap!, site)
+  return ok(Opened(root: real.unwrap!, label: Lock.label(locked), names: names, natives: natives))
 end
 
 def verify(
@@ -346,6 +354,21 @@ def declared_names(
       return error(Failure.fail_at(site, "PKG-SYMLINK", message, Failure.hint("a manifest is a file of the package")))
     Shape.Unlisted(message) ->
       return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read the package: #{message}", Diag.Help.NoHelp))
+  end
+end
+
+# What the `[native]` table of the manifest of the package means on this system. A package with no manifest has none.
+def natives_of(
+  workspace: Workspace.Workspace,
+  scope: Scope,
+  root: String,
+  site: Failure.Site,
+) -> Result[Map[String, NativeLibrary.Target]]
+  case shape_of(workspace, root)
+    Shape.Regular ->
+      manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
+      return ok(NativeLibrary.resolve(workspace, manifest, root, scope.os))
+    _ -> return ok({})
   end
 end
 

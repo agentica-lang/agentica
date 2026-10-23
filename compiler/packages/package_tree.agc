@@ -1,6 +1,7 @@
-## What the fetch copies from a commit (docs/future/45-packages.md, 45.8): the `.agc` files of the package and its
-## agentica.toml, chosen from the listing that `git ls-tree -r -z -l` gives. The rules of the hash decide which files
-## count (package_hash.agc), so the copy holds what the hash covers and nothing else. This reads text and does no I/O.
+## What the fetch copies from a commit (docs/future/45-packages.md, 45.8): the `.agc` files of the package, the files
+## of its native/ folder and its agentica.toml, chosen from the listing that `git ls-tree -r -z -l` gives. The rules of
+## the hash decide which files count (package_hash.agc), so the copy holds what the hash covers and nothing else. This
+## reads text and does no I/O.
 
 import PackageHash from "package_hash"
 
@@ -124,13 +125,14 @@ def skipped?(parts: List[String]) -> Bool
   return false
 end
 
-# Only the manifest at the root and the source files are copied. The manifest in another case is left out, unless it is
-# a link: the build refuses a manifest of any case that is not a regular file, so the fetch refuses it too.
+# Only the manifest at the root, the source files and the files of native/ are copied. The manifest in another case is
+# left out, unless it is a link: the build refuses a manifest of any case that is not a regular file, so the fetch
+# refuses it too.
 def copied?(parts: List[String], name: String, mode: String) -> Bool
   if parts.size == 1 and PackageHash.fold(name) == MANIFEST_FILE
     return name == MANIFEST_FILE or LINK_MODES.include?(mode)
   end
-  return PackageHash.source_file?(name)
+  return PackageHash.source_file?(name) or PackageHash.native_path?(parts.join("/"))
 end
 
 # No empty, `.` or `..` part and no backslash or colon, which a file system could read as another place. Git does not

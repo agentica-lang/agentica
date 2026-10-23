@@ -21,7 +21,7 @@ compiler/         # the front end (§18.3): one folder per context; a new file g
   io/             # the adapter to the machine: the only stage code that reads files and the environment (host.agc builds the Workspace); package fetch and deps/, bytecode cache, stdin buffer
   syntax/         # source text, UTF-8 rules (source_file.agc), lexer, parser, AST, types.agc (the Type enum), suggest.agc (did_you_mean), unicode_table.agc (hand-edited, Unicode 17.0)
   modules/        # the linker: workspace.agc (the port of the stages to the machine), modules.agc (load), resolve_import.agc (std/, pkg/, relative; std/internal/ is for std only), link_env.agc (Env, Settings), overlay.agc (buffers)
-  packages/       # §45: manifest, lock, workspace members, cache and hash; no I/O
+  packages/       # §45: manifest, lock, workspace members, cache, hash and native libraries (native_library.agc); no I/O
   check/          # the checker; check_tables.agc (method tables and foreign-name helps, hand-edited); defaults.agc (shared with lowering); check_prelude.agc and prelude_files.agc (stages.md)
   catalog/        # the builtin catalog (imports only syntax/): builtins_data.agc (rows, hand-edited), prelude_data.agc (by hand), catalog_json.agc (`help --json`)
   lower/          # the IR and lowering; lower_tables.agc holds VM_BUILTINS

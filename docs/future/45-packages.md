@@ -2,11 +2,9 @@
 
 **Status:** Built. The parts (45-0 `std/toml`, the manifest, the lock and the
 cache imports of 45a, the fetch and `install` of 45b, `add`, `update` and the
-writers of 45c, and the `deps/` folder of #578) are specified in
-[`05b-modules.md`](../grammar/05b-modules.md), the contract. This file keeps
-the decisions. Only the native packages (FFI-b, issue
-[#534](https://github.com/sonic182/agentica/issues/534)) are left; they are
-planned for 0.10.
+writers of 45c, the `deps/` folder of #578, and the native libraries of 45.10)
+are specified in [`05b-modules.md`](../grammar/05b-modules.md), the contract.
+This file keeps the decisions.
 
 Decided by the owner:
 
@@ -133,11 +131,44 @@ the command lines, the files they write and the `PKG-` codes are in
 
 ### 45.10 Native code
 
-Packages are pure Agentica. A native package, such as a wrapper of the
-SQLite C library, needs the FFI and a native library. The design is in
-[issue #534](https://github.com/sonic182/agentica/issues/534): a prebuilt or
-system library first, with its hash in the lock. Compiling at install, which
-breaks "no code runs at install", comes later and needs its own grant.
+**Built (FFI-b, issue
+[#534](https://github.com/sonic182/agentica/issues/534)).** The rules are in
+[05b](../grammar/05b-modules.md), Packages. Packages stay pure Agentica unless
+the manifest names a native library. Decided (2026-10-23, the smallest rule
+that works on Linux, macOS and Windows):
+
+- **Declaration.** `[native.NAME]` in the manifest of the package, one inline
+  table per system (`linux`, `macos`, `windows`) with `file` (a path in the
+  package's `native/` folder) or `system` (a name for the loader). The key is
+  the operating system only, because `System.os()` is all the front end can
+  ask: a macOS library is a universal binary (`lipo`), and the VM supports one
+  Linux architecture. The tables are inline so that a later `url` and `sha256`
+  (a downloaded prebuilt library, issue
+  [#594](https://github.com/sonic182/agentica/issues/594) H) is one more key.
+- **Lookup.** `extern "NAME"` in a file of the package means that entry. The
+  front end rewrites the library to an absolute path in `deps/<package>/`
+  while it links, so no search is involved and `LD_LIBRARY_PATH` plays no
+  part. The VM and the lowering are unchanged. A name the manifest does not
+  declare is a system name as before, so no program changes meaning.
+- **Hash.** The hash of the package covers every file of its `native/` folder,
+  for all systems, next to the `.agc` files. The lock is unchanged (no new
+  key, so no old lock breaks), and a changed library is `PKG-HASH-MISMATCH`
+  at `package[n].hash`, from the same check and the same fetch as the source.
+  A hash for each system in the lock was weighed: it would add a lock table,
+  its writer and its stale checks to say less than the one hash says.
+- **Cache.** The bytecode cache entry holds the digest of the library file,
+  so a replaced library is a miss and the build hashes the package again.
+- **Errors.** `PKG-NATIVE-PLATFORM` (no entry for the running system) and
+  `PKG-NATIVE-MISSING` (the file is not in the package), at the manifest and
+  the key path, only where a file of the package uses the name.
+- **Grants.** Nothing changes: the result is an ordinary extern function, so
+  `--deny-native` and `--sandbox` refuse it. No code runs at install.
+- **Size.** A file of a package is at most 1 MiB, the library included, so
+  a larger library is a `system` name until downloaded libraries exist.
+
+Compiling at install, which breaks "no code runs at install", and downloading
+prebuilt libraries (a URL and a hash for each system) come later, each with its
+own grant or lock key.
 
 ### 45.11 Testing plan
 
@@ -158,8 +189,8 @@ breaks "no code runs at install", comes later and needs its own grant.
 
 ### 45.12 Phases
 
-45-0, 45a, 45b (fetch and `install`), 45c (`add`, `update`) and 45d (`deps/`)
-are done; native packages (FFI-b, 45.10) are the part left.
+45-0, 45a, 45b (fetch and `install`), 45c (`add`, `update`), 45d (`deps/`) and
+native libraries (FFI-b, 45.10) are done.
 
 ### 45.13 Not now
 
@@ -172,8 +203,8 @@ are done; native packages (FFI-b, 45.10) are the part left.
 - Sources other than git, such as a local path.
 - Typed decoding into structs: `JSON.decode(JSON.encode(j), T)` on the output of
   `Toml.to_json` does it (45.14, question 10).
-- Native packages: the FFI first (45.10, issue
-  [#534](https://github.com/sonic182/agentica/issues/534)).
+- Compiling a native library at install, and downloaded prebuilt libraries
+  (45.10).
 
 ### 45.14 Open questions
 
@@ -196,10 +227,9 @@ decision, then the rejected options.
    Rejected: all errors under `CHECK-IMPORT-*`.
 5. **`dev_dependencies`.** None in v1; there is one list. Rejected: a second
    table for `*_test.agc` files, which can be added when a test needs it.
-6. **Data files.** Only `.agc` files and native libraries (issue
-   [#534](https://github.com/sonic182/agentica/issues/534)) are used and
-   hashed. The manifest of a package is kept but not hashed. Rejected for v1: a
-   `files` list in the manifest.
+6. **Data files.** Only `.agc` files and the files of `native/` (45.10) are
+   used and hashed. The manifest of a package is kept but not hashed. Rejected
+   for v1: a `files` list in the manifest.
 7. **Hashing at build.** Every build hashes each package it loads, so a changed
    file of `deps/` is caught. Rejected: hashing only at install, which trusts
    `deps/`.

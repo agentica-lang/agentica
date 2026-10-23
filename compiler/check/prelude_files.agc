@@ -119,6 +119,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
       aliases: {},
       named: {},
       parsed: program,
+      libraries: [],
     ),
   )
 end

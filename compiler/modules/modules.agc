@@ -238,7 +238,7 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   taken = try take(walk.kept, walk.next_id, key.unwrap!, file, text)
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
-  scope = try Packages.check_manifests(workspace, Packages.scope_of(project))
+  scope = try Packages.check_manifests(workspace, Packages.scope_of(project).with(os: settings.env.os))
   build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)
   first = Parsed(
     key: key.unwrap!,

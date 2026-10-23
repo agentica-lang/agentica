@@ -241,11 +241,31 @@ import Sqlite from "pkg/sqlite/db"
 - The hash is `sha256:` and the SHA-256 in hex (`Crypto.sha256`) of one byte
   stream: for each `.agc` file below the package folder, in bytewise order of
   its path relative to the folder (written with `/`), the path, a zero byte, the
-  size in decimal, a zero byte and the file bytes. Hidden folders (any depth),
-  `agc_libs/` at the package root and non-`.agc` files are left out, so the
+  size in decimal, a zero byte and the file bytes. The files are the `.agc`
+  files and every file of `native/` at the package root. Hidden folders (any
+  depth), `agc_libs/` at the package root and other files are left out, so the
   package's `agentica.toml` is not hashed. A build hashes a package (its
   `deps/` folder) the first time an import loads it; a difference is
-  `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc` is `PKG-SYMLINK`.
+  `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc` or in `native/` is
+  `PKG-SYMLINK`.
+- A package declares native libraries in its own `agentica.toml`, one table
+  `[native.NAME]` each, with an inline table for each of `linux`, `macos` and
+  `windows` that has exactly one of `file = "native/path"` (shipped in the
+  package, at most 1 MiB, hashed with it; a macOS file is a universal binary)
+  or `system = "libname"` (a name the system loader looks up):
+
+  ```toml
+  [native.sqlite3]
+  linux = { system = "libsqlite3.so.0" }
+  windows = { file = "native/windows/sqlite3.dll" }
+  ```
+
+  In the package's files, `extern "sqlite3"` then means the entry of the
+  running system: a `file` is opened by its absolute path in `deps/`, never
+  searched. A bad table is `PKG-MANIFEST-INVALID` at its key path; no entry for
+  the system is `PKG-NATIVE-PLATFORM` (key `native.NAME`) and a missing file
+  `PKG-NATIVE-MISSING` (key `native.NAME.linux.file`), both where a file of the
+  package uses the name. `--deny-native` and `--sandbox` refuse such a program.
 
 ## String queue (`std/queue`)
 

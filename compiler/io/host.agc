@@ -42,6 +42,7 @@ export def process_env() -> Env.Env
     home: variable("HOME"),
     local_app_data: variable("LOCALAPPDATA"),
     windows: System.os() == "windows",
+    os: System.os(),
   )
 end
 

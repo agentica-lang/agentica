@@ -25,16 +25,18 @@ MAIN = 'import Greet from "pkg/greeter/greet"\n\ndef main() -> Void\n  puts(Gree
 
 
 def package_hash(folder):
-    """sha256: and the hex SHA-256 of: for each .agc file in bytewise order of its path from `folder` (written with "/"),
-    the path, a zero byte, the size in decimal, a zero byte and the bytes. Hidden folders and the agc_libs folder at
-    the root are left out. The `.agc` extension and the name agc_libs are compared without regard to case."""
+    """sha256: and the hex SHA-256 of: for each .agc file, and each file under the native folder at the root, in bytewise
+    order of its path from `folder` (written with "/"), the path, a zero byte, the size in decimal, a zero byte and the
+    bytes. Hidden folders and the agc_libs folder at the root are left out. The `.agc` extension and the names agc_libs
+    and native are compared without regard to case."""
     folder = Path(folder)
     paths = []
     for directory, names, files in os.walk(folder):
         relative = Path(directory).relative_to(folder)
         root = str(relative) == "."
         names[:] = [name for name in names if not name.startswith(".") and not (root and name.lower() == "agc_libs")]
-        paths += [(relative / name).as_posix() for name in files if name.lower().endswith(".agc")]
+        native = relative.parts[:1] and relative.parts[0].lower() == "native"
+        paths += [(relative / name).as_posix() for name in files if native or name.lower().endswith(".agc")]
     digest = hashlib.sha256()
     for path in sorted(paths, key=lambda text: text.encode("utf-8")):
         data = (folder / path).read_bytes()
@@ -242,7 +244,7 @@ def lock_entry(ws, remotes, path, files, commit, tag=None, ref=None, name=None, 
     scratch = ws.base / ("scratch-" + (name or path).replace("/", "-"))
     shutil.rmtree(scratch, ignore_errors=True)
     for relative, content in files.items():
-        if relative.endswith(".agc"):
+        if relative.endswith(".agc") or relative.split("/")[0] == "native":
             (scratch / relative).parent.mkdir(parents=True, exist_ok=True)
             (scratch / relative).write_bytes(content if isinstance(content, bytes) else content.encode("utf-8"))
     entry = {"name": name or path.split("/")[1], "git": remotes.url(path), "commit": commit,

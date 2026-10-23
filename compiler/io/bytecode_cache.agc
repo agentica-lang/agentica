@@ -164,6 +164,11 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
         return false
       end
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
+      libraries = library_lines(settings.workspace, sources)
+      if !libraries.ok?
+        return false
+      end
+      lines = lines.concat(libraries.unwrap!)
       text = [entry.key, "program #{digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
       return publish(entry, text, program)
   end
@@ -171,6 +176,24 @@ end
 
 def source_line(module: Linker.LinkedModule) -> String
   return "#{SOURCE_WORD}#{digest(String.to_bytes(module.text))} #{module.key}"
+end
+
+# One `source` line for each native file of a package that the program opens by path, so a file that changes makes the
+# entry miss and the build (which hashes the package against the lock) runs again.
+def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedModule]) -> Result[List[String]]
+  paths: List[String] = []
+  for module in modules
+    paths = paths.concat(module.libraries)
+  end
+  lines: List[String] = []
+  for path in paths.uniq
+    if !plain?(path)
+      return error("the path has a line feed, a tab or a NUL")
+    end
+    read = try workspace.read_bytes.call(path)
+    lines = lines.push("#{SOURCE_WORD}#{digest(read)} #{path}")
+  end
+  return ok(lines)
 end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes

@@ -1,8 +1,9 @@
-## The hash of a package (docs/grammar/05b-modules.md). The .agc files of the package folder, with paths relative
-## to it and written with "/", are taken in bytewise order of their paths; for each one the stream holds its path, a
-## zero byte, its size in decimal, a zero byte and its bytes. The hash is `sha256:` and the SHA-256 of that stream in
-## hex. Hidden folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named *.agc is refused, as
-## the fetch refuses it; other links, and files that are not .agc, are ignored.
+## The hash of a package (docs/grammar/05b-modules.md). The .agc files of the package folder and every file of its
+## native/ folder (the native libraries, any name), with paths relative to it and written with "/", are taken in
+## bytewise order of their paths; for each one the stream holds its path, a zero byte, its size in decimal, a zero byte
+## and its bytes. The hash is `sha256:` and the SHA-256 of that stream in hex. Hidden folders (any depth) and agc_libs/
+## (at the root) are left out. A symbolic link named *.agc or inside native/ is refused, as the fetch refuses it; other
+## links, and other files that are not .agc, are ignored.
 ##
 ## The names `.agc` and `agc_libs` are compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
 ## out on every system. A case-insensitive file system (macOS, Windows) can open `x.AGC` or `AGC_LIBS/y.agc` by the
@@ -14,6 +15,9 @@
 
 import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
+
+# The folder of a package that holds its native libraries.
+NATIVE_FOLDER = "native"
 
 ## What hashing a folder gives: the hash, a link among the .agc files (its path), or the system's message for a file
 ## or folder that cannot be read.
@@ -57,11 +61,11 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
             pending = pending.push(path)
           end
         Workspace.EntryKind.Link ->
-          if source_file?(entry.name)
+          if source_file?(entry.name) or native_path?(path)
             return Listing.Stopped(Hashed.Link(path))
           end
         Workspace.EntryKind.File ->
-          if source_file?(entry.name)
+          if source_file?(entry.name) or native_path?(path)
             files = files.push(path)
           end
         _ -> next
@@ -74,6 +78,13 @@ end
 ## Whether a file name is a source file of a package: it ends in `.agc`, in any case.
 export def source_file?(name: String) -> Bool
   return fold(name).ends_with?(".agc")
+end
+
+## Whether a path of the package (parts joined by "/") is under its native/ folder, whose files are all part of the
+## package. The name is compared without regard to case, as agc_libs is.
+export def native_path?(path: String) -> Bool
+  parts = path.split("/")
+  return parts.size > 1 and fold(parts[0]) == NATIVE_FOLDER
 end
 
 ## Whether a folder is left out of the hash, and cannot be imported: a hidden one at any depth, or agc_libs at the root
