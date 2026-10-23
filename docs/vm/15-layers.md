@@ -231,11 +231,12 @@ Each `.c` file includes the header of its layer: `core.h` for the core,
   struct starts with), `agc_io_kind`, the outcome and stack types, the stdin
   types, and the port functions of §15.2.
 - **`core.h`**: what only the core and the driver call: `agc_vm_init`, tasks and
-  turns, the numeric opcode helpers (`agc_op_add_i` ... `agc_op_same`, defined
-  in `interp.c`; they fail through `agc_fail` and leave the step and turn-cost
-  accounting to the caller, so a future JIT can share them), the loop's life,
-  the exit path, ownership internals, the loader, the builtin table list, and
-  the diagnostics printers.
+  turns, the opcode helpers (`agc_op_add_i` ... `agc_op_list_get`, defined in
+  `interp.c`; they return an `agc_status` instead of failing, which
+  `agc_op_fail` turns into the failure, and leave the step and turn-cost
+  accounting to the caller, so a future JIT can share them; §22), the loop's
+  life, the exit path, ownership internals, the loader, the builtin table list,
+  and the diagnostics printers.
 - **`services.h`**: `agc_inbuf`, the helpers of `strings.c`, the JSON parser and
   typed JSON, the exports of `files.c`, `tree.c` and `process.c` that others
   call, the stream kit, the child channel (`agc_duplex_*`, `agc_parent_*`) and

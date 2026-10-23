@@ -7,12 +7,19 @@
 #include "core.h"
 #include "list_impl.h"
 
+#include <assert.h>
 #include <inttypes.h>
 #include <math.h>
 #include <string.h>
 #if AGC_LEAF_CHECK
 #include <stdio.h>
 #endif
+
+/* An opcode helper (agc_op_* in core.h) is defined inline and always inlined into turn_loop. core.h declares it
+   without `inline`, so this definition is also its one external definition (C11 6.7.4p7), which a JIT calls; core.h
+   must stay included before the definitions. clang's -Wstatic-in-inline (under -Wpedantic) is a false positive here,
+   as the definition is not an inline definition. */
+#define OP_HELPER inline __attribute__((always_inline))
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
@@ -824,115 +831,180 @@ static bool return_value(agc_vm *vm, agc_value result) {
   return true;
 }
 
-static bool equal_values(agc_vm *vm, agc_value x, agc_value y) {
-  if (agc_is(x, AGC_T_INT) && agc_is(y, AGC_T_INT)) return agc_as_int(vm, x) == agc_as_int(vm, y);
-  if (agc_is(x, AGC_T_FLOAT) && agc_is(y, AGC_T_FLOAT)) return agc_as_float(vm, x) == agc_as_float(vm, y);
-  if (agc_is(x, AGC_T_NIL) && agc_is(y, AGC_T_NIL)) return true;
-  if (agc_is(x, AGC_T_STRING) && agc_is(y, AGC_T_STRING))
-    return agc_same_string(vm, agc_as_string(vm, x), agc_as_string(vm, y));
-  if (agc_is(x, AGC_T_RANGE) && agc_is(y, AGC_T_RANGE)) {
-    const agc_range *a = agc_as_range(vm, x), *b = agc_as_range(vm, y);
-    return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
-  }
-  return agc_as_bool(vm, x) == agc_as_bool(vm, y);
+static inline __attribute__((always_inline)) bool tags_are(const agc_value *a, const agc_value *b, agc_tag tag) {
+  return a->tag == (uint32_t)tag && b->tag == (uint32_t)tag;
 }
 
-static bool same_values(agc_vm *vm, agc_value x, agc_value y) {
-  if (x.tag != y.tag) return false;
-  if (agc_is(x, AGC_T_FLOAT)) {
-    double a = agc_as_float(vm, x), b = agc_as_float(vm, y);
-    return isnan(a) ? isnan(b) : a == b && signbit(a) == signbit(b);
+/* 1 when the values are equal, 0 when not, -1 for a pair of values that has no equality (hand-made bytecode): never a
+   raw truthy int from libc, which -1 would be mistaken for. The tag tests come first, so the checked accessors after
+   them never fail (the compiler drops their second test). Kept out of line, as gcc built it before the helpers took
+   pointers: the turn loop is sensitive to its register use. */
+static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
+  if (tags_are(x, y, AGC_T_INT)) return agc_as_int(vm, *x) == agc_as_int(vm, *y);
+  if (tags_are(x, y, AGC_T_FLOAT)) return agc_as_float(vm, *x) == agc_as_float(vm, *y);
+  if (tags_are(x, y, AGC_T_NIL)) return 1;
+  if (tags_are(x, y, AGC_T_STRING)) return agc_same_string(vm, agc_as_string(vm, *x), agc_as_string(vm, *y));
+  if (tags_are(x, y, AGC_T_RANGE)) {
+    const agc_range *a = agc_as_range(vm, *x), *b = agc_as_range(vm, *y);
+    return a->start == b->start && a->end == b->end && a->exclusive == b->exclusive;
+  }
+  if (tags_are(x, y, AGC_T_BOOL)) return agc_as_bool(vm, *x) == agc_as_bool(vm, *y);
+  return -1;
+}
+
+/* equal_values for SAME: values of two tags are never the same, a NaN is the same as a NaN, and 0.0 is not the same
+   as -0.0. */
+static int same_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
+  if (x->tag != y->tag) return 0;
+  if (agc_is(*x, AGC_T_FLOAT)) {
+    double a = agc_as_float(vm, *x), b = agc_as_float(vm, *y);
+    /* isnan and signbit return any nonzero int (mingw-w64's isnan gives -1), so each is turned into 0 or 1. */
+    return isnan(a) ? isnan(b) != 0 : a == b && (signbit(a) != 0) == (signbit(b) != 0);
   }
   return equal_values(vm, x, y);
 }
 
-agc_value agc_op_add_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+OP_HELPER agc_status agc_op_add_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
   int64_t result;
-  if (__builtin_add_overflow(agc_as_int(vm, left), agc_as_int(vm, right), &result))
-    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
-  return agc_int(result);
+  if (!tags_are(a, b, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_add_overflow(agc_as_int(vm, *a), agc_as_int(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_int(result);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_sub_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+OP_HELPER agc_status agc_op_sub_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
   int64_t result;
-  if (__builtin_sub_overflow(agc_as_int(vm, left), agc_as_int(vm, right), &result))
-    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
-  return agc_int(result);
+  if (!tags_are(a, b, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_sub_overflow(agc_as_int(vm, *a), agc_as_int(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_int(result);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_mul_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
+OP_HELPER agc_status agc_op_mul_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
   int64_t result;
-  if (__builtin_mul_overflow(agc_as_int(vm, left), agc_as_int(vm, right), &result))
-    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
-  return agc_int(result);
+  if (!tags_are(a, b, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  if (__builtin_mul_overflow(agc_as_int(vm, *a), agc_as_int(vm, *b), &result)) return AGC_STATUS_OVERFLOW;
+  *dst = agc_int(result);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_div_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
-  int64_t dividend = agc_as_int(vm, left), divisor = agc_as_int(vm, right);
-  if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
-  if (dividend == INT64_MIN && divisor == -1)
-    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
-  return agc_int(dividend / divisor);
+OP_HELPER agc_status agc_op_div_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  int64_t dividend = agc_as_int(vm, *a), divisor = agc_as_int(vm, *b);
+  if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  if (dividend == INT64_MIN && divisor == -1) return AGC_STATUS_OVERFLOW;
+  *dst = agc_int(dividend / divisor);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_mod_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
-  int64_t dividend = agc_as_int(vm, left), divisor = agc_as_int(vm, right);
-  if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
-  return agc_int(divisor == -1 ? 0 : dividend % divisor);
+OP_HELPER agc_status agc_op_mod_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  int64_t dividend = agc_as_int(vm, *a), divisor = agc_as_int(vm, *b);
+  if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  *dst = agc_int(divisor == -1 ? 0 : dividend % divisor);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_neg_i(agc_vm *vm, agc_value value, uint32_t span) {
-  int64_t integer = agc_as_int(vm, value);
-  if (integer == INT64_MIN) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
-  return agc_int(-integer);
+OP_HELPER agc_status agc_op_neg_i(agc_vm *vm, agc_value *dst, const agc_value *a) {
+  if (!agc_is(*a, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  int64_t integer = agc_as_int(vm, *a);
+  if (integer == INT64_MIN) return AGC_STATUS_OVERFLOW;
+  *dst = agc_int(-integer);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_add_f(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_float(agc_as_float(vm, left) + agc_as_float(vm, right));
+OP_HELPER agc_status agc_op_add_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_float(agc_as_float(vm, *a) + agc_as_float(vm, *b));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_sub_f(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_float(agc_as_float(vm, left) - agc_as_float(vm, right));
+OP_HELPER agc_status agc_op_sub_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_float(agc_as_float(vm, *a) - agc_as_float(vm, *b));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_mul_f(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_float(agc_as_float(vm, left) * agc_as_float(vm, right));
+OP_HELPER agc_status agc_op_mul_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_float(agc_as_float(vm, *a) * agc_as_float(vm, *b));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_div_f(agc_vm *vm, agc_value left, agc_value right, uint32_t span) {
-  double divisor = agc_as_float(vm, right);
-  if (divisor == 0) agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
-  return agc_float(agc_as_float(vm, left) / divisor);
+/* The divisor is checked first, so a zero divisor fails with RUNTIME-DIVISION-BY-ZERO whatever the left operand. */
+OP_HELPER agc_status agc_op_div_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!agc_is(*b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  double divisor = agc_as_float(vm, *b);
+  if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  if (!agc_is(*a, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_float(agc_as_float(vm, *a) / divisor);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_neg_f(agc_vm *vm, agc_value value) { return agc_float(-agc_as_float(vm, value)); }
-
-agc_value agc_op_lt_i(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_bool(agc_as_int(vm, left) < agc_as_int(vm, right));
+OP_HELPER agc_status agc_op_neg_f(agc_vm *vm, agc_value *dst, const agc_value *a) {
+  if (!agc_is(*a, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_float(-agc_as_float(vm, *a));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_le_i(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_bool(agc_as_int(vm, left) <= agc_as_int(vm, right));
+OP_HELPER agc_status agc_op_lt_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_int(vm, *a) < agc_as_int(vm, *b));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_lt_f(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_bool(agc_as_float(vm, left) < agc_as_float(vm, right));
+OP_HELPER agc_status agc_op_le_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_int(vm, *a) <= agc_as_int(vm, *b));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_le_f(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_bool(agc_as_float(vm, left) <= agc_as_float(vm, right));
+OP_HELPER agc_status agc_op_lt_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_float(vm, *a) < agc_as_float(vm, *b));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_eq(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_bool(equal_values(vm, left, right));
+OP_HELPER agc_status agc_op_le_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(agc_as_float(vm, *a) <= agc_as_float(vm, *b));
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_ne(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_bool(!equal_values(vm, left, right));
+OP_HELPER agc_status agc_op_eq(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  int equal = equal_values(vm, a, b);
+  if (equal < 0) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(equal);
+  return AGC_STATUS_OK;
 }
 
-agc_value agc_op_same(agc_vm *vm, agc_value left, agc_value right) {
-  return agc_bool(same_values(vm, left, right));
+OP_HELPER agc_status agc_op_ne(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  int equal = equal_values(vm, a, b);
+  if (equal < 0) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(!equal);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_same(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  int same = same_values(vm, a, b);
+  if (same < 0) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_bool(same);
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_list_len(agc_vm *vm, agc_value *dst, const agc_value *list) {
+  if (!agc_is(*list, AGC_T_LIST)) return AGC_STATUS_WRONG_TAG;
+  *dst = agc_int((int64_t)list_len(agc_as_list(vm, *list)));
+  return AGC_STATUS_OK;
+}
+
+OP_HELPER agc_status agc_op_list_get(agc_vm *vm, agc_value *dst, const agc_value *list, const agc_value *index) {
+  if (!agc_is(*list, AGC_T_LIST) || !agc_is(*index, AGC_T_INT)) return AGC_STATUS_WRONG_TAG;
+  const agc_list *l = agc_as_list(vm, *list);
+  int64_t x = agc_as_int(vm, *index);
+  if (x < 0 || (uint64_t)x >= list_len(l)) return AGC_STATUS_INDEX_OUT_OF_RANGE;
+  *dst = list_at(l, (size_t)x);
+  return AGC_STATUS_OK;
 }
 
 static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, uint32_t span) {
@@ -941,6 +1013,34 @@ static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, 
   char *message = agc_alloc_atomic((size_t)n + 1);
   memcpy(message, text, (size_t)n + 1);
   agc_fail(vm, "RUNTIME-INDEX-OUT-OF-RANGE", message, span);
+}
+
+__attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a,
+                                                            const agc_value *b, uint32_t span) {
+  switch (status) {
+    case AGC_STATUS_OVERFLOW:
+      agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
+    case AGC_STATUS_DIVISION_BY_ZERO: agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
+    case AGC_STATUS_INDEX_OUT_OF_RANGE:
+      assert(a && b);
+      index_out_of_range(vm, agc_as_int(vm, *b), list_len(agc_as_list(vm, *a)), span);
+    case AGC_STATUS_WRONG_TAG: agc_wrong_tag(vm);
+    case AGC_STATUS_OK: break;
+  }
+  agc_fail(vm, "RUNTIME-INTERNAL", "an opcode helper failed with no error", span);
+}
+
+/* agc_op_fail for the running instruction of the interpreter, read back from the top frame (frame->pc is written
+   before each instruction runs), so the hot loop passes only the status and keeps no operand live for the cold call.
+   Only LIST_GET's status needs the operands. */
+static __attribute__((noinline, cold)) _Noreturn void op_failed(agc_vm *vm, agc_status status) {
+  const agc_task *t = vm->task;
+  const agc_frame *frame = &t->frames[t->frame_count - 1];
+  const agc_function *f = &vm->rt->program->functions[frame->function];
+  agc_instr in = f->code[frame->pc - 1];
+  const agc_value *R = t->regs + frame->base;
+  bool operands = status == AGC_STATUS_INDEX_OUT_OF_RANGE;
+  agc_op_fail(vm, status, operands ? &R[in.b] : NULL, operands ? &R[in.c] : NULL, f->spans[frame->pc - 1]);
 }
 
 static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
@@ -964,6 +1064,15 @@ static agc_turn_result park_task(agc_task *t) {
 
 /* The span of the running instruction, read only where a failure or a call needs it. */
 #define SPAN spans[pc - 1]
+
+/* An opcode helper's status turned into the failure of the running instruction (op_failed). */
+#define CHECK(status)                                                                     \
+  do {                                                                                    \
+    agc_status status_ = (status);                                                        \
+    if (__builtin_expect(status_ != AGC_STATUS_OK, 0)) op_failed(vm, status_);            \
+  } while (0)
+#define BINARY(helper) CHECK(helper(vm, &R[in.a], &R[in.b], &R[in.c]))
+#define UNARY(helper) CHECK(helper(vm, &R[in.a], &R[in.b]))
 
 /* The second instruction of a fused pair, fetched as the loop fetches one. */
 #define FUSED_NEXT()                              \
@@ -1045,7 +1154,6 @@ reload:
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
     pc++;
     frame->pc = pc;
-    int64_t x;
     switch (in.op) {
       case AGC_OP_MOVE:
       op_move:
@@ -1129,29 +1237,32 @@ reload:
       case AGC_OP_SUB_I:
       case AGC_OP_MUL_I:
       op_arith_i: {
-        R[in.a] = in.op == AGC_OP_ADD_I ? agc_op_add_i(vm, R[in.b], R[in.c], SPAN)
-                    : in.op == AGC_OP_SUB_I ? agc_op_sub_i(vm, R[in.b], R[in.c], SPAN)
-                                            : agc_op_mul_i(vm, R[in.b], R[in.c], SPAN);
+        if (in.op == AGC_OP_ADD_I)
+          BINARY(agc_op_add_i);
+        else if (in.op == AGC_OP_SUB_I)
+          BINARY(agc_op_sub_i);
+        else
+          BINARY(agc_op_mul_i);
         break;
       }
       case AGC_OP_DIV_I:
       op_div_i:
-        R[in.a] = agc_op_div_i(vm, R[in.b], R[in.c], SPAN);
+        BINARY(agc_op_div_i);
         break;
       case AGC_OP_MOD_I:
       op_mod_i:
-        R[in.a] = agc_op_mod_i(vm, R[in.b], R[in.c], SPAN);
+        BINARY(agc_op_mod_i);
         break;
       case AGC_OP_NEG_I:
-        R[in.a] = agc_op_neg_i(vm, R[in.b], SPAN);
+        UNARY(agc_op_neg_i);
         break;
-      case AGC_OP_ADD_F: R[in.a] = agc_op_add_f(vm, R[in.b], R[in.c]); break;
-      case AGC_OP_SUB_F: R[in.a] = agc_op_sub_f(vm, R[in.b], R[in.c]); break;
-      case AGC_OP_MUL_F: R[in.a] = agc_op_mul_f(vm, R[in.b], R[in.c]); break;
-      case AGC_OP_DIV_F: R[in.a] = agc_op_div_f(vm, R[in.b], R[in.c], SPAN); break;
-      case AGC_OP_NEG_F: R[in.a] = agc_op_neg_f(vm, R[in.b]); break;
-      case AGC_OP_LT_F: R[in.a] = agc_op_lt_f(vm, R[in.b], R[in.c]); break;
-      case AGC_OP_LE_F: R[in.a] = agc_op_le_f(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_ADD_F: BINARY(agc_op_add_f); break;
+      case AGC_OP_SUB_F: BINARY(agc_op_sub_f); break;
+      case AGC_OP_MUL_F: BINARY(agc_op_mul_f); break;
+      case AGC_OP_DIV_F: BINARY(agc_op_div_f); break;
+      case AGC_OP_NEG_F: UNARY(agc_op_neg_f); break;
+      case AGC_OP_LT_F: BINARY(agc_op_lt_f); break;
+      case AGC_OP_LE_F: BINARY(agc_op_le_f); break;
       case AGC_OP_CONCAT: {
         agc_string *joined = agc_concat(agc_as_string(vm, R[in.b]), agc_as_string(vm, R[in.c]));
         R[in.a] = agc_string_value(joined);
@@ -1170,16 +1281,11 @@ reload:
       case AGC_OP_LIST:
         R[in.a] = in.c ? agc_list_value(agc_list_from_array(&R[in.b], in.c)) : vm->rt->empty_list;
         break;
-      case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)list_len(agc_as_list(vm, R[in.b]))); break;
+      case AGC_OP_LIST_LEN: UNARY(agc_op_list_len); break;
       case AGC_OP_LIST_GET:
-      op_list_get: {
-        const agc_list *l = agc_as_list(vm, R[in.b]);
-        x = agc_as_int(vm, R[in.c]);
-        size_t len = list_len(l);
-        if (x < 0 || (uint64_t)x >= len) index_out_of_range(vm, x, len, SPAN);
-        R[in.a] = list_at(l, (size_t)x);
+      op_list_get:
+        BINARY(agc_op_list_get);
         break;
-      }
       case AGC_OP_MAP: {
         agc_map *m = agc_as_map(vm, vm->rt->empty_map);
         for (uint32_t k = 0; k < in.c; k++)
@@ -1253,26 +1359,26 @@ reload:
         break;
       }
       case AGC_OP_SAME:
-        R[in.a] = agc_op_same(vm, R[in.b], R[in.c]);
+        BINARY(agc_op_same);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
       case AGC_OP_LT_I:
       op_lt_i:
-        R[in.a] = agc_op_lt_i(vm, R[in.b], R[in.c]);
+        BINARY(agc_op_lt_i);
         break;
       case AGC_OP_LE_I:
       op_le_i:
-        R[in.a] = agc_op_le_i(vm, R[in.b], R[in.c]);
+        BINARY(agc_op_le_i);
         break;
       case AGC_OP_EQ:
       op_eq:
-        R[in.a] = agc_op_eq(vm, R[in.b], R[in.c]);
+        BINARY(agc_op_eq);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_NE:
       op_ne:
-        R[in.a] = agc_op_ne(vm, R[in.b], R[in.c]);
+        BINARY(agc_op_ne);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_JUMP: pc = bx; break;
@@ -1379,6 +1485,9 @@ reload:
   }
 }
 
+#undef UNARY
+#undef BINARY
+#undef CHECK
 #undef FUSED_CONST
 #undef FUSED_STEP
 #undef FUSED_NEXT
