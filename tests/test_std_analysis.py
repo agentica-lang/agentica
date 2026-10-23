@@ -5,6 +5,7 @@ streams. The driver is compiled once for the module (it compiles the core of the
 of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
 import json
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -463,7 +464,7 @@ def test_a_refresh_after_an_edit_checks_only_the_modules_that_changed_or_import_
     assert lines[4]["reused"] > lines[3]["reused"]
     assert [line["checks"] for line in lines] == [1, 2, 3, 4, 5]
     wider = json.loads(err)
-    assert (wider["code"], wider["file"]) == ("CHECK-ARITY", str(project / "sizes.agc"))
+    assert (wider["code"], Path(wider["file"])) == ("CHECK-ARITY", project / "sizes.agc")
     assert out.splitlines()[-1] == "same 2"
 
 
