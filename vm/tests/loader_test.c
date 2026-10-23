@@ -1248,6 +1248,23 @@ int main(void) {
   free(fusable.data);
   assert(p->functions[p->entry].code[0].op == AGC_FUSED_STEP_CONST);
   assert(p->functions[p->entry].code[1].op == AGC_OP_CONST && p->functions[p->entry].code[2].op == AGC_OP_JUMP);
+  static const struct { uint16_t next, fused; } register_forms[] = {
+    {AGC_OP_MOVE, AGC_FUSED_STEP_MOVE},     {AGC_OP_ADD_I, AGC_FUSED_STEP_ARITH_I},
+    {AGC_OP_SUB_I, AGC_FUSED_STEP_ARITH_I}, {AGC_OP_MUL_I, AGC_FUSED_STEP_ARITH_I},
+    {AGC_OP_LT_I, AGC_FUSED_STEP_LT_I},     {AGC_OP_LIST_GET, AGC_FUSED_STEP_LIST_GET},
+    {AGC_OP_RETURN, AGC_FUSED_STEP_RETURN}};
+  for (size_t i = 0; i < sizeof register_forms / sizeof register_forms[0]; i++) {
+    const agc_instr pair[] = {{AGC_OP_STEP, 1, 0, 0}, {register_forms[i].next, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+    s = base();
+    s.code = pair;
+    s.code_spans = three_spans;
+    s.count = 3;
+    buffer form = build(s);
+    assert(agc_load(form.data, form.len, &p, error, sizeof error));
+    free(form.data);
+    assert(p->functions[p->entry].code[0].op == register_forms[i].fused);
+    assert(p->functions[p->entry].code[1].op == register_forms[i].next);
+  }
   s = base();
   s.code = builtin_window;
   s.code_spans = builtin_spans;

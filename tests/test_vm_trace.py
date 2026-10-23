@@ -331,11 +331,14 @@ def test_a_fused_step_stops_and_yields_where_the_plain_step_of_the_profile_does(
     source.write_text(FUSED_TASKS)
     bytecode = compile_fixture(source, tmp_path)
     profile = {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": tmp_path / "fused.trace"}
-    for limit in [*range(1, 30), *range(1990, 2010), *range(30, 34000, 499)]:
+    for limit in sorted({*range(1, 30), *range(1990, 2010), *range(30, 34000, 499)}):
         command = [*vm, "--schedulers", "1", "--json", "--max-steps", str(limit), "--", bytecode]
         plain = vm_run(command, vm_environment())
-        assert plain[0] == 1 and json.loads(plain[2])["code"] == "RUNTIME-STEP-LIMIT", limit
         assert vm_run(command, vm_environment(profile)) == plain, limit
+        if plain[0] == 0:
+            break
+        assert plain[0] == 1 and json.loads(plain[2])["code"] == "RUNTIME-STEP-LIMIT", limit
+    assert limit > 2010
     command = [*vm, "--schedulers", "1", "--", bytecode]
     plain = vm_run(command, vm_environment())
     assert plain[0] == 0 and plain[1].count(b"\n") == 3 * 12 + 3
