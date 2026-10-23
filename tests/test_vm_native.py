@@ -489,22 +489,25 @@ end
 """
 
 
-# Native.string_at reads up to the NUL, or exactly the length given (the NUL and a cut character included, which
-# becomes U+FFFD); Native.bytes_at copies bytes. NULL with length 0 is empty, as C means it. Native.pointer makes the
-# pointer of an integer, which C sees as that
-# integer, and a pointer's value makes the same pointer again.
+# Native.get_string reads from an offset up to the NUL, or exactly the length given (the NUL and a cut character
+# included, which becomes U+FFFD); Native.get_bytes copies bytes. NULL with length 0 is empty, as C means it. The old
+# names string_at and bytes_at read the same at offset 0. Native.pointer makes the pointer of an integer, which C sees
+# as that integer, and a pointer's value makes the same pointer again.
 @NATIVE_CALLS
 def test_memory_that_c_returns_is_read_as_text_or_bytes(tmp_path, peer):
     main = """def main() -> Void
   p = peer_text()
-  puts(Native.string_at(p))
-  IO.inspect(Native.string_at(p, 12))
-  puts(Native.string_at(p, 2))
-  puts(Native.string_at(p, 0).size)
-  puts(Native.bytes_at(p, 12))
-  puts(Native.bytes_at(p, 0))
-  puts(Native.bytes_at(Native.null(), 0))
-  puts(Native.string_at(Native.null(), 0).size)
+  puts(Native.get_string(p, 0))
+  puts(Native.get_string(p, 7))
+  IO.inspect(Native.get_string(p, 0, 12))
+  puts(Native.get_string(p, 0, 2))
+  puts(Native.get_string(p, 3, 0).size)
+  puts(Native.get_bytes(p, 0, 12))
+  puts(Native.get_bytes(p, 7, 2))
+  puts(Native.get_bytes(Native.null(), 0, 0))
+  puts(Native.get_string(Native.null(), 0, 0).size)
+  puts(Native.string_at(p) == Native.get_string(p, 0) and Native.string_at(p, 12) == Native.get_string(p, 0, 12))
+  puts(Native.bytes_at(p, 12).inspect == Native.get_bytes(p, 0, 12).inspect)
   puts(peer_ptr_value(Native.pointer(-1)))
   puts(peer_ptr_value(Native.pointer(4096)))
   puts(Native.null?(Native.pointer(0)))
@@ -514,20 +517,25 @@ end
     result = agentica(program(tmp_path, MEMORY_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "héllo", '"héllo\\u0000world"', "h\ufffd", "0", "[104, 195, 169, 108, 108, 111, 0, 119, 111, 114, 108, 100]",
-        "[]", "[]", "0", "-1", "4096", "true", "42", "",
+        "héllo", "world", '"héllo\\u0000world"', "h\ufffd", "0",
+        "[104, 195, 169, 108, 108, 111, 0, 119, 111, 114, 108, 100]", "[119, 111]", "[]", "0", "true", "true", "-1",
+        "4096", "true", "42", "",
     ]
 
 
-# A read at NULL is RUNTIME-NATIVE-NULL at the pointer, and a negative length RUNTIME-INVALID-COUNT at the length; the
-# pointer is checked first.
+# A read at NULL is RUNTIME-NATIVE-NULL at the pointer, a negative offset RUNTIME-NATIVE-BOUNDS at it and a negative
+# length RUNTIME-INVALID-COUNT at the length; the pointer is checked first. The old names fail the same way.
 @NATIVE_CALLS
 @pytest.mark.parametrize("call, code, argument", [
+    ("Native.get_string(Native.null(), 0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
+    ("Native.get_string(Native.null(), 0, 1)", "RUNTIME-NATIVE-NULL", "Native.null()"),
+    ("Native.get_bytes(Native.pointer(0), 0, 1)", "RUNTIME-NATIVE-NULL", "Native.pointer(0)"),
+    ("Native.get_bytes(Native.null(), 0, -1)", "RUNTIME-NATIVE-NULL", "Native.null()"),
+    ("Native.get_string(peer_text(), 0, -1)", "RUNTIME-INVALID-COUNT", "-1"),
+    ("Native.get_bytes(peer_text(), 0, -1)", "RUNTIME-INVALID-COUNT", "-1"),
+    ("Native.get_string(peer_text(), -1)", "RUNTIME-NATIVE-BOUNDS", "-1"),
+    ("Native.get_bytes(peer_text(), -2, 1)", "RUNTIME-NATIVE-BOUNDS", "-2"),
     ("Native.string_at(Native.null())", "RUNTIME-NATIVE-NULL", "Native.null()"),
-    ("Native.string_at(Native.null(), 1)", "RUNTIME-NATIVE-NULL", "Native.null()"),
-    ("Native.bytes_at(Native.pointer(0), 1)", "RUNTIME-NATIVE-NULL", "Native.pointer(0)"),
-    ("Native.bytes_at(Native.null(), -1)", "RUNTIME-NATIVE-NULL", "Native.null()"),
-    ("Native.string_at(peer_text(), -1)", "RUNTIME-INVALID-COUNT", "-1"),
     ("Native.bytes_at(peer_text(), -1)", "RUNTIME-INVALID-COUNT", "-1"),
 ])
 def test_a_read_at_null_or_with_a_negative_length_stops_the_run(tmp_path, peer, call, code, argument):
@@ -593,9 +601,18 @@ end
 """
 
 
+def stopped_buffer_program(tmp_path, peer, schedulers, main, out):
+    """Run MAIN after BUFFER_EXTERN on SCHEDULERS schedulers; it must print OUT and stop. Its diagnostic's code and
+    start."""
+    text = BUFFER_EXTERN.format(library=literal(peer)) + main
+    result = agentica("--json", "--schedulers", schedulers, program(tmp_path, text))
+    assert result.stdout == out
+    return diagnostic(result, 1)
+
+
 # An owned buffer is a C.Pointer that C fills and reads: typed reads and writes at byte offsets, signed and unsigned,
 # bulk reads and writes of Int and Float lists, a pointer array of owned C strings, and a free that runs once. The
-# typed reads take a C.Pointer that C returns too, as Native.string_at does; a NULL one with count 0 is empty.
+# typed reads take a C.Pointer that C returns too, as Native.get_string does; a NULL one with count 0 is empty.
 @NATIVE_CALLS
 def test_c_fills_and_reads_an_owned_buffer(tmp_path, peer):
     main = """def main() -> Void
@@ -634,10 +651,10 @@ def test_c_fills_and_reads_an_owned_buffer(tmp_path, peer):
   Native.put_pointer(names, 0, a)
   Native.put_pointer(names, 8, b)
   puts(peer_strs_len(names, 2))
-  puts(Native.string_at(Native.get_pointer(names, 8)))
-  puts(Native.string_at(a))
-  puts(Native.bytes_at(a, 4))
-  puts(Native.string_at(b, 2))
+  puts(Native.get_string(Native.get_pointer(names, 8), 0))
+  puts(Native.get_string(a, 0))
+  puts(Native.get_bytes(a, 0, 4))
+  puts(Native.get_string(b, 1, 2))
   IO.inspect(a)
   puts(Native.null?(a))
   Native.free(a)
@@ -657,7 +674,7 @@ end
     assert result.stdout.split("\n") == [
         "[0, 0, 0, 0]", "[0.0, 0.5, 1.0, 1.5]", "1.5", "9.5", "[-3, -2, 1, 6]", "[-3, 253, -3, 65533]",
         "[-3, 4294967293, 100663296]", "[-1, 65534, -1]", "2999999999", "[2.5, 0.10000000149011612]", "-5",
-        "[2.5]", "[-5]", "[0.5, 1.5]", "8", "hello", "abc", "[97, 98, 99, 0]", "he", "<C.Pointer>", "false", "false",
+        "[2.5]", "[-5]", "[0.5, 1.5]", "8", "hello", "abc", "[97, 98, 99, 0]", "el", "<C.Pointer>", "false", "false",
         "[]", "[1.5, -2.25, 1.0000000150474662e+30]", "-2.25", "[7, -9]", "-9", "[]", "",
     ]
 
@@ -677,8 +694,16 @@ end
     ("Native.get_array_of_int32(buf, 0, -1)", "RUNTIME-INVALID-COUNT", "-1"),
     ("Native.put_array_of_int64(buf, 8, [1, 2])", "RUNTIME-NATIVE-BOUNDS", "[1"),
     ("Native.put_string(buf, 0, \"0123456789abcdef\")", "RUNTIME-NATIVE-BOUNDS", "\"0"),
-    ("Native.string_at(full)", "RUNTIME-NATIVE-BOUNDS", "full"),
-    ("Native.bytes_at(buf, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
+    ("Native.get_string(full, 0)", "RUNTIME-NATIVE-BOUNDS", "full"),
+    ("Native.get_string(full, 2)", "RUNTIME-NATIVE-BOUNDS", "full"),
+    ("Native.get_string(buf, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
+    ("Native.get_bytes(buf, 0, 17)", "RUNTIME-NATIVE-BOUNDS", "17"),
+    ("Native.get_bytes(buf, 8, 9)", "RUNTIME-NATIVE-BOUNDS", "9"),
+    ("Native.put_bytes(buf, 14, [1, 2, 3])", "RUNTIME-NATIVE-BOUNDS", "[1"),
+    ("Native.put_bytes(buf, -1, [1])", "RUNTIME-NATIVE-BOUNDS", "-1"),
+    ("Native.put_bytes(buf, 0, [1, 256])", "RUNTIME-INTEGER-OVERFLOW", "[1"),
+    ("Native.put_bytes(buf, 0, [-1])", "RUNTIME-INTEGER-OVERFLOW", "[-1"),
+    ("Native.get_bytes(gone, 0, 1)", "RUNTIME-NATIVE-CLOSED", "gone"),
     ("Native.get_int32(Native.null(), 0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
     ("Native.put_float64(Native.null(), 8, 1.0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
     ("Native.get_int32(peer_static_int64s(), -4)", "RUNTIME-NATIVE-BOUNDS", "-4"),
@@ -705,6 +730,57 @@ def test_bounds_null_and_freed_buffers_stop_the_run(tmp_path, peer, line, code, 
     assert diagnostic(result, 1) == (code, where)
 
 
+# Native.put_bytes writes a List of bytes that C reads (two little-endian int64s here: every target with native calls
+# is little-endian) and that Native.get_bytes gives back unchanged.
+@NATIVE_CALLS
+def test_put_bytes_writes_what_get_bytes_reads_back(tmp_path, peer):
+    main = """def main() -> Void
+  buf = Native.memory_pointer(16)
+  Native.put_bytes(buf, 0, [1, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0])
+  puts(peer_sum_int64s(buf, 2))
+  copy = Native.memory_pointer(16)
+  Native.put_bytes(copy, 0, Native.get_bytes(buf, 0, 16))
+  puts(Native.get_bytes(copy, 0, 16).inspect == Native.get_bytes(buf, 0, 16).inspect)
+  Native.put_bytes(copy, 15, [])
+  Native.put_bytes(copy, 16, [])
+  puts(Native.get_bytes(copy, 7, 3))
+end
+"""
+    result = agentica(program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "256\ntrue\n[0, 255, 0]\n", "")
+
+
+# The block form of Native.memory_pointer yields a new buffer, frees it when the block ends and returns the block's
+# value: a buffer that the block gives back is freed, and so is one when the block ends early with an error that a
+# `try` returned (the block hands its buffer out over a channel to show it).
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("tail, out", [
+    ("  kept = Native.memory_pointer(8) do |buf| buf end\n", "9.5\n"),
+    ("  failed = Native.memory_pointer(8) do |buf| first(buf, out) end\n  puts(failed.ok?)\n"
+     "  kept = out.recv(1000).unwrap!\n", "9.5\nfalse\n"),
+])
+def test_the_block_form_frees_its_buffer_when_the_block_ends(tmp_path, peer, schedulers, tail, out):
+    main = """def first(buf: C.Pointer, out: Channel[C.Pointer]) -> Result[Int]
+  try out.send(buf, 1000)
+  n = try "x".to_i
+  return ok(n)
+end
+
+def main() -> Void
+  out: Channel[C.Pointer] = Channel.new(1)
+  sum = Native.memory_pointer(16) do |buf|
+    Native.put_array_of_float32(buf, 4, [2.0, 3.5, 4.0])
+    peer_sum_floats(buf, 4)
+  end
+  puts(sum)
+%s  puts(Native.get_int8(kept, 0))
+end
+""" % tail
+    where = (BUFFER_EXTERN.count("\n") + main.count("\n") - 1, 24)
+    assert stopped_buffer_program(tmp_path, peer, schedulers, main, out) == ("RUNTIME-NATIVE-CLOSED", where)
+
+
 # Task.spawn_owning hands an owned buffer to the new task, which uses it and whose end frees it; a pointer that C gave
 # is not the caller's to hand over.
 @NATIVE_CALLS
@@ -725,10 +801,7 @@ def main() -> Void
   puts(Native.get_int8(buf, 0))
 end
 """ % handed
-    text = BUFFER_EXTERN.format(library=literal(peer)) + main
-    result = agentica("--json", "--schedulers", schedulers, program(tmp_path, text))
-    assert result.stdout == out
-    assert diagnostic(result, 1)[0] == code
+    assert stopped_buffer_program(tmp_path, peer, schedulers, main, out)[0] == code
 
 
 # A compute call holds its buffer arguments: a free while C still reads the memory only marks the buffer freed, and

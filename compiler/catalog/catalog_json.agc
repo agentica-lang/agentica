@@ -6,12 +6,12 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 import Builtins from "builtins"
-import {PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
+import {OLD_NAMES, PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
 
-## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`) or a prelude-only
-## helper is not a public name, and neither is one that the catalog lacks.
+## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`), a prelude-only
+## helper or an old name (`Native.string_at`) is not a public name, and neither is one that the catalog lacks.
 export def public(name: String) -> Result[Model.Builtin]
-  if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name)
+  if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name) or OLD_NAMES.has_key?(name)
     return error("not a public builtin")
   end
   return Builtins.lookup(name)

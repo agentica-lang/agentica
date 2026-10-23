@@ -208,6 +208,13 @@ export ENUMS: List[Model.EnumDef] = [
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
 
+## The old names of builtins renamed to their Ruby name, with the new name: a program that calls one still runs, and no
+## listing, suggestion or help shows it (`agentica help OLD` shows the new builtin).
+export OLD_NAMES: Map[String, String] = {
+  "Native.bytes_at": "Native.get_bytes",
+  "Native.string_at": "Native.get_string",
+}
+
 ## The builtin types with no structure: handles, TestCase and C.Pointer (a C pointer of native code).
 export OPAQUE_TYPES: List[String] = [
   "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "C.Pointer",
@@ -2455,10 +2462,7 @@ ROWS_28: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "Native.bytes_at",
       effects: ["native"],
-      description: (
-        "Copy length bytes at the C.Pointer into a list; NULL with length 0 is [], other NULL is " +
-        "RUNTIME-NATIVE-NULL, then a negative length RUNTIME-INVALID-COUNT; a length past the memory is undefined."
-      ),
+      description: "Old name of Native.get_bytes(pointer, 0, length), kept so that older programs run.",
       alternatives: [],
     ),
     Model.Builtin(
@@ -2552,6 +2556,23 @@ ROWS_28: List[Model.Builtin] = [
       description: (
         "Read count signed 64-bit integers from offset bytes past the C.Pointer into a list; a negative count is " +
         "RUNTIME-INVALID-COUNT."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.get_bytes",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "length", type: Types.Type.Int),
+      ],
+      result: Types.Type.List(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_bytes",
+      effects: ["native"],
+      description: (
+        "Copy length bytes from offset bytes past the C.Pointer into a list; NULL with length 0 is [], other NULL " +
+        "is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT; a length past C memory is undefined."
       ),
       alternatives: [],
     ),
@@ -2668,6 +2689,40 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "Native.get_string",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+      ],
+      result: Types.Type.String,
+      rule: Model.Rule.Plain,
+      implementation: "Native.get_string",
+      effects: ["native"],
+      description: (
+        "Copy the NUL-terminated text from offset bytes past the C.Pointer; bytes that are not UTF-8 become U+FFFD, " +
+        "and NULL is RUNTIME-NATIVE-NULL."
+      ),
+      alternatives: [
+        Model.Builtin(
+          name: "Native.get_string",
+          parameters: [
+            Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+            Model.Named(name: "offset", type: Types.Type.Int),
+            Model.Named(name: "length", type: Types.Type.Int),
+          ],
+          result: Types.Type.String,
+          rule: Model.Rule.Plain,
+          implementation: "Native.get_string",
+          effects: ["native"],
+          description: (
+            "Copy exactly length bytes from offset bytes past the C.Pointer, NUL bytes included; NULL with length 0 " +
+            "is \"\", other NULL is RUNTIME-NATIVE-NULL, a negative length RUNTIME-INVALID-COUNT."
+          ),
+          alternatives: [],
+        ),
+      ],
+    ),
+    Model.Builtin(
       name: "Native.get_uint16",
       parameters: [
         Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
@@ -2724,9 +2779,27 @@ ROWS_28: List[Model.Builtin] = [
       effects: ["native"],
       description: (
         "A new owned buffer of size zeroed bytes, as a C.Pointer that the calling task owns; Native.free or the " +
-        "owner's end frees it, and every read or write past it is RUNTIME-NATIVE-BOUNDS."
+        "owner's end frees it, and every read or write past it is RUNTIME-NATIVE-BOUNDS. With a block, it is freed " +
+        "when the block ends and the call returns the block's value."
       ),
-      alternatives: [],
+      alternatives: [
+        Model.Builtin(
+          name: "Native.memory_pointer",
+          parameters: [
+            Model.Named(name: "size", type: Types.Type.Int),
+            Model.Named(name: "block", type: Types.Type.Fn([Types.Type.Opaque("C.Pointer")], Types.Type.Var("T"))),
+          ],
+          result: Types.Type.Var("T"),
+          rule: Model.Rule.NativeMemoryBlock,
+          implementation: "Native.memory_pointer",
+          effects: ["native"],
+          description: (
+            "Yield a new owned buffer of size zeroed bytes to the block, free it when the block ends (an error it " +
+            "returns included), and return the block's value."
+          ),
+          alternatives: [],
+        ),
+      ],
     ),
     Model.Builtin(
       name: "Native.null",
@@ -2823,6 +2896,23 @@ ROWS_28: List[Model.Builtin] = [
       description: (
         "Write the values as signed 64-bit integers from offset bytes past the C.Pointer; every value is checked " +
         "before the first write."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Native.put_bytes",
+      parameters: [
+        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
+        Model.Named(name: "offset", type: Types.Type.Int),
+        Model.Named(name: "bytes", type: Types.Type.List(Types.Type.Int)),
+      ],
+      result: Types.Type.Void,
+      rule: Model.Rule.Plain,
+      implementation: "Native.put_bytes",
+      effects: ["native"],
+      description: (
+        "Write the bytes from offset bytes past the C.Pointer; every byte is checked before the first write, and " +
+        "one outside 0 to 255 is RUNTIME-INTEGER-OVERFLOW."
       ),
       alternatives: [],
     ),
@@ -2957,10 +3047,7 @@ ROWS_28: List[Model.Builtin] = [
       rule: Model.Rule.Plain,
       implementation: "Native.string_at",
       effects: ["native"],
-      description: (
-        "Copy the NUL-terminated text at the C.Pointer; bytes that are not UTF-8 become U+FFFD, and NULL is " +
-        "RUNTIME-NATIVE-NULL."
-      ),
+      description: "Old name of Native.get_string(pointer, 0), kept so that older programs run.",
       alternatives: [
         Model.Builtin(
           name: "Native.string_at",
@@ -2972,10 +3059,7 @@ ROWS_28: List[Model.Builtin] = [
           rule: Model.Rule.Plain,
           implementation: "Native.string_at",
           effects: ["native"],
-          description: (
-            "Copy exactly length bytes at the C.Pointer, NUL bytes included; NULL with length 0 is \"\", other " +
-            "NULL is RUNTIME-NATIVE-NULL, then a negative length RUNTIME-INVALID-COUNT."
-          ),
+          description: "Old name of Native.get_string(pointer, 0, length), kept so that older programs run.",
           alternatives: [],
         ),
       ],

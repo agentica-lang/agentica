@@ -51,7 +51,7 @@ export VM_BUILTINS = Set.new([
   "Native.put_float64", "Native.put_pointer", "Native.put_string", "Native.get_array_of_int32",
   "Native.get_array_of_int64", "Native.get_array_of_float32", "Native.get_array_of_float64",
   "Native.put_array_of_int32", "Native.put_array_of_int64", "Native.put_array_of_float32",
-  "Native.put_array_of_float64", "__fail_arg",
+  "Native.put_array_of_float64", "Native.get_string", "Native.get_bytes", "Native.put_bytes", "__fail_arg",
   "__lazy_channel",
   "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find", "__lazy_flat_map", "__lazy_group",
   "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a",

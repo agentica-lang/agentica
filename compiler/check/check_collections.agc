@@ -26,7 +26,8 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.ChannelSend -> return check_channel_send(cx, st, site)
     Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
     Model.Rule.ChannelTarget -> return check_target(cx, st, site, &Args.channel_argument)
-    Model.Rule.ProfileMeasure -> return check_profile_measure(cx, st, site)
+    Model.Rule.ProfileMeasure -> return check_block_value(cx, st, site, T.Type.String, [])
+    Model.Rule.NativeMemoryBlock -> return check_block_value(cx, st, site, T.Type.Int, [T.Type.Opaque("C.Pointer")])
     _ -> return check_map_rule(cx, st, site, rule)
   end
 end
@@ -226,10 +227,17 @@ def check_target(
   return ok(State.Out(st: target.st, type: site.selected.result))
 end
 
-# Profile.measure(label) do ... end: a String label and a block or function of no parameters; the call has the type the
-# block returns. The context of the call is the block's expected result.
-def check_profile_measure(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  label = try State.expr(cx, st, site.args[0], T.Type.String)
+# Profile.measure(label) do ... end and Native.memory_pointer(size) do |buf| ... end: the first argument has the type
+# `first`, then a block or a function that takes `params`; the call has the type the block returns. The context of the
+# call is the block's expected result.
+def check_block_value(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  first: T.Type,
+  params: List[T.Type],
+) -> Result[State.Out]
+  label = try State.expr(cx, st, site.args[0], first)
   wanted = site.expected
   if CheckTypes.has_variables?(wanted)
     wanted = T.Type.Unknown
@@ -237,23 +245,32 @@ def check_profile_measure(cx: State.Cx, st: State.St, site: State.Site) -> Resul
   callback = site.args[1]
   case callback
     Ast.Expr.BlockLit(block) ->
-      checked = try Stmt.check_block_body(cx, label.st, block, Ast.Optional.Present([]), wanted, Ast.Optional.Absent)
+      known = Ast.Optional.Present(params)
+      checked = try Stmt.check_block_body(cx, label.st, block, known, wanted, Ast.Optional.Absent)
       return ok(State.Out(st: checked.st, type: T.result(checked.type)))
     _ ->
       checked = try State.expr(cx, label.st, callback, T.Type.Unknown)
-      if !T.is?(checked.type, "Fn") or T.params(checked.type).size != 0
+      if !T.is?(checked.type, "Fn") or !T.same_all?(T.params(checked.type), params)
         return error(
           State.fail(
             cx,
             checked.st,
             "CHECK-TYPE-MISMATCH",
-            "Profile.measure requires a block or a function with no parameters",
+            "#{site.selected.name} requires a block or a function #{block_parameters(params)}",
             Ast.expr_span(callback),
           ),
         )
       end
       return ok(State.Out(st: checked.st, type: T.result(checked.type)))
   end
+end
+
+# How the help of check_block_value names the parameters of the block: "with no parameters", "that takes C.Pointer".
+def block_parameters(params: List[T.Type]) -> String
+  if params.size == 0
+    return "with no parameters"
+  end
+  return "that takes #{params.map do |param: T.Type| T.to_text(param) end.join(", ")}"
 end
 
 def check_map_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]

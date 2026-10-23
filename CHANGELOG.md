@@ -31,6 +31,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   parameters.
 - Owned buffers and typed memory: `Native.memory_pointer`, `Native.free`,
   `Native.get_int32`, `put_array_of_float32` and the other Ruby `ffi` forms.
+- `Native.memory_pointer(size) do |buf| ... end` frees the buffer when the
+  block ends; `Native.get_string`, `get_bytes` and `put_bytes` (Ruby `ffi`
+  names) replace `string_at` and `bytes_at`, which still work.
 
 ### Changed
 

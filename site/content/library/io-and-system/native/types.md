@@ -21,7 +21,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 
 - A `C.Int32` argument outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
 - A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity), and a `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
-- The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.string_at` (below).
+- The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.get_string` (below).
 - A `C.Bytes` argument is a list of bytes: C gets a copy, valid only during the call, and an item outside 0 to 255 fails with `RUNTIME-INVALID-NUMBER`. Pass the length as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
 - A `C.Pointer` is a C pointer that your program passes back to C. It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it. Pointers have no `==`, and `IO.inspect` prints `<C.Pointer>`.
 
@@ -54,8 +54,8 @@ end
 
 A function that returns a pointer and a length, or text that may be NULL, is declared `-> C.Pointer`, and your program copies the memory:
 
-- `Native.string_at(p)` copies the NUL-terminated text at `p`, and `Native.string_at(p, length)` exactly `length` bytes, NUL bytes included. Bytes that are not UTF-8 become U+FFFD.
-- `Native.bytes_at(p, length)` copies `length` bytes into a `List[Int]`.
+- `Native.get_string(p, offset)` copies the NUL-terminated text that starts `offset` bytes past `p`, and `Native.get_string(p, offset, length)` exactly `length` bytes, NUL bytes included. Bytes that are not UTF-8 become U+FFFD.
+- `Native.get_bytes(p, offset, length)` copies `length` bytes into a `List[Int]`.
 - A NULL `p` with length 0 reads as `""` or `[]`, as C means it (SQLite gives NULL for an empty blob). Any other NULL `p` fails with `RUNTIME-NATIVE-NULL`, so test it with `Native.null?(p)` first. Then a negative length fails with `RUNTIME-INVALID-COUNT`: the pointer is checked first. A length past the memory C owns is undefined behavior, like a wrong signature: Agentica does not check it.
 - `Native.pointer(n)` is the pointer with the integer value `n`, for sentinels such as `SQLITE_TRANSIENT`, which is `Native.pointer(-1)`.
 
@@ -71,7 +71,7 @@ def main() -> Void
   db = sqlite3_open(":memory:").db
   failed = sqlite3_exec(db, "select from nowhere", Native.null(), Native.null())
   if !Native.null?(failed.errmsg)
-    puts(Native.string_at(failed.errmsg))   # near "from": syntax error
+    puts(Native.get_string(failed.errmsg, 0))   # near "from": syntax error
     sqlite3_free(failed.errmsg)
   end
   Native.close(db)
@@ -88,20 +88,23 @@ extern "libc.so.6"
 end
 
 def main() -> Void
-  buf = Native.memory_pointer(4096)
-  if !Native.null?(getcwd(buf, 4096))
-    puts(Native.string_at(buf))
+  Native.memory_pointer(4096) do |buf|
+    if !Native.null?(getcwd(buf, 4096))
+      puts(Native.get_string(buf, 0))
+    end
   end
-  Native.free(buf)
 end
 ```
 
-- The calling task owns the buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. `free` ends a buffer as `Native.close` ends a resource. When `main` returns, the program ends without freeing it.
+- The block form, `Native.memory_pointer(size) do |buf| ... end`, gives the buffer to the block and frees it when the block ends, also when the block ends early with an error that `try` returns. The call returns the block's value. A runtime error in the block stops the task, whose end frees the buffer.
+- The plain form, `buf = Native.memory_pointer(size)`, is for a buffer that outlives one block, such as one that C keeps between calls.
+
+- The calling task owns a plain buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. `free` ends a buffer as `Native.close` ends a resource. When `main` returns, the program ends without freeing it.
 - A buffer that is never freed lives until its task ends, so a loop that makes buffers without freeing them grows. Free each one when C is done with it.
 - `Task.spawn_owning(&work, buf)` hands the buffer to the new task, whose end then frees it. Sending it on a channel or returning it from a task does not move it: it is still freed when its owner ends. A size the system cannot give fails with `RUNTIME-INVALID-COUNT`.
 - A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call. Reading or writing the buffer while such a call runs races with C: wait for the call first.
 - A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`. `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
-- The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)`, `get_int32(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
+- The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)` and its block form, `get_int32(offset)`, `get_string(offset)`, `put_array_of_float32(offset, values)`), as `Native.*` functions that take the pointer first.
 
 Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one that C returned; the offset need not be aligned:
 
@@ -112,9 +115,10 @@ Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one 
 | `Native.get_float32(p, offset)`, `get_float64` | `Native.put_float32(p, offset, value)`, `put_float64` | `float` or `double`, `Float` |
 | `Native.get_pointer(p, offset)` | `Native.put_pointer(p, offset, value)` | `void *`, `C.Pointer` |
 | `Native.get_array_of_int32(p, offset, count)`, `_int64`, `_float32`, `_float64` | `Native.put_array_of_int32(p, offset, values)`, `_int64`, `_float32`, `_float64` | a `List[Int]` or `List[Float]` |
-| `Native.string_at(p)` (above) | `Native.put_string(p, offset, text)` | text and a NUL, a C string |
+| `Native.get_string(p, offset)` (above) | `Native.put_string(p, offset, text)` | text and a NUL, a C string |
+| `Native.get_bytes(p, offset, length)` (above) | `Native.put_bytes(p, offset, bytes)` | bytes, a `List[Int]` |
 
-- A `put_int` form takes a value that fits in its bits, read as signed or unsigned: `put_int8` takes -128 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` checks every item before it writes the first.
+- A `put_int` form takes a value that fits in its bits, read as signed or unsigned: `put_int8` takes -128 to 255, and `put_bytes` 0 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` and `put_bytes` check every item before they write the first.
 - `put_string` writes the bytes of the text and a NUL after them; a NUL in the text fails with `RUNTIME-INVALID-CHARACTER`. Owned C strings and an array of pointers to them (`const char *const *`) are buffers too. `put_pointer` stores an address that nothing tracks: keep the buffer it points to unfreed while C uses it.
 
 ```agentica {mode="check"}
@@ -134,8 +138,8 @@ def main() -> Void
 end
 ```
 
-- A buffer knows its size: a read or write that starts before it or runs past its end fails with `RUNTIME-NATIVE-BOUNDS`, and so does `Native.string_at` of a buffer with no NUL. Nothing outside the buffer is ever read or written.
-- A pointer that C returned has no size. A NULL one fails with `RUNTIME-NATIVE-NULL` (an array or `bytes_at` of count 0 is empty), and a negative offset with `RUNTIME-NATIVE-BOUNDS`; any other offset is trusted. Memory past what C owns is undefined behavior, like a wrong signature: take the size from the library.
+- A buffer knows its size: a read or write that starts before it or runs past its end fails with `RUNTIME-NATIVE-BOUNDS`, and so does `Native.get_string` of a buffer with no NUL after the offset. Nothing outside the buffer is ever read or written.
+- A pointer that C returned has no size. A NULL one fails with `RUNTIME-NATIVE-NULL` (an array or `get_bytes` of count 0 is empty), and a negative offset with `RUNTIME-NATIVE-BOUNDS`; any other offset is trusted. Memory past what C owns is undefined behavior, like a wrong signature: take the size from the library. Two tasks that read and write the same memory of C at once race, as in C; each read or write of an owned buffer holds a lock.
 - A negative count or size fails with `RUNTIME-INVALID-COUNT`.
 
 ## Resources

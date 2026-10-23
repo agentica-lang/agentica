@@ -1,7 +1,7 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
    the prepared-call cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one,
-   the reads Native.string_at and bytes_at, owned buffers with typed reads and writes (bounds, NULL, freed, no_files),
-   and agc_ffi_refusal at load. Calls into the math and C libraries run only in a build with libffi. */
+   the memory reads (get_string, get_bytes, old names), owned buffers with typed reads and writes and put_bytes
+   (bounds, NULL, freed, no_files), and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -294,6 +294,11 @@ static void test_reads(void) {
   assert(agc_as_string(&vm, row("Native.string_at", 1)(&vm, at, 0))->bytes == 2);
   assert(agc_as_string(&vm, row("Native.string_at", 2)(&vm, at, 0))->bytes == 4);
   assert(agc_list_len(agc_as_list(&vm, row("Native.bytes_at", 2)(&vm, at, 0))) == 4);
+  /* The Ruby names read from an offset: "c" after the NUL, and the bytes from there. */
+  agc_value from[3] = {at[0], agc_int(3), agc_int(1)};
+  assert(agc_as_string(&vm, row("Native.get_string", 2)(&vm, from, 0))->bytes == 1);
+  assert(agc_as_string(&vm, row("Native.get_string", 3)(&vm, from, 0))->data[0] == 'c');
+  assert(agc_as_int(&vm, agc_list_get(agc_as_list(&vm, row("Native.get_bytes", 3)(&vm, from, 0)), 0)) == 'c');
   /* The pointer first: NULL fails before a negative length, and only NULL with length 0 reads as empty. */
   agc_value null_at[2] = {agc_c_pointer_value(NULL), agc_int(0)};
   assert(agc_as_string(&vm, row("Native.string_at", 2)(&vm, null_at, 0))->bytes == 0);
@@ -349,9 +354,17 @@ static void test_buffers(void) {
   agc_value ints[2] = {agc_int(1), agc_int(INT64_C(1) << 32)};
   agc_value list[3] = {buf, agc_int(4), agc_list_value(agc_list_from_array(ints, 2))};
   read_fails("Native.put_array_of_int32", 3, list, "RUNTIME-INTEGER-OVERFLOW");
-  /* A bad item leaves the memory as it was. */
+  /* A bad item leaves the memory as it was; a byte of put_bytes is 0 to 255 only. */
   get[1] = agc_int(5);
   assert(agc_as_int(&vm, call_row("Native.get_int32", 2, get)) == -2);
+  agc_value bytes[2] = {agc_int(9), agc_int(-1)};
+  agc_value put_bytes[3] = {buf, agc_int(5), agc_list_value(agc_list_from_array(bytes, 2))};
+  read_fails("Native.put_bytes", 3, put_bytes, "RUNTIME-INTEGER-OVERFLOW");
+  assert(agc_as_int(&vm, call_row("Native.get_int32", 2, get)) == -2);
+  bytes[1] = agc_int(255);
+  put_bytes[2] = agc_list_value(agc_list_from_array(bytes, 2));
+  (void)call_row("Native.put_bytes", 3, put_bytes);
+  assert(agc_as_int(&vm, call_row("Native.get_uint16", 2, get)) == 9 + 255 * 256);
   read_fails("Native.free", 1, (agc_value[]){agc_c_pointer_value(NULL)}, "RUNTIME-NATIVE-NOT-OWNED");
   (void)call_row("Native.free", 1, &buf);
   assert(res->closed && res->freed);

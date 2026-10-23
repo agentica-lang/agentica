@@ -3,7 +3,7 @@
 ## of the builtins.
 
 import Builtins from "../catalog/builtins"
-import {PUBLIC_NAMES} from "../catalog/builtins"
+import {OLD_NAMES, PUBLIC_NAMES} from "../catalog/builtins"
 import Model from "../catalog/builtin_model"
 import RubyForm from "../check/ruby_form"
 import CatalogJson from "../catalog/catalog_json"
@@ -47,11 +47,15 @@ export def help(words: List[String], style: String) -> Reply.Reply
   return Reply.printed(block(name, entry.unwrap!))
 end
 
-# The answer for a name that is no builtin: the hint of the checker for a name from another language that has one
-# (`int`, `Hash.new`: its targets could mislead), else the builtins it stands for, else the unknown-builtin error.
+# The answer for a name that is no public builtin: the new name of an old one (`Native.string_at`), else the hint of
+# the checker for a name from another language that has one (`int`, `Hash.new`: its targets could mislead), else the
+# builtins it stands for, else the unknown-builtin error.
 def renamed(name: String, as_json: Bool) -> Reply.Reply
   found: List[String] = []
-  if !Tables.foreign_names().has_key?(name)
+  old = OLD_NAMES.get(name)
+  if old.ok?
+    found = [old.unwrap!]
+  elsif !Tables.foreign_names().has_key?(name)
     found = Alias.targets(name)
   end
   if found.size == 0

@@ -35,39 +35,46 @@ end
   (`[native.NAME]`, see `modules.md`); `extern "NAME"` in its files opens it.
 - A `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`; a NUL in a
   `C.String` is `RUNTIME-INVALID-CHARACTER`. A `NULL` string result reads as
-  `""`: when NULL matters, declare `-> C.Pointer` and use `Native.string_at`.
+  `""`: when NULL matters, declare `-> C.Pointer` and use `Native.get_string`.
 - `C.Pointer` (`void *`) is a type any code may hold; it may be NULL
   (`Native.null()`, `Native.null?(p) -> Bool`), has no `==`, and inspects as
   `<C.Pointer>`. `C.Bytes` is a parameter only: a `List[Int]` of bytes (an
   item outside 0..255 is `RUNTIME-INVALID-NUMBER`) that C gets as a
   `const uint8_t *` copy valid during the call; pass the length separately.
-- Memory C returns: `Native.string_at(p) -> String` (up to the NUL),
-  `Native.string_at(p, length)` (exactly `length` bytes, NULs included) and
-  `Native.bytes_at(p, length) -> List[Int]` copy it; bytes that are not UTF-8
-  become U+FFFD. NULL with length 0 reads as empty (an empty SQLite blob);
-  other NULL is `RUNTIME-NATIVE-NULL` (test with `Native.null?` first), checked
-  before a negative length (`RUNTIME-INVALID-COUNT`); a length past what C
-  owns is undefined behavior. `Native.pointer(n)` is the pointer with value `n`
-  (`SQLITE_TRANSIENT` is `Native.pointer(-1)`). A `char **` out parameter
-  read with `string_at` is then freed by its C function (`sqlite3_free`).
+- Memory C returns, from a byte offset: `Native.get_string(p, off) -> String`
+  (up to the NUL), `Native.get_string(p, off, length)` (exactly `length` bytes,
+  NULs included) and `Native.get_bytes(p, off, length) -> List[Int]` copy it;
+  bytes that are not UTF-8 become U+FFFD. NULL with length 0 reads as empty (an
+  empty SQLite blob); other NULL is `RUNTIME-NATIVE-NULL` (test with
+  `Native.null?` first), checked before a negative length
+  (`RUNTIME-INVALID-COUNT`); a length past what C owns is undefined behavior.
+  `Native.pointer(n)` is the pointer with value `n` (`SQLITE_TRANSIENT` is
+  `Native.pointer(-1)`). A `char **` out parameter read with `get_string` is
+  then freed by its C function (`sqlite3_free`).
 - Owned buffers: `Native.memory_pointer(size) -> C.Pointer` is `size` zeroed
   bytes that the task owns (pass it to any `C.Pointer` parameter; a size the
   system cannot give is `RUNTIME-INVALID-COUNT`). `Native.free(p)` ends a buffer
   as `Native.close` ends a resource; the owner's end frees the rest, so a loop
-  that never frees grows. `Task.spawn_owning(&f, buf)` hands it over; a channel
-  send or a task's result does not. A `compute def` call holds it (reading or
-  writing it meanwhile races with C). A freed one is `RUNTIME-NATIVE-CLOSED`;
-  `Native.free` of C's pointer `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores
-  an untracked address: keep the target alive while C uses it.
+  that never frees grows. `Native.memory_pointer(size) do |buf| ... end` frees
+  it when the block ends (an error returned with `try` too) and gives the
+  block's value: prefer it for a buffer of one call. `Task.spawn_owning(&f,
+  buf)` hands a buffer over; a channel send or a task's result does not. A
+  `compute def` call holds it (reading or writing it meanwhile races with C). A
+  freed one is `RUNTIME-NATIVE-CLOSED`; `Native.free` of C's pointer
+  `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an untracked address: keep
+  the target alive while C uses it.
 - Typed memory at a byte offset of any `C.Pointer` (Ruby `ffi` names):
   `Native.get_int8/16/32/64(p, off)`, `get_uint8/16/32`, `get_float32/64`,
   `get_pointer`; `Native.put_int8/16/32/64(p, off, v)` (signed or unsigned
   range, else `RUNTIME-INTEGER-OVERFLOW`), `put_float32/64`, `put_pointer`,
-  `put_string(p, off, s)` (adds the NUL); bulk
+  `put_string(p, off, s)` (adds the NUL), `put_bytes(p, off, bytes)` (0..255,
+  else `RUNTIME-INTEGER-OVERFLOW`); bulk
   `Native.get_array_of_int32/int64/float32/float64(p, off, count) -> List` and
   `put_array_of_*(p, off, list)`. In a buffer, past its end or a negative offset
   is `RUNTIME-NATIVE-BOUNDS`; at C's pointer only NULL (`RUNTIME-NATIVE-NULL`)
-  and a negative offset are checked, the rest is trusted (UB if wrong).
+  and a negative offset are checked, the rest is trusted (UB if wrong). Two
+  tasks that use the same C memory at once race, as in C; each read or write of
+  an owned buffer holds a lock.
 - `[export] resource Db, free: db_close` in a block declares a resource type,
   freed by `void db_close(void *)` of the same library. Declare it above the
   `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is
