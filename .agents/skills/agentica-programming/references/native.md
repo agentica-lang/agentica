@@ -161,13 +161,19 @@ Keep the `extern` layer private and give the user a normal API; site page:
 - A block with a resource must sit above the functions that use it, and
   exported functions sit above private ones (`CHECK-DECL-ORDER`): put such a
   block in `raw.agc`, `export` its names, and `import Raw from "raw"` in the
-  public file. A block with no resource may stay at the end of the public file.
+  public file, with `export type Stream = Raw.Stream` for the signatures. The
+  split keeps the raw layer private (one file works if the block's functions
+  are `export def`, but then they are its API). A block with no resource may
+  stay at the end of the public file.
 - No varargs in Agentica. Declare each shape of a variadic C function with
   `...` and `= "symbol"`, keep them private, and give the public `def` a
   `List[T]` (pick the shape by length, `error` for no shape), a struct whose
-  defaults are an exported constant (`DEFAULTS.with(create: true)`; a default
-  parameter must be a literal) or parameters with defaults. Never let the
-  caller choose a printf format: pass a constant format and the text as `%s`.
+  defaults are a constant or parameters with defaults (a default parameter
+  must be a literal). For the struct, `export` the struct and the constant;
+  the caller imports the constant by name (`import {DEFAULTS, open_file} from
+  "files"`; a constant is not read through the alias) and writes
+  `DEFAULTS.with(create: true)`. Never let the caller choose a printf format:
+  pass a constant format and the text as `%s`.
 - A package lists the library per system in `agentica.toml`
   (`[native.NAME]`, `linux`/`macos`/`windows` each `{ system = "..." }` or
   `{ file = "native/..." }`) and `raw.agc` says `extern "NAME"`.

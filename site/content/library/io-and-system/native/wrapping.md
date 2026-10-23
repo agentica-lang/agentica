@@ -4,11 +4,11 @@ weight: 5
 description: Hide the C habits of a library (return codes, out pointers, varargs) behind a normal Agentica API, and ship it in a package.
 ---
 
-A C library is shaped by C: return codes, pointers that C fills, handles with a free function, variadic functions. A good wrapper keeps that out of sight. The `extern` block is the raw layer, and the public functions on top of it look like the rest of Agentica. For a whole library done this way, read [SQLite](/library/io-and-system/native/sqlite/); this page gives the rules. The examples name the Linux libraries (`libc.so.6`, `libm.so.6`).
+A C library is shaped by C. It has return codes, pointers that C fills, handles with a free function and variadic functions. A good wrapper hides all of that. The `extern` block is the raw layer. The public functions on top of it look like the rest of Agentica. [SQLite](/library/io-and-system/native/sqlite/) is a whole library done this way. This page gives the rules. The examples name the Linux libraries (`libc.so.6`, `libm.so.6`).
 
 ## Two layers
 
-The raw layer is one `extern` block per library, with each signature copied from the C header, the C names as they are, and no `?` or `!` (`PARSE-EXTERN-NAME`). It is not part of your API. The public layer is plain Agentica:
+The raw layer is one `extern` block per library. Copy each signature from the C header and keep the C names. A name has no `?` or `!` (`PARSE-EXTERN-NAME`). The raw layer is not part of your API. The public layer is plain Agentica:
 
 | In C | In the public API |
 |---|---|
@@ -19,7 +19,7 @@ The raw layer is one `extern` block per library, with each signature copied from
 | A call that may take long | a [`compute def`](/library/io-and-system/native/compute/) in the raw layer, so the other tasks keep running; the wrapper calls it like any function |
 | A variadic function | functions of a normal shape (see Variadic functions below) |
 
-Exported functions come before private ones, and a resource comes before the functions that use it (`CHECK-DECL-ORDER`). A block with a resource therefore goes in a file of its own, `raw.agc`, that only your own files import; the public file wraps it. A block without resources can stay private at the end of the public file, as in the examples after this one.
+A block with a resource must come before the functions that use it. Exported functions must come before private ones (`CHECK-DECL-ORDER`). So the wrapper cannot sit in the same file as such a block. Put the block in its own file, `raw.agc`, and export its names. The public file imports it. This keeps the raw layer private: the public file exports only the wrapper. One file would work if the block's functions were `export def`, but then they would be part of its API. A block without resources can stay private at the end of the public file, as in the examples after this one.
 
 ```agentica {file="raw.agc"}
 extern "libc.so.6"
@@ -34,8 +34,10 @@ end
 ```agentica {mode="check"}
 import Raw from "raw"
 
+export type Stream = Raw.Stream
+
 ## Opens a file for appending, or says which path failed.
-export def open_append(path: String) -> Result[Raw.Stream]
+export def open_append(path: String) -> Result[Stream]
   case Raw.fopen(path, "a")
     Result.Ok(stream) -> return ok(stream)
     Result.Err(_) -> return error("cannot open #{path}")
@@ -43,7 +45,7 @@ export def open_append(path: String) -> Result[Raw.Stream]
 end
 
 ## Writes one line.
-export def write_line(stream: Raw.Stream, text: String) -> Result[Void]
+export def write_line(stream: Stream, text: String) -> Result[Void]
   if Raw.fputs("#{text}\n", stream) < 0
     return error("cannot write to the stream")
   end
@@ -51,7 +53,7 @@ export def write_line(stream: Raw.Stream, text: String) -> Result[Void]
 end
 
 ## Pushes the buffered text to the file.
-export def flush(stream: Raw.Stream) -> Result[Void]
+export def flush(stream: Stream) -> Result[Void]
   if Raw.fflush(stream) != 0
     return error("cannot flush the stream")
   end
@@ -64,11 +66,11 @@ export def tty?(fd: Int) -> Bool
 end
 ```
 
-`fopen` is declared `-> Stream`, so the raw call already gives a `Result[Stream]`; the wrapper only replaces its message with one that names the path. Callers close the stream with `Native.close`, or the task that owns it frees it when it ends.
+`fopen` is declared `-> Stream`, so the raw call already gives a `Result[Stream]`. The wrapper only replaces its message with one that names the path. The alias `Stream` lets callers name the type without importing `raw.agc`. Callers close the stream with `Native.close`, or the task that owns it frees it when it ends. `fflush` is a `compute def` in the raw layer, and `flush` calls it like any function.
 
 ## Out parameters
 
-An `out` parameter does not reach the public API. The raw call returns a record with the C result as `result` and one field per out parameter; the wrapper copies them into a struct whose fields say what they are.
+An `out` parameter stays in the raw layer: the wrapper copies the record fields into a struct of its own.
 
 ```agentica {mode="check"}
 struct Split
@@ -92,19 +94,19 @@ end
 Agentica functions have no variadic parameters, and a wrapper does not add any. Declare the C function once for each [shape](/library/io-and-system/native/types/#variadic-functions-and-c-names) that your wrapper needs, with `...` and `= "symbol"`, and keep the shapes private. The public function takes a normal parameter instead:
 
 - Parameters with defaults, when an argument is optional (`on: Bool = true`).
-- A struct, when there are many options. Export a constant with the default values and let the caller change a field with `with`: `OPEN_DEFAULTS.with(create: true)`.
+- A struct, when there are many options. Export the struct and a constant with the default values. The caller imports the constant by name, because a constant is not read through the module alias, and changes a field with `with`: `import {OPEN_DEFAULTS, open_file} from "files"`, then `OPEN_DEFAULTS.with(create: true)`.
 - A `List[T]`, when the count of arguments changes. The wrapper picks the shape from the length of the list and returns an `error` for a length it has no shape for.
 
 ```agentica {mode="check"}
 O_WRONLY = 1
-O_CREAT = 64
+O_CREAT = 64   # the Linux value; macOS uses 0x200
 F_SETFD = 2
 FD_CLOEXEC = 1
 
 ## Read only, and mode 0600 when the file is created.
 export OPEN_DEFAULTS = OpenOptions(write: false, create: false, mode: 384)
 
-struct OpenOptions
+export struct OpenOptions
   write: Bool
   create: Bool
   mode: Int
@@ -160,17 +162,8 @@ extern "libc.so.6"
 end
 ```
 
-`write_fields` never lets its caller choose the format. The format is a constant of the wrapper, and the caller's text goes in as `%s` arguments, so a `%` in a field is only text.
+`open_file` gives a descriptor; the example leaves out a function that closes it. `write_fields` never lets its caller choose the format. The format is a constant of the wrapper, and the caller's text goes in as `%s` arguments, so a `%` in a field is only text.
 
 ## Shipping it in a package
 
-A package that wraps a library names the library for each system in its `agentica.toml`, as `[native.NAME]` with a `system` name or a `file` of its `native/` folder, and its `raw.agc` opens it with `extern "NAME"`:
-
-```toml
-[native.sqlite3]
-linux = { system = "libsqlite3.so.0" }
-macos = { system = "libsqlite3.dylib" }
-windows = { file = "native/windows/sqlite3.dll" }
-```
-
-The lock covers the files of `native/`, and a system without an entry is a diagnostic where a file uses the library. See [Packages](/tour/modules/) for the rules and the codes. Document the wrapper file as the API of the package.
+A package names the library for each system in `[native.NAME]` of its `agentica.toml`. Its `raw.agc` then opens it with `extern "NAME"`. See [Packages](/tour/modules/#packages) for the form, the lock and the error codes. Document the wrapper file as the API of the package.
