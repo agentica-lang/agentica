@@ -8,11 +8,11 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - Top level holds `def`, `struct`, `enum`, `type` alias, `import` and constants;
   no statement runs there. `export` prefixes a function, struct, enum, alias or
   constant. An `extern "LIB"` block declares native functions, which count as
-  `def`s, and resources, which count as types; a block with a resource counts
-  as types as a whole (`native.md`).
+  `def`s, and resources and C structs, which count as types; a block with a
+  resource or a struct counts as types as a whole (`native.md`).
 - Order is checked: module doc and `import`s, constants, `struct`, `enum`,
-  aliases and `extern` blocks with a resource (any order), `export def`, then
-  private `def`.
+  aliases and `extern` blocks with a resource or a struct (any order),
+  `export def`, then private `def`.
   The first declaration out of place is `CHECK-DECL-ORDER`. A function may call
   one declared later.
 - A constant is `NAME = expr` or `NAME: Type = expr` (the type also types `[]`,
