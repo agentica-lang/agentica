@@ -158,12 +158,14 @@ Keep the `extern` layer private and give the user a normal API; site page:
 - An out parameter becomes a field of your own struct; a yes/no `int` becomes
   a `name?` function returning `Bool`; a call that may take long is a
   `compute def` in the block, called like any function.
-- A block with a resource must sit above the functions that use it, and
+- A block with a resource must sit above every function of the file, and
   exported functions sit above private ones (`CHECK-DECL-ORDER`): put such a
   block in `raw.agc`, `export` its names, and `import Raw from "raw"` in the
   public file, with `export type Stream = Raw.Stream` for the signatures. The
-  split keeps the raw layer private (one file works if the block's functions
-  are `export def`, but then they are its API). A block with no resource may
+  public file does not re-export the raw layer (one file works if the block's
+  functions are `export def`, but then they are its API). A `String` with a NUL
+  stops the program at the C call (`RUNTIME-INVALID-CHARACTER`): check inputs
+  first in a wrapper that must not stop. A block with no resource may
   stay at the end of the public file.
 - No varargs in Agentica. Declare each shape of a variadic C function with
   `...` and `= "symbol"`, keep them private, and give the public `def` a

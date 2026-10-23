@@ -8,7 +8,7 @@ A C library is shaped by C. It has return codes, pointers that C fills, handles 
 
 ## Two layers
 
-The raw layer is one `extern` block per library. Copy each signature from the C header and keep the C names. A name has no `?` or `!` (`PARSE-EXTERN-NAME`). The raw layer is not part of your API. The public layer is plain Agentica:
+The raw layer is one `extern` block per library. Copy each signature from the C header and keep the C names. A name has no `?` or `!` (`PARSE-EXTERN-NAME`). The raw layer is not part of your API. The public layer is plain Agentica. A `String` with a NUL character stops the program when it crosses to C (`RUNTIME-INVALID-CHARACTER`), so a wrapper that must not stop checks its `String` inputs first; the examples skip that check.
 
 | In C | In the public API |
 |---|---|
@@ -19,7 +19,7 @@ The raw layer is one `extern` block per library. Copy each signature from the C 
 | A call that may take long | a [`compute def`](/library/io-and-system/native/compute/) in the raw layer, so the other tasks keep running; the wrapper calls it like any function |
 | A variadic function | functions of a normal shape (see Variadic functions below) |
 
-A block with a resource must come before the functions that use it. Exported functions must come before private ones (`CHECK-DECL-ORDER`). So the wrapper cannot sit in the same file as such a block. Put the block in its own file, `raw.agc`, and export its names. The public file imports it. This keeps the raw layer private: the public file exports only the wrapper. One file would work if the block's functions were `export def`, but then they would be part of its API. A block without resources can stay private at the end of the public file, as in the examples after this one.
+A block with a resource must come before every function of the file. Exported functions must come before private ones (`CHECK-DECL-ORDER`). So the wrapper cannot sit in the same file as such a block. Put the block in its own file, `raw.agc`, and export its names. The public file imports it. The public file does not re-export the raw layer: it exports only the wrapper. One file would work if the block's functions were `export def`, but then they would be part of its API. A block without resources can stay private at the end of the public file, as in the examples after this one.
 
 ```agentica {file="raw.agc"}
 extern "libc.so.6"
@@ -73,7 +73,7 @@ end
 An `out` parameter stays in the raw layer: the wrapper copies the record fields into a struct of its own.
 
 ```agentica {mode="check"}
-struct Split
+export struct Split
   whole: Float
   fraction: Float
 end
