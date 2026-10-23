@@ -154,10 +154,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   machine code of each kind, the exit stubs and the entry table, for the SysV
   and Win64 argument registers (`AGC_JIT_HOST` is 0 elsewhere and nothing is
   compiled). `mem_posix.c`, `mem_windows.c`: W^X pages, written then sealed
-  read-execute. `run_compiled` in `vm/interp.c` enters at each reload (after
-  the one-byte `agc_jit_may_run` test) and handles the exits as the
-  interpreter handles that instruction: STEP runs `step_slow`, COST
-  `apply_cost`, a failure `op_failed`, INTERPRET goes on in the loop (RETURN).
+  read-execute. `run_compiled` in `vm/interp.c` enters at each reload of the
+  jit copy of `turn_loop` (after the one-byte `agc_jit_may_run` test; the
+  plain copy has no JIT test, as one cost arithmetic 20% by code layout alone)
+  and handles the exits as the interpreter handles that instruction: STEP runs
+  `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET goes on in
+  the loop (RETURN).
   A new instruction: a case in the walk, its `agc_emit_*`, a case in
   `jit_test.c` and in `tests/test_vm_jit.py`; compiled code never fails,
   allocates, parks, calls a builtin or moves a frame
