@@ -144,7 +144,8 @@ end
   end
   ~~~
 - Functions count as `def`s for the declaration order, resources as types; a
-  block with a resource counts as types as a whole. A wrong signature is undefined behavior in C: copy it from the C header.
+  block with a resource counts as types as a whole. A wrong signature is
+  undefined behavior in C: copy it from the C header.
 
 ## Wrapping a library
 

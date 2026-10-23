@@ -333,6 +333,8 @@ class TestModuleRules:
         block = ('extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open() -> Db\n'
                  "  def db_ping() -> C.Int32\nend\n\n")
         plain = 'extern "/opt/libdb.so"\n  def db_stat() -> C.Int32\nend\n\n'
+        mixed = ('extern "/opt/libdb.so"\n  export def db_load(path: C.String, out size: C.Int32) -> C.Int32\n'
+                 "  compute def db_scan(db: C.Pointer) -> C.Int32\n  resource Db, free: db_close\nend\n\n")
         api = "export def api() -> Void\nend\n\n"
         later = "def helper() -> Void\nend\n\n"
         results = self.checks([({"root.agc": text + MAIN}, "root.agc", None) for text in (
@@ -345,13 +347,16 @@ class TestModuleRules:
             api + plain,
             # The rule is per block, also for two blocks of one library.
             block + plain + api,
-            block + api + plain)])
+            block + api + plain,
+            # An exported def with an out record and a compute def, with the resource declared after them.
+            mixed + api + later)])
         assert results[0][1] is None
         assert start(self.assert_rejected(results[1], "CHECK-DECL-ORDER")) == (5, 3)
         assert start(self.assert_rejected(results[2], "CHECK-DECL-ORDER")) == (5, 1)
         assert results[3][1] is None
         assert start(self.assert_rejected(results[4], "CHECK-DECL-ORDER")) == (11, 1)
         assert results[5][1] is None
+        assert results[6][1] is None
 
     def test_an_import_after_a_declaration_is_out_of_order(self):
         problem = self.check({
