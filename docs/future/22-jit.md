@@ -66,11 +66,11 @@ and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
 the default; `on`, which compiles a function at its 100th entry (a call, a
 return into it, or a turn that starts in it); `always`, at its first entry,
 for tests. Only the user's program is compiled; the front end stays in the
-interpreter. On
-another architecture every mode runs the interpreter. A function is compiled
-only when each of its instructions is `MOVE`, `CONST`, `STEP`, an Int operator
-or compare (`ADD_I` to `LE_I`), `EQ`, `NE`, a jump or `RETURN`, fused or not;
-any other instruction keeps the whole function in the interpreter.
+interpreter. On another architecture every mode runs the interpreter. A
+function is compiled only when each of its instructions is `MOVE`, `CONST`,
+`STEP`, an Int operator or compare (`ADD_I` to `LE_I`), `EQ`, `NE`, a jump or
+`RETURN`, fused or not; any other instruction keeps the whole function in the
+interpreter.
 
 - Entry: at each reload of the turn loop (a call, a return, the start of a
   turn) the interpreter tests one byte of the function and enters its code at

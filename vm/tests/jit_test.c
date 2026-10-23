@@ -207,13 +207,16 @@ static AGC_JIT_CALLER void string_cost(void) {
 }
 
 /* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): each gets the one copy
-   that was published, and the copies that lost the race were unmapped. */
+   that was published, and the copies that lost the race were unmapped. The barrier lets them start together, so
+   more than one compiles and the losing side of the compare-and-swap runs. */
 #define RACERS 4
 static agc_jit *race_jit;
 static agc_jit_code race_code[RACERS];
+static uv_barrier_t race_start;
 
 static void race_one(void *arg) {
   assert(agc_gc_thread_enter());
+  uv_barrier_wait(&race_start);
   race_code[(uintptr_t)arg] = agc_jit_code_of(race_jit, 0);
   agc_gc_thread_leave();
 }
@@ -224,12 +227,35 @@ static void compile_race(void) {
   sum_loop(&f);
   program_of(&f);
   race_jit = agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet);
+  assert(uv_barrier_init(&race_start, RACERS) == 0);
   uv_thread_t threads[RACERS];
   for (uintptr_t k = 0; k < RACERS; k++) assert(uv_thread_create(&threads[k], race_one, (void *)k) == 0);
   for (size_t k = 0; k < RACERS; k++) assert(uv_thread_join(&threads[k]) == 0);
   for (size_t k = 0; k < RACERS; k++) assert(race_code[k] && race_code[k] == race_code[0]);
   assert(agc_jit_code_of(race_jit, 0) == race_code[0]);
   assert(atomic_load(&race_jit->used) == 4096);
+  uv_barrier_destroy(&race_start);
+}
+
+/* A function whose code crosses AGC_JIT_CODE_CAP inside the 32-bit offset of a jump fails, and nothing is written
+   past the buffer: not the offset's patch, not the exit stubs, not the entry table (an overflow fails under
+   SANITIZE=1). MOVE is 32 bytes and the jump 5, so the moves leave the jump's opcode at CAP - 3. */
+static void cap_inside_an_offset(void) {
+  agc_emitter e;
+  agc_emit_begin(&e, 2);
+  agc_emit_label(&e, 0);
+  agc_emit_step(&e, 1, 0);
+  agc_emit_label(&e, 1);
+  size_t opcode_at = AGC_JIT_CODE_CAP - 3;
+  while ((opcode_at - e.len) % 5) agc_emit_move(&e, 1, 2);
+  while (opcode_at - e.len >= (size_t)5 * 32)
+    for (int k = 0; k < 5; k++) agc_emit_move(&e, 1, 2);
+  while (e.len < opcode_at) agc_emit_exit(&e, AGC_JIT_EXIT_INTERPRET, 1);
+  assert(e.len == opcode_at && !e.failed && e.cap == AGC_JIT_CODE_CAP);
+  agc_emit_jump(&e, 0);
+  assert(e.failed && e.len <= e.cap);
+  agc_emit_exit(&e, AGC_JIT_EXIT_INTERPRET, 1);
+  assert(agc_emit_end(&e) == 0 && e.len <= e.cap);
 }
 
 /* Functions with an instruction the emitter does not know stay interpreted. */
@@ -285,6 +311,7 @@ int main(void) {
 #if AGC_JIT_HOST
   code_memory();
   compile_race();
+  cap_inside_an_offset();
   bytes();
   loops_and_steps();
   int_rules();

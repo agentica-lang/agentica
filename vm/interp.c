@@ -1026,7 +1026,8 @@ __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_statu
       assert(a && b);
       index_out_of_range(vm, agc_as_int(vm, *b), list_len(agc_as_list(vm, *a)), span);
     case AGC_STATUS_WRONG_TAG: agc_wrong_tag(vm);
-    case AGC_STATUS_OK: break;
+    case AGC_STATUS_OK:
+    case AGC_STATUS_COUNT: break;
   }
   agc_fail(vm, "RUNTIME-INTERNAL", "an opcode helper failed with no error", span);
 }

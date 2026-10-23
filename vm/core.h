@@ -218,7 +218,8 @@ typedef enum {
   AGC_STATUS_OVERFLOW,           /* RUNTIME-INTEGER-OVERFLOW at the instruction's span */
   AGC_STATUS_DIVISION_BY_ZERO,   /* RUNTIME-DIVISION-BY-ZERO at the instruction's span */
   AGC_STATUS_INDEX_OUT_OF_RANGE, /* RUNTIME-INDEX-OUT-OF-RANGE at the instruction's span */
-  AGC_STATUS_WRONG_TAG           /* RUNTIME-INTERNAL at span 0 (agc_wrong_tag): only hand-made bytecode */
+  AGC_STATUS_WRONG_TAG,          /* RUNTIME-INTERNAL at span 0 (agc_wrong_tag): only hand-made bytecode */
+  AGC_STATUS_COUNT               /* not a status: the number of them, which stays last */
 } agc_status;
 
 agc_status agc_op_add_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);

@@ -76,7 +76,7 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 #define AGC_JIT_CODE_CAP ((size_t)64 * 1024 * 1024)
 
 /* Exit words share the status half with agc_status, so every status is below the first exit. */
-_Static_assert((int)AGC_STATUS_WRONG_TAG < (int)AGC_JIT_EXIT_STEP, "an agc_status value overlaps the JIT's exits");
+_Static_assert((int)AGC_STATUS_COUNT <= (int)AGC_JIT_EXIT_STEP, "an agc_status value overlaps the JIT's exits");
 
 /* A 32-bit offset written once the function is laid out: to the code of instruction `value` (LABEL), or to the exit
    stub that returns the exit word `value` (EXIT), or the status in eax with the pc in the high half of `value`
@@ -89,8 +89,9 @@ typedef struct {
 } agc_jit_patch;
 
 /* The machine code of one function as it is written: `labels[pc]` is where instruction pc starts, `entry` the offset
-   that the entry table's address goes to. `failed` is set when an operand does not fit the encoding; the function
-   then stays interpreted. The buffers are GC memory without pointers. */
+   that the entry table's address goes to. `failed` is set when an operand does not fit the encoding or the code
+   passes AGC_JIT_CODE_CAP; from then on nothing is written, and the function stays interpreted. The buffers are GC
+   memory without pointers. */
 typedef struct {
   uint8_t *code;
   size_t len, cap;

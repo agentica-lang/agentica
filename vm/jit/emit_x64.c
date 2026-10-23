@@ -42,12 +42,13 @@ enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_LE = 0xE };
 #define TAG(r) ((int64_t)(r) * 16)
 #define WORD(r) ((int64_t)(r) * 16 + 8)
 
-/* Room for N more bytes. Past the code cap the function fails and the writing starts over at 0 in the same buffer,
-   so the bytes that follow, until the walk sees `failed`, stay in bounds. */
+/* Room for N more bytes, or `failed` past the code cap. Once `failed` is set nothing is written any more: byte,
+   put32_at and patch do nothing, so an offset recorded before the failure, whose bytes may be cut off at the cap, is
+   never written into, and agc_emit_end lays out nothing. */
 static void grow(agc_emitter *e, size_t n) {
   if (e->len + n > AGC_JIT_CODE_CAP) {
     e->failed = true;
-    e->len = 0;
+    return;
   }
   if (e->len + n <= e->cap) return;
   size_t cap = e->cap ? e->cap : 256;
@@ -59,8 +60,8 @@ static void grow(agc_emitter *e, size_t n) {
 }
 
 static void byte(agc_emitter *e, uint8_t b) {
-  grow(e, 1);
-  e->code[e->len++] = b;
+  if (!e->failed) grow(e, 1);
+  if (!e->failed) e->code[e->len++] = b;
 }
 
 static void put_bytes(agc_emitter *e, const uint8_t *data, size_t n) {
@@ -75,7 +76,9 @@ static void word64(agc_emitter *e, uint64_t v) {
   for (int k = 0; k < 8; k++) byte(e, (uint8_t)(v >> (8 * k)));
 }
 
+/* Writes over 4 bytes that were written before; nothing after a failure, when they may not all be there. */
 static void put32_at(agc_emitter *e, size_t at, uint32_t v) {
+  if (e->failed) return;
   for (int k = 0; k < 4; k++) e->code[at + (size_t)k] = (uint8_t)(v >> (8 * k));
 }
 
@@ -164,6 +167,7 @@ static size_t jump_to_patch(agc_emitter *e, int cc) {
 static void land(agc_emitter *e, size_t at) { put32_at(e, at, (uint32_t)(int32_t)(e->len - (at + 4))); }
 
 static void patch(agc_emitter *e, size_t at, agc_jit_patch_kind kind, uint64_t value) {
+  if (e->failed) return;
   if (e->patch_count == e->patch_cap) {
     size_t cap = e->patch_cap ? agc_size_mul(e->patch_cap, 2) : 64;
     agc_jit_patch *patches = agc_alloc_atomic(agc_size_mul(cap, sizeof *patches));
@@ -353,6 +357,7 @@ void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc) { exit_if(e, -1
 /* The epilogue, the stubs of the exits (one for each run of patches with the same exit word), then the table of
    entry offsets, each relative to the table, which the entry's lea finds rip-relative. */
 size_t agc_emit_end(agc_emitter *e) {
+  if (e->failed) return 0;
   size_t epilogue = e->len;
   BYTES(e, 0x48, 0x83, 0xC4, SHADOW); /* add rsp, 32 */
   pop(e, CONSTS);
