@@ -537,8 +537,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   so the run has stalled. It ends with the `RUNTIME-INTERNAL` of N = 1. The last
   scheduler to go idle wakes the I/O thread for the check (`agc_runq_on_idle`).
 - **Wakes between schedulers.** The run queue stays one global FIFO, with no
-  local queues, no stealing and no thread affinity. Two things keep a wake cheap
-  (`vm/task.c`, `vm/runq.c`):
+  local queues, no stealing and no thread affinity. Three things keep a wake
+  cheap (`vm/task.c`, `vm/runq.c`):
   - Each scheduler thread has one runnext slot (`agc_vm.runnext`). A task that a
     scheduler wakes (`agc_task_wake`: a channel, an await, a timer, a lock
     hand-on, a detached ending) goes into that slot when it is free, and to the
@@ -577,7 +577,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     may hold the thread for long (a long builtin, a native call). So the
     scheduler marks the push (`agc_vm.own_pending`), and when its next pick
     takes the slot while the mark is set, it sends the skipped wake
-    (`agc_runq_kick`: `work` and one signal while the queue holds a task).
+    (`agc_runq_kick`: while the queue holds a task, it sets `work`, and it
+    signals when no scheduler spins).
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
   cancel flag, and then the state says who ends the task. Exactly one party
   does. A task on a turn (RUNNING, PARKING or WOKEN) is left to its scheduler,

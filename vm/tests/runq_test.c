@@ -309,6 +309,13 @@ static void test_push_own(void) {
   agc_runq_push_own(q, b);
   assert(agc_runq_stats(q).signals == signals + 1);
   assert(agc_runq_pop(q) == a && agc_runq_pop(q) == b && agc_runq_pop(q) == NULL);
+  /* A kick sends the skipped wake only while the queue holds a task. */
+  agc_runq_kick(q);
+  assert(agc_runq_stats(q).signals == signals + 1);
+  agc_runq_push_own(q, a);
+  agc_runq_kick(q);
+  assert(agc_runq_stats(q).signals == signals + 2);
+  assert(agc_runq_pop(q) == a);
 }
 
 static agc_vm burst;
