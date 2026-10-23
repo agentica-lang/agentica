@@ -1,9 +1,7 @@
 /*
- * Runs with several scheduler threads (§16.9; agc_vm_run with rt->schedulers > 1): a storm of tasks on a channel, a
- * stall that the I/O thread finds (also beside a service task's timer), main failing beside spinners (the run ends
- * once), TCP calls issued and resumed on several schedulers while the I/O thread owns every socket, a ping-pong
- * that runnext keeps on one scheduler, a lone yielding task that stays on one, and that task moving to another
- * scheduler while a task woken into its runnext slot blocks its own. `make vm-tsan` runs it under ThreadSanitizer.
+ * Runs with several scheduler threads (§16.9): a channel storm, a stall the I/O thread finds (also beside a service
+ * timer), main failing beside spinners, TCP calls resumed on several schedulers, a ping-pong that runnext keeps on one
+ * scheduler, a lone yielding task that stays on one and moves when its slot's task blocks. `make vm-tsan` runs it too.
  */
 #include "../core.h"
 #include "test_program.h"
