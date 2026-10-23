@@ -1,0 +1,82 @@
+/*
+ * The status contract of the opcode helpers (agc_op_* in core.h): a status on
+ * overflow, division by zero, a bad index or a wrong tag, the result register
+ * left alone then, and no longjmp (the VM here has no failure target).
+ */
+#include "../core.h"
+
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+
+static agc_vm vm;
+
+static bool same_bits(agc_value x, agc_value y) { return memcmp(&x, &y, sizeof x) == 0; }
+
+/* A failing helper returns `want` and leaves `dst` as it was. */
+static void fails(agc_status got, agc_status want, const agc_value *dst, agc_value before) {
+  assert(got == want);
+  assert(same_bits(*dst, before));
+}
+
+static void int_rules(void) {
+  agc_value max = agc_int(INT64_MAX), min = agc_int(INT64_MIN), one = agc_int(1), zero = agc_int(0);
+  agc_value minus = agc_int(-1), mark = agc_nil(), dst = mark;
+  fails(agc_op_add_i(&vm, &dst, &max, &one), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_sub_i(&vm, &dst, &min, &one), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_mul_i(&vm, &dst, &max, &max), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_div_i(&vm, &dst, &min, &minus), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_neg_i(&vm, &dst, &min), AGC_STATUS_OVERFLOW, &dst, mark);
+  fails(agc_op_div_i(&vm, &dst, &one, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
+  fails(agc_op_mod_i(&vm, &dst, &one, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
+  assert(agc_op_mod_i(&vm, &dst, &min, &minus) == AGC_STATUS_OK && same_bits(dst, zero));
+  /* The result register may be an operand: both are read before it is written. */
+  agc_value acc = agc_int(40);
+  assert(agc_op_add_i(&vm, &acc, &acc, &acc) == AGC_STATUS_OK && same_bits(acc, agc_int(80)));
+  assert(agc_op_lt_i(&vm, &dst, &min, &max) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+}
+
+static void float_rules(void) {
+  agc_value x = agc_float(1.5), zero = agc_float(0.0), mark = agc_nil(), dst = mark;
+  fails(agc_op_div_f(&vm, &dst, &x, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
+  assert(agc_op_mul_f(&vm, &dst, &x, &x) == AGC_STATUS_OK && same_bits(dst, agc_float(2.25)));
+  agc_value neg = agc_float(-0.0);
+  assert(agc_op_same(&vm, &dst, &zero, &neg) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  assert(agc_op_eq(&vm, &dst, &zero, &neg) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+}
+
+/* A wrong tag is hand-made bytecode: the helper reports it instead of calling agc_wrong_tag. */
+static void wrong_tags(void) {
+  agc_value i = agc_int(1), f = agc_float(1.0), list = agc_list_value(agc_list_from_array(&i, 1));
+  agc_value mark = agc_nil(), dst = mark;
+  fails(agc_op_add_i(&vm, &dst, &i, &f), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_add_f(&vm, &dst, &f, &i), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_neg_i(&vm, &dst, &f), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_lt_f(&vm, &dst, &i, &i), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_list_get(&vm, &dst, &i, &i), AGC_STATUS_WRONG_TAG, &dst, mark);
+  fails(agc_op_list_get(&vm, &dst, &list, &f), AGC_STATUS_WRONG_TAG, &dst, mark);
+  /* EQ has no equality for two lists; SAME is false for two different tags before it looks. */
+  fails(agc_op_eq(&vm, &dst, &list, &list), AGC_STATUS_WRONG_TAG, &dst, mark);
+  assert(agc_op_same(&vm, &dst, &i, &f) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+}
+
+static void lists(void) {
+  agc_value items[3] = {agc_int(7), agc_int(8), agc_int(9)};
+  agc_value list = agc_list_value(agc_list_from_array(items, 3));
+  agc_value at = agc_int(3), back = agc_int(-1), mark = agc_nil(), dst = mark;
+  fails(agc_op_list_get(&vm, &dst, &list, &at), AGC_STATUS_INDEX_OUT_OF_RANGE, &dst, mark);
+  fails(agc_op_list_get(&vm, &dst, &list, &back), AGC_STATUS_INDEX_OUT_OF_RANGE, &dst, mark);
+  at = agc_int(2);
+  assert(agc_op_list_get(&vm, &dst, &list, &at) == AGC_STATUS_OK && same_bits(dst, items[2]));
+  assert(agc_op_list_len(&vm, &dst, &list) == AGC_STATUS_OK && same_bits(dst, agc_int(3)));
+}
+
+int main(void) {
+  agc_init();
+  int_rules();
+  float_rules();
+  wrong_tags();
+  lists();
+  puts("op helper tests passed");
+  return 0;
+}
