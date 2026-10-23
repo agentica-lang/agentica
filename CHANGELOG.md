@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Loops and function calls run faster: the VM joins each step check with the
+  instruction after it (up to about 35 % on integer loops).
+
 ## [0.9.0] - 2026-10-23
 
 The first stable release since 0.8.1, with the changes of `0.9.0-beta.1` and

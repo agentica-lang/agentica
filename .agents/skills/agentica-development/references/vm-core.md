@@ -190,6 +190,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     local again; `frame->pc` is still written before each instruction (the
     stack trace, a park and a yield read it), and `SPAN` is the span of the
     running instruction, read where a failure or a call needs it
+  - fused STEP (`docs/vm/03-ir-and-bytecode.md` §4.2): the loader's
+    `fuse_steps` turns a checked `STEP` into an `AGC_FUSED_STEP_*` opcode when
+    the next instruction has a fused form; `FUSED_STEP()` is the `STEP`, then
+    fetches the next instruction as the loop does and jumps to its case label
+    (`op_move`, ...). A new fused form needs the opcode in `agc_fused_opcode`,
+    a case in `fuse_steps`, a case and a label in `turn_loop`. The profiling
+    copy runs fused STEPs plain, so the profile is also the unfused reference
+    (`tests/test_vm_trace.py`)
   - `LIST` and `MAP` with no items return `rt->empty_list` and `rt->empty_map`
     (made once by `agc_vm_init`), and a map literal starts from the shared empty
     map: nothing writes a list or map after it is returned (`agc_map_put` copies

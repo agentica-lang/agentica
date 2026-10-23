@@ -331,6 +331,18 @@ by `OPCODES` in `compiler/bytecode/bytecode_tables.agc` and `agc_opcode` in
 `vm/value.h`. New opcodes are appended at the end. An appended opcode does not
 bump the format version, and an older VM rejects it as unknown.
 
+Fused STEP: after it has checked a file, the loader rewrites each `STEP` whose
+next instruction is `MOVE`, `CONST`, `FIELD`, `LIST_GET`, `IS_VARIANT`,
+`GLOBAL`, `ADD_I`, `SUB_I`, `MUL_I`, `LT_I` or `RETURN` into a fused opcode
+(`agc_fused_opcode` in `vm/value.h`, numbered from `AGC_OP_COUNT`) and leaves
+the next instruction in place. The fused opcode is that `STEP` (same charge,
+same stop and span, same yield, before the next instruction runs), then the
+next instruction without a second dispatch. A jump to the next instruction, or
+a resume after the yield, runs it alone. Steps and stop points do not change,
+and no file holds a fused opcode: the loader rejects one as unknown. The
+profile (`docs/vm/08-loader-and-cli.md` §9) runs every fused `STEP` as a plain
+`STEP`, so its counts are those of the file's opcodes.
+
 Details that code and tests rely on:
 
 - `EQ` and `NE` accept pairs of Int, Float, Bool, Nil, String or Range (ranges

@@ -1232,6 +1232,48 @@ int main(void) {
 
   static const agc_instr unknown_op[] = {{AGC_OP_COUNT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   assert(!loads_code(unknown_op, two_spans, 2, "unknown opcode"));
+
+  /* The fused STEP forms are the loader's own: a file that holds one is rejected, and a checked STEP before a CONST
+     becomes one while the CONST stays in place; a STEP before an opcode with no fused form stays a STEP. */
+  for (uint32_t op = AGC_OP_COUNT; op < AGC_FUSED_END; op++) {
+    const agc_instr fused[] = {{(uint16_t)op, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+    assert(!loads_code(fused, two_spans, 2, "unknown opcode"));
+  }
+  s = base();
+  s.code = back_to_step;
+  s.code_spans = three_spans;
+  s.count = 3;
+  buffer fusable = build(s);
+  assert(agc_load(fusable.data, fusable.len, &p, error, sizeof error));
+  free(fusable.data);
+  assert(p->functions[p->entry].code[0].op == AGC_FUSED_STEP_CONST);
+  assert(p->functions[p->entry].code[1].op == AGC_OP_CONST && p->functions[p->entry].code[2].op == AGC_OP_JUMP);
+  static const struct { uint16_t next, fused; } register_forms[] = {
+    {AGC_OP_MOVE, AGC_FUSED_STEP_MOVE},     {AGC_OP_ADD_I, AGC_FUSED_STEP_ARITH_I},
+    {AGC_OP_SUB_I, AGC_FUSED_STEP_ARITH_I}, {AGC_OP_MUL_I, AGC_FUSED_STEP_ARITH_I},
+    {AGC_OP_LT_I, AGC_FUSED_STEP_LT_I},     {AGC_OP_LIST_GET, AGC_FUSED_STEP_LIST_GET},
+    {AGC_OP_RETURN, AGC_FUSED_STEP_RETURN}};
+  for (size_t i = 0; i < sizeof register_forms / sizeof register_forms[0]; i++) {
+    const agc_instr pair[] = {{AGC_OP_STEP, 1, 0, 0}, {register_forms[i].next, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
+    s = base();
+    s.code = pair;
+    s.code_spans = three_spans;
+    s.count = 3;
+    buffer form = build(s);
+    assert(agc_load(form.data, form.len, &p, error, sizeof error));
+    free(form.data);
+    assert(p->functions[p->entry].code[0].op == register_forms[i].fused);
+    assert(p->functions[p->entry].code[1].op == register_forms[i].next);
+  }
+  s = base();
+  s.code = builtin_window;
+  s.code_spans = builtin_spans;
+  s.count = 4;
+  s.registers = 2;
+  buffer unfused = build(s);
+  assert(agc_load(unfused.data, unfused.len, &p, error, sizeof error));
+  free(unfused.data);
+  assert(p->functions[p->entry].code[0].op == AGC_OP_STEP);
   static const agc_instr no_return[] = {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_MOVE, 0, 0, 0}};
   assert(!loads_code(no_return, two_spans, 2, "does not end with RETURN"));
 
