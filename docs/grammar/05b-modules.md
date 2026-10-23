@@ -324,12 +324,13 @@ import Sqlite from "pkg/sqlite/db"
   path and a cache that cannot be written are `PKG-FETCH`. These failures name
   `agentica.lock` and the key of the entry (`package[1].tag`,
   `package[1].hash`; `package[1].git` when git itself failed; `package[1]` for
-  the others). The first failure stops the command. When every package is in the cache, the manifest of each is checked
-  against the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`), and only then is
-  `deps/` written, so a cache or a manifest that fails those checks writes
-  nothing there. A failure in the middle of the copy (a full disk, say) leaves
-  `deps/` partly updated: each package folder is either the old one or the new
-  one, and `agentica install` finishes the rest. The
+  the others). The first failure stops the command. When every package is in
+  the cache, the manifest of each is checked against the lock
+  (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`), and only then is `deps/` written,
+  so a cache or a manifest that fails those checks writes nothing there. A
+  failure in the middle of the copy (a full disk, say) leaves `deps/` partly
+  updated: each package folder is either the old one or the new one, and
+  `agentica install` finishes the rest. The
   answer is `fetched NAME@VERSION`, `in the cache NAME@VERSION` or, for a
   workspace member, `in the workspace NAME@workspace` for each package, or
   `nothing to install`. The command starts git even under
