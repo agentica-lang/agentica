@@ -389,7 +389,7 @@ size_t agc_emit_end(agc_emitter *e) {
     }
     put32_at(e, p.at, (uint32_t)(int32_t)(to - (p.at + 4)));
   }
-  while (e->len % 4) byte(e, 0xCC);
+  while (!e->failed && e->len % 4) byte(e, 0xCC);
   size_t table = e->len;
   for (uint32_t pc = 0; pc < e->count; pc++) word32(e, (uint32_t)(int32_t)(e->labels[pc] - table));
   put32_at(e, e->entry, (uint32_t)(int32_t)(table - (e->entry + 4)));
