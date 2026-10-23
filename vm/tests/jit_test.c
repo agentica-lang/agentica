@@ -6,6 +6,7 @@
 #include "../jit/jit.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <uv.h>
@@ -188,6 +189,60 @@ static AGC_JIT_CALLER void int_rules(void) {
   assert(same_bits(R[3], agc_int(-5)));
 }
 
+/* The instructions that call their opcode helper: the C code's results (NaN compares false, -0.0 keeps its sign) and
+   statuses (a Float division by zero, a list index outside the list, a wrong tag). */
+static AGC_JIT_CALLER void helpers(void) {
+  agc_value nan = agc_float(NAN), two = agc_float(2.0), any = agc_nil();
+  agc_value items[3] = {agc_int(7), agc_int(8), agc_int(9)};
+  agc_value list = agc_list_value(agc_list_from_array(items, 3));
+  binary(AGC_OP_ADD_F, agc_float(0.5), two, AGC_STATUS_OK, agc_float(2.5));
+  binary(AGC_OP_SUB_F, agc_float(0.0), agc_float(0.0), AGC_STATUS_OK, agc_float(0.0));
+  binary(AGC_OP_MUL_F, agc_float(-0.0), two, AGC_STATUS_OK, agc_float(-0.0));
+  binary(AGC_OP_DIV_F, agc_float(1.0), agc_float(-0.0), AGC_STATUS_DIVISION_BY_ZERO, any);
+  binary(AGC_OP_DIV_F, agc_float(1.0), agc_float(1e-310), AGC_STATUS_OK, agc_float(1.0 / 1e-310));
+  binary(AGC_OP_NEG_F, two, any, AGC_STATUS_OK, agc_float(-2.0));
+  binary(AGC_OP_LT_F, nan, two, AGC_STATUS_OK, agc_bool(false));
+  binary(AGC_OP_LE_F, two, nan, AGC_STATUS_OK, agc_bool(false));
+  binary(AGC_OP_LE_F, two, two, AGC_STATUS_OK, agc_bool(true));
+  binary(AGC_OP_ADD_F, two, agc_int(1), AGC_STATUS_WRONG_TAG, any);
+  binary(AGC_OP_SAME, agc_int(1), agc_int(1), AGC_STATUS_OK, agc_bool(true));
+  binary(AGC_OP_LIST_LEN, list, any, AGC_STATUS_OK, agc_int(3));
+  binary(AGC_OP_LIST_LEN, agc_int(3), any, AGC_STATUS_WRONG_TAG, any);
+  binary(AGC_OP_LIST_GET, list, agc_int(2), AGC_STATUS_OK, agc_int(9));
+  binary(AGC_OP_LIST_GET, list, agc_int(3), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
+  binary(AGC_OP_LIST_GET, list, agc_int(-1), AGC_STATUS_INDEX_OUT_OF_RANGE, any);
+  binary(AGC_OP_LIST_GET, list, two, AGC_STATUS_WRONG_TAG, any);
+}
+
+/* The reads without a helper (R3 = R1 read at index or variant 2): a wrong tag or an index past the count leaves for
+   the interpreter at the instruction, R3 untouched, and the interpreter fails as it does without the JIT. */
+static AGC_JIT_CALLER void reads(void) {
+  agc_value any = agc_nil(), x = agc_int(5), y = agc_float(1.5);
+  agc_struct *wide = agc_new_struct(0, 3), *narrow = agc_new_struct(0, 2);
+  wide->fields[0] = wide->fields[1] = narrow->fields[0] = narrow->fields[1] = any;
+  wide->fields[2] = x;
+  agc_enum *v2 = agc_new_enum(2, 3), *v1 = agc_new_enum(1, 1);
+  v2->payload[0] = v2->payload[1] = v1->payload[0] = any;
+  v2->payload[2] = y;
+  uint32_t out = AGC_JIT_EXIT_INTERPRET;
+  binary(AGC_OP_NOT, agc_bool(true), any, AGC_STATUS_OK, agc_bool(false));
+  binary(AGC_OP_NOT, agc_bool(false), any, AGC_STATUS_OK, agc_bool(true));
+  binary(AGC_OP_NOT, agc_word_value(AGC_T_BOOL, 2), any, AGC_STATUS_OK, agc_bool(false));
+  binary(AGC_OP_NOT, x, any, out, any);
+  binary(AGC_OP_FIELD, agc_struct_value(wide), any, AGC_STATUS_OK, x);
+  binary(AGC_OP_FIELD, agc_struct_value(narrow), any, out, any);
+  binary(AGC_OP_FIELD, agc_enum_value(v2), any, out, any);
+  binary(AGC_OP_PAYLOAD, agc_enum_value(v2), any, AGC_STATUS_OK, y);
+  binary(AGC_OP_PAYLOAD, agc_enum_value(v1), any, out, any);
+  binary(AGC_OP_IS_VARIANT, agc_enum_value(v2), any, AGC_STATUS_OK, agc_bool(true));
+  binary(AGC_OP_IS_VARIANT, agc_enum_value(v1), any, AGC_STATUS_OK, agc_bool(false));
+  binary(AGC_OP_IS_VARIANT, agc_struct_value(wide), any, out, any);
+  binary(AGC_OP_IS_OK, agc_result_value(true, x), any, AGC_STATUS_OK, agc_bool(true));
+  binary(AGC_OP_IS_OK, agc_result_value(false, x), any, AGC_STATUS_OK, agc_bool(false));
+  binary(AGC_OP_RESULT_VALUE, agc_result_value(false, y), any, AGC_STATUS_OK, y);
+  binary(AGC_OP_RESULT_VALUE, y, any, out, any);
+}
+
 /* A String compare charges its bytes to the task's turn cost, and the code leaves for the interpreter to apply it. */
 static AGC_JIT_CALLER void string_cost(void) {
   char text[200];
@@ -258,11 +313,10 @@ static void cap_inside_an_offset(void) {
   assert(agc_emit_end(&e) == 0 && e.len <= e.cap);
 }
 
-/* Every opcode that agc_jit_new accepts has its case in the emitter (jit.c lists the set twice, in `known` and in
-   emit_function): a function of that one opcode then RETURN compiles with `always`. */
-static void every_known_opcode_compiles(void) {
+/* Every opcode compiles with `always`: one without code of its own, such as CALL_BUILTIN or RETURN, leaves for the
+   interpreter at its pc. */
+static AGC_JIT_CALLER void every_opcode_compiles(void) {
   static const agc_trace quiet = {0};
-  int accepted = 0;
   for (uint32_t op = 0; op < AGC_OP_COUNT; op++) {
     one_function f;
     memset(&f, 0, sizeof f);
@@ -270,26 +324,28 @@ static void every_known_opcode_compiles(void) {
     emit(&f, AGC_OP_RETURN, 0, 0, 0);
     program_of(&f);
     agc_jit *jit = agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet);
-    if (!jit) continue;
-    accepted++;
-    if (!agc_jit_code_of(jit, 0)) {
-      fprintf(stderr, "jit-test: %s is accepted but not emitted\n", agc_opcode_name(op));
+    if (!jit || !agc_jit_code_of(jit, 0)) {
+      fprintf(stderr, "jit-test: %s does not compile\n", agc_opcode_name(op));
       assert(0);
     }
   }
-  assert(accepted > 0);
-}
-
-/* A function with an instruction the emitter does not know stays out in every mode, and one without a loop with
-   `on`; a program where no function is compiled has no JIT at all. */
-static void ineligible(void) {
-  static const agc_trace quiet = {0};
   one_function f;
   memset(&f, 0, sizeof f);
   emit(&f, AGC_OP_CALL_BUILTIN, 0, 0, 0);
   emit(&f, AGC_OP_RETURN, 0, 0, 0);
-  program_of(&f);
-  assert(!agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet));
+  agc_value R[8] = {agc_nil()};
+  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_RETURN, 0, 0, 0);
+  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+}
+
+/* `on` keeps out a function without a loop, and one whose loop goes back to the interpreter (a builtin that is not a
+   leaf) more than once in AGC_JIT_SPACING instructions; a leaf builtin does not count, as run_compiled calls it. A
+   program where no function is compiled has no JIT at all. */
+static void ineligible(void) {
+  static const agc_trace quiet = {0};
+  one_function f;
   memset(&f, 0, sizeof f);
   emit(&f, AGC_OP_ADD_I, 0, 1, 2);
   emit(&f, AGC_OP_RETURN, 0, 0, 0);
@@ -298,6 +354,21 @@ static void ineligible(void) {
   assert(agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet));
   f.code[1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
   assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  agc_builtin leaf = {.leaf = true}, other = {.leaf = false};
+  const agc_builtin *builtins[2] = {&leaf, &other};
+  for (uint32_t which = 0; which < 2; which++) {
+    memset(&f, 0, sizeof f);
+    emit(&f, AGC_OP_STEP, 1, 0, 0);
+    emit(&f, AGC_OP_CALL_BUILTIN, 0, (uint16_t)which, 0);
+    while (f.fn.count < AGC_JIT_SPACING - 2) emit(&f, AGC_OP_MOVE, 1, 2, 0);
+    emit(&f, AGC_OP_JUMP, 0, 0, 0);
+    program_of(&f);
+    f.program.builtins = builtins;
+    assert(!agc_jit_new(&f.program, AGC_JIT_ON, &quiet) == (which == 1));
+    f.code[f.fn.count - 1] = (agc_instr){AGC_OP_MOVE, 1, 2, 0};
+    emit(&f, AGC_OP_JUMP, 0, 0, 0);
+    assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  }
 }
 
 /* mov eax, 42; ret */
@@ -348,9 +419,11 @@ int main(void) {
   bytes();
   loops_and_steps();
   int_rules();
+  helpers();
+  reads();
   string_cost();
   ineligible();
-  every_known_opcode_compiles();
+  every_opcode_compiles();
 #else
   /* No emitter on this host: the JIT is never made. */
   agc_program empty = {0};

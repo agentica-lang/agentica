@@ -13,7 +13,7 @@
 enum { RAX, RCX, RDX, RBX, RSP, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15 };
 
 /* Condition codes: the low nibble of jcc (0F 80+cc) and setcc (0F 90+cc). */
-enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_LE = 0xE };
+enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_L = 0xC, CC_LE = 0xE };
 
 /* The argument registers of the calling convention: compiled code is called with (vm, R, K, pc), and calls a helper
    with (vm, dst, a, b). Windows x64 also wants 32 bytes of shadow space above the return address. */
@@ -41,6 +41,10 @@ enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_LE = 0xE };
 
 #define TAG(r) ((int64_t)(r) * 16)
 #define WORD(r) ((int64_t)(r) * 16 + 8)
+
+/* The two shapes of the opcode helpers (agc_op_* in core.h). */
+typedef agc_status (*binary_helper)(agc_vm *, agc_value *, const agc_value *, const agc_value *);
+typedef agc_status (*unary_helper)(agc_vm *, agc_value *, const agc_value *);
 
 /* Room for N more bytes, or `failed` past the code cap. Once `failed` is set nothing is written any more: byte,
    put32_at and patch do nothing, so an offset recorded before the failure, whose bytes may be cut off at the cap, is
@@ -310,9 +314,30 @@ void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   store_value(e, in.a, AGC_T_INT);
 }
 
-/* EQ and NE: two Ints inline; any other pair through agc_op_eq or agc_op_ne, whose failure status leaves with the
-   pc. Then, as the interpreter does after either, a turn cost (a String compare charges its bytes) leaves for the
-   interpreter to apply. */
+/* HELPER(vm, &R[a], &R[b]) or, with C, HELPER(vm, &R[a], &R[b], &R[c]): an opcode helper writes R[a] only on
+   success, and a status other than OK leaves with the pc, for the interpreter to raise. */
+static void call_helper(agc_emitter *e, uint64_t helper, agc_instr in, bool c, uint32_t pc) {
+  move_reg(e, true, ARG0, VM);
+  lea(e, ARG1, REGS, TAG(in.a));
+  lea(e, ARG2, REGS, TAG(in.b));
+  if (c) lea(e, ARG3, REGS, TAG(in.c));
+  move_imm64(e, RAX, helper);
+  BYTES(e, 0xFF, 0xD0); /* call rax */
+  BYTES(e, 0x85, 0xC0); /* test eax, eax */
+  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+}
+
+/* After EQ, NE and SAME, as the interpreter does after each: a turn cost (a String compare charges its bytes) leaves
+   for the interpreter to apply. */
+static void cost_exit(agc_emitter *e, uint32_t pc) {
+  load(e, RAX, VM, (int64_t)offsetof(agc_vm, task));
+  compare_imm8(e, true, RAX, (int64_t)offsetof(agc_task, turn_cost), 0);
+  exit_if(e, CC_NE, AGC_JIT_EXIT_COST, pc);
+}
+
+static uint64_t binary(binary_helper helper) { return (uint64_t)(uintptr_t)helper; }
+
+/* EQ and NE: two Ints inline; any other pair through agc_op_eq or agc_op_ne. */
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   compare_imm8(e, false, REGS, TAG(in.b), AGC_T_INT);
   size_t slow_b = jump_to_patch(e, CC_NE);
@@ -325,20 +350,99 @@ void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
   size_t done = jump_to_patch(e, -1);
   land(e, slow_b);
   land(e, slow_c);
-  move_reg(e, true, ARG0, VM);
-  lea(e, ARG1, REGS, TAG(in.a));
-  lea(e, ARG2, REGS, TAG(in.b));
-  lea(e, ARG3, REGS, TAG(in.c));
-  agc_status (*helper)(agc_vm *, agc_value *, const agc_value *, const agc_value *) =
-    op == AGC_OP_EQ ? agc_op_eq : agc_op_ne;
-  move_imm64(e, RAX, (uint64_t)(uintptr_t)helper);
-  BYTES(e, 0xFF, 0xD0); /* call rax */
-  BYTES(e, 0x85, 0xC0); /* test eax, eax */
-  patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
+  call_helper(e, binary(op == AGC_OP_EQ ? agc_op_eq : agc_op_ne), in, true, pc);
   land(e, done);
-  load(e, RAX, VM, (int64_t)offsetof(agc_vm, task));
-  compare_imm8(e, true, RAX, (int64_t)offsetof(agc_task, turn_cost), 0);
-  exit_if(e, CC_NE, AGC_JIT_EXIT_COST, pc);
+  cost_exit(e, pc);
+}
+
+/* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
+   compares (so NaN, rounding and the result's bits are the C code's), SAME, LIST_LEN and LIST_GET (with its bounds
+   check, whose INDEX_OUT_OF_RANGE leaves R[b] and R[c] for the message). */
+void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
+  if (op == AGC_OP_NEG_F || op == AGC_OP_LIST_LEN) {
+    unary_helper one = op == AGC_OP_NEG_F ? agc_op_neg_f : agc_op_list_len;
+    call_helper(e, (uint64_t)(uintptr_t)one, in, false, pc);
+    return;
+  }
+  binary_helper two;
+  switch (op) {
+    case AGC_OP_ADD_F: two = agc_op_add_f; break;
+    case AGC_OP_SUB_F: two = agc_op_sub_f; break;
+    case AGC_OP_MUL_F: two = agc_op_mul_f; break;
+    case AGC_OP_DIV_F: two = agc_op_div_f; break;
+    case AGC_OP_LT_F: two = agc_op_lt_f; break;
+    case AGC_OP_LE_F: two = agc_op_le_f; break;
+    case AGC_OP_SAME: two = agc_op_same; break;
+    default: two = agc_op_list_get; break;
+  }
+  call_helper(e, binary(two), in, true, pc);
+  if (op == AGC_OP_SAME) cost_exit(e, pc);
+}
+
+/* The tag of register R must be TAG, else the interpreter runs the instruction at PC, and fails as it does. */
+static void tag_or_interpret(agc_emitter *e, uint32_t r, agc_tag tag, uint32_t pc) {
+  compare_imm8(e, false, REGS, TAG(r), (int8_t)tag);
+  exit_if(e, CC_NE, AGC_JIT_EXIT_INTERPRET, pc);
+}
+
+/* rcx = the object R[b] points to, once its tag is TAG. */
+static void object(agc_emitter *e, uint32_t b, agc_tag tag, uint32_t pc) {
+  tag_or_interpret(e, b, tag, pc);
+  load(e, RCX, REGS, WORD(b));
+}
+
+/* The 32-bit count at [rcx + AT] must be above INDEX, else the interpreter runs the instruction (and fails with its
+   RUNTIME-INTERNAL on hand-made bytecode); then R[a] = the agc_value at [rcx + FIRST + 16 * INDEX], both words read
+   before either is written, so R[a] may be R[b]. */
+static void item(agc_emitter *e, uint32_t a, size_t at, size_t first, uint32_t index, uint32_t pc) {
+  op_mem(e, false, 0x81, 7, RCX, (int64_t)at); /* cmp dword [rcx + at], index */
+  word32(e, index);
+  exit_if(e, CC_BE, AGC_JIT_EXIT_INTERPRET, pc);
+  load(e, RAX, RCX, (int64_t)(first + (size_t)index * sizeof(agc_value)));
+  load(e, RDX, RCX, (int64_t)(first + (size_t)index * sizeof(agc_value) + 8));
+  store(e, REGS, TAG(a), RAX);
+  store(e, REGS, WORD(a), RDX);
+}
+
+/* The instructions that read a value without a helper, as the interpreter's cases do: NOT (any payload other than 0
+   is true, as agc_as_bool reads it), FIELD and PAYLOAD (with the field count check), IS_VARIANT, IS_OK and
+   RESULT_VALUE. Any wrong tag or bad index leaves for the interpreter, and R[a] is written last. */
+void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
+  switch (op) {
+    case AGC_OP_NOT:
+      tag_or_interpret(e, in.b, AGC_T_BOOL, pc);
+      compare_imm8(e, true, REGS, WORD(in.b), 0);
+      set_bool(e, CC_E);
+      store_value(e, in.a, AGC_T_BOOL);
+      break;
+    case AGC_OP_FIELD:
+      object(e, in.b, AGC_T_STRUCT, pc);
+      item(e, in.a, offsetof(agc_struct, n), offsetof(agc_struct, fields), in.c, pc);
+      break;
+    case AGC_OP_PAYLOAD:
+      object(e, in.b, AGC_T_ENUM, pc);
+      item(e, in.a, offsetof(agc_enum, n), offsetof(agc_enum, payload), in.c, pc);
+      break;
+    case AGC_OP_IS_VARIANT:
+      object(e, in.b, AGC_T_ENUM, pc);
+      op_mem(e, false, 0x81, 7, RCX, (int64_t)offsetof(agc_enum, variant)); /* cmp dword [rcx + variant], c */
+      word32(e, in.c);
+      set_bool(e, CC_E);
+      store_value(e, in.a, AGC_T_BOOL);
+      break;
+    case AGC_OP_IS_OK:
+      object(e, in.b, AGC_T_RESULT, pc);
+      op_mem(e, false, 0x0FB6, RAX, RCX, (int64_t)offsetof(agc_result, ok)); /* movzx eax, byte [rcx + ok] */
+      store_value(e, in.a, AGC_T_BOOL);
+      break;
+    default: /* RESULT_VALUE */
+      object(e, in.b, AGC_T_RESULT, pc);
+      load(e, RAX, RCX, (int64_t)offsetof(agc_result, value));
+      load(e, RDX, RCX, (int64_t)offsetof(agc_result, value) + 8);
+      store(e, REGS, TAG(in.a), RAX);
+      store(e, REGS, WORD(in.a), RDX);
+      break;
+  }
 }
 
 void agc_emit_jump(agc_emitter *e, uint32_t target) {

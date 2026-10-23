@@ -1,10 +1,11 @@
 """The JIT tier (`--jit`, docs/future/22-jit.md §22) changes no exit code, output, diagnostic, span or step count.
 
-Each program runs with `--jit off`, `on` and `always`, which compiles every eligible function at its first entry (`on`
-only those with a loop, at their 100th entry). Its eligible functions (Int loops, compares and jumps only) run the
-STEPs of their loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end
-inside them (by steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and
-four schedulers compile and run them at once.
+Each program runs with `--jit off`, `on` and `always`, which compiles every function at its first entry (`on` only
+those with a loop that seldom leaves compiled code, at their 100th entry). Compiled functions run the STEPs of their
+loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end inside them (by
+steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and four schedulers
+compile and run them at once. An instruction without code of its own (a call, a builtin, an allocation) runs in the
+interpreter, and the code goes on after it.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
@@ -17,8 +18,8 @@ from tests.agentica_test import compile_text, run_vm, vm_environment
 X86_64 = platform.machine().lower() in ("x86_64", "amd64")
 MODES = ("off", "on", "always")
 
-# spin and same_text are eligible; worker and main call and print, so they stay interpreted. A spin call runs past a
-# turn (2000 steps), so the three tasks' turns end inside compiled loops, and the order of the lines shows where.
+# worker and main call and print, which leave compiled code for the interpreter. A spin call runs past a turn (2000
+# steps), so the three tasks' turns end inside compiled loops, and the order of the lines shows where.
 LONG = "x" * 300
 TASKS = """def spin(id: Int, n: Int) -> Int
   i = 0
@@ -62,11 +63,13 @@ def main() -> Void
 end
 """.replace("LONG", LONG)
 
-# Failures inside an eligible function, after it printed: the diagnostic, its span and the stack must not depend on
-# the tier.
+# Failures inside a compiled loop, after the program printed: the diagnostic, its span (the message of an index names
+# the list's length and the index) and the stack must not depend on the tier.
 FAILURES = {
-    "RUNTIME-INTEGER-OVERFLOW": "x = x * 3 + 1",
-    "RUNTIME-DIVISION-BY-ZERO": "x = x / (7 - i)",
+    "overflow": ("RUNTIME-INTEGER-OVERFLOW", "x = x * 3 + 1"),
+    "division": ("RUNTIME-DIVISION-BY-ZERO", "x = x / (7 - i)"),
+    "float division": ("RUNTIME-DIVISION-BY-ZERO", "x = x + (1.0 / (7.0 - i.to_f)).to_i!"),
+    "index": ("RUNTIME-INDEX-OUT-OF-RANGE", "x = x + items[i / 19]"),
 }
 
 # A task in a long compiled loop is cancelled between two of its turns.
@@ -114,8 +117,8 @@ def main() -> Void
 end
 """
 
-# Six tasks on four schedulers call one eligible function 150 times each, so `on` compiles it while several
-# schedulers run it, and `always` compiles it on several schedulers at once.
+# Six tasks on four schedulers call spin 150 times each, from worker's loop, so `on` compiles both while several
+# schedulers run them, and `always` compiles them on several schedulers at once.
 SCHEDULERS = """def spin(id: Int, n: Int) -> Int
   i = 0
   total = 0
@@ -197,6 +200,74 @@ end
 """
 
 
+# scan reads fields, list items, enum variants and payloads, Results and Floats (a NaN among them) in compiled code;
+# the only instructions of its loop without code are leaf builtins (List.size, Int.bit_xor), which run_compiled calls
+# itself, so with `on` the code leaves for the interpreter only at the RETURN.
+READS = """struct Point
+  x: Int
+  y: Float
+end
+
+enum Shape
+  Dot
+  Box(Int, Int)
+end
+
+def scan(points: List[Point], shapes: List[Shape], results: List[Result[Int]], rounds: Int) -> Float
+  total = 0.0
+  count = 0
+  nan = Float.from_bits(9221120237041090560)
+  round = 0
+  while round < rounds
+    i = 0
+    while i < points.size
+      p = points[i]
+      if not (p.y < nan) and p.y <= 2.5
+        total = total + p.y * 2.0 - -p.y / 4.0
+      end
+      case shapes[i % shapes.size]
+        Shape.Dot -> count = count + 1
+        Shape.Box(w, h) -> count = count + w * h
+      end
+      case results[i % results.size]
+        ok(v) -> count = count + v
+        error(_) -> count = count - 1
+      end
+      count = count + p.x + i.bit_xor(3)
+      i = i + 1
+    end
+    round = round + 1
+  end
+  return total + count.to_f
+end
+
+def main() -> Void
+  points = [Point(x: 1, y: 0.5), Point(x: 2, y: 3.25), Point(x: -3, y: 1.0 / 3.0)]
+  shapes = [Shape.Dot, Shape.Box(2, 3)]
+  results: List[Result[Int]] = [ok(4), error("no"), ok(-2)]
+  puts(scan(points, shapes, results, 2000))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+# label's loop leaves compiled code at each String interpolation (TO_TEXT and CONCAT), more than once in 16
+# instructions, so `on` keeps it in the interpreter, where it runs faster; `always` compiles it.
+DENSE = """def label(n: Int) -> Int
+  total = 0
+  i = 0
+  while i < n
+    total = total + "<#{i}>".size
+    i = i + 1
+  end
+  return total
+end
+
+def main() -> Void
+  puts(label(30000))
+end
+"""
+
+
 # twice has no loop, so `on` keeps it in the interpreter however often it runs: each entry would run two instructions
 # in compiled code and pay for the entry, the exit and the RETURN in the interpreter. `always` compiles it.
 LOOP_FREE = """def twice(x: Int) -> Int
@@ -258,7 +329,7 @@ def compiled(bytecode, tmp_path, mode="always"):
 
 def test_the_max_steps_sweep_of_three_tasks_in_compiled_loops_matches_the_interpreter(tmp_path):
     bytecode = compile_text(TASKS, "tasks", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["same_text", "spin"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["main", "same_text", "spin", "worker"] if X86_64 else [])
     full = assert_same(bytecode)
     assert full[0] == 0 and full[1].count("\n") == 3 * 6 + 4, full
     limits = sorted({*range(1, 25), *range(1990, 2010), *range(25, 200000, 1201)})
@@ -272,16 +343,18 @@ def test_the_max_steps_sweep_of_three_tasks_in_compiled_loops_matches_the_interp
     assert checked >= 100 and code == 0, (checked, limit)
 
 
-@pytest.mark.parametrize("code", sorted(FAILURES))
-def test_a_failure_in_compiled_code_has_the_interpreters_diagnostic_span_and_stack(tmp_path, code):
+@pytest.mark.parametrize("case", sorted(FAILURES))
+def test_a_failure_in_compiled_code_has_the_interpreters_diagnostic_span_and_stack(tmp_path, case):
+    code, statement = FAILURES[case]
     bytecode = compile_text(f"""def grow(start: Int) -> Int
   x = start
+  items = [1, 2, 3, 4, 5]
   i = 0
   while i < 100
-    {FAILURES[code]}
+    {statement}
     i = i + 1
   end
-  return x
+  return x + items.size
 end
 
 def main() -> Void
@@ -289,7 +362,7 @@ def main() -> Void
   puts(grow(1))
 end
 """, "failure", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["grow"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["grow", "main"] if X86_64 else [])
     for style in ((), ("--json",), ("--ai",)):
         status, stdout, stderr = assert_same(bytecode, *style)
         assert status == 1 and stdout == "before\n" and code in stderr, (style, stderr)
@@ -297,7 +370,7 @@ end
 
 def test_a_task_cancelled_in_a_compiled_loop_stops_as_in_the_interpreter(tmp_path):
     bytecode = compile_text(CANCEL, "cancel", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["spin"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["main", "spin"] if X86_64 else [])
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout == "5000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
@@ -315,7 +388,7 @@ def test_on_compiles_a_function_at_a_turn_that_starts_in_its_loop(tmp_path):
 
 def test_several_schedulers_compile_and_run_one_function_as_the_interpreter(tmp_path):
     bytecode = compile_text(SCHEDULERS, "schedulers", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["spin"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "on") == (["spin", "worker"] if X86_64 else [])
     for _ in range(3):
         code, stdout, stderr = assert_same(bytecode, schedulers=4)
         assert code == 0 and stdout.count("\n") == 2, stderr
@@ -323,7 +396,7 @@ def test_several_schedulers_compile_and_run_one_function_as_the_interpreter(tmp_
 
 def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_does(tmp_path):
     bytecode = compile_text(COST, "cost", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["same"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path) == (["doubled", "main", "same", "worker"] if X86_64 else [])
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.endswith("\n24\n"), (stdout, stderr)
 
@@ -331,11 +404,37 @@ def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_d
 def test_on_keeps_a_hot_function_without_a_loop_in_the_interpreter(tmp_path):
     bytecode = compile_text(LOOP_FREE, "loop_free", tmp_path)
     assert compiled(bytecode, tmp_path, "on") == (["spin"] if X86_64 else [])
-    assert compiled(bytecode, tmp_path, "always") == (["spin", "twice"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "always") == (["main", "spin", "twice"] if X86_64 else [])
     skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=twice " in line]
     assert len(skips) == (1 if X86_64 else 0) and all(line.endswith(" loop=none") for line in skips), skips
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.count("\n") == 1, stderr
+
+
+def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
+    bytecode = compile_text(READS, "reads", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["scan"] if X86_64 else [])
+    lines = jit_trace(bytecode, tmp_path, "on")
+    exits = sorted(line.split("exit op=")[1] for line in lines if " jit exit op=" in line)
+    leaves = [int(line.split("count=")[1]) for line in lines if " jit leaf count=" in line]
+    assert exits == (["return count=1"] if X86_64 else []), exits
+    assert len(leaves) == (1 if X86_64 else 0) and all(n > 10000 for n in leaves), leaves
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.startswith("33750.0\n"), (stdout, stderr)
+    steps = int(stdout.split("steps ")[1])
+    for limit in (steps // 3, steps // 2 + 7, steps - 1):
+        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
+        assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
+
+
+def test_on_keeps_a_loop_that_often_leaves_compiled_code_in_the_interpreter(tmp_path):
+    bytecode = compile_text(DENSE, "dense", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == []
+    skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=label " in line]
+    assert skips == [] if not X86_64 else len(skips) == 1 and skips[0].endswith(" loop=exits"), skips
+    assert compiled(bytecode, tmp_path, "always") == (["label", "main"] if X86_64 else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert (code, stdout) == (0, "198890\n"), (stdout, stderr)
 
 
 def test_a_bad_jit_mode_is_refused(tmp_path):
