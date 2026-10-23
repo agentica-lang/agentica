@@ -23,6 +23,7 @@ check/check_method.agc
 check/check_names.agc
 check/check_prelude.agc
 check/check_register.agc
+check/check_reuse.agc
 check/check_rules.agc
 check/check_state.agc
 check/check_stmt.agc

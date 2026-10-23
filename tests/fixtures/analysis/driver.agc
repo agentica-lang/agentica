@@ -9,7 +9,7 @@ import Analysis from "std/analysis"
 #   diagnostic TEXTFILE    the diagnostic that Analysis.diagnostic reads from the JSON in TEXTFILE, written back
 #   roundtrip PATH         `true` on stdout when the diagnostic of PATH, written as JSON and read back, is the same
 #   refresh PATH           Analysis.refresh; prints nothing
-#   stats                  `roots=R checks=C parsed=P kept=K top=T live=L`: the files of the cache, what refreshes did
+#   stats                  `roots=R checks=C reused=U parsed=P kept=K top=T live=L`: the cache and what refreshes did
 #   write PATH TEXTFILE    puts the text of TEXTFILE in the file PATH of the disk (an edit that is not a buffer)
 #   remove PATH            deletes the file PATH of the disk
 #   compare PATH [L C]...  the last command: `same N` when the check of PATH and the type-at of each LINE COL are equal
@@ -105,8 +105,9 @@ def main() -> Void
   end
 end
 
-# The cache of the session: how many roots it holds, how many programs the refreshes linked and checked, how many files
-# they parsed, how many parsed files it keeps, the first id above them all and the ids that they hold.
+# The cache of the session: how many roots it holds, how many programs the refreshes linked and checked, how many
+# modules of them they did not check again, how many files they parsed, how many parsed files it keeps, the first id
+# above them all and the ids that they hold.
 def stats(session: Analysis.Session) -> String
   cache = session.internal.cache
   live = 0
@@ -114,8 +115,8 @@ def stats(session: Analysis.Session) -> String
     live += file.program.id + 1 - file.first_id
   end
   return (
-    "roots=#{cache.roots.size} checks=#{cache.checks} parsed=#{cache.parsed} kept=#{cache.parses.kept.size} " +
-    "top=#{cache.parses.top} live=#{live}"
+    "roots=#{cache.roots.size} checks=#{cache.checks} reused=#{cache.reused} parsed=#{cache.parsed} " +
+    "kept=#{cache.parses.kept.size} top=#{cache.parses.top} live=#{live}"
   )
 end
 

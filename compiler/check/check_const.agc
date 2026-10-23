@@ -22,10 +22,11 @@ export struct Done
   order: List[String]
 end
 
-# A constant with the file it is declared in.
+# A constant with the file it is declared in, and whether an earlier check already did it (check_reuse.agc).
 struct Entry
   decl: Ast.ConstDecl
   file: String
+  kept: Bool
 end
 
 # A constant being visited by the ordering: the index of its entry, its reads, and the next read to look at.
@@ -36,26 +37,37 @@ struct Visit
 end
 
 ## Orders and checks the constants of the program (the declarations of the linked modules, in order). A program without
-## constants gives its context and state back.
-export def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule]) -> Result[Done]
-  entries = collect(modules)
+## constants gives its context and state back. The modules of `kept` were checked by an earlier run that the context
+## and the state already hold (their constants are not read again, but they take their place in the order).
+export def check_all(
+  cx: State.Cx,
+  st: State.St,
+  modules: List[Linker.LinkedModule],
+  kept: Set[String],
+) -> Result[Done]
+  entries = collect(modules, kept)
   if entries.size == 0
     return ok(Done(cx: cx, st: st, order: []))
   end
   order = try order_of(cx, st, entries)
   current = Done(cx: cx, st: st, order: [])
   for index in order
-    current = try check_one(current, entries[index])
+    if entries[index].kept
+      current = current.with(order: current.order.push(entries[index].decl.name))
+    else
+      current = try check_one(current, entries[index])
+    end
   end
   return ok(current)
 end
 
-def collect(modules: List[Linker.LinkedModule]) -> List[Entry]
+def collect(modules: List[Linker.LinkedModule], kept: Set[String]) -> List[Entry]
   found: List[Entry] = []
   for module in modules
     for decl in module.declarations
       case decl
-        Ast.Decl.Constant(node) -> found = found.push(Entry(decl: node, file: module.file))
+        Ast.Decl.Constant(node) ->
+          found = found.push(Entry(decl: node, file: module.file, kept: kept.include?(module.key)))
         _ -> found = found
       end
     end

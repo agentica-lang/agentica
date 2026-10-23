@@ -9,6 +9,7 @@ import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
+import Ast from "../syntax/ast"
 import Cache from "cache"
 import Front from "front"
 
@@ -37,29 +38,39 @@ export def query_file(cache: Cache.Cache, path: String, settings: Env.Settings) 
     return Outcome.Rejected(Front.link_problem(Failure.unpack_failure(walked.message)))
   end
   case Cache.find(cache, walked.unwrap!)
-    Cache.Found.Hit(root) -> return reused(root, settings)
-    Cache.Found.Miss -> return linked(walked.unwrap!, settings)
+    Cache.Found.Hit(root) -> return reused(cache, root, settings)
+    Cache.Found.Miss -> return linked(cache, walked.unwrap!, settings)
   end
 end
 
-def reused(root: Cache.Root, settings: Env.Settings) -> Outcome
+def reused(cache: Cache.Cache, root: Cache.Root, settings: Env.Settings) -> Outcome
   case root.checking
     Checker.Checking.Done(checked) ->
       front = Front.Checked(linked: root.linked, checked: checked)
       return Outcome.Done(Recovered(front: front, problems: [], failed: []))
-    Checker.Checking.Failed(_) -> return recovered(root.linked, settings)
+    Checker.Checking.Failed(_) -> return recovered(cache, root.loaded, root.linked, settings)
   end
 end
 
-def linked(loaded: Modules.Loaded, settings: Env.Settings) -> Outcome
+def linked(cache: Cache.Cache, loaded: Modules.Loaded, settings: Env.Settings) -> Outcome
   case Linker.link_loaded(loaded, settings)
     Linker.Linking.Failed(failure) -> return Outcome.Rejected(Front.link_problem(failure))
-    Linker.Linking.Done(program) -> return recovered(program, settings)
+    Linker.Linking.Done(program) -> return recovered(cache, loaded, program, settings)
   end
 end
 
-def recovered(program: Linker.Linked, settings: Env.Settings) -> Outcome
-  case Checker.check_recovering(program, settings)
+# Checks `program` as check_recovering does, taking from the last good program of the root what its unchanged modules
+# left (Cache.reusing).
+def recovered(cache: Cache.Cache, loaded: Modules.Loaded, program: Linker.Linked, settings: Env.Settings) -> Outcome
+  case Cache.reusing(cache, loaded)
+    Ast.Optional.Present(reusing) ->
+      return answered(program, Checker.check_recovering_reusing(program, settings, reusing))
+    Ast.Optional.Absent -> return answered(program, Checker.check_recovering(program, settings))
+  end
+end
+
+def answered(program: Linker.Linked, recovering: Checker.Recovering) -> Outcome
+  case recovering
     Checker.Recovering.Failed(problem) -> return Outcome.Rejected(problem)
     Checker.Recovering.Done(found) ->
       front = Front.Checked(linked: program, checked: found.checked)

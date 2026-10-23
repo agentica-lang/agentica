@@ -30,6 +30,11 @@
 ## there is no task or lock. The caller owns the loop: run `refresh` in a task, one at a time, and store the session it
 ## returns; two refreshes of one session give two caches, and keeping one drops the work of the other (it costs time,
 ## not correctness).
+##
+## A refresh does not check again a module whose text is the same as in the last program of the file that checked, when
+## every module it imports is the same too: it takes what that check left for the module, so an edit of the file costs
+## about the file itself, and an edit of an imported module checks that module and those that import it. The answers
+## are those of a check from the start.
 
 import Core from "std/internal/compiler/analysis/analysis"
 import DiagnosticJson from "std/internal/compiler/diagnostics/diagnostic_json"

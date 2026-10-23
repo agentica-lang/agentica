@@ -36,13 +36,15 @@ end
 ## the root first, each file before the files its imports read, and ids, the number of node ids the checker must make
 ## room for: the ids of the parser, and as many again when a file declares a constant, because the linker gives the
 ## receiver of a rewritten NAME.method(...) the id of the call plus the number of ids of the program
-## (Rewrite.rewrite_constant_member). roots are the keys of the modules that are roots: the first file for
-## `link_file`, each root that linked for `link_programs`. The checker checks the `main` of those and no other.
+## (Rewrite.rewrite_constant_member). receivers is the first of those extra ids (the highest id of the parser), or -1
+## when no file declares a constant. roots are the keys of the modules that are roots: the first file for `link_file`,
+## each root that linked for `link_programs`. The checker checks the `main` of those and no other.
 export struct Linked
   root: Ast.Program
   root_dir: String
   modules: List[LinkedModule]
   ids: Int
+  receivers: Int
   roots: List[String]
 end
 
@@ -139,6 +141,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
     root_dir: kept[0].root_dir,
     modules: pool.kept,
     ids: id_count(loaded),
+    receivers: receivers_at(loaded),
     roots: kept.map do |entry: Modules.Entry| entry.key end,
   )
   return Programs(linked: Ast.Optional.Present(together), skipped: skipped)
@@ -155,6 +158,7 @@ export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linkin
         root_dir: loaded.root_dir,
         modules: files.unwrap!,
         ids: id_count(loaded),
+        receivers: receivers_at(loaded),
         roots: [loaded.order[0]],
       ),
     )
@@ -242,6 +246,14 @@ def id_count(loaded: Modules.Loaded) -> Int
     end
   end
   return parser_ids(loaded)
+end
+
+# Where the receivers of rewritten constant members start (the room id_count made), or -1 when there is none.
+def receivers_at(loaded: Modules.Loaded) -> Int
+  if id_count(loaded) > parser_ids(loaded)
+    return parser_ids(loaded)
+  end
+  return -1
 end
 
 def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[LinkedModule]]
