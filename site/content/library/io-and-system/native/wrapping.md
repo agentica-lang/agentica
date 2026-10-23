@@ -19,6 +19,7 @@ The raw layer is one `extern` block per library. Copy each signature from the C 
 | Memory that the caller gives and C fills | a `String` or a `List` copied out of a `Native.memory_pointer` block (see Buffers and block forms below) |
 | A call that may take long | a [`compute def`](/library/io-and-system/native/compute/) in the raw layer, so the other tasks keep running; the wrapper calls it like any function |
 | A variadic function | functions of a normal shape (see Variadic functions below) |
+| A struct of options passed by value, with a function that gives the defaults | a struct of your own with the options the caller may set, copied into the [C struct](/library/io-and-system/native/types/#c-structs) by the wrapper (see Structs of options below) |
 | A table of function pointers (`api->CreateEnv(...)`) | [`C.Function`](/library/io-and-system/native/types/#function-pointers) calls in the raw layer, with the slots as constants of the wrapper (see Tables of function pointers below) |
 
 A block with a resource sits with the types of the file, at the top and before every function, and its `def`s do not count as functions in the declaration order (`CHECK-DECL-ORDER`). So the wrapper can sit in the same file as the block. Export the resource, so that callers can name the type, and keep the `def`s private: the file exports only the wrapper. A block without a resource has no such rule. Its `def`s count as functions, so it stays at the end of the file, as in the examples after this one.
@@ -205,6 +206,44 @@ end
 ```
 
 `open_file` gives a descriptor; the example leaves out a function that closes it. `write_fields` never lets its caller choose the format. The format is a constant of the wrapper, and the caller's text goes in as `%s` arguments, so a `%` in a field is only text.
+
+## Structs of options
+
+Some libraries take their options as a struct by value, with a function that gives the defaults: llama.cpp has `llama_context_default_params()` and `llama_init_from_model(model, params)`. The raw layer declares the C struct in the block, every field in the order of the header ([C structs](/library/io-and-system/native/types/#c-structs)). The wrapper takes the defaults, sets the fields that the caller chose with `.with`, and passes the record on. The caller sees only a struct of its own, with the options it may set.
+
+```agentica {mode="check"}
+export struct ContextOptions
+  size: Int = 4096
+  threads: Int = 4
+end
+
+extern "/opt/infer/libinfer.so"
+  export resource Model, free: infer_model_free
+  export resource Context, free: infer_free
+  struct ContextParams
+    n_ctx: C.Int32
+    n_batch: C.Int32
+    n_threads: C.Int32
+    rope_freq_base: C.Float
+    embeddings: C.Bool
+    offload: C.Bool
+    callback_data: C.Pointer
+  end
+  def infer_context_default_params() -> ContextParams
+  compute def infer_init_from_model(model: Model, params: ContextParams) -> Context
+end
+
+## A context of the model with the caller's options; the other parameters keep the library's defaults.
+export def context(model: Model, options: ContextOptions) -> Result[Context]
+  params = infer_context_default_params().with(n_ctx: options.size, n_threads: options.threads)
+  case infer_init_from_model(model, params)
+    Result.Ok(made) -> return ok(made)
+    Result.Err(_) -> return error("cannot make a context of #{options.size} tokens")
+  end
+end
+```
+
+A size that does not fit in a `C.Int32` stops the program at the call (`RUNTIME-INTEGER-OVERFLOW`), so a wrapper that must not stop checks the options first; the example skips that check.
 
 ## Tables of function pointers
 

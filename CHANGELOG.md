@@ -36,14 +36,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Native.memory_pointer(size) do |buf| ... end` frees the buffer when the
   block ends, and `Native.put_bytes` writes a list of bytes.
 - `C.Function` in `extern` blocks calls and frees through C function pointers.
+- C structs passed and returned by value: `struct Name ... end` in an `extern`
+  block, seen as a record.
 
 ### Changed
 
 - **Breaking:** `Native.string_at`/`bytes_at` are replaced by
   `Native.get_string`/`get_bytes`, which take an offset
   (`get_string(p, 0, length)`).
-- An `extern` block that declares a `resource` sits with the types in the
-  declaration order, with its `def`s, so a wrapper can keep the block and its
+- An `extern` block that declares a `resource` or a `struct` sits with the
+  types in the declaration order, with its `def`s, so a wrapper can keep the block and its
   exported functions in one file. A block with no resource keeps its rule.
 - **Breaking:** the files of the top-level `native/` folder of a package, of
   any name, are now part of its hash, and so is its `agentica.toml` when

@@ -195,9 +195,40 @@ end
     compute def read(fn: C.Function, h: Handle, n: C.Int64) -> C.Int64
   end
   ~~~
-- Functions count as `def`s for the declaration order, resources as types; a
-  block with a resource counts as types as a whole. A wrong signature is
-  undefined behavior in C: copy it from the C header.
+- C structs by value (llama.cpp's `llama_context_params`, Ruby ffi's
+  `FFI::Struct`): `[export] struct Name ... end` in the block, every field of
+  the header in its order, each `C.Int32`, `C.Int64`, `C.Double`, `C.Float`,
+  `C.Bool`, `C.Pointer` or a struct declared above in the block (else
+  `PARSE-EXTERN-TYPE`: a `char *` is a `C.Pointer` read with
+  `Native.get_string`; no fixed arrays). The program sees an ordinary struct
+  (`Int`, `Float`, `Bool`, `C.Pointer` fields; defaults and `.with` work),
+  copied into C for each call and back from a struct result. A parameter or a
+  result (also `compute def` and through a `C.Function`), never `out`
+  (`PARSE-EXTERN-OUT`: pass an owned buffer) or variadic. Fields are checked
+  like arguments (`RUNTIME-INTEGER-OVERFLOW`, a freed buffer
+  `RUNTIME-NATIVE-CLOSED`). No field: `PARSE-EXTERN-TYPE`; over 1024 fields or
+  16 levels: `PARSE-EXTERN-ARITY`. A wrong field list is undefined behavior.
+
+  ~~~ruby
+  extern "/opt/infer/libinfer.so"
+    struct ContextParams
+      n_ctx: C.Int32
+      n_threads: C.Int32
+      embeddings: C.Bool
+      callback_data: C.Pointer
+    end
+    def infer_context_default_params() -> ContextParams
+    def infer_context_size(params: ContextParams) -> C.Int32
+  end
+
+  def main() -> Void
+    params = infer_context_default_params().with(n_ctx: 4096)
+    puts(infer_context_size(params))
+  end
+  ~~~
+- Functions count as `def`s for the declaration order, resources and structs
+  as types; a block with a resource or a struct counts as types as a whole. A
+  wrong signature is undefined behavior in C: copy it from the C header.
 
 ## Wrapping a library
 
@@ -211,14 +242,17 @@ Keep the `extern` layer private and give the user a normal API; site page:
 - An out parameter becomes a field of your own struct; a yes/no `int` becomes
   a `name?` function returning `Bool`; a call that may take long is a
   `compute def` in the block, called like any function.
-- A block with a resource sits with the types, above every function of the
-  file, and its `def`s do not count as functions for `CHECK-DECL-ORDER`: one
-  file holds the block and the wrapper. `export resource` so callers can name
+- A block with a resource or a struct sits with the types, above every
+  function of the file, and its `def`s do not count as functions for
+  `CHECK-DECL-ORDER`: one file holds the block and the wrapper. `export resource` so callers can name
   the type, keep the `def`s private, export only the wrapper. A block with no
   resource keeps the rule (its `def`s count as functions): put it at the end
   of the file. A `String` with a NUL stops the program at the C call
   (`RUNTIME-INVALID-CHARACTER`): check inputs first in a wrapper that must not
   stop.
+- A C struct of options with a defaults function: the wrapper takes the
+  defaults, sets the caller's fields with `.with` and passes the record on;
+  the caller sees a struct of its own with only the options it may set.
 - A table of function pointers: keep the slot numbers as constants (header
   order), get the table once (turn a NULL from a version check into an
   `error`) and never show a `C.Pointer` of a function to the caller.
