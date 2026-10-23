@@ -377,12 +377,14 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   unit of budget: a `STEP` instruction adds the steps of its block), and each
   builtin counts its calls and its time. The loop of `interp.c` is built twice,
   with and without the hooks, so a run without the category costs nothing; with
-  it, every `STEP` takes the slow path of the budget counter and the run is
-  about a third slower. When the run ends (once for each runtime: the front end
-  hands its program over in a second one) `vm/profile.c` writes a `total` line
-  (fields in that file), then the 30 functions with the most steps (the step of
-  each pass of a range `each`, `times`, `upto`, `downto` or `File.each_line`
-  loop is `<native>`, while `List.map` and `List.each` add no step beyond their
+  it, every `STEP` takes the slow path of the budget counter, every instruction
+  is counted and every builtin call is timed, so the run is about 1.1 to 1.7
+  times slower on loops and calls and up to about 15 times on a loop of cheap
+  builtin calls. When the run ends (once for each runtime: the front end hands
+  its program over in a second one) `vm/profile.c` writes a `total` line (fields
+  in that file), then the 30 functions with the most steps (the step of each
+  pass of a range `each`, `times`, `upto`, `downto` or `File.each_line` loop is
+  `<native>`, while `List.map` and `List.each` add no step beyond their
   callbacks), the 12 source files with the most steps and the 30 builtins that
   took the most time. A builtin is timed for the call itself, so one that parks
   is timed until it does. `gc_ms` is Boehm's own clock of its collections, and

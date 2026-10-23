@@ -280,8 +280,11 @@ typedef struct {
   bool shared;
   /* A plain C call: the builtin never parks (agc_io_start, agc_task_park), never starts a stepper or a block, never
      charges turn cost (agc_charge, nor a helper that charges, such as a map lookup that hashes a String key) and never
-     counts a step or asks to yield; it only returns a value or fails with agc_fail. CALL_BUILTIN then stores the result
-     and goes on without the generic tail. A leaf row is never shared, has AGC_NATIVE_NONE and AGC_COST_NONE
+     counts a step or asks to yield; it only returns a value or fails with agc_fail. Its work is O(1) or bounded, so a
+     builtin whose work grows with a String or a list (a compare, a copy, a UTF-8 walk) is not a leaf even when it
+     charges nothing today. List.append and List.set copy the whole list only when a value's tag does not match a packed
+     Int or Float list (list_wide in vm/list.c), which typed code never reaches. CALL_BUILTIN then stores the result and
+     goes on without the generic tail. A leaf row is never shared, has AGC_NATIVE_NONE and AGC_COST_NONE
      (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds abort when a leaf call breaks the
      rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. */
   bool leaf;

@@ -136,6 +136,8 @@ agc-trace +0.004015 profile section calls=2 steps=2228 us=31 gc_ms=0 name=inner
 
 `agentica FILE.agc` prints two reports, the front end's and then the program's; the sections are in the program's.
 
+The report ends with what the VM ran, for work on the VM itself: an `events` line (instructions, frame reloads and how builtin calls went), an `op` row for each opcode with its share of the instructions, and the 20 most common `pair` rows of two opcodes run one after the other.
+
 A run keeps up to 4096 labels. Every label after that counts in one `[overflow]` section (the frame `measure[overflow]` in folded stacks), so a label built from data, such as `"item #{i}"`, cannot grow the profile without bound.
 
 ## Flame graphs
@@ -165,6 +167,6 @@ main@app.agc:25;Int.times;block@app.agc:40:11 1000
 ## Performance notes
 
 - With the profile off, `Profile.steps` is one builtin call; leave `Profile.measure` and `Profile.steps` in the code.
-- The profile counts every step, so a profiled run is about a third slower. Folded output at the default sample adds a few percent more; a sample every 100 steps adds about a fifth.
+- The profile counts every step and instruction and times every builtin call, so a profiled run is slower: about 1.1 to 1.7 times on loops and function calls, and up to about 15 times on a loop of cheap builtin calls such as String methods. Folded output at the default sample adds a few percent more; a sample every 100 steps adds about a fifth.
 - Rank by steps; use `us` to compare builtins and sections in one run, and time the program without the profile.
 - The profile runs on one scheduler: a profiled run uses one unless `--schedulers` or `AGENTICA_SCHEDULERS` asks for more, which it refuses.

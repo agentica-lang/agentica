@@ -142,7 +142,8 @@ static void test_builtin_classes(void) {
 }
 
 /* A leaf row is a plain call (agc_builtin.leaf): never shared, no native frame, no cost by size. The hot accessors are
-   marked; a map lookup is not, since hashing a String key charges turn cost, nor is anything that writes output. */
+   marked; a map lookup is not, since hashing a String key charges turn cost, nor is a String op whose work grows with
+   the text (slice), nor anything that writes output. */
 static void test_leaf_rows(void) {
   for (size_t t = 0; t < agc_builtin_table_count; t++) {
     for (size_t i = 0; i < *agc_builtin_tables[t].count; i++) {
@@ -160,10 +161,11 @@ static void test_leaf_rows(void) {
   } expected[] = {
       {"List.size", 1, true},     {"List.at", 2, true},       {"String.length", 1, true}, {"Int.bit_and", 2, true},
       {"Map.get", 2, false},      {"Map.has_key?", 2, false}, {"Set.include?", 2, false}, {"List.concat", 2, false},
-      {"puts", 1, false},         {"List.map", 2, false},     {"IO.gets", 0, false},
+      {"puts", 1, false},         {"List.map", 2, false},     {"IO.gets", 0, false},      {"String.slice", 3, false},
   };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
-    const agc_builtin *b = agc_find_builtin((const uint8_t *)expected[k].name, strlen(expected[k].name), expected[k].arity);
+    const char *name = expected[k].name;
+    const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), expected[k].arity);
     assert(b && b->leaf == expected[k].leaf);
   }
 }
@@ -178,8 +180,9 @@ static agc_value charges_cost(agc_vm *vm, agc_value *args, uint32_t span) {
 
 static const agc_builtin mismarked = {"Test.mismarked", 0, charges_cost, AGC_NATIVE_NONE, AGC_COST_NONE, false, true};
 
-/* A program whose entry calls the mismarked builtin and returns. */
-static void run_mismarked(void) {
+/* A program whose entry calls the mismarked builtin and returns, with the profile on or off (the two copies of the
+   turn loop). */
+static void run_mismarked(bool profiled) {
   static agc_program p;
   static agc_test_source src;
   static agc_span spans[4];
@@ -193,12 +196,19 @@ static void run_mismarked(void) {
   agc_test_emit(&fns[0], 4, AGC_OP_CALL_BUILTIN, 0, 0, 1);
   agc_test_emit(&fns[0], 4, AGC_OP_RETURN, 0, 0, 2);
   agc_vm_init(&leaf_vm, &p, stdout, stderr, INT64_MAX);
+  if (profiled) agc_trace_parse(&leaf_vm.rt->trace, "profile", 2);
   agc_vm_run(&leaf_vm);
 }
 
-/* The sanitizer and GC-stress builds stop a leaf call that charged turn cost, naming the row. */
+static void run_mismarked_plain(void) { run_mismarked(false); }
+
+static void run_mismarked_profiled(void) { run_mismarked(true); }
+
+/* The sanitizer and GC-stress builds stop a leaf call that charged turn cost, naming the row, with or without the
+   profile. */
 static void test_mismarked_leaf_aborts(void) {
-  agc_test_aborts_with(run_mismarked, "builtin Test.mismarked/0 is marked leaf but charged turn cost");
+  agc_test_aborts_with(run_mismarked_plain, "builtin Test.mismarked/0 is marked leaf but charged turn cost");
+  agc_test_aborts_with(run_mismarked_profiled, "builtin Test.mismarked/0 is marked leaf but charged turn cost");
 }
 #endif
 

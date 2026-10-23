@@ -9,8 +9,10 @@
 
 #include <inttypes.h>
 #include <math.h>
-#include <stdio.h>
 #include <string.h>
+#if AGC_LEAF_CHECK
+#include <stdio.h>
+#endif
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
@@ -342,17 +344,21 @@ static _Noreturn __attribute__((noinline, cold)) void leaf_broken(const agc_buil
   agc_internal_abort(detail);
 }
 
-/* The call of a leaf builtin (agc_builtin.leaf), checked: it parked, started a stepper, charged turn cost, counted a
-   step or asked to yield, any of which the generic tail of CALL_BUILTIN would have handled, so the run stops. */
+/* The call of a leaf builtin (agc_builtin.leaf), checked: it parked (or asked to retry), started a stepper, charged
+   turn cost, counted a step, asked to yield or left rt->sync taken, any of which the generic tail of CALL_BUILTIN
+   would have handled, so the run stops. */
 static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
   const agc_task *t = vm->task;
-  int64_t cost = t->turn_cost, stop = vm->next_stop;
-  bool yielded = vm->yield;
+  int64_t cost = t->turn_cost, stop = vm->next_stop, left = vm->turn_left;
+  uint32_t depth = vm->sync_depth;
+  bool yielded = vm->yield, retry = t->retry;
   agc_value result = b->fn(vm, args, span);
-  if (t->parking) leaf_broken(b, "parked");
+  if (t->parking || t->retry != retry) leaf_broken(b, "parked");
   if (t->stepper) leaf_broken(b, "started a stepper");
   if (t->turn_cost != cost) leaf_broken(b, "charged turn cost");
-  if (vm->next_stop != stop || vm->yield != yielded) leaf_broken(b, "counted a step or asked to yield");
+  if (vm->next_stop != stop || vm->turn_left != left || vm->yield != yielded)
+    leaf_broken(b, "counted a step or asked to yield");
+  if (vm->sync_depth != depth) leaf_broken(b, "left rt->sync taken");
   return result;
 }
 #else
@@ -363,11 +369,11 @@ static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *a
 #endif
 
 /* A builtin call with its count and time: the time of the call itself, so a builtin that parks is timed until it
- * does. */
+ * does. A LEAF call goes through call_leaf, so the check of the leaf rule runs under the profile too. */
 static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args,
-                                              uint32_t span) {
+                                              uint32_t span, bool leaf) {
   uint64_t began = agc_trace_now();
-  agc_value result = call_builtin(vm, b, args, span);
+  agc_value result = leaf ? call_leaf(vm, b, args, span) : call_builtin(vm, b, args, span);
   vm->profile->builtin_calls[id]++;
   vm->profile->builtin_ns[id] += agc_trace_now() - began;
   return result;
@@ -1202,7 +1208,7 @@ reload:
         const agc_builtin *b = p->builtins[bx];
         if (b->leaf) {
           if (profiling) profile->builtin_leaf++;
-          args[0] = profiling ? profile_builtin(vm, b, bx, args, SPAN) : call_leaf(vm, b, args, SPAN);
+          args[0] = profiling ? profile_builtin(vm, b, bx, args, SPAN, true) : call_leaf(vm, b, args, SPAN);
           break;
         }
         if (b->native) {
@@ -1215,7 +1221,7 @@ reload:
         uint64_t units = 0;
         if (b->cost == AGC_COST_SIZE)
           for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
-        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN) : call_builtin(vm, b, args, SPAN);
+        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN, false) : call_builtin(vm, b, args, SPAN);
         if (t->stepper) {
           start_stepper(vm, b, base + in.a, SPAN);
           if (t->parking) return park_task(t);

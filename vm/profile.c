@@ -96,6 +96,8 @@ static const char *const opcode_names[] = {
   "closure", "range", "range-bounds", "struct-with", "global", "global-set", "try-step",
 };
 _Static_assert(sizeof opcode_names / sizeof opcode_names[0] == AGC_OP_COUNT, "one name for each opcode");
+/* report_loop ranks the pairs in the AGC_OP_COUNT slots it ranks the opcodes in. */
+_Static_assert(PROFILE_PAIRS <= AGC_OP_COUNT, "the top pairs fit the opcode ranking");
 
 static uint64_t hash_bytes(uint64_t h, const void *data, size_t n) {
   const unsigned char *p = data;
@@ -515,9 +517,9 @@ static void report_folded(const agc_vm *vm, const agc_profile *profile) {
 
 /* One total line, then the functions with the most steps, the source files with the most steps, the builtins that
  * took the most time and the sections of Profile.measure, each with its counts, and last what the turn loop ran
- * (report_loop). The step that a counting loop
- * (Range#each, Int#times, upto, downto) or a stepper builtin (File.each_line) takes for each pass is the function
- * "<native>"; List.map, each, filter and the like count no step of their own, only the steps of their callbacks.
+ * (report_loop). The step that a counting loop (Range#each, Int#times, upto, downto) or a stepper builtin
+ * (File.each_line) takes for each pass is the function "<native>"; List.map, each, filter and the like count no step
+ * of their own, only the steps of their callbacks.
  * Builtin time is wall time of the call itself: a builtin that waits (a sleep, a read) is timed until it parks, and
  * the garbage collector runs inside the allocations of any of them. `gc_ms` and `collections` are those of the whole
  * process so far, not of this runtime: the report of the program that `agentica FILE.agc` runs counts the front

@@ -61,7 +61,8 @@ record numbers only from an idle machine, in the last section of
   `collections` are still those of the whole process. `check` of a file with no
   `main` prints its report too.
 - Steps are exact and repeat from run to run, so they are the main evidence.
-  Wall time is supporting: a profiled run is about a third slower, so time
+  Wall time is supporting: a profiled run is slower (up to 15 times on cheap
+  builtin calls, each of which it times), so time
   without the profile, run the old and the new binary alternately (A B A B, a
   few rounds of several runs), take the median of the round medians, record the
   load average (`uptime`) and say "measured under load" above 2.
