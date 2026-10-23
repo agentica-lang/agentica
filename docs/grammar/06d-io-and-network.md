@@ -356,11 +356,11 @@ end
 - The C types are `C.Int32` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
   (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Float` (a 32-bit
   `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a `const char *`,
-  `String`), `C.Pointer`, `C.Bytes` and the resources of the block (below); a
-  result may also be `Void`. `C.Int` is `PARSE-EXTERN-TYPE`: write the width. A
-  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`). A `Float` passed
-  as a `C.Float` is rounded to the nearest float, and one outside its range
-  becomes an infinity.
+  `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function pointer, below)
+  and the resources of the block (below); a result may also be `Void`. `C.Int`
+  is `PARSE-EXTERN-TYPE`: write the width. A function takes at most 64
+  parameters (`PARSE-EXTERN-ARITY`). A `Float` passed as a `C.Float` is rounded
+  to the nearest float, and one outside its range becomes an infinity.
 - The library is a plain string literal: a name without `/`, which the system
   loader looks up, or an absolute path. Anything else is
   `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
@@ -486,6 +486,22 @@ end
   pool thread; a cancel drops the record, and an out resource of a call that
   ran is freed once when it returns. `C.String` and `C.Bytes` cannot be out
   parameters (take a `char **` as an out `C.Pointer`).
+- A C function whose address is known only at run time, such as a slot of a
+  table of function pointers (onnxruntime's `OrtApi`), is declared with a
+  first parameter `fn: C.Function` (section 5) and called with that address,
+  read with `Native.get_pointer`; Ruby ffi's `FFI::Function.new(ret, params,
+  pointer)`. Its other parameters, result, out parameters, resources and
+  `compute def` work as for a function found by name. A NULL address is
+  `RUNTIME-NATIVE-NULL` at the extern function and an owned buffer
+  `RUNTIME-NATIVE-BOUNDS`, both before C runs; any other address is trusted,
+  and one that is not a function of that signature is undefined behavior, like
+  a wrong signature. `resource Session, free: C.Function` declares a resource
+  freed through a function pointer (`api->ReleaseSession`): the call that makes
+  one takes the address of its free function as its last parameter (a
+  `C.Function`, also checked for NULL before C runs), and `Native.close`, the
+  owner's end and a dropped compute result call that address, once. An
+  extern block whose functions are all called through a pointer never opens
+  its library, so a wrong library path is not reported.
 - A `def` call blocks timers, I/O and other tasks until it returns, and the step
   limit cannot stop it in the middle. Native code must retry calls cut
   short by `EINTR`: GC signals can interrupt sleeps and polls.

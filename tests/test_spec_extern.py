@@ -529,3 +529,80 @@ def test_the_record_takes_its_name_and_follows_the_function(tmp_path):
     late = 'def main() -> Void\n  puts(db_open().db)\nend\n\n' \
            'extern "libc.so.6"\n  def db_open(out db: C.Int32) -> Void\nend\n'
     assert check(source(tmp_path, late)).code == 0
+
+
+POINTERS = """extern "/opt/libort.so"
+  resource Session, free: C.Function
+  def ort_get_api_base() -> C.Pointer = "OrtGetApiBase"
+  def get_api(fn: C.Function, version: C.Int32) -> C.Pointer
+  compute def run(fn: C.Function, session: Session, x: C.Double) -> C.Pointer
+  def create_session(fn: C.Function, path: C.String, out session: Session, free: C.Function) -> C.Pointer
+  def open_session(path: C.String, free: C.Function) -> Session
+  def printf_at(fn: C.Function, format: C.String, ..., n: C.Int32) -> C.Int32
+end
+
+def main() -> Void
+  api = get_api(Native.get_pointer(ort_get_api_base(), 0), 16)
+  made = create_session(Native.get_pointer(api, 8), "model.onnx", Native.get_pointer(api, 16))
+  status: C.Pointer = run(Native.get_pointer(api, 24), made.session, 1.5)
+  opened: Result[Session] = open_session("other.onnx", Native.get_pointer(api, 16))
+  puts(printf_at(Native.get_pointer(api, 32), "%d", 1) + 1)
+end
+"""
+
+
+# A C.Function parameter is a C.Pointer to the checker: first, the function the def calls; last, the free function of
+# the resource of a free: C.Function kind that the call makes.
+def test_function_pointers_check_as_c_pointers(tmp_path):
+    assert check(source(tmp_path, POINTERS)).code == 0
+    bad = POINTERS.replace("get_api(Native.get_pointer(ort_get_api_base(), 0), 16)", "get_api(0, 16)")
+    assert at(problem_of(check(source(tmp_path, bad))))[0] == "CHECK-TYPE-MISMATCH"
+
+
+@pytest.mark.parametrize("signature, code, start, stop", [
+    ("def f(a: C.Int32, fn: C.Function, b: C.Int32) -> Void", "PARSE-EXTERN-FUNCTION", (3, 25), (3, 35)),
+    ("def f(fn: C.Function, g: C.Function) -> Void", "PARSE-EXTERN-FUNCTION", (3, 28), (3, 38)),
+    ("def f(a: C.Int32, free: C.Function) -> Void", "PARSE-EXTERN-FUNCTION", (3, 27), (3, 37)),
+    ('def f(fn: C.Function, a: C.Int32) -> Void = "g"', "PARSE-EXTERN-FUNCTION", (3, 47), (3, 50)),
+    ("def f(fn: C.Function, a: C.Int32) -> Thing", "PARSE-EXTERN-FUNCTION", (3, 40), (3, 45)),
+    ("def f(fn: C.Pointer, out t: Thing) -> Void", "PARSE-EXTERN-FUNCTION", (3, 31), (3, 36)),
+    ("def f(a: C.Int32, out t: Thing, out u: Thing, free: C.Function) -> Void", "PARSE-EXTERN-FUNCTION", (3, 42),
+     (3, 47)),
+    ("def f(fn: C.Function) -> C.Function", "PARSE-EXTERN-TYPE", (3, 28), (3, 38)),
+    ("def f(fn: C.Function, out g: C.Function) -> Void", "PARSE-EXTERN-OUT", (3, 32), (3, 42)),
+    ("def f(fn: C.Function, ...) -> Void", "PARSE-EXTERN-VARIADIC-FIXED", (3, 25), (3, 28)),
+    ("def f(free: C.Function, ...) -> Thing", "PARSE-EXTERN-VARIADIC-FIXED", (3, 27), (3, 30)),
+    ("def f(fn: C.Function, free: C.Function, ...) -> Thing", "PARSE-EXTERN-VARIADIC-FIXED", (3, 43), (3, 46)),
+    ("def f(fn: C.Function, a: C.Int32, ..., g: C.Function) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (3, 45), (3, 55)),
+])
+def test_a_c_function_is_the_function_to_call_or_a_free_function(tmp_path, signature, code, start, stop):
+    text = 'extern "/opt/libx.so"\n  resource Thing, free: C.Function\n  %s\nend\n' % signature
+    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+
+
+@pytest.mark.parametrize("free, stop", [("C.Pointer", (2, 34)), ("C.Function[Int]", (2, 40))])
+def test_a_resource_is_freed_by_a_c_name_or_a_c_function(tmp_path, free, stop):
+    text = 'extern "/opt/libx.so"\n  resource Thing, free: %s\nend\n' % free
+    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-FUNCTION", (2, 25), stop)
+
+
+# A call through a pointer has no C name, so a def of the name of a free function of the block is not one.
+def test_a_call_through_a_pointer_may_take_the_name_of_a_free_function(tmp_path):
+    text = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_close(fn: C.Function, db: Db) -> Void\n' \
+           '  resource Other, free: db_close\nend\n'
+    assert check(source(tmp_path, text)).code == 0
+
+
+# A sole C.Function parameter of a def that makes a resource of a free: C.Function kind is its free function, not the
+# function to call: the def calls its C function by name (void *thing_new(void)), so = "symbol" is allowed.
+@pytest.mark.parametrize("signature", [
+    "def thing_new(free: C.Function) -> Thing",
+    'def new_thing(free: C.Function) -> Thing = "thing_new"',
+    "def thing_at(fn: C.Function, free: C.Function) -> Thing",
+])
+def test_a_sole_c_function_of_a_maker_is_its_free_function(tmp_path, signature):
+    name = signature.split("(")[0].split()[-1]
+    text = 'extern "/opt/libx.so"\n  resource Thing, free: C.Function\n  %s\nend\n\n' \
+           'def make(f: C.Pointer) -> Result[Thing]\n  return %s(%sf)\nend\n' \
+           % (signature, name, "f, " if "fn:" in signature else "")
+    assert check(source(tmp_path, text)).code == 0

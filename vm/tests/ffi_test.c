@@ -1,13 +1,14 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
-   the prepared-call cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one,
-   the memory reads (get_string, get_bytes), owned buffers with typed reads and writes and put_bytes
-   (bounds, NULL, freed, no_files), and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
+   the cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one, calls and frees
+   through C function pointers, the memory reads, owned buffers with typed reads and writes (bounds, NULL, freed,
+   no_files), and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
 
 #include <assert.h>
 #include <setjmp.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* The math library and the C library, found by name by the system loader; on Windows the UCRT holds both, and on macOS
@@ -64,7 +65,10 @@ static void test_bad_signatures(void) {
                        "rd cos free " LIBM, "rd cos  Mem " LIBM, "rd cos free M\xc3\xa9m " LIBM,
                        "rd cos free 1Mem " LIBM, "rd cos free M.em " LIBM, ". cos " LIBM, "d.d cos " LIBM,
                        "dd..d cos " LIBM, "dd.d.d cos " LIBM, "dd.b cos " LIBM, "dd.D cos " LIBM, "dd.R cos " LIBM,
-                       "dd.f cos " LIBM, "Fd cos " LIBM};
+                       "dd.f cos " LIBM, "Fd cos " LIBM, "ddc cos " LIBM, "dcc cos " LIBM, "dC cos " LIBM,
+                       "dde cos " LIBM, "rl malloc C.Function Mem " LIBM, "rlee malloc C.Function Mem " LIBM,
+                       "rle malloc free Mem " LIBM, "dc.d cos " LIBM, "dd.e cos " LIBM, "ce cos " LIBM,
+                       "rel malloc C.Function Mem " LIBM, "rcel malloc C.Function Mem " LIBM};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);
@@ -392,6 +396,74 @@ static void test_buffers(void) {
   vm.rt->no_files = false;
 }
 
+#ifdef AGC_FFI
+/* The functions that the calls through a function pointer reach: the test's own, so their addresses are known. */
+static int frees_seen;
+static double twice(double x) { return 2 * x; }
+/* The block and its free come from the test, not from the C library by name: under ASan the loader's malloc is libc's
+   own, which ASan's free would refuse. */
+static void *make_block(int64_t n) { return malloc((size_t)n); }
+static void count_free(void *p) {
+  frees_seen++;
+  free(p);
+}
+
+/* The address of FN as a C.Pointer, as Native.get_pointer reads one from a table of function pointers. */
+static agc_value address_of(void (*fn)(void)) {
+  void *p;
+  memcpy(&p, &fn, sizeof p);
+  return agc_c_pointer_value(p);
+}
+
+/* The task parks on the compute call of SIGNATURE, as a builtin leaves it. */
+static void park_call(agc_task *task, const char *signature, agc_value *items, size_t n) {
+  atomic_store(&task->state, AGC_TASK_RUNNING);
+  (void)native_call(signature, items, n);
+  assert(task->parked && task->parking);
+  task->parking = false;
+  assert(agc_task_commit_park(task));
+}
+#endif
+
+/* A call through a C function pointer (code c) calls the address of its first argument, which is not passed to C; a
+   resource of a `free: C.Function` kind is freed through the address its call got (code e), at a close, and when the
+   result of a cancelled compute call is dropped. A NULL address or an owned buffer is refused before C runs. */
+static void test_pointers(void) {
+#ifdef AGC_FFI
+  agc_value args[2] = {address_of((void (*)(void))twice), agc_float(1.5)};
+  assert(agc_as_float(&vm, native_call("dcd twice " LIBM, args, 2)) == 3.0);
+  agc_value compute[2] = {args[0], agc_float(4.0)};
+  agc_task *task = vm.task;
+  park_call(task, "compute dcd twice " LIBM, compute, 2);
+  assert(agc_as_float(&vm, take_in_turn(task)) == 8.0);
+  args[0] = agc_c_pointer_value(NULL);
+  fails("dcd twice " LIBM, args, 2, "RUNTIME-NATIVE-NULL");
+  agc_value size = agc_int(8);
+  args[0] = call_row("Native.memory_pointer", 1, &size);
+  fails("dcd twice " LIBM, args, 2, "RUNTIME-NATIVE-BOUNDS");
+  (void)call_row("Native.free", 1, &args[0]);
+  /* A block of make_block, freed through count_free; a NULL free function makes nothing. */
+  agc_value made_args[3] = {address_of((void (*)(void))make_block), agc_int(16),
+                            address_of((void (*)(void))count_free)};
+  agc_value made = native_call("rcle make_block C.Function Mem " LIBC, made_args, 3);
+  agc_c_resource *res = agc_as_c_resource(&vm, agc_as_result(&vm, made)->value);
+  assert(res->pointer && res->free_at && !res->closed);
+  native_close(agc_as_result(&vm, made)->value);
+  assert(res->freed && frees_seen == 1);
+  made_args[2] = agc_c_pointer_value(NULL);
+  fails("rcle make_block C.Function Mem " LIBC, made_args, 3, "RUNTIME-NATIVE-NULL");
+  made_args[2] = address_of((void (*)(void))count_free);
+  /* A compute call cancelled after C returned: its dropped result is freed through the pointer, once. */
+  park_call(task, "compute rcle make_block C.Function Mem " LIBC, made_args, 3);
+  agc_test_wait_woken(&vm, task);
+  agc_io_detach(&vm, task);
+  for (int k = 0; k < 100 && frees_seen < 2; k++) (void)agc_io_poll(&vm, true);
+  atomic_store(&task->state, AGC_TASK_RUNNING);
+  assert(frees_seen == 2);
+  agc_test_settle_loop(&vm);
+#endif
+}
+
 int main(void) {
   agc_test_io_vm(&vm);
   test_bad_signatures();
@@ -401,6 +473,7 @@ int main(void) {
   test_compute_outs();
   test_reads();
   test_buffers();
+  test_pointers();
   test_refusal();
   return 0;
 }

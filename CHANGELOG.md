@@ -35,6 +35,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `Native.get_int32`, `put_array_of_float32` and the other Ruby `ffi` forms.
 - `Native.memory_pointer(size) do |buf| ... end` frees the buffer when the
   block ends, and `Native.put_bytes` writes a list of bytes.
+- `C.Function` in `extern` blocks calls and frees through C function pointers.
 
 ### Changed
 

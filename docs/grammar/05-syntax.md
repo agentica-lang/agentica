@@ -28,8 +28,10 @@ extern_function  = [ "compute" ], "def", NAME, "(", [ c_parameters ], ")",
                    "->", ( c_type | TYPE_NAME | "Void" ), [ "=", STRING ], NL ;
 c_parameters     = c_parameter, { ",", c_parameter },
                    [ ",", "...", { ",", c_parameter } ], [ "," ] ;
-resource_decl    = "resource", TYPE_NAME, ",", "free", ":", NAME, NL ;
-c_parameter      = [ "out" ], NAME, ":", ( c_type | "C", ".", "Bytes" | TYPE_NAME ) ;
+resource_decl    = "resource", TYPE_NAME, ",", "free", ":",
+                   ( NAME | "C", ".", "Function" ), NL ;
+c_parameter      = [ "out" ], NAME, ":",
+                   ( c_type | "C", ".", ( "Bytes" | "Function" ) | TYPE_NAME ) ;
 c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" | "Pointer" ) ;
 
 struct_decl      = "struct", TYPE_NAME, NL,
@@ -110,13 +112,32 @@ result (`-> C.Int32 = "fcntl"`), so one C function can be declared in several
 shapes. The string is a plain literal of letters, digits and `_` that does not
 start with a digit (`PARSE-EXTERN-SYMBOL` at the string). `...` among the
 parameters declares a variadic C function: the parameters after it are its
-variadic arguments, each with the C type the call passes, and they may be
-none. It comes after one parameter at least (`PARSE-EXTERN-VARIADIC-FIXED` at
-the `...`), at most once in a function, and only in an extern block
-(`PARSE-EXTERN-VARIADIC` at the `...`). A variadic parameter is not an out
-parameter, not `C.Bool`, which C promotes to `int`, and not `C.Float`, which C
-promotes to `double` (`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count
-both parts.
+variadic arguments, each with the C type the call passes, and they may be none.
+It comes after one C parameter at least, not counting a `C.Function`
+(`PARSE-EXTERN-VARIADIC-FIXED` at the `...`), at most once in a function, and
+only in an extern block (`PARSE-EXTERN-VARIADIC` at the `...`). A variadic
+parameter is not an out parameter, not `C.Bool`, which C promotes to `int`, and
+not `C.Float`, which C promotes to `double` (`PARSE-EXTERN-VARIADIC-TYPE`); the
+64 parameters count both parts.
+
+A `C.Function` parameter is the address of a C function, a `C.Pointer` for the
+checker. As the first parameter it makes the `def` a call through a function
+pointer: the call runs the function at that address with the other parameters,
+and the `def` has no C name (`= "..."` is `PARSE-EXTERN-FUNCTION` at the
+string). `resource Name, free: C.Function` declares a resource whose values each
+have their own free function: a `def` that makes one (its result or an out
+parameter) takes the address of that function as its last parameter, a
+`C.Function`, after any out parameters. The free rule wins: a sole `C.Function`
+parameter of a `def` that returns such a resource is its free function, so `def
+thing_new(free: C.Function) -> Thing` calls `thing_new` by name; a call through
+a pointer that makes one takes two `C.Function` parameters. The parameter names
+are free (`fn` and `free` are a convention). Neither address goes to C. A
+`C.Function` anywhere else, a `def` that makes such a resource without that
+parameter, and a `def` that makes two are `PARSE-EXTERN-FUNCTION` at the type,
+and so is a `free:` type other than `C.Function`. A `C.Function` result is
+`PARSE-EXTERN-TYPE`, an out one `PARSE-EXTERN-OUT` and a variadic one
+`PARSE-EXTERN-VARIADIC-TYPE`; a variadic part needs a C parameter before the
+`...` besides the `C.Function` ones (`PARSE-EXTERN-VARIADIC-FIXED`).
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

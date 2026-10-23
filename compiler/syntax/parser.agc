@@ -36,21 +36,31 @@ COMPOUND_OPERATORS: Map[String, String] = {
 }
 
 # The C types an extern function may take, with their codes (Ast.Native) and the Agentica types the program sees.
+# C.Function (code c, a C.Pointer to the program) is the address of a C function: as the first parameter the function
+# the def calls, as the last (code e) the free function of the resource the call makes.
 EXTERN_CODES = {
   "C.Int32": "i", "C.Int64": "l", "C.Double": "d", "C.Float": "f", "C.Bool": "b", "C.String": "s", "C.Pointer": "p",
-  "C.Bytes": "y",
+  "C.Bytes": "y", "C.Function": "c",
 }
 EXTERN_TYPES = {
   "i": "Int", "l": "Int", "d": "Float", "f": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "v": "Void",
+  "c": "C.Pointer", "e": "C.Pointer",
 }
 EXTERN_TYPES_HELP = (
   "extern functions take and return C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.String, C.Pointer or a " +
-  "resource declared above in the same block, take C.Bytes, or return Void"
+  "resource declared above in the same block, take C.Bytes or a C.Function, or return Void"
 )
 EXTERN_OUT_HELP = (
   "an out parameter is C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.Pointer or a resource of the block; " +
-  "take a char ** as an out C.Pointer"
+  "take a char ** or a function pointer as an out C.Pointer"
 )
+# The type name of a function pointer, and the free word of a resource whose values each have their own free function.
+FUNCTION_TYPE = "C.Function"
+FUNCTION_HELP = (
+  "a C.Function parameter is first, the function the def calls, or last, the free function of the resource of a " +
+  "free: C.Function kind that the call makes"
+)
+FUNCTION_RESULT_HELP = "declare a function that returns a function pointer -> C.Pointer"
 # C.Int was the name of C.Int32 before the widths became explicit; it is refused, with no alias.
 EXTERN_INT_HELP = "write C.Int32 (a 32-bit int) or C.Int64 (a 64-bit integer) instead of C.Int"
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
@@ -122,11 +132,13 @@ struct GuardAt
 end
 
 # The parameters, whether each is an `out` parameter of an extern function, the number of parameters before the `...`
-# of a variadic extern function (-1 without one), the next position and the next free id.
+# of a variadic extern function (-1 without one) and the position of that `...`, the next position and the next free
+# id.
 struct ParamsAt
   nodes: List[Ast.Param]
   outs: List[Bool]
   fixed: Int
+  mark: Int
   pos: Int
   ids: Int
 end
@@ -151,7 +163,8 @@ struct MemberAt
   records: List[Ast.Decl]
 end
 
-# An extern function, its C name and its record (none or one), with the next position and the next free node id.
+# An extern function, its C name ("" for a call through a function pointer) and its record (none or one), with the
+# next position and the next free node id.
 struct ExternAt
   decl: DeclAt
   symbol: String
@@ -1743,8 +1756,9 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
   nodes: List[Ast.Param] = []
   outs: List[Bool] = []
   fixed = -1
+  mark = -1
   if e.tokens[pos].kind == "right-paren"
-    return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, pos: pos, ids: ids))
+    return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, mark: mark, pos: pos, ids: ids))
   end
   cursor = pos
   next_id = ids
@@ -1752,6 +1766,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
   while looping
     if e.tokens[cursor].kind == "dot-dot-dot"
       fixed = try variadic_marker(e, cursor, nodes.size, fixed, extern)
+      mark = cursor
       cursor += 1
     else
       start = cursor
@@ -1807,7 +1822,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
       looping = false
     end
   end
-  return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, pos: cursor, ids: next_id))
+  return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, mark: mark, pos: cursor, ids: next_id))
 end
 
 # The `...` at `at`, after `count` parameters, gives the number of fixed parameters: PARSE-EXTERN-VARIADIC outside an
@@ -2004,7 +2019,11 @@ def parse_extern_member(
 ) -> Result[MemberAt]
   if resource_start?(e, pos)
     member = try parse_resource(e, pos, ids, doc, block)
-    named = block.resources.put(e.tokens[pos + 1].lexeme, e.tokens[pos + 5].lexeme)
+    free = e.tokens[pos + 5].lexeme
+    if e.tokens[pos + 5].kind == "type-name"
+      free = FUNCTION_TYPE
+    end
+    named = block.resources.put(e.tokens[pos + 1].lexeme, free)
     return ok(MemberAt(decl: member, block: block.with(resources: named), records: []))
   end
   at = pos
@@ -2015,7 +2034,10 @@ def parse_extern_member(
     return error(Base.found(e, at, "def, compute def, resource or end in an extern block"))
   end
   member = try parse_extern_function(e, pos, at, ids, doc, block)
-  symbols = block.symbols.add(member.symbol)
+  symbols = block.symbols
+  if member.symbol != ""
+    symbols = symbols.add(member.symbol)
+  end
   return ok(MemberAt(decl: member.decl, block: block.with(symbols: symbols), records: member.records))
 end
 
@@ -2024,13 +2046,17 @@ def resource_start?(e: Base.Env, at: Int) -> Bool
   return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "resource" and Base.kind_at(e, at + 1) == "type-name"
 end
 
-# resource Name, free: c_name NL in an extern block. pos is the word resource.
+# resource Name, free: c_name NL in an extern block, or free: C.Function, when each value has its own free function,
+# which the call that makes it takes. pos is the word resource.
 def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], block: ExternBlock) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a resource name", false)
   after_comma = try Base.expect(e, after_name, "comma", "\",\"", false)
   after_word = try expect_word(e, after_comma, "free", "write resource Name, free: c_function")
   after_colon = try Base.expect(e, after_word, "colon", "\":\"", false)
-  after_free = try Base.expect(e, after_colon, "name", "the C name of the free function", true)
+  if Base.kind_at(e, after_colon) == "type-name"
+    return parse_resource_by_pointer(e, pos, ids, doc, after_colon)
+  end
+  after_free = try Base.expect(e, after_colon, "name", "the C name of the free function or C.Function", true)
   free = e.tokens[after_colon].lexeme
   if free.ends_with?("?") or free.ends_with?("!")
     return error(c_name_failure(e, after_colon, free))
@@ -2045,6 +2071,34 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], b
       name: e.tokens[pos + 1].lexeme,
       name_span: e.tokens[pos + 1].span,
       free: free,
+      doc: doc,
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+  return decl_at(node, stop, ids)
+end
+
+# The rest of resource Name, free: C.Function from at, the type after the colon: any other type is
+# PARSE-EXTERN-FUNCTION at it.
+def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], at: Int) -> Result[DeclAt]
+  type = try Base.parse_type(e, at, ids)
+  if type.node.name != FUNCTION_TYPE or type.node.args.size > 0
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-FUNCTION",
+        "the free function of a resource is a C name or C.Function, not #{type.node.name}",
+        type.node.span,
+        Base.hint("write free: c_function, or free: C.Function when the call that makes the resource takes it"),
+      ),
+    )
+  end
+  stop = try expect_statement_end(e, type.pos, "a newline after the resource")
+  node = Ast.Decl.Resource(
+    Ast.ResourceDecl(
+      id: ids,
+      name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
+      free: FUNCTION_TYPE,
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
@@ -2078,7 +2132,9 @@ end
 # before the variadic part of a variadic C function. The C name is the def's unless the string gives it. start is the
 # first token (compute or def) and pos the def. A function with out parameters takes only the others, and returns its
 # record, made here (Ast.StructDecl.record_of): the C result as `result` (none for Void), then each out value, named
-# after it.
+# after it. A first parameter of type C.Function makes it a call through a function pointer: the def calls that
+# address, has no C name (ExternAt.symbol is ""), and takes no = "symbol". A sole C.Function parameter of a def that
+# returns a resource of a free: C.Function kind is that resource's free function instead (callee?).
 def parse_extern_function(
   e: Base.Env,
   start: Int,
@@ -2104,7 +2160,18 @@ def parse_extern_function(
     after_signature = try symbol_string(e, symbol_at)
   end
   symbol = Base.token_text(e.tokens[symbol_at])
-  if block.resources.values.any? do |free: String| free == symbol end
+  callee = callee?(params, result.node, block)
+  if callee and symbol_at != pos + 1
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-FUNCTION",
+        "a call through a C.Function has no C name",
+        Base.span_from(e, symbol_at, after_signature),
+        Base.hint("the def calls the address of its first parameter: write it without = \"symbol\""),
+      ),
+    )
+  end
+  if !callee and block.resources.values.any? do |free: String| free == symbol end
     return error(free_failure(e, symbol_at, symbol))
   end
   stop = try expect_statement_end(e, after_signature, "a newline after the extern function")
@@ -2126,6 +2193,14 @@ def parse_extern_function(
   typed: List[Ast.Param] = []
   fields: List[Ast.FieldDecl] = []
   outs: List[Ast.NativeResource] = []
+  # The types of the resources of a free: C.Function kind that the call makes, and the free C.Function parameter.
+  by_pointer: List[Ast.TypeRef] = []
+  if returned.code == "r" and block.resources[result.node.name] == FUNCTION_TYPE
+    by_pointer = by_pointer.push(result.node)
+  end
+  free_params: List[Ast.Param] = []
+  # The C.Function parameters before the ... of a variadic def, which C does not get.
+  not_c = 0
   index = 0
   for param in params.nodes
     case param.default
@@ -2166,12 +2241,38 @@ def parse_extern_function(
       fields = fields.push(field)
       if taken.code == "r"
         outs = outs.push(Ast.NativeResource(name: param.type.name, free: block.resources[param.type.name]))
+        if block.resources[param.type.name] == FUNCTION_TYPE
+          by_pointer = by_pointer.push(param.type)
+        end
       end
     else
-      codes = codes.push(taken.code)
+      code = taken.code
+      if code == "c" and (index > 0 or !callee)
+        if index != params.nodes.size - 1
+          return error(function_failure(param.type))
+        end
+        code = "e"
+        free_params = free_params.push(param)
+      end
+      if (code == "c" or code == "e") and index < params.fixed
+        not_c += 1
+      end
+      codes = codes.push(code)
       typed = typed.push(param.with(type: taken.type))
     end
     index += 1
+  end
+  try free_function(by_pointer, free_params)
+  if params.fixed > 0 and params.fixed == not_c
+    return error(
+      Base.bail(
+        e,
+        params.mark,
+        "PARSE-EXTERN-VARIADIC-FIXED",
+        "a variadic function takes at least one parameter before ..., besides its C.Function ones",
+        Base.hint("declare the fixed parameters of the C function first, as its header does"),
+      ),
+    )
   end
   # An empty variadic part (`def printf(format: C.String, ...)`) still marks the call as variadic.
   if params.fixed == params.nodes.size
@@ -2250,7 +2351,65 @@ def parse_extern_function(
     ),
   )
   decl = try decl_at(node, stop, next_id)
+  if callee
+    symbol = ""
+  end
   return ok(ExternAt(decl: decl, symbol: symbol, records: records))
+end
+
+# PARSE-EXTERN-FUNCTION at the type of a C.Function parameter that is neither the function to call nor a free function.
+def function_failure(type: Ast.TypeRef) -> String
+  return Base.bail_span(
+    "PARSE-EXTERN-FUNCTION",
+    "a C.Function parameter is the function to call or a free function",
+    type.span,
+    Base.hint(FUNCTION_HELP),
+  )
+end
+
+# Whether the first parameter is a C.Function (not an out one): the def calls the function at that address. A sole
+# C.Function parameter of a def that returns a resource of a free: C.Function kind is its free function, so
+# `def thing_new(free: C.Function) -> Thing` calls thing_new by name; a call through a pointer that makes such a
+# resource takes two. (A def with out parameters has its free function last, so its first parameter is not it.)
+def callee?(params: ParamsAt, result: Ast.TypeRef, block: ExternBlock) -> Bool
+  if params.nodes.size == 0 or params.outs[0]
+    return false
+  end
+  first = params.nodes[0].type
+  if first.name != FUNCTION_TYPE or first.args.size > 0
+    return false
+  end
+  return params.nodes.size > 1 or block.resources.get(result.name, "") != FUNCTION_TYPE
+end
+
+# A call that makes a resource of a free: C.Function kind (made: the type of each) takes its free function as its last
+# parameter, a C.Function (free_params: none or that one), and a call that makes none takes no such parameter; one call
+# makes one such resource at most. Else PARSE-EXTERN-FUNCTION.
+def free_function(made: List[Ast.TypeRef], free_params: List[Ast.Param]) -> Result[Void]
+  if made.size > 1
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-FUNCTION",
+        "a call makes one resource of a free: C.Function kind at most",
+        made[1].span,
+        Base.hint("declare the resources with their own free functions, or split the call"),
+      ),
+    )
+  end
+  if made.size == 1 and free_params.size == 0
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-FUNCTION",
+        "#{made[0].name} is freed through a C.Function that the call takes",
+        made[0].span,
+        Base.hint("add the free function as the last parameter: free: C.Function"),
+      ),
+    )
+  end
+  if made.size == 0 and free_params.size == 1
+    return error(function_failure(free_params[0].type))
+  end
+  return ok()
 end
 
 # The string at `at` after the = of an extern function, which names its C function, and the position after it: a
@@ -2312,10 +2471,10 @@ def variadic_type(param: Ast.Param, taken: ExternType, out: Bool) -> Result[Void
 end
 
 # The field of the record for an out parameter, of the parameter's Agentica type (a resource itself, not a Result), or
-# PARSE-EXTERN-OUT: at the type for C.String and C.Bytes (who frees what C writes there is not known), and at the
-# name for `result`, which the C result takes unless it is Void.
+# PARSE-EXTERN-OUT: at the type for C.String and C.Bytes (who frees what C writes there is not known) and C.Function
+# (an out function pointer is a C.Pointer), and at the name for `result`, which the C result takes unless it is Void.
 def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast.FieldDecl]
-  if taken.code == "s" or taken.code == "y"
+  if taken.code == "s" or taken.code == "y" or taken.code == "c"
     return error(
       Base.bail_span(
         "PARSE-EXTERN-OUT",
@@ -2386,7 +2545,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
   code = ""
   if ref.args.size == 0
     found = EXTERN_CODES.get(ref.name)
-    if found.ok? and !(result and found.unwrap! == "y")
+    if found.ok? and !(result and (found.unwrap! == "y" or found.unwrap! == "c"))
       code = found.unwrap!
     elsif result and ref.name == "Void"
       code = "v"
@@ -2398,6 +2557,8 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     help = EXTERN_TYPES_HELP
     if ref.name == "C.Int" and ref.args.size == 0
       help = EXTERN_INT_HELP
+    elsif ref.name == FUNCTION_TYPE and ref.args.size == 0
+      help = FUNCTION_RESULT_HELP
     end
     return error(
       Base.bail_span(

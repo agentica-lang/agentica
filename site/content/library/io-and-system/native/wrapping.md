@@ -19,6 +19,7 @@ The raw layer is one `extern` block per library. Copy each signature from the C 
 | Memory that the caller gives and C fills | a `String` or a `List` copied out of a `Native.memory_pointer` block (see Buffers and block forms below) |
 | A call that may take long | a [`compute def`](/library/io-and-system/native/compute/) in the raw layer, so the other tasks keep running; the wrapper calls it like any function |
 | A variadic function | functions of a normal shape (see Variadic functions below) |
+| A table of function pointers (`api->CreateEnv(...)`) | [`C.Function`](/library/io-and-system/native/types/#function-pointers) calls in the raw layer, with the slots as constants of the wrapper (see Tables of function pointers below) |
 
 A block with a resource sits with the types of the file, at the top and before every function, and its `def`s do not count as functions in the declaration order (`CHECK-DECL-ORDER`). So the wrapper can sit in the same file as the block. Export the resource, so that callers can name the type, and keep the `def`s private: the file exports only the wrapper. A block without a resource has no such rule. Its `def`s count as functions, so it stays at the end of the file, as in the examples after this one.
 
@@ -204,6 +205,10 @@ end
 ```
 
 `open_file` gives a descriptor; the example leaves out a function that closes it. `write_fields` never lets its caller choose the format. The format is a constant of the wrapper, and the caller's text goes in as `%s` arguments, so a `%` in a field is only text.
+
+## Tables of function pointers
+
+A library whose API is a struct of function pointers, such as onnxruntime, is wrapped the same way. The raw layer declares each slot that the wrapper uses as a `def` whose first parameter is `fn: C.Function`, and each handle as `resource Name, free: C.Function`, freed through the release slot of the table. The wrapper gets the table once, keeps the slot numbers as constants in the order of the C header, and passes `Native.get_pointer(api, slot * 8)` to the raw `def`s, so the caller never sees a function pointer. A slot number from another version of the header is undefined behavior, like a wrong signature: ask for the version the slots come from, as onnxruntime's `GetApi(version)` does, and turn its NULL into an `error`.
 
 ## Shipping it in a package
 
