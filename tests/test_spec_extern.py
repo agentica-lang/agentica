@@ -408,6 +408,12 @@ def test_the_memory_builtins_take_a_pointer_and_a_length(tmp_path, body, code, s
     assert_checks(check(source(tmp_path, OPENER % body)), code, start, stop)
 
 
+# The old names carry the help that gives the new call (its presence, not its text).
+@pytest.mark.parametrize("call", ["Native.string_at(Native.null(), 3)", "Native.bytes_at(Native.null(), 3).size"])
+def test_the_old_memory_names_have_a_help(tmp_path, call):
+    assert problem_of(check(source(tmp_path, OPENER % ("  puts(%s)" % call)))).get("help")
+
+
 # The block's free function is the VM's to call: a def of it, before or after the resource, is PARSE-EXTERN-FREE at
 # the later of the two names.
 @pytest.mark.parametrize("members, start, stop", [
