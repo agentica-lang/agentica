@@ -746,15 +746,17 @@ VARIADIC_EXTERN = """extern "{library}"
     p: C.Int64, q: C.Int32,
   ) -> C.Double = "peer_vmix"
   compute def vmix_pool(kinds: C.String, ..., a: C.Double, b: C.Int32) -> C.Double = "peer_vmix"
+  def vmix_out(out count: C.Int32, kinds: C.String, ..., a: C.Double, b: C.Int32) -> C.Double = "peer_vmix_out"
 end
 
 """
 
 
 # One variadic C function declared in five shapes with `= "peer_vmix"`: ints, doubles, none, a mix with more
-# arguments than registers (so some go on the stack on every ABI), and a compute def. On Apple arm64 every variadic
-# argument goes on the stack, and on Windows x64 a variadic double goes in an integer register too: a fixed signature
-# would read them wrong there.
+# arguments than registers (so some go on the stack on every ABI), and a compute def; and a sixth with an out
+# parameter before `...`, which counts in the fixed part. Only Apple arm64, where every variadic argument goes on the
+# stack, tells a variadic call from a fixed one: on x86-64 and Windows x64 libffi makes the two calls the same, so CI
+# on those systems does not test the fixed count.
 @NATIVE_CALLS
 def test_a_variadic_function_gets_the_arguments_of_its_declared_shape(tmp_path, peer):
     main = """def main() -> Void
@@ -768,12 +770,15 @@ def test_a_variadic_function_gets_the_arguments_of_its_declared_shape(tmp_path, 
     ),
   )
   puts(vmix_pool("di", 0.5, 8))
+  counted = vmix_out("di", 0.5, 8)
+  puts(counted.result)
+  puts(counted.count)
 end
 """
     result = agentica(program(tmp_path, VARIADIC_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     wide = 1 + 0.5 + 2 + 4 + 200 + 64 + 9 * 1.0 + 3_000_000_000 - 7
-    assert result.stdout.split("\n") == ["9000000038.0", "1.75", "0.0", repr(float(wide)), "8.5", ""]
+    assert result.stdout.split("\n") == ["9000000038.0", "1.75", "0.0", repr(float(wide)), "8.5", "8.5", "2", ""]
 
 
 # The C library's own variadic functions: open with O_CREAT and a mode (the mode is the variadic argument), and
@@ -784,6 +789,8 @@ end
 @NATIVE_CALLS
 def test_libc_variadic_functions_open_a_file_with_a_mode_and_format_text(tmp_path):
     made = tmp_path / "made.txt"
+    umask = os.umask(0o22)
+    os.umask(umask)
     if WINDOWS:
         library, opened, closed, printed, flags, mode = LIBC, "_open", "_close", "_snprintf", 0x0100 | 0x0001, 0x0100
         text = 'extern "msvcrt.dll"\n  def snprintf(buffer: C.Pointer, size: C.Int64, format: C.String, ..., ' \
@@ -816,8 +823,6 @@ end
         if WINDOWS:
             assert made.stat().st_mode & 0o200 == 0
         else:
-            umask = os.umask(0)
-            os.umask(umask)
             assert made.stat().st_mode & 0o777 == 0o640 & ~umask
     finally:
         if made.exists():

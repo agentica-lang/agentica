@@ -54,19 +54,19 @@ parameter (`do |x|`) takes no default.
 An `extern` block declares functions of a native library (section 6d, "Native
 code"). The library is a plain string: a name without `/` or an absolute path
 (`PARSE-EXTERN-LIBRARY` at the string). Each line is the signature of one C
-function: no body, no default (`PARSE-EXTERN-DEFAULT` at the parameter), C
-types only (`PARSE-EXTERN-TYPE` at the type), at most 64 parameters
-(`PARSE-EXTERN-ARITY` at the 65th) and a C name, without `?` or `!`
-(`PARSE-EXTERN-NAME` at the name). Anything else in the block, a body or a
-library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc goes on a
-`def` inside the block. Each function is a `def` for the rest of the language:
-`export` makes it importable, it takes the place of a `def` in the declaration
-order, the whole block needs the blank line of a declaration, and the checker
-sees `C.Int32` and `C.Int64` as `Int`, `C.Double` as `Float`, `C.Bool` as `Bool`
-and `C.String` as `String`. `compute def` declares a function that runs off the
-scheduler while the task waits (section 6d); `export` comes first. `extern` is
-contextual: it is a keyword only at the start of a top-level declaration, and
-`compute` only before `def` in an extern block.
+function: no body, no default (`PARSE-EXTERN-DEFAULT` at the parameter), C types
+only (`PARSE-EXTERN-TYPE` at the type), at most 64 parameters
+(`PARSE-EXTERN-ARITY` at the 65th) and a `def` name without `?` or `!`, even
+with a C name (`PARSE-EXTERN-NAME` at the name). Anything else in the block, a
+body or a library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc
+goes on a `def` inside the block. Each function is a `def` for the rest of the
+language: `export` makes it importable, it takes the place of a `def` in the
+declaration order, the whole block needs the blank line of a declaration, and
+the checker sees `C.Int32` and `C.Int64` as `Int`, `C.Double` as `Float`,
+`C.Bool` as `Bool` and `C.String` as `String`. `compute def` declares a function
+that runs off the scheduler while the task waits (section 6d); `export` comes
+first. `extern` is contextual: it is a keyword only at the start of a top-level
+declaration, and `compute` only before `def` in an extern block.
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function
@@ -76,8 +76,8 @@ declaration order. A `def` of the block may use it in its signature after the
 line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes the
 resource, and a result of the resource is `Result[Name]` for the checker. A
 `def` of the block whose C name is the free function is `PARSE-EXTERN-FREE` at
-that name; the check is per block, so another block of the same library may still
-declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
+that name; the check is per block, so another block of the same library may
+still declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
 `C.Bytes` is a parameter only, a `List[Int]` for the checker. `resource` is a
 keyword only at the start of a member of an extern block.
 

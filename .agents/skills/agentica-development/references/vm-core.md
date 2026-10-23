@@ -78,8 +78,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   gives a List that the lowered body turns into the function's record, and a
   detached compute call frees its out resources in `done`), the `.` code that
   starts the variadic part (`ffi_prep_cif_var`; no `.agcb` format change, the
-  signature is a string constant), and `agc_ffi_refusal`, which `agc_launch_native` calls at load (`--deny-native`,
-  systems without libffi). A `compute def`'s signature starts with `compute `:
+  signature is a string constant), and `agc_ffi_refusal`, which
+  `agc_launch_native` calls at load (`--deny-native`, systems without libffi). A `compute def`'s signature starts with `compute `:
   the call goes to the compute pool (`vm/compute.c`) through `agc_io_compute` in
   `vm/loop.c`, and the task parks. `Native.wait_readable` and `wait_writable`
   are a wait on the loop (`agc_io_start_then`, a poller on a new open or a

@@ -68,9 +68,7 @@ double peer_mix(int32_t a, double b, int64_t c, bool d, const char *s, double e,
 
 /* A variadic function: KINDS names the type of each variadic argument (i int, l int64_t, d double, s a string, which
    adds its length, y bytes, which add the first byte, p a pointer, which adds its address), and it returns the sum. */
-double peer_vmix(const char *kinds, ...) {
-  va_list args;
-  va_start(args, kinds);
+static double vmix_sum(const char *kinds, va_list args) {
   double sum = 0;
   for (const char *kind = kinds; *kind; kind++) {
     switch (*kind) {
@@ -83,6 +81,23 @@ double peer_vmix(const char *kinds, ...) {
       default: break;
     }
   }
+  return sum;
+}
+
+double peer_vmix(const char *kinds, ...) {
+  va_list args;
+  va_start(args, kinds);
+  double sum = vmix_sum(kinds, args);
+  va_end(args);
+  return sum;
+}
+
+/* peer_vmix with an out pointer before the variadic part: COUNT gets the number of kinds. */
+double peer_vmix_out(int32_t *count, const char *kinds, ...) {
+  *count = (int32_t)strlen(kinds);
+  va_list args;
+  va_start(args, kinds);
+  double sum = vmix_sum(kinds, args);
   va_end(args);
   return sum;
 }

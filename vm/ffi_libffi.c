@@ -194,7 +194,7 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   }
   bool variadic = fixed != AGC_FFI_NOT_VARIADIC;
   if (variadic && (fixed == 0 || fixed > count)) {
-    snprintf(error, size, "%s has no fixed parameter before its variadic part", symbol);
+    snprintf(error, size, "%s has a bad fixed parameter count", symbol);
     return NULL;
   }
   /* A library that holds the function is never closed: a prepared call keeps pointing into it until the process
