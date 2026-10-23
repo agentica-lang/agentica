@@ -7,8 +7,8 @@
 USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
-    "[--schedulers N] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] [--no-cache] ",
-    "[check] <source-file> [args...]",
+    "[--schedulers N] [--jit MODE] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] ",
+    "[--no-cache] [check] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check --stdin <source-file>",
   "       agentica [--ai|--json] compile <source-file> -o <file.agcb>",
@@ -56,8 +56,8 @@ SUMMARY = [
   "  agentica compile FILE.agc -o OUT.agcb   write bytecode",
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",
-  "                                          --flush-timeout MS, --schedulers N, the --deny-* flags, --sandbox,",
-  "                                          --source-root DIR, --ai, --json",
+  "                                          --flush-timeout MS, --schedulers N, --jit MODE, the --deny-* flags,",
+  "                                          --sandbox, --source-root DIR, --ai, --json",
   "  agentica doc PATH [--json]              exported API of a file or a std/ module, with its ## docs (parse only)",
   "  agentica outline FILE [--json]          declarations of a file or a std/ module, private ones too, with docs",
   "                                          and spans (parse only); --stdin FILE reads the file from standard input",
@@ -121,6 +121,11 @@ OPTIONS = [
   [
     "     run on N scheduler threads, 1 to 1024 (default: one per logical core; AGENTICA_SCHEDULERS sets it too, ",
     "the flag wins over a valid value); 1 runs one task at a time, in a fixed order",
+  ].join(""),
+  "  --jit <mode>",
+  [
+    "     off, on or always: compile hot functions to machine code (experimental, off by default, x86-64 only; ",
+    "AGENTICA_JIT sets it too, the flag wins); always compiles each function at its first call",
   ].join(""),
   "  --dump",
   "     print the checked tree instead of running it",

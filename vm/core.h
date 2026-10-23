@@ -250,6 +250,7 @@ agc_outcome agc_vm_run(agc_vm *vm);
 
 void agc_profile_start(agc_vm *vm);
 void agc_profile_report(agc_vm *vm);
+const char *agc_opcode_name(uint32_t op);
 
 /* A frame of a folded stack (vm/profile.c) is one code: its kind in the high 32 bits and an index in the low ones (a
    function, a builtin of the program's table, a Profile.measure label). CUT stands for the frames that a stack deeper

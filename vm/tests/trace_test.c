@@ -81,7 +81,7 @@ int main(void) {
   assert(t.mask == (AGC_TRACE_SCHED | AGC_TRACE_IO | AGC_TRACE_GC));
   agc_trace_parse(&t, "all", 2);
   assert(t.mask == AGC_TRACE_ALL);
-  assert(!AGC_TRACE_ON(&t, 1u << 7));
+  assert(AGC_TRACE_ON(&t, AGC_TRACE_JIT) && !AGC_TRACE_ON(&t, AGC_TRACE_PROFILE) && !AGC_TRACE_ON(&t, 1u << 8));
 #ifndef _WIN32
   int fds[2];
   assert(pipe(fds) == 0);

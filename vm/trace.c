@@ -20,7 +20,7 @@
 
 typedef enum { LEN_INT, LEN_CHAR, LEN_SHORT, LEN_LONG, LEN_LLONG, LEN_SIZE, LEN_MAX, LEN_PTRDIFF } length_kind;
 
-static const char *const category_names[] = {"sched", "io", "proc", "tls", "loader", "gc", "profile"};
+static const char *const category_names[] = {"sched", "io", "proc", "tls", "loader", "gc", "profile", "jit"};
 static const char hex_digits[] = "0123456789abcdef";
 
 static size_t utf8_width(unsigned char c) { return c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1; }

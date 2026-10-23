@@ -62,6 +62,36 @@ and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
 `emit_x64.c` and `emit_a64.c` encode the instructions, and `mem_posix.c` and
 `mem_windows.c` hold the code memory. Each file comes with its first use.
 
+**Built (x86-64):** `--jit MODE` (or `AGENTICA_JIT`; the flag wins): `off`,
+the default; `on`, which compiles a function at its 100th entry (a call, a
+return into it, or a turn that starts in it); `always`, at its first entry,
+for tests. Only
+the user's program is compiled; the front end stays in the interpreter. On
+another architecture every mode runs the interpreter. A function is compiled
+only when each of its instructions is `MOVE`, `CONST`, `STEP`, an Int operator
+or compare (`ADD_I` to `LE_I`), `EQ`, `NE`, a jump or `RETURN`, fused or not;
+any other instruction keeps the whole function in the interpreter.
+
+- Entry: at each reload of the turn loop (a call, a return, the start of a
+  turn) the interpreter tests one byte of the function and enters its code at
+  `frame->pc` through a table of entry offsets, so a turn that ended inside a
+  compiled loop resumes in compiled code.
+- Exits: a slow `STEP` (the interpreter runs `step_slow`, then ends the turn or
+  enters the code again at the next instruction), a turn cost to apply (a
+  String compare in `EQ` or `NE`), a failure (raised as the helper contract
+  says), and `RETURN`, which the interpreter runs.
+- Code: one pass, fixed code per instruction, the VM in rbx, the registers in
+  r12 and the constants in r13, the Int fast paths inline with their overflow
+  checks; `EQ` and `NE` call `agc_op_eq` and `agc_op_ne` for any pair other
+  than two Ints. Each function has its own pages (64 MiB in all); when two
+  schedulers compile one function at once, the first copy is kept.
+- `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
+  and a `skip` line with the first instruction that kept one out.
+- Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
+  three tasks in compiled loops, failures, a cancel), `make vm-jit-test` (the
+  goldens and their sweeps with `AGENTICA_JIT=always`, in CI) and
+  `vm/tests/jit_test.c` (bytes, exits, the read-execute seal).
+
 **Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
 never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and
 JIT frames have no unwind info. A helper takes the VM, the result register and

@@ -24,13 +24,16 @@ static const char name[] = "agentica";
 static const char run_name[] = "agentica run";
 
 static const char usage[] =
-  "usage: agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--schedulers N] [--deny-run] "
+  "usage: agentica run [--version] [--max-steps N] [--seed N] [--flush-timeout MS] [--schedulers N] [--jit MODE] "
+  "[--deny-run] "
   "[--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] [--ai|--json] [--source-root DIR] -- "
   "<file.agcb> [args...]\n"
   "  --source-root DIR is put before each stored source name that is relative and does not start with std/, in diagnostics and reports\n"
   "  the file flush at the end of the run waits at most 30000 ms, or MS, or AGENTICA_FLUSH_TIMEOUT_MS (the flag wins, at most 86400000)\n"
   "  the run uses one scheduler per logical core (at most 1024), or N (1 to 1024), or AGENTICA_SCHEDULERS (the flag "
-  "wins); --schedulers 1 runs one task at a time, in a fixed order\n";
+  "wins); --schedulers 1 runs one task at a time, in a fixed order\n"
+  "  --jit MODE (off, on or always; or AGENTICA_JIT, the flag wins) compiles hot functions to machine code: "
+  "experimental, off by default, x86-64 only\n";
 
 /* The std/ sources of the binary, from the index that make wrote. The rows point only into agc_embedded_data, which
  * is static, so the array holds no GC pointer and is atomic. */
@@ -121,7 +124,7 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
 
 /* The second run: the program that the front end handed over, with the options it passed on. It returns only to
  * report a start that failed. The options are those of `agentica run` (--ai, --json, the --deny-* flags, --sandbox,
- * --max-steps, --seed, --flush-timeout, --schedulers, --source-root), each once. The front end is trusted with them,
+ * --max-steps, --seed, --flush-timeout, --schedulers, --jit, --source-root), each once. The front end is trusted with them,
  * but --driver-pid is not one: it names the process that started this one, which only that process can say, so the
  * front end cannot. The counts are capped by the hand-off (AGC_FRONT_END_MAX_OPTIONS and _ARGUMENTS), so they fit
  * an int. */

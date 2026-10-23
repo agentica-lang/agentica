@@ -14,13 +14,13 @@
 # make vm-tsan            the C tests of the code that threads share (inbox, outcome, run queue, wake, job) under TSan
 # make vm-tsan-run        the programs of tests/test_vm_multicore.py and the TCP, TLS and HTTP modules on
 #                         several schedulers, on a TSan binary
-# Each mode compiles vm/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
+# Each mode compiles vm/*.c and vm/jit/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
-# make vm-lint            clang-tidy (19 or newer) over vm/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
+# make vm-lint            clang-tidy (19 or newer) over vm/*.c, vm/jit/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
 # make AGENTICA_GC=vendored  build libgc from vm/third_party/bdwgc into build/vm/gc.o and link it statically (the release, the GC-stress build and
 #                         non-Linux hosts do); pass it to every make command or export it. The Linux default AGENTICA_GC=system links the system
@@ -40,7 +40,8 @@ UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 FFI_DIR := vm/third_party/libffi
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c \
+  vm/jit/jit.c vm/jit/emit_x64.c vm/jit/mem_posix.c vm/jit/mem_windows.c
 EXE :=
 VM_PIC := -fPIE
 VM_PIE := -pie
@@ -285,7 +286,7 @@ $(VM_OBJ)/agentica-res.o: vm/agentica.rc vm/agentica.manifest $(VM_OBJ_STAMP)
 	@mkdir -p $(VM_OBJ)
 	$(WINDRES) -I vm -O coff vm/agentica.rc $@
 
--include $(wildcard $(VM_OBJ)/*.d $(VM_OBJ)/tests/*.d)
+-include $(wildcard $(VM_OBJ)/*.d $(VM_OBJ)/jit/*.d $(VM_OBJ)/tests/*.d)
 
 $(VM_TP_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)

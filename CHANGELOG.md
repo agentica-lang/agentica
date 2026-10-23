@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `--jit on` (or `AGENTICA_JIT=on`) compiles hot integer functions to machine
+  code on x86-64: experimental, off by default.
+
 ## [0.10.0-beta.1] - 2026-10-24
 
 ### Changed

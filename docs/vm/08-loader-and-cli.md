@@ -146,6 +146,10 @@ byte of a file with a type table, an Updates section or Globals.
   end itself always runs on one scheduler; `check` and `compile` ignore the
   flag. `agentica test` refuses the flag (exit 2), since the VMs it starts would
   not get it; they read the variable.
+- `--jit MODE` (`off`, the default, `on` or `always`; the variable
+  `AGENTICA_JIT` too, the flag wins) compiles functions of the user's program to
+  machine code (`docs/future/22-jit.md` §22). A bad flag or variable exits 2.
+  `agentica test` refuses the flag, as it refuses `--schedulers`.
 - `agentica file.agc [args...]` runs in the same process: the front end compiles
   in memory and hands the bytes to C with `FrontEnd.hand_off`, and C runs them
   in a new runtime (see "The single binary" below). No temporary file and no
@@ -286,8 +290,8 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   and has the same standing as the binary itself. The options it may pass are
   exactly `--ai`, `--json`, `--deny-run`, `--deny-net`, `--deny-fs`,
   `--deny-env`, `--deny-native`, `--sandbox`, `--max-steps N`, `--seed N`,
-  `--flush-timeout MS`, `--schedulers N` and `--source-root DIR`, each once,
-  and nothing else; no positional word, no `--version`.
+  `--flush-timeout MS`, `--schedulers N`, `--jit MODE` and `--source-root DIR`,
+  each once, and nothing else; no positional word, no `--version`.
   `--driver-pid` is refused (exit 2): it says which process started this one,
   and only that process can say so. So is `--embedded` (exit 2): only
   `agentica run` starts an embedded program. The hand-off takes at most 64
@@ -345,7 +349,7 @@ copy with `bootstrap/stage0.agcb` in place of the front end
 **VM tracing.**
 
 - `AGENTICA_VM_TRACE` lists the categories to trace: `sched`, `io`, `proc`,
-  `tls`, `loader` and `gc`. Trace lines go to stderr. When
+  `tls`, `loader`, `gc` and `jit`. Trace lines go to stderr. When
   `AGENTICA_VM_TRACE_FILE` is also set, they go to that file instead, and the
   `unknown category` warning follows them there. If the file cannot be opened,
   the `cannot open` line goes to stderr and tracing is off. `make TRACE=0`

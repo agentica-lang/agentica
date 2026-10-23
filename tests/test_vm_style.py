@@ -16,6 +16,7 @@ SKIPPED = ("unicode_data.c",)
 
 def _vm_files(root_pattern):
     found = [p.name for p in VM_DIR.iterdir() if re.search(root_pattern, p.name)]
+    found += ["jit/" + p.name for p in (VM_DIR / "jit").iterdir() if re.search(root_pattern, p.name)]
     found += ["tests/" + p.name for p in (VM_DIR / "tests").iterdir() if p.name.endswith(".c")]
     return sorted(f for f in found if f not in SKIPPED)
 

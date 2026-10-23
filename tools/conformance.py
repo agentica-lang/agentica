@@ -119,7 +119,7 @@ AREAS = {
         [
             "tests/test_vm_diff_1.py", "tests/test_vm_diff_2.py", "tests/test_vm_diff_3.py",
             "tests/test_vm_diff_4.py", "tests/test_vm_diff_5.py", "tests/test_vm_diff_6.py",
-            "tests/test_vm_diff_7.py", "tests/test_vm_bits.py", "tests/test_vm_stack.py",
+            "tests/test_vm_diff_7.py", "tests/test_vm_bits.py", "tests/test_vm_stack.py", "tests/test_vm_jit.py",
         ],
     ),
     "library": (
