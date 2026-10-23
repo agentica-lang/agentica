@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, and out parameters.
+description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, and calls through C function pointers.
 ---
 
 ## Types
@@ -16,6 +16,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 | `C.String` | `const char *` | `String` |
 | `C.Pointer` | `void *` | `C.Pointer` |
 | `C.Bytes` | `const uint8_t *` (parameters only) | `List[Int]` |
+| `C.Function` | a function pointer (the first or the last parameter only, [below](#function-pointers)) | `C.Pointer` |
 
 `C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
@@ -177,3 +178,42 @@ A C function that gives a value through a pointer, such as `int sqlite3_open(con
 - An out parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
 - An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it.
 - A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.
+
+## Function pointers
+
+Some libraries give their functions as a table of C function pointers, not by name: onnxruntime's `OrtGetApiBase()->GetApi(version)` gives the `OrtApi` struct, and every call is `api->CreateEnv(...)`. A `def` whose first parameter is `fn: C.Function` calls the function at that address, with the signature the `def` declares (Ruby ffi's `FFI::Function.new(ret, params, pointer)`). Read the address from the table with `Native.get_pointer`; a pointer is 8 bytes on every system with native calls.
+
+```agentica {mode="check"}
+# The slots of struct plugin_api in plugin.h, in order.
+OPEN = 0
+READ = 1
+CLOSE = 2
+
+extern "/opt/plugin/libplugin.so"
+  ## A handle that the close slot of the table frees.
+  resource Handle, free: C.Function
+  def plugin_api(version: C.Int32) -> C.Pointer
+  def open(fn: C.Function, path: C.String, out handle: Handle, free: C.Function) -> C.Int32
+  compute def read(fn: C.Function, handle: Handle, buf: C.Pointer, size: C.Int64) -> C.Int64
+end
+
+def slot(api: C.Pointer, index: Int) -> C.Pointer
+  return Native.get_pointer(api, index * 8)
+end
+
+def main() -> Void
+  api = plugin_api(1)
+  opened = open(slot(api, OPEN), "/tmp/data", slot(api, CLOSE))
+  if opened.result == 0
+    Native.memory_pointer(64) do |buf|
+      puts(read(slot(api, READ), opened.handle, buf, 64))
+    end
+    Native.close(opened.handle)   # calls the close slot once
+  end
+end
+```
+
+- The other parameters, the result, out parameters, resources and `compute def` work as for a function found by name. The `def` has no C name: `= "symbol"` is `PARSE-EXTERN-FUNCTION`.
+- `resource Name, free: C.Function` declares a resource whose free function is a function pointer too, such as `api->ReleaseSession`. The `def` that makes one, as its result or an out parameter, takes that address as its last parameter, `free: C.Function`. `Native.close`, the end of the owning task and a dropped `compute def` result call it once, as for a free function found by name. One call makes one such resource at most.
+- A `C.Function` is the first parameter (the function to call) or the last (the free function); anywhere else it is `PARSE-EXTERN-FUNCTION`. It is never a result, an out parameter or a variadic parameter. The program sees it as a `C.Pointer`.
+- A NULL address fails the call with `RUNTIME-NATIVE-NULL` before C runs, and an owned buffer with `RUNTIME-NATIVE-BOUNDS`. Any other address is trusted: one that is not a function of the declared signature is undefined behavior, like a wrong signature.

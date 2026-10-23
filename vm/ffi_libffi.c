@@ -1,8 +1,9 @@
 /*
  * The native calls of a build with libffi (AGC_FFI: Linux x86_64, Windows x64 and macOS): the loader (dlopen and
  * dlsym, or LoadLibraryExW and GetProcAddress) finds the function, ffi_prep_cif (ffi_prep_cif_var for a variadic one)
- * describes its signature once and ffi_call calls it. Adapter layer; ffi.c converts the values and ffi_none.c is the
- * other half. Design: docs/grammar/06d-io-and-network.md.
+ * describes its signature once and ffi_call calls it, or the function at the address of a C function pointer.
+ * Adapter layer; ffi.c converts the values and ffi_none.c is the other half. Design:
+ * docs/grammar/06d-io-and-network.md.
  */
 #ifdef AGC_FFI
 #include "ffi_os.h"
@@ -189,23 +190,27 @@ bool agc_ffi_supported(void) { return true; }
 
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, uint32_t fixed, char *error, size_t size) {
+  const char *name = symbol ? symbol : "a function pointer";
   if (count > AGC_FFI_MAX_PARAMS) {
-    snprintf(error, size, "%s has more than %d parameters", symbol, AGC_FFI_MAX_PARAMS);
+    snprintf(error, size, "%s has more than %d parameters", name, AGC_FFI_MAX_PARAMS);
     return NULL;
   }
   bool variadic = fixed != AGC_FFI_NOT_VARIADIC;
   if (variadic && (fixed == 0 || fixed > count)) {
-    snprintf(error, size, "%s has a bad fixed parameter count", symbol);
+    snprintf(error, size, "%s has a bad fixed parameter count", name);
     return NULL;
   }
   /* A library that holds the function is never closed: a prepared call keeps pointing into it until the process
-     ends. */
-  void *lib = library_open(library, error, size);
-  if (!lib) return NULL;
-  void *found = library_symbol(lib, library, symbol, error, size);
-  if (!found) {
-    library_close(lib);
-    return NULL;
+     ends. A call through a function pointer has no symbol and opens no library. */
+  void *lib = NULL, *found = NULL;
+  if (symbol) {
+    lib = library_open(library, error, size);
+    if (!lib) return NULL;
+    found = library_symbol(lib, library, symbol, error, size);
+    if (!found) {
+      library_close(lib);
+      return NULL;
+    }
   }
   agc_ffi_call *call = malloc(sizeof(agc_ffi_call));
   if (!call) agc_out_of_memory();
@@ -224,19 +229,19 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
                           : ffi_prep_cif(&call->cif, FFI_DEFAULT_ABI, count, ffi_type_of(result), call->types);
   if (status != FFI_OK) {
     free(call);
-    library_close(lib);
-    snprintf(error, size, "cannot describe the signature of %s", symbol);
+    if (lib) library_close(lib);
+    snprintf(error, size, "cannot describe the signature of %s", name);
     return NULL;
   }
   return call;
 }
 
 void agc_ffi_discard(agc_ffi_call *call) {
-  library_close(call->lib);
+  if (call->lib) library_close(call->lib);
   free(call);
 }
 
-void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) {
+void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value *result) {
   /* ffi_call reads each argument through a pointer to it: every member of the union starts at its first byte, so a
      pointer to the union is a pointer to the member that ffi_type_of named. An integer result is widened to a whole
      ffi_arg, so it goes through a buffer of that size first. */
@@ -251,7 +256,10 @@ void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result) 
   if (call->result == AGC_C_DOUBLE) out = &real;
   if (call->result == AGC_C_FLOAT) out = &single;
   if (pointed) out = &pointer;
-  ffi_call(&call->cif, call->fn, out, slots);
+  /* The address of a C function pointer becomes a function pointer the same way as the loader's (memcpy). */
+  void (*target)(void) = call->fn;
+  if (fn) memcpy(&target, &fn, sizeof target);
+  ffi_call(&call->cif, target, out, slots);
   switch (call->result) {
     case AGC_C_INT: result->i = (int32_t)word; break;
     case AGC_C_INT64: result->l = (int64_t)word; break;

@@ -279,20 +279,26 @@ and a task's crash line (`"task":true`) carry it too.
   name without `/` or an absolute path, or a `def` of the block's `free:`
   function (`native.md`).
 - `PARSE-EXTERN-OUT`: an `out` parameter of a type that cannot be one
-  (`C.String`, `C.Bytes`), named `result` beside a C result or like an in
-  parameter, of a function name with no letter for the record's name, or
-  outside an extern block (`native.md`).
+  (`C.String`, `C.Bytes`, `C.Function`), named `result` beside a C result or
+  like an in parameter, of a function name with no letter for the record's
+  name, or outside an extern block (`native.md`).
 - `PARSE-EXTERN-VARIADIC`, `PARSE-EXTERN-VARIADIC-FIXED`,
   `PARSE-EXTERN-VARIADIC-TYPE`, `PARSE-EXTERN-SYMBOL`: a second `...` or one
   outside an extern block, a `...` with no parameter before it, a `C.Bool`,
   `C.Float` or `out` parameter after it, or a C name after `=` that is not a
   plain string of letters, digits and `_` (`native.md`).
+- `PARSE-EXTERN-FUNCTION`: a `C.Function` parameter that is not the first
+  (the function to call) or the last (the free function), a call through a
+  `C.Function` with `= "symbol"`, a call that makes a `free: C.Function`
+  resource without that last parameter or makes two, or a `free:` type other
+  than `C.Function` (`native.md`).
 - `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-NULL`,
   `RUNTIME-NATIVE-BOUNDS`, `RUNTIME-NATIVE-NOT-OWNED`,
   `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`: the library or
   function of an extern call was not found (at the extern function); a call
   or a memory builtin took a closed resource or a freed buffer; a memory
   builtin read or wrote at NULL, at a negative offset or past an owned buffer;
+  a `C.Function` argument was NULL or an owned buffer;
   `Native.free` took a pointer that C gave; or, at load with exit 2,
   `--deny-native` refused a program with an extern function or a `Native.*`
   call, or the system has no native calls.

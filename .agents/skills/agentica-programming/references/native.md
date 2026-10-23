@@ -172,6 +172,26 @@ end
     def fcntl_set(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
   end
   ~~~
+- Function pointers (a table of them, as onnxruntime's `OrtApi`): a first
+  parameter `fn: C.Function` makes the `def` call that address, with its
+  declared signature (no `= "symbol"`); pass `Native.get_pointer(api, slot *
+  8)`. `resource Session, free: C.Function` is freed through a pointer: the
+  `def` that makes one (result or `out`) takes it as its last parameter
+  `free: C.Function`, and close, the owner's end and a dropped compute result
+  call it once. `C.Function` is a `C.Pointer` to the program; elsewhere, or a
+  second such resource in one call, is `PARSE-EXTERN-FUNCTION`; never a
+  result, `out` or variadic. NULL is `RUNTIME-NATIVE-NULL` before C runs, an
+  owned buffer `RUNTIME-NATIVE-BOUNDS`; a wrong address is undefined behavior.
+
+  ~~~ruby
+  extern "/opt/plugin/libplugin.so"
+    resource Handle, free: C.Function
+    def plugin_api(version: C.Int32) -> C.Pointer
+    def open(fn: C.Function, path: C.String, out h: Handle,
+             free: C.Function) -> C.Int32
+    compute def read(fn: C.Function, h: Handle, n: C.Int64) -> C.Int64
+  end
+  ~~~
 - Functions count as `def`s for the declaration order, resources as types; a
   block with a resource counts as types as a whole. A wrong signature is
   undefined behavior in C: copy it from the C header.
@@ -196,6 +216,9 @@ Keep the `extern` layer private and give the user a normal API; site page:
   of the file. A `String` with a NUL stops the program at the C call
   (`RUNTIME-INVALID-CHARACTER`): check inputs first in a wrapper that must not
   stop.
+- A table of function pointers: keep the slot numbers as constants (header
+  order), get the table once (turn a NULL from a version check into an
+  `error`) and never show a `C.Pointer` of a function to the caller.
 - No varargs in Agentica. Declare each shape of a variadic C function with
   `...` and `= "symbol"`, keep them private, and give the public `def` a
   `List[T]` (pick the shape by length, `error` for no shape), a struct with

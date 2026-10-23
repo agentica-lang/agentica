@@ -1223,6 +1223,163 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, 'error("task: cancelled")\n1\nok(4)\n2\n', "")
 
 
+API_EXTERN = """# The slots of the peer's table (peer_api in peer.c), one pointer each.
+ADD = 0
+MIX = 1
+CREATE = 2
+OPEN = 3
+RELEASE = 4
+GET = 5
+READ = 6
+HALF = 7
+CREATE_LATER = 8
+MISSING = 9
+
+extern "{library}"
+  resource Thing, free: C.Function
+  def peer_get_api_base() -> C.Pointer
+  def peer_api_releases() -> C.Int32
+  def peer_ptr_static() -> C.Pointer
+  def peer_set_flag() -> Void
+  def get_api(fn: C.Function, version: C.Int32) -> C.Pointer
+  def version_string(fn: C.Function) -> C.String
+  def add(fn: C.Function, a: C.Int32, b: C.Int32) -> C.Int32
+  def mix(fn: C.Function, a: C.Int32, b: C.Double, c: C.Float, d: C.Int64) -> C.Double
+  def create(fn: C.Function, value: C.Int32, out thing: Thing, free: C.Function) -> C.Int32
+  def open(fn: C.Function, value: C.Int32, free: C.Function) -> Thing
+  def get(fn: C.Function, thing: Thing) -> C.Int32
+  def read(fn: C.Function, p: C.Pointer) -> C.Int32
+  compute def half(fn: C.Function, x: C.Double) -> C.Double
+  compute def create_later(
+    fn: C.Function, value: C.Int32, limit_ms: C.Int32, out thing: Thing, free: C.Function,
+  ) -> C.Int32
+  def missing(fn: C.Function) -> Void
+end
+
+def slot(table: C.Pointer, index: Int) -> C.Pointer
+  return Native.get_pointer(table, index * 8)
+end
+
+def api() -> C.Pointer
+  return get_api(slot(peer_get_api_base(), 0), 1)
+end
+
+def wait_releases(count: Int) -> Void
+  n = 0
+  while peer_api_releases() < count and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+end
+
+"""
+
+
+# A table of C function pointers, as onnxruntime's OrtApi: a base from a named function, a table from a call through
+# its first slot, then calls through the table with each C type, an out resource and a resource result freed through
+# the table's release slot (once, and never for NULL), and a compute def through a pointer.
+@NATIVE_CALLS
+def test_calls_through_a_table_of_c_function_pointers(tmp_path, peer):
+    main = """def main() -> Void
+  table = api()
+  puts(Native.null?(get_api(slot(peer_get_api_base(), 0), 2)))
+  puts(version_string(slot(peer_get_api_base(), 1)))
+  puts(add(slot(table, ADD), 40, 2))
+  puts(mix(slot(table, MIX), 1, 0.5, 0.25, 3_000_000_000))
+  made = create(slot(table, CREATE), 7, slot(table, RELEASE))
+  puts(made.result)
+  puts(get(slot(table, GET), made.thing))
+  Native.close(made.thing)
+  Native.close(made.thing)
+  puts(peer_api_releases())
+  failed = create(slot(table, CREATE), -1, slot(table, RELEASE))
+  puts(failed.result)
+  Native.close(failed.thing)
+  opened = open(slot(table, OPEN), 9, slot(table, RELEASE)).unwrap!
+  puts(get(slot(table, GET), opened))
+  puts(open(slot(table, OPEN), -1, slot(table, RELEASE)).message)
+  Native.close(opened)
+  puts(peer_api_releases())
+  puts(read(slot(table, READ), peer_ptr_static()))
+  puts(half(slot(table, HALF), 5.0))
+end
+"""
+    result = agentica(program(tmp_path, API_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "true", "peer-api-1", "42", "3000000001.75", "0", "7", "1", "1", "9", "open returned NULL", "2", "42", "2.5", "",
+    ]
+
+
+# A NULL function pointer, to call or as a free function, and an owned buffer to call stop the run at the extern
+# function before C runs; nothing is made.
+@NATIVE_CALLS
+@pytest.mark.parametrize("call, code", [
+    ("missing(slot(api(), MISSING))", "RUNTIME-NATIVE-NULL"),
+    ("open(slot(api(), OPEN), 1, Native.null())", "RUNTIME-NATIVE-NULL"),
+    ("half(Native.memory_pointer(8), 1.0)", "RUNTIME-NATIVE-BOUNDS"),
+])
+def test_a_null_function_pointer_is_refused(tmp_path, peer, call, code):
+    main = "def main() -> Void\n  %s\n  puts(peer_api_releases())\nend\n" % call
+    result = agentica("--json", program(tmp_path, API_EXTERN.format(library=literal(peer)) + main))
+    declared = " def %s(" % call.split("(")[0]
+    line = next(k for k, text in enumerate(API_EXTERN.split("\n"), 1) if declared in text)
+    assert diagnostic(result, 1) == (code, (line, 3))
+    assert result.stdout == ""
+
+
+# A resource freed through a function pointer is freed by the end of its owning task (a cancel ends it too), and the
+# out resource of a cancelled compute call through a pointer is freed through its pointer once C returns.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_resource_freed_through_a_pointer_at_task_end_and_on_cancel(tmp_path, peer, schedulers):
+    main = """def open_one(n: Int) -> Int
+  table = api()
+  return get(slot(table, GET), open(slot(table, OPEN), n, slot(table, RELEASE)).unwrap!)
+end
+
+def keep(n: Int) -> Result[Int]
+  table = api()
+  made = create(slot(table, CREATE), n, slot(table, RELEASE))
+  Task.sleep(60_000)
+  return ok(get(slot(table, GET), made.thing))
+end
+
+def later(n: Int) -> Result[Int]
+  table = api()
+  made = create_later(slot(table, CREATE_LATER), n, 20_000, slot(table, RELEASE))
+  return ok(get(slot(table, GET), made.thing))
+end
+
+def main() -> Void
+  sum = 0
+  for n in 1..10
+    sum += Task.await(Task.spawn(&open_one, n))
+  end
+  puts(sum)
+  puts(peer_api_releases())
+  keeper = Task.spawn(&keep, 3)
+  Task.sleep(20)
+  Task.cancel(keeper)
+  puts(Task.await(keeper))
+  wait_releases(11)
+  puts(peer_api_releases())
+  opener = Task.spawn(&later, 4)
+  Task.sleep(20)
+  Task.cancel(opener)
+  puts(Task.await(opener))
+  peer_set_flag()
+  wait_releases(12)
+  puts(peer_api_releases())
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, API_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "55", "10", 'error("task: cancelled")', "11", 'error("task: cancelled")', "12", "",
+    ]
+
+
 WAIT_EXTERN = """extern "{library}"
   def peer_pipe() -> C.Int32
   def peer_pipe_writer() -> C.Int32

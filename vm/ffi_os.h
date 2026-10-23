@@ -46,7 +46,8 @@ bool agc_ffi_supported(void);
    finds SYMBOL in it and prepares the call of RESULT SYMBOL(PARAMS[0..COUNT)). A variadic function has FIXED
    parameters before its `...` (1 to COUNT), the others AGC_FFI_NOT_VARIADIC. NULL with a message in ERROR (SIZE
    bytes) when the library or the symbol is missing, COUNT is above AGC_FFI_MAX_PARAMS or the build cannot call native
-   code. A library that holds SYMBOL stays open until the process ends. */
+   code. A library that holds SYMBOL stays open until the process ends. A NULL SYMBOL prepares only the signature, for
+   a function whose address agc_ffi_invoke gets (a C function pointer): no library is opened then. */
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, uint32_t fixed, char *error, size_t size);
 
@@ -54,7 +55,8 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
    the library. */
 void agc_ffi_discard(agc_ffi_call *call);
 
-/* Calls the prepared function with ARGS (one per parameter) and stores its result in RESULT (untouched for Void). */
-void agc_ffi_invoke(agc_ffi_call *call, agc_c_value *args, agc_c_value *result);
+/* Calls the function at FN, or the prepared one when FN is NULL, with ARGS (one per parameter) and stores its result
+   in RESULT (untouched for Void). A call prepared without a symbol always gets an FN, which must not be NULL. */
+void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value *result);
 
 #endif

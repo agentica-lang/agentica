@@ -499,3 +499,57 @@ double peer_floats_hold(const float *xs, int32_t n, int32_t limit_ms) {
   peer_wait_flag(limit_ms);
   return peer_sum_floats(xs, n);
 }
+
+/* For C function pointers: a table of them, as onnxruntime's OrtApi is. peer_get_api_base gives the base, whose
+   get_api(1) gives the table (NULL for another version). The resources of the table are peer_res values, freed only
+   through its release slot, which counts them apart. The table has a NULL slot, which a call must refuse. */
+static atomic_int api_releases;
+
+static int32_t api_add(int32_t a, int32_t b) { return a + b; }
+static double api_mix(int32_t a, double b, float c, int64_t d) { return a + b + c + (double)d; }
+static int32_t api_create(int32_t value, void **out) {
+  *out = peer_res_open(value);
+  return *out ? 0 : 1;
+}
+static void *api_open(int32_t value) { return peer_res_open(value); }
+static void api_release(void *p) {
+  atomic_fetch_add(&api_releases, 1);
+  peer_res_free(p);
+}
+static int32_t api_get(void *p) { return peer_res_get(p); }
+static int32_t api_read(void *p) { return *(int32_t *)p; }
+static double api_half(double x) { return x / 2; }
+/* A compute call that makes its out resource once peer_set_flag has run. */
+static int32_t api_create_later(int32_t value, int32_t limit_ms, void **out) {
+  peer_wait_flag(limit_ms);
+  return api_create(value, out);
+}
+
+typedef struct {
+  int32_t (*add)(int32_t, int32_t);
+  double (*mix)(int32_t, double, float, int64_t);
+  int32_t (*create)(int32_t, void **);
+  void *(*open)(int32_t);
+  void (*release)(void *);
+  int32_t (*get)(void *);
+  int32_t (*read)(void *);
+  double (*half)(double);
+  int32_t (*create_later)(int32_t, int32_t, void **);
+  void (*missing)(void);
+} peer_api;
+
+static const peer_api api_table = {api_add, api_mix, api_create, api_open, api_release, api_get, api_read, api_half,
+                                   api_create_later, NULL};
+
+static const peer_api *api_get_api(int32_t version) { return version == 1 ? &api_table : NULL; }
+static const char *api_version(void) { return "peer-api-1"; }
+
+typedef struct {
+  const peer_api *(*get_api)(int32_t);
+  const char *(*version)(void);
+} peer_api_base;
+
+static const peer_api_base api_base = {api_get_api, api_version};
+
+const void *peer_get_api_base(void) { return &api_base; }
+int32_t peer_api_releases(void) { return atomic_load(&api_releases); }

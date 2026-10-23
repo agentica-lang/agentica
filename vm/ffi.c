@@ -1,12 +1,12 @@
 /*
  * Native calls (docs/grammar/06d-io-and-network.md, "Native code"): Native.call, which every extern function lowers
  * to, and agc_ffi_refusal, the check at load. It reads the signature string, keeps one prepared call per signature,
- * converts values to C and back, runs a fast call on the scheduler and a compute call on the compute pool
- * (agc_io_compute), and leaves dlopen and libffi to the adapter (ffi_os.h). Also the resources that extern functions
- * return (agc_c_resource) with Native.close, Native.null and Native.null?, Native.pointer, the owned buffers of
- * Native.memory_pointer (and its block form) and Native.free, the reads and writes of memory (Native.get_string,
- * get_bytes, get_*, put_*, the array forms), and Native.wait_readable and wait_writable, the waits on a descriptor.
- * Service layer.
+ * converts values to C and back, calls a C function by name or through a function pointer, runs a fast call on the
+ * scheduler and a compute call on the compute pool (agc_io_compute), and leaves dlopen and libffi to the adapter
+ * (ffi_os.h). Also the resources that extern functions return (agc_c_resource) with Native.close, Native.null and
+ * null?, Native.pointer, the owned buffers of Native.memory_pointer (and its block form) and Native.free, the reads and
+ * writes of memory (Native.get_string, get_bytes, get_*, put_*, the array forms), and Native.wait_readable and
+ * wait_writable, the waits on a descriptor. Service layer.
  */
 #include "ffi_os.h"
 #include "net_os.h"
@@ -21,6 +21,9 @@
 /* The turn cost of one call, besides the size of its arguments and result: a fast call runs on the scheduler and
    cannot be stopped in the middle, so it is charged as a long builtin. */
 #define FFI_CALL_COST 64
+/* The free word of a resource kind declared `free: C.Function`: no C name holds a dot. */
+#define BY_POINTER "C.Function"
+#define BY_POINTER_LEN (sizeof BY_POINTER - 1)
 /* The word in front of the signature of a compute def (compiler/lower/lower_native.agc). */
 #define COMPUTE_PREFIX "compute "
 #define COMPUTE_PREFIX_LEN (sizeof COMPUTE_PREFIX - 1)
@@ -35,10 +38,12 @@
 /* The name an owned buffer inspects as: it is a C.Pointer to the program. */
 #define BUFFER_NAME "C.Pointer"
 
-/* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. */
+/* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. A kind
+   declared `free: C.Function` (by_pointer) frees through the address that the call got: its call has no symbol. */
 typedef struct {
   agc_ffi_call *free;
   char *name;
+  bool by_pointer;
 } made_kind;
 
 /* A prepared signature. An out parameter (out[k]) is not an argument of Native.call: C gets a pointer to a zeroed slot
@@ -46,7 +51,10 @@ typedef struct {
    Native.call (`inputs` of them). For a function that returns a resource, `free` is the prepared call of the
    resource's free function, `resource` the resource's name and `symbol` the C name of the function, which the error of
    a NULL result names; all three are NULL otherwise. `made` holds the kind of each out resource (NULL when the call has
-   none). A function with out parameters (`outs` > 0) gives a List: the C result, unless Void, then each out value. */
+   none). A function with out parameters (`outs` > 0) gives a List: the C result, unless Void, then each out value.
+   `params` and the rest index the C parameters only. A call through a C function pointer (`by_pointer`, code c) takes
+   the function's address as argument 0, and the free function of the resources it makes of a `free: C.Function` kind
+   (`free_by_pointer` for the result's) as argument `free_input` (code e), -1 when it has none; neither goes to C. */
 typedef struct {
   char *key;
   size_t key_len;
@@ -57,7 +65,8 @@ typedef struct {
   uint8_t arg[AGC_FFI_MAX_PARAMS];
   agc_c_type result;
   uint32_t count, inputs, outs;
-  bool compute;
+  bool compute, by_pointer, free_by_pointer;
+  int32_t free_input;
   agc_ffi_call *free;
   char *resource, *symbol;
   made_kind *made;
@@ -71,9 +80,11 @@ typedef struct {
    after `in`; the registry keeps each held resource alive. The slot of an out parameter is zeroed on the scheduler,
    written by C on the pool thread, and read only by `done` after `ran`. `ran` is set by the pool thread once the call
    is made: the work of a job cancelled while it waited is skipped (run_compute in vm/loop.c), and then `out` and the
-   slots hold no result. */
+   slots hold no result. `fn` is the address a call through a function pointer calls (else NULL) and `free_at` the free
+   function of the resources it makes of a `free: C.Function` kind (else NULL). */
 typedef struct {
   const ffi_entry *entry;
+  void *fn, *free_at;
   agc_c_value *slots;
   agc_c_resource **held;
   bool ran;
@@ -89,6 +100,7 @@ typedef struct {
   const char *kinds[AGC_FFI_MAX_PARAMS + 1];
   size_t kind_lens[AGC_FFI_MAX_PARAMS + 1];
   agc_ffi_call *calls[AGC_FFI_MAX_PARAMS + 1];
+  bool by_pointer[AGC_FFI_MAX_PARAMS + 1];
   uint32_t count;
 } free_list;
 
@@ -222,10 +234,13 @@ static void discard_frees(free_list *frees) {
 
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the
    C name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
-   function has a "." among the codes where its variadic part starts, after one parameter at least; the codes after it
+   function has a "." among the codes where its variadic part starts, after one C parameter at least; the codes after it
    are never an out parameter, a C.Bool or a C.Float, which C would promote. Each resource the call makes adds two words
    after the C name, the C name of its free function and the resource's name, an identifier: the result's first (code
-   r), then each out resource's (code R), in order. The front end writes it (compiler/lower/lower_native.agc); the
+   r), then each out resource's (code R), in order. A call through a C function pointer has the code c first: the
+   argument is the address to call, and SYMBOL (the def's name) is only shown. The code e, once and before the ".",
+   is the argument that holds the free function of each resource the call makes whose free word is C.Function; the
+   call has one exactly when such a resource needs it. The front end writes it (compiler/lower/lower_native.agc); the
    bytecode may hold anything, so every part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
@@ -239,14 +254,14 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   size_t codes_len, symbol_len;
   if (!next_word(&at, &left, &codes, &codes_len) || !next_word(&at, &left, &symbol, &symbol_len))
     bad_signature(vm, span);
-  /* The "." comes out of the codes; a second one is then an unknown code. */
+  /* The "." comes out of the codes; a second one is then an unknown code. BEFORE counts the codes in front of it. */
   const char *mark = memchr(codes, '.', codes_len);
-  uint32_t fixed = AGC_FFI_NOT_VARIADIC;
+  uint32_t before = UINT32_MAX;
   char kinds[AGC_FFI_MAX_PARAMS + 1];
   size_t kinds_len = codes_len - (mark != NULL);
   if (kinds_len - 1 > AGC_FFI_MAX_PARAMS || (mark && mark - codes < 2)) bad_signature(vm, span);
   if (mark) {
-    fixed = (uint32_t)(mark - codes - 1);
+    before = (uint32_t)(mark - codes - 1);
     memcpy(kinds, codes, (size_t)(mark - codes));
     memcpy(kinds + (mark - codes), mark + 1, codes_len - (size_t)(mark - codes) - 1);
   } else {
@@ -254,38 +269,64 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   }
   agc_c_type result, params[AGC_FFI_MAX_PARAMS], c_params[AGC_FFI_MAX_PARAMS];
   bool out[AGC_FFI_MAX_PARAMS], result_out;
+  uint8_t arg[AGC_FFI_MAX_PARAMS];
   if (!c_type_of(kinds[0], true, &result, &result_out)) bad_signature(vm, span);
-  uint32_t count = (uint32_t)(kinds_len - 1), outs = 0;
+  uint32_t total = (uint32_t)(kinds_len - 1), count = 0, outs = 0, inputs = 0, fixed = AGC_FFI_NOT_VARIADIC;
+  int32_t free_input = -1;
+  bool by_pointer = false;
   free_list frees;
   frees.count = 0;
   bool made = result == AGC_C_RESOURCE;
   if (made) frees.count++;
-  for (uint32_t k = 0; k < count; k++) {
-    if (!c_type_of(kinds[k + 1], false, &params[k], &out[k])) bad_signature(vm, span);
-    if (k >= fixed && (out[k] || params[k] == AGC_C_BOOL || params[k] == AGC_C_FLOAT)) bad_signature(vm, span);
+  /* COUNT is the number of C parameters so far; the c and e arguments are not passed to C. */
+  for (uint32_t k = 0; k < total; k++) {
+    if (k == before) fixed = count;
+    char code = kinds[k + 1];
+    if (code == 'c' && k == 0) {
+      by_pointer = true;
+      inputs++;
+      continue;
+    }
+    if (code == 'e' && free_input < 0 && k < before) {
+      free_input = (int32_t)inputs++;
+      continue;
+    }
+    if (!c_type_of(code, false, &params[count], &out[count])) bad_signature(vm, span);
+    if (k >= before && (out[count] || params[count] == AGC_C_BOOL || params[count] == AGC_C_FLOAT))
+      bad_signature(vm, span);
     /* C gets a pointer to the slot of an out parameter. */
-    c_params[k] = out[k] ? AGC_C_POINTER : params[k];
-    outs += out[k];
-    if (out[k] && params[k] == AGC_C_RESOURCE) frees.count++;
+    c_params[count] = out[count] ? AGC_C_POINTER : params[count];
+    if (!out[count]) arg[count] = (uint8_t)inputs++;
+    outs += out[count];
+    if (out[count] && params[count] == AGC_C_RESOURCE) frees.count++;
+    count++;
   }
+  if (before == total) fixed = count;
+  if (mark && fixed == 0) bad_signature(vm, span);
+  bool any_by_pointer = false;
   for (uint32_t k = 0; k < frees.count; k++) {
     if (!next_word(&at, &left, &frees.names[k], &frees.lens[k]) ||
         !next_word(&at, &left, &frees.kinds[k], &frees.kind_lens[k]) ||
         !identifier(frees.kinds[k], frees.kind_lens[k]))
       bad_signature(vm, span);
+    frees.by_pointer[k] = frees.lens[k] == BY_POINTER_LEN && memcmp(frees.names[k], BY_POINTER, BY_POINTER_LEN) == 0;
+    any_by_pointer = any_by_pointer || frees.by_pointer[k];
     frees.calls[k] = NULL;
   }
+  if (any_by_pointer != (free_input >= 0)) bad_signature(vm, span);
   /* A NUL inside a name would cut it short for the system loader: such a name opens nothing. */
   bool nul = left == 0 || memchr(at, 0, left) || memchr(symbol, 0, symbol_len);
   for (uint32_t k = 0; k < frees.count && !nul; k++) nul = memchr(frees.names[k], 0, frees.lens[k]) != NULL;
   if (nul) load_failed(vm, "a library or function name is empty or holds a NUL character", span);
   char *library = text_copy(at, left), *symbol_text = text_copy(symbol, symbol_len);
   char error[512];
-  agc_ffi_call *call = agc_ffi_prepare(library, symbol_text, result, c_params, count, fixed, error, sizeof error);
+  agc_ffi_call *call =
+      agc_ffi_prepare(library, by_pointer ? NULL : symbol_text, result, c_params, count, fixed, error, sizeof error);
   bool prepared = call != NULL;
   for (uint32_t k = 0; k < frees.count && prepared; k++) {
-    /* Each free function is in the same library and takes the pointer: void free(void *). */
-    char *free_text = text_copy(frees.names[k], frees.lens[k]);
+    /* Each free function is in the same library, or at the address the call gets, and takes the pointer:
+       void free(void *). */
+    char *free_text = frees.by_pointer[k] ? NULL : text_copy(frees.names[k], frees.lens[k]);
     const agc_c_type pointer = AGC_C_POINTER;
     frees.calls[k] =
         agc_ffi_prepare(library, free_text, AGC_C_VOID, &pointer, 1, AGC_FFI_NOT_VARIADIC, error, sizeof error);
@@ -302,28 +343,32 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   ffi_entry *e = calloc(1, sizeof(ffi_entry));
   if (!e) agc_out_of_memory();
   e->compute = compute;
+  e->by_pointer = by_pointer;
+  e->free_input = free_input;
   e->call = call;
   e->result = result;
   e->count = count;
   e->outs = outs;
   memcpy(e->params, params, count * sizeof(agc_c_type));
   memcpy(e->out, out, count * sizeof(bool));
-  uint32_t next = 0, kind = made ? 1 : 0;
+  uint32_t kind = made ? 1 : 0;
   for (uint32_t k = 0; k < count; k++) {
     if (!out[k]) {
-      e->arg[k] = (uint8_t)next++;
+      e->arg[k] = arg[k];
     } else if (params[k] == AGC_C_RESOURCE) {
       if (!e->made) {
         e->made = calloc(count, sizeof(made_kind));
         if (!e->made) agc_out_of_memory();
       }
-      e->made[k] = (made_kind){frees.calls[kind], text_copy(frees.kinds[kind], frees.kind_lens[kind])};
+      e->made[k] = (made_kind){frees.calls[kind], text_copy(frees.kinds[kind], frees.kind_lens[kind]),
+                               frees.by_pointer[kind]};
       kind++;
     }
   }
-  e->inputs = next;
+  e->inputs = inputs;
   if (made) {
     e->free = frees.calls[0];
+    e->free_by_pointer = frees.by_pointer[0];
     e->resource = text_copy(frees.kinds[0], frees.kind_lens[0]);
     e->symbol = symbol_text;
   } else {
@@ -377,11 +422,12 @@ static ffi_entry *find_call(agc_vm *vm, const agc_string *text, uint32_t span) {
   return e;
 }
 
-/* Runs FREE_CALL, a void free(void *), on POINTER unless it is NULL. */
-static void free_pointer(agc_ffi_call *free_call, void *pointer) {
+/* Runs FREE_CALL, a void free(void *), on POINTER unless it is NULL: the function at AT, or the prepared one when AT is
+   NULL. */
+static void free_pointer(agc_ffi_call *free_call, void *at, void *pointer) {
   if (!pointer) return;
   agc_c_value arg = {.p = pointer}, unused;
-  agc_ffi_invoke(free_call, &arg, &unused);
+  agc_ffi_invoke(free_call, at, &arg, &unused);
 }
 
 /* Calls the free function of the resource, once; an owned buffer is malloc'd memory. */
@@ -390,7 +436,7 @@ static void call_free(agc_c_resource *res) {
   if (res->buffer) {
     free(res->pointer);
   } else {
-    free_pointer(res->free, res->pointer);
+    free_pointer(res->free, res->free_at, res->pointer);
   }
 }
 
@@ -426,14 +472,15 @@ static void release_resource(void *native) {
   if (!res->freed && !res->jobs) call_free(res);
 }
 
-/* A resource NAME around POINTER, freed by FREE_CALL and owned by the calling task (none for a detached compute call,
-   whose result is dropped and so freed at once). A NULL pointer (an out resource that C left NULL) gives a resource
-   that is closed already and was never registered: no close, owner's end or end of the run frees it, and a call that
-   takes it is RUNTIME-NATIVE-CLOSED. */
-static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, const char *name, void *pointer) {
+/* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL) and owned by the calling task
+   (none for a detached compute call, whose result is dropped and so freed at once). A NULL pointer (an out resource
+   that C left NULL) gives a resource that is closed already and was never registered: no close, owner's end or end of
+   the run frees it, and a call that takes it is RUNTIME-NATIVE-CLOSED. */
+static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, const char *name, void *pointer) {
   agc_c_resource *res = agc_alloc(sizeof *res);
   res->pointer = pointer;
   res->free = free_call;
+  res->free_at = free_at;
   res->name = name;
   res->size = 0;
   res->jobs = 0;
@@ -447,14 +494,15 @@ static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, const char *
   return agc_c_resource_value(res);
 }
 
-/* The resource that a call returned, as Result ok; NULL is an error that names the function. */
-static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer) {
+/* The resource that a call returned, as Result ok; NULL is an error that names the function. FREE_AT is the free
+   function that the call got (code e), else NULL. */
+static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, void *free_at) {
   if (!pointer) {
     char message[512];
     snprintf(message, sizeof message, "%s returned NULL", e->symbol);
     return agc_error_value(message);
   }
-  return agc_result_value(true, make_resource(vm, e->free, e->resource, pointer));
+  return agc_result_value(true, make_resource(vm, e->free, e->free_by_pointer ? free_at : NULL, e->resource, pointer));
 }
 
 /* The compute calls that held these resources are over: a resource closed meanwhile is freed by the last of them. */
@@ -619,7 +667,7 @@ static agc_value text_value(const uint8_t *p, size_t n) {
   return agc_string_value(agc_utf8_decode(n ? p : (const uint8_t *)"", n, "\xEF\xBF\xBD", false));
 }
 
-static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r) {
+static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, void *free_at) {
   switch (e->result) {
     case AGC_C_INT: return agc_int(r->i);
     case AGC_C_INT64: return agc_int(r->l);
@@ -632,7 +680,7 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
       return text_value((const uint8_t *)s, strlen(s));
     }
     case AGC_C_POINTER: return agc_c_pointer_value(r->p);
-    case AGC_C_RESOURCE: return resource_result(vm, e, r->p);
+    case AGC_C_RESOURCE: return resource_result(vm, e, r->p, free_at);
     case AGC_C_BYTES:
     case AGC_C_VOID: break;
   }
@@ -641,7 +689,7 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
 
 /* The value of the out parameter K from its slot, which C wrote (or left zeroed). A C.Bool is read as the byte C
    wrote, so a slot that does not hold 0 or 1 is never read as a _Bool. */
-static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc_c_value *slot) {
+static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc_c_value *slot, void *free_at) {
   switch (e->params[k]) {
     case AGC_C_INT: return agc_int(slot->i);
     case AGC_C_INT64: return agc_int(slot->l);
@@ -653,7 +701,10 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
       return agc_bool(byte != 0);
     }
     case AGC_C_POINTER: return agc_c_pointer_value(slot->p);
-    case AGC_C_RESOURCE: return make_resource(vm, e->made[k].free, e->made[k].name, slot->p);
+    case AGC_C_RESOURCE: {
+      const made_kind *kind = &e->made[k];
+      return make_resource(vm, kind->free, kind->by_pointer ? free_at : NULL, kind->name, slot->p);
+    }
     case AGC_C_STRING:
     case AGC_C_BYTES:
     case AGC_C_VOID: break;
@@ -662,23 +713,27 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
 }
 
 /* The value of a call: the C result, or for a function with out parameters the List of the fields of its record (the
-   C result unless Void, then each out value from its slot). */
-static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots) {
-  if (!e->outs) return result_value(vm, e, r);
+   C result unless Void, then each out value from its slot). FREE_AT is the free function that the call got. */
+static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots,
+                            void *free_at) {
+  if (!e->outs) return result_value(vm, e, r, free_at);
   agc_value items[AGC_FFI_MAX_PARAMS + 1];
   size_t n = 0;
-  if (e->result != AGC_C_VOID) items[n++] = result_value(vm, e, r);
+  if (e->result != AGC_C_VOID) items[n++] = result_value(vm, e, r, free_at);
   for (uint32_t k = 0; k < e->count; k++)
-    if (e->out[k]) items[n++] = out_value(vm, e, k, &slots[k]);
+    if (e->out[k]) items[n++] = out_value(vm, e, k, &slots[k], free_at);
   return agc_list_value(agc_list_from_array(items, n));
 }
 
 /* The resources that a compute call with out parameters made, when nobody takes its value (the task was cancelled):
    each pointer that is not NULL is freed here, once, and no value is made. */
-static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots) {
-  if (e->result == AGC_C_RESOURCE) free_pointer(e->free, r->p);
-  for (uint32_t k = 0; k < e->count; k++)
-    if (e->out[k] && e->params[k] == AGC_C_RESOURCE) free_pointer(e->made[k].free, slots[k].p);
+static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots, void *free_at) {
+  if (e->result == AGC_C_RESOURCE) free_pointer(e->free, e->free_by_pointer ? free_at : NULL, r->p);
+  for (uint32_t k = 0; k < e->count; k++) {
+    if (!e->out[k] || e->params[k] != AGC_C_RESOURCE) continue;
+    const made_kind *kind = &e->made[k];
+    free_pointer(kind->free, kind->by_pointer ? free_at : NULL, slots[k].p);
+  }
 }
 
 static void free_copies(const ffi_entry *e, agc_c_value *in) {
@@ -696,7 +751,7 @@ static void compute_free(void *data) {
 /* On a pool thread: C values only, no GC memory. */
 static void compute_work(void *data) {
   compute_call *c = data;
-  agc_ffi_invoke(c->entry->call, c->in, &c->out);
+  agc_ffi_invoke(c->entry->call, c->fn, c->in, &c->out);
   if (c->entry->result == AGC_C_STRING && c->out.s) {
     size_t n = strlen(c->out.s);
     char *copy = malloc(n + 1);
@@ -725,9 +780,9 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
      job's `done` runs from end_detached, which the drain and agc_io_service call only between turns. The job's own
      `detached` flag is private to vm/loop.c and reaches no half. */
   if (c->ran && e->outs && !vm->in_turn)
-    drop_made(e, &c->out, c->slots);
+    drop_made(e, &c->out, c->slots, c->free_at);
   else if (c->ran)
-    v = call_value(vm, e, &c->out, c->slots);
+    v = call_value(vm, e, &c->out, c->slots, c->free_at);
   compute_free(c);
   return v;
 }
@@ -744,6 +799,17 @@ static agc_value compute_expired(agc_vm *vm, void *data, agc_value context) {
 static const agc_io_kind compute_io = {compute_work, compute_done, compute_expired, compute_free, false, "compute",
                                        NULL, true, NULL};
 
+/* The address of the C function that argument V (a C.Pointer) holds, for a call through a function pointer or a free
+   function of a resource: NULL is refused, and so is an owned buffer, whose memory holds no function. Any other
+   address is trusted, as a signature is: a wrong one is undefined behavior. */
+static void *function_at(agc_vm *vm, agc_value v, uint32_t span) {
+  if (buffer_of(vm, v))
+    agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "a C.Function argument is an owned buffer, which holds no function", span);
+  void *fn = agc_as_c_pointer(vm, v);
+  if (!fn) agc_fail(vm, "RUNTIME-NATIVE-NULL", "a C.Function argument is NULL", span);
+  return fn;
+}
+
 /* Native.call(signature, arguments): one call of an extern function, on the scheduler, or for a compute def on the
    compute pool while the task waits. The arguments are a List with one value per parameter, of the Agentica type the
    checker gave it. Every argument is checked before the first copy is made; then the C.Bytes arguments are copied,
@@ -757,6 +823,8 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   const agc_list *values = agc_as_list(vm, args[1]);
   if (agc_list_len(values) != e->inputs)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
+  void *fn = e->by_pointer ? function_at(vm, agc_list_get(values, 0), span) : NULL;
+  void *free_at = e->free_input >= 0 ? function_at(vm, agc_list_get(values, (size_t)e->free_input), span) : NULL;
   for (uint32_t k = 0; k < e->count; k++)
     if (!e->out[k]) check_argument(vm, e->params[k], agc_list_get(values, e->arg[k]), span);
   /* The loop is made first: a loop that cannot start fails here, before the copies exist. */
@@ -773,6 +841,8 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     compute_call *c = malloc(agc_size_add(agc_size_add(sizeof(compute_call), in_size), held_size));
     if (!c) agc_out_of_memory();
     c->entry = e;
+    c->fn = fn;
+    c->free_at = free_at;
     c->slots = c->in + e->count;
     c->held = (agc_c_resource **)(void *)(c->slots + e->count);
     c->ran = false;
@@ -801,9 +871,9 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     }
   }
   agc_c_value out = {0};
-  agc_ffi_invoke(e->call, in, &out);
+  agc_ffi_invoke(e->call, fn, in, &out);
   free_copies(e, in);
-  return call_value(vm, e, &out, slots);
+  return call_value(vm, e, &out, slots, free_at);
 }
 
 /* Native.close(resource): see close_resource. */
@@ -848,6 +918,7 @@ static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   agc_charge_bytes(vm, (size_t)size);
   res->pointer = memory;
   res->free = NULL;
+  res->free_at = NULL;
   res->name = BUFFER_NAME;
   res->size = (size_t)size;
   res->jobs = 0;
