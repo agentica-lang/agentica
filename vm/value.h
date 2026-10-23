@@ -165,15 +165,24 @@ typedef enum {
   AGC_OP_COUNT
 } agc_opcode;
 
-/* A STEP fused with the instruction after it (docs/vm/03-ir-and-bytecode.md §4.2). Only the loader writes these, after
-   it has checked the file, on a STEP whose next instruction has the opcode in the name (ARITH_I: ADD_I, SUB_I or
-   MUL_I); that instruction stays in place. A file never holds them: the loader rejects them as unknown opcodes. */
+/* A STEP or a CONST fused with the instruction after it (docs/vm/03-ir-and-bytecode.md §4.2). Only the loader writes
+   these, after it has checked the file, on a STEP or CONST whose next instruction has the opcode in the name (ARITH_I:
+   ADD_I, SUB_I or MUL_I); that instruction stays in place. AGC_FUSED_STEP_CONST_* is a STEP before a fused CONST, so
+   the three run in one dispatch. The STEP forms come first and the CONST forms last (AGC_FUSED_CONST_FIRST), so the
+   profile can tell which plain opcode a fused one starts with. A file never holds them: the loader rejects them as
+   unknown opcodes. */
 typedef enum {
   AGC_FUSED_STEP_MOVE = AGC_OP_COUNT, AGC_FUSED_STEP_CONST, AGC_FUSED_STEP_FIELD, AGC_FUSED_STEP_LIST_GET,
   AGC_FUSED_STEP_IS_VARIANT, AGC_FUSED_STEP_GLOBAL, AGC_FUSED_STEP_ARITH_I, AGC_FUSED_STEP_LT_I,
   AGC_FUSED_STEP_RETURN,
-  AGC_FUSED_END
+  AGC_FUSED_STEP_CONST_ARITH_I, AGC_FUSED_STEP_CONST_DIV_I, AGC_FUSED_STEP_CONST_MOD_I, AGC_FUSED_STEP_CONST_LT_I,
+  AGC_FUSED_STEP_CONST_LE_I, AGC_FUSED_STEP_CONST_EQ, AGC_FUSED_STEP_CONST_NE,
+  AGC_FUSED_CONST_ARITH_I, AGC_FUSED_CONST_DIV_I, AGC_FUSED_CONST_MOD_I, AGC_FUSED_CONST_LT_I, AGC_FUSED_CONST_LE_I,
+  AGC_FUSED_CONST_EQ, AGC_FUSED_CONST_NE,
+  AGC_FUSED_END,
+  AGC_FUSED_CONST_FIRST = AGC_FUSED_CONST_ARITH_I
 } agc_fused_opcode;
+_Static_assert(AGC_FUSED_STEP_CONST_NE < AGC_FUSED_CONST_FIRST, "the STEP forms come before the CONST forms");
 
 typedef struct { uint16_t op, a, b, c; } agc_instr;
 

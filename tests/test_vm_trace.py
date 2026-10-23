@@ -345,6 +345,39 @@ def test_a_fused_step_stops_and_yields_where_the_plain_step_of_the_profile_does(
     assert vm_run(command, vm_environment(profile)) == plain
 
 
+# The statement at the top of the loop of the program below: `x * 3` and `x / 0` are a CONST and the operator after it.
+FUSED_CONST_FAILURES = {
+    "RUNTIME-INTEGER-OVERFLOW": "x = x * 3 + 1",
+    "RUNTIME-DIVISION-BY-ZERO": "if i == 7\n      x = x / 0\n    end",
+}
+
+
+@pytest.mark.parametrize("code", sorted(FUSED_CONST_FAILURES))
+def test_an_operator_after_a_fused_const_fails_where_the_plain_one_of_the_profile_does(tmp_path, traced_vm, code):
+    """The loader fuses a CONST with the Int operator or compare after it (and a STEP before the CONST with both), and
+    the profile runs them plain. The failure of the operator must have the same output, diagnostic and span."""
+    vm = traced_vm[0]
+    source = tmp_path / "fused_const.agc"
+    source.write_text(f"""def main() -> Void
+  x = 1
+  i = 0
+  while i < 100
+    {FUSED_CONST_FAILURES[code]}
+    i = i + 1
+    if i % 5 == 0
+      puts(x)
+    end
+  end
+end
+""")
+    bytecode = compile_fixture(source, tmp_path)
+    profile = {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": tmp_path / "fused_const.trace"}
+    command = [*vm, "--json", "--", bytecode]
+    plain = vm_run(command, vm_environment())
+    assert plain[0] == 1 and json.loads(plain[2])["code"] == code and plain[1]
+    assert vm_run(command, vm_environment(profile)) == plain
+
+
 def test_the_profile_is_not_part_of_all(tmp_path, traced_vm):
     vm = traced_vm[0]
     bytecode = compile_fixture(VM_FIXTURES / "task-fail.agc", tmp_path)

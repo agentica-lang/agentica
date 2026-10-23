@@ -197,7 +197,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`op_move`, ...). A new fused form needs the opcode in `agc_fused_opcode`,
     a case in `fuse_steps`, a case and a label in `turn_loop`. The profiling
     copy runs fused STEPs plain, so the profile is also the unfused reference
-    (`tests/test_vm_trace.py`)
+    (`tests/test_vm_trace.py`). `fuse_consts` runs first and turns a `CONST`
+    before an Int operator or a compare into an `AGC_FUSED_CONST_*` opcode
+    (`FUSED_CONST()`: the `CONST`'s write, then the next instruction); a `STEP`
+    before one becomes `AGC_FUSED_STEP_CONST_*`. The CONST forms come last in
+    the enum (`AGC_FUSED_CONST_FIRST`), so the profile maps them back to `CONST`
   - `LIST` and `MAP` with no items return `rt->empty_list` and `rt->empty_map`
     (made once by `agc_vm_init`), and a map literal starts from the shared empty
     map: nothing writes a list or map after it is returned (`agc_map_put` copies

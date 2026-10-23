@@ -343,6 +343,15 @@ and no file holds a fused opcode: the loader rejects one as unknown. The
 profile (`docs/vm/08-loader-and-cli.md` §9) runs every fused `STEP` as a plain
 `STEP`, so its counts are those of the file's opcodes.
 
+Fused CONST: before it fuses the `STEP`s, the loader also rewrites each `CONST`
+whose next instruction is `ADD_I`, `SUB_I`, `MUL_I`, `DIV_I`, `MOD_I`, `LT_I`,
+`LE_I`, `EQ` or `NE` (`i + 1`, `n % 2 == 0`, `i < 10`). The fused opcode still
+writes the constant's register, since a later instruction may read it, then
+runs the next instruction without a second dispatch, with that instruction's
+checks, error and span. A `STEP` before a fused `CONST` gets a fused form of its
+own, so the three run in one dispatch. As with `STEP`, the next instruction
+stays in place, and the profile runs a fused `CONST` as a plain `CONST`.
+
 Details that code and tests rely on:
 
 - `EQ` and `NE` accept pairs of Int, Float, Bool, Nil, String or Range (ranges

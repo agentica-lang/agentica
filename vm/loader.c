@@ -350,6 +350,13 @@ static void fuse_steps(agc_function *f) {
   for (uint32_t pc = 0; pc + 1 < f->count; pc++) {
     if (f->code[pc].op != AGC_OP_STEP) continue;
     switch (f->code[pc + 1].op) {
+      case AGC_FUSED_CONST_ARITH_I: f->code[pc].op = AGC_FUSED_STEP_CONST_ARITH_I; break;
+      case AGC_FUSED_CONST_DIV_I: f->code[pc].op = AGC_FUSED_STEP_CONST_DIV_I; break;
+      case AGC_FUSED_CONST_MOD_I: f->code[pc].op = AGC_FUSED_STEP_CONST_MOD_I; break;
+      case AGC_FUSED_CONST_LT_I: f->code[pc].op = AGC_FUSED_STEP_CONST_LT_I; break;
+      case AGC_FUSED_CONST_LE_I: f->code[pc].op = AGC_FUSED_STEP_CONST_LE_I; break;
+      case AGC_FUSED_CONST_EQ: f->code[pc].op = AGC_FUSED_STEP_CONST_EQ; break;
+      case AGC_FUSED_CONST_NE: f->code[pc].op = AGC_FUSED_STEP_CONST_NE; break;
       case AGC_OP_MOVE: f->code[pc].op = AGC_FUSED_STEP_MOVE; break;
       case AGC_OP_CONST: f->code[pc].op = AGC_FUSED_STEP_CONST; break;
       case AGC_OP_FIELD: f->code[pc].op = AGC_FUSED_STEP_FIELD; break;
@@ -361,6 +368,30 @@ static void fuse_steps(agc_function *f) {
       case AGC_OP_MUL_I: f->code[pc].op = AGC_FUSED_STEP_ARITH_I; break;
       case AGC_OP_LT_I: f->code[pc].op = AGC_FUSED_STEP_LT_I; break;
       case AGC_OP_RETURN: f->code[pc].op = AGC_FUSED_STEP_RETURN; break;
+      default: break;
+    }
+  }
+}
+
+/* Turns each CONST whose next instruction is an Int operator or a compare into the fused form for that opcode
+   (AGC_FUSED_CONST_*), which saves one dispatch on `i + 1`, `n % 2 == 0` or `i < 10`. The fused form still writes the
+   constant's register, since the loader does not know whether a later instruction reads it, and the operator runs
+   exactly as it does alone (same checks, errors and span). Like fuse_steps, it runs after the checks, a CONST never
+   ends a function, and the next instruction stays in place, so a jump to it runs it alone. It runs before fuse_steps,
+   which then chains a STEP before a fused CONST. */
+static void fuse_consts(agc_function *f) {
+  for (uint32_t pc = 0; pc + 1 < f->count; pc++) {
+    if (f->code[pc].op != AGC_OP_CONST) continue;
+    switch (f->code[pc + 1].op) {
+      case AGC_OP_ADD_I:
+      case AGC_OP_SUB_I:
+      case AGC_OP_MUL_I: f->code[pc].op = AGC_FUSED_CONST_ARITH_I; break;
+      case AGC_OP_DIV_I: f->code[pc].op = AGC_FUSED_CONST_DIV_I; break;
+      case AGC_OP_MOD_I: f->code[pc].op = AGC_FUSED_CONST_MOD_I; break;
+      case AGC_OP_LT_I: f->code[pc].op = AGC_FUSED_CONST_LT_I; break;
+      case AGC_OP_LE_I: f->code[pc].op = AGC_FUSED_CONST_LE_I; break;
+      case AGC_OP_EQ: f->code[pc].op = AGC_FUSED_CONST_EQ; break;
+      case AGC_OP_NE: f->code[pc].op = AGC_FUSED_CONST_NE; break;
       default: break;
     }
   }
@@ -641,7 +672,10 @@ static void load(reader *r, agc_program *p) {
   if (left(r) != 0) reject(r, "trailing bytes");
 
   for (uint32_t i = 0; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
-  for (uint32_t i = 0; i < p->function_count; i++) fuse_steps(&p->functions[i]);
+  for (uint32_t i = 0; i < p->function_count; i++) {
+    fuse_consts(&p->functions[i]);
+    fuse_steps(&p->functions[i]);
+  }
   if (p->native_import != UINT32_MAX) note_native_function(p);
 }
 

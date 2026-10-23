@@ -965,22 +965,37 @@ static agc_turn_result park_task(agc_task *t) {
 /* The span of the running instruction, read only where a failure or a call needs it. */
 #define SPAN spans[pc - 1]
 
+/* The second instruction of a fused pair, fetched as the loop fetches one. */
+#define FUSED_NEXT()                              \
+  do {                                            \
+    in = code[pc++];                              \
+    bx = (uint32_t)in.b | ((uint32_t)in.c << 16); \
+    frame->pc = pc;                               \
+  } while (0)
+
 /* The STEP half of a fused instruction (AGC_FUSED_STEP_*, written by the loader on a STEP whose next instruction has
    that opcode). It is STEP itself: the same fast path, and the same slow path, which may stop the run at the STEP's
    span or yield with frame->pc on the next instruction, before it runs, so the resumed task runs it alone. Then the
    next instruction is fetched as the loop would fetch it, and its case runs it with a direct jump instead of a second
    dispatch. */
-#define FUSED_STEP()                              \
-  do {                                            \
-    if (vm->next_stop > in.a) {                   \
-      vm->next_stop -= in.a;                      \
-    } else {                                      \
-      step_slow(vm, in.a, SPAN);                  \
-      if (vm->yield) return AGC_TURN_YIELD;       \
-    }                                             \
-    in = code[pc++];                              \
-    bx = (uint32_t)in.b | ((uint32_t)in.c << 16); \
-    frame->pc = pc;                               \
+#define FUSED_STEP()                        \
+  do {                                      \
+    if (vm->next_stop > in.a) {             \
+      vm->next_stop -= in.a;                \
+    } else {                                \
+      step_slow(vm, in.a, SPAN);            \
+      if (vm->yield) return AGC_TURN_YIELD; \
+    }                                       \
+    FUSED_NEXT();                           \
+  } while (0)
+
+/* The CONST half of a fused instruction (AGC_FUSED_CONST_*): the CONST's own write, kept because a later instruction
+   may read the register, then the next instruction (an Int operator or a compare, which may read the constant there)
+   fetched as above, so its failure has its own span and frame->pc. */
+#define FUSED_CONST()                \
+  do {                               \
+    R[in.a] = p->constants[bx];      \
+    FUSED_NEXT();                    \
   } while (0)
 
 /* The turn loop keeps the state of the top frame in locals (its code, spans, register window and next pc) and
@@ -1023,7 +1038,8 @@ reload:
     if (profiling) {
       /* The profiling copy runs a fused STEP as a plain STEP, and its next instruction as one of its own, so the
          opcode and pair counts describe the program's bytecode, the same with or without fusing. */
-      if (in.op >= AGC_OP_COUNT && in.op < AGC_FUSED_END) in.op = AGC_OP_STEP;
+      if (in.op >= AGC_OP_COUNT && in.op < AGC_FUSED_END)
+        in.op = in.op >= AGC_FUSED_CONST_FIRST ? AGC_OP_CONST : AGC_OP_STEP;
       profile_op(profile, &before, in.op);
     }
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
@@ -1074,6 +1090,41 @@ reload:
       case AGC_FUSED_STEP_ARITH_I: FUSED_STEP(); goto op_arith_i;
       case AGC_FUSED_STEP_LT_I: FUSED_STEP(); goto op_lt_i;
       case AGC_FUSED_STEP_RETURN: FUSED_STEP(); goto op_return;
+      case AGC_FUSED_STEP_CONST_ARITH_I: FUSED_STEP(); goto op_const_arith_i;
+      case AGC_FUSED_STEP_CONST_DIV_I: FUSED_STEP(); goto op_const_div_i;
+      case AGC_FUSED_STEP_CONST_MOD_I: FUSED_STEP(); goto op_const_mod_i;
+      case AGC_FUSED_STEP_CONST_LT_I: FUSED_STEP(); goto op_const_lt_i;
+      case AGC_FUSED_STEP_CONST_LE_I: FUSED_STEP(); goto op_const_le_i;
+      case AGC_FUSED_STEP_CONST_EQ: FUSED_STEP(); goto op_const_eq;
+      case AGC_FUSED_STEP_CONST_NE: FUSED_STEP(); goto op_const_ne;
+      case AGC_FUSED_CONST_ARITH_I:
+      op_const_arith_i:
+        FUSED_CONST();
+        goto op_arith_i;
+      case AGC_FUSED_CONST_DIV_I:
+      op_const_div_i:
+        FUSED_CONST();
+        goto op_div_i;
+      case AGC_FUSED_CONST_MOD_I:
+      op_const_mod_i:
+        FUSED_CONST();
+        goto op_mod_i;
+      case AGC_FUSED_CONST_LT_I:
+      op_const_lt_i:
+        FUSED_CONST();
+        goto op_lt_i;
+      case AGC_FUSED_CONST_LE_I:
+      op_const_le_i:
+        FUSED_CONST();
+        goto op_le_i;
+      case AGC_FUSED_CONST_EQ:
+      op_const_eq:
+        FUSED_CONST();
+        goto op_eq;
+      case AGC_FUSED_CONST_NE:
+      op_const_ne:
+        FUSED_CONST();
+        goto op_ne;
       case AGC_OP_ADD_I:
       case AGC_OP_SUB_I:
       case AGC_OP_MUL_I:
@@ -1083,8 +1134,14 @@ reload:
                                             : agc_op_mul_i(vm, R[in.b], R[in.c], SPAN);
         break;
       }
-      case AGC_OP_DIV_I: R[in.a] = agc_op_div_i(vm, R[in.b], R[in.c], SPAN); break;
-      case AGC_OP_MOD_I: R[in.a] = agc_op_mod_i(vm, R[in.b], R[in.c], SPAN); break;
+      case AGC_OP_DIV_I:
+      op_div_i:
+        R[in.a] = agc_op_div_i(vm, R[in.b], R[in.c], SPAN);
+        break;
+      case AGC_OP_MOD_I:
+      op_mod_i:
+        R[in.a] = agc_op_mod_i(vm, R[in.b], R[in.c], SPAN);
+        break;
       case AGC_OP_NEG_I:
         R[in.a] = agc_op_neg_i(vm, R[in.b], SPAN);
         break;
@@ -1204,12 +1261,17 @@ reload:
       op_lt_i:
         R[in.a] = agc_op_lt_i(vm, R[in.b], R[in.c]);
         break;
-      case AGC_OP_LE_I: R[in.a] = agc_op_le_i(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_LE_I:
+      op_le_i:
+        R[in.a] = agc_op_le_i(vm, R[in.b], R[in.c]);
+        break;
       case AGC_OP_EQ:
+      op_eq:
         R[in.a] = agc_op_eq(vm, R[in.b], R[in.c]);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_NE:
+      op_ne:
         R[in.a] = agc_op_ne(vm, R[in.b], R[in.c]);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
@@ -1317,7 +1379,9 @@ reload:
   }
 }
 
+#undef FUSED_CONST
 #undef FUSED_STEP
+#undef FUSED_NEXT
 #undef SPAN
 
 agc_turn_result agc_run_turn(agc_vm *vm) { return AGC_PROFILE_ON(vm) ? turn_loop(vm, true) : turn_loop(vm, false); }
