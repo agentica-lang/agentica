@@ -42,6 +42,7 @@ export def item(declared: DocModel.Item) -> Model.Item
           name: member.name,
           name_range: DiagnosticModel.range_of(member.name_span),
           type: member.type,
+          default: text(member.default),
           doc: text(member.doc),
         )
       end

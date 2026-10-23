@@ -75,6 +75,7 @@ def field_json(module: String, field: Model.Field, located: Bool) -> Json
   fields: Map[String, Json] = {
     "name": JSON.from(field.name),
     "type": JSON.from(field.type),
+    "default": text_json(field.default),
     "doc": text_json(field.doc),
   }
   if located

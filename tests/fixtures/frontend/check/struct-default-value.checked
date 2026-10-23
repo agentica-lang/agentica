@@ -1,0 +1,1 @@
+ERROR CHECK-DEFAULT-VALUE 32:2:18-38:2:24 "a default value must be a constant" "write a literal, true, false, nil, [], {} or an enum variant without a payload, or remove the default" file="struct-default-value.agc"

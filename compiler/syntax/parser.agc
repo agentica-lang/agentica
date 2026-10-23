@@ -2177,6 +2177,7 @@ def parse_extern_function(
         name: "result",
         name_span: result.node.span,
         type: returned.type,
+        default: Ast.Optional.Absent,
         doc: Ast.Optional.Absent,
         span: result.node.span,
       )
@@ -2310,6 +2311,7 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
     name: param.name,
     name_span: param.name_span,
     type: taken.type,
+    default: Ast.Optional.Absent,
     doc: Ast.Optional.Absent,
     span: param.span,
   )
@@ -2394,16 +2396,28 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String])
   after_name = try Base.expect(e, pos, "name", "a field name", false)
   colon = try Base.expect(e, after_name, "colon", "\":\"", false)
   type = try Base.parse_type(e, colon, ids)
-  stop = try Base.expect(e, type.pos, "NL", "a newline after the field", false)
+  default: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
+  after_type = type.pos
+  field_id = type.ids
+  # As for a parameter, any expression is read after "=" so that the checker can say why a default is not a constant.
+  # The id of the field follows the ids of its default (post-order).
+  if e.tokens[after_type].kind == "assign"
+    value = try parse_expression(e, after_type + 1, type.ids)
+    default = Ast.Optional.Present(value.node)
+    after_type = value.pos
+    field_id = value.ids
+  end
+  stop = try Base.expect(e, after_type, "NL", "a newline after the field", false)
   node = Ast.FieldDecl(
-    id: type.ids,
+    id: field_id,
     name: e.tokens[pos].lexeme,
     name_span: e.tokens[pos].span,
     type: type.node,
+    default: default,
     doc: doc,
     span: Base.span_from(e, pos, stop),
   )
-  return ok(FieldAt(node: node, pos: stop, ids: type.ids + 1))
+  return ok(FieldAt(node: node, pos: stop, ids: field_id + 1))
 end
 
 def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[VariantAt]

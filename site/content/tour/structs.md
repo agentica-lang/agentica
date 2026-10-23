@@ -57,6 +57,42 @@ def main() -> Void
 end
 ```
 
+## Default values
+
+A field written `name: Type = value` has a default, and a constructor may leave it out. A field without a default must still be given.
+
+```agentica
+struct Options
+  name: String
+  retries: Int = 3
+  tags: List[String] = []
+end
+
+def main() -> Void
+  puts(Options(name: "a"))
+  puts(Options(name: "b", retries: 1))
+end
+```
+
+```output
+Options(name: "a", retries: 3, tags: [])
+Options(name: "b", retries: 1, tags: [])
+```
+
+A default follows the rules of a parameter default: a literal, `true`, `false`, `nil`, `[]`, `{}` or an enum variant without a payload. Anything else is `CHECK-DEFAULT-VALUE`, and a value of the wrong type is `CHECK-TYPE-MISMATCH`.
+
+```agentica {expect="CHECK-DEFAULT-VALUE"}
+struct Options
+  retries: Int = 1 + 2
+end
+
+def main() -> Void
+  puts(Options())
+end
+```
+
+`with` and `JSON.decode` do not use defaults: `with` copies a value, and a decode still needs every key.
+
 ## Change a field
 
 Fields cannot be assigned. `value.with(...)` copies the struct with the named fields changed. The original stays as it was.
