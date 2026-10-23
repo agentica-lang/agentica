@@ -377,6 +377,10 @@ end
   absolute path. macOS drops `DYLD_*` variables when a protected program
   (`/usr/bin/env`, `/bin/sh`) starts agentica, so `DYLD_LIBRARY_PATH` does not
   pass through a shebang line or a shell.
+- A package names its libraries in its manifest (`[native.NAME]`,
+  05b-modules.md): `extern "NAME"` in a file of the package then opens the file
+  it ships for the running system by its absolute path in `deps/`, or the
+  system name it gives.
 - An argument is checked before the call: a `C.Int32` outside 32 bits is
   `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which

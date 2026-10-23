@@ -131,7 +131,7 @@ end
 
 # A module of std/ or pkg/ libraries, which belongs to no package.
 def plain(build: Build, key: String) -> Resolution
-  return Resolution(key: key, origin: Packages.project_origin(), name: "", scope: build.scope)
+  return Resolution(key: key, origin: Packages.library_origin(), name: "", scope: build.scope)
 end
 
 # A pkg/ import: a package the importing manifest declares, which shadows the library roots for its name, else a

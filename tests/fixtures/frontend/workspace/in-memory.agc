@@ -55,7 +55,7 @@ def main() -> Void
     list_folder: &no_folder,
     read_bytes: &no_bytes,
   )
-  env = Env.Env(agentica_path: "", xdg_data_home: "", xdg_cache_home: "", home: "", local_app_data: "", windows: false)
+  env = Env.Env(agentica_path: "", xdg_data_home: "", xdg_cache_home: "", home: "", local_app_data: "", windows: false, os: "linux")
   settings = Env.settings(workspace, "stdlib", env)
   puts(LinkText.ids_text("/mem/root.agc", settings))
   puts(LinkText.ids_text("/mem/broken.agc", settings))

@@ -75,6 +75,7 @@ PIECE = 1_048_576
 
 # The words that start the lines after the program line, and the digest length in hex.
 SOURCE_WORD = "source "
+TREE_WORD = "tree "
 ABSENT_WORD = "absent "
 PRESENT_WORD = "present "
 DIGEST_CHARS = 64
@@ -164,6 +165,11 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
         return false
       end
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
+      libraries = library_lines(settings.workspace, sources)
+      if !libraries.ok?
+        return false
+      end
+      lines = lines.concat(libraries.unwrap!)
       text = [entry.key, "program #{digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
       return publish(entry, text, program)
   end
@@ -171,6 +177,35 @@ end
 
 def source_line(module: Linker.LinkedModule) -> String
   return "#{SOURCE_WORD}#{digest(String.to_bytes(module.text))} #{module.key}"
+end
+
+# One `source` line for each file that a native library of the program may come from or load (the manifest that names
+# it and every file of native/), and one `tree` line for each package folder, with a digest of the names of its native/
+# files, so a change or an added file makes the entry miss and the build (which hashes the package against the lock)
+# runs again.
+def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedModule]) -> Result[List[String]]
+  paths: List[String] = []
+  for module in modules
+    paths = paths.concat(module.watched)
+  end
+  lines: List[String] = []
+  for path in paths.uniq
+    if !plain?(path)
+      return error("the path has a line feed, a tab or a NUL")
+    end
+    if workspace.directory_exists.call(path)
+      lines = lines.push("#{TREE_WORD}#{names_digest(workspace, path)} #{path}")
+    else
+      read = try workspace.read_bytes.call(path)
+      lines = lines.push("#{SOURCE_WORD}#{digest(read)} #{path}")
+    end
+  end
+  return ok(lines)
+end
+
+# The digest of the names of the native/ files of a package folder.
+def names_digest(workspace: Workspace.Workspace, root: String) -> String
+  return digest(String.to_bytes(PackageHash.native_files(workspace, root).join("\n")))
 end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes
@@ -399,6 +434,8 @@ def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[V
   for line in lines
     if line.starts_with?(SOURCE_WORD)
       try check_source(workspace, line)
+    elsif line.starts_with?(TREE_WORD)
+      try check_tree(workspace, line)
     elsif line.starts_with?(ABSENT_WORD)
       path = line.slice(ABSENT_WORD.length, line.length - ABSENT_WORD.length)
       if path.contains?(String.from_code(0)) or workspace.file_exists.call(path)
@@ -427,6 +464,21 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
   read = try workspace.read_bytes.call(path)
   if digest(read) != wanted
     return error("#{path} changed")
+  end
+  return ok()
+end
+
+def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
+  if line.length <= TREE_WORD.length + DIGEST_CHARS + 1
+    return error("a line of the entry is wrong")
+  end
+  from = TREE_WORD.length + DIGEST_CHARS + 1
+  path = line.slice(from, line.length - from)
+  if path.contains?(String.from_code(0))
+    return error("a line of the entry is wrong")
+  end
+  if names_digest(workspace, path) != line.slice(TREE_WORD.length, DIGEST_CHARS)
+    return error("the native files of #{path} changed")
   end
   return ok()
 end

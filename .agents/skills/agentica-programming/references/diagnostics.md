@@ -159,6 +159,11 @@ and a task's crash line (`"task":true`) carry it too.
   submodule, or the package's `agentica.toml` is not a regular file. Run
   `agentica install` again for `deps/`; remove the cache folder and run it for
   the cache. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
+- `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`: a file of a package opens a
+  library that its `agentica.toml` declares under `[native.NAME]`, but the
+  table has no entry for this system (key `native.NAME`: add `linux`, `macos`
+  or `windows`), or its `file` is not in the package (key
+  `native.NAME.linux.file`). The file is the package's `agentica.toml`.
 - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
   `agentica install` failed: git did not start or failed, the tag or commit does
   not exist, a copied path is unsafe, a file is over 1 MiB (16 MiB in all) or

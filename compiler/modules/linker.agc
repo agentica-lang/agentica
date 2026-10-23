@@ -18,6 +18,7 @@ import Rewrite from "rewrite"
 ## declaration and with it the `##` doc that sits on the export, so the docs of a file (`agentica type-at`) are read
 ## from here. named maps each local name of an import list (`create` of `import {make as create} from "models"`) to
 ## the linked name of what it stands for (`@2::make`), so a query can tell which declaration an imported name selects.
+## watched are the files of its package that its extern functions may open (the bytecode cache watches them).
 export struct LinkedModule
   key: String
   file: String
@@ -30,6 +31,7 @@ export struct LinkedModule
   aliases: Map[String, String]
   named: Map[String, String]
   parsed: Ast.Program
+  watched: List[String]
 end
 
 ## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
@@ -291,6 +293,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
       aliases: module.aliases,
       named: linked_names(module, loaded.modules),
       parsed: module.program,
+      watched: module.origin.watched,
     ),
   )
 end

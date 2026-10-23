@@ -12,6 +12,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `--jit on` (or `AGENTICA_JIT=on`) compiles hot integer functions to machine
   code on x86-64: experimental, off by default.
+- A package can ship or name native libraries for its `extern` blocks:
+  `[native.NAME]` in its `agentica.toml` picks a file of its `native/` folder
+  or a system library name for `linux`, `macos` and `windows`. The files of
+  `native/` are part of the package hash in the lock. New codes
+  `PKG-NATIVE-PLATFORM` and `PKG-NATIVE-MISSING`.
+
+### Changed
+
+- **Breaking:** the files of the top-level `native/` folder of a package, of
+  any name, are now part of its hash, and so is its `agentica.toml` when
+  `native/` holds a file that is not `.agc` or the manifest has a `[native]`
+  table. A lock made before for a package with a non-`.agc` file in `native/`
+  must be updated with `agentica update`; other packages hash as before.
 
 ## [0.10.0-beta.1] - 2026-10-24
 
