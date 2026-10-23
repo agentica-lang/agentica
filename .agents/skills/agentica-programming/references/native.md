@@ -155,15 +155,15 @@ end
   `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
-- Variadic C functions: `...` where the variadic part starts, then the C type
-  of each argument the calls pass. `= "c_name"` after the result names the C
+- Variadic C functions: `...` where the variadic part starts, then the C type of
+  each argument the calls pass. `= "c_name"` after the result names the C
   function when the `def` name differs, so one function takes several shapes.
-  `...` needs a parameter before it (`PARSE-EXTERN-VARIADIC-FIXED`), once, in
-  an extern block (`PARSE-EXTERN-VARIADIC`); after it no `out`, no `C.Bool`
-  and no `C.Float` (C promotes them: write `C.Int32`, `C.Double`;
-  `PARSE-EXTERN-VARIADIC-TYPE`); the C name
-  is letters, digits and `_` (`PARSE-EXTERN-SYMBOL`). Never declare a variadic
-  function without `...`: on Apple arm64 its arguments go on the stack.
+  `...` needs a C parameter (not a `C.Function`) before it
+  (`PARSE-EXTERN-VARIADIC-FIXED`), once, in an extern block
+  (`PARSE-EXTERN-VARIADIC`); after it no `out`, no `C.Bool` and no `C.Float` (C
+  promotes them: write `C.Int32`, `C.Double`; `PARSE-EXTERN-VARIADIC-TYPE`); the
+  C name is letters, digits and `_` (`PARSE-EXTERN-SYMBOL`). Never declare a
+  variadic function without `...`: on Apple arm64 its arguments go on the stack.
 
   ~~~ruby
   extern "libc.so.6"
@@ -180,11 +180,11 @@ end
   C.Function` (after the `out` ones), and close, the owner's end and a dropped
   compute result call it once. A sole `C.Function` of a `def` that returns such
   a resource is its free function (`def thing_new(free: C.Function) -> Thing`
-  calls `thing_new` by name). Names are free. `C.Function` is a `C.Pointer` to
-  the program; elsewhere, or a second such resource in one call, is
-  `PARSE-EXTERN-FUNCTION`; never a result, `out` or variadic. NULL is
-  `RUNTIME-NATIVE-NULL` before C runs, an owned buffer `RUNTIME-NATIVE-BOUNDS`;
-  a wrong address is undefined behavior.
+  calls `thing_new` by name). Parameter names are free (`fn`, `free` are a
+  convention). `C.Function` is a `C.Pointer` to the program; elsewhere, or a
+  second such resource in one call, is `PARSE-EXTERN-FUNCTION`; never a result,
+  `out` or variadic. NULL is `RUNTIME-NATIVE-NULL` before C runs, an owned
+  buffer `RUNTIME-NATIVE-BOUNDS`; a wrong address is undefined behavior.
 
   ~~~ruby
   extern "/opt/plugin/libplugin.so"

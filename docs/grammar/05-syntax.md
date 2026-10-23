@@ -112,13 +112,13 @@ result (`-> C.Int32 = "fcntl"`), so one C function can be declared in several
 shapes. The string is a plain literal of letters, digits and `_` that does not
 start with a digit (`PARSE-EXTERN-SYMBOL` at the string). `...` among the
 parameters declares a variadic C function: the parameters after it are its
-variadic arguments, each with the C type the call passes, and they may be
-none. It comes after one parameter at least (`PARSE-EXTERN-VARIADIC-FIXED` at
-the `...`), at most once in a function, and only in an extern block
-(`PARSE-EXTERN-VARIADIC` at the `...`). A variadic parameter is not an out
-parameter, not `C.Bool`, which C promotes to `int`, and not `C.Float`, which C
-promotes to `double` (`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count
-both parts.
+variadic arguments, each with the C type the call passes, and they may be none.
+It comes after one C parameter at least, not counting a `C.Function`
+(`PARSE-EXTERN-VARIADIC-FIXED` at the `...`), at most once in a function, and
+only in an extern block (`PARSE-EXTERN-VARIADIC` at the `...`). A variadic
+parameter is not an out parameter, not `C.Bool`, which C promotes to `int`, and
+not `C.Float`, which C promotes to `double` (`PARSE-EXTERN-VARIADIC-TYPE`); the
+64 parameters count both parts.
 
 A `C.Function` parameter is the address of a C function, a `C.Pointer` for the
 checker. As the first parameter it makes the `def` a call through a function

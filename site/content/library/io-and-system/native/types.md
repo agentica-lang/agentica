@@ -46,7 +46,7 @@ def main() -> Void
 end
 ```
 
-- `...` comes after one parameter at least (`PARSE-EXTERN-VARIADIC-FIXED`), once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty, and the 64 parameters count both parts.
+- `...` comes after one C parameter at least, not counting a `C.Function` (`PARSE-EXTERN-VARIADIC-FIXED`), once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty, and the 64 parameters count both parts.
 - A variadic parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool` and `C.Float` are `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes them to `int` and `double`: write `C.Int32` or `C.Double`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
 - The C name is a plain string of letters, digits and `_` (`PARSE-EXTERN-SYMBOL`).
 - The call follows the variadic rules of each system's C ABI, which differ from a fixed signature: on Apple arm64 the variadic arguments go on the stack. Declare a variadic function with `...`, never as a fixed one.
