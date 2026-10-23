@@ -46,7 +46,7 @@ typedef union {
 } agc_c_value;
 
 /* The bytes the buffer of a struct result of SIZE bytes takes: libffi may store a whole register for a small one. */
-#define AGC_FFI_RESULT_SIZE(size) ((size) < 16 ? (size_t)16 : ((size) + 15) & ~(size_t)15)
+#define AGC_FFI_RESULT_SIZE(size) ((size) < 16 ? (size_t)16 : (((size) + 15) & ~(size_t)15))
 
 /* A prepared call: the function and its signature, in malloc memory that lives as long as the process. */
 typedef struct agc_ffi_call agc_ffi_call;

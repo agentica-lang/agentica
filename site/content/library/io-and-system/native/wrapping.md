@@ -22,7 +22,7 @@ The raw layer is one `extern` block per library. Copy each signature from the C 
 | A struct of options passed by value, with a function that gives the defaults | a struct of your own with the options the caller may set, copied into the [C struct](/library/io-and-system/native/types/#c-structs) by the wrapper (see Structs of options below) |
 | A table of function pointers (`api->CreateEnv(...)`) | [`C.Function`](/library/io-and-system/native/types/#function-pointers) calls in the raw layer, with the slots as constants of the wrapper (see Tables of function pointers below) |
 
-A block with a resource sits with the types of the file, at the top and before every function, and its `def`s do not count as functions in the declaration order (`CHECK-DECL-ORDER`). So the wrapper can sit in the same file as the block. Export the resource, so that callers can name the type, and keep the `def`s private: the file exports only the wrapper. A block without a resource has no such rule. Its `def`s count as functions, so it stays at the end of the file, as in the examples after this one.
+A block with a resource or a struct sits with the types of the file, at the top and before every function, and its `def`s do not count as functions in the declaration order (`CHECK-DECL-ORDER`). So the wrapper can sit in the same file as the block. Export the resource, so that callers can name the type, and keep the `def`s private: the file exports only the wrapper. A block with neither has no such rule. Its `def`s count as functions, so it stays at the end of the file, as in the examples after this one.
 
 ```agentica {mode="check"}
 extern "libc.so.6"

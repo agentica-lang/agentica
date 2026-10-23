@@ -47,7 +47,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`get_string(p, 0, length)`).
 - An `extern` block that declares a `resource` or a `struct` sits with the
   types in the declaration order, with its `def`s, so a wrapper can keep the block and its
-  exported functions in one file. A block with no resource keeps its rule.
+  exported functions in one file. A block with neither keeps its rule.
 - **Breaking:** the files of the top-level `native/` folder of a package, of
   any name, are now part of its hash, and so is its `agentica.toml` when
   `native/` holds a file that is not `.agc` or the manifest has a `[native]`

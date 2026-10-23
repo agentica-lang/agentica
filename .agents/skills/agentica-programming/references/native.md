@@ -245,9 +245,10 @@ Keep the `extern` layer private and give the user a normal API; site page:
 - A block with a resource or a struct sits with the types, above every
   function of the file, and its `def`s do not count as functions for
   `CHECK-DECL-ORDER`: one file holds the block and the wrapper. `export resource` so callers can name
-  the type, keep the `def`s private, export only the wrapper. A block with no
-  resource keeps the rule (its `def`s count as functions): put it at the end
-  of the file. A `String` with a NUL stops the program at the C call
+  the type, keep the `def`s private, export only the wrapper. A block with
+  neither resource nor struct keeps the rule (its `def`s count as
+  functions): put it at the end of the file. A `String` with a NUL stops
+  the program at the C call
   (`RUNTIME-INVALID-CHARACTER`): check inputs first in a wrapper that must not
   stop.
 - A C struct of options with a defaults function: the wrapper takes the
