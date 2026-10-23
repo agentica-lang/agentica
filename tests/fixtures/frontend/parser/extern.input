@@ -26,4 +26,18 @@ extern "/opt/lib/my peer.so"
   def peer_at(fn: C.Function, x: C.Int32) -> C.Int32
   compute def session_open(fn: C.Function, path: C.String, out s: Session, free: C.Function) -> C.Int32
   def session_named(path: C.String, free: C.Function) -> Session
+  ## A C struct passed by value.
+  export struct Pair
+    x: C.Int32
+    y: C.Int32 = 0
+  end
+  struct Box
+    ## The corner.
+    at: Pair
+    scale: C.Float
+    on: C.Bool
+    data: C.Pointer
+  end
+  def box_make(n: C.Int64) -> Box
+  compute def box_area(fn: C.Function, b: Box, out area: C.Double) -> Box
 end

@@ -12,6 +12,18 @@ extern "/opt/lib/my peer.so"
   def peer_at(fn: C.Function, x: C.Int32) -> C.Int32
   compute def session_open(fn: C.Function, path: C.String, out s: Session, free: C.Function) -> C.Int32
   def session_named(path: C.String, free: C.Function) -> Session
+  struct Pair
+    x: C.Int32
+    y: C.Int64 = 0
+  end
+  struct Box
+    at: Pair
+    scale: C.Float
+    on: C.Bool
+    data: C.Pointer
+  end
+  def box_make(n: C.Int64) -> Box
+  compute def box_area(fn: C.Function, b: Box, p: Pair, out area: C.Double) -> Box
 end
 
 extern "libm.so.6"
@@ -37,4 +49,7 @@ def main() -> Void
   opened = session_open(Native.get_pointer(table, 8), "s", Native.get_pointer(table, 0))
   Native.close(opened.s)
   Native.close(session_named("t", Native.get_pointer(table, 0)).unwrap!)
+  box = box_make(3)
+  boxed = box_area(Native.get_pointer(table, 0), box.with(on: true), Pair(x: 1))
+  puts(boxed.area + boxed.result.at.y.to_f)
 end

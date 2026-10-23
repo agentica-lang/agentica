@@ -178,7 +178,6 @@ def test_an_extern_parameter_has_no_default(tmp_path):
 
 @pytest.mark.parametrize("text, start", [
     ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n    return 1\n  end\nend\n', (3, 5)),
-    ('extern "libc.so.6"\n  struct S\n  end\nend\n', (2, 3)),
     ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n', (3, 1)),
     ('extern "libc.so.6" def abs(n: C.Int32) -> C.Int32\nend\n', (1, 20)),
     ('extern <<~A\n  a\n  b\nA\n  def abs(n: C.Int32) -> C.Int32\nend\n', (1, 8)),
@@ -606,3 +605,117 @@ def test_a_sole_c_function_of_a_maker_is_its_free_function(tmp_path, signature):
            'def make(f: C.Pointer) -> Result[Thing]\n  return %s(%sf)\nend\n' \
            % (signature, name, "f, " if "fn:" in signature else "")
     assert check(source(tmp_path, text)).code == 0
+
+
+STRUCTS = """extern "/opt/libllama.so"
+  ## The params of a model.
+  export struct ModelParams
+    n_gpu_layers: C.Int32 = 0
+    use_mmap: C.Bool
+    progress: C.Pointer
+  end
+  struct Inner
+    x: C.Float
+    n: C.Int64
+  end
+  struct Outer
+    inner: Inner
+    scale: C.Double
+  end
+  resource Model, free: llama_model_free
+  export def llama_model_default_params() -> ModelParams
+  compute def llama_model_load_from_file(path: C.String, params: ModelParams) -> Model
+  def outer_twice(fn: C.Function, o: Outer) -> Outer
+  def make_outer(out n: C.Int32) -> Outer
+end
+
+def main() -> Void
+%s
+end
+"""
+
+
+# A struct of an extern block is a record with the Agentica types of its C fields (Int, Float, Bool, C.Pointer, a
+# nested struct): construction, field defaults, .with and field access check as for any struct, and extern functions
+# take and return it by value, also through a function pointer, in a compute def and as the result of a record.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  params = llama_model_default_params().with(n_gpu_layers: 99)\n"
+     "  model: Result[Model] = llama_model_load_from_file(\"m.gguf\", params)\n"
+     "  o = outer_twice(Native.null(), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
+     "  made = make_outer()\n  n: Int = made.result.inner.n + made.n\n"
+     "  p = ModelParams(use_mmap: true, progress: Native.null())\n  puts(o.inner.x + (p.n_gpu_layers + n).to_f)",
+     None, None, None),
+    ("  p = ModelParams(n_gpu_layers: 1.5, use_mmap: true, progress: Native.null())",
+     "CHECK-TYPE-MISMATCH", (24, 33), (24, 36)),
+    ("  o = outer_twice(Native.null(), Inner(x: 1.5, n: 2))", "CHECK-TYPE-MISMATCH", (24, 34), (24, 53)),
+    ("  s: String = llama_model_default_params().progress", "CHECK-TYPE-MISMATCH", (24, 15), (24, 52)),
+])
+def test_a_struct_of_an_extern_block_is_a_record_passed_by_value(tmp_path, body, code, start, stop):
+    assert_checks(check(source(tmp_path, STRUCTS % body)), code, start, stop)
+
+
+def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
+    source(tmp_path, STRUCTS % "  puts(1)", "raw.agc")
+    text = 'import Raw from "./raw"\n\ndef main() -> Void\n' \
+           '  p = Raw.llama_model_default_params().with(n_gpu_layers: 2)\n' \
+           '  puts(Raw.ModelParams(use_mmap: p.use_mmap, progress: p.progress).n_gpu_layers)\nend\n'
+    assert check(source(tmp_path, text)).code == 0
+
+
+# A field of a C struct is C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in the
+# block: a C.String, C.Bytes, C.Function or resource field (whose lifetime the VM cannot follow), an Agentica type, a
+# struct declared below and C.Int are PARSE-EXTERN-TYPE at the type.
+@pytest.mark.parametrize("field, start, stop", [
+    ("name: C.String", (4, 11), (4, 19)),
+    ("data: C.Bytes", (4, 11), (4, 18)),
+    ("fn: C.Function", (4, 9), (4, 19)),
+    ("thing: Thing", (4, 12), (4, 17)),
+    ("n: Int", (4, 8), (4, 11)),
+    ("xs: List[C.Int32]", (4, 9), (4, 22)),
+    ("later: Later", (4, 12), (4, 17)),
+    ("n: C.Int", (4, 8), (4, 13)),
+])
+def test_a_c_struct_field_has_a_c_value_type(tmp_path, field, start, stop):
+    text = 'extern "/opt/libx.so"\n  resource Thing, free: thing_free\n  struct S\n    %s\n  end\n' \
+           '  struct Later\n    n: C.Int32\n  end\nend\n' % field
+    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-TYPE", start, stop)
+
+
+# A struct is a type of the block after it is declared; it is not an out parameter (C would fill memory the program
+# gives: a C.Pointer to an owned buffer) or a variadic one.
+@pytest.mark.parametrize("signature, code, start, stop", [
+    ("def f(p: Later) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 17)),
+    ("def f() -> Later", "PARSE-EXTERN-TYPE", (2, 14), (2, 19)),
+    ("def f(out p: Pair) -> Void", "PARSE-EXTERN-OUT", (6, 16), (6, 20)),
+    ("def f(n: C.Int32, ..., p: Pair) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (6, 29), (6, 33)),
+])
+def test_a_c_struct_is_passed_in_or_returned_after_its_declaration(tmp_path, signature, code, start, stop):
+    if code == "PARSE-EXTERN-TYPE":
+        text = 'extern "/opt/libx.so"\n  %s\n  struct Later\n    n: C.Int32\n  end\nend\n' % signature
+    else:
+        text = 'extern "/opt/libx.so"\n  struct Pair\n    x: C.Int32\n    y: C.Int32\n  end\n  %s\nend\n' % signature
+    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+
+
+# C has no empty struct (PARSE-EXTERN-TYPE at the name), and the VM takes at most 1024 fields and 16 levels in one
+# struct, nested ones counted (PARSE-EXTERN-ARITY at the name of the struct that goes over).
+def test_a_c_struct_has_fields_within_the_limits(tmp_path):
+    empty = 'extern "/opt/libx.so"\n  struct Empty\n  end\nend\n'
+    assert at(problem_of(check(source(tmp_path, empty)))) == ("PARSE-EXTERN-TYPE", (2, 10), (2, 15))
+    fields = "".join("    f%d: C.Int32\n" % k for k in range(513))
+    wide = 'extern "/opt/libx.so"\n  struct Half\n%s  end\n  struct Wide\n    a: Half\n    b: Half\n  end\nend\n' \
+        % fields
+    assert at(problem_of(check(source(tmp_path, wide)))) == ("PARSE-EXTERN-ARITY", (517, 10), (517, 14))
+    assert check(source(tmp_path, wide.replace("    b: Half\n", ""))).code == 0
+    levels = 'extern "/opt/libx.so"\n  struct L0\n    n: C.Int32\n  end\n' + "".join(
+        "  struct L%d\n    inner: L%d\n  end\n" % (k, k - 1) for k in range(1, 17)) + "end\n"
+    assert at(problem_of(check(source(tmp_path, levels)))) == ("PARSE-EXTERN-ARITY", (50, 10), (50, 13))
+    assert check(source(tmp_path, levels.replace("  struct L16\n    inner: L15\n  end\n", ""))).code == 0
+
+
+# An extern block that declares a struct goes with the types in the declaration order, as one with a resource does.
+def test_an_extern_block_with_a_struct_goes_with_the_types(tmp_path):
+    block = 'extern "/opt/libx.so"\n  struct Pair\n    x: C.Int32\n  end\n  def pair() -> Pair\nend\n'
+    assert check(source(tmp_path, block + '\ndef main() -> Void\n  puts(pair().x)\nend\n')).code == 0
+    late = 'def main() -> Void\n  puts(pair().x)\nend\n\n' + block
+    assert at(problem_of(check(source(tmp_path, late))))[:2] == ("CHECK-DECL-ORDER", (6, 3))
