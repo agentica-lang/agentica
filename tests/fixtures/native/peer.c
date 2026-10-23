@@ -555,3 +555,81 @@ const void *peer_get_api_base(void) { return &api_base; }
 /* A named maker whose value is freed only through the table's release slot, which the program passes. */
 void *peer_api_thing(void) { return peer_res_open(5); }
 int32_t peer_api_releases(void) { return atomic_load(&api_releases); }
+
+/* For C structs by value, one per class of the ABIs: two int32 (8 bytes, one integer register), an int32 and a double
+   (an integer and a floating register on x86_64), four floats (a homogeneous float aggregate: four floating registers
+   on arm64), a struct larger than 16 bytes with bool and pointer fields (in memory; Windows x64 passes it by a hidden
+   pointer) like llama.cpp's params, a nested struct, and a batch that points at the caller's tokens. */
+typedef struct {
+  int32_t x, y;
+} peer_pair;
+typedef struct {
+  int32_t n;
+  double x;
+} peer_mixed;
+typedef struct {
+  float a, b, c, d;
+} peer_quad;
+typedef struct {
+  int32_t n_ctx;
+  int32_t n_threads;
+  int64_t seed;
+  double rope_freq_base;
+  float yarn_factor;
+  bool use_mmap;
+  bool embeddings;
+  const void *user_data;
+} peer_params;
+typedef struct {
+  peer_pair at;
+  peer_mixed mixed;
+  bool flag;
+} peer_nested;
+typedef struct {
+  int32_t n_tokens;
+  const int32_t *token;
+} peer_batch;
+
+static char params_text[256];
+static const int32_t static_tokens[] = {5, 6, 7};
+
+peer_pair peer_pair_make(int32_t x, int32_t y) { return (peer_pair){x, y}; }
+peer_pair peer_pair_swap(peer_pair p) { return (peer_pair){p.y, p.x}; }
+int64_t peer_pair_sum(peer_pair p) { return (int64_t)p.x + p.y; }
+/* The address of peer_pair_swap, for a call through a C function pointer. */
+const void *peer_pair_swap_address(void) {
+  peer_pair (*fn)(peer_pair) = peer_pair_swap;
+  const void *p;
+  memcpy(&p, &fn, sizeof p);
+  return p;
+}
+peer_mixed peer_mixed_scale(peer_mixed m, double k) { return (peer_mixed){m.n * 2, m.x * k}; }
+peer_quad peer_quad_add(peer_quad p, peer_quad q) { return (peer_quad){p.a + q.a, p.b + q.b, p.c + q.c, p.d + q.d}; }
+double peer_quad_sum(peer_quad q) { return (double)q.a + q.b + q.c + q.d; }
+peer_params peer_params_default(void) {
+  return (peer_params){512, 4, -1, 10000.5, 0.25f, true, false, static_tokens};
+}
+/* Every field of the params as text, so the test sees what C got. */
+const char *peer_params_text(peer_params p) {
+  snprintf(params_text, sizeof params_text, "n_ctx=%d threads=%d seed=%lld rope=%.2f yarn=%.3f mmap=%d emb=%d data=%s",
+           p.n_ctx, p.n_threads, (long long)p.seed, p.rope_freq_base, (double)p.yarn_factor, p.use_mmap, p.embeddings,
+           p.user_data == static_tokens ? "static" : p.user_data ? "other" : "null");
+  return params_text;
+}
+peer_nested peer_nested_make(int32_t k) { return (peer_nested){{k, k + 1}, {k + 2, k * 0.5}, true}; }
+peer_nested peer_nested_bump(peer_nested v) {
+  return (peer_nested){{v.at.x + 1, v.at.y + 1}, {v.mixed.n + 1, v.mixed.x * 2}, !v.flag};
+}
+peer_batch peer_batch_get_one(const int32_t *tokens, int32_t n) { return (peer_batch){n, tokens}; }
+int64_t peer_batch_sum(peer_batch b) {
+  int64_t sum = 0;
+  for (int32_t k = 0; k < b.n_tokens; k++) sum += b.token[k];
+  return sum;
+}
+/* A compute call that holds the batch's tokens until peer_set_flag has run, then sums them: a buffer freed meanwhile
+   would give another sum. */
+int64_t peer_batch_hold(peer_batch b, int32_t limit_ms) {
+  atomic_fetch_add(&res_holding, 1);
+  peer_wait_flag(limit_ms);
+  return peer_batch_sum(b);
+}

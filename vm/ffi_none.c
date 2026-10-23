@@ -12,13 +12,16 @@
 bool agc_ffi_supported(void) { return false; }
 
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
-                              uint32_t count, uint32_t fixed, char *error, size_t size) {
+                              uint32_t count, uint32_t fixed, agc_c_struct *result_struct,
+                              agc_c_struct *const *structs, char *error, size_t size) {
   (void)library;
   (void)symbol;
   (void)result;
   (void)params;
   (void)count;
   (void)fixed;
+  (void)result_struct;
+  (void)structs;
   snprintf(error, size, "native calls are not supported on this system yet");
   return NULL;
 }

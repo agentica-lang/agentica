@@ -25,7 +25,8 @@
 #define PATH_BUF 1024
 #endif
 
-/* The cif points at types, so both live in one block. */
+/* The cif points at types, so both live in one block; the ffi_type of each struct and its elements are in one more
+   malloc block (aggregates, NULL without structs), which lives as long as the call. */
 struct agc_ffi_call {
   void *lib;
   void (*fn)(void);
@@ -33,7 +34,15 @@ struct agc_ffi_call {
   uint32_t count;
   ffi_cif cif;
   ffi_type *types[AGC_FFI_MAX_PARAMS];
+  agc_c_type params[AGC_FFI_MAX_PARAMS];
+  void *aggregates;
 };
+
+/* Where the ffi_types of the structs of a call are made: NODES, then the element lists, in one block. */
+typedef struct {
+  ffi_type *nodes;
+  ffi_type **elements;
+} aggregate_space;
 
 static ffi_type *ffi_type_of(agc_c_type type) {
   switch (type) {
@@ -46,9 +55,62 @@ static ffi_type *ffi_type_of(agc_c_type type) {
     case AGC_C_POINTER:
     case AGC_C_BYTES:
     case AGC_C_RESOURCE: return &ffi_type_pointer;
+    case AGC_C_STRUCT:
     case AGC_C_VOID: break;
   }
   return &ffi_type_void;
+}
+
+/* The ffi_type nodes and element slots (each list ends with NULL) that the struct S takes, nested ones included. */
+static void aggregate_count(const agc_c_struct *s, size_t *nodes, size_t *elements) {
+  *nodes += 1;
+  *elements += s->count + 1;
+  for (uint32_t k = 0; k < s->count; k++)
+    if (s->types[k] == AGC_C_STRUCT) aggregate_count(s->nested[k], nodes, elements);
+}
+
+/* The FFI_TYPE_STRUCT of S, made in SPACE. Size and alignment are 0: ffi_prep_cif computes them. */
+static ffi_type *aggregate_make(const agc_c_struct *s, aggregate_space *space) {
+  ffi_type *t = space->nodes++;
+  t->size = 0;
+  t->alignment = 0;
+  t->type = FFI_TYPE_STRUCT;
+  t->elements = space->elements;
+  space->elements += s->count + 1;
+  for (uint32_t k = 0; k < s->count; k++)
+    t->elements[k] = s->types[k] == AGC_C_STRUCT ? aggregate_make(s->nested[k], space) : ffi_type_of(s->types[k]);
+  t->elements[s->count] = NULL;
+  return t;
+}
+
+/* Copies libffi's layout of T, which ffi_prep_cif has computed, into S and its nested structs: the size, the
+   alignment and each field's offset. */
+static bool aggregate_layout(agc_c_struct *s, ffi_type *t) {
+  if (ffi_get_struct_offsets(FFI_DEFAULT_ABI, t, s->offsets) != FFI_OK) return false;
+  s->size = t->size;
+  s->align = t->alignment;
+  for (uint32_t k = 0; k < s->count; k++)
+    if (s->types[k] == AGC_C_STRUCT && !aggregate_layout(s->nested[k], t->elements[k])) return false;
+  return true;
+}
+
+/* Makes the ffi_type of every struct of the call (the result's, then each parameter's) in one malloc block, kept in
+   CALL->aggregates. *RESULT_TYPE is the result's type. */
+static void aggregates_make(agc_ffi_call *call, agc_c_type result, agc_c_struct *result_struct,
+                            agc_c_struct *const *structs, const agc_c_type *params, ffi_type **result_type) {
+  size_t nodes = 0, elements = 0;
+  if (result == AGC_C_STRUCT) aggregate_count(result_struct, &nodes, &elements);
+  for (uint32_t k = 0; k < call->count; k++)
+    if (params[k] == AGC_C_STRUCT) aggregate_count(structs[k], &nodes, &elements);
+  call->aggregates = NULL;
+  if (!nodes) return;
+  /* At most 65 top-level structs of 1024 fields each (ffi.c): the sizes cannot overflow. */
+  call->aggregates = malloc(nodes * sizeof(ffi_type) + elements * sizeof(ffi_type *));
+  if (!call->aggregates) agc_out_of_memory();
+  aggregate_space space = {call->aggregates, (ffi_type **)(void *)((ffi_type *)call->aggregates + nodes)};
+  if (result == AGC_C_STRUCT) *result_type = aggregate_make(result_struct, &space);
+  for (uint32_t k = 0; k < call->count; k++)
+    if (params[k] == AGC_C_STRUCT) call->types[k] = aggregate_make(structs[k], &space);
 }
 
 #ifdef _WIN32
@@ -189,7 +251,8 @@ static void library_close(void *lib) { dlclose(lib); }
 bool agc_ffi_supported(void) { return true; }
 
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
-                              uint32_t count, uint32_t fixed, char *error, size_t size) {
+                              uint32_t count, uint32_t fixed, agc_c_struct *result_struct,
+                              agc_c_struct *const *structs, char *error, size_t size) {
   const char *name = symbol ? symbol : "a function pointer";
   if (count > AGC_FFI_MAX_PARAMS) {
     snprintf(error, size, "%s has more than %d parameters", name, AGC_FFI_MAX_PARAMS);
@@ -220,14 +283,23 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   call->lib = lib;
   call->result = result;
   call->count = count;
-  for (uint32_t k = 0; k < count; k++) call->types[k] = ffi_type_of(params[k]);
+  for (uint32_t k = 0; k < count; k++) {
+    call->types[k] = ffi_type_of(params[k]);
+    call->params[k] = params[k];
+  }
+  ffi_type *result_type = ffi_type_of(result);
+  aggregates_make(call, result, result_struct, structs, params, &result_type);
   /* A variadic call follows its own ABI rules, which ffi_prep_cif_var knows: on Apple arm64 the variadic arguments go
      on the stack, on Windows x64 a variadic double goes in the integer register too. It refuses a variadic argument
-     that C would promote (FFI_BAD_ARGTYPE), such as a _Bool. */
-  ffi_status status = variadic
-                          ? ffi_prep_cif_var(&call->cif, FFI_DEFAULT_ABI, fixed, count, ffi_type_of(result), call->types)
-                          : ffi_prep_cif(&call->cif, FFI_DEFAULT_ABI, count, ffi_type_of(result), call->types);
-  if (status != FFI_OK) {
+     that C would promote (FFI_BAD_ARGTYPE), such as a _Bool. ffi_prep_cif lays out each struct as C does, and also
+     decides how it is passed (in registers, on the stack, or by a hidden pointer on Windows x64). */
+  ffi_status status = variadic ? ffi_prep_cif_var(&call->cif, FFI_DEFAULT_ABI, fixed, count, result_type, call->types)
+                               : ffi_prep_cif(&call->cif, FFI_DEFAULT_ABI, count, result_type, call->types);
+  bool laid_out = status == FFI_OK && (result != AGC_C_STRUCT || aggregate_layout(result_struct, result_type));
+  for (uint32_t k = 0; k < count && laid_out; k++)
+    if (params[k] == AGC_C_STRUCT) laid_out = aggregate_layout(structs[k], call->types[k]);
+  if (!laid_out) {
+    free(call->aggregates);
     free(call);
     if (lib) library_close(lib);
     snprintf(error, size, "cannot describe the signature of %s", name);
@@ -238,15 +310,17 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
 
 void agc_ffi_discard(agc_ffi_call *call) {
   if (call->lib) library_close(call->lib);
+  free(call->aggregates);
   free(call);
 }
 
 void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value *result) {
   /* ffi_call reads each argument through a pointer to it: every member of the union starts at its first byte, so a
-     pointer to the union is a pointer to the member that ffi_type_of named. An integer result is widened to a whole
-     ffi_arg, so it goes through a buffer of that size first. */
+     pointer to the union is a pointer to the member that ffi_type_of named, and a struct argument already is a pointer
+     to its bytes. An integer result is widened to a whole ffi_arg, so it goes through a buffer of that size first; a
+     struct result goes to the caller's buffer, which has room for a whole register. */
   void *slots[AGC_FFI_MAX_PARAMS];
-  for (uint32_t k = 0; k < call->count; k++) slots[k] = &args[k];
+  for (uint32_t k = 0; k < call->count; k++) slots[k] = call->params[k] == AGC_C_STRUCT ? args[k].p : &args[k];
   ffi_arg word = 0;
   double real = 0;
   float single = 0;
@@ -256,6 +330,7 @@ void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value
   if (call->result == AGC_C_DOUBLE) out = &real;
   if (call->result == AGC_C_FLOAT) out = &single;
   if (pointed) out = &pointer;
+  if (call->result == AGC_C_STRUCT) out = result->p;
   /* The address of a C function pointer becomes a function pointer the same way as the loader's (memcpy). */
   void (*target)(void) = call->fn;
   if (fn) memcpy(&target, &fn, sizeof target);
@@ -269,6 +344,7 @@ void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value
     case AGC_C_STRING: result->s = pointer; break;
     case AGC_C_POINTER:
     case AGC_C_RESOURCE: result->p = pointer; break;
+    case AGC_C_STRUCT:
     case AGC_C_BYTES:
     case AGC_C_VOID: break;
   }
