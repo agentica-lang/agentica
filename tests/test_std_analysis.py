@@ -452,16 +452,60 @@ def test_a_refresh_after_an_edit_checks_only_the_modules_that_changed_or_import_
         # The leaf: every module imports it, directly or not, so none is taken, and SIZES does not check.
         "update", "shapes.agc", "shapes_wider.agc", "refresh", "report.agc", "stats",
         "check", "report.agc",
-        # Back to the texts of the last program that checked: all three are taken, though the root was not checked.
+        # Back to the texts of the last program that checked: modules whose ids are still the ones of that program are
+        # taken, though the root was not checked (the ids moved when the files were parsed again, so how many depends on
+        # them).
         "update", "shapes.agc", "shapes.agc", "refresh", "report.agc", "stats",
         "compare", "report.agc", *asked_at,
     )
     lines = stats_of(out)
-    assert [line["reused"] for line in lines] == [0, 2, 3, 3, 6]
+    assert [line["reused"] for line in lines[:4]] == [0, 2, 3, 3]
+    assert lines[4]["reused"] > lines[3]["reused"]
     assert [line["checks"] for line in lines] == [1, 2, 3, 4, 5]
     wider = json.loads(err)
     assert (wider["code"], wider["file"]) == ("CHECK-ARITY", str(project / "sizes.agc"))
     assert out.splitlines()[-1] == "same 2"
+
+
+# A fourth module that the edits below do not touch, so it is taken from the last good program.
+NAMES = 'export def label() -> String\n  return "r"\nend\n'
+REPORT_NAMED = (
+    'import Names from "names"\nimport Sizes from "sizes"\n\n'
+    "def report() -> Int\n  return Sizes.area(3) + Names.label().length\nend\n"
+)
+
+
+def test_a_question_without_a_refresh_and_the_partial_answers_take_the_unchanged_modules_and_equal_the_command_line(
+    driver, project,
+):
+    """SIZES does not change, but the leaf it imports does, so SIZES no longer checks: the first problem is in a module
+    that was not edited. NAMES is the module that is taken from the last program that checked."""
+    write_files(project, {
+        "shapes.agc": SHAPES, "sizes.agc": SIZES, "names.agc": NAMES, "report.agc": REPORT_NAMED,
+        "shapes_wider.agc": SHAPES_WIDER,
+    })
+    line, column = positions(REPORT_NAMED, ("Sizes.area", 6))
+    wider = ("update", "shapes.agc", "shapes_wider.agc")
+    # A plain check with no refresh after the edit (the cache misses): it takes NAMES all the same.
+    plain_out, plain_err = library(driver, project, "refresh", "report.agc", *wider, "check", "report.agc")
+    # The cache after the refresh of the program that does not check: NAMES is taken, and the partial questions use it.
+    answers = {}
+    for command in ("type-at-partial", "refs-partial"):
+        out, err = library(
+            driver, project, "refresh", "report.agc", *wider, "refresh", "report.agc", "stats",
+            command, "report.agc", line, column,
+        )
+        assert err == ""
+        first, answers[command] = out.split("\n", 1)
+        assert stats_of(first)[0]["reused"] == 1
+    write_files(project, {"shapes.agc": SHAPES_WIDER})
+    assert (plain_out, plain_err) == command_line(project, "check", "report.agc")
+    assert json.loads(plain_err)["code"] == "CHECK-ARITY"
+    for command, partial in (("type-at-partial", "type-at"), ("refs-partial", "refs")):
+        cold = partial_cli(project, partial, "report.agc", line, column)
+        assert (answers[command], "") == cold
+        found = json.loads(answers[command])
+        assert (found["partial"], found["diagnostics"][0]["code"]) == (True, "CHECK-ARITY")
 
 
 def test_a_refreshed_session_is_asked_by_tasks_on_four_schedulers_with_the_answers_of_the_command_line(driver, project):

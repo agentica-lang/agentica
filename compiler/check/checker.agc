@@ -73,9 +73,16 @@ export struct Reusing
   clean: Set[String]
 end
 
+## The result of `check_query_reusing` and the number of modules it did not check again: those of `Reusing.clean` that
+## the earlier program also has with the same ids and constants (the others are checked, so this may be less).
+export struct Rechecked
+  checking: Checking
+  taken: Int
+end
+
 ## Checks a linked program. The settings tell where the files of the prelude are read.
 export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, true, false, Ast.Optional.Absent))
+  return finished(run(linked, settings, true, false, taking(linked, Ast.Optional.Absent)))
 end
 
 ## Checks a linked program as `check_query` does, but a function whose body fails to check does not stop the run: its
@@ -84,26 +91,27 @@ end
 ## order, and the first is the one `check_query` gives. A failure of the registration of the declarations, of the main
 ## rule or of the module constants leaves no part that passes, so it is the failure, as for `check_query`.
 export def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovering
-  return recovered(run(linked, settings, false, true, Ast.Optional.Absent))
+  return recovered(run(linked, settings, false, true, taking(linked, Ast.Optional.Absent)))
 end
 
 ## `check_recovering`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of
 ## `check_recovering` without it.
 export def check_recovering_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Recovering
-  return recovered(run(linked, settings, false, true, Ast.Optional.Present(reusing)))
+  return recovered(run(linked, settings, false, true, taking(linked, Ast.Optional.Present(reusing))))
 end
 
 ## Checks a linked program as `check` does, without the rule that it declares a main (CHECK-MAIN): `agentica check` and
 ## a query about a position (`agentica type-at`) take a library file as well as a program. A main that is declared must
 ## still be `main() -> Void`, and every other rule holds.
 export def check_query(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, false, false, Ast.Optional.Absent))
+  return finished(run(linked, settings, false, false, taking(linked, Ast.Optional.Absent)))
 end
 
 ## `check_query`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of `check_query`
 ## without it, and so is the first problem.
-export def check_query_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Checking
-  return finished(run(linked, settings, false, false, Ast.Optional.Present(reusing)))
+export def check_query_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Rechecked
+  taken = taking(linked, Ast.Optional.Present(reusing))
+  return Rechecked(checking: finished(run(linked, settings, false, false, taken)), taken: taken.clean.size)
 end
 
 def recovered(result: Result[Recovered]) -> Recovering
@@ -149,12 +157,11 @@ def run(
   settings: Env.Settings,
   main_required: Bool,
   recover: Bool,
-  reusing: Ast.Optional[Reusing],
+  taken: Reuse.Taken,
 ) -> Result[Recovered]
   base = start(linked)
   cx = try Register.register(base, linked.modules)
   try Register.check_main(cx, linked.modules, linked.roots, linked.root.span, main_required)
-  taken = taking(linked, reusing)
   cx = cx.with(constants: taken.constants)
   done = try Constants.check_all(cx, taken.st, linked.modules, taken.clean)
   cx = done.cx
@@ -182,6 +189,9 @@ def run(
       end
     end
   end
+  # The prelude functions are attached in the order of the calls in `st.bodies`, and their ids start after the ids of
+  # the program. With modules taken from an earlier check that order, and so those ids, can differ from a cold check;
+  # no answer reads them, so nothing may rely on them.
   attached = try Prelude.attach(settings, base, st)
   checked = Checked(
     types: attached.st.types,

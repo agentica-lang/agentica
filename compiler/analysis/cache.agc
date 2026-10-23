@@ -35,7 +35,9 @@ end
 
 ## A root that linked, with what checking it gave (a program or its first problem). `loaded` and `fingerprint` say
 ## which modules it was made from; `used` is the clock of the refresh that last wanted it. `good` is the last program
-## of this root that checked, which is the current one when `checking` is a program.
+## of this root that checked, which is the current one when `checking` is a program. When the latest program does not
+## check, `good` keeps a whole older one (modules, linked program and result) beside it: up to MAX_ROOTS of them,
+## outside the accounting of `pruned` and `crowded?`.
 export struct Root
   loaded: Modules.Loaded
   fingerprint: String
@@ -47,8 +49,8 @@ end
 
 ## The roots by the canonical key of the root file, the parsed files and the counters of the work done. `checks` counts
 ## the roots that `refresh` linked and checked, `parsed` the files it lexed and parsed, and `reused` the modules that
-## it did not check again because they and what they import were unchanged (a test reads them to see what a refresh
-## reused).
+## it did not check again because they and what they import were unchanged, as the checker took them (a test reads
+## them to see what a refresh reused).
 export struct Cache
   roots: Map[String, Root]
   parses: Modules.Parses
@@ -187,14 +189,6 @@ export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: 
       reused: cache.reused + reused,
     ),
   )
-end
-
-## The number of modules that `reusing` offers the checker.
-export def reused_count(reusing: Ast.Optional[Checker.Reusing]) -> Int
-  case reusing
-    Ast.Optional.Present(found) -> return found.clean.size
-    Ast.Optional.Absent -> return 0
-  end
 end
 
 def counted(count: Int, one: Bool) -> Int
