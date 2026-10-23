@@ -2,7 +2,8 @@
 # check, clang-tidy and the layer check. Their binaries use the build mode and the objects of mk/vm.mk.
 
 .PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-fuzz vm-gc-stress vm-trace-off \
-  vm-diff-build vm-diff-test sweep-full test-shared vm-sanitize-build vm-sanitize-test vendored-check vendored-test vm-layers
+  vm-diff-build vm-diff-test sweep-full test-shared vm-jit-test vm-sanitize-build vm-sanitize-test vendored-check vendored-test \
+  vm-layers
 
 VM_DIFF_TESTS = $(sort $(wildcard tests/test_vm_diff_*.py))
 
@@ -23,9 +24,10 @@ vm-test: $(VM_TESTS)
 
 # TSan over the code that more than one thread touches (docs/vm/10-io-multicore.md §10.2.3, "Order of work"): the inbox, the
 # set-once outcome and reference count, the run queue, the wake against the park, a job on the loop, rt->sync, the output
-# locks and a timer fired against a wake. The VM is built without libgc (AGC_NO_GC), so the collector's own signals are out
-# of the picture; the whole run is checked, so a race fails it.
-VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads
+# locks, a timer fired against a wake and a function compiled by several threads at once. The VM is built without
+# libgc (AGC_NO_GC), so the collector's own signals are out of the picture; the whole run is checked, so a race fails
+# it.
+VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit
 # vm/tools/tsan.supp: the calls from the system libcrypto, whose own locking TSan cannot see (TLS setup on pool threads).
 VM_TSAN_OPTIONS := halt_on_error=1 suppressions=$(CURDIR)/vm/tools/tsan.supp
 vm-tsan:
@@ -98,7 +100,7 @@ sweep-full: vm-diff-build
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
-VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_std_analysis.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py tests/test_vm_native.py
+VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_std_analysis.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py tests/test_vm_native.py tests/test_vm_jit.py
 SANITIZE_JOBS ?= 4
 
 # The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only; the module
@@ -106,6 +108,13 @@ SANITIZE_JOBS ?= 4
 # every builtin, so a builtin that touches shared state without its lock fails here.
 test-shared: dist/agentica$(EXE)
 	AGENTICA_VM_TEST_SHARED=1 AGENTICA_VM_TEST_MODULE_SCHEDULERS=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
+
+# The goldens with their --max-steps sweeps, the stack traces and the programs on four schedulers, with each function
+# the JIT can compile compiled at its first entry (AGENTICA_JIT=always, docs/future/22-jit.md §22): no output may
+# depend on the tier.
+vm-jit-test: dist/agentica$(EXE)
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always $(MAKE) --no-print-directory test-py \
+	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_vm_multicore.py"
 
 vm-sanitize-build: dist/agentica$(EXE)
 
@@ -142,7 +151,7 @@ vendored-test: vendored-check
 CLANG_TIDY ?= clang-tidy
 # vm/unicode_data.c is frozen table data (see its header), so it is not linted
 VM_LINT_SKIP := vm/unicode_data.c
-VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/tests/*.c))
+VM_LINT_SRC := $(filter-out $(VM_LINT_SKIP),$(wildcard vm/*.c vm/jit/*.c vm/tests/*.c))
 
 .PHONY: vm-lint vm-lint-check vm-lint-release vm-lint-sanitize vm-lint-gcstress
 vm-lint: vm-lint-release vm-lint-sanitize vm-lint-gcstress
@@ -169,6 +178,6 @@ vm-lint-gcstress:
 	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
 
 vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o
-	for h in vm/*.h; do $(VM_CC) $(VM_CFLAGS) -fsyntax-only -x c -include $$h /dev/null || exit 1; done
+	for h in vm/*.h vm/jit/*.h; do $(VM_CC) $(VM_CFLAGS) -fsyntax-only -x c -include $$h /dev/null || exit 1; done
 	sh vm/tools/check-layers.sh $(VM_OBJ)
 	sh vm/tools/check-layers-test.sh $(VM_OBJ) $(VM_CC) $(VM_CFLAGS)

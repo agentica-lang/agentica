@@ -79,6 +79,7 @@ OPTIONS = [
     ["--schedulers"], ["--schedulers", "x", "ok.agc"], ["--schedulers", "0", "ok.agc"],
     ["--schedulers", "1025", "ok.agc"], ["--schedulers", "0001", "ok.agc"], ["--schedulers", "2", "ok.agc"],
     ["--schedulers", "1", "--schedulers", "1", "ok.agc"],
+    ["--jit"], ["--jit", "fast", "ok.agc"], ["--jit", "always", "ok.agc"], ["--jit", "on", "--jit", "off", "ok.agc"],
     ["--version", "--foo"], ["--foo", "--version"], ["--", "ok.agc"], ["ok.agc", "--version"],
     ["check", "--json", "ok.agc"], ["compile", "ok.agc"], ["--dump", "compile", "ok.agc", "-o", "out.agcb"],
     ["--max-steps", "1", "check", "ok.agc"], ["--json", "check", "ok.agc"], ["--ai", "check", "ok.agc"],

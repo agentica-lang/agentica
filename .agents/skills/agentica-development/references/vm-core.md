@@ -158,6 +158,25 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`agc_std_builtins`, not guarded), which reads the std sources of `rt->std`
 - `vm/fuzz.c`, `vm/fuzz_main.c`: `agc_fuzz_one` and the mutation driver (not in
   the release binary)
+- `vm/jit/` (core, `docs/future/22-jit.md` §22; `--jit`, `AGENTICA_JIT`):
+  `jit.h` is the one header, the interpreter's boundary first, then the emitter
+  and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. `jit.c`
+  walks a function once: each instruction (fused ones as their STEP or CONST)
+  calls one `agc_emit_*` function, and any other opcode sets `skip` for the
+  function; it maps, seals and publishes the code with a release CAS
+  (`agc_jit_code_of`, which also counts entries for `on`). `emit_x64.c`: the
+  machine code of each kind, the exit stubs and the entry table, for the SysV
+  and Win64 argument registers (`AGC_JIT_HOST` is 0 elsewhere and nothing is
+  compiled). `mem_posix.c`, `mem_windows.c`: W^X pages, written then sealed
+  read-execute. `run_compiled` in `vm/interp.c` enters at each reload of the
+  jit copy of `turn_loop` (after the one-byte `agc_jit_may_run` test; the
+  plain copy has no JIT test, as one cost arithmetic 20% by code layout alone)
+  and handles the exits as the interpreter handles that instruction: STEP runs
+  `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET goes on in
+  the loop (RETURN).
+  A new instruction: a case in the walk, its `agc_emit_*`, a case in
+  `jit_test.c` and in `tests/test_vm_jit.py`; compiled code never fails,
+  allocates, parks, calls a builtin or moves a frame
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)
   - lists: `struct agc_list` is defined in `list_impl.h` and opaque everywhere

@@ -389,6 +389,9 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
   if options.schedulers != ""
     flags = flags.concat(["--schedulers", options.schedulers])
   end
+  if options.jit != ""
+    flags = flags.concat(["--jit", options.jit])
+  end
   flags = flags.concat(options.deny)
   root = SourceRoot.option(source)
   if root != ""
@@ -468,10 +471,13 @@ def test(session: Session, words: List[String]) -> Int
   if binary == ""
     return emit(Reply.failed(2, Texts.test_without_binary_text()))
   end
-  # The test files run in VMs that the driver starts, which do not get the flag, so it is refused instead of being
-  # dropped without a word. Those VMs inherit AGENTICA_SCHEDULERS, which sets the count for all of them.
+  # The test files run in VMs that the driver starts, which do not get the flags, so they are refused instead of being
+  # dropped without a word. Those VMs inherit AGENTICA_SCHEDULERS and AGENTICA_JIT, which set them for all of them.
   if options.schedulers != ""
     return emit(Reply.failed(2, "agentica: test does not take --schedulers; set AGENTICA_SCHEDULERS instead\n"))
+  end
+  if options.jit != ""
+    return emit(Reply.failed(2, "agentica: test does not take --jit; set AGENTICA_JIT instead\n"))
   end
   driver: List[String] = [
     "--vm", binary, "--version", session.settings.version, "--style", options.style,

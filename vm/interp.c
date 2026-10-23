@@ -5,6 +5,7 @@
  * builtins. Core layer. Design: docs/vm/05-values-execution-builtins.md §6.
  */
 #include "core.h"
+#include "jit/jit.h"
 #include "list_impl.h"
 
 #include <assert.h>
@@ -1025,7 +1026,8 @@ __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_statu
       assert(a && b);
       index_out_of_range(vm, agc_as_int(vm, *b), list_len(agc_as_list(vm, *a)), span);
     case AGC_STATUS_WRONG_TAG: agc_wrong_tag(vm);
-    case AGC_STATUS_OK: break;
+    case AGC_STATUS_OK:
+    case AGC_STATUS_COUNT: break;
   }
   agc_fail(vm, "RUNTIME-INTERNAL", "an opcode helper failed with no error", span);
 }
@@ -1060,6 +1062,36 @@ static _Noreturn void key_not_found(agc_vm *vm, agc_value key, uint32_t span) {
 static agc_turn_result park_task(agc_task *t) {
   t->parking = false;
   return AGC_TURN_PARKED;
+}
+
+/* Runs the top frame in compiled code (vm/jit/jit.h) when its function has some, from frame->pc, and handles the
+   exits as the interpreter would handle the instruction at the exit's pc: a slow STEP runs step_slow, a turn cost is
+   applied, a failure is raised here, outside compiled code, with frame->pc past the failing instruction. True when
+   the turn ends (a yield); false when the interpreter goes on at frame->pc (no code, or a RETURN to run). Only the jit
+   copy of the turn loop calls it. */
+static __attribute__((noinline)) AGC_JIT_CALLER bool run_compiled(agc_vm *vm, agc_jit *jit, agc_frame *frame) {
+  agc_jit_code code = agc_jit_code_of(jit, frame->function);
+  const agc_program *p = vm->rt->program;
+  const agc_function *f = &p->functions[frame->function];
+  if (!code || frame->pc >= f->count) return false;
+  agc_value *R = vm->task->regs + frame->base;
+  uint32_t pc = frame->pc;
+  for (;;) {
+    agc_jit_exit out = code(vm, R, p->constants, pc);
+    frame->pc = out.pc + 1;
+    switch (out.status) {
+      case AGC_JIT_EXIT_STEP:
+        step_slow(vm, f->code[out.pc].a, f->spans[out.pc]);
+        if (vm->yield) return true;
+        break;
+      case AGC_JIT_EXIT_COST:
+        if (apply_cost(vm)) return true;
+        break;
+      case AGC_JIT_EXIT_INTERPRET: frame->pc = out.pc; return false;
+      default: op_failed(vm, (agc_status)out.status);
+    }
+    pc = out.pc + 1;
+  }
 }
 
 /* The span of the running instruction, read only where a failure or a call needs it. */
@@ -1113,8 +1145,9 @@ static agc_turn_result park_task(agc_task *t) {
  * builtin that returns normally cannot move them: push_frame, replace_frame and new_frame are called only from this
  * file, on the task that runs, and a builtin never pushes a frame of the running task (Task.spawn pushes the
  * child's). frame->pc is still written before each instruction runs, as the stack trace of a failure, a park and a
- * yield read it. */
-static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *vm, bool profiling) {
+ * yield read it. The plain copy, the profiling copy and the jit copy (--jit on or always; it enters compiled code at
+ * each reload) are three copies of this loop, so the plain copy has no test of the JIT at all. */
+static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *vm, bool profiling, bool jitting) {
   const agc_program *p = vm->rt->program;
   agc_task *t = vm->task;
   if (t->frame_count == 0) return AGC_TURN_DONE;
@@ -1137,6 +1170,8 @@ reload:
     before = AGC_OP_COUNT;
   }
   frame = &t->frames[t->frame_count - 1];
+  if (jitting && agc_jit_may_run(vm->rt->jit, frame->function) && run_compiled(vm, vm->rt->jit, frame))
+    return AGC_TURN_YIELD;
   code = p->functions[frame->function].code;
   spans = p->functions[frame->function].spans;
   base = frame->base;
@@ -1493,4 +1528,8 @@ reload:
 #undef FUSED_NEXT
 #undef SPAN
 
-agc_turn_result agc_run_turn(agc_vm *vm) { return AGC_PROFILE_ON(vm) ? turn_loop(vm, true) : turn_loop(vm, false); }
+/* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. */
+agc_turn_result agc_run_turn(agc_vm *vm) {
+  if (AGC_PROFILE_ON(vm)) return turn_loop(vm, true, false);
+  return vm->rt->jit ? turn_loop(vm, false, true) : turn_loop(vm, false, false);
+}

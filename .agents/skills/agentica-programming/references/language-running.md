@@ -20,9 +20,9 @@ program, the bytecode cache and the sandbox flags.
 - `agentica compile FILE.agc -o OUT.agcb` writes bytecode; `agentica run
   [FLAGS] -- OUT.agcb [ARGS...]` runs it (`run` only as the first word), on the
   same Agentica version only. Flags go before `--`: `--max-steps`, `--seed`,
-  `--flush-timeout`, `--schedulers N`, the `--deny-*` flags, `--sandbox`,
-  `--source-root DIR`, `--ai`, `--json`. `agentica run --version` also lists the
-  libraries.
+  `--flush-timeout`, `--schedulers N`, `--jit MODE` (experimental, off by
+  default), the `--deny-*` flags, `--sandbox`, `--source-root DIR`, `--ai`,
+  `--json`. `agentica run --version` also lists the libraries.
 - `agentica F.agc` and `agentica test` keep the compiled program of each root
   file in `_build/bytecode/`, in the folder of the nearest `agentica.toml`
   (else beside F), and read it while F, its imports, `agentica.toml`,

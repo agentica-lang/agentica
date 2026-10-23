@@ -29,8 +29,9 @@ AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded AGENTICA_VM_TRACE_FILE=
 make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
 FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
-make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, compute pool, outcome, run queue, wake, job, sync, output, timers, threads, net, process threads) under TSan
+make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, compute pool, outcome, run queue, wake, job, sync, output, timers, threads, net, process threads, jit compile race) under TSan
 make vm-tsan-run                     # a TSan agentica (front end of the release build) running tests/test_vm_multicore.py and the modules of test-multicore-modules
+make vm-jit-test                     # the golden tests, tests/test_vm_stack.py and tests/test_vm_multicore.py with AGENTICA_JIT=always (docs/future/22-jit.md §22)
 make test-multicore                  # tests/test_vm_multicore.py: programs on 4 schedulers (--schedulers 4), then test-multicore-modules
 make test-multicore-modules          # the TCP, TLS, HTTP, process and BDD modules with every VM on 4 schedulers
 make vm-latency                      # tests/test_vm_latency.py alone (see `vm-tasks.md`, Gotchas)
@@ -58,11 +59,11 @@ dist/agentica prog.agc               # front end + VM in one step, in one proces
   builtin reaches it today.
   `agentica run [FLAGS] -- file.agcb [ARGS...]` runs a compiled file: C
   handles it when `run` is the first word, with the VM flags (`--max-steps`,
-  `--seed`, `--flush-timeout`, `--schedulers`, the `--deny-*` flags,
+  `--seed`, `--flush-timeout`, `--schedulers`, `--jit`, the `--deny-*` flags,
   `--sandbox`, `--ai`, `--json`, `--source-root`, `--version`) and the hidden
-  `--driver-pid PID` and
-  `--embedded NAME` (run the `runner` or `steps` program that the binary
-  carries; the front end may not pass it on in a hand-off). The VM then
+  `--driver-pid PID` and `--embedded NAME` (run the `runner` or `steps`
+  program that the binary carries; the front end may not pass it on in a
+  hand-off). The VM then
   deletes its input right after reading it (only a private file is read with
   that flag); on Linux it first resets `SIGTERM` to its default, sets
   `PR_SET_PDEATHSIG` to `SIGTERM` and exits 2 when `getppid()` is not `PID`.
