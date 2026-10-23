@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0-beta.1] - 2026-10-24
+
 ### Changed
 
 - `Analysis.refresh` no longer checks again the modules that did not change,
@@ -406,7 +408,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.9.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.10.0-beta.1...HEAD
+[0.10.0-beta.1]: https://github.com/sonic182/agentica/compare/0.9.0...0.10.0-beta.1
 [0.9.0]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...0.9.0
 [0.9.0-beta.2]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...0.9.0-beta.2
 [0.9.0-beta.1]: https://github.com/sonic182/agentica/compare/0.8.1...0.9.0-beta.1
