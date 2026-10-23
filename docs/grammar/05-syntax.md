@@ -24,9 +24,10 @@ parameter        = NAME, ":", type, [ "=", expression ] ;
 
 extern_decl      = "extern", STRING, NL, { extern_member }, "end", NL ;
 extern_member    = [ DOC, NL ], [ "export" ], ( extern_function | resource_decl ) ;
-extern_function  = [ "compute" ], "def", NAME, "(",
-                   [ c_parameter, { ",", c_parameter }, [ "," ] ], ")",
-                   "->", ( c_type | TYPE_NAME | "Void" ), NL ;
+extern_function  = [ "compute" ], "def", NAME, "(", [ c_parameters ], ")",
+                   "->", ( c_type | TYPE_NAME | "Void" ), [ "=", STRING ], NL ;
+c_parameters     = c_parameter, { ",", c_parameter },
+                   [ ",", "...", { ",", c_parameter } ], [ "," ] ;
 resource_decl    = "resource", TYPE_NAME, ",", "free", ":", NAME, NL ;
 c_parameter      = [ "out" ], NAME, ":", ( c_type | "C", ".", "Bytes" | TYPE_NAME ) ;
 c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" | "Pointer" ) ;
@@ -53,19 +54,19 @@ parameter (`do |x|`) takes no default.
 An `extern` block declares functions of a native library (section 6d, "Native
 code"). The library is a plain string: a name without `/` or an absolute path
 (`PARSE-EXTERN-LIBRARY` at the string). Each line is the signature of one C
-function: no body, no default (`PARSE-EXTERN-DEFAULT` at the parameter), C
-types only (`PARSE-EXTERN-TYPE` at the type), at most 64 parameters
-(`PARSE-EXTERN-ARITY` at the 65th) and a C name, without `?` or `!`
-(`PARSE-EXTERN-NAME` at the name). Anything else in the block, a body or a
-library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc goes on a
-`def` inside the block. Each function is a `def` for the rest of the language:
-`export` makes it importable, it takes the place of a `def` in the declaration
-order, the whole block needs the blank line of a declaration, and the checker
-sees `C.Int32` and `C.Int64` as `Int`, `C.Double` as `Float`, `C.Bool` as `Bool`
-and `C.String` as `String`. `compute def` declares a function that runs off the
-scheduler while the task waits (section 6d); `export` comes first. `extern` is
-contextual: it is a keyword only at the start of a top-level declaration, and
-`compute` only before `def` in an extern block.
+function: no body, no default (`PARSE-EXTERN-DEFAULT` at the parameter), C types
+only (`PARSE-EXTERN-TYPE` at the type), at most 64 parameters
+(`PARSE-EXTERN-ARITY` at the 65th) and a `def` name without `?` or `!`, even
+with a C name (`PARSE-EXTERN-NAME` at the name). Anything else in the block, a
+body or a library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc
+goes on a `def` inside the block. Each function is a `def` for the rest of the
+language: `export` makes it importable, it takes the place of a `def` in the
+declaration order, the whole block needs the blank line of a declaration, and
+the checker sees `C.Int32` and `C.Int64` as `Int`, `C.Double` as `Float`,
+`C.Bool` as `Bool` and `C.String` as `String`. `compute def` declares a function
+that runs off the scheduler while the task waits (section 6d); `export` comes
+first. `extern` is contextual: it is a keyword only at the start of a top-level
+declaration, and `compute` only before `def` in an extern block.
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function
@@ -74,28 +75,40 @@ language: `export` makes it importable, and it takes the place of a type in the
 declaration order. A `def` of the block may use it in its signature after the
 line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes the
 resource, and a result of the resource is `Result[Name]` for the checker. A
-`def` of the block named like the free function is `PARSE-EXTERN-FREE` at the
-name; the check is per block, so another block of the same library may still
-declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
+`def` of the block whose C name is the free function is `PARSE-EXTERN-FREE` at
+that name; the check is per block, so another block of the same library may
+still declare it. `C.Pointer` is the type of a C pointer anywhere in a program;
 `C.Bytes` is a parameter only, a `List[Int]` for the checker. `resource` is a
 keyword only at the start of a member of an extern block.
 
 `out NAME: type` in an extern function is an out parameter: C gets a pointer to
 a slot and writes the value there (section 6d). The caller does not pass it.
 A function with out parameters returns its record, a struct that the parser
-declares next to it, named after the C name in CamelCase (`sqlite3_open` gives
+declares next to it, named after the function in CamelCase (`sqlite3_open` gives
 `Sqlite3Open`): a field `result` with the C result (none for `Void`), then one
 field per out parameter, in order, named after it. The record is exported with
 its function and has no place in the declaration order. An out parameter is
 `C.Int32`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the
 block, whose field is the resource itself, not a `Result`; anything else is
 `PARSE-EXTERN-OUT` at the type. An out parameter named `result` of a function
-with a C result, an in and an out parameter of one name (at the later), and a C
-name with no letter for the record's name, are `PARSE-EXTERN-OUT` at that name;
-`out` before a parameter outside an extern block is `PARSE-EXTERN-OUT` at the
-word. A type of the record's name elsewhere in the file, and two out parameters
-of one name, are `CHECK-REDEFINED-NAME`. `out` is a keyword only before a
-parameter name.
+with a C result, an in and an out parameter of one name (at the later), and a
+function name with no letter for the record's name, are `PARSE-EXTERN-OUT` at
+that name; `out` before a parameter outside an extern block is
+`PARSE-EXTERN-OUT` at the word. A type of the record's name elsewhere in the
+file, and two out parameters of one name, are `CHECK-REDEFINED-NAME`. `out` is
+a keyword only before a parameter name.
+
+The C name of an extern function is its `def` name, or the string after the
+result (`-> C.Int32 = "fcntl"`), so one C function can be declared in several
+shapes. The string is a plain literal of letters, digits and `_` that does not
+start with a digit (`PARSE-EXTERN-SYMBOL` at the string). `...` among the
+parameters declares a variadic C function: the parameters after it are its
+variadic arguments, each with the C type the call passes, and they may be
+none. It comes after one parameter at least (`PARSE-EXTERN-VARIADIC-FIXED` at
+the `...`), at most once in a function, and only in an extern block
+(`PARSE-EXTERN-VARIADIC` at the `...`). A variadic parameter is not an out
+parameter and not `C.Bool`, which C promotes to `int`
+(`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count both parts.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

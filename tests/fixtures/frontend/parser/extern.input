@@ -17,4 +17,7 @@ extern "/opt/lib/my peer.so"
   ## Gives a connection and a count as out parameters.
   export def peer_accept(port: C.Int32, out conn: Conn, out count: C.Int64) -> C.Int32
   def peer_split(x: C.Double, out whole: C.Double) -> Void
+  ## Variadic, under another C name.
+  def peer_vsum(kinds: C.String, out n: C.Int32, ..., a: C.Int32, b: C.Double) -> C.Double = "peer_vmix"
+  compute def peer_vnone(kinds: C.String, ...) -> C.Double = "peer_vmix"
 end

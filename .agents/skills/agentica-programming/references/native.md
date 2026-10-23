@@ -73,7 +73,7 @@ end
 - `out NAME: T` is an out parameter (`T` is `C.Int32`, `C.Int64`, `C.Double`,
   `C.Bool`, `C.Pointer` or a resource; else `PARSE-EXTERN-OUT`). The caller
   does not pass it; C writes through a pointer to a zeroed slot. The call
-  returns a record named after the C name in CamelCase (`Sqlite3Open`), with
+  returns a record named after the function in CamelCase (`Sqlite3Open`), with
   `result` (the C result; none for `Void`) and one field per out parameter.
   An out resource field is the resource (not a `Result`): owned by the task
   when C wrote a pointer, closed (never freed, calls fail with
@@ -127,7 +127,55 @@ end
   `RUNTIME-NATIVE-UNSUPPORTED` (exit 2). `check` works everywhere.
 - Allowed by default; `--deny-native` (or any `--deny-*` flag) refuses such a
   program at load (`RUNTIME-NATIVE-DENIED`, exit 2).
+- Variadic C functions: `...` where the variadic part starts, then the C type
+  of each argument the calls pass. `= "c_name"` after the result names the C
+  function when the `def` name differs, so one function takes several shapes.
+  `...` needs a parameter before it (`PARSE-EXTERN-VARIADIC-FIXED`), once, in
+  an extern block (`PARSE-EXTERN-VARIADIC`); after it no `out` and no `C.Bool`
+  (C promotes it: write `C.Int32`; `PARSE-EXTERN-VARIADIC-TYPE`); the C name
+  is letters, digits and `_` (`PARSE-EXTERN-SYMBOL`). Never declare a variadic
+  function without `...`: on Apple arm64 its arguments go on the stack.
+
+  ~~~ruby
+  extern "libc.so.6"
+    def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32
+    def fcntl_get(fd: C.Int32, cmd: C.Int32, ...) -> C.Int32 = "fcntl"
+    def fcntl_set(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
+  end
+  ~~~
 - Functions count as `def`s for the declaration order, resources as types. A
-  wrong signature is undefined behavior in C: copy it from the C header. No
-  variadic functions (`printf`): a fixed signature is undefined behavior, and
-  wrong on Apple arm64.
+  wrong signature is undefined behavior in C: copy it from the C header.
+
+## Wrapping a library
+
+Keep the `extern` layer private and give the user a normal API; site page:
+`library/io-and-system/native/wrapping.md`.
+
+- Copy the C signatures as they are (no `?`, `!` or default in the block).
+  The public `def`s use Ruby names (`open_file`, `tty?`) and return `Result`
+  with an error text that names the bad value. A resource result already is a
+  `Result[Stream]`: rewrite its message to name the path.
+- An out parameter becomes a field of your own struct; a yes/no `int` becomes
+  a `name?` function returning `Bool`; a call that may take long is a
+  `compute def` in the block, called like any function.
+- A block with a resource must sit above every function of the file, and
+  exported functions sit above private ones (`CHECK-DECL-ORDER`): put such a
+  block in `raw.agc`, `export` its names, and `import Raw from "raw"` in the
+  public file, with `export type Stream = Raw.Stream` for the signatures. The
+  public file does not re-export the raw layer (one file works if the block's
+  functions are `export def`, but then they are its API). A `String` with a NUL
+  stops the program at the C call (`RUNTIME-INVALID-CHARACTER`): check inputs
+  first in a wrapper that must not stop. A block with no resource may
+  stay at the end of the public file.
+- No varargs in Agentica. Declare each shape of a variadic C function with
+  `...` and `= "symbol"`, keep them private, and give the public `def` a
+  `List[T]` (pick the shape by length, `error` for no shape), a struct whose
+  defaults are a constant or parameters with defaults (a default parameter
+  must be a literal). For the struct, `export` the struct and the constant;
+  the caller imports the constant by name (`import {DEFAULTS, open_file} from
+  "files"`; a constant is not read through the alias) and writes
+  `DEFAULTS.with(create: true)`. Never let the caller choose a printf format:
+  pass a constant format and the text as `%s`.
+- A package lists the library per system in `agentica.toml`
+  (`[native.NAME]`, `linux`/`macos`/`windows` each `{ system = "..." }` or
+  `{ file = "native/..." }`) and `raw.agc` says `extern "NAME"`.

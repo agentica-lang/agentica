@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, reading memory that C returns, resources that own a C pointer, and out parameters.
+description: The C types of an extern block, variadic functions, reading memory that C returns, resources that own a C pointer, and out parameters.
 ---
 
 ## Types
@@ -22,6 +22,31 @@ description: The C types of an extern block, reading memory that C returns, reso
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.string_at` (below).
 - A `C.Bytes` argument is a list of bytes: C gets a copy, valid only during the call, and an item outside 0 to 255 fails with `RUNTIME-INVALID-NUMBER`. Pass the length as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
 - A `C.Pointer` is a C pointer that your program passes back to C. It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it. Pointers have no `==`, and `IO.inspect` prints `<C.Pointer>`.
+
+## Variadic functions and C names
+
+A variadic C function, such as `int open(const char *path, int flags, ...)`, is declared with `...` where its variadic part starts, followed by the C type of each argument your calls pass. A string after the result gives the C name when it differs from the `def` name, so one C function can be declared in several shapes:
+
+```agentica {mode="check"}
+extern "libc.so.6"
+  def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32
+  def fcntl_get(fd: C.Int32, cmd: C.Int32, ...) -> C.Int32 = "fcntl"
+  def fcntl_set(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
+  def close(fd: C.Int32) -> C.Int32
+end
+
+def main() -> Void
+  fd = open("/tmp/agentica-native.txt", 65, 384)   # O_WRONLY | O_CREAT on Linux, mode 0600
+  fcntl_set(fd, 2, 1)                                # F_SETFD, FD_CLOEXEC
+  puts(fcntl_get(fd, 1))                             # F_GETFD: 1
+  close(fd)
+end
+```
+
+- `...` comes after one parameter at least (`PARSE-EXTERN-VARIADIC-FIXED`), once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty, and the 64 parameters count both parts.
+- A variadic parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool` is `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes it to `int`: write `C.Int32`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
+- The C name is a plain string of letters, digits and `_` (`PARSE-EXTERN-SYMBOL`).
+- The call follows the variadic rules of each system's C ABI, which differ from a fixed signature: on Apple arm64 the variadic arguments go on the stack. Declare a variadic function with `...`, never as a fixed one.
 
 ## Reading memory that C returns
 
@@ -82,7 +107,7 @@ end
 
 A C function that gives a value through a pointer, such as `int sqlite3_open(const char *filename, sqlite3 **db)`, declares that parameter with `out`. The caller does not pass it: C writes into a slot that is zeroed before the call, and the call returns a record with the C result as `result` and one field per out parameter, named after it.
 
-- The record is a struct named after the C name in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
+- The record is a struct named after the function in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
 - An out parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
 - An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it.
 - A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.

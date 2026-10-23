@@ -1,4 +1,4 @@
-program #61 0:1:1-671:21:1
+program #78 0:1:1-886:24:1
   declaration: export-decl #4 38:3:3-78:4:1 doc="The cosine."
     declaration: function-decl #3 45:3:10-78:4:1 name="cos" doc="The cosine." library="libm.so.6" codes="dd"
       param: param #1 53:3:18-64:3:29 name="x"
@@ -58,3 +58,20 @@ program #61 0:1:1-671:21:1
   declaration: struct-decl #58 610:19:3-667:20:1 name="PeerSplit" doc="The result of `peer_split`." record-of="peer_split"
     field: field-decl #56 638:19:31-657:19:50 name="whole"
       type: type-ref #55 649:19:42-657:19:50 name="Float"
+  declaration: function-decl #73 706:21:3-809:22:1 name="peer_vsum" doc="Variadic, under another C name." library="/opt/lib/my peer.so" codes="dsI.id" symbol="peer_vmix"
+    param: param #62 720:21:17-735:21:32 name="kinds"
+      type: type-ref #61 727:21:24-735:21:32 name="String"
+    param: param #66 758:21:55-768:21:65 name="a"
+      type: type-ref #65 761:21:58-768:21:65 name="Int"
+    param: param #68 770:21:67-781:21:78 name="b"
+      type: type-ref #67 773:21:70-781:21:78 name="Float"
+    result: type-ref #72 786:21:83-794:21:91 name="PeerVsum"
+  declaration: struct-decl #71 706:21:3-809:22:1 name="PeerVsum" doc="The result of `peer_vsum`." record-of="peer_vsum"
+    field: field-decl #70 786:21:83-794:21:91 name="result"
+      type: type-ref #69 786:21:83-794:21:91 name="Float"
+    field: field-decl #64 737:21:34-751:21:48 name="n"
+      type: type-ref #63 744:21:41-751:21:48 name="Int"
+  declaration: function-decl #77 811:22:3-882:23:1 name="peer_vnone" library="/opt/lib/my peer.so" codes="ds." symbol="peer_vmix" compute=true
+    param: param #75 834:22:26-849:22:41 name="kinds"
+      type: type-ref #74 841:22:33-849:22:41 name="String"
+    result: type-ref #76 859:22:51-867:22:59 name="Float"

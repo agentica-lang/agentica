@@ -17,6 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   or a system library name for `linux`, `macos` and `windows`. The files of
   `native/` are part of the package hash in the lock. New codes
   `PKG-NATIVE-PLATFORM` and `PKG-NATIVE-MISSING`.
+- Variadic C functions in `extern` blocks: `...` starts the variadic part
+  (`def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32`),
+  and `= "c_name"` after the result names the C function, so one function
+  can be declared in several shapes.
 
 ### Changed
 

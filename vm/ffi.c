@@ -187,10 +187,12 @@ static void discard_frees(free_list *frees) {
 }
 
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the
-   C name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. Each resource
-   the call makes adds two words after the C name, the C name of its free function and the resource's name, an
-   identifier: the result's first (code r), then each out resource's (code R), in order. The front end writes it
-   (compiler/lower/lower_native.agc); the bytecode may hold anything, so every part is checked here. */
+   C name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
+   function has a "." among the codes where its variadic part starts, after one parameter at least; the codes after it
+   are never an out parameter or a C.Bool, which C would promote. Each resource the call makes adds two words after the
+   C name, the C name of its free function and the resource's name, an identifier: the result's first (code r), then
+   each out resource's (code R), in order. The front end writes it (compiler/lower/lower_native.agc); the bytecode may
+   hold anything, so every part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
   size_t left = text->bytes;
@@ -201,19 +203,32 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   }
   const char *codes, *symbol;
   size_t codes_len, symbol_len;
-  if (!next_word(&at, &left, &codes, &codes_len) || !next_word(&at, &left, &symbol, &symbol_len) ||
-      codes_len - 1 > AGC_FFI_MAX_PARAMS)
+  if (!next_word(&at, &left, &codes, &codes_len) || !next_word(&at, &left, &symbol, &symbol_len))
     bad_signature(vm, span);
+  /* The "." comes out of the codes; a second one is then an unknown code. */
+  const char *mark = memchr(codes, '.', codes_len);
+  uint32_t fixed = AGC_FFI_NOT_VARIADIC;
+  char kinds[AGC_FFI_MAX_PARAMS + 1];
+  size_t kinds_len = codes_len - (mark != NULL);
+  if (kinds_len - 1 > AGC_FFI_MAX_PARAMS || (mark && mark - codes < 2)) bad_signature(vm, span);
+  if (mark) {
+    fixed = (uint32_t)(mark - codes - 1);
+    memcpy(kinds, codes, (size_t)(mark - codes));
+    memcpy(kinds + (mark - codes), mark + 1, codes_len - (size_t)(mark - codes) - 1);
+  } else {
+    memcpy(kinds, codes, codes_len);
+  }
   agc_c_type result, params[AGC_FFI_MAX_PARAMS], c_params[AGC_FFI_MAX_PARAMS];
   bool out[AGC_FFI_MAX_PARAMS], result_out;
-  if (!c_type_of(codes[0], true, &result, &result_out)) bad_signature(vm, span);
-  uint32_t count = (uint32_t)(codes_len - 1), outs = 0;
+  if (!c_type_of(kinds[0], true, &result, &result_out)) bad_signature(vm, span);
+  uint32_t count = (uint32_t)(kinds_len - 1), outs = 0;
   free_list frees;
   frees.count = 0;
   bool made = result == AGC_C_RESOURCE;
   if (made) frees.count++;
   for (uint32_t k = 0; k < count; k++) {
-    if (!c_type_of(codes[k + 1], false, &params[k], &out[k])) bad_signature(vm, span);
+    if (!c_type_of(kinds[k + 1], false, &params[k], &out[k])) bad_signature(vm, span);
+    if (k >= fixed && (out[k] || params[k] == AGC_C_BOOL)) bad_signature(vm, span);
     /* C gets a pointer to the slot of an out parameter. */
     c_params[k] = out[k] ? AGC_C_POINTER : params[k];
     outs += out[k];
@@ -232,13 +247,14 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   if (nul) load_failed(vm, "a library or function name is empty or holds a NUL character", span);
   char *library = text_copy(at, left), *symbol_text = text_copy(symbol, symbol_len);
   char error[512];
-  agc_ffi_call *call = agc_ffi_prepare(library, symbol_text, result, c_params, count, error, sizeof error);
+  agc_ffi_call *call = agc_ffi_prepare(library, symbol_text, result, c_params, count, fixed, error, sizeof error);
   bool prepared = call != NULL;
   for (uint32_t k = 0; k < frees.count && prepared; k++) {
     /* Each free function is in the same library and takes the pointer: void free(void *). */
     char *free_text = text_copy(frees.names[k], frees.lens[k]);
     const agc_c_type pointer = AGC_C_POINTER;
-    frees.calls[k] = agc_ffi_prepare(library, free_text, AGC_C_VOID, &pointer, 1, error, sizeof error);
+    frees.calls[k] =
+        agc_ffi_prepare(library, free_text, AGC_C_VOID, &pointer, 1, AGC_FFI_NOT_VARIADIC, error, sizeof error);
     free(free_text);
     prepared = frees.calls[k] != NULL;
   }
