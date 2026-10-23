@@ -4,8 +4,8 @@
  * converts values to C and back, runs a fast call on the scheduler and a compute call on the compute pool
  * (agc_io_compute), and leaves dlopen and libffi to the adapter (ffi_os.h). Also the resources that extern functions
  * return (agc_c_resource) with Native.close, Native.null and Native.null?, Native.pointer, the owned buffers of
- * Native.memory_pointer and Native.free, the reads and writes of memory (Native.string_at, bytes_at, get_*, put_* and
- * the array forms), and Native.wait_readable and wait_writable, the waits of a task on a descriptor of native code.
+ * Native.memory_pointer (and its block form) and Native.free, the reads and writes of memory (Native.get_string,
+ * get_bytes, get_*, put_*, the array forms), and Native.wait_readable and wait_writable, the waits on a descriptor.
  * Service layer.
  */
 #include "ffi_os.h"
@@ -114,11 +114,11 @@ typedef struct {
   bool writing;
 } native_wait;
 
-/* The kinds of item that the typed reads and writes move: Native.get_int8 to get_pointer, put_int8 to put_pointer and
-   the array forms. ITEM_WIDTHS has the size of each. */
+/* The kinds of item that the typed reads and writes move: Native.get_int8 to get_pointer, put_int8 to put_pointer, the
+   array forms, get_bytes and put_bytes (ITEM_BYTE, written only from 0 to 255). ITEM_WIDTHS has the size of each. */
 typedef enum {
   ITEM_INT8, ITEM_INT16, ITEM_INT32, ITEM_INT64, ITEM_UINT8, ITEM_UINT16, ITEM_UINT32, ITEM_FLOAT32, ITEM_FLOAT64,
-  ITEM_POINTER
+  ITEM_POINTER, ITEM_BYTE
 } item_kind;
 
 /* What a memory builtin reads or writes: COUNT items of SIZE bytes at OFFSET bytes past its pointer. A bad offset
@@ -129,6 +129,13 @@ typedef struct {
   uint32_t offset_span, count_span;
 } memory_ask;
 
+/* The block form of Native.memory_pointer: the buffer it yields, and whether the block has been called. */
+typedef struct {
+  agc_stepper stepper;
+  agc_value buffer;
+  bool called;
+} buffer_block;
+
 /* The prepared calls of the run, by signature string, in malloc memory (no GC pointers): open addressing over a
    power-of-two table, kept at most half full. Native.call is a shared builtin, so in a shared VM it runs with
    rt->sync held and the table needs no lock of its own. Entries live until the process ends, like the libraries. */
@@ -137,7 +144,7 @@ typedef struct agc_ffi_cache {
   size_t size, used;
 } agc_ffi_cache;
 
-static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
+static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *), 1};
 
 static uint64_t text_hash(const char *data, size_t len) {
   uint64_t h = 1469598103934665603ULL;
@@ -851,6 +858,32 @@ static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_c_resource_value(res);
 }
 
+/* The first step calls the block with the buffer; the second frees the buffer, as Native.free does, and ends the call
+   with what the block returned, an error Result from a `try` included. Ownership wins: a buffer that the block handed
+   to another task (Task.spawn_owning) is left to its new owner, whose end frees it. A runtime failure in the block
+   never comes back here: it ends the task, and the owner's end frees the buffer. */
+static agc_step buffer_block_step(agc_vm *vm, agc_stepper *self, agc_value last) {
+  buffer_block *b = (buffer_block *)self;
+  if (!b->called) {
+    b->called = true;
+    return (agc_step){.kind = AGC_STEP_CALL, .value = b->buffer, .fn = agc_void()};
+  }
+  /* The stepper is not `unlocked`, so this step runs with rt->sync held, which the owner check and close_resource
+     need. A buffer freed in the block has no owner any more and is left as it is. */
+  if (agc_task_owns(vm, b->buffer)) close_resource(vm, agc_as_c_resource(vm, b->buffer));
+  return (agc_step){.kind = AGC_STEP_END, .value = last};
+}
+
+/* Native.memory_pointer(size) do |buf| ... end, Ruby ffi's MemoryPointer.new(size) { |p| ... }: a new owned buffer
+   for the block, freed when the block ends; the call returns the block's value. */
+static agc_value builtin_memory_pointer_block(agc_vm *vm, agc_value *args, uint32_t span) {
+  buffer_block *b = agc_alloc(sizeof *b);
+  b->buffer = builtin_memory_pointer(vm, args, span);
+  b->stepper.step = buffer_block_step;
+  agc_task_stepper(vm, &b->stepper);
+  return agc_void();
+}
+
 /* Native.free(pointer): frees an owned buffer once, as Native.close frees a resource; a C.Pointer that C gave is not
    the program's to free. */
 static agc_value builtin_native_free(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -898,36 +931,32 @@ static void memory_done(agc_vm *vm, bool locked) {
   if (locked) agc_sync_drop(vm);
 }
 
-/* Native.string_at(pointer) and string_at(pointer, length): a copy of the NUL-terminated text at the pointer, or of
-   exactly LENGTH bytes (NUL bytes included). In an owned buffer the text must end before the buffer does. */
-static agc_value builtin_string_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_c_resource *res = buffer_of(vm, args[0]);
+/* The text at OFFSET bytes past the pointer P (Native.get_string(pointer, offset)): a copy up to the first NUL. In an
+   owned buffer the text must end before the buffer does. */
+static agc_value text_until_nul(agc_vm *vm, agc_value p, int64_t offset, uint32_t offset_span, uint32_t span) {
+  agc_c_resource *res = buffer_of(vm, p);
   bool locked;
-  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, res ? 0 : 1, 1, span + 1, span + 1}, span, &locked);
-  const uint8_t *nul = res ? memchr(p, 0, res->size) : p + strlen((const char *)p);
+  const uint8_t *at = memory_at(vm, p, (memory_ask){offset, res ? 0 : 1, 1, offset_span, offset_span}, span, &locked);
+  const uint8_t *nul = res ? memchr(at, 0, res->size - (size_t)offset) : at + strlen((const char *)at);
   if (!nul) agc_fail(vm, "RUNTIME-NATIVE-BOUNDS", "the owned buffer holds no NUL byte to end the text", span + 1);
-  agc_value text = text_value(p, (size_t)(nul - p));
+  agc_value text = text_value(at, (size_t)(nul - at));
   memory_done(vm, locked);
   return text;
 }
 
-static agc_value builtin_string_at_length(agc_vm *vm, agc_value *args, uint32_t span) {
-  int64_t n = agc_as_int(vm, args[1]);
-  bool locked;
-  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span, &locked);
-  agc_value text = text_value(p, (size_t)n);
-  memory_done(vm, locked);
-  return text;
+/* Native.get_string(pointer, offset) and get_string(pointer, offset, length), Ruby ffi's get_string: the text from
+   OFFSET bytes past the pointer up to its NUL, or exactly LENGTH bytes. */
+static agc_value builtin_get_string(agc_vm *vm, agc_value *args, uint32_t span) {
+  return text_until_nul(vm, args[0], agc_as_int(vm, args[1]), span + 2, span);
 }
 
-/* Native.bytes_at(pointer, length): a List of the LENGTH bytes at the pointer. */
-static agc_value builtin_bytes_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  int64_t n = agc_as_int(vm, args[1]);
+static agc_value builtin_get_string_length(agc_vm *vm, agc_value *args, uint32_t span) {
+  memory_ask ask = {agc_as_int(vm, args[1]), agc_as_int(vm, args[2]), 1, span + 2, span + 3};
   bool locked;
-  const uint8_t *p = memory_at(vm, args[0], (memory_ask){0, n, 1, span + 2, span + 2}, span, &locked);
-  agc_list *bytes = agc_list_of_bytes(p, (size_t)n);
+  const uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  agc_value text = text_value(at, (size_t)ask.count);
   memory_done(vm, locked);
-  return agc_list_value(bytes);
+  return text;
 }
 
 /* The item of KIND at AT, which may be unaligned (memcpy). */
@@ -937,7 +966,8 @@ static agc_value load_item(item_kind kind, const uint8_t *at) {
     case ITEM_INT16: { int16_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_INT32: { int32_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_INT64: { int64_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
-    case ITEM_UINT8: { uint8_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
+    case ITEM_UINT8:
+    case ITEM_BYTE: { uint8_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_UINT16: { uint16_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_UINT32: { uint32_t x; memcpy(&x, at, sizeof x); return agc_int(x); }
     case ITEM_FLOAT32: { float x; memcpy(&x, at, sizeof x); return agc_float(x); }
@@ -948,8 +978,8 @@ static agc_value load_item(item_kind kind, const uint8_t *at) {
 }
 
 /* Checks V before an item of KIND is written: an Int that fits in the item's bits read as signed or as unsigned (an
-   int8 takes -128 to 255, the same bits), a Float (a float32 takes any, one outside the range of a float becomes an
-   infinity), or a C.Pointer (an owned buffer, unless freed, gives its address). */
+   int8 takes -128 to 255, the same bits; a byte of put_bytes only 0 to 255), a Float (a float32 takes any, one outside
+   the range of a float becomes an infinity), or a C.Pointer (an owned buffer, unless freed, gives its address). */
 static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
   if (kind == ITEM_FLOAT32 || kind == ITEM_FLOAT64) {
     (void)agc_as_float(vm, v);
@@ -957,6 +987,9 @@ static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
     agc_c_resource *res = buffer_of(vm, v);
     if (!res) (void)agc_as_c_pointer(vm, v);
     if (res && res->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "the owned buffer is freed", span);
+  } else if (kind == ITEM_BYTE) {
+    int64_t n = agc_as_int(vm, v);
+    if (n < 0 || n > 255) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a byte must be 0 to 255", span);
   } else {
     int64_t n = agc_as_int(vm, v);
     unsigned bits = (unsigned)ITEM_WIDTHS[kind] * 8;
@@ -970,7 +1003,8 @@ static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
 static void store_item(agc_vm *vm, item_kind kind, uint8_t *at, agc_value v) {
   switch (kind) {
     case ITEM_INT8:
-    case ITEM_UINT8: { uint8_t x = (uint8_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
+    case ITEM_UINT8:
+    case ITEM_BYTE: { uint8_t x = (uint8_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
     case ITEM_INT16:
     case ITEM_UINT16: { uint16_t x = (uint16_t)agc_as_int(vm, v); memcpy(at, &x, sizeof x); break; }
     case ITEM_INT32:
@@ -1130,6 +1164,14 @@ static agc_value builtin_put_floats32(agc_vm *vm, agc_value *args, uint32_t span
 static agc_value builtin_put_floats64(agc_vm *vm, agc_value *args, uint32_t span) {
   return put_array(vm, args, span, ITEM_FLOAT64);
 }
+/* Native.get_bytes(pointer, offset, length) and put_bytes(pointer, offset, bytes), Ruby ffi's get_bytes and put_bytes
+   with a List of bytes for their String. */
+static agc_value builtin_get_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_array(vm, args, span, ITEM_BYTE);
+}
+static agc_value builtin_put_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return put_array(vm, args, span, ITEM_BYTE);
+}
 
 /* An error or a hang-up on the descriptor ends the wait as readiness does: as with poll(2), the next call of the
    native code does not block and reports the error itself (a refused connect, for example). */
@@ -1246,10 +1288,11 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_string", 2, builtin_get_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_string", 3, builtin_get_string_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.get_bytes", 3, builtin_get_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.memory_pointer", 1, builtin_memory_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Native.memory_pointer", 2, builtin_memory_pointer_block, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Native.free", 1, builtin_native_free, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Native.get_int8", 2, builtin_get_int8, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.get_int16", 2, builtin_get_int16, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
@@ -1277,6 +1320,7 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.put_array_of_int64", 3, builtin_put_ints64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.put_array_of_float32", 3, builtin_put_floats32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.put_array_of_float64", 3, builtin_put_floats64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.put_bytes", 3, builtin_put_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };

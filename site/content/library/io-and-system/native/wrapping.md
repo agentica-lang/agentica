@@ -16,6 +16,7 @@ The raw layer is one `extern` block per library. Copy each signature from the C 
 | A handle and the function that frees it | a [resource](/library/io-and-system/native/types/#resources), returned in a `Result` |
 | An `int` that answers yes or no | a function named `name?` that returns `Bool` |
 | A pointer that C fills | an [`out` parameter](/library/io-and-system/native/types/#out-parameters), turned into the fields of your own struct |
+| Memory that the caller gives and C fills | a `String` or a `List` copied out of a `Native.memory_pointer` block (see Buffers and block forms below) |
 | A call that may take long | a [`compute def`](/library/io-and-system/native/compute/) in the raw layer, so the other tasks keep running; the wrapper calls it like any function |
 | A variadic function | functions of a normal shape (see Variadic functions below) |
 
@@ -80,6 +81,54 @@ end
 
 extern "libm.so.6"
   def modf(x: C.Double, out whole: C.Double) -> C.Double
+end
+```
+
+## Buffers and block forms
+
+A C function that fills memory its caller gives it, such as `getcwd`, gets an [owned buffer](/library/io-and-system/native/types/#owned-buffers-and-typed-memory). The wrapper makes it with the block form, `Native.memory_pointer(size) do |buf| ... end`, which frees the buffer when the block ends, also when the block returns an error early, and returns the block's value. The block copies out what C wrote, so the caller gets a `String` or a `List` and never sees the buffer.
+
+```agentica {mode="check"}
+## The working directory, or an error when it is longer than 4095 bytes.
+export def cwd() -> Result[String]
+  return Native.memory_pointer(4096) do |buf|
+    if Native.null?(getcwd(buf, 4096))
+      return error("the working directory is longer than 4095 bytes")
+    end
+    ok(Native.get_string(buf, 0))
+  end
+end
+
+extern "libc.so.6"
+  def getcwd(buf: C.Pointer, size: C.Int64) -> C.Pointer
+end
+```
+
+A wrapper may give a resource a block form of its own, as Ruby's `File.open` does: it opens the resource, gives it to the block, closes it when the block ends and returns what the block returned, so the caller cannot forget the close. If the block stops with a runtime error, the end of the task frees the resource.
+
+```agentica {mode="check"}
+extern "libc.so.6"
+  export resource Stream, free: fclose
+  def fopen(path: C.String, mode: C.String) -> Stream
+  def fputs(text: C.String, stream: Stream) -> C.Int32
+end
+
+## Opens a file for appending, gives the stream to the block and closes it when the block ends.
+export def append_to(path: String, f: Fn[Stream, Result[Void]]) -> Result[Void]
+  stream = try fopen(path, "a")
+  done = f.call(stream)
+  Native.close(stream)
+  return done
+end
+
+def main() -> Void
+  written = append_to("/tmp/agentica-log.txt") do |stream|
+    if fputs("started\n", stream) < 0
+      return error("cannot write the log")
+    end
+    ok()
+  end
+  IO.inspect(written)
 end
 ```
 

@@ -50,6 +50,14 @@ def at(problem):
     return problem["code"], (start["line"], start["column"]), (end["line"], end["column"])
 
 
+def assert_checks(result, code, start, stop):
+    """A check RESULT is ok when CODE is None, else the diagnostic CODE from START to STOP."""
+    if code is None:
+        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
+    else:
+        assert at(problem_of(result)) == (code, start, stop)
+
+
 def test_an_extern_block_declares_functions_that_check_like_any_other(tmp_path):
     result = check(source(tmp_path, VALID))
     assert (result.code, result.stdout) == (0, '{"ok":true}\n')
@@ -125,6 +133,8 @@ end
 
 # An owned buffer is a C.Pointer: it goes where a C.Pointer parameter is, Task.spawn_owning hands it over, and the
 # typed reads and writes take any C.Pointer with an Int offset, giving Int, Float, C.Pointer or a list of Int or Float.
+# The block form yields a C.Pointer and has the type of the block's value (a Result from a `try` in it included); the
+# block or function must take one C.Pointer.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  buf = Native.memory_pointer(16)\n  fill(buf, 4)\n  xs: List[Float] = Native.get_array_of_float32(buf, 0, 4)\n"
      "  n: Int = Native.get_uint8(buf, 0) + Native.get_int64(buf, 8)\n  p: C.Pointer = Native.get_pointer(buf, 8)\n"
@@ -135,13 +145,18 @@ end
     ("  Native.put_array_of_float32(Native.memory_pointer(8), 0, [1, 2])", "CHECK-TYPE-MISMATCH", (10, 61), (10, 62)),
     ("  Native.put_int32(Native.memory_pointer(4), 0, 1.5)", "CHECK-TYPE-MISMATCH", (10, 49), (10, 52)),
     ("  n: Int = Native.get_float64(Native.null(), 0)", "CHECK-TYPE-MISMATCH", (10, 12), (10, 48)),
+    ('  total: Float = Native.memory_pointer(16) do |buf|\n    fill(buf, 4)\n    Native.get_float32(buf, 0)\n  end\n'
+     '  r: Result[Int] = Native.memory_pointer(4) do |buf|\n    n = try "3".to_i\n'
+     '    ok(n + Native.get_int32(buf, 0))\n  end\n  Native.memory_pointer(8, &fill_two)\n  puts(total)\n'
+     '  puts(r.ok?)', None, None, None),
+    ("  s: String = Native.memory_pointer(8) do |buf| Native.get_int8(buf, 0) end", "CHECK-TYPE-MISMATCH", (10, 49),
+     (10, 72)),
+    ("  n = Native.memory_pointer(8) do |buf: Int| buf end", "CHECK-TYPE-MISMATCH", (10, 36), (10, 44)),
+    ("  Native.memory_pointer(8, &main)", "CHECK-TYPE-MISMATCH", (10, 28), (10, 33)),
+    ("  n = Native.memory_pointer(8.5) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 29), (10, 32)),
 ])
 def test_owned_buffers_and_typed_memory_check_as_c_pointers(tmp_path, body, code, start, stop):
-    result = check(source(tmp_path, MEMORY % body))
-    if code is None:
-        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
-    else:
-        assert at(problem_of(result)) == (code, start, stop)
+    assert_checks(check(source(tmp_path, MEMORY % body)), code, start, stop)
 
 
 def test_c_int_is_refused_with_the_widths_to_write(tmp_path):
@@ -367,27 +382,36 @@ def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
     assert at(problem_of(check(source(tmp_path, OPENER % body)))) == (code, start, stop)
 
 
-# Native.string_at and bytes_at read memory at a C.Pointer (not a resource) with an Int length, and Native.pointer
-# makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it, and a wrong count CHECK-ARITY.
+# Native.get_string and get_bytes read memory at a C.Pointer (not a resource) with an Int offset and length, put_bytes
+# writes a List[Int], and Native.pointer makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it,
+# and a wrong count CHECK-ARITY. The old names string_at and bytes_at are CHECK-UNKNOWN-NAME, with a help that gives
+# the call with offset 0.
 @pytest.mark.parametrize("body, code, start, stop", [
-    ("  s: String = Native.string_at(db_handle(db_open().unwrap!), 3)\n"
-     "  b: List[Int] = Native.bytes_at(Native.pointer(-1), 0)\n"
-     "  puts(s + Native.string_at(Native.null()) + b.size.to_s)", None, None, None),
-    ('  puts(Native.string_at("x"))', "CHECK-TYPE-MISMATCH", (8, 25), (8, 28)),
-    ("  db = db_open().unwrap!\n  puts(Native.string_at(db))", "CHECK-TYPE-MISMATCH", (9, 25), (9, 27)),
-    ('  puts(Native.string_at(Native.null(), "3"))', "CHECK-TYPE-MISMATCH", (8, 40), (8, 43)),
-    ("  puts(Native.string_at(Native.null(), 1, 2))", "CHECK-ARITY", (8, 8), (8, 45)),
-    ("  puts(Native.bytes_at(Native.pointer(1), [3]))", "CHECK-TYPE-MISMATCH", (8, 43), (8, 46)),
-    ("  puts(Native.bytes_at(Native.null()))", "CHECK-ARITY", (8, 8), (8, 38)),
+    ("  s: String = Native.get_string(db_handle(db_open().unwrap!), 1, 3)\n"
+     "  b: List[Int] = Native.get_bytes(Native.pointer(-1), 0, 0)\n"
+     "  Native.put_bytes(Native.pointer(1), 0, b)\n"
+     "  puts(s + Native.get_string(Native.null(), 0) + b.size.to_s)", None, None, None),
+    ("  puts(Native.string_at(Native.null(), 3))", "CHECK-UNKNOWN-NAME", (8, 8), (8, 42)),
+    ("  puts(Native.bytes_at(Native.null(), 3).size)", "CHECK-UNKNOWN-NAME", (8, 8), (8, 41)),
+    ('  puts(Native.get_string("x", 0))', "CHECK-TYPE-MISMATCH", (8, 26), (8, 29)),
+    ("  db = db_open().unwrap!\n  puts(Native.get_string(db, 0))", "CHECK-TYPE-MISMATCH", (9, 26), (9, 28)),
+    ('  puts(Native.get_string(Native.null(), "3"))', "CHECK-TYPE-MISMATCH", (8, 41), (8, 44)),
+    ("  puts(Native.get_string(Native.null()))", "CHECK-ARITY", (8, 8), (8, 40)),
+    ("  puts(Native.get_bytes(Native.pointer(1), 0, [3]))", "CHECK-TYPE-MISMATCH", (8, 47), (8, 50)),
+    ("  puts(Native.get_bytes(Native.null(), 0))", "CHECK-ARITY", (8, 8), (8, 42)),
+    ("  Native.put_bytes(Native.null(), 0, [1.5])", "CHECK-TYPE-MISMATCH", (8, 39), (8, 42)),
+    ('  Native.put_bytes(Native.null(), 0, "ab")', "CHECK-TYPE-MISMATCH", (8, 38), (8, 42)),
     ("  puts(Native.pointer(1.5))", "CHECK-TYPE-MISMATCH", (8, 23), (8, 26)),
     ("  n: Int = Native.pointer(1)", "CHECK-TYPE-MISMATCH", (8, 12), (8, 29)),
 ])
 def test_the_memory_builtins_take_a_pointer_and_a_length(tmp_path, body, code, start, stop):
-    result = check(source(tmp_path, OPENER % body))
-    if code is None:
-        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
-    else:
-        assert at(problem_of(result)) == (code, start, stop)
+    assert_checks(check(source(tmp_path, OPENER % body)), code, start, stop)
+
+
+# The old names carry the help that gives the new call (its presence, not its text).
+@pytest.mark.parametrize("call", ["Native.string_at(Native.null(), 3)", "Native.bytes_at(Native.null(), 3).size"])
+def test_the_old_memory_names_have_a_help(tmp_path, call):
+    assert problem_of(check(source(tmp_path, OPENER % ("  puts(%s)" % call)))).get("help")
 
 
 # The block's free function is the VM's to call: a def of it, before or after the resource, is PARSE-EXTERN-FREE at

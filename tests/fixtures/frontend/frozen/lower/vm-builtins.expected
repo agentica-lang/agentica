@@ -125,13 +125,13 @@ Map.keys
 Map.put
 Map.size
 Map.values
-Native.bytes_at
 Native.close
 Native.free
 Native.get_array_of_float32
 Native.get_array_of_float64
 Native.get_array_of_int32
 Native.get_array_of_int64
+Native.get_bytes
 Native.get_float32
 Native.get_float64
 Native.get_int16
@@ -139,6 +139,7 @@ Native.get_int32
 Native.get_int64
 Native.get_int8
 Native.get_pointer
+Native.get_string
 Native.get_uint16
 Native.get_uint32
 Native.get_uint8
@@ -150,6 +151,7 @@ Native.put_array_of_float32
 Native.put_array_of_float64
 Native.put_array_of_int32
 Native.put_array_of_int64
+Native.put_bytes
 Native.put_float32
 Native.put_float64
 Native.put_int16
@@ -158,7 +160,6 @@ Native.put_int64
 Native.put_int8
 Native.put_pointer
 Native.put_string
-Native.string_at
 Native.wait_readable
 Native.wait_writable
 Path.cwd

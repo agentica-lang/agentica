@@ -86,14 +86,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   duplicate of the descriptor from `agc_poller_open_copy` in `vm/loop.c`, whose
   OS side is `vm/poll_posix.c` and `vm/poll_windows.c`; on Windows a duplicate
   Winsock socket, one wait per socket), the job's timer, the `cancel` half.
-  `Native.string_at`, `bytes_at` and `pointer` read memory at a `C.Pointer` and
-  make one. `Native.memory_pointer` makes an owned buffer: an `agc_c_resource`
-  with `buffer` set (calloc'd memory of `size` bytes, freed with free() by
-  `Native.free`, the owner's end or the run's end), which the program types as
-  a `C.Pointer` (`buffer_of` and `pointer_of` take either), so an extern call
-  passes it and a compute call holds it. The typed reads and writes
-  (`get_*`, `put_*`, `get_array_of_*`, `put_array_of_*`, `put_string`) and
-  `string_at`/`bytes_at` go through `memory_at`, which checks a buffer's
+  `Native.get_string`, `get_bytes` and `pointer` read memory at a `C.Pointer`
+  and make one. `Native.memory_pointer` makes an owned buffer: an
+  `agc_c_resource` with `buffer` set (calloc'd memory of `size` bytes, freed
+  with free() by `Native.free`, the owner's end or the run's end), which the
+  program types as a `C.Pointer` (`buffer_of` and `pointer_of` take either), so
+  an extern call passes it and a compute call holds it. Its block form (arity 2)
+  is a stepper (`buffer_block_step`) that calls the block with the buffer and
+  closes it when the block returns, if the task still owns it. The typed reads
+  and writes (`get_*`, `put_*`, `get_array_of_*`, `put_array_of_*`,
+  `put_string`, `put_bytes`) and `get_string`/`get_bytes` go through
+  `memory_at`, which checks a buffer's
   bounds and freed state (`RUNTIME-NATIVE-BOUNDS`, `-CLOSED`) and only NULL and
   a negative offset of a raw pointer. Their rows are not shared: `memory_at`
   takes rt->sync only for a buffer, and the caller drops it after the copy
