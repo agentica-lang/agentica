@@ -71,11 +71,17 @@ success, and returns a status: `OK`, `OVERFLOW`, `DIVISION_BY_ZERO`,
 `INDEX_OUT_OF_RANGE` or `WRONG_TAG`. On any other status than `OK`, compiled
 code returns `{status, pc}`, and the interpreter, outside compiled code, calls
 `agc_op_fail` with the span of the instruction at `pc` (`WRONG_TAG` fails at
-span 0, as `agc_wrong_tag` does). Helpers count no step and apply no turn cost:
+span 0, as `agc_wrong_tag` does). Before that, the exit leaves the operand
+registers in the frame's register file (the `INDEX_OUT_OF_RANGE` message
+prints the list's length and the index) and sets `frame->pc` past the failing
+instruction, as the interpreter does before each instruction: the stack trace
+reads it. Helpers count no step and apply no turn cost:
 the caller runs the `STEP`s, and after `EQ`, `NE` and `SAME`, which add the
 bytes of a String compare to the task's turn cost, it applies the cost where
 the interpreter does. A helper never parks, yields or pushes a frame. Builtins
-fail with `agc_fail`, so compiled code does not call them directly.
+fail with `agc_fail`, so compiled code does not call them directly. The C test
+`vm/tests/op_helpers_test.c` checks the statuses; the goldens check the
+failures that `agc_op_fail` makes of them.
 
 **Memory:** W^X: code is written RW, then made RX; never writable and
 executable at once for a thread. Linux uses `mprotect` and Windows

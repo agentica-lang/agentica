@@ -6,12 +6,13 @@
 #include "../core.h"
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
-#include <string.h>
 
 static agc_vm vm;
 
-static bool same_bits(agc_value x, agc_value y) { return memcmp(&x, &y, sizeof x) == 0; }
+/* The tag and the 8-byte payload: bytes 4 to 7 are padding that the constructors leave unset. */
+static bool same_bits(agc_value x, agc_value y) { return x.tag == y.tag && agc_value_word(x) == agc_value_word(y); }
 
 /* A failing helper returns `want` and leaves `dst` as it was. */
 static void fails(agc_status got, agc_status want, const agc_value *dst, agc_value before) {
@@ -43,6 +44,16 @@ static void float_rules(void) {
   agc_value neg = agc_float(-0.0);
   assert(agc_op_same(&vm, &dst, &zero, &neg) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
   assert(agc_op_eq(&vm, &dst, &zero, &neg) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  /* A NaN is the same as a NaN but not equal to it (isnan's nonzero result is not taken for the -1 sentinel). */
+  agc_value nan = agc_float(NAN);
+  assert(agc_op_same(&vm, &dst, &nan, &nan) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  assert(agc_op_eq(&vm, &dst, &nan, &nan) == AGC_STATUS_OK && same_bits(dst, agc_bool(false)));
+  assert(agc_op_ne(&vm, &dst, &nan, &nan) == AGC_STATUS_OK && same_bits(dst, agc_bool(true)));
+  /* The divisor is checked first, as before the helpers returned a status. */
+  agc_value i = agc_int(1);
+  dst = mark;
+  fails(agc_op_div_f(&vm, &dst, &i, &zero), AGC_STATUS_DIVISION_BY_ZERO, &dst, mark);
+  fails(agc_op_div_f(&vm, &dst, &i, &x), AGC_STATUS_WRONG_TAG, &dst, mark);
 }
 
 /* A wrong tag is hand-made bytecode: the helper reports it instead of calling agc_wrong_tag. */

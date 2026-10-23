@@ -7,6 +7,7 @@
 #include "core.h"
 #include "list_impl.h"
 
+#include <assert.h>
 #include <inttypes.h>
 #include <math.h>
 #include <string.h>
@@ -15,7 +16,9 @@
 #endif
 
 /* An opcode helper (agc_op_* in core.h) is defined inline and always inlined into turn_loop. core.h declares it
-   without `inline`, so this definition is also its one external definition (C11 6.7.4), which a JIT calls. */
+   without `inline`, so this definition is also its one external definition (C11 6.7.4p7), which a JIT calls; core.h
+   must stay included before the definitions. clang's -Wstatic-in-inline (under -Wpedantic) is a false positive here,
+   as the definition is not an inline definition. */
 #define OP_HELPER inline __attribute__((always_inline))
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
@@ -832,8 +835,8 @@ static inline __attribute__((always_inline)) bool tags_are(const agc_value *a, c
   return a->tag == (uint32_t)tag && b->tag == (uint32_t)tag;
 }
 
-/* 1 when the values are equal, 0 when not, -1 for a pair of values that has no equality (hand-made bytecode). The tag
-   tests come first, so the checked accessors after them never fail (the compiler drops their second test). Kept out
+/* 1 when the values are equal, 0 when not, -1 for a pair of values that has no equality (hand-made bytecode): never a
+   raw truthy int from libc, which -1 would be mistaken for. The tag tests come first, so the checked accessors after them never fail (the compiler drops their second test). Kept out
    of line, as gcc built it before the helpers took pointers: the turn loop is sensitive to its register use. */
 static __attribute__((noinline)) int equal_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
   if (tags_are(x, y, AGC_T_INT)) return agc_as_int(vm, *x) == agc_as_int(vm, *y);
@@ -854,7 +857,8 @@ static int same_values(agc_vm *vm, const agc_value *x, const agc_value *y) {
   if (x->tag != y->tag) return 0;
   if (agc_is(*x, AGC_T_FLOAT)) {
     double a = agc_as_float(vm, *x), b = agc_as_float(vm, *y);
-    return isnan(a) ? isnan(b) : a == b && signbit(a) == signbit(b);
+    /* isnan and signbit return any nonzero int (mingw-w64's isnan gives -1), so each is turned into 0 or 1. */
+    return isnan(a) ? isnan(b) != 0 : a == b && (signbit(a) != 0) == (signbit(b) != 0);
   }
   return equal_values(vm, x, y);
 }
@@ -926,10 +930,12 @@ OP_HELPER agc_status agc_op_mul_f(agc_vm *vm, agc_value *dst, const agc_value *a
   return AGC_STATUS_OK;
 }
 
+/* The divisor is checked first, so a zero divisor fails with RUNTIME-DIVISION-BY-ZERO whatever the left operand. */
 OP_HELPER agc_status agc_op_div_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
-  if (!tags_are(a, b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
+  if (!agc_is(*b, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   double divisor = agc_as_float(vm, *b);
   if (divisor == 0) return AGC_STATUS_DIVISION_BY_ZERO;
+  if (!agc_is(*a, AGC_T_FLOAT)) return AGC_STATUS_WRONG_TAG;
   *dst = agc_float(agc_as_float(vm, *a) / divisor);
   return AGC_STATUS_OK;
 }
@@ -1015,6 +1021,7 @@ __attribute__((noinline, cold)) _Noreturn void agc_op_fail(agc_vm *vm, agc_statu
       agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "Int result is outside the 64-bit range", span);
     case AGC_STATUS_DIVISION_BY_ZERO: agc_fail(vm, "RUNTIME-DIVISION-BY-ZERO", "division by zero", span);
     case AGC_STATUS_INDEX_OUT_OF_RANGE:
+      assert(a && b);
       index_out_of_range(vm, agc_as_int(vm, *b), list_len(agc_as_list(vm, *a)), span);
     case AGC_STATUS_WRONG_TAG: agc_wrong_tag(vm);
     case AGC_STATUS_OK: break;

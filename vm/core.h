@@ -241,9 +241,10 @@ agc_status agc_op_ne(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_v
 agc_status agc_op_same(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_list_len(agc_vm *vm, agc_value *dst, const agc_value *list);
 agc_status agc_op_list_get(agc_vm *vm, agc_value *dst, const agc_value *list, const agc_value *index);
-/* The failure of a helper's status, with agc_fail. `a` and `b` are the operands the helper was given (the list and
- * the index name the bad index in the message; NULL where unused) and `span` the span of the running instruction. It
- * is called on the VM's C stack, never from compiled code. */
+/* The failure of a helper's status, with agc_fail. `a` and `b` are the operands the helper was given:
+ * AGC_STATUS_INDEX_OUT_OF_RANGE needs both (the list and the index, named in the message), the other statuses read
+ * neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from
+ * compiled code. */
 _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
 agc_outcome agc_vm_run(agc_vm *vm);
 
