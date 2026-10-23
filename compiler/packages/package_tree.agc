@@ -132,7 +132,11 @@ def copied?(parts: List[String], name: String, mode: String) -> Bool
   if parts.size == 1 and PackageHash.fold(name) == MANIFEST_FILE
     return name == MANIFEST_FILE or LINK_MODES.include?(mode)
   end
-  return PackageHash.source_file?(name) or PackageHash.native_path?(parts.join("/"))
+  path = parts.join("/")
+  if LINK_MODES.include?(mode)
+    return PackageHash.source_file?(name) or PackageHash.native_path?(path) or PackageHash.native_root?(path)
+  end
+  return PackageHash.source_file?(name) or (PackageHash.native_path?(path) and !PackageHash.native_junk?(name))
 end
 
 # No empty, `.` or `..` part and no backslash or colon, which a file system could read as another place. Git does not

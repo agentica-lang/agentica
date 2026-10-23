@@ -178,12 +178,13 @@ def source_line(module: Linker.LinkedModule) -> String
   return "#{SOURCE_WORD}#{digest(String.to_bytes(module.text))} #{module.key}"
 end
 
-# One `source` line for each native file of a package that the program opens by path, so a file that changes makes the
-# entry miss and the build (which hashes the package against the lock) runs again.
+# One `source` line for each file that a native library of the program may come from or load (the manifest that names
+# it and every file of native/), so a change makes the entry miss and the build (which hashes the package against the
+# lock) runs again.
 def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedModule]) -> Result[List[String]]
   paths: List[String] = []
   for module in modules
-    paths = paths.concat(module.libraries)
+    paths = paths.concat(module.watched)
   end
   lines: List[String] = []
   for path in paths.uniq

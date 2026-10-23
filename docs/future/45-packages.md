@@ -150,14 +150,19 @@ that works on Linux, macOS and Windows):
   while it links, so no search is involved and `LD_LIBRARY_PATH` plays no
   part. The VM and the lowering are unchanged. A name the manifest does not
   declare is a system name as before, so no program changes meaning.
-- **Hash.** The hash of the package covers every file of its `native/` folder,
-  for all systems, next to the `.agc` files. The lock is unchanged (no new
-  key, so no old lock breaks), and a changed library is `PKG-HASH-MISMATCH`
-  at `package[n].hash`, from the same check and the same fetch as the source.
+- **Hash.** The hash of the package covers every file of its `native/` folder
+  (dotfiles, `Thumbs.db` and `desktop.ini` aside), for all systems, next to
+  the `.agc` files, and the package's `agentica.toml` when it has such files
+  or a `[native]` table, because the manifest decides which file is opened
+  (any other package hashes as before). The lock format is unchanged, and a
+  changed library or manifest is `PKG-HASH-MISMATCH` at `package[n].hash`,
+  from the same check and the same fetch as the source.
   A hash for each system in the lock was weighed: it would add a lock table,
   its writer and its stale checks to say less than the one hash says.
-- **Cache.** The bytecode cache entry holds the digest of the library file,
-  so a replaced library is a miss and the build hashes the package again.
+- **Cache.** The bytecode cache entry holds the digest of the manifest and of
+  every file of `native/`, so a replaced file is a miss and the build hashes
+  the package again. The bytecode of `compile` holds the absolute path, and
+  `run -- file.agcb` opens it with no check.
 - **Errors.** `PKG-NATIVE-PLATFORM` (no entry for the running system) and
   `PKG-NATIVE-MISSING` (the file is not in the package), at the manifest and
   the key path, only where a file of the package uses the name.
@@ -228,7 +233,8 @@ decision, then the rejected options.
 5. **`dev_dependencies`.** None in v1; there is one list. Rejected: a second
    table for `*_test.agc` files, which can be added when a test needs it.
 6. **Data files.** Only `.agc` files and the files of `native/` (45.10) are
-   used and hashed. The manifest of a package is kept but not hashed. Rejected
+   used and hashed. The manifest of a package is hashed only with native files
+  or a `[native]` table (45.10). Rejected
    for v1: a `files` list in the manifest.
 7. **Hashing at build.** Every build hashes each package it loads, so a changed
    file of `deps/` is caught. Rejected: hashing only at install, which trusts

@@ -7,10 +7,11 @@ run everywhere; the ones that call the library need libffi (Linux x86_64, Window
 the file and key path, never message text (AGENTS.md).
 """
 import json
+import shutil
 
 import pytest
 
-from tests.agentica_test import TARGET_OS, WINDOWS, cli, run, vm_environment
+from tests.agentica_test import TARGET_OS, WINDOWS, cli, host_only, run, vm_environment
 from tests.package_support import (assert_at_key, build, cached_files, dependency, git,  # noqa: F401
                                     install, lock_entry, package_hash, plain, problem_of, remotes, ws)
 from tests.test_vm_native import NATIVE_CALLS, library_name, shared_library
@@ -67,7 +68,9 @@ def declare(ws, files, extra_manifest, name="pkgdemo"):
 
 def files_of(library):
     """The package: the module, the library of this system and files for the other systems that this one never opens."""
-    return {"demo.agc": DEMO, library_path(HERE): library, "native/other/lib.bin": b"not a library for here"}
+    # The dotfile and Thumbs.db are never part of the package.
+    return {"demo.agc": DEMO, library_path(HERE): library, "native/other/lib.bin": b"not a library for here",
+            "native/.DS_Store": b"junk", "native/Thumbs.db": b"junk"}
 
 
 def table_of_all():
@@ -110,6 +113,43 @@ def test_a_package_ships_a_library_install_copies_it_and_a_build_opens_it_by_its
     assert install(ws, remotes)[1] is None
     assert build(ws, remotes).stdout == "42\n"
 
+    # Any other file of native/ is covered too (a library may load a sibling), warm cache or not.
+    sibling = ws.deps / "pkgdemo" / "native" / "other" / "lib.bin"
+    assert build(ws, remotes).code == 0
+    sibling.write_bytes(b"swapped")
+    assert build(ws, remotes).code == 1
+    assert problem_of(ws, remotes)["code"] == "PKG-HASH-MISMATCH"
+    assert install(ws, remotes)[1] is None
+
+    # The manifest picks the library, so it is covered: pointing it at another file or a system library is a mismatch
+    # with a warm cache (the entry watches the manifest), with none, and `install` puts the locked one back.
+    manifest_file = ws.deps / "pkgdemo" / "agentica.toml"
+    locked_manifest = manifest_file.read_text(encoding="utf-8")
+    assert build(ws, remotes).stdout == "42\n"
+    for swapped in (table(**{HERE: "native/other/lib.bin"}), '[native.pkgdemo]\n%s = { system = "libc.so.6" }\n' % HERE):
+        manifest_file.write_text(manifest(swapped), encoding="utf-8")
+        assert build(ws, remotes).code == 1
+        assert plain(ws, remotes, "--no-cache", str(ws.project / "main.agc")).code == 1
+        assert problem_of(ws, remotes)["code"] == "PKG-HASH-MISMATCH"
+        assert install(ws, remotes)[1] is None
+        assert manifest_file.read_text(encoding="utf-8") == locked_manifest
+    assert build(ws, remotes).stdout == "42\n"
+
+
+@NATIVE_CALLS
+def test_a_project_declares_its_own_libraries_and_its_files_use_them(library, ws):
+    path = ws.project / library_path(HERE)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(library)
+    (ws.project / "agentica.toml").write_text(manifest(table(**{HERE: library_path(HERE)})), encoding="utf-8")
+    own = DEMO + "\ndef main() -> Void\n  puts(pkgdemo_add(40, 2))\nend\n"
+    (ws.project / "main.agc").write_text(own, encoding="utf-8")
+    ran = run(cli() + [str(ws.project / "main.agc")], cwd=ws.project, env=environment_of(ws))
+    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    # A file the project lacks is PKG-NATIVE-MISSING at the project's manifest.
+    path.unlink()
+    assert_at_key(check(ws), "PKG-NATIVE-MISSING", ws.project / "agentica.toml", "native.pkgdemo.%s.file" % HERE)
+
 
 @NATIVE_CALLS
 def test_a_system_library_is_named_for_each_system_and_needs_no_file(ws):
@@ -123,6 +163,32 @@ def check(ws):
     """The problem that `--json check` reports for main.agc of the project, or None."""
     result = run(cli() + ["--json", "check", str(ws.project / "main.agc")], cwd=ws.project, env=environment_of(ws))
     return json.loads(result.stderr) if result.code == 1 else None
+
+
+def test_a_manifest_without_native_files_or_a_native_table_is_not_part_of_the_hash(ws):
+    declare(ws, {"demo.agc": DEMO}, "# a note\n")
+    assert check(ws) is None
+    (ws.deps / "pkgdemo" / "agentica.toml").write_text(manifest("# another note\n"), encoding="utf-8")
+    assert check(ws) is None
+
+
+@host_only(WINDOWS, "a symbolic link needs a privilege on Windows")
+def test_a_link_named_native_is_a_symlink_error_in_the_build_and_in_the_fetch(ws, remotes, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "lib.bin").write_bytes(b"x")
+    declare(ws, {"demo.agc": DEMO}, table(**{HERE: library_path(HERE)}))
+    (ws.deps / "pkgdemo" / "native").symlink_to(outside, target_is_directory=True)
+    assert check(ws)["code"] == "PKG-SYMLINK"
+    files = {"demo.agc": DEMO}
+    commit = remotes.publish(REPO, files, tag="v1.0.0", links={"native": "outside"})
+    ws.locked.clear()
+    lock_entry(ws, remotes, REPO, files, commit, tag="v1.0.0")
+    ws.write_manifest({"pkgdemo": dependency(remotes.url(REPO), tag="v1.0.0")})
+    ws.write_lock()
+    shutil.rmtree(ws.deps)
+    result, problem = install(ws, remotes)
+    assert result.code == 1 and problem["code"] == "PKG-SYMLINK"
 
 
 def test_a_package_that_names_no_library_for_this_system_is_refused_where_it_uses_it(ws):

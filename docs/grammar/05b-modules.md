@@ -154,7 +154,8 @@ import Sqlite from "pkg/sqlite/db"
 - The manifest knows `name`, `[dependencies]`, `[native]`, `[style]` and
   `[workspace]` (below). An unknown key at any level, a value of the wrong
   form, or a TOML syntax error is `PKG-MANIFEST-INVALID`. `name` is optional
-  and follows the rule of a dependency name below. `max_line_width` is an integer of 1 or more.
+  and follows the rule of a dependency name below. `max_line_width` is an
+  integer of 1 or more.
 - A dependency is a local name and an inline table. The name is the key: a
   lowercase letter, then lowercase letters, digits, `_` and `-`, at most 64
   characters. It is the segment after `pkg/` in an import and has nothing to do
@@ -314,15 +315,15 @@ import Sqlite from "pkg/sqlite/db"
   or `agentica.toml`, or in `native/`, is `PKG-SYMLINK`, two copied paths that
   differ only in case are `PKG-PATH-COLLISION` (only case: not Unicode
   normalisation or Windows device names, which the hash still catches), a file
-  over 1 MiB, or all files over 16 MiB, is `PKG-FETCH` naming the file, and the hash of the copy must be
-  the locked hash (`PKG-HASH-MISMATCH`). The copy is built in a hidden `.tmp-*`
-  folder of the cache root and renamed into place in one step (a killed install
-  may leave that folder; delete it). git may ask for a password on a terminal;
-  each read of its output has a 5 minute deadline. A git that cannot start or
-  fails, a missing tag or commit, an unsafe path and a cache that cannot be
-  written are `PKG-FETCH`. These failures name `agentica.lock` and the key of
-  the entry (`package[1].tag`, `package[1].hash`; `package[1].git` when git
-  itself failed; `package[1]` for the others). The first failure stops the
+  over 1 MiB, or all files over 16 MiB, is `PKG-FETCH` naming the file, and
+  the hash of the copy must be the locked hash (`PKG-HASH-MISMATCH`). The copy
+  is built in a hidden `.tmp-*` folder of the cache root and renamed into place
+  in one step (a killed install may leave that folder; delete it). git may ask
+  for a password on a terminal; each read of its output has a 5 minute
+  deadline. A git that cannot start or fails, a missing tag or commit, an unsafe
+  path and a cache that cannot be written are `PKG-FETCH`. These failures name
+  `agentica.lock` and the key of the entry (`package[1].tag`,
+  `package[1].hash`; `package[1].git` when git itself failed; `package[1]` for the others). The first failure stops the
   command. When every package is in the cache, the manifest of each is checked
   against the lock (`PKG-LOCK-STALE`, `PKG-SOURCE-CONFLICT`), and only then is
   `deps/` written, so a cache or a manifest that fails those checks writes
@@ -432,25 +433,28 @@ import Sqlite from "pkg/sqlite/db"
   reads it (the hash covers what is behind it); `install` replaces the link
   itself. A name the project does not declare is the `pkg/` library search.
 - The hash covers the `.agc` files of the package folder and every file of its
-  `native/` folder at the root (for a `subdir`, that folder of the
-  repository, so a change in another folder does not change it).
+  `native/` folder at the root, but dotfiles, `Thumbs.db` and `desktop.ini`
+  (for a `subdir`, that folder of the repository, so a change in another folder
+  does not change it).
   Their paths are relative to it, written with `/`, in bytewise order; for each
   file, its path, a zero byte, its size in decimal, a zero byte and its bytes.
   The hash is `sha256:` and the SHA-256 of that stream in hex (`Crypto.sha256`).
   Hidden folders (any depth), `agc_libs/` at the root and files that are not
   `.agc` (outside `native/`) are left out (`.agc`, `agc_libs` and `native` are
   compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
-  out on every system), so
-  the `agentica.toml` of a package is not hashed: it can only choose among the
-  names of the lock. The first time a build loads a package, it hashes the
-  folder of `deps/` and compares the result with the lock
-  (`PKG-HASH-MISMATCH`); a symbolic link named `*.agc`, or any link in
-  `native/`, is `PKG-SYMLINK`. A
-  package that no import reaches is not hashed. A build changes nothing in
-  `deps/`. The bytecode cache of `agentica FILE.agc` hashes only the files a
-  program reads, so a new unused file in a `deps/` folder is caught by `check`
-  or `--no-cache`, not by a cached run. A committed `deps/` needs no `install`
-  to build.
+  out on every system). The `agentica.toml` of a package is left out too, so it
+  can only choose among the names of the lock, except when the package has
+  files in `native/` or a top-level `[native]` table: the manifest then decides
+  which file is opened, so it is added to the stream with the path
+  `agentica.toml`, and the hash of any other package is unchanged. The first
+  time a build loads a package, it hashes the folder of `deps/` and compares
+  the result with the lock (`PKG-HASH-MISMATCH`); a symbolic link named
+  `*.agc`, a link named `native` at the root, or any link in `native/`, is
+  `PKG-SYMLINK`. A package that no import reaches is not hashed. A build
+  changes nothing in `deps/`. The bytecode cache of `agentica FILE.agc` hashes
+  only the files a program reads, so a new unused file in a `deps/` folder is
+  caught by `check` or `--no-cache`, not by a cached run. A committed `deps/`
+  needs no `install` to build.
 - Native libraries. A package declares them in its own manifest, one table
   `[native.NAME]` for each library, where `NAME` follows the rule of a
   dependency name and is what `extern "NAME"` writes in the files of the
@@ -487,12 +491,16 @@ import Sqlite from "pkg/sqlite/db"
   - A library that is a `file` is checked by the hash of the package when the
     package is first loaded, so a changed file is `PKG-HASH-MISMATCH`. The
     entry of the bytecode cache of `agentica FILE.agc` also holds the digest of
-    that file, so a change to it is a cache miss and the build runs again. The
-    bytecode that `agentica compile` writes names the file by its path on this
-    machine.
-  - `[native]` of a project's own manifest is checked but not used: the
-    project's files write the path in `extern`. A workspace member is read from
-    its folder with no hash, as its `.agc` files are.
+    the manifest and of every file of `native/` (a library may load a sibling),
+    so a change to one is a cache miss and the build runs again. The bytecode
+    that `agentica compile` writes names the file by its path on this machine,
+    and `agentica run -- file.agcb` opens whatever is at that path, with no
+    hash check.
+  - The manifest of the project has the same `[native]` table, used by the
+    project's own files, with the files relative to the project folder (a
+    package author's tests run with the package as the project). The project's
+    files are not hashed. A workspace member is read from its folder with no
+    hash, as its `.agc` files are.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

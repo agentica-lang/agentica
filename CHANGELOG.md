@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Breaking:** the top-level `native/` folder of a package (and, for a package
+  with `native/` files or a `[native]` table, its `agentica.toml`) is now part
+  of its hash, so a lock made before for a package that already had such a
+  folder must be updated with `agentica update`.
 - A package can ship or name native libraries for its `extern` blocks:
   `[native.NAME]` in its `agentica.toml` picks a file of its `native/` folder
   or a system library name for `linux`, `macos` and `windows`. The files of

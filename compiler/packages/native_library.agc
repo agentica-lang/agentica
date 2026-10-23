@@ -9,6 +9,7 @@ import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
 import Manifest from "manifest"
+import PackageHash from "package_hash"
 import Reader from "toml_read"
 
 ## What `extern "name"` means in a file of the package: the absolute path of a file of the package, a name for the
@@ -19,32 +20,43 @@ export enum Target
   Unusable(String)
 end
 
-## The target of each library the manifest declares, for the system `os` ("linux", "macos" or "windows"). `root` is the
-## real folder of the package, which holds the files.
+## What a manifest's [native] table means on one system: the target of each library it declares, and the files the
+## bytecode cache must watch because the program opens them: the manifest (when it is hashed with the package, so it
+## is not the project's), and every file of native/, which a library may load others from. watched is empty for a
+## manifest with no [native] table.
+export struct Found
+  targets: Map[String, Target]
+  watched: List[String]
+end
+
+## The libraries a manifest declares, for the system `os` ("linux", "macos" or "windows"). `root` is the real folder of
+## the package (or of the project), which holds the files; `hashed` says that the package hash covers the manifest.
 export def resolve(
   workspace: Workspace.Workspace,
   manifest: Manifest.Manifest,
   root: String,
   os: String,
-) -> Map[String, Target]
-  found: Map[String, Target] = {}
+  hashed: Bool,
+) -> Found
+  targets: Map[String, Target] = {}
   for library in manifest.natives
-    found = found.put(library.name, target_of(workspace, manifest, library, root, os))
+    targets = targets.put(library.name, target_of(workspace, manifest, library, root, os))
   end
-  return found
-end
-
-## The files of the package among the targets: what the bytecode cache watches.
-export def files(targets: Map[String, Target]) -> List[String]
-  found: List[String] = []
-  for name in targets.keys
-    case targets[name]
-      Target.File(path) -> found = found.push(path)
-      Target.System(_) -> next
-      Target.Unusable(_) -> next
-    end
+  watched: List[String] = []
+  if manifest.natives.size == 0
+    return Found(targets: targets, watched: watched)
   end
-  return found
+  # A folder that cannot be listed watches nothing here; the hash of the package reports it.
+  case PackageHash.list_files(workspace, root)
+    PackageHash.Listing.Files(paths) ->
+      natives = paths.filter do |path: String| PackageHash.native_path?(path) end
+      watched = natives.sort.map do |path: String| Paths.join(root, path) end
+      if hashed
+        watched = [manifest.file].concat(watched)
+      end
+    PackageHash.Listing.Stopped(_) -> watched = []
+  end
+  return Found(targets: targets, watched: watched)
 end
 
 def target_of(

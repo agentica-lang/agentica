@@ -28,13 +28,14 @@ DEPS_FOLDER = "deps"
 
 ## The package a file belongs to. package is its local name, root the real folder of its files in deps/ and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
-## the project. natives says what each `extern "name"` of the package means (native_library.agc); it is empty for the
-## files of the project.
+## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
+## files that the bytecode cache must watch because of it.
 export struct Origin
   package: String
   root: String
   label: String
   natives: Map[String, NativeLibrary.Target]
+  watched: List[String]
 end
 
 ## A package that the build has loaded and hashed: the same fields as its Origin, and the names its own manifest
@@ -44,6 +45,7 @@ export struct Opened
   label: String
   names: List[String]
   natives: Map[String, NativeLibrary.Target]
+  watched: List[String]
 end
 
 ## What a build knows when it resolves an import: the deps/ folder of the project ("" when it has no manifest), the
@@ -53,6 +55,8 @@ end
 export struct Scope
   deps: String
   os: String
+  natives: Map[String, NativeLibrary.Target]
+  watched: List[String]
   direct: List[String]
   lock: Lock.Lock
   members: Members.Members
@@ -89,6 +93,8 @@ export def scope_of(project: Project.Project) -> Scope
       return Scope(
         deps: "",
         os: "",
+        natives: {},
+        watched: [],
         direct: [],
         lock: Lock.Lock(file: "", packages: []),
         members: Members.none(),
@@ -99,6 +105,8 @@ export def scope_of(project: Project.Project) -> Scope
       return Scope(
         deps: Paths.join(found.dir, DEPS_FOLDER),
         os: "",
+        natives: {},
+        watched: [],
         direct: Project.direct_names(project),
         lock: found.lock,
         members: found.members,
@@ -108,9 +116,25 @@ export def scope_of(project: Project.Project) -> Scope
   end
 end
 
-## The origin of a file of the project.
-export def project_origin() -> Origin
-  return Origin(package: "", root: "", label: "", natives: {})
+## The scope with the native libraries of the project's own manifest ([native], for this system). Its files are the
+## project's own, so they are not hashed; the files of its native/ folder are watched by the bytecode cache.
+export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, project: Project.Project) -> Scope
+  case project
+    Project.Project.Bare -> return scope
+    Project.Project.Declared(found) ->
+      native = NativeLibrary.resolve(workspace, found.manifest, found.dir, scope.os, false)
+      return scope.with(natives: native.targets, watched: native.watched)
+  end
+end
+
+## The origin of a file of the project: its folder's native libraries are the scope's.
+export def project_origin(scope: Scope) -> Origin
+  return Origin(package: "", root: "", label: "", natives: scope.natives, watched: scope.watched)
+end
+
+## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
+export def library_origin() -> Origin
+  return Origin(package: "", root: "", label: "", natives: {}, watched: [])
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
@@ -162,7 +186,13 @@ export def open_package(
   return ok(
     Located(
       file: target.unwrap!,
-      origin: Origin(package: name, root: package.root, label: package.label, natives: package.natives),
+      origin: Origin(
+        package: name,
+        root: package.root,
+        label: package.label,
+        natives: package.natives,
+        watched: package.watched,
+      ),
       name: stored_name(package.label, inner),
       opened: opened,
     ),
@@ -266,8 +296,16 @@ def load(
     try verify(workspace, locked, real.unwrap!, folder, site)
   end
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
-  natives = try natives_of(workspace, scope, real.unwrap!, site)
-  return ok(Opened(root: real.unwrap!, label: Lock.label(locked), names: names, natives: natives))
+  native = try natives_of(workspace, scope, real.unwrap!, locked.member)
+  return ok(
+    Opened(
+      root: real.unwrap!,
+      label: Lock.label(locked),
+      names: names,
+      natives: native.targets,
+      watched: native.watched,
+    ),
+  )
 end
 
 def verify(
@@ -337,9 +375,10 @@ def names_of(
 end
 
 # The names the manifest of the package declares, none when it has no manifest. Each must be in the lock with the same
-# source (PKG-LOCK-STALE for a missing one, PKG-SOURCE-CONFLICT for another source). The manifest is not part of the
-# hash, so what it can do is limited to this check: it picks among the names of the lock and cannot change one. A
-# manifest that is not a regular file is PKG-SYMLINK at the import, as a link among the .agc files is.
+# source (PKG-LOCK-STALE for a missing one, PKG-SOURCE-CONFLICT for another source). The manifest is part of the hash
+# only for a package with native files or a [native] table (package_hash.agc); for any other package it can do no more
+# than this check: pick among the names of the lock and not change one. A manifest that is not a regular file is
+# PKG-SYMLINK at the import, as a link among the .agc files is.
 def declared_names(
   workspace: Workspace.Workspace,
   scope: Scope,
@@ -362,13 +401,13 @@ def natives_of(
   workspace: Workspace.Workspace,
   scope: Scope,
   root: String,
-  site: Failure.Site,
-) -> Result[Map[String, NativeLibrary.Target]]
+  member: Bool,
+) -> Result[NativeLibrary.Found]
   case shape_of(workspace, root)
     Shape.Regular ->
       manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
-      return ok(NativeLibrary.resolve(workspace, manifest, root, scope.os))
-    _ -> return ok({})
+      return ok(NativeLibrary.resolve(workspace, manifest, root, scope.os, !member))
+    _ -> return ok(NativeLibrary.Found(targets: {}, watched: []))
   end
 end
 

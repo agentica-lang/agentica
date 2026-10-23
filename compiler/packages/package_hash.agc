@@ -1,9 +1,11 @@
 ## The hash of a package (docs/grammar/05b-modules.md). The .agc files of the package folder and every file of its
-## native/ folder (the native libraries, any name), with paths relative to it and written with "/", are taken in
-## bytewise order of their paths; for each one the stream holds its path, a zero byte, its size in decimal, a zero byte
-## and its bytes. The hash is `sha256:` and the SHA-256 of that stream in hex. Hidden folders (any depth) and agc_libs/
-## (at the root) are left out. A symbolic link named *.agc or inside native/ is refused, as the fetch refuses it; other
-## links, and other files that are not .agc, are ignored.
+## native/ folder (the native libraries, any name but a dotfile, Thumbs.db and desktop.ini), with paths relative to it
+## and written with "/", are taken in bytewise order of their paths; for each one the stream holds its path, a zero
+## byte, its size in decimal, a zero byte and its bytes. The agentica.toml at the root joins them when the package has
+## native files or a [native] table, because the manifest then decides which file is opened; for any other package it
+## is not hashed, so those hashes did not change. The hash is `sha256:` and the SHA-256 of that stream in hex. Hidden
+## folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named *.agc, named native at the root
+## or inside native/ is refused, as the fetch refuses it; other links, and other files that are not .agc, are ignored.
 ##
 ## The names `.agc` and `agc_libs` are compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
 ## out on every system. A case-insensitive file system (macOS, Windows) can open `x.AGC` or `AGC_LIBS/y.agc` by the
@@ -15,9 +17,13 @@
 
 import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
+import Toml from "std/toml"
 
-# The folder of a package that holds its native libraries.
+# The folder of a package that holds its native libraries, and the manifest at its root.
 NATIVE_FOLDER = "native"
+MANIFEST_FILE = "agentica.toml"
+# Files that a file manager adds to a folder: not part of the package, so they are not hashed or copied.
+NATIVE_JUNK = Set.new(["thumbs.db", "desktop.ini"])
 
 ## What hashing a folder gives: the hash, a link among the .agc files (its path), or the system's message for a file
 ## or folder that cannot be read.
@@ -37,7 +43,45 @@ end
 export def hash_folder(workspace: Workspace.Workspace, root: String) -> Hashed
   case list_files(workspace, root)
     Listing.Stopped(reason) -> return reason
-    Listing.Files(paths) -> return hash_files(workspace, root, paths.sort)
+    Listing.Files(paths) ->
+      covered = paths
+      if manifest_hashed?(workspace, root, paths)
+        covered = covered.push(MANIFEST_FILE)
+      end
+      return hash_files(workspace, root, covered.sort)
+  end
+end
+
+## Whether the hash of the package folder covers its agentica.toml: the file is a regular file at the root and the
+## package has native files (`paths` are its covered files) or a top-level `native` table. A manifest that cannot be
+## read or parsed is left out; the build reports it where it reads it.
+export def manifest_hashed?(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Bool
+  entries = workspace.list_folder.call(root)
+  if !entries.ok?
+    return false
+  end
+  present = entries.unwrap!.any? do |entry: Workspace.Entry| entry.name == MANIFEST_FILE and regular?(entry.kind) end
+  if !present
+    return false
+  end
+  if paths.any? do |path: String| native_path?(path) end
+    return true
+  end
+  read = workspace.read_bytes.call(join(root, MANIFEST_FILE))
+  if !read.ok?
+    return false
+  end
+  text = String.from_bytes(read.unwrap!)
+  if !text.ok?
+    return false
+  end
+  parsed = Toml.parse(text.unwrap!)
+  if !parsed.ok?
+    return false
+  end
+  case parsed.unwrap!
+    Toml.Value.Table(table) -> return table.has_key?("native")
+    _ -> return false
   end
 end
 
@@ -61,11 +105,11 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
             pending = pending.push(path)
           end
         Workspace.EntryKind.Link ->
-          if source_file?(entry.name) or native_path?(path)
+          if source_file?(entry.name) or native_path?(path) or native_root?(path)
             return Listing.Stopped(Hashed.Link(path))
           end
         Workspace.EntryKind.File ->
-          if source_file?(entry.name) or native_path?(path)
+          if source_file?(entry.name) or (native_path?(path) and !native_junk?(entry.name))
             files = files.push(path)
           end
         _ -> next
@@ -85,6 +129,17 @@ end
 export def native_path?(path: String) -> Bool
   parts = path.split("/")
   return parts.size > 1 and fold(parts[0]) == NATIVE_FOLDER
+end
+
+## Whether the path is the native/ entry of the package root itself (a link named so would hide a folder from the
+## hash).
+export def native_root?(path: String) -> Bool
+  return fold(path) == NATIVE_FOLDER
+end
+
+## Whether a file name under native/ is left out: a dotfile (.DS_Store) or one that Windows adds.
+export def native_junk?(name: String) -> Bool
+  return name.starts_with?(".") or NATIVE_JUNK.include?(fold(name))
 end
 
 ## Whether a folder is left out of the hash, and cannot be imported: a hidden one at any depth, or agc_libs at the root
@@ -119,6 +174,15 @@ export def concat_all(pieces: List[List[Int]]) -> List[Int]
     return []
   end
   return level[0]
+end
+
+def regular?(kind: Workspace.EntryKind) -> Bool
+  case kind
+    Workspace.EntryKind.File -> return true
+    Workspace.EntryKind.Directory -> return false
+    Workspace.EntryKind.Link -> return false
+    Workspace.EntryKind.Other -> return false
+  end
 end
 
 def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Hashed
