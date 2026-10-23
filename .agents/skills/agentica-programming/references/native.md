@@ -13,7 +13,8 @@ end
 ~~~
 
 - Types: `C.Int32` (32-bit `int`, an `Int`), `C.Int64` (`Int`), `C.Double`
-  (`Float`), `C.Bool` (`Bool`), `C.String` (`const char *`, a `String`); a
+  (`Float`), `C.Float` (32-bit `float`, a `Float`, rounded; out of range is an
+  infinity), `C.Bool` (`Bool`), `C.String` (`const char *`, a `String`); a
   result may be `Void`. Anything else (`C.Int` too: write the width) is
   `PARSE-EXTERN-TYPE`; more than 64 parameters `PARSE-EXTERN-ARITY`; a name
   with `?` or `!` `PARSE-EXTERN-NAME`; a default `PARSE-EXTERN-DEFAULT`. `##`
@@ -49,6 +50,20 @@ end
   owns is undefined behavior. `Native.pointer(n)` is the pointer with value `n`
   (`SQLITE_TRANSIENT` is `Native.pointer(-1)`). A `char **` out parameter
   read with `string_at` is then freed by its C function (`sqlite3_free`).
+- Owned buffers: `Native.memory_pointer(size) -> C.Pointer` is `size` zeroed
+  bytes that the task owns (pass it to any `C.Pointer` parameter);
+  `Native.free(p)` frees it once, the owner's end frees the rest; a `compute
+  def` call holds it. A freed one is `RUNTIME-NATIVE-CLOSED`; `Native.free` of
+  C's pointer `RUNTIME-NATIVE-NOT-OWNED`.
+- Typed memory at a byte offset of any `C.Pointer` (Ruby `ffi` names):
+  `Native.get_int8/16/32/64(p, off)`, `get_uint8/16/32`, `get_float32/64`,
+  `get_pointer`; `Native.put_int8/16/32/64(p, off, v)` (signed or unsigned
+  range, else `RUNTIME-INTEGER-OVERFLOW`), `put_float32/64`, `put_pointer`,
+  `put_string(p, off, s)` (adds the NUL); bulk
+  `Native.get_array_of_int32/int64/float32/float64(p, off, count) -> List` and
+  `put_array_of_*(p, off, list)`. In a buffer, past its end or a negative offset
+  is `RUNTIME-NATIVE-BOUNDS`; at C's pointer only NULL (`RUNTIME-NATIVE-NULL`)
+  and a negative offset are checked, the rest is trusted (UB if wrong).
 - `[export] resource Db, free: db_close` in a block declares a resource type,
   freed by `void db_close(void *)` of the same library. Declare it above the
   `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is
@@ -71,10 +86,11 @@ end
   end
   ~~~
 - `out NAME: T` is an out parameter (`T` is `C.Int32`, `C.Int64`, `C.Double`,
-  `C.Bool`, `C.Pointer` or a resource; else `PARSE-EXTERN-OUT`). The caller
-  does not pass it; C writes through a pointer to a zeroed slot. The call
-  returns a record named after the function in CamelCase (`Sqlite3Open`), with
-  `result` (the C result; none for `Void`) and one field per out parameter.
+  `C.Float`, `C.Bool`, `C.Pointer` or a resource; else `PARSE-EXTERN-OUT`).
+  The caller does not pass it; C writes through a pointer to a zeroed slot. The
+  call returns a record named after the function in CamelCase
+  (`Sqlite3Open`), with `result` (the C result; none for `Void`) and one field
+  per out parameter.
   An out resource field is the resource (not a `Result`): owned by the task
   when C wrote a pointer, closed (never freed, calls fail with
   `RUNTIME-NATIVE-CLOSED`) when it is NULL, so check `result` first. An out
@@ -131,8 +147,9 @@ end
   of each argument the calls pass. `= "c_name"` after the result names the C
   function when the `def` name differs, so one function takes several shapes.
   `...` needs a parameter before it (`PARSE-EXTERN-VARIADIC-FIXED`), once, in
-  an extern block (`PARSE-EXTERN-VARIADIC`); after it no `out` and no `C.Bool`
-  (C promotes it: write `C.Int32`; `PARSE-EXTERN-VARIADIC-TYPE`); the C name
+  an extern block (`PARSE-EXTERN-VARIADIC`); after it no `out`, no `C.Bool`
+  and no `C.Float` (C promotes them: write `C.Int32`, `C.Double`;
+  `PARSE-EXTERN-VARIADIC-TYPE`); the C name
   is letters, digits and `_` (`PARSE-EXTERN-SYMBOL`). Never declare a variadic
   function without `...`: on Apple arm64 its arguments go on the stack.
 

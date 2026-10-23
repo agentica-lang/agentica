@@ -282,15 +282,18 @@ and a task's crash line (`"task":true`) carry it too.
   outside an extern block (`native.md`).
 - `PARSE-EXTERN-VARIADIC`, `PARSE-EXTERN-VARIADIC-FIXED`,
   `PARSE-EXTERN-VARIADIC-TYPE`, `PARSE-EXTERN-SYMBOL`: a second `...` or one
-  outside an extern block, a `...` with no parameter before it, a `C.Bool` or
-  `out` parameter after it, or a C name after `=` that is not a plain string
-  of letters, digits and `_` (`native.md`).
+  outside an extern block, a `...` with no parameter before it, a `C.Bool`,
+  `C.Float` or `out` parameter after it, or a C name after `=` that is not a
+  plain string of letters, digits and `_` (`native.md`).
 - `RUNTIME-NATIVE-LOAD`, `RUNTIME-NATIVE-CLOSED`, `RUNTIME-NATIVE-NULL`,
+  `RUNTIME-NATIVE-BOUNDS`, `RUNTIME-NATIVE-NOT-OWNED`,
   `RUNTIME-NATIVE-DENIED`, `RUNTIME-NATIVE-UNSUPPORTED`: the library or
   function of an extern call was not found (at the extern function); a call
-  took a closed resource; `Native.string_at` or `bytes_at` read at NULL; or, at
-  load with exit 2, `--deny-native` refused a program with an extern function
-  or a `Native.*` call, or the system has no native calls.
+  or a memory builtin took a closed resource or a freed buffer; a memory
+  builtin read or wrote at NULL, at a negative offset or past an owned buffer;
+  `Native.free` took a pointer that C gave; or, at load with exit 2,
+  `--deny-native` refused a program with an extern function or a `Native.*`
+  call, or the system has no native calls.
 - `LOWER-UNSUPPORTED`: the VM cannot run this form (exit 1 before anything
   runs); an interpreter bug to report.
 

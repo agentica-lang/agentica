@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, variadic functions, reading memory that C returns, resources that own a C pointer, and out parameters.
+description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, and out parameters.
 ---
 
 ## Types
@@ -11,6 +11,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 | `C.Int32` | `int32_t` / `int` (32 bits) | `Int` |
 | `C.Int64` | `int64_t` | `Int` |
 | `C.Double` | `double` | `Float` |
+| `C.Float` | `float` (32 bits) | `Float` |
 | `C.Bool` | `bool` | `Bool` |
 | `C.String` | `const char *` | `String` |
 | `C.Pointer` | `void *` | `C.Pointer` |
@@ -19,6 +20,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 `C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
 - A `C.Int32` argument outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
+- A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity), and a `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.string_at` (below).
 - A `C.Bytes` argument is a list of bytes: C gets a copy, valid only during the call, and an item outside 0 to 255 fails with `RUNTIME-INVALID-NUMBER`. Pass the length as a parameter of its own. A `C.Bytes` result is `PARSE-EXTERN-TYPE`.
 - A `C.Pointer` is a C pointer that your program passes back to C. It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it. Pointers have no `==`, and `IO.inspect` prints `<C.Pointer>`.
@@ -44,7 +46,7 @@ end
 ```
 
 - `...` comes after one parameter at least (`PARSE-EXTERN-VARIADIC-FIXED`), once, and only in an extern block (`PARSE-EXTERN-VARIADIC`). The variadic part may be empty, and the 64 parameters count both parts.
-- A variadic parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool` is `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes it to `int`: write `C.Int32`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
+- A variadic parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.String`, `C.Pointer`, `C.Bytes` or a resource. `C.Bool` and `C.Float` are `PARSE-EXTERN-VARIADIC-TYPE`, as C promotes them to `int` and `double`: write `C.Int32` or `C.Double`. An out parameter there is `PARSE-EXTERN-VARIADIC-TYPE` too.
 - The C name is a plain string of letters, digits and `_` (`PARSE-EXTERN-SYMBOL`).
 - The call follows the variadic rules of each system's C ABI, which differ from a fixed signature: on Apple arm64 the variadic arguments go on the stack. Declare a variadic function with `...`, never as a fixed one.
 
@@ -75,6 +77,63 @@ def main() -> Void
   Native.close(db)
 end
 ```
+
+## Owned buffers and typed memory
+
+A C function that writes into memory the caller gives it, such as `char *getcwd(char *buf, size_t size)`, or that reads an array of floats, gets an owned buffer. `Native.memory_pointer(size)` allocates `size` zeroed bytes and gives them as a `C.Pointer`, so the buffer goes wherever a `C.Pointer` parameter is:
+
+```agentica {mode="check"}
+extern "libc.so.6"
+  def getcwd(buf: C.Pointer, size: C.Int64) -> C.Pointer
+end
+
+def main() -> Void
+  buf = Native.memory_pointer(4096)
+  if !Native.null?(getcwd(buf, 4096))
+    puts(Native.string_at(buf))
+  end
+  Native.free(buf)
+end
+```
+
+- The calling task owns the buffer like a resource: `Native.free(buf)` frees it once (freeing it again does nothing), and the task's end frees what it did not free. When `main` returns, the program ends without freeing it. A `compute def` call keeps its buffer arguments until it returns, so a free meanwhile waits for the call.
+- A freed buffer fails every later read, write or call with `RUNTIME-NATIVE-CLOSED`. `Native.free` of a pointer that C gave fails with `RUNTIME-NATIVE-NOT-OWNED`: free it with its library's function.
+- The names follow the Ruby `ffi` gem (`FFI::MemoryPointer.new(size)`, `get_int32(offset)`, `put_array_of_float(offset, values)`), as `Native.*` functions that take the pointer first.
+
+Typed reads and writes take a byte offset past any `C.Pointer`, a buffer or one that C returned; the offset need not be aligned:
+
+| Read | Write | Item |
+|---|---|---|
+| `Native.get_int8(p, offset)`, `get_int16`, `get_int32`, `get_int64` | `Native.put_int8(p, offset, value)`, `put_int16`, `put_int32`, `put_int64` | signed integer, `Int` |
+| `Native.get_uint8(p, offset)`, `get_uint16`, `get_uint32` | the `put_int` forms | unsigned integer, `Int` |
+| `Native.get_float32(p, offset)`, `get_float64` | `Native.put_float32(p, offset, value)`, `put_float64` | `float` or `double`, `Float` |
+| `Native.get_pointer(p, offset)` | `Native.put_pointer(p, offset, value)` | `void *`, `C.Pointer` |
+| `Native.get_array_of_int32(p, offset, count)`, `_int64`, `_float32`, `_float64` | `Native.put_array_of_int32(p, offset, values)`, `_int64`, `_float32`, `_float64` | a `List[Int]` or `List[Float]` |
+| `Native.string_at(p)` (above) | `Native.put_string(p, offset, text)` | text and a NUL, a C string |
+
+- A `put_int` form takes a value that fits in its bits, read as signed or unsigned: `put_int8` takes -128 to 255. Any other value fails with `RUNTIME-INTEGER-OVERFLOW`. A `put_array_of_*` checks every item before it writes the first.
+- `put_string` writes the bytes of the text and a NUL after them; a NUL in the text fails with `RUNTIME-INVALID-CHARACTER`. Owned C strings and an array of pointers to them (`const char *const *`) are buffers too:
+
+```agentica {mode="check"}
+extern "/opt/model/libmodel.so"
+  def model_inputs(names: C.Pointer, count: C.Int64, data: C.Pointer) -> C.Int32
+end
+
+def main() -> Void
+  name = Native.memory_pointer(6)
+  Native.put_string(name, 0, "input")
+  names = Native.memory_pointer(8)
+  Native.put_pointer(names, 0, name)
+  data = Native.memory_pointer(4 * 3)
+  Native.put_array_of_float32(data, 0, [0.5, 1.5, 2.5])
+  puts(model_inputs(names, 1, data))
+  puts(Native.get_array_of_float32(data, 0, 3))
+end
+```
+
+- A buffer knows its size: a read or write that starts before it or runs past its end fails with `RUNTIME-NATIVE-BOUNDS`, and so does `Native.string_at` of a buffer with no NUL. Nothing outside the buffer is ever read or written.
+- A pointer that C returned has no size. A NULL one fails with `RUNTIME-NATIVE-NULL` (an array or `bytes_at` of count 0 is empty), and a negative offset with `RUNTIME-NATIVE-BOUNDS`; any other offset is trusted. Memory past what C owns is undefined behavior, like a wrong signature: take the size from the library.
+- A negative count or size fails with `RUNTIME-INVALID-COUNT`.
 
 ## Resources
 
@@ -108,6 +167,6 @@ end
 A C function that gives a value through a pointer, such as `int sqlite3_open(const char *filename, sqlite3 **db)`, declares that parameter with `out`. The caller does not pass it: C writes into a slot that is zeroed before the call, and the call returns a record with the C result as `result` and one field per out parameter, named after it.
 
 - The record is a struct named after the function in CamelCase (`sqlite3_open` gives `Sqlite3Open`), exported with its function. A `Void` function's record has no `result`.
-- An out parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
+- An out parameter is `C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of the block; anything else is `PARSE-EXTERN-OUT`. For a `char **`, use an out `C.Pointer`.
 - An out resource is the resource itself, not a `Result`. When C wrote a pointer, the calling task owns it, as for a resource result. When C wrote NULL or left the slot alone, it is a resource that is closed already: nothing frees it, `Native.close` does nothing, and a call with it fails with `RUNTIME-NATIVE-CLOSED`. Check `result` before you use it.
 - A cancelled `compute def` call drops its record; an out resource that C made is freed when the call returns.

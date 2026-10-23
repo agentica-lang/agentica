@@ -72,7 +72,7 @@ def test_a_private_extern_function_is_not_exported(tmp_path):
 @pytest.mark.parametrize("signature, start, stop", [
     ("def f(x: Float) -> C.Int32", (2, 12), (2, 17)),
     ("def f(x: C.Int32) -> Int", (2, 24), (2, 27)),
-    ("def f(x: C.Float) -> Void", (2, 12), (2, 19)),
+    ("def f(x: C.Char) -> Void", (2, 12), (2, 18)),
     ("def f(x: C.Int32) -> C.Bytes", (2, 24), (2, 31)),
     ("def f(x: Void) -> Void", (2, 12), (2, 16)),
     ("def f(x: List[C.Int32]) -> Void", (2, 12), (2, 25)),
@@ -82,6 +82,60 @@ def test_a_private_extern_function_is_not_exported(tmp_path):
 def test_only_c_types_cross_an_extern_signature(tmp_path, signature, start, stop):
     text = 'extern "libc.so.6"\n  %s\nend\n' % signature
     assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-TYPE", start, stop)
+
+
+FLOATS = """extern "/opt/libpeer.so"
+  def scalef(x: C.Float, k: C.Float) -> C.Float
+  def half(x: C.Float, out half: C.Float) -> Void
+end
+
+def main() -> Void
+%s
+end
+"""
+
+
+# C.Float is a 32-bit float in C and a Float to the checker, as a parameter, a result and an out parameter.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  x: Float = scalef(1.5, 2.0) + half(3.0).half\n  puts(x)", None, None, None),
+    ("  puts(scalef(1, 2.0))", "CHECK-TYPE-MISMATCH", (7, 15), (7, 16)),
+    ("  n: Int = scalef(1.0, 2.0)", "CHECK-TYPE-MISMATCH", (7, 12), (7, 28)),
+])
+def test_c_float_is_a_float_to_the_checker(tmp_path, body, code, start, stop):
+    result = check(source(tmp_path, FLOATS % body))
+    if code is None:
+        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
+    else:
+        assert at(problem_of(result)) == (code, start, stop)
+
+
+MEMORY = """extern "/opt/libpeer.so"
+  def fill(out: C.Pointer, n: C.Int32) -> Void
+end
+
+def main() -> Void
+%s
+end
+"""
+
+
+# An owned buffer is a C.Pointer: it goes where a C.Pointer parameter is, and the typed reads and writes take any
+# C.Pointer with an Int offset, giving Int, Float, C.Pointer or a list of Int or Float.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  buf = Native.memory_pointer(16)\n  fill(buf, 4)\n  xs: List[Float] = Native.get_array_of_float32(buf, 0, 4)\n"
+     "  n: Int = Native.get_uint8(buf, 0) + Native.get_int64(buf, 8)\n  p: C.Pointer = Native.get_pointer(buf, 8)\n"
+     "  Native.put_array_of_int64(buf, 0, [1, 2])\n  Native.put_float32(buf, 0, 1.5)\n  Native.put_pointer(buf, 8, p)\n"
+     "  Native.put_string(buf, 0, \"x\")\n  Native.free(buf)\n  puts(xs.size + n)", None, None, None),
+    ("  Native.put_array_of_float32(Native.memory_pointer(8), 0, [1, 2])", "CHECK-TYPE-MISMATCH", (6, 61), (6, 62)),
+    ("  Native.put_int32(Native.memory_pointer(4), 0, 1.5)", "CHECK-TYPE-MISMATCH", (6, 49), (6, 52)),
+    ("  n: Int = Native.get_float64(Native.null(), 0)", "CHECK-TYPE-MISMATCH", (6, 12), (6, 48)),
+])
+def test_owned_buffers_and_typed_memory_check_as_c_pointers(tmp_path, body, code, start, stop):
+    result = check(source(tmp_path, MEMORY % body))
+    if code is None:
+        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
+    else:
+        assert at(problem_of(result)) == (code, start, stop)
 
 
 def test_c_int_is_refused_with_the_widths_to_write(tmp_path):
@@ -168,7 +222,8 @@ def test_a_variadic_extern_function_checks_like_any_other(tmp_path):
     ("def f(a: C.Int32, ..., b: C.Int32, ...) -> Void", "PARSE-EXTERN-VARIADIC", (2, 38), (2, 41)),
     ("def f(a: C.Int32, ..., b: C.Bool) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 35)),
     ("def f(a: C.Int32, ..., out b: C.Int32) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 26), (2, 40)),
-    ("def f(a: C.Int32, ..., b: C.Float) -> Void", "PARSE-EXTERN-TYPE", (2, 29), (2, 36)),
+    ("def f(a: C.Int32, ..., b: C.Float) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36)),
+    ("def f(a: C.Int32, ..., b: C.Char) -> Void", "PARSE-EXTERN-TYPE", (2, 29), (2, 35)),
     ('def f(a: C.Int32) -> Void = "a b"', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 36)),
     ('def f(a: C.Int32) -> Void = "1a"', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 35)),
     ('def f(a: C.Int32) -> Void = ""', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 33)),

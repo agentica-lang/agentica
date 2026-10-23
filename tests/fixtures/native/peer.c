@@ -454,3 +454,48 @@ int32_t peer_out_open_later(int32_t value, int32_t limit_ms, void **res) {
 static const char text_with_nul[] = "h\xc3\xa9llo\0world";
 const void *peer_text(void) { return text_with_nul; }
 int64_t peer_ptr_value(void *p) { return (int64_t)(intptr_t)p; }
+
+/* C.Float: a float result, and float arguments mixed with the other types, more than the registers hold (8 floating
+   registers on x86_64 System V and arm64, 4 slots in all on Windows x64), so some go on the stack. */
+float peer_scalef(float x, float k) { return x * k; }
+double peer_fmix(int32_t a, float b, double c, float d, int64_t e, float f, float g, float h, float i, float j,
+                 float k, float l, float m) {
+  return a + b + c + d + (double)e + f + g + h + i + j + k + l + m;
+}
+void peer_out_half(float x, float *half) { *half = x / 2; }
+
+/* For owned buffers: C fills and reads memory that Agentica owns, as llama.cpp and onnxruntime do. */
+void peer_fill_floats(float *out, int32_t n) {
+  for (int32_t k = 0; k < n; k++) out[k] = (float)k * 0.5f;
+}
+double peer_sum_floats(const float *xs, int32_t n) {
+  double sum = 0;
+  for (int32_t k = 0; k < n; k++) sum += xs[k];
+  return sum;
+}
+void peer_fill_ints(int32_t *out, int32_t n) {
+  for (int32_t k = 0; k < n; k++) out[k] = k * k - 3;
+}
+int64_t peer_sum_int64s(const int64_t *xs, int32_t n) {
+  int64_t sum = 0;
+  for (int32_t k = 0; k < n; k++) sum += xs[k];
+  return sum;
+}
+/* The total length of N C strings, given as an array of pointers (onnxruntime's input names). */
+int64_t peer_strs_len(const char *const *strs, int32_t n) {
+  int64_t sum = 0;
+  for (int32_t k = 0; k < n; k++) sum += (int64_t)strlen(strs[k]);
+  return sum;
+}
+/* Memory that C owns, read through a plain C.Pointer: 1.5, -2.25 and 1e30 as floats, then 7 and -9 as int64. */
+static const float static_floats[] = {1.5f, -2.25f, 1e30f};
+static const int64_t static_int64s[] = {7, -9};
+const void *peer_static_floats(void) { return static_floats; }
+const void *peer_static_int64s(void) { return static_int64s; }
+/* A compute call that holds a buffer of floats until peer_set_flag has run, then sums it: a buffer freed meanwhile
+   would give another sum (the allocator writes into a freed block). */
+double peer_floats_hold(const float *xs, int32_t n, int32_t limit_ms) {
+  atomic_fetch_add(&res_holding, 1);
+  peer_wait_flag(limit_ms);
+  return peer_sum_floats(xs, n);
+}

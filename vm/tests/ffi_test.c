@@ -1,7 +1,7 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
    the prepared-call cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one,
-   the reads Native.string_at and bytes_at (NULL, length 0, a negative length, refused under no_files), and
-   agc_ffi_refusal at load. Calls into the math and C libraries run only in a build with libffi. */
+   the reads Native.string_at and bytes_at, owned buffers with typed reads and writes (bounds, NULL, freed, no_files),
+   and agc_ffi_refusal at load. Calls into the math and C libraries run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -63,7 +63,8 @@ static void test_bad_signatures(void) {
                        "dd  " LIBM, " cos " LIBM, "yd cos " LIBM, "rd cos " LIBM,
                        "rd cos free " LIBM, "rd cos  Mem " LIBM, "rd cos free M\xc3\xa9m " LIBM,
                        "rd cos free 1Mem " LIBM, "rd cos free M.em " LIBM, ". cos " LIBM, "d.d cos " LIBM,
-                       "dd..d cos " LIBM, "dd.d.d cos " LIBM, "dd.b cos " LIBM, "dd.D cos " LIBM, "dd.R cos " LIBM};
+                       "dd..d cos " LIBM, "dd.d.d cos " LIBM, "dd.b cos " LIBM, "dd.D cos " LIBM, "dd.R cos " LIBM,
+                       "dd.f cos " LIBM, "fF cos " LIBM};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);
@@ -87,6 +88,12 @@ static void test_calls(void) {
   fails("ls strlen " LIBC, &nul, 1, "RUNTIME-INVALID-CHARACTER");
   agc_value small = agc_int(-(INT64_C(1) << 31));
   assert(agc_as_int(&vm, native_call("ii abs " LIBC, &small, 1)) == INT32_MIN);
+#ifndef _WIN32
+  /* C.Float: float fabsf(float), the argument narrowed and the result widened. The peer test covers Windows, whose
+     UCRT need not export fabsf. */
+  agc_value minus = agc_float(-0.1);
+  assert(agc_as_float(&vm, native_call("ff fabsf " LIBM, &minus, 1)) == (double)0.1f);
+#endif
   agc_value s = text("h\xc3\xa9llo");
   assert(agc_as_int(&vm, native_call("ls strlen " LIBC, &s, 1)) == 6);
   fails("v no_such_function_here " LIBC, NULL, 0, "RUNTIME-NATIVE-LOAD");
@@ -305,6 +312,69 @@ static void test_reads(void) {
   vm.rt->no_files = false;
 }
 
+/* Calls the row NAME/ARITY with ARGS. */
+static agc_value call_row(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)(&vm, args, 0); }
+
+/* An owned buffer: typed writes and reads at byte offsets, unaligned too, the bounds of its size, a free that runs
+   once and leaves every later use RUNTIME-NATIVE-CLOSED; the same reads at a C pointer, which has no size but refuses
+   NULL and a negative offset; and nothing at all under no_files. */
+static void test_buffers(void) {
+  agc_value size = agc_int(16);
+  agc_value buf = call_row("Native.memory_pointer", 1, &size);
+  agc_c_resource *res = agc_as_c_resource(&vm, buf);
+  assert(res->buffer && res->size == 16 && res->state && !res->closed);
+  agc_value put[3] = {buf, agc_int(5), agc_int(-2)};
+  (void)call_row("Native.put_int32", 3, put);
+  agc_value get[3] = {buf, agc_int(5), agc_int(2)};
+  assert(agc_as_int(&vm, call_row("Native.get_int32", 2, get)) == -2);
+  assert(agc_as_int(&vm, call_row("Native.get_uint8", 2, get)) == 254);
+  put[1] = agc_int(12);
+  put[2] = agc_float(1.5);
+  (void)call_row("Native.put_float32", 3, put);
+  get[1] = agc_int(12);
+  assert(agc_as_float(&vm, call_row("Native.get_float32", 2, get)) == 1.5);
+  get[1] = agc_int(13);
+  read_fails("Native.get_int32", 2, get, "RUNTIME-NATIVE-BOUNDS");
+  get[1] = agc_int(17);
+  read_fails("Native.get_int8", 2, get, "RUNTIME-NATIVE-BOUNDS");
+  get[1] = agc_int(-1);
+  read_fails("Native.get_int8", 2, get, "RUNTIME-NATIVE-BOUNDS");
+  get[1] = agc_int(0);
+  get[2] = agc_int(5);
+  read_fails("Native.get_array_of_int32", 3, get, "RUNTIME-NATIVE-BOUNDS");
+  get[2] = agc_int(INT64_MAX);
+  read_fails("Native.get_array_of_int64", 3, get, "RUNTIME-NATIVE-BOUNDS");
+  get[2] = agc_int(-1);
+  read_fails("Native.get_array_of_int64", 3, get, "RUNTIME-INVALID-COUNT");
+  agc_value ints[2] = {agc_int(1), agc_int(INT64_C(1) << 32)};
+  agc_value list[3] = {buf, agc_int(4), agc_list_value(agc_list_from_array(ints, 2))};
+  read_fails("Native.put_array_of_int32", 3, list, "RUNTIME-INTEGER-OVERFLOW");
+  /* A bad item leaves the memory as it was. */
+  get[1] = agc_int(5);
+  assert(agc_as_int(&vm, call_row("Native.get_int32", 2, get)) == -2);
+  read_fails("Native.free", 1, (agc_value[]){agc_c_pointer_value(NULL)}, "RUNTIME-NATIVE-NOT-OWNED");
+  (void)call_row("Native.free", 1, &buf);
+  assert(res->closed && res->freed);
+  (void)call_row("Native.free", 1, &buf);
+  read_fails("Native.get_int8", 2, get, "RUNTIME-NATIVE-CLOSED");
+  assert(!agc_as_bool(&vm, row("Native.null?", 1)(&vm, &buf, 0)));
+  /* A C pointer: read as it is, but never NULL or before itself. */
+  static const int32_t words[2] = {7, -9};
+  agc_value raw[3] = {agc_c_pointer_value((void *)words), agc_int(4), agc_int(1)};
+  assert(agc_as_int(&vm, call_row("Native.get_int32", 2, raw)) == -9);
+  raw[1] = agc_int(-4);
+  read_fails("Native.get_int32", 2, raw, "RUNTIME-NATIVE-BOUNDS");
+  raw[0] = agc_c_pointer_value(NULL);
+  raw[1] = agc_int(0);
+  read_fails("Native.get_int32", 2, raw, "RUNTIME-NATIVE-NULL");
+  raw[2] = agc_int(0);
+  assert(agc_list_len(agc_as_list(&vm, call_row("Native.get_array_of_float32", 3, raw))) == 0);
+  vm.rt->no_files = true;
+  read_fails("Native.memory_pointer", 1, &size, "RUNTIME-NATIVE-DENIED");
+  read_fails("Native.get_int32", 2, raw, "RUNTIME-NATIVE-DENIED");
+  vm.rt->no_files = false;
+}
+
 int main(void) {
   agc_test_io_vm(&vm);
   test_bad_signatures();
@@ -313,6 +383,7 @@ int main(void) {
   test_outs();
   test_compute_outs();
   test_reads();
+  test_buffers();
   test_refusal();
   return 0;
 }
