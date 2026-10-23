@@ -71,8 +71,8 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   `CHECK-EMPTY-SET-TYPE`): `m: Map[String, Int] = {}`. A non-empty list needs
   one element type.
 - Struct construction names each field at most once, in any order: `User(name:
-  "Ana", age: 25)` (`CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD`). A field with
-  a default may be left out (`CHECK-MISSING-FIELD` only for one without).
+  "Ana", age: 25)` (`CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD`). A field
+  with a default may be left out (`CHECK-MISSING-FIELD` only for one without).
 - Update: `user.with(age: 31)` copies the struct with named fields changed. It
   takes at least one field, each named once, only by name (`user.with()` and
   `user.with(31)` are `PARSE-UNEXPECTED-TOKEN`), each with a value of the
