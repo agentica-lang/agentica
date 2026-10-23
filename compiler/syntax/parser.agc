@@ -1011,7 +1011,8 @@ def enum_constructor_node(
 end
 
 # After Type.Name: an enum constructor (A.B.C, A.B(args)), Result.Ok(x) and Result.Err(m), which are the calls ok and
-# error, a struct construction through a module alias (A.B(name: v)), or a type name.
+# error, a struct construction through a module alias (A.B(name: v)), or a type name (also a constant through an alias,
+# A.NAME, which the linker tells from a type).
 def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = e.tokens[pos].lexeme
   member_pos = pos + 2
@@ -1020,6 +1021,14 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
   cursor = member_pos + 1
   kind = e.tokens[cursor].kind
   no_args: List[Ast.Expr] = []
+  if kind == "dot" and Base.constant_name?(member) and Base.kind_at(e, cursor + 1) == "name"
+    # Alias.NAME.x on an exported constant: the postfix loop reads the field or method; a variant would be a type-name.
+    return expr_at(
+      Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, span: Base.span_from(e, pos, cursor))),
+      cursor,
+      ids,
+    )
+  end
   if kind == "dot"
     variant_pos = cursor + 1
     after_variant = try Base.expect(e, variant_pos, "type-name", "an enum variant", false)

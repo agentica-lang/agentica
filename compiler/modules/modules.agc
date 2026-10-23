@@ -50,7 +50,6 @@ export struct Module
   names: Map[String, Declarations.Kind]
   public: Map[String, Declarations.Kind]
   aliases: Map[String, String]
-  paths: Map[String, String]
   named: Map[String, Named]
   imports: List[String]
 end
@@ -80,14 +79,13 @@ export struct Parses
   top: Int
 end
 
-# A file whose imports are being read: the module so far (its aliases, the paths written for them and named imports are
-# filled in as imports are read), and the index of the next import to read. pending is the key of the file that the
-# import at next names while its names wait to be checked: they need the exports of that file, so they are checked once
-# it is loaded, checked after the walk. "" when no import waits.
+# A file whose imports are being read: the module so far (its aliases and named imports are filled in as imports are
+# read), and the index of the next import to read. pending is the key of the file that the import at next names while
+# its names wait to be checked: they need the exports of that file, so they are checked once it is loaded, checked
+# after the walk. "" when no import waits.
 struct Frame
   module: Module
   aliases: Map[String, String]
-  paths: Map[String, String]
   named: Map[String, Named]
   imports: List[Ast.ImportDecl]
   imported: List[String]
@@ -302,7 +300,6 @@ end
 def finish(walk: Walk, frame: Frame) -> Walk
   module = frame.module.with(
     aliases: frame.aliases,
-    paths: frame.paths,
     named: frame.named,
     imports: frame.imported,
   )
@@ -320,7 +317,6 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   site = Failure.Site(file: module.file, span: decl.span)
   alias = Declarations.alias_of(decl)
   aliases = frame.aliases
-  paths = frame.paths
   if (
     alias != "" and
     (
@@ -338,9 +334,8 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   target = found.key
   if alias != ""
     aliases = aliases.put(alias, target)
-    paths = paths.put(alias, decl.path)
   end
-  noted = frame.with(paths: paths, imported: frame.imported.push(target))
+  noted = frame.with(imported: frame.imported.push(target))
   with_frame = replace_top(walk, after_read(noted, aliases, target, decl))
   # The packages loaded so far are kept whether or not this file is new.
   known = with_frame.with(build: with_frame.build.with(scope: found.scope))
@@ -386,7 +381,7 @@ def bind_name(
         Failure.Site(file: file, span: entry.span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        ImportHelp.unknown_import_help(target.key, target.public, entry.name, false),
+        ImportHelp.unknown_import_help(target.key, target.public, entry.name),
       ),
     )
   end
@@ -508,14 +503,12 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     names: collected.names,
     public: collected.public,
     aliases: {},
-    paths: {},
     named: {},
     imports: [],
   )
   frame = Frame(
     module: module,
     aliases: {},
-    paths: {},
     named: {},
     imports: Declarations.imports_of(program.declarations),
     imported: [],

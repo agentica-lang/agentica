@@ -1,1 +1,1 @@
-ERROR CHECK-IMPORT-NAME 35:3:13-42:3:20 "a constant is read by its name, not through the module alias" "write import {MAX} from \"lib\", then use MAX\nor let the module export a function and call it as Lib.name()" file="root.agc"
+ERROR CHECK-TYPE-MISMATCH 35:3:13-42:3:20 "wrong kind of imported declaration" - file="root.agc"

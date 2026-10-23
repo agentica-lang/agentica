@@ -70,11 +70,14 @@ Unused names are not reported.
 "limits"` brings it in by name, like any other exported name (it can be renamed
 to another constant name: `import {LIMIT as MAX_ITEMS} from "limits"`). A
 constant is read by its bare name, wherever an expression can stand, in the file
-that declares it and in a file that imports it by name; it is not reached
-through an alias. `Limits.LIMIT` is `CHECK-IMPORT-NAME` at the member, with the
-help `write import {LIMIT} from "limits", then use LIMIT` (a typo of a constant
-through an alias suggests `import {NAME}`), so a module that wants to offer a
-value through its alias exports a function. An imported name must not collide
+that declares it and in a file that imports it by name. An importer that has
+the module under an alias reads an exported constant as `Limits.LIMIT`, like an
+exported function: `Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)` and
+`"#{Limits.LIMIT}"` work as for a bare constant. A private constant, and a name
+the module does not export, are `CHECK-IMPORT-NAME` at the member, with a `did
+you mean` help for a near export, as for a function. A constant is no function
+and no type: `Limits.LIMIT()` and `x: Limits.LIMIT` are `CHECK-TYPE-MISMATCH`.
+An imported name must not collide
 with a constant of the file, and two constants of the same name are
 `CHECK-REDEFINED-NAME`, as for any declaration. An unexported constant is
 private: importing it is `CHECK-IMPORT-NAME`. A constant is never changed, so

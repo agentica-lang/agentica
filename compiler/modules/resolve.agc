@@ -83,6 +83,21 @@ export def constant_identity(cx: Context, name: String) -> String
   return ""
 end
 
+## The linked name of the constant that Alias.NAME reads, or "" when the alias is unknown or the module it names does
+## not export a constant of that name (a private constant is left to `resolve`, which refuses it like a private
+## function).
+export def alias_constant_identity(cx: Context, name: String) -> String
+  parts = name.split(".")
+  if parts.size != 2 or !cx.me.aliases.has_key?(parts[0])
+    return ""
+  end
+  target = cx.modules[cx.me.aliases[parts[0]]]
+  if target.public.has_key?(parts[1]) and Declarations.constant?(target.public[parts[1]])
+    return target.prefix + parts[1]
+  end
+  return ""
+end
+
 ## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not
 ## exist.
 export def unknown_constant?(cx: Context, name: String) -> Bool
@@ -140,7 +155,7 @@ end
 def qualified(cx: Context, alias: String, member: String, want: Want, span: Source.Span, hint: Bool) -> Result[String]
   target = cx.me.aliases.get(alias, "")
   if target != ""
-    return imported(cx, alias, cx.modules[target], member, want, span)
+    return imported(cx, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
   elsif function_wanted?(want) or std_record?(alias, member, want) or c_pointer?(alias, member, want)
@@ -219,41 +234,15 @@ def imported_by_name(cx: Context, entry: Modules.Named, want: Want, span: Source
   return ok(target.prefix + entry.name)
 end
 
-# Mod.NAME on a constant: the import that reads it, with the path as the alias import wrote it, and the other way.
-def constant_help(cx: Context, alias: String, member: String) -> String
-  path = cx.me.paths[alias]
-  return (
-    "write import {#{member}} from \"#{path}\", then use #{member}\n" +
-    "or let the module export a function and call it as #{alias}.name()"
-  )
-end
-
 # Only exports are candidates, so a private name is never suggested.
-def imported(
-  cx: Context,
-  alias: String,
-  target: Modules.Module,
-  member: String,
-  want: Want,
-  span: Source.Span,
-) -> Result[String]
+def imported(cx: Context, target: Modules.Module, member: String, want: Want, span: Source.Span) -> Result[String]
   if !target.public.has_key?(member)
     return error(
       Failure.fail_at(
         site(cx, span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        ImportHelp.unknown_import_help(target.key, target.public, member, true),
-      ),
-    )
-  end
-  if Declarations.constant?(target.public[member])
-    return error(
-      Failure.fail_at(
-        site(cx, span),
-        "CHECK-IMPORT-NAME",
-        "a constant is read by its name, not through the module alias",
-        Failure.hint(constant_help(cx, alias, member)),
+        ImportHelp.unknown_import_help(target.key, target.public, member),
       ),
     )
   end
