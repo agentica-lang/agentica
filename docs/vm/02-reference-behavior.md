@@ -229,6 +229,13 @@ Every failure is an error value. The checks run in this order:
 - `File.read_text` refuses a file over 1 MiB by its size and decodes strictly.
   `File.read_line` strips LF or CRLF and fails after 1 MiB without a LF.
   `File.read_bytes` reads to `max_bytes` or EOF.
+- `File.sha256` streams a whole regular file through one private descriptor,
+  read from the start in fixed 64 KiB chunks with O(chunk) memory: no 1 MiB
+  cap, and the 32 digest bytes in `Crypto.sha256` order. The `fstat` of the
+  descriptor decides regular; anything else is `filesystem: path does not
+  refer to a regular file`, without waiting on the loop. The job never takes
+  the `more` step, so a cancel or a timeout detaches it like the other
+  whole-file calls.
 - `File.stat` of a missing path is an error without a kind. A directory's size
   is
   0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`; `user_id` and

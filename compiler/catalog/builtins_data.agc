@@ -565,6 +565,22 @@ ROWS_6: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "File.sha256",
+      parameters: [
+        Model.Named(name: "path", type: Types.Type.String),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "File.sha256",
+      effects: ["filesystem"],
+      description: (
+        "Hash the whole file at path with SHA-256, streaming in fixed chunks, and return the 32 digest bytes; " +
+        "VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "File.stat",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),

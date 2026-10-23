@@ -170,6 +170,25 @@ Signatures are in
   returns `Result[Void]`: `ok()` goes on to the next line and an error stops and
   is returned by `each_line`. `try` works in the block. The file is closed on
   every return path.
+- `File.sha256(path, timeout_ms)` gives `Result[List[Int]]`: the 32 bytes of
+  the SHA-256 digest of the whole file, in the same order and form as
+  `Crypto.sha256` returns them (compose with hex yourself). It streams the
+  file in fixed 64 KiB chunks with O(chunk) memory, so unlike the whole-text
+  helpers it has no 1 MiB cap. Only regular files are hashed, read from the
+  first byte through a private descriptor that closes on every path;
+  symlinks are followed as `File.stat` follows them, and a missing path, a
+  directory, a path that reopens a pipe the VM made for itself, and (before
+  any blocking read) a FIFO, pipe, socket or device give
+  `error("filesystem: path does not refer to a regular file")`, the same
+  error `File.read_text` gives them. `timeout_ms` covers the whole call and
+  must be positive, otherwise `error("filesystem: timeout must be
+  positive milliseconds")`; expiry gives `error("filesystem: operation
+  timed out")`, while a hash already running on the pool runs to its end
+  and its result is dropped, as with the other whole-file calls (there is no
+  handle to close). A cancelled task detaches the same way, and a task that
+  ends owns nothing. There is no snapshot: bytes are hashed in read order,
+  so a concurrent writer changes the digest; to verify an archive, write it
+  to a temporary name first, hash it, then `Path.rename` it into place.
 - `File.close` flushes and is idempotent. Timeouts are positive milliseconds and
   include the lock wait. A timeout during active I/O closes the handle; a
   timeout while waiting for the lock keeps it open.
