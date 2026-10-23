@@ -279,7 +279,7 @@ typedef enum { AGC_COST_NONE, AGC_COST_SIZE } agc_cost_rule;
 
 /* The builtin that every extern function lowers to (vm/ffi.c). Every builtin whose name starts with AGC_NATIVE_PREFIX
    (it, the waits Native.wait_readable and wait_writable, Native.close, Native.null, Native.null?, Native.pointer and
-   the reads Native.string_at and bytes_at) is native code: the loader notes whether a program imports one, so a run
+   the memory reads and writes) is native code: the loader notes whether a program imports one, so a run
    can refuse native code before it starts (agc_ffi_refusal). */
 #define AGC_NATIVE_CALL "Native.call"
 #define AGC_NATIVE_PREFIX "Native."

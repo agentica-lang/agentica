@@ -388,7 +388,7 @@ end
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
   it may read only during the call. A `C.String` result is copied; `NULL` reads
   as `""`, and bytes that are not UTF-8 become U+FFFD. A result that may be
-  NULL is declared `-> C.Pointer` and read with `Native.string_at`.
+  NULL is declared `-> C.Pointer` and read with `Native.get_string`.
 - `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
@@ -396,11 +396,12 @@ end
   `List[Int]` whose items are bytes (an item outside 0 to 255 is
   `RUNTIME-INVALID-NUMBER`). C gets a `const uint8_t *` to a copy, valid only
   during the call; pass the length as a parameter of its own.
-- Memory that C returns is read through its `C.Pointer`:
-  `Native.string_at(p)` copies the NUL-terminated text, `Native.string_at(p,
-  length)` exactly `length` bytes (NUL bytes included), and
-  `Native.bytes_at(p, length)` gives the bytes as a `List[Int]`. Bytes that are
-  not UTF-8 become U+FFFD. A NULL `p` with length 0 reads as empty (C's way
+- Memory that C returns is read through its `C.Pointer`, from a byte offset
+  past it: `Native.get_string(p, offset)` copies the NUL-terminated text,
+  `Native.get_string(p, offset, length)` exactly `length` bytes (NUL bytes
+  included), and `Native.get_bytes(p, offset, length)` gives the bytes as a
+  `List[Int]` (Ruby ffi's `get_string` and `get_bytes`). Bytes that are not
+  UTF-8 become U+FFFD. A NULL `p` with length 0 reads as empty (C's way
   to say empty: SQLite gives NULL for an empty blob); any other NULL `p` is
   `RUNTIME-NATIVE-NULL` at the pointer, checked first, and then a negative
   length is `RUNTIME-INVALID-COUNT` at the length. A pointer or a
@@ -412,14 +413,17 @@ end
   parameter is (a negative size is `RUNTIME-INVALID-COUNT`). The calling task
   owns it like a resource: `Native.free(p)` frees it once (again does nothing),
   the owner's end frees it, and when `main` returns the program ends without
-  freeing it. `Task.spawn_owning` hands it over (section 6c); a channel send or
-  a task's result does not move it. A size the system cannot give, and any
-  size above 256 TiB (2^48 bytes), is `RUNTIME-INVALID-COUNT`. A `compute def`
-  call holds its buffer arguments as it holds resources: a free meanwhile runs
-  when the call returns, and a read or write of the buffer meanwhile races with
-  C. A freed buffer is
-  `RUNTIME-NATIVE-CLOSED` in every later read, write or call; `Native.free` of
-  a pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
+  freeing it. `Native.memory_pointer(size) do |p| ... end` gives a new buffer to
+  the block, frees it when the block ends (also when it returns an error early
+  with `try`) and has the block's value; a buffer that the block hands to
+  another task is left to that owner. `Task.spawn_owning` hands it over
+  (section 6c); a channel send or a task's result does not move it. A size the
+  system cannot give, and any size above 256 TiB (2^48 bytes), is
+  `RUNTIME-INVALID-COUNT`. A `compute def` call holds its buffer arguments as it
+  holds resources: a free meanwhile runs when the call returns, and a read or
+  write of the buffer meanwhile races with C. A freed buffer is
+  `RUNTIME-NATIVE-CLOSED` in every later read, write or call; `Native.free` of a
+  pointer that C gave is `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an
   address that nothing tracks, so the buffer it names must outlive C's use.
   `IO.inspect` prints `<C.Pointer>`, and `Native.null?` is false.
 - Typed memory, at a byte offset past any `C.Pointer` (alignment is not needed):
@@ -431,20 +435,24 @@ end
   fits in N bits as signed or unsigned (`put_int8` takes -128 to 255), else
   `RUNTIME-INTEGER-OVERFLOW` at the value. `Native.put_string(p, offset, text)`
   writes the bytes of `text` and a NUL, a C string (a NUL in `text` is
-  `RUNTIME-INVALID-CHARACTER`). In bulk, `Native.get_array_of_int32`,
+  `RUNTIME-INVALID-CHARACTER`), and `Native.put_bytes(p, offset, bytes)` writes
+  a `List[Int]` of bytes (one outside 0 to 255 is `RUNTIME-INTEGER-OVERFLOW`,
+  every item checked first). In bulk, `Native.get_array_of_int32`,
   `get_array_of_int64`, `get_array_of_float32` and `get_array_of_float64` take
   `(p, offset, count)` and give a `List[Int]` or `List[Float]`; the
   `put_array_of_*` forms take `(p, offset, values)` and check every item before
   the first is written.
 - An owned buffer knows its size: a read or write that starts before it or runs
   past its end is `RUNTIME-NATIVE-BOUNDS`, at the offset, or at the count, list
-  or text that runs past; so is `Native.string_at` of a buffer with no NUL, or
-  with a length past its end. Nothing outside the buffer is ever touched. A
-  `C.Pointer` that C gave has no size: a NULL one is `RUNTIME-NATIVE-NULL`
-  (unless the count is 0, as for `Native.bytes_at`) and a negative offset
-  `RUNTIME-NATIVE-BOUNDS`; any other offset and count are trusted, and memory
-  that C does not own is undefined behavior, like a wrong signature. A negative
-  count is `RUNTIME-INVALID-COUNT`.
+  or text that runs past; so is `Native.get_string` of a buffer with no NUL
+  after the offset, or with a length past its end. Nothing outside the buffer is
+  ever touched. A `C.Pointer` that C gave has no size: a NULL one is
+  `RUNTIME-NATIVE-NULL` (unless the count is 0, as for `Native.get_bytes`) and a
+  negative offset `RUNTIME-NATIVE-BOUNDS`; any other offset and count are
+  trusted, and memory that C does not own is undefined behavior, like a wrong
+  signature. Two tasks that read and write the same memory of C at once race, as
+  in C; each read or write of an owned buffer holds a lock. A negative count is
+  `RUNTIME-INVALID-COUNT`.
 - `resource Db, free: db_close` declares a resource: a nominal type for the
   pointers that the block's functions return, freed by `void db_close(void *)`
   of the same library. A function declared `-> Db` gives a `Result[Db]`: a NULL

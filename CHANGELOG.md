@@ -33,9 +33,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   parameters.
 - Owned buffers and typed memory: `Native.memory_pointer`, `Native.free`,
   `Native.get_int32`, `put_array_of_float32` and the other Ruby `ffi` forms.
+- `Native.memory_pointer(size) do |buf| ... end` frees the buffer when the
+  block ends, and `Native.put_bytes` writes a list of bytes.
 
 ### Changed
 
+- **Breaking:** `Native.string_at`/`bytes_at` are replaced by
+  `Native.get_string`/`get_bytes`, which take an offset
+  (`get_string(p, 0, length)`).
 - An `extern` block that declares a `resource` sits with the types in the
   declaration order, with its `def`s, so a wrapper can keep the block and its
   exported functions in one file. A block with no resource keeps its rule.

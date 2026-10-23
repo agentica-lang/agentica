@@ -97,6 +97,13 @@ export def foreign_names() -> Map[String, String]
     "Map.empty": "use a map literal with a type: m: Map[String, Int] = {}",
     "Map.new": "use a map literal with a type: m: Map[String, Int] = {}",
     "Mutex.new": "keep the state in one owner task that receives messages on a Channel, and send it requests",
+    "Native.bytes_at": (
+      "use Native.get_bytes(p, 0, length) for Native.bytes_at(p, length): its second argument is an offset"
+    ),
+    "Native.string_at": (
+      "use Native.get_string(p, 0) for Native.string_at(p), and Native.get_string(p, 0, length) for " +
+      "Native.string_at(p, length): its second argument is an offset"
+    ),
     "None": "use nil",
     "Parallel.map": "use Task.map(items, limit, timeout_ms) do |x| ... end, where the block gives a Result",
     "Request": "a std/http handler takes an HttpRequest: def handle(request: HttpRequest) -> Result[HttpResponse]",
