@@ -378,7 +378,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
      length). The "." comes out of them, after the result and one parameter at least; a second one is then an unknown
      code. BEFORE counts the parameter codes in front of it. */
   uint32_t before = UINT32_MAX, items = 0;
-  char kinds[AGC_FFI_MAX_PARAMS + 1];
+  char kinds[AGC_FFI_MAX_PARAMS + 1] = {0};
   const char *groups[AGC_FFI_MAX_PARAMS + 1];
   size_t group_lens[AGC_FFI_MAX_PARAMS + 1];
   for (size_t k = 0; k < codes_len;) {
