@@ -1068,7 +1068,7 @@ static agc_turn_result park_task(agc_task *t) {
    applied, a failure is raised here, outside compiled code, with frame->pc past the failing instruction. True when
    the turn ends (a yield); false when the interpreter goes on at frame->pc (no code, or a RETURN to run). Only the jit
    copy of the turn loop calls it. */
-static __attribute__((noinline)) bool run_compiled(agc_vm *vm, agc_jit *jit, agc_frame *frame) {
+static __attribute__((noinline)) AGC_JIT_CALLER bool run_compiled(agc_vm *vm, agc_jit *jit, agc_frame *frame) {
   agc_jit_code code = agc_jit_code_of(jit, frame->function);
   const agc_program *p = vm->rt->program;
   const agc_function *f = &p->functions[frame->function];

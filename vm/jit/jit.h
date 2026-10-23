@@ -28,18 +28,25 @@ typedef struct {
    constants, and returns at the first exit. It never fails, allocates, calls a builtin or moves a frame. */
 typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *K, uint32_t pc);
 
+/* On a function that calls compiled code: clang's -fsanitize=function reads a type word before each indirect call
+   target, which compiled code does not have. */
+#if defined(__clang__)
+#define AGC_JIT_CALLER __attribute__((no_sanitize("function")))
+#else
+#define AGC_JIT_CALLER
+#endif
+
 /* The JIT of a run. `skip[f]` is set once function f will not be compiled, so the interpreter's reload tests one
    byte for it; `code[f]` is its code (NULL until compiled), published with a release store after the pages are
    sealed, so a scheduler that loads it with acquire sees finished code; two schedulers that compile one function at
-   once keep the first and unmap the second. `sizes` are the mapped sizes, `entries` the entries counted in the `on`
-   mode, `used` the code memory taken. */
+   once keep the first and unmap the second. `entries` are the entries counted in the `on` mode, `used` the code
+   memory taken. The code lives until the process exits, like the program. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
   const agc_program *program;
   agc_jit_mode mode;
   const agc_trace *trace;
-  size_t *sizes;
   _Atomic uint32_t *entries;
   _Atomic size_t used;
 } agc_jit;
@@ -52,8 +59,6 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function);
 static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
   return !atomic_load_explicit(&jit->skip[function], memory_order_relaxed);
 }
-/* Gives back the code memory. No scheduler may run compiled code then. */
-void agc_jit_free(agc_jit *jit);
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
@@ -65,6 +70,13 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 #else
 #define AGC_JIT_HOST 0
 #endif
+
+/* The most code memory a run takes, counted in 4 KiB pages, and so the most one function takes; past it, functions
+   stay interpreted. */
+#define AGC_JIT_CODE_CAP ((size_t)64 * 1024 * 1024)
+
+/* Exit words share the status half with agc_status, so every status is below the first exit. */
+_Static_assert((int)AGC_STATUS_WRONG_TAG < (int)AGC_JIT_EXIT_STEP, "an agc_status value overlaps the JIT's exits");
 
 /* A 32-bit offset written once the function is laid out: to the code of instruction `value` (LABEL), or to the exit
    stub that returns the exit word `value` (EXIT), or the status in eax with the pc in the high half of `value`

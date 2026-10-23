@@ -24,9 +24,10 @@ vm-test: $(VM_TESTS)
 
 # TSan over the code that more than one thread touches (docs/vm/10-io-multicore.md §10.2.3, "Order of work"): the inbox, the
 # set-once outcome and reference count, the run queue, the wake against the park, a job on the loop, rt->sync, the output
-# locks and a timer fired against a wake. The VM is built without libgc (AGC_NO_GC), so the collector's own signals are out
-# of the picture; the whole run is checked, so a race fails it.
-VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads
+# locks, a timer fired against a wake and a function compiled by several threads at once. The VM is built without
+# libgc (AGC_NO_GC), so the collector's own signals are out of the picture; the whole run is checked, so a race fails
+# it.
+VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit
 # vm/tools/tsan.supp: the calls from the system libcrypto, whose own locking TSan cannot see (TLS setup on pool threads).
 VM_TSAN_OPTIONS := halt_on_error=1 suppressions=$(CURDIR)/vm/tools/tsan.supp
 vm-tsan:
@@ -108,10 +109,12 @@ SANITIZE_JOBS ?= 4
 test-shared: dist/agentica$(EXE)
 	AGENTICA_VM_TEST_SHARED=1 AGENTICA_VM_TEST_MODULE_SCHEDULERS=1 $(MAKE) --no-print-directory test-py TESTS="$(VM_PY_TESTS)" JOBS=$(JOBS)
 
-# The goldens with their --max-steps sweeps and the stack traces, with each function the JIT can compile compiled at
-# its first entry (AGENTICA_JIT=always, docs/future/22-jit.md §22): no output may depend on the tier.
+# The goldens with their --max-steps sweeps, the stack traces and the programs on four schedulers, with each function
+# the JIT can compile compiled at its first entry (AGENTICA_JIT=always, docs/future/22-jit.md §22): no output may
+# depend on the tier.
 vm-jit-test: dist/agentica$(EXE)
-	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always $(MAKE) --no-print-directory test-py TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py"
+	AGENTICA_REQUIRE_VM=1 AGENTICA_JIT=always $(MAKE) --no-print-directory test-py \
+	  TESTS="$(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_vm_multicore.py"
 
 vm-sanitize-build: dist/agentica$(EXE)
 

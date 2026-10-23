@@ -1,12 +1,14 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
- * failures that leave the result register alone), and the code memory sealed read-execute, never writable then.
+ * failures that leave the result register alone), the code memory sealed read-execute, never writable then, and
+ * one copy kept when several threads compile a function at once.
  */
 #include "../jit/jit.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <uv.h>
 
 #define MAX_CODE 32
 
@@ -20,10 +22,10 @@ typedef struct {
 
 static agc_vm vm;
 
+#if AGC_JIT_HOST
 /* The tag and the 8-byte payload: bytes 4 to 7 are padding that the constructors leave unset. */
 static bool same_bits(agc_value x, agc_value y) { return x.tag == y.tag && agc_value_word(x) == agc_value_word(y); }
 
-#if AGC_JIT_HOST
 static void emit(one_function *f, uint32_t op, uint32_t a, uint32_t b, uint32_t c) {
   assert(f->fn.count < MAX_CODE);
   f->code[f->fn.count++] = (agc_instr){(uint16_t)op, (uint16_t)a, (uint16_t)b, (uint16_t)c};
@@ -105,7 +107,7 @@ static void sum_loop(one_function *f) {
   emit(f, AGC_OP_RETURN, 2, 0, 0);
 }
 
-static void loops_and_steps(void) {
+static AGC_JIT_CALLER void loops_and_steps(void) {
   one_function f;
   sum_loop(&f);
   agc_jit_code code = compile(&f);
@@ -129,7 +131,7 @@ static void loops_and_steps(void) {
 }
 
 /* R3 = R1 op R2, then RETURN R3: the exit for each case, and R3 left alone on a failure. */
-static void binary(agc_opcode op, agc_value x, agc_value y, uint32_t status, agc_value want) {
+static AGC_JIT_CALLER void binary(agc_opcode op, agc_value x, agc_value y, uint32_t status, agc_value want) {
   one_function f;
   memset(&f, 0, sizeof f);
   emit(&f, op, 3, 1, 2);
@@ -148,7 +150,7 @@ static void binary(agc_opcode op, agc_value x, agc_value y, uint32_t status, agc
   }
 }
 
-static void int_rules(void) {
+static AGC_JIT_CALLER void int_rules(void) {
   agc_value max = agc_int(INT64_MAX), min = agc_int(INT64_MIN), one = agc_int(1), zero = agc_int(0);
   agc_value minus = agc_int(-1), any = agc_nil();
   binary(AGC_OP_ADD_I, agc_int(40), agc_int(2), AGC_STATUS_OK, agc_int(42));
@@ -187,7 +189,7 @@ static void int_rules(void) {
 }
 
 /* A String compare charges its bytes to the task's turn cost, and the code leaves for the interpreter to apply it. */
-static void string_cost(void) {
+static AGC_JIT_CALLER void string_cost(void) {
   char text[200];
   memset(text, 'a', sizeof text);
   agc_value x = agc_string_value(agc_make_string(text, sizeof text, sizeof text));
@@ -204,6 +206,32 @@ static void string_cost(void) {
   vm.task->turn_cost = 0;
 }
 
+/* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): each gets the one copy
+   that was published, and the copies that lost the race were unmapped. */
+#define RACERS 4
+static agc_jit *race_jit;
+static agc_jit_code race_code[RACERS];
+
+static void race_one(void *arg) {
+  assert(agc_gc_thread_enter());
+  race_code[(uintptr_t)arg] = agc_jit_code_of(race_jit, 0);
+  agc_gc_thread_leave();
+}
+
+static void compile_race(void) {
+  static const agc_trace quiet = {0};
+  one_function f;
+  sum_loop(&f);
+  program_of(&f);
+  race_jit = agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet);
+  uv_thread_t threads[RACERS];
+  for (uintptr_t k = 0; k < RACERS; k++) assert(uv_thread_create(&threads[k], race_one, (void *)k) == 0);
+  for (size_t k = 0; k < RACERS; k++) assert(uv_thread_join(&threads[k]) == 0);
+  for (size_t k = 0; k < RACERS; k++) assert(race_code[k] && race_code[k] == race_code[0]);
+  assert(agc_jit_code_of(race_jit, 0) == race_code[0]);
+  assert(atomic_load(&race_jit->used) == 4096);
+}
+
 /* Functions with an instruction the emitter does not know stay interpreted. */
 static void ineligible(void) {
   one_function f;
@@ -215,7 +243,6 @@ static void ineligible(void) {
 
 /* mov eax, 42; ret */
 static const uint8_t forty_two[] = {0xB8, 42, 0, 0, 0, 0xC3};
-#endif
 
 /* The permissions of the mapping that holds P in /proc/self/maps ("rw-p", "r-xp"), Linux only. */
 static bool mapped_as(const void *p, const char *want) {
@@ -239,8 +266,7 @@ static bool mapped_as(const void *p, const char *want) {
 #endif
 }
 
-static void code_memory(void) {
-#if AGC_JIT_HOST
+static AGC_JIT_CALLER void code_memory(void) {
   uint8_t *pages = agc_jit_mem_map(sizeof forty_two);
   assert(pages && mapped_as(pages, "rw-p"));
   memcpy(pages, forty_two, sizeof forty_two);
@@ -249,14 +275,16 @@ static void code_memory(void) {
   int (*fn)(void) = (int (*)(void))(uintptr_t)pages;
   assert(fn() == 42);
   agc_jit_mem_unmap(pages, sizeof forty_two);
-#endif
 }
+#endif
 
 int main(void) {
   agc_init();
+  agc_gc_allow_threads();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
-  code_memory();
 #if AGC_JIT_HOST
+  code_memory();
+  compile_race();
   bytes();
   loops_and_steps();
   int_rules();

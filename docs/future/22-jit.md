@@ -65,8 +65,8 @@ and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
 **Built (x86-64):** `--jit MODE` (or `AGENTICA_JIT`; the flag wins): `off`,
 the default; `on`, which compiles a function at its 100th entry (a call, a
 return into it, or a turn that starts in it); `always`, at its first entry,
-for tests. Only
-the user's program is compiled; the front end stays in the interpreter. On
+for tests. Only the user's program is compiled; the front end stays in the
+interpreter. On
 another architecture every mode runs the interpreter. A function is compiled
 only when each of its instructions is `MOVE`, `CONST`, `STEP`, an Int operator
 or compare (`ADD_I` to `LE_I`), `EQ`, `NE`, a jump or `RETURN`, fused or not;
@@ -88,9 +88,11 @@ any other instruction keeps the whole function in the interpreter.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
   and a `skip` line with the first instruction that kept one out.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
-  three tasks in compiled loops, failures, a cancel), `make vm-jit-test` (the
-  goldens and their sweeps with `AGENTICA_JIT=always`, in CI) and
-  `vm/tests/jit_test.c` (bytes, exits, the read-execute seal).
+  three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
+  switching in the middle of a loop, four schedulers), `make vm-jit-test` (the
+  goldens and their sweeps and `test_vm_multicore.py` with
+  `AGENTICA_JIT=always`, in CI) and `vm/tests/jit_test.c` (bytes, exits, the
+  read-execute seal, a compile race, also under `make vm-tsan`).
 
 **Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
 never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and

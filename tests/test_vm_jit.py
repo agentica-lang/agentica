@@ -2,7 +2,8 @@
 
 Each program runs with `--jit off`, `on` and `always`, which compiles every eligible function at its first entry. Its
 eligible functions (Int loops, compares and jumps only) run the STEPs of their loops in compiled code, so the
-`--max-steps` sweep stops inside them, the turns of several tasks end inside them, and their failures leave them.
+`--max-steps` sweep stops inside them, the turns of several tasks end inside them (by steps and by turn cost), their
+failures leave them, `on` switches to them in the middle of a loop, and four schedulers compile and run them at once.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
@@ -86,27 +87,136 @@ end
 """
 
 
-def runs(bytecode, *flags, env=None):
+# spin is called 96 times, below the threshold of `on` (100 entries), and its last call runs for many turns: the
+# turns that start inside its loop are entries too, so `on` compiles it at one of them and enters the code at
+# frame->pc, in the middle of the loop, through the entry table.
+THRESHOLD = """def spin(n: Int) -> Int
+  i = 0
+  total = 0
+  while i < n
+    total = total + i % 7
+    i = i + 1
+  end
+  return total
+end
+
+def main() -> Void
+  sum = 0
+  k = 0
+  while k < 95
+    sum = sum + spin(5)
+    k += 1
+  end
+  puts(sum)
+  puts(spin(40000))
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+# Six tasks on four schedulers call one eligible function 150 times each, so `on` compiles it while several
+# schedulers run it, and `always` compiles it on several schedulers at once.
+SCHEDULERS = """def spin(id: Int, n: Int) -> Int
+  i = 0
+  total = 0
+  while i < n
+    total = total + i * id - 3
+    if total % 7 == 0 or total > 1000000
+      total = total / 3
+    end
+    i = i + 1
+  end
+  return total
+end
+
+def worker(id: Int) -> Int
+  total = 0
+  round = 0
+  while round < 150
+    total = total + spin(id, 50 + round)
+    round += 1
+  end
+  return total
+end
+
+def main() -> Void
+  a = Task.spawn(&worker, 1)
+  b = Task.spawn(&worker, 2)
+  c = Task.spawn(&worker, 3)
+  d = Task.spawn(&worker, 4)
+  e = Task.spawn(&worker, 5)
+  puts(worker(6))
+  puts("#{Task.await(a)} #{Task.await(b)} #{Task.await(c)} #{Task.await(d)} #{Task.await(e)}")
+end
+"""
+
+# Each compare of two 256 KiB Strings in the eligible `same` charges more turn cost than a turn has steps, so the
+# turn ends right after it, in compiled code as in the interpreter. Task 1 compares once a round, task 2 five times,
+# so the order of their lines shows where each turn ended.
+COST = """def same(a: String, b: String, n: Int) -> Int
+  i = 0
+  hits = 0
+  while i < n
+    if a == b
+      hits = hits + 1
+    end
+    i = i + 1
+  end
+  return hits
+end
+
+def doubled(times: Int) -> String
+  s = "x"
+  k = 0
+  while k < times
+    s = s + s
+    k += 1
+  end
+  return s
+end
+
+def worker(id: Int) -> Int
+  n = 4 * id - 3
+  a = doubled(18)
+  b = doubled(18)
+  total = 0
+  round = 0
+  while round < 4
+    total = total + same(a, b, n)
+    puts("task #{id} round #{round} hits #{total}")
+    round += 1
+  end
+  return total
+end
+
+def main() -> Void
+  x = Task.spawn(&worker, 1)
+  y = Task.spawn(&worker, 2)
+  puts(Task.await(x) + Task.await(y))
+end
+"""
+
+
+def runs(bytecode, *flags, env=None, schedulers=1):
     """{mode: (exit code, stdout, stderr)} of one program in each mode."""
     out = {}
     for mode in MODES:
-        result = run_vm(bytecode, "--jit", mode, "--schedulers", "1", *flags, env=vm_environment(env))
+        result = run_vm(bytecode, "--jit", mode, "--schedulers", str(schedulers), *flags, env=vm_environment(env))
         out[mode] = (result.code, result.stdout, result.stderr)
     return out
 
 
-def assert_same(bytecode, *flags):
-    results = runs(bytecode, *flags)
+def assert_same(bytecode, *flags, schedulers=1):
+    results = runs(bytecode, *flags, schedulers=schedulers)
     assert results["on"] == results["off"], flags
     assert results["always"] == results["off"], flags
     return results["off"]
 
 
-def compiled(bytecode, tmp_path):
-    """The functions the jit trace says were compiled in a run with --jit always."""
+def compiled(bytecode, tmp_path, mode="always"):
+    """The functions the jit trace says were compiled in a run with --jit MODE."""
     trace = tmp_path / "jit.trace"
     trace.unlink(missing_ok=True)
-    run_vm(bytecode, "--jit", "always", "--schedulers", "1",
+    run_vm(bytecode, "--jit", mode, "--schedulers", "1",
            env=vm_environment({"AGENTICA_VM_TRACE": "jit", "AGENTICA_VM_TRACE_FILE": trace}))
     lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
     return sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
@@ -156,6 +266,32 @@ def test_a_task_cancelled_in_a_compiled_loop_stops_as_in_the_interpreter(tmp_pat
     assert compiled(bytecode, tmp_path) == (["spin"] if X86_64 else [])
     status, stdout, stderr = assert_same(bytecode, "--json")
     assert status == 1 and stdout == "5000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
+
+
+def test_on_compiles_a_function_at_a_turn_that_starts_in_its_loop(tmp_path):
+    bytecode = compile_text(THRESHOLD, "threshold", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["spin"] if X86_64 else [])
+    full = assert_same(bytecode)
+    assert full[0] == 0 and full[1].count("\n") == 3, full
+    steps = int(full[1].split("steps ")[1])
+    for limit in (*range(steps - 3000, steps + 1, 211), steps - 1, steps):
+        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
+        assert code == (0 if limit >= steps else 1), (limit, stderr)
+
+
+def test_several_schedulers_compile_and_run_one_function_as_the_interpreter(tmp_path):
+    bytecode = compile_text(SCHEDULERS, "schedulers", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["spin"] if X86_64 else [])
+    for _ in range(3):
+        code, stdout, stderr = assert_same(bytecode, schedulers=4)
+        assert code == 0 and stdout.count("\n") == 2, stderr
+
+
+def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_does(tmp_path):
+    bytecode = compile_text(COST, "cost", tmp_path)
+    assert compiled(bytecode, tmp_path) == (["same"] if X86_64 else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout.endswith("\n24\n"), (stdout, stderr)
 
 
 def test_a_bad_jit_mode_is_refused(tmp_path):

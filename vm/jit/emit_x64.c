@@ -42,7 +42,13 @@ enum { CC_O = 0x0, CC_E = 0x4, CC_NE = 0x5, CC_L = 0xC, CC_LE = 0xE };
 #define TAG(r) ((int64_t)(r) * 16)
 #define WORD(r) ((int64_t)(r) * 16 + 8)
 
+/* Room for N more bytes. Past the code cap the function fails and the writing starts over at 0 in the same buffer,
+   so the bytes that follow, until the walk sees `failed`, stay in bounds. */
 static void grow(agc_emitter *e, size_t n) {
+  if (e->len + n > AGC_JIT_CODE_CAP) {
+    e->failed = true;
+    e->len = 0;
+  }
   if (e->len + n <= e->cap) return;
   size_t cap = e->cap ? e->cap : 256;
   while (cap < e->len + n) cap = agc_size_mul(cap, 2);
