@@ -230,11 +230,11 @@ def rank(decl: Ast.Decl) -> Int
 end
 
 # A function takes the rank of its kind (3 exported, 4 private), except one of an extern block that declares a
-# resource: the block sits with the types, as a whole.
+# resource or a struct: the block sits with the types, as a whole.
 def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
   case function.native
     Ast.Optional.Present(link) ->
-      if link.with_resource
+      if link.with_types
         return 2
       end
       return plain

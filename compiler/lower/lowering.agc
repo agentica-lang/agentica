@@ -134,12 +134,16 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     table_size += 1
   end
   table = Table(functions: [], blocks: {}, block_count: table_size)
+  struct_decls: Map[String, Ast.StructDecl] = {}
+  for entry in structs
+    struct_decls = struct_decls.put(entry.decl.name, entry.decl)
+  end
   for entry in functions
     params = entry.function.params.map do |param: Ast.Param| param.name end
     function = entry.function
     case function.native
       Ast.Optional.Present(native) ->
-        lowered = try Native.lower(cx.with(file: entry.file), function, native, index_of[entry.file])
+        lowered = try Native.lower(cx.with(file: entry.file), function, native, struct_decls, index_of[entry.file])
         table = table.with(functions: table.functions.push(lowered))
       Ast.Optional.Absent ->
         table = try add_function(

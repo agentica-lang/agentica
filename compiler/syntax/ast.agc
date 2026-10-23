@@ -123,12 +123,14 @@ end
 ## has a `.` where its `...` is, before the codes of its variadic part; a C.Function first parameter, the address of
 ## the function to call, is c, and a C.Function last parameter, the free function of the resource the call makes (or
 ## the sole one of a def that returns such a resource), is e: neither goes to C, and the C name of a call through a
-## pointer is only shown), and whether it is a `compute def`, which runs on the VM's compute pool while the task waits.
+## pointer is only shown; a struct of the block, passed or returned by value, is its layout code: { then the code of
+## each field in order (i, l, d, f, b, p or a nested struct's layout code), then }), and whether it is a `compute def`,
+## which runs on the VM's compute pool while the task waits.
 ## A function that returns a resource has the resource's name as written and the C name of its free function (or
 ## "C.Function"); both are "" otherwise. outs holds the same for each out resource, in order. A function with out
 ## parameters has none of them in its params: it returns its record (StructDecl.record_of), with the C result first.
-## with_resource is true when the block of the function declares a resource, which puts all its functions with the
-## types in the declaration order.
+## with_types is true when the block of the function declares a resource or a struct, which puts all its functions
+## with the types in the declaration order.
 export struct Native
   library: String
   symbol: String
@@ -137,7 +139,7 @@ export struct Native
   resource: String
   free: String
   outs: List[NativeResource]
-  with_resource: Bool
+  with_types: Bool
 end
 
 ## A resource that an out parameter of an extern function gives: its name as written and the C name of its free
