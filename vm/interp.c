@@ -965,6 +965,24 @@ static agc_turn_result park_task(agc_task *t) {
 /* The span of the running instruction, read only where a failure or a call needs it. */
 #define SPAN spans[pc - 1]
 
+/* The STEP half of a fused instruction (AGC_FUSED_STEP_*, written by the loader on a STEP whose next instruction has
+   that opcode). It is STEP itself: the same fast path, and the same slow path, which may stop the run at the STEP's
+   span or yield with frame->pc on the next instruction, before it runs, so the resumed task runs it alone. Then the
+   next instruction is fetched as the loop would fetch it, and its case runs it with a direct jump instead of a second
+   dispatch. */
+#define FUSED_STEP()                              \
+  do {                                            \
+    if (vm->next_stop > in.a) {                   \
+      vm->next_stop -= in.a;                      \
+    } else {                                      \
+      step_slow(vm, in.a, SPAN);                  \
+      if (vm->yield) return AGC_TURN_YIELD;       \
+    }                                             \
+    in = code[pc++];                              \
+    bx = (uint32_t)in.b | ((uint32_t)in.c << 16); \
+    frame->pc = pc;                               \
+  } while (0)
+
 /* The turn loop keeps the state of the top frame in locals (its code, spans, register window and next pc) and
  * reloads them (`reload`) only after an instruction that can change which frame runs or move the frames or the
  * registers: CALL, CALL_VALUE, TAIL_CALL, RETURN, a failing TRY, and a builtin that starts a native frame. A
@@ -1002,15 +1020,27 @@ reload:
   pc = frame->pc;
   for (;;) {
     agc_instr in = code[pc];
-    if (profiling) profile_op(profile, &before, in.op);
+    if (profiling) {
+      /* The profiling copy runs a fused STEP as a plain STEP, and its next instruction as one of its own, so the
+         opcode and pair counts describe the program's bytecode, the same with or without fusing. */
+      if (in.op >= AGC_OP_COUNT && in.op < AGC_FUSED_END) in.op = AGC_OP_STEP;
+      profile_op(profile, &before, in.op);
+    }
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
     pc++;
     frame->pc = pc;
     int64_t x;
     switch (in.op) {
-      case AGC_OP_MOVE: R[in.a] = R[in.b]; break;
-      case AGC_OP_CONST: R[in.a] = p->constants[bx]; break;
-      case AGC_OP_GLOBAL: {
+      case AGC_OP_MOVE:
+      op_move:
+        R[in.a] = R[in.b];
+        break;
+      case AGC_OP_CONST:
+      op_const:
+        R[in.a] = p->constants[bx];
+        break;
+      case AGC_OP_GLOBAL:
+      op_global: {
         /* The loader checked bx against global_count. A zeroed slot has tag AGC_T_VOID, and no module constant
            has type Void (docs/future/44-module-constants.md §44.5), so it means "never set": only a hand-made
            file reads one (or a slot it unset with GLOBAL_SET of a Void). */
@@ -1035,9 +1065,19 @@ reload:
         step_slow(vm, in.a, SPAN);
         if (vm->yield) return AGC_TURN_YIELD;
         break;
+      case AGC_FUSED_STEP_MOVE: FUSED_STEP(); goto op_move;
+      case AGC_FUSED_STEP_CONST: FUSED_STEP(); goto op_const;
+      case AGC_FUSED_STEP_FIELD: FUSED_STEP(); goto op_field;
+      case AGC_FUSED_STEP_LIST_GET: FUSED_STEP(); goto op_list_get;
+      case AGC_FUSED_STEP_IS_VARIANT: FUSED_STEP(); goto op_is_variant;
+      case AGC_FUSED_STEP_GLOBAL: FUSED_STEP(); goto op_global;
+      case AGC_FUSED_STEP_ARITH_I: FUSED_STEP(); goto op_arith_i;
+      case AGC_FUSED_STEP_LT_I: FUSED_STEP(); goto op_lt_i;
+      case AGC_FUSED_STEP_RETURN: FUSED_STEP(); goto op_return;
       case AGC_OP_ADD_I:
       case AGC_OP_SUB_I:
-      case AGC_OP_MUL_I: {
+      case AGC_OP_MUL_I:
+      op_arith_i: {
         R[in.a] = in.op == AGC_OP_ADD_I ? agc_op_add_i(vm, R[in.b], R[in.c], SPAN)
                     : in.op == AGC_OP_SUB_I ? agc_op_sub_i(vm, R[in.b], R[in.c], SPAN)
                                             : agc_op_mul_i(vm, R[in.b], R[in.c], SPAN);
@@ -1074,7 +1114,8 @@ reload:
         R[in.a] = in.c ? agc_list_value(agc_list_from_array(&R[in.b], in.c)) : vm->rt->empty_list;
         break;
       case AGC_OP_LIST_LEN: R[in.a] = agc_int((int64_t)list_len(agc_as_list(vm, R[in.b]))); break;
-      case AGC_OP_LIST_GET: {
+      case AGC_OP_LIST_GET:
+      op_list_get: {
         const agc_list *l = agc_as_list(vm, R[in.b]);
         x = agc_as_int(vm, R[in.c]);
         size_t len = list_len(l);
@@ -1126,7 +1167,8 @@ reload:
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       }
-      case AGC_OP_FIELD: {
+      case AGC_OP_FIELD:
+      op_field: {
         const agc_struct *st = agc_as_struct(vm, R[in.b]);
         if (in.c >= st->n) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: field index out of range", 0);
         R[in.a] = st->fields[in.c];
@@ -1143,7 +1185,10 @@ reload:
         R[in.a] = agc_enum_value(e);
         break;
       }
-      case AGC_OP_IS_VARIANT: R[in.a] = agc_bool(agc_as_enum(vm, R[in.b])->variant == in.c); break;
+      case AGC_OP_IS_VARIANT:
+      op_is_variant:
+        R[in.a] = agc_bool(agc_as_enum(vm, R[in.b])->variant == in.c);
+        break;
       case AGC_OP_PAYLOAD: {
         const agc_enum *e = agc_as_enum(vm, R[in.b]);
         if (in.c >= e->n) agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: payload index out of range", 0);
@@ -1155,7 +1200,10 @@ reload:
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_NOT: R[in.a] = agc_bool(!agc_as_bool(vm, R[in.b])); break;
-      case AGC_OP_LT_I: R[in.a] = agc_op_lt_i(vm, R[in.b], R[in.c]); break;
+      case AGC_OP_LT_I:
+      op_lt_i:
+        R[in.a] = agc_op_lt_i(vm, R[in.b], R[in.c]);
+        break;
       case AGC_OP_LE_I: R[in.a] = agc_op_le_i(vm, R[in.b], R[in.c]); break;
       case AGC_OP_EQ:
         R[in.a] = agc_op_eq(vm, R[in.b], R[in.c]);
@@ -1240,6 +1288,7 @@ reload:
         break;
       }
       case AGC_OP_RETURN:
+      op_return:
         if (!return_value(vm, R[in.a])) return AGC_TURN_DONE;
         if (t->parking) return park_task(t);
         if (vm->yield) return AGC_TURN_YIELD;
@@ -1268,6 +1317,7 @@ reload:
   }
 }
 
+#undef FUSED_STEP
 #undef SPAN
 
 agc_turn_result agc_run_turn(agc_vm *vm) { return AGC_PROFILE_ON(vm) ? turn_loop(vm, true) : turn_loop(vm, false); }

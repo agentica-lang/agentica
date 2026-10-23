@@ -406,7 +406,8 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   that took the leaf path, `builtin_leaf`, the generic tail, `builtin_tail`, or
   started a native frame, `builtin_native`), then one `op` row for each opcode
   that ran (`count`, `share` of the instructions in percent, `name` as
-  `--dump-ir` spells it), the most first, and the 20 `pair` rows with the most
+  `--dump-ir` spells it; a fused `STEP` counts as a `STEP` and the instruction
+  after it, `docs/vm/03-ir-and-bytecode.md` §4.2), the most first, and the 20 `pair` rows with the most
   runs of opcode `first` followed by `then` in one frame (the first instruction
   after a reload starts no pair). These counters live in `agc_profile`, like the
   others, and the profile runs on one scheduler, so they need no lock.

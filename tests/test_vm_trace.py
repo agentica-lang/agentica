@@ -299,6 +299,49 @@ def test_the_profile_stops_a_looping_program_at_the_same_step_and_counts_a_nativ
                for line in lines), lines
 
 
+FUSED_TASKS = """def count(id: Int) -> Int
+  i = 0
+  total = 0
+  while i < 600
+    total = total + i * id
+    i = i + 1
+    if i % 50 == 0
+      puts("task #{id} at #{i}")
+    end
+  end
+  return total
+end
+
+def main() -> Void
+  a = Task.spawn(&count, 1)
+  b = Task.spawn(&count, 2)
+  puts(count(3))
+  puts(Task.await(a))
+  puts(Task.await(b))
+end
+"""
+
+
+def test_a_fused_step_stops_and_yields_where_the_plain_step_of_the_profile_does(tmp_path, traced_vm):
+    """The loader fuses most STEPs with the instruction after them, and the profile runs every STEP plain. Three tasks
+    share one scheduler, so their turns end on fused STEPs and the order of the lines shows where; each --max-steps
+    stop must have the same output, diagnostic and span."""
+    vm = traced_vm[0]
+    source = tmp_path / "fused.agc"
+    source.write_text(FUSED_TASKS)
+    bytecode = compile_fixture(source, tmp_path)
+    profile = {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": tmp_path / "fused.trace"}
+    for limit in [*range(1, 30), *range(1990, 2010), *range(30, 34000, 499)]:
+        command = [*vm, "--schedulers", "1", "--json", "--max-steps", str(limit), "--", bytecode]
+        plain = vm_run(command, vm_environment())
+        assert plain[0] == 1 and json.loads(plain[2])["code"] == "RUNTIME-STEP-LIMIT", limit
+        assert vm_run(command, vm_environment(profile)) == plain, limit
+    command = [*vm, "--schedulers", "1", "--", bytecode]
+    plain = vm_run(command, vm_environment())
+    assert plain[0] == 0 and plain[1].count(b"\n") == 3 * 12 + 3
+    assert vm_run(command, vm_environment(profile)) == plain
+
+
 def test_the_profile_is_not_part_of_all(tmp_path, traced_vm):
     vm = traced_vm[0]
     bytecode = compile_fixture(VM_FIXTURES / "task-fail.agc", tmp_path)

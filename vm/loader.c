@@ -341,6 +341,31 @@ static void check_function(reader *r, const agc_program *p, const agc_function *
   if (sets_global && jumps_back) reject(r, "GLOBAL_SET in a function with a backward jump");
 }
 
+/* Turns each STEP whose next instruction is a common one into the fused form for that opcode (AGC_FUSED_STEP_*),
+   which saves the interpreter one dispatch. It runs after every function is checked, so the checks see only file
+   opcodes. A STEP never ends a function (the last instruction is RETURN or JUMP) and never branches, so the next
+   instruction is the one that runs after it; that instruction stays in place, so a jump to it, or a resume after the
+   STEP yielded, runs it alone, as before. */
+static void fuse_steps(agc_function *f) {
+  for (uint32_t pc = 0; pc + 1 < f->count; pc++) {
+    if (f->code[pc].op != AGC_OP_STEP) continue;
+    switch (f->code[pc + 1].op) {
+      case AGC_OP_MOVE: f->code[pc].op = AGC_FUSED_STEP_MOVE; break;
+      case AGC_OP_CONST: f->code[pc].op = AGC_FUSED_STEP_CONST; break;
+      case AGC_OP_FIELD: f->code[pc].op = AGC_FUSED_STEP_FIELD; break;
+      case AGC_OP_LIST_GET: f->code[pc].op = AGC_FUSED_STEP_LIST_GET; break;
+      case AGC_OP_IS_VARIANT: f->code[pc].op = AGC_FUSED_STEP_IS_VARIANT; break;
+      case AGC_OP_GLOBAL: f->code[pc].op = AGC_FUSED_STEP_GLOBAL; break;
+      case AGC_OP_ADD_I:
+      case AGC_OP_SUB_I:
+      case AGC_OP_MUL_I: f->code[pc].op = AGC_FUSED_STEP_ARITH_I; break;
+      case AGC_OP_LT_I: f->code[pc].op = AGC_FUSED_STEP_LT_I; break;
+      case AGC_OP_RETURN: f->code[pc].op = AGC_FUSED_STEP_RETURN; break;
+      default: break;
+    }
+  }
+}
+
 static void skip_string(reader *r) { take(r, read_u32(r)); }
 
 static uint64_t count_variants(reader *r, uint32_t enums) {
@@ -616,6 +641,7 @@ static void load(reader *r, agc_program *p) {
   if (left(r) != 0) reject(r, "trailing bytes");
 
   for (uint32_t i = 0; i < p->function_count; i++) check_function(r, p, &p->functions[i]);
+  for (uint32_t i = 0; i < p->function_count; i++) fuse_steps(&p->functions[i]);
   if (p->native_import != UINT32_MAX) note_native_function(p);
 }
 
