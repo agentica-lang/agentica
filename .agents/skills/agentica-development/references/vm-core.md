@@ -164,8 +164,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `vm/jit/` (core, `docs/future/22-jit.md` §22; `--jit`, `AGENTICA_JIT`):
   `jit.h` is the one header, the interpreter's boundary first, then the emitter
   and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. `jit.c`
-  decides every function once in `agc_jit_new` (only known opcodes; for `on`
-  also a backward jump), sets `skip` for the rest and returns NULL when no
+  decides every function once in `agc_jit_new` (for `on`, a backward jump and
+  innermost loops that seldom leave the code), sets `skip` for the rest and
+  returns NULL when no
   function is left, so that run takes the plain turn loop; it walks a function
   once: each instruction (fused ones as their STEP or CONST) calls one
   `agc_emit_*` function; it maps, seals and publishes the code with a release
@@ -177,10 +178,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   jit copy of `turn_loop` (after the one-byte `agc_jit_may_run` test; the
   plain copy has no JIT test, as one cost arithmetic 20% by code layout alone)
   and handles the exits as the interpreter handles that instruction: STEP runs
-  `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET goes on in
-  the loop (RETURN).
-  A new instruction: a case in the walk, its `agc_emit_*`, a case in
-  `jit_test.c` and in `tests/test_vm_jit.py`; compiled code never fails,
+  `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
+  leaf builtin itself or lets the loop run that one instruction, which enters
+  the code again at the next pc (`resume`).
+  A new instruction with code: a case in `has_code` and in the walk, its
+  `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
+  slow path leaves for the interpreter; compiled code never fails,
   allocates, parks, calls a builtin or moves a frame
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)

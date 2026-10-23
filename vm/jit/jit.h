@@ -8,16 +8,19 @@
 
 #include "../core.h"
 
-/* --jit and AGENTICA_JIT: off, on (a function with a loop is compiled after AGC_JIT_THRESHOLD entries) and always
-   (any function the emitter knows, at its first entry, for tests). A host without an emitter accepts every mode and
-   runs everything in the interpreter. */
+/* --jit and AGENTICA_JIT: off, on (a function with a loop is compiled after AGC_JIT_THRESHOLD entries, unless an
+   innermost loop leaves compiled code for the interpreter more than once in AGC_JIT_SPACING instructions) and always
+   (every function, at its first entry, for tests). A host without an emitter accepts every mode and runs everything
+   in the interpreter. */
 typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 #define AGC_JIT_THRESHOLD 100
+#define AGC_JIT_SPACING 16
 
-/* Why compiled code stopped, besides a failure of agc_status (OVERFLOW, DIVISION_BY_ZERO, WRONG_TAG), which the
-   interpreter raises at the instruction at `pc` with agc_op_fail. STEP: the STEP at `pc` is the slow one; the
-   interpreter runs it (a stop, a yield or a new batch of steps). COST: the instruction at `pc` charged turn cost,
-   which the interpreter applies. INTERPRET: the interpreter goes on at `pc` (RETURN). */
+/* Why compiled code stopped, besides a failure of agc_status (OVERFLOW, DIVISION_BY_ZERO, INDEX_OUT_OF_RANGE,
+   WRONG_TAG), which the interpreter raises at the instruction at `pc` with agc_op_fail. STEP: the STEP at `pc` is the
+   slow one; the interpreter runs it (a stop, a yield or a new batch of steps). COST: the instruction at `pc` charged
+   turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction at `pc` (one that has no
+   code here, such as a call, or a slow path such as a wrong tag), then enters the code again at the next one. */
 enum { AGC_JIT_EXIT_STEP = 16, AGC_JIT_EXIT_COST, AGC_JIT_EXIT_INTERPRET };
 
 /* An exit: 8 bytes, so both calling conventions return it in one register (rax), status in the low half. */
@@ -41,7 +44,9 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    interpreter's reload tests one byte for it; `code[f]` is its code (NULL until compiled), published with a release
    store after the pages are sealed, so a scheduler that loads it with acquire sees finished code; two schedulers that
    compile one function at once keep the first and unmap the second. `entries` are the entries counted in the `on`
-   mode, `used` the code memory taken. The code lives until the process exits, like the program. */
+   mode, `used` the code memory taken, `exits[op]` the INTERPRET exits at each opcode that went back to the turn
+   loop, and `leaves` the leaf builtins that run_compiled called itself, both counted only while the jit trace is on.
+   The code lives until the process exits, like the program. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -50,6 +55,8 @@ typedef struct agc_jit {
   const agc_trace *trace;
   _Atomic uint32_t *entries;
   _Atomic size_t used;
+  _Atomic uint64_t *exits;
+  _Atomic uint64_t leaves;
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -61,6 +68,13 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function);
 static inline bool agc_jit_may_run(agc_jit *jit, uint32_t function) {
   return !atomic_load_explicit(&jit->skip[function], memory_order_relaxed);
 }
+/* Counts an INTERPRET exit at instruction PC of FUNCTION, when the jit trace is on (the exit's slow path). */
+void agc_jit_count_exit(agc_jit *jit, uint32_t function, uint32_t pc);
+/* Counts a leaf builtin that run_compiled called between two runs of compiled code, when the jit trace is on. */
+void agc_jit_count_leaf(agc_jit *jit);
+/* At the end of a run, the jit trace's `exit op=OP count=N` lines, one for each opcode that compiled code left to the
+   turn loop at, and `leaf count=N`, the leaf builtins called between two runs of compiled code. */
+void agc_jit_report(agc_jit *jit);
 /* "off", "on" or "always" in *MODE; false for any other word. */
 bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 
@@ -112,6 +126,8 @@ void agc_emit_const(agc_emitter *e, uint32_t a, uint32_t k);
 void agc_emit_step(agc_emitter *e, uint32_t n, uint32_t pc);
 void agc_emit_int(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
+void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
+void agc_emit_read(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc);
 void agc_emit_jump(agc_emitter *e, uint32_t target);
 void agc_emit_branch(agc_emitter *e, uint32_t a, bool when, uint32_t target, uint32_t pc);
 void agc_emit_exit(agc_emitter *e, uint32_t status, uint32_t pc);
