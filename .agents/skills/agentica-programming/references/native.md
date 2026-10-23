@@ -172,10 +172,9 @@ Keep the `extern` layer private and give the user a normal API; site page:
   `List[T]` (pick the shape by length, `error` for no shape), a struct whose
   defaults are a constant or parameters with defaults (a default parameter
   must be a literal). For the struct, `export` the struct and the constant;
-  the caller imports the constant by name (`import {DEFAULTS, open_file} from
-  "files"`; a constant is not read through the alias) and writes
-  `DEFAULTS.with(create: true)`. Never let the caller choose a printf format:
-  pass a constant format and the text as `%s`.
+  the caller writes `Files.DEFAULTS.with(create: true)` (a constant reads
+  through the alias like a function). Never let the caller choose a printf
+  format: pass a constant format and the text as `%s`.
 - A package lists the library per system in `agentica.toml`
   (`[native.NAME]`, `linux`/`macos`/`windows` each `{ system = "..." }` or
   `{ file = "native/..." }`) and `raw.agc` says `extern "NAME"`.

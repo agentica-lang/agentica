@@ -94,7 +94,7 @@ end
 Agentica functions have no variadic parameters, and a wrapper does not add any. Declare the C function once for each [shape](/library/io-and-system/native/types/#variadic-functions-and-c-names) that your wrapper needs, with `...` and `= "symbol"`, and keep the shapes private. The public function takes a normal parameter instead:
 
 - Parameters with defaults, when an argument is optional (`on: Bool = true`).
-- A struct, when there are many options. Export the struct and a constant with the default values. The caller imports the constant by name, because a constant is not read through the module alias, and changes a field with `with`: `import {OPEN_DEFAULTS, open_file} from "files"`, then `OPEN_DEFAULTS.with(create: true)`.
+- A struct, when there are many options. Export the struct and a constant with the default values. The caller reads the constant through the module alias and changes a field with `with`: `import Files from "files"`, then `Files.OPEN_DEFAULTS.with(create: true)`.
 - A `List[T]`, when the count of arguments changes. The wrapper picks the shape from the length of the list and returns an `error` for a length it has no shape for.
 
 ```agentica {mode="check"}
