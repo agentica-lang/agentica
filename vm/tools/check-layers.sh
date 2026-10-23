@@ -7,13 +7,13 @@ bad() { printf 'vm layers: %s\n' "$*" >&2; fail=1; }
 for tool in rg nm; do command -v "$tool" >/dev/null || { bad "$tool is not installed"; exit 1; }; done
 obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
-core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c runq.c inbox.c compute.c sync.c timers.c task_map.c channel.c loop.c input.c output.c stdio_posix.c stdio_windows.c poll_posix.c poll_windows.c random.c loader.c builtins.c diag.c trace.c profile.c"
+core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c runq.c inbox.c compute.c sync.c timers.c task_map.c channel.c loop.c input.c output.c stdio_posix.c stdio_windows.c poll_posix.c poll_windows.c random.c loader.c builtins.c diag.c trace.c profile.c jit/jit.c jit/emit_x64.c jit/mem_posix.c jit/mem_windows.c"
 services="strings.c numbers.c crypto.c json.c json_typed.c files.c tree.c stream.c lazy.c duplex.c process.c system.c tcp.c http_fields.c http_service.c http_server.c http_wire.c logger.c testing.c front_end.c ffi.c"
 adapters="tls_openssl.c tls_trust.c tls_trust_posix.c tls_trust_darwin.c tls_trust_windows.c digest_openssl.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c duplex_posix.c duplex_windows.c system_posix.c system_windows.c net_posix.c net_windows.c ffi_libffi.c ffi_none.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_main.c"
-headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h digest.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h ffi_os.h"
+headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h digest.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h ffi_os.h jit/jit.h"
 memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
-inc='^\s*#\s*include\s*["<](\./)?'
+inc='^\s*#\s*include\s*["<](\.\.?/)?'
 found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
 only() {
   globs=""
@@ -28,7 +28,7 @@ chain() {
   [ "${got% }" = "$*" ] || bad "$f must include only: ${*:-nothing of ours}"
 }
 
-for f in *.c *.h; do
+for f in *.c *.h jit/*.c jit/*.h; do
   case " $core $services $adapters $driver $headers " in *" $f "*) ;; *) bad "$f is in no layer" ;; esac
 done
 for f in $core $services $adapters $driver $headers; do [ -f "$f" ] || bad "$f is listed but missing"; done
@@ -53,6 +53,9 @@ chain duplex_os.h
 chain system_os.h
 chain net_os.h
 chain ffi_os.h
+# The JIT is core (docs/future/22-jit.md §22): jit.h is its one header, and it includes only core.h.
+chain jit/jit.h ../core.h
+for f in jit/*.c; do chain "$f" jit.h; done
 if found -n "$inc(services|net|tls|digest|http_parse|http_fields|file_io|process_os|duplex_os|system_os|net_os|ffi_os)\.h" $core; then bad "a core file includes a service or adapter header"; fi
 if found -n "${inc}core\.h" $services $adapters; then bad "a service or adapter includes core.h"; fi
 if found -n "$inc(port|services|net|http_fields)\.h" $adapters; then bad "an adapter includes the port or a service header"; fi

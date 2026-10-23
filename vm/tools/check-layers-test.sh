@@ -8,10 +8,12 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fresh() {
   rm -rf "$tmp/vm" "$tmp/obj"
-  mkdir -p "$tmp/vm/tools" "$tmp/obj"
+  mkdir -p "$tmp/vm/tools" "$tmp/vm/jit" "$tmp/obj/jit"
   cp "$src"/*.c "$src"/*.h "$tmp/vm/"
+  cp "$src"/jit/*.c "$src"/jit/*.h "$tmp/vm/jit/"
   cp "$src/tools/check-layers.sh" "$tmp/vm/tools/"
   cp "$obj"/*.o "$tmp/obj/"
+  cp "$obj"/jit/*.o "$tmp/obj/jit/"
 }
 build() { f="$1"; shift; "$@" -c "$tmp/vm/$f" -o "$tmp/obj/${f%.c}.o"; }
 plant() { fresh; printf '%s\n' "$2" >> "$tmp/vm/$1"; }
@@ -59,6 +61,10 @@ fails "list_impl.h in tests/map_test.c" 'only list\.c, interp\.c and tests/list_
 rm "$tmp/vm/tests/map_test.c"
 printf '#include "../list_impl.h"\n' > "$tmp/vm/tests/interp.c"
 fails "list_impl.h in tests/interp.c" 'only list\.c, interp\.c and tests/list_test\.c may include list_impl\.h'
+plant jit/jit.c '#include "../services.h"'
+fails "a JIT file that includes services.h" 'jit/jit\.c must include only: jit\.h'
+plant jit/jit.h '#include "../services.h"'
+fails "jit.h that includes services.h" 'a core file includes a service|jit/jit\.h must include only'
 plant text.c 'size_t agc_utf8_encode(uint32_t cp, char out[4]);'
 fails "a prototype in a .c file" 'an agc_ prototype'
 plant services.h '#include "core.h"'

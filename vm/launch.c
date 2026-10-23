@@ -16,6 +16,7 @@
 #include "core.h"
 #include "services.h"
 #include "file_io.h"
+#include "jit/jit.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -491,6 +492,13 @@ bool agc_launch_env(const char *name, agc_launch_options *options) {
   }
   if (schedulers && !options->seen_schedulers) options->schedulers = count;
   options->chosen_schedulers = options->seen_schedulers || schedulers;
+  const char *jit = getenv("AGENTICA_JIT");
+  agc_jit_mode mode = AGC_JIT_OFF;
+  if (jit && *jit && !agc_jit_mode_parse(jit, &mode)) {
+    fprintf(stderr, "%s: AGENTICA_JIT needs off, on or always\n", name);
+    return false;
+  }
+  if (jit && *jit && !options->seen_jit) options->jit = (int)mode;
   return true;
 }
 
@@ -577,6 +585,12 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       if (!value || !parse_schedulers(value, &options->schedulers))
         return refuse(name, "--schedulers needs an integer from 1 to 1024");
       i += 2;
+    } else if (strcmp(arg, "--jit") == 0) {
+      if (!once(name, &options->seen_jit, arg)) return AGC_LAUNCH_BAD;
+      agc_jit_mode mode = AGC_JIT_OFF;
+      if (!value || !agc_jit_mode_parse(value, &mode)) return refuse(name, "--jit needs off, on or always");
+      options->jit = (int)mode;
+      i += 2;
     } else if (strcmp(arg, "--source-root") == 0) {
       if (!once(name, &seen_root, arg)) return AGC_LAUNCH_BAD;
       if (!value || strcmp(value, "--") == 0 ||
@@ -649,6 +663,8 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   rt->std = launch->std;
   rt->std_count = launch->std_count;
   rt->schedulers = front_end ? 1 : options->schedulers;
+  /* The front end runs in the interpreter: --jit is for the user's program. */
+  if (!front_end) rt->jit = agc_jit_new(program, (agc_jit_mode)options->jit, &rt->trace);
   seed_map_hash(vm);
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");

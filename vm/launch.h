@@ -21,12 +21,14 @@
 typedef struct {
   int64_t max_steps, flush_timeout, driver, schedulers;
   uint32_t seed;
+  /* The agc_jit_mode of --jit or AGENTICA_JIT (vm/jit/jit.h), off by default. */
+  int jit;
   agc_style style;
   const char *source_root;
   const char *embedded;
   size_t source_root_chars;
-  bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, sandbox, deny_run, deny_net,
-      deny_fs, deny_env, deny_native;
+  bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, seen_jit, sandbox, deny_run,
+      deny_net, deny_fs, deny_env, deny_native;
 } agc_launch_options;
 
 typedef enum { AGC_LAUNCH_OK, AGC_LAUNCH_VERSION, AGC_LAUNCH_BAD } agc_launch_status;
@@ -64,8 +66,8 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
 /* The options of a run that has no flags. */
 void agc_launch_defaults(agc_launch_options *options);
 
-/* Applies AGENTICA_FLUSH_TIMEOUT_MS unless --flush-timeout was given, and AGENTICA_SCHEDULERS unless --schedulers was
- * given. False, with a message on stderr, when a variable is not valid. */
+/* Applies AGENTICA_FLUSH_TIMEOUT_MS unless --flush-timeout was given, AGENTICA_SCHEDULERS unless --schedulers was
+ * given, and AGENTICA_JIT unless --jit was given. False, with a message on stderr, when a variable is not valid. */
 bool agc_launch_env(const char *name, agc_launch_options *options);
 
 /* The schedulers of a run that does not choose a count: one per logical core, at most AGC_SCHEDULERS_MAX. */

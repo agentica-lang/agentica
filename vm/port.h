@@ -341,6 +341,8 @@ typedef struct {
      scheduler reads them without a lock. */
   const agc_std_source *std;
   size_t std_count;
+  /* The compiled code of the run (vm/jit/jit.h), NULL when --jit is off: set before the run starts. */
+  struct agc_jit *jit;
   agc_runq *runq;
   /* The state that every scheduler and the I/O role share (docs/vm/16-architecture.md §16.9, "The context split"): the
      main task, the resource registry and the loop, the process service's guard and parent channel, and the records of

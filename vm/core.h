@@ -218,7 +218,8 @@ typedef enum {
   AGC_STATUS_OVERFLOW,           /* RUNTIME-INTEGER-OVERFLOW at the instruction's span */
   AGC_STATUS_DIVISION_BY_ZERO,   /* RUNTIME-DIVISION-BY-ZERO at the instruction's span */
   AGC_STATUS_INDEX_OUT_OF_RANGE, /* RUNTIME-INDEX-OUT-OF-RANGE at the instruction's span */
-  AGC_STATUS_WRONG_TAG           /* RUNTIME-INTERNAL at span 0 (agc_wrong_tag): only hand-made bytecode */
+  AGC_STATUS_WRONG_TAG,          /* RUNTIME-INTERNAL at span 0 (agc_wrong_tag): only hand-made bytecode */
+  AGC_STATUS_COUNT               /* not a status: the number of them, which stays last */
 } agc_status;
 
 agc_status agc_op_add_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
@@ -250,6 +251,7 @@ agc_outcome agc_vm_run(agc_vm *vm);
 
 void agc_profile_start(agc_vm *vm);
 void agc_profile_report(agc_vm *vm);
+const char *agc_opcode_name(uint32_t op);
 
 /* A frame of a folded stack (vm/profile.c) is one code: its kind in the high 32 bits and an index in the low ones (a
    function, a builtin of the program's table, a Profile.measure label). CUT stands for the frames that a stack deeper

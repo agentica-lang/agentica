@@ -39,7 +39,8 @@ enum {
   AGC_TRACE_LOADER = 1u << 4,
   AGC_TRACE_GC = 1u << 5,
   AGC_TRACE_PROFILE = 1u << 6,
-  AGC_TRACE_ALL = (1u << 6) - 1
+  AGC_TRACE_JIT = 1u << 7,
+  AGC_TRACE_ALL = ((1u << 6) - 1) | AGC_TRACE_JIT
 };
 
 /* `profile_every`: the profile writes folded stacks sampled every that many steps instead of its report

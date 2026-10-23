@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `--jit on` (or `AGENTICA_JIT=on`) compiles hot integer functions to machine
+  code on x86-64: experimental, off by default.
 - An exported constant is read through the module alias, like an exported
   function: `Limits.MAX`, `Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)`.
   `Limits.MAX()` and `x: Limits.MAX` are now `CHECK-TYPE-MISMATCH`. A method

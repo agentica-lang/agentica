@@ -579,3 +579,6 @@ void agc_profile_report(agc_vm *vm) {
   report_sections(tr, profile->sections);
   report_loop(tr, profile);
 }
+
+/* The name of a file opcode as --dump-ir spells it, or "?" past them (the fused opcodes have none). */
+const char *agc_opcode_name(uint32_t op) { return op < AGC_OP_COUNT ? opcode_names[op] : "?"; }

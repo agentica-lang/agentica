@@ -12,9 +12,10 @@ import Texts from "cli_text"
 # The options that are given once at most, with the number of values each takes; --steps may repeat.
 ONCE = {
   "--version": 0, "--deny-run": 0, "--deny-net": 0, "--deny-fs": 0, "--deny-env": 0, "--deny-native": 0,
-  "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--dump": 0, "--dump-ir": 0,
-  "--ai": 0, "--json": 0, "--no-cache": 0,
+  "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--jit": 1, "--dump": 0,
+  "--dump-ir": 0, "--ai": 0, "--json": 0, "--no-cache": 0,
 }
+JIT_MODES: Set[String] = Set.new(["off", "on", "always"])
 DIGITS = "0123456789"
 
 ## What the options said, and the words after them (the command, or the source file, and its arguments).
@@ -24,6 +25,7 @@ export struct Options
   seed: String
   flush_timeout: String
   schedulers: String
+  jit: String
   deny: List[String]
   dump: Bool
   dump_ir: Bool
@@ -53,6 +55,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     seed: "",
     flush_timeout: "",
     schedulers: "",
+    jit: "",
     deny: [],
     dump: false,
     dump_ir: false,
@@ -132,6 +135,7 @@ def apply(options: Options, word: String, value: String) -> Applied
     "--max-steps" -> return max_steps(options, value)
     "--seed" -> return seed(options, value)
     "--schedulers" -> return schedulers(options, value)
+    "--jit" -> return jit(options, value)
     _ -> return flush_timeout(options, value)
   end
 end
@@ -158,6 +162,13 @@ def schedulers(options: Options, value: String) -> Applied
     return Applied.Refused("--schedulers needs an integer from 1 to 1024")
   end
   return Applied.Changed(options.with(schedulers: digits))
+end
+
+def jit(options: Options, value: String) -> Applied
+  if !JIT_MODES.include?(value)
+    return Applied.Refused("--jit needs off, on or always")
+  end
+  return Applied.Changed(options.with(jit: value))
 end
 
 # The flag passes the text as it was typed (a leading zero stays).
