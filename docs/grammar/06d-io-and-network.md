@@ -490,10 +490,24 @@ end
   Elsewhere such a program is refused at load with
   `RUNTIME-NATIVE-UNSUPPORTED`, exit 2.
   `check`, `compile` and the queries work on every system.
+- A variadic C function is declared with `...` before its variadic part and
+  the C type of each argument the call passes (section 5); the C name after
+  `=` lets one function have several shapes:
+
+  ```ruby
+  extern "libc.so.6"
+    def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32
+    def fcntl_get(fd: C.Int32, cmd: C.Int32, ...) -> C.Int32 = "fcntl"
+    def fcntl_set(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
+  end
+  ```
+
+  The call follows the variadic rules of the system's C ABI (libffi's
+  `ffi_prep_cif_var`): on Apple arm64 the variadic arguments go on the stack,
+  and on Windows x64 a variadic `double` goes in an integer register too. A
+  `def` without `...` for a variadic C function is a wrong signature.
 - The VM trusts the signature: a wrong one is undefined behavior in C, and
-  native code runs with the rights of the program. A variadic C function
-  (`printf`) cannot be declared: a fixed signature for it is undefined
-  behavior, and on Apple arm64 its extra arguments come out wrong.
+  native code runs with the rights of the program.
 
 [agentica-link-1]: ../../site/content/library/io-and-system/network.md
 [agentica-link-2]: ../../site/content/library/io-and-system/files.md

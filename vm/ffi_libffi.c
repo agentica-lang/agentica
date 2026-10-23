@@ -1,9 +1,8 @@
 /*
- * The native calls of a build with libffi (AGC_FFI: Linux x86_64, Windows x64
- * and macOS): the loader (dlopen and dlsym, or LoadLibraryExW and
- * GetProcAddress) finds the function, ffi_prep_cif describes its signature
- * once and ffi_call calls it. Adapter layer; ffi.c converts the values and
- * ffi_none.c is the other half. Design: docs/grammar/06d-io-and-network.md.
+ * The native calls of a build with libffi (AGC_FFI: Linux x86_64, Windows x64 and macOS): the loader (dlopen and
+ * dlsym, or LoadLibraryExW and GetProcAddress) finds the function, ffi_prep_cif (ffi_prep_cif_var for a variadic one)
+ * describes its signature once and ffi_call calls it. Adapter layer; ffi.c converts the values and ffi_none.c is the
+ * other half. Design: docs/grammar/06d-io-and-network.md.
  */
 #ifdef AGC_FFI
 #include "ffi_os.h"
@@ -188,9 +187,14 @@ static void library_close(void *lib) { dlclose(lib); }
 bool agc_ffi_supported(void) { return true; }
 
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
-                              uint32_t count, char *error, size_t size) {
+                              uint32_t count, uint32_t fixed, char *error, size_t size) {
   if (count > AGC_FFI_MAX_PARAMS) {
     snprintf(error, size, "%s has more than %d parameters", symbol, AGC_FFI_MAX_PARAMS);
+    return NULL;
+  }
+  bool variadic = fixed != AGC_FFI_NOT_VARIADIC;
+  if (variadic && (fixed == 0 || fixed > count)) {
+    snprintf(error, size, "%s has a bad fixed parameter count", symbol);
     return NULL;
   }
   /* A library that holds the function is never closed: a prepared call keeps pointing into it until the process
@@ -211,7 +215,13 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
   call->result = result;
   call->count = count;
   for (uint32_t k = 0; k < count; k++) call->types[k] = ffi_type_of(params[k]);
-  if (ffi_prep_cif(&call->cif, FFI_DEFAULT_ABI, count, ffi_type_of(result), call->types) != FFI_OK) {
+  /* A variadic call follows its own ABI rules, which ffi_prep_cif_var knows: on Apple arm64 the variadic arguments go
+     on the stack, on Windows x64 a variadic double goes in the integer register too. It refuses a variadic argument
+     that C would promote (FFI_BAD_ARGTYPE), such as a _Bool. */
+  ffi_status status = variadic
+                          ? ffi_prep_cif_var(&call->cif, FFI_DEFAULT_ABI, fixed, count, ffi_type_of(result), call->types)
+                          : ffi_prep_cif(&call->cif, FFI_DEFAULT_ABI, count, ffi_type_of(result), call->types);
+  if (status != FFI_OK) {
     free(call);
     library_close(lib);
     snprintf(error, size, "cannot describe the signature of %s", symbol);

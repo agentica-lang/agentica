@@ -51,6 +51,18 @@ EXTERN_OUT_HELP = (
 # C.Int was the name of C.Int32 before the widths became explicit; it is refused, with no alias.
 EXTERN_INT_HELP = "write C.Int32 (a 32-bit int) or C.Int64 (a 64-bit integer) instead of C.Int"
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
+EXTERN_SYMBOL_HELP = "write the C name as a plain string of letters, digits and _, such as = \"fcntl\""
+# The types that C's default argument promotions leave as they are, which the variadic part of an extern function
+# takes: C.Bool (promoted to int) is not one.
+VARIADIC_CODES = Set.new(["i", "l", "d", "s", "p", "y", "r"])
+# The code that marks where the variadic part starts in Ast.Native.codes.
+VARIADIC_MARK = "."
+DIGITS = Set.new("0123456789".split(""))
+C_NAME_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789".split(""))
+VARIADIC_HELP = (
+  "after ... a parameter is C.Int32, C.Int64, C.Double, C.String, C.Pointer, C.Bytes or a resource, " +
+  "and not an out parameter; pass a C.Bool there as C.Int32"
+)
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
 EXTERN_MAX_PARAMS = 64
 
@@ -106,10 +118,12 @@ struct GuardAt
   ids: Int
 end
 
-# The parameters, whether each is an `out` parameter of an extern function, the next position and the next free id.
+# The parameters, whether each is an `out` parameter of an extern function, the number of parameters before the `...`
+# of a variadic extern function (-1 without one), the next position and the next free id.
 struct ParamsAt
   nodes: List[Ast.Param]
   outs: List[Bool]
+  fixed: Int
   pos: Int
   ids: Int
 end
@@ -134,9 +148,10 @@ struct MemberAt
   records: List[Ast.Decl]
 end
 
-# An extern function and its record (none or one), with the next position and the next free node id.
+# An extern function, its C name and its record (none or one), with the next position and the next free node id.
 struct ExternAt
   decl: DeclAt
+  symbol: String
   records: List[Ast.Decl]
 end
 
@@ -1706,61 +1721,68 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   )
 end
 
-# The parameters of a def up to ")". extern is true in an extern block, where `out NAME: type` marks an out parameter;
-# elsewhere that is PARSE-EXTERN-OUT at the word out.
+# The parameters of a def up to ")". extern is true in an extern block, where `out NAME: type` marks an out parameter
+# and `...` the start of the variadic part; elsewhere those are PARSE-EXTERN-OUT at the word out and
+# PARSE-EXTERN-VARIADIC at the `...`.
 def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[ParamsAt]
   nodes: List[Ast.Param] = []
   outs: List[Bool] = []
+  fixed = -1
   if e.tokens[pos].kind == "right-paren"
-    return ok(ParamsAt(nodes: nodes, outs: outs, pos: pos, ids: ids))
+    return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, pos: pos, ids: ids))
   end
   cursor = pos
   next_id = ids
   looping = true
   while looping
-    start = cursor
-    out = out_start?(e, cursor)
-    if out and !extern
-      return error(
-        Base.bail(
-          e,
-          cursor,
-          "PARSE-EXTERN-OUT",
-          "only a function of an extern block has out parameters",
-          Base.hint("return the values in a struct"),
+    if e.tokens[cursor].kind == "dot-dot-dot"
+      fixed = try variadic_marker(e, cursor, nodes.size, fixed, extern)
+      cursor += 1
+    else
+      start = cursor
+      out = out_start?(e, cursor)
+      if out and !extern
+        return error(
+          Base.bail(
+            e,
+            cursor,
+            "PARSE-EXTERN-OUT",
+            "only a function of an extern block has out parameters",
+            Base.hint("return the values in a struct"),
+          ),
+        )
+      end
+      if out
+        cursor += 1
+      end
+      outs = outs.push(out)
+      after_name = try Base.expect(e, cursor, "name", "a parameter name", false)
+      colon = try Base.expect(e, after_name, "colon", "\":\"", false)
+      type = try Base.parse_type(e, colon, next_id)
+      default: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
+      after_type = type.pos
+      param_id = type.ids
+      # Any expression is read after "=", so that the checker can say why a default is not a constant. The id of the
+      # parameter follows the ids of its default (post-order).
+      if e.tokens[after_type].kind == "assign"
+        value = try parse_expression(e, after_type + 1, type.ids)
+        default = Ast.Optional.Present(value.node)
+        after_type = value.pos
+        param_id = value.ids
+      end
+      nodes = nodes.push(
+        Ast.Param(
+          id: param_id,
+          name: e.tokens[cursor].lexeme,
+          name_span: e.tokens[cursor].span,
+          type: type.node,
+          default: default,
+          span: Base.span_from(e, start, after_type),
         ),
       )
+      cursor = after_type
+      next_id = param_id + 1
     end
-    if out
-      cursor += 1
-    end
-    outs = outs.push(out)
-    after_name = try Base.expect(e, cursor, "name", "a parameter name", false)
-    colon = try Base.expect(e, after_name, "colon", "\":\"", false)
-    type = try Base.parse_type(e, colon, next_id)
-    default: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
-    after_type = type.pos
-    param_id = type.ids
-    # Any expression is read after "=", so that the checker can say why a default is not a constant. The id of the
-    # parameter follows the ids of its default (post-order).
-    if e.tokens[after_type].kind == "assign"
-      value = try parse_expression(e, after_type + 1, type.ids)
-      default = Ast.Optional.Present(value.node)
-      after_type = value.pos
-      param_id = value.ids
-    end
-    nodes = nodes.push(
-      Ast.Param(
-        id: param_id,
-        name: e.tokens[cursor].lexeme,
-        name_span: e.tokens[cursor].span,
-        type: type.node,
-        default: default,
-        span: Base.span_from(e, start, after_type),
-      ),
-    )
-    cursor = after_type
-    next_id = param_id + 1
     if e.tokens[cursor].kind == "comma"
       cursor += 1
       if e.tokens[cursor].kind == "right-paren"
@@ -1770,7 +1792,47 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
       looping = false
     end
   end
-  return ok(ParamsAt(nodes: nodes, outs: outs, pos: cursor, ids: next_id))
+  return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, pos: cursor, ids: next_id))
+end
+
+# The `...` at `at`, after `count` parameters, gives the number of fixed parameters: PARSE-EXTERN-VARIADIC outside an
+# extern block or for a second `...` (fixed is not -1), and PARSE-EXTERN-VARIADIC-FIXED before any parameter, as C
+# needs one to find the others.
+def variadic_marker(e: Base.Env, at: Int, count: Int, fixed: Int, extern: Bool) -> Result[Int]
+  if !extern
+    return error(
+      Base.bail(
+        e,
+        at,
+        "PARSE-EXTERN-VARIADIC",
+        "only a function of an extern block has a variadic part",
+        Base.hint("take the values as a List"),
+      ),
+    )
+  end
+  if fixed >= 0
+    return error(
+      Base.bail(
+        e,
+        at,
+        "PARSE-EXTERN-VARIADIC",
+        "an extern function has one ... at most",
+        Base.hint("declare the variadic arguments after one ..., or declare the function again in another shape"),
+      ),
+    )
+  end
+  if count == 0
+    return error(
+      Base.bail(
+        e,
+        at,
+        "PARSE-EXTERN-VARIADIC-FIXED",
+        "a variadic function takes at least one parameter before ...",
+        Base.hint("declare the fixed parameters of the C function first, as its header does"),
+      ),
+    )
+  end
+  return ok(count)
 end
 
 # `out` is a plain name: before a parameter name it marks an out parameter.
@@ -1925,7 +1987,7 @@ def parse_extern_member(
     return error(Base.found(e, at, "def, compute def, resource or end in an extern block"))
   end
   member = try parse_extern_function(e, pos, at, ids, doc, block)
-  symbols = block.symbols.add(e.tokens[at + 1].lexeme)
+  symbols = block.symbols.add(member.symbol)
   return ok(MemberAt(decl: member.decl, block: block.with(symbols: symbols), records: member.records))
 end
 
@@ -1984,9 +2046,11 @@ def free_failure(e: Base.Env, at: Int, name: String) -> String
   )
 end
 
-# [compute] def name(params) -> Type NL in an extern block: a C name, C types, no defaults. start is the first token
-# (compute or def) and pos the def. A function with out parameters takes only the others, and returns its record, made
-# here (Ast.StructDecl.record_of): the C result as `result` (none for Void), then each out value, named after it.
+# [compute] def name(params) -> Type [= "symbol"] NL in an extern block: a C name, C types, no defaults, and `...`
+# before the variadic part of a variadic C function. The C name is the def's unless the string gives it. start is the
+# first token (compute or def) and pos the def. A function with out parameters takes only the others, and returns its
+# record, made here (Ast.StructDecl.record_of): the C result as `result` (none for Void), then each out value, named
+# after it.
 def parse_extern_function(
   e: Base.Env,
   start: Int,
@@ -2000,15 +2064,22 @@ def parse_extern_function(
   if name.ends_with?("?") or name.ends_with?("!")
     return error(c_name_failure(e, pos + 1, name))
   end
-  if block.resources.values.any? do |free: String| free == name end
-    return error(free_failure(e, pos + 1, name))
-  end
   after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
   params = try parse_parameters(e, after_open, ids, true)
   after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
   after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
   result = try Base.parse_type(e, after_arrow, params.ids)
-  stop = try expect_statement_end(e, result.pos, "a newline after the extern function")
+  symbol_at = pos + 1
+  after_signature = result.pos
+  if e.tokens[after_signature].kind == "assign"
+    symbol_at = after_signature + 1
+    after_signature = try symbol_string(e, symbol_at)
+  end
+  symbol = Base.token_text(e.tokens[symbol_at])
+  if block.resources.values.any? do |free: String| free == symbol end
+    return error(free_failure(e, symbol_at, symbol))
+  end
+  stop = try expect_statement_end(e, after_signature, "a newline after the extern function")
   next_id = result.ids
   codes: List[String] = []
   returned = try extern_type(result.node, true, block, next_id)
@@ -2043,6 +2114,12 @@ def parse_extern_function(
     end
     taken = try extern_type(param.type, false, block, next_id)
     next_id = taken.ids
+    if index == params.fixed
+      codes = codes.push(VARIADIC_MARK)
+    end
+    if params.fixed >= 0 and index >= params.fixed
+      try variadic_type(param, taken, params.outs[index])
+    end
     # An in and an out parameter of one name would be a parameter of the function and a field of its record; two of
     # the same side are the checker's CHECK-REDEFINED-NAME.
     if other_side?(params, index)
@@ -2068,6 +2145,10 @@ def parse_extern_function(
     end
     index += 1
   end
+  # An empty variadic part (`def printf(format: C.String, ...)`) still marks the call as variadic.
+  if params.fixed == params.nodes.size
+    codes = codes.push(VARIADIC_MARK)
+  end
   resource = ""
   free = ""
   if returned.code == "r"
@@ -2086,7 +2167,7 @@ def parse_extern_function(
           pos + 1,
           "PARSE-EXTERN-OUT",
           "\"#{name}\" gives no name for the record of its out parameters",
-          Base.hint("the record is named after the C name in CamelCase, so the name needs a letter after its _"),
+          Base.hint("the record is named after the function in CamelCase, so the name needs a letter after its _"),
         ),
       )
     end
@@ -2127,7 +2208,7 @@ def parse_extern_function(
       native: Ast.Optional.Present(
         Ast.Native(
           library: block.library,
-          symbol: name,
+          symbol: symbol,
           codes: codes.join(""),
           compute: start != pos,
           resource: resource,
@@ -2139,7 +2220,65 @@ def parse_extern_function(
     ),
   )
   decl = try decl_at(node, stop, next_id)
-  return ok(ExternAt(decl: decl, records: records))
+  return ok(ExternAt(decl: decl, symbol: symbol, records: records))
+end
+
+# The string at `at` after the = of an extern function, which names its C function, and the position after it: a
+# plain "..." literal holding a C name, else PARSE-EXTERN-SYMBOL at it.
+def symbol_string(e: Base.Env, at: Int) -> Result[Int]
+  kind = Base.kind_at(e, at)
+  stop = at + 1
+  if kind == "interp-start"
+    stop = interpolation_end(e, at) + 1
+  end
+  if kind == "string" and !Base.heredoc?(e.tokens[at]) and c_name?(Base.token_text(e.tokens[at]))
+    return ok(stop)
+  end
+  if kind != "string" and kind != "interp-start"
+    return error(Base.found(e, at, "the C name of the function as a string"))
+  end
+  return error(
+    Base.bail_span(
+      "PARSE-EXTERN-SYMBOL",
+      "the C name of an extern function is a plain string of letters, digits and _",
+      Base.span_from(e, at, stop),
+      Base.hint(EXTERN_SYMBOL_HELP),
+    ),
+  )
+end
+
+# A C identifier: letters, digits and _, not starting with a digit. The VM reads the name up to a space.
+def c_name?(text: String) -> Bool
+  if text == "" or DIGITS.include?(text.slice(0, 1))
+    return false
+  end
+  return text.split("").all? do |char: String| C_NAME_CHARS.include?(char) end
+end
+
+# PARSE-EXTERN-VARIADIC-TYPE for a parameter of the variadic part that C would promote (C.Bool) or that is an out
+# parameter.
+def variadic_type(param: Ast.Param, taken: ExternType, out: Bool) -> Result[Void]
+  if out
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-VARIADIC-TYPE",
+        "the variadic parameter \"#{param.name}\" cannot be an out parameter",
+        param.span,
+        Base.hint(VARIADIC_HELP),
+      ),
+    )
+  end
+  if !VARIADIC_CODES.include?(taken.code)
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-VARIADIC-TYPE",
+        "#{param.type.name} cannot be a variadic parameter",
+        param.type.span,
+        Base.hint(VARIADIC_HELP),
+      ),
+    )
+  end
+  return ok()
 end
 
 # The field of the record for an out parameter, of the parameter's Agentica type (a resource itself, not a Result), or
@@ -2197,7 +2336,7 @@ def record_doc(record: Ast.Decl) -> Ast.Optional[String]
   end
 end
 
-# The name of the record of an extern function with out parameters: its C name in CamelCase (sqlite3_open is
+# The name of the record of an extern function with out parameters: its name in CamelCase (sqlite3_open is
 # Sqlite3Open), or "" when that does not start with a letter.
 def record_name(name: String) -> String
   pieces = name.split("_").filter do |piece: String| piece != "" end
