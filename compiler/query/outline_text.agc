@@ -41,8 +41,11 @@ export def declaration_text(kind: String, exported: Bool, signature: String) -> 
   return head
 end
 
-## `field Struct.name: Type`.
-export def field_text(owner: String, name: String, type: String) -> String
+## `field Struct.name: Type`, with ` = default` as written when `default` is not "".
+export def field_text(owner: String, name: String, type: String, default: String) -> String
+  if default != ""
+    return "field #{owner}.#{name}: #{type} = #{default}"
+  end
   return "field #{owner}.#{name}: #{type}"
 end
 
@@ -70,7 +73,7 @@ end
 # `field Struct.name: Type` and `variant Enum.Name(Payload)`, one line each, at the position of the name.
 def member_lines(file: String, item: Model.Item) -> List[String]
   fields = item.fields.map do |field: Model.Field|
-    "#{place(file, field.name_range)} #{field_text(item.name, field.name, field.type)}"
+    "#{place(file, field.name_range)} #{field_text(item.name, field.name, field.type, field.default)}"
   end
   variants = item.variants.map do |variant: Model.Variant| variant_line(file, item.name, variant) end
   return fields.concat(variants)

@@ -1,0 +1,17 @@
+enum Mode
+  Fast
+  Safe
+end
+
+struct Options
+  ## The name.
+  name: String
+  retries: Int = 3
+  ratio: Float = -0.5
+  tags: List[String] = []
+  mode: Mode = Mode.Safe
+end
+
+def main() -> Void
+  puts(Options(name: "a").inspect)
+end

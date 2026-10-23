@@ -33,7 +33,7 @@ end
 ## A point.
 export struct Point
   ## The x position.
-  x: Int
+  x: Int = 0
   user: Nowhere.User
 end
 
@@ -110,8 +110,8 @@ def test_exports_in_source_order_with_docs_and_spans(tmp_path):
     ]
     assert items["Point"]["signature"] == "struct Point"
     assert items["Point"]["fields"] == [
-        {"name": "x", "type": "Int", "doc": "The x position."},
-        {"name": "user", "type": "Nowhere.User", "doc": None},
+        {"name": "x", "type": "Int", "default": "0", "doc": "The x position."},
+        {"name": "user", "type": "Nowhere.User", "default": None, "doc": None},
     ]
     assert items["Grid"]["signature"] == "type Grid[T] = List[List[T]]"
     assert items["LIMIT"]["signature"] == "LIMIT: Int"
@@ -156,7 +156,7 @@ def test_markdown_form(tmp_path):
     # An export is a heading with its signature, then its doc; a field or variant is a list line with its doc.
     heading = lines.index("## `add(a: Int, b: Int = 2) -> Int`")
     assert lines[heading + 2] == "Adds two numbers."
-    assert "- `x: Int` - The x position." in lines
+    assert "- `x: Int = 0` - The x position." in lines
     assert "- `Rect(Float, Map[String, List[Int]])`" in lines
     assert "## `bare(f: Fn[Int, Map[String, List[Int]]]) -> Nowhere.User`" in lines
     assert not any("hidden" in line.lower() for line in lines)

@@ -144,6 +144,12 @@ end
 - Structs, enums and functions are top level only. Only enums and aliases take
   type parameters. There are no generic functions or structs, user methods,
   nested functions, keyword arguments or overloads. Closures are blocks.
+- A struct field may have a default: `retries: Int = 3`. A constructor may
+  leave it out (`Options(name: "a")`); a field without one must be given
+  (`CHECK-MISSING-FIELD`). The default follows the rules of a parameter default
+  below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), with no order rule, and
+  is built again at each construction. `.with(...)` and `JSON.decode` are not
+  affected: a decode still needs every key.
 - A parameter may have a default: `def connect(host: String = "localhost", port:
   Int = 8080)`. A call omits trailing defaulted parameters (`connect("db")`).
   The default is a constant: an Int, Float or String literal (a minus before a

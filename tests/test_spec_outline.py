@@ -35,7 +35,7 @@ end
 ## A point.
 struct Point
   ## The x position.
-  x: Int
+  x: Int = 0
   user: Nowhere.User
 end
 
@@ -98,8 +98,9 @@ def test_items_in_source_order_with_exported_docs_signatures_and_spans(tmp_path)
         ("Circle", ["Float"], "A circle with a radius.", (18, 3)),
         ("Rect", ["Float", "Map[String, List[Int]]"], None, (19, 3)),
     ]
-    assert [(f["name"], f["type"], f["doc"], start(f["name_span"])) for f in items["Point"]["fields"]] == [
-        ("x", "Int", "The x position.", (25, 3)), ("user", "Nowhere.User", None, (26, 3)),
+    fields = items["Point"]["fields"]
+    assert [(f["name"], f["type"], f["default"], f["doc"], start(f["name_span"])) for f in fields] == [
+        ("x", "Int", "0", "The x position.", (25, 3)), ("user", "Nowhere.User", None, None, (26, 3)),
     ]
 
 
@@ -220,7 +221,7 @@ def test_text_form_lists_one_line_per_declaration(tmp_path):
         "shapes.agc:18:3 variant Shape.Circle(Float)",
         "shapes.agc:19:3 variant Shape.Rect(Float, Map[String, List[Int]])",
         "shapes.agc:23:1 struct Point",
-        "shapes.agc:25:3 field Point.x: Int",
+        "shapes.agc:25:3 field Point.x: Int = 0",
         "shapes.agc:26:3 field Point.user: Nowhere.User",
         "shapes.agc:29:1 export type Grid[T] = List[List[T]]",
         "shapes.agc:32:1 export def add(a: Int, b: Int = 2) -> Int",

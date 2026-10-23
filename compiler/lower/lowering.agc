@@ -43,6 +43,11 @@ struct LocatedConst
   constant: Ast.ConstDecl
 end
 
+struct LocatedStruct
+  file: String
+  decl: Ast.StructDecl
+end
+
 # The functions lowered so far, with the block functions their bodies made and the next free index of the table.
 struct Table
   functions: List[Ir.Function]
@@ -71,6 +76,7 @@ end
 def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   functions: List[Located] = []
   constants: List[LocatedConst] = []
+  structs: List[LocatedStruct] = []
   decls: List[Ast.Decl] = []
   modules = linked.modules.concat(checked.prelude)
   for module in modules
@@ -79,6 +85,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       case decl
         Ast.Decl.Function(node) -> functions = functions.push(Located(file: module.file, function: node))
         Ast.Decl.Constant(node) -> constants = constants.push(LocatedConst(file: module.file, constant: node))
+        Ast.Decl.Struct(node) -> structs = structs.push(LocatedStruct(file: module.file, decl: node))
         _ -> functions = functions
       end
     end
@@ -92,7 +99,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, checked.constants)
   start = plan.slots.size > 0
   files_of = constant_files(constants)
-  files = source_order(linked, functions, plan.kept, files_of)
+  files = source_order(linked, functions, plan.kept, files_of, structs)
   index_of: Map[String, Int] = {}
   for file in files
     index_of = index_of.put(file, index_of.size)
@@ -115,6 +122,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     bodies: checked.bodies,
     step_tries: checked.step_tries,
     fills: fills_of(functions, index_of),
+    field_fills: field_fills_of(structs, index_of),
     reads: reads_of(plan),
     file: linked.modules[0].file,
     index: 0,
@@ -210,6 +218,25 @@ def fills_of(functions: List[Located], index_of: Map[String, Int]) -> Map[String
     if Defaults.has_defaults?(shape)
       fill = Lowering.Fill(shape: shape, params: entry.function.params, file: entry.file, index: index_of[entry.file])
       fills = fills.put(entry.function.name, fill)
+    end
+  end
+  return fills
+end
+
+# The structs that have fields with a default value, by name, with the file each is declared in.
+def field_fills_of(structs: List[LocatedStruct], index_of: Map[String, Int]) -> Map[String, Lowering.FieldFill]
+  fills: Map[String, Lowering.FieldFill] = {}
+  for entry in structs
+    values: Map[String, Ast.Expr] = {}
+    for field in entry.decl.fields
+      case field.default
+        Ast.Optional.Present(value) -> values = values.put(field.name, value)
+        Ast.Optional.Absent -> values = values
+      end
+    end
+    if values.size > 0
+      fill = Lowering.FieldFill(values: values, file: entry.file, index: index_of[entry.file])
+      fills = fills.put(entry.decl.name, fill)
     end
   end
   return fills
@@ -337,9 +364,11 @@ def reads_of(plan: Const.Plan) -> Map[String, Lowering.Read]
 end
 
 # The files in the order the lowering first emits an instruction of each: the root, then the file of each function,
-# then of each kept constant.
+# then of each kept constant, then of each struct with a field default (a construction lowers the default in the file
+# of its struct, which may have no function).
 def source_order(
-  linked: Linker.Linked, functions: List[Located], kept: List[Ast.ConstDecl], files_of: Map[String, String]
+  linked: Linker.Linked, functions: List[Located], kept: List[Ast.ConstDecl], files_of: Map[String, String],
+  structs: List[LocatedStruct]
 ) -> List[String]
   seen: Set[String] = Set.new([linked.modules[0].file])
   files: List[String] = [linked.modules[0].file]
@@ -354,6 +383,13 @@ def source_order(
     if !seen.include?(file)
       seen = seen.add(file)
       files = files.push(file)
+    end
+  end
+  for entry in structs
+    defaulted = entry.decl.fields.any? do |field: Ast.FieldDecl| Defaults.field_default?(field) end
+    if !seen.include?(entry.file) and defaulted
+      seen = seen.add(entry.file)
+      files = files.push(entry.file)
     end
   end
   return files

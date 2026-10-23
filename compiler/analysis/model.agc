@@ -21,11 +21,13 @@ export struct Parameter
   default: String
 end
 
-## One field of a struct, with its doc ("" for none) and the range of its name.
+## One field of a struct, with the source text of its default value ("" for none), its doc ("" for none) and the range
+## of its name.
 export struct Field
   name: String
   name_range: Diagnostics.Region
   type: String
+  default: String
   doc: String
 end
 

@@ -245,6 +245,7 @@ end
 def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[State.Cx]
   seen: Set[String] = Set.new([])
   fields: List[Model.Named] = []
+  defaulted: Set[String] = Set.new([])
   for field in node.fields
     try State.reserve_constructor(cx, st, field.name, field.span)
     if seen.include?(field.name)
@@ -265,9 +266,15 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
         ),
       )
     end
+    try DefaultChecks.check_field_value(cx, st, field)
+    if Defaults.field_default?(field)
+      defaulted = defaulted.add(field.name)
+    end
     fields = fields.push(Model.Named(name: field.name, type: type))
   end
-  return ok(cx.with(structs: cx.structs.put(node.name, fields)))
+  return ok(
+    cx.with(structs: cx.structs.put(node.name, fields), field_defaults: cx.field_defaults.put(node.name, defaulted)),
+  )
 end
 
 def register_enum_variants(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
