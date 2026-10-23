@@ -62,7 +62,7 @@ static ffi_type *ffi_type_of(agc_c_type type) {
 }
 
 /* The ffi_type nodes and element slots (each list ends with NULL) that the struct S takes, nested ones included. */
-static void aggregate_count(const agc_c_struct *s, size_t *nodes, size_t *elements) {
+static void aggregate_count(const agc_c_struct *s, size_t *nodes, size_t *elements) { // NOLINT(misc-no-recursion)
   *nodes += 1;
   *elements += s->count + 1;
   for (uint32_t k = 0; k < s->count; k++)
@@ -70,7 +70,7 @@ static void aggregate_count(const agc_c_struct *s, size_t *nodes, size_t *elemen
 }
 
 /* The FFI_TYPE_STRUCT of S, made in SPACE. Size and alignment are 0: ffi_prep_cif computes them. */
-static ffi_type *aggregate_make(const agc_c_struct *s, aggregate_space *space) {
+static ffi_type *aggregate_make(const agc_c_struct *s, aggregate_space *space) { // NOLINT(misc-no-recursion)
   ffi_type *t = space->nodes++;
   t->size = 0;
   t->alignment = 0;
@@ -85,7 +85,7 @@ static ffi_type *aggregate_make(const agc_c_struct *s, aggregate_space *space) {
 
 /* Copies libffi's layout of T, which ffi_prep_cif has computed, into S and its nested structs: the size, the
    alignment and each field's offset. */
-static bool aggregate_layout(agc_c_struct *s, ffi_type *t) {
+static bool aggregate_layout(agc_c_struct *s, ffi_type *t) { // NOLINT(misc-no-recursion)
   if (ffi_get_struct_offsets(FFI_DEFAULT_ABI, t, s->offsets) != FFI_OK) return false;
   s->size = t->size;
   s->align = t->alignment;

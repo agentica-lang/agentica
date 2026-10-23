@@ -249,7 +249,8 @@ static _Noreturn void load_failed(agc_vm *vm, const char *error, uint32_t span) 
 }
 
 /* The length of the struct "{...}" at the start of TEXT (LEN bytes), up to its closing brace, or 0 when its braces do
-   not close or nest deeper than STRUCT_MAX_DEPTH. */
+   not close or nest deeper than STRUCT_MAX_DEPTH. Every layout comes through here, so no recursion over one nests
+   deeper than that. */
 static size_t group_length(const char *text, size_t len) {
   uint32_t depth = 0;
   for (size_t k = 0; k < len; k++) {
@@ -259,7 +260,7 @@ static size_t group_length(const char *text, size_t len) {
   return 0;
 }
 
-static void struct_free(agc_c_struct *s) {
+static void struct_free(agc_c_struct *s) { // NOLINT(misc-no-recursion)
   if (!s) return;
   for (uint32_t k = 0; k < s->count; k++) struct_free(s->nested[k]);
   free(s);
@@ -268,7 +269,7 @@ static void struct_free(agc_c_struct *s) {
 /* The layout of the struct "{N:CODES}" at *AT, whose braces group_length has checked, before END; *AT moves past it.
    N is a struct of the program P with one field per code: i, l, d, f, b, p or a nested struct. *LEAVES counts the
    fields of the whole tree, nested ones included. NULL when any part is wrong, with nothing left allocated. */
-static agc_c_struct *struct_parse(const agc_program *p, const char **at, const char *end, uint32_t *leaves) {
+static agc_c_struct *struct_parse(const agc_program *p, const char **at, const char *end, uint32_t *leaves) { // NOLINT(misc-no-recursion)
   const char *c = *at + 1;
   uint32_t index = 0, digits = 0;
   for (; c < end && *c >= '0' && *c <= '9' && digits < 9; c++, digits++) index = index * 10 + (uint32_t)(*c - '0');
@@ -696,7 +697,7 @@ static void *pointer_of(agc_vm *vm, agc_value v) {
    copied (copy_bytes), and whether a resource or an owned buffer is closed before and after that (check_open). A
    C.Float takes any Float: one outside the range of a float becomes an infinity (IEEE 754, C11 Annex F). A struct
    (LAYOUT) is a struct value of the program's type that the layout names, whose fields are checked the same way. */
-static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layout, agc_value v, uint32_t span) {
+static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layout, agc_value v, uint32_t span) { // NOLINT(misc-no-recursion)
   switch (type) {
     case AGC_C_INT: {
       int64_t n = agc_as_int(vm, v);
@@ -732,7 +733,7 @@ static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layo
 
 /* Writes the checked struct V into BASE at the offsets of LAYOUT. A C.Bool is the byte 0 or 1 (C's bool is one byte on
    every target with native calls) and a C.Float the float nearest the Float, as for an argument. */
-static void struct_write(agc_vm *vm, const agc_c_struct *layout, agc_value v, uint8_t *base) {
+static void struct_write(agc_vm *vm, const agc_c_struct *layout, agc_value v, uint8_t *base) { // NOLINT(misc-no-recursion)
   const agc_struct *st = agc_as_struct(vm, v);
   for (uint32_t k = 0; k < layout->count; k++) {
     uint8_t *at = base + layout->offsets[k];
@@ -772,7 +773,7 @@ static void struct_write(agc_vm *vm, const agc_c_struct *layout, agc_value v, ui
 
 /* The struct value of the program's type that LAYOUT names, read from the C struct at BASE: a C.Bool field is read as
    the byte C wrote, as an out C.Bool is. */
-static agc_value struct_value(const agc_c_struct *layout, const uint8_t *base) {
+static agc_value struct_value(const agc_c_struct *layout, const uint8_t *base) { // NOLINT(misc-no-recursion)
   agc_struct *st = agc_new_struct(layout->index, layout->count);
   for (uint32_t k = 0; k < layout->count; k++) {
     const uint8_t *at = base + layout->offsets[k];
@@ -912,7 +913,7 @@ static agc_c_resource *held_by(agc_vm *vm, const ffi_entry *e, const agc_list *v
 
 /* Stores in HELD[*N] on the owned buffer (or NULL) of each C.Pointer field of the checked struct V (LAYOUT), nested
    ones included, in order; a compute call holds them as it holds its parameters'. */
-static void struct_held(agc_vm *vm, const agc_c_struct *layout, agc_value v, agc_c_resource **held, uint32_t *n) {
+static void struct_held(agc_vm *vm, const agc_c_struct *layout, agc_value v, agc_c_resource **held, uint32_t *n) { // NOLINT(misc-no-recursion)
   if (!layout->pointers) return;
   const agc_struct *st = agc_as_struct(vm, v);
   for (uint32_t k = 0; k < layout->count; k++) {
@@ -923,7 +924,7 @@ static void struct_held(agc_vm *vm, const agc_c_struct *layout, agc_value v, agc
 
 /* Whether a C.Pointer field of the checked struct V (LAYOUT), nested ones included, holds an owned buffer that is
    closed. */
-static bool struct_closed(agc_vm *vm, const agc_c_struct *layout, agc_value v) {
+static bool struct_closed(agc_vm *vm, const agc_c_struct *layout, agc_value v) { // NOLINT(misc-no-recursion)
   if (!layout->pointers) return false;
   const agc_struct *st = agc_as_struct(vm, v);
   bool closed = false;
