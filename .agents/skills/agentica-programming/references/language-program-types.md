@@ -8,9 +8,11 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - Top level holds `def`, `struct`, `enum`, `type` alias, `import` and constants;
   no statement runs there. `export` prefixes a function, struct, enum, alias or
   constant. An `extern "LIB"` block declares native functions, which count as
-  `def`s, and resources, which count as types (`native.md`).
+  `def`s, and resources, which count as types; a block with a resource counts
+  as types as a whole (`native.md`).
 - Order is checked: module doc and `import`s, constants, `struct`, `enum`,
-  aliases and `extern` resources (any order), `export def`, then private `def`.
+  aliases and `extern` blocks with a resource (any order), `export def`, then
+  private `def`.
   The first declaration out of place is `CHECK-DECL-ORDER`. A function may call
   one declared later.
 - A constant is `NAME = expr` or `NAME: Type = expr` (the type also types `[]`,
@@ -142,6 +144,12 @@ end
 - Structs, enums and functions are top level only. Only enums and aliases take
   type parameters. There are no generic functions or structs, user methods,
   nested functions, keyword arguments or overloads. Closures are blocks.
+- A struct field may have a default: `retries: Int = 3`. A constructor may
+  leave it out (`Options(name: "a")`); a field without one must be given
+  (`CHECK-MISSING-FIELD`). The default follows the rules of a parameter default
+  below (`CHECK-DEFAULT-VALUE`, `CHECK-TYPE-MISMATCH`), with no order rule, and
+  is built again at each construction. `.with(...)` and `JSON.decode` are not
+  affected: a decode still needs every key.
 - A parameter may have a default: `def connect(host: String = "localhost", port:
   Int = 8080)`. A call omits trailing defaulted parameters (`connect("db")`).
   The default is a constant: an Int, Float or String literal (a minus before a

@@ -37,12 +37,22 @@ export struct Fill
   index: Int
 end
 
+## The field defaults of a struct, as a construction needs them: the expression of each field that has one, by field
+## name, the file that declares the struct and its position in the sources. Like a parameter default, a field default
+## is lowered with the instructions in that file, because its spans and the names in it belong there.
+export struct FieldFill
+  values: Map[String, Ast.Expr]
+  file: String
+  index: Int
+end
+
 ## What is fixed while the program is lowered. types and resolved are those of the checker. user_types maps a struct or
 ## enum name (the program's and the builtin ones it uses) to "Struct" or "Enum"; structs the struct info by name;
 ## variants the id of "Enum.Variant"; json_structs the structs JSON.decode may build; functions the index of each
 ## declared function; bodies the prelude function each call of a prelude builtin runs, by id of the call
 ## (prelude_files.agc); step_tries the `try` nodes in the blocks of Lazy methods, which lower to try-step;
-## fills the functions that have default values, by name; reads what a constant read becomes. file
+## fills the functions that have default values, by name; field_fills the structs that have fields with a default, by
+## name; reads what a constant read becomes. file
 ## is the file of the function being lowered and index its position in the sources. expression lowers an expression,
 ## and block lowers a block as a function: the cycles between expressions, statements and blocks go through these two
 ## fields, because a module cannot import one that imports it.
@@ -57,6 +67,7 @@ export struct Cx
   bodies: Map[Int, String]
   step_tries: Set[Int]
   fills: Map[String, Fill]
+  field_fills: Map[String, FieldFill]
   reads: Map[String, Read]
   file: String
   index: Int

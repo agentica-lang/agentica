@@ -497,7 +497,11 @@ end
 
 def print_field(out: List[String], at: Margin, field: Ast.FieldDecl) -> List[String]
   lines = out.push(head(at, "field", "field-decl", field.id, field.span, name_attr(field.name) + doc_attr(field.doc)))
-  return print_type(lines, deeper(at), "type", field.type)
+  lines = print_type(lines, deeper(at), "type", field.type)
+  case field.default
+    Ast.Optional.Present(value) -> return print_expr(lines, deeper(at), "default", value)
+    Ast.Optional.Absent -> return lines
+  end
 end
 
 def print_variant(out: List[String], at: Margin, variant: Ast.EnumVariant) -> List[String]

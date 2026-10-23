@@ -143,8 +143,9 @@ end
     def fcntl_set(fd: C.Int32, cmd: C.Int32, ..., arg: C.Int32) -> C.Int32 = "fcntl"
   end
   ~~~
-- Functions count as `def`s for the declaration order, resources as types. A
-  wrong signature is undefined behavior in C: copy it from the C header.
+- Functions count as `def`s for the declaration order, resources as types; a
+  block with a resource counts as types as a whole. A wrong signature is
+  undefined behavior in C: copy it from the C header.
 
 ## Wrapping a library
 
@@ -158,24 +159,21 @@ Keep the `extern` layer private and give the user a normal API; site page:
 - An out parameter becomes a field of your own struct; a yes/no `int` becomes
   a `name?` function returning `Bool`; a call that may take long is a
   `compute def` in the block, called like any function.
-- A block with a resource must sit above every function of the file, and
-  exported functions sit above private ones (`CHECK-DECL-ORDER`): put such a
-  block in `raw.agc`, `export` its names, and `import Raw from "raw"` in the
-  public file, with `export type Stream = Raw.Stream` for the signatures. The
-  public file does not re-export the raw layer (one file works if the block's
-  functions are `export def`, but then they are its API). A `String` with a NUL
-  stops the program at the C call (`RUNTIME-INVALID-CHARACTER`): check inputs
-  first in a wrapper that must not stop. A block with no resource may
-  stay at the end of the public file.
+- A block with a resource sits with the types, above every function of the
+  file, and its `def`s do not count as functions for `CHECK-DECL-ORDER`: one
+  file holds the block and the wrapper. `export resource` so callers can name
+  the type, keep the `def`s private, export only the wrapper. A block with no
+  resource keeps the rule (its `def`s count as functions): put it at the end
+  of the file. A `String` with a NUL stops the program at the C call
+  (`RUNTIME-INVALID-CHARACTER`): check inputs first in a wrapper that must not
+  stop.
 - No varargs in Agentica. Declare each shape of a variadic C function with
   `...` and `= "symbol"`, keep them private, and give the public `def` a
-  `List[T]` (pick the shape by length, `error` for no shape), a struct whose
-  defaults are a constant or parameters with defaults (a default parameter
-  must be a literal). For the struct, `export` the struct and the constant;
-  the caller imports the constant by name (`import {DEFAULTS, open_file} from
-  "files"`; a constant is not read through the alias) and writes
-  `DEFAULTS.with(create: true)`. Never let the caller choose a printf format:
-  pass a constant format and the text as `%s`.
+  `List[T]` (pick the shape by length, `error` for no shape), a struct with
+  field defaults or parameters with defaults (a default must be a literal).
+  For the struct, `export` it; the caller writes `OpenOptions(create: true)`
+  and leaves out the fields that keep their default. Never let the caller
+  choose a printf format: pass a constant format and the text as `%s`.
 - A package lists the library per system in `agentica.toml`
   (`[native.NAME]`, `linux`/`macos`/`windows` each `{ system = "..." }` or
-  `{ file = "native/..." }`) and `raw.agc` says `extern "NAME"`.
+  `{ file = "native/..." }`) and the `extern` block says `extern "NAME"`.

@@ -12,6 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `--jit on` (or `AGENTICA_JIT=on`) compiles hot integer functions to machine
   code on x86-64: experimental, off by default.
+- Default values for struct fields: `retries: Int = 3` in a `struct`. A
+  constructor may leave out a field that has a default. The default follows
+  the rules of a parameter default.
 - A package can ship or name native libraries for its `extern` blocks:
   `[native.NAME]` in its `agentica.toml` picks a file of its `native/` folder
   or a system library name for `linux`, `macos` and `windows`. The files of
@@ -24,6 +27,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- An `extern` block that declares a `resource` sits with the types in the
+  declaration order, with its `def`s, so a wrapper can keep the block and its
+  exported functions in one file. A block with no resource keeps its rule.
 - **Breaking:** the files of the top-level `native/` folder of a package, of
   any name, are now part of its hash, and so is its `agentica.toml` when
   `native/` holds a file that is not `.agc` or the manifest has a `[native]`

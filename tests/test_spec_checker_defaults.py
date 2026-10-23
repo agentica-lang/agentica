@@ -1,4 +1,4 @@
-"""Default parameter values (`NAME: type = expression`), through the product CLI.
+"""Default values of parameters and of struct fields (`NAME: type = expression`), through the product CLI.
 
 Each case writes a program (one file, or several for the import-alias rules) and runs `--json check FILE`. A rejected
 program is asserted by its diagnostic code and the source text its range covers; a good one checks clean. Message and
@@ -14,6 +14,9 @@ JOIN = 'def join(xs: List[String], sep: String = ", ") -> String\n  return xs.jo
 EACH_LINE = ('def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void\n'
              '  f.call(path)\nend\n\n'
              'def show(line: String) -> Void\n  puts(line)\nend\n\n')
+
+
+POINT = 'struct Point\n  x: Int = 0\n  y: Int\nend\n\n'
 
 
 def main_with(body, helpers=""):
@@ -128,6 +131,52 @@ SINGLE_FILE = [
      'def f(a: Int =) -> Int\n  return 1\nend\n\n' + main_with("  puts(f())\n"), "PARSE-UNEXPECTED-TOKEN", ")"),
     ("a parameter needs its type even with a default",
      'def f(a = 1) -> Int\n  return 1\nend\n\n' + main_with("  puts(f())\n"), "PARSE-UNEXPECTED-TOKEN", "="),
+    ("a constructor may leave out a field with a default, or give it",
+     'enum Mode\n  Fast\n  Safe\nend\n\n'
+     'struct Options\n  name: String\n  a: Int = 1\n  b: Int = -2\n  c: Float = 2.5\n  d: String = "x"\n'
+     '  e: Bool = true\n  f: List[Int] = []\n  g: Map[String, Int] = {}\n  h: Mode = Mode.Safe\nend\n\n'
+     + main_with('  puts(Options(name: "n").inspect)\n  puts(Options(h: Mode.Fast, name: "n", a: 2).inspect)\n'),
+     None, None),
+    ("a struct with only defaults is built with no fields",
+     'struct Box\n  w: Int = 1\n  h: Int = 2\nend\n\n' + main_with("  puts(Box().inspect)\n"), None, None),
+    ("a field without a default must still be given",
+     POINT + main_with("  puts(Point(x: 1).inspect)\n"), "CHECK-MISSING-FIELD", "Point(x: 1)"),
+    ("a field without a default must still be given, even when every other field has one",
+     POINT + main_with("  puts(Point().inspect)\n"), "CHECK-MISSING-FIELD", "Point()"),
+    ("a field that has a default cannot be given twice",
+     POINT + main_with("  puts(Point(x: 1, y: 2, x: 3).inspect)\n"), "CHECK-DUPLICATE-FIELD", "x: 3"),
+    ("an extra field is still unknown",
+     POINT + main_with("  puts(Point(y: 2, z: 3).inspect)\n"), "CHECK-UNKNOWN-FIELD", "z: 3"),
+    ("a field default is a constant: a call",
+     'struct S\n  a: Int = seed()\nend\n\ndef seed() -> Int\n  return 4\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-DEFAULT-VALUE", "seed()"),
+    ("a field default is a constant: an operation",
+     'struct S\n  a: Int = 1 + 2\nend\n\n' + main_with("  puts(S().inspect)\n"), "CHECK-DEFAULT-VALUE", "1 + 2"),
+    ("a field default is a constant: a name",
+     'ONE = 1\n\nstruct S\n  a: Int = ONE\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-DEFAULT-VALUE", "ONE"),
+    ("a field default is a constant: a list with elements",
+     'struct S\n  a: List[Int] = [1]\nend\n\n' + main_with("  puts(S().inspect)\n"), "CHECK-DEFAULT-VALUE", "[1]"),
+    ("a field default is a constant: a struct",
+     POINT + 'struct S\n  p: Point = Point(y: 1)\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-DEFAULT-VALUE", "Point(y: 1)"),
+    ("a field default is a constant: another field",
+     'struct S\n  a: Int = 1\n  b: Int = a\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-DEFAULT-VALUE", "a"),
+    ("the type of a field default is checked against the field",
+     'struct S\n  a: Int = "x"\nend\n\n' + main_with("  puts(S().inspect)\n"), "CHECK-TYPE-MISMATCH", '"x"'),
+    ("[] does not fit a map field",
+     'struct S\n  a: Map[String, Int] = []\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-TYPE-MISMATCH", "[]"),
+    ("an unknown variant is not a field default",
+     'enum Mode\n  Fast\nend\n\nstruct S\n  a: Mode = Mode.Gone\nend\n\n' + main_with("  puts(S().inspect)\n"),
+     "CHECK-UNKNOWN-VARIANT", "Mode.Gone"),
+    ("a field default needs an expression after the sign",
+     'struct S\n  a: Int =\nend\n\n' + main_with("  puts(S().inspect)\n"), "PARSE-UNEXPECTED-TOKEN", "\n"),
+    ("a field default of a struct that is never built is still checked",
+     'struct S\n  a: Int = 1 + 1\nend\n\n' + main_with("  puts(1)\n"), "CHECK-DEFAULT-VALUE", "1 + 1"),
+    ("with changes a field and leaves the others, defaults included",
+     POINT + main_with("  puts(Point(y: 1).with(x: 5).inspect)\n"), None, None),
 ]
 
 # Several files: (title, files, code, file of the diagnostic, text the range covers).
@@ -169,6 +218,25 @@ MODULES = [
      {"util.agc": "export " + JOIN,
       "root.agc": 'import {join} from "util"\n\n' + main_with('  puts(join(["a"]))\n')},
      None, None, None),
+    ("a struct with defaults, exported, is built by another file that leaves them out",
+     {"models.agc": 'export enum Level\n  Info\n  Warn\nend\n\n'
+                    'export struct Options\n  name: String\n  level: Level = Level.Warn\n  retries: Int = 3\nend\n\n',
+      "root.agc": 'import Models from "models"\n\n'
+                  + main_with('  puts(Models.Options(name: "a").inspect)\n'
+                              '  puts(Models.Options(name: "a", retries: 1).inspect)\n')},
+     None, None, None),
+    ("a field default that names a private enum of its module can be left out by another module",
+     {"models.agc": 'enum Mode\n  Fast\n  Safe\nend\n\nexport struct S\n  mode: Mode = Mode.Safe\nend\n\n',
+      "root.agc": 'import Models from "models"\n\n' + main_with("  puts(Models.S().inspect)\n")},
+     None, None, None),
+    ("a field of an imported struct without a default must still be given",
+     {"models.agc": 'export struct S\n  a: Int\n  b: Int = 1\nend\n\n',
+      "root.agc": 'import Models from "models"\n\n' + main_with("  puts(Models.S(b: 2).inspect)\n")},
+     "CHECK-MISSING-FIELD", "root.agc", "Models.S(b: 2)"),
+    ("a bad field default in an imported file is reported in that file",
+     {"models.agc": 'export struct S\n  a: Int = 1 + 1\nend\n\n',
+      "root.agc": 'import Models from "models"\n\n' + main_with("  puts(Models.S().inspect)\n")},
+     "CHECK-DEFAULT-VALUE", "models.agc", "1 + 1"),
 ]
 
 

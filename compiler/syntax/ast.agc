@@ -124,7 +124,8 @@ end
 ## VM's compute pool while the task waits. A function that returns a resource has the resource's name as written and
 ## the C name of its free function; both are "" otherwise. outs holds the same for each out resource, in order. A
 ## function with out parameters has none of them in its params: it returns its record (StructDecl.record_of), with the
-## C result first.
+## C result first. with_resource is true when the block of the function declares a resource, which puts all its
+## functions with the types in the declaration order.
 export struct Native
   library: String
   symbol: String
@@ -133,6 +134,7 @@ export struct Native
   resource: String
   free: String
   outs: List[NativeResource]
+  with_resource: Bool
 end
 
 ## A resource that an out parameter of an extern function gives: its name as written and the C name of its free
@@ -168,12 +170,15 @@ export struct StructDecl
   span: Source.Span
 end
 
-## One field of a struct.
+## One field of a struct, with its default value when `name: Type = expression` gave one. Like a parameter default, it
+## is an ordinary expression of the file; the checker accepts only a constant (CHECK-DEFAULT-VALUE), the linker
+## resolves its names in the file that declares the struct, and a constructor that leaves the field out gets the value.
 export struct FieldDecl
   id: Int
   name: String
   name_span: Source.Span
   type: TypeRef
+  default: Optional[Expr]
   doc: Optional[String]
   span: Source.Span
 end

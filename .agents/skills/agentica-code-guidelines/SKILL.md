@@ -53,8 +53,9 @@ Change style only in code you touch. Restyle untouched code separately.
 ## Modules and docs
 
 - Declaration order is fixed (`CHECK-DECL-ORDER`): module doc/imports,
-  constants, structs/enums, `export def`, private `def`. Sort imports by path;
-  put callers before helpers within a group.
+  constants, structs/enums (an `extern` block with a resource goes here, whole),
+  `export def`, private `def`. Sort imports by path; put callers before helpers
+  within a group.
 - Export only names used by other files. Keep one topic per file; split files
   that grow into several topics.
 - Use `import Alias from "path"` for many names or possible collisions;
@@ -79,8 +80,9 @@ Change style only in code you touch. Restyle untouched code separately.
 
 - One purpose per function; split when comments divide its paragraphs. Hot
   loops are an exception.
-- Prefer four or fewer parameters; group more in a struct. Put options last
-  with defaults (`CHECK-DEFAULT-ORDER`).
+- Prefer four or fewer parameters; group more in a struct, and give its
+  optional fields defaults so a caller names only what differs. Put options
+  last with defaults (`CHECK-DEFAULT-ORDER`).
 - Guard-return bad cases early. Keep nesting to three levels of `if`, `for`,
   `while` and `case`.
 - Return a struct/enum, not parallel lists, fixed-key maps or magic codes.

@@ -342,8 +342,24 @@ end
 
 ### Structs and lists
 
-A struct constructor gives every field exactly once, by name, in any order.
-There are no default or extra fields.
+A struct constructor gives each field at most once, by name, in any order. A
+field written `NAME: type = expression` has a default value, which a
+constructor may leave out; the field then gets the default. A field without a
+default must be given (`CHECK-MISSING-FIELD`, located at the constructor), and
+a name that is not a field is `CHECK-UNKNOWN-FIELD`. A field that is given twice
+is `CHECK-DUPLICATE-FIELD`.
+
+A field default follows the rules of a parameter default (see "Default
+parameter values"): it is a constant of the same forms, anything else is
+`CHECK-DEFAULT-VALUE` at the expression, and its type is checked against the
+field type (`[]` and `{}` take the field type, a mismatch is
+`CHECK-TYPE-MISMATCH`). There is no order rule: a constructor names its fields,
+so any field may have a default. A default is checked where the struct is
+declared, even when no constructor leaves the field out. It is built at each
+construction that leaves the field out, so no two values share one, and it is
+resolved in the module that declares the struct, so a constructor in another
+module can leave the field out without importing what the default names.
+`value.with(...)` is not affected, and neither are the builtin records.
 
 `value.with(name: expr, ...)` is a copy of a struct with some fields changed;
 the original is unchanged. The receiver must be a struct (any other type is

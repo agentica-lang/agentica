@@ -156,11 +156,13 @@ struct ExternAt
 end
 
 # What the members of an extern block see of the block: its library, the free function of each resource declared so
-# far, by name, and the C names of the functions declared so far.
+# far, by name, the C names of the functions declared so far, and whether the block declares a resource anywhere
+# (Ast.Native.with_resource).
 struct ExternBlock
   library: String
   resources: Map[String, String]
   symbols: Set[String]
+  with_resource: Bool
 end
 
 struct FieldAt
@@ -1922,7 +1924,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
     )
   end
   cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
-  block = ExternBlock(library: name, resources: {}, symbols: Set.new([]))
+  block = ExternBlock(library: name, resources: {}, symbols: Set.new([]), with_resource: declares_resource?(e, cursor))
   nodes: List[Ast.Decl] = []
   next_id = ids
   looping = true
@@ -1964,6 +1966,19 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   end
   stop = try expect_statement_end(e, cursor + 1, "a newline after end")
   return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
+end
+
+# Whether a member of the extern block that starts at pos is a resource. The members have no body, so the first `end`
+# closes the block.
+def declares_resource?(e: Base.Env, pos: Int) -> Bool
+  at = pos
+  while at < e.size and e.tokens[at].kind != "end"
+    if resource_start?(e, at)
+      return true
+    end
+    at += 1
+  end
+  return false
 end
 
 # One member of an extern block at pos (after its doc and export), and the block with it.
@@ -2177,6 +2192,7 @@ def parse_extern_function(
         name: "result",
         name_span: result.node.span,
         type: returned.type,
+        default: Ast.Optional.Absent,
         doc: Ast.Optional.Absent,
         span: result.node.span,
       )
@@ -2214,6 +2230,7 @@ def parse_extern_function(
           resource: resource,
           free: free,
           outs: outs,
+          with_resource: block.with_resource,
         ),
       ),
       span: span,
@@ -2310,6 +2327,7 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
     name: param.name,
     name_span: param.name_span,
     type: taken.type,
+    default: Ast.Optional.Absent,
     doc: Ast.Optional.Absent,
     span: param.span,
   )
@@ -2394,16 +2412,28 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String])
   after_name = try Base.expect(e, pos, "name", "a field name", false)
   colon = try Base.expect(e, after_name, "colon", "\":\"", false)
   type = try Base.parse_type(e, colon, ids)
-  stop = try Base.expect(e, type.pos, "NL", "a newline after the field", false)
+  default: Ast.Optional[Ast.Expr] = Ast.Optional.Absent
+  after_type = type.pos
+  field_id = type.ids
+  # As for a parameter, any expression is read after "=" so that the checker can say why a default is not a constant.
+  # The id of the field follows the ids of its default (post-order).
+  if e.tokens[after_type].kind == "assign"
+    value = try parse_expression(e, after_type + 1, type.ids)
+    default = Ast.Optional.Present(value.node)
+    after_type = value.pos
+    field_id = value.ids
+  end
+  stop = try Base.expect(e, after_type, "NL", "a newline after the field", false)
   node = Ast.FieldDecl(
-    id: type.ids,
+    id: field_id,
     name: e.tokens[pos].lexeme,
     name_span: e.tokens[pos].span,
     type: type.node,
+    default: default,
     doc: doc,
     span: Base.span_from(e, pos, stop),
   )
-  return ok(FieldAt(node: node, pos: stop, ids: type.ids + 1))
+  return ok(FieldAt(node: node, pos: stop, ids: field_id + 1))
 end
 
 def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[VariantAt]

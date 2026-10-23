@@ -181,9 +181,10 @@ end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports, then
 ## constants, then struct, enum, type alias and resource (exported or not), then export def, then def. The span is of
-## the declaration out of place; the help names the group it belongs to. The record of an extern function with out
-## parameters (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with no
-## meaning for evaluation.
+## the declaration out of place; the help names the group it belongs to. The functions of an extern block that declares
+## a resource are in the group of the types, with the resource. The record of an extern function with out parameters
+## (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with no meaning for
+## evaluation.
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
   highest = 0
   for decl in declarations
@@ -221,9 +222,23 @@ def rank(decl: Ast.Decl) -> Int
         Ast.Decl.Enum(inner) -> return 2
         Ast.Decl.TypeAlias(inner) -> return 2
         Ast.Decl.Resource(inner) -> return 2
+        Ast.Decl.Function(inner) -> return function_rank(inner, 3)
         _ -> return 3
       end
-    Ast.Decl.Function(node) -> return 4
+    Ast.Decl.Function(node) -> return function_rank(node, 4)
+  end
+end
+
+# A function takes the rank of its kind (3 exported, 4 private), except one of an extern block that declares a
+# resource: the block sits with the types, as a whole.
+def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
+  case function.native
+    Ast.Optional.Present(link) ->
+      if link.with_resource
+        return 2
+      end
+      return plain
+    Ast.Optional.Absent -> return plain
   end
 end
 
