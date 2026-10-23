@@ -19,12 +19,13 @@ export struct Parameter
   default: Ast.Optional[String]
 end
 
-## One field of a struct, with its doc, its span and the span of its name.
+## One field of a struct, with its doc, its span, the span of its name and the source text of its default value.
 export struct Field
   name: String
   span: Source.Span
   name_span: Source.Span
   type: String
+  default: Ast.Optional[String]
   doc: Ast.Optional[String]
 end
 
@@ -128,7 +129,7 @@ def items_of(declaration: Ast.Decl, text: String) -> List[Item]
     Ast.Decl.Export(node) -> return inner_items(node.declaration, node.doc, node.span, text)
     Ast.Decl.Constant(node) -> return [constant_item(node, node.span, node.exported)]
     Ast.Decl.Function(node) -> return [function_item(node, node.doc, node.span, false, text)]
-    Ast.Decl.Struct(node) -> return [struct_item(node, node.doc, node.span, false)]
+    Ast.Decl.Struct(node) -> return [struct_item(node, node.doc, node.span, false, text)]
     Ast.Decl.Enum(node) -> return [enum_item(node, node.doc, node.span, false)]
     Ast.Decl.TypeAlias(node) -> return [alias_item(node, node.doc, node.span, false)]
     Ast.Decl.Resource(node) -> return [resource_item(node, node.doc, node.span, false)]
@@ -140,7 +141,7 @@ end
 def inner_items(declaration: Ast.Decl, doc: Ast.Optional[String], span: Source.Span, text: String) -> List[Item]
   case declaration
     Ast.Decl.Function(node) -> return [function_item(node, doc, span, true, text)]
-    Ast.Decl.Struct(node) -> return [struct_item(node, doc, span, true)]
+    Ast.Decl.Struct(node) -> return [struct_item(node, doc, span, true, text)]
     Ast.Decl.Enum(node) -> return [enum_item(node, doc, span, true)]
     Ast.Decl.TypeAlias(node) -> return [alias_item(node, doc, span, true)]
     Ast.Decl.Resource(node) -> return [resource_item(node, doc, span, true)]
@@ -169,7 +170,7 @@ def function_item(
     Parameter(
       name: parameter.name,
       type: Signature.type_text(parameter.type),
-      default: Signature.default_text(parameter, text),
+      default: Signature.default_text(parameter.default, text),
     )
   end
   return Item(
@@ -184,13 +185,20 @@ def function_item(
   )
 end
 
-def struct_item(node: Ast.StructDecl, doc: Ast.Optional[String], span: Source.Span, exported: Bool) -> Item
+def struct_item(
+  node: Ast.StructDecl,
+  doc: Ast.Optional[String],
+  span: Source.Span,
+  exported: Bool,
+  text: String,
+) -> Item
   fields = node.fields.map do |field: Ast.FieldDecl|
     Field(
       name: field.name,
       span: field.span,
       name_span: field.name_span,
       type: Signature.type_text(field.type),
+      default: Signature.default_text(field.default, text),
       doc: cleaned(field.doc),
     )
   end

@@ -26,7 +26,7 @@ def match_text(match: Model.Symbol) -> String
   case match.kind
     "builtin" -> return match.signatures.map do |line: String| "builtin #{line}\n" end.join("")
     "field" ->
-      head = OutlineText.field_text(match.owner, match.name, match.type)
+      head = OutlineText.field_text(match.owner, match.name, match.type, "")
       return "#{OutlineText.place(match.module, match.name_range)} #{head}\n"
     "variant" ->
       head = OutlineText.variant_text(match.owner, match.signature)

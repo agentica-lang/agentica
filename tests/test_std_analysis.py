@@ -33,6 +33,7 @@ NON_ASCII = 'def main() -> Void\n  puts(\u00f1and\u00fa)\nend\n'
 # that calls `twice` twice.
 FRESH = "export def fresh(n: Int) -> Int\n  return n\nend\n"
 TWICE_TWICE = 'import Util from "util"\n\ndef run() -> Int\n  return Util.twice(2) + Util.twice(3)\nend\n'
+OPTIONS = "struct Options\n  name: String\n  retries: Int = 3\nend\n"
 MISSING_IMPORT = 'import Nowhere from "nowhere"\n\ndef main() -> Void\n  puts("x")\nend\n'
 
 
@@ -47,6 +48,7 @@ def project(tmp_path):
     write_files(tmp_path, {
         "util.agc": UTIL, "main.agc": MAIN, "models.agc": MODELS, "orders.agc": ORDERS, "parse_error.agc": PARSE_ERROR,
         "type_error.agc": TYPE_ERROR, "missing_import.agc": MISSING_IMPORT, "uses_extra.agc": USES_EXTRA,
+        "options.agc": OPTIONS,
         "bad_util.agc": "export def twice(n: Int) -> Int\n  return \"a\"\nend\n", "uses_bad.agc": USES_BAD,
     })
     return tmp_path
@@ -86,6 +88,7 @@ PARITY = [
     ("check", "uses_bad.agc"),
     ("outline", "models.agc"),
     ("outline", "orders.agc"),
+    ("outline", "options.agc"),
     ("outline", "parse_error.agc"),
     ("type-at", *position("orders.agc", ORDERS, "user.age", 5)),
     ("type-at", *position("orders.agc", ORDERS, "name.upcase", 6)),
@@ -115,6 +118,12 @@ def test_the_library_answers_with_the_bytes_the_command_line_prints(driver, proj
     expected = asked(project, command, file, *rest)
     assert got == expected
     assert got != ("", "")
+
+
+def test_the_library_outline_gives_the_default_of_a_field(driver, project):
+    out, err = library(driver, project, "outline", "options.agc")
+    fields = json.loads(out)["items"][0]["fields"]
+    assert [(field["name"], field["default"]) for field in fields] == [("name", None), ("retries", "3")]
 
 
 def test_an_unreadable_file_or_a_bad_position_is_a_query_usage_diagnostic_in_that_file(driver, project):

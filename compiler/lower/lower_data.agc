@@ -142,12 +142,14 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
     out = try cx.expression.call(cx, fx, arg.value, start + info.positions[arg.name], false, false)
     fx = out.fx.with(next: after)
   end
-  fills = cx.field_fills.get(node.type_name, State.FieldFill(values: {}, file: cx.file, index: cx.index))
-  given = Set.new(node.args.map do |arg: Ast.NamedArg| arg.name end)
-  for field in info.fields
-    if !given.include?(field) and fills.values.has_key?(field)
-      fx = try lower_field_default(cx, fx, fills, fills.values[field], start + info.positions[field])
-      fx = fx.with(next: after)
+  if cx.field_fills.has_key?(node.type_name)
+    fills = cx.field_fills[node.type_name]
+    given = Set.new(node.args.map do |arg: Ast.NamedArg| arg.name end)
+    for field in info.fields
+      if !given.include?(field) and fills.values.has_key?(field)
+        fx = try lower_field_default(cx, fx, fills, fills.values[field], start + info.positions[field])
+        fx = fx.with(next: after)
+      end
     end
   end
   first = start

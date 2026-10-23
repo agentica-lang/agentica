@@ -161,8 +161,9 @@ The same data rule as printing: no `Fn`, `Task`, `Table` or resource handle
   - **Removing or reordering fields is safe:** fields are keyed by name, and
     extra keys are ignored on decode, as in `JSON.decode`.
   - **Adding a field breaks old data:** a field default only fills a
-    constructor, not a decode, so a missing field is an error. Old bytes do not have the new key, so they no
-    longer decode with the new type. 16.6 says how to handle it.
+    constructor, not a decode, so a missing field is an error. Old bytes do
+    not have the new key, so they no longer decode with the new type. 16.6
+    says how to handle it.
 - **Enum:** a CBOR array of exactly 2 items, `[tag, values]`:
   - `tag` is the variant name without the enum name, as a text string:
     `"Circle"`, not `"Shape.Circle"`.
