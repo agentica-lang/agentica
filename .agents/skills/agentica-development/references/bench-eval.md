@@ -51,14 +51,18 @@ record numbers only from an idle machine, in the last section of
   run ends (stderr, or `AGENTICA_VM_TRACE_FILE`): the `total` line (`wall_ms`,
   `steps`, `calls`, `builtin_ms`, `gc_ms`, `collections`), then the 30
   functions with most steps (`fn`, with `at=FILE:LINE`), the 12 files with most
-  steps, the 30 builtins with most time (`us=`) and the `section` rows of
-  `Profile.measure`; `AGENTICA_PROFILE_FORMAT=folded` writes flame graph
-  stacks instead (`references/vm-build.md`). `agentica FILE.agc` prints
+  steps, the 30 builtins with most time (`us=`), the `section` rows of
+  `Profile.measure`, and what the VM loop ran: the `events` line (frame
+  reloads, leaf and slow-tail builtin calls), an `op` row per opcode with its
+  share and the 20 top `pair` rows (`docs/vm/08-loader-and-cli.md` §9), which
+  say what to fuse or open-code; `AGENTICA_PROFILE_FORMAT=folded` writes flame
+  graph stacks instead (`references/vm-build.md`). `agentica FILE.agc` prints
   two reports, the front end's and the program's; in the second, `gc_ms` and
   `collections` are still those of the whole process. `check` of a file with no
   `main` prints its report too.
 - Steps are exact and repeat from run to run, so they are the main evidence.
-  Wall time is supporting: a profiled run is about a third slower, so time
+  Wall time is supporting: a profiled run is slower (up to 15 times on cheap
+  builtin calls, each of which it times), so time
   without the profile, run the old and the new binary alternately (A B A B, a
   few rounds of several runs), take the median of the round medians, record the
   load average (`uptime`) and say "measured under load" above 2.

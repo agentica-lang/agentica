@@ -124,6 +124,10 @@ def test_the_opcode_numbers_are_those_of_agc_opcode_in_vm_value_h():
     pairs = re.findall(r'"([^"]+)": ([0-9]+)', text[start:text.index("\n}", start)])
     assert [int(number) for _, number in pairs] == list(range(len(pairs)))
     assert [name.upper().replace("-", "_") for name, _ in pairs] == in_c
+    # The profile's opcode rows name each opcode as the writer does.
+    profile = (ROOT / "vm" / "profile.c").read_text(encoding="utf-8")
+    names = profile[profile.index("opcode_names[] = {"):]
+    assert re.findall(r'"([^"]+)"', names[:names.index("};")]) == [name for name, _ in pairs]
 
 
 def test_the_lowering_fixtures_fill_every_section_of_the_file():

@@ -377,12 +377,14 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   unit of budget: a `STEP` instruction adds the steps of its block), and each
   builtin counts its calls and its time. The loop of `interp.c` is built twice,
   with and without the hooks, so a run without the category costs nothing; with
-  it, every `STEP` takes the slow path of the budget counter and the run is
-  about a third slower. When the run ends (once for each runtime: the front end
-  hands its program over in a second one) `vm/profile.c` writes a `total` line
-  (fields in that file), then the 30 functions with the most steps (the step of
-  each pass of a range `each`, `times`, `upto`, `downto` or `File.each_line`
-  loop is `<native>`, while `List.map` and `List.each` add no step beyond their
+  it, every `STEP` takes the slow path of the budget counter, every instruction
+  is counted and every builtin call is timed, so the run is about 1.1 to 1.7
+  times slower on loops and calls and up to about 15 times on a loop of cheap
+  builtin calls. When the run ends (once for each runtime: the front end hands
+  its program over in a second one) `vm/profile.c` writes a `total` line (fields
+  in that file), then the 30 functions with the most steps (the step of each
+  pass of a range `each`, `times`, `upto`, `downto` or `File.each_line` loop is
+  `<native>`, while `List.map` and `List.each` add no step beyond their
   callbacks), the 12 source files with the most steps and the 30 builtins that
   took the most time. A builtin is timed for the call itself, so one that parks
   is timed until it does. `gc_ms` is Boehm's own clock of its collections, and
@@ -398,7 +400,16 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   called in its place (`agc_task_call_block`): one step, no native frame; with
   it on, it is a stepper whose native frame names the label. `Profile.steps` is
   the task's steps (`agc_task_steps`: its finished turns plus the running one),
-  the same with the profile on or off.
+  the same with the profile on or off. The report ends with what the loop of
+  `interp.c` ran: one `events` line (`instructions`, `reloads` of the top
+  frame's state, the start of each turn included, and the `CALL_BUILTIN` calls
+  that took the leaf path, `builtin_leaf`, the generic tail, `builtin_tail`, or
+  started a native frame, `builtin_native`), then one `op` row for each opcode
+  that ran (`count`, `share` of the instructions in percent, `name` as
+  `--dump-ir` spells it), the most first, and the 20 `pair` rows with the most
+  runs of opcode `first` followed by `then` in one frame (the first instruction
+  after a reload starts no pair). These counters live in `agc_profile`, like the
+  others, and the profile runs on one scheduler, so they need no lock.
 - `AGENTICA_PROFILE_FORMAT=folded` (with `profile`; `report` or unset keeps the
   report, another value is one `agc-trace unknown profile format` line) writes
   folded stacks instead of the report, to the trace output: a line per distinct

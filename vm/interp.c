@@ -10,6 +10,9 @@
 #include <inttypes.h>
 #include <math.h>
 #include <string.h>
+#if AGC_LEAF_CHECK
+#include <stdio.h>
+#endif
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
@@ -304,7 +307,20 @@ static PROFILE_HOOK void profile_steps(agc_vm *vm, int64_t n) {
 
 static PROFILE_HOOK void profile_call(agc_vm *vm, uint32_t function) { vm->profile->calls[function]++; }
 
-static PROFILE_HOOK void profile_builtin_call(agc_vm *vm, uint32_t id) { vm->profile->builtin_calls[id]++; }
+static PROFILE_HOOK void profile_builtin_call(agc_vm *vm, uint32_t id) {
+  vm->profile->builtin_calls[id]++;
+  vm->profile->builtin_native++;
+}
+
+/* The count of one instruction and of its pair with the one before it in the frame (*BEFORE, AGC_OP_COUNT for none).
+   It runs once per instruction, so it is inline: only the copy of turn_loop that has `profiling` true calls it. An
+   opcode out of range is left to the loop's own failure. */
+static inline __attribute__((always_inline)) void profile_op(agc_profile *profile, uint32_t *before, uint32_t op) {
+  if (op >= AGC_OP_COUNT) return;
+  profile->ops[op]++;
+  if (*before < AGC_OP_COUNT) profile->pairs[*before * AGC_OP_COUNT + op]++;
+  *before = op;
+}
 
 /* The call of a builtin. Once the VM is shared (agc_share) a builtin whose row is marked `shared` runs with rt->sync
  * held, so the task tree, the waiter lists, the channels, the handles and the logger table are seen by one scheduler
@@ -320,12 +336,44 @@ static inline agc_value call_builtin(agc_vm *vm, const agc_builtin *b, agc_value
   return b->fn(vm, args, span);
 }
 
+#if AGC_LEAF_CHECK
+/* Names the leaf builtin and what it did that a leaf must not (a row marked leaf by mistake). */
+static _Noreturn __attribute__((noinline, cold)) void leaf_broken(const agc_builtin *b, const char *what) {
+  char detail[160];
+  (void)snprintf(detail, sizeof detail, "builtin %s/%" PRIu32 " is marked leaf but %s", b->name, b->arity, what);
+  agc_internal_abort(detail);
+}
+
+/* The call of a leaf builtin (agc_builtin.leaf), checked: it parked (or asked to retry), started a stepper, charged
+   turn cost, counted a step, asked to yield or left rt->sync taken, any of which the generic tail of CALL_BUILTIN
+   would have handled, so the run stops. */
+static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
+  const agc_task *t = vm->task;
+  int64_t cost = t->turn_cost, stop = vm->next_stop, left = vm->turn_left;
+  uint32_t depth = vm->sync_depth;
+  bool yielded = vm->yield, retry = t->retry;
+  agc_value result = b->fn(vm, args, span);
+  if (t->parking || t->retry != retry) leaf_broken(b, "parked");
+  if (t->stepper) leaf_broken(b, "started a stepper");
+  if (t->turn_cost != cost) leaf_broken(b, "charged turn cost");
+  if (vm->next_stop != stop || vm->turn_left != left || vm->yield != yielded)
+    leaf_broken(b, "counted a step or asked to yield");
+  if (vm->sync_depth != depth) leaf_broken(b, "left rt->sync taken");
+  return result;
+}
+#else
+/* The call of a leaf builtin (agc_builtin.leaf). A leaf row is never shared, so it needs no lock. */
+static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *args, uint32_t span) {
+  return b->fn(vm, args, span);
+}
+#endif
+
 /* A builtin call with its count and time: the time of the call itself, so a builtin that parks is timed until it
- * does. */
+ * does. A LEAF call goes through call_leaf, so the check of the leaf rule runs under the profile too. */
 static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args,
-                                              uint32_t span) {
+                                              uint32_t span, bool leaf) {
   uint64_t began = agc_trace_now();
-  agc_value result = call_builtin(vm, b, args, span);
+  agc_value result = leaf ? call_leaf(vm, b, args, span) : call_builtin(vm, b, args, span);
   vm->profile->builtin_calls[id]++;
   vm->profile->builtin_ns[id] += agc_trace_now() - began;
   return result;
@@ -938,7 +986,14 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
   const uint32_t *spans;
   agc_value *R;
   uint32_t base, pc;
+  /* Only the profiling copy uses these; the plain copy drops them. */
+  agc_profile *profile = profiling ? vm->profile : NULL;
+  uint32_t before = AGC_OP_COUNT;
 reload:
+  if (profiling) {
+    profile->reloads++;
+    before = AGC_OP_COUNT;
+  }
   frame = &t->frames[t->frame_count - 1];
   code = p->functions[frame->function].code;
   spans = p->functions[frame->function].spans;
@@ -947,6 +1002,7 @@ reload:
   pc = frame->pc;
   for (;;) {
     agc_instr in = code[pc];
+    if (profiling) profile_op(profile, &before, in.op);
     uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
     pc++;
     frame->pc = pc;
@@ -1150,16 +1206,22 @@ reload:
       case AGC_OP_CALL_BUILTIN: {
         agc_value *args = R + in.a;
         const agc_builtin *b = p->builtins[bx];
+        if (b->leaf) {
+          if (profiling) profile->builtin_leaf++;
+          args[0] = profiling ? profile_builtin(vm, b, bx, args, SPAN, true) : call_leaf(vm, b, args, SPAN);
+          break;
+        }
         if (b->native) {
           if (profiling) profile_builtin_call(vm, bx);
           start_native(vm, b->native, base + in.a, SPAN);
           if (vm->yield) return AGC_TURN_YIELD;
           goto reload;
         }
+        if (profiling) profile->builtin_tail++;
         uint64_t units = 0;
         if (b->cost == AGC_COST_SIZE)
           for (uint32_t k = 0; k < b->arity; k++) units += agc_value_units(args[k]);
-        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN) : call_builtin(vm, b, args, SPAN);
+        agc_value result = profiling ? profile_builtin(vm, b, bx, args, SPAN, false) : call_builtin(vm, b, args, SPAN);
         if (t->stepper) {
           start_stepper(vm, b, base + in.a, SPAN);
           if (t->parking) return park_task(t);

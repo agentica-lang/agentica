@@ -112,16 +112,16 @@ static agc_value builtin_stdin_bytes(agc_vm *vm, agc_value *args, uint32_t span)
 }
 
 const agc_builtin agc_front_end_builtins[] = {
-  {"FrontEnd.hand_off", 3, builtin_hand_off, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
-  {"FrontEnd.std_source", 1, builtin_std_source, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
-  {"FrontEnd.stdin_bytes", 0, builtin_stdin_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
+  {"FrontEnd.hand_off", 3, builtin_hand_off, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"FrontEnd.std_source", 1, builtin_std_source, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"FrontEnd.stdin_bytes", 0, builtin_stdin_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
 };
 
 const size_t agc_front_end_builtin_count = sizeof agc_front_end_builtins / sizeof agc_front_end_builtins[0];
 
 /* Not shared: it reads only constant data, so it runs in parallel at any number of schedulers. */
 const agc_builtin agc_std_builtins[] = {
-  {"Std.source", 1, builtin_source, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
+  {"Std.source", 1, builtin_source, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
 };
 
 const size_t agc_std_builtin_count = sizeof agc_std_builtins / sizeof agc_std_builtins[0];

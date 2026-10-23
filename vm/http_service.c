@@ -42,10 +42,10 @@ static agc_value builtin_awaited(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 const agc_builtin agc_http_service_builtins[] = {
-  {"HttpWire.service", 3, builtin_service, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.awaited?", 1, builtin_awaited, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.jobs", 1, builtin_jobs, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"HttpWire.options", 1, builtin_options, AGC_NATIVE_NONE, AGC_COST_NONE, true},
+  {"HttpWire.service", 3, builtin_service, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.awaited?", 1, builtin_awaited, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.jobs", 1, builtin_jobs, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"HttpWire.options", 1, builtin_options, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
 };
 
 const size_t agc_http_service_builtin_count = sizeof agc_http_service_builtins / sizeof agc_http_service_builtins[0];

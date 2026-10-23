@@ -41,15 +41,18 @@ FILE.agc`, `agentica check FILE`, `agentica run -- FILE.agcb`). Its first line
 is `total wall_ms= steps= calls= builtin_calls= builtin_ms= gc_ms=
 collections=`; then up to 30 `fn calls= steps= name= at=FILE:LINE` rows (a block
 is `block@FILE:LINE:COL`), 12 `file` rows, 30 `builtin calls= us= name=` rows
-and the `section` rows of `Profile.measure`. `agentica FILE.agc` prints the
-front end's report, then the program's: the program's `steps` are its own, while
-`gc_ms` and `collections` count the whole process. `AGENTICA_VM_TRACE_FILE=PATH`
-writes the report to a file. Steps repeat exactly from run to run; wall time
-does not, so compare steps. A profiled run is about a third slower: rank
-builtins with the `builtin ... us=` rows, then time the program without the
-profiler. A `<native>` row is the steps of a range loop such as `(0...n).each`,
-one per item (the block's own steps are on its `block@` row); a list's `each`
-and `map` add none.
+and the `section` rows of `Profile.measure`; it ends with what the VM ran (an
+`events` line, an `op` row per opcode with its share, the top 20 `pair` rows of
+opcodes run in a row), which is for work on the VM. `agentica FILE.agc` prints
+the front end's report, then the program's: the program's `steps` are its own,
+while `gc_ms` and `collections` count the whole process.
+`AGENTICA_VM_TRACE_FILE=PATH` writes the report to a file. Steps repeat exactly
+from run to run; wall time does not, so compare steps. A profiled run is slower
+(about 1.1 to 1.7 times for loops and calls, up to about 15 times for a loop of
+cheap builtin calls, since each call is timed): rank builtins with the `builtin
+... us=` rows, then time the program without the profiler. A `<native>` row is
+the steps of a range loop such as `(0...n).each`, one per item (the block's own
+steps are on its `block@` row); a list's `each` and `map` add none.
 
 Costs in steps, measured on 100,000 repeats:
 

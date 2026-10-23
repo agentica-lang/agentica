@@ -892,16 +892,16 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
 }
 
 const agc_builtin agc_ffi_builtins[] = {
-  {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true},
-  {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true},
-  {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false},
-  {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false},
-  {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false},
-  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
-  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
-  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false},
-  {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
-  {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false},
+  {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
+  {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };
 
 const size_t agc_ffi_builtin_count = sizeof agc_ffi_builtins / sizeof agc_ffi_builtins[0];

@@ -9,6 +9,14 @@
 
 #include "port.h"
 
+/* The sanitizer, TSan and GC-stress builds check after each call of a builtin marked leaf that it kept the rule of
+   agc_builtin.leaf, and abort if not (vm/interp.c); the release build trusts the mark. */
+#if defined(AGC_NO_GC) || defined(AGC_GC_STRESS)
+#define AGC_LEAF_CHECK 1
+#else
+#define AGC_LEAF_CHECK 0
+#endif
+
 typedef struct {
   const agc_builtin *entries;
   const size_t *count;

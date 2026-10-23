@@ -239,6 +239,43 @@ def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_eac
         assert any(re.match(pattern, line) for line in lines), "%r in %r" % (pattern, lines)
 
 
+def test_the_profile_counts_each_opcode_the_pairs_and_the_paths_of_builtin_calls(tmp_path, traced_vm):
+    vm = traced_vm[0]
+    source = tmp_path / "ops.agc"
+    source.write_text('def main() -> Void\n  total = 0\n  word = "hello"\n  for k in 0...50\n'
+                      "    total += word.length\n  end\n  puts(total)\nend\n")
+    bytecode = compile_fixture(source, tmp_path)
+    path = tmp_path / "ops.trace"
+    plain = run_vm(vm, bytecode)
+    traced = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path})
+    assert traced == plain
+    lines = trace_lines(path)
+    prefix = rb"^agc-trace \+[0-9.]+ profile "
+    events = [re.match(prefix + rb"events instructions=([0-9]+) reloads=([1-9][0-9]*) builtin_leaf=([0-9]+)"
+                       rb" builtin_tail=([0-9]+) builtin_native=([0-9]+)$", line) for line in lines]
+    events = [match for match in events if match]
+    assert len(events) == 1, lines
+    instructions, _, leaf, tail, native = (int(group) for group in events[0].groups())
+    # String.length is a leaf builtin, called once per pass; puts takes the generic tail.
+    assert (leaf, tail, native) == (50, 1, 0)
+    share = rb"([0-9]+\.[0-9]{2})"
+    ops = [re.match(prefix + rb"op count=([1-9][0-9]*) share=" + share + rb" name=([a-z-]+)$", line) for line in lines]
+    ops = [(int(m.group(1)), float(m.group(2)), m.group(3)) for m in ops if m]
+    names = [name for _, _, name in ops]
+    assert len(names) == len(set(names)) and b"step" in names
+    assert sum(count for count, _, _ in ops) == instructions
+    assert [count for count, _, _ in ops] == sorted((count for count, _, _ in ops), reverse=True)
+    assert dict((name, count) for count, _, name in ops)[b"call-builtin"] == 51
+    assert abs(sum(part for _, part, _ in ops) - 100) < 0.01 * len(ops)
+    pairs = [re.match(prefix + rb"pair count=([1-9][0-9]*) share=" + share + rb" first=([a-z-]+) then=([a-z-]+)$",
+                      line) for line in lines]
+    pairs = [(int(m.group(1)), m.group(3), m.group(4)) for m in pairs if m]
+    assert 0 < len(pairs) <= 20
+    assert [count for count, _, _ in pairs] == sorted((count for count, _, _ in pairs), reverse=True)
+    assert all(first in names and then in names for _, first, then in pairs)
+    assert any(then == b"call-builtin" and count >= 50 for count, _, then in pairs), pairs
+
+
 def test_the_profile_stops_a_looping_program_at_the_same_step_and_counts_a_native_loop(tmp_path, traced_vm):
     """Counting takes every STEP through the slow path of the budget; the run must still end where it ended."""
     vm = traced_vm[0]
