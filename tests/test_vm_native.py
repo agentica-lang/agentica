@@ -1254,6 +1254,7 @@ extern "{library}"
     fn: C.Function, value: C.Int32, limit_ms: C.Int32, out thing: Thing, free: C.Function,
   ) -> C.Int32
   def missing(fn: C.Function) -> Void
+  def peer_api_thing(free: C.Function) -> Thing
 end
 
 def slot(table: C.Pointer, index: Int) -> C.Pointer
@@ -1277,7 +1278,8 @@ end
 
 # A table of C function pointers, as onnxruntime's OrtApi: a base from a named function, a table from a call through
 # its first slot, then calls through the table with each C type, an out resource and a resource result freed through
-# the table's release slot (once, and never for NULL), and a compute def through a pointer.
+# the table's release slot (once, and never for NULL), a compute def through a pointer, and a named maker whose sole
+# C.Function parameter is its free function.
 @NATIVE_CALLS
 def test_calls_through_a_table_of_c_function_pointers(tmp_path, peer):
     main = """def main() -> Void
@@ -1302,22 +1304,28 @@ def test_calls_through_a_table_of_c_function_pointers(tmp_path, peer):
   puts(peer_api_releases())
   puts(read(slot(table, READ), peer_ptr_static()))
   puts(half(slot(table, HALF), 5.0))
+  named = peer_api_thing(slot(table, RELEASE)).unwrap!
+  puts(get(slot(table, GET), named))
+  Native.close(named)
+  puts(peer_api_releases())
 end
 """
     result = agentica(program(tmp_path, API_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "true", "peer-api-1", "42", "3000000001.75", "0", "7", "1", "1", "9", "open returned NULL", "2", "42", "2.5", "",
+        "true", "peer-api-1", "42", "3000000001.75", "0", "7", "1", "1", "9", "open returned NULL", "2", "42", "2.5",
+        "5", "3", "",
     ]
 
 
-# A NULL function pointer, to call or as a free function, and an owned buffer to call stop the run at the extern
-# function before C runs; nothing is made.
+# A NULL function pointer, to call or as a free function, and an owned buffer to call or as a free function stop the
+# run at the extern function before C runs; nothing is made.
 @NATIVE_CALLS
 @pytest.mark.parametrize("call, code", [
     ("missing(slot(api(), MISSING))", "RUNTIME-NATIVE-NULL"),
     ("open(slot(api(), OPEN), 1, Native.null())", "RUNTIME-NATIVE-NULL"),
     ("half(Native.memory_pointer(8), 1.0)", "RUNTIME-NATIVE-BOUNDS"),
+    ("open(slot(api(), OPEN), 1, Native.memory_pointer(8))", "RUNTIME-NATIVE-BOUNDS"),
 ])
 def test_a_null_function_pointer_is_refused(tmp_path, peer, call, code):
     main = "def main() -> Void\n  %s\n  puts(peer_api_releases())\nend\n" % call

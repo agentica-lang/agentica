@@ -571,6 +571,8 @@ def test_function_pointers_check_as_c_pointers(tmp_path):
     ("def f(fn: C.Function) -> C.Function", "PARSE-EXTERN-TYPE", (3, 28), (3, 38)),
     ("def f(fn: C.Function, out g: C.Function) -> Void", "PARSE-EXTERN-OUT", (3, 32), (3, 42)),
     ("def f(fn: C.Function, ...) -> Void", "PARSE-EXTERN-VARIADIC-FIXED", (3, 25), (3, 28)),
+    ("def f(free: C.Function, ...) -> Thing", "PARSE-EXTERN-VARIADIC-FIXED", (3, 27), (3, 30)),
+    ("def f(fn: C.Function, free: C.Function, ...) -> Thing", "PARSE-EXTERN-VARIADIC-FIXED", (3, 43), (3, 46)),
     ("def f(fn: C.Function, a: C.Int32, ..., g: C.Function) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (3, 45), (3, 55)),
 ])
 def test_a_c_function_is_the_function_to_call_or_a_free_function(tmp_path, signature, code, start, stop):
@@ -588,4 +590,19 @@ def test_a_resource_is_freed_by_a_c_name_or_a_c_function(tmp_path, free, stop):
 def test_a_call_through_a_pointer_may_take_the_name_of_a_free_function(tmp_path):
     text = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_close(fn: C.Function, db: Db) -> Void\n' \
            '  resource Other, free: db_close\nend\n'
+    assert check(source(tmp_path, text)).code == 0
+
+
+# A sole C.Function parameter of a def that makes a resource of a free: C.Function kind is its free function, not the
+# function to call: the def calls its C function by name (void *thing_new(void)), so = "symbol" is allowed.
+@pytest.mark.parametrize("signature", [
+    "def thing_new(free: C.Function) -> Thing",
+    'def new_thing(free: C.Function) -> Thing = "thing_new"',
+    "def thing_at(fn: C.Function, free: C.Function) -> Thing",
+])
+def test_a_sole_c_function_of_a_maker_is_its_free_function(tmp_path, signature):
+    name = signature.split("(")[0].split()[-1]
+    text = 'extern "/opt/libx.so"\n  resource Thing, free: C.Function\n  %s\nend\n\n' \
+           'def make(f: C.Pointer) -> Result[Thing]\n  return %s(%sf)\nend\n' \
+           % (signature, name, "f, " if "fn:" in signature else "")
     assert check(source(tmp_path, text)).code == 0

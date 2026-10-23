@@ -552,4 +552,6 @@ typedef struct {
 static const peer_api_base api_base = {api_get_api, api_version};
 
 const void *peer_get_api_base(void) { return &api_base; }
+/* A named maker whose value is freed only through the table's release slot, which the program passes. */
+void *peer_api_thing(void) { return peer_res_open(5); }
 int32_t peer_api_releases(void) { return atomic_load(&api_releases); }

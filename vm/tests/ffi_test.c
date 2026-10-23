@@ -67,7 +67,8 @@ static void test_bad_signatures(void) {
                        "dd..d cos " LIBM, "dd.d.d cos " LIBM, "dd.b cos " LIBM, "dd.D cos " LIBM, "dd.R cos " LIBM,
                        "dd.f cos " LIBM, "Fd cos " LIBM, "ddc cos " LIBM, "dcc cos " LIBM, "dC cos " LIBM,
                        "dde cos " LIBM, "rl malloc C.Function Mem " LIBM, "rlee malloc C.Function Mem " LIBM,
-                       "rle malloc free Mem " LIBM, "dc.d cos " LIBM, "dd.e cos " LIBM, "ce cos " LIBM};
+                       "rle malloc free Mem " LIBM, "dc.d cos " LIBM, "dd.e cos " LIBM, "ce cos " LIBM,
+                       "rel malloc C.Function Mem " LIBM, "rcel malloc C.Function Mem " LIBM};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
   char wide[100];
   memset(wide, 'i', 66);

@@ -238,10 +238,10 @@ static void discard_frees(free_list *frees) {
    are never an out parameter, a C.Bool or a C.Float, which C would promote. Each resource the call makes adds two words
    after the C name, the C name of its free function and the resource's name, an identifier: the result's first (code
    r), then each out resource's (code R), in order. A call through a C function pointer has the code c first: the
-   argument is the address to call, and SYMBOL (the def's name) is only shown. The code e, once and before the ".",
-   is the argument that holds the free function of each resource the call makes whose free word is C.Function; the
-   call has one exactly when such a resource needs it. The front end writes it (compiler/lower/lower_native.agc); the
-   bytecode may hold anything, so every part is checked here. */
+   argument is the address to call, and SYMBOL (the def's name) is only shown. The code e, only as the last code (a
+   "." may follow), is the argument that holds the free function of each resource the call makes whose free word is
+   C.Function; the call has one exactly when such a resource needs it. The front end writes it
+   (compiler/lower/lower_native.agc); the bytecode may hold anything, so every part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
   size_t left = text->bytes;
@@ -287,7 +287,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
       inputs++;
       continue;
     }
-    if (code == 'e' && free_input < 0 && k < before) {
+    if (code == 'e' && k + 1 == total && k < before) {
       free_input = (int32_t)inputs++;
       continue;
     }
@@ -494,6 +494,10 @@ static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_a
   return agc_c_resource_value(res);
 }
 
+/* The address that frees a resource of a kind: FREE_AT, the free function that the call got (code e), for a kind
+   declared free: C.Function (BY_POINTER), else NULL, so its prepared call by name runs. */
+static void *free_address(bool by_pointer, void *free_at) { return by_pointer ? free_at : NULL; }
+
 /* The resource that a call returned, as Result ok; NULL is an error that names the function. FREE_AT is the free
    function that the call got (code e), else NULL. */
 static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, void *free_at) {
@@ -502,7 +506,8 @@ static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, 
     snprintf(message, sizeof message, "%s returned NULL", e->symbol);
     return agc_error_value(message);
   }
-  return agc_result_value(true, make_resource(vm, e->free, e->free_by_pointer ? free_at : NULL, e->resource, pointer));
+  return agc_result_value(true, make_resource(vm, e->free, free_address(e->free_by_pointer, free_at), e->resource,
+                                              pointer));
 }
 
 /* The compute calls that held these resources are over: a resource closed meanwhile is freed by the last of them. */
@@ -703,7 +708,7 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     case AGC_C_POINTER: return agc_c_pointer_value(slot->p);
     case AGC_C_RESOURCE: {
       const made_kind *kind = &e->made[k];
-      return make_resource(vm, kind->free, kind->by_pointer ? free_at : NULL, kind->name, slot->p);
+      return make_resource(vm, kind->free, free_address(kind->by_pointer, free_at), kind->name, slot->p);
     }
     case AGC_C_STRING:
     case AGC_C_BYTES:
@@ -728,11 +733,11 @@ static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r
 /* The resources that a compute call with out parameters made, when nobody takes its value (the task was cancelled):
    each pointer that is not NULL is freed here, once, and no value is made. */
 static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots, void *free_at) {
-  if (e->result == AGC_C_RESOURCE) free_pointer(e->free, e->free_by_pointer ? free_at : NULL, r->p);
+  if (e->result == AGC_C_RESOURCE) free_pointer(e->free, free_address(e->free_by_pointer, free_at), r->p);
   for (uint32_t k = 0; k < e->count; k++) {
     if (!e->out[k] || e->params[k] != AGC_C_RESOURCE) continue;
     const made_kind *kind = &e->made[k];
-    free_pointer(kind->free, kind->by_pointer ? free_at : NULL, slots[k].p);
+    free_pointer(kind->free, free_address(kind->by_pointer, free_at), slots[k].p);
   }
 }
 

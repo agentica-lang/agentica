@@ -356,11 +356,11 @@ end
 - The C types are `C.Int32` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
   (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Float` (a 32-bit
   `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a `const char *`,
-  `String`), `C.Pointer`, `C.Bytes` and the resources of the block (below); a
-  result may also be `Void`. `C.Int` is `PARSE-EXTERN-TYPE`: write the width. A
-  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`). A `Float` passed
-  as a `C.Float` is rounded to the nearest float, and one outside its range
-  becomes an infinity.
+  `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function pointer, below)
+  and the resources of the block (below); a result may also be `Void`. `C.Int`
+  is `PARSE-EXTERN-TYPE`: write the width. A function takes at most 64
+  parameters (`PARSE-EXTERN-ARITY`). A `Float` passed as a `C.Float` is rounded
+  to the nearest float, and one outside its range becomes an infinity.
 - The library is a plain string literal: a name without `/`, which the system
   loader looks up, or an absolute path. Anything else is
   `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
@@ -499,7 +499,9 @@ end
   freed through a function pointer (`api->ReleaseSession`): the call that makes
   one takes the address of its free function as its last parameter (a
   `C.Function`, also checked for NULL before C runs), and `Native.close`, the
-  owner's end and a dropped compute result call that address, once.
+  owner's end and a dropped compute result call that address, once. An
+  extern block whose functions are all called through a pointer never opens
+  its library, so a wrong library path is not reported.
 - A `def` call blocks timers, I/O and other tasks until it returns, and the step
   limit cannot stop it in the middle. Native code must retry calls cut
   short by `EINTR`: GC signals can interrupt sleeps and polls.

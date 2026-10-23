@@ -2133,7 +2133,8 @@ end
 # first token (compute or def) and pos the def. A function with out parameters takes only the others, and returns its
 # record, made here (Ast.StructDecl.record_of): the C result as `result` (none for Void), then each out value, named
 # after it. A first parameter of type C.Function makes it a call through a function pointer: the def calls that
-# address, has no C name (ExternAt.symbol is ""), and takes no = "symbol".
+# address, has no C name (ExternAt.symbol is ""), and takes no = "symbol". A sole C.Function parameter of a def that
+# returns a resource of a free: C.Function kind is that resource's free function instead (callee?).
 def parse_extern_function(
   e: Base.Env,
   start: Int,
@@ -2159,7 +2160,7 @@ def parse_extern_function(
     after_signature = try symbol_string(e, symbol_at)
   end
   symbol = Base.token_text(e.tokens[symbol_at])
-  callee = callee?(params)
+  callee = callee?(params, result.node, block)
   if callee and symbol_at != pos + 1
     return error(
       Base.bail_span(
@@ -2198,6 +2199,8 @@ def parse_extern_function(
     by_pointer = by_pointer.push(result.node)
   end
   free_params: List[Ast.Param] = []
+  # The C.Function parameters before the ... of a variadic def, which C does not get.
+  not_c = 0
   index = 0
   for param in params.nodes
     case param.default
@@ -2244,12 +2247,15 @@ def parse_extern_function(
       end
     else
       code = taken.code
-      if code == "c" and index > 0
+      if code == "c" and (index > 0 or !callee)
         if index != params.nodes.size - 1
           return error(function_failure(param.type))
         end
         code = "e"
         free_params = free_params.push(param)
+      end
+      if (code == "c" or code == "e") and index < params.fixed
+        not_c += 1
       end
       codes = codes.push(code)
       typed = typed.push(param.with(type: taken.type))
@@ -2257,13 +2263,13 @@ def parse_extern_function(
     index += 1
   end
   try free_function(by_pointer, free_params)
-  if callee and params.fixed == 1
+  if params.fixed > 0 and params.fixed == not_c
     return error(
       Base.bail(
         e,
         params.mark,
         "PARSE-EXTERN-VARIADIC-FIXED",
-        "a variadic function takes at least one parameter before ..., after its C.Function",
+        "a variadic function takes at least one parameter before ..., besides its C.Function ones",
         Base.hint("declare the fixed parameters of the C function first, as its header does"),
       ),
     )
@@ -2361,13 +2367,19 @@ def function_failure(type: Ast.TypeRef) -> String
   )
 end
 
-# Whether the first parameter is a C.Function (not an out one): the def calls the function at that address.
-def callee?(params: ParamsAt) -> Bool
+# Whether the first parameter is a C.Function (not an out one): the def calls the function at that address. A sole
+# C.Function parameter of a def that returns a resource of a free: C.Function kind is its free function, so
+# `def thing_new(free: C.Function) -> Thing` calls thing_new by name; a call through a pointer that makes such a
+# resource takes two. (A def with out parameters has its free function last, so its first parameter is not it.)
+def callee?(params: ParamsAt, result: Ast.TypeRef, block: ExternBlock) -> Bool
   if params.nodes.size == 0 or params.outs[0]
     return false
   end
   first = params.nodes[0].type
-  return first.name == FUNCTION_TYPE and first.args.size == 0
+  if first.name != FUNCTION_TYPE or first.args.size > 0
+    return false
+  end
+  return params.nodes.size > 1 or block.resources.get(result.name, "") != FUNCTION_TYPE
 end
 
 # A call that makes a resource of a free: C.Function kind (made: the type of each) takes its free function as its last

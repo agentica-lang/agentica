@@ -176,12 +176,15 @@ end
   parameter `fn: C.Function` makes the `def` call that address, with its
   declared signature (no `= "symbol"`); pass `Native.get_pointer(api, slot *
   8)`. `resource Session, free: C.Function` is freed through a pointer: the
-  `def` that makes one (result or `out`) takes it as its last parameter
-  `free: C.Function`, and close, the owner's end and a dropped compute result
-  call it once. `C.Function` is a `C.Pointer` to the program; elsewhere, or a
-  second such resource in one call, is `PARSE-EXTERN-FUNCTION`; never a
-  result, `out` or variadic. NULL is `RUNTIME-NATIVE-NULL` before C runs, an
-  owned buffer `RUNTIME-NATIVE-BOUNDS`; a wrong address is undefined behavior.
+  `def` that makes one (result or `out`) takes it as its last parameter `free:
+  C.Function` (after the `out` ones), and close, the owner's end and a dropped
+  compute result call it once. A sole `C.Function` of a `def` that returns such
+  a resource is its free function (`def thing_new(free: C.Function) -> Thing`
+  calls `thing_new` by name). Names are free. `C.Function` is a `C.Pointer` to
+  the program; elsewhere, or a second such resource in one call, is
+  `PARSE-EXTERN-FUNCTION`; never a result, `out` or variadic. NULL is
+  `RUNTIME-NATIVE-NULL` before C runs, an owned buffer `RUNTIME-NATIVE-BOUNDS`;
+  a wrong address is undefined behavior.
 
   ~~~ruby
   extern "/opt/plugin/libplugin.so"
