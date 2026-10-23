@@ -52,7 +52,7 @@ def roots(module: Linker.LinkedModule, offset: Int) -> List[Walk.Node]
       Ast.Decl.Function(node) ->
         if holds?(node.span, offset)
           for param in node.params
-            out = out.concat(default_of(param))
+            out = out.concat(default_of(param.default))
           end
           out = out.concat(node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end)
         end
@@ -60,14 +60,20 @@ def roots(module: Linker.LinkedModule, offset: Int) -> List[Walk.Node]
         if holds?(node.span, offset)
           out = out.push(Walk.Node.Expr(node.value))
         end
+      Ast.Decl.Struct(node) ->
+        if holds?(node.span, offset)
+          for field in node.fields
+            out = out.concat(default_of(field.default))
+          end
+        end
       _ -> out = out
     end
   end
   return out
 end
 
-def default_of(param: Ast.Param) -> List[Walk.Node]
-  case param.default
+def default_of(default: Ast.Optional[Ast.Expr]) -> List[Walk.Node]
+  case default
     Ast.Optional.Present(value) -> return [Walk.Node.Expr(value)]
     Ast.Optional.Absent -> return []
   end

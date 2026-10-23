@@ -88,7 +88,9 @@ end
 def rewrite_struct(cx: Resolve.Context, node: Ast.StructDecl) -> Result[Ast.Decl]
   fields: List[Ast.FieldDecl] = []
   for field in node.fields
-    fields = fields.push(field.with(type: try rewrite_type(cx, field.type)))
+    type = try rewrite_type(cx, field.type)
+    default = try rewrite_optional_expr(cx, field.default)
+    fields = fields.push(field.with(type: type, default: default))
   end
   return ok(Ast.Decl.Struct(node.with(name: Resolve.identity(cx, node.name), fields: fields)))
 end
