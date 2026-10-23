@@ -166,7 +166,7 @@ end
 
 ## Files and docs
 
-A file has a fixed order: its doc and imports, constants, structs, enums, type aliases and extern resources, exported functions, then private functions. Sort imports by path. A constant is imported by name (`import {LIMIT} from "limits"`) and the rest through the alias; a file may import one module both ways.
+A file has a fixed order: its doc and imports, constants, structs, enums, type aliases and extern blocks with a resource, exported functions, then private functions. Sort imports by path. A constant is imported by name (`import {LIMIT} from "limits"`) and the rest through the alias; a file may import one module both ways.
 
 ```agentica {expect="CHECK-DECL-ORDER"}
 # bad
