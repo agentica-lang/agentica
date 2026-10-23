@@ -24,6 +24,11 @@
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
+/* What run_compiled leaves to the jit copy of the turn loop: no compiled code ran to an end (the interpreter goes on at
+   frame->pc), the turn ends, or the interpreter runs the one instruction at frame->pc and enters the code again
+   after it. */
+typedef enum { COMPILED_NONE, COMPILED_YIELD, COMPILED_ONE } compiled_result;
+
 typedef struct {
   uint64_t key;
   uint64_t item;
@@ -1066,14 +1071,15 @@ static agc_turn_result park_task(agc_task *t) {
 
 /* Runs the top frame in compiled code (vm/jit/jit.h) when its function has some, from frame->pc, and handles the
    exits as the interpreter would handle the instruction at the exit's pc: a slow STEP runs step_slow, a turn cost is
-   applied, a failure is raised here, outside compiled code, with frame->pc past the failing instruction. True when
-   the turn ends (a yield); false when the interpreter goes on at frame->pc (no code, or a RETURN to run). Only the jit
-   copy of the turn loop calls it. */
-static __attribute__((noinline)) AGC_JIT_CALLER bool run_compiled(agc_vm *vm, agc_jit *jit, agc_frame *frame) {
+   applied, a failure is raised here, outside compiled code, with frame->pc past the failing instruction. An
+   instruction without code (a call, a builtin, RETURN) or a slow path goes back to the turn loop with frame->pc on
+   it (COMPILED_ONE). Only the jit copy of the turn loop calls it. */
+static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc_vm *vm, agc_jit *jit,
+                                                                             agc_frame *frame) {
   agc_jit_code code = agc_jit_code_of(jit, frame->function);
   const agc_program *p = vm->rt->program;
   const agc_function *f = &p->functions[frame->function];
-  if (!code || frame->pc >= f->count) return false;
+  if (!code || frame->pc >= f->count) return COMPILED_NONE;
   agc_value *R = vm->task->regs + frame->base;
   uint32_t pc = frame->pc;
   for (;;) {
@@ -1082,12 +1088,27 @@ static __attribute__((noinline)) AGC_JIT_CALLER bool run_compiled(agc_vm *vm, ag
     switch (out.status) {
       case AGC_JIT_EXIT_STEP:
         step_slow(vm, f->code[out.pc].a, f->spans[out.pc]);
-        if (vm->yield) return true;
+        if (vm->yield) return COMPILED_YIELD;
         break;
       case AGC_JIT_EXIT_COST:
-        if (apply_cost(vm)) return true;
+        if (apply_cost(vm)) return COMPILED_YIELD;
         break;
-      case AGC_JIT_EXIT_INTERPRET: frame->pc = out.pc; return false;
+      case AGC_JIT_EXIT_INTERPRET: {
+        /* A leaf builtin is called here, as the interpreter's CALL_BUILTIN calls it, and the code goes on after it:
+           a leaf never parks, yields, charges cost or touches the frames, so nothing else of the turn loop runs. */
+        agc_instr in = f->code[out.pc];
+        uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+        const agc_builtin *b = in.op == AGC_OP_CALL_BUILTIN ? p->builtins[bx] : NULL;
+        bool tracing = AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT);
+        if (b && b->leaf) {
+          if (tracing) agc_jit_count_leaf(jit);
+          R[in.a] = call_leaf(vm, b, R + in.a, f->spans[out.pc]);
+          break;
+        }
+        if (tracing) agc_jit_count_exit(jit, frame->function, out.pc);
+        frame->pc = out.pc;
+        return COMPILED_ONE;
+      }
       default: op_failed(vm, (agc_status)out.status);
     }
     pc = out.pc + 1;
@@ -1164,20 +1185,37 @@ static inline __attribute__((always_inline)) agc_turn_result turn_loop(agc_vm *v
   /* Only the profiling copy uses these; the plain copy drops them. */
   agc_profile *profile = profiling ? vm->profile : NULL;
   uint32_t before = AGC_OP_COUNT;
+  /* Only the jit copy uses it: the pc after an instruction that compiled code left to the interpreter, where the loop
+     enters the code again. An instruction that changes the frame reloads first, which clears it; one that jumps
+     elsewhere leaves it unmet until the loop comes by. */
+  uint32_t resume = UINT32_MAX;
 reload:
   if (profiling) {
     profile->reloads++;
     before = AGC_OP_COUNT;
   }
   frame = &t->frames[t->frame_count - 1];
-  if (jitting && agc_jit_may_run(vm->rt->jit, frame->function) && run_compiled(vm, vm->rt->jit, frame))
-    return AGC_TURN_YIELD;
+  if (jitting) {
+    resume = UINT32_MAX;
+    if (agc_jit_may_run(vm->rt->jit, frame->function)) {
+      compiled_result ran = run_compiled(vm, vm->rt->jit, frame);
+      if (ran == COMPILED_YIELD) return AGC_TURN_YIELD;
+      if (ran == COMPILED_ONE) resume = frame->pc + 1;
+    }
+  }
   code = p->functions[frame->function].code;
   spans = p->functions[frame->function].spans;
   base = frame->base;
   R = t->regs + base;
   pc = frame->pc;
   for (;;) {
+    /* A stale resume is harmless: reload rebuilds code, spans, base, R and
+       pc from the frame, so landing on this pc by another path just enters
+       the code at the frame's instruction. */
+    if (jitting && pc == resume) {
+      frame->pc = pc;
+      goto reload;
+    }
     agc_instr in = code[pc];
     if (profiling) {
       /* The profiling copy runs a fused STEP as a plain STEP, and its next instruction as one of its own, so the
@@ -1528,8 +1566,16 @@ reload:
 #undef FUSED_NEXT
 #undef SPAN
 
+/* The jit and the profiling copies of the turn loop are functions of their own, and agc_run_turn holds only the plain
+   copy that --jit off runs: the compiler lays out blocks and allocates registers for each function apart, so a change
+   to the JIT's copy does not reshape the plain one. With the three copies in agc_run_turn, a change to the jit copy
+   alone made case 7% slower with --jit off. */
+static __attribute__((noinline)) agc_turn_result jit_turn(agc_vm *vm) { return turn_loop(vm, false, true); }
+static __attribute__((noinline)) agc_turn_result profile_turn(agc_vm *vm) { return turn_loop(vm, true, false); }
+
 /* The profile counts the bytecode's instructions, so a profiled run never runs compiled code. */
 agc_turn_result agc_run_turn(agc_vm *vm) {
-  if (AGC_PROFILE_ON(vm)) return turn_loop(vm, true, false);
-  return vm->rt->jit ? turn_loop(vm, false, true) : turn_loop(vm, false, false);
+  if (AGC_PROFILE_ON(vm)) return profile_turn(vm);
+  if (vm->rt->jit) return jit_turn(vm);
+  return turn_loop(vm, false, false);
 }

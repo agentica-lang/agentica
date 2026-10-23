@@ -64,13 +64,17 @@ and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
 
 **Built (x86-64):** `--jit MODE` (or `AGENTICA_JIT`; the flag wins): `off`,
 the default; `on`, which compiles a function that has a loop at its 100th
-entry (a call, a return into it, or a turn that starts in it); `always`, any
-eligible function at its first entry, for tests. Only the user's program is
+entry (a call, a return into it, or a turn that starts in it; counted only
+until it compiles); `always`, every
+function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
-every mode runs the interpreter. A function is eligible only when each of its
-instructions is `MOVE`, `CONST`, `STEP`, an Int operator or compare (`ADD_I`
-to `LE_I`), `EQ`, `NE`, a jump or `RETURN`, fused or not; any other
-instruction keeps the whole function in the interpreter.
+every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
+and list opcodes, `EQ`, `NE`, `SAME`, `NOT`, `FIELD`, `IS_VARIANT`,
+`PAYLOAD`, `IS_OK`, `RESULT_VALUE` and the jumps have code; any other
+instruction (calls, builtins, allocations, `RETURN`) leaves the code: the
+interpreter runs that one instruction and enters the code again after it. A
+leaf builtin is called between two runs of compiled code, without the
+interpreter's loop.
 
 - Decided once: the JIT looks at every function when the run starts. A
   function that `on` will not compile is never counted or walked again, and
@@ -82,6 +86,13 @@ instruction keeps the whole function in the interpreter.
   instructions that `filter`, `map` or `reduce` call a million times, and an
   empty function called 20 million times (about 13 ns more per call), ran
   slower compiled.
+- Why `on` also keeps out a loop that often leaves: each trip to the
+  interpreter and back costs more than interpreting the few instructions
+  around it saves (`print-lines`, `small-values` and `strings` of
+  `benchmarks/`, whose loops leave every 4 to 9 instructions, ran 3 to 8%
+  slower compiled). A function stays out when one of its innermost loops has
+  more than one instruction that leaves (a leaf builtin does not count) in
+  16 (`AGC_JIT_SPACING`).
 - Why no JIT when nothing compiles: the jit copy of the turn loop has the same
   handlers as the plain copy, but its machine code sits at other addresses,
   which alone made programs that compiled nothing 6 to 10% slower or faster
@@ -92,31 +103,39 @@ instruction keeps the whole function in the interpreter.
   compiled loop resumes in compiled code.
 - Exits: a slow `STEP` (the interpreter runs `step_slow`, then ends the turn or
   enters the code again at the next instruction), a turn cost to apply (a
-  String compare in `EQ` or `NE`), a failure (raised as the helper contract
-  says), and `RETURN`, which the interpreter runs.
+  String compare in `EQ`, `NE` or `SAME`), a failure (raised as the helper
+  contract says), and an instruction without code or a slow path (a wrong
+  tag, a field index past the count), which the interpreter runs; the turn
+  loop enters the code again when it reaches the next instruction, or at its
+  next reload (a call returns, a turn starts).
 - Code: one pass, fixed code per instruction, the VM in rbx, the registers in
   r12 and the constants in r13, the Int fast paths inline with their overflow
   checks; `EQ` and `NE` call `agc_op_eq` and `agc_op_ne` for any pair other
-  than two Ints. Each function has its own pages (64 MiB in all); when two
-  schedulers compile one function at once, the first copy is kept.
+  than two Ints; the Float opcodes, `SAME`, `LIST_LEN` and `LIST_GET` call
+  their helper; `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and
+  `RESULT_VALUE` read the value inline after a tag check. Each function has
+  its own pages (64 MiB in all); when two schedulers compile one function at
+  once, the first copy is kept.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
-  and a `skip` line for each function kept out: `pc=N op=OP` (the first
-  instruction the emitter does not know) or `loop=none` when the run starts,
-  and `size` when its code did not fit at compile time.
+  and a `skip` line for each function kept out: `loop=none` or `loop=exits`
+  when the run starts, and `size` when its code did not fit at compile time.
+  At the end of the run, `exit op=OP count=N` counts the trips to the
+  interpreter at each opcode and `leaf count=N` the leaf builtins called
+  between two runs of compiled code.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a hot function without a
-  loop that `on` keeps out), `make vm-jit-test` (the goldens and their sweeps
-  and `test_vm_multicore.py` with `AGENTICA_JIT=always`, in CI; the same
-  compiled code as before the loop rule, but the jit copy of the turn loop now
-  runs only for programs with an eligible function, about 60 of the 313
-  goldens) and `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, a
-  compile race, every opcode the walk accepts has its emitter case, also
-  under `make vm-tsan`).
+  loop and one whose loop often leaves that `on` keeps out, fields, lists,
+  enums, Results and Floats read in compiled code with the exit counts of the
+  trace), `make vm-jit-test` (the goldens and their sweeps and
+  `test_vm_multicore.py` with `AGENTICA_JIT=always`, which compiles every
+  function, in CI) and `vm/tests/jit_test.c` (bytes, exits, the read-execute
+  seal, a compile race, every opcode compiles, the results and statuses of
+  the helper calls and inline reads, also under `make vm-tsan`).
 - Known limits: a function with a loop that is called very often but whose
   loop rarely runs still pays the entry and the exit at each call; and a
-  program with one eligible function keeps the jit copy of the turn loop (and
-  its layout effect) even if that function never gets hot.
+  program with one function that `on` may compile keeps the jit copy of the
+  turn loop (and its layout effect) even if that function never gets hot.
 
 **Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
 never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and

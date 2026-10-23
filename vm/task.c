@@ -5,6 +5,7 @@
  * docs/vm/10-io-scheduler.md §10.2.1 and docs/vm/14-core-invariants.md.
  */
 #include "core.h"
+#include "jit/jit.h"
 
 #include <inttypes.h>
 #include <string.h>
@@ -441,6 +442,7 @@ static void trace_end(agc_vm *vm) {
   else if (o->kind == AGC_EXITED)
     AGC_TRACE(tr, AGC_TRACE_SCHED, "exit task=%" PRIu64 " code=%" PRId64, task, o->exit_code);
   trace_gc(vm, "end");
+  if (vm->rt->jit && AGC_TRACE_ON(tr, AGC_TRACE_JIT)) agc_jit_report(vm->rt->jit);
   agc_profile_report(vm);
 }
 
