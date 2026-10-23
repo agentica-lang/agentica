@@ -258,13 +258,24 @@ static void cap_inside_an_offset(void) {
   assert(agc_emit_end(&e) == 0 && e.len <= e.cap);
 }
 
-/* Functions with an instruction the emitter does not know stay interpreted. */
+/* A function with an instruction the emitter does not know stays out in every mode, and one without a loop with
+   `on`; a program where no function is compiled has no JIT at all. */
 static void ineligible(void) {
+  static const agc_trace quiet = {0};
   one_function f;
   memset(&f, 0, sizeof f);
   emit(&f, AGC_OP_CALL_BUILTIN, 0, 0, 0);
   emit(&f, AGC_OP_RETURN, 0, 0, 0);
-  assert(!compile(&f));
+  program_of(&f);
+  assert(!agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet));
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_ADD_I, 0, 1, 2);
+  emit(&f, AGC_OP_RETURN, 0, 0, 0);
+  program_of(&f);
+  assert(!agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
+  assert(agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet));
+  f.code[1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
+  assert(agc_jit_new(&f.program, AGC_JIT_ON, &quiet));
 }
 
 /* mov eax, 42; ret */
