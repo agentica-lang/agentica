@@ -471,8 +471,11 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
     )
   end
   checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args)
+  # A field with a default may be left out: the lowering fills it in at this construction.
+  none: Set[String] = Set.new([])
+  defaulted = cx.field_defaults.get(name, none)
   for field in fields.unwrap!
-    if !checked.seen.include?(field.name)
+    if !checked.seen.include?(field.name) and !defaulted.include?(field.name)
       return error(
         State.fail_help(
           cx,

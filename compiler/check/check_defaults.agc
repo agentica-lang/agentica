@@ -1,7 +1,10 @@
-## The checks of default parameter values. The order and the shape of a default need no types, so they run when the
-## function is registered (CHECK-DEFAULT-ORDER, CHECK-DEFAULT-VALUE); the type of a default is checked with the
-## function, like an initializer (CHECK-TYPE-MISMATCH).
+## The checks of default values, of parameters and of struct fields. The order and the shape of a default need no
+## types, so they run when the function or struct is registered (CHECK-DEFAULT-ORDER, CHECK-DEFAULT-VALUE); the type of
+## a default is checked with the function or in the order of the declarations, like an initializer
+## (CHECK-TYPE-MISMATCH). A field default follows the rule of a parameter default, except the order: a constructor
+## names its fields, so any field may have one.
 
+import Model from "../catalog/builtin_model"
 import Ast from "../syntax/ast"
 import Types from "../syntax/types"
 import State from "check_state"
@@ -16,7 +19,7 @@ export def check_parameters(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) 
     param = node.params[index]
     case param.default
       Ast.Optional.Present(value) ->
-        try check_value(cx, st, value)
+        try check_value(cx, st, value, "make the parameter required")
         seen = true
       Ast.Optional.Absent ->
         if seen and !(index == node.params.size - 1 and param.type.name == "Fn")
@@ -50,6 +53,32 @@ export def check_types(
   return ok(current)
 end
 
+## CHECK-DEFAULT-VALUE at the first field default that is not a constant.
+export def check_field_value(cx: State.Cx, st: State.St, field: Ast.FieldDecl) -> Result[Bool]
+  case field.default
+    Ast.Optional.Present(value) -> return check_value(cx, st, value, "remove the default")
+    Ast.Optional.Absent -> return ok(true)
+  end
+end
+
+## Checks the default of each field of a registered struct against the field's type, in order, and records the types
+## by node id like check_types.
+export def check_field_types(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[State.St]
+  types = cx.structs[node.name].map do |field: Model.Named| field.type end
+  current = st
+  index = 0
+  while index < node.fields.size
+    case node.fields[index].default
+      Ast.Optional.Present(value) ->
+        out = try State.expr(cx, current, value, types[index])
+        current = out.st
+      Ast.Optional.Absent -> current = current
+    end
+    index += 1
+  end
+  return ok(current)
+end
+
 def order_failure(cx: State.Cx, st: State.St, param: Ast.Param) -> String
   return State.fail_help(
     cx,
@@ -61,7 +90,7 @@ def order_failure(cx: State.Cx, st: State.St, param: Ast.Param) -> String
   )
 end
 
-def check_value(cx: State.Cx, st: State.St, value: Ast.Expr) -> Result[Bool]
+def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, remedy: String) -> Result[Bool]
   if constant?(value)
     return ok(true)
   end
@@ -72,7 +101,7 @@ def check_value(cx: State.Cx, st: State.St, value: Ast.Expr) -> Result[Bool]
       "CHECK-DEFAULT-VALUE",
       "a default value must be a constant",
       Ast.expr_span(value),
-      "write a literal, true, false, nil, [], {} or an enum variant without a payload, or make the parameter required",
+      "write a literal, true, false, nil, [], {} or an enum variant without a payload, or #{remedy}",
     ),
   )
 end

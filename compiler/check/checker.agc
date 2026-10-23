@@ -10,6 +10,7 @@ import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import T from "../syntax/types"
 import Constants from "check_const"
+import DefaultChecks from "check_defaults"
 import Expr from "check_expr"
 import Help from "check_help"
 import Register from "check_register"
@@ -137,6 +138,7 @@ def start(linked: Linker.Linked) -> State.Cx
   return State.Cx(
     help: Help.tables(),
     structs: RECORDS,
+    field_defaults: {},
     enums: ENUMS,
     aliases: {},
     resources: Set.new([]),
@@ -166,6 +168,18 @@ def run(
   done = try Constants.check_all(cx, taken.st, linked.modules, taken.clean)
   cx = done.cx
   st = done.st
+  # Like a constant, the default of a field belongs to no function, so a failure of one is the failure of the run.
+  for module in linked.modules
+    if taken.clean.include?(module.key)
+      next
+    end
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Struct(node) -> st = try DefaultChecks.check_field_types(cx.with(file: module.file), st, node)
+        _ -> st = st
+      end
+    end
+  end
   problems: List[Failure.Problem] = []
   failed: List[String] = []
   for module in linked.modules

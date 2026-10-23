@@ -1,0 +1,29 @@
+program #28 0:1:1-229:18:1
+  declaration: enum-decl #2 0:1:1-28:5:1 name="Mode" type-parameters=[]
+    variant: enum-variant #0 12:2:3-17:3:1 name="Fast"
+    variant: enum-variant #1 19:3:3-24:4:1 name="Safe"
+  declaration: struct-decl #19 29:6:1-170:14:1 name="Options"
+    field: field-decl #4 61:8:3-74:9:1 name="name" doc="The name."
+      type: type-ref #3 67:8:9-73:8:15 name="String"
+    field: field-decl #7 76:9:3-93:10:1 name="retries"
+      type: type-ref #5 85:9:12-88:9:15 name="Int"
+      default: literal #6 91:9:18-92:9:19 value=int:3
+    field: field-decl #11 95:10:3-115:11:1 name="ratio"
+      type: type-ref #8 102:10:10-107:10:15 name="Float"
+      default: unary #10 110:10:18-114:10:22 op=minus op-span=110:10:18-111:10:19
+        operand: literal #9 111:10:19-114:10:22 value=float:bits:4602678819172646912
+    field: field-decl #15 117:11:3-141:12:1 name="tags"
+      type: type-ref #13 123:11:9-135:11:21 name="List"
+        arg: type-ref #12 128:11:14-134:11:20 name="String"
+      default: list-lit #14 138:11:24-140:11:26
+    field: field-decl #18 143:12:3-166:13:1 name="mode"
+      type: type-ref #16 149:12:9-153:12:13 name="Mode"
+      default: type-expression #17 156:12:16-165:12:25 name="Mode.Safe"
+  declaration: function-decl #27 171:15:1-229:18:1 name="main"
+    result: type-ref #20 185:15:15-189:15:19 name="Void"
+    body: expr-stmt #26 192:16:3-225:17:1
+      value: call #25 192:16:3-224:16:35 name="puts" piped=false
+        arg: field-access #24 197:16:8-223:16:34 name="inspect"
+          target: construct #23 197:16:8-215:16:26 type="Options"
+            arg: named-arg #22 205:16:16-214:16:25 name="name"
+              value: literal #21 211:16:22-214:16:25 value=string:"a"

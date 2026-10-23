@@ -123,7 +123,8 @@ export def lower_enum(
 end
 
 ## A struct construction: a register for each field, each value computed into the register of its field, in source
-## order, and a `struct` instruction.
+## order, then the default of each field the construction leaves out, and a `struct` instruction. The checker accepted
+## only a construction that gives every field without a default.
 export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: Int) -> Result[State.Out]
   span = node.span
   info = cx.structs[node.type_name]
@@ -140,6 +141,14 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
   for arg in node.args
     out = try cx.expression.call(cx, fx, arg.value, start + info.positions[arg.name], false, false)
     fx = out.fx.with(next: after)
+  end
+  fills = cx.field_fills.get(node.type_name, State.FieldFill(values: {}, file: cx.file, index: cx.index))
+  given = Set.new(node.args.map do |arg: Ast.NamedArg| arg.name end)
+  for field in info.fields
+    if !given.include?(field) and fills.values.has_key?(field)
+      fx = try lower_field_default(cx, fx, fills, fills.values[field], start + info.positions[field])
+      fx = fx.with(next: after)
+    end
   end
   first = start
   if info.fields.size == 0
@@ -177,6 +186,17 @@ export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want
   end
   fx = State.emit_at(fx, "struct-with", [dst, window, info.index].concat(positions), span)
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+end
+
+# A default is an expression of the file that declares the struct, so it is lowered with that file's index (the spans
+# of its instructions point into that file), as the default of a parameter is, and the file of the construction comes
+# back after it.
+def lower_field_default(
+  cx: State.Cx, fx: State.Fx, fills: State.FieldFill, value: Ast.Expr, slot: Int
+) -> Result[State.Fx]
+  here = cx.with(file: fills.file, index: fills.index)
+  out = try cx.expression.call(here, fx.with(file: fills.index), value, slot, false, false)
+  return ok(out.fx.with(file: fx.file))
 end
 
 # Lowers items[from] up to items[stop] into consecutive new registers. A literal item needs no type check of its own:
