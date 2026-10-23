@@ -313,8 +313,8 @@ static void cap_inside_an_offset(void) {
   assert(agc_emit_end(&e) == 0 && e.len <= e.cap);
 }
 
-/* Every opcode compiles with `always`: one without code of its own, such as CALL_BUILTIN, leaves for the interpreter
-   at its pc. */
+/* Every opcode compiles with `always`: one without code of its own, such as CALL_BUILTIN or RETURN, leaves for the
+   interpreter at its pc. */
 static AGC_JIT_CALLER void every_opcode_compiles(void) {
   static const agc_trace quiet = {0};
   for (uint32_t op = 0; op < AGC_OP_COUNT; op++) {
@@ -334,6 +334,9 @@ static AGC_JIT_CALLER void every_opcode_compiles(void) {
   emit(&f, AGC_OP_CALL_BUILTIN, 0, 0, 0);
   emit(&f, AGC_OP_RETURN, 0, 0, 0);
   agc_value R[8] = {agc_nil()};
+  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_RETURN, 0, 0, 0);
   expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
 }
 

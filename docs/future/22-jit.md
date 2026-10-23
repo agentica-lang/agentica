@@ -64,7 +64,8 @@ and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
 
 **Built (x86-64):** `--jit MODE` (or `AGENTICA_JIT`; the flag wins): `off`,
 the default; `on`, which compiles a function that has a loop at its 100th
-entry (a call, a return into it, or a turn that starts in it); `always`, every
+entry (a call, a return into it, or a turn that starts in it; counted only
+until it compiles); `always`, every
 function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
 every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
@@ -112,8 +113,9 @@ interpreter's loop.
   checks; `EQ` and `NE` call `agc_op_eq` and `agc_op_ne` for any pair other
   than two Ints; the Float opcodes, `SAME`, `LIST_LEN` and `LIST_GET` call
   their helper; `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and
-  `RESULT_VALUE` read the value inline after a tag check. Each function has its own pages (64 MiB in all); when two
-  schedulers compile one function at once, the first copy is kept.
+  `RESULT_VALUE` read the value inline after a tag check. Each function has
+  its own pages (64 MiB in all); when two schedulers compile one function at
+  once, the first copy is kept.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
   and a `skip` line for each function kept out: `loop=none` or `loop=exits`
   when the run starts, and `size` when its code did not fit at compile time.

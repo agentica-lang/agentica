@@ -1209,6 +1209,9 @@ reload:
   R = t->regs + base;
   pc = frame->pc;
   for (;;) {
+    /* A stale resume is harmless: reload rebuilds code, spans, base, R and
+       pc from the frame, so landing on this pc by another path just enters
+       the code at the frame's instruction. */
     if (jitting && pc == resume) {
       frame->pc = pc;
       goto reload;
