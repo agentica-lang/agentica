@@ -573,8 +573,11 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     pops, so it stays on that core. A queue that holds tasks signals as usual.
     With a plain push, one CPU-bound task would wake an idle scheduler at
     every turn and move between cores (#627). A timer or a service end at
-    that turn boundary may fill the slot after the push; the task then waits
-    for the slot's turns (at most `RUNNEXT_LIMIT`), as a queued task does.
+    that turn boundary may fill the slot after the push, and the slot's task
+    may hold the thread for long (a long builtin, a native call). So the
+    scheduler marks the push (`agc_vm.own_pending`), and when its next pick
+    takes the slot while the mark is set, it sends the skipped wake
+    (`agc_runq_kick`: `work` and one signal while the queue holds a task).
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
   cancel flag, and then the state says who ends the task. Exactly one party
   does. A task on a turn (RUNNING, PARKING or WOKEN) is left to its scheduler,

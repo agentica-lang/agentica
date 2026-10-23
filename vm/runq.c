@@ -121,9 +121,24 @@ void agc_runq_push(agc_runq *q, agc_task *t) { push(q, t, false); }
 /* The push of the task whose turn just ended on the calling scheduler, when that scheduler pops the queue next (its
    runnext slot is empty). If the queue was empty, the task is the first one it pops, so no other scheduler is woken for
    it: one CPU-bound task that yields at every turn would otherwise wake an idle scheduler per turn and move between
-   cores (#627). A queue that already held tasks signals as agc_runq_push does: the caller pops the first of those, and
-   this task needs a scheduler of its own. */
+   cores (#627). If the caller takes a task from its slot first after all, it sends the skipped wake with
+   agc_runq_kick. A queue that already held tasks signals as agc_runq_push does: the caller pops the first of those,
+   and this task needs a scheduler of its own. */
 void agc_runq_push_own(agc_runq *q, agc_task *t) { push(q, t, true); }
+
+/* The wake that agc_runq_push_own skipped, sent when its caller runs another task before it pops (a task woken into its
+   runnext slot at the turn boundary): if the queue still holds a task, it publishes `work` for the spinners and, when
+   none spins, signals one waiter, as agc_runq_push would have. An empty queue (the task was taken) sends nothing. */
+void agc_runq_kick(agc_runq *q) {
+  if (q->solo) return;
+  uv_mutex_lock(&q->lock);
+  bool queued = q->first != NULL;
+  bool wake = queued && atomic_load_explicit(&q->spinning, memory_order_seq_cst) == 0;
+  if (queued) atomic_store_explicit(&q->work, true, memory_order_seq_cst);
+  if (wake) q->signals++;
+  uv_mutex_unlock(&q->lock);
+  if (wake) uv_cond_signal(&q->wake);
+}
 
 static agc_task *take_first(agc_runq *q) {
   agc_task *t = q->first;

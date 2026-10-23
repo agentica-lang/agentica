@@ -27,13 +27,15 @@ static void enqueue(agc_vm *vm, agc_task *t) {
 /* The end of a turn that leaves T ready (a yield, or a wake during its own turn). A scheduler thread with an empty
    runnext slot pops the queue next, so it pushes T as its own (agc_runq_push_own): with no other task queued T stays
    on this scheduler and no idle one is woken (#627). A timer or a service end at this turn boundary may still fill the
-   slot; T then waits for the slot's turns, at most RUNNEXT_LIMIT, as any queued task does. */
+   slot, and the slot's task runs first, maybe for long (a long builtin, a native call); `own_pending` makes next_ready
+   send the skipped wake then (agc_runq_kick), so an idle scheduler takes T. */
 static void requeue(agc_vm *vm, agc_task *t) {
   if (!vm->runnext_on || vm->runnext) {
     enqueue(vm, t);
     return;
   }
   atomic_store_explicit(&t->state, AGC_TASK_READY, memory_order_seq_cst);
+  vm->own_pending = true;
   agc_runq_push_own(vm->rt->runq, t);
 }
 
@@ -565,10 +567,14 @@ static agc_task *admit(agc_vm *vm, agc_task *t) {
 /* The next ready task: the runnext slot first, unless it has run RUNNEXT_LIMIT times in a row; then the global queue
    gets its look, which resets the count, and an empty queue gives the slot's task after all. So a pair of tasks that
    wake each other cannot keep the queue waiting, and the slot never loses its task. With one scheduler the slot is
-   always empty and this is the pop. */
+   always empty and this is the pop. A task pushed by requeue without a wake is the queue's first one unless another
+   scheduler took it: the pop finds it, and only the slot can come first, so taking the slot then sends that wake. */
 static agc_task *next_ready(agc_vm *vm) {
   agc_task *slot = vm->runnext;
+  bool own = vm->own_pending;
+  vm->own_pending = false;
   if (slot && vm->runnext_runs < RUNNEXT_LIMIT) {
+    if (own) agc_runq_kick(vm->rt->runq);
     vm->runnext = NULL;
     vm->runnext_runs++;
     return slot;
