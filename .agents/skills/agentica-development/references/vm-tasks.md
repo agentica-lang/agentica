@@ -39,8 +39,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   queue counts its idle schedulers for the stall check of the I/O thread
   (`agc_runq_quiet`). Before it waits, an idle scheduler spins (`agc_runq_spin`,
   set up at N > 1), and a push skips the condvar signal while one spins. A task
-  that a scheduler thread wakes goes to its runnext slot (`agc_vm.runnext`,
-  taken first by `agc_task_next`, `RUNNEXT_LIMIT` in `vm/task.c`; §16.9, "Wakes
+  whose turn ends ready goes back with `agc_runq_push_own` (`requeue` in
+  `vm/task.c`). Into an empty queue it sends no signal, since its own scheduler
+  pops it next, so a lone task stays on one core (#627); if that scheduler takes
+  its runnext slot first, it sends the wake then (`agc_runq_kick`). A task that
+  a scheduler thread wakes goes to its runnext slot (`agc_vm.runnext`, taken
+  first by `agc_task_next`, `RUNNEXT_LIMIT` in `vm/task.c`; §16.9, "Wakes
   between schedulers").
 - `vm/sync.c`: The locks of the shared state. `agc_lock` (a mutex that is solo
   until `agc_share`, with an owner token that aborts a drop by a thread that

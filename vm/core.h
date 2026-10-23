@@ -77,10 +77,14 @@ bool agc_program_set_source_root(agc_program *program, const char *root, size_t 
  * sets the state of a task before it pushes it. agc_runq_pop returns NULL when the queue is empty. agc_runq_remove
  * takes a task out of the middle (a cancel) and says whether it found it. A new queue is solo: its one thread takes no
  * lock and never waits. Whoever starts a second thread that touches the queue calls agc_runq_share first, before that
- * thread exists. */
+ * thread exists. agc_runq_push_own is the push of the task whose turn just ended, by the scheduler that pops next: it
+ * wakes no other scheduler when the queue was empty. agc_runq_kick is the wake that such a push skipped, for a
+ * scheduler that runs another task first. */
 agc_runq *agc_runq_new(void);
 void agc_runq_share(agc_runq *q);
 void agc_runq_push(agc_runq *q, agc_task *t);
+void agc_runq_push_own(agc_runq *q, agc_task *t);
+void agc_runq_kick(agc_runq *q);
 agc_task *agc_runq_pop(agc_runq *q);
 bool agc_runq_remove(agc_runq *q, const agc_task *t);
 /* agc_runq_wait is the pop of an idle scheduler: it blocks until a task is queued, and returns NULL once agc_runq_end

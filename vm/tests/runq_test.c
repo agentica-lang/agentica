@@ -1,8 +1,8 @@
 /*
  * The global run queue (docs/vm/16-architecture.md §16.3): FIFO order and removal, solo and shared by many threads
  * (every task comes out once); the blocking pop of an idle scheduler (a waiter gets the push before or after it waits,
- * agc_runq_end wakes every waiter); and the spin of an idle scheduler (a push that a spinner takes sends no condvar
- * signal, and no push is lost when a spinner stops).
+ * agc_runq_end wakes every waiter); the spin of an idle scheduler (a push that a spinner takes sends no condvar
+ * signal, and no push is lost when a spinner stops); and the push of a task whose turn ended.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -294,6 +294,30 @@ static void test_spin(void) {
   assert(atomic_load(&spun_task) == NULL);
 }
 
+/* The push of a task whose turn ended (agc_runq_push_own, #627): into an empty queue it sends no signal, since the
+   pusher pops the task next; into a queue that holds a task it signals as agc_runq_push does, since the pusher pops
+   that other task first. FIFO order is kept. */
+static void test_push_own(void) {
+  agc_vm own;
+  agc_vm_init(&own, NULL, stdout, stderr, INT64_MAX);
+  agc_runq *q = own.rt->runq;
+  agc_runq_share(q);
+  agc_task *a = agc_new_task(&own), *b = agc_new_task(&own);
+  uint64_t signals = agc_runq_stats(q).signals;
+  agc_runq_push_own(q, a);
+  assert(agc_runq_stats(q).signals == signals);
+  agc_runq_push_own(q, b);
+  assert(agc_runq_stats(q).signals == signals + 1);
+  assert(agc_runq_pop(q) == a && agc_runq_pop(q) == b && agc_runq_pop(q) == NULL);
+  /* A kick sends the skipped wake only while the queue holds a task. */
+  agc_runq_kick(q);
+  assert(agc_runq_stats(q).signals == signals + 1);
+  agc_runq_push_own(q, a);
+  agc_runq_kick(q);
+  assert(agc_runq_stats(q).signals == signals + 2);
+  assert(agc_runq_pop(q) == a);
+}
+
 static agc_vm burst;
 static _Atomic int burst_taken;
 
@@ -346,6 +370,7 @@ int main(void) {
   test_wait_until();
   test_end_wakes_everyone();
   test_spin();
+  test_push_own();
   test_burst_wakes_every_waiter(2, 300);
   test_burst_wakes_every_waiter(3, 300);
   puts("run queue tests passed");

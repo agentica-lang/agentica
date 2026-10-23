@@ -1,8 +1,7 @@
 /*
- * Runs with several scheduler threads (§16.9; agc_vm_run with rt->schedulers > 1): a storm of tasks on a channel, a
- * stall that the I/O thread finds (also beside a service task's timer), main failing beside spinners (the run ends
- * once), TCP calls issued and resumed on several schedulers while the I/O thread owns every socket, and a ping-pong
- * that runnext keeps on one scheduler. `make vm-tsan` runs it under ThreadSanitizer.
+ * Runs with several scheduler threads (§16.9): a channel storm, a stall the I/O thread finds (also beside a service
+ * timer), main failing beside spinners, TCP calls resumed on several schedulers, a ping-pong that runnext keeps on one
+ * scheduler, a lone yielding task that stays on one and moves when its slot's task blocks. `make vm-tsan` runs it too.
  */
 #include "../core.h"
 #include "test_program.h"
@@ -12,6 +11,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
+#include <uv.h>
 
 #if defined(__linux__) || defined(__APPLE__)
 
@@ -45,9 +45,12 @@ enum {
   B_SERVICE,
   B_NO_PENDING,
   B_HOP,
+  B_TICK,
+  B_MAIN_HERE,
+  B_BLOCK,
   B_COUNT
 };
-enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_NET, F_NAP, F_PING, F_COUNT };
+enum { F_MAIN, F_WORK, F_PARK, F_SPIN, F_SEEN, F_NET, F_NAP, F_PING, F_BLOCK, F_COUNT };
 
 typedef struct {
   agc_function fns[F_COUNT];
@@ -157,6 +160,48 @@ static agc_value test_hop(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_void();
 }
 
+/* The blocked-slot case (test_slot_block_moves_the_yielder): main's ticks and the scheduler of its last tick, a
+   request from the blocker that main meet it again, and the end of the block with whether main ticked during it. */
+static _Atomic uint64_t ticks;
+static _Atomic uint32_t main_at;
+static _Atomic bool rejoin, block_over, ticked_in_block;
+/* How long Test.block waits for main to tick before it gives up: a failure detector only, far above any wait. */
+#define BLOCK_DEADLINE_MS UINT64_C(5000)
+#define BLOCK_TICKS 50
+
+/* Test.tick(_): one tick of main, which records its scheduler. 2 once the block is over, 1 when the blocker asks to
+   meet again, else 0. */
+static agc_value test_tick(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  atomic_store(&main_at, vm->index);
+  atomic_fetch_add(&ticks, 1);
+  if (atomic_load(&block_over)) return agc_int(2);
+  return agc_int(atomic_exchange(&rejoin, false) ? 1 : 0);
+}
+
+/* Test.main_here(_): true when main last ticked on the blocker's scheduler; else it asks main to meet again. */
+static agc_value test_main_here(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  if (atomic_load(&main_at) == vm->index) return agc_bool(true);
+  atomic_store(&rejoin, true);
+  return agc_bool(false);
+}
+
+/* Test.block(_): holds the calling scheduler thread, as a long builtin or a plain native call does, until main has
+   ticked BLOCK_TICKS times or BLOCK_DEADLINE_MS has passed, and says which came first. */
+static agc_value test_block(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)vm;
+  (void)args;
+  (void)span;
+  uint64_t start = atomic_load(&ticks), until = agc_clock_ms() + BLOCK_DEADLINE_MS;
+  while (atomic_load(&ticks) - start < BLOCK_TICKS && agc_clock_ms() < until) uv_sleep(1);
+  atomic_store(&ticked_in_block, atomic_load(&ticks) - start >= BLOCK_TICKS);
+  atomic_store(&block_over, true);
+  return agc_void();
+}
+
 static const agc_builtin test_builtins[] = {
   {"Test.add", 1, test_add, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Test.forever", 1, test_forever, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
@@ -166,6 +211,9 @@ static const agc_builtin test_builtins[] = {
   {"Test.service", 1, test_service, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Test.no_pending", 1, test_no_pending, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Test.hop", 1, test_hop, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Test.tick", 1, test_tick, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Test.main_here", 1, test_main_here, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Test.block", 1, test_block, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };
 
 /* The index of the next instruction of F, the target of a jump. */
@@ -221,6 +269,7 @@ static void new_prog(prog *p) {
                    &p->code[0][0], &p->spans[0][0], MAX_CODE, F_MAIN);
   p->fns[F_WORK].captures = 1;
   p->fns[F_PING].captures = 2;
+  p->fns[F_BLOCK].captures = 2;
   p->program.max_arity = 2;
 
   /* work(k), with the channel captured in r1: add k, yield twice, send k. */
@@ -312,6 +361,25 @@ static void new_prog(prog *p) {
   emit(p, F_PING, AGC_OP_JUMP, 0, rally);
   p->code[F_PING][rally_exit].b = (uint16_t)here(p, F_PING);
   emit(p, F_PING, AGC_OP_RETURN, 0, 0);
+
+  /* block(_), with the channel it receives on in r1 and the one it sends on in r2: receive, send (which wakes main
+     into this scheduler's slot when main waits), sleep 1 ms on this scheduler's timer heap. If main last ticked here
+     when the sleep ends, the wake came at a turn boundary of main: call Test.block. Else main is elsewhere: meet
+     again. */
+  uint32_t again = here(p, F_BLOCK);
+  emit(p, F_BLOCK, AGC_OP_MOVE, SCRATCH, 1);
+  emit(p, F_BLOCK, AGC_OP_CONST, SCRATCH + 1, constant(p, 30000));
+  emit(p, F_BLOCK, AGC_OP_CALL_BUILTIN, SCRATCH, B_CH_RECV);
+  emit(p, F_BLOCK, AGC_OP_CALL_BUILTIN, SCRATCH, B_UNWRAP);
+  emit(p, F_BLOCK, AGC_OP_MOVE, SCRATCH, 2);
+  emit(p, F_BLOCK, AGC_OP_CONST, SCRATCH + 1, constant(p, 1));
+  emit(p, F_BLOCK, AGC_OP_CONST, SCRATCH + 2, constant(p, 30000));
+  emit(p, F_BLOCK, AGC_OP_CALL_BUILTIN, SCRATCH, B_CH_SEND);
+  call_int(p, F_BLOCK, B_SLEEP, 1);
+  call_int(p, F_BLOCK, B_MAIN_HERE, 0);
+  emit(p, F_BLOCK, AGC_OP_JUMP_IF_FALSE, SCRATCH, again);
+  call_int(p, F_BLOCK, B_BLOCK, 0);
+  emit(p, F_BLOCK, AGC_OP_RETURN, 0, 0);
 }
 
 /* main: the storm. Spawns WORKERS tasks on one channel and receives WORKERS values. */
@@ -359,15 +427,20 @@ static void spawning_main(prog *p, uint32_t fn, uint32_t last) {
   emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
 }
 
-/* main: two channels of one slot, a ping task (receives on the first, sends on the second) and a pong task (the other
-   way), one value sent on the first channel to start the rally; then it awaits both, or with AWAIT false returns at
-   once and leaves the rally to the end of the run. */
-static void rally_main(prog *p, bool await) {
+/* main: two channels of one slot, in r1 and r2. */
+static void two_channels(prog *p) {
   for (uint32_t k = 1; k <= 2; k++) {
     emit(p, F_MAIN, AGC_OP_CONST, 10, constant(p, 1));
     emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_CH_NEW);
     emit(p, F_MAIN, AGC_OP_MOVE, k, 10);
   }
+}
+
+/* main: two channels of one slot, a ping task (receives on the first, sends on the second) and a pong task (the other
+   way), one value sent on the first channel to start the rally; then it awaits both, or with AWAIT false returns at
+   once and leaves the rally to the end of the run. */
+static void rally_main(prog *p, bool await) {
+  two_channels(p);
   for (uint32_t k = 1; k <= 2; k++) {
     emit(p, F_MAIN, AGC_OP_MOVE, 10, k);
     emit(p, F_MAIN, AGC_OP_MOVE, 11, 3 - k);
@@ -453,6 +526,17 @@ static void test_tcp_over_schedulers(void) {
   }
 }
 
+/* Runs P on four schedulers five times; each run ends normally, and its calls of Test.hop move at most MOST times. */
+static void few_moves(prog *p, uint32_t most) {
+  for (int round = 0; round < 5; round++) {
+    atomic_store(&last_hop, UINT32_MAX);
+    atomic_store(&moves, 0);
+    agc_outcome out = run(p, 4);
+    assert(out.kind == AGC_DONE);
+    assert(atomic_load(&moves) <= most);
+  }
+}
+
 /* A rally on four schedulers stays on one of them (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"). Once
    a send finds the other task PARKED, that task waits in the sender's runnext slot and runs right after the sender
    parks on its own receive, on the same scheduler, and so does every send after it: the other schedulers never get a
@@ -464,17 +548,83 @@ static void test_rally_stays_on_one_scheduler(void) {
   prog *p = agc_alloc(sizeof *p);
   new_prog(p);
   rally_main(p, true);
-  for (int round = 0; round < 5; round++) {
-    atomic_store(&last_hop, UINT32_MAX);
-    atomic_store(&moves, 0);
-    agc_outcome out = run(p, 4);
-    assert(out.kind == AGC_DONE);
-    assert(atomic_load(&moves) <= 8);
-  }
+  few_moves(p, 8);
   prog *q = agc_alloc(sizeof *q);
   new_prog(q);
   rally_main(q, false);
   for (int round = 0; round < 20; round++) assert(run(q, 4).kind == AGC_DONE);
+}
+
+/* One task alone on four schedulers stays on one of them (#627): main calls Test.hop and yields RALLY times. Its yield
+   finds the run queue empty, so it wakes no idle scheduler and its own scheduler takes it back. Only the start may
+   move it, while the other schedulers start and pop once (a few moves). If each yield woke an idle scheduler, that
+   scheduler would often take the task, and it would move dozens of times. */
+static void test_lone_task_stays_on_one_scheduler(void) {
+  prog *p = agc_alloc(sizeof *p);
+  new_prog(p);
+  emit(p, F_MAIN, AGC_OP_CONST, 1, constant(p, 0));
+  emit(p, F_MAIN, AGC_OP_CONST, 2, constant(p, RALLY));
+  emit(p, F_MAIN, AGC_OP_CONST, 3, constant(p, 1));
+  uint32_t top = here(p, F_MAIN);
+  emit3(p, F_MAIN, AGC_OP_LT_I, 4, 1, 2);
+  uint32_t exit_jump = here(p, F_MAIN);
+  emit(p, F_MAIN, AGC_OP_JUMP_IF_FALSE, 4, 0);
+  call_int(p, F_MAIN, B_HOP, 0);
+  call_int(p, F_MAIN, B_SLEEP, 0);
+  emit3(p, F_MAIN, AGC_OP_ADD_I, 1, 1, 3);
+  emit(p, F_MAIN, AGC_OP_JUMP, 0, top);
+  p->code[F_MAIN][exit_jump].b = (uint16_t)here(p, F_MAIN);
+  emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
+  few_moves(p, 16);
+}
+
+/* A yielder is not left behind a task woken into its scheduler's slot. Main meets the blocker (a send hands main to
+   the blocker's slot), then ticks and yields; each yield finds the queue empty and wakes nobody. The blocker sleeps
+   1 ms on its scheduler's timer heap. When main is on that scheduler, the timer wakes the blocker into the slot at a
+   turn boundary of main, the scheduler runs it before it pops main, and Test.block holds that thread until main ticks
+   again. Main must get another scheduler, which only a wake can give: the others wait without a deadline. Left
+   unsignalled, main would not tick until the block gave up. When main has moved away the two meet again. */
+static void test_slot_block_moves_the_yielder(void) {
+  prog *p = agc_alloc(sizeof *p);
+  new_prog(p);
+  two_channels(p);
+  emit(p, F_MAIN, AGC_OP_MOVE, 10, 1);
+  emit(p, F_MAIN, AGC_OP_MOVE, 11, 2);
+  emit(p, F_MAIN, AGC_OP_CLOSURE, 10, F_BLOCK);
+  emit(p, F_MAIN, AGC_OP_CONST, 11, constant(p, 0));
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, 10, B_SPAWN);
+  emit(p, F_MAIN, AGC_OP_CONST, 3, constant(p, 1));
+  emit(p, F_MAIN, AGC_OP_CONST, 4, constant(p, 2));
+  uint32_t meet = here(p, F_MAIN);
+  emit(p, F_MAIN, AGC_OP_MOVE, SCRATCH, 1);
+  emit(p, F_MAIN, AGC_OP_CONST, SCRATCH + 1, constant(p, 1));
+  emit(p, F_MAIN, AGC_OP_CONST, SCRATCH + 2, constant(p, 30000));
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, SCRATCH, B_CH_SEND);
+  emit(p, F_MAIN, AGC_OP_MOVE, SCRATCH, 2);
+  emit(p, F_MAIN, AGC_OP_CONST, SCRATCH + 1, constant(p, 30000));
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, SCRATCH, B_CH_RECV);
+  emit(p, F_MAIN, AGC_OP_CALL_BUILTIN, SCRATCH, B_UNWRAP);
+  uint32_t spin = here(p, F_MAIN);
+  call_int(p, F_MAIN, B_TICK, 0);
+  emit3(p, F_MAIN, AGC_OP_LT_I, 5, SCRATCH, 3);
+  uint32_t asked = here(p, F_MAIN);
+  emit(p, F_MAIN, AGC_OP_JUMP_IF_FALSE, 5, 0);
+  call_int(p, F_MAIN, B_SLEEP, 0);
+  emit(p, F_MAIN, AGC_OP_JUMP, 0, spin);
+  p->code[F_MAIN][asked].b = (uint16_t)here(p, F_MAIN);
+  emit3(p, F_MAIN, AGC_OP_LT_I, 5, SCRATCH, 4);
+  emit(p, F_MAIN, AGC_OP_JUMP_IF_TRUE, 5, meet);
+  emit(p, F_MAIN, AGC_OP_RETURN, 0, 0);
+  for (int round = 0; round < 3; round++) {
+    atomic_store(&ticks, 0);
+    atomic_store(&main_at, UINT32_MAX);
+    atomic_store(&rejoin, false);
+    atomic_store(&block_over, false);
+    atomic_store(&ticked_in_block, false);
+    agc_outcome out = run(p, 4);
+    assert(out.kind == AGC_DONE);
+    assert(atomic_load(&block_over) && atomic_load(&ticked_in_block));
+  }
 }
 
 /* Every worker runs once, whichever scheduler takes it, and main sees every send. */
@@ -547,6 +697,8 @@ int main(void) {
   test_tasks_spread_over_schedulers();
   test_tcp_over_schedulers();
   test_rally_stays_on_one_scheduler();
+  test_lone_task_stays_on_one_scheduler();
+  test_slot_block_moves_the_yielder();
   fclose(quiet);
 #endif
   puts("threads tests passed");
