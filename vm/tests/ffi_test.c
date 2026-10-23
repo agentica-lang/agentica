@@ -1,6 +1,6 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
    the cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one, calls and frees
-   through C function pointers, the memory reads, owned buffers with typed reads and writes (bounds, NULL, freed,
+   through C function pointers, structs by value, the memory reads, owned buffers with typed reads and writes (bounds, NULL, freed,
    no_files), and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
@@ -39,6 +39,19 @@
 #define AGC_FFI_BUILT true
 #else
 #define AGC_FFI_BUILT false
+#endif
+
+#ifdef AGC_FFI
+/* The structs that test_structs passes by value to its own functions through their addresses. */
+typedef struct {
+  int32_t n;
+  double x;
+} mixed;
+typedef struct {
+  float f;
+  bool b;
+  void *p;
+} flags;
 #endif
 
 static agc_vm vm;
@@ -464,6 +477,72 @@ static void test_pointers(void) {
 #endif
 }
 
+#ifdef AGC_FFI
+static mixed mixed_twice(mixed m) { return (mixed){m.n * 2, m.x * 2}; }
+static flags flags_flip(flags v) { return (flags){v.f * 2, !v.b, v.p}; }
+#endif
+
+static agc_value make_struct(uint32_t type, const agc_value *fields, uint32_t n) {
+  agc_struct *st = agc_new_struct(type, n);
+  for (uint32_t k = 0; k < n; k++) st->fields[k] = fields[k];
+  return agc_struct_value(st);
+}
+
+/* Structs by value ("{N:CODES}"): every bad layout is RUNTIME-INTERNAL before anything is prepared (braces, the index
+   and the field count against the program's struct table, the codes, nesting, the field cap, a struct after the "."),
+   and calls through the test's own functions carry an int and a double, and a float, a bool and a pointer, both ways,
+   fast and compute; a field out of range or a value of another type fails before C runs. */
+static void test_structs(void) {
+  agc_struct_def defs[3] = {{.count = 2}, {.count = 3}, {.count = 1025}};
+  agc_program program = {0};
+  program.struct_count = 3;
+  program.structs = defs;
+  vm.rt->program = &program;
+  agc_value one = agc_float(0.0);
+  const char *bad[] = {"d{0:ii cos " LIBM, "d}0:ii{ cos " LIBM, "d{0ii} cos " LIBM, "d{:ii} cos " LIBM,
+                       "d{3:ii} cos " LIBM, "d{0:i} cos " LIBM, "d{0:iii} cos " LIBM, "d{0:} cos " LIBM,
+                       "d{0:is} cos " LIBM, "d{0:iy} cos " LIBM, "d{0:ir} cos " LIBM, "d{0:iv} cos " LIBM,
+                       "d{0:iI} cos " LIBM, "d{0:ic} cos " LIBM, "d{0:i.} cos " LIBM, "d{0:i{0:i}} cos " LIBM,
+                       "d{1:i{0:ii}} cos " LIBM, "d{0000000000:ii} cos " LIBM, "d{0:ii}} cos " LIBM,
+                       "d{0:i}i} cos " LIBM, "dd.{0:ii} cos " LIBM, "d{0:ii}{} cos " LIBM, "{} cos " LIBM};
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &one, 1, "RUNTIME-INTERNAL");
+  /* Seventeen levels of nesting, one more than the VM takes, and 1025 fields, one more than its cap. */
+  char deep[256] = "d";
+  for (int k = 0; k < 17; k++) strcat(deep, "{0:i");
+  strcat(deep, "i");
+  for (int k = 0; k < 17; k++) strcat(deep, "}");
+  strcat(deep, " cos " LIBM);
+  fails(deep, &one, 1, "RUNTIME-INTERNAL");
+  char wide[1100] = "d{2:";
+  memset(wide + 4, 'i', 1025);
+  strcpy(wide + 4 + 1025, "} cos " LIBM);
+  fails(wide, &one, 1, "RUNTIME-INTERNAL");
+#ifdef AGC_FFI
+  agc_value fields[3] = {agc_int(21), agc_float(1.25)};
+  agc_value args[2] = {address_of((void (*)(void))mixed_twice), make_struct(0, fields, 2)};
+  const agc_struct *got = agc_as_struct(&vm, native_call("{0:id}c{0:id} mixed_twice " LIBM, args, 2));
+  assert(got->type == 0 && agc_as_int(&vm, got->fields[0]) == 42 && agc_as_float(&vm, got->fields[1]) == 2.5);
+  agc_task *task = vm.task;
+  park_call(task, "compute {0:id}c{0:id} mixed_twice " LIBM, args, 2);
+  got = agc_as_struct(&vm, take_in_turn(task));
+  assert(agc_as_int(&vm, got->fields[0]) == 42 && agc_as_float(&vm, got->fields[1]) == 2.5);
+  /* A float narrowed (0.1 is not a float), a bool as one byte, a pointer kept. */
+  agc_value flag_fields[3] = {agc_float(0.1), agc_bool(false), agc_c_pointer_value(&vm)};
+  agc_value flag_args[2] = {address_of((void (*)(void))flags_flip), make_struct(1, flag_fields, 3)};
+  got = agc_as_struct(&vm, native_call("{1:fbp}c{1:fbp} flags_flip " LIBM, flag_args, 2));
+  assert(agc_as_float(&vm, got->fields[0]) == (double)(0.1f * 2) && agc_as_bool(&vm, got->fields[1]));
+  assert(agc_as_c_pointer(&vm, got->fields[2]) == &vm);
+  fields[0] = agc_int(INT64_C(1) << 31);
+  args[1] = make_struct(0, fields, 2);
+  fails("{0:id}c{0:id} mixed_twice " LIBM, args, 2, "RUNTIME-INTEGER-OVERFLOW");
+  args[1] = make_struct(1, flag_fields, 3);
+  fails("{0:id}c{0:id} mixed_twice " LIBM, args, 2, "RUNTIME-INTERNAL");
+  args[1] = agc_int(1);
+  fails("{0:id}c{0:id} mixed_twice " LIBM, args, 2, "RUNTIME-INTERNAL");
+#endif
+  vm.rt->program = NULL;
+}
+
 int main(void) {
   agc_test_io_vm(&vm);
   test_bad_signatures();
@@ -474,6 +553,7 @@ int main(void) {
   test_reads();
   test_buffers();
   test_pointers();
+  test_structs();
   test_refusal();
   return 0;
 }

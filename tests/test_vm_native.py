@@ -97,6 +97,15 @@ def diagnostic(result, status):
     return found["code"], (found["range"]["start"]["line"], found["range"]["start"]["column"])
 
 
+def refused_at_extern(tmp_path, peer, extern_src, main, call, code):
+    """A call the extern function refuses stops the run at that function with CODE and prints nothing."""
+    result = agentica("--json", program(tmp_path, extern_src.format(library=literal(peer)) + main))
+    declared = " def %s(" % call.split("(")[0]
+    line = next(k for k, text in enumerate(extern_src.split("\n"), 1) if declared in text)
+    assert diagnostic(result, 1) == (code, (line, 3))
+    assert result.stdout == ""
+
+
 @NATIVE_CALLS
 def test_each_c_type_crosses_to_the_peer_and_back(tmp_path, peer):
     main = """def main() -> Void
@@ -1329,11 +1338,7 @@ end
 ])
 def test_a_null_function_pointer_is_refused(tmp_path, peer, call, code):
     main = "def main() -> Void\n  %s\n  puts(peer_api_releases())\nend\n" % call
-    result = agentica("--json", program(tmp_path, API_EXTERN.format(library=literal(peer)) + main))
-    declared = " def %s(" % call.split("(")[0]
-    line = next(k for k, text in enumerate(API_EXTERN.split("\n"), 1) if declared in text)
-    assert diagnostic(result, 1) == (code, (line, 3))
-    assert result.stdout == ""
+    refused_at_extern(tmp_path, peer, API_EXTERN, main, call, code)
 
 
 # A resource freed through a function pointer is freed by the end of its owning task (a cancel ends it too), and the
@@ -1386,6 +1391,166 @@ end
     assert result.stdout.split("\n") == [
         "55", "10", 'error("task: cancelled")', "11", 'error("task: cancelled")', "12", "",
     ]
+
+
+STRUCT_EXTERN = """extern "{library}"
+  struct PeerPair
+    x: C.Int32
+    y: C.Int32
+  end
+  struct PeerMixed
+    n: C.Int32
+    x: C.Double
+  end
+  struct PeerQuad
+    a: C.Float
+    b: C.Float
+    c: C.Float = 0.5
+    d: C.Float = 0.25
+  end
+  struct PeerParams
+    n_ctx: C.Int32
+    n_threads: C.Int32
+    seed: C.Int64
+    rope_freq_base: C.Double
+    yarn_factor: C.Float
+    use_mmap: C.Bool
+    embeddings: C.Bool
+    user_data: C.Pointer
+  end
+  struct PeerNested
+    at: PeerPair
+    mixed: PeerMixed
+    flag: C.Bool
+  end
+  struct PeerBatch
+    n_tokens: C.Int32
+    token: C.Pointer
+  end
+  def peer_pair_make(x: C.Int32, y: C.Int32) -> PeerPair
+  def peer_pair_swap(p: PeerPair) -> PeerPair
+  def peer_pair_sum(p: PeerPair) -> C.Int64
+  def peer_pair_swap_address() -> C.Pointer
+  def swap_at(fn: C.Function, p: PeerPair) -> PeerPair
+  def peer_mixed_scale(m: PeerMixed, k: C.Double) -> PeerMixed
+  compute def scale_later(m: PeerMixed, k: C.Double) -> PeerMixed = "peer_mixed_scale"
+  def peer_quad_add(p: PeerQuad, q: PeerQuad) -> PeerQuad
+  def peer_quad_sum(q: PeerQuad) -> C.Double
+  def peer_params_default() -> PeerParams
+  def peer_params_text(p: PeerParams) -> C.String
+  compute def params_text_later(p: PeerParams) -> C.String = "peer_params_text"
+  def peer_nested_make(k: C.Int32) -> PeerNested
+  def peer_nested_bump(v: PeerNested) -> PeerNested
+  def peer_batch_get_one(tokens: C.Pointer, n: C.Int32) -> PeerBatch
+  def peer_batch_sum(b: PeerBatch) -> C.Int64
+  compute def batch_sum_later(b: PeerBatch) -> C.Int64 = "peer_batch_sum"
+  compute def peer_batch_hold(b: PeerBatch, limit_ms: C.Int32) -> C.Int64
+  def peer_res_holding() -> C.Int32
+  def peer_set_flag() -> Void
+end
+
+"""
+
+
+# C structs by value, both ways, for each class of the ABIs (peer.c): two int32, an int32 and a double, four floats
+# (with field defaults), params larger than 16 bytes with bool and pointer fields, read and changed with .with and
+# passed back as llama.cpp's are, a nested struct, and a batch whose pointer field is an owned buffer or C's memory;
+# also through a C function pointer and in compute defs.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_c_structs_cross_by_value_both_ways(tmp_path, peer, schedulers):
+    main = """def main() -> Void
+  p = peer_pair_make(3, -4)
+  puts(p)
+  puts(peer_pair_swap(p.with(x: 2_147_483_647)))
+  puts(peer_pair_sum(PeerPair(x: -2_147_483_648, y: -1)))
+  puts(swap_at(peer_pair_swap_address(), p))
+  m = peer_mixed_scale(PeerMixed(n: 21, x: 1.5), 3.0)
+  puts(m)
+  puts(scale_later(m, 0.5))
+  q = peer_quad_add(PeerQuad(a: 1.5, b: 0.25), PeerQuad(a: 2.0, b: 0.5, c: 1.0, d: 2.0))
+  puts(q)
+  puts(peer_quad_sum(q))
+  params = peer_params_default()
+  puts(peer_params_text(params))
+  puts([params.use_mmap, params.embeddings, Native.null?(params.user_data)])
+  changed = params.with(n_ctx: 4096, seed: 9_000_000_000, use_mmap: false, embeddings: true, yarn_factor: 1.5)
+  puts(peer_params_text(changed))
+  puts(params_text_later(changed.with(user_data: Native.null(), n_threads: -8)))
+  n = peer_nested_make(10)
+  puts(n)
+  puts(peer_nested_bump(n.with(at: n.at.with(y: 0))))
+  buf = Native.memory_pointer(12)
+  Native.put_array_of_int32(buf, 0, [1, 2, 39])
+  batch = peer_batch_get_one(buf, 3)
+  puts(batch.n_tokens)
+  puts(peer_batch_sum(batch))
+  puts(batch_sum_later(PeerBatch(n_tokens: 2, token: buf)))
+  puts(peer_batch_sum(PeerBatch(n_tokens: 3, token: params.user_data)))
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, STRUCT_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "PeerPair(x: 3, y: -4)",
+        "PeerPair(x: -4, y: 2147483647)",
+        "-2147483649",
+        "PeerPair(x: -4, y: 3)",
+        "PeerMixed(n: 42, x: 4.5)",
+        "PeerMixed(n: 84, x: 2.25)",
+        "PeerQuad(a: 3.5, b: 0.75, c: 1.5, d: 2.25)",
+        "8.0",
+        "n_ctx=512 threads=4 seed=-1 rope=10000.50 yarn=0.250 mmap=1 emb=0 data=static",
+        "[true, false, false]",
+        "n_ctx=4096 threads=4 seed=9000000000 rope=10000.50 yarn=1.500 mmap=0 emb=1 data=static",
+        "n_ctx=4096 threads=-8 seed=9000000000 rope=10000.50 yarn=1.500 mmap=0 emb=1 data=null",
+        "PeerNested(at: PeerPair(x: 10, y: 11), mixed: PeerMixed(n: 12, x: 5.0), flag: true)",
+        "PeerNested(at: PeerPair(x: 11, y: 1), mixed: PeerMixed(n: 13, x: 10.0), flag: false)",
+        "3", "42", "3", "18", "",
+    ]
+
+
+# What C cannot take in a struct field stops the run at the extern function before C runs, as for an argument: a
+# C.Int32 field out of range (a nested one too) and a freed owned buffer in a C.Pointer field.
+@NATIVE_CALLS
+@pytest.mark.parametrize("call, code", [
+    ("peer_pair_sum(PeerPair(x: 2_147_483_648, y: 0))", "RUNTIME-INTEGER-OVERFLOW"),
+    ("peer_nested_bump(peer_nested_make(1).with(mixed: PeerMixed(n: -2_147_483_649, x: 0.0)))",
+     "RUNTIME-INTEGER-OVERFLOW"),
+    ("peer_batch_sum(PeerBatch(n_tokens: 1, token: freed))", "RUNTIME-NATIVE-CLOSED"),
+])
+def test_what_c_cannot_take_in_a_struct_field_stops_the_run(tmp_path, peer, call, code):
+    main = "def main() -> Void\n  freed = Native.memory_pointer(4)\n  Native.free(freed)\n  %s\n  puts(1)\nend\n" % call
+    refused_at_extern(tmp_path, peer, STRUCT_EXTERN, main, call, code)
+
+
+# A compute call holds the owned buffer in a C.Pointer field of its struct argument, as it holds a C.Pointer argument:
+# a free while C still reads the memory only marks the buffer freed.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_compute_call_keeps_the_buffer_of_a_struct_field(tmp_path, peer, schedulers):
+    main = """def sum_later(buf: C.Pointer) -> Result[Int]
+  return ok(peer_batch_hold(PeerBatch(n_tokens: 64, token: buf), 20_000))
+end
+
+def main() -> Void
+  buf = Native.memory_pointer(256)
+  for k in 0...64
+    Native.put_int32(buf, k * 4, 2)
+  end
+  task = Task.spawn(&sum_later, buf)
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  Native.free(buf)
+  peer_set_flag()
+  puts(Task.await(task))
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, STRUCT_EXTERN.format(library=literal(peer)) + main))
+    assert (result.code, result.stdout, result.stderr) == (0, "ok(128)\n", "")
 
 
 WAIT_EXTERN = """extern "{library}"

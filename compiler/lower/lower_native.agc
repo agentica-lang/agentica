@@ -5,7 +5,9 @@
 ## resource's name as written: the result's first (result code r), then each out resource's (code R) in order,
 ## "CODES SYMBOL FREE NAME ... LIBRARY". A compute def puts "compute " in front: the VM then runs the call on its
 ## compute pool while the task waits. A function with out parameters gets from Native.call a List of the record's
-## fields, in order (the C result, unless Void, then each out value), and builds its record from it.
+## fields, in order (the C result, unless Void, then each out value), and builds its record from it. A struct passed
+## or returned by value gets the index of its record in the struct table after its {: "{N:CODES}", so the VM reads and
+## makes the record itself (nested structs too); the parser wrote the field codes in the record's field order.
 
 import Ast from "../syntax/ast"
 import Ir from "ir"
@@ -15,14 +17,22 @@ import Lowering from "lower_state"
 NATIVE_CALL = "Native.call"
 MAX_PARAMS = 64
 
-## The function that calls the C function, or LOWER-UNSUPPORTED when it has more parameters than the VM takes. index
-## is the index of the function's file in the program's sources.
-export def lower(cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native, index: Int) -> Result[Ir.Function]
+## The function that calls the C function, or LOWER-UNSUPPORTED when it has more parameters than the VM takes. structs
+## are the program's struct declarations by name, and index is the index of the function's file in the program's
+## sources.
+export def lower(
+  cx: Lowering.Cx,
+  function: Ast.FunctionDecl,
+  native: Ast.Native,
+  structs: Map[String, Ast.StructDecl],
+  index: Int,
+) -> Result[Ir.Function]
   span = function.span
   count = function.params.size
   if count > MAX_PARAMS
     return error(Lowering.unsupported(cx, "extern functions with more than #{MAX_PARAMS} parameters", span))
   end
+  codes = try indexed_codes(cx, function, native, structs)
   kind = ""
   if native.compute
     kind = "compute "
@@ -34,7 +44,7 @@ export def lower(cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native
   for out in native.outs
     words = words.concat([out.free, out.name])
   end
-  signature = "#{kind}#{native.codes} #{words.join(" ")} #{native.library}"
+  signature = "#{kind}#{codes} #{words.join(" ")} #{native.library}"
   body = [
     Ir.instr("step", [], index, [span]),
     Ir.Instr(op: "const", args: [count], imm: Ir.Imm.Text(signature), name: "", file: index, spans: [span]),
@@ -73,4 +83,50 @@ end
 # Whether the function has out parameters: one of the codes is a capital.
 def record?(native: Ast.Native) -> Bool
   return native.codes.split("").any? do |code: String| "ILDFBPR".contains?(code) end
+end
+
+# The codes of the signature with the index of each struct after its {. The structs come in the order of their {: the C
+# result's (the field result of the record of a function with out parameters), then each parameter's, each one before
+# the structs of its fields. LOWER-INTERNAL when they do not match the codes.
+def indexed_codes(
+  cx: Lowering.Cx, function: Ast.FunctionDecl, native: Ast.Native, structs: Map[String, Ast.StructDecl],
+) -> Result[String]
+  pieces = native.codes.split("{")
+  if pieces.size == 1
+    return ok(native.codes)
+  end
+  result = function.result.name
+  if record?(native)
+    first = structs[result].fields[0]
+    result = ""
+    if first.name == "result"
+      result = first.type.name
+    end
+  end
+  names = nested_structs(result, structs)
+  for param in function.params
+    names = names.concat(nested_structs(param.type.name, structs))
+  end
+  if names.size != pieces.size - 1
+    return error(Lowering.internal(cx, "the structs of #{function.name} do not match its codes", function.span))
+  end
+  out = pieces[0]
+  at = 1
+  for name in names
+    out += "{#{cx.structs[name].index}:#{pieces[at]}"
+    at += 1
+  end
+  return ok(out)
+end
+
+# The struct of this name, then the structs of its fields in order, each before its own; none when it is not a struct.
+def nested_structs(name: String, structs: Map[String, Ast.StructDecl]) -> List[String]
+  if !structs.has_key?(name)
+    return []
+  end
+  names = [name]
+  for field in structs[name].fields
+    names = names.concat(nested_structs(field.type.name, structs))
+  end
+  return names
 end

@@ -1,7 +1,7 @@
 ---
 title: Types and resources
 weight: 1
-description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, and calls through C function pointers.
+description: The C types of an extern block, variadic functions, reading memory that C returns, owned buffers and typed memory, resources that own a C pointer, out parameters, calls through C function pointers, and C structs passed by value.
 ---
 
 ## Types
@@ -17,6 +17,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 | `C.Pointer` | `void *` | `C.Pointer` |
 | `C.Bytes` | `const uint8_t *` (parameters only) | `List[Int]` |
 | `C.Function` | a function pointer (the first or the last parameter only, [below](#function-pointers)) | `C.Pointer` |
+| a `struct` of the block | a struct passed by value ([below](#c-structs)) | that struct |
 
 `C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
@@ -218,3 +219,41 @@ end
 - A `C.Function` is the first parameter (the function to call) or the last (the free function); anywhere else it is `PARSE-EXTERN-FUNCTION`. It is never a result, an out parameter or a variadic parameter. The program sees it as a `C.Pointer`. The parameter names are free: `fn` and `free` are a convention.
 - A NULL address fails the call with `RUNTIME-NATIVE-NULL` before C runs, and an owned buffer with `RUNTIME-NATIVE-BOUNDS`. Any other address is trusted: one that is not a function of the declared signature is undefined behavior, like a wrong signature.
 - An extern block whose functions are all called through a pointer never opens its library, so a wrong library path is not reported.
+
+## C structs
+
+A C function that takes or returns a struct by value, such as llama.cpp's `llama_context_default_params()`, needs the struct declared with `struct` inside the block, its fields in the order of the C header (Ruby ffi's `FFI::Struct` with `layout`). Your program sees an ordinary struct: build one, read its fields, change one with `.with`. A call copies it into C memory, and a struct result is copied back into a new record.
+
+```agentica {mode="check"}
+extern "/opt/geo/libgeo.so"
+  struct Point
+    x: C.Double
+    y: C.Double
+  end
+  struct Shape
+    origin: Point
+    sides: C.Int32
+    scale: C.Float = 1.0
+    filled: C.Bool
+    tag: C.Pointer
+  end
+  def geo_default_shape() -> Shape
+  def geo_area(shape: Shape) -> C.Double
+  compute def geo_grow(shape: Shape, by: C.Double) -> Shape
+end
+
+def main() -> Void
+  shape = geo_default_shape()
+  bigger = shape.with(sides: 6, origin: shape.origin.with(x: 2.5))
+  puts(geo_area(bigger))
+  puts(geo_grow(bigger, 2.0).scale)
+  puts(geo_area(Shape(origin: Point(x: 0.0, y: 0.0), sides: 3, filled: true, tag: Native.null())))
+end
+```
+
+- A field is `C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a struct declared above in the same block, and your program sees `Int`, `Float`, `Bool`, `C.Pointer` or that struct. Anything else is `PARSE-EXTERN-TYPE`: `C.String`, `C.Bytes`, `C.Function` and resources would not survive the copy. Declare a `char *` field as `C.Pointer` and read its text with `Native.get_string`. A fixed array field (`char name[16]`) cannot be declared yet.
+- The struct is laid out as the C compiler of the system lays it out, padding included. Declare every field of the header, in its order: a wrong field list is undefined behavior, like a wrong signature. A struct has one field at least (`PARSE-EXTERN-TYPE`) and at most 1024, nested ones counted, in at most 16 levels (`PARSE-EXTERN-ARITY`).
+- A struct is a parameter or a result, also of a `compute def` and of a call through a function pointer. It is not an out parameter (`PARSE-EXTERN-OUT`; for a struct that C fills, pass a `C.Pointer` to an owned buffer and read it with `Native.get_*`) or a variadic parameter (`PARSE-EXTERN-VARIADIC-TYPE`).
+- Each field of an argument is checked as an argument is, before C runs: a `C.Int32` outside 32 bits fails with `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field fails with `RUNTIME-NATIVE-CLOSED`. A `C.Bool` field of a result is `true` when its byte is not 0.
+- A `C.Pointer` field is an address that nothing tracks: the memory it names must outlive C's use. A `compute def` call holds the owned buffers in the fields of its struct arguments until it returns, as it holds its buffer arguments.
+- The struct is a type of the block, used after its declaration (`PARSE-EXTERN-TYPE` before), and `export struct` makes it importable. Field defaults work as in any struct. A block that declares a struct takes the place of types as a whole, as a block with a resource does.

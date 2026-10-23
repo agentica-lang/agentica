@@ -23,7 +23,8 @@ parameters       = parameter, { ",", parameter }, [ "," ] ;
 parameter        = NAME, ":", type, [ "=", expression ] ;
 
 extern_decl      = "extern", STRING, NL, { extern_member }, "end", NL ;
-extern_member    = [ DOC, NL ], [ "export" ], ( extern_function | resource_decl ) ;
+extern_member    = [ DOC, NL ], [ "export" ],
+                   ( extern_function | resource_decl | c_struct_decl ) ;
 extern_function  = [ "compute" ], "def", NAME, "(", [ c_parameters ], ")",
                    "->", ( c_type | TYPE_NAME | "Void" ), [ "=", STRING ], NL ;
 c_parameters     = c_parameter, { ",", c_parameter },
@@ -32,7 +33,13 @@ resource_decl    = "resource", TYPE_NAME, ",", "free", ":",
                    ( NAME | "C", ".", "Function" ), NL ;
 c_parameter      = [ "out" ], NAME, ":",
                    ( c_type | "C", ".", ( "Bytes" | "Function" ) | TYPE_NAME ) ;
-c_type           = "C", ".", ( "Int" | "Int64" | "Double" | "Bool" | "String" | "Pointer" ) ;
+c_type           = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
+                   | "String" | "Pointer" ) ;
+c_struct_decl    = "struct", TYPE_NAME, NL, c_field, { c_field }, "end", NL ;
+c_field          = [ DOC, NL ], NAME, ":", ( c_field_type | TYPE_NAME ),
+                   [ "=", expression ], NL ;
+c_field_type     = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
+                   | "Pointer" ) ;
 
 struct_decl      = "struct", TYPE_NAME, NL,
                    { field_decl }, "end", NL ;
@@ -78,9 +85,9 @@ block.
 the C pointers that the block's functions return, freed by the C function
 `c_name` of the same library (section 6d). It is a type for the rest of the
 language: `export` makes it importable, and it takes the place of a type in the
-declaration order. So does every `def` of a block that declares a resource,
-exported or not: such a block is one declaration among the types, and its
-functions do not count as functions for the order (a block with no resource
+declaration order. So does every `def` of a block that declares a resource or a
+struct, exported or not: such a block is one declaration among the types, and
+its functions do not count as functions for the order (a block with neither
 keeps the rule of the `def`). A `def` of the block may use it in its signature
 after the line that declares it (`PARSE-EXTERN-TYPE` before): a parameter takes
 the resource, and a result of the resource is `Result[Name]` for the checker. A
@@ -139,6 +146,20 @@ and so is a `free:` type other than `C.Function`. A `C.Function` result is
 `PARSE-EXTERN-VARIADIC-TYPE`; a variadic part needs a C parameter before the
 `...` besides the `C.Function` ones (`PARSE-EXTERN-VARIADIC-FIXED`).
 
+`struct Name ... end` in an extern block declares a C struct that the block's
+functions take and return by value (section 6d). Its fields come in the order of
+the C header, each `C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`,
+`C.Pointer` or a struct declared above in the block; any other type, `C.String`,
+`C.Bytes`, `C.Function` and a resource included, is `PARSE-EXTERN-TYPE` at the
+type (a `char *` field is a `C.Pointer`). A struct with no field is
+`PARSE-EXTERN-TYPE` at its name, and one with more than 1024 fields or 16
+levels, nested structs counted, `PARSE-EXTERN-ARITY` there. For the rest of the
+language it is an ordinary struct whose fields have the Agentica types (`Int`,
+`Float`, `Bool`, `C.Pointer`, the nested struct), with field defaults, `.with`
+and `export`. Like a resource, a `def` of the block may use it after its
+declaration (`PARSE-EXTERN-TYPE` before), as a parameter or a result; an out
+struct is `PARSE-EXTERN-OUT` and a variadic one `PARSE-EXTERN-VARIADIC-TYPE`.
+
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names
 into the file, each with an optional new name after `as`, and the list may span
@@ -166,8 +187,8 @@ Declarations follow a fixed order in every file, the root program, imported
 files and embedded `std/` modules alike: the module doc and the imports first,
 then the constants, then `struct`, `enum` and type alias declarations (exported
 or not, in any order among themselves), then `export def` functions, then
-private `def` functions (an extern block that declares a resource goes with the
-types, as a whole). `type` is contextual in an alias declaration and remains an
+private `def` functions (an extern block that declares a resource or a struct
+goes with the types, as a whole). `type` is contextual in an alias declaration and remains an
 ordinary name elsewhere. The order is a style rule only: a function may still
 call a function, use a struct declared later or read a constant in the same
 group. The first declaration that comes after a declaration of a later group is

@@ -357,7 +357,8 @@ end
   (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Float` (a 32-bit
   `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a `const char *`,
   `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function pointer, below)
-  and the resources of the block (below); a result may also be `Void`. `C.Int`
+  and the resources and structs of the block (below); a result may also be
+  `Void`. `C.Int`
   is `PARSE-EXTERN-TYPE`: write the width. A function takes at most 64
   parameters (`PARSE-EXTERN-ARITY`). A `Float` passed as a `C.Float` is rounded
   to the nearest float, and one outside its range becomes an infinity.
@@ -486,6 +487,20 @@ end
   pool thread; a cancel drops the record, and an out resource of a call that
   ran is freed once when it returns. `C.String` and `C.Bytes` cannot be out
   parameters (take a `char **` as an out `C.Pointer`).
+- A `struct` of the block (section 5) is a C struct passed and returned by
+  value, laid out as the C compiler of the system lays it out (libffi computes
+  the offsets): Ruby ffi's `class P < FFI::Struct; layout ...`. The program
+  sees a record, copied both ways. A struct result is a new record with each
+  field read from C (a `C.Bool` field is true when its byte is not 0). A struct
+  argument is copied into C memory for the call, each field checked as an
+  argument is: a `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`, a
+  `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field is
+  `RUNTIME-NATIVE-CLOSED`, all before C runs. A field is changed with `.with`
+  and the new record passed back (llama.cpp's params). A `C.Pointer` field is an
+  address that nothing tracks, so the memory it names must outlive C's use; a
+  `compute def` call holds the owned buffers in the fields of its struct
+  arguments as it holds its buffer arguments. A struct with a fixed array
+  field (`char name[16]`) cannot be declared yet.
 - A C function whose address is known only at run time, such as a slot of a
   table of function pointers (onnxruntime's `OrtApi`), is declared with a
   first parameter `fn: C.Function` (section 5) and called with that address,

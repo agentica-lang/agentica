@@ -272,21 +272,22 @@ and a task's crash line (`"task":true`) carry it too.
 - `RUNTIME-TEST-TIMEOUT`: under `agentica test`, a test ran longer than 30
   seconds; the rest of its file is not executed.
 - `PARSE-EXTERN-TYPE`, `PARSE-EXTERN-NAME`, `PARSE-EXTERN-DEFAULT`,
-  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`, `PARSE-EXTERN-FREE`: an
-  `extern` signature with a type that is not a C type or a resource declared
-  above in the block (the span is the type), a name with `?` or `!`, a
-  parameter with a default, more than 64 parameters, a library that is not a
-  name without `/` or an absolute path, or a `def` of the block's `free:`
-  function (`native.md`).
+  `PARSE-EXTERN-ARITY`, `PARSE-EXTERN-LIBRARY`, `PARSE-EXTERN-FREE`: an `extern`
+  signature with a type that is not a C type or a resource or struct declared
+  above in the block (the span is the type), a C struct field that is not a C
+  value type or a struct with no field, a name with `?` or `!`, a parameter with
+  a default, more than 64 parameters (or a C struct over 1024 fields or 16
+  levels), a library that is not a name without `/` or an absolute path, or a
+  `def` of the block's `free:` function (`native.md`).
 - `PARSE-EXTERN-OUT`: an `out` parameter of a type that cannot be one
-  (`C.String`, `C.Bytes`, `C.Function`), named `result` beside a C result or
-  like an in parameter, of a function name with no letter for the record's
-  name, or outside an extern block (`native.md`).
+  (`C.String`, `C.Bytes`, `C.Function`, a struct), named `result` beside a C
+  result or like an in parameter, of a function name with no letter for the
+  record's name, or outside an extern block (`native.md`).
 - `PARSE-EXTERN-VARIADIC`, `PARSE-EXTERN-VARIADIC-FIXED`,
   `PARSE-EXTERN-VARIADIC-TYPE`, `PARSE-EXTERN-SYMBOL`: a second `...` or one
   outside an extern block, a `...` with no parameter before it, a `C.Bool`,
-  `C.Float` or `out` parameter after it, or a C name after `=` that is not a
-  plain string of letters, digits and `_` (`native.md`).
+  `C.Float`, struct or `out` parameter after it, or a C name after `=` that is
+  not a plain string of letters, digits and `_` (`native.md`).
 - `PARSE-EXTERN-FUNCTION`: a `C.Function` parameter that is not the first
   (the function to call) or the last (the free function), a call through a
   `C.Function` with `= "symbol"`, a call that makes a `free: C.Function`

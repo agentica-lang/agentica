@@ -37,6 +37,15 @@
 #define BUFFER_MAX (UINT64_C(1) << 48)
 /* The name an owned buffer inspects as: it is a C.Pointer to the program. */
 #define BUFFER_NAME "C.Pointer"
+/* The limits of a struct of a signature: how deep it nests and how many fields it has, nested ones counted. The front
+   end refuses more (PARSE-EXTERN-ARITY), so only hand-made bytecode reaches them; with at most 8 bytes per field,
+   no struct within them is larger than STRUCT_MAX_SIZE, which is checked too. */
+#define STRUCT_MAX_DEPTH 16
+#define STRUCT_MAX_FIELDS 1024
+#define STRUCT_MAX_SIZE 16384
+/* The bytes a struct argument takes in the memory of a call: each starts at a multiple of 16, which no C struct of a
+   signature needs more than. */
+#define STRUCT_ROUND(size) (((size) + 15) & ~(size_t)15)
 
 /* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. A kind
    declared `free: C.Function` (by_pointer) frees through the address that the call got: its call has no symbol. */
@@ -54,7 +63,11 @@ typedef struct {
    none). A function with out parameters (`outs` > 0) gives a List: the C result, unless Void, then each out value.
    `params` and the rest index the C parameters only. A call through a C function pointer (`by_pointer`, code c) takes
    the function's address as argument 0, and the free function of the resources it makes of a `free: C.Function` kind
-   (`free_by_pointer` for the result's) as argument `free_input` (code e), -1 when it has none; neither goes to C. */
+   (`free_by_pointer` for the result's) as argument `free_input` (code e), -1 when it has none; neither goes to C. A
+   struct parameter has its layout in structs[k] (NULL for the others) and a struct result in `result_struct`; a call
+   copies its struct arguments into `struct_bytes` of memory (each at a multiple of 16), then gives the result's buffer.
+   `holds` counts what a compute call may hold: one per C parameter, then one per C.Pointer field of each struct
+   argument, in order. */
 typedef struct {
   char *key;
   size_t key_len;
@@ -64,7 +77,10 @@ typedef struct {
   bool out[AGC_FFI_MAX_PARAMS];
   uint8_t arg[AGC_FFI_MAX_PARAMS];
   agc_c_type result;
-  uint32_t count, inputs, outs;
+  agc_c_struct *structs[AGC_FFI_MAX_PARAMS];
+  agc_c_struct *result_struct;
+  size_t struct_bytes;
+  uint32_t count, inputs, outs, holds;
   bool compute, by_pointer, free_by_pointer;
   int32_t free_input;
   agc_ffi_call *free;
@@ -81,12 +97,16 @@ typedef struct {
    written by C on the pool thread, and read only by `done` after `ran`. `ran` is set by the pool thread once the call
    is made: the work of a job cancelled while it waited is skipped (run_compute in vm/loop.c), and then `out` and the
    slots hold no result. `fn` is the address a call through a function pointer calls (else NULL) and `free_at` the free
-   function of the resources it makes of a `free: C.Function` kind (else NULL). */
+   function of the resources it makes of a `free: C.Function` kind (else NULL). `held` has `holds` entries, the owned
+   buffers in the C.Pointer fields of struct arguments after those of the parameters. `structs` (at a multiple of 16
+   in the block) holds the struct arguments, copied on the scheduler, then the buffer of a struct result, which `out.p`
+   points at. */
 typedef struct {
   const ffi_entry *entry;
   void *fn, *free_at;
   agc_c_value *slots;
   agc_c_resource **held;
+  uint8_t *structs;
   bool ran;
   agc_c_value out;
   agc_c_value in[];
@@ -183,6 +203,7 @@ static bool c_type_of(char code, bool result, agc_c_type *type, bool *out) {
     case 'r': *type = AGC_C_RESOURCE; return true;
     case 'y': *type = AGC_C_BYTES; return !result;
     case 'v': *type = AGC_C_VOID; return result;
+    case '{': *type = AGC_C_STRUCT; return true;
     default: return false;
   }
 }
@@ -227,9 +248,106 @@ static _Noreturn void load_failed(agc_vm *vm, const char *error, uint32_t span) 
   agc_fail_text(vm, "RUNTIME-NATIVE-LOAD", text, span);
 }
 
+/* The length of the struct "{...}" at the start of TEXT (LEN bytes), up to its closing brace, or 0 when its braces do
+   not close or nest deeper than STRUCT_MAX_DEPTH. Every layout comes through here, so no recursion over one nests
+   deeper than that. */
+static size_t group_length(const char *text, size_t len) {
+  uint32_t depth = 0;
+  for (size_t k = 0; k < len; k++) {
+    if (text[k] == '{' && ++depth > STRUCT_MAX_DEPTH) return 0;
+    if (text[k] == '}' && --depth == 0) return k + 1;
+  }
+  return 0;
+}
+
+static void struct_free(agc_c_struct *s) { // NOLINT(misc-no-recursion)
+  if (!s) return;
+  for (uint32_t k = 0; k < s->count; k++) struct_free(s->nested[k]);
+  free(s);
+}
+
+/* The layout of the struct "{N:CODES}" at *AT, whose braces group_length has checked, before END; *AT moves past it.
+   N is a struct of the program P with one field per code: i, l, d, f, b, p or a nested struct. *LEAVES counts the
+   fields of the whole tree, nested ones included. NULL when any part is wrong, with nothing left allocated. */
+static agc_c_struct *struct_parse(const agc_program *p, const char **at, const char *end, uint32_t *leaves) { // NOLINT(misc-no-recursion)
+  const char *c = *at + 1;
+  uint32_t index = 0, digits = 0;
+  for (; c < end && *c >= '0' && *c <= '9' && digits < 9; c++, digits++) index = index * 10 + (uint32_t)(*c - '0');
+  if (!digits || c == end || *c != ':' || !p || index >= p->struct_count) return NULL;
+  c++;
+  uint32_t count = 0;
+  for (const char *f = c; f < end && *f != '}'; count++) {
+    size_t len = *f == '{' ? group_length(f, (size_t)(end - f)) : 1;
+    if (!len) return NULL;
+    f += len;
+  }
+  if (!count || count != p->structs[index].count) return NULL;
+  agc_c_struct *s = calloc(1, sizeof *s + count * (sizeof(size_t) + sizeof(agc_c_struct *) + sizeof(agc_c_type)));
+  if (!s) agc_out_of_memory();
+  s->offsets = (size_t *)(void *)(s + 1);
+  s->nested = (agc_c_struct **)(void *)(s->offsets + count);
+  s->types = (agc_c_type *)(void *)(s->nested + count);
+  s->count = count;
+  s->index = index;
+  bool good = true;
+  for (uint32_t k = 0; k < count && good; k++) {
+    agc_c_type type = AGC_C_VOID;
+    switch (*c) {
+      case 'i': type = AGC_C_INT; break;
+      case 'l': type = AGC_C_INT64; break;
+      case 'd': type = AGC_C_DOUBLE; break;
+      case 'f': type = AGC_C_FLOAT; break;
+      case 'b': type = AGC_C_BOOL; break;
+      case 'p': type = AGC_C_POINTER; break;
+      case '{': type = AGC_C_STRUCT; break;
+      default: break;
+    }
+    s->types[k] = type;
+    if (type == AGC_C_STRUCT) {
+      s->nested[k] = struct_parse(p, &c, end, leaves);
+      good = s->nested[k] != NULL;
+      if (good) s->pointers += s->nested[k]->pointers;
+    } else {
+      good = type != AGC_C_VOID && ++*leaves <= STRUCT_MAX_FIELDS;
+      s->pointers += type == AGC_C_POINTER;
+      c++;
+    }
+  }
+  if (!good || c == end || *c != '}') {
+    struct_free(s);
+    return NULL;
+  }
+  *at = c + 1;
+  return s;
+}
+
+/* The layout of the struct that is exactly the LEN bytes at TEXT, or NULL. */
+static agc_c_struct *layout_of(agc_vm *vm, const char *text, size_t len) {
+  const char *at = text;
+  uint32_t leaves = 0;
+  agc_c_struct *s = struct_parse(vm->rt->program, &at, text + len, &leaves);
+  if (s && at != text + len) {
+    struct_free(s);
+    return NULL;
+  }
+  return s;
+}
+
 static void discard_frees(free_list *frees) {
   for (uint32_t k = 0; k < frees->count; k++)
     if (frees->calls[k]) agc_ffi_discard(frees->calls[k]);
+}
+
+static void free_layouts(agc_c_struct *result_struct, agc_c_struct **structs, uint32_t count) {
+  struct_free(result_struct);
+  for (uint32_t k = 0; k < count; k++) struct_free(structs[k]);
+}
+
+/* Whether every struct of a prepared signature is at most STRUCT_MAX_SIZE bytes. */
+static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *structs, uint32_t count) {
+  bool fit = !result_struct || result_struct->size <= STRUCT_MAX_SIZE;
+  for (uint32_t k = 0; k < count; k++) fit = fit && (!structs[k] || structs[k]->size <= STRUCT_MAX_SIZE);
+  return fit;
 }
 
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the
@@ -240,7 +358,9 @@ static void discard_frees(free_list *frees) {
    r), then each out resource's (code R), in order. A call through a C function pointer has the code c first: the
    argument is the address to call, and SYMBOL (the def's name) is only shown. The code e, only as the last code (a
    "." may follow), is the argument that holds the free function of each resource the call makes whose free word is
-   C.Function; the call has one exactly when such a resource needs it. The front end writes it
+   C.Function; the call has one exactly when such a resource needs it. A struct passed or returned by value is one code
+   "{N:CODES}": N is its index in the program's struct table and CODES has one code per field, in the struct's field
+   order, i, l, d, f, b, p or a nested struct; it is never an out parameter or after the ".". The front end writes it
    (compiler/lower/lower_native.agc); the bytecode may hold anything, so every part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
@@ -254,24 +374,33 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   size_t codes_len, symbol_len;
   if (!next_word(&at, &left, &codes, &codes_len) || !next_word(&at, &left, &symbol, &symbol_len))
     bad_signature(vm, span);
-  /* The "." comes out of the codes; a second one is then an unknown code. BEFORE counts the codes in front of it. */
-  const char *mark = memchr(codes, '.', codes_len);
-  uint32_t before = UINT32_MAX;
-  char kinds[AGC_FFI_MAX_PARAMS + 1];
-  size_t kinds_len = codes_len - (mark != NULL);
-  if (kinds_len - 1 > AGC_FFI_MAX_PARAMS || (mark && mark - codes < 2)) bad_signature(vm, span);
-  if (mark) {
-    before = (uint32_t)(mark - codes - 1);
-    memcpy(kinds, codes, (size_t)(mark - codes));
-    memcpy(kinds + (mark - codes), mark + 1, codes_len - (size_t)(mark - codes) - 1);
-  } else {
-    memcpy(kinds, codes, codes_len);
+  /* The codes, one item each: a letter, or a struct up to its closing brace (GROUPS has where each starts and its
+     length). The "." comes out of them, after the result and one parameter at least; a second one is then an unknown
+     code. BEFORE counts the parameter codes in front of it. */
+  uint32_t before = UINT32_MAX, items = 0;
+  char kinds[AGC_FFI_MAX_PARAMS + 1] = {0};
+  const char *groups[AGC_FFI_MAX_PARAMS + 1];
+  size_t group_lens[AGC_FFI_MAX_PARAMS + 1];
+  for (size_t k = 0; k < codes_len;) {
+    if (codes[k] == '.' && before == UINT32_MAX && items >= 2) {
+      before = items - 1;
+      k++;
+      continue;
+    }
+    size_t len = codes[k] == '{' ? group_length(codes + k, codes_len - k) : 1;
+    if (items == AGC_FFI_MAX_PARAMS + 1 || len == 0) bad_signature(vm, span);
+    kinds[items] = codes[k];
+    groups[items] = codes + k;
+    group_lens[items++] = len;
+    k += len;
   }
   agc_c_type result, params[AGC_FFI_MAX_PARAMS], c_params[AGC_FFI_MAX_PARAMS];
   bool out[AGC_FFI_MAX_PARAMS], result_out;
   uint8_t arg[AGC_FFI_MAX_PARAMS];
+  /* The item of each C parameter, for the layout of a struct. */
+  uint32_t item_of[AGC_FFI_MAX_PARAMS];
   if (!c_type_of(kinds[0], true, &result, &result_out)) bad_signature(vm, span);
-  uint32_t total = (uint32_t)(kinds_len - 1), count = 0, outs = 0, inputs = 0, fixed = AGC_FFI_NOT_VARIADIC;
+  uint32_t total = items - 1, count = 0, outs = 0, inputs = 0, fixed = AGC_FFI_NOT_VARIADIC;
   int32_t free_input = -1;
   bool by_pointer = false;
   free_list frees;
@@ -292,8 +421,10 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
       continue;
     }
     if (!c_type_of(code, false, &params[count], &out[count])) bad_signature(vm, span);
-    if (k >= before && (out[count] || params[count] == AGC_C_BOOL || params[count] == AGC_C_FLOAT))
+    if (k >= before &&
+        (out[count] || params[count] == AGC_C_BOOL || params[count] == AGC_C_FLOAT || params[count] == AGC_C_STRUCT))
       bad_signature(vm, span);
+    item_of[count] = k + 1;
     /* C gets a pointer to the slot of an out parameter. */
     c_params[count] = out[count] ? AGC_C_POINTER : params[count];
     if (!out[count]) arg[count] = (uint8_t)inputs++;
@@ -302,7 +433,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
     count++;
   }
   if (before == total) fixed = count;
-  if (mark && fixed == 0) bad_signature(vm, span);
+  if (before != UINT32_MAX && fixed == 0) bad_signature(vm, span);
   bool any_by_pointer = false;
   for (uint32_t k = 0; k < frees.count; k++) {
     if (!next_word(&at, &left, &frees.names[k], &frees.lens[k]) ||
@@ -318,18 +449,34 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   bool nul = left == 0 || memchr(at, 0, left) || memchr(symbol, 0, symbol_len);
   for (uint32_t k = 0; k < frees.count && !nul; k++) nul = memchr(frees.names[k], 0, frees.lens[k]) != NULL;
   if (nul) load_failed(vm, "a library or function name is empty or holds a NUL character", span);
+  agc_c_struct *result_struct = NULL, *structs[AGC_FFI_MAX_PARAMS] = {NULL};
+  bool laid_out = result != AGC_C_STRUCT || (result_struct = layout_of(vm, groups[0], group_lens[0])) != NULL;
+  for (uint32_t k = 0; k < count && laid_out; k++)
+    if (params[k] == AGC_C_STRUCT)
+      laid_out = (structs[k] = layout_of(vm, groups[item_of[k]], group_lens[item_of[k]])) != NULL;
+  if (!laid_out) {
+    free_layouts(result_struct, structs, count);
+    bad_signature(vm, span);
+  }
   char *library = text_copy(at, left), *symbol_text = text_copy(symbol, symbol_len);
   char error[512];
-  agc_ffi_call *call =
-      agc_ffi_prepare(library, by_pointer ? NULL : symbol_text, result, c_params, count, fixed, error, sizeof error);
+  agc_ffi_call *call = agc_ffi_prepare(library, by_pointer ? NULL : symbol_text, result, c_params, count, fixed,
+                                       result_struct, structs, error, sizeof error);
+  if (call && !layouts_fit(result_struct, structs, count)) {
+    agc_ffi_discard(call);
+    free(library);
+    free(symbol_text);
+    free_layouts(result_struct, structs, count);
+    bad_signature(vm, span);
+  }
   bool prepared = call != NULL;
   for (uint32_t k = 0; k < frees.count && prepared; k++) {
     /* Each free function is in the same library, or at the address the call gets, and takes the pointer:
        void free(void *). */
     char *free_text = frees.by_pointer[k] ? NULL : text_copy(frees.names[k], frees.lens[k]);
     const agc_c_type pointer = AGC_C_POINTER;
-    frees.calls[k] =
-        agc_ffi_prepare(library, free_text, AGC_C_VOID, &pointer, 1, AGC_FFI_NOT_VARIADIC, error, sizeof error);
+    frees.calls[k] = agc_ffi_prepare(library, free_text, AGC_C_VOID, &pointer, 1, AGC_FFI_NOT_VARIADIC, NULL, NULL,
+                                     error, sizeof error);
     free(free_text);
     prepared = frees.calls[k] != NULL;
   }
@@ -338,6 +485,7 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
     if (call) agc_ffi_discard(call);
     discard_frees(&frees);
     free(symbol_text);
+    free_layouts(result_struct, structs, count);
     load_failed(vm, error, span);
   }
   ffi_entry *e = calloc(1, sizeof(ffi_entry));
@@ -351,6 +499,15 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
   e->outs = outs;
   memcpy(e->params, params, count * sizeof(agc_c_type));
   memcpy(e->out, out, count * sizeof(bool));
+  memcpy(e->structs, structs, count * sizeof(agc_c_struct *));
+  e->result_struct = result_struct;
+  e->holds = count;
+  for (uint32_t k = 0; k < count; k++) {
+    if (!structs[k]) continue;
+    e->struct_bytes += STRUCT_ROUND(structs[k]->size);
+    e->holds += structs[k]->pointers;
+  }
+  if (result_struct) e->struct_bytes += AGC_FFI_RESULT_SIZE(result_struct->size);
   uint32_t kind = made ? 1 : 0;
   for (uint32_t k = 0; k < count; k++) {
     if (!out[k]) {
@@ -513,7 +670,7 @@ static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, 
 /* The compute calls that held these resources are over: a resource closed meanwhile is freed by the last of them. */
 static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) {
   agc_sync_assert(vm);
-  for (uint32_t k = 0; k < e->count; k++) {
+  for (uint32_t k = 0; k < e->holds; k++) {
     agc_c_resource *res = held[k];
     if (res && --res->jobs == 0 && res->closed && !res->freed) free_resource(vm, res);
   }
@@ -538,8 +695,9 @@ static void *pointer_of(agc_vm *vm, agc_value v) {
    nothing. A C.Int32 that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and
    cutting them short would call the function with another value. The items of a C.Bytes are checked while they are
    copied (copy_bytes), and whether a resource or an owned buffer is closed before and after that (check_open). A
-   C.Float takes any Float: one outside the range of a float becomes an infinity (IEEE 754, C11 Annex F). */
-static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t span) {
+   C.Float takes any Float: one outside the range of a float becomes an infinity (IEEE 754, C11 Annex F). A struct
+   (LAYOUT) is a struct value of the program's type that the layout names, whose fields are checked the same way. */
+static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layout, agc_value v, uint32_t span) { // NOLINT(misc-no-recursion)
   switch (type) {
     case AGC_C_INT: {
       int64_t n = agc_as_int(vm, v);
@@ -562,13 +720,109 @@ static void check_argument(agc_vm *vm, agc_c_type type, agc_value v, uint32_t sp
     case AGC_C_POINTER: (void)buffer_of(vm, v); break;
     case AGC_C_BYTES: agc_as_list(vm, v); break;
     case AGC_C_RESOURCE: agc_as_c_resource(vm, v); break;
+    case AGC_C_STRUCT: {
+      const agc_struct *st = agc_as_struct(vm, v);
+      if (st->type != layout->index || st->n != layout->count) agc_wrong_tag(vm);
+      for (uint32_t k = 0; k < layout->count; k++)
+        check_argument(vm, layout->types[k], layout->nested[k], st->fields[k], span);
+      break;
+    }
     case AGC_C_VOID: agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a Void parameter", span);
   }
 }
 
+/* Writes the checked struct V into BASE at the offsets of LAYOUT. A C.Bool is the byte 0 or 1 (C's bool is one byte on
+   every target with native calls) and a C.Float the float nearest the Float, as for an argument. */
+static void struct_write(agc_vm *vm, const agc_c_struct *layout, agc_value v, uint8_t *base) { // NOLINT(misc-no-recursion)
+  const agc_struct *st = agc_as_struct(vm, v);
+  for (uint32_t k = 0; k < layout->count; k++) {
+    uint8_t *at = base + layout->offsets[k];
+    agc_value field = st->fields[k];
+    switch (layout->types[k]) {
+      case AGC_C_INT: {
+        int32_t n = (int32_t)agc_as_int(vm, field);
+        memcpy(at, &n, sizeof n);
+        break;
+      }
+      case AGC_C_INT64: {
+        int64_t n = agc_as_int(vm, field);
+        memcpy(at, &n, sizeof n);
+        break;
+      }
+      case AGC_C_DOUBLE: {
+        double x = agc_as_float(vm, field);
+        memcpy(at, &x, sizeof x);
+        break;
+      }
+      case AGC_C_FLOAT: {
+        float x = (float)agc_as_float(vm, field);
+        memcpy(at, &x, sizeof x);
+        break;
+      }
+      case AGC_C_BOOL: *at = agc_as_bool(vm, field) ? 1 : 0; break;
+      case AGC_C_POINTER: {
+        void *p = pointer_of(vm, field);
+        memcpy(at, &p, sizeof p);
+        break;
+      }
+      case AGC_C_STRUCT: struct_write(vm, layout->nested[k], field, at); break;
+      default: break;
+    }
+  }
+}
+
+/* The struct value of the program's type that LAYOUT names, read from the C struct at BASE: a C.Bool field is read as
+   the byte C wrote, as an out C.Bool is. */
+static agc_value struct_value(const agc_c_struct *layout, const uint8_t *base) { // NOLINT(misc-no-recursion)
+  agc_struct *st = agc_new_struct(layout->index, layout->count);
+  for (uint32_t k = 0; k < layout->count; k++) {
+    const uint8_t *at = base + layout->offsets[k];
+    agc_value field = agc_void();
+    switch (layout->types[k]) {
+      case AGC_C_INT: {
+        int32_t n;
+        memcpy(&n, at, sizeof n);
+        field = agc_int(n);
+        break;
+      }
+      case AGC_C_INT64: {
+        int64_t n;
+        memcpy(&n, at, sizeof n);
+        field = agc_int(n);
+        break;
+      }
+      case AGC_C_DOUBLE: {
+        double x;
+        memcpy(&x, at, sizeof x);
+        field = agc_float(x);
+        break;
+      }
+      case AGC_C_FLOAT: {
+        float x;
+        memcpy(&x, at, sizeof x);
+        field = agc_float(x);
+        break;
+      }
+      case AGC_C_BOOL: field = agc_bool(*at != 0); break;
+      case AGC_C_POINTER: {
+        void *p;
+        memcpy(&p, at, sizeof p);
+        field = agc_c_pointer_value(p);
+        break;
+      }
+      case AGC_C_STRUCT: field = struct_value(layout->nested[k], at); break;
+      default: break;
+    }
+    st->fields[k] = field;
+  }
+  return agc_struct_value(st);
+}
+
 /* The C value of a checked argument. A C.String is a malloc'd copy, which the caller frees after the call
-   (free_copies); a C.Bytes is BYTES, its copy made before (copy_bytes), which free_copies frees too. */
-static agc_c_value c_argument(agc_vm *vm, agc_c_type type, agc_value v, uint8_t *bytes) {
+   (free_copies); a C.Bytes is BYTES, its copy made before (copy_bytes), which free_copies frees too. A struct (LAYOUT)
+   is copied into MEMORY, its place in the memory of the call, and C gets a pointer to it. */
+static agc_c_value c_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layout, agc_value v, uint8_t *bytes,
+                              uint8_t *memory) {
   agc_c_value out = {0};
   switch (type) {
     case AGC_C_INT: out.i = (int32_t)agc_as_int(vm, v); break;
@@ -581,6 +835,10 @@ static agc_c_value c_argument(agc_vm *vm, agc_c_type type, agc_value v, uint8_t 
     case AGC_C_POINTER: out.p = pointer_of(vm, v); break;
     case AGC_C_RESOURCE: out.p = agc_as_c_resource(vm, v)->pointer; break;
     case AGC_C_BYTES: out.p = bytes; break;
+    case AGC_C_STRUCT:
+      struct_write(vm, layout, v, memory);
+      out.p = memory;
+      break;
     case AGC_C_VOID: break;
   }
   return out;
@@ -653,13 +911,40 @@ static agc_c_resource *held_by(agc_vm *vm, const ffi_entry *e, const agc_list *v
   return NULL;
 }
 
-/* A closed resource or owned buffer fails: its pointer is freed, or about to be. Under rt->sync. The call checks once
-   before the byte copies (BYTES NULL), so a closed resource fails first, and once after them, with the lock taken
-   again, so no close comes between this check and the call; a failure then frees the copies. */
+/* Stores in HELD[*N] on the owned buffer (or NULL) of each C.Pointer field of the checked struct V (LAYOUT), nested
+   ones included, in order; a compute call holds them as it holds its parameters'. */
+static void struct_held(agc_vm *vm, const agc_c_struct *layout, agc_value v, agc_c_resource **held, uint32_t *n) { // NOLINT(misc-no-recursion)
+  if (!layout->pointers) return;
+  const agc_struct *st = agc_as_struct(vm, v);
+  for (uint32_t k = 0; k < layout->count; k++) {
+    if (layout->types[k] == AGC_C_POINTER) held[(*n)++] = buffer_of(vm, st->fields[k]);
+    if (layout->types[k] == AGC_C_STRUCT) struct_held(vm, layout->nested[k], st->fields[k], held, n);
+  }
+}
+
+/* Whether a C.Pointer field of the checked struct V (LAYOUT), nested ones included, holds an owned buffer that is
+   closed. */
+static bool struct_closed(agc_vm *vm, const agc_c_struct *layout, agc_value v) { // NOLINT(misc-no-recursion)
+  if (!layout->pointers) return false;
+  const agc_struct *st = agc_as_struct(vm, v);
+  bool closed = false;
+  for (uint32_t k = 0; k < layout->count && !closed; k++) {
+    agc_c_resource *res = layout->types[k] == AGC_C_POINTER ? buffer_of(vm, st->fields[k]) : NULL;
+    closed = (res && res->closed) ||
+             (layout->types[k] == AGC_C_STRUCT && struct_closed(vm, layout->nested[k], st->fields[k]));
+  }
+  return closed;
+}
+
+/* A closed resource or owned buffer fails, also in a C.Pointer field of a struct: its pointer is freed, or about to
+   be. Under rt->sync. The call checks once before the byte copies (BYTES NULL), so a closed resource fails first, and
+   once after them, with the lock taken again, so no close comes between this check and the call; a failure then frees
+   the copies. */
 static void check_open(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint8_t **bytes, uint32_t span) {
   for (uint32_t k = 0; k < e->count; k++) {
     agc_c_resource *res = held_by(vm, e, values, k);
-    if (res && res->closed) {
+    bool in_struct = e->structs[k] && struct_closed(vm, e->structs[k], agc_list_get(values, e->arg[k]));
+    if ((res && res->closed) || in_struct) {
       if (bytes) free_bytes(e, bytes);
       agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "a native call takes a resource that is closed", span);
     }
@@ -686,6 +971,7 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
     }
     case AGC_C_POINTER: return agc_c_pointer_value(r->p);
     case AGC_C_RESOURCE: return resource_result(vm, e, r->p, free_at);
+    case AGC_C_STRUCT: return struct_value(e->result_struct, r->p);
     case AGC_C_BYTES:
     case AGC_C_VOID: break;
   }
@@ -712,6 +998,7 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     }
     case AGC_C_STRING:
     case AGC_C_BYTES:
+    case AGC_C_STRUCT:
     case AGC_C_VOID: break;
   }
   return agc_void();
@@ -831,7 +1118,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   void *fn = e->by_pointer ? function_at(vm, agc_list_get(values, 0), span) : NULL;
   void *free_at = e->free_input >= 0 ? function_at(vm, agc_list_get(values, (size_t)e->free_input), span) : NULL;
   for (uint32_t k = 0; k < e->count; k++)
-    if (!e->out[k]) check_argument(vm, e->params[k], agc_list_get(values, e->arg[k]), span);
+    if (!e->out[k]) check_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), span);
   /* The loop is made first: a loop that cannot start fails here, before the copies exist. */
   if (e->compute) (void)agc_io_loop(vm);
   check_open(vm, e, values, NULL, span);
@@ -839,19 +1126,27 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   copy_byte_arguments(vm, e, values, bytes, span);
   check_open(vm, e, values, bytes, span);
   agc_charge(vm, FFI_CALL_COST);
+  /* The struct arguments are copied in proportion to their size. */
+  agc_charge_bytes(vm, e->struct_bytes);
   if (e->compute) {
-    /* in, then the slots, then held: one block. */
+    /* in, then the slots, then held, then the structs at a multiple of 16: one block (malloc aligns it for any C
+       object). */
     size_t in_size = agc_size_mul(agc_size_mul(e->count, 2), sizeof(agc_c_value));
-    size_t held_size = agc_size_mul(e->count, sizeof(agc_c_resource *));
-    compute_call *c = malloc(agc_size_add(agc_size_add(sizeof(compute_call), in_size), held_size));
+    size_t held_size = agc_size_mul(e->holds, sizeof(agc_c_resource *));
+    size_t structs_at = STRUCT_ROUND(agc_size_add(agc_size_add(sizeof(compute_call), in_size), held_size));
+    compute_call *c = malloc(agc_size_add(structs_at, e->struct_bytes));
     if (!c) agc_out_of_memory();
     c->entry = e;
     c->fn = fn;
     c->free_at = free_at;
     c->slots = c->in + e->count;
     c->held = (agc_c_resource **)(void *)(c->slots + e->count);
+    c->structs = (uint8_t *)c + structs_at;
     c->ran = false;
     memset(&c->out, 0, sizeof c->out);
+    memset(c->structs, 0, e->struct_bytes);
+    size_t used = 0;
+    uint32_t holds = e->count;
     for (uint32_t k = 0; k < e->count; k++) {
       c->held[k] = NULL;
       memset(&c->slots[k], 0, sizeof c->slots[k]);
@@ -859,26 +1154,42 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
         c->in[k].p = &c->slots[k];
         continue;
       }
-      c->in[k] = c_argument(vm, e->params[k], agc_list_get(values, e->arg[k]), bytes[k]);
+      agc_value v = agc_list_get(values, e->arg[k]);
+      c->in[k] = c_argument(vm, e->params[k], e->structs[k], v, bytes[k], c->structs + used);
       c->held[k] = held_by(vm, e, values, k);
-      if (c->held[k]) c->held[k]->jobs++;
+      if (e->structs[k]) {
+        struct_held(vm, e->structs[k], v, c->held, &holds);
+        used += STRUCT_ROUND(e->structs[k]->size);
+      }
     }
+    for (uint32_t k = 0; k < e->holds; k++)
+      if (c->held[k]) c->held[k]->jobs++;
+    if (e->result_struct) c->out.p = c->structs + used;
     agc_io_compute(vm, &compute_io, c);
     return agc_void();
   }
   agc_c_value in[AGC_FFI_MAX_PARAMS], slots[AGC_FFI_MAX_PARAMS];
+  /* The memory of the struct arguments and of a struct result; zeroed, so padding bytes hold no old data. */
+  uint8_t *structs = e->struct_bytes ? calloc(1, e->struct_bytes) : NULL;
+  if (e->struct_bytes && !structs) agc_out_of_memory();
+  size_t used = 0;
   for (uint32_t k = 0; k < e->count; k++) {
     if (e->out[k]) {
       memset(&slots[k], 0, sizeof slots[k]);
       in[k].p = &slots[k];
     } else {
-      in[k] = c_argument(vm, e->params[k], agc_list_get(values, e->arg[k]), bytes[k]);
+      uint8_t *memory = e->structs[k] ? structs + used : NULL;
+      in[k] = c_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), bytes[k], memory);
+      if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
     }
   }
   agc_c_value out = {0};
+  if (e->result_struct) out.p = structs + used;
   agc_ffi_invoke(e->call, fn, in, &out);
   free_copies(e, in);
-  return call_value(vm, e, &out, slots, free_at);
+  agc_value v = call_value(vm, e, &out, slots, free_at);
+  free(structs);
+  return v;
 }
 
 /* Native.close(resource): see close_resource. */

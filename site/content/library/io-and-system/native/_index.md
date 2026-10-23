@@ -28,7 +28,7 @@ A package can ship its library or name a system one in its `agentica.toml` (`[na
 
 The rest of the section has its own pages:
 
-- Use [Types and resources](/library/io-and-system/native/types/) for the C types, reading memory that C returns, owned buffers and typed memory, resources, out parameters and C function pointers.
+- Use [Types and resources](/library/io-and-system/native/types/) for the C types, reading memory that C returns, owned buffers and typed memory, resources, out parameters, C function pointers and C structs.
 - Use [SQLite](/library/io-and-system/native/sqlite/) for a full example: a library behind safe functions that return `Result`.
 - Use [Compute calls](/library/io-and-system/native/compute/) for a call that may take long: the other tasks keep running.
 - Use [Waiting on a descriptor](/library/io-and-system/native/waiting/) to wait for a socket or descriptor without stopping the other tasks.
@@ -38,8 +38,8 @@ The rest of the section has its own pages:
 
 - The library is a plain string: a name without `/` (`"libm.so.6"`), which the system looks up, or an absolute path (`"/opt/tool/libtool.so"`). Anything else is `PARSE-EXTERN-LIBRARY`. The working directory is never searched. On Windows a name (`"ucrtbase.dll"`) is looked up next to `agentica.exe` and in the system folder, not in `PATH`; write an absolute path with escaped backslashes (`"C:\\libs\\x.dll"`), and the DLLs it needs are searched in its folder and the default folders, never in `PATH` (a MinGW DLL that needs `libgcc_s_seh-1.dll` must have it next to it). On macOS a name (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and in `DYLD_LIBRARY_PATH`), which finds the system libraries in the dyld shared cache (libc and libm are `"libSystem.B.dylib"`); any other library takes its absolute path (`"/opt/homebrew/lib/libpq.dylib"`). macOS drops `DYLD_*` variables when a protected program such as `/usr/bin/env` or `/bin/sh` starts agentica, so `DYLD_LIBRARY_PATH` does not pass through a shebang line or a shell script.
 - The library opens at the first call of one of its functions and stays open. A library, dependency or function that is not found fails that call with `RUNTIME-NATIVE-LOAD`.
-- A `def` name has no `?` or `!`, even with a C name after `=` (`PARSE-EXTERN-NAME`); parameters take no default (`PARSE-EXTERN-DEFAULT`); only the [types](/library/io-and-system/native/types/) and the block's resources cross (`PARSE-EXTERN-TYPE`).
-- `export def` makes a function importable from other files. The functions take the place of `def` functions in the declaration order, and resources the place of types. A block that declares a resource takes the place of types as a whole, its functions included.
+- A `def` name has no `?` or `!`, even with a C name after `=` (`PARSE-EXTERN-NAME`); parameters take no default (`PARSE-EXTERN-DEFAULT`); only the [types](/library/io-and-system/native/types/) and the block's resources and structs cross (`PARSE-EXTERN-TYPE`).
+- `export def` makes a function importable from other files. The functions take the place of `def` functions in the declaration order, and resources and structs the place of types. A block that declares a resource or a struct takes the place of types as a whole, its functions included.
 - `extern` is a keyword only at the start of a top-level declaration, and `resource` only at the start of a line of the block; elsewhere they are ordinary names.
 
 ## Running

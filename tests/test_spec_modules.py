@@ -374,7 +374,8 @@ class TestModuleRules:
             block + api + later,
             # After an exported function the block is out of order, at its first member.
             api + block,
-            # A block without a resource keeps its rule: private defs come after the exported functions.
+            # A block with neither a resource nor a struct keeps its rule:
+            # private defs come after the exported functions.
             plain + api,
             api + plain,
             # The rule is per block, also for two blocks of one library.

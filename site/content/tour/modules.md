@@ -31,7 +31,7 @@ Each file lists its declarations in this order (`CHECK-DECL-ORDER` otherwise):
 ```text
 # module doc and imports
 # constants (see Constants)
-# struct, enum, type alias and extern block with a resource (its defs too), in any order
+# struct, enum, type alias and extern block with a resource or a struct (its defs too), in any order
 # export def
 # def
 ```

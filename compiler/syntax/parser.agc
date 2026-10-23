@@ -48,8 +48,23 @@ EXTERN_TYPES = {
 }
 EXTERN_TYPES_HELP = (
   "extern functions take and return C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.String, C.Pointer or a " +
-  "resource declared above in the same block, take C.Bytes or a C.Function, or return Void"
+  "struct or resource declared above in the same block, take C.Bytes or a C.Function, or return Void"
 )
+# The C types of a field of a struct of an extern block, with their codes; a field of a struct declared above in the
+# block has that struct's layout code ("{" and the codes of its fields, then "}"), so a layout nests.
+STRUCT_FIELD_CODES = {"C.Int32": "i", "C.Int64": "l", "C.Double": "d", "C.Float": "f", "C.Bool": "b", "C.Pointer": "p"}
+STRUCT_FIELD_HELP = (
+  "a field of a C struct is C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in " +
+  "the block; declare a char * field as C.Pointer and read the text with Native.get_string"
+)
+STRUCT_OUT_HELP = (
+  "pass a struct that C fills as a C.Pointer to a buffer of Native.memory_pointer, and read its fields with " +
+  "Native.get_*"
+)
+# The most fields of a C struct, nested ones counted, and the deepest nesting (STRUCT_MAX_FIELDS and STRUCT_MAX_DEPTH
+# in vm/ffi.c).
+STRUCT_MAX_FIELDS = 1024
+STRUCT_MAX_DEPTH = 16
 EXTERN_OUT_HELP = (
   "an out parameter is C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.Pointer or a resource of the block; " +
   "take a char ** or a function pointer as an out C.Pointer"
@@ -163,6 +178,12 @@ struct MemberAt
   records: List[Ast.Decl]
 end
 
+# A struct of an extern block and its layout code (ExternBlock.structs).
+struct ExternStructAt
+  decl: DeclAt
+  layout: String
+end
+
 # An extern function, its C name ("" for a call through a function pointer) and its record (none or one), with the
 # next position and the next free node id.
 struct ExternAt
@@ -172,13 +193,20 @@ struct ExternAt
 end
 
 # What the members of an extern block see of the block: its library, the free function of each resource declared so
-# far, by name, the C names of the functions declared so far, and whether the block declares a resource anywhere
-# (Ast.Native.with_resource).
+# far, by name, the layout code of each struct declared so far, by name, the C names of the functions declared so far,
+# and whether the block declares a resource or a struct anywhere (Ast.Native.with_types).
 struct ExternBlock
   library: String
   resources: Map[String, String]
+  structs: Map[String, String]
   symbols: Set[String]
-  with_resource: Bool
+  with_types: Bool
+end
+
+struct StructAt
+  node: Ast.StructDecl
+  pos: Int
+  ids: Int
 end
 
 struct FieldAt
@@ -1912,8 +1940,9 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
 end
 
 # extern "library" NL, then [##doc] [export] members, then end. A member is [compute] def, a function with no body
-# (Ast.Native), so the later stages see ordinary functions, or resource Name, free: c_name. A resource names a type
-# that the members below it may use; no def of the block may be its free function, which the VM alone calls.
+# (Ast.Native), so the later stages see ordinary functions, resource Name, free: c_name, or struct Name ... end, a C
+# struct passed by value. A resource or a struct names a type that the members below it may use; no def of the block
+# may be the free function of a resource, which the VM alone calls.
 def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   library = pos + 1
   if Base.kind_at(e, library) == "string" and Base.heredoc?(e.tokens[library])
@@ -1952,7 +1981,9 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
     )
   end
   cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
-  block = ExternBlock(library: name, resources: {}, symbols: Set.new([]), with_resource: declares_resource?(e, cursor))
+  block = ExternBlock(
+    library: name, resources: {}, structs: {}, symbols: Set.new([]), with_types: declares_types?(e, cursor),
+  )
   nodes: List[Ast.Decl] = []
   next_id = ids
   looping = true
@@ -1996,12 +2027,12 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
 end
 
-# Whether a member of the extern block that starts at pos is a resource. The members have no body, so the first `end`
-# closes the block.
-def declares_resource?(e: Base.Env, pos: Int) -> Bool
+# Whether a member of the extern block that starts at pos is a resource or a struct. Only a struct has an `end` of its
+# own, so the first `end` closes the block or comes after a struct.
+def declares_types?(e: Base.Env, pos: Int) -> Bool
   at = pos
   while at < e.size and e.tokens[at].kind != "end"
-    if resource_start?(e, at)
+    if resource_start?(e, at) or e.tokens[at].kind == "struct"
       return true
     end
     at += 1
@@ -2026,12 +2057,17 @@ def parse_extern_member(
     named = block.resources.put(e.tokens[pos + 1].lexeme, free)
     return ok(MemberAt(decl: member, block: block.with(resources: named), records: []))
   end
+  if e.tokens[pos].kind == "struct"
+    made = try parse_extern_struct(e, pos, ids, doc, block)
+    laid_out = block.structs.put(e.tokens[pos + 1].lexeme, made.layout)
+    return ok(MemberAt(decl: made.decl, block: block.with(structs: laid_out), records: []))
+  end
   at = pos
   if compute_start?(e, at)
     at += 1
   end
   if e.tokens[at].kind != "def"
-    return error(Base.found(e, at, "def, compute def, resource or end in an extern block"))
+    return error(Base.found(e, at, "def, compute def, resource, struct or end in an extern block"))
   end
   member = try parse_extern_function(e, pos, at, ids, doc, block)
   symbols = block.symbols
@@ -2104,6 +2140,99 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional
     ),
   )
   return decl_at(node, stop, ids)
+end
+
+# struct Name NL fields end NL in an extern block at pos: a C struct that extern functions take and return by value,
+# an ordinary struct (a record) for the rest of the language. Each field has a C type of STRUCT_FIELD_CODES, or is a
+# struct declared above in the block, and the program sees its Agentica type. The layout code lists the codes of the
+# fields in their order, which is the order of the record and of the C struct.
+def parse_extern_struct(
+  e: Base.Env,
+  pos: Int,
+  ids: Int,
+  doc: Ast.Optional[String],
+  block: ExternBlock,
+) -> Result[ExternStructAt]
+  parsed = try parse_struct(e, pos, ids, doc)
+  node = parsed.node
+  codes: List[String] = []
+  fields: List[Ast.FieldDecl] = []
+  for field in node.fields
+    code = struct_field_code(field.type, block)
+    if code == ""
+      help = STRUCT_FIELD_HELP
+      if field.type.name == "C.Int" and field.type.args.size == 0
+        help = EXTERN_INT_HELP
+      end
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-TYPE",
+          "#{field.type.name} is not a field type of a C struct",
+          field.type.span,
+          Base.hint(help),
+        ),
+      )
+    end
+    codes = codes.push(code)
+    if code.size == 1
+      fields = fields.push(field.with(type: field.type.with(name: EXTERN_TYPES[code])))
+    else
+      fields = fields.push(field)
+    end
+  end
+  layout = "{#{codes.join("")}}"
+  try struct_size(node, layout)
+  decl = try decl_at(Ast.Decl.Struct(node.with(fields: fields)), parsed.pos, parsed.ids)
+  return ok(ExternStructAt(decl: decl, layout: layout))
+end
+
+# The code of a field of a C struct: of its C type, or the layout code of a struct of the block; "" for any other type.
+def struct_field_code(type: Ast.TypeRef, block: ExternBlock) -> String
+  if type.args.size > 0
+    return ""
+  end
+  return STRUCT_FIELD_CODES.get(type.name, block.structs.get(type.name, ""))
+end
+
+# PARSE-EXTERN-TYPE at the name of a C struct without fields (C has none), and PARSE-EXTERN-ARITY at the name of one
+# with more fields than the VM takes, nested ones counted, or nested deeper.
+def struct_size(node: Ast.StructDecl, layout: String) -> Result[Void]
+  if node.fields.size == 0
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-TYPE",
+        "the C struct #{node.name} has no fields",
+        node.name_span,
+        Base.hint("declare the fields of the C struct, in the order of its header"),
+      ),
+    )
+  end
+  depth = 0
+  deepest = 0
+  leaves = 0
+  for char in layout.split("")
+    if char == "{"
+      depth += 1
+      if depth > deepest
+        deepest = depth
+      end
+    elsif char == "}"
+      depth -= 1
+    else
+      leaves += 1
+    end
+  end
+  if leaves > STRUCT_MAX_FIELDS or deepest > STRUCT_MAX_DEPTH
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-ARITY",
+        "a C struct has at most #{STRUCT_MAX_FIELDS} fields and #{STRUCT_MAX_DEPTH} levels, nested structs counted",
+        node.name_span,
+        Base.hint("split the struct, or keep a part of it as a C.Pointer to memory read with Native.get_*"),
+      ),
+    )
+  end
+  return ok()
 end
 
 def c_name_failure(e: Base.Env, at: Int, name: String) -> String
@@ -2344,7 +2473,7 @@ def parse_extern_function(
           resource: resource,
           free: free,
           outs: outs,
-          with_resource: block.with_resource,
+          with_types: block.with_types,
         ),
       ),
       span: span,
@@ -2474,6 +2603,16 @@ end
 # PARSE-EXTERN-OUT: at the type for C.String and C.Bytes (who frees what C writes there is not known) and C.Function
 # (an out function pointer is a C.Pointer), and at the name for `result`, which the C result takes unless it is Void.
 def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast.FieldDecl]
+  if taken.code.starts_with?("{")
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-OUT",
+        "the struct #{param.type.name} cannot be an out parameter",
+        param.type.span,
+        Base.hint(STRUCT_OUT_HELP),
+      ),
+    )
+  end
   if taken.code == "s" or taken.code == "y" or taken.code == "c"
     return error(
       Base.bail_span(
@@ -2551,6 +2690,8 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
       code = "v"
     elsif block.resources.has_key?(ref.name)
       code = "r"
+    elsif block.structs.has_key?(ref.name)
+      code = block.structs[ref.name]
     end
   end
   if code == ""
@@ -2569,7 +2710,9 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
       ),
     )
   end
-  if code == "r" and result
+  if code.starts_with?("{")
+    return ok(ExternType(code: code, type: ref, ids: ids))
+  elsif code == "r" and result
     wrapped = Ast.TypeRef(id: ids, name: "Result", args: [ref], span: ref.span)
     return ok(ExternType(code: code, type: wrapped, ids: ids + 1))
   elsif code == "r"
@@ -2681,6 +2824,12 @@ def documented(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
 end
 
 def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[DeclAt]
+  parsed = try parse_struct(e, pos, ids, doc)
+  return decl_at(Ast.Decl.Struct(parsed.node), parsed.pos, parsed.ids)
+end
+
+# struct Name NL fields end NL at pos, with the next position and the next free node id.
+def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> Result[StructAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a struct name", false)
   cursor = try Base.expect(e, after_name, "NL", "a newline after the struct name", false)
   fields: List[Ast.FieldDecl] = []
@@ -2703,18 +2852,16 @@ def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]
   end
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
-  node = Ast.Decl.Struct(
-    Ast.StructDecl(
-      id: next_id,
-      name: e.tokens[pos + 1].lexeme,
-      name_span: e.tokens[pos + 1].span,
-      fields: fields,
-      doc: doc,
-      record_of: "",
-      span: Base.span_from(e, pos, stop),
-    ),
+  node = Ast.StructDecl(
+    id: next_id,
+    name: e.tokens[pos + 1].lexeme,
+    name_span: e.tokens[pos + 1].span,
+    fields: fields,
+    doc: doc,
+    record_of: "",
+    span: Base.span_from(e, pos, stop),
   )
-  return decl_at(node, stop, next_id)
+  return ok(StructAt(node: node, pos: stop, ids: next_id))
 end
 
 def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]

@@ -83,7 +83,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   buffers, the call is prepared with no symbol and `agc_ffi_invoke` takes the
   address), the `e` code and the free word `C.Function` of a resource kind
   freed through a pointer (the address of that argument, kept in
-  `agc_c_resource.free_at`), and `agc_ffi_refusal`, which
+  `agc_c_resource.free_at`), the `{N:CODES}` code of a C struct by value (N
+  the record's index in the struct table, which lowering writes; the VM checks
+  it against the program, builds an `agc_c_struct` layout per signature that
+  `vm/ffi_libffi.c` turns into an `FFI_TYPE_STRUCT` and fills with libffi's
+  offsets, copies a record's fields into C memory and builds a record from a
+  struct result, nested ones too), and `agc_ffi_refusal`, which
   `agc_launch_native` calls at load (`--deny-native`, systems without libffi). A `compute def`'s signature starts with `compute `:
   the call goes to the compute pool (`vm/compute.c`) through `agc_io_compute` in
   `vm/loop.c`, and the task parks. `Native.wait_readable` and `wait_writable`
