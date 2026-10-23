@@ -13,6 +13,7 @@ import json
 import os
 import platform
 import subprocess
+import textwrap
 import time
 
 import pytest
@@ -490,9 +491,9 @@ end
 
 
 # Native.get_string reads from an offset up to the NUL, or exactly the length given (the NUL and a cut character
-# included, which becomes U+FFFD); Native.get_bytes copies bytes. NULL with length 0 is empty, as C means it. The old
-# names string_at and bytes_at read the same at offset 0. Native.pointer makes the pointer of an integer, which C sees
-# as that integer, and a pointer's value makes the same pointer again.
+# included, which becomes U+FFFD); Native.get_bytes copies bytes. NULL with length 0 is empty, as C means it.
+# Native.pointer makes the pointer of an integer, which C sees as that integer, and a pointer's value makes the same
+# pointer again.
 @NATIVE_CALLS
 def test_memory_that_c_returns_is_read_as_text_or_bytes(tmp_path, peer):
     main = """def main() -> Void
@@ -506,8 +507,6 @@ def test_memory_that_c_returns_is_read_as_text_or_bytes(tmp_path, peer):
   puts(Native.get_bytes(p, 7, 2))
   puts(Native.get_bytes(Native.null(), 0, 0))
   puts(Native.get_string(Native.null(), 0, 0).size)
-  puts(Native.string_at(p) == Native.get_string(p, 0) and Native.string_at(p, 12) == Native.get_string(p, 0, 12))
-  puts(Native.bytes_at(p, 12).inspect == Native.get_bytes(p, 0, 12).inspect)
   puts(peer_ptr_value(Native.pointer(-1)))
   puts(peer_ptr_value(Native.pointer(4096)))
   puts(Native.null?(Native.pointer(0)))
@@ -518,13 +517,13 @@ end
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
         "héllo", "world", '"héllo\\u0000world"', "h\ufffd", "0",
-        "[104, 195, 169, 108, 108, 111, 0, 119, 111, 114, 108, 100]", "[119, 111]", "[]", "0", "true", "true", "-1",
-        "4096", "true", "42", "",
+        "[104, 195, 169, 108, 108, 111, 0, 119, 111, 114, 108, 100]", "[119, 111]", "[]", "0", "-1", "4096", "true",
+        "42", "",
     ]
 
 
 # A read at NULL is RUNTIME-NATIVE-NULL at the pointer, a negative offset RUNTIME-NATIVE-BOUNDS at it and a negative
-# length RUNTIME-INVALID-COUNT at the length; the pointer is checked first. The old names fail the same way.
+# length RUNTIME-INVALID-COUNT at the length; the pointer is checked first.
 @NATIVE_CALLS
 @pytest.mark.parametrize("call, code, argument", [
     ("Native.get_string(Native.null(), 0)", "RUNTIME-NATIVE-NULL", "Native.null()"),
@@ -535,8 +534,6 @@ end
     ("Native.get_bytes(peer_text(), 0, -1)", "RUNTIME-INVALID-COUNT", "-1"),
     ("Native.get_string(peer_text(), -1)", "RUNTIME-NATIVE-BOUNDS", "-1"),
     ("Native.get_bytes(peer_text(), -2, 1)", "RUNTIME-NATIVE-BOUNDS", "-2"),
-    ("Native.string_at(Native.null())", "RUNTIME-NATIVE-NULL", "Native.null()"),
-    ("Native.bytes_at(peer_text(), -1)", "RUNTIME-INVALID-COUNT", "-1"),
 ])
 def test_a_read_at_null_or_with_a_negative_length_stops_the_run(tmp_path, peer, call, code, argument):
     line = "  IO.inspect(%s)" % call
@@ -549,7 +546,7 @@ def test_a_read_at_null_or_with_a_negative_length_stops_the_run(tmp_path, peer, 
 # The memory builtins are native code too: a program that calls only them is refused at load like one with extern
 # functions.
 def test_deny_native_refuses_the_memory_builtins(tmp_path):
-    text = 'def main() -> Void\n  puts("started")\n  puts(Native.string_at(Native.pointer(0), 0))\nend\n'
+    text = 'def main() -> Void\n  puts("started")\n  puts(Native.get_string(Native.pointer(0), 0, 0))\nend\n'
     result = agentica("--json", "--deny-native", program(tmp_path, text))
     assert result.stdout == ""
     assert diagnostic(result, 2)[0] == ("RUNTIME-NATIVE-DENIED" if NATIVE else "RUNTIME-NATIVE-UNSUPPORTED")
@@ -752,19 +749,37 @@ end
 
 # The block form of Native.memory_pointer yields a new buffer, frees it when the block ends and returns the block's
 # value: a buffer that the block gives back is freed, and so is one when the block ends early with an error that a
-# `try` returned (the block hands its buffer out over a channel to show it).
+# `try` returned (the block hands its buffer out over a channel to show it). A task cancelled while its block is
+# parked ends, and its end frees the buffer; nested block forms free each buffer at the end of its own block. Each
+# case reads a freed buffer last, which is RUNTIME-NATIVE-CLOSED.
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
 @pytest.mark.parametrize("tail, out", [
     ("  kept = Native.memory_pointer(8) do |buf| buf end\n", "9.5\n"),
     ("  failed = Native.memory_pointer(8) do |buf| first(buf, out) end\n  puts(failed.ok?)\n"
      "  kept = out.recv(1000).unwrap!\n", "9.5\nfalse\n"),
+    ("  worker = Task.spawn(&park, out)\n  kept = out.recv(5000).unwrap!\n  Task.cancel(worker)\n"
+     "  puts(Task.await(worker).ok?)\n", "9.5\nfalse\n"),
+    ("  kept = Native.memory_pointer(8) do |outer|\n    Native.put_int32(outer, 0, 5)\n"
+     "    inner = Native.memory_pointer(8) do |buf|\n      Native.put_int32(buf, 0, 7)\n"
+     "      puts(Native.get_int32(outer, 0) + Native.get_int32(buf, 0))\n      buf\n    end\n"
+     "    puts(Native.get_int32(outer, 0))\n    inner\n  end\n", "9.5\n12\n5\n"),
+    ("  kept = Native.memory_pointer(8) do |outer|\n"
+     "    Native.memory_pointer(8) do |buf| Native.put_int32(buf, 0, 7) end\n    outer\n  end\n", "9.5\n"),
 ])
 def test_the_block_form_frees_its_buffer_when_the_block_ends(tmp_path, peer, schedulers, tail, out):
     main = """def first(buf: C.Pointer, out: Channel[C.Pointer]) -> Result[Int]
   try out.send(buf, 1000)
   n = try "x".to_i
   return ok(n)
+end
+
+def park(out: Channel[C.Pointer]) -> Result[Void]
+  return Native.memory_pointer(8) do |buf|
+    try out.send(buf, 5000)
+    Task.sleep(60_000)
+    ok()
+  end
 end
 
 def main() -> Void
@@ -779,6 +794,29 @@ end
 """ % tail
     where = (BUFFER_EXTERN.count("\n") + main.count("\n") - 1, 24)
     assert stopped_buffer_program(tmp_path, peer, schedulers, main, out) == ("RUNTIME-NATIVE-CLOSED", where)
+
+
+# Ownership wins over the block: a buffer that the block hands to a child with Task.spawn_owning is not freed at the
+# block's end, so the child, which reads it after the block ended, sums what was written; its own end frees it.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_the_block_form_leaves_a_handed_buffer_to_its_new_owner(tmp_path, peer, schedulers):
+    main = """def sum_later(buf: C.Pointer) -> Float
+  Task.sleep(50)
+  return peer_sum_floats(buf, 2)
+end
+
+def main() -> Void
+  child = Native.memory_pointer(8) do |buf|
+    Native.put_array_of_float32(buf, 0, [1.5, 2.0])
+    Task.spawn_owning(&sum_later, buf)
+  end
+  puts(Task.await(child))
+end
+"""
+    text = BUFFER_EXTERN.format(library=literal(peer)) + main
+    result = agentica("--schedulers", schedulers, program(tmp_path, text))
+    assert (result.code, result.stdout, result.stderr) == (0, "3.5\n", "")
 
 
 # Task.spawn_owning hands an owned buffer to the new task, which uses it and whose end frees it; a pointer that C gave
@@ -805,30 +843,39 @@ end
 
 
 # A compute call holds its buffer arguments: a free while C still reads the memory only marks the buffer freed, and
-# the memory goes when the call returns, so C sums what was written.
+# the memory goes when the call returns, so C sums what was written. The same holds for the free at the end of a block
+# form, while a compute call of another task reads the buffer.
+HOLD_BUFFER = """for k in 0...64
+  Native.put_float32(buf, k * 4, 1.0)
+end
+task = Task.spawn(&sum_later, buf)
+n = 0
+while peer_res_holding() == 0 and n < 2000
+  Task.sleep(1)
+  n += 1
+end
+"""
+
+
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["1", "4"])
-def test_a_compute_call_keeps_its_buffer_until_it_returns(tmp_path, peer, schedulers):
+@pytest.mark.parametrize("form", ["free", "block"])
+def test_a_compute_call_keeps_its_buffer_until_it_returns(tmp_path, peer, schedulers, form):
+    if form == "free":
+        body = "  buf = Native.memory_pointer(256)\n" + textwrap.indent(HOLD_BUFFER, "  ") + \
+            "  Native.free(buf)\n  holder = task\n"
+    else:
+        body = "  holder = Native.memory_pointer(256) do |buf|\n" + textwrap.indent(HOLD_BUFFER, "    ") + \
+            "    task\n  end\n"
     main = """def sum_later(buf: C.Pointer) -> Result[Float]
   return ok(peer_floats_hold(buf, 64, 20_000))
 end
 
 def main() -> Void
-  buf = Native.memory_pointer(256)
-  for k in 0...64
-    Native.put_float32(buf, k * 4, 1.0)
-  end
-  holder = Task.spawn(&sum_later, buf)
-  n = 0
-  while peer_res_holding() == 0 and n < 2000
-    Task.sleep(1)
-    n += 1
-  end
-  Native.free(buf)
-  peer_set_flag()
+%s  peer_set_flag()
   puts(Task.await(holder))
 end
-"""
+""" % body
     result = agentica("--schedulers", schedulers, program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
     assert (result.code, result.stdout, result.stderr) == (0, "ok(64.0)\n", "")
 
@@ -1098,7 +1145,7 @@ def main() -> Void
   puts(close_file(fd))
   buffer = malloc(64)
   puts(snprintf(buffer, 64, "%%d %%.2f %%s %%s", 42, 2.5, "hi", [121, 111, 0]))
-  puts(Native.string_at(buffer))
+  puts(Native.get_string(buffer, 0))
   free(buffer)
 end
 """ % (library, opened, closed, literal(made), flags, mode)
@@ -1685,7 +1732,7 @@ SQLITE_MEMORY_EXTERN = SQLITE_OUT_EXTERN.replace("  def sqlite3_column_text(stmt
 # A blob and a text bound with SQLITE_TRANSIENT (SQLite copies them: the C.String and C.Bytes copies live only during
 # the call) come back through sqlite3_column_blob and sqlite3_column_text with their lengths; a row of SQL NULLs gives
 # NULL pointers, and an empty blob a NULL pointer with length 0, which reads as []. sqlite3_exec writes its error
-# message to an out pointer, which string_at reads and sqlite3_free
+# message to an out pointer, which get_string reads and sqlite3_free
 # frees; a statement that works leaves it NULL.
 @NATIVE_CALLS
 def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tmp_path, sqlite):
@@ -1701,9 +1748,9 @@ def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tm
   puts(sqlite3_exec(db, "insert into t values (2, null, null)", Native.null(), Native.null()).result)
   query = sqlite3_prepare_v2(db, "select b, s from t order by id", -1).stmt
   puts(sqlite3_step(query))
-  puts(Native.bytes_at(sqlite3_column_blob(query, 0), sqlite3_column_bytes(query, 0)))
-  puts(Native.string_at(sqlite3_column_text(query, 1), sqlite3_column_bytes(query, 1)))
-  puts(Native.string_at(sqlite3_column_text(query, 1)))
+  puts(Native.get_bytes(sqlite3_column_blob(query, 0), 0, sqlite3_column_bytes(query, 0)))
+  puts(Native.get_string(sqlite3_column_text(query, 1), 0, sqlite3_column_bytes(query, 1)))
+  puts(Native.get_string(sqlite3_column_text(query, 1), 0))
   puts(sqlite3_step(query))
   puts([Native.null?(sqlite3_column_blob(query, 0)), Native.null?(sqlite3_column_text(query, 1))])
   Native.close(query)
@@ -1711,11 +1758,11 @@ def test_the_system_sqlite_gives_blobs_null_text_and_error_messages_as_memory(tm
   puts(sqlite3_step(empty))
   blob_at = sqlite3_column_blob(empty, 0)
   puts(Native.null?(blob_at))
-  puts(Native.bytes_at(blob_at, sqlite3_column_bytes(empty, 0)))
+  puts(Native.get_bytes(blob_at, 0, sqlite3_column_bytes(empty, 0)))
   Native.close(empty)
   failed = sqlite3_exec(db, "select from nowhere", Native.null(), Native.null())
   puts(failed.result)
-  puts(Native.string_at(failed.errmsg).end_with?("syntax error"))
+  puts(Native.get_string(failed.errmsg, 0).end_with?("syntax error"))
   sqlite3_free(failed.errmsg)
   puts(Native.null?(sqlite3_exec(db, "select 1", Native.null(), Native.null()).errmsg))
   Native.close(db)

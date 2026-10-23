@@ -1,6 +1,6 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
    the prepared-call cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one,
-   the memory reads (get_string, get_bytes, old names), owned buffers with typed reads and writes and put_bytes
+   the memory reads (get_string, get_bytes), owned buffers with typed reads and writes and put_bytes
    (bounds, NULL, freed, no_files), and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
@@ -290,30 +290,31 @@ static void read_fails(const char *name, uint32_t arity, agc_value *args, const 
 
 static void test_reads(void) {
   static const char data[] = "ab\0c";
-  agc_value at[2] = {agc_c_pointer_value((void *)data), agc_int(4)};
-  assert(agc_as_string(&vm, row("Native.string_at", 1)(&vm, at, 0))->bytes == 2);
-  assert(agc_as_string(&vm, row("Native.string_at", 2)(&vm, at, 0))->bytes == 4);
-  assert(agc_list_len(agc_as_list(&vm, row("Native.bytes_at", 2)(&vm, at, 0))) == 4);
-  /* The Ruby names read from an offset: "c" after the NUL, and the bytes from there. */
+  /* (pointer, offset, length): at offset 0 the text ends at the NUL, and a length reads past it. */
+  agc_value at[3] = {agc_c_pointer_value((void *)data), agc_int(0), agc_int(4)};
+  assert(agc_as_string(&vm, row("Native.get_string", 2)(&vm, at, 0))->bytes == 2);
+  assert(agc_as_string(&vm, row("Native.get_string", 3)(&vm, at, 0))->bytes == 4);
+  assert(agc_list_len(agc_as_list(&vm, row("Native.get_bytes", 3)(&vm, at, 0))) == 4);
+  /* From an offset: "c" after the NUL, and the bytes from there. */
   agc_value from[3] = {at[0], agc_int(3), agc_int(1)};
   assert(agc_as_string(&vm, row("Native.get_string", 2)(&vm, from, 0))->bytes == 1);
   assert(agc_as_string(&vm, row("Native.get_string", 3)(&vm, from, 0))->data[0] == 'c');
   assert(agc_as_int(&vm, agc_list_get(agc_as_list(&vm, row("Native.get_bytes", 3)(&vm, from, 0)), 0)) == 'c');
   /* The pointer first: NULL fails before a negative length, and only NULL with length 0 reads as empty. */
-  agc_value null_at[2] = {agc_c_pointer_value(NULL), agc_int(0)};
-  assert(agc_as_string(&vm, row("Native.string_at", 2)(&vm, null_at, 0))->bytes == 0);
-  assert(agc_list_len(agc_as_list(&vm, row("Native.bytes_at", 2)(&vm, null_at, 0))) == 0);
-  read_fails("Native.string_at", 1, null_at, "RUNTIME-NATIVE-NULL");
-  null_at[1] = agc_int(-1);
-  read_fails("Native.bytes_at", 2, null_at, "RUNTIME-NATIVE-NULL");
-  at[1] = agc_int(-1);
-  read_fails("Native.string_at", 2, at, "RUNTIME-INVALID-COUNT");
-  read_fails("Native.bytes_at", 2, at, "RUNTIME-INVALID-COUNT");
+  agc_value null_at[3] = {agc_c_pointer_value(NULL), agc_int(0), agc_int(0)};
+  assert(agc_as_string(&vm, row("Native.get_string", 3)(&vm, null_at, 0))->bytes == 0);
+  assert(agc_list_len(agc_as_list(&vm, row("Native.get_bytes", 3)(&vm, null_at, 0))) == 0);
+  read_fails("Native.get_string", 2, null_at, "RUNTIME-NATIVE-NULL");
+  null_at[2] = agc_int(-1);
+  read_fails("Native.get_bytes", 3, null_at, "RUNTIME-NATIVE-NULL");
+  at[2] = agc_int(-1);
+  read_fails("Native.get_string", 3, at, "RUNTIME-INVALID-COUNT");
+  read_fails("Native.get_bytes", 3, at, "RUNTIME-INVALID-COUNT");
   vm.rt->no_files = true;
-  at[1] = agc_int(1);
-  read_fails("Native.string_at", 1, at, "RUNTIME-NATIVE-DENIED");
-  read_fails("Native.string_at", 2, at, "RUNTIME-NATIVE-DENIED");
-  read_fails("Native.bytes_at", 2, at, "RUNTIME-NATIVE-DENIED");
+  at[2] = agc_int(1);
+  read_fails("Native.get_string", 2, at, "RUNTIME-NATIVE-DENIED");
+  read_fails("Native.get_string", 3, at, "RUNTIME-NATIVE-DENIED");
+  read_fails("Native.get_bytes", 3, at, "RUNTIME-NATIVE-DENIED");
   vm.rt->no_files = false;
 }
 

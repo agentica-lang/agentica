@@ -7,7 +7,6 @@ import {
   BUILTIN_ROWS,
   ENUMS as DATA_ENUMS,
   HANDLE_TYPES,
-  OLD_NAMES as DATA_OLD_NAMES,
   OPAQUE_TYPES as DATA_OPAQUE_TYPES,
   RECORDS as DATA_RECORDS,
   RESERVED_TYPE_NAMES,
@@ -44,10 +43,8 @@ end
 
 export PRELUDE_ONLY = Set.new(DATA_PRELUDE_ONLY)
 
-export OLD_NAMES = DATA_OLD_NAMES
-
 export PUBLIC_NAMES = ENTRIES.keys.filter do |name|
-  !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name) and !OLD_NAMES.has_key?(name)
+  !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name)
 end
 
 export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") end)

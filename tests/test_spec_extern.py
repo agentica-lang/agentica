@@ -384,13 +384,15 @@ def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
 
 # Native.get_string and get_bytes read memory at a C.Pointer (not a resource) with an Int offset and length, put_bytes
 # writes a List[Int], and Native.pointer makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it,
-# and a wrong count CHECK-ARITY. The old names string_at and bytes_at still check.
+# and a wrong count CHECK-ARITY. The old names string_at and bytes_at are CHECK-UNKNOWN-NAME, with a help that gives
+# the call with offset 0.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  s: String = Native.get_string(db_handle(db_open().unwrap!), 1, 3)\n"
      "  b: List[Int] = Native.get_bytes(Native.pointer(-1), 0, 0)\n"
      "  Native.put_bytes(Native.pointer(1), 0, b)\n"
-     "  old = Native.string_at(Native.null(), 0) + Native.bytes_at(Native.null(), 0).size.to_s\n"
-     "  puts(s + Native.get_string(Native.null(), 0) + b.size.to_s + old)", None, None, None),
+     "  puts(s + Native.get_string(Native.null(), 0) + b.size.to_s)", None, None, None),
+    ("  puts(Native.string_at(Native.null(), 3))", "CHECK-UNKNOWN-NAME", (8, 8), (8, 42)),
+    ("  puts(Native.bytes_at(Native.null(), 3).size)", "CHECK-UNKNOWN-NAME", (8, 8), (8, 41)),
     ('  puts(Native.get_string("x", 0))', "CHECK-TYPE-MISMATCH", (8, 26), (8, 29)),
     ("  db = db_open().unwrap!\n  puts(Native.get_string(db, 0))", "CHECK-TYPE-MISMATCH", (9, 26), (9, 28)),
     ('  puts(Native.get_string(Native.null(), "3"))', "CHECK-TYPE-MISMATCH", (8, 41), (8, 44)),

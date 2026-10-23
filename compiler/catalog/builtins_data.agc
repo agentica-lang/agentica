@@ -208,13 +208,6 @@ export ENUMS: List[Model.EnumDef] = [
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
 
-## The old names of builtins renamed to their Ruby name, with the new name: a program that calls one still runs, and no
-## listing, suggestion or help shows it (`agentica help OLD` shows the new builtin).
-export OLD_NAMES: Map[String, String] = {
-  "Native.bytes_at": "Native.get_bytes",
-  "Native.string_at": "Native.get_string",
-}
-
 ## The builtin types with no structure: handles, TestCase and C.Pointer (a C pointer of native code).
 export OPAQUE_TYPES: List[String] = [
   "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "C.Pointer",
@@ -2453,19 +2446,6 @@ ROWS_28: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
-      name: "Native.bytes_at",
-      parameters: [
-        Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
-        Model.Named(name: "length", type: Types.Type.Int),
-      ],
-      result: Types.Type.List(Types.Type.Int),
-      rule: Model.Rule.Plain,
-      implementation: "Native.bytes_at",
-      effects: ["native"],
-      description: "Old name of Native.get_bytes(pointer, 0, length), kept so that older programs run.",
-      alternatives: [],
-    ),
-    Model.Builtin(
       name: "Native.close",
       parameters: [Model.Named(name: "resource", type: Types.Type.Var("R"))],
       result: Types.Type.Void,
@@ -3039,30 +3019,6 @@ ROWS_28: List[Model.Builtin] = [
         "is RUNTIME-INVALID-CHARACTER."
       ),
       alternatives: [],
-    ),
-    Model.Builtin(
-      name: "Native.string_at",
-      parameters: [Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer"))],
-      result: Types.Type.String,
-      rule: Model.Rule.Plain,
-      implementation: "Native.string_at",
-      effects: ["native"],
-      description: "Old name of Native.get_string(pointer, 0), kept so that older programs run.",
-      alternatives: [
-        Model.Builtin(
-          name: "Native.string_at",
-          parameters: [
-            Model.Named(name: "pointer", type: Types.Type.Opaque("C.Pointer")),
-            Model.Named(name: "length", type: Types.Type.Int),
-          ],
-          result: Types.Type.String,
-          rule: Model.Rule.Plain,
-          implementation: "Native.string_at",
-          effects: ["native"],
-          description: "Old name of Native.get_string(pointer, 0, length), kept so that older programs run.",
-          alternatives: [],
-        ),
-      ],
     ),
     Model.Builtin(
       name: "Native.wait_readable",

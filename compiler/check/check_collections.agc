@@ -237,7 +237,7 @@ def check_block_value(
   first: T.Type,
   params: List[T.Type],
 ) -> Result[State.Out]
-  label = try State.expr(cx, st, site.args[0], first)
+  leading = try State.expr(cx, st, site.args[0], first)
   wanted = site.expected
   if CheckTypes.has_variables?(wanted)
     wanted = T.Type.Unknown
@@ -246,10 +246,10 @@ def check_block_value(
   case callback
     Ast.Expr.BlockLit(block) ->
       known = Ast.Optional.Present(params)
-      checked = try Stmt.check_block_body(cx, label.st, block, known, wanted, Ast.Optional.Absent)
+      checked = try Stmt.check_block_body(cx, leading.st, block, known, wanted, Ast.Optional.Absent)
       return ok(State.Out(st: checked.st, type: T.result(checked.type)))
     _ ->
-      checked = try State.expr(cx, label.st, callback, T.Type.Unknown)
+      checked = try State.expr(cx, leading.st, callback, T.Type.Unknown)
       if !T.is?(checked.type, "Fn") or !T.same_all?(T.params(checked.type), params)
         return error(
           State.fail(

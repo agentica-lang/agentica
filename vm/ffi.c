@@ -115,7 +115,7 @@ typedef struct {
 } native_wait;
 
 /* The kinds of item that the typed reads and writes move: Native.get_int8 to get_pointer, put_int8 to put_pointer, the
-   array forms and put_bytes (ITEM_BYTE, 0 to 255 only). ITEM_WIDTHS has the size of each. */
+   array forms, get_bytes and put_bytes (ITEM_BYTE, written only from 0 to 255). ITEM_WIDTHS has the size of each. */
 typedef enum {
   ITEM_INT8, ITEM_INT16, ITEM_INT32, ITEM_INT64, ITEM_UINT8, ITEM_UINT16, ITEM_UINT32, ITEM_FLOAT32, ITEM_FLOAT64,
   ITEM_POINTER, ITEM_BYTE
@@ -859,15 +859,18 @@ static agc_value builtin_memory_pointer(agc_vm *vm, agc_value *args, uint32_t sp
 }
 
 /* The first step calls the block with the buffer; the second frees the buffer, as Native.free does, and ends the call
-   with what the block returned, an error Result from a `try` included. A runtime failure in the block never comes
-   back here: it ends the task, and the owner's end frees the buffer. Runs under rt->sync (not `unlocked`). */
+   with what the block returned, an error Result from a `try` included. Ownership wins: a buffer that the block handed
+   to another task (Task.spawn_owning) is left to its new owner, whose end frees it. A runtime failure in the block
+   never comes back here: it ends the task, and the owner's end frees the buffer. */
 static agc_step buffer_block_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   buffer_block *b = (buffer_block *)self;
   if (!b->called) {
     b->called = true;
     return (agc_step){.kind = AGC_STEP_CALL, .value = b->buffer, .fn = agc_void()};
   }
-  close_resource(vm, agc_as_c_resource(vm, b->buffer));
+  /* The stepper is not `unlocked`, so this step runs with rt->sync held, which the owner check and close_resource
+     need. A buffer freed in the block has no owner any more and is left as it is. */
+  if (agc_task_owns(vm, b->buffer)) close_resource(vm, agc_as_c_resource(vm, b->buffer));
   return (agc_step){.kind = AGC_STEP_END, .value = last};
 }
 
@@ -928,8 +931,8 @@ static void memory_done(agc_vm *vm, bool locked) {
   if (locked) agc_sync_drop(vm);
 }
 
-/* The text at OFFSET bytes past the pointer P (Native.get_string(pointer, offset), and string_at(pointer), its old
-   name, at offset 0): a copy up to the first NUL. In an owned buffer the text must end before the buffer does. */
+/* The text at OFFSET bytes past the pointer P (Native.get_string(pointer, offset)): a copy up to the first NUL. In an
+   owned buffer the text must end before the buffer does. */
 static agc_value text_until_nul(agc_vm *vm, agc_value p, int64_t offset, uint32_t offset_span, uint32_t span) {
   agc_c_resource *res = buffer_of(vm, p);
   bool locked;
@@ -941,16 +944,6 @@ static agc_value text_until_nul(agc_vm *vm, agc_value p, int64_t offset, uint32_
   return text;
 }
 
-/* A copy of exactly the bytes that ASK names, as a String (NUL bytes included) or, with BYTES, as a List of bytes. */
-static agc_value copy_of(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span, bool bytes) {
-  bool locked;
-  const uint8_t *at = memory_at(vm, p, ask, span, &locked);
-  size_t n = (size_t)ask.count;
-  agc_value copy = bytes ? agc_list_value(agc_list_of_bytes(at, n)) : text_value(at, n);
-  memory_done(vm, locked);
-  return copy;
-}
-
 /* Native.get_string(pointer, offset) and get_string(pointer, offset, length), Ruby ffi's get_string: the text from
    OFFSET bytes past the pointer up to its NUL, or exactly LENGTH bytes. */
 static agc_value builtin_get_string(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -959,28 +952,11 @@ static agc_value builtin_get_string(agc_vm *vm, agc_value *args, uint32_t span) 
 
 static agc_value builtin_get_string_length(agc_vm *vm, agc_value *args, uint32_t span) {
   memory_ask ask = {agc_as_int(vm, args[1]), agc_as_int(vm, args[2]), 1, span + 2, span + 3};
-  return copy_of(vm, args[0], ask, span, false);
-}
-
-/* Native.get_bytes(pointer, offset, length), Ruby ffi's get_bytes: a List of the LENGTH bytes from OFFSET bytes past
-   the pointer. */
-static agc_value builtin_get_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  memory_ask ask = {agc_as_int(vm, args[1]), agc_as_int(vm, args[2]), 1, span + 2, span + 3};
-  return copy_of(vm, args[0], ask, span, true);
-}
-
-/* Native.string_at(pointer), string_at(pointer, length) and bytes_at(pointer, length): the old names of get_string and
-   get_bytes at offset 0, kept so that programs written before still run. */
-static agc_value builtin_string_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  return text_until_nul(vm, args[0], 0, span + 1, span);
-}
-
-static agc_value builtin_string_at_length(agc_vm *vm, agc_value *args, uint32_t span) {
-  return copy_of(vm, args[0], (memory_ask){0, agc_as_int(vm, args[1]), 1, span + 2, span + 2}, span, false);
-}
-
-static agc_value builtin_bytes_at(agc_vm *vm, agc_value *args, uint32_t span) {
-  return copy_of(vm, args[0], (memory_ask){0, agc_as_int(vm, args[1]), 1, span + 2, span + 2}, span, true);
+  bool locked;
+  const uint8_t *at = memory_at(vm, args[0], ask, span, &locked);
+  agc_value text = text_value(at, (size_t)ask.count);
+  memory_done(vm, locked);
+  return text;
 }
 
 /* The item of KIND at AT, which may be unaligned (memcpy). */
@@ -1188,7 +1164,11 @@ static agc_value builtin_put_floats32(agc_vm *vm, agc_value *args, uint32_t span
 static agc_value builtin_put_floats64(agc_vm *vm, agc_value *args, uint32_t span) {
   return put_array(vm, args, span, ITEM_FLOAT64);
 }
-/* Native.put_bytes(pointer, offset, bytes), Ruby ffi's put_bytes with a List of bytes for its String. */
+/* Native.get_bytes(pointer, offset, length) and put_bytes(pointer, offset, bytes), Ruby ffi's get_bytes and put_bytes
+   with a List of bytes for their String. */
+static agc_value builtin_get_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
+  return get_array(vm, args, span, ITEM_BYTE);
+}
 static agc_value builtin_put_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
   return put_array(vm, args, span, ITEM_BYTE);
 }
@@ -1308,9 +1288,6 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
-  {"Native.string_at", 1, builtin_string_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.string_at", 2, builtin_string_at_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
-  {"Native.bytes_at", 2, builtin_bytes_at, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.get_string", 2, builtin_get_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.get_string", 3, builtin_get_string_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.get_bytes", 3, builtin_get_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},

@@ -763,6 +763,12 @@
   "stdout": "map.get(key: K) -> Result[V]\nmap.get(key: K, default: V) -> V\nRead a value as a Result, or supply an eagerly evaluated default as a third argument.\n",
   "written": []
  },
+ "[[\"help\", \"Native.string_at\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin Native.string_at; use Native.get_string(p, 0) for Native.string_at(p), and Native.get_string(p, 0, length) for Native.string_at(p, length): its second argument is an offset\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"help\", \"Nope\"], {}]": {
   "code": 2,
   "stderr": "agentica: unknown builtin Nope\n",

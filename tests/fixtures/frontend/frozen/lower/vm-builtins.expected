@@ -125,7 +125,6 @@ Map.keys
 Map.put
 Map.size
 Map.values
-Native.bytes_at
 Native.close
 Native.free
 Native.get_array_of_float32
@@ -161,7 +160,6 @@ Native.put_int64
 Native.put_int8
 Native.put_pointer
 Native.put_string
-Native.string_at
 Native.wait_readable
 Native.wait_writable
 Path.cwd

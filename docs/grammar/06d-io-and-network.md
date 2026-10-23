@@ -415,7 +415,8 @@ end
   the owner's end frees it, and when `main` returns the program ends without
   freeing it. `Native.memory_pointer(size) do |p| ... end` gives a new buffer to
   the block, frees it when the block ends (also when it returns an error early
-  with `try`) and has the block's value. `Task.spawn_owning` hands it over
+  with `try`) and has the block's value; a buffer that the block hands to
+  another task is left to that owner. `Task.spawn_owning` hands it over
   (section 6c); a channel send or a task's result does not move it. A size the
   system cannot give, and any size above 256 TiB (2^48 bytes), is
   `RUNTIME-INVALID-COUNT`. A `compute def` call holds its buffer arguments as it

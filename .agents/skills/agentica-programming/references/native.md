@@ -57,8 +57,9 @@ end
   as `Native.close` ends a resource; the owner's end frees the rest, so a loop
   that never frees grows. `Native.memory_pointer(size) do |buf| ... end` frees
   it when the block ends (an error returned with `try` too) and gives the
-  block's value: prefer it for a buffer of one call. `Task.spawn_owning(&f,
-  buf)` hands a buffer over; a channel send or a task's result does not. A
+  block's value: prefer it for a buffer of one call (one handed to another
+  task is left to its new owner). `Task.spawn_owning(&f, buf)` hands a buffer
+  over; a channel send or a task's result does not. A
   `compute def` call holds it (reading or writing it meanwhile races with C). A
   freed one is `RUNTIME-NATIVE-CLOSED`; `Native.free` of C's pointer
   `RUNTIME-NATIVE-NOT-OWNED`. `put_pointer` stores an untracked address: keep
