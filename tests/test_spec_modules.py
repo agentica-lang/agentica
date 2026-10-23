@@ -206,6 +206,38 @@ class TestModuleRules:
             "root.agc": 'import B from "b"\n\ndef main() -> Void\n'
                         "  x = B.get().with(n: 2)\nend\n\n"}), "CHECK-IMPORT-NAME")
 
+    def test_an_exported_constant_is_read_through_the_alias_like_an_exported_function(self):
+        lib = ("HIDDEN = 5\nexport LIMIT = HIDDEN + 1\nexport NAMES = [\"a\"]\nexport CONFIG = Config(port: 80)\n\n"
+               "export struct Config\n  port: Int\nend\n\n")
+        header = 'import Lib from "lib"\n\ndef main() -> Void\n'
+        good = ("  x = Lib.LIMIT + 1\n  puts(Lib.NAMES.size)\n  puts(Lib.CONFIG.port)\n"
+                "  moved: Lib.Config = Lib.CONFIG.with(port: 81)\n  puts(\"#{Lib.LIMIT}\")\n")
+        cases = [good, "  puts(Lib.HIDDEN)\n", "  puts(Lib.HIDDEN.size)\n", "  puts(Lib.MISSING)\n"]
+        checked = self.checks([({"lib.agc": lib, "root.agc": header + body + "end\n"}, "root.agc", None)
+                               for body in cases])
+        assert checked[0][1] is None
+        # A private constant, and one that does not exist, are refused like a private function, at the member.
+        for refused in checked[1:]:
+            assert start(self.assert_rejected(refused, "CHECK-IMPORT-NAME")) == (4, 8)
+        # A constant is no function and no type.
+        wrong = self.checks([({"lib.agc": lib, "root.agc": header + body + "end\n"}, "root.agc", None)
+                             for body in ("  puts(Lib.LIMIT())\n", "  x: Lib.LIMIT = 1\n")])
+        for checked_wrong in wrong:
+            self.assert_rejected(checked_wrong, "CHECK-TYPE-MISMATCH", line=4)
+
+    def test_a_constant_through_the_alias_sits_beside_enum_variants_and_blocks(self):
+        lib = "export LIMIT = 3\nexport NAMES = [\"a\"]\n\nexport enum Shade\n  Dark\n  Light(Int)\nend\n\n"
+        local = "enum Level\n  HIGH\nend\n\nenum Mix\n  Low\nend\n\n"
+        header = 'import Lib from "lib"\n\n' + local + "def main() -> Void\n"
+        bodies = ["  a = Lib.Shade.Dark\n  b = Lib.Shade.Light(Lib.LIMIT)\n  puts(Lib.LIMIT.to_s + a.to_s + b.to_s)\n",
+                  "  puts(Lib.NAMES.map do |name| name + \"!\" end)\n"
+                  "  puts(Lib.NAMES.reduce(0) do |n, name| n + 1 end)\n",
+                  # A method on a variant reads the same for an all-capitals variant and a CamelCase one.
+                  "  puts(Level.HIGH.to_s)\n  puts(Mix.Low.to_s)\n  puts(Lib.Shade.Dark.to_s)\n"]
+        checked = self.checks([({"lib.agc": lib, "root.agc": header + body + "end\n"}, "root.agc", None)
+                               for body in bodies])
+        assert [problem for _directory, problem in checked] == [None, None, None]
+
     def test_cycles_are_reported_in_the_file_that_closes_them(self):
         checked = self.check({
             "root.agc": 'import A from "a"\n' + MAIN,

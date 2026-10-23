@@ -228,10 +228,10 @@ type:
   - **Help:** constants are set at the top level and never change; use a local
     with a lowercase name
 
-- **Written:** `Limits.MAX` or `Limits.MAX()` for a constant `MAX`
-  (`CHECK-IMPORT-NAME`)
-  - **Help:** `import {MAX} from "limits"`, then use `MAX`; a constant is not
-    reached through the alias
+- **Written:** `Limits.MAX()` or `x: Limits.MAX` for a constant `MAX`
+  (`CHECK-TYPE-MISMATCH`)
+  - **Help:** none; a constant is read as `Limits.MAX`, with no parentheses, and
+    is not a type
 
 - **Written:** code nested more than 1,000 levels deep (`PARSE-TOO-DEEP`):
   parentheses, brackets, blocks, statements, prefix operators, type arguments,

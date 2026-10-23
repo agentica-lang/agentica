@@ -397,7 +397,8 @@ def rewrite_block(cx: Resolve.Context, node: Ast.BlockLit) -> Result[Ast.Expr]
 end
 
 # Enum.Variant, written without parentheses, is a variant of an enum of this file, one imported by name or a builtin
-# one; a name that is a constant of this file is a read of it; any other name is a type.
+# one; a name that is a constant of this file, imported by name or exported by an alias (Alias.NAME) is a read of it;
+# any other name is a type.
 def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Expr]
   parts = node.name.split(".")
   if parts.size == 2 and Resolve.local_enum?(cx, parts[0])
@@ -412,11 +413,23 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
   if parts.size == 1 and constant != ""
     return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: constant, span: node.span)))
   end
+  alias_constant = Resolve.alias_constant_identity(cx, node.name)
+  if alias_constant != ""
+    return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: alias_constant, span: member_only(node, parts[1]))))
+  end
   if parts.size == 1 and Resolve.unknown_constant?(cx, node.name)
     return error(Resolve.unknown_constant_failure(cx, node.name, node.span))
   end
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Type, node.span, true)
   return ok(Ast.Expr.TypeName(node.with(name: name)))
+end
+
+# The span of the member in `Alias.NAME`, so that a rename of the constant keeps the alias (as for `Alias.f(...)`).
+# The node comes from `parse_qualified_member`, whose span ends at the member.
+def member_only(node: Ast.TypeName, member: String) -> Source.Span
+  stop = node.span.stop
+  start = Source.Position(offset: stop.offset - member.length, line: stop.line, column: stop.column - member.length)
+  return Source.Span(start: start, stop: stop)
 end
 
 def variant(

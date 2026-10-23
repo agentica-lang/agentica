@@ -59,9 +59,9 @@ Change style only in code you touch. Restyle untouched code separately.
 - Export only names used by other files. Keep one topic per file; split files
   that grow into several topics.
 - Use `import Alias from "path"` for many names or possible collisions;
-  `import {a, B} from "path"` for one or two frequent names. Use both for one
-  module only to read its constants beside qualified calls (`Mod.LIMIT` is
-  `CHECK-IMPORT-NAME`; two styles go on two lines).
+  `import {a, B} from "path"` for one or two frequent names. A constant reads
+  through the alias too (`Mod.LIMIT`), so one import is enough; import a
+  constant by name only when it is used often.
 - Add a descriptive local type alias when a composite/qualified type recurs;
   don't alias a short, clear type.
 - The first `##` block, then a blank line, is the module doc. Document as little
