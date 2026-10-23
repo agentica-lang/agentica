@@ -1,7 +1,7 @@
 /*
  * What only the core and the driver call: VM setup and the scheduler entry
  * points, the loader, the diagnostic printers, stdin, output and the loop,
- * the numeric opcode helpers (`agc_op_*`) and the builtin table type. Core
+ * the opcode helpers (`agc_op_*`) and the builtin table type. Core
  * header. Design: docs/vm/15-layers.md §15.4.
  */
 #ifndef AGC_CORE_H
@@ -206,30 +206,46 @@ uint64_t agc_task_steps(const agc_vm *vm);
 bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper);
 agc_turn_result agc_run_turn(agc_vm *vm);
 
-/* Opcode helpers: the arithmetic, comparison and equality opcodes as pure functions of `agc_value`s, shared by
- * the interpreter and a future JIT. On an error (overflow, division by zero) they call agc_fail, which longjmps:
- * they never return an error value. `span` is the span of the running instruction (`spans[pc - 1]`). An operand
- * of the wrong tag fails with RUNTIME-INTERNAL at span 0. The caller keeps the step count and the turn cost: the
- * cost of an EQ, NE or SAME on strings or ranges is charged by the interpreter's apply_cost, which a JIT must
- * charge too. */
-agc_value agc_op_add_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
-agc_value agc_op_sub_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
-agc_value agc_op_mul_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
-agc_value agc_op_div_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
-agc_value agc_op_mod_i(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
-agc_value agc_op_neg_i(agc_vm *vm, agc_value value, uint32_t span);
-agc_value agc_op_add_f(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_sub_f(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_mul_f(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_div_f(agc_vm *vm, agc_value left, agc_value right, uint32_t span);
-agc_value agc_op_neg_f(agc_vm *vm, agc_value value);
-agc_value agc_op_lt_i(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_le_i(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_lt_f(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_le_f(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_eq(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_ne(agc_vm *vm, agc_value left, agc_value right);
-agc_value agc_op_same(agc_vm *vm, agc_value left, agc_value right);
+/* Opcode helpers: the arithmetic, comparison, equality and list opcodes, shared by the interpreter
+ * (vm/interp.c inlines them) and the JIT (docs/future/22-jit.md §22, "Helper contract"). Values go by pointer: `dst`
+ * is the result register, written only on AGC_STATUS_OK, and it may be an operand. A helper never fails itself (no
+ * agc_fail, no longjmp): it returns a status, and the caller turns a status other than OK into the failure with
+ * agc_op_fail, outside compiled code. The caller also keeps the step count and the turn cost: EQ, NE and SAME on
+ * Strings add to the task's turn cost (agc_charge), which the caller applies after the instruction as the
+ * interpreter's apply_cost does. */
+typedef enum {
+  AGC_STATUS_OK = 0,
+  AGC_STATUS_OVERFLOW,           /* RUNTIME-INTEGER-OVERFLOW at the instruction's span */
+  AGC_STATUS_DIVISION_BY_ZERO,   /* RUNTIME-DIVISION-BY-ZERO at the instruction's span */
+  AGC_STATUS_INDEX_OUT_OF_RANGE, /* RUNTIME-INDEX-OUT-OF-RANGE at the instruction's span */
+  AGC_STATUS_WRONG_TAG           /* RUNTIME-INTERNAL at span 0 (agc_wrong_tag): only hand-made bytecode */
+} agc_status;
+
+agc_status agc_op_add_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_sub_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_mul_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_div_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_mod_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_neg_i(agc_vm *vm, agc_value *dst, const agc_value *a);
+agc_status agc_op_add_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_sub_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_mul_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_div_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_neg_f(agc_vm *vm, agc_value *dst, const agc_value *a);
+agc_status agc_op_lt_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_le_i(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_lt_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_le_f(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_eq(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_ne(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_same(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_list_len(agc_vm *vm, agc_value *dst, const agc_value *list);
+agc_status agc_op_list_get(agc_vm *vm, agc_value *dst, const agc_value *list, const agc_value *index);
+/* The failure of a helper's status, with agc_fail. `a` and `b` are the operands the helper was given:
+ * AGC_STATUS_INDEX_OUT_OF_RANGE needs both (the list and the index, named in the message), the other statuses read
+ * neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from
+ * compiled code. */
+_Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, const agc_value *b, uint32_t span);
 agc_outcome agc_vm_run(agc_vm *vm);
 
 void agc_profile_start(agc_vm *vm);

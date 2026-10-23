@@ -34,9 +34,10 @@ the multicore rules of `docs/vm/16-architecture.md`. No language change.
 - Black-box parity (`docs/vm/README.md` §1) holds: exit code, stdout, program
   stderr and diagnostic codes do not depend on the tier.
 
-**Code generation** (decided in the JIT PR). No LLVM or libgccjit at run time
-(size, and libgccjit is GPL). The release ships x86-64 (Linux, Windows,
-macOS) and arm64 (macOS), so the choice must cover both. Options seen in 2026:
+**Code generation:** our own emitter in C, one per architecture, with no new
+dependency: no LLVM or libgccjit at run time (size, and libgccjit is GPL), no
+sljit and no asmjit. The release ships x86-64 (Linux, Windows, macOS) and arm64
+(macOS), so there are two emitters. Options seen in 2026:
 
 | Option | Gain | Cost |
 | --- | --- | --- |
@@ -54,6 +55,33 @@ Sources: [Sparkplug](https://v8.dev/blog/sparkplug),
 [ZJIT load and store removal](https://railsatscale.com/2026-03-18-how-zjit-removes-redundant-object-loads-and-stores/),
 [PEP 836](https://peps.python.org/pep-0836/),
 [MIR](https://developers.redhat.com/articles/2022/02/16/code-specialization-mir-lightweight-jit-compiler).
+
+**Code layout:** the JIT lives in `vm/jit/`, in the core layer. `jit.h` is its
+only boundary with the interpreter: compile a function, enter compiled code,
+and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
+`emit_x64.c` and `emit_a64.c` encode the instructions, and `mem_posix.c` and
+`mem_windows.c` hold the code memory. Each file comes with its first use.
+
+**Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
+never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and
+JIT frames have no unwind info. A helper takes the VM, the result register and
+the operand registers by pointer (a 16-byte struct by value is passed
+differently by the SysV and Win64 conventions), writes the result only on
+success, and returns a status: `OK`, `OVERFLOW`, `DIVISION_BY_ZERO`,
+`INDEX_OUT_OF_RANGE` or `WRONG_TAG`. On any other status than `OK`, compiled
+code returns `{status, pc}`, and the interpreter, outside compiled code, calls
+`agc_op_fail` with the span of the instruction at `pc` (`WRONG_TAG` fails at
+span 0, as `agc_wrong_tag` does). Before that, the exit leaves the operand
+registers in the frame's register file (the `INDEX_OUT_OF_RANGE` message
+prints the list's length and the index) and sets `frame->pc` past the failing
+instruction, as the interpreter does before each instruction: the stack trace
+reads it. Helpers count no step and apply no turn cost:
+the caller runs the `STEP`s, and after `EQ`, `NE` and `SAME`, which add the
+bytes of a String compare to the task's turn cost, it applies the cost where
+the interpreter does. A helper never parks, yields or pushes a frame. Builtins
+fail with `agc_fail`, so compiled code does not call them directly. The C test
+`vm/tests/op_helpers_test.c` checks the statuses; the goldens check the
+failures that `agc_op_fail` makes of them.
 
 **Memory:** W^X: code is written RW, then made RX; never writable and
 executable at once for a thread. Linux uses `mprotect` and Windows
