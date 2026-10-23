@@ -129,7 +129,9 @@ and a task's crash line (`"task":true`) carry it too.
   `CHECK-IMPORT-NAME`: a missing or unreadable import; an invalid path (with
   `.agc` or another extension too); a cycle; an unknown or private imported
   name. A private struct cannot be built or updated with `.with` from another
-  module. `Mod.NAME` on a constant is also `CHECK-IMPORT-NAME` (`modules.md`).
+  module. `Mod.NAME` reads an exported constant; a private or unknown name is
+  `CHECK-IMPORT-NAME`, and `Mod.NAME()` or `x: Mod.NAME` is `CHECK-TYPE-MISMATCH`
+  (`modules.md`).
 - `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in
   `deps/` (run `agentica install`), or a package file imports a `pkg/` name its
   own `agentica.toml` does not declare.

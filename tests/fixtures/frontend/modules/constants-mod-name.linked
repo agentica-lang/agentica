@@ -4,7 +4,7 @@ program #6 0:1:1-62:6:1
       result: type-ref #1 37:3:15-41:3:19 name="Void"
       body: expr-stmt #4 44:4:3-58:5:1
         value: call #3 44:4:3-57:4:16 name="puts" piped=false
-          arg: const-ref #2 49:4:8-56:4:15 name="@2::MAX"
+          arg: const-ref #2 53:4:12-56:4:15 name="@2::MAX"
   module "lib.agc"
     declaration: const-decl #1 0:1:1-10:2:1 name="@2::LIMIT"
       value: literal #0 8:1:9-9:1:10 value=int:4

@@ -225,6 +225,19 @@ class TestModuleRules:
         for checked_wrong in wrong:
             self.assert_rejected(checked_wrong, "CHECK-TYPE-MISMATCH", line=4)
 
+    def test_a_constant_through_the_alias_sits_beside_enum_variants_and_blocks(self):
+        lib = "export LIMIT = 3\nexport NAMES = [\"a\"]\n\nexport enum Shade\n  Dark\n  Light(Int)\nend\n\n"
+        local = "enum Level\n  HIGH\nend\n\nenum Mix\n  Low\nend\n\n"
+        header = 'import Lib from "lib"\n\n' + local + "def main() -> Void\n"
+        bodies = ["  a = Lib.Shade.Dark\n  b = Lib.Shade.Light(Lib.LIMIT)\n  puts(Lib.LIMIT.to_s + a.to_s + b.to_s)\n",
+                  "  puts(Lib.NAMES.map do |name| name + \"!\" end)\n"
+                  "  puts(Lib.NAMES.reduce(0) do |n, name| n + 1 end)\n",
+                  # A method on a variant reads the same for an all-capitals variant and a CamelCase one.
+                  "  puts(Level.HIGH.to_s)\n  puts(Mix.Low.to_s)\n  puts(Lib.Shade.Dark.to_s)\n"]
+        checked = self.checks([({"lib.agc": lib, "root.agc": header + body + "end\n"}, "root.agc", None)
+                               for body in bodies])
+        assert [problem for _directory, problem in checked] == [None, None, None]
+
     def test_cycles_are_reported_in_the_file_that_closes_them(self):
         checked = self.check({
             "root.agc": 'import A from "a"\n' + MAIN,

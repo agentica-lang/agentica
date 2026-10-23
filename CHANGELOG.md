@@ -12,7 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - An exported constant is read through the module alias, like an exported
   function: `Limits.MAX`, `Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)`.
-  `Limits.MAX()` and `x: Limits.MAX` are now `CHECK-TYPE-MISMATCH`.
+  `Limits.MAX()` and `x: Limits.MAX` are now `CHECK-TYPE-MISMATCH`. A method
+  or field also reads on a variant written without parentheses
+  (`Level.High.to_s`).
 - A package can ship or name native libraries for its `extern` blocks:
   `[native.NAME]` in its `agentica.toml` picks a file of its `native/` folder
   or a system library name for `linux`, `macos` and `windows`. The files of

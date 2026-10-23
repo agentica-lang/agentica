@@ -66,21 +66,21 @@ Unused names are not reported.
 
 #### Constants
 
-`export LIMIT = 100` makes a constant visible, and `import {LIMIT} from
-"limits"` brings it in by name, like any other exported name (it can be renamed
-to another constant name: `import {LIMIT as MAX_ITEMS} from "limits"`). A
-constant is read by its bare name, wherever an expression can stand, in the file
-that declares it and in a file that imports it by name. An importer that has
-the module under an alias reads an exported constant as `Limits.LIMIT`, like an
-exported function: `Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)` and
-`"#{Limits.LIMIT}"` work as for a bare constant. A private constant, and a name
-the module does not export, are `CHECK-IMPORT-NAME` at the member, with a `did
-you mean` help for a near export, as for a function. A constant is no function
-and no type: `Limits.LIMIT()` and `x: Limits.LIMIT` are `CHECK-TYPE-MISMATCH`.
-An imported name must not collide
-with a constant of the file, and two constants of the same name are
-`CHECK-REDEFINED-NAME`, as for any declaration. An unexported constant is
-private: importing it is `CHECK-IMPORT-NAME`. A constant is never changed, so
+`export LIMIT = 100` makes a constant visible, and
+`import {LIMIT} from "limits"` brings it in by name, like any other exported
+name (it can be renamed to another constant name:
+`import {LIMIT as MAX_ITEMS} from "limits"`). A constant is read by its bare
+name, wherever an expression can stand, in the file that declares it and in a
+file that imports it by name. An importer that has the module under an alias
+reads an exported constant as `Limits.LIMIT`, like an exported function:
+`Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)` and `"#{Limits.LIMIT}"` work
+as for a bare constant. A private constant, and a name the module does not
+export, are `CHECK-IMPORT-NAME` at the member, with a `did you mean` help for a
+near export, as for a function. A constant is no function and no type:
+`Limits.LIMIT()` and `x: Limits.LIMIT` are `CHECK-TYPE-MISMATCH`. An imported
+name must not collide with a constant of the file, and two constants of the same
+name are `CHECK-REDEFINED-NAME`, as for any declaration. An unexported constant
+is private: importing it is `CHECK-IMPORT-NAME`. A constant is never changed, so
 there is no shared state between modules: the value an importer reads is the
 value the declaring file computed.
 

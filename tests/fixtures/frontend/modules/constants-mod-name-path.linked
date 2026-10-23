@@ -3,7 +3,7 @@ program #5 0:1:1-66:6:1
     declaration: function-decl #4 27:3:1-66:6:1 name="main"
       result: type-ref #1 41:3:15-45:3:19 name="Void"
       body: binding #3 48:4:3-62:5:1 name="x"
-        value: const-ref #2 52:4:7-61:4:16 name="@2::NAMES"
+        value: const-ref #2 56:4:11-61:4:16 name="@2::NAMES"
   module "sub/lib.agc"
     declaration: const-decl #1 0:1:1-10:2:1 name="@2::LIMIT"
       value: literal #0 8:1:9-9:1:10 value=int:4

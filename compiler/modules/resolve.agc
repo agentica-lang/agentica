@@ -87,6 +87,7 @@ end
 ## not export a constant of that name (a private constant is left to `resolve`, which refuses it like a private
 ## function).
 export def alias_constant_identity(cx: Context, name: String) -> String
+  # An alias is a single segment, so only `Alias.NAME` counts.
   parts = name.split(".")
   if parts.size != 2 or !cx.me.aliases.has_key?(parts[0])
     return ""

@@ -263,7 +263,8 @@ signature. A default is resolved in the module that declares the function, so
 
 Enums are nominal sum types and may declare type parameters. Variants are
 qualified by their enum, and payloads are positional. A nullary variant is
-written `Command.Show` or `Command.Show()`. Constructor type parameters come
+written `Command.Show` or `Command.Show()`, and a method reads on it
+(`Command.Show.to_s`). Constructor type parameters come
 from the payloads and the expected type; unresolved or conflicting ones are
 errors.
 

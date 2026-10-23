@@ -413,13 +413,20 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
   end
   alias_constant = Resolve.alias_constant_identity(cx, node.name)
   if alias_constant != ""
-    return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: alias_constant, span: node.span)))
+    return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: alias_constant, span: member_only(node, parts[1]))))
   end
   if parts.size == 1 and Resolve.unknown_constant?(cx, node.name)
     return error(Resolve.unknown_constant_failure(cx, node.name, node.span))
   end
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Type, node.span, true)
   return ok(Ast.Expr.TypeName(node.with(name: name)))
+end
+
+# The span of the member in `Alias.NAME`, so that a rename of the constant keeps the alias (as for `Alias.f(...)`).
+def member_only(node: Ast.TypeName, member: String) -> Source.Span
+  stop = node.span.stop
+  start = Source.Position(offset: stop.offset - member.length, line: stop.line, column: stop.column - member.length)
+  return Source.Span(start: start, stop: stop)
 end
 
 def variant(

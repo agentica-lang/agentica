@@ -1021,8 +1021,9 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
   cursor = member_pos + 1
   kind = e.tokens[cursor].kind
   no_args: List[Ast.Expr] = []
-  if kind == "dot" and Base.constant_name?(member) and Base.kind_at(e, cursor + 1) == "name"
-    # Alias.NAME.x on an exported constant: the postfix loop reads the field or method; a variant would be a type-name.
+  if kind == "dot" and Base.kind_at(e, cursor + 1) == "name"
+    # Alias.NAME.x on an exported constant, or Enum.Variant.x: the postfix loop reads the field or method; the linker
+    # decides what A.B is. A type-name after the dot is a variant (Alias.Enum.Variant).
     return expr_at(
       Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, span: Base.span_from(e, pos, cursor))),
       cursor,
