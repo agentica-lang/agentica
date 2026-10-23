@@ -1265,6 +1265,68 @@ int main(void) {
     assert(p->functions[p->entry].code[0].op == register_forms[i].fused);
     assert(p->functions[p->entry].code[1].op == register_forms[i].next);
   }
+  /* A checked CONST before an Int operator or a compare becomes the fused CONST form for it, and the STEP before
+     that CONST the chained STEP form; the operator stays in place, so a jump to it runs it alone. The CONST of
+     back_to_step above, before a JUMP, stayed a CONST. */
+  static const struct { uint16_t next, fused, stepped; } const_forms[] = {
+    {AGC_OP_ADD_I, AGC_FUSED_CONST_ARITH_I, AGC_FUSED_STEP_CONST_ARITH_I},
+    {AGC_OP_SUB_I, AGC_FUSED_CONST_ARITH_I, AGC_FUSED_STEP_CONST_ARITH_I},
+    {AGC_OP_MUL_I, AGC_FUSED_CONST_ARITH_I, AGC_FUSED_STEP_CONST_ARITH_I},
+    {AGC_OP_DIV_I, AGC_FUSED_CONST_DIV_I, AGC_FUSED_STEP_CONST_DIV_I},
+    {AGC_OP_MOD_I, AGC_FUSED_CONST_MOD_I, AGC_FUSED_STEP_CONST_MOD_I},
+    {AGC_OP_LT_I, AGC_FUSED_CONST_LT_I, AGC_FUSED_STEP_CONST_LT_I},
+    {AGC_OP_LE_I, AGC_FUSED_CONST_LE_I, AGC_FUSED_STEP_CONST_LE_I},
+    {AGC_OP_EQ, AGC_FUSED_CONST_EQ, AGC_FUSED_STEP_CONST_EQ},
+    {AGC_OP_NE, AGC_FUSED_CONST_NE, AGC_FUSED_STEP_CONST_NE}};
+  static const uint32_t const_spans[] = {1, 0, 0, 0};
+  for (size_t i = 0; i < sizeof const_forms / sizeof const_forms[0]; i++) {
+    const agc_instr chain[] = {
+      {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {const_forms[i].next, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+    s = base();
+    s.code = chain;
+    s.code_spans = const_spans;
+    s.count = 4;
+    s.registers = 2;
+    buffer form = build(s);
+    assert(agc_load(form.data, form.len, &p, error, sizeof error));
+    free(form.data);
+    const agc_instr *code = p->functions[p->entry].code;
+    assert(code[0].op == const_forms[i].stepped && code[1].op == const_forms[i].fused);
+    assert(code[1].a == 1 && code[1].b == 0 && code[1].c == 0);
+    assert(code[2].op == const_forms[i].next && code[3].op == AGC_OP_RETURN);
+  }
+  /* A jump to the ADD_I of a fused CONST runs the ADD_I alone (40 + 40), and falling into the fused CONST runs both
+     (1 + 1). The front end never jumps there, but a file may. */
+  for (uint16_t target = 3; target <= 4; target++) {
+    const agc_instr jump_in[] = {
+      {AGC_OP_STEP, 2, 0, 0},         {AGC_OP_CONST, 1, 2, 0}, {AGC_OP_JUMP, 0, target, 0},
+      {AGC_OP_CONST, 1, 0, 0},        {AGC_OP_ADD_I, 0, 1, 1}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
+      {AGC_OP_CONST, 0, 1, 0},        {AGC_OP_RETURN, 0, 0, 0}};
+    static const uint32_t jump_in_spans[] = {1, 0, 0, 0, 0, 1, 0, 0};
+    s = base();
+    s.code = jump_in;
+    s.code_spans = jump_in_spans;
+    s.count = 8;
+    s.registers = 2;
+    s.second_int = 40;
+    out = tmpfile();
+    assert(out);
+    assert(run_spec(s, out).kind == AGC_DONE);
+    expect_output(out, target == 4 ? "80\n" : "2\n");
+  }
+  /* The operator of a fused CONST fails as it does alone: the overflow of MUL_I is reported at its own span. */
+  static const agc_instr overflow[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 1, 2, 0}, {AGC_OP_MUL_I, 0, 1, 1}, {AGC_OP_RETURN, 0, 0, 0}};
+  static const uint32_t overflow_spans[] = {1, 0, 2, 0};
+  s = base();
+  s.code = overflow;
+  s.code_spans = overflow_spans;
+  s.count = 4;
+  s.registers = 2;
+  s.second_int = INT64_MAX;
+  agc_outcome overflowed = run_spec(s, stdout);
+  assert(overflowed.kind == AGC_FAILED && strcmp(overflowed.code, "RUNTIME-INTEGER-OVERFLOW") == 0);
+  assert(overflowed.span == 2);
   s = base();
   s.code = builtin_window;
   s.code_spans = builtin_spans;
