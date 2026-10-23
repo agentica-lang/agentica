@@ -119,4 +119,20 @@ end
 2
 ```
 
-A constant is not reached through the alias: `Limits.MAX` is `CHECK-IMPORT-NAME`. Import the name instead: `import {MAX} from "limits"`.
+A file that imports the module under an alias reads the constant as `Limits.MAX`, like an exported function:
+
+```agentica
+import Limits from "limits"
+
+def main() -> Void
+  puts(Limits.MAX)
+  puts(Limits.NAMES.size)
+end
+```
+
+```output
+100
+2
+```
+
+A constant the module keeps private is `CHECK-IMPORT-NAME`, as for a function.

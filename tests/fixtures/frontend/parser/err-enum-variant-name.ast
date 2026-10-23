@@ -1,1 +1,6 @@
-ERROR PARSE-UNEXPECTED-TOKEN 29:2:11-30:2:12 "expected an enum variant, found \"c\"" -
+program #5 0:1:1-35:4:1
+  declaration: function-decl #4 0:1:1-35:4:1 name="main"
+    result: type-ref #0 14:1:15-18:1:19 name="Void"
+    body: binding #3 21:2:3-31:3:1 name="x"
+      value: field-access #2 25:2:7-30:2:12 name="c"
+        target: type-expression #1 25:2:7-28:2:10 name="A.B"

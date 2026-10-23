@@ -63,11 +63,12 @@ imported alone: import the enum. A bare function still needs parentheses.
 `export LIMIT = 100` shares a constant; `import {LIMIT, TABLE as LOOKUP} from
 "limits"` brings it in by name, read bare. A constant can be renamed only to
 another constant name (capitals and underscores): `{LIMIT as max}` is
-`CHECK-IMPORT-RENAME`. It is not reached through the alias: `Limits.LIMIT` is
-`CHECK-IMPORT-NAME` (the help says to write `import {LIMIT} from "limits"`); to
-offer a value through the alias, export a function. An imported constant cannot
-equal a constant or another name of the file (`CHECK-REDEFINED-NAME`); a private
-constant cannot be imported (`CHECK-IMPORT-NAME`). The constants of the imported
+`CHECK-IMPORT-RENAME`. An alias reads it too: `Limits.LIMIT`,
+`Limits.TABLE.size`, `Limits.CONFIG.with(port: 81)`; a private one is
+`CHECK-IMPORT-NAME`, `Limits.LIMIT()` is `CHECK-TYPE-MISMATCH`. An imported
+constant cannot equal a constant or another name of the file
+(`CHECK-REDEFINED-NAME`); a private constant cannot be imported
+(`CHECK-IMPORT-NAME`). The constants of the imported
 files that the program can reach are built before `main`.
 
 ## Running
