@@ -6,8 +6,8 @@
 ## echo URLs, queries or secrets. Redirects stay in this module: at most five hops of 301/302/303/307/308 with exactly
 ## one Location each, relative targets resolved against the current URL, no https downgrade, http only to a loopback
 ## literal, one global deadline and 256 MiB of bodies across all hops. The archive hash is checked before anything is
-## read from it; only plain and gzipped TAR archives are supported, and a member object (payload plus receipt) is
-## published by one no-replace rename, so concurrent publishers never overwrite each other.
+## read from it; only plain, gzipped TAR and ZIP archives are supported, and a member object (payload plus receipt)
+## is published by one no-replace rename, so concurrent publishers never overwrite each other.
 
 import Archive from "std/archive"
 import HTTP from "std/http"
@@ -441,7 +441,7 @@ def publish_member(
   dest = Paths.join(tmp, "payload")
   left = try time_left(deadline, context)
   options = Archive.Options(timeout_ms: left, max_output_bytes: MEMBER_MAX_BYTES)
-  extracted = Archive.extract_tar(archive, [canonical], dest, options)
+  extracted = extract_member(archive, canonical, dest, options, deadline)
   if !extracted.ok?
     message = Result.message(extracted)
     if String.contains?(message, "member not found")
@@ -451,14 +451,14 @@ def publish_member(
     if String.contains?(message, "timed out")
       return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
     end
-    help = "only plain and gzipped TAR archives are supported"
-    return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a TAR archive", help))
+    help = "only plain, gzipped TAR and ZIP archives are supported"
+    return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a supported archive", help))
   end
   payload = Paths.join(dest, canonical)
   left = try time_left(deadline, context)
   found = File.sha256(payload, left)
   if !found.ok?
-    return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a TAR archive", ""))
+    return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a supported archive", ""))
   end
   receipt = Paths.join(tmp, "receipt")
   left = try time_left(deadline, context)
@@ -476,6 +476,71 @@ def publish_member(
         Probe.Missing -> return error(fail(context, "PKG-FETCH", "member", "the cache cannot be written", ""))
         Probe.Broken(packed) -> return error(packed)
       end
+  end
+end
+
+# Extracts one member from a validated archive, routed by its bounded file magic: a ZIP local header goes to
+# `extract_zip`, anything else keeps the TAR and gzip path. The URL and its suffix never decide the format. The
+# extractor timeout is recomputed from the original absolute deadline after the sniff, so the probe never extends
+# the global budget; an expired deadline refuses before either extractor with the usual timeout failure.
+def extract_member(
+  archive: String,
+  canonical: String,
+  dest: String,
+  options: Archive.Options,
+  deadline: Int,
+) -> Result[List[Int]]
+  zipped = zip_magic?(archive, deadline)
+  left = deadline - Time.monotonic_ms()
+  if left <= 0
+    return error("the operation timed out")
+  end
+  fresh = Archive.Options(timeout_ms: left, max_output_bytes: options.max_output_bytes)
+  if zipped
+    return Archive.extract_zip(archive, [canonical], dest, fresh)
+  end
+  return Archive.extract_tar(archive, [canonical], dest, fresh)
+end
+
+# True when the file at `archive` opens with the ZIP local header (`PK\x03\x04`). Anything unreadable or short
+# answers false, so the caller keeps the TAR path and reports its error.
+def zip_magic?(archive: String, deadline: Int) -> Bool
+  left = deadline - Time.monotonic_ms()
+  if left <= 0
+    return false
+  end
+  case File.open(archive, "read", left)
+    ok(handle) ->
+      left = deadline - Time.monotonic_ms()
+      if left <= 0
+        close_quiet(handle, deadline)
+        return false
+      end
+      case File.read_bytes(handle, 4, left)
+        ok(first) ->
+          close_quiet(handle, deadline)
+          if first.size < 4
+            return false
+          end
+          return first[0] == 80 and first[1] == 75 and first[2] == 3 and first[3] == 4
+        error(_) ->
+          close_quiet(handle, deadline)
+          return false
+      end
+    error(_) -> return false
+  end
+end
+
+# Closes a sniff handle on the capped cleanup budget, never failing the caller.
+def close_quiet(handle: FileHandle, deadline: Int) -> Void
+  left = deadline - Time.monotonic_ms()
+  budget = 5000
+  if left > 0 and left < budget
+    budget = left
+  end
+  case File.close(handle, budget)
+    ok(_) -> return
+    error(_) -> return
   end
 end
 

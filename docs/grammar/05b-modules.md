@@ -475,8 +475,8 @@ import Sqlite from "pkg/sqlite/db"
   or `:`; at most 128 characters), for a library the system has
   (`winsqlite3.dll`), or a download `{ url, sha256, member }` (an https
   URL, or http to 127.0.0.1 or [::1]; 64 lowercase hex digits; a safe
-  relative TAR member): the archive is verified by its SHA-256 and the
-  member is cached, pinned per system in `[[native-artifact]]` and fetched
+  relative TAR or ZIP member): the archive is verified by its SHA-256 and
+  the member is cached, pinned per system in `[[native-artifact]]` and fetched
   by `install` and `update` for the host only. Another key, both shapes or
   a half-written download are `PKG-MANIFEST-INVALID` at the key path
   (`native.sqlite3.linux.file`).

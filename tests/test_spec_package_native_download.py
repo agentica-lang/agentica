@@ -8,6 +8,7 @@ import io
 import json
 import tarfile
 import threading
+import zipfile
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -88,6 +89,16 @@ def make_tar(members, gzip=True):
             info.mtime = 0
             info.mode = 0o755
             tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+def make_zip(members):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, data in members.items():
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, data)
     return buf.getvalue()
 
 
@@ -304,6 +315,25 @@ def test_lazy_unavailable_target_and_deny_native(server, tmp_path):
     assert (result.code, problem) == (0, None), problem
 
 
+def pin_downloaded_demo(ws, url, sha, member):
+    """A manifest pinning the archive for every system, with the demo sources that call it."""
+    text = 'name = "app"\n\n[native.pkgdemo]\n'
+    text += download_row(HERE, url, sha, member)
+    text += download_row(OTHER, url, sha, member)
+    text += download_row(THIRD, url, sha, member)
+    (ws.project / "agentica.toml").write_text(text, encoding="utf-8")
+    (ws.project / "demo.agc").write_text(DEMO, encoding="utf-8")
+    (ws.project / "main.agc").write_text(
+        'import Demo from "demo"\n\ndef main() -> Void\n  puts(Demo.pkgdemo_add(40, 2))\nend\n',
+        encoding="utf-8")
+
+
+def run_downloaded_demo(ws):
+    """Run the demo entry point: the downloaded library must add to 42."""
+    result = run_cli(ws, str(ws.project / "main.agc"))
+    assert (result.code, result.stdout) == (0, "42\n"), (result.code, result.stdout, result.stderr)
+
+
 @NATIVE_CALLS
 def test_downloaded_library_calls_and_deny(server, tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("native-download-ffi")
@@ -316,21 +346,60 @@ def test_downloaded_library_calls_and_deny(server, tmp_path_factory):
     sha = digest(archive)
     srv = server
     srv.routes_ref["/t/demo.tar.gz"] = archive
-    url = srv.url("/t/demo.tar.gz")
-    text = 'name = "app"\n\n[native.pkgdemo]\n'
-    text += download_row(HERE, url, sha, member)
-    text += download_row(OTHER, url, sha, member)
-    text += download_row(THIRD, url, sha, member)
-    (ws.project / "agentica.toml").write_text(text, encoding="utf-8")
-    (ws.project / "demo.agc").write_text(DEMO, encoding="utf-8")
-    (ws.project / "main.agc").write_text(
-        'import Demo from "demo"\n\ndef main() -> Void\n  puts(Demo.pkgdemo_add(40, 2))\nend\n', encoding="utf-8")
+    pin_downloaded_demo(ws, srv.url("/t/demo.tar.gz"), sha, member)
     result, problem = update(ws)
     assert (result.code, problem) == (0, None), getattr(result, "stderr", problem)
-    result = run_cli(ws, str(ws.project / "main.agc"))
-    assert (result.code, result.stdout) == (0, "42\n"), (result.code, result.stdout, result.stderr)
+    run_downloaded_demo(ws)
     denied = run_cli(ws, "--deny-native", str(ws.project / "main.agc"))
     assert denied.code == 2
+
+
+@NATIVE_CALLS
+def test_zip_archive_download_calls_offline_and_deny(server, tmp_path_factory):
+    tmp_path = tmp_path_factory.mktemp("native-download-zip")
+    ws = Workspace(tmp_path)
+    from tests.test_vm_native import library_name as _libname
+    lib_bytes = shared_library(tmp_path_factory, "pkgdemo").read_bytes()
+    member = _libname("pkgdemo")
+    archive = make_zip({member: lib_bytes})
+    assert archive[:4] == b"PK\x03\x04"
+    sha = digest(archive)
+    # A TAR-looking URL and no format field: the file magic alone routes to the ZIP extractor.
+    server.routes_ref["/t/demo.tar.gz"] = archive
+    pin_downloaded_demo(ws, server.url("/t/demo.tar.gz"), sha, member)
+    result, problem = update(ws)
+    assert (result.code, problem) == (0, None), getattr(result, "stderr", problem)
+    assert [p for p in server.requests if p == "/t/demo.tar.gz"] != []
+    run_downloaded_demo(ws)
+    # Offline: the routes are gone, yet the cached payload still runs with no new request.
+    fetched = len(server.requests)
+    server.routes_ref.clear()
+    run_downloaded_demo(ws)
+    assert len(server.requests) == fetched
+    denied = run_cli(ws, "--deny-native", str(ws.project / "main.agc"))
+    assert denied.code == 2
+    # A tampered payload fails at use instead of loading.
+    roots = [q for q in (tmp_path / "cache").rglob(member) if q.is_file()]
+    assert roots, "expected a cached payload"
+    roots[0].write_bytes(roots[0].read_bytes() + b"\x00")
+    result, problem = check_json(ws, ws.project / "main.agc")
+    assert problem is not None and problem["code"] in ("PKG-HASH-MISMATCH", "PKG-NATIVE-MISSING"), problem
+
+
+def test_tar_bytes_under_zip_url_uses_tar_path(server, tmp_path):
+    # The mirror of the ZIP test above: TAR bytes under a `.zip` URL still take the TAR path.
+    ws = Workspace(tmp_path)
+    (ws.project / "main.agc").write_text('def main() -> Void\nend\n', encoding="utf-8")
+    archive = make_tar({"lib.bin": b"member-bytes"})
+    assert archive[:4] != b"PK\x03\x04"
+    sha = digest(archive)
+    server.routes_ref["/t/lib.zip"] = archive
+    write_root_manifest(ws, "demo", [download_row(HERE, server.url("/t/lib.zip"), sha)])
+    result, problem = update(ws)
+    assert (result.code, problem) == (0, None), getattr(result, "stderr", problem)
+    assert any(p == "/t/lib.zip" for p in server.requests)
+    result = run_cli(ws, "--json", "install")
+    assert result.code == 0, result.stderr
 
 
 def test_dependency_download_git_hash_stable_and_host_only(server, tmp_path, remotes):
