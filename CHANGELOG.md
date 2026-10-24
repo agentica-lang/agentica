@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `Archive.extract_tar` accepts a destination that holds host backslashes (such as a cache root from the OS on Windows): the destination is normalized to the spelling the host join produces before the under-destination guard compares it, so a valid destination no longer looks like an escape.
+
 ### Added
 
 - `std/archive` extracts an explicit allowlist of regular files from a plain or gzipped TAR into a new private directory (`Archive.extract_tar`), with fixed security ceilings and no extract-all.

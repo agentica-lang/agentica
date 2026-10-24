@@ -192,7 +192,11 @@ export def extract_tar(src: String, members: List[String], dest_dir: String, opt
   end
   deadline = now + options.timeout_ms
   wanted = try validate_members(members)
-  dest = strip_slashes(dest_dir)
+  # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
+  # while a caller may hold `\` (a cache root from the OS does), and the under-destination guard compares the joined
+  # output with this folder literally. Without this a valid destination looks like an escape on Windows.
+  joined = try join_one([dest_dir])
+  dest = strip_slashes(joined)
   if dest == ""
     return error("archive: destination must not be empty")
   end
