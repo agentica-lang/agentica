@@ -220,10 +220,15 @@ class DuckdbOracle:
             self.lib.duckdb_free(at)
 
 
+def sql_literal(path):
+    """A filesystem path as a SQL string literal: single quotes double."""
+    return "'" + str(path).replace("'", "''") + "'"
+
+
 @NATIVE_CALLS
 def test_ctypes_oracle_matches_typed_values_and_the_parquet_file(tmp_path, library):
     main = stage(tmp_path, library) / "main.agc"
-    out_dir = tmp_path / "oracle out"
+    out_dir = tmp_path / "oracle out's"
     result = run_program(main, out_dir, tmp_path)
     assert (result.code, result.stderr) == (0, "")
     oracle = DuckdbOracle(library)
@@ -238,8 +243,8 @@ def test_ctypes_oracle_matches_typed_values_and_the_parquet_file(tmp_path, libra
             assert [oracle.cell(buf, col, 0) for col in range(4)] == [1, 10000000000, 9.5, "Ada"]
         finally:
             oracle.destroy(buf)
-        parquet = str(out_dir / "people.parquet").encode("utf-8")
-        rows = oracle.query(b"SELECT id, code, score, name FROM read_parquet('" + parquet + b"') ORDER BY id")
+        parquet = sql_literal(out_dir / "people.parquet").encode("utf-8")
+        rows = oracle.query(b"SELECT id, code, score, name FROM read_parquet(" + parquet + b") ORDER BY id")
         try:
             assert oracle.lib.duckdb_row_count(rows) == 4
             assert [[oracle.cell(rows, col, row) for col in range(4)] for row in range(4)] == [

@@ -102,6 +102,25 @@ def test_stage_refuses_to_overwrite_an_existing_library(tmp_path):
     assert (out / MEMBER).read_bytes() == b"already staged"
 
 
+def test_read_asset_returns_a_small_local_file(tmp_path):
+    path = tmp_path / "pinned.tar.gz"
+    path.write_bytes(b"fake archive bytes")
+    assert provision.read_asset(str(path), "pinned.tar.gz") == b"fake archive bytes"
+
+
+def test_read_asset_rejects_an_oversized_local_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(provision, "MAX_COMPRESSED", 16)
+    path = tmp_path / "big.tar.gz"
+    path.write_bytes(b"x" * 17)
+    with pytest.raises(SystemExit):
+        provision.read_asset(str(path), "big.tar.gz")
+
+
+def test_read_asset_fails_closed_on_a_missing_file(tmp_path):
+    with pytest.raises(SystemExit):
+        provision.read_asset(str(tmp_path / "absent.tar.gz"), "absent.tar.gz")
+
+
 def test_stage_refuses_a_create_that_lost_the_race(tmp_path, monkeypatch):
     """The exclusive create, not the friendly check, owns the guarantee."""
     out = tmp_path / "native" / "linux"

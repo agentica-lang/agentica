@@ -22,24 +22,22 @@ from pathlib import Path
 VERSION = "v2.0.0"
 BASE = f"https://github.com/duckdb/duckdb/releases/download/{VERSION}"
 
-# os-key -> (asset name, archive sha256, member in the archive, staged name).
+# os-key -> (asset name, archive sha256, shared library: the member in the
+# archive and the name staged under native/<os>/, one and the same).
 ASSETS = {
     "linux": (
         "duckdb-shared-libs-linux-amd64.tar.gz",
         "993ad89e7dfca66cd6da994c2cad090c2fc160ddf9f550498a098ab4bb13cfb1",
-        "libduckdb.so",
         "libduckdb.so",
     ),
     "macos": (
         "duckdb-shared-libs-osx-universal.tar.gz",
         "14cd63180614cfd961f7959146ecd9087527ff20b67311efdc3fa1c29c18204d",
         "libduckdb.dylib",
-        "libduckdb.dylib",
     ),
     "windows": (
         "duckdb-shared-libs-windows-amd64.tar.gz",
         "2b83169128239de5f45fe21de80f99bf436e53aa4bb24020dd951a1ba8d4b95f",
-        "duckdb.dll",
         "duckdb.dll",
     ),
 }
@@ -64,10 +62,7 @@ def this_system() -> str:
 def read_asset(asset: str | None, name: str) -> bytes:
     """The bytes of the pinned archive: a local file with --asset, else one download."""
     if asset is not None:
-        data = Path(asset).read_bytes()
-        if len(data) > MAX_COMPRESSED:
-            raise SystemExit(f"provision_duckdb.py: --asset {asset} is larger than 128MiB")
-        return data
+        return read_file_capped(asset)
     url = f"{BASE}/{name}"
     body = io.BytesIO()
     started = time.monotonic()
@@ -85,6 +80,22 @@ def read_asset(asset: str | None, name: str) -> bytes:
                     raise SystemExit(f"provision_duckdb.py: {url} is larger than 128MiB")
     except OSError as error:
         raise SystemExit(f"provision_duckdb.py: cannot download {url}: {error}")
+
+
+def read_file_capped(path: str) -> bytes:
+    """A local archive, streamed with the same 128MiB cap as a download."""
+    body = io.BytesIO()
+    try:
+        with open(path, "rb") as handle:
+            while True:
+                chunk = handle.read(1024 * 1024)
+                if not chunk:
+                    return body.getvalue()
+                body.write(chunk)
+                if body.tell() > MAX_COMPRESSED:
+                    raise SystemExit(f"provision_duckdb.py: --asset {path} is larger than 128MiB")
+    except OSError as error:
+        raise SystemExit(f"provision_duckdb.py: cannot read --asset {path}: {error}")
 
 
 def stage(data: bytes, digest: str, member: str, out: Path) -> Path:
@@ -127,12 +138,9 @@ def main(argv: list[str]) -> int:
                         help="provision for this system instead of this machine's (testing only)")
     args = parser.parse_args(argv)
     system = args.os or this_system()
-    name, digest, member, staged = ASSETS[system]
+    name, digest, member = ASSETS[system]
     data = read_asset(args.asset, name)
     target = stage(data, digest, member, Path(args.out) / "native" / system)
-    if target.name != staged:
-        target.rename(target.with_name(staged))
-        target = target.with_name(staged)
     print(str(target.resolve()))
     return 0
 
