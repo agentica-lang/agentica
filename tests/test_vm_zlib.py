@@ -315,6 +315,18 @@ def test_zlib_bytes_cut_output_past_its_cap(bytes_peer, tmp_path):
         assert result.stdout.startswith("error("), result.stdout
 
 
+def test_zlib_bytes_reject_a_byte_outside_0_to_255(tmp_path):
+    body = (
+        "def main() -> Void\n"
+        "  puts(Zlib.deflate([256], 6, 1048576))\n"
+        "  puts(Zlib.gzip([1, -1], 6, 1048576))\n"
+        "end\n"
+    )
+    result = run_source(tmp_path, "range.agc", body, [])
+    assert result.code == 0, result.stderr
+    assert result.stdout.startswith("error("), result.stdout
+
+
 def files_case(peer, op, src, dst, cap=CAP_1GIB, level=6, timeout=30000):
     """Run one file op through argv: paths never enter the generated source,
     so a Windows path (D:\\a\\...) cannot break the lexer."""
