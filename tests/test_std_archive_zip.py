@@ -7,6 +7,10 @@ through the CLI in temp directories. Expected outputs name the exact
 byte are compared with binascii/zlib peers, never with zipfile reads.
 """
 import binascii
+import os
+import pathlib
+
+import pytest
 import struct
 import zlib
 
@@ -741,6 +745,27 @@ def test_expired_deadline_aborts_long_reads(tmp_path):
     (work / "bigd.zip").write_bytes(blob)
     lines = run_zip(work, "deflated", "bigd.zip", ["z.bin"], "o2", tiny)
     assert lines[0].startswith("deflated error archive: ") and "timed out" in lines[0]
+
+
+@pytest.mark.parametrize("variant", ["fwd", "back", "mixed", "cacheroot"])
+def test_destination_spellings_with_backslashes_extract(tmp_path, variant):
+    """A destination may hold host backslashes (a cache root from the OS does): the join the
+    extractor uses normalizes them, so each spelling extracts on every system with no host skip."""
+    work = tmp_path
+    stored_case(work)
+    root = str(work)
+    if variant == "fwd":
+        dest = root.replace(os.sep, "/") + "/d-fwd"
+    elif variant == "back":
+        dest = root + "\\d-back"
+    elif variant == "mixed":
+        dest = root.replace(os.sep, "/") + "\\d-mix"
+    else:
+        dest = root + "/d-cache"
+    lines = run_zip(work, variant, "stored.zip", ["plain.txt", "sub/deep.bin"], dest)
+    assert lines == ["%s ok [%d, %d]" % (variant, len(STORED_HELLO), len(DEEP_DATA)), ""], lines
+    assert (pathlib.Path(dest) / "plain.txt").read_bytes() == STORED_HELLO
+    assert (pathlib.Path(dest) / "sub" / "deep.bin").read_bytes() == DEEP_DATA
 
 
 def test_absolute_destination_extracts(tmp_path):

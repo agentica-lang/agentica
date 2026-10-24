@@ -192,7 +192,11 @@ export def extract_zip(
   end
   deadline = now + timeout_ms
   wanted = try validate_members(members)
-  dest = strip_slashes(dest_dir)
+  # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
+  # while a caller may hold `\` (a cache root from the OS does), and the under-destination guard compares the joined
+  # output with this folder literally. Without this a valid destination looks like an escape on Windows.
+  joined = try join_one([dest_dir])
+  dest = strip_slashes(joined)
   if dest == ""
     return error("archive: destination must not be empty")
   end
@@ -1154,32 +1158,20 @@ def join_one(parts: List[String]) -> Result[String]
   end
 end
 
-# The host spelling of a path for prefix checks: `Path.join` normalizes `\` to `/` on Windows, so both sides map
-# `\` to `/` first. The joined segments never hold a separator (`check_relative` rejects `\` and splits `/`), so
-# this only tolerates the join's own normalization of the destination, never an escape.
-def slashed(path: String) -> String
-  fixed: List[Int] = []
-  for b in String.to_bytes(path)
-    if b == 92
-      fixed = List.append(fixed, 47)
-    else
-      fixed = List.append(fixed, b)
-    end
-  end
-  case String.from_bytes(fixed)
-    ok(text) -> return text
-    error(_) -> return path
-  end
-end
-
-# True when `out` is the destination itself or lies directly below it, comparing the joined spelling.
+# True when `out` is the destination itself or lies directly below it. Either path separator counts: `Path.join`
+# uses the host one, and the joined segments themselves never hold a separator.
 def stays_under(out: String, dest: String) -> Bool
-  base = slashed(dest)
-  left = slashed(out)
-  if left == base
+  if out == dest
     return true
   end
-  return String.starts_with?(left, "#{base}/")
+  if String.starts_with?(out, "#{dest}/")
+    return true
+  end
+  return String.starts_with?(out, back_join(dest))
+end
+
+def back_join(dest: String) -> String
+  return "#{dest}\\"
 end
 
 def join_under(dest: String, segments: List[String]) -> Result[String]
