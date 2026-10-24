@@ -101,6 +101,8 @@ def stage(data: bytes, digest: str, member: str, out: Path) -> Path:
         if not info.isfile() or info.size <= 0 or info.size > MAX_MEMBER:
             raise SystemExit(f"provision_duckdb.py: refusing member {member} of size {info.size}")
         target = out / member
+        if target.exists():
+            raise SystemExit(f"provision_duckdb.py: refusing to overwrite {target}")
         with archive.extractfile(info) as source, open(target, "wb") as handle:
             if source is None:
                 raise SystemExit(f"provision_duckdb.py: cannot read member {member}")

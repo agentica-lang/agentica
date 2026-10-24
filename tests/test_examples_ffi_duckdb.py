@@ -12,6 +12,7 @@ csv checks the export bytes, and nothing here touches the network.
 """
 import csv
 import ctypes
+import json
 import os
 import shutil
 
@@ -124,12 +125,18 @@ def test_usage_and_missing_parent_fail_closed_without_a_panic(tmp_path, library)
 
 @NATIVE_CALLS
 def test_a_non_library_staged_as_duckdb_fails_closed(tmp_path):
-    """Garbage staged where the manifest points at is a clean load error, never a hang."""
+    """Garbage staged where the manifest points at is RUNTIME-NATIVE-LOAD, never a hang."""
     staged = stage(tmp_path, DUCKDB / "duckdb.agc")
     (staged / "native" / HERE / LIBNAME).write_bytes(b"not a shared library\n")
-    result = run_program(staged / "main.agc", tmp_path / "out", tmp_path)
-    assert result.code != 0
+    result = run(cli() + ["--json", str(staged / "main.agc"), str(tmp_path / "out")],
+                   cwd=tmp_path, env=vm_environment())
+    assert result.code == 1
     assert result.stdout == ""
+    line = next(n for n, text in enumerate((DUCKDB / "duckdb.agc").read_text(
+        encoding="utf-8").split("\n"), 1) if "def duckdb_library_version(" in text)
+    found = json.loads(result.stderr.strip().split("\n")[-1])
+    assert found["code"] == "RUNTIME-NATIVE-LOAD"
+    assert (found["range"]["start"]["line"], found["range"]["start"]["column"]) == (line, 3)
 
 
 class DuckdbOracle:
