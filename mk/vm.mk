@@ -39,8 +39,11 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 FFI_DIR := vm/third_party/libffi
+ZLIB_DIR := vm/third_party/zlib
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c \
+# The vendored zlib build is inflate-only (no configure, no gz* I/O): the six sources the decoder needs.
+ZLIB_NAMES := adler32 crc32 inffast inflate inftrees zutil
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/gunzip_zlib.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c \
   vm/jit/jit.c vm/jit/emit_x64.c vm/jit/mem_posix.c vm/jit/mem_windows.c
 EXE :=
 VM_PIC := -fPIE
@@ -192,6 +195,7 @@ PICO_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS)
 UV_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) $(UV_DEFS) -I $(UV_DIR)/include -I $(UV_DIR)/src
 FFI_INC = $(VM_BUILD)/ffi/include
 FFI_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) -I $(FFI_INC) -I $(FFI_DIR)/include
+ZLIB_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS) -I $(ZLIB_DIR)
 SUBMODULE_KEY = if [ "$$(git -C $(1) rev-parse --show-toplevel 2>/dev/null)" = '$(CURDIR)/$(1)' ]; then \
   git ls-tree HEAD $(1); git -C $(1) rev-parse HEAD; git -C $(1) diff --no-ext-diff --no-color --binary HEAD | cksum; \
   (cd $(1) && git ls-files -z -o --exclude-standard | xargs -0r cksum); \
@@ -202,7 +206,9 @@ TP_KEY = { echo '$(shell uname -s) $(shell uname -m) $(OS)'; \
   echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) | $(AR) rcs'; $(VM_CC) --version 2>/dev/null | head -n 1; \
   $(AR) --version 2>/dev/null | head -n 1; \
   echo '$(FFI_COMPILE) | $(FFI_NAMES) | $(FFI_TARGET) $(FFI_DIR_TARGET) $(FFI_LONG_DOUBLE) $(FFI_TRAMPOLINE_TABLE) $(FFI_APPLE)'; \
+  echo '$(ZLIB_COMPILE) | $(ZLIB_NAMES)'; \
   $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); \
+  $(call SUBMODULE_KEY,$(ZLIB_DIR)); \
   $(if $(FFI_NAMES),$(call SUBMODULE_KEY,$(FFI_DIR));) }
 ifeq ($(origin CCACHE),undefined)
 CCACHE := $(shell c=$$(command -v ccache 2>/dev/null) || exit 0; d=$$($$c -k cache_dir 2>/dev/null) || d=$${CCACHE_DIR:-$$HOME/.ccache}; \
@@ -219,6 +225,8 @@ VM_RES := $(if $(filter Windows_NT,$(VM_OS)),$(VM_OBJ)/agentica-res.o)
 WINDRES ?= $(patsubst %gcc,%windres,$(patsubst %clang,%windres,$(VM_CC)))
 VM_YY := $(VM_BUILD)/yyjson.o
 VM_PICO := $(VM_BUILD)/picohttpparser.o
+VM_ZLIB := $(VM_BUILD)/libzlib.a
+ZLIB_OBJS := $(patsubst %,$(VM_BUILD)/zlib/%.o,$(ZLIB_NAMES))
 VM_UV := $(if $(UV_NAMES),$(VM_BUILD)/libuv.a)
 UV_OBJS := $(patsubst %,$(VM_BUILD)/uv/%.o,$(UV_NAMES))
 VM_FFI := $(if $(FFI_NAMES),$(VM_BUILD)/libffi.a)
@@ -227,6 +235,7 @@ FFI_HEADERS := $(if $(FFI_NAMES),$(FFI_INC)/ffi.h $(FFI_INC)/fficonfig.h $(FFI_I
 ifneq ($(FFI_NAMES),)
 VM_CFLAGS += -DAGC_FFI -I $(FFI_INC)
 endif
+VM_CFLAGS += -I $(ZLIB_DIR)
 OSSL_BUILD := $(VM_BUILD)/openssl
 OSSL_STAMP := $(VM_BUILD)/openssl-flags
 OSSL_OPTS := no-shared no-tests no-docs no-apps no-module no-dso no-engine no-legacy no-autoload-config no-async no-comp \
@@ -301,7 +310,7 @@ vm-third-party-key:
 	@$(TP_KEY)
 	@$(if $(filter system,$(GC_MODE)),$(GC_SYSTEM_KEY),$(if $(VM_GC),$(GC_KEY),:))
 
-vm-third-party: $(GC_DEP) $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_FFI)
+vm-third-party: $(GC_DEP) $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_ZLIB) $(VM_UV) $(VM_FFI)
 
 $(GC_DIR)/extra/gc.c:
 	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
@@ -333,6 +342,17 @@ $(PICO_DIR)/picohttpparser.c:
 $(VM_PICO): $(VM_TP_STAMP) | $(PICO_DIR)/picohttpparser.c
 	@mkdir -p $(VM_BUILD)
 	$(CCACHE) $(PICO_COMPILE) $(DEBUG_MAP) -c $(PICO_DIR)/picohttpparser.c -o $@
+
+$(ZLIB_DIR)/zlib.h:
+	@echo "missing $(ZLIB_DIR): run git submodule update --init" >&2; exit 1
+
+$(VM_BUILD)/zlib/%.o: $(VM_TP_STAMP) | $(ZLIB_DIR)/zlib.h
+	@mkdir -p $(dir $@)
+	$(CCACHE) $(ZLIB_COMPILE) $(DEBUG_MAP) -c $(ZLIB_DIR)/$*.c -o $@
+
+$(VM_ZLIB): $(ZLIB_OBJS) | $(ZLIB_DIR)/zlib.h
+	rm -f $@
+	$(AR) rcs $@ $(ZLIB_OBJS)
 
 $(UV_DIR)/src/uv-common.c:
 	@echo "missing $(UV_DIR): run git submodule update --init" >&2; exit 1
@@ -431,5 +451,5 @@ $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
 $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 	@test -f $@ || { echo "$@ is missing: remove $(OSSL_BUILD) and rebuild" >&2; exit 1; }
 
-VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_FFI)
+VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_ZLIB) $(VM_UV) $(VM_FFI)
 VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(VM_LDFLAGS)

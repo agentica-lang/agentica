@@ -236,6 +236,16 @@ Every failure is an error value. The checks run in this order:
   refer to a regular file`, without waiting on the loop. The job never takes
   the `more` step, so a cancel or a timeout detaches it like the other
   whole-file calls.
+- `File.gunzip` pumps one gzip member file-to-file in fixed 64 KiB chunks
+  with O(chunk) memory through the vendored zlib (`inflate`, gzip-only
+  `windowBits` 31, no `gz*` calls): the source opens and filters like
+  `File.sha256`, the destination opens like `create_private`, and neither
+  waits on the loop, so the job never takes the `more` step either. Output
+  is checked against `max_out_bytes` before every write (a partial never
+  exceeds it and is conserved on error); the compressed input never exceeds
+  268435456 bytes. A second member or any trailing bytes, a bad
+  header, truncation and a refused wrapper are `filesystem: invalid gzip
+  data`; a trailer mismatch is `filesystem: gzip checksum mismatch`.
 - `File.stat` of a missing path is an error without a kind. A directory's size
   is
   0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`; `user_id` and

@@ -11,8 +11,8 @@ server) use the same libuv sockets and the same C helpers, with no Windows-only
 HTTP code.
 
 The release (`release.yml`, 11) builds one native archive per system on a
-runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser
-and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`).
+runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser,
+zlib and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`).
 The system libraries that remain are the C library of each system: glibc (at
 most 2.28 symbols), libSystem on macOS, and on Windows the system DLLs with the
 Universal C Runtime, which is part of Windows 10. `tools/release-check.sh`
@@ -69,6 +69,15 @@ architecture, a library outside that list or missing hardening.
     `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure
     script would write made by `mk/vm.mk`, and linked statically. Only
     `vm/ffi_libffi.c` includes `ffi.h`.
+
+- **Dependency:** zlib
+  - **Choice:** Vendored submodule `vm/third_party/zlib` (zlib/libpng,
+    permission to use for any purpose with attribution, no copyleft), tag
+    v1.3.1. Only the inflate side is built, without configure and without
+    the `gz*` file API: `adler32`, `crc32`, `inffast`, `inflate`, `inftrees`
+    and `zutil` compile per mode into `$(VM_BUILD)/zlib/` and link
+    statically. `File.gunzip` decodes through them behind the adapter
+    (`vm/gunzip_zlib.c`); only that file includes `zlib.h` (15.5).
 
 - **Dependency:** OpenSSL 3.5 LTS
   - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),

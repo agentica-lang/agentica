@@ -11,6 +11,7 @@ File.append_text
 File.close
 File.each_line
 File.flush
+File.gunzip
 File.lstat
 File.open
 File.read_bytes

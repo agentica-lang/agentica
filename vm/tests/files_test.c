@@ -17,6 +17,7 @@
 #endif
 #include <string.h>
 #include <uv.h>
+#include "zlib.h"
 
 static agc_vm vm;
 static agc_task *task;
@@ -144,6 +145,258 @@ static void write_test_file(const char *path, const uint8_t *data, size_t len) {
   assert(out);
   if (len) assert(fwrite(data, 1, len, out) == len);
   assert(fclose(out) == 0);
+}
+
+/* File.gunzip fixtures, made by Python's stdlib gzip (mtime 0): the empty and
+   "abc" members, the 64 KiB input/output chunk boundaries, a multi-chunk
+   input, and a 3 MiB zero bomb that compresses to 3 KiB. */
+static const unsigned char gunzip_empty[] = {0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x03,
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+static const unsigned char gunzip_abc[] = {0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4b, 0x4c,
+  0x4a, 0x06, 0x00, 0xc2, 0x41, 0x24, 0x35, 0x03, 0x00, 0x00, 0x00};
+
+/* A gzip member with stored (uncompressed) deflate blocks, framed by hand:
+   only the CRC32 helper of the vendored zlib is used, never its decoder, so
+   the fixtures stay independent of the inflate path under test. */
+static uint32_t test_crc32(const uint8_t *data, size_t len) {
+  unsigned long crc = crc32(0L, Z_NULL, 0);
+  for (size_t at = 0; at < len;) {
+    unsigned chunk = len - at > 65536 ? 65536 : (unsigned)(len - at);
+    crc = crc32(crc, data + at, chunk);
+    at += chunk;
+  }
+  return (uint32_t)crc;
+}
+
+static void write_gzip_stored(const char *path, const uint8_t *data, size_t len) {
+  static const uint8_t header[10] = {0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff};
+  FILE *out = fopen(path, "wb");
+  assert(out);
+  assert(fwrite(header, 1, sizeof header, out) == sizeof header);
+  size_t at = 0;
+  if (len == 0) {
+    uint8_t empty[5] = {0x01, 0x00, 0x00, 0xff, 0xff};
+    assert(fwrite(empty, 1, sizeof empty, out) == sizeof empty);
+  }
+  while (at < len) {
+    size_t take = len - at > 65535 ? 65535 : len - at;
+    bool last = at + take == len;
+    uint8_t block[5] = {(uint8_t)(last ? 0x01 : 0x00), (uint8_t)take, (uint8_t)(take >> 8),
+      (uint8_t)(~take), (uint8_t)((~take) >> 8)};
+    assert(fwrite(block, 1, sizeof block, out) == sizeof block);
+    assert(fwrite(data + at, 1, take, out) == take);
+    at += take;
+  }
+  uint32_t crc = test_crc32(data, len), isize = (uint32_t)len;
+  uint8_t trailer[8] = {(uint8_t)crc, (uint8_t)(crc >> 8), (uint8_t)(crc >> 16), (uint8_t)(crc >> 24),
+    (uint8_t)isize, (uint8_t)(isize >> 8), (uint8_t)(isize >> 16), (uint8_t)(isize >> 24)};
+  assert(fwrite(trailer, 1, sizeof trailer, out) == sizeof trailer);
+  assert(fclose(out) == 0);
+}
+
+static int64_t gunzip_bytes(const char *src, const char *dst, int64_t max_out) {
+  agc_value args[] = {string(src), string(dst), agc_int(max_out), agc_int(5000)};
+  return agc_as_int(&vm, ok(call("File.gunzip", args)));
+}
+
+static void gunzip_error(const char *src, const char *dst, int64_t max_out) {
+  agc_value args[] = {string(src), string(dst), agc_int(max_out), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.gunzip", args))->ok);
+}
+
+static int64_t file_size_of(const char *path) {
+  agc_fs_info info;
+  assert(agc_fs_stat(path, &info, true) == 0);
+  return (int64_t)info.size;
+}
+
+static void check_file_bytes(const char *path, const uint8_t *data, size_t len) {
+  FILE *in = fopen(path, "rb");
+  assert(in);
+  uint8_t *got = malloc(len ? len : 1);
+  assert(got);
+  assert(fread(got, 1, len ? len : 1, in) == len);
+  assert(fgetc(in) == EOF);
+  assert(memcmp(got, data, len) == 0);
+  free(got);
+  assert(fclose(in) == 0);
+}
+
+/* File.gunzip writes one gzip member file-to-file with fixed 64 KiB chunks:
+   the hardcoded empty and "abc" members, the 64 KiB chunk boundaries, a
+   multi-chunk input with content checked, an exact bound, a zero bomb capped
+   at max_out with its partial conserved, the rejections (bad magic, reserved
+   flags, truncation, CRC and ISIZE, a concatenated member, trailing zeros and
+   junk, a zlib wrapper and raw deflate, a missing or directory source, an
+   existing or missing-parent target) and the argument checks. A FIFO and a
+   device are refused without waiting; a symlink source is followed. */
+static void test_gunzip(const char *directory) {
+  char src[4300], dst[4300], other[4300];
+  assert(snprintf(src, sizeof src, "%s/gunzip-empty.gz", directory) > 0);
+  write_test_file(src, gunzip_empty, sizeof gunzip_empty);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-empty.out", directory) > 0);
+  assert(gunzip_bytes(src, dst, 100) == 0);
+  assert(file_size_of(dst) == 0);
+  assert(agc_fs_unlink(src) == 0 && agc_fs_unlink(dst) == 0);
+  assert(snprintf(src, sizeof src, "%s/gunzip-abc.gz", directory) > 0);
+  write_test_file(src, gunzip_abc, sizeof gunzip_abc);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-abc.out", directory) > 0);
+  assert(gunzip_bytes(src, dst, 100) == 3);
+  check_file_bytes(dst, (const uint8_t *)"abc", 3);
+  assert(agc_fs_unlink(src) == 0 && agc_fs_unlink(dst) == 0);
+  /* The 64 KiB input and output chunk boundaries, written out instead of
+     looped: two cases need no table. */
+  uint8_t zeros[65537] = {0};
+  assert(snprintf(src, sizeof src, "%s/gunzip-zeros64k.gz", directory) > 0);
+  write_gzip_stored(src, zeros, 65536);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-zeros64k.out", directory) > 0);
+  assert(gunzip_bytes(src, dst, 70000) == 65536);
+  check_file_bytes(dst, zeros, 65536);
+  assert(agc_fs_unlink(src) == 0 && agc_fs_unlink(dst) == 0);
+  assert(snprintf(src, sizeof src, "%s/gunzip-zeros64k1.gz", directory) > 0);
+  write_gzip_stored(src, zeros, 65537);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-zeros64k1.out", directory) > 0);
+  assert(gunzip_bytes(src, dst, 70000) == 65537);
+  check_file_bytes(dst, zeros, 65537);
+  assert(agc_fs_unlink(src) == 0 && agc_fs_unlink(dst) == 0);
+  size_t multi = 200000;
+  uint8_t *pattern = malloc(multi);
+  assert(pattern);
+  for (size_t k = 0; k < multi; k++) pattern[k] = (uint8_t)(k % 251);
+  assert(snprintf(src, sizeof src, "%s/gunzip-multi.gz", directory) > 0);
+  write_gzip_stored(src, pattern, multi);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-multi.out", directory) > 0);
+  assert(gunzip_bytes(src, dst, 300000) == (int64_t)multi);
+  check_file_bytes(dst, pattern, multi);
+  free(pattern);
+  assert(agc_fs_unlink(src) == 0 && agc_fs_unlink(dst) == 0);
+  size_t huge = (size_t)3 * 1048576;
+  uint8_t *big = calloc(1, huge);
+  assert(big);
+  assert(snprintf(src, sizeof src, "%s/gunzip-bomb.gz", directory) > 0);
+  write_gzip_stored(src, big, huge);
+  free(big);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-bomb.out", directory) > 0);
+  gunzip_error(src, dst, 1048576);
+  /* The partial is conserved but never grows past max_out: the cap is cut in
+     streaming, so what stays is within one chunk of it. */
+  assert(file_size_of(dst) <= 1048576 && file_size_of(dst) > 1048576 - 65536);
+  assert(agc_fs_unlink(src) == 0 && agc_fs_unlink(dst) == 0);
+  /* The exact bound succeeds. */
+  assert(snprintf(src, sizeof src, "%s/gunzip-exact.gz", directory) > 0);
+  write_test_file(src, gunzip_abc, sizeof gunzip_abc);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-exact.out", directory) > 0);
+  assert(gunzip_bytes(src, dst, 3) == 3);
+  check_file_bytes(dst, (const uint8_t *)"abc", 3);
+  assert(agc_fs_unlink(dst) == 0);
+  gunzip_error(src, dst, 2);
+  assert(file_size_of(dst) == 0);
+  assert(agc_fs_unlink(src) == 0 && agc_fs_unlink(dst) == 0);
+  uint8_t bad[64];
+  memcpy(bad, gunzip_abc, sizeof gunzip_abc);
+  assert(snprintf(src, sizeof src, "%s/gunzip-bad.gz", directory) > 0);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-bad.out", directory) > 0);
+  bad[0] = 0x1e;
+  write_test_file(src, bad, sizeof gunzip_abc);
+  gunzip_error(src, dst, 100);
+  bad[0] = 0x1f;
+  bad[3] = 0x20;
+  write_test_file(src, bad, sizeof gunzip_abc);
+  gunzip_error(src, dst, 100);
+  bad[3] = 0x00;
+  bad[sizeof gunzip_abc / 2] ^= 0x01;
+  write_test_file(src, bad, sizeof gunzip_abc);
+  gunzip_error(src, dst, 100);
+  memcpy(bad, gunzip_abc, sizeof gunzip_abc);
+  bad[sizeof gunzip_abc - 8] ^= 0x01;
+  write_test_file(src, bad, sizeof gunzip_abc);
+  gunzip_error(src, dst, 100);
+  memcpy(bad, gunzip_abc, sizeof gunzip_abc);
+  bad[sizeof gunzip_abc - 4] ^= 0x01;
+  write_test_file(src, bad, sizeof gunzip_abc);
+  gunzip_error(src, dst, 100);
+  memcpy(bad, gunzip_abc, sizeof gunzip_abc);
+  assert(snprintf(other, sizeof other, "%s/gunzip-concat.gz", directory) > 0);
+  FILE *concat = fopen(other, "wb");
+  assert(concat);
+  assert(fwrite(bad, 1, sizeof gunzip_abc, concat) == sizeof gunzip_abc);
+  assert(fwrite(bad, 1, sizeof gunzip_abc, concat) == sizeof gunzip_abc);
+  assert(fclose(concat) == 0);
+  gunzip_error(other, dst, 100);
+  assert(agc_fs_unlink(other) == 0);
+  FILE *trailing = fopen(other, "wb");
+  assert(trailing);
+  assert(fwrite(bad, 1, sizeof gunzip_abc, trailing) == sizeof gunzip_abc);
+  assert(fputc(0, trailing) == 0);
+  assert(fclose(trailing) == 0);
+  gunzip_error(other, dst, 100);
+  assert(agc_fs_unlink(other) == 0);
+  trailing = fopen(other, "wb");
+  assert(trailing);
+  assert(fwrite(bad, 1, sizeof gunzip_abc, trailing) == sizeof gunzip_abc);
+  assert(fwrite("junk", 1, 4, trailing) == 4);
+  assert(fclose(trailing) == 0);
+  gunzip_error(other, dst, 100);
+  assert(agc_fs_unlink(other) == 0);
+  FILE *trunc = fopen(other, "wb");
+  assert(trunc);
+  assert(fwrite(bad, 1, sizeof gunzip_abc / 2, trunc) == sizeof gunzip_abc / 2);
+  assert(fclose(trunc) == 0);
+  gunzip_error(other, dst, 100);
+  assert(agc_fs_unlink(other) == 0);
+  /* A zlib wrapper and raw deflate are refused: only gzip members decode. */
+  static const uint8_t wrapper[] = {0x78, 0x9c, 0x4b, 0x4c, 0x4a, 0x06, 0x00, 0x02, 0x8d, 0x01, 0x2d};
+  write_test_file(other, wrapper, sizeof wrapper);
+  gunzip_error(other, dst, 100);
+  static const uint8_t raw[] = {0x4b, 0x4c, 0x4a, 0x06, 0x00};
+  write_test_file(other, raw, sizeof raw);
+  gunzip_error(other, dst, 100);
+  assert(agc_fs_unlink(other) == 0);
+  /* Every refused input above conserved its partial destination: one file. */
+  assert(agc_fs_unlink(dst) == 0);
+  assert(agc_fs_unlink(src) == 0);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-abc.out", directory) > 0);
+  agc_value missing[] = {string("missing.gz"), string(dst), agc_int(100), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.gunzip", missing))->ok);
+  agc_value is_dir[] = {string(directory), string(dst), agc_int(100), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.gunzip", is_dir))->ok);
+  assert(snprintf(src, sizeof src, "%s/gunzip-keep.gz", directory) > 0);
+  write_test_file(src, gunzip_abc, sizeof gunzip_abc);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-keep.out", directory) > 0);
+  write_test_file(dst, (const uint8_t *)"keepme", 6);
+  gunzip_error(src, dst, 100);
+  check_file_bytes(dst, (const uint8_t *)"keepme", 6);
+  assert(agc_fs_unlink(dst) == 0);
+  gunzip_error(src, src, 100);
+  check_file_bytes(src, gunzip_abc, sizeof gunzip_abc);
+  assert(snprintf(dst, sizeof dst, "%s/no-such-dir/gunzip.out", directory) > 0);
+  gunzip_error(src, dst, 100);
+  agc_value no_path[] = {string(src), string(""), agc_int(100), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.gunzip", no_path))->ok);
+  agc_value bad_max[] = {string(src), string(dst), agc_int(0), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.gunzip", bad_max))->ok);
+  bad_max[2] = agc_int(-1);
+  assert(!agc_as_result(&vm, call("File.gunzip", bad_max))->ok);
+  bad_max[2] = agc_int(1073741825);
+  assert(!agc_as_result(&vm, call("File.gunzip", bad_max))->ok);
+  agc_value bad_timeout[] = {string(src), string(dst), agc_int(100), agc_int(0)};
+  assert(!agc_as_result(&vm, call("File.gunzip", bad_timeout))->ok);
+#ifndef _WIN32
+  assert(snprintf(other, sizeof other, "%s/gunzip-link.gz", directory) > 0);
+  assert(symlink(src, other) == 0);
+  assert(snprintf(dst, sizeof dst, "%s/gunzip-link.out", directory) > 0);
+  assert(gunzip_bytes(other, dst, 100) == 3);
+  check_file_bytes(dst, (const uint8_t *)"abc", 3);
+  assert(agc_fs_unlink(other) == 0 && agc_fs_unlink(dst) == 0);
+  assert(snprintf(other, sizeof other, "%s/gunzip-fifo", directory) > 0);
+  assert(mkfifo(other, 0600) == 0);
+  agc_value fifo[] = {string(other), string(dst), agc_int(100), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.gunzip", fifo))->ok);
+  assert(agc_fs_unlink(other) == 0);
+  agc_value device[] = {string("/dev/null"), string(dst), agc_int(100), agc_int(5000)};
+  assert(!agc_as_result(&vm, call("File.gunzip", device))->ok);
+#endif
+  assert(agc_fs_unlink(src) == 0);
 }
 
 static void check_sha256(agc_value path, const unsigned char expected[32]) {
@@ -407,6 +660,7 @@ int main(void) {
   }
 #endif
   test_sha256(directory);
+  test_gunzip(directory);
   int fd = agc_fs_open(path, AGC_FS_READ);
   uint8_t data[257];
   assert(fd >= 0 && agc_fs_read(fd, data, sizeof data) == 256);

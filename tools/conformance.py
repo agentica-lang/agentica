@@ -137,7 +137,8 @@ AREAS = {
         "files, directories, paths, metadata and locks",
         [
             "tests/test_filesystem.py", "tests/test_source_paths.py", "tests/test_vm_os.py",
-            "tests/test_vm_file_lines.py", "tests/test_vm_file_sha256.py", "tests/test_vm_lazy_io.py",
+            "tests/test_vm_file_lines.py", "tests/test_vm_file_sha256.py", "tests/test_vm_file_gunzip.py",
+            "tests/test_vm_lazy_io.py",
             "tests/test_windows_handle_counts.py",
             "tests/test_windows_metadata_and_locks.py",
         ],

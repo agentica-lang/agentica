@@ -12,6 +12,7 @@
 #endif
 #include "services.h"
 #include "digest.h"
+#include "gunzip.h"
 #include "file_io.h"
 
 /* The bounds of buffer_bytes (File.each_line, File.foreach), on every platform: the stub below reads them too. */
@@ -48,16 +49,22 @@
 #define CHUNK ((size_t)65536)
 #define WRITE_BUFFER ((size_t)4096)
 #define NO_DEADLINE ((int64_t)-1)
+/* File.gunzip bounds: the caller caps the decompressed bytes (at most 1
+   GiB), while the compressed input (headers included) never exceeds a fixed
+   256 MiB, so hostile headers or a compression bomb are cut in streaming. */
+#define GUNZIP_MAX_OUT ((int64_t)1073741824)
+#define GUNZIP_MAX_IN ((uint64_t)268435456)
 
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME
+  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_GZIP_FORMAT,
+  FS_GZIP_CRC, FS_GZIP_TRAILING, FS_GZIP_TOO_BIG, FS_GZIP_INPUT_BIG
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_GUNZIP
 } op_kind;
 
 typedef struct {
@@ -79,7 +86,7 @@ typedef struct {
   size_t out_len, out_cap, count, fail_at;
   fs_status status;
   int err, fd;
-  bool owns_st, polled, locked;
+  bool owns_st, polled, locked, dst_failed;
   const char *file_type;
   agc_vm *vm;
   agc_poller *poller;
@@ -770,6 +777,149 @@ static void work_sha256(op *o) {
   o->out_cap = AGC_SHA256_BYTES;
 }
 
+/* File.gunzip: one gzip member file-to-file in fixed 64 KiB chunks with
+   O(chunk) memory. The source opens like File.sha256 (non-blocking, and the
+   fstat of the descriptor itself decides regular, so a FIFO swap cannot turn
+   this into a wait); the destination opens like OP_OPEN_CREATE (O_EXCL, never
+   following a link, an existing path stays intact). Output is checked against
+   max_out before every write, so a partial file never grows past it and is
+   conserved on error (never removed: removal would race with a replacement).
+   Only malloc'd memory is touched here, no GC pointer, and nothing raises. A
+   job already running runs to its end on timeout or cancel and its result is
+   dropped, as with the other whole-file calls: there is no handle to close. */
+static void work_gunzip(op *o) {
+  uint64_t max_out = (uint64_t)o->count;
+  int sfd = open_for(o, true, false);
+  if (sfd < 0) return;
+  agc_fs_info info;
+  if (agc_fs_fstat(sfd, &info) != 0) {
+    int err = errno;
+    agc_fs_close(sfd);
+    fail_op(o, FS_READ, err);
+    return;
+  }
+  if (!AGC_FS_ISREG(info.mode)) {
+    agc_fs_close(sfd);
+    fail_op(o, FS_NOT_REGULAR, 0);
+    return;
+  }
+  blocking(sfd);
+  /* O_EXCL on any existing entry, a dangling link included, and never follows one. */
+  int dfd = agc_fs_open(o->to, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE);
+  if (dfd < 0) {
+    int err = errno;
+    agc_fs_close(sfd);
+    o->dst_failed = true;
+    fail_op(o, FS_OPEN, err);
+    return;
+  }
+  uint8_t *in = malloc(CHUNK);
+  uint8_t *out = malloc(CHUNK);
+  agc_gunzip *gz = agc_gunzip_begin();
+  if (!in || !out || !gz) {
+    agc_gunzip_free(gz);
+    free(in);
+    free(out);
+    agc_fs_close(sfd);
+    agc_fs_close(dfd);
+    fail_op(o, FS_READ, ENOMEM);
+    return;
+  }
+  uint64_t total_in = 0, total_out = 0;
+  const uint8_t *next = NULL;
+  size_t left = 0;
+  bool src_eof = false, finished = false;
+  for (;;) {
+    if (left == 0 && !src_eof) {
+      int64_t n = agc_fs_read(sfd, in, CHUNK);
+      if (n < 0 && errno == EINTR) continue;
+      if (n < 0) {
+        fail_op(o, FS_READ, errno);
+        break;
+      }
+      if (n == 0) {
+        src_eof = true;
+      } else {
+        if (total_in + (uint64_t)n > GUNZIP_MAX_IN) {
+          fail_op(o, FS_GZIP_INPUT_BIG, 0);
+          break;
+        }
+        total_in += (uint64_t)n;
+        next = in;
+        left = (size_t)n;
+      }
+    }
+    size_t produced = 0;
+    agc_gunzip_status fed;
+    if (left > 0 || !src_eof) {
+      fed = agc_gunzip_feed(gz, &next, &left, out, CHUNK, &produced);
+    } else {
+      const uint8_t *empty = NULL;
+      size_t empty_left = 0;
+      fed = agc_gunzip_feed(gz, &empty, &empty_left, out, CHUNK, &produced);
+    }
+    if (fed == AGC_GUNZIP_NOMEM) {
+      fail_op(o, FS_READ, ENOMEM);
+      break;
+    }
+    if (fed == AGC_GUNZIP_CRC) {
+      fail_op(o, FS_GZIP_CRC, 0);
+      break;
+    }
+    if (fed == AGC_GUNZIP_FORMAT) {
+      fail_op(o, FS_GZIP_FORMAT, 0);
+      break;
+    }
+    if (produced > 0) {
+      if (total_out + (uint64_t)produced > max_out) {
+        fail_op(o, FS_GZIP_TOO_BIG, 0);
+        break;
+      }
+      int err = 0;
+      if (!write_all(dfd, out, produced, &err)) {
+        fail_op(o, FS_WRITE, err);
+        break;
+      }
+      total_out += (uint64_t)produced;
+    }
+    if (fed == AGC_GUNZIP_DONE) {
+      finished = true;
+      break;
+    }
+    if (fed == AGC_GUNZIP_MORE && left == 0 && src_eof && produced == 0) {
+      fail_op(o, FS_GZIP_FORMAT, 0);
+      break;
+    }
+  }
+  if (finished && o->status == FS_OK) {
+    if (left != 0) {
+      fail_op(o, FS_GZIP_TRAILING, 0);
+    } else {
+      /* A member that ends exactly at end of file has no trailer beyond it:
+         one more byte decides trailing data from a clean end. Every trailing
+         byte is refused, zeros and concatenated members alike. */
+      uint8_t extra = 0;
+      for (;;) {
+        int64_t n = agc_fs_read(sfd, &extra, 1);
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0) {
+          fail_op(o, FS_READ, errno);
+        } else if (n > 0) {
+          fail_op(o, FS_GZIP_TRAILING, 0);
+        }
+        break;
+      }
+    }
+  }
+  agc_gunzip_free(gz);
+  free(in);
+  free(out);
+  agc_fs_close(sfd);
+  agc_fs_close(dfd);
+  if (o->status != FS_OK) return;
+  o->size = (int64_t)total_out;
+}
+
 static void work_stat(op *o) {
   agc_fs_info info;
   if ((o->kind == OP_LSTAT ? agc_fs_stat(o->path, &info, false) : agc_fs_stat(o->path, &info, true)) != 0) {
@@ -1128,6 +1278,7 @@ static void work(void *data) {
     case OP_WRITE: work_write(o); break;
     case OP_CLOSE: work_close(o); break;
     case OP_SHA256: work_sha256(o); break;
+    case OP_GUNZIP: work_gunzip(o); break;
   }
 }
 
@@ -1285,6 +1436,11 @@ static agc_value common_error(agc_vm *vm, const op *o) {
       if (o->kind == OP_LIST) return os_error(vm, "directory-list: could not open directory", o->path, path_len, o->err);
       if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256)
         return os_error(vm, "open-input-file: cannot open input file", o->path, path_len, o->err);
+      if (o->kind == OP_GUNZIP) {
+        if (!o->dst_failed) return os_error(vm, "open-input-file: cannot open input file", o->path, path_len, o->err);
+        size_t to_len = o->to ? strlen(o->to) : 0;
+        return os_error(vm, "open-output-file: error opening file", o->to, to_len, o->err);
+      }
       return os_error(vm, "open-output-file: error opening file", o->path, path_len, o->err);
     case FS_IS_DIR: {
       text t = {0};
@@ -1304,6 +1460,11 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_REFUSED: return error_of(refused_path);
     case FS_LOCK: return agc_system_error(vm, "filesystem: cannot lock file", o->err);
     case FS_NOT_LOCKABLE: return error_of(not_lockable);
+    case FS_GZIP_FORMAT: return error_of("filesystem: invalid gzip data");
+    case FS_GZIP_CRC: return error_of("filesystem: gzip checksum mismatch");
+    case FS_GZIP_TRAILING: return error_of("filesystem: gzip has trailing bytes");
+    case FS_GZIP_TOO_BIG: return error_of("filesystem: decompressed output exceeds max_out_bytes");
+    case FS_GZIP_INPUT_BIG: return error_of("filesystem: compressed input exceeds 268435456 bytes");
     case FS_RENAME: {
       text t = {0};
       puts_text(&t, "filesystem: cannot rename path\n  from: ");
@@ -1432,6 +1593,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_READ_TEXT:
       case OP_READ_LINE: result = text_result(o); break;
       case OP_SHA256: result = bytes_result(o); break;
+      case OP_GUNZIP: result = agc_result_value(true, agc_int(o->size)); break;
       case OP_LIST: result = list_result(vm, o); break;
       case OP_REAL: result = real_result(o); break;
       case OP_READ_BYTES: result = bytes_result(o); break;
@@ -1547,6 +1709,28 @@ static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   return path_op(vm, OP_SHA256, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who,
                  complete_expected);
+}
+
+/* File.gunzip is the one exception to the Ruby-first rule the supervisor
+   accepted: like Zlib::GzipReader it gunzips, but as a whole-file call with
+   the File timeout and Result of the other whole-file calls (Result[Int]
+   counts the bytes written), and without a new module. */
+static agc_value builtin_gunzip(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
+  const agc_string *src = agc_as_string(vm, args[0]);
+  const agc_string *dst = agc_as_string(vm, args[1]);
+  int64_t max_out = agc_as_int(vm, args[2]);
+  int64_t timeout = agc_as_int(vm, args[3]);
+  if (max_out < 1 || max_out > GUNZIP_MAX_OUT)
+    return error_of("filesystem: max_out_bytes must be between 1 and 1073741824");
+  if (timeout <= 0) return error_of(bad_timeout);
+  if (!path_string(src)) return contract_error(complete_who, complete_expected, src);
+  if (!path_string(dst)) return contract_error(complete_who, complete_expected, dst);
+  op *o = new_op(vm, OP_GUNZIP);
+  o->path = agc_host_path(vm, src);
+  o->to = agc_host_path(vm, dst);
+  o->count = (size_t)max_out;
+  return start(vm, o, agc_void(), timeout);
 }
 
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -2206,6 +2390,7 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   /* New rows go last: a C test may index a table by position. */
   {"File.sha256", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"File.gunzip", 4, builtin_gunzip, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];

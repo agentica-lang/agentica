@@ -189,6 +189,26 @@ Signatures are in
   ends owns nothing. There is no snapshot: bytes are hashed in read order,
   so a concurrent writer changes the digest; to verify an archive, write it
   to a temporary name first, hash it, then `Path.rename` it into place.
+- `File.gunzip(src, dst, max_out_bytes, timeout_ms)` gives `Result[Int]`:
+  it decompresses one gzip member from `src` into a new file at `dst` and
+  returns the bytes written. Only gzip members decode (RFC 1952, checked
+  with `windowBits` 31): a zlib wrapper or raw deflate is
+  `error("filesystem: invalid gzip data")`, as are a bad magic, method
+  or reserved flags, a truncated or corrupt stream, and any trailing bytes
+  after the single member (a second member or zeros alike). A CRC32 or
+  ISIZE mismatch is `error("filesystem: gzip checksum mismatch")`.
+  `max_out_bytes` is 1 to 1073741824, otherwise a contract error; output
+  past it is `error("filesystem: decompressed output exceeds
+  max_out_bytes")`, cut while streaming so a partial file never grows
+  past it and is conserved on error (never removed). The compressed input
+  (headers included) never exceeds 268435456 bytes, else
+  `error("filesystem: compressed input exceeds 268435456 bytes")`. The
+  source is read like `File.sha256` reads it (regular files only through
+  a private descriptor) and the destination opens like `create_private`
+  (an existing path, a dangling link included, is an error and stays
+  intact). `timeout_ms` covers the whole call; expiry or a cancel detaches
+  like the other whole-file calls, while work already running runs to its
+  end and its result is dropped.
 - `File.close` flushes and is idempotent. Timeouts are positive milliseconds and
   include the lock wait. A timeout during active I/O closes the handle; a
   timeout while waiting for the lock keeps it open.

@@ -489,6 +489,23 @@ ROWS_4: List[Model.Builtin] = [
       alternatives: [],
     ),
     Model.Builtin(
+      name: "File.gunzip",
+      parameters: [
+        Model.Named(name: "src", type: Types.Type.String),
+        Model.Named(name: "dst", type: Types.Type.String),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "File.gunzip",
+      effects: ["filesystem"],
+      description: (
+        "Decompress one gzip member from src to a new file at dst and return the bytes written; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
       name: "File.lstat",
       parameters: [
         Model.Named(name: "path", type: Types.Type.String),
