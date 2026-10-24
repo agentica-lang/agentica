@@ -473,7 +473,9 @@ def publish_member(
 end
 
 # Extracts one member from a validated archive, routed by its bounded file magic: a ZIP local header goes to
-# `extract_zip`, anything else keeps the TAR and gzip path. The URL and its suffix never decide the format.
+# `extract_zip`, anything else keeps the TAR and gzip path. The URL and its suffix never decide the format. The
+# extractor timeout is recomputed from the original absolute deadline after the sniff, so the probe never extends
+# the global budget; an expired deadline refuses before either extractor with the usual timeout failure.
 def extract_member(
   archive: String,
   canonical: String,
@@ -481,10 +483,16 @@ def extract_member(
   options: Archive.Options,
   deadline: Int,
 ) -> Result[List[Int]]
-  if zip_magic?(archive, deadline)
-    return Archive.extract_zip(archive, [canonical], dest, options)
+  zipped = zip_magic?(archive, deadline)
+  left = deadline - Time.monotonic_ms()
+  if left <= 0
+    return error("the operation timed out")
   end
-  return Archive.extract_tar(archive, [canonical], dest, options)
+  fresh = Archive.Options(timeout_ms: left, max_output_bytes: options.max_output_bytes)
+  if zipped
+    return Archive.extract_zip(archive, [canonical], dest, fresh)
+  end
+  return Archive.extract_tar(archive, [canonical], dest, fresh)
 end
 
 # True when the file at `archive` opens with the ZIP local header (`PK\x03\x04`). Anything unreadable or short

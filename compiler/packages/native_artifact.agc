@@ -26,7 +26,7 @@ export MAX_TIMEOUT_MS = 86400000
 export MAX_CLOCK = 9223372036854775807
 
 ## One artifact row: the URL of the archive, its expected SHA-256 (64 lowercase hex digits), and the member to use
-## from it (a relative TAR path, kept in archive spelling after one optional leading "./").
+## from it (a relative TAR or ZIP member path, kept in archive spelling after one optional leading "./").
 export struct Source
   url: String
   sha256: String

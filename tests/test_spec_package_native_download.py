@@ -386,6 +386,22 @@ def test_zip_archive_download_calls_offline_and_deny(server, tmp_path_factory):
     assert problem is not None and problem["code"] in ("PKG-HASH-MISMATCH", "PKG-NATIVE-MISSING"), problem
 
 
+def test_tar_bytes_under_zip_url_uses_tar_path(server, tmp_path):
+    # The mirror of the ZIP test above: TAR bytes under a `.zip` URL still take the TAR path.
+    ws = Workspace(tmp_path)
+    (ws.project / "main.agc").write_text('def main() -> Void\nend\n', encoding="utf-8")
+    archive = make_tar({"lib.bin": b"member-bytes"})
+    assert archive[:4] != b"PK\x03\x04"
+    sha = digest(archive)
+    server.routes_ref["/t/lib.zip"] = archive
+    write_root_manifest(ws, "demo", [download_row(HERE, server.url("/t/lib.zip"), sha)])
+    result, problem = update(ws)
+    assert (result.code, problem) == (0, None), getattr(result, "stderr", problem)
+    assert any(p == "/t/lib.zip" for p in server.requests)
+    result = run_cli(ws, "--json", "install")
+    assert result.code == 0, result.stderr
+
+
 def test_dependency_download_git_hash_stable_and_host_only(server, tmp_path, remotes):
     from tests.package_support import dependency as _dep, lock_entry as _lock_entry
     from tests.test_vm_native import library_name as _libname

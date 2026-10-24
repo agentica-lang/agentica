@@ -255,7 +255,7 @@ import Sqlite from "pkg/sqlite/db"
   `windows` that has exactly one of `file = "native/path"` (shipped in the
   package, at most 1 MiB, hashed with it; a macOS file is a universal binary),
   `system = "libname"` (a name the system loader looks up), or
-  `{ url, sha256, member }` (a pinned TAR download, fetched for the host):
+  `{ url, sha256, member }` (a pinned TAR or ZIP download, fetched for the host; the format is detected from file magic, never the URL):
 
   ```toml
   [native.sqlite3]
