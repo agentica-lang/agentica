@@ -131,6 +131,7 @@ AREAS = {
             "tests/test_stdlib_prelude.py",
             "tests/test_vm_logger.py", "tests/test_vm_monotonic.py", "tests/test_vm_stdout.py",
             "tests/test_vm_crypto.py", "tests/test_vm_native.py", "tests/test_examples_ffi.py",
+            "tests/test_examples_ffi_duckdb.py",
         ],
     ),
     "files": (

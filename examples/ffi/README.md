@@ -13,6 +13,9 @@ note saying which.
   `Native.close`, and a caller-owned float buffer that C fills and reads.
 - [`function_table.agc`](function_table.agc): dispatch through a table of
   typed C function pointers, the shape of APIs like onnxruntime's `OrtApi`.
+- [`duckdb/`](duckdb/): the same shapes against the real DuckDB C API
+  (pinned v2.0.0): version check, `:memory:` open and connect, typed rows,
+  a captured SQL error, and CSV and Parquet `COPY` roundtrips.
 
 ## Build the library
 

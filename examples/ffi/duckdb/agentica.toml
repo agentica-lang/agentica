@@ -1,0 +1,6 @@
+name = "ffi-duckdb"
+
+[native.duckdb]
+linux = { file = "native/linux/libduckdb.so" }
+macos = { file = "native/macos/libduckdb.dylib" }
+windows = { file = "native/windows/duckdb.dll" }
