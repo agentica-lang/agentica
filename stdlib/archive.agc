@@ -191,7 +191,7 @@ export def extract_tar(src: String, members: List[String], dest_dir: String, opt
   if gzip
     dec = try start_decoder(handle, deadline)
     input = Input.Gzip(GzipInput(handle: handle, dec: dec))
-    cur = Cursor(carry: [], pending: first, raw_read: 0, out_total: 0, file_eof: false, stream_done: false)
+    cur = Cursor(carry: [], pending: first, raw_read: first.size, out_total: 0, file_eof: false, stream_done: false)
   end
   ctx = Ctx(
     dest: dest,
@@ -380,6 +380,9 @@ def fill(cur: Cursor, input: Input, need: Int, deadline: Int, src: String) -> Re
           quantum = smaller(SCAN_BYTES - cur.out_total, CHUNK)
           if quantum <= 0
             quantum = 1
+          end
+          if Time.monotonic_ms() >= deadline
+            return error("archive: operation timed out")
           end
           step = try inflate_step(g.dec, feed, quantum)
           cur = cur.with(

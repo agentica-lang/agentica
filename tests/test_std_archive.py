@@ -8,11 +8,12 @@ outputs name the exact `error(...)` text of std/archive.
 import gzip
 import io
 import os
+import subprocess
 import tarfile
 
 import pytest
 
-from tests.agentica_test import binary, host_only, run, vm_environment
+from tests.agentica_test import binary, run, vm_environment
 
 WINDOWS = os.name == "nt"
 
@@ -296,11 +297,20 @@ def test_duplicate_and_case_colliding_members_rejected(tmp_path, first, second):
     assert not (work / "d").exists()
 
 
-@host_only(WINDOWS, "Windows needs privileges to create a symbolic link")
+def make_link(target, link):
+    """A file symlink; Windows uses mklink like tests/vm_os_support.py, which the Windows CI runners allow."""
+    if not WINDOWS:
+        os.symlink(target, link)
+        return
+    made = subprocess.run(["cmd.exe", "/d", "/c", "mklink", str(link), str(target)],
+                          capture_output=True, text=True, check=False)
+    assert made.returncode == 0, made.stdout + made.stderr
+
+
 def test_symlink_source_is_refused(tmp_path):
     work = tmp_path
     (work / "real.tar").write_bytes(finish([entry(b"a.txt", b"hi")]))
-    (work / "link.tar").symlink_to(work / "real.tar")
+    make_link(work / "real.tar", work / "link.tar")
     lines = run_driver(work, "linksrc", driver([("link", "link.tar", q("a.txt"), "d", "Archive.options()")]))
     assert lines == ["link error archive: source is not a regular file: link.tar", ""]
     assert not (work / "d").exists()
@@ -466,13 +476,7 @@ def test_limits_and_streaming_chunks(tmp_path):
     work = tmp_path
     big = bytes(i % 251 for i in range(200000))
     (work / "big.bin").write_bytes(big)
-    with tarfile.open(work / "big.tar", "w") as tar:
-        info = tarfile.TarInfo("big.bin")
-        info.size = len(big)
-        tar.addfile(info, io.BytesIO(big))
-        info = tarfile.TarInfo("small.txt")
-        info.size = 3
-        tar.addfile(info, io.BytesIO(b"abc"))
+    pax_tar(work, "big.tar", [("big.bin", big), ("small.txt", b"abc")])
     with open(work / "big.tar", "rb") as raw:
         (work / "big.tar.gz").write_bytes(gzip.compress(raw.read()))
     huge_size = ustar_header(b"huge.bin", 2 * 1073741824)
@@ -549,6 +553,52 @@ def test_entry_cap_trips_past_8192(tmp_path):
     assert lines[0] == "ok ok [1]"
     assert lines[1] == "over error archive: too many entries, past 8192"
     assert (work / "o1" / "f08191.txt").read_bytes() == b"x"
+
+
+def test_pax_local_beats_gnu_longname_and_longlink(tmp_path):
+    work = tmp_path
+    pax = pax_block([(b"path", b"PAX_NAME"), (b"size", b"4")])
+    reg = entry(b"HEADER_NAME", b"0123456789")
+    (work / "mix.tar").write_bytes(finish([pax + longname_block(b"GNU_NAME") + reg]))
+    (work / "mixk.tar").write_bytes(
+        finish([pax + entry(b"././@LongLink", b"GNU_LINK\x00", b"K") + reg]))
+    options = "Archive.options()"
+    calls = [
+        ("pax", "mix.tar", q("PAX_NAME"), "o1", options),
+        ("gnu", "mix.tar", q("GNU_NAME"), "o2", options),
+        ("hdr", "mix.tar", q("HEADER_NAME"), "o3", options),
+        ("paxk", "mixk.tar", q("PAX_NAME"), "o4", options),
+    ]
+    lines = run_driver(work, "paxgnu", driver(calls))
+    # Both Python's tarfile and GNU tar resolve this to PAX_NAME with 4
+    # bytes, so the local PAX override wins over the GNU long name or link.
+    assert lines[0] == "pax ok [4]"
+    assert lines[1] == "gnu error archive: member not found: GNU_NAME"
+    assert lines[2] == "hdr error archive: member not found: HEADER_NAME"
+    assert lines[3] == "paxk ok [4]"
+    assert (work / "o1" / "PAX_NAME").read_bytes() == b"0123"
+    assert (work / "o4" / "PAX_NAME").read_bytes() == b"0123"
+
+
+def test_expired_deadline_aborts_long_scans(tmp_path):
+    work = tmp_path
+    pax_tar(work, "big.tar", [("z.bin", b"\x00" * 10000000), ("small.txt", b"abc")])
+    with open(work / "big.tar", "rb") as raw:
+        (work / "big.tar.gz").write_bytes(gzip.compress(raw.read()))
+    tiny = opts(timeout=1)
+    calls = [
+        ("gz", "big.tar.gz", q("z.bin"), "o1", tiny),
+        ("plain", "big.tar", q("small.txt"), "o2", tiny),
+    ]
+    lines = run_driver(work, "expired", driver(calls))
+    # Ten megabytes through the interpreter can never fit in one
+    # millisecond, so an already-expired deadline must fail, not hang or go
+    # ok: the gzip poll fires mid-inflate and the plain skip path checks each
+    # 64 KiB read. A 1 ms deadline can also fire natively inside the first
+    # file read, which surfaces wrapped; exact abort timing and site are
+    # clock-driven and not asserted, only that every outcome is a timeout.
+    assert lines[0].startswith("gz error archive: ") and "timed out" in lines[0]
+    assert lines[1].startswith("plain error archive: ") and "timed out" in lines[1]
 
 
 def test_utf8_names_and_skipped_entries_do_not_materialize(tmp_path):
