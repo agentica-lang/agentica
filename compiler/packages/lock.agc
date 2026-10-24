@@ -9,12 +9,14 @@
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
+import NativeArtifact from "native_artifact"
 import Toml from "std/toml"
 import Reader from "toml_read"
 
-# The keys of the lock and of a [[package]] table. A package has exactly one of tag and ref.
-TOP_KEYS = ["version", "package"]
+# The keys of the lock, of a [[package]] table and of a [[native-artifact]] table.
+TOP_KEYS = ["version", "package", "native-artifact"]
 PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace"]
+ARTIFACT_KEYS = ["package", "library", "system", "url", "sha256", "member"]
 
 LOCK_FORMAT = 1
 HASH_PREFIX = "sha256:"
@@ -31,10 +33,22 @@ export struct Locked
   member: Bool
 end
 
-## A read lock. packages are in the order of the file.
+## One locked native artifact: the lock key of the package ("" for the project root), the library and the
+## system, with the archive URL, its expected SHA-256 and the member to use. One row is one alias on one system.
+export struct Artifact
+  package: String
+  library: String
+  system: String
+  url: String
+  sha256: String
+  member: String
+end
+
+## A read lock. packages and artifacts are in the order of the file.
 export struct Lock
   file: String
   packages: List[Locked]
+  artifacts: List[Artifact]
 end
 
 ## Reads the lock at file.
@@ -64,18 +78,44 @@ export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
       packages = packages.push(locked)
     end
   end
-  return ok(Lock(file: file, packages: packages))
+  artifacts: List[Artifact] = []
+  if root.has_key?("native-artifact")
+    items = try Reader.array(reading, root["native-artifact"], "native-artifact")
+    seen: Set[String] = Set.new([])
+    for index in 0...items.size
+      path = Reader.item("native-artifact", index)
+      artifact = try artifact_of(reading, items[index], path)
+      key = identity(artifact)
+      if seen.include?(key)
+        return error(Reader.fail(reading, Reader.child(path, "system"), "native artifact locked twice"))
+      end
+      seen = seen.add(key)
+      artifacts = artifacts.push(artifact)
+    end
+  end
+  return ok(Lock(file: file, packages: packages, artifacts: artifacts))
 end
 
-## The text of a lock with these packages: `version = 1`, then one `[[package]]` for each, sorted by name, with the
-## keys in the order of 05b. The same packages always give the same bytes, so a lock that did not change makes no diff,
-## and `read` gives back what was written.
-export def encode(packages: List[Locked]) -> String
+## The text of a lock with these packages and artifacts: `version = 1`, then one `[[package]]` for each,
+## sorted by name, then one `[[native-artifact]]` for each, sorted by (package, library, system), with the keys in
+## a fixed order. The same entries always give the same bytes, so a lock that did not change makes no diff, and
+## `read` gives back what was written. A lock with no packages and no artifacts is `version = 1` alone.
+export def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
   sorted = packages.sort_by do |locked| locked.name end
   tables = sorted.map do |locked| package_table(locked) end
+  ordered = artifacts.sort_by do |artifact| sort_key(artifact) end
+  artifact_tables = ordered.map do |artifact| artifact_table(artifact) end
   root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT)})
-  if tables.size > 0
+  if tables.size > 0 and artifact_tables.size > 0
+    version = Toml.Value.Int(LOCK_FORMAT)
+    root = Toml.Value.Table(
+      {"version": version, "package": Toml.Value.Array(tables), "native-artifact": Toml.Value.Array(artifact_tables)},
+    )
+  elsif tables.size > 0
     root = Toml.Value.Table({"version": Toml.Value.Int(LOCK_FORMAT), "package": Toml.Value.Array(tables)})
+  elsif artifact_tables.size > 0
+    version = Toml.Value.Int(LOCK_FORMAT)
+    root = Toml.Value.Table({"version": version, "native-artifact": Toml.Value.Array(artifact_tables)})
   end
   # The keys are fixed and every value is a string or the version, so std/toml has no reason to refuse them.
   return Toml.encode(root).unwrap!
@@ -89,6 +129,16 @@ export def find(lock: Lock, name: String) -> Result[Locked]
     end
   end
   return error("#{name} is not in the lock")
+end
+
+## The locked artifact for this package, library and system, or an error. package is "" for the project root.
+export def find_artifact(lock: Lock, package: String, library: String, system: String) -> Result[Artifact]
+  for artifact in lock.artifacts
+    if artifact.package == package and artifact.library == library and artifact.system == system
+      return ok(artifact)
+    end
+  end
+  return error("#{package} #{library} #{system} is not in the lock")
 end
 
 ## `name@version` for the messages and the stored names of a package's files: the tag, the first characters of the
@@ -118,6 +168,75 @@ def package_table(locked: Locked) -> Toml.Value
     return Toml.Value.Table(keys.put("workspace", Toml.Value.Bool(true)))
   end
   return Toml.Value.Table(keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash)))
+end
+
+# The sort key of a native artifact row: one alias on one system of one package.
+def sort_key(artifact: Artifact) -> String
+  sep = String.from_code(0)
+  return "#{artifact.package}#{sep}#{artifact.library}#{sep}#{artifact.system}"
+end
+
+# The keys of a native artifact, in a fixed order: package, library, system, url, sha256, member.
+def artifact_table(artifact: Artifact) -> Toml.Value
+  keys = {
+    "package": Toml.Value.Str(artifact.package),
+    "library": Toml.Value.Str(artifact.library),
+    "system": Toml.Value.Str(artifact.system),
+    "url": Toml.Value.Str(artifact.url),
+    "sha256": Toml.Value.Str(artifact.sha256),
+    "member": Toml.Value.Str(artifact.member),
+  }
+  return Toml.Value.Table(keys)
+end
+
+# The identity of a native artifact row: one alias on one system of one package.
+def identity(artifact: Artifact) -> String
+  return sort_key(artifact)
+end
+
+def artifact_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Artifact]
+  entries = try Reader.table(reading, value, path)
+  try Reader.known_keys(reading, entries, ARTIFACT_KEYS, path)
+  for key in ARTIFACT_KEYS
+    if !entries.has_key?(key)
+      return error(Reader.fail(reading, Reader.child(path, key), "missing key"))
+    end
+  end
+  package = try text_of(reading, entries, path, "package")
+  if package != ""
+    problem = GitSource.name_problem(package)
+    if problem != ""
+      return error(Reader.fail_help(reading, Reader.child(path, "package"), "not a package name", problem))
+    end
+  end
+  library = try text_of(reading, entries, path, "library")
+  problem = GitSource.name_problem(library)
+  if problem != ""
+    return error(Reader.fail_help(reading, Reader.child(path, "library"), "not a library name", problem))
+  end
+  system = try text_of(reading, entries, path, "system")
+  if system != "linux" and system != "macos" and system != "windows"
+    here = Reader.child(path, "system")
+    return error(Reader.fail_help(reading, here, "not a system", "write linux, macos or windows"))
+  end
+  url = try text_of(reading, entries, path, "url")
+  if !NativeArtifact.url_allowed?(url)
+    message = "the url is not an https URL (or an http URL to 127.0.0.1 or [::1])"
+    return error(Reader.fail_help(reading, Reader.child(path, "url"), "not a download URL", message))
+  end
+  sha = try text_of(reading, entries, path, "sha256")
+  if !NativeArtifact.valid_sha?(sha)
+    message = "the sha256 is not 64 lowercase hex digits"
+    return error(Reader.fail_help(reading, Reader.child(path, "sha256"), "not a sha256", message))
+  end
+  member = try text_of(reading, entries, path, "member")
+  case NativeArtifact.canonical_member(member)
+    ok(_) ->
+      return ok(Artifact(package: package, library: library, system: system, url: url, sha256: sha, member: member))
+    error(_) ->
+      message = "the member is not a safe relative path"
+      return error(Reader.fail_help(reading, Reader.child(path, "member"), "not a member", message))
+  end
 end
 
 def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Locked]

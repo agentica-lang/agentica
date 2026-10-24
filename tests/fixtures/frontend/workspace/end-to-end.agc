@@ -108,6 +108,7 @@ def in_memory(files: Map[String, String]) -> Workspace.Workspace
     std_source: resolver() do |name: String| std_module(name) end,
     list_folder: lister() do |path: String| entries(files, path) end,
     read_bytes: byter() do |path: String| bytes_of(files, path) end,
+    native_artifact: nativer() do |request: Workspace.NativeRequest| error("no native artifact in this workspace") end,
   )
 end
 
@@ -129,6 +130,10 @@ def lister(f: Fn[String, Result[List[Workspace.Entry]]]) -> Fn[String, Result[Li
 end
 
 def byter(f: Fn[String, Result[List[Int]]]) -> Fn[String, Result[List[Int]]]
+  return f
+end
+
+def nativer(f: Fn[Workspace.NativeRequest, Result[String]]) -> Fn[Workspace.NativeRequest, Result[String]]
   return f
 end
 

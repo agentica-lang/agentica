@@ -8,7 +8,9 @@
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
 import Workspace from "../modules/workspace"
+import Lock from "lock"
 import Manifest from "manifest"
+import NativeArtifact from "native_artifact"
 import PackageHash from "package_hash"
 import Reader from "toml_read"
 
@@ -32,7 +34,10 @@ end
 
 ## The libraries a manifest declares, for the system `os` ("linux", "macos" or "windows"). `root` is the real folder of
 ## the package (or of the project), which holds the files. `package` is false for the project, whose files are not
-## hashed; `member` is true for a workspace member, whose are not either.
+## hashed; `member` is true for a workspace member, whose are not either. `package_name` is the lock key of the
+## package ("" for the project root), `lock` the lock to match downloaded rows against, and `cache_root` the
+## package cache root ("" when no place was given): downloaded rows are verified from the cache alone and become
+## a file path, never fetched.
 export def resolve(
   workspace: Workspace.Workspace,
   manifest: Manifest.Manifest,
@@ -40,13 +45,18 @@ export def resolve(
   os: String,
   package: Bool,
   member: Bool,
+  package_name: String,
+  lock: Lock.Lock,
+  cache_root: String,
 ) -> Found
   targets: Map[String, Target] = {}
   for library in manifest.natives
-    targets = targets.put(library.name, target_of(workspace, manifest, library, root, os))
+    target = target_of(workspace, manifest, library, root, os, package_name, lock, cache_root)
+    targets = targets.put(library.name, target)
   end
   if !package
-    return Found(targets: targets, watched: files(targets))
+    extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
+    return Found(targets: targets, watched: files(targets).concat(extra))
   end
   names = PackageHash.native_files(workspace, root)
   hashed = !member and PackageHash.manifest_hashed?(workspace, root, names)
@@ -57,7 +67,8 @@ export def resolve(
   if hashed
     watched = watched.push(manifest.file)
   end
-  return Found(targets: targets, watched: watched)
+  extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
+  return Found(targets: targets, watched: watched.concat(extra))
 end
 
 # The files that the targets name.
@@ -79,11 +90,17 @@ def target_of(
   library: Manifest.NativeLibrary,
   root: String,
   os: String,
+  package_name: String,
+  lock: Lock.Lock,
+  cache_root: String,
 ) -> Target
   here = Reader.child("native", library.name)
   for place in library.places
     if place.system != os
       next
+    end
+    if place.url != ""
+      return downloaded_target(workspace, manifest, library.name, here, place, os, package_name, lock, cache_root)
     end
     if place.file == ""
       return Target.System(place.name)
@@ -103,4 +120,106 @@ def target_of(
   return Target.Unusable(
     Failure.fail_key(manifest.file, here, "PKG-NATIVE-PLATFORM", message, Failure.hint(help)),
   )
+end
+
+# The downloaded row on this system: the lock row it matches, verified from the cache alone. A lock the manifest
+# outgrew, a row the lock lacks and a cache that cannot verify are Unusable at use, so an unused alias never fails.
+def downloaded_target(
+  workspace: Workspace.Workspace,
+  manifest: Manifest.Manifest,
+  name: String,
+  here: String,
+  place: Manifest.Place,
+  os: String,
+  package_name: String,
+  lock: Lock.Lock,
+  cache_root: String,
+) -> Target
+  row = Reader.child(here, os)
+  found = Lock.find_artifact(lock, package_name, name, os)
+  if !found.ok?
+    message = "the lock has no native artifact for #{name} on #{os}"
+    help = Failure.hint("run agentica install to lock the native artifacts the manifests declare")
+    return Target.Unusable(Failure.fail_key(manifest.file, row, "PKG-LOCK-STALE", message, help))
+  end
+  artifact = found.unwrap!
+  if artifact.url != place.url or artifact.sha256 != place.sha256 or !same_member?(artifact.member, place.member)
+    message = "the lock does not list the download the manifest names for #{name} on #{os}"
+    help = Failure.hint("run agentica update to lock the download the manifest names")
+    return Target.Unusable(Failure.fail_key(manifest.file, row, "PKG-LOCK-STALE", message, help))
+  end
+  if cache_root == ""
+    message = "there is no place for the native artifact cache"
+    help = Failure.hint("set HOME or XDG_CACHE_HOME")
+    return Target.Unusable(Failure.fail_key(manifest.file, row, "PKG-FETCH", message, help))
+  end
+  request = Workspace.NativeRequest(
+    cache_root: cache_root,
+    package: package_name,
+    library: name,
+    system: os,
+    file: manifest.file,
+    key: row,
+    url: artifact.url,
+    sha256: artifact.sha256,
+    member: artifact.member,
+  )
+  case workspace.native_artifact.call(request)
+    ok(path) -> return Target.File(path)
+    error(packed) -> return Target.Unusable(packed)
+  end
+end
+
+# Whether two member spellings name one member (one leading "./" is stripped at parse).
+def same_member?(left: String, right: String) -> Bool
+  left_canonical = NativeArtifact.canonical_member(left)
+  right_canonical = NativeArtifact.canonical_member(right)
+  if !left_canonical.ok? or !right_canonical.ok?
+    return left == right
+  end
+  return left_canonical.unwrap! == right_canonical.unwrap!
+end
+
+# The receipt beside every downloaded payload the targets hold, so the bytecode cache watches both: a tampered
+# member or receipt misses. Only File targets of downloaded rows are watched; an Unusable row opens nothing.
+def downloaded_watched(
+  manifest: Manifest.Manifest,
+  lock: Lock.Lock,
+  package_name: String,
+  os: String,
+  cache_root: String,
+  targets: Map[String, Target],
+) -> List[String]
+  if cache_root == ""
+    return []
+  end
+  found: List[String] = []
+  for library in manifest.natives
+    case targets.get(library.name)
+      ok(target) ->
+        case target
+          Target.File(_) ->
+            artifact = Lock.find_artifact(lock, package_name, library.name, os)
+            if artifact.ok?
+              receipt = receipt_of(cache_root, artifact.unwrap!)
+              if receipt != "" and !found.any? do |seen| seen == receipt end
+                found = found.push(receipt)
+              end
+            end
+          _ -> next
+        end
+      error(_) -> next
+    end
+  end
+  return found
+end
+
+# The receipt of the cached member object, or "" when the member is not safe (validated at parse).
+def receipt_of(cache_root: String, artifact: Lock.Artifact) -> String
+  case NativeArtifact.canonical_member(artifact.member)
+    ok(canonical) ->
+      digest = NativeArtifact.member_digest_hex(canonical)
+      return NativeArtifact.receipt_path(cache_root, artifact.sha256, digest)
+    error(_) -> return ""
+  end
 end

@@ -253,8 +253,9 @@ import Sqlite from "pkg/sqlite/db"
 - A package declares native libraries in its own `agentica.toml`, one table
   `[native.NAME]` each, with an inline table for each of `linux`, `macos` and
   `windows` that has exactly one of `file = "native/path"` (shipped in the
-  package, at most 1 MiB, hashed with it; a macOS file is a universal binary)
-  or `system = "libname"` (a name the system loader looks up):
+  package, at most 1 MiB, hashed with it; a macOS file is a universal binary),
+  `system = "libname"` (a name the system loader looks up), or
+  `{ url, sha256, member }` (a pinned TAR download, fetched for the host):
 
   ```toml
   [native.sqlite3]

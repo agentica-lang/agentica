@@ -44,6 +44,10 @@ def no_bytes(path: String) -> Result[List[Int]]
   return error("no such file")
 end
 
+def no_native(request: Workspace.NativeRequest) -> Result[String]
+  return error("no native artifact in this workspace")
+end
+
 def main() -> Void
   workspace = Workspace.Workspace(
     read_text: &read_text,
@@ -54,6 +58,7 @@ def main() -> Void
     std_source: &nothing,
     list_folder: &no_folder,
     read_bytes: &no_bytes,
+    native_artifact: &no_native,
   )
   env = Env.Env(agentica_path: "", xdg_data_home: "", xdg_cache_home: "", home: "", local_app_data: "", windows: false, os: "linux")
   settings = Env.settings(workspace, "stdlib", env)

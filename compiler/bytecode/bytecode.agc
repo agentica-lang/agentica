@@ -1,6 +1,7 @@
 import CheckText from "../check/check_text"
 import Checker from "../check/checker"
 import Host from "../io/host"
+import NativeWorkspace from "../io/native_workspace"
 import SaveFile from "../io/save_file"
 import LowerText from "../lower/lower_text"
 import Lowering from "../lower/lowering"
@@ -25,7 +26,7 @@ def main() -> Void
     if output_next
       output_next = false
       puts("== #{root}")
-      puts(compile(root, argument, Env.settings(Host.workspace(), stdlib, env).with(version: version)))
+      puts(compile(root, argument, Env.settings(NativeWorkspace.workspace(), stdlib, env).with(version: version)))
     elsif argument == "-o"
       output_next = true
     elsif argument.starts_with?("--stdlib=")

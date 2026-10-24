@@ -7,6 +7,7 @@
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
+import NativeArtifact from "native_artifact"
 import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
@@ -15,7 +16,7 @@ import Reader from "toml_read"
 TOP_KEYS = ["name", "dependencies", "native", "style", "workspace"]
 STYLE_KEYS = ["max_line_width"]
 DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir"]
-PLACE_KEYS = ["file", "system"]
+PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 # The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
 SYSTEMS = Set.new(["linux", "macos", "windows"])
 # The folder of a package that holds its native files (package_hash.agc hashes them with the .agc files).
@@ -28,12 +29,17 @@ export struct Dependency
   source: GitSource.Source
 end
 
-## Where a native library is on one system: `file`, a path inside the package's native/ folder, or `system`, a name
-## for the system loader. One of them is "".
+## Where a native library is on one system: `file`, a path inside the package's native/ folder, `system`, a name
+## for the system loader, or a downloaded artifact (`url`, `sha256` and `member`). Exactly one shape is present:
+## `file` and `system` keep their meaning, and a downloaded row names the archive URL, its expected SHA-256 (64
+## lowercase hex digits) and the member to use from it. The other fields are "" when the shape does not use them.
 export struct Place
   system: String
   file: String
   name: String
+  url: String
+  sha256: String
+  member: String
 end
 
 ## A native library of a package: the name its `extern "name"` uses, and where it is on each system it names.
@@ -83,6 +89,19 @@ end
 ## The local names of the dependencies, in the order of the file.
 export def names(manifest: Manifest) -> List[String]
   return manifest.dependencies.map do |dependency| dependency.name end
+end
+
+## Whether the manifest declares a downloaded native artifact on any system: a `[native]` row with
+## `url`+`sha256`+`member`. Such a project needs a lock even with no dependencies.
+export def has_downloaded(manifest: Manifest) -> Bool
+  for library in manifest.natives
+    for place in library.places
+      if place.url != ""
+        return true
+      end
+    end
+  end
+  return false
 end
 
 # The project's own name, a package name too. "" when the file has none.
@@ -186,10 +205,41 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
   return ok(found)
 end
 
-# One system of a library: exactly one of `file` and `system`.
+# One system of a library: exactly one of `file`, `system`, or the downloaded triple
+# `url`+`sha256`+`member` (all three, and neither file nor system with them).
 def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: String) -> Result[Place]
   entries = try Reader.table(reading, value, path)
   try Reader.known_keys(reading, entries, PLACE_KEYS, path)
+  downloaded = entries.has_key?("url") or entries.has_key?("sha256") or entries.has_key?("member")
+  if downloaded
+    if entries.has_key?("file") or entries.has_key?("system")
+      help = "write exactly one of them"
+      return error(Reader.fail_help(reading, path, "a library has a file, a system name or a download", help))
+    end
+    for key in ["url", "sha256", "member"]
+      if !entries.has_key?(key)
+        help = "write all three of them"
+        return error(Reader.fail_help(reading, path, "a download has a url, a sha256 and a member", help))
+      end
+    end
+    url = try Reader.text(reading, entries["url"], Reader.child(path, "url"))
+    if !NativeArtifact.url_allowed?(url)
+      message = "the url is not an https URL (or an http URL to 127.0.0.1 or [::1])"
+      return error(Reader.fail_help(reading, Reader.child(path, "url"), "not a download URL", message))
+    end
+    sha = try Reader.text(reading, entries["sha256"], Reader.child(path, "sha256"))
+    if !NativeArtifact.valid_sha?(sha)
+      message = "the sha256 is not 64 lowercase hex digits"
+      return error(Reader.fail_help(reading, Reader.child(path, "sha256"), "not a sha256", message))
+    end
+    member = try Reader.text(reading, entries["member"], Reader.child(path, "member"))
+    case NativeArtifact.canonical_member(member)
+      ok(_) -> return ok(Place(system: system, file: "", name: "", url: url, sha256: sha, member: member))
+      error(_) ->
+        message = "the member is not a safe relative path"
+        return error(Reader.fail_help(reading, Reader.child(path, "member"), "not a member", message))
+    end
+  end
   if entries.has_key?("file") == entries.has_key?("system")
     return error(Reader.fail_help(reading, path, "a library has a file or a system name", "write exactly one of them"))
   end
@@ -199,14 +249,14 @@ def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: S
     if problem != ""
       return error(Reader.fail_help(reading, Reader.child(path, "file"), "not a native file", problem))
     end
-    return ok(Place(system: system, file: file, name: ""))
+    return ok(Place(system: system, file: file, name: "", url: "", sha256: "", member: ""))
   end
   name = try Reader.text(reading, entries["system"], Reader.child(path, "system"))
   problem = system_problem(name)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "system"), "not a library name", problem))
   end
-  return ok(Place(system: system, file: "", name: name))
+  return ok(Place(system: system, file: "", name: name, url: "", sha256: "", member: ""))
 end
 
 # A file of the native/ folder, in plain folder names (the rules of a subdir), so the hash covers it.

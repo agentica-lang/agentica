@@ -1,4 +1,5 @@
 import Host from "../io/host"
+import NativeWorkspace from "../io/native_workspace"
 import Env from "../modules/link_env"
 import CheckText from "check_text"
 
@@ -23,7 +24,7 @@ def main() -> Void
       env = env.with(local_app_data: argument.slice(17, argument.length - 17))
     else
       puts("== #{argument}")
-      puts(CheckText.check_text(argument, Env.settings(Host.workspace(), stdlib, env)))
+      puts(CheckText.check_text(argument, Env.settings(NativeWorkspace.workspace(), stdlib, env)))
     end
   end
 end
