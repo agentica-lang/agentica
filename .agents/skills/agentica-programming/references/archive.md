@@ -1,13 +1,15 @@
 # Archive (`std/archive`)
 
 `import Archive from "std/archive"`. Copies an explicit allowlist of regular
-files out of a plain `.tar` or gzipped `.tar.gz` into a new private directory.
-Written in Agentica over the `Zlib` streaming decoder; every failure is an
-`error` and none halts, whatever the input.
+files out of a plain `.tar`, gzipped `.tar.gz`, or classic single-disk
+`.zip` (stored and raw deflate only) into a new private directory. Written
+in Agentica over the `Zlib` streaming decoder; every failure is an `error`
+and none halts, whatever the input.
 
 ```text
 Archive.options() -> Archive.Options
 Archive.extract_tar(src, members, dest_dir, options) -> Result[List[Int]]
+Archive.extract_zip(src, members, dest_dir, options) -> Result[List[Int]]
 ```
 
 - `options` is `Archive.Options(timeout_ms, max_output_bytes)`; the defaults
@@ -27,4 +29,8 @@ Archive.extract_tar(src, members, dest_dir, options) -> Result[List[Int]]
 - Fixed ceilings: raw TAR scan 1073741824 bytes, gzipped source 268435456
   compressed bytes, 8192 entries, 1024 name bytes, 65536 bytes of PAX and GNU
   extension data. USTAR with PAX `path`/`size` and GNU long names; other PAX
-  records are ignored, sparse entries are refused.
+  records are ignored, sparse entries are refused. ZIP: source at most
+  268435456 bytes over three forward-only passes (768 MiB of physical reads),
+  8192 entries, 1024 name bytes; strict UTF-8 with flag 11 else pure ASCII.
+  Selected payloads stream in their exact window with CRC32 and size checked;
+  unselected payloads are skipped by size and offset only, never CRC-checked.
