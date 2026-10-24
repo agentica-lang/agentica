@@ -69,7 +69,7 @@ until it compiles); `always`, every
 function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
 every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
-and list opcodes, `EQ`, `NE`, `SAME`, `NOT`, `FIELD`, `IS_VARIANT`,
+and list opcodes, `EQ`, `NE`, `SAME`, `CONCAT`, `TO_TEXT`, `NOT`, `FIELD`, `IS_VARIANT`,
 `PAYLOAD`, `IS_OK`, `RESULT_VALUE` and the jumps have code; any other
 instruction (calls, builtins, allocations, `RETURN`) leaves the code: the
 interpreter runs that one instruction and enters the code again after it. A
@@ -103,7 +103,8 @@ interpreter's loop.
   compiled loop resumes in compiled code.
 - Exits: a slow `STEP` (the interpreter runs `step_slow`, then ends the turn or
   enters the code again at the next instruction), a turn cost to apply (a
-  String compare in `EQ`, `NE` or `SAME`), a failure (raised as the helper
+  String compare in `EQ`, `NE` or `SAME`, a join in `CONCAT`, a compound,
+  String or Json form in `TO_TEXT`), a failure (raised as the helper
   contract says), and an instruction without code or a slow path (a wrong
   tag, a field index past the count), which the interpreter runs; the turn
   loop enters the code again when it reaches the next instruction, or at its
@@ -111,9 +112,9 @@ interpreter's loop.
 - Code: one pass, fixed code per instruction, the VM in rbx, the registers in
   r12 and the constants in r13, the Int fast paths inline with their overflow
   checks; `EQ` and `NE` call `agc_op_eq` and `agc_op_ne` for any pair other
-  than two Ints; the Float opcodes, `SAME`, `LIST_LEN` and `LIST_GET` call
-  their helper; `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and
-  `RESULT_VALUE` read the value inline after a tag check. Each function has
+  than two Ints; the Float opcodes, `SAME`, `CONCAT`, `TO_TEXT`, `LIST_LEN`
+  and `LIST_GET` call their helper; `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`,
+  `IS_OK` and `RESULT_VALUE` read the value inline after a tag check. Each function has
   its own pages (64 MiB in all); when two schedulers compile one function at
   once, the first copy is kept.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
@@ -125,7 +126,8 @@ interpreter's loop.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a hot function without a
-  loop and one whose loop often leaves that `on` keeps out, fields, lists,
+  loop that `on` keeps out, string joins and text forms in compiled code,
+  fields, lists,
   enums, Results and Floats read in compiled code with the exit counts of the
   trace), `make vm-jit-test` (the goldens and their sweeps and
   `test_vm_multicore.py` with `AGENTICA_JIT=always`, which compiles every
@@ -151,9 +153,10 @@ registers in the frame's register file (the `INDEX_OUT_OF_RANGE` message
 prints the list's length and the index) and sets `frame->pc` past the failing
 instruction, as the interpreter does before each instruction: the stack trace
 reads it. Helpers count no step and apply no turn cost:
-the caller runs the `STEP`s, and after `EQ`, `NE` and `SAME`, which add the
-bytes of a String compare to the task's turn cost, it applies the cost where
-the interpreter does. A helper never parks, yields or pushes a frame. Builtins
+the caller runs the `STEP`s, and after `EQ`, `NE`, `SAME`, `CONCAT` and
+`TO_TEXT`, which add the bytes of a String compare, a join, or a printed
+form to the task's turn cost, it applies the cost where the interpreter
+does. A helper never parks, yields or pushes a frame. Builtins
 fail with `agc_fail`, so compiled code does not call them directly. The C test
 `vm/tests/op_helpers_test.c` checks the statuses; the goldens check the
 failures that `agc_op_fail` makes of them.
