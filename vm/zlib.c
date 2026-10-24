@@ -91,10 +91,13 @@ static void release_zlib(void *native) {
 
 /* Zlib.encoder_close, Zlib.decoder_close and the end of the owning task:
    idempotent, under rt->sync, with no pool job that could still reach the
-   context, so the codec is freed at once. */
+   context, so the codec is freed at once. Identity is checked before the
+   cast: File and lock handles share the AGC_T_HANDLE tag, and unregistering
+   or freeing a foreign native would corrupt its owner. */
 static void close_zlib(agc_vm *vm, agc_resource *r, agc_task *ender) {
   (void)ender;
   agc_sync_assert(vm);
+  if (r->close != close_zlib) return;
   zlib_ctx *c = r->native;
   if (!c) return;
   r->native = NULL;
@@ -110,6 +113,10 @@ static void close_zlib(agc_vm *vm, agc_resource *r, agc_task *ender) {
    every other refusal is the call's error value. */
 static zlib_ctx *open_ctx(agc_vm *vm, agc_value handle, zlib_kind kind, uint32_t span, agc_value *failed) {
   agc_resource *r = agc_as_handle(vm, handle);
+  if (r->close != close_zlib) {
+    *failed = zlib_error("zlib: handle is not a zlib handle");
+    return NULL;
+  }
   zlib_ctx *c = r->native;
   if (!c) {
     *failed = zlib_error("zlib: handle is closed");
@@ -133,10 +140,12 @@ static uint32_t progress_struct(agc_vm *vm) { return agc_builtin_struct(vm, "Zli
 /* A progress record in the contract's field order: the fresh output bytes,
    what the call consumed of its input, whether the stream end was reached,
    and whether the codec wants more input (false while output may still drain
-   from its internal state, so the caller drains with empty input). */
-static agc_value progress_value(agc_vm *vm, const uint8_t *output, size_t produced, uint64_t consumed, bool finished,
-                                bool needs_input) {
-  agc_struct *p = agc_new_struct(progress_struct(vm), 4);
+   from its internal state, so the caller drains with empty input). The
+   struct type resolves at the caller, before any malloc it must survive. */
+static agc_value progress_value(agc_vm *vm, uint32_t type, const uint8_t *output, size_t produced, uint64_t consumed,
+                                bool finished, bool needs_input) {
+  (void)vm;
+  agc_struct *p = agc_new_struct(type, 4);
   p->fields[0] = byte_list_value(output, produced);
   p->fields[1] = agc_int((int64_t)consumed);
   p->fields[2] = agc_bool(finished);
@@ -155,10 +164,13 @@ static bool wants_input(size_t given, size_t consumed, size_t produced, size_t o
 
 /* One deflate or inflate pass over at most a quantum each way, through a
    malloc'd output buffer the call frees. Totals move only on success, and a
-   refused cap changes nothing. */
+   refused cap changes nothing. The progress record is resolved before the
+   malloc: its lookup longjmps when the frontend has not provided it, and
+   must not leave a live buffer behind. */
 static agc_value feed_stream(agc_vm *vm, zlib_ctx *c, const uint8_t *input, size_t given, size_t out_cap, bool finish,
                              uint32_t span) {
   (void)span;
+  uint32_t progress = progress_struct(vm);
   if (c->total_in + (uint64_t)given > c->max_in) return zlib_error("zlib: total input exceeds max_total_in");
   if (c->total_out + (uint64_t)out_cap > c->max_out) return zlib_error("zlib: total output exceeds max_total_out");
   uint8_t *out = malloc(out_cap ? out_cap : 1);
@@ -186,7 +198,7 @@ static agc_value feed_stream(agc_vm *vm, zlib_ctx *c, const uint8_t *input, size
     c->total_in += (uint64_t)consumed;
     c->total_out += (uint64_t)produced;
     agc_charge_bytes(vm, consumed + produced);
-    result = progress_value(vm, out, produced, (uint64_t)consumed, end,
+    result = progress_value(vm, progress, out, produced, (uint64_t)consumed, end,
                             wants_input(given, consumed, produced, out_cap, end));
   }
   free(out);
@@ -405,7 +417,7 @@ static agc_value next_stream(agc_vm *vm, agc_value *args, uint32_t span, zlib_ki
     /* Empty drains after the verified end report finished again; only new
        input after it is an error, since those bytes would be discarded. */
     if (n != 0) return zlib_error("zlib: stream already finished");
-    return progress_value(vm, input, 0, 0, true, false);
+    return progress_value(vm, progress_struct(vm), input, 0, 0, true, false);
   }
   if (c->kind == ZLIB_ENCODER && c->state == ZLIB_FINISHING)
     return zlib_error("zlib: encoder finish already started");
@@ -427,10 +439,13 @@ static agc_value builtin_deflate_finish(agc_vm *vm, agc_value *args, uint32_t sp
   int64_t max_out = agc_as_int(vm, args[1]);
   if (max_out < 1 || (uint64_t)max_out > ZLIB_QUANTUM) return zlib_error("zlib: max_out must be between 1 and 65536");
   /* Finishing drains stay callable until the terminal call: each bounded
-     drain reports its finished flag, and only new feed is refused. */
-  if (c->state == ZLIB_DONE) return progress_value(vm, zlib_empty, 0, 0, true, false);
-  c->state = ZLIB_FINISHING;
-  return feed_stream(vm, c, zlib_empty, 0, (size_t)max_out, true, span);
+     drain reports its finished flag, and only new feed is refused. FINISHING
+     is assigned only once the drain is accepted, so a refused cap leaves
+     OPEN intact and a later feed stays legal. */
+  if (c->state == ZLIB_DONE) return progress_value(vm, progress_struct(vm), zlib_empty, 0, 0, true, false);
+  agc_value drained = feed_stream(vm, c, zlib_empty, 0, (size_t)max_out, true, span);
+  if (agc_as_result(vm, drained)->ok && c->state != ZLIB_DONE) c->state = ZLIB_FINISHING;
+  return drained;
 }
 
 static agc_value builtin_inflate_finish(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -444,10 +459,13 @@ static agc_value builtin_inflate_finish(agc_vm *vm, agc_value *args, uint32_t sp
 }
 
 /* Both close rows: closing is idempotent and owner-indifferent, like
-   Native.close, so one function serves the encoder and the decoder. */
+   Native.close, so one function serves the encoder and the decoder. A
+   foreign handle is refused before close_zlib could unregister it: the
+   close reports, it never touches another library's resource. */
 static agc_value builtin_zlib_close(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_resource *r = agc_as_handle(vm, args[0]);
+  if (r->close != close_zlib) return zlib_error("zlib: handle is not a zlib handle");
   close_zlib(vm, r, NULL);
   return agc_result_value(true, agc_void());
 }

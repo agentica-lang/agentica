@@ -1,6 +1,7 @@
 /* Zlib bytes, streaming handles and their shared-VM interleavings, against
    independently generated vectors. */
 #include "builtin_test.h"
+#include "../file_io.h"
 #include "../services.h"
 #include "../zlib_codec.h"
 
@@ -15,6 +16,7 @@
 #include <uv.h>
 
 #include "test_support.h"
+#include "scratch_dir.h"
 #include "zlib_vectors.h"
 
 static agc_vm vm;
@@ -625,6 +627,155 @@ static void test_concurrent(void) {
   }
 }
 
+/* A refused finish must not flip OPEN to FINISHING: the totals pre-check
+   runs before the state assignment, so a later feed stays legal. */
+static void test_finish_cap_state(void) {
+  /* The totals bound the proof whatever a feed emits: the 64 quantum always
+exceeds the 20 lifetime cap, while a 10 quantum always fits beside at most
+     10 emitted bytes, and the whole stream stays far below the cap. */
+  agc_value init[] = {agc_int(15), agc_int(6), agc_int(1073741824), agc_int(20)};
+  agc_value enc = ok(call("Zlib.deflate_init", 4, init));
+  agc_value feed[] = {enc, byte_list(abc_bytes, 3), agc_int(10)};
+  const agc_struct *p = progress_of(call("Zlib.deflate_next", 3, feed));
+  assert(agc_as_int(&vm, p->fields[1]) == 3);
+  agc_value big[] = {enc, agc_int(64)};
+  check_error(call("Zlib.deflate_finish", 2, big), "zlib: total output exceeds max_total_out");
+  /* The refused finish left OPEN intact: the next feed stays legal, which a
+     premature FINISHING would have refused. */
+  static const uint8_t dee[] = {0x64};
+  agc_value next[] = {enc, byte_list(dee, 1), agc_int(10)};
+  const agc_struct *q = progress_of(call("Zlib.deflate_next", 3, next));
+  assert(agc_as_int(&vm, q->fields[1]) == 1);
+  /* An invalid quantum likewise changes nothing, and a finish on the closed
+     handle reports closed without touching anything. */
+  agc_value bad[] = {enc, agc_int(0)};
+  check_error(call("Zlib.deflate_finish", 2, bad), "zlib: max_out must be between 1 and 65536");
+  agc_value next2[] = {enc, byte_list(dee, 1), agc_int(1)};
+  assert(agc_as_int(&vm, progress_of(call("Zlib.deflate_next", 3, next2))->fields[1]) == 1);
+  agc_value close[] = {enc};
+  assert(agc_as_result(&vm, call("Zlib.encoder_close", 1, close))->ok);
+  check_error(call("Zlib.deflate_finish", 2, big), "zlib: handle is closed");
+}
+
+static agc_value path_str(const char *text) {
+  return agc_string_value(agc_make_string(text, strlen(text), strlen(text)));
+}
+
+/* A File call on a Zlib handle through the test's own call helper. */
+static agc_value file_call(agc_task *t, const char *name, uint32_t arity, agc_value *args) {
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
+  assert(b);
+  return agc_test_call(&vm, t, b, args);
+}
+
+/* Handles of the two libraries share the AGC_T_HANDLE tag, so each side
+   must refuse the other's: every Zlib entry refuses an open File handle and
+   every central File path refuses an open Zlib handle, with stable errors
+   and no close, unregister or free of the foreign resource. */
+static void test_foreign_handles(void) {
+  char directory[4300];
+  uv_fs_t req;
+  agc_test_scratch(directory, &req, "zlib-foreign");
+  char path[4300];
+  assert(snprintf(path, sizeof path, "%s/foreign.bin", directory) > 0);
+  agc_value open_args[] = {path_str(path), path_str("write"), agc_int(5000)};
+  agc_value file = ok(file_call(vm.task, "File.open", 3, open_args));
+  agc_value data = byte_list(abc_bytes, sizeof abc_bytes);
+  agc_value feed[] = {file, data, agc_int(64)};
+  check_error(call("Zlib.deflate_next", 3, feed), "zlib: handle is not a zlib handle");
+  check_error(call("Zlib.inflate_next", 3, feed), "zlib: handle is not a zlib handle");
+  agc_value finish[] = {file, agc_int(64)};
+  check_error(call("Zlib.deflate_finish", 2, finish), "zlib: handle is not a zlib handle");
+  agc_value dfinish[] = {file};
+  check_error(call("Zlib.inflate_finish", 1, dfinish), "zlib: handle is not a zlib handle");
+  agc_value close[] = {file};
+  check_error(call("Zlib.encoder_close", 1, close), "zlib: handle is not a zlib handle");
+  check_error(call("Zlib.decoder_close", 1, close), "zlib: handle is not a zlib handle");
+  /* The File handle is untouched: still owned, lockable, writable, and its
+     bytes land intact through a real close. */
+  assert(agc_task_owns(&vm, file));
+  agc_value lock[] = {file, agc_int(5000)};
+  assert(agc_as_bool(&vm, ok(file_call(vm.task, "File.try_lock", 2, lock))));
+  static const uint8_t hello[] = {0x68, 0x65, 0x6c, 0x6c, 0x6f};
+  agc_value write[] = {file, byte_list(hello, sizeof hello), agc_int(5000)};
+  ok(file_call(vm.task, "File.write_bytes", 3, write));
+  agc_value fclose[] = {file, agc_int(5000)};
+  ok(file_call(vm.task, "File.close", 2, fclose));
+  agc_value read[] = {path_str(path), agc_int(5000)};
+  assert(agc_as_string(&vm, ok(file_call(vm.task, "File.read_text", 2, read)))->bytes == sizeof hello);
+  /* The mirror direction: File.close/read/write/flush/try_lock on Zlib
+     handles refuse without reaching any file state. */
+  agc_value einit[] = {agc_int(15), agc_int(6), agc_int(100), agc_int(100)};
+  agc_value enc = ok(call("Zlib.deflate_init", 4, einit));
+  agc_value dinit[] = {agc_int(15), agc_int(100), agc_int(100)};
+  agc_value dec = ok(call("Zlib.inflate_init", 3, dinit));
+  static const char foreign[] = "filesystem: handle is not a file handle";
+  agc_value fclose2[] = {enc, agc_int(5000)};
+  check_error(file_call(vm.task, "File.close", 2, fclose2), foreign);
+  agc_value dread[] = {dec, agc_int(10), agc_int(5000)};
+  check_error(file_call(vm.task, "File.read_bytes", 3, dread), foreign);
+  agc_value wargs[] = {enc, path_str("x"), agc_int(5000)};
+  check_error(file_call(vm.task, "File.write", 3, wargs), foreign);
+  agc_value wbytes[] = {enc, byte_list(abc_bytes, 1), agc_int(5000)};
+  check_error(file_call(vm.task, "File.write_bytes", 3, wbytes), foreign);
+  agc_value flush[] = {enc, agc_int(5000)};
+  check_error(file_call(vm.task, "File.flush", 2, flush), foreign);
+  agc_value tlock[] = {dec, agc_int(5000)};
+  check_error(file_call(vm.task, "File.try_lock", 2, tlock), foreign);
+  /* Both Zlib handles are untouched: still owned, feedable, closable. */
+  assert(agc_task_owns(&vm, enc) && agc_task_owns(&vm, dec));
+  agc_value efeed[] = {enc, byte_list(abc_bytes, 1), agc_int(64)};
+  assert(agc_as_int(&vm, progress_of(call("Zlib.deflate_next", 3, efeed))->fields[1]) == 1);
+  agc_value dfeed[] = {dec, byte_list(NULL, 0), agc_int(64)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, dfeed)), 0, 0, false, true);
+  agc_value eclose[] = {enc};
+  assert(agc_as_result(&vm, call("Zlib.encoder_close", 1, eclose))->ok);
+  agc_value dclose[] = {dec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, dclose))->ok);
+  assert(agc_fs_unlink(path) == 0);
+  assert(uv_fs_rmdir(NULL, &req, directory, NULL) == 0);
+  uv_fs_req_cleanup(&req);
+}
+
+static agc_vm bare_vm;
+static agc_program bare_program;
+
+/* The init half on the record-less VM, returning its handle value. */
+static agc_value bare_init(void) {
+  agc_value init[] = {agc_int(15), agc_int(6), agc_int(100), agc_int(100)};
+  agc_value result = call_on(&bare_vm, bare_vm.task, "Zlib.deflate_init", 4, init);
+  const agc_result *r = agc_as_result(&bare_vm, result);
+  assert(r->ok);
+  return r->value;
+}
+
+/* A call that must fail with the missing-record diagnostic on a VM whose
+   program has no ZlibProgress struct: solo only, off-turn, nothing live. */
+static void fails_internal(agc_task *t, const char *name, uint32_t arity, agc_value *args) {
+  if (setjmp(bare_vm.fail) == 0) {
+    (void)call_on(&bare_vm, t, name, arity, args);
+    assert(!"the call did not fail");
+  }
+  assert(strcmp(bare_vm.outcome->code, "RUNTIME-INTERNAL") == 0);
+}
+
+/* The progress lookup runs before any malloc, so a missing record fails
+   cleanly again and again with nothing retained; the encoder itself
+   survives every failed lookup and still closes. */
+static void test_missing_progress_record(void) {
+  agc_vm_init(&bare_vm, &bare_program, stdout, stderr, INT64_MAX);
+  bare_vm.in_turn = true;
+  agc_value enc = bare_init();
+  agc_task *task = bare_vm.task;
+  bare_vm.in_turn = false;
+  agc_value feed[] = {enc, byte_list(abc_bytes, 3), agc_int(64)};
+  for (int k = 0; k < 50; k++) fails_internal(task, "Zlib.deflate_next", 3, feed);
+  bare_vm.task = task;
+  bare_vm.in_turn = true;
+  agc_value close[] = {enc};
+  assert(agc_as_result(&bare_vm, call_on(&bare_vm, task, "Zlib.encoder_close", 1, close))->ok);
+}
+
 int main(void) {
   agc_test_deadline(120);
   agc_init();
@@ -647,6 +798,9 @@ int main(void) {
   test_stream_truncation_trailing();
   test_stream_failure_caps();
   test_stream_ownership();
+  test_finish_cap_state();
+  test_foreign_handles();
+  test_missing_progress_record();
   /* The shared phase: one lock for tasks, handles and the registry, with
      every streaming row running under it like the interpreter runs them. */
   agc_share(&vm);

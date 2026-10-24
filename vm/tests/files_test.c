@@ -1,5 +1,7 @@
 /* File builtins on native paths: binary round trips and rejected writes leave data intact. */
 #include "builtin_test.h"
+#include "test_support.h"
+#include "scratch_dir.h"
 #include "../services.h"
 #include "../file_io.h"
 
@@ -604,16 +606,9 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   task = agc_alloc(sizeof(agc_task));
   vm.in_turn = true;
-  char temporary[4096];
-  size_t size = sizeof temporary;
-  assert(uv_os_tmpdir(temporary, &size) == 0);
-  char pattern[4200];
-  assert(snprintf(pattern, sizeof pattern, "%s/agentica-files-XXXXXX", temporary) > 0);
+  char directory[4300];
   uv_fs_t req;
-  assert(uv_fs_mkdtemp(NULL, &req, pattern, NULL) == 0);
-  char *directory = strdup(req.path);
-  assert(directory);
-  uv_fs_req_cleanup(&req);
+  agc_test_scratch(directory, &req, "files");
   char path[4300];
   assert(snprintf(path, sizeof path, "%s/space name-\xC3\xB1-\xF0\x9F\x99\x82.bin", directory) > 0);
   agc_value file = string(path);
@@ -802,7 +797,6 @@ int main(void) {
   assert(agc_fs_unlink(path) == 0);
   assert(uv_fs_rmdir(NULL, &req, directory, NULL) == 0);
   uv_fs_req_cleanup(&req);
-  free(directory);
   assert(agc_io_close(&vm));
   puts("files tests passed");
   return 0;

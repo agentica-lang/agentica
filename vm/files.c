@@ -145,6 +145,9 @@ typedef struct {
 } line_scan;
 
 static const char not_regular[] = "filesystem: path does not refer to a regular file";
+/* A handle of another library: File, Zlib and lock handles share the
+   AGC_T_HANDLE tag, so identity is checked before any cast of native. */
+static const char not_file[] = "filesystem: handle is not a file handle";
 static const char timed_out[] = "filesystem: operation timed out";
 static const char line_too_long[] = "filesystem: line exceeds buffer_bytes";
 static const char bad_timeout[] = "filesystem: timeout must be positive milliseconds";
@@ -1848,6 +1851,10 @@ static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *r
     *result = error_of(bad_timeout);
     return true;
   }
+  if (agc_as_handle(vm, handle)->close != close_file) {
+    *result = error_of(not_file);
+    return true;
+  }
   switch (agc_handle_wait(vm, agc_as_handle(vm, handle), timeout)) {
     case AGC_LOCK_TAKEN: return false;
     case AGC_LOCK_WAIT: *result = agc_void(); return true;
@@ -1859,6 +1866,10 @@ static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *r
 
 static file_state *open_state(agc_vm *vm, agc_value handle, agc_value *failure) {
   const agc_resource *r = agc_as_handle(vm, handle);
+  if (r->close != close_file) {
+    *failure = error_of(not_file);
+    return NULL;
+  }
   if (r->native && !r->closing) return r->native;
   *failure = error_of("filesystem: file handle is closed");
   return NULL;
