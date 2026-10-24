@@ -26,11 +26,12 @@ keeps their records.
   released 2026-10-23.
 - **0.10.0** (owner, 2026-10-23), in this order, one item at a time:
   1. The JIT groundwork, without tier 2
-     ([#622](https://github.com/sonic182/agentica/issues/622)): opcode and
-     opcode-pair counters, `leaf` builtins, smaller values
-     ([#396](https://github.com/sonic182/agentica/issues/396)), then the
-     helpers by pointer, errors without `longjmp` through compiled code and a
-     W^X code memory.
+     ([#622](https://github.com/sonic182/agentica/issues/622)): interpreter
+     opcode and opcode-pair profile counters (done), `leaf` builtins (done),
+     then the helpers by pointer,
+     errors without `longjmp` through compiled code and a W^X code memory.
+     Smaller values ([#396](https://github.com/sonic182/agentica/issues/396))
+     are deferred beyond 0.10.0.
   2. The rest of the FFI core: FFI-b (native libraries in packages; done),
      variadic C functions
      ([#619](https://github.com/sonic182/agentica/issues/619); done), and from
@@ -38,7 +39,8 @@ keeps their records.
      buffers and typed memory and `C.Float` (done), structs by value (done),
      function pointers (done) and downloaded prebuilt libraries. No
      callbacks.
-  3. JIT tier 2 (§22) with our own emitter for x86-64 and arm64 (no sljit).
+  3. JIT tier 2 (§22) with our own emitter for x86-64 (no sljit); the arm64
+     emitter is deferred beyond 0.10.0.
 
 ### Next, after 0.8.0 (owner, 2026-10-21)
 
@@ -71,14 +73,15 @@ Second batch, after the first:
 6. [#396](https://github.com/sonic182/agentica/issues/396): smaller values,
    with compact storage instead of the 16-byte `agc_value`. It changes the
    value representation of the whole VM, so it must work on all four systems,
-   not only Linux. It goes before the JIT.
+   not only Linux. It is deferred beyond 0.10.0 and is not a prerequisite for
+   the 0.10.0 x86-64 JIT.
 
 Weighed later (no fixed order):
 
 7. Regular expressions [§48](../future/48-regex.md#48-regular-expressions)
    (row 7.10).
 8. The JIT (row 9.1, [§22](../future/22-jit.md)); it needs 8.1, 7.7 and 9, and
-   comes after the FFI. #396 (item 6) goes before it.
+   comes after the FFI.
 9. [#531](https://github.com/sonic182/agentica/issues/531), `type-at` on type
    names: done in 0.8.1 (#550).
 10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer.
