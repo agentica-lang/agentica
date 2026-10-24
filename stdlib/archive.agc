@@ -371,7 +371,10 @@ def fill(cur: Cursor, input: Input, need: Int, deadline: Int, src: String) -> Re
             if chunk.size == 0
               cur = cur.with(file_eof: true)
             else
-              cur = cur.with(pending: List.concat(cur.pending, chunk))
+              cur = cur.with(
+                pending: List.concat(cur.pending, chunk),
+                raw_read: cur.raw_read + chunk.size,
+              )
             end
           end
         else
@@ -388,7 +391,6 @@ def fill(cur: Cursor, input: Input, need: Int, deadline: Int, src: String) -> Re
           cur = cur.with(
             pending: List.concat(List.drop(feed, step.consumed), rest),
             carry: List.concat(cur.carry, step.output),
-            raw_read: cur.raw_read + step.consumed,
             out_total: cur.out_total + step.output.size,
           )
           if cur.out_total > SCAN_BYTES
