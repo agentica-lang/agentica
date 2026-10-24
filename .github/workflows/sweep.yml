@@ -21,6 +21,7 @@ jobs:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: full
       AGENTICA_GC: vendored
+      AGENTICA_ZLIB: vendored
     steps:
       - uses: actions/checkout@v7
         with:

@@ -80,9 +80,9 @@ comment), then a step that calls it. Targets that are not obvious:
 - `tools/refreeze.py` (`references/frontend.md`, "Refreeze") rewrites the
   frozen front-end goldens; `make goldens` runs its `--fast-only` tier. Not a
   CI step.
-- `vendored-check` links against the vendored libgc and OpenSSL and fails on
-  a dynamic `libgc`, OpenSSL or `msys-2.0.dll`; `vendored-test` adds the TLS
-  and HTTP tests on that binary.
+- `vendored-check` links against the vendored libgc, OpenSSL and zlib and
+  fails on a dynamic `libgc`, OpenSSL, `libz`/`zlib1.dll` or `msys-2.0.dll`;
+  `vendored-test` adds the TLS and HTTP tests on that binary.
 - `vm-lint` includes the clang-tidy 19 version check; `vm-trace-off` builds
   with `TRACE=0` and checks `--version`.
 - `vm-layers` (Linux; needs `rg` and `nm`) compiles each `vm/*.h` alone and
@@ -205,16 +205,17 @@ site and Markdown-only changes skip it; a newer push cancels an older run.
 - Peers: TCP needs Node; TLS needs Node and Python 3; the goldens need
   Python 3 (`tests/fixtures/channel-run.py`; `channel-run.js` on Windows).
 - PR jobs use the system libgc (`GC_MIN` 8.2.0; older systems use
-  `AGENTICA_GC=vendored`) and OpenSSL 3; a guard step installs the `-dev`
-  packages when `pkg-config` cannot find them. `warm-third-party`, `sweep.yml`
-  and the release use the vendored libgc, and the release the vendored
-  OpenSSL. Both modes share `build/vm/release/obj`; a mode change changes the
-  flag stamps and forces a full rebuild.
+  `AGENTICA_GC=vendored`), OpenSSL 3 and zlib 1.2.0; a guard step installs
+  the `-dev` packages when `pkg-config` cannot find them. `warm-third-party`,
+  `sweep.yml` and the release use the vendored libgc and zlib, and the release
+  the vendored OpenSSL. Both modes share `build/vm/release/obj`; a mode change
+  changes the flag stamps and forces a full rebuild.
 
 ## Conformance matrix (`platforms.yml`)
 
 One job per system: `linux-x86_64`, `windows-x86_64` (MSYS2 UCRT64),
-`macos-x86_64` and `macos-arm64`; the last three link the vendored OpenSSL.
+`macos-x86_64` and `macos-arm64`; the last three link the vendored OpenSSL
+and zlib.
 It runs on PRs with the `platforms` label and on `master` pushes. Each job:
 `vm-test`, `vendored-check`, `bootstrap-smoke`, `fixed-point`, then
 `make conformance-area/<area>` per area of `tools/conformance.py`, then
@@ -266,7 +267,7 @@ Skip rules, checked by the report:
 
 ## Release (`release.yml`)
 
-Four packages, one job each, vendored libgc and OpenSSL, built from stage0
+Four packages, one job each, vendored libgc, OpenSSL and zlib, built from stage0
 (`make vm-test fixed-point`): `linux-x86_64` (`.tar.gz`, pinned `zig cc`
 against glibc 2.28), `windows-x86_64` (`.zip`, MSYS2 UCRT64), `macos-x86_64`
 and `macos-arm64` (`.tar.gz`, `MACOSX_DEPLOYMENT_TARGET=12.0`). Per package:

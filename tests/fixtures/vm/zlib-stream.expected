@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 318,
+  "stdout": [
+    "head 1 consumed 0 needs false",
+    "fed rest 0 out 2",
+    "tail finished true tail 8",
+    "round ok()",
+    "close true again true",
+    "feed after close -> error(\"zlib: handle is closed\")",
+    "bad window -> false",
+    "bad total -> false",
+    "close true",
+    ""
+  ],
+  "stderr": []
+}

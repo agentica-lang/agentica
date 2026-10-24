@@ -17,3 +17,6 @@
 [submodule "vm/third_party/libffi"]
 	path = vm/third_party/libffi
 	url = https://github.com/libffi/libffi.git
+[submodule "vm/third_party/zlib"]
+	path = vm/third_party/zlib
+	url = https://github.com/madler/zlib.git

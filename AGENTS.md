@@ -42,8 +42,8 @@ phase 13).
 
 - `poetry install --only test --no-root`: the pytest environment.
 - `make`: build `dist/agentica` (`git submodule update --init` first). Linux
-  uses system libgc and OpenSSL (`pkg-config`);
-  `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored` links the vendored
+  uses system libgc, OpenSSL and zlib (`pkg-config`);
+  `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored AGENTICA_ZLIB=vendored` links the vendored
   ones statically. The build links a first binary with
   `bootstrap/stage0.agcb`, compiles the front end three times and links the
   final binary. `make fixed-point` checks it once more; `make stage0`

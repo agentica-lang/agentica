@@ -236,6 +236,21 @@ Every failure is an error value. The checks run in this order:
   refer to a regular file`, without waiting on the loop. The job never takes
   the `more` step, so a cancel or a timeout detaches it like the other
   whole-file calls.
+- `Zlib.deflate_file`, `Zlib.inflate_file`, `Zlib.gzip_file` and
+  `Zlib.gunzip_file` pump one stream file-to-file in fixed 64 KiB chunks
+  with O(chunk) memory through the shared zlib codec (no `gz*` calls):
+  the deflate pair wraps in zlib, the gzip pair in gzip. The source opens
+  and filters like `File.sha256`, the destination opens like
+  `create_private`, and neither waits on the loop, so the job never takes
+  the `more` step either. Output is checked against `max_out_bytes`
+  (1 to 1073741824) before every write (a partial never exceeds it and is
+  conserved on error); a decompression source never exceeds 268435456
+  compressed bytes and a compression source never exceeds 1073741824 raw
+  bytes, enforced while reading even if the source grows. A bad header,
+  a refused wrapper and a short stream are `zlib: invalid compressed
+  data` or `zlib: truncated stream`; a second member or any trailing
+  bytes is `zlib: trailing bytes after stream end`; a trailer mismatch is
+  `zlib: checksum mismatch`.
 - `File.stat` of a missing path is an error without a kind. A directory's size
   is
   0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`; `user_id` and

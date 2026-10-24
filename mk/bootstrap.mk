@@ -111,7 +111,7 @@ $(VM_OBJ)/embedded-stage0.o: $(VM_BUILD)/bootstrap/embedded.s $(VM_OBJ_STAMP) $(
 	@mkdir -p $(VM_OBJ)
 	$(VM_CC) -x assembler -c $< -o $@
 
-AGENTICA_OBJS = $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o $(VM_RES) $(VM_LINK_LIBS) $(VM_STAMP)
+AGENTICA_OBJS = $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o $(VM_RES) $(VM_LINK_LIBS) $(VM_STAMP)
 
 $(BOOT): $(AGENTICA_OBJS) $(VM_OBJ)/embedded-stage0.o
 	@mkdir -p $(dir $@)

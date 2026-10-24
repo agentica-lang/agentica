@@ -34,6 +34,14 @@
   `GC_DEBUG`), and `SANITIZE=1` links no libgc. Pass `AGENTICA_GC=vendored` to
   every make command, or export it. `build/vm/flags` and `obj-flags` record the
   mode, so switching it recompiles and relinks.
+- `AGENTICA_ZLIB` picks the zlib build the same way: `system` (the default on
+  Linux) links the distro's zlib dynamically, through a `pkg-config zlib`
+  stamp that stops with a fix when the package is missing or older than
+  `ZLIB_MIN` (1.2.0, the series with gzip decoding in `inflateInit2`); the
+  mode is not remembered, so pass `AGENTICA_ZLIB=vendored` to every make
+  command to link the eight codec sources statically instead (the release
+  and non-Linux hosts build this way). The flags stamp records the mode, so
+  switching it relinks without stale objects.
 - Both libgc builds have thread support: Debian's libgc is built with it, and
   the vendored `gc.o` has `GC_THREADS`, `PARALLEL_MARK` and
   `THREAD_LOCAL_ALLOC`. `vm/value.c` defines `GC_THREADS` before it includes
@@ -162,13 +170,15 @@
   So Windows sees the same sources, spans and output as Linux.
 - Every CI job except the `test` job links the system OpenSSL, including the
   sanitizer and GC-stress builds. Pull request jobs also link the system libgc
-  (`AGENTICA_GC=system`, the default), and the apt fallback in each of them
-  installs `libgc-dev` next to `libssl-dev`. The jobs that run on `push` to
-  `master` (`warm-third-party`), the weekly `sweep.yml` and the release use
-  `AGENTICA_GC=vendored`, so the vendored `gc.o` stays built and tested for the
+  (`AGENTICA_GC=system`, the default) and the system zlib
+  (`AGENTICA_ZLIB=system`, the default), and the apt fallback in each of them
+  installs `libgc-dev` and `zlib1g-dev` next to `libssl-dev`. The jobs that run
+  on `push` to `master` (`warm-third-party`), the weekly `sweep.yml` and the
+  release use `AGENTICA_GC=vendored` and `AGENTICA_ZLIB=vendored`, so the
+  vendored `gc.o` and the vendored zlib stay built and tested for the
   release and the GC-stress job (which always builds it, whatever the mode).
-  `vendored-check` links with both vendored libraries and fails when
-  `readelf -d` shows `libgc`. A cold sanitizer OpenSSL build took an hour on the
+  `vendored-check` links with all three vendored libraries and fails when
+  `readelf -d` shows `libgc` or `libz`. A cold sanitizer OpenSSL build took an hour on the
   shared runner host, so no job builds an instrumented OpenSSL. The
   `warm-third-party` job on `master` builds the vendored release-mode OpenSSL
   into a cache, keyed by `openssl-release-` and the hash of
@@ -176,12 +186,14 @@
   that cache (a pull request can restore only its own caches or `master`'s). On
   a hit it links `build/vm/release/agentica` against it, checks it with
   `readelf -d` and `run --version`, and runs the TLS and HTTP tests on it.
-- The third-party objects (yyjson, picohttpparser, libuv and `build/vm/gc.o`)
-  follow content stamps, `$(VM_BUILD)/third-party-flags` and
-  `build/vm/gc-flags`, from `make -s vm-third-party-key`. The key starts with a
-  `libgc=system` or `libgc=vendored` line, so the two modes have different keys:
-  in `system` it holds the libgc version and flags and not the submodule, and in
-  `vendored` the compile line and the submodule. The stamps hold the compile
+- The third-party objects (yyjson, picohttpparser, libuv, `build/vm/gc.o` and,
+  in `AGENTICA_ZLIB=vendored` mode, the zlib objects) follow content stamps,
+  `$(VM_BUILD)/third-party-flags` and `build/vm/gc-flags`, from
+  `make -s vm-third-party-key`. The key starts with a `libgc=system` or
+  `libgc=vendored` line and a `zlib=system` or `zlib=vendored` line, so the
+  modes have different keys: in `system` each holds the library version and
+  flags and not the submodule, and in `vendored` the compile line and the
+  submodule. The stamps hold the compile
   lines, the compiler and `ar` versions, and each submodule's commit, diff and
   untracked files, or a checksum when it is not a git checkout. They rebuild
   only when the key changes, and CI does not cache them, since ccache rebuilds
@@ -218,6 +230,6 @@
   glibc 2.28. `ZIG_VERSION` and `ZIG_SHA256` in `.github/workflows/release.yml`
   pin the compiler, and the downloaded archive must pass `sha256sum -c` before
   it is used. The `objdump -T` floor check covers OpenSSL's symbols too. The
-  release fails if `readelf -d` shows `libssl`, `libcrypto` or `libgc` (on the
-  built binary and on the unpacked archive), and the archive ships
+  release fails if `readelf -d` shows `libssl`, `libcrypto`, `libgc` or `libz` (on
+  the built binary and on the unpacked archive), and the archive ships
   `licenses/openssl/LICENSE.txt`.

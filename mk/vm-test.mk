@@ -27,7 +27,7 @@ vm-test: $(VM_TESTS)
 # locks, a timer fired against a wake and a function compiled by several threads at once. The VM is built without
 # libgc (AGC_NO_GC), so the collector's own signals are out of the picture; the whole run is checked, so a race fails
 # it.
-VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit
+VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit zlib
 # vm/tools/tsan.supp: the calls from the system libcrypto, whose own locking TSan cannot see (TLS setup on pool threads).
 VM_TSAN_OPTIONS := halt_on_error=1 suppressions=$(CURDIR)/vm/tools/tsan.supp
 vm-tsan:
@@ -133,14 +133,15 @@ VM_DYNAMIC_DEPS = readelf -d $(1) | sed -n 's/.*NEEDED.*\[\(.*\)\]/\1/p'
 endif
 VENDORED_BIN := build/vm/release/agentica$(EXE)
 
-# Link the VM against the vendored OpenSSL and libgc and check that it is static and the version is the submodule's.
-# On Windows it also checks that the binary does not need the MSYS2 runtime (msys-2.0.dll).
+# Link the VM against the vendored OpenSSL, libgc and zlib and check that each is static and the version is the submodule's.
+# On Windows it also checks that the binary does not need the MSYS2 runtime (msys-2.0.dll). The libz match needs the
+# separator class: without it libzstd would match too.
 vendored-check:
-	$(MAKE) -j$(JOBS) $(VENDORED_BIN) AGENTICA_OPENSSL=vendored AGENTICA_GC=vendored
+	$(MAKE) -j$(JOBS) $(VENDORED_BIN) AGENTICA_OPENSSL=vendored AGENTICA_GC=vendored AGENTICA_ZLIB=vendored
 	@deps=$$($(call VM_DYNAMIC_DEPS,$(VENDORED_BIN))); \
 	  test -n "$$deps" || { echo "cannot list the shared libraries of $(VENDORED_BIN)" >&2; exit 1; }; \
-	  if printf '%s\n' "$$deps" | grep -qE '(^|[/[:space:]])lib(ssl|crypto|gc)[-.0-9]|msys-2[.]0[.]dll'; then \
-	    echo "the vendored binary links OpenSSL, libgc or the MSYS2 runtime dynamically:" >&2; printf '%s\n' "$$deps" >&2; exit 1; fi
+	  if printf '%s\n' "$$deps" | grep -qE '(^|[/[:space:]])lib(ssl|crypto|gc|z)[-.0-9]|zlib1[.]dll|msys-2[.]0[.]dll'; then \
+	    echo "the vendored binary links OpenSSL, libgc, zlib or the MSYS2 runtime dynamically:" >&2; printf '%s\n' "$$deps" >&2; exit 1; fi
 	@ossl=$$(awk -F= '/^(MAJOR|MINOR|PATCH)=/ { printf "%s%s", sep, $$2; sep = "." }' vm/third_party/openssl/VERSION.dat); \
 	  $(RUN_PROGRAM) $(VENDORED_BIN) run --version | grep -qF "OpenSSL $$ossl" || { echo "the vendored binary does not report OpenSSL $$ossl" >&2; exit 1; }
 

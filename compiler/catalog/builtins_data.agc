@@ -5,7 +5,8 @@
 import Types from "../syntax/types"
 import Model from "builtin_model"
 
-## Every builtin, sorted by name.
+## Every builtin, sorted by name; the Zlib rows are appended last, in
+## contract order, so the positions of the existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -17,10 +18,11 @@ BUILTIN_GROUP_8 = ROWS_36.concat(ROWS_37.concat(ROWS_38.concat(ROWS_39.concat(RO
 BUILTIN_GROUP_9 = ROWS_41.concat(ROWS_42.concat(ROWS_43.concat(ROWS_44.concat(ROWS_45))))
 BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(ROWS_50))))
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
+BUILTIN_GROUP_12 = ROWS_56
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
-BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11)
+BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11.concat(BUILTIN_GROUP_12))
 export BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUPS_2).concat(
   BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_4),
 )
@@ -181,6 +183,16 @@ export RECORDS: List[Model.Record] = [
         Model.Named(name: "truncated", type: Types.Type.Bool),
       ],
     ),
+    # vm/value.h names these field positions (AGC_ZLIB_PROGRESS_FIELDS): keep them in step.
+    Model.Record(
+      name: "ZlibProgress",
+      fields: [
+        Model.Named(name: "output", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "consumed", type: Types.Type.Int),
+        Model.Named(name: "finished", type: Types.Type.Bool),
+        Model.Named(name: "needs_input", type: Types.Type.Bool),
+      ],
+    ),
   ]
 
 ## The builtin enums, whose variants are written without an import.
@@ -206,11 +218,14 @@ export ENUMS: List[Model.EnumDef] = [
   ]
 
 ## The handle types a task can be given with Task.spawn_owning.
-export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
+export HANDLE_TYPES: List[String] = [
+  "Socket", "Listener", "HttpServer", "FileHandle", "Process", "ZlibEncoder", "ZlibDecoder",
+]
 
 ## The builtin types with no structure: handles, TestCase and C.Pointer (a C pointer of native code).
 export OPAQUE_TYPES: List[String] = [
   "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "C.Pointer",
+  "ZlibEncoder", "ZlibDecoder",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -264,6 +279,10 @@ export RESERVED_TYPE_NAMES: List[String] = [
     "TestCase",
     "Time",
     "Void",
+    "Zlib",
+    "ZlibDecoder",
+    "ZlibEncoder",
+    "ZlibProgress",
   ]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
@@ -4791,6 +4810,289 @@ ROWS_55: List[Model.Builtin] = [
       implementation: "puts",
       effects: ["stdout"],
       description: "Write a value and a newline; non-String values print as in interpolation.",
+      alternatives: [],
+    ),
+  ]
+
+## The Zlib compression rows, in contract order; appended last so the positions of the existing rows never shift.
+ROWS_56: List[Model.Builtin] = [
+    Model.Builtin(
+      name: "Zlib.deflate",
+      parameters: [
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "level", type: Types.Type.Int),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.deflate",
+      effects: [],
+      description: (
+        "Compress bytes to the zlib wrapper (RFC 1950) with level 0 to 9; empty input is valid and gives the " +
+        "empty stream; data at most 1048576 bytes, max_out_bytes 1 to 1048576; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.inflate",
+      parameters: [
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.inflate",
+      effects: [],
+      description: (
+        "Decompress one zlib-wrapped (RFC 1950) stream with its checksum checked; empty input fails, and any " +
+        "trailing bytes after the single stream are an error; data at most 1048576 bytes, max_out_bytes 1 to " +
+        "1048576; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.gzip",
+      parameters: [
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "level", type: Types.Type.Int),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.gzip",
+      effects: [],
+      description: (
+        "Compress bytes to gzip (RFC 1952) with level 0 to 9; empty input is valid; data at most 1048576 bytes, " +
+        "max_out_bytes 1 to 1048576; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.gunzip",
+      parameters: [
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.List(Types.Type.Int)),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.gunzip",
+      effects: [],
+      description: (
+        "Decompress one gzip member (RFC 1952) with its CRC and size checked; empty input fails, and any " +
+        "trailing bytes after the single member (a second member or zeros alike) are an error; data at most " +
+        "1048576 bytes, max_out_bytes 1 to 1048576; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.deflate_file",
+      parameters: [
+        Model.Named(name: "src", type: Types.Type.String),
+        Model.Named(name: "dst", type: Types.Type.String),
+        Model.Named(name: "level", type: Types.Type.Int),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.deflate_file",
+      effects: ["filesystem"],
+      description: (
+        "Compress a file to the zlib wrapper at dst and return the bytes written; level 0 to 9; the raw input " +
+        "never exceeds 1073741824 bytes and max_out_bytes is 1 to 1073741824; the destination opens like " +
+        "create_private, so an existing path is an error and stays intact, and a partial file is kept on error; " +
+        "VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.inflate_file",
+      parameters: [
+        Model.Named(name: "src", type: Types.Type.String),
+        Model.Named(name: "dst", type: Types.Type.String),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.inflate_file",
+      effects: ["filesystem"],
+      description: (
+        "Decompress one zlib-wrapped stream from src into a new file at dst and return the bytes written; the " +
+        "checksum is checked and any trailing bytes after the single stream are an error; the compressed input " +
+        "never exceeds 268435456 bytes and max_out_bytes is 1 to 1073741824; the destination opens like " +
+        "create_private and a partial file is kept on error; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.gzip_file",
+      parameters: [
+        Model.Named(name: "src", type: Types.Type.String),
+        Model.Named(name: "dst", type: Types.Type.String),
+        Model.Named(name: "level", type: Types.Type.Int),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.gzip_file",
+      effects: ["filesystem"],
+      description: (
+        "Compress a file to gzip at dst and return the bytes written; level 0 to 9; the raw input never exceeds " +
+        "1073741824 bytes and max_out_bytes is 1 to 1073741824; the destination opens like create_private and a " +
+        "partial file is kept on error; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.gunzip_file",
+      parameters: [
+        Model.Named(name: "src", type: Types.Type.String),
+        Model.Named(name: "dst", type: Types.Type.String),
+        Model.Named(name: "max_out_bytes", type: Types.Type.Int),
+        Model.Named(name: "timeout_ms", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.gunzip_file",
+      effects: ["filesystem"],
+      description: (
+        "Decompress one gzip member from src into a new file at dst and return the bytes written; the CRC and " +
+        "size are checked and any trailing bytes after the single member are an error; the compressed input " +
+        "never exceeds 268435456 bytes and max_out_bytes is 1 to 1073741824; the destination opens like " +
+        "create_private and a partial file is kept on error; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.deflate_init",
+      parameters: [
+        Model.Named(name: "window_bits", type: Types.Type.Int),
+        Model.Named(name: "level", type: Types.Type.Int),
+        Model.Named(name: "max_total_in", type: Types.Type.Int),
+        Model.Named(name: "max_total_out", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Opaque("ZlibEncoder")),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.deflate_init",
+      effects: [],
+      description: (
+        "Start a streaming compressor: window_bits 15 is the zlib wrapper, -15 raw deflate, 31 gzip; level 0 to " +
+        "9; each total cap 1 to 1073741824; the handle works with Task.spawn_owning; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.inflate_init",
+      parameters: [
+        Model.Named(name: "window_bits", type: Types.Type.Int),
+        Model.Named(name: "max_total_in", type: Types.Type.Int),
+        Model.Named(name: "max_total_out", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Opaque("ZlibDecoder")),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.inflate_init",
+      effects: [],
+      description: (
+        "Start a streaming decompressor: window_bits 15 is the zlib wrapper, -15 raw deflate, 31 gzip; each " +
+        "total cap 1 to 1073741824; the handle works with Task.spawn_owning; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.deflate_next",
+      parameters: [
+        Model.Named(name: "enc", type: Types.Type.Opaque("ZlibEncoder")),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "max_out", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("ZlibProgress")),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.deflate_next",
+      effects: [],
+      description: (
+        "Feed a streaming compressor at most 65536 input bytes with room for max_out 1 to 65536 output bytes; " +
+        "consumed may be less than data.size and the rest stays caller-owned; empty input drains pending " +
+        "output; needs_input true asks for more input, false asks to call again at once; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.inflate_next",
+      parameters: [
+        Model.Named(name: "dec", type: Types.Type.Opaque("ZlibDecoder")),
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "max_out", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("ZlibProgress")),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.inflate_next",
+      effects: [],
+      description: (
+        "Feed a streaming decompressor at most 65536 input bytes with room for max_out 1 to 65536 output " +
+        "bytes; consumed may be less than data.size and the rest stays caller-owned; empty input drains pending " +
+        "output; needs_input true asks for more input or a finish, false asks to call again at once; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.deflate_finish",
+      parameters: [
+        Model.Named(name: "enc", type: Types.Type.Opaque("ZlibEncoder")),
+        Model.Named(name: "max_out", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Struct("ZlibProgress")),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.deflate_finish",
+      effects: [],
+      description: (
+        "Drain the end of a streaming compressor with room for max_out 1 to 65536 output bytes; repeat until " +
+        "finished is true; feeding more input after finishing starts is an error; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.inflate_finish",
+      parameters: [
+        Model.Named(name: "dec", type: Types.Type.Opaque("ZlibDecoder")),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.inflate_finish",
+      effects: [],
+      description: (
+        "Succeed only once a whole checked stream end arrived on a streaming decoder, else a truncation error; " +
+        "VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.encoder_close",
+      parameters: [
+        Model.Named(name: "enc", type: Types.Type.Opaque("ZlibEncoder")),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.encoder_close",
+      effects: [],
+      description: (
+        "Free a streaming compressor idempotently; feeding or finishing it afterwards is an error; VM only."
+      ),
+      alternatives: [],
+    ),
+    Model.Builtin(
+      name: "Zlib.decoder_close",
+      parameters: [
+        Model.Named(name: "dec", type: Types.Type.Opaque("ZlibDecoder")),
+      ],
+      result: Types.Type.Result(Types.Type.Void),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.decoder_close",
+      effects: [],
+      description: (
+        "Free a streaming decoder idempotently; feeding or finishing it afterwards is an error; VM only."
+      ),
       alternatives: [],
     ),
   ]

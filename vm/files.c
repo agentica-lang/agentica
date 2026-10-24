@@ -13,6 +13,7 @@
 #include "services.h"
 #include "digest.h"
 #include "file_io.h"
+#include "zlib_codec.h"
 
 /* The bounds of buffer_bytes (File.each_line, File.foreach), on every platform: the stub below reads them too. */
 #define MIN_LINE_BUFFER ((int64_t)1024)
@@ -48,16 +49,24 @@
 #define CHUNK ((size_t)65536)
 #define WRITE_BUFFER ((size_t)4096)
 #define NO_DEADLINE ((int64_t)-1)
+/* Zlib.*_file bounds: the caller caps the output bytes (at most 1 GiB),
+   while the source read never exceeds a fixed cap, so hostile headers or a
+   compression bomb are cut in streaming: 256 MiB of compressed input for
+   decompression, 1 GiB of raw input for compression. */
+#define ZLIB_FILE_MAX_OUT ((int64_t)1073741824)
+#define ZLIB_FILE_MAX_DECOMP_IN ((uint64_t)268435456)
+#define ZLIB_FILE_MAX_COMP_IN ((uint64_t)1073741824)
 
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME
+  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_ZLIB_FORMAT,
+  FS_ZLIB_CHECK, FS_ZLIB_TRAILING, FS_ZLIB_TOO_BIG, FS_ZLIB_INPUT_BIG
 } fs_status;
 
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256, OP_ZLIB_FILE
 } op_kind;
 
 typedef struct {
@@ -79,13 +88,16 @@ typedef struct {
   size_t out_len, out_cap, count, fail_at;
   fs_status status;
   int err, fd;
-  bool owns_st, polled, locked;
+  bool owns_st, polled, locked, dst_failed;
   const char *file_type;
   agc_vm *vm;
   agc_poller *poller;
   agc_io_job *job;
   size_t sent;
   int64_t size, mtime, mode, user_id, group_id;
+  int zlib_kind;
+  int64_t zlib_level;
+  uint64_t zlib_in;
 } op;
 
 typedef struct {
@@ -133,6 +145,9 @@ typedef struct {
 } line_scan;
 
 static const char not_regular[] = "filesystem: path does not refer to a regular file";
+/* A handle of another library: File, Zlib and lock handles share the
+   AGC_T_HANDLE tag, so identity is checked before any cast of native. */
+static const char not_file[] = "filesystem: handle is not a file handle";
 static const char timed_out[] = "filesystem: operation timed out";
 static const char line_too_long[] = "filesystem: line exceeds buffer_bytes";
 static const char bad_timeout[] = "filesystem: timeout must be positive milliseconds";
@@ -770,6 +785,160 @@ static void work_sha256(op *o) {
   o->out_cap = AGC_SHA256_BYTES;
 }
 
+/* Zlib.*_file: one stream file-to-file in fixed 64 KiB chunks with O(chunk)
+   memory, through the shared codec kernel of zlib_codec.h, so compression and
+   decompression share it with the byte and streaming calls and no second
+   decoder exists: DEFLATE/INFLATE wrap in zlib, GZIP/GUNZIP in gzip. The
+   source opens like File.sha256 (non-blocking, and the fstat of the
+   descriptor itself decides regular, so a FIFO swap cannot turn this into a
+   wait); the destination opens like OP_OPEN_CREATE (O_EXCL, never following
+   a link, an existing path stays intact). Output is checked against max_out
+   before every write, so a partial file never grows past it and is conserved
+   on error (never removed: removal would race with a replacement). Only
+   malloc'd memory is touched here, no GC pointer, and nothing raises. A job
+   already running runs to its end on timeout or cancel and its result is
+   dropped, as with the other whole-file calls: there is no handle to close. */
+static void work_zlib_file(op *o) {
+  bool compress = o->zlib_kind == AGC_ZLIB_DEFLATE_FILE || o->zlib_kind == AGC_ZLIB_GZIP_FILE;
+  bool gzip = o->zlib_kind == AGC_ZLIB_GZIP_FILE || o->zlib_kind == AGC_ZLIB_GUNZIP_FILE;
+  uint64_t max_out = (uint64_t)o->count;
+  uint64_t max_in = compress ? ZLIB_FILE_MAX_COMP_IN : ZLIB_FILE_MAX_DECOMP_IN;
+  int sfd = open_for(o, true, false);
+  if (sfd < 0) return;
+  agc_fs_info info;
+  if (agc_fs_fstat(sfd, &info) != 0) {
+    int err = errno;
+    agc_fs_close(sfd);
+    fail_op(o, FS_READ, err);
+    return;
+  }
+  if (!AGC_FS_ISREG(info.mode)) {
+    agc_fs_close(sfd);
+    fail_op(o, FS_NOT_REGULAR, 0);
+    return;
+  }
+  blocking(sfd);
+  /* O_EXCL on any existing entry, a dangling link included, and never follows one. */
+  int dfd = agc_fs_open(o->to, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_PRIVATE);
+  if (dfd < 0) {
+    int err = errno;
+    agc_fs_close(sfd);
+    o->dst_failed = true;
+    fail_op(o, FS_OPEN, err);
+    return;
+  }
+  uint8_t *in = malloc(CHUNK);
+  uint8_t *out = malloc(CHUNK);
+  agc_zcodec *codec = compress ? agc_zcodec_encode_begin(gzip ? 31 : 15, (int)o->zlib_level)
+                               : agc_zcodec_decode_begin(gzip ? 31 : 15);
+  if (!in || !out || !codec) {
+    agc_zcodec_free(codec);
+    free(in);
+    free(out);
+    agc_fs_close(sfd);
+    agc_fs_close(dfd);
+    fail_op(o, FS_READ, ENOMEM);
+    return;
+  }
+  uint64_t total_out = 0;
+  const uint8_t *next = NULL;
+  size_t left = 0;
+  bool src_eof = false, finished = false;
+  for (;;) {
+    if (left == 0 && !src_eof) {
+      int64_t n = agc_fs_read(sfd, in, CHUNK);
+      if (n < 0 && errno == EINTR) continue;
+      if (n < 0) {
+        fail_op(o, FS_READ, errno);
+        break;
+      }
+      if (n == 0) {
+        src_eof = true;
+      } else {
+        if (o->zlib_in + (uint64_t)n > max_in) {
+          fail_op(o, FS_ZLIB_INPUT_BIG, 0);
+          break;
+        }
+        o->zlib_in += (uint64_t)n;
+        next = in;
+        left = (size_t)n;
+      }
+    }
+    size_t produced = 0;
+    agc_zcodec_status fed;
+    if (left > 0 || !src_eof) {
+      fed = compress ? agc_zcodec_encode(codec, &next, &left, false, out, CHUNK, &produced)
+                     : agc_zcodec_decode(codec, &next, &left, out, CHUNK, &produced);
+    } else {
+      /* Past end of source the encoder drains with FINISH and the decoder
+         proves the truncation: neither takes new input here. */
+      const uint8_t *empty = NULL;
+      size_t empty_left = 0;
+      fed = compress ? agc_zcodec_encode(codec, &empty, &empty_left, true, out, CHUNK, &produced)
+                     : agc_zcodec_decode(codec, &empty, &empty_left, out, CHUNK, &produced);
+    }
+    if (fed == AGC_ZCODEC_NOMEM) {
+      fail_op(o, FS_READ, ENOMEM);
+      break;
+    }
+    if (fed == AGC_ZCODEC_CHECK) {
+      fail_op(o, FS_ZLIB_CHECK, 0);
+      break;
+    }
+    if (fed == AGC_ZCODEC_FORMAT) {
+      fail_op(o, FS_ZLIB_FORMAT, 0);
+      break;
+    }
+    if (produced > 0) {
+      if (total_out + (uint64_t)produced > max_out) {
+        fail_op(o, FS_ZLIB_TOO_BIG, 0);
+        break;
+      }
+      int err = 0;
+      if (!write_all(dfd, out, produced, &err)) {
+        fail_op(o, FS_WRITE, err);
+        break;
+      }
+      total_out += (uint64_t)produced;
+    }
+    if (fed == AGC_ZCODEC_DONE) {
+      finished = true;
+      break;
+    }
+    if (fed == AGC_ZCODEC_MORE && left == 0 && src_eof && produced == 0) {
+      fail_op(o, FS_ZLIB_FORMAT, 0);
+      break;
+    }
+  }
+  if (finished && o->status == FS_OK && !compress) {
+    if (left != 0) {
+      fail_op(o, FS_ZLIB_TRAILING, 0);
+    } else {
+      /* A stream that ends exactly at end of file has no byte beyond it: one
+         more byte decides trailing data from a clean end. Every trailing byte
+         is refused, zeros and concatenated members alike. */
+      uint8_t extra = 0;
+      for (;;) {
+        int64_t n = agc_fs_read(sfd, &extra, 1);
+        if (n < 0 && errno == EINTR) continue;
+        if (n < 0) {
+          fail_op(o, FS_READ, errno);
+        } else if (n > 0) {
+          fail_op(o, FS_ZLIB_TRAILING, 0);
+        }
+        break;
+      }
+    }
+  }
+  agc_zcodec_free(codec);
+  free(in);
+  free(out);
+  agc_fs_close(sfd);
+  agc_fs_close(dfd);
+  if (o->status != FS_OK) return;
+  o->size = (int64_t)total_out;
+}
+
 static void work_stat(op *o) {
   agc_fs_info info;
   if ((o->kind == OP_LSTAT ? agc_fs_stat(o->path, &info, false) : agc_fs_stat(o->path, &info, true)) != 0) {
@@ -1128,6 +1297,7 @@ static void work(void *data) {
     case OP_WRITE: work_write(o); break;
     case OP_CLOSE: work_close(o); break;
     case OP_SHA256: work_sha256(o); break;
+    case OP_ZLIB_FILE: work_zlib_file(o); break;
   }
 }
 
@@ -1285,6 +1455,11 @@ static agc_value common_error(agc_vm *vm, const op *o) {
       if (o->kind == OP_LIST) return os_error(vm, "directory-list: could not open directory", o->path, path_len, o->err);
       if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256)
         return os_error(vm, "open-input-file: cannot open input file", o->path, path_len, o->err);
+      if (o->kind == OP_ZLIB_FILE) {
+        if (!o->dst_failed) return os_error(vm, "open-input-file: cannot open input file", o->path, path_len, o->err);
+        size_t to_len = o->to ? strlen(o->to) : 0;
+        return os_error(vm, "open-output-file: error opening file", o->to, to_len, o->err);
+      }
       return os_error(vm, "open-output-file: error opening file", o->path, path_len, o->err);
     case FS_IS_DIR: {
       text t = {0};
@@ -1304,6 +1479,19 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_REFUSED: return error_of(refused_path);
     case FS_LOCK: return agc_system_error(vm, "filesystem: cannot lock file", o->err);
     case FS_NOT_LOCKABLE: return error_of(not_lockable);
+    case FS_ZLIB_FORMAT:
+      if (o->kind == OP_ZLIB_FILE &&
+          (o->zlib_kind == AGC_ZLIB_DEFLATE_FILE || o->zlib_kind == AGC_ZLIB_GZIP_FILE))
+        return error_of("zlib: compression failed");
+      return error_of("zlib: invalid compressed data");
+    case FS_ZLIB_CHECK: return error_of("zlib: checksum mismatch");
+    case FS_ZLIB_TRAILING: return error_of("zlib: trailing bytes after stream end");
+    case FS_ZLIB_TOO_BIG: return error_of("zlib: output exceeds max_out_bytes");
+    case FS_ZLIB_INPUT_BIG:
+      if (o->kind == OP_ZLIB_FILE &&
+          (o->zlib_kind == AGC_ZLIB_DEFLATE_FILE || o->zlib_kind == AGC_ZLIB_GZIP_FILE))
+        return error_of("zlib: input exceeds 1073741824 bytes");
+      return error_of("zlib: compressed input exceeds 268435456 bytes");
     case FS_RENAME: {
       text t = {0};
       puts_text(&t, "filesystem: cannot rename path\n  from: ");
@@ -1432,6 +1620,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
       case OP_READ_TEXT:
       case OP_READ_LINE: result = text_result(o); break;
       case OP_SHA256: result = bytes_result(o); break;
+      case OP_ZLIB_FILE: result = agc_result_value(true, agc_int(o->size)); break;
       case OP_LIST: result = list_result(vm, o); break;
       case OP_REAL: result = real_result(o); break;
       case OP_READ_BYTES: result = bytes_result(o); break;
@@ -1549,6 +1738,30 @@ static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
                  complete_expected);
 }
 
+/* The file jobs behind the Zlib.*_file builtins (declared in services.h):
+   the whole-file call shape of the other file calls (the File global timer,
+   Result[Int] counting the bytes written, the partial kept on error), over
+   the shared codec kernel of zlib_codec.h. */
+agc_value agc_zlib_file(agc_vm *vm, agc_zlib_file_kind kind, const agc_string *src, const agc_string *dst,
+                        int64_t level, int64_t max_out, int64_t timeout, uint32_t span) {
+  files_on(vm, span);
+  if (vm->rt->deny_fs) return error_of(AGC_DENIED_FS);
+  bool compress = kind == AGC_ZLIB_DEFLATE_FILE || kind == AGC_ZLIB_GZIP_FILE;
+  if (compress && (level < 0 || level > 9)) return error_of("zlib: level must be between 0 and 9");
+  if (max_out < 1 || max_out > ZLIB_FILE_MAX_OUT)
+    return error_of("zlib: max_out_bytes must be between 1 and 1073741824");
+  if (timeout <= 0) return error_of(bad_timeout);
+  if (!path_string(src)) return contract_error(complete_who, complete_expected, src);
+  if (!path_string(dst)) return contract_error(complete_who, complete_expected, dst);
+  op *o = new_op(vm, OP_ZLIB_FILE);
+  o->path = agc_host_path(vm, src);
+  o->to = agc_host_path(vm, dst);
+  o->count = (size_t)max_out;
+  o->zlib_kind = (int)kind;
+  o->zlib_level = level;
+  return start(vm, o, agc_void(), timeout);
+}
+
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   return path_op(vm, OP_LSTAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
@@ -1638,6 +1851,10 @@ static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *r
     *result = error_of(bad_timeout);
     return true;
   }
+  if (agc_as_handle(vm, handle)->close != close_file) {
+    *result = error_of(not_file);
+    return true;
+  }
   switch (agc_handle_wait(vm, agc_as_handle(vm, handle), timeout)) {
     case AGC_LOCK_TAKEN: return false;
     case AGC_LOCK_WAIT: *result = agc_void(); return true;
@@ -1649,6 +1866,10 @@ static bool blocked(agc_vm *vm, agc_value handle, int64_t *timeout, agc_value *r
 
 static file_state *open_state(agc_vm *vm, agc_value handle, agc_value *failure) {
   const agc_resource *r = agc_as_handle(vm, handle);
+  if (r->close != close_file) {
+    *failure = error_of(not_file);
+    return NULL;
+  }
   if (r->native && !r->closing) return r->native;
   *failure = error_of("filesystem: file handle is closed");
   return NULL;
@@ -2261,6 +2482,17 @@ agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last
 void agc_writer_stop(agc_line_writer *w, agc_value outcome) {
   (void)w;
   (void)outcome;
+}
+
+agc_value agc_zlib_file(agc_vm *vm, agc_zlib_file_kind kind, const agc_string *src, const agc_string *dst,
+                        int64_t level, int64_t max_out, int64_t timeout, uint32_t span) {
+  (void)kind;
+  (void)src;
+  (void)dst;
+  (void)level;
+  (void)max_out;
+  (void)timeout;
+  agc_fail(vm, "RUNTIME-INTERNAL", "file access is off in this run", span);
 }
 
 const agc_builtin agc_file_builtins[] = {{"", 0, NULL, AGC_NATIVE_NONE, AGC_COST_NONE, false, false}};

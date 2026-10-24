@@ -18,7 +18,7 @@ WINDOWS_DOCKERFILE ?= tools/windows-check.Dockerfile
 WINDOWS_WINE_HOME := $(CURDIR)/build/wine-home
 WINDOWS_WRAPPER_DIR := build/windows
 WINDOWS_CROSS := VM_OS=Windows_NT CC=x86_64-w64-mingw32-gcc AR=llvm-ar RUN_PROGRAM=wine VM_TEST_RUNNER=wine \
-  AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored
+  AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored AGENTICA_ZLIB=vendored
 # The modules the vm-windows job of platforms.yml runs: the bootstrap binary alone, then the product. TESTS= picks
 # others (test_cli_forms.py drives only the command line, for instance).
 # tests/test_process.py, tests/test_process_lifecycle.py and tests/test_vm_child_channel.py stay out: their peers are

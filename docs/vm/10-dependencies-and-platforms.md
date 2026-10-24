@@ -11,8 +11,9 @@ server) use the same libuv sockets and the same C helpers, with no Windows-only
 HTTP code.
 
 The release (`release.yml`, 11) builds one native archive per system on a
-runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser
-and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`).
+runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser,
+zlib and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`,
+`AGENTICA_ZLIB=vendored`).
 The system libraries that remain are the C library of each system: glibc (at
 most 2.28 symbols), libSystem on macOS, and on Windows the system DLLs with the
 Universal C Runtime, which is part of Windows 10. `tools/release-check.sh`
@@ -70,6 +71,19 @@ architecture, a library outside that list or missing hardening.
     script would write made by `mk/vm.mk`, and linked statically. Only
     `vm/ffi_libffi.c` includes `ffi.h`.
 
+- **Dependency:** zlib
+  - **Choice:** Vendored submodule `vm/third_party/zlib` (zlib/libpng,
+    permission to use for any purpose with attribution, no copyleft), tag
+    v1.3.1. With `AGENTICA_ZLIB=vendored` (the release, and the default off
+    Linux) only the codec side is built, without configure and without
+    the `gz*` file API: `adler32`, `crc32`, `deflate`, `inffast`,
+    `inflate`, `inftrees`, `trees` and `zutil` compile per mode into
+    `$(VM_BUILD)/zlib/` and link
+    statically. The Linux default, `system`, links the distro's zlib 1.2.0
+    or newer dynamically instead, as OpenSSL does (10.0). `Zlib`
+    compresses and decompresses through either behind the adapter
+    (`vm/zlib_codec.c`); only that file includes `zlib.h` (15.5).
+
 - **Dependency:** OpenSSL 3.5 LTS
   - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),
     shallow, tag `openssl-3.5.9`. Linked statically in the release
@@ -104,7 +118,8 @@ and `NOTICE` with the third-party licenses.
   (`readelf -d` shows no `libssl` or `libcrypto`) and runs on any glibc 2.28
   system. Pull request CI jobs use `system`, except the `test` job, which links
   one vendored release-mode binary from a cached OpenSSL so this path stays
-  tested (11). The same split applies to libgc through `AGENTICA_GC` (11).
+  tested (11). The same split applies to libgc through `AGENTICA_GC` and to
+  zlib through `AGENTICA_ZLIB` (11).
 
 The mode is not remembered. Pass `AGENTICA_OPENSSL=vendored` to every make
 command, or export it. `build/vm/flags` records the mode, so switching it

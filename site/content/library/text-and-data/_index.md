@@ -10,5 +10,6 @@ description: Work with text and numbers, read and write JSON and TOML, pack numb
 - Use [Binary data](/library/text-and-data/binary/) (`std/binary`) to read and write numbers in a list of bytes, and to frame messages.
 - Use [TOML](/library/text-and-data/toml/) (`std/toml`) to read and write TOML 1.0 documents, such as configuration files.
 - Use [Crypto](/library/text-and-data/crypto/) to hash a list of bytes with SHA-256.
+- Use [Zlib](/library/text-and-data/zlib/) to compress bytes, files and streams with DEFLATE, zlib and gzip.
 
 The tour pages [Strings](/tour/strings/) and [Numbers](/tour/numbers/) are a short start.

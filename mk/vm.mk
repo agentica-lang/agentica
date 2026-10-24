@@ -29,9 +29,13 @@
 # make AGENTICA_OPENSSL=vendored  build OpenSSL from vm/third_party/openssl and link it statically (the release does); pass it to
 #                         every make command or export it. The default AGENTICA_OPENSSL=system links the system OpenSSL 3 found by pkg-config
 #                         (Debian: libssl-dev pkg-config) and checks it before any vm/*.c compile.
+# make AGENTICA_ZLIB=vendored  build zlib from vm/third_party/zlib and link it statically (the release and non-Linux hosts do);
+#                         pass it to every make command or export it. The Linux default AGENTICA_ZLIB=system links the system
+#                         zlib found by pkg-config (Debian: zlib1g-dev pkg-config) and checks it before any vm/*.c compile.
 # make vm-openssl         AGENTICA_OPENSSL=vendored: build only the static libraries; AGENTICA_OPENSSL=system: check the system OpenSSL
 # make vm-openssl-key     AGENTICA_OPENSSL=vendored only: print what the OpenSSL build of this mode depends on (the CI cache key)
-# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, and build yyjson, picohttpparser, libuv and (Linux x86_64, Windows x64, macOS) libffi for this mode (no libgc with SANITIZE=1)
+# make vm-third-party     build (AGENTICA_GC=vendored) or check (system) libgc, build (AGENTICA_ZLIB=vendored) or check (system) zlib,
+#                         and build yyjson, picohttpparser, libuv and (Linux x86_64, Windows x64, macOS) libffi for this mode (no libgc with SANITIZE=1)
 # make vm-third-party-key print what those builds depend on (the CI cache key); they rebuild only when it changes
 GC_DIR := vm/third_party/bdwgc
 YY_DIR := vm/third_party/yyjson
@@ -39,8 +43,11 @@ PICO_DIR := vm/third_party/picohttpparser
 UV_DIR := vm/third_party/libuv
 OSSL_DIR := vm/third_party/openssl
 FFI_DIR := vm/third_party/libffi
+ZLIB_DIR := vm/third_party/zlib
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c \
+# The vendored zlib build is codec-only (no configure, no gz* I/O): the eight sources deflate and inflate need.
+ZLIB_NAMES := adler32 crc32 deflate inffast inflate inftrees trees zutil
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/zlib.c vm/zlib_codec.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c \
   vm/jit/jit.c vm/jit/emit_x64.c vm/jit/mem_posix.c vm/jit/mem_windows.c
 EXE :=
 VM_PIC := -fPIE
@@ -64,6 +71,7 @@ VM_LIBS += -framework Security -framework CoreFoundation
 endif
 UV_NAMES :=
 AGENTICA_GC_DEFAULT := vendored
+AGENTICA_ZLIB_DEFAULT := vendored
 ifeq ($(VM_OS),Windows_NT)
 UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
   win/async win/core win/detect-wakeup win/dl win/error win/fs win/fs-event win/getaddrinfo win/getnameinfo win/handle \
@@ -74,6 +82,7 @@ VM_LIBS += -lpsapi -luser32 -ladvapi32 -liphlpapi -luserenv -lws2_32 -ldbghelp -
 VM_LIBS += -lcrypt32 -lgdi32
 else ifeq ($(shell uname -s),Linux)
 AGENTICA_GC_DEFAULT := system
+AGENTICA_ZLIB_DEFAULT := system
 UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool timer uv-common uv-data-getter-setters version \
   unix/async unix/core unix/dl unix/fs unix/getaddrinfo unix/getnameinfo unix/loop-watcher unix/loop unix/pipe unix/poll \
   unix/process unix/random-devurandom unix/signal unix/stream unix/tcp unix/thread unix/tty unix/udp \
@@ -86,10 +95,18 @@ UV_NAMES := fs-poll idna inet random strscpy strtok thread-common threadpool tim
   unix/proctitle unix/bsd-ifaddrs unix/kqueue unix/random-getentropy unix/darwin-proctitle unix/darwin unix/fsevents
 endif
 AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
+AGENTICA_ZLIB ?= $(AGENTICA_ZLIB_DEFAULT)
 PKG_CONFIG ?= pkg-config
 GC_MIN := 8.2.0
+# The codec needs inflateInit2 and deflateInit2 with windowBits 15 (zlib), -15 (raw) and 31 (gzip), inflate,
+# deflate and their end calls: wrapper support in both directions dates from the 1.2 series, so 1.2.0 is the floor,
+# not the latest release.
+ZLIB_MIN := 1.2.0
 ifeq ($(filter $(AGENTICA_GC),system vendored),)
 $(error AGENTICA_GC must be system or vendored, not '$(AGENTICA_GC)')
+endif
+ifeq ($(filter $(AGENTICA_ZLIB),system vendored),)
+$(error AGENTICA_ZLIB must be system or vendored, not '$(AGENTICA_ZLIB)')
 endif
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_GNU_SOURCE -D_POSIX_C_SOURCE=200112
 ifeq ($(VM_OS),Windows_NT)
@@ -183,6 +200,19 @@ GC_LINK := $(shell $(PKG_CONFIG) --libs bdw-gc 2>/dev/null)
 GC_DEP := $(VM_BUILD)/gc-system
 endif
 VM_CFLAGS += $(GC_INC)
+VM_ZLIB :=
+ZLIB_LINK :=
+ZLIB_INC :=
+ZLIB_DEP :=
+ifeq ($(AGENTICA_ZLIB),vendored)
+VM_ZLIB := $(VM_BUILD)/libzlib.a
+VM_CFLAGS += -I $(ZLIB_DIR)
+else
+ZLIB_INC := $(shell $(PKG_CONFIG) --cflags zlib 2>/dev/null)
+ZLIB_LINK := $(shell $(PKG_CONFIG) --libs zlib 2>/dev/null)
+ZLIB_DEP := $(VM_BUILD)/zlib-system
+VM_CFLAGS += $(ZLIB_INC)
+endif
 VM_STAMP := build/vm/flags
 VM_TP_STAMP := $(VM_BUILD)/third-party-flags
 GC_STAMP := build/vm/gc-flags
@@ -192,17 +222,22 @@ PICO_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS)
 UV_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) $(UV_DEFS) -I $(UV_DIR)/include -I $(UV_DIR)/src
 FFI_INC = $(VM_BUILD)/ffi/include
 FFI_COMPILE = $(VM_CC) -std=gnu11 $(YY_CFLAGS) -I $(FFI_INC) -I $(FFI_DIR)/include
+ZLIB_COMPILE = $(VM_CC) -std=c11 $(YY_CFLAGS) -I $(ZLIB_DIR)
 SUBMODULE_KEY = if [ "$$(git -C $(1) rev-parse --show-toplevel 2>/dev/null)" = '$(CURDIR)/$(1)' ]; then \
   git ls-tree HEAD $(1); git -C $(1) rev-parse HEAD; git -C $(1) diff --no-ext-diff --no-color --binary HEAD | cksum; \
   (cd $(1) && git ls-files -z -o --exclude-standard | xargs -0r cksum); \
   else echo 'no git checkout: $(1)'; find $(1) -type f ! -path '*/.git/*' -print0 | LC_ALL=C sort -z | xargs -0r cksum | cksum; fi
 GC_SYSTEM_KEY = { $(PKG_CONFIG) --modversion bdw-gc 2>/dev/null; echo '$(GC_INC) $(GC_LINK)'; }
 GC_KEY = { echo '$(GC_COMPILE)'; $(CC) --version 2>/dev/null | head -n 1; $(call SUBMODULE_KEY,$(GC_DIR)); }
+ZLIB_SYSTEM_KEY = { $(PKG_CONFIG) --modversion zlib 2>/dev/null; echo '$(ZLIB_INC) $(ZLIB_LINK)'; }
+ZLIB_KEY = { echo '$(ZLIB_COMPILE)'; $(VM_CC) --version 2>/dev/null | head -n 1; $(call SUBMODULE_KEY,$(ZLIB_DIR)); }
 TP_KEY = { echo '$(shell uname -s) $(shell uname -m) $(OS)'; \
   echo '$(YY_COMPILE) | $(PICO_COMPILE) | $(UV_COMPILE) | $(UV_NAMES) | $(AR) rcs'; $(VM_CC) --version 2>/dev/null | head -n 1; \
   $(AR) --version 2>/dev/null | head -n 1; \
   echo '$(FFI_COMPILE) | $(FFI_NAMES) | $(FFI_TARGET) $(FFI_DIR_TARGET) $(FFI_LONG_DOUBLE) $(FFI_TRAMPOLINE_TABLE) $(FFI_APPLE)'; \
+  echo 'zlib=$(AGENTICA_ZLIB) $(ZLIB_COMPILE) | $(ZLIB_NAMES) | $(ZLIB_LINK)'; \
   $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); \
+  $(if $(filter vendored,$(AGENTICA_ZLIB)),$(call SUBMODULE_KEY,$(ZLIB_DIR));) \
   $(if $(FFI_NAMES),$(call SUBMODULE_KEY,$(FFI_DIR));) }
 ifeq ($(origin CCACHE),undefined)
 CCACHE := $(shell c=$$(command -v ccache 2>/dev/null) || exit 0; d=$$($$c -k cache_dir 2>/dev/null) || d=$${CCACHE_DIR:-$$HOME/.ccache}; \
@@ -219,6 +254,7 @@ VM_RES := $(if $(filter Windows_NT,$(VM_OS)),$(VM_OBJ)/agentica-res.o)
 WINDRES ?= $(patsubst %gcc,%windres,$(patsubst %clang,%windres,$(VM_CC)))
 VM_YY := $(VM_BUILD)/yyjson.o
 VM_PICO := $(VM_BUILD)/picohttpparser.o
+ZLIB_OBJS := $(patsubst %,$(VM_BUILD)/zlib/%.o,$(ZLIB_NAMES))
 VM_UV := $(if $(UV_NAMES),$(VM_BUILD)/libuv.a)
 UV_OBJS := $(patsubst %,$(VM_BUILD)/uv/%.o,$(UV_NAMES))
 VM_FFI := $(if $(FFI_NAMES),$(VM_BUILD)/libffi.a)
@@ -267,7 +303,7 @@ VM_CFLAGS += $(OSSL_INC)
 
 $(VM_STAMP): FORCE
 	@mkdir -p $(VM_BUILD) build/vm
-	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK) gc=$(GC_MODE) $(GC_LINK)' > $@.$(notdir $(VM_BUILD)); \
+	@echo '$(VM_CC) $(VM_CFLAGS) $(VM_LDFLAGS) openssl=$(AGENTICA_OPENSSL) $(OSSL_LINK) gc=$(GC_MODE) $(GC_LINK) zlib=$(AGENTICA_ZLIB) $(ZLIB_LINK)' > $@.$(notdir $(VM_BUILD)); \
 	if cmp -s $@.$(notdir $(VM_BUILD)) $@; then rm -f $@.$(notdir $(VM_BUILD)); else mv $@.$(notdir $(VM_BUILD)) $@; fi
 
 $(VM_OBJ_STAMP): FORCE
@@ -278,7 +314,9 @@ $(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := -U NDEBUG
 
 $(VM_OBJ)/tls_openssl.o $(VM_OBJ)/digest_openssl.o: $(OSSL_DEP)
 
-$(VM_OBJ)/%.o: vm/%.c $(VM_OBJ_STAMP) | $(OSSL_DEP) $(GC_DEP)
+$(VM_OBJ)/zlib.o $(VM_OBJ)/zlib_codec.o: $(ZLIB_DEP)
+
+$(VM_OBJ)/%.o: vm/%.c $(VM_OBJ_STAMP) | $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP)
 	@mkdir -p $(dir $@)
 	$(CCACHE) $(VM_CC) $(VM_CFLAGS) $(DEBUG_MAP) $(VM_OBJ_FLAGS) -MMD -MP -c $< -o $@
 
@@ -298,10 +336,12 @@ $(GC_STAMP): FORCE
 
 vm-third-party-key:
 	@echo 'libgc=$(GC_MODE)'
+	@echo 'zlib=$(AGENTICA_ZLIB)'
 	@$(TP_KEY)
 	@$(if $(filter system,$(GC_MODE)),$(GC_SYSTEM_KEY),$(if $(VM_GC),$(GC_KEY),:))
+	@$(if $(filter system,$(AGENTICA_ZLIB)),$(ZLIB_SYSTEM_KEY),$(if $(VM_ZLIB),$(ZLIB_KEY),:))
 
-vm-third-party: $(GC_DEP) $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_FFI)
+vm-third-party: $(GC_DEP) $(VM_GC) $(ZLIB_DEP) $(VM_YY) $(VM_PICO) $(VM_ZLIB) $(VM_UV) $(VM_FFI)
 
 $(GC_DIR)/extra/gc.c:
 	@echo "missing $(GC_DIR): run git submodule update --init" >&2; exit 1
@@ -333,6 +373,24 @@ $(PICO_DIR)/picohttpparser.c:
 $(VM_PICO): $(VM_TP_STAMP) | $(PICO_DIR)/picohttpparser.c
 	@mkdir -p $(VM_BUILD)
 	$(CCACHE) $(PICO_COMPILE) $(DEBUG_MAP) -c $(PICO_DIR)/picohttpparser.c -o $@
+
+$(ZLIB_DIR)/zlib.h:
+	@echo "missing $(ZLIB_DIR): run git submodule update --init" >&2; exit 1
+
+$(VM_BUILD)/zlib-system: FORCE
+	@command -v $(PKG_CONFIG) >/dev/null || { echo "AGENTICA_ZLIB=system needs pkg-config and the zlib development files (Debian: apt install zlib1g-dev pkg-config), or build with AGENTICA_ZLIB=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --exists zlib || { echo "pkg-config cannot find zlib: install the zlib development files (Debian: zlib1g-dev), or build with AGENTICA_ZLIB=vendored" >&2; exit 1; }
+	@$(PKG_CONFIG) --atleast-version=$(ZLIB_MIN) zlib || { echo "the VM needs zlib $(ZLIB_MIN) or newer, pkg-config found $$($(PKG_CONFIG) --modversion zlib); install a newer zlib1g-dev or build with AGENTICA_ZLIB=vendored" >&2; exit 1; }
+	@mkdir -p $(VM_BUILD)
+	@$(ZLIB_SYSTEM_KEY) > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
+
+$(VM_BUILD)/zlib/%.o: $(VM_TP_STAMP) | $(ZLIB_DIR)/zlib.h
+	@mkdir -p $(dir $@)
+	$(CCACHE) $(ZLIB_COMPILE) $(DEBUG_MAP) -c $(ZLIB_DIR)/$*.c -o $@
+
+$(VM_BUILD)/libzlib.a: $(ZLIB_OBJS) | $(ZLIB_DIR)/zlib.h
+	rm -f $@
+	$(AR) rcs $@ $(ZLIB_OBJS)
 
 $(UV_DIR)/src/uv-common.c:
 	@echo "missing $(UV_DIR): run git submodule update --init" >&2; exit 1
@@ -431,5 +489,5 @@ $(OSSL_BUILD)/libcrypto.a: $(OSSL_STAMP)
 $(OSSL_BUILD)/libssl.a: $(OSSL_BUILD)/libcrypto.a
 	@test -f $@ || { echo "$@ is missing: remove $(OSSL_BUILD) and rebuild" >&2; exit 1; }
 
-VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_UV) $(VM_FFI)
-VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(VM_LDFLAGS)
+VM_LINK_LIBS = $(VM_GC) $(VM_YY) $(VM_PICO) $(VM_ZLIB) $(VM_UV) $(VM_FFI)
+VM_LINK = $(VM_CC) -o $@ $(filter-out $(VM_LINK_LIBS),$(filter %.o,$^)) $(VM_LINK_LIBS) $(OSSL_LINK) $(GC_LINK) $(ZLIB_LINK) $(VM_LDFLAGS)

@@ -63,6 +63,7 @@ case "$kind" in
     grep -q 'Type:[[:space:]]*DYN' <<< "$header" || die "$name is not PIE"
     if grep -qE 'NEEDED.*lib(ssl|crypto)' <<< "$dynamic"; then die "$name links OpenSSL dynamically"; fi
     if grep -qE 'NEEDED.*libgc[.]' <<< "$dynamic"; then die "$name links libgc dynamically"; fi
+    if grep -qE 'NEEDED.*libz[.]' <<< "$dynamic"; then die "$name links zlib dynamically"; fi
     vendored_openssl
     grep -q 'FLAGS_1).*PIE' <<< "$dynamic" || die "$name is not PIE"
     grep -q '(FLAGS).*BIND_NOW' <<< "$dynamic" || die "$name lacks BIND_NOW"
@@ -90,7 +91,7 @@ case "$kind" in
     grep -qx '/usr/lib/libSystem.B.dylib' <<< "$libs" || die "$name does not link libSystem"
     bad=$(grep -vE '^(/usr/lib/|/System/Library/)' <<< "$libs" || true)
     [ -z "$bad" ] || die "$name links libraries outside the system: $bad"
-    if grep -qE 'lib(ssl|crypto|gc|uv)[.0-9]*[.]dylib' <<< "$libs"; then die "$name links a third-party library dynamically"; fi
+    if grep -qE 'lib(ssl|crypto|gc|uv|z)[.0-9]*[.]dylib' <<< "$libs"; then die "$name links a third-party library dynamically"; fi
     vendored_openssl
     header=$(otool -hv -arch "$arch" "$binary")
     grep -qE '(^|[[:space:]])PIE([[:space:]]|$)' <<< "$header" || die "$name is not PIE"
@@ -108,7 +109,7 @@ case "$kind" in
     grep -q 'file format pei-x86-64' <<< "$info" || die "$name is not a 64-bit x86 PE file: $info"
     private=$(objdump -p "$binary")
     # A DLL the system does not have fails to start the program: MSYS2's msys-2.0.dll, GCC's libgcc_s_seh-1.dll and
-    # libwinpthread-1.dll, and any libssl or libgc belong to the build environment. Allowed: the Windows system DLLs
+    # libwinpthread-1.dll, and any libssl, libgc or zlib1 belong to the build environment. Allowed: the Windows system DLLs
     # and the Universal C Runtime (ucrtbase.dll and the api-ms-win-* forwarders), part of Windows 10 and later.
     dlls=$(awk '/DLL Name:/ { print tolower($3) }' <<< "$private" | sort -u)
     echo "$name: imports: $(tr '\n' ' ' <<< "$dlls")"
