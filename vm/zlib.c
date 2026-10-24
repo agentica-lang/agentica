@@ -164,7 +164,16 @@ static bool wants_input(size_t given, size_t consumed, size_t produced, size_t o
 
 /* One deflate or inflate pass over at most a quantum each way, through a
    malloc'd output buffer the call frees. Totals move only on success, and a
-   refused cap changes nothing. The progress record is resolved before the
+   refused cap changes nothing, except for one decoder case: once its output
+   budget is exactly full, a further call may still need to consume the
+   wrapper trailer (or a raw final empty block), which produces no bytes. A
+   positive max_out is still required by the range check, and any positive
+   quantum would trip the totals precheck, so that valid stream end would be
+   unreachable. The decoder then runs a bounded one-byte overflow probe
+   instead of the requested quantum: zero production commits normally, while
+   any produced byte fails the handle without exposing the extra byte. The
+   encoder keeps its conservative requested-quantum refusal (a smaller retry
+   quantum always exists there). The progress record is resolved before the
    malloc: its lookup longjmps when the frontend has not provided it, and
    must not leave a live buffer behind. */
 static agc_value feed_stream(agc_vm *vm, zlib_ctx *c, const uint8_t *input, size_t given, size_t out_cap, bool finish,
@@ -172,14 +181,28 @@ static agc_value feed_stream(agc_vm *vm, zlib_ctx *c, const uint8_t *input, size
   (void)span;
   uint32_t progress = progress_struct(vm);
   if (c->total_in + (uint64_t)given > c->max_in) return zlib_error("zlib: total input exceeds max_total_in");
-  if (c->total_out + (uint64_t)out_cap > c->max_out) return zlib_error("zlib: total output exceeds max_total_out");
-  uint8_t *out = malloc(out_cap ? out_cap : 1);
+  /* At an exactly full decoder budget only the zero-output trailer (or raw
+     terminator) may remain. Probe it with a private one-byte buffer rather
+     than refusing every positive quantum or running the full requested
+     quantum with no room: the probe either commits empty progress or
+     proves a genuine overflow. */
+  bool probe = false;
+  size_t eff_cap = out_cap;
+  if (c->total_out + (uint64_t)out_cap > c->max_out) {
+    if (c->kind == ZLIB_DECODER && c->total_out == c->max_out) {
+      probe = true;
+      eff_cap = 1;
+    } else {
+      return zlib_error("zlib: total output exceeds max_total_out");
+    }
+  }
+  uint8_t *out = malloc(eff_cap ? eff_cap : 1);
   if (!out) agc_out_of_memory();
   const uint8_t *next = input;
   size_t left = given, produced = 0;
   agc_zcodec_status fed = c->kind == ZLIB_ENCODER
-                              ? agc_zcodec_encode(c->codec, &next, &left, finish, out, out_cap, &produced)
-                              : agc_zcodec_decode(c->codec, &next, &left, out, out_cap, &produced);
+                              ? agc_zcodec_encode(c->codec, &next, &left, finish, out, eff_cap, &produced)
+                              : agc_zcodec_decode(c->codec, &next, &left, out, eff_cap, &produced);
   size_t consumed = given - left;
   bool end = fed == AGC_ZCODEC_DONE;
   bool check = fed == AGC_ZCODEC_CHECK;
@@ -193,13 +216,20 @@ static agc_value feed_stream(agc_vm *vm, zlib_ctx *c, const uint8_t *input, size
     c->state = ZLIB_FAILED;
     result = zlib_error(check ? "zlib: checksum mismatch" : c->kind == ZLIB_ENCODER ? "zlib: compression failed"
                                                                                     : "zlib: invalid compressed data");
+  } else if (probe && produced != 0) {
+    /* A genuine overflow past the full budget: fail sticky without
+       recording or returning the probe byte, so the handle can never
+       resume and the extra output never leaks. Totals stay frozen, as on
+       every other failure leg. */
+    c->state = ZLIB_FAILED;
+    result = zlib_error("zlib: total output exceeds max_total_out");
   } else {
     if (end) c->state = ZLIB_DONE;
     c->total_in += (uint64_t)consumed;
     c->total_out += (uint64_t)produced;
     agc_charge_bytes(vm, consumed + produced);
     result = progress_value(vm, progress, out, produced, (uint64_t)consumed, end,
-                            wants_input(given, consumed, produced, out_cap, end));
+                            wants_input(given, consumed, produced, eff_cap, end));
   }
   free(out);
   return result;

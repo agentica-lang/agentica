@@ -403,6 +403,148 @@ static void test_stream_truncation_trailing(void) {
   assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, close))->ok);
 }
 
+/* A decoder whose output budget exactly fits the payload must still reach
+   the verified end: the wrapper trailer (or a raw final empty block)
+   produces no bytes, so once the budget is full a bounded one-byte probe
+   consumes it, whatever quantum the call asked for. A byte past the full
+   budget instead fails the handle without leaking the probe byte, and the
+   trailer error and input-cap legs stay errors. */
+static void test_stream_decoder_full_budget(void) {
+  /* gzip "abc" with a 3-byte budget, the 8-byte trailer split into a later
+     chunk: the payload call is not done yet, then the trailer call
+     finishes with no output. */
+  agc_value init[] = {agc_int(31), agc_int(100), agc_int(3)};
+  agc_value dec = ok(call("Zlib.inflate_init", 3, init));
+  agc_value head[] = {dec, byte_list(zlib_vec_gzip_abc, 15), agc_int(3)};
+  const agc_struct *first = progress_of(call("Zlib.inflate_next", 3, head));
+  check_progress(first, 3, 15, false, false);
+  check_list_bytes(first->fields[0], abc_bytes, sizeof abc_bytes);
+  /* A 1-byte quantum finishes the trailer... */
+  agc_value tail[] = {dec, byte_list(zlib_vec_gzip_abc + 15, sizeof zlib_vec_gzip_abc - 15), agc_int(1)};
+  const agc_struct *end = progress_of(call("Zlib.inflate_next", 3, tail));
+  check_progress(end, 0, 8, true, false);
+  agc_value finish[] = {dec};
+  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, finish))->ok);
+  agc_value close[] = {dec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, close))->ok);
+  /* ... and so does a full 64 KiB quantum: the probe runs a private byte,
+     never the requested quantum with no room. */
+  agc_value dec_big = ok(call("Zlib.inflate_init", 3, init));
+  agc_value head_big[] = {dec_big, byte_list(zlib_vec_gzip_abc, 15), agc_int(3)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, head_big)), 3, 15, false, false);
+  agc_value tail_big[] = {dec_big, byte_list(zlib_vec_gzip_abc + 15, sizeof zlib_vec_gzip_abc - 15),
+                          agc_int(65536)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, tail_big)), 0, 8, true, false);
+  agc_value finish_big[] = {dec_big};
+  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, finish_big))->ok);
+  agc_value close_big[] = {dec_big};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, close_big))->ok);
+  /* The zlib wrapper splits the same way: 7 payload bytes, then the 4-byte
+     Adler trailer at the full budget. */
+  agc_value zinit[] = {agc_int(15), agc_int(100), agc_int(3)};
+  agc_value zdec = ok(call("Zlib.inflate_init", 3, zinit));
+  agc_value zhead[] = {zdec, byte_list(zlib_abc, 7), agc_int(3)};
+  const agc_struct *zfirst = progress_of(call("Zlib.inflate_next", 3, zhead));
+  check_progress(zfirst, 3, 7, false, false);
+  check_list_bytes(zfirst->fields[0], abc_bytes, sizeof abc_bytes);
+  agc_value ztail[] = {zdec, byte_list(zlib_abc + 7, sizeof zlib_abc - 7), agc_int(1)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, ztail)), 0, 4, true, false);
+  agc_value zfinish[] = {zdec};
+  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, zfinish))->ok);
+  agc_value zclose[] = {zdec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, zclose))->ok);
+  /* Raw has no trailer, but its final empty block still needs a zero-output
+     termination once the budget is full. */
+  agc_value rinit[] = {agc_int(-15), agc_int(100), agc_int(3)};
+  agc_value rdec = ok(call("Zlib.inflate_init", 3, rinit));
+  agc_value rhead[] = {rdec, byte_list(zlib_vec_raw_abc, 4), agc_int(3)};
+  const agc_struct *rfirst = progress_of(call("Zlib.inflate_next", 3, rhead));
+  check_progress(rfirst, 3, 4, false, false);
+  check_list_bytes(rfirst->fields[0], abc_bytes, sizeof abc_bytes);
+  agc_value rtail[] = {rdec, byte_list(zlib_vec_raw_abc + 4, sizeof zlib_vec_raw_abc - 4), agc_int(1)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, rtail)), 0, 1, true, false);
+  agc_value rfinish[] = {rdec};
+  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, rfinish))->ok);
+  agc_value rclose[] = {rdec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, rclose))->ok);
+  /* One byte at a time with a 1-byte quantum and an exact budget: only the
+     trailer call is done, the gathered output is exactly the payload, and
+     the end verifies. */
+  agc_value binit[] = {agc_int(31), agc_int(100), agc_int(3)};
+  agc_value bdec = ok(call("Zlib.inflate_init", 3, binit));
+  uint8_t gathered[8];
+  size_t total = 0;
+  bool done = false;
+  for (size_t at = 0; at < sizeof zlib_vec_gzip_abc; at++) {
+    agc_value feed[] = {bdec, byte_list(zlib_vec_gzip_abc + at, 1), agc_int(1)};
+    const agc_struct *p = progress_of(call("Zlib.inflate_next", 3, feed));
+    assert(agc_as_int(&vm, p->fields[1]) <= 1);
+    done = agc_as_bool(&vm, p->fields[2]);
+    assert(done == (at == sizeof zlib_vec_gzip_abc - 1));
+    gather(&vm, p, gathered, &total);
+  }
+  assert(total == sizeof abc_bytes && memcmp(gathered, abc_bytes, total) == 0);
+  agc_value bfinish[] = {bdec};
+  assert(agc_as_result(&vm, call("Zlib.inflate_finish", 1, bfinish))->ok);
+  agc_value bclose[] = {bdec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, bclose))->ok);
+  /* A genuine overflow past the full budget fails sticky: with a 2-byte
+     budget the third payload byte never leaks, and the handle never
+     resumes. */
+  agc_value oinit[] = {agc_int(31), agc_int(100), agc_int(2)};
+  agc_value odec = ok(call("Zlib.inflate_init", 3, oinit));
+  uint8_t kept[8];
+  size_t kept_total = 0;
+  bool overflowed = false;
+  for (size_t at = 0; at < sizeof zlib_vec_gzip_abc; at++) {
+    agc_value feed[] = {odec, byte_list(zlib_vec_gzip_abc + at, 1), agc_int(1)};
+    agc_value result = call("Zlib.inflate_next", 3, feed);
+    if (!agc_as_result(&vm, result)->ok) {
+      check_error(result, "zlib: total output exceeds max_total_out");
+      overflowed = true;
+      break;
+    }
+    gather(&vm, agc_as_struct(&vm, ok(result)), kept, &kept_total);
+  }
+  assert(overflowed);
+  assert(kept_total == 2 && memcmp(kept, abc_bytes, kept_total) == 0);
+  agc_value retry[] = {odec, byte_list(zlib_vec_gzip_abc, 1), agc_int(1)};
+  check_error(call("Zlib.inflate_next", 3, retry), "zlib: handle failed");
+  agc_value ofinish[] = {odec};
+  check_error(call("Zlib.inflate_finish", 1, ofinish), "zlib: handle failed");
+  agc_value oclose[] = {odec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, oclose))->ok);
+  /* A corrupt trailer at the full budget is still a checksum failure, and a
+     truncated one still truncates: the probe changes neither verdict. */
+  uint8_t bad[sizeof zlib_vec_gzip_abc];
+  memcpy(bad, zlib_vec_gzip_abc, sizeof bad);
+  bad[sizeof bad - 1] ^= 0x01;
+  agc_value cdec = ok(call("Zlib.inflate_init", 3, init));
+  agc_value chead[] = {cdec, byte_list(bad, 15), agc_int(3)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, chead)), 3, 15, false, false);
+  agc_value ctail[] = {cdec, byte_list(bad + 15, sizeof bad - 15), agc_int(1)};
+  check_error(call("Zlib.inflate_next", 3, ctail), "zlib: checksum mismatch");
+  check_error(call("Zlib.inflate_next", 3, ctail), "zlib: handle failed");
+  agc_value cclose[] = {cdec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, cclose))->ok);
+  agc_value tdec = ok(call("Zlib.inflate_init", 3, init));
+  agc_value thead[] = {tdec, byte_list(zlib_vec_gzip_abc, 15), agc_int(3)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, thead)), 3, 15, false, false);
+  agc_value ttail[] = {tdec, byte_list(zlib_vec_gzip_abc + 15, 4), agc_int(1)};
+  check_progress(progress_of(call("Zlib.inflate_next", 3, ttail)), 0, 4, false, true);
+  agc_value tfinish[] = {tdec};
+  check_error(call("Zlib.inflate_finish", 1, tfinish), "zlib: stream is truncated");
+  agc_value tclose[] = {tdec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, tclose))->ok);
+  /* The input total cap is still enforced before any probe runs. */
+  agc_value sinit[] = {agc_int(15), agc_int(5), agc_int(100)};
+  agc_value sdec = ok(call("Zlib.inflate_init", 3, sinit));
+  agc_value over[] = {sdec, byte_list(zlib_abc, 6), agc_int(100)};
+  check_error(call("Zlib.inflate_next", 3, over), "zlib: total input exceeds max_total_in");
+  agc_value sclose[] = {sdec};
+  assert(agc_as_result(&vm, call("Zlib.decoder_close", 1, sclose))->ok);
+}
+
 /* A failed handle stays failed, and the caps are enforced before any state
    could exceed them: a refused call changes nothing. */
 static void test_stream_failure_caps(void) {
@@ -802,6 +944,7 @@ int main(void) {
   test_stream_encode();
   test_stream_decode();
   test_stream_truncation_trailing();
+  test_stream_decoder_full_budget();
   test_stream_failure_caps();
   test_stream_ownership();
   test_finish_cap_state();
