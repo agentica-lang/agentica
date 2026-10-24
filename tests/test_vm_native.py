@@ -57,14 +57,14 @@ def library_name(name):
     return name + ".dll" if WINDOWS else "lib%s.dylib" % name if MACOS else "lib%s.so" % name
 
 
-def shared_library(tmp_path_factory, name, *flags, folder=None):
-    """Build tests/fixtures/native/NAME.c into a shared library (library_name) in FOLDER (a new one by default), with
-    the extra compiler FLAGS, and return its absolute path."""
+def shared_library(tmp_path_factory, name, *flags, folder=None, source=None):
+    """Build SOURCE (tests/fixtures/native/NAME.c by default) into a shared library (library_name) in FOLDER (a new
+    one by default), with the extra compiler FLAGS, and return its absolute path."""
     folder = folder or tmp_path_factory.mktemp("native")
     out = folder / library_name(name)
     kind = ["-shared"] if WINDOWS else ["-dynamiclib"] if MACOS else ["-shared", "-fPIC"]
-    subprocess.run([tool("cc"), *kind, "-O1", "-o", str(out), str(FIXTURES / "native" / (name + ".c")), *flags],
-                   check=True)
+    subprocess.run([tool("cc"), *kind, "-O1", "-o", str(out),
+                    str(source or FIXTURES / "native" / (name + ".c")), *flags], check=True)
     return out
 
 

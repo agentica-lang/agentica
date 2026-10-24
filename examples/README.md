@@ -36,6 +36,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The
 - [`http_server.agc`](http_server.agc): an HTTP server with `std/http`;
   `http_server.agc serve` keeps serving and prints its port.
 - [`queue.agc`](queue.agc): the embedded `std/queue` library.
+- [`ffi/`](ffi/README.md): calling C through `extern` blocks: plain calls, structs/resources/buffers, and a table of function pointers (build `ffi/demo.c` first).
 - [`json-modules.agc`](json-modules.agc): a program split across files (it
   imports [`modules/json-tools.agc`](modules/json-tools.agc)).
 - [`mcp/stdio.agc`](mcp/stdio.agc): a minimal MCP stdio server.

@@ -45,6 +45,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   returns: it streams in fixed 64 KiB chunks with no 1 MiB cap, and only
   regular files are hashed.
 - `Zlib` compresses bytes, files and streams with DEFLATE: the zlib wrapper and gzip one-shots and file pairs, plus incremental streaming with progress and task-owned handles.
+- Small FFI examples in `examples/ffi/`: a tiny C demo library plus programs showing plain native calls, structs by value with an owned resource and buffers, and a table of C function pointers.
 
 ### Changed
 
