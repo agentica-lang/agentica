@@ -5095,4 +5095,21 @@ ROWS_56: List[Model.Builtin] = [
       ),
       alternatives: [],
     ),
+    Model.Builtin(
+      name: "Zlib.crc32",
+      parameters: [
+        Model.Named(name: "data", type: Types.Type.List(Types.Type.Int)),
+        Model.Named(name: "seed", type: Types.Type.Int),
+      ],
+      result: Types.Type.Result(Types.Type.Int),
+      rule: Model.Rule.Plain,
+      implementation: "Zlib.crc32",
+      effects: [],
+      description: (
+        "CRC32 (RFC 1952) of bytes chained after seed: pass 0 first, then each next chunk with the previous " +
+        "result; empty input returns the seed unchanged; data at most 1048576 bytes, seed 0 to 4294967295; " +
+        "VM only."
+      ),
+      alternatives: [],
+    ),
   ]

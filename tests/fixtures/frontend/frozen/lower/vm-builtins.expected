@@ -272,6 +272,7 @@ Test.test
 Time.monotonic_ms
 Time.monotonic_ns
 Time.now_ms
+Zlib.crc32
 Zlib.decoder_close
 Zlib.deflate
 Zlib.deflate_file

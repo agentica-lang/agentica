@@ -1,7 +1,7 @@
 /*
  * The Zlib builtins (agc_zlib_builtins): one-shot compression and
- * decompression of byte lists, and task-owned streaming encoder and decoder
- * handles with their progress records. The file jobs (Zlib.*_file) only
+ * decompression of byte lists, the CRC32 checksum, and task-owned streaming
+ * encoder and decoder handles with their progress records. The file jobs (Zlib.*_file) only
  * validate and hand over to vm/files.c; the codec itself is the adapter of
  * zlib_codec.h, which alone includes zlib.h. Service layer. Design: RFC 1950
  * (zlib), RFC 1951 (deflate) and RFC 1952 (gzip).
@@ -488,6 +488,26 @@ static agc_value builtin_inflate_finish(agc_vm *vm, agc_value *args, uint32_t sp
   return agc_result_value(true, agc_void());
 }
 
+/* Zlib.crc32(data, seed): the zlib CRC32 of the bytes chained after seed,
+   for the ZIP checksum (RFC 1952 §8). A pure function of its arguments: no
+   handle, no shared state, so it runs without the shared lock, like the
+   one-shot calls, with the 1 MiB input bound keeping each call's work
+   bounded. Empty input returns the seed unchanged (zlib crc32(Z_NULL, 0)
+   resets to zero, so the empty case never reaches the codec). The bytes and
+   the checksum are computed first; the Result is built only after, so no
+   GC allocation happens while a caller buffer is held. */
+static agc_value builtin_crc32(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_value failed = agc_void();
+  const uint8_t *input = zlib_bytes(vm, args[0], ZLIB_ONE_SHOT_MAX, "zlib: input exceeds 1048576 bytes", &failed);
+  if (!input) return failed;
+  size_t n = agc_list_len(agc_as_list(vm, args[0]));
+  int64_t seed = agc_as_int(vm, args[1]);
+  if (seed < 0 || seed > 4294967295LL) return zlib_error("zlib: seed must be between 0 and 4294967295");
+  uint32_t crc = agc_zlib_crc32((uint32_t)seed, input, n);
+  return agc_result_value(true, agc_int((int64_t)crc));
+}
+
 /* Both close rows: closing is idempotent and owner-indifferent, like
    Native.close, so one function serves the encoder and the decoder. A
    foreign handle is refused before close_zlib could unregister it: the
@@ -517,6 +537,7 @@ const agc_builtin agc_zlib_builtins[] = {
   {"Zlib.inflate_finish", 1, builtin_inflate_finish, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
   {"Zlib.encoder_close", 1, builtin_zlib_close, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
   {"Zlib.decoder_close", 1, builtin_zlib_close, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false},
+  {"Zlib.crc32", 2, builtin_crc32, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
 };
 
 const size_t agc_zlib_builtin_count = sizeof agc_zlib_builtins / sizeof agc_zlib_builtins[0];
