@@ -1,4 +1,5 @@
 import Host from "../io/host"
+import NativeWorkspace from "../io/native_workspace"
 import Env from "link_env"
 import LinkText from "link_text"
 
@@ -28,7 +29,7 @@ def main() -> Void
       ids = true
     else
       puts("== #{argument}")
-      settings = Env.settings(Host.workspace(), stdlib, env)
+      settings = Env.settings(NativeWorkspace.workspace(), stdlib, env)
       if ids
         puts(LinkText.ids_text(argument, settings))
       else

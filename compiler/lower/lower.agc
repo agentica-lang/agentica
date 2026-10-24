@@ -1,4 +1,5 @@
 import Host from "../io/host"
+import NativeWorkspace from "../io/native_workspace"
 import Env from "../modules/link_env"
 import LowerText from "lower_text"
 
@@ -27,7 +28,7 @@ def main() -> Void
       env = env.with(local_app_data: argument.slice(17, argument.length - 17))
     else
       puts("== #{argument}")
-      puts(LowerText.lower_text_after(argument, Env.settings(Host.workspace(), stdlib, env), burn))
+      puts(LowerText.lower_text_after(argument, Env.settings(NativeWorkspace.workspace(), stdlib, env), burn))
     end
   end
 end

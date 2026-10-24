@@ -24,6 +24,7 @@ export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.W
     std_source: std_source,
     list_folder: &list_folder,
     read_bytes: &read_bytes,
+    native_artifact: &no_native,
   )
 end
 
@@ -114,6 +115,12 @@ def read_bytes(path: String) -> Result[List[Int]]
   end
   File.close(handle, STAT_TIMEOUT_MS)
   return ok(data)
+end
+
+# The verified local path of the downloaded member named by the request, from the cache alone and without
+# any network use. The caller matched the manifest row against the lock; this only verifies the cache object.
+def no_native(request: Workspace.NativeRequest) -> Result[String]
+  return error("native artifacts are not available in this workspace")
 end
 
 def variable(name: String) -> String

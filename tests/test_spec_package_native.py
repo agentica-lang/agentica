@@ -246,7 +246,7 @@ def test_an_extern_name_that_the_manifest_does_not_declare_stays_a_system_librar
     ('[native.pkgdemo]\nlinux = { file = "native/../x.so" }\n', "native.pkgdemo.linux.file"),
     ('[native.pkgdemo]\nlinux = { file = "native/x.so", system = "libx.so" }\n', "native.pkgdemo.linux"),
     ('[native.pkgdemo]\nlinux = { system = "/usr/lib/libx.so" }\n', "native.pkgdemo.linux.system"),
-    ('[native.pkgdemo]\nlinux = { url = "https://example.test/x.so" }\n', "native.pkgdemo.linux.url"),
+    ('[native.pkgdemo]\nlinux = { url = "https://example.test/x.so" }\n', "native.pkgdemo.linux"),
     ('[native.Demo]\nlinux = { system = "libx.so" }\n', "native.Demo"),
     ('[native.pkgdemo]\nlinux = { file = "native/Thumbs.db" }\n', "native.pkgdemo.linux.file"),
     ('[native.pkgdemo]\nlinux = { file = "native/sub/Desktop.INI" }\n', "native.pkgdemo.linux.file"),

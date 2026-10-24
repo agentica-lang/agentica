@@ -51,7 +51,8 @@ end
 ## What a build knows when it resolves an import: the deps/ folder of the project ("" when it has no manifest), the
 ## names the project declares, the system the build runs on (`os`, for the native libraries), the lock, the workspace
 ## of the project (none when it is in no workspace), the names that the manifests of the locked packages declare (by
-## package name; check_manifests reads them before any file is loaded), and the packages loaded so far (by name).
+## package name; check_manifests reads them before any file is loaded), the packages loaded so far (by name), and
+## `native_root`, the package cache root the downloaded native artifacts are verified from ("" when none).
 export struct Scope
   deps: String
   os: String
@@ -62,6 +63,7 @@ export struct Scope
   members: Members.Members
   declared: Map[String, List[String]]
   opened: Map[String, Opened]
+  native_root: String
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
@@ -96,10 +98,11 @@ export def scope_of(project: Project.Project) -> Scope
         natives: {},
         watched: [],
         direct: [],
-        lock: Lock.Lock(file: "", packages: []),
+        lock: Lock.Lock(file: "", packages: [], artifacts: []),
         members: Members.none(),
         declared: {},
         opened: {},
+        native_root: "",
       )
     Project.Project.Declared(found) ->
       return Scope(
@@ -112,17 +115,21 @@ export def scope_of(project: Project.Project) -> Scope
         members: found.members,
         declared: {},
         opened: {},
+        native_root: "",
       )
   end
 end
 
 ## The scope with the native libraries of the project's own manifest ([native], for this system). Its files are the
 ## project's own, so they are not hashed; the files of its native/ folder are watched by the bytecode cache.
+## Downloaded rows are verified from `scope.native_root` against `scope.lock` (the lock key "" is the project).
 export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, project: Project.Project) -> Scope
   case project
     Project.Project.Bare -> return scope
     Project.Project.Declared(found) ->
-      native = NativeLibrary.resolve(workspace, found.manifest, found.dir, scope.os, false, false)
+      native = NativeLibrary.resolve(
+        workspace, found.manifest, found.dir, scope.os, false, false, "", scope.lock, scope.native_root,
+      )
       return scope.with(natives: native.targets, watched: native.watched)
   end
 end
@@ -296,7 +303,7 @@ def load(
     try verify(workspace, locked, real.unwrap!, folder, site)
   end
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
-  native = try natives_of(workspace, scope, real.unwrap!, locked.member)
+  native = try natives_of(workspace, scope, real.unwrap!, locked.member, locked.name)
   return ok(
     Opened(
       root: real.unwrap!,
@@ -397,16 +404,21 @@ def declared_names(
 end
 
 # What the `[native]` table of the manifest of the package means on this system. A package with no manifest has none.
+# Downloaded rows are verified from `scope.native_root` against `scope.lock` (the lock key is `package_name`).
 def natives_of(
   workspace: Workspace.Workspace,
   scope: Scope,
   root: String,
   member: Bool,
+  package_name: String,
 ) -> Result[NativeLibrary.Found]
   case shape_of(workspace, root)
     Shape.Regular ->
       manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
-      return ok(NativeLibrary.resolve(workspace, manifest, root, scope.os, true, member))
+      found = NativeLibrary.resolve(
+        workspace, manifest, root, scope.os, true, member, package_name, scope.lock, scope.native_root,
+      )
+      return ok(found)
     _ -> return ok(NativeLibrary.Found(targets: {}, watched: []))
   end
 end

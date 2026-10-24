@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A `[native]` entry may download its library: `{ url, sha256, member }` pins the TAR archive and member per system, locked in `[[native-artifact]]` and fetched by `install`/`update` for the host.
+
 - `std/archive` extracts an explicit allowlist of regular files from a plain or gzipped TAR into a new private directory (`Archive.extract_tar`), with fixed security ceilings and no extract-all.
 - `--jit on` (or `AGENTICA_JIT=on`) compiles hot functions that have a loop
   (Int and Float math, list, field, enum and Result reads) to machine code on

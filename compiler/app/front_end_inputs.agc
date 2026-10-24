@@ -10,6 +10,7 @@
 ## that folder (docs/future/35-self-hosting.md, 35.3).
 
 import Host from "../io/host"
+import NativeWorkspace from "../io/native_workspace"
 import Env from "../modules/link_env"
 
 ## What the arguments of the front end are: the settings and the words of the user, or the mistake of whoever started
@@ -51,7 +52,7 @@ export def read(arguments: List[String]) -> Read
     return Read.Broken("--version is required")
   end
   env = Host.process_env()
-  workspace = Host.workspace_with(&std_source)
+  workspace = NativeWorkspace.workspace_with(&std_source)
   words = arguments.drop(at + 1)
   if stdlib == ""
     return Read.Ready(Env.embedded_settings(workspace, env, version, embedded_bdd).with(self_path: self_path), words)

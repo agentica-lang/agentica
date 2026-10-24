@@ -14,6 +14,7 @@
 import {BARE_NAMES, RESERVED} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Packages from "../packages/package_import"
+import PackageCache from "../packages/package_cache"
 import Project from "../packages/project"
 import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
@@ -236,7 +237,8 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   taken = try take(walk.kept, walk.next_id, key.unwrap!, file, text)
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
-  scope = try Packages.check_manifests(workspace, Packages.scope_of(project).with(os: settings.env.os))
+  base = Packages.scope_of(project).with(os: settings.env.os, native_root: PackageCache.root(settings.env))
+  scope = try Packages.check_manifests(workspace, base)
   scope = Packages.with_project_natives(workspace, scope, project)
   build = Resolve.Build(libs_dir: Project.library_dir(project, root_dir), scope: scope)
   first = Parsed(
