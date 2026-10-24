@@ -250,8 +250,8 @@ def main() -> Void
 end
 """
 
-# label's loop leaves compiled code at each String interpolation (TO_TEXT and CONCAT), more than once in 16
-# instructions, so `on` keeps it in the interpreter, where it runs faster; `always` compiles it.
+# label's loop builds Strings in compiled code (TO_TEXT and CONCAT have code of their own), so `on` compiles it;
+# `always` compiles it too.
 DENSE = """def label(n: Int) -> Int
   total = 0
   i = 0
@@ -296,6 +296,55 @@ end
 """
 
 
+# build joins Strings in a loop (each join charges its bytes, so turns end by cost in compiled code as in the
+# interpreter); main prints the text form of every tag through TO_TEXT. The joins stay in compiled code under `on`,
+# so build compiles there; main has no loop and compiles only under `always`.
+STRINGS = """struct Point
+  x: Int
+  y: Float
+end
+
+enum Shape
+  Dot
+  Box(Int, Int)
+end
+
+def build(n: Int) -> String
+  s = ""
+  i = 0
+  while i < n
+    s = s + "<#{i}>;"
+    i = i + 1
+  end
+  return s
+end
+
+def main() -> Void
+  puts(build(2000).size)
+  puts(42.to_s)
+  puts(1.5.to_s)
+  puts(true.to_s)
+  puts(nil.to_s)
+  puts("hi".to_s)
+  puts((1..3).to_s)
+  puts((1...3).to_s)
+  puts([1, 2, 3].to_s)
+  puts(ok(7).to_s)
+  r: Result[Int] = error("no")
+  puts(r.to_s)
+  puts(Point(x: 1, y: 0.5).to_s)
+  puts(Shape.Dot.to_s)
+  puts(Shape.Box(2, 3).to_s)
+  puts({"a": 1, "b": 2}.to_s)
+  case JSON.parse("{\\"a\\":[1,true]}")
+    ok(j) -> puts(j.to_s)
+    error(e) -> puts("parse failed")
+  end
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+
 def runs(bytecode, *flags, env=None, schedulers=1):
     """{mode: (exit code, stdout, stderr)} of one program in each mode."""
     out = {}
@@ -310,6 +359,13 @@ def assert_same(bytecode, *flags, schedulers=1):
     assert results["on"] == results["off"], flags
     assert results["always"] == results["off"], flags
     return results["off"]
+
+
+def assert_max_steps_sweep(bytecode, steps):
+    """Limits below STEPS stop every tier with RUNTIME-STEP-LIMIT."""
+    for limit in (steps // 3, steps // 2 + 7, steps - 1):
+        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
+        assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
 
 
 def jit_trace(bytecode, tmp_path, mode):
@@ -422,19 +478,33 @@ def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith("33750.0\n"), (stdout, stderr)
     steps = int(stdout.split("steps ")[1])
-    for limit in (steps // 3, steps // 2 + 7, steps - 1):
-        code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(limit))
-        assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
+    assert_max_steps_sweep(bytecode, steps)
 
 
-def test_on_keeps_a_loop_that_often_leaves_compiled_code_in_the_interpreter(tmp_path):
+def test_on_compiles_a_loop_that_builds_strings_in_compiled_code(tmp_path):
     bytecode = compile_text(DENSE, "dense", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == []
-    skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=label " in line]
-    assert skips == [] if not X86_64 else len(skips) == 1 and skips[0].endswith(" loop=exits"), skips
+    assert compiled(bytecode, tmp_path, "on") == (["label"] if X86_64 else [])
+    skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=main " in line]
+    assert len(skips) == (1 if X86_64 else 0) and all(line.endswith(" loop=none") for line in skips), skips
     assert compiled(bytecode, tmp_path, "always") == (["label", "main"] if X86_64 else [])
     code, stdout, stderr = assert_same(bytecode)
     assert (code, stdout) == (0, "198890\n"), (stdout, stderr)
+
+
+def test_string_joins_and_forms_run_in_compiled_code(tmp_path):
+    bytecode = compile_text(STRINGS, "strings", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["build"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "always") == (["build", "main"] if X86_64 else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0, stderr
+    assert stdout.split("\n")[:16] == ["12890", "42", "1.5", "true", "nil", "hi", "1..3", "1...3",
+                                         "[1, 2, 3]", "ok(7)", 'error("no")', "Point(x: 1, y: 0.5)",
+                                         "Shape.Dot", "Shape.Box(2, 3)", '{"a": 1, "b": 2}',
+                                         '{"a":[1,true]}'], stdout
+    steps = int(stdout.split("steps ")[1])
+    assert_max_steps_sweep(bytecode, steps)
+    code, _, stderr = assert_same(bytecode, "--json", "--max-steps", str(steps + 100))
+    assert code == 0, stderr
 
 
 def test_a_bad_jit_mode_is_refused(tmp_path):

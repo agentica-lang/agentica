@@ -206,12 +206,13 @@ uint64_t agc_task_steps(const agc_vm *vm);
 bool agc_frame_runs(const agc_task *t, uint32_t at, const agc_stepper *stepper);
 agc_turn_result agc_run_turn(agc_vm *vm);
 
-/* Opcode helpers: the arithmetic, comparison, equality and list opcodes, shared by the interpreter
+/* Opcode helpers: the arithmetic, comparison, equality, string and list opcodes, shared by the interpreter
  * (vm/interp.c inlines them) and the JIT (docs/future/22-jit.md §22, "Helper contract"). Values go by pointer: `dst`
  * is the result register, written only on AGC_STATUS_OK, and it may be an operand. A helper never fails itself (no
  * agc_fail, no longjmp): it returns a status, and the caller turns a status other than OK into the failure with
  * agc_op_fail, outside compiled code. The caller also keeps the step count and the turn cost: EQ, NE and SAME on
- * Strings add to the task's turn cost (agc_charge), which the caller applies after the instruction as the
+ * Strings add to the task's turn cost (agc_charge), as do CONCAT (the joined bytes) and TO_TEXT (agc_text charges a
+ * compound, String or Json form itself), which the caller applies after the instruction as the
  * interpreter's apply_cost does. */
 typedef enum {
   AGC_STATUS_OK = 0,
@@ -242,6 +243,8 @@ agc_status agc_op_ne(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_v
 agc_status agc_op_same(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
 agc_status agc_op_list_len(agc_vm *vm, agc_value *dst, const agc_value *list);
 agc_status agc_op_list_get(agc_vm *vm, agc_value *dst, const agc_value *list, const agc_value *index);
+agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b);
+agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v);
 /* The failure of a helper's status, with agc_fail. `a` and `b` are the operands the helper was given:
  * AGC_STATUS_INDEX_OUT_OF_RANGE needs both (the list and the index, named in the message), the other statuses read
  * neither (NULL is fine). `span` is the span of the running instruction. It is called on the VM's C stack, never from

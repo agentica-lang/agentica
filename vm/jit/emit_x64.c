@@ -327,7 +327,8 @@ static void call_helper(agc_emitter *e, uint64_t helper, agc_instr in, bool c, u
   patch(e, jump_to_patch(e, CC_NE), AGC_JIT_PATCH_EXIT_STATUS, (uint64_t)pc << 32);
 }
 
-/* After EQ, NE and SAME, as the interpreter does after each: a turn cost (a String compare charges its bytes) leaves
+/* After EQ, NE, SAME, CONCAT and TO_TEXT, as the interpreter does after each: a turn cost (a String compare charges
+   its bytes, CONCAT its joined bytes, TO_TEXT a compound, String or Json form) leaves
    for the interpreter to apply. */
 static void cost_exit(agc_emitter *e, uint32_t pc) {
   load(e, RAX, VM, (int64_t)offsetof(agc_vm, task));
@@ -356,12 +357,14 @@ void agc_emit_equal(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
 }
 
 /* The instructions that are one call of their opcode helper, the interpreter's own code: the Float operators and
-   compares (so NaN, rounding and the result's bits are the C code's), SAME, LIST_LEN and LIST_GET (with its bounds
+   compares (so NaN, rounding and the result's bits are the C code's), SAME, CONCAT and TO_TEXT (whose charges the
+   cost_exit applies, as the interpreter does), LIST_LEN and LIST_GET (with its bounds
    check, whose INDEX_OUT_OF_RANGE leaves R[b] and R[c] for the message). */
 void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
-  if (op == AGC_OP_NEG_F || op == AGC_OP_LIST_LEN) {
-    unary_helper one = op == AGC_OP_NEG_F ? agc_op_neg_f : agc_op_list_len;
+  if (op == AGC_OP_NEG_F || op == AGC_OP_LIST_LEN || op == AGC_OP_TO_TEXT) {
+    unary_helper one = op == AGC_OP_NEG_F ? agc_op_neg_f : op == AGC_OP_LIST_LEN ? agc_op_list_len : agc_op_to_text;
     call_helper(e, (uint64_t)(uintptr_t)one, in, false, pc);
+    if (op == AGC_OP_TO_TEXT) cost_exit(e, pc);
     return;
   }
   binary_helper two;
@@ -373,10 +376,11 @@ void agc_emit_helper(agc_emitter *e, agc_opcode op, agc_instr in, uint32_t pc) {
     case AGC_OP_LT_F: two = agc_op_lt_f; break;
     case AGC_OP_LE_F: two = agc_op_le_f; break;
     case AGC_OP_SAME: two = agc_op_same; break;
+    case AGC_OP_CONCAT: two = agc_op_concat; break;
     default: two = agc_op_list_get; break;
   }
   call_helper(e, binary(two), in, true, pc);
-  if (op == AGC_OP_SAME) cost_exit(e, pc);
+  if (op == AGC_OP_SAME || op == AGC_OP_CONCAT) cost_exit(e, pc);
 }
 
 /* The tag of register R must be TAG, else the interpreter runs the instruction at PC, and fails as it does. */

@@ -29,7 +29,9 @@ typedef struct {
 } agc_jit_exit;
 
 /* Compiled code of one function: runs from instruction `pc` with R the frame's registers and K the program's
-   constants, and returns at the first exit. It never fails, allocates, calls a builtin or moves a frame. */
+   constants, and returns at the first exit. The machine code itself never fails, allocates directly, calls a builtin
+   or moves a frame: an opcode helper it calls may allocate, but never fails (no agc_fail, no longjmp), parks or
+   moves a frame. */
 typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *K, uint32_t pc);
 
 /* On a function that calls compiled code: clang's -fsanitize=function reads a type word before each indirect call

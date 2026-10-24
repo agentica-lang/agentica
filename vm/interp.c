@@ -1013,6 +1013,39 @@ OP_HELPER agc_status agc_op_list_get(agc_vm *vm, agc_value *dst, const agc_value
   return AGC_STATUS_OK;
 }
 
+/* CONCAT joins two Strings and charges the joined bytes, as the interpreter's case did; the caller applies the cost.
+   Any other pair is hand-made bytecode (the checker keeps `+` to two Strings or two numbers), so it is WRONG_TAG and
+   dst is left alone. The two String pointers are read before dst is written, so dst may be an operand. */
+OP_HELPER agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *a, const agc_value *b) {
+  if (!tags_are(a, b, AGC_T_STRING)) return AGC_STATUS_WRONG_TAG;
+  const agc_string *x = agc_as_string(vm, *a), *y = agc_as_string(vm, *b);
+  agc_string *joined = agc_concat(x, y);
+  agc_charge_bytes(vm, joined->bytes);
+  *dst = agc_string_value(joined);
+  return AGC_STATUS_OK;
+}
+
+/* TO_TEXT prints any value through the checked text form, which charges a compound, String or Json form itself;
+   the caller applies the cost. A Void at the top level or inside a list, map value, set, struct, enum or Result is
+   hand-made bytecode (the checker rejects a Void value with CHECK-VOID-VALUE): the checked form reports it instead
+   of failing, so the helper answers WRONG_TAG with dst left alone. Structs and enums come from loader-checked
+   instructions, and a Json never holds a non-finite Float (JSON.parse and JSON.from refuse those), so on a loaded
+   program the checked form fails for nothing else here. Unlike EQ, which answers shallow pairs without walking them
+   (equal_values returns -1 past Ints, Floats, Nils, Strings, Ranges and Bools), TO_TEXT walks and formats
+   arbitrarily deep values; the check keeps that walk inside the helper's status contract. */
+OP_HELPER agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v) {
+  if (agc_is(*v, AGC_T_VOID)) return AGC_STATUS_WRONG_TAG;
+  int64_t cost = vm->task->turn_cost;
+  agc_string *text;
+  if (!agc_text_checked(vm, *v, &text)) {
+    /* The partial walk may have charged key re-hashes; a failing helper leaves the cost alone. */
+    vm->task->turn_cost = cost;
+    return AGC_STATUS_WRONG_TAG;
+  }
+  *dst = agc_string_value(text);
+  return AGC_STATUS_OK;
+}
+
 static _Noreturn void index_out_of_range(agc_vm *vm, int64_t index, size_t len, uint32_t span) {
   char text[96];
   int n = snprintf(text, sizeof text, "index %" PRId64 " is outside a list of length %zu", index, len);
@@ -1336,15 +1369,12 @@ reload:
       case AGC_OP_NEG_F: UNARY(agc_op_neg_f); break;
       case AGC_OP_LT_F: BINARY(agc_op_lt_f); break;
       case AGC_OP_LE_F: BINARY(agc_op_le_f); break;
-      case AGC_OP_CONCAT: {
-        agc_string *joined = agc_concat(agc_as_string(vm, R[in.b]), agc_as_string(vm, R[in.c]));
-        R[in.a] = agc_string_value(joined);
-        agc_charge_bytes(vm, joined->bytes);
+      case AGC_OP_CONCAT:
+        BINARY(agc_op_concat);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
-      }
       case AGC_OP_TO_TEXT:
-        R[in.a] = agc_string_value(agc_text(vm, R[in.b]));
+        UNARY(agc_op_to_text);
         if (t->turn_cost && apply_cost(vm)) return AGC_TURN_YIELD;
         break;
       case AGC_OP_INSPECT:

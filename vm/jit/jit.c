@@ -50,6 +50,8 @@ static bool has_code(uint32_t op) {
     case AGC_OP_LT_F:
     case AGC_OP_LE_F:
     case AGC_OP_SAME:
+    case AGC_OP_CONCAT:
+    case AGC_OP_TO_TEXT:
     case AGC_OP_LIST_LEN:
     case AGC_OP_LIST_GET:
     case AGC_OP_NOT:
@@ -131,6 +133,8 @@ static size_t emit_function(agc_emitter *e, const agc_function *f) {
       case AGC_OP_LT_F:
       case AGC_OP_LE_F:
       case AGC_OP_SAME:
+      case AGC_OP_CONCAT:
+      case AGC_OP_TO_TEXT:
       case AGC_OP_LIST_LEN:
       case AGC_OP_LIST_GET: agc_emit_helper(e, op, in, pc); break;
       case AGC_OP_NOT:

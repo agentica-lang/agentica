@@ -19,8 +19,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/archive` extracts an explicit allowlist of regular files from a plain or gzipped TAR into a new private directory (`Archive.extract_tar`), with fixed security ceilings and no extract-all.
 - `Archive.extract_zip` copies an explicit allowlist of regular files out of a classic single-disk ZIP (stored and raw deflate only) into a new private directory, with verified CRC32 and sizes for selected files and fixed read ceilings.
 - `--jit on` (or `AGENTICA_JIT=on`) compiles hot functions that have a loop
-  (Int and Float math, list, field, enum and Result reads) to machine code on
-  x86-64: experimental, off by default.
+  (Int and Float math, list, field, enum and Result reads, string joins and
+  text forms) to machine code on x86-64: experimental, off by default.
 - HTTP.download streams a response body to a new file with bounded memory: binary-safe bodies up to 256 MiB, reported as status, headers and bytes written.
 - An exported constant is read through the module alias, like an exported
   function: `Limits.MAX`, `Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)`.
