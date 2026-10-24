@@ -1,0 +1,10 @@
+# The native library of the FFI examples, built from demo.c (see README.md).
+# Paths are relative to this folder; build the one for your system first.
+# No downloads and no lock file: a project manifest with no dependencies
+# needs neither.
+name = "ffi-examples"
+
+[native.demo]
+linux = { file = "native/linux/libdemo.so" }
+macos = { file = "native/macos/libdemo.dylib" }
+windows = { file = "native/windows/demo.dll" }
