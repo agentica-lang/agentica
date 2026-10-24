@@ -538,9 +538,10 @@ def test_zlib_files_keep_an_existing_destination_intact(files_peer, tmp_path):
 
 def test_zlib_files_reject_themselves_missing_parents_and_symlink_targets(files_peer, tmp_path):
     src = tmp_path / "self.gz"
-    src.write_bytes(gzip.compress(b"abc"))
+    compressed = gzip.compress(b"abc", mtime=0)
+    src.write_bytes(compressed)
     assert "error opening file" in files_case(files_peer, "gunzip_file", src, src).stdout
-    assert read_bytes(src) == gzip.compress(b"abc")
+    assert read_bytes(src) == compressed
     assert "error opening file" in files_case(files_peer, "gunzip_file", src, tmp_path / "no-dir" / "out").stdout
     assert not (tmp_path / "no-dir").exists()
     if sys.platform == "win32":
