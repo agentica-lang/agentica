@@ -335,8 +335,10 @@ import Sqlite from "pkg/sqlite/db"
   updated: each package folder is either the old one or the new one, and
   `agentica install` finishes the rest. The
   answer is `fetched NAME@VERSION`, `in the cache NAME@VERSION` or, for a
-  workspace member, `in the workspace NAME@workspace` for each package, or
-  `nothing to install`. The command starts git even under
+  workspace member, `in the workspace NAME@workspace` for each package; with
+  no package but host artifacts ready, `1 native artifact ready` (or `N
+  native artifacts ready`); else `nothing to install`. The command starts
+  git even under
   `--deny-run`, which only limits programs.
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and
   `agentica update [NAME]` write the lock; they are the only commands that do.

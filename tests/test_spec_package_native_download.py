@@ -191,7 +191,6 @@ def test_root_native_only_install_update_and_offline_hit(server, tmp_path):
     assert (result.code, problem) == (0, None), getattr(result, "stderr", "")
     lock_text = (ws.project / "agentica.lock").read_text(encoding="utf-8")
     assert "[[native-artifact]]" in lock_text and sha in lock_text
-    result, problem = install(ws, None) if False else (None, None)
     # install via package_support helper needs remotes; use CLI directly with cache env.
     result = run_cli(ws, "--json", "install")
     assert result.code == 0, result.stderr
@@ -224,18 +223,24 @@ def test_all_systems_pinned_host_fetched_only(server, tmp_path):
     assert not any(p in ("/t/other.tar", "/t/third.tar") for p in paths)
 
 
-def test_multi_member_one_archive_two_aliases(server, tmp_path):
-    ws = Workspace(tmp_path)
+def pinned_two_aliases(ws, server, route="/t/multi.tar"):
+    """A project with two aliases sharing one two-member archive, pinned via update."""
     (ws.project / "main.agc").write_text('def main() -> Void\nend\n', encoding="utf-8")
     archive = make_tar({"a.bin": b"a-bytes", "b.bin": b"b-bytes"})
     sha = digest(archive)
-    server.routes_ref["/t/multi.tar"] = archive
-    url = server.url("/t/multi.tar")
+    server.routes_ref[route] = archive
+    url = server.url(route)
     text = 'name = "app"\n\n[native.a]\n' + download_row(HERE, url, sha, "a.bin")
     text += '\n[native.b]\n' + download_row(HERE, url, sha, "b.bin")
     (ws.project / "agentica.toml").write_text(text, encoding="utf-8")
     result, problem = update(ws)
     assert (result.code, problem) == (0, None), getattr(result, "stderr", problem)
+    return sha
+
+
+def test_multi_member_one_archive_two_aliases(server, tmp_path):
+    ws = Workspace(tmp_path)
+    pinned_two_aliases(ws, server)
     lock_text = (ws.project / "agentica.lock").read_text(encoding="utf-8")
     assert lock_text.count("[[native-artifact]]") == 2
     # One archive download serves both members (second member reuses the archive).
@@ -455,3 +460,82 @@ def test_workspace_member_download_uses_folder_and_cache(server, tmp_path):
     assert result.code == 0, result.stderr
     lock_text = (repo / member / "agentica.lock").read_text(encoding="utf-8")
     assert "[[native-artifact]]" in lock_text and 'package = ""' in lock_text
+
+
+def duplicate_row(ws, **spellings):
+    """The lock text with its single artifact row copied once, with the given fields re-spelled."""
+    text = (ws.project / "agentica.lock").read_text(encoding="utf-8")
+    assert text.count("[[native-artifact]]") == 1
+    head, row = text.split("[[native-artifact]]")
+    assert 'member = "lib.bin"' in row
+    for key, value in spellings.items():
+        lines = [line for line in row.splitlines(keepends=True) if line.startswith(key + " =")]
+        assert len(lines) == 1, (key, row)
+        row = row.replace(lines[0], '%s = "%s"\n' % (key, value))
+    return text + "[[native-artifact]]" + row
+
+
+def pinned_root(ws, server, route="/t/lib.tar"):
+    (ws.project / "main.agc").write_text('def main() -> Void\nend\n', encoding="utf-8")
+    archive = make_tar({"lib.bin": b"member-bytes"})
+    sha = digest(archive)
+    server.routes_ref[route] = archive
+    write_root_manifest(ws, "demo", [download_row(HERE, server.url(route), sha)])
+    result, problem = update(ws)
+    assert (result.code, problem) == (0, None), getattr(result, "stderr", problem)
+    return sha
+
+
+def test_lock_duplicate_identity_ignores_member_spelling(server, tmp_path):
+    # The duplicate key is exactly (package, library, system): a re-spelled member is still a duplicate.
+    ws = Workspace(tmp_path)
+    pinned_root(ws, server)
+    (ws.project / "agentica.lock").write_text(duplicate_row(ws, member="./lib.bin"), encoding="utf-8")
+    result, problem = check_json(ws, ws.project / "main.agc")
+    assert result.code == 1
+    assert_at_key(problem, "PKG-LOCK-INVALID", ws.project / "agentica.lock", "native-artifact[1].system")
+
+
+def test_lock_duplicate_identity_ignores_payload_fields(server, tmp_path):
+    # A duplicate triple with a different URL, sha256 and member is still one row locked twice.
+    ws = Workspace(tmp_path)
+    pinned_root(ws, server)
+    other = "https://example.test/other.tar"
+    text = duplicate_row(ws, url=other, sha256="ab" * 32, member="other.bin")
+    (ws.project / "agentica.lock").write_text(text, encoding="utf-8")
+    result, problem = check_json(ws, ws.project / "main.agc")
+    assert result.code == 1
+    assert_at_key(problem, "PKG-LOCK-INVALID", ws.project / "agentica.lock", "native-artifact[1].system")
+
+
+def test_artifact_only_install_reports_ready_not_fetched(server, tmp_path):
+    # An artifact-only lock has no package lines: install says what the host ensured, cached or not.
+    ws = Workspace(tmp_path)
+    pinned_root(ws, server)
+    result = run_cli(ws, "install")
+    assert (result.code, result.stdout) == (0, "1 native artifact ready\n"), result.stderr
+    mark = len(server.requests)
+    # Cached again: the same status, and no new download behind it.
+    result = run_cli(ws, "install")
+    assert (result.code, result.stdout) == (0, "1 native artifact ready\n"), result.stderr
+    assert len(server.requests) == mark
+
+
+def test_artifact_only_install_counts_host_artifacts(server, tmp_path):
+    ws = Workspace(tmp_path)
+    pinned_two_aliases(ws, server)
+    result = run_cli(ws, "install")
+    assert (result.code, result.stdout) == (0, "2 native artifacts ready\n"), result.stderr
+
+
+def test_other_system_only_install_stays_quiet(server, tmp_path):
+    # No entry for this host: nothing is fetched and the answer keeps its old meaning.
+    ws = Workspace(tmp_path)
+    (ws.project / "main.agc").write_text('def main() -> Void\nend\n', encoding="utf-8")
+    write_root_manifest(ws, "demo", [download_row(OTHER, "https://example.test/other.tar", "ab" * 32)])
+    result, problem = update(ws)
+    assert (result.code, problem) == (0, None), getattr(result, "stderr", problem)
+    assert server.requests == []
+    result = run_cli(ws, "install")
+    assert (result.code, result.stdout) == (0, "nothing to install\n"), result.stderr
+    assert server.requests == []

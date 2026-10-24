@@ -461,6 +461,26 @@ def test_end_record_rules(tmp_path):
     assert lines == ["comment ok [%d]" % len(HELLO_WORLD), ""]
 
 
+def test_end_record_comment_holding_an_eocd_uses_the_outer_record(tmp_path):
+    # The outer comment embeds a second anchored EOCD reusing the outer
+    # central-directory fields: the inner record ends at EOF too (its
+    # comment length covers only the trailing suffix), so only the
+    # earliest-anchored-wins order tells them apart. A last-wins reader
+    # would take the inner record and fail the abut check; ok pins outer.
+    work = tmp_path
+    seed, layout = assemble([Spec(b"a.txt", b"data", method=0)])
+    suffix = b"XY"
+    inner = (SIG_EOCD + struct.pack("<HHHHIIH", 0, 0, 1, 1,
+             len(layout["central"]), layout["cd_offset"], len(suffix)) + suffix)
+    blob, _ = assemble([Spec(b"a.txt", b"data", method=0)], comment=b"hi" + inner)
+    (work / "nested.zip").write_bytes(blob)
+    assert seed.count(SIG_EOCD) == 1
+    assert blob.count(SIG_EOCD) == 2
+    lines = run_zip(work, "nested", "nested.zip", ["a.txt"], "o1")
+    assert lines == ["nested ok [4]", ""]
+    assert (work / "o1" / "a.txt").read_bytes() == b"data"
+
+
 def test_multidisk_and_zip64_are_refused(tmp_path):
     work = tmp_path
     deflated_case(work)

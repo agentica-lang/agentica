@@ -121,11 +121,6 @@ export def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
   return Toml.encode(root).unwrap!
 end
 
-## The encoded lock with these packages and no artifacts, for the callers that lock no download.
-export def encode_packages(packages: List[Locked]) -> String
-  return encode(packages, [])
-end
-
 ## The locked package with this name, or an error.
 export def find(lock: Lock, name: String) -> Result[Locked]
   for locked in lock.packages
