@@ -138,21 +138,24 @@ size_t agc_emit_end(agc_emitter *e);
 /* Code memory (mem_posix.c, mem_windows.c, mem_apple.c): pages are mapped writable, filled, then sealed read and
    execute; never writable and executable at once. The icache is flushed at the seal. On Apple arm64 the pages come
    from one process-lifetime MAP_JIT arena (at most AGC_JIT_CODE_CAP bytes) with effective per-thread
-   write-xor-execute: a thread opens a write lease with agc_jit_mem_apple_begin_write around the fill, the seal
-   flushes, and agc_jit_mem_apple_end_write closes the lease before the code is published with
-   agc_jit_mem_apple_publish or run; agc_jit_mem_apple_thread_exec puts a new thread to the resting executable state
+   write-xor-execute: a thread opens a write lease with agc_jit_mem_apple_begin_write before any fill write and
+   holds it through the fill (writing without it may fault on Apple), the seal flushes the whole owned reservation,
+   and agc_jit_mem_apple_end_write closes the lease before the code is published with agc_jit_mem_apple_publish
+   or run, with no exception; agc_jit_mem_apple_thread_exec puts a new thread to the resting executable state
    before any entry. Only the thread that mapped a slice may seal, publish or abandon it while it is unpublished;
-   published slices stay immutable until the process exits, and exhaustion or an unsupported host keeps the function
-   interpreted. */
+   end every lease and abandon or publish every reservation before the thread exits. Published slices stay immutable
+   until the process exits, and exhaustion or an unsupported host keeps the function interpreted. */
 void *agc_jit_mem_map(size_t size);
 bool agc_jit_mem_seal(void *pages, size_t size);
 void agc_jit_mem_unmap(void *pages, size_t size);
 /* Apple arm64 only (mem_apple.c): the resting executable state of this thread (false when the host toggle is
    unsupported, the arena failed, or the thread holds an open lease), and the write lease around one fill. The seal
-   validates the lease and flushes without closing it; the publish marks the winner immutable. */
+   validates the lease and flushes the whole reservation without closing it; the publish marks the winner immutable. */
+#if (defined(__APPLE__) && defined(__aarch64__)) || defined(AGC_JIT_MEM_APPLE_SHIM)
 bool agc_jit_mem_apple_thread_exec(void);
 bool agc_jit_mem_apple_begin_write(void *pages);
 bool agc_jit_mem_apple_end_write(void *pages);
 bool agc_jit_mem_apple_publish(void *pages);
+#endif
 
 #endif

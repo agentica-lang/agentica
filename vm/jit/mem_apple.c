@@ -1,10 +1,12 @@
 /*
  * The JIT's code memory on Apple arm64 (docs/future/22-jit.md §22, "Memory"): one process-lifetime MAP_JIT arena of
  * at most AGC_JIT_CODE_CAP bytes in 4 KiB logical slices (the host page only sizes the mapping, rounded down, never
- * past the cap). A thread writes only with its own lease open (begin_write); the seal flushes the icache without
- * closing the lease, and end_write always restores the thread to executable first. Only the mapping thread may seal,
- * publish or abandon its unpublished slice; the winner's publish is immutable, losers return to the arena, and
- * exhaustion or an unsupported host keeps the function interpreted. Core layer.
+ * past the cap). A thread writes only with its own lease open (begin_write); the fill itself needs the open lease
+ * (writing without begin may fault on Apple), the seal flushes the whole owned reservation without closing the lease,
+ * and end_write always restores the thread to executable first. Only the mapping thread may seal, publish or abandon
+ * its unpublished slice; the winner's publish is immutable, losers return to the arena, and exhaustion or an
+ * unsupported host keeps the function interpreted. End every lease and abandon or publish every reservation before
+ * the thread exits; a leaked lease pins its slices. Core layer.
  */
 #if defined(__APPLE__) && !defined(_DARWIN_C_SOURCE)
 #define _DARWIN_C_SOURCE 1
@@ -43,6 +45,7 @@
 #define APPLE_SLICES ((size_t)AGC_JIT_CODE_CAP / APPLE_SLICE)
 
 _Static_assert((size_t)AGC_JIT_CODE_CAP % APPLE_SLICE == 0, "the code cap is a whole number of slices");
+_Static_assert(APPLE_SLICES <= (size_t)UINT16_MAX, "a reservation length fits in 16 bits");
 
 /* A slice's state: free, reserved, sealed, or published forever. The lease bit rides on a reservation's first slice
    only; interior slices carry the state without it, so a scan tells free from held on every slice. */
@@ -58,7 +61,8 @@ _Static_assert((size_t)AGC_JIT_CODE_CAP % APPLE_SLICE == 0, "the code cap is a w
 static uint8_t apple_state[APPLE_SLICES];
 static uint16_t apple_len[APPLE_SLICES];
 static pthread_t apple_owner[APPLE_SLICES];
-/* The short mutex: it spans only the metadata scan and mark, never a fill, a flush, a toggle or an execution. */
+/* The short mutex: it spans the metadata scan and mark, never a fill, a flush, a toggle or an execution. The
+   one-time arena mapping also runs under it, before any slice exists to contend on. */
 static pthread_mutex_t apple_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint8_t *apple_base;
 static size_t apple_bytes;
@@ -69,8 +73,8 @@ static long apple_host_page(void) { return 16384; }
 
 static bool apple_shim_supported = true;
 static _Atomic unsigned apple_shim_wp_off, apple_shim_wp_on, apple_shim_flushes;
-static void *apple_shim_last_flush;
-static size_t apple_shim_last_flush_len;
+static void *_Atomic apple_shim_last_flush;
+static _Atomic size_t apple_shim_last_flush_len;
 
 static bool apple_toggle_supported(void) { return apple_shim_supported; }
 
@@ -82,8 +86,8 @@ static void apple_write_protect(int executable) {
 }
 
 static void apple_flush(const void *pages, size_t size) {
-  apple_shim_last_flush = (void *)pages;
-  apple_shim_last_flush_len = size;
+  atomic_store(&apple_shim_last_flush, (void *)pages);
+  atomic_store(&apple_shim_last_flush_len, size);
   atomic_fetch_add(&apple_shim_flushes, 1);
 }
 
@@ -207,9 +211,11 @@ void *agc_jit_mem_map(size_t size) {
 }
 
 bool agc_jit_mem_seal(void *pages, size_t size) {
-  /* Validate the active owned lease and its range, mark sealed, then flush outside the lock. The lease stays open:
+  /* Validate the active owned lease and its range, mark the whole owned reservation sealed, then flush that span
+     outside the lock — never just the caller size, so every byte publish freezes was flushed. The lease stays open:
      only end_write closes it, so the seal never secretly restores executable mode. */
   if (!pages || !size) return false;
+  size_t sealed = 0;
   pthread_mutex_lock(&apple_lock);
   size_t at = apple_start_of(pages), mine = 0;
   bool ok = at != (size_t)-1 && ((apple_state[at] & APPLE_STATE_MASK) == APPLE_RESERVED ||
@@ -218,13 +224,14 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
             size <= (size_t)apple_len[at] * APPLE_SLICE;
   if (ok) {
     size_t need = apple_len[at];
+    sealed = need * APPLE_SLICE;
     for (size_t i = at; i < at + need; i++)
       apple_state[i] = (uint8_t)((apple_state[i] & APPLE_LEASED) | APPLE_SEALED);
   }
   pthread_mutex_unlock(&apple_lock);
   if (!ok) return false;
-  /* Every slice is flushed before it can run; the instruction caches are not coherent with data caches. */
-  apple_flush(pages, size);
+  /* Every sealed byte is flushed before it can run; the instruction caches are not coherent with data caches. */
+  apple_flush(pages, sealed);
   return true;
 }
 
@@ -237,9 +244,9 @@ void agc_jit_mem_unmap(void *pages, size_t size) {
   if (!pages) return;
   pthread_mutex_lock(&apple_lock);
   size_t at = apple_start_of(pages);
-  if (at != (size_t)-1 && pthread_equal(apple_owner[at], pthread_self()) && !(apple_state[at] & APPLE_LEASED) &&
-      ((apple_state[at] & APPLE_STATE_MASK) == APPLE_RESERVED ||
-       (apple_state[at] & APPLE_STATE_MASK) == APPLE_SEALED)) {
+  if (at != (size_t)-1 && ((apple_state[at] & APPLE_STATE_MASK) == APPLE_RESERVED ||
+                           (apple_state[at] & APPLE_STATE_MASK) == APPLE_SEALED) &&
+      !(apple_state[at] & APPLE_LEASED) && pthread_equal(apple_owner[at], pthread_self())) {
     size_t need = apple_len[at];
     for (size_t i = at; i < at + need; i++) apple_state[i] = APPLE_FREE;
     apple_len[at] = 0;
@@ -265,7 +272,9 @@ bool agc_jit_mem_apple_thread_exec(void) {
 
 bool agc_jit_mem_apple_begin_write(void *pages) {
   /* A second begin on a thread with an open lease fails without touching the outer lease or the toggle: the thread
-     stays writable under the lease it already holds. Any other failure leaves the thread executable. */
+     stays writable under the lease it already holds. Any other failure leaves the thread executable. The fill
+     itself needs this lease: integration acquires it before any fill write (writing without it may fault on Apple)
+     and closes it before publish or entry. End every lease before the thread exits; a leaked lease pins slices. */
   if (!pages || !apple_toggle_supported()) return false;
   pthread_mutex_lock(&apple_lock);
   size_t mine = 0;
@@ -285,8 +294,9 @@ bool agc_jit_mem_apple_begin_write(void *pages) {
 }
 
 bool agc_jit_mem_apple_end_write(void *pages) {
-  /* Always back to executable first: even a mismatched pointer must not leave this thread writable. Then close the
-     thread's own lease, whatever was passed, and report whether it matched — never another thread's ownership. */
+  /* Always back to executable first, unconditionally on purpose (a harmless no-op where unsupported): even a
+     mismatched pointer must not leave this thread writable. Then close the thread's own lease, whatever was passed,
+     and report whether it matched — never another thread's ownership. */
   apple_write_protect(1);
   pthread_mutex_lock(&apple_lock);
   size_t mine = 0;
@@ -300,16 +310,18 @@ bool agc_jit_mem_apple_end_write(void *pages) {
 }
 
 bool agc_jit_mem_apple_publish(void *pages) {
-  /* The winning slice becomes immutable until the process exits. Only its owner publishes it, and only once sealed
-     (so flushed); a foreign or early publish is a no-op, and repeating it stays true. */
+  /* The winning slice becomes immutable until the process exits. Only its owner moves it from sealed (so flushed)
+     to published; an early or foreign publish while unpublished is a no-op. Already published stays true for any
+     caller without reading the recorded owner, which may belong to an exited thread. */
   if (!pages) return false;
   pthread_mutex_lock(&apple_lock);
   size_t at = apple_start_of(pages);
   bool ok = false;
-  if (at != (size_t)-1 && pthread_equal(apple_owner[at], pthread_self()) && !(apple_state[at] & APPLE_LEASED)) {
+  if (at != (size_t)-1 && !(apple_state[at] & APPLE_LEASED)) {
     if ((apple_state[at] & APPLE_STATE_MASK) == APPLE_PUBLISHED)
       ok = true;
-    else if ((apple_state[at] & APPLE_STATE_MASK) == APPLE_SEALED) {
+    else if ((apple_state[at] & APPLE_STATE_MASK) == APPLE_SEALED &&
+             pthread_equal(apple_owner[at], pthread_self())) {
       size_t need = apple_len[at];
       for (size_t i = at; i < at + need; i++) apple_state[i] = APPLE_PUBLISHED;
       ok = true;

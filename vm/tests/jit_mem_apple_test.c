@@ -62,18 +62,19 @@ static void unsupported(void) {
 }
 #endif
 
-/* 64 one-MiB slices exactly fill the 64 MiB arena; the 65th keeps the function interpreted. Everything comes back. */
+/* 1 MiB slices exactly fill the cap; one more keeps the function interpreted. Everything comes back. */
 static void exhaustion(void) {
-  void *held[64];
-  for (size_t k = 0; k < 64; k++) held[k] = reserve_clean((size_t)1024 * 1024);
+  size_t mib = (size_t)1024 * 1024, count = (size_t)AGC_JIT_CODE_CAP / mib;
+  void *held[count];
+  for (size_t k = 0; k < count; k++) held[k] = reserve_clean(mib);
   assert(!agc_jit_mem_map(4096));
-  assert(!agc_jit_mem_map((size_t)64 * 1024 * 1024));
-  for (size_t k = 0; k < 64; k++) agc_jit_mem_unmap(held[k], (size_t)1024 * 1024);
+  assert(!agc_jit_mem_map((size_t)AGC_JIT_CODE_CAP));
+  for (size_t k = 0; k < count; k++) agc_jit_mem_unmap(held[k], mib);
   /* The whole arena comes back as one run: no growth, no fragmentation. */
-  void *all = reserve_clean((size_t)64 * 1024 * 1024);
+  void *all = reserve_clean((size_t)AGC_JIT_CODE_CAP);
   assert(agc_jit_mem_apple_begin_write(all));
   assert(agc_jit_mem_apple_end_write(all));
-  agc_jit_mem_unmap(all, (size_t)64 * 1024 * 1024);
+  agc_jit_mem_unmap(all, (size_t)AGC_JIT_CODE_CAP);
   /* First fit reuses the freed start. */
   assert(agc_jit_mem_map(4096) == all);
   agc_jit_mem_unmap(all, 4096);
@@ -146,7 +147,9 @@ static void return_value(void) {
 #ifdef MEM_NATIVE
   assert(((int (*)(void))(uintptr_t)p)() == 42);
 #else
-  assert(apple_shim_last_flush == p && apple_shim_last_flush_len == sizeof code_bytes);
+  assert(atomic_load(&apple_shim_last_flush) == p &&
+         atomic_load(&apple_shim_last_flush_len) ==
+           (sizeof code_bytes + APPLE_SLICE - 1) / APPLE_SLICE * APPLE_SLICE);
   assert(memcmp(p, code_bytes, sizeof code_bytes) == 0);
   /* One open, and one close per end/thread_exec call: the mode never sticks. */
   assert(atomic_load(&apple_shim_wp_off) == off0 + 1);
