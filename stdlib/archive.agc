@@ -1,10 +1,11 @@
-## Extracts named regular files from a TAR archive.
+## Extracts named regular files from TAR and ZIP archives.
 ##
 ## Import it with `import Archive from "std/archive"`. `extract_tar` copies one allowlist of regular files out of a
 ## plain TAR or a gzipped TAR (detected by the gzip magic) into a new private directory, and returns the byte counts
-## in member order. It is the only operation: there is no extract-all, no glob, no listing and no ZIP. Every failure
-## is an `error` result, never a halt; a partial destination is kept on error and is only usable when the call
-## returns `ok`.
+## in member order. `extract_zip` copies one allowlist of regular files out of a classic single-disk ZIP32 archive
+## the same way. The only operations are those two: there is no extract-all, no glob, no listing and no ZIP writer.
+## Every failure is an `error` result, never a halt; a partial destination is kept on error and is only usable when
+## the call returns `ok`.
 ##
 ## The call validates the allowlist before touching the disk, creates the destination with `Dir.mkdir_private` (an
 ## existing path is an error, a missing parent is an error), then streams the archive in 64 KiB reads without ever
@@ -18,6 +19,8 @@
 ## shares, backslashes, colons, NUL bytes and `.` or `..` segments are rejected, as are two members that only differ
 ## in case. The source must be a stable caller-owned regular file: it is checked with `File.lstat`, which cannot
 ## promise that a rename race did not swap it afterwards.
+
+import Zip from "std/internal/archive_zip"
 
 # Fixed ceilings, documented on `extract_tar`.
 CHUNK = 65536
@@ -139,6 +142,30 @@ end
 ## Returns the default options: a 30 s deadline and at most 256 MiB of extracted files.
 export def options() -> Options
   return Options(timeout_ms: 30000, max_output_bytes: 268435456)
+end
+
+## Copies the allowlisted `members` out of the ZIP archive at `src` into `dest_dir` and returns each file's bytes in
+## member order.
+##
+## `src` is a classic single-disk `.zip` file holding stored (method 0) and raw deflate (method 8) entries only:
+## ZIP64, encryption, multi-disk images, split archives, self-extractors and other methods are refused. `members`
+## holds 1 to 256 archive paths with the same safe-relative rules as `extract_tar`, `dest_dir` is created private
+## and must not exist, and only regular files are written; a selected link, directory or device is an error. The
+## reader makes three forward-only passes in 64 KiB reads without ever holding the file, so the source is at most
+## 256 MiB and the passes together read at most 768 MiB of physical bytes. Fixed ceilings: 8192 entries, 1024 name
+## bytes. Names are strict UTF-8 when flag 11 is set and pure ASCII otherwise; legacy CP437 bytes are refused,
+## never misdecoded. Every local record is validated even after the selected files, so corruption past a selected
+## file is still an error. Selected payloads stream within their exact compressed window with their CRC32 and
+## uncompressed size verified; unselected payloads are skipped by size and offset only, never inflated or
+## CRC-checked.
+export def extract_zip(src: String, members: List[String], dest_dir: String, options: Options) -> Result[List[Int]]
+  if options.timeout_ms <= 0 or options.timeout_ms > 86400000
+    return error("archive: options.timeout_ms must be 1..86400000")
+  end
+  if options.max_output_bytes <= 0 or options.max_output_bytes > SCAN_BYTES
+    return error("archive: options.max_output_bytes must be 1..1073741824")
+  end
+  return Zip.extract_zip(src, members, dest_dir, options.timeout_ms, options.max_output_bytes)
 end
 
 ## Copies the allowlisted `members` out of the TAR archive at `src` into `dest_dir` and returns each file's bytes in

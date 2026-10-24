@@ -657,13 +657,22 @@ CAPPED_SHOW = (
 
 
 def write_capped(work, name, chunk, cap):
-    """A copy of the real std/archive with only CHUNK and INPUT_BYTES narrowed, for exact cap boundaries."""
+    """A copy of the real std/archive with only CHUNK and INPUT_BYTES narrowed, for exact cap boundaries.
+
+    The copy also vendors the real std/internal/archive_zip beside it with its import rewritten to the
+    sibling file: only a module of std/ may name the private std/internal/ path, so the vendored helper
+    keeps the copy honest without weakening that rule. The ZIP code is otherwise byte-identical."""
     src = (ROOT / "stdlib" / "archive.agc").read_text(encoding="utf-8")
     assert src.count("CHUNK = 65536") == 1
     assert src.count("INPUT_BYTES = 268435456") == 1
+    assert src.count('import Zip from "std/internal/archive_zip"') == 1
     src = src.replace("CHUNK = 65536", "CHUNK = %d" % chunk)
     src = src.replace("INPUT_BYTES = 268435456", "INPUT_BYTES = %d" % cap)
+    sibling = "archive_zip_" + name[len("archive_"):]
+    src = src.replace('import Zip from "std/internal/archive_zip"', 'import Zip from "%s"' % sibling[:-4])
     (work / name).write_text(src, encoding="utf-8")
+    zipped = (ROOT / "stdlib" / "internal" / "archive_zip.agc").read_text(encoding="utf-8")
+    (work / sibling).write_text(zipped, encoding="utf-8")
 
 
 def test_compressed_cap_counts_physical_bytes_exactly(tmp_path):
