@@ -1,7 +1,7 @@
 /*
- * The JIT's code memory on Linux and macOS (docs/future/22-jit.md §22, "Memory"): anonymous pages mapped read-write,
- * then sealed read-execute with mprotect, so no page is ever writable and executable at once. The Windows side is
- * mem_windows.c. Core layer.
+ * The JIT's code memory on Linux and Intel macOS (docs/future/22-jit.md §22, "Memory"): anonymous pages mapped
+ * read-write, then sealed read-execute with mprotect, so no page is ever writable and executable at once. Apple
+ * arm64 instead reserves slices of one MAP_JIT arena (mem_apple.c). The Windows side is mem_windows.c. Core layer.
  */
 #ifndef _WIN32
 #ifdef __APPLE__
@@ -13,8 +13,8 @@
 
 #include <sys/mman.h>
 
-/* macOS on arm64 refuses executable pages without MAP_JIT; its emitter will map them so and switch them per thread
-   with pthread_jit_write_protect_np in place of the mprotect below. No emitter runs there yet. */
+/* mem_apple.c replaces these three on Apple arm64 (one MAP_JIT arena with a per-thread write lease). */
+#if !defined(__APPLE__) || !defined(__aarch64__)
 void *agc_jit_mem_map(size_t size) {
   void *pages = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
   return pages == MAP_FAILED ? NULL : pages;
@@ -28,4 +28,5 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 }
 
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
+#endif
 #endif
