@@ -209,6 +209,10 @@ Signatures are in
   `gzip.decompress`, concatenated members never decode. One-shot `data` is
   at most 1048576 bytes and `max_out_bytes` is 1 to 1048576, otherwise a
   contract error; output past the cap is an error.
+- `Zlib.crc32(data, seed)` gives `Result[Int]`, the CRC32 (RFC 1952) of
+  `data` chained after `seed`: pass 0 first, then each next chunk with the
+  previous result. Empty input returns `seed` unchanged. `data` is at most
+  1048576 bytes and `seed` is 0 to 4294967295, otherwise a contract error.
 - `Zlib.deflate_file(src, dst, level, max_out_bytes, timeout_ms)` and
   `Zlib.gzip_file(src, dst, level, max_out_bytes, timeout_ms)` compress a
   file and give `Result[Int]`, the bytes written; `Zlib.inflate_file(src,
