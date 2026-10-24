@@ -1,4 +1,5 @@
 std/analysis.agc
+std/archive.agc
 std/bdd.agc
 std/bdd/gherkin.agc
 std/bdd/match.agc

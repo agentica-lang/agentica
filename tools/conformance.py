@@ -127,7 +127,7 @@ AREAS = {
         "std/ modules, standard streams and native calls: analysis, binary, toml, prelude, logger, clock, crypto, "
         "stdout and stderr, extern functions",
         [
-            "tests/test_std_analysis.py", "tests/test_std_binary.py", "tests/test_std_toml.py",
+            "tests/test_std_analysis.py", "tests/test_std_archive.py", "tests/test_std_binary.py", "tests/test_std_toml.py",
             "tests/test_stdlib_prelude.py",
             "tests/test_vm_logger.py", "tests/test_vm_monotonic.py", "tests/test_vm_stdout.py",
             "tests/test_vm_crypto.py", "tests/test_vm_native.py", "tests/test_examples_ffi.py",
