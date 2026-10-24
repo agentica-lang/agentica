@@ -226,6 +226,11 @@ def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_eac
     traced = run_vm(vm, bytecode, {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": path})
     assert traced == plain
     lines = trace_lines(path)
+    jit_path = tmp_path / "profile-jit.trace"
+    traced_with_jit = run_vm([*vm, "--jit", "always"], bytecode,
+                             {"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": jit_path})
+    assert traced_with_jit == plain
+    jit_lines = trace_lines(jit_path)
     number = rb"[0-9]+"
     patterns = [
         rb"^agc-trace \+[0-9.]+ profile total wall_ms=" + number + rb" steps=([1-9][0-9]*) calls=" + number +
@@ -237,6 +242,7 @@ def test_the_profile_counts_calls_and_steps_of_each_function_and_the_time_of_eac
     ]
     for pattern in patterns:
         assert any(re.match(pattern, line) for line in lines), "%r in %r" % (pattern, lines)
+        assert any(re.match(pattern, line) for line in jit_lines), "%r in %r" % (pattern, jit_lines)
 
 
 def test_the_profile_counts_each_opcode_the_pairs_and_the_paths_of_builtin_calls(tmp_path, traced_vm):
