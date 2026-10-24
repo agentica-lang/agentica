@@ -13,6 +13,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `--jit on` (or `AGENTICA_JIT=on`) compiles hot functions that have a loop
   (Int and Float math, list, field, enum and Result reads) to machine code on
   x86-64: experimental, off by default.
+- HTTP.download streams a response body to a new file with bounded memory: binary-safe bodies up to 256 MiB, reported as status, headers and bytes written.
 - An exported constant is read through the module alias, like an exported
   function: `Limits.MAX`, `Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)`.
   `Limits.MAX()` and `x: Limits.MAX` are now `CHECK-TYPE-MISMATCH`. A method

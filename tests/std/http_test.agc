@@ -9,6 +9,19 @@ def answer(request: HttpRequest) -> Result[HttpResponse]
   return ok(HttpResponse(status: 200, headers: [], body: request.path))
 end
 
+def download_answer(request: HttpRequest) -> Result[HttpResponse]
+  if request.path == "/tiny"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Total", value: "4")], body: "abcd"))
+  end
+  if request.path == "/hundred"
+    return ok(HttpResponse(status: 200, headers: [], body: "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"))
+  end
+  if request.path == "/gone"
+    return ok(HttpResponse(status: 404, headers: [], body: "nope"))
+  end
+  return ok(HttpResponse(status: 200, headers: [], body: request.path))
+end
+
 def main() -> Void
   Test.run([
     Test.test("default client options") do
@@ -49,6 +62,66 @@ def main() -> Void
       HTTP.close_client(pool)
       try Test.eq(scheme.message, "http: the URL must be http:// or https:// with a host, and without user info")
       Test.eq(port.message, "http: the port must be 1..65535")
+    end,
+    Test.test("download options carry the 256 MiB budget") do
+      Test.eq(HTTP.download_options(), HTTP.DownloadOptions(timeout_ms: 30000, max_total_bytes: 268435456))
+    end,
+    Test.test("a download writes the body to a new file") do
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
+      pool = try HTTP.client(HTTP.client_options())
+      got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-tiny.bin", HTTP.download_options())
+      HTTP.close_client(pool)
+      HTTP.close_server(server)
+      try HTTP.wait(server)
+      saved = try got
+      try Test.eq(saved.status, 200)
+      try Test.eq(saved.bytes_written, 4)
+      try Test.eq(HTTP.header_values(saved.headers, "x-total"), ["4"])
+      try Test.eq(try File.read_text("download-tiny.bin", 5000), "abcd")
+      Path.remove("download-tiny.bin", 5000)
+    end,
+    Test.test("a download reports a 404 and still writes its body") do
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
+      pool = try HTTP.client(HTTP.client_options())
+      got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/gone", "download-gone.bin", HTTP.download_options())
+      HTTP.close_client(pool)
+      HTTP.close_server(server)
+      try HTTP.wait(server)
+      saved = try got
+      try Test.eq(saved.status, 404)
+      try Test.eq(saved.bytes_written, 4)
+      try Test.eq(try File.read_text("download-gone.bin", 5000), "nope")
+      Path.remove("download-gone.bin", 5000)
+    end,
+    Test.test("a download refuses a body over the budget before reading it") do
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
+      pool = try HTTP.client(HTTP.client_options())
+      small = HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 10)
+      got = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/hundred", "download-over.bin", small)
+      HTTP.close_client(pool)
+      HTTP.close_server(server)
+      try HTTP.wait(server)
+      try Test.eq(got.message, "http: body exceeds max_body_bytes")
+      handle = try File.open("download-over.bin", "read", 5000)
+      try Test.eq(List.size(try File.read_bytes(handle, 100, 5000)), 0)
+      try File.close(handle, 5000)
+      Path.remove("download-over.bin", 5000)
+    end,
+    Test.test("a download never overwrites and checks its options first") do
+      pool = try HTTP.client(HTTP.client_options())
+      bad = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(timeout_ms: 0, max_total_bytes: 10))
+      try Test.eq(bad.message, "http: every download option must be positive")
+      huge = HTTP.download(pool, "http://127.0.0.1:1/tiny", "download-never.bin", HTTP.DownloadOptions(timeout_ms: 5000, max_total_bytes: 268435457))
+      try Test.eq(huge.message, "http: max_total_bytes must be at most 268435456")
+      try File.write_text("download-kept.bin", "old", 5000)
+      server = try HTTP.listen("127.0.0.1", 0, &download_answer, HTTP.server_options())
+      kept = HTTP.download(pool, "http://127.0.0.1:#{HTTP.local_port(server)}/tiny", "download-kept.bin", HTTP.download_options())
+      HTTP.close_client(pool)
+      HTTP.close_server(server)
+      try HTTP.wait(server)
+      try Test.eq(String.starts_with?(kept.message, "open-output-file: error opening file"), true)
+      try Test.eq(try File.read_text("download-kept.bin", 5000), "old")
+      Path.remove("download-kept.bin", 5000)
     end
   ])
 end

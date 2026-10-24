@@ -35,6 +35,9 @@ END_OF_INPUT = "network: end of input"
 READ_FAILED = "error reading from stream port"
 # The answer of a call whose worker or owner task crashed.
 FAILED = "http: connection failed"
+# The widest body a download may write, in bytes. The client and server text bodies stay capped at 64 MiB by
+# check_options; only a download streamed to a file may use up to this.
+DOWNLOAD_MAX_BYTES = 268435456
 
 struct Target
   scheme: String
@@ -130,6 +133,26 @@ struct Received
   started: Bool
 end
 
+## How far a download may go: a positive `timeout_ms` for the whole call, from the connect to the last byte
+## written, and a positive `max_total_bytes` for the body, at most 256 MiB.
+export struct DownloadOptions
+  ## The milliseconds the whole download may take.
+  timeout_ms: Int
+  ## The most body bytes written to the file.
+  max_total_bytes: Int
+end
+
+## What a download wrote: the response `status` and `headers` with the count of body `bytes_written` to the file.
+## The body itself is in the file, never in this record.
+export struct Download
+  ## The response status, however high: 404 and 500 are normal responses, as with `get`.
+  status: Int
+  ## The response headers.
+  headers: List[Header]
+  ## How many body bytes went to the file.
+  bytes_written: Int
+end
+
 struct Whole
   text: String
   kept: Bool
@@ -218,6 +241,49 @@ export def request(
         return error(CLIENT_CLOSED)
       end
       return error(TIMED_OUT)
+  end
+end
+
+## Returns the default download options: a 30 s timeout and bodies up to 256 MiB.
+export def download_options() -> DownloadOptions
+  return DownloadOptions(timeout_ms: 30000, max_total_bytes: DOWNLOAD_MAX_BYTES)
+end
+
+## Downloads the resource at `url` with a `GET` request and writes its body bytes to `path`.
+##
+## The transfer stays bounded: at most 1 MiB is held at once, the body stops at
+## `options.max_total_bytes` with `http: body exceeds max_body_bytes`, and the file never grows past it. The file
+## must not exist: it is made with `create_private`, so an existing path is an error and stays intact, while a
+## failed download keeps the partial file. Status codes such as 404 or 500 are normal responses, as with `get`:
+## the body is still written and the status returned, so check `status` before using the file. There is no
+## redirect follow, and the connection is not pooled: it closes when the download ends. The pool gives the TLS
+## context and its certificates for `https`, whose verification stays on.
+export def download(pool: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
+  if options.timeout_ms <= 0 or options.max_total_bytes <= 0
+    return error("http: every download option must be positive")
+  end
+  if options.max_total_bytes > DOWNLOAD_MAX_BYTES
+    return error("http: max_total_bytes must be at most 268435456")
+  end
+  where = try parse_url(url)
+  client_options = HttpWire.options(pool)
+  head = try HttpWire.encode_request(
+    where.scheme,
+    where.host,
+    where.port,
+    "GET",
+    where.target,
+    [],
+    "",
+    client_options.max_body_bytes,
+  )
+  deadline = Time.monotonic_ms() + options.timeout_ms
+  socket = try connect_download(pool, where, deadline)
+  case TCP.send(socket, head, try time_left(socket, deadline))
+    ok(_) -> return finish_download(socket, path, options, deadline)
+    error(message) ->
+      TCP.close(socket)
+      return error(message)
   end
 end
 
@@ -1198,6 +1264,215 @@ def read_until_close(answer: Answer) -> Result[Whole]
       return error(TOO_LARGE)
     end
     body = Body(pieces: List.append(body.pieces, piece.text), carry: piece.carry)
+  end
+  return error(TRUNCATED)
+end
+
+# One download connection: on a new socket, which closes when the download ends, since the pool only runs
+# whole-response calls. The pool gives the TLS context and its certificates for https.
+def connect_download(pool: HttpClient, where: Target, deadline: Int) -> Result[Socket]
+  left = deadline - Time.monotonic_ms()
+  if left <= 0
+    return error(TIMED_OUT)
+  end
+  if where.scheme == "https"
+    return HttpWire.connect_tls(pool, where.host, where.port, left)
+  end
+  return TCP.connect(where.host, where.port, left)
+end
+
+# Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
+# the partial file stays, while a path that existed before is never touched.
+def finish_download(socket: Socket, path: String, options: DownloadOptions, deadline: Int) -> Result[Download]
+  case time_left(socket, deadline)
+    ok(left) ->
+      case File.open(path, "create_private", left)
+        ok(out) -> return stream_download(socket, out, options, deadline)
+        error(message) ->
+          TCP.close(socket)
+          return error(message)
+      end
+    error(message) ->
+      TCP.close(socket)
+      return error(message)
+  end
+end
+
+# The response head (after at most MAX_INTERIM interim ones) streamed into the file.
+def stream_download(socket: Socket, out: FileHandle, options: DownloadOptions, deadline: Int) -> Result[Download]
+  case download_head(socket, options.max_total_bytes, deadline)
+    ok(head) ->
+      case save_body(socket, out, head, options.max_total_bytes, deadline)
+        ok(written) ->
+          case File.close(out, larger(deadline - Time.monotonic_ms(), 1))
+            ok(_) ->
+              TCP.close(socket)
+              return ok(Download(status: head.status, headers: head.headers, bytes_written: written))
+            error(message) -> return fail_download(socket, out, deadline, message)
+          end
+        error(message) -> return fail_download(socket, out, deadline, message)
+      end
+    error(message) -> return fail_download(socket, out, deadline, message)
+  end
+end
+
+# Closes both handles after a failure and reports it; the partial file stays for inspection.
+def fail_download(socket: Socket, out: FileHandle, deadline: Int, message: String) -> Result[Download]
+  File.close(out, larger(deadline - Time.monotonic_ms(), 1))
+  TCP.close(socket)
+  return error(message)
+end
+
+# The response head of a download, with the download budget as the body limit.
+def download_head(socket: Socket, budget: Int, deadline: Int) -> Result[HttpWire.Response]
+  interim = 0
+  while true
+    case time_left(socket, deadline)
+      ok(left) ->
+        case HttpWire.read_response(socket, false, budget, left)
+          ok(head) ->
+            if head.status >= 200
+              return ok(head)
+            end
+            interim = interim + 1
+            if interim > MAX_INTERIM
+              return error("http: too many interim responses")
+            end
+          error(message) ->
+            if interim > 0 and message == END_OF_INPUT
+              return error(CUT_SHORT)
+            end
+            return error(message)
+        end
+      error(message) -> return error(message)
+    end
+  end
+  return error(TIMED_OUT)
+end
+
+# Streams the body framing of head into the file and counts its bytes.
+def save_body(
+  socket: Socket,
+  out: FileHandle,
+  head: HttpWire.Response,
+  budget: Int,
+  deadline: Int,
+) -> Result[Int]
+  if head.chunked
+    return save_chunked(socket, out, budget, deadline)
+  end
+  if head.until_close
+    return save_until_close(socket, out, budget, deadline)
+  end
+  return save_length(socket, out, head.length, budget, deadline)
+end
+
+# The next body bytes, at most most of them; an empty list means the peer closed the input.
+def recv_body(socket: Socket, most: Int, deadline: Int) -> Result[List[Int]]
+  return TCP.recv_bytes(socket, most, try time_left(socket, deadline))
+end
+
+# Appends data to the download within the whole-call deadline.
+def write_body(out: FileHandle, data: List[Int], deadline: Int) -> Result[Void]
+  left = deadline - Time.monotonic_ms()
+  if left <= 0
+    return error(TIMED_OUT)
+  end
+  return File.write_bytes(out, data, left)
+end
+
+# Appends data without letting the file grow past the budget: writes what fits, then reports TOO_LARGE.
+def write_bounded(
+  out: FileHandle,
+  data: List[Int],
+  written: Int,
+  budget: Int,
+  deadline: Int,
+) -> Result[Int]
+  room = budget - written
+  if List.size(data) > room
+    if room > 0
+      try write_body(out, List.take(data, room), deadline)
+    end
+    return error(TOO_LARGE)
+  end
+  try write_body(out, data, deadline)
+  return ok(written + List.size(data))
+end
+
+# A Content-Length body: the head already refused one over the budget, so the count only follows it.
+def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadline: Int) -> Result[Int]
+  left = length
+  written = 0
+  while left > 0
+    data = try recv_body(socket, smaller(left, TEXT_BYTES), deadline)
+    if List.size(data) == 0
+      return error(TRUNCATED)
+    end
+    written = try write_bounded(out, data, written, budget, deadline)
+    left = left - List.size(data)
+  end
+  return ok(written)
+end
+
+# A chunked body: framing goes through the decoder, whose runs say which bytes of each read are body.
+def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
+  data: List[Int] = []
+  state = HttpWire.chunked(budget)
+  written = 0
+  while not state.done
+    if state.remaining > 0
+      data = try recv_body(socket, smaller(state.remaining, TEXT_BYTES), deadline)
+      if List.size(data) == 0
+        return error(TRUNCATED)
+      end
+      written = try write_bounded(out, data, written, budget, deadline)
+      state = HttpWire.chunk_read(state, List.size(data))
+    else
+      data = try recv_body(socket, FRAME_BYTES, deadline)
+      if List.size(data) == 0
+        return error(TRUNCATED)
+      end
+      case HttpWire.chunk(state, data, 0)
+        ok(next) -> state = next
+        error(problem) -> return error("http: #{rest_of(problem, 4)}")
+      end
+      written = try write_runs(out, data, state.runs, written, budget, deadline)
+    end
+  end
+  return ok(written)
+end
+
+# Appends the runs of data (start, length pairs) to the download.
+def write_runs(
+  out: FileHandle,
+  data: List[Int],
+  runs: List[Int],
+  written: Int,
+  budget: Int,
+  deadline: Int,
+) -> Result[Int]
+  at = 0
+  while at < List.size(runs)
+    piece = List.drop(data, List.at(runs, at)).take(List.at(runs, at + 1))
+    written = try write_bounded(out, piece, written, budget, deadline)
+    at = at + 2
+  end
+  return ok(written)
+end
+
+# A body that ends with the connection: over TLS the end must be the peer's close_notify.
+def save_until_close(socket: Socket, out: FileHandle, budget: Int, deadline: Int) -> Result[Int]
+  written = 0
+  while true
+    data = try recv_body(socket, TEXT_BYTES, deadline)
+    if List.size(data) == 0
+      if not HttpWire.clean_eof?(socket)
+        return error(TRUNCATED)
+      end
+      return ok(written)
+    end
+    written = try write_bounded(out, data, written, budget, deadline)
   end
   return error(TRUNCATED)
 end
