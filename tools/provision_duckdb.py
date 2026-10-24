@@ -103,9 +103,14 @@ def stage(data: bytes, digest: str, member: str, out: Path) -> Path:
         target = out / member
         if target.exists():
             raise SystemExit(f"provision_duckdb.py: refusing to overwrite {target}")
-        with archive.extractfile(info) as source, open(target, "wb") as handle:
-            if source is None:
-                raise SystemExit(f"provision_duckdb.py: cannot read member {member}")
+        source = archive.extractfile(info)
+        if source is None:
+            raise SystemExit(f"provision_duckdb.py: cannot read member {member}")
+        try:
+            handle = open(target, "xb")
+        except FileExistsError:
+            raise SystemExit(f"provision_duckdb.py: refusing to overwrite {target}")
+        with handle, source:
             while True:
                 chunk = source.read(1024 * 1024)
                 if not chunk:

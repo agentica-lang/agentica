@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import io
 import tarfile
+from pathlib import Path
 
 import pytest
 
@@ -95,6 +96,18 @@ def test_stage_refuses_to_overwrite_an_existing_library(tmp_path):
     out = tmp_path / "native" / "linux"
     out.mkdir(parents=True)
     (out / MEMBER).write_bytes(b"already staged")
+    data = archive((MEMBER, "file", LIB))
+    with pytest.raises(SystemExit):
+        provision.stage(data, digest(data), MEMBER, out)
+    assert (out / MEMBER).read_bytes() == b"already staged"
+
+
+def test_stage_refuses_a_create_that_lost_the_race(tmp_path, monkeypatch):
+    """The exclusive create, not the friendly check, owns the guarantee."""
+    out = tmp_path / "native" / "linux"
+    out.mkdir(parents=True)
+    (out / MEMBER).write_bytes(b"already staged")
+    monkeypatch.setattr(Path, "exists", lambda self: False)
     data = archive((MEMBER, "file", LIB))
     with pytest.raises(SystemExit):
         provision.stage(data, digest(data), MEMBER, out)

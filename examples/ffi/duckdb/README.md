@@ -5,8 +5,8 @@ API with private scope helpers and `main.agc` runs version check, `:memory:`
 open and connect, small resource limits, a typed table, ordered reads of
 `INTEGER`, `BIGINT`, `DOUBLE`, `VARCHAR` and `NULL`, one captured SQL error
 followed by queries that keep working, and CSV and Parquet `COPY` roundtrips
-with counts and typed rows compared. About 230 lines of Agentica, no C shim,
-no new builtins, no extra package.
+with counts and typed rows compared. No C shim, no new builtins, no extra
+package.
 
 This is an integration example, not a binding: it covers exactly the calls
 the flow needs (open, close, connect, disconnect, query, destroy, typed cell
@@ -19,7 +19,7 @@ The library is never committed. Stage exactly one pinned file per system with
 the provisioner (it checks the archive hash before it unpacks anything):
 
 ```sh
-python3 tools/provision_duckdb.py --out /tmp/duckdb-native
+python3 tools/provision_duckdb.py --out examples/ffi/duckdb
 ls examples/ffi/duckdb/native/linux/libduckdb.so
 ```
 
