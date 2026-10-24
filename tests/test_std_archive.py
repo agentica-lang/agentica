@@ -8,6 +8,7 @@ outputs name the exact `error(...)` text of std/archive.
 import gzip
 import io
 import os
+import pathlib
 import subprocess
 import tarfile
 
@@ -167,6 +168,29 @@ def test_basic_roundtrips_keep_member_order_and_counts(tmp_path):
     assert (work / "d3" / "b" / "c.txt").read_bytes() == b"xy"
     assert (work / "d4" / ("g" * 120)).read_bytes() == b"data"
     assert (work / "d5" / "lib.so").read_bytes() == b"hello lib"
+
+
+def test_destination_spellings_with_backslashes_extract(tmp_path):
+    """A destination may hold host backslashes (a cache root from the OS does): the join the
+extractor uses normalizes them, so forward, backslash, mixed and cache-root spellings all
+extract on every system with no host skip."""
+    work = tmp_path
+    pax_tar(work, "reg.tar", [("lib.so", b"hello lib")])
+    root = str(work)
+    fwd = root.replace(os.sep, "/")
+    dests = [
+        ("fwd", fwd + "/d-fwd"),
+        ("back", root + "\\d-back"),
+        ("mixed", fwd + "\\d-mix"),
+        ("cacheroot", root + "/d-cache"),
+    ]
+    calls = [
+        (label, "reg.tar", q("lib.so"), dest.replace("\\", "\\\\"), "Archive.options()")
+        for label, dest in dests
+    ]
+    assert run_driver(work, "spellings", driver(calls)) == ["%s ok [9]" % label for label, _ in dests] + [""]
+    for _, dest in dests:
+        assert (pathlib.Path(dest) / "lib.so").read_bytes() == b"hello lib"
 
 
 def test_dot_prefixed_names_normalize_both_ways(tmp_path):
