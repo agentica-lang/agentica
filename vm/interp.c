@@ -1038,7 +1038,7 @@ OP_HELPER agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value 
   int64_t cost = vm->task->turn_cost;
   agc_string *text;
   if (!agc_text_checked(vm, *v, &text)) {
-    /* The partial walk may have charged key hashes or nested Json forms; a failing helper leaves the cost alone. */
+    /* The partial walk may have charged key re-hashes; a failing helper leaves the cost alone. */
     vm->task->turn_cost = cost;
     return AGC_STATUS_WRONG_TAG;
   }
