@@ -26,8 +26,9 @@ keeps their records.
   released 2026-10-23.
 - **0.10.0** (owner, 2026-10-23), in this order, one item at a time:
   1. The JIT groundwork, without tier 2
-     ([#622](https://github.com/sonic182/agentica/issues/622)): opcode and
-     opcode-pair counters, `leaf` builtins (done), then the helpers by pointer,
+     ([#622](https://github.com/sonic182/agentica/issues/622)): interpreter
+     opcode and opcode-pair profile counters (done), `leaf` builtins (done),
+     then the helpers by pointer,
      errors without `longjmp` through compiled code and a W^X code memory.
      Smaller values ([#396](https://github.com/sonic182/agentica/issues/396))
      are deferred beyond 0.10.0.
