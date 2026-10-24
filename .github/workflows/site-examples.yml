@@ -28,6 +28,6 @@ jobs:
           python-version: '3.12'
       - run: python3 -m pip install poetry==2.1.2
       - run: poetry install --only test --no-root
-      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
+      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
       - run: make dist/agentica
       - run: make test-slow TESTS=tests/test_site_examples.py

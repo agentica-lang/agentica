@@ -24,7 +24,7 @@ jobs:
           submodules: true
       - run: echo "FUZZ_SEED=$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')" >> "$GITHUB_ENV"
       - run: echo "commit $GITHUB_SHA, FUZZ_SEED=$FUZZ_SEED, FUZZ_RUNS=$RUNS"
-      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
+      - run: command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
       - run: make vm-fuzz FUZZ_RUNS="$RUNS"
       - if: failure()
         uses: actions/upload-artifact@v4

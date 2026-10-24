@@ -71,6 +71,8 @@ jobs:
       # Linux builds with the system libgc and OpenSSL, as ci.yml does (ci.yml and the release check the vendored link
       # there); the other systems link the vendored OpenSSL, as the release does.
       AGENTICA_OPENSSL: ${{ matrix.platform == 'linux-x86_64' && 'system' || github.event_name == 'workflow_dispatch' && inputs.openssl || 'vendored' }}
+      # Linux links the system zlib, the others the vendored one, as the release does.
+      AGENTICA_ZLIB: ${{ matrix.platform == 'linux-x86_64' && 'system' || 'vendored' }}
       CCACHE_DIR: ${{ github.workspace }}/build/ccache
       PYTHON: ${{ matrix.python }}
       PLATFORM: ${{ matrix.platform }}
@@ -105,7 +107,7 @@ jobs:
       - name: Linux packages (system libgc and OpenSSL, ccache, libsqlite3-0), when the image lacks them
         if: runner.os == 'Linux'
         run: |
-          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev pkg-config; }
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
           command -v ccache >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache; }
           dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
       - if: runner.os == 'macOS' && env.AGENTICA_OPENSSL == 'system'

@@ -12,7 +12,8 @@ HTTP code.
 
 The release (`release.yml`, 11) builds one native archive per system on a
 runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser,
-zlib and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`).
+zlib and OpenSSL statically (`AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored`,
+`AGENTICA_ZLIB=vendored`).
 The system libraries that remain are the C library of each system: glibc (at
 most 2.28 symbols), libSystem on macOS, and on Windows the system DLLs with the
 Universal C Runtime, which is part of Windows 10. `tools/release-check.sh`
@@ -73,11 +74,14 @@ architecture, a library outside that list or missing hardening.
 - **Dependency:** zlib
   - **Choice:** Vendored submodule `vm/third_party/zlib` (zlib/libpng,
     permission to use for any purpose with attribution, no copyleft), tag
-    v1.3.1. Only the inflate side is built, without configure and without
+    v1.3.1. With `AGENTICA_ZLIB=vendored` (the release, and the default off
+    Linux) only the inflate side is built, without configure and without
     the `gz*` file API: `adler32`, `crc32`, `inffast`, `inflate`, `inftrees`
     and `zutil` compile per mode into `$(VM_BUILD)/zlib/` and link
-    statically. `File.gunzip` decodes through them behind the adapter
-    (`vm/gunzip_zlib.c`); only that file includes `zlib.h` (15.5).
+    statically. The Linux default, `system`, links the distro's zlib 1.2.0
+    or newer dynamically instead, as OpenSSL does (10.0). `File.gunzip`
+    decodes through either behind the adapter (`vm/gunzip_zlib.c`); only
+    that file includes `zlib.h` (15.5).
 
 - **Dependency:** OpenSSL 3.5 LTS
   - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),
@@ -113,7 +117,8 @@ and `NOTICE` with the third-party licenses.
   (`readelf -d` shows no `libssl` or `libcrypto`) and runs on any glibc 2.28
   system. Pull request CI jobs use `system`, except the `test` job, which links
   one vendored release-mode binary from a cached OpenSSL so this path stays
-  tested (11). The same split applies to libgc through `AGENTICA_GC` (11).
+  tested (11). The same split applies to libgc through `AGENTICA_GC` and to
+  zlib through `AGENTICA_ZLIB` (11).
 
 The mode is not remembered. Pass `AGENTICA_OPENSSL=vendored` to every make
 command, or export it. `build/vm/flags` records the mode, so switching it

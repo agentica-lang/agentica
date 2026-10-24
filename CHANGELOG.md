@@ -62,6 +62,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `native/` holds a file that is not `.agc` or the manifest has a `[native]`
   table. A lock made before for a package with a non-`.agc` file in `native/`
   must be updated with `agentica update`; other packages hash as before.
+- On Linux the VM links the system zlib dynamically by default
+  (`AGENTICA_ZLIB=system`, Debian: `zlib1g-dev`); `AGENTICA_ZLIB=vendored`
+  links the pinned submodule statically instead, as the release and the
+  macOS and Windows builds do.
 
 ## [0.10.0-beta.1] - 2026-10-24
 
