@@ -224,6 +224,31 @@ end
 ["a=1", "b=2"]
 ```
 
+### HTTP.download
+
+```text
+HTTP.download_options() -> DownloadOptions
+HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
+```
+
+- `DownloadOptions` has `timeout_ms`, for the whole call, and `max_total_bytes`, for the body, at most 256 MiB. `download_options()` gives 30 s and 256 MiB. `Download` has `status`, `headers` and `bytes_written`; the body itself is in the file, never in the record.
+- The download sends a `GET` request and streams the body to `path` in pieces of at most 1 MiB, so bodies may be arbitrary bytes: NUL and invalid UTF-8 are fine. `Content-Length`, chunked and close-delimited responses are all bounded by `max_total_bytes`, and the file never grows past it.
+- The file must not exist: it is made private to the user, so an existing path fails untouched, while a failed download keeps the partial file. Status codes such as 404 are normal responses whose body is still written, so check `status` before using the file.
+- The connection is not pooled: it closes when the download ends. There is no redirect follow, and `https` keeps certificate verification on.
+
+```agentica {mode="check"}
+import HTTP from "std/http"
+
+def main() -> Void
+  client = HTTP.client(HTTP.client_options()).unwrap!
+  case HTTP.download(client, "http://localhost:8080/asset", "asset.bin", HTTP.download_options())
+    ok(saved) -> puts("#{saved.status} #{saved.bytes_written}")
+    error(message) -> IO.warn(message)
+  end
+  HTTP.close_client(client)
+end
+```
+
 ## HTTP server
 
 The server is in `std/http` too: a handler takes the whole request and returns the whole response. It runs one task per connection, with keep-alive.

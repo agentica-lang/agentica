@@ -72,9 +72,13 @@ HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
 HTTP.post(client: HttpClient, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
 HTTP.request(client: HttpClient, method: String, url: String, headers: List[Header], body: String) -> Result[HttpResponse]
 HTTP.header_values(headers: List[Header], name: String) -> List[String]
+HTTP.download_options() -> DownloadOptions
+HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions) -> Result[Download]
 
 Header(name: String, value: String)
 HttpResponse(status: Int, headers: List[Header], body: String)
+DownloadOptions(timeout_ms: Int, max_total_bytes: Int)
+Download(status: Int, headers: List[Header], bytes_written: Int)
 HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, max_body_bytes: Int, ca_file: String)
 ```
 
@@ -94,6 +98,14 @@ HttpClientOptions(timeout_ms: Int, idle_timeout_ms: Int, max_connections: Int, m
   a timeout is `network: operation timed out`. No streaming, automatic redirect
   or gzip decoding. The client runs as Agentica code in tasks of its own, so it
   spends the run's `--max-steps` budget.
+- `download` streams a `GET` body to a new file instead of a `String`, for
+  binary-safe bodies up to 256 MiB: at most 1 MiB is held at once, every
+  framing (`Content-Length`, chunked, close-delimited) counts against
+  `max_total_bytes`, and the file never grows past it. The file must not
+  exist (`create_private`, so an existing path fails untouched) and a failed
+  download keeps the partial file. 4xx and 5xx still return `ok` with their
+  status and written body, without redirect follow; the connection is not
+  pooled. `download_options()` gives 30 s and 256 MiB.
 - Names that do not exist: `HTTP.client()` (write
   `HTTP.client(HTTP.client_options())`), `HTTP.text(response.body, t)`
   (`response.body`), `header_timeout_ms` (`request_timeout_ms`), and `read`,

@@ -88,7 +88,11 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   once, so body memory is at most `max_body_bytes` × `max_connections` × 4 (512
   MiB with the server defaults). A program that raises `max_body_bytes` must
   lower `max_connections`. A body over the limit is an `error` on the client,
-  and a 413 on the server, before the handler runs.
+  and a 413 on the server, before the handler runs. `HttpWire` itself takes up
+  to 256 MiB, which only a file download (`HTTP.download`, streamed in pieces
+  of at most 1 MiB with no `String`) may use: the transfer stops at its
+  `max_total_bytes`, the file never grows past it, and a failed download
+  keeps the partial file.
 - **Bodies are text.** A request or response body must be valid UTF-8. The
   client returns an `error` for a response body that is not, and the server
   answers 400 without running the handler. Binary bodies wait for `Bytes` (phase

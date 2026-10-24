@@ -161,14 +161,20 @@ def start(server):
     return server.server_address[1]
 
 
-def main():
-    plain = Quiet(("127.0.0.1", 0), Web)
-    secure = Quiet(("127.0.0.1", 0), Web)
+def serve_pair(handler):
+    """Start a plain and a TLS server with handler; return {"plain": port, "tls": port}."""
+    plain = Quiet(("127.0.0.1", 0), handler)
+    secure = Quiet(("127.0.0.1", 0), handler)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(os.path.join(CERTS, "server.pem"), os.path.join(CERTS, "server-key.pem"))
     secure.socket = context.wrap_socket(secure.socket, server_side=True)
+    return {"plain": start(plain), "tls": start(secure)}
+
+
+def main():
+    ports = serve_pair(Web)
     raw = RawServer(("127.0.0.1", 0), Raw)
-    ports = {"plain": start(plain), "tls": start(secure), "raw": start(raw)}
+    ports["raw"] = start(raw)
     print(json.dumps(ports), flush=True)
     sys.stdin.read()
 
