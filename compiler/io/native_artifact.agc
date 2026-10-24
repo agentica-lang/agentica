@@ -17,6 +17,13 @@ import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import PackageCache from "../packages/package_cache"
 import NativeArtifact from "../packages/native_artifact"
+import {
+  MAX_CLOCK,
+  MAX_REDIRECTS,
+  MAX_TIMEOUT_MS,
+  MEMBER_MAX_BYTES,
+  TOTAL_BODY_BYTES,
+} from "../packages/native_artifact"
 import Reader from "../packages/toml_read"
 
 # Tries for a fresh private name, as in package_fetch.agc.
@@ -117,11 +124,11 @@ def fail(context: NativeArtifact.Context, code: String, key: String, message: St
 end
 
 def checked_deadline(timeout_ms: Int, context: NativeArtifact.Context) -> Result[Int]
-  if timeout_ms <= 0 or timeout_ms > NativeArtifact.MAX_TIMEOUT_MS
+  if timeout_ms <= 0 or timeout_ms > MAX_TIMEOUT_MS
     return error(fail(context, "PKG-FETCH", "", "the timeout must be 1..86400000 milliseconds", ""))
   end
   now = Time.monotonic_ms()
-  if now > NativeArtifact.MAX_CLOCK - timeout_ms
+  if now > MAX_CLOCK - timeout_ms
     return error(fail(context, "PKG-FETCH", "", "the clock is too far ahead for the timeout", ""))
   end
   return ok(now + timeout_ms)
@@ -293,7 +300,7 @@ def download_archive(
       HTTP.close_client(pool)
       return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
     end
-    budgeted = NativeArtifact.hop_budget(consumed, NativeArtifact.TOTAL_BODY_BYTES)
+    budgeted = NativeArtifact.hop_budget(consumed, TOTAL_BODY_BYTES)
     if !budgeted.ok?
       HTTP.close_client(pool)
       return error(fail(context, "PKG-FETCH", "url", "the download is larger than 256 MiB", ""))
@@ -369,7 +376,7 @@ def follow_redirect(
   if seen.has_key?(next_url)
     return error(fail(context, "PKG-FETCH", "url", "the redirects loop", ""))
   end
-  if redirects >= NativeArtifact.MAX_REDIRECTS
+  if redirects >= MAX_REDIRECTS
     return error(fail(context, "PKG-FETCH", "url", "too many redirects", ""))
   end
   return ok(next_url)
@@ -433,7 +440,7 @@ def publish_member(
   tmp = try make_temp(parent, deadline, context)
   dest = Paths.join(tmp, "payload")
   left = try time_left(deadline, context)
-  options = Archive.Options(timeout_ms: left, max_output_bytes: NativeArtifact.MEMBER_MAX_BYTES)
+  options = Archive.Options(timeout_ms: left, max_output_bytes: MEMBER_MAX_BYTES)
   extracted = extract_member(archive, canonical, dest, options, deadline)
   if !extracted.ok?
     message = Result.message(extracted)
