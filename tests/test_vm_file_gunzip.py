@@ -41,13 +41,15 @@ def peer(tmp_path_factory):
 
 
 def gunzip_case(source, src, dst, limit):
+    """Run File.gunzip on src/dst through argv: paths never enter the generated
+    source, so a Windows path (D:\\a\\...) cannot break the lexer."""
     source.write_text(
         "def main() -> Void\n"
-        '  puts(File.gunzip("%s", "%s", %s, 30000))\n'
-        "end\n" % (src, dst, limit),
+        '  puts(File.gunzip(System.args()[0], System.args()[1], %s, 30000))\n'
+        "end\n" % (limit,),
         encoding="utf-8",
     )
-    return run(cli() + [str(source)], env=vm_environment())
+    return run(cli() + [str(source), str(src), str(dst)], env=vm_environment())
 
 
 def run_source(tmp_path, name, body, args):
@@ -231,11 +233,11 @@ def test_gunzip_rejects_itself_missing_parents_and_symlink_targets(tmp_path):
     source = tmp_path / "link.agc"
     source.write_text(
         "def main() -> Void\n"
-        '  puts(File.gunzip("%s", "%s", 100, 30000))\n'
-        "end\n" % (linked, out),
+        '  puts(File.gunzip(System.args()[0], System.args()[1], 100, 30000))\n'
+        "end\n",
         encoding="utf-8",
     )
-    result = run(cli() + [str(source)], env=vm_environment())
+    result = run(cli() + [str(source), str(linked), str(out)], env=vm_environment())
     assert (result.code, result.stdout) == (0, "ok(3)\n"), result.stderr
     assert read_bytes(out) == b"abc"
     dangling = tmp_path / "dangling.out"
@@ -326,13 +328,32 @@ def test_gunzip_reports_denied_fs(tmp_path):
     source = tmp_path / "denied.agc"
     source.write_text(
         "def main() -> Void\n"
-        '  puts(File.gunzip("%s", "%s", 100, 30000))\n'
-        "end\n" % (src, tmp_path / "denied.out"),
+        '  puts(File.gunzip(System.args()[0], System.args()[1], 100, 30000))\n'
+        "end\n",
         encoding="utf-8",
     )
-    result = run(cli() + ["--deny-fs", str(source)], env=vm_environment())
+    result = run(cli() + ["--deny-fs", str(source), str(src), str(tmp_path / "denied.out")],
+                   env=vm_environment())
     assert result.code == 0, result.stderr
     assert result.stdout == 'error("denied: --deny-fs turns off file access")\n', result.stdout
+
+
+@pytest.mark.skipif(sys.platform == "win32",
+                     reason="host-only: Windows reserves the backslash as a separator, "
+                     "so no file name holds one")
+def test_gunzip_accepts_a_backslash_in_a_path_through_argv(tmp_path):
+    """A backslash is a valid Linux file name, which proves the Windows shape
+    (D:\\a\\...) on this system: argv carries the path, so the generated
+    source holds no backslash for the lexer to reject."""
+    src = tmp_path / "back\\slash.gz"
+    src.write_bytes(gzip.compress(b"abc"))
+    dst = tmp_path / "back\\slash.out"
+    source = tmp_path / "backslash.agc"
+    result = gunzip_case(source, src, dst, 100)
+    assert "\\" not in source.read_text(encoding="utf-8")
+    assert result.code == 0, result.stderr
+    assert result.stdout == "ok(3)\n", result.stdout
+    assert read_bytes(dst) == b"abc"
 
 
 def test_gunzip_runs_beside_other_tasks_and_each_result_is_right(tmp_path):

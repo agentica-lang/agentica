@@ -31,10 +31,12 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception (SPDX:
     `LICENSE.txt`;
   - libffi (`vm/third_party/libffi`, built into the Linux x86_64 binary for the
     native calls): MIT, with its license in `LICENSE`;
+  - zlib (`vm/third_party/zlib`, v1.3.1, used inflate-only by `File.gunzip`):
+    zlib license, with its license in `LICENSE`;
 
 Every release archive (Linux, macOS and Windows) ships these notices in
 `licenses/`: `bdwgc/NOTICE`, `libuv/LICENSE` and `LICENSE-extra`,
 `yyjson/LICENSE`, `picohttpparser/LICENSE` (the notice from
-`picohttpparser.h`), `openssl/LICENSE.txt`, `libffi/LICENSE`,
+`picohttpparser.h`), `openssl/LICENSE.txt`, `libffi/LICENSE`, `zlib/LICENSE`,
 `unicode/LICENSE.txt` (also in this repository). All of these libraries are built into the program, so no archive
 carries a library file of its own.

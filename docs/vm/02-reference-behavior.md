@@ -243,9 +243,10 @@ Every failure is an error value. The checks run in this order:
   waits on the loop, so the job never takes the `more` step either. Output
   is checked against `max_out_bytes` before every write (a partial never
   exceeds it and is conserved on error); the compressed input never exceeds
-  268435456 bytes. A second member or any trailing bytes, a bad
-  header, truncation and a refused wrapper are `filesystem: invalid gzip
-  data`; a trailer mismatch is `filesystem: gzip checksum mismatch`.
+  268435456 bytes. A bad header, truncation and a refused wrapper are
+  `filesystem: invalid gzip data`; a second member or any trailing bytes is
+  `filesystem: gzip has trailing bytes`; a trailer mismatch is
+  `filesystem: gzip checksum mismatch`.
 - `File.stat` of a missing path is an error without a kind. A directory's size
   is
   0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`; `user_id` and

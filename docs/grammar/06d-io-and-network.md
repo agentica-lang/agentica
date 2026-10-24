@@ -194,8 +194,9 @@ Signatures are in
   returns the bytes written. Only gzip members decode (RFC 1952, checked
   with `windowBits` 31): a zlib wrapper or raw deflate is
   `error("filesystem: invalid gzip data")`, as are a bad magic, method
-  or reserved flags, a truncated or corrupt stream, and any trailing bytes
-  after the single member (a second member or zeros alike). A CRC32 or
+  or reserved flags, and a truncated or corrupt stream. Any trailing bytes
+  after the single member (a second member or zeros alike) is
+  `error("filesystem: gzip has trailing bytes")`. A CRC32 or
   ISIZE mismatch is `error("filesystem: gzip checksum mismatch")`.
   `max_out_bytes` is 1 to 1073741824, otherwise a contract error; output
   past it is `error("filesystem: decompressed output exceeds

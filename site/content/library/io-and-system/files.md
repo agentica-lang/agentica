@@ -93,7 +93,7 @@ def main() -> Void
 end
 ```
 
-- Only gzip members decode: a zlib wrapper or raw deflate, a bad magic, method or reserved flags, a truncated or corrupt stream, and any trailing bytes after the single member (a second member or zeros alike) give `error("filesystem: invalid gzip data")`. A CRC32 or ISIZE mismatch gives `error("filesystem: gzip checksum mismatch")`.
+- Only gzip members decode: a zlib wrapper or raw deflate, a bad magic, method or reserved flags, and a truncated or corrupt stream give `error("filesystem: invalid gzip data")`. Any trailing bytes after the single member (a second member or zeros alike) give `error("filesystem: gzip has trailing bytes")`. A CRC32 or ISIZE mismatch gives `error("filesystem: gzip checksum mismatch")`.
 - `max_out_bytes` is 1 to 1073741824. Output past it gives `error("filesystem: decompressed output exceeds max_out_bytes")`, cut while streaming so the partial file never grows past it and is conserved on error. Compressed input past 268435456 bytes gives `error("filesystem: compressed input exceeds 268435456 bytes")`.
 - The source is read like `File.sha256` reads it (regular files only); the destination opens like `create_private`, so an existing path is an error and stays intact. `timeout_ms` covers the whole call; expiry or a cancel detaches like the other whole-file calls, while work already running runs to its end and its result is dropped.
 
