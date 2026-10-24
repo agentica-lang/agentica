@@ -1,0 +1,16 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 123,
+  "stdout": [
+    "head 1 consumed 0 needs false",
+    "tail ok(ZlibProgress(output: [3], consumed: 0, finished: false, needs_input: false)) rest 1",
+    "close true again true",
+    "feed after close -> error(\"zlib: handle is closed\")",
+    "bad window -> false",
+    "bad total -> false",
+    "close true",
+    ""
+  ],
+  "stderr": []
+}

@@ -75,13 +75,14 @@ architecture, a library outside that list or missing hardening.
   - **Choice:** Vendored submodule `vm/third_party/zlib` (zlib/libpng,
     permission to use for any purpose with attribution, no copyleft), tag
     v1.3.1. With `AGENTICA_ZLIB=vendored` (the release, and the default off
-    Linux) only the inflate side is built, without configure and without
-    the `gz*` file API: `adler32`, `crc32`, `inffast`, `inflate`, `inftrees`
-    and `zutil` compile per mode into `$(VM_BUILD)/zlib/` and link
+    Linux) only the codec side is built, without configure and without
+    the `gz*` file API: `adler32`, `crc32`, `deflate`, `inffast`,
+    `inflate`, `inftrees`, `trees` and `zutil` compile per mode into
+    `$(VM_BUILD)/zlib/` and link
     statically. The Linux default, `system`, links the distro's zlib 1.2.0
-    or newer dynamically instead, as OpenSSL does (10.0). `File.gunzip`
-    decodes through either behind the adapter (`vm/gunzip_zlib.c`); only
-    that file includes `zlib.h` (15.5).
+    or newer dynamically instead, as OpenSSL does (10.0). `Zlib`
+    compresses and decompresses through either behind the adapter
+    (`vm/zlib_codec.c`); only that file includes `zlib.h` (15.5).
 
 - **Dependency:** OpenSSL 3.5 LTS
   - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),

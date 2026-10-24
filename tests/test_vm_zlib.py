@@ -35,7 +35,6 @@ implementation.
 """
 import gzip
 import hashlib
-import json
 import os
 import struct
 import sys
@@ -50,15 +49,15 @@ CAP_1GIB = 1073741824
 
 # One-shot bytes through files: argv is op, src, dst, max_out, level.
 BYTES_PEER = (
-    "def convert(op: String, data: List[Int], cap: Int, level: Int) -> List[Int]\n"
+    "def convert(op: String, data: List[Int], cap: Int, level: Int) -> Result[List[Int]]\n"
     '  if op == "deflate"\n'
-    "    return Zlib.deflate(data, level, cap).unwrap!\n"
+    "    return Zlib.deflate(data, level, cap)\n"
     '  elsif op == "inflate"\n'
-    "    return Zlib.inflate(data, cap).unwrap!\n"
+    "    return Zlib.inflate(data, cap)\n"
     '  elsif op == "gzip"\n'
-    "    return Zlib.gzip(data, level, cap).unwrap!\n"
+    "    return Zlib.gzip(data, level, cap)\n"
     "  else\n"
-    "    return Zlib.gunzip(data, cap).unwrap!\n"
+    "    return Zlib.gunzip(data, cap)\n"
     "  end\n"
     "end\n"
     "\n"
@@ -72,10 +71,14 @@ BYTES_PEER = (
     "  data = File.read_bytes(fd, 1048576, 30000).unwrap!\n"
     "  File.close(fd, 30000)\n"
     "  out = convert(op, data, cap, level)\n"
+    "  if out.ok?\n"
     '  w = File.open(dst, "write", 30000).unwrap!\n'
-    "  File.write_bytes(w, out, 30000).unwrap!\n"
+    "  File.write_bytes(w, out.unwrap!, 30000).unwrap!\n"
     "  File.close(w, 30000)\n"
     '  puts(\"ok\")\n'
+    "  else\n"
+    "    puts(out)\n"
+    "  end\n"
     "end\n"
 )
 
@@ -340,6 +343,10 @@ def check_files_round_trip(peer, op, op_back, tmp_path, name, data, **kwargs):
     target.write_bytes(data)
     mid = tmp_path / (name + ".mid")
     out = tmp_path / (name + ".out")
+    # File outputs never overwrite: drop the previous pair's products first.
+    for stale in (mid, out):
+        if stale.exists():
+            stale.unlink()
     result = files_case(peer, op, target, mid, level=level)
     assert result.code == 0, result.stderr
     assert result.stdout.startswith("ok("), result.stdout
@@ -400,7 +407,7 @@ def test_zlib_gunzip_file_reads_python_gzip(files_peer, tmp_path):
 def test_zlib_compress_files_match_python(files_peer, tmp_path):
     data = bytes((k * 3) % 251 for k in range(100000))
     for level in (0, 6, 9):
-        target = tmp_path / "mine-%d.bin" % level
+        target = tmp_path / ("mine-%d.bin" % level)
         target.write_bytes(data)
         gz = tmp_path / ("mine-%d.bin.gz" % level)
         result = files_case(files_peer, "gzip_file", target, gz, level=level)
@@ -433,7 +440,7 @@ def test_zlib_gunzip_file_reads_optional_headers(files_peer, tmp_path):
     manual_out = tmp_path / "manual.gz.out"
     again = files_case(files_peer, "gunzip_file", manual, manual_out)
     assert again.code == 0, again.stderr
-    assert json.loads(again.stdout) == len(payload)
+    assert again.stdout == ("ok(%d)\n" % len(payload)), again.stdout
     assert read_bytes(manual_out) == payload
 
 
@@ -847,24 +854,31 @@ def test_zlib_stream_raw_output_matches_python(tmp_path):
 
 
 def test_zlib_stream_init_rejects_a_bad_shape(tmp_path):
+    # A handle Result has no to_s, so the programs print ok? instead: every
+    # bad shape below must read false, except inflate_init with a bad level,
+    # which takes no level and stays ok (its window and totals are valid).
     body = (
         "def main() -> Void\n"
-        "  puts(Zlib.deflate_init(%s, %s, %s, %s))\n"
-        "  puts(Zlib.inflate_init(%s, %s, %s))\n"
+        "  puts(Zlib.deflate_init(%s, %s, %s, %s).ok?)\n"
+        "  puts(Zlib.inflate_init(%s, %s, %s).ok?)\n"
         "end\n"
     )
     bad_windows = ["0", "8", "16", "47", "-8"]
     bad_levels = ["-1", "10"]
     bad_totals = ["0", "1073741825"]
-    cases = [body % (w, "6", "1073741824", "1073741824", w, "1073741824", "1073741824") for w in bad_windows]
-    cases += [body % ("15", level, "1073741824", "1073741824", "15", "1073741824", "1073741824")
-              for level in bad_levels]
-    cases += [body % ("15", "6", total, "1073741824", "15", total, "1073741824") for total in bad_totals]
-    cases += [body % ("15", "6", "1073741824", total, "15", "1073741824", total) for total in bad_totals]
-    for index, case in enumerate(cases):
+    cases = [(body % (w, "6", "1073741824", "1073741824", w, "1073741824", "1073741824"),
+                "false\nfalse\n") for w in bad_windows]
+    cases += [(body % ("15", level, "1073741824", "1073741824", "15", "1073741824", "1073741824"),
+                 "false\ntrue\n")
+                for level in bad_levels]
+    cases += [(body % ("15", "6", total, "1073741824", "15", total, "1073741824"),
+                 "false\nfalse\n") for total in bad_totals]
+    cases += [(body % ("15", "6", "1073741824", total, "15", "1073741824", total),
+                 "false\nfalse\n") for total in bad_totals]
+    for index, (case, want) in enumerate(cases):
         result = run_source(tmp_path, "init-%d.agc" % index, case, [])
         assert result.code == 0, result.stderr
-        assert result.stdout.startswith("error("), result.stdout
+        assert result.stdout == want, result.stdout
 
 
 def test_zlib_stream_next_rejects_a_call_past_its_quantum(tmp_path):
@@ -897,10 +911,18 @@ def test_zlib_stream_pending_output_drains_from_empty_input(tmp_path):
         "  if fed.needs_input\n"
         '    puts("asked for more with pending output")\n'
         "  end\n"
-        "  again = true\n"
+        "  index = fed.consumed\n"
+        "  empty = Zlib.inflate_next(dec, [], 65536).unwrap!\n"
+        "  out = List.concat(out, empty.output)\n"
+        "  if empty.output.size == 0\n"
+        '    puts("empty drain stalled with output pending")\n'
+        "  end\n"
+        "  index = index + empty.consumed\n"
+        "  again = not empty.finished\n"
         "  while again\n"
-        "    step = Zlib.inflate_next(dec, [], 65536).unwrap!\n"
+        "    step = Zlib.inflate_next(dec, List.take(List.drop(packed, index), 65536), 65536).unwrap!\n"
         "    out = List.concat(out, step.output)\n"
+        "    index = index + step.consumed\n"
         "    again = not step.finished\n"
         "  end\n"
         "  Zlib.inflate_finish(dec).unwrap!\n"
@@ -911,6 +933,7 @@ def test_zlib_stream_pending_output_drains_from_empty_input(tmp_path):
     result = run_source(tmp_path, "drain.agc", body, [])
     assert result.code == 0, result.stderr
     assert "asked for more" not in result.stdout, result.stdout
+    assert "stalled" not in result.stdout, result.stdout
     assert "ok()" in result.stdout, result.stdout
 
 
@@ -918,8 +941,8 @@ def test_zlib_stream_finish_repeats_until_finished(tmp_path):
     body = (
         "def main() -> Void\n"
         "  enc = Zlib.deflate_init(15, 6, 1073741824, 1073741824).unwrap!\n"
-        "  Zlib.deflate_next(enc, [1, 2, 3], 65536).unwrap!\n"
-        "  out: List[Int] = []\n"
+        "  first = Zlib.deflate_next(enc, [1, 2, 3], 65536).unwrap!\n"
+        "  out: List[Int] = first.output\n"
         " again = true\n"
         "  rounds = 0\n"
         "  while again\n"
@@ -1031,10 +1054,14 @@ def test_zlib_stream_enforces_the_total_caps(tmp_path):
         "  puts(over.ok?)\n"
         "  Zlib.encoder_close(enc).unwrap!\n"
         "  dec = Zlib.inflate_init(15, %d, %d).unwrap!\n"
-        "  puts(Zlib.inflate_next(dec, packed, 65536))\n"
+        # The totals precheck is quantum-based by contract (safe but strict):
+        # the first feed asks for exactly the remaining total, so the call is
+        # admitted and its real output fits; a full 65536 quantum here would
+        # be refused even though the bytes would fit.
+        "  puts(Zlib.inflate_next(dec, packed, %d))\n"
         "  puts(Zlib.inflate_next(dec, [9], 65536).ok?)\n"
         "  Zlib.decoder_close(dec).unwrap!\n"
-        "end\n" % (in_text, packed_text, len(data), len(packed), len(data))
+        "end\n" % (in_text, packed_text, len(data), len(packed), len(data), len(data))
     )
     result = run_source(tmp_path, "totals.agc", body, [])
     assert result.code == 0, result.stderr
@@ -1075,8 +1102,11 @@ def test_zlib_stream_used_from_the_wrong_task_halts(tmp_path):
         "\n"
         "def main() -> Void\n"
         "  enc = Zlib.deflate_init(15, 6, 1073741824, 1073741824).unwrap!\n"
-        "  Task.await(Task.spawn_owning(&hold, enc))\n"
+        # Feeding while the holder still owns the handle halts; awaiting
+        # first would only see the owner-end close after the holder ends.
+        "  t = Task.spawn_owning(&hold, enc)\n"
         "  puts(Zlib.deflate_next(enc, [1], 65536))\n"
+        "  Task.await(t)\n"
         "end\n"
     )
     source = tmp_path / "wrong-task.agc"

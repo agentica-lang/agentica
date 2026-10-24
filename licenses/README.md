@@ -31,7 +31,7 @@ Agentica is licensed under the Apache License 2.0 with the LLVM exception (SPDX:
     `LICENSE.txt`;
   - libffi (`vm/third_party/libffi`, built into the Linux x86_64 binary for the
     native calls): MIT, with its license in `LICENSE`;
-  - zlib (`vm/third_party/zlib`, v1.3.1, used inflate-only by `File.gunzip`):
+  - zlib (`vm/third_party/zlib`, v1.3.1, codec sources used by `Zlib`):
     zlib license, with its license in `LICENSE`;
 
 Every release archive (Linux, macOS and Windows) ships these notices in

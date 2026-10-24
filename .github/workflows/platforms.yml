@@ -142,6 +142,8 @@ jobs:
             build/vm/release/third-party-flags
             build/vm/release/yyjson.o
             build/vm/release/picohttpparser.o
+            build/vm/release/zlib
+            build/vm/release/libzlib.a
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
@@ -218,6 +220,8 @@ jobs:
             build/vm/release/third-party-flags
             build/vm/release/yyjson.o
             build/vm/release/picohttpparser.o
+            build/vm/release/zlib
+            build/vm/release/libzlib.a
             build/vm/gc.o
             build/vm/gc-flags
           key: native-deps-release-${{ hashFiles('build/native-deps-key') }}

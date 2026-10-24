@@ -1,0 +1,17 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 101,
+  "stdout": [
+    "deflate 13 round ok()",
+    "empty deflate 8 round ok()",
+    "gzip 25 round ok()",
+    "empty gzip 20 round ok()",
+    "inflating nothing -> error(\"zlib: invalid compressed data\")",
+    "gunzipping nothing -> error(\"zlib: invalid compressed data\")",
+    "zero max -> error(\"zlib: max_out_bytes must be between 1 and 1048576\")",
+    "bad level -> error(\"zlib: level must be between 0 and 9\")",
+    ""
+  ],
+  "stderr": []
+}
