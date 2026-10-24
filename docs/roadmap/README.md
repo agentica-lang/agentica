@@ -27,10 +27,10 @@ keeps their records.
 - **0.10.0** (owner, 2026-10-23), in this order, one item at a time:
   1. The JIT groundwork, without tier 2
      ([#622](https://github.com/sonic182/agentica/issues/622)): opcode and
-     opcode-pair counters, `leaf` builtins, smaller values
-     ([#396](https://github.com/sonic182/agentica/issues/396)), then the
-     helpers by pointer, errors without `longjmp` through compiled code and a
-     W^X code memory.
+     opcode-pair counters, `leaf` builtins (done), then the helpers by pointer,
+     errors without `longjmp` through compiled code and a W^X code memory.
+     Smaller values ([#396](https://github.com/sonic182/agentica/issues/396))
+     are deferred beyond 0.10.0.
   2. The rest of the FFI core: FFI-b (native libraries in packages; done),
      variadic C functions
      ([#619](https://github.com/sonic182/agentica/issues/619); done), and from
@@ -38,7 +38,8 @@ keeps their records.
      buffers and typed memory and `C.Float` (done), structs by value (done),
      function pointers (done) and downloaded prebuilt libraries. No
      callbacks.
-  3. JIT tier 2 (§22) with our own emitter for x86-64 and arm64 (no sljit).
+  3. JIT tier 2 (§22) with our own emitter for x86-64 (no sljit); the arm64
+     emitter is deferred beyond 0.10.0.
 
 ### Next, after 0.8.0 (owner, 2026-10-21)
 
