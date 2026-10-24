@@ -204,8 +204,9 @@ export def redirect_status?(status: Int) -> Bool
   return status == 301 or status == 302 or status == 303 or status == 307 or status == 308
 end
 
-## The redirect target of `location` against `current`: an absolute URL passes through, an absolute path keeps the
-## scheme and authority of `current`, anything else merges with the folder of the current target. A fragment is dropped
+## The redirect target of `location` against `current`: an absolute URL passes through, a scheme-relative
+## `//host/path` takes the scheme of `current`, an absolute path keeps the scheme and authority of `current`,
+## anything else merges with the folder of the current target. A fragment is dropped
 ## (it is never sent); dot segments resolve lexically, and climbing past the root is refused. Errors are plain text
 ## for the engine to pack with the caller's file and key, without the secrets a Location may carry.
 export def resolve_location(current: String, location: String) -> Result[String]
@@ -223,6 +224,10 @@ export def resolve_location(current: String, location: String) -> Result[String]
     return ok(canonical_url(checked))
   end
   parsed = try parse_url(current)
+  if String.starts_with?(bare, "//")
+    checked = try parse_url(scheme_relative_url(parsed.scheme, bare))
+    return ok(canonical_url(checked))
+  end
   if String.starts_with?(bare, "/")
     merged = split_query(bare)
     return ok("#{parsed.scheme}://#{parsed.authority}#{merged.before}#{merged.after}")
@@ -232,6 +237,11 @@ export def resolve_location(current: String, location: String) -> Result[String]
   raw = split_query("#{folder}#{merged.before}")
   fixed = try normalize_path(raw.before)
   return ok("#{parsed.scheme}://#{parsed.authority}#{fixed}#{raw.after}")
+end
+
+# A scheme-relative target (`//host/path`) with the scheme of the current URL, for the normal URL policy to judge.
+def scheme_relative_url(scheme: String, bare: String) -> String
+  return "#{scheme}:#{bare}"
 end
 
 # Whether the text starts with a scheme (`name://` of letters, digits, "+" "-" and ".").
@@ -363,6 +373,9 @@ def split_authority(authority: String) -> Result[HostPort]
     colon = first_index(authority, ":")
     host = String.slice(authority, 0, colon)
     port = String.slice(authority, colon + 1, String.length(authority) - colon - 1)
+    if port == ""
+      return error("the URL holds a bad port")
+    end
     try check_port(port)
     return ok(HostPort(host: String.downcase(host), port: port))
   end

@@ -184,8 +184,10 @@ def test_allowed_urls_are_https_or_loopback_http(setup):
     assert pure(setup, "allowed", "https://example.com/x.tar.gz") == ["true"]
     assert pure(setup, "allowed", "http://127.0.0.1:9/x") == ["true"]
     assert pure(setup, "allowed", "http://[::1]:9/x") == ["true"]
+    assert pure(setup, "allowed", "https://example.com:443/x") == ["true"]
     for bad in ["http://example.com/x", "http://localhost:9/x", "ftp://h/x", "https://u@example.com/x",
-                "https://example.com/x#f", "file:///x", "https://", "http://127.0.0.1:0/x@y"]:
+                "https://example.com/x#f", "file:///x", "https://", "http://127.0.0.1:0/x@y",
+                "https://example.com:/x", "https://[::1]:/x", "http://127.0.0.1:/x"]:
         assert pure(setup, "allowed", bad) == ["false"], bad
 
 
@@ -198,6 +200,10 @@ def test_resolve_location_forms(setup):
     assert pure(setup, "resolve", base, "/t/lib.tar?token=s") == ["OK http://127.0.0.1:9/t/lib.tar?token=s"]
     assert pure(setup, "resolve", base, "./sub/../t/lib.tar") == ["OK http://127.0.0.1:9/t/lib.tar"]
     assert pure(setup, "resolve", base, "/t/lib.tar#frag") == ["OK http://127.0.0.1:9/t/lib.tar"]
+    assert pure(setup, "resolve", base, "//127.0.0.1:9/t/lib.tar") == ["OK http://127.0.0.1:9/t/lib.tar"]
+    assert pure(setup, "resolve", base, "//example.com/t/lib.tar") == ["OK http://example.com/t/lib.tar"]
+    assert pure(setup, "resolve", base, "//127.0.0.1:9/t?token=s") == ["OK http://127.0.0.1:9/t?token=s"]
+    assert pure(setup, "resolve", "https://h:9/a", "//h2:8/b") == ["OK https://h2:8/b"]
     assert pure(setup, "resolve", base, "../../t") == ["ERR rejected"]
     assert pure(setup, "resolve", base, "") == ["ERR rejected"]
     assert pure(setup, "resolve", base, "ftp://h/x") == ["ERR rejected"]
@@ -384,6 +390,23 @@ def test_signed_query_never_persists(setup, tmp_path):
         for name in files:
             data = open(os.path.join(directory, name), "rb").read()
             assert b"s3cr3t" not in data, name
+
+
+def test_scheme_relative_redirect_keeps_current_scheme(setup, tmp_path):
+    sha = digest(setup["lib_tar"])
+    status, path = redirected_fetch(setup, cache(tmp_path / "scheme"), "/r-scheme", sha)
+    assert status == "ok"
+    assert open(path, "rb").read() == member_bytes(setup["lib_tar"], MEMBER)
+    status, path = redirected_fetch(setup, cache(tmp_path / "schemeq"), "/r-schemeq", sha)
+    assert status == "ok"
+    assert open(path, "rb").read() == member_bytes(setup["lib_tar"], MEMBER)
+
+
+def test_scheme_relative_external_redirect_fails_before_network(setup, tmp_path, mark):
+    sha = digest(setup["lib_tar"])
+    assert redirected_fetch(setup, cache(tmp_path / "ext"), "/r-ext", sha) == (
+        "err", "PKG-FETCH", FILE, KEY + ".url")
+    assert requests_since(setup, mark) == ["/r-ext"]
 
 
 def test_redirect_loops_and_counts_fail(setup, tmp_path):

@@ -192,8 +192,16 @@ def probe_member(
   if !is_dir?(NativeArtifact.member_dir(root, sha, digest), left)
     return Probe.Missing
   end
+  left = deadline - Time.monotonic_ms()
+  if left <= 0
+    return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
+  end
   case File.read_text(receipt, left)
     ok(text) ->
+      left = deadline - Time.monotonic_ms()
+      if left <= 0
+        return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
+      end
       case File.sha256(payload, left)
         ok(found) ->
           if text.trim == NativeArtifact.hex_of(found)
@@ -226,6 +234,10 @@ def archive_state(
       if info.kind != "file"
         message = "the cached archive is not a regular file"
         return ArchiveSeen.Broken(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
+      end
+      left = deadline - Time.monotonic_ms()
+      if left <= 0
+        return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
       end
       case File.sha256(archive, left)
         ok(found) ->
@@ -442,11 +454,13 @@ def publish_member(
     return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a TAR archive", ""))
   end
   receipt = Paths.join(tmp, "receipt")
+  left = try time_left(deadline, context)
   wrote = File.write_text(receipt, NativeArtifact.hex_of(found.unwrap!), left)
   if !wrote.ok?
     return error(fail(context, "PKG-FETCH", "member", "the cache cannot be written", ""))
   end
   target = NativeArtifact.member_dir(root, sha, digest)
+  left = try time_left(deadline, context)
   case Path.rename(tmp, target, left)
     ok(_) -> return ok(Paths.join(Paths.join(target, "payload"), canonical))
     error(_) ->
@@ -481,7 +495,11 @@ def make_parents(path: String, deadline: Int, context: NativeArtifact.Context) -
     ok(_) -> return ok()
     error(_) ->
       # A concurrent fetch may have made it first: keep the winner when it is a real folder.
-      if is_dir?(path, left)
+      fresh = deadline - Time.monotonic_ms()
+      if fresh <= 0
+        return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
+      end
+      if is_dir?(path, fresh)
         return ok()
       end
       message = "the cache folder cannot be made"
@@ -494,14 +512,14 @@ def make_temp(parent: String, deadline: Int, context: NativeArtifact.Context) ->
   left = try time_left(deadline, context)
   failure = "no free name"
   for attempt in 0...TEMP_TRIES
+    left = deadline - Time.monotonic_ms()
+    if left <= 0
+      return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
+    end
     name = Paths.join(parent, ".tmp-#{System.pid()}-#{attempt}-#{Random.int(0, 999999999)}")
     case Dir.mkdir_private(name, left)
       ok(_) -> return ok(name)
       error(message) -> failure = message
-    end
-    left = deadline - Time.monotonic_ms()
-    if left <= 0
-      return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
     end
   end
   return error(fail(context, "PKG-FETCH", "", "cannot make a folder in the cache: #{failure}", ""))

@@ -148,6 +148,12 @@ class Web(http.server.BaseHTTPRequestHandler):
             self.redirect(plain + "/t/lib.tar")
         elif bare == "/r-up":
             self.redirect(secure + "/t/lib.tar")
+        elif bare == "/r-scheme":
+            self.redirect("//127.0.0.1:%d/t/lib.tar" % PLAIN_PORT)
+        elif bare == "/r-schemeq":
+            self.redirect("//127.0.0.1:%d/t/lib.tar?token=qq-signed" % PLAIN_PORT)
+        elif bare == "/r-ext":
+            self.redirect("//example.com/t/lib.tar")
         elif bare == "/r-multi":
             self.redirect("/t/lib.tar", "/t/other.tar")
         elif bare == "/r-noloc":
