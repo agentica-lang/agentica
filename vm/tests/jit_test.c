@@ -4,6 +4,7 @@
  * one copy kept when several threads compile a function at once.
  */
 #include "../jit/jit.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <math.h>
@@ -172,6 +173,17 @@ static AGC_JIT_CALLER void text_binary(agc_opcode op, agc_value x, agc_value y, 
   assert(s->bytes == n && memcmp(s->data, want, n) == 0);
 }
 
+/* R3 = the String OP printed for the value R1 holds, with the TO_TEXT-only function: the code leaves for the
+   interpreter to apply the charge, which is the text's own bytes. */
+static AGC_JIT_CALLER void text_cost(agc_jit_code code, one_function *f, agc_value *R, agc_value v) {
+  R[1] = v;
+  R[3] = agc_nil();
+  vm.task->turn_cost = 0;
+  expect_exit(code(&vm, R, f->constants, 0), AGC_JIT_EXIT_COST, 0);
+  assert(agc_is(R[3], AGC_T_STRING));
+  assert(vm.task->turn_cost == (int64_t)(agc_as_string(&vm, R[3])->bytes / AGC_COST_BYTES));
+}
+
 static AGC_JIT_CALLER void int_rules(void) {
   agc_value max = agc_int(INT64_MAX), min = agc_int(INT64_MIN), one = agc_int(1), zero = agc_int(0);
   agc_value minus = agc_int(-1), any = agc_nil();
@@ -240,6 +252,41 @@ static AGC_JIT_CALLER void helpers(void) {
   text_binary(AGC_OP_TO_TEXT, hello, any, "hello, ");
   text_binary(AGC_OP_TO_TEXT, list_of_two, any, "[7, 8]");
   binary(AGC_OP_TO_TEXT, agc_void(), any, AGC_STATUS_WRONG_TAG, any);
+  /* A Void nested in a list or a map value fails compiled TO_TEXT at its pc, leaving R3 alone, as without the JIT. */
+  agc_value hole_items[2] = {agc_int(1), agc_void()};
+  binary(AGC_OP_TO_TEXT, agc_list_value(agc_list_from_array(hole_items, 2)), any, AGC_STATUS_WRONG_TAG, any);
+  agc_map *hole_map =
+      agc_map_put(&vm, agc_new_map(), agc_string_value(agc_make_string("a", 1, 1)), agc_void());
+  binary(AGC_OP_TO_TEXT, agc_map_value(hole_map), any, AGC_STATUS_WRONG_TAG, any);
+  /* Valid compounds print through compiled TO_TEXT; short ones charge nothing. */
+  agc_map *ok_map = agc_map_put(&vm, agc_new_map(), agc_string_value(agc_make_string("a", 1, 1)), agc_int(1));
+  text_binary(AGC_OP_TO_TEXT, agc_map_value(ok_map), any, "{\"a\": 1}");
+  text_binary(AGC_OP_TO_TEXT, agc_result_value(true, agc_int(1)), any, "ok(1)");
+  agc_map *two_set = agc_map_put(&vm, agc_new_map(), agc_int(1), agc_nil());
+  two_set = agc_map_put(&vm, two_set, agc_int(2), agc_nil());
+  text_binary(AGC_OP_TO_TEXT, agc_set_value(two_set), any, "Set[1, 2]");
+  /* Record and enum shapes walk their defs from the runtime's program before the check reports a nested Void. */
+  agc_test_shapes shapes;
+  agc_test_shapes_init(&shapes);
+  const agc_program *saved = vm.rt->program;
+  vm.rt->program = &shapes.program;
+  agc_struct *hole_struct = agc_new_struct(0, 1);
+  hole_struct->fields[0] = agc_void();
+  binary(AGC_OP_TO_TEXT, agc_struct_value(hole_struct), any, AGC_STATUS_WRONG_TAG, any);
+  agc_struct *ok_struct = agc_new_struct(0, 1);
+  ok_struct->fields[0] = agc_int(1);
+  text_binary(AGC_OP_TO_TEXT, agc_struct_value(ok_struct), any, "S(x: 1)");
+  agc_enum *hole_enum = agc_new_enum(1, 2);
+  hole_enum->payload[0] = agc_int(1);
+  hole_enum->payload[1] = agc_void();
+  binary(AGC_OP_TO_TEXT, agc_enum_value(hole_enum), any, AGC_STATUS_WRONG_TAG, any);
+  agc_enum *ok_enum = agc_new_enum(0, 1);
+  ok_enum->payload[0] = agc_int(7);
+  text_binary(AGC_OP_TO_TEXT, agc_enum_value(ok_enum), any, "E.v(7)");
+  agc_enum *unit_enum = agc_new_enum(0, 1);
+  unit_enum->payload[0] = agc_void();
+  text_binary(AGC_OP_TO_TEXT, agc_enum_value(unit_enum), any, "E.v()");
+  vm.rt->program = saved;
   binary(AGC_OP_LIST_LEN, list, any, AGC_STATUS_OK, agc_int(3));
   binary(AGC_OP_LIST_LEN, agc_int(3), any, AGC_STATUS_WRONG_TAG, any);
   binary(AGC_OP_LIST_GET, list, agc_int(2), AGC_STATUS_OK, agc_int(9));
@@ -323,12 +370,12 @@ static AGC_JIT_CALLER void string_build_cost(void) {
   assert(same_bits(R[3], big) && vm.task->turn_cost == 0);
   agc_value many[100];
   for (size_t k = 0; k < 100; k++) many[k] = agc_int((int64_t)k);
-  R[1] = agc_list_value(agc_list_from_array(many, 100));
-  R[3] = agc_nil();
-  vm.task->turn_cost = 0;
-  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_COST, 0);
-  assert(agc_is(R[3], AGC_T_STRING));
-  assert(vm.task->turn_cost == (int64_t)(agc_as_string(&vm, R[3])->bytes / AGC_COST_BYTES));
+  text_cost(code, &f, R, agc_list_value(agc_list_from_array(many, 100)));
+  /* An int-keyed map prints through compiled TO_TEXT the same way: a COST exit with the text's own charge. */
+  agc_map *big_map = agc_new_map();
+  for (size_t k = 0; k < 100; k++)
+    big_map = agc_map_put(&vm, big_map, agc_int((int64_t)k), agc_int((int64_t)k));
+  text_cost(code, &f, R, agc_map_value(big_map));
   vm.task->turn_cost = 0;
 }
 

@@ -1025,14 +1025,24 @@ OP_HELPER agc_status agc_op_concat(agc_vm *vm, agc_value *dst, const agc_value *
   return AGC_STATUS_OK;
 }
 
-/* TO_TEXT prints any value through agc_text, which charges a compound, String or Json form itself; the caller applies
-   the cost. A Void value is hand-made bytecode (the checker rejects a Void value with CHECK-VOID-VALUE). Every other
-   tag has a form: structs and enums come from loader-checked instructions, and a Json never holds a non-finite Float
-   (JSON.parse and JSON.from refuse those), so on a loaded program agc_text neither fails nor parks here, as the
-   already-compiled EQ on the same values relies on. */
+/* TO_TEXT prints any value through the checked text form, which charges a compound, String or Json form itself;
+   the caller applies the cost. A Void at the top level or inside a list, map value, set, struct, enum or Result is
+   hand-made bytecode (the checker rejects a Void value with CHECK-VOID-VALUE): the checked form reports it instead
+   of failing, so the helper answers WRONG_TAG with dst left alone. Structs and enums come from loader-checked
+   instructions, and a Json never holds a non-finite Float (JSON.parse and JSON.from refuse those), so on a loaded
+   program the checked form fails for nothing else here. Unlike EQ, which answers shallow pairs without walking them
+   (equal_values returns -1 past Ints, Floats, Nils, Strings, Ranges and Bools), TO_TEXT walks and formats
+   arbitrarily deep values; the check keeps that walk inside the helper's status contract. */
 OP_HELPER agc_status agc_op_to_text(agc_vm *vm, agc_value *dst, const agc_value *v) {
   if (agc_is(*v, AGC_T_VOID)) return AGC_STATUS_WRONG_TAG;
-  *dst = agc_string_value(agc_text(vm, *v));
+  int64_t cost = vm->task->turn_cost;
+  agc_string *text;
+  if (!agc_text_checked(vm, *v, &text)) {
+    /* The partial walk may have charged key hashes or nested Json forms; a failing helper leaves the cost alone. */
+    vm->task->turn_cost = cost;
+    return AGC_STATUS_WRONG_TAG;
+  }
+  *dst = agc_string_value(text);
   return AGC_STATUS_OK;
 }
 

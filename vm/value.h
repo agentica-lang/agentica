@@ -701,6 +701,7 @@ agc_string *agc_concat(const agc_string *a, const agc_string *b);
 size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]);
 agc_string *agc_text(agc_vm *vm, agc_value v);
 agc_string *agc_debug(agc_vm *vm, agc_value v);
+bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text);
 agc_string *agc_test_text(agc_vm *vm, agc_value v);
 bool agc_same_string(agc_vm *vm, const agc_string *x, const agc_string *y);
 bool agc_equal(agc_vm *vm, agc_value a, agc_value b, uint32_t span);

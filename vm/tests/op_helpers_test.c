@@ -4,6 +4,7 @@
  * left alone then, and no longjmp (the VM here has no failure target).
  */
 #include "../core.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <math.h>
@@ -91,6 +92,84 @@ static void text_is(agc_value got, const char *want) {
   assert(s->bytes == n && s->chars == n && memcmp(s->data, want, n) == 0);
 }
 
+/* A Void nested in a compound has no text form: the checked form reports it, and the helper answers WRONG_TAG with
+   dst and the turn cost left alone. The program holds one struct S(x) and one enum E with variants v/1 and w/2, as
+   a loaded program would, so the record and enum shapes walk their defs first. Void map keys and set elements are
+   not covered: a void key never survives construction (agc_key_hash fails it in agc_map_put), so hostile bytecode
+   fails at MAP, never at TO_TEXT. */
+static void void_text(void) {
+  agc_test_shapes shapes;
+  agc_test_shapes_init(&shapes);
+  const agc_program *saved = vm.rt->program;
+  vm.rt->program = &shapes.program;
+  agc_value one = agc_int(1), void_value = agc_void(), mark = agc_nil(), dst;
+  agc_value inner_items[2] = {one, void_value};
+  agc_value inner = agc_list_value(agc_list_from_array(inner_items, 2));
+  agc_value deep_items[2] = {one, inner};
+  agc_value key = agc_string_value(agc_make_string("a", 1, 1));
+  agc_struct *st = agc_new_struct(0, 1);
+  st->fields[0] = void_value;
+  agc_enum *en = agc_new_enum(1, 2);
+  en->payload[0] = one;
+  en->payload[1] = void_value;
+  agc_value holes[6] = {
+    inner,
+    agc_list_value(agc_list_from_array(deep_items, 2)),
+    agc_map_value(agc_map_put(&vm, agc_new_map(), key, void_value)),
+    agc_struct_value(st),
+    agc_enum_value(en),
+    agc_result_value(false, void_value),
+  };
+  for (size_t k = 0; k < sizeof holes / sizeof holes[0]; k++) {
+    dst = mark;
+    vm.task->turn_cost = 0;
+    assert(agc_op_to_text(&vm, &dst, &holes[k]) == AGC_STATUS_WRONG_TAG);
+    assert(same_bits(dst, mark) && vm.task->turn_cost == 0);
+  }
+  /* ok(void) and a single void payload print with no items, as the formatter always did. */
+  agc_value ok_void = agc_result_value(true, void_value);
+  assert(agc_op_to_text(&vm, &dst, &ok_void) == AGC_STATUS_OK);
+  text_is(dst, "ok()");
+  agc_enum *unit = agc_new_enum(0, 1);
+  unit->payload[0] = void_value;
+  agc_value unit_value = agc_enum_value(unit);
+  assert(agc_op_to_text(&vm, &dst, &unit_value) == AGC_STATUS_OK);
+  text_is(dst, "E.v()");
+  vm.rt->program = saved;
+  vm.task->turn_cost = 0;
+}
+
+/* Valid compounds print exactly what agc_text prints, and charge exactly what it charges: the checked form is the
+   same single walk, so the helper adds no second hash or traversal. */
+static void compound_text(void) {
+  agc_value one = agc_int(1), two = agc_int(2), mark = agc_nil(), dst;
+  agc_value pair[2] = {one, two};
+  agc_map *m = agc_map_put(&vm, agc_new_map(), agc_string_value(agc_make_string("a", 1, 1)), one);
+  m = agc_map_put(&vm, m, agc_int(2), two);
+  agc_map *s = agc_map_put(&vm, agc_new_map(), one, agc_nil());
+  s = agc_map_put(&vm, s, two, agc_nil());
+  agc_value forms[5] = {
+    agc_list_value(agc_list_from_array(pair, 2)),
+    agc_map_value(m),
+    agc_set_value(s),
+    agc_result_value(true, one),
+    agc_list_value(agc_list_from_array(pair, 0)),
+  };
+  for (size_t k = 0; k < sizeof forms / sizeof forms[0]; k++) {
+    vm.task->turn_cost = 0;
+    agc_string *want_text = agc_text(&vm, forms[k]);
+    int64_t want_cost = vm.task->turn_cost;
+    dst = mark;
+    vm.task->turn_cost = 0;
+    assert(agc_op_to_text(&vm, &dst, &forms[k]) == AGC_STATUS_OK);
+    assert(agc_is(dst, AGC_T_STRING));
+    const agc_string *got = agc_as_string(&vm, dst);
+    assert(got->bytes == want_text->bytes && memcmp(got->data, want_text->data, got->bytes) == 0);
+    assert(vm.task->turn_cost == want_cost);
+  }
+  vm.task->turn_cost = 0;
+}
+
 static void strings(void) {
   agc_value ab = agc_string_value(agc_make_string("ab", 2, 2));
   agc_value cd = agc_string_value(agc_make_string("cd", 2, 2));
@@ -151,6 +230,8 @@ int main(void) {
   wrong_tags();
   lists();
   strings();
+  void_text();
+  compound_text();
   puts("op helper tests passed");
   return 0;
 }

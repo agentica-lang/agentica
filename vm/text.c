@@ -157,7 +157,13 @@ static void append_string(builder *b, const agc_string *s) {
   b->s->chars += s->chars;
 }
 
-static void append_item(agc_vm *vm, builder *b, agc_value v, bool json) {
+/* A Void has no text form (the checker rejects one with CHECK-VOID-VALUE): where the formatter would reach
+   agc_as_int and fail, a non-NULL is_void reports it instead and the partial text is discarded. */
+static void append_item(agc_vm *vm, builder *b, agc_value v, bool json, bool *is_void) {
+  if (is_void && agc_is(v, AGC_T_VOID)) {
+    *is_void = true;
+    return;
+  }
   if (json && agc_is(v, AGC_T_JSON)) {
     append_string(b, agc_json_encode(vm, v, 0));
   } else if (agc_is(v, AGC_T_STRING)) {
@@ -247,7 +253,7 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
   return true;
 }
 
-static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json) {
+static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json, bool *is_void) {
   builder b;
   b.cap = 64;
   b.s = agc_new_string(b.cap, 0);
@@ -257,7 +263,8 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json) {
   agc_value item = root;
   for (;;) {
     if (!compound(item)) {
-      append_item(vm, &b, item, json);
+      append_item(vm, &b, item, json, is_void);
+      if (is_void && *is_void) return b.s;
     } else if (open_value(vm, &b, item)) {
       if (depth == capacity) {
         size_t bigger = agc_size_mul(capacity, 2);
@@ -289,7 +296,8 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json) {
     }
     if (agc_is(top->value, AGC_T_MAP)) {
       agc_value key = top->keys[top->next++];
-      append_item(vm, &b, key, json);
+      append_item(vm, &b, key, json, is_void);
+      if (is_void && *is_void) return b.s;
       append(&b, ": ", 2);
       if (!agc_map_get(vm, agc_as_map(vm, top->value), key, &item))
         agc_fail(vm, "RUNTIME-INTERNAL", "invalid map", 0);
@@ -309,12 +317,17 @@ agc_string *agc_text(agc_vm *vm, agc_value v) {
   return agc_debug(vm, v);
 }
 
-static agc_string *debug_text(agc_vm *vm, agc_value v, bool json) {
+static agc_string *debug_text(agc_vm *vm, agc_value v, bool json, bool *is_void) {
   if (json && agc_is(v, AGC_T_JSON)) return agc_json_encode(vm, v, 0);
   if (compound(v)) {
-    agc_string *text = compound_debug(vm, v, json);
+    agc_string *text = compound_debug(vm, v, json, is_void);
+    if (is_void && *is_void) return text;
     agc_charge_bytes(vm, text->bytes);
     return text;
+  }
+  if (is_void && agc_is(v, AGC_T_VOID)) {
+    *is_void = true;
+    return vm->rt->empty_string;
   }
   if (!agc_is(v, AGC_T_STRING)) {
     char text[AGC_SCALAR_TEXT];
@@ -330,8 +343,27 @@ static agc_string *debug_text(agc_vm *vm, agc_value v, bool json) {
   return result;
 }
 
-agc_string *agc_debug(agc_vm *vm, agc_value v) { return debug_text(vm, v, false); }
+agc_string *agc_debug(agc_vm *vm, agc_value v) { return debug_text(vm, v, false, NULL); }
+
+/* Like agc_text, but a Void at the top level or inside a list, map value, set, struct, enum or Result reports
+   through the result instead of failing: every other invalid value still fails as agc_text does. */
+bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text) {
+  if (agc_is(v, AGC_T_VOID)) return false;
+  if (agc_is(v, AGC_T_STRING)) {
+    *text = agc_as_string(vm, v);
+    return true;
+  }
+  if (agc_is(v, AGC_T_JSON)) {
+    *text = agc_json_encode(vm, v, 0);
+    return true;
+  }
+  bool is_void = false;
+  agc_string *s = debug_text(vm, v, false, &is_void);
+  if (is_void) return false;
+  *text = s;
+  return true;
+}
 
 /* The inspect form, except that a Json at any depth is its canonical text
    (docs/future/36-unit-tests.md §36.3), for Test.eq's expected and actual. */
-agc_string *agc_test_text(agc_vm *vm, agc_value v) { return debug_text(vm, v, true); }
+agc_string *agc_test_text(agc_vm *vm, agc_value v) { return debug_text(vm, v, true, NULL); }
