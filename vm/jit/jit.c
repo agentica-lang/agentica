@@ -25,8 +25,8 @@ static bool backward(agc_instr in, uint32_t pc, uint32_t *start) {
   return (op == AGC_OP_JUMP || op == AGC_OP_JUMP_IF_FALSE || op == AGC_OP_JUMP_IF_TRUE) && *start <= pc;
 }
 
-/* True for the instructions that have code of their own in emit_function (keep the two sets the same); every other
-   one leaves compiled code for the interpreter. */
+/* True when IN can keep executing in the generated instruction stream. CALL and RETURN have emitted boundary exits,
+   but remain false here so the `on` heuristic still counts their frame transitions as exits. */
 static bool has_code(uint32_t op) {
   switch (plain_op(op)) {
     case AGC_OP_MOVE:
@@ -67,8 +67,8 @@ static bool has_code(uint32_t op) {
   }
 }
 
-/* True when compiled code goes back to the turn loop at IN: an instruction without code, except a leaf builtin, which
-   run_compiled calls itself before it enters the code again. */
+/* True when IN makes the `on` loop heuristic count a trip out of compiled code. CALL and RETURN use dedicated
+   frame-transition exits but still leave the generated sequence; a leaf builtin is called by run_compiled itself. */
 static bool leaves_code(const agc_program *p, agc_instr in) {
   if (has_code(in.op)) return false;
   return in.op != AGC_OP_CALL_BUILTIN || !p->builtins[(uint32_t)in.b | ((uint32_t)in.c << 16)]->leaf;
@@ -101,9 +101,8 @@ static const char *kept_out(const agc_program *p, const agc_function *f, agc_jit
 }
 
 #if AGC_JIT_HOST
-/* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code; any other
-   instruction leaves for the interpreter, RETURN too: the interpreter pops the frame and resumes the caller, which may
-   be a native frame. */
+/* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code; unsupported
+   instructions leave for the interpreter, while CALL and RETURN leave through dedicated frame-transition exits. */
 static size_t emit_function(agc_emitter *e, const agc_function *f) {
   agc_emit_begin(e, f->count);
   for (uint32_t pc = 0; pc < f->count && !e->failed; pc++) {
@@ -146,6 +145,8 @@ static size_t emit_function(agc_emitter *e, const agc_function *f) {
       case AGC_OP_JUMP: agc_emit_jump(e, bx); break;
       case AGC_OP_JUMP_IF_FALSE:
       case AGC_OP_JUMP_IF_TRUE: agc_emit_branch(e, in.a, op == AGC_OP_JUMP_IF_TRUE, bx, pc); break;
+      case AGC_OP_CALL: agc_emit_exit(e, AGC_JIT_EXIT_CALL, pc); break;
+      case AGC_OP_RETURN: agc_emit_exit(e, AGC_JIT_EXIT_RETURN, pc); break;
       default: agc_emit_exit(e, AGC_JIT_EXIT_INTERPRET, pc); break;
     }
   }

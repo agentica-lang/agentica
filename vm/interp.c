@@ -24,10 +24,9 @@
 
 typedef enum { SORT_INT, SORT_FLOAT, SORT_TEXT } sort_kind;
 
-/* What run_compiled leaves to the jit copy of the turn loop: no compiled code ran to an end (the interpreter goes on at
-   frame->pc), the turn ends, or the interpreter runs the one instruction at frame->pc and enters the code again
-   after it. */
-typedef enum { COMPILED_NONE, COMPILED_YIELD, COMPILED_ONE } compiled_result;
+/* The result of one run_compiled call: no code ran, the turn yields or parks/done, an unsupported instruction is left
+   for the opcode switch, or a dedicated frame transition reloads the new top frame. */
+typedef enum { COMPILED_NONE, COMPILED_YIELD, COMPILED_PARKED, COMPILED_ONE, COMPILED_RELOAD, COMPILED_DONE } compiled_result;
 
 typedef struct {
   uint64_t key;
@@ -837,6 +836,17 @@ static bool return_value(agc_vm *vm, agc_value result) {
   return true;
 }
 
+/* Shared by the interpreted CALL case and the JIT's CALL boundary exit. The generated function has returned before
+   this can grow the frame or register arrays or fail with agc_fail. */
+static void call_instruction(agc_vm *vm, agc_task *t, uint32_t function, uint32_t base, uint16_t window, uint32_t span,
+                             bool profiling) {
+  if (profiling) profile_call(vm, function);
+  push_frame(vm, t, function, base + window, base + window, span);
+}
+
+/* Shared by the interpreted RETURN case and the JIT's RETURN boundary exit. */
+static bool return_instruction(agc_vm *vm, agc_value result) { return return_value(vm, result); }
+
 static inline __attribute__((always_inline)) bool tags_are(const agc_value *a, const agc_value *b, agc_tag tag) {
   return a->tag == (uint32_t)tag && b->tag == (uint32_t)tag;
 }
@@ -1104,9 +1114,9 @@ static agc_turn_result park_task(agc_task *t) {
 
 /* Runs the top frame in compiled code (vm/jit/jit.h) when its function has some, from frame->pc, and handles the
    exits as the interpreter would handle the instruction at the exit's pc: a slow STEP runs step_slow, a turn cost is
-   applied, a failure is raised here, outside compiled code, with frame->pc past the failing instruction. An
-   instruction without code (a call, a builtin, RETURN) or a slow path goes back to the turn loop with frame->pc on
-   it (COMPILED_ONE). Only the jit copy of the turn loop calls it. */
+   applied, and a failure is raised here, outside compiled code. CALL and RETURN use the shared frame handlers and
+   reload without the generic opcode switch; other unsupported instructions return to that switch at frame->pc.
+   Only the jit copy of the turn loop calls it. */
 static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc_vm *vm, agc_jit *jit,
                                                                              agc_frame *frame) {
   agc_jit_code code = agc_jit_code_of(jit, frame->function);
@@ -1126,6 +1136,19 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
       case AGC_JIT_EXIT_COST:
         if (apply_cost(vm)) return COMPILED_YIELD;
         break;
+      case AGC_JIT_EXIT_CALL: {
+        agc_instr in = f->code[out.pc];
+        uint32_t function = (uint32_t)in.b | ((uint32_t)in.c << 16);
+        call_instruction(vm, vm->task, function, frame->base, in.a, f->spans[out.pc], false);
+        return COMPILED_RELOAD;
+      }
+      case AGC_JIT_EXIT_RETURN: {
+        agc_instr in = f->code[out.pc];
+        if (!return_instruction(vm, R[in.a]) || vm->task->frame_count == 0) return COMPILED_DONE;
+        if (vm->task->parking) return COMPILED_PARKED;
+        if (vm->yield) return COMPILED_YIELD;
+        return COMPILED_RELOAD;
+      }
       case AGC_JIT_EXIT_INTERPRET: {
         /* A leaf builtin is called here, as the interpreter's CALL_BUILTIN calls it, and the code goes on after it:
            a leaf never parks, yields, charges cost or touches the frames, so nothing else of the turn loop runs. */
@@ -1233,6 +1256,9 @@ reload:
     if (agc_jit_may_run(vm->rt->jit, frame->function)) {
       compiled_result ran = run_compiled(vm, vm->rt->jit, frame);
       if (ran == COMPILED_YIELD) return AGC_TURN_YIELD;
+      if (ran == COMPILED_PARKED) return park_task(t);
+      if (ran == COMPILED_DONE) return AGC_TURN_DONE;
+      if (ran == COMPILED_RELOAD) goto reload;
       if (ran == COMPILED_ONE) resume = frame->pc + 1;
     }
   }
@@ -1492,8 +1518,7 @@ reload:
         if (agc_as_bool(vm, R[in.a])) pc = bx;
         break;
       case AGC_OP_CALL:
-        if (profiling) profile_call(vm, bx);
-        push_frame(vm, t, bx, base + in.a, base + in.a, SPAN);
+        call_instruction(vm, t, bx, base, in.a, SPAN, profiling);
         goto reload;
       case AGC_OP_CALL_VALUE: {
         uint32_t at = base + in.a;
@@ -1560,7 +1585,7 @@ reload:
       }
       case AGC_OP_RETURN:
       op_return:
-        if (!return_value(vm, R[in.a])) return AGC_TURN_DONE;
+        if (!return_instruction(vm, R[in.a])) return AGC_TURN_DONE;
         if (t->parking) return park_task(t);
         if (vm->yield) return AGC_TURN_YIELD;
         goto reload;
