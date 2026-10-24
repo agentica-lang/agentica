@@ -39,7 +39,7 @@
   stamp that stops with a fix when the package is missing or older than
   `ZLIB_MIN` (1.2.0, the series with gzip decoding in `inflateInit2`); the
   mode is not remembered, so pass `AGENTICA_ZLIB=vendored` to every make
-  command to link the six inflate sources statically instead (the release
+  command to link the eight codec sources statically instead (the release
   and non-Linux hosts build this way). The flags stamp records the mode, so
   switching it relinks without stale objects.
 - Both libgc builds have thread support: Debian's libgc is built with it, and
