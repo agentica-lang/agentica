@@ -41,11 +41,21 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
   end
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
   members = try Members.find(workspace, dir)
-  empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [])
-  if manifest.dependencies.size == 0
+  empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
+  if manifest.dependencies.size == 0 and !Manifest.has_downloaded(manifest)
     return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: empty, members: members)))
   end
   if !workspace.file_exists.call(empty.file)
+    if manifest.dependencies.size == 0
+      return error(
+        Failure.fail_file(
+          empty.file,
+          "PKG-LOCK-MISSING",
+          "#{MANIFEST_FILE} declares native downloads but there is no #{LOCK_FILE}",
+          Failure.hint("run agentica install to lock the native artifacts the manifest declares"),
+        ),
+      )
+    end
     return error(
       Failure.fail_file(
         empty.file,
@@ -70,7 +80,7 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Re
   end
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
   members = try Members.find(workspace, dir)
-  lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [])
+  lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
   if workspace.file_exists.call(lock.file)
     lock = try Lock.read(workspace, lock.file)
   end

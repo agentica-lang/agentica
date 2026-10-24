@@ -131,8 +131,9 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   manifest = try added_manifest(found.manifest, edited, request)
   refresh = PackageResolve.Refresh(all: false, name: "")
   packages = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
+  artifacts = try PackageResolve.resolve_artifacts(settings, manifest, found.members, packages)
   try unchanged(settings, file, text)
-  try save(settings, found.lock.file, Lock.encode(packages), "")
+  try save(settings, found.lock.file, Lock.encode(packages, artifacts), "")
   try save(settings, file, edited, LOCK_WRITTEN)
   try refresh_deps(settings, found, packages)
   return ok(report(found.lock, packages, request.name))
@@ -186,9 +187,10 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
   end
   refresh = PackageResolve.Refresh(all: name == "", name: name)
   packages = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
-  # A project with no dependency and no lock stays as it is: nothing asks for a lock.
-  if packages.size > 0 or settings.workspace.file_exists.call(found.lock.file)
-    try save(settings, found.lock.file, Lock.encode(packages), "")
+  artifacts = try PackageResolve.resolve_artifacts(settings, manifest, found.members, packages)
+  # A project with no dependency, no download and no lock stays as it is: nothing asks for a lock.
+  if packages.size > 0 or artifacts.size > 0 or settings.workspace.file_exists.call(found.lock.file)
+    try save(settings, found.lock.file, Lock.encode(packages, artifacts), "")
   end
   try refresh_deps(settings, found, packages)
   return ok(report(found.lock, packages, ""))

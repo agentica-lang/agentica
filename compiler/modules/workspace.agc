@@ -24,6 +24,22 @@ export struct Entry
   kind: EntryKind
 end
 
+## One downloaded native artifact the core asks the machine to verify from the cache alone: the cache root
+## (PackageCache.root of the settings), the lock key of the package ("" for the project root), the library and
+## the system, and the manifest row (the file and row key its failures point at, with the URL, SHA-256 and member).
+## The machine never fetches: it answers the verified local path or a packed PKG- failure at file/key.
+export struct NativeRequest
+  cache_root: String
+  package: String
+  library: String
+  system: String
+  file: String
+  key: String
+  url: String
+  sha256: String
+  member: String
+end
+
 ## What the core asks of the machine. Each function takes a path as the front end got it and never raises: a failure
 ## is data (`Read.Unreadable`, a `Result` error, `false`). `list_folder` gives the entries of a folder in no
 ## particular order, and `read_bytes` the whole content of a file, for the hash of a package. A path given to the
@@ -37,4 +53,5 @@ export struct Workspace
   std_source: Fn[String, Result[String]]
   list_folder: Fn[String, Result[List[Entry]]]
   read_bytes: Fn[String, Result[List[Int]]]
+  native_artifact: Fn[NativeRequest, Result[String]]
 end
