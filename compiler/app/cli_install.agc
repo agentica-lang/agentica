@@ -32,8 +32,9 @@ export def run(settings: Env.Settings, style: String) -> Reply.Answer
 end
 
 ## Fills the cache with every package of the lock, in the order of the file, then every downloaded native artifact
-## of this host. The lines say `fetched` or `in the cache` for each package; artifacts print nothing: they are pinned
-## for all systems in the lock, and only this host is fetched. A lock with neither stays quiet.
+## of this host. The lines say `fetched` or `in the cache` for each package; artifacts are pinned for all systems
+## in the lock, and only this host is fetched. With no package but host artifacts, the answer counts the host
+## artifacts ensured; a lock with neither, or with no entry for this host, stays quiet.
 export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   if lock.packages.size == 0 and lock.artifacts.size == 0
     return ok("nothing to install\n")
@@ -56,20 +57,27 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
       end
     end
   end
-  try fill_artifacts(settings, lock)
+  hosted = try fill_artifacts(settings, lock)
   if lines.size == 0
-    return ok("nothing to install\n")
+    if hosted == 0
+      return ok("nothing to install\n")
+    end
+    if hosted == 1
+      return ok("1 native artifact ready\n")
+    end
+    return ok("#{hosted} native artifacts ready\n")
   end
   return ok("#{lines.join("\n")}\n")
 end
 
 # The downloaded native artifacts of this host in the lock, verified from the cache alone afterwards: the archive is
 # downloaded and hashed once per SHA-256, then the member is extracted into its own object. Other systems stay pinned
-# but unfetched. A corrupt cache is a packed failure at the lock entry.
-def fill_artifacts(settings: Env.Settings, lock: Lock.Lock) -> Result[Void]
+# but unfetched. Answers how many artifacts of this host were ensured, whether fetched now or already cached;
+# a corrupt cache is a packed failure at the lock entry.
+def fill_artifacts(settings: Env.Settings, lock: Lock.Lock) -> Result[Int]
   wanted = lock.artifacts.filter do |artifact: Lock.Artifact| artifact.system == settings.env.os end
   if wanted.size == 0
-    return ok()
+    return ok(0)
   end
   cache = PackageCache.root(settings.env)
   if cache == ""
@@ -85,7 +93,7 @@ def fill_artifacts(settings: Env.Settings, lock: Lock.Lock) -> Result[Void]
       error(packed) -> return error(packed)
     end
   end
-  return ok()
+  return ok(wanted.size)
 end
 
 # The `native-artifact[i]` key path of this artifact in its lock, for precise failures.
