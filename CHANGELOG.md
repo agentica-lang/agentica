@@ -47,6 +47,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   regular files are hashed.
 - `Zlib` compresses bytes, files and streams with DEFLATE: the zlib wrapper and gzip one-shots and file pairs, plus incremental streaming with progress and task-owned handles.
 - Small FFI examples in `examples/ffi/`: a tiny C demo library plus programs showing plain native calls, structs by value with an owned resource and buffers, and a table of C function pointers.
+- A complete DuckDB example in `examples/ffi/duckdb/`: typed SQL queries with CSV and Parquet roundtrips through the C API of DuckDB v2.0.0 (the library is staged separately and never committed).
 
 ### Changed
 

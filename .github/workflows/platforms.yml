@@ -122,6 +122,10 @@ jobs:
           "$PYTHON" --version
           node --version
           "$PYTHON" tools/conformance.py host "$PLATFORM"
+      - name: Provision the pinned DuckDB library (test-only; the tests never fetch)
+        run: |
+          lib="$("$PYTHON" tools/provision_duckdb.py --out "$RUNNER_TEMP/duckdb-native")"
+          echo "DUCKDB_LIB=$lib" >> "$GITHUB_ENV"
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
       - if: env.AGENTICA_OPENSSL == 'vendored'
         run: make -s vm-openssl-key > build/openssl-key-release
