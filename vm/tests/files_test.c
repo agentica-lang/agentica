@@ -157,7 +157,7 @@ static void write_test_file(const char *path, const uint8_t *data, size_t len) {
    multi-chunk input, and a 3 MiB zero bomb that compresses to 3 KiB. */
 
 /* A gzip member with stored (uncompressed) deflate blocks, framed by hand:
-   only the CRC32 helper of the vendored zlib is used, never its decoder, so
+   only the CRC32 helper of the linked zlib is used, never its decoder, so
    the fixtures stay independent of the inflate path under test. */
 static uint32_t test_crc32(const uint8_t *data, size_t len) {
   unsigned long crc = crc32(0L, Z_NULL, 0);

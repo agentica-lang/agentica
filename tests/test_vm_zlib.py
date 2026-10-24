@@ -29,9 +29,7 @@ argument check is deterministic.
 
 The error assertions below check the shape of the failure (an error Result,
 the filesystem family, the halting code), not the exact wording of the new
-data errors: the native review owns the final strings. The gunzip_file
-vectors keep the established File.gunzip wordings, which move with the
-implementation.
+data errors: the native review owns the final strings.
 """
 import gzip
 import hashlib
@@ -1153,3 +1151,159 @@ def test_zlib_stream_empty_feed_before_input_asks_for_more(tmp_path):
     result = run_source(tmp_path, "empty-feed.agc", body, [])
     assert result.code == 0, result.stderr
     assert result.stdout.splitlines() == ["0", "0", "false", "true"], result.stdout
+
+
+def test_zlib_stream_decoder_finishes_at_an_exact_output_budget(tmp_path):
+    for window, split in ((31, 15), (15, 7)):
+        packed = gzip.compress(b"abc") if window == 31 else zlib.compress(b"abc")
+        text = ", ".join(str(b) for b in packed)
+        body = (
+            "def main() -> Void\n"
+            "  packed: List[Int] = [%s]\n"
+            "  head = List.take(packed, %d)\n"
+            "  tail = List.drop(packed, %d)\n"
+            "  dec = Zlib.inflate_init(%d, 1073741824, 3).unwrap!\n"
+            "  first = Zlib.inflate_next(dec, head, 3).unwrap!\n"
+            "  puts(Test.eq(first.output, [97, 98, 99]))\n"
+            "  puts(first.consumed)\n"
+            "  puts(first.finished)\n"
+            "  step = Zlib.inflate_next(dec, tail, 1).unwrap!\n"
+            "  puts(Test.eq(step.output, []))\n"
+            "  puts(step.consumed)\n"
+            "  puts(step.finished)\n"
+            "  puts(Zlib.inflate_finish(dec))\n"
+            "  Zlib.decoder_close(dec).unwrap!\n"
+            "  wide = Zlib.inflate_init(%d, 1073741824, 3).unwrap!\n"
+            "  Zlib.inflate_next(wide, head, 3).unwrap!\n"
+            "  big = Zlib.inflate_next(wide, tail, 65536).unwrap!\n"
+            "  puts(Test.eq(big.output, []))\n"
+            "  puts(big.finished)\n"
+            "  puts(Zlib.inflate_finish(wide))\n"
+            "  Zlib.decoder_close(wide).unwrap!\n"
+            "end\n" % (text, split, split, window, window)
+        )
+        result = run_source(tmp_path, "exact-budget-%d.agc" % window, body, [])
+        assert result.code == 0, result.stderr
+        assert result.stdout.splitlines() == [
+            "ok()", str(split), "false", "ok()", str(len(packed) - split), "true", "ok()",
+            "ok()", "true", "ok()",
+        ], result.stdout
+
+
+def test_zlib_stream_decoder_reads_an_exact_budget_one_byte_at_a_time(tmp_path):
+    packed = gzip.compress(b"abc")
+    text = ", ".join(str(b) for b in packed)
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(31, 1073741824, 3).unwrap!\n"
+        "  out: List[Int] = []\n"
+        "  rest = packed\n"
+        "  rounds = 0\n"
+        "  ended = false\n"
+        "  while rest.size > 0\n"
+        "    step = Zlib.inflate_next(dec, List.take(rest, 1), 1).unwrap!\n"
+        "    out = List.concat(out, step.output)\n"
+        "    rest = List.drop(rest, step.consumed)\n"
+        "    ended = step.finished\n"
+        "    if step.finished\n"
+        "      puts(rest.size)\n"
+        "      rest = []\n"
+        "    end\n"
+        "    rounds = rounds + 1\n"
+        "    if rounds > 100\n"
+        '      puts("stuck")\n'
+        "      rest = []\n"
+        "    end\n"
+        "  end\n"
+        "  puts(Test.eq(out, [97, 98, 99]))\n"
+        "  puts(ended)\n"
+        "  puts(Zlib.inflate_finish(dec))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "end\n" % text
+    )
+    result = run_source(tmp_path, "exact-bytes.agc", body, [])
+    assert result.code == 0, result.stderr
+    assert result.stdout.splitlines() == ["0", "ok()", "true", "ok()"], result.stdout
+
+
+def test_zlib_stream_decoder_overflow_past_a_full_budget_fails_sticky(tmp_path):
+    packed = gzip.compress(b"abc")
+    text = ", ".join(str(b) for b in packed)
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(31, 1073741824, 2).unwrap!\n"
+        "  out: List[Int] = []\n"
+        "  rest = packed\n"
+        "  rounds = 0\n"
+        "  failed = false\n"
+        "  while rest.size > 0\n"
+        "    step = Zlib.inflate_next(dec, List.take(rest, 1), 1)\n"
+        "    if step.ok?\n"
+        "      good = step.unwrap!\n"
+        "      out = List.concat(out, good.output)\n"
+        "      rest = List.drop(rest, good.consumed)\n"
+        "    else\n"
+        "      failed = true\n"
+        "      rest = []\n"
+        "    end\n"
+        "    rounds = rounds + 1\n"
+        "    if rounds > 100\n"
+        "      rest = []\n"
+        "    end\n"
+        "  end\n"
+        "  puts(Test.eq(out, [97, 98]))\n"
+        "  puts(failed)\n"
+        "  puts(Zlib.inflate_next(dec, List.take(packed, 1), 1))\n"
+        "  puts(Zlib.inflate_finish(dec))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "end\n" % text
+    )
+    result = run_source(tmp_path, "exact-overflow.agc", body, [])
+    assert result.code == 0, result.stderr
+    out_lines = result.stdout.splitlines()
+    assert out_lines[:2] == ["ok()", "true"], result.stdout
+    # Exact wording here pins the sticky failure: a retryable cap refusal
+    # would repeat the cap error and report truncation on finish instead.
+    assert out_lines[2:] == ['error("zlib: handle failed")'] * 2, result.stdout
+
+
+def test_zlib_stream_decoder_full_budget_keeps_trailer_and_input_errors(tmp_path):
+    packed = gzip.compress(b"abc")
+    bad = bytearray(packed)
+    bad[-1] ^= 0x01
+    good_text = ", ".join(str(b) for b in packed)
+    bad_text = ", ".join(str(b) for b in bad)
+    body = (
+        "def main() -> Void\n"
+        "  bad: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(31, 1073741824, 3).unwrap!\n"
+        "  Zlib.inflate_next(dec, List.take(bad, 15), 3).unwrap!\n"
+        "  puts(Zlib.inflate_next(dec, List.drop(bad, 15), 1))\n"
+        "  puts(Zlib.inflate_finish(dec))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "  good: List[Int] = [%s]\n"
+        "  short = Zlib.inflate_init(31, 1073741824, 3).unwrap!\n"
+        "  Zlib.inflate_next(short, List.take(good, 15), 3).unwrap!\n"
+        "  part = Zlib.inflate_next(short, List.take(List.drop(good, 15), 4), 1).unwrap!\n"
+        "  puts(part.output.size)\n"
+        "  puts(part.finished)\n"
+        "  puts(part.needs_input)\n"
+        "  puts(Zlib.inflate_finish(short))\n"
+        "  Zlib.decoder_close(short).unwrap!\n"
+        "  capped = Zlib.inflate_init(15, 5, 100).unwrap!\n"
+        "  puts(Zlib.inflate_next(capped, [120, 156, 75, 76, 74, 6], 100))\n"
+        "  Zlib.decoder_close(capped).unwrap!\n"
+        "end\n" % (bad_text, good_text)
+    )
+    result = run_source(tmp_path, "exact-errors.agc", body, [])
+    assert result.code == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0].startswith("error("), result.stdout
+    assert lines[1].startswith("error("), result.stdout
+    assert lines[2] == "0", result.stdout
+    assert lines[3] == "false", result.stdout
+    assert lines[4] == "true", result.stdout
+    assert lines[5].startswith("error("), result.stdout
+    assert lines[6].startswith("error("), result.stdout
