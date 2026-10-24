@@ -13,7 +13,7 @@ import tarfile
 
 import pytest
 
-from tests.agentica_test import binary, run, vm_environment
+from tests.agentica_test import ROOT, binary, run, vm_environment
 
 WINDOWS = os.name == "nt"
 
@@ -612,3 +612,47 @@ def test_utf8_names_and_skipped_entries_do_not_materialize(tmp_path):
     assert lines == ["utf8 ok [6]", ""]
     assert (work / "o1" / selector).read_bytes() == "héllo".encode("utf-8")
     assert sorted(path.name for path in (work / "o1").iterdir()) == [selector]
+
+
+CAPPED_SHOW = (
+    'import Capped from "archive_capped"\n'
+    'import Short from "archive_short"\n'
+    "\n"
+    "def show(label: String, r: Result[List[Int]]) -> Void\n"
+    "  case r\n"
+    '    ok(counts) -> puts("#{label} ok #{counts}")\n'
+    '    error(message) -> puts("#{label} error #{message}")\n'
+    "  end\n"
+    "end\n"
+    "\n"
+    "def main() -> Void\n"
+    '  show("exact", Capped.extract_tar("tiny.tar.gz", ["a.txt"], "o1", Capped.options()))\n'
+    '  show("short", Short.extract_tar("tiny.tar.gz", ["a.txt"], "o2", Short.options()))\n'
+    "end\n"
+)
+
+
+def write_capped(work, name, chunk, cap):
+    """A copy of the real std/archive with only CHUNK and INPUT_BYTES narrowed, for exact cap boundaries."""
+    src = (ROOT / "stdlib" / "archive.agc").read_text(encoding="utf-8")
+    assert src.count("CHUNK = 65536") == 1
+    assert src.count("INPUT_BYTES = 268435456") == 1
+    src = src.replace("CHUNK = 65536", "CHUNK = %d" % chunk)
+    src = src.replace("INPUT_BYTES = 268435456", "INPUT_BYTES = %d" % cap)
+    (work / name).write_text(src, encoding="utf-8")
+
+
+def test_compressed_cap_counts_physical_bytes_exactly(tmp_path):
+    work = tmp_path
+    tarred = finish([entry(b"a.txt", b"0123456789ABCDEF")])
+    blob = gzip.compress(tarred)
+    assert len(blob) > 64
+    (work / "tiny.tar.gz").write_bytes(blob)
+    write_capped(work, "archive_capped.agc", 32, len(blob))
+    write_capped(work, "archive_short.agc", 32, len(blob) - 1)
+    lines = run_driver(work, "capped", CAPPED_SHOW)
+    # The 32-byte reads fragment every feed, so the exact cap must still succeed while one byte less must fail:
+    # raw_read counts physical file bytes (first chunk plus each read), never decoder consumption.
+    assert lines[0] == "exact ok [16]"
+    assert lines[1].startswith("short error archive: compressed input exceeds ")
+    assert (work / "o1" / "a.txt").read_bytes() == b"0123456789ABCDEF"
