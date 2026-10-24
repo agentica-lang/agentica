@@ -19,9 +19,10 @@ typedef enum { AGC_JIT_OFF, AGC_JIT_ON, AGC_JIT_ALWAYS } agc_jit_mode;
 /* Why compiled code stopped, besides a failure of agc_status (OVERFLOW, DIVISION_BY_ZERO, INDEX_OUT_OF_RANGE,
    WRONG_TAG), which the interpreter raises at the instruction at `pc` with agc_op_fail. STEP: the STEP at `pc` is the
    slow one; the interpreter runs it (a stop, a yield or a new batch of steps). COST: the instruction at `pc` charged
-   turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction at `pc` (one that has no
-   code here, such as a call, or a slow path such as a wrong tag), then enters the code again at the next one. */
-enum { AGC_JIT_EXIT_STEP = 16, AGC_JIT_EXIT_COST, AGC_JIT_EXIT_INTERPRET };
+   turn cost, which the interpreter applies. INTERPRET: the interpreter runs the instruction at `pc` (one without a
+   compiled boundary, or a slow path), then enters code again. CALL and RETURN: run their shared frame transition
+   handler after generated code has returned, then reload the frame in the jit turn loop without the opcode switch. */
+enum { AGC_JIT_EXIT_STEP = 16, AGC_JIT_EXIT_COST, AGC_JIT_EXIT_INTERPRET, AGC_JIT_EXIT_CALL, AGC_JIT_EXIT_RETURN };
 
 /* An exit: 8 bytes, so both calling conventions return it in one register (rax), status in the low half. */
 typedef struct {

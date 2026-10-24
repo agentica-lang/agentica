@@ -7,6 +7,7 @@
 #include "test_support.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -54,7 +55,12 @@ static agc_jit_code compile(one_function *f) {
   return agc_jit_code_of(jit, 0);
 }
 
-static void expect_exit(agc_jit_exit got, uint32_t status, uint32_t pc) { assert(got.status == status && got.pc == pc); }
+static void expect_exit(agc_jit_exit got, uint32_t status, uint32_t pc) {
+  if (got.status != status || got.pc != pc)
+    fprintf(stderr, "jit-test: exit got status=%" PRIu32 " pc=%" PRIu32 ", want status=%" PRIu32 " pc=%" PRIu32 "\n",
+            got.status, got.pc, status, pc);
+  assert(got.status == status && got.pc == pc);
+}
 
 /* The encodings, checked against an assembler (objdump -D -b binary -mi386:x86-64). */
 static void bytes(void) {
@@ -109,6 +115,18 @@ static void sum_loop(one_function *f) {
   emit(f, AGC_OP_RETURN, 2, 0, 0);
 }
 
+static AGC_JIT_CALLER void call_return_exits(void) {
+  one_function f;
+  memset(&f, 0, sizeof f);
+  emit(&f, AGC_OP_CALL, 0, 0, 0);
+  emit(&f, AGC_OP_RETURN, 0, 0, 0);
+  agc_jit_code code = compile(&f);
+  assert(code);
+  agc_value R[8] = {agc_int(42)};
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_CALL, 0);
+  expect_exit(code(&vm, R, f.constants, 1), AGC_JIT_EXIT_RETURN, 1);
+}
+
 static AGC_JIT_CALLER void loops_and_steps(void) {
   one_function f;
   sum_loop(&f);
@@ -116,7 +134,7 @@ static AGC_JIT_CALLER void loops_and_steps(void) {
   assert(code);
   agc_value R[8] = {agc_int(10)};
   vm.next_stop = 1000;
-  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 9);
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 9);
   assert(same_bits(R[2], agc_int(45)) && vm.next_stop == 1000 - 11);
   /* The STEP takes its fast path while next_stop is above its count, as the interpreter's: from 3, two passes, then
      the exit for the slow path at the STEP, and the code goes on from the next instruction. */
@@ -125,7 +143,7 @@ static AGC_JIT_CALLER void loops_and_steps(void) {
   expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_STEP, 2);
   assert(vm.next_stop == 1 && same_bits(R[1], agc_int(2)));
   vm.next_stop = 1000;
-  expect_exit(code(&vm, R, f.constants, 3), AGC_JIT_EXIT_INTERPRET, 9);
+  expect_exit(code(&vm, R, f.constants, 3), AGC_JIT_EXIT_RETURN, 9);
   assert(same_bits(R[2], agc_int(45)));
   /* A wrong tag on the compare leaves at its pc. */
   R[0] = agc_nil();
@@ -153,7 +171,7 @@ static AGC_JIT_CALLER void binary(agc_opcode op, agc_value x, agc_value y, uint3
   agc_value mark = agc_nil();
   agc_jit_exit out = run_two(op, x, y, R);
   if (status == AGC_STATUS_OK) {
-    expect_exit(out, AGC_JIT_EXIT_INTERPRET, 1);
+    expect_exit(out, AGC_JIT_EXIT_RETURN, 1);
     assert(same_bits(R[3], want));
   } else {
     expect_exit(out, status, 0);
@@ -166,7 +184,7 @@ static AGC_JIT_CALLER void binary(agc_opcode op, agc_value x, agc_value y, uint3
 static AGC_JIT_CALLER void text_binary(agc_opcode op, agc_value x, agc_value y, const char *want) {
   agc_value R[8];
   vm.task->turn_cost = 0;
-  expect_exit(run_two(op, x, y, R), AGC_JIT_EXIT_INTERPRET, 1);
+  expect_exit(run_two(op, x, y, R), AGC_JIT_EXIT_RETURN, 1);
   assert(agc_is(R[3], AGC_T_STRING) && vm.task->turn_cost == 0);
   const agc_string *s = agc_as_string(&vm, R[3]);
   size_t n = strlen(want);
@@ -218,7 +236,7 @@ static AGC_JIT_CALLER void int_rules(void) {
   agc_value R[8] = {agc_nil(), min, agc_nil(), agc_nil()};
   expect_exit(code(&vm, R, f.constants, 0), AGC_STATUS_OVERFLOW, 0);
   R[1] = agc_int(5);
-  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 1);
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 1);
   assert(same_bits(R[3], agc_int(-5)));
 }
 
@@ -366,7 +384,7 @@ static AGC_JIT_CALLER void string_build_cost(void) {
   R[1] = big;
   R[3] = agc_nil();
   vm.task->turn_cost = 0;
-  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 1);
+  expect_exit(code(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 1);
   assert(same_bits(R[3], big) && vm.task->turn_cost == 0);
   agc_value many[100];
   for (size_t k = 0; k < 100; k++) many[k] = agc_int((int64_t)k);
@@ -455,7 +473,7 @@ static AGC_JIT_CALLER void every_opcode_compiles(void) {
   expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
   memset(&f, 0, sizeof f);
   emit(&f, AGC_OP_RETURN, 0, 0, 0);
-  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_INTERPRET, 0);
+  expect_exit(compile(&f)(&vm, R, f.constants, 0), AGC_JIT_EXIT_RETURN, 0);
 }
 
 /* `on` keeps out a function without a loop, and one whose loop goes back to the interpreter (a builtin that is not a
@@ -535,6 +553,7 @@ int main(void) {
   compile_race();
   cap_inside_an_offset();
   bytes();
+  call_return_exits();
   loops_and_steps();
   int_rules();
   helpers();

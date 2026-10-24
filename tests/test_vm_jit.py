@@ -4,8 +4,9 @@ Each program runs with `--jit off`, `on` and `always`, which compiles every func
 those with a loop that seldom leaves compiled code, at their 100th entry). Compiled functions run the STEPs of their
 loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end inside them (by
 steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and four schedulers
-compile and run them at once. An instruction without code of its own (a call, a builtin, an allocation) runs in the
-interpreter, and the code goes on after it.
+compile and run them at once. Calls and returns use compiled frame-transition
+exits; builtins and allocations without code run in the interpreter, and the
+code goes on after them.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
@@ -383,6 +384,29 @@ def compiled(bytecode, tmp_path, mode="always"):
     return sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
 
 
+def test_recursive_compiled_calls_match_the_interpreter_across_frame_growth(tmp_path):
+    bytecode = compile_text("""def descend(n: Int) -> Int
+  if n == 0
+    return 42
+  end
+  return descend(n - 1) + 1
+end
+
+def main() -> Void
+  values = [1, 2].map do |n| descend(180) + n end
+  puts(values[0] + values[1])
+end
+""", "call-bridge", tmp_path)
+    for style in ((), ("--json",), ("--max-steps", "10000")):
+        code, stdout, _ = assert_same(bytecode, *style)
+        assert code == 0 and stdout == "447\n", (style, stdout)
+    lines = jit_trace(bytecode, tmp_path, "always")
+    compiled_functions = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
+    assert compiled_functions == (["block@call-bridge.agc:9:23", "descend", "main"] if X86_64 else [])
+    transitions = [line for line in lines if " jit exit op=call " in line or " jit exit op=return " in line]
+    assert transitions == [], transitions
+
+
 def test_the_max_steps_sweep_of_three_tasks_in_compiled_loops_matches_the_interpreter(tmp_path):
     bytecode = compile_text(TASKS, "tasks", tmp_path)
     assert compiled(bytecode, tmp_path) == (["main", "same_text", "spin", "worker"] if X86_64 else [])
@@ -473,7 +497,7 @@ def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
     lines = jit_trace(bytecode, tmp_path, "on")
     exits = sorted(line.split("exit op=")[1] for line in lines if " jit exit op=" in line)
     leaves = [int(line.split("count=")[1]) for line in lines if " jit leaf count=" in line]
-    assert exits == (["return count=1"] if X86_64 else []), exits
+    assert exits == [], exits
     assert len(leaves) == (1 if X86_64 else 0) and all(n > 10000 for n in leaves), leaves
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.startswith("33750.0\n"), (stdout, stderr)

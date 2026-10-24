@@ -70,11 +70,14 @@ function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
 every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
 and list opcodes, `EQ`, `NE`, `SAME`, `CONCAT`, `TO_TEXT`, `NOT`, `FIELD`, `IS_VARIANT`,
-`PAYLOAD`, `IS_OK`, `RESULT_VALUE` and the jumps have code; any other
-instruction (calls, builtins, allocations, `RETURN`) leaves the code: the
-interpreter runs that one instruction and enters the code again after it. A
-leaf builtin is called between two runs of compiled code, without the
-interpreter's loop.
+`PAYLOAD`, `IS_OK`, `RESULT_VALUE` and the jumps have code. `CALL` and
+`RETURN` have dedicated exits: generated code returns to the interpreter C
+stack, which applies the shared frame transition and reloads compiled code at
+the new frame without executing that opcode in the generic interpreter switch.
+This is a compiled frame-transition trampoline, not a native nested ABI call.
+Other unsupported instructions (including builtins and allocations) leave the
+code for the interpreter. A leaf builtin is called between two runs of
+compiled code, without the interpreter's loop.
 
 - Decided once: the JIT looks at every function when the run starts. A
   function that `on` will not compile is never counted or walked again, and
@@ -108,7 +111,8 @@ interpreter's loop.
   contract says), and an instruction without code or a slow path (a wrong
   tag, a field index past the count), which the interpreter runs; the turn
   loop enters the code again when it reaches the next instruction, or at its
-  next reload (a call returns, a turn starts).
+  next reload. CALL and RETURN instead use dedicated frame-transition exits,
+  then reload at the callee or caller without the generic opcode switch.
 - Code: one pass, fixed code per instruction, the VM in rbx, the registers in
   r12 and the constants in r13, the Int fast paths inline with their overflow
   checks; `EQ` and `NE` call `agc_op_eq` and `agc_op_ne` for any pair other
@@ -120,9 +124,10 @@ interpreter's loop.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
   and a `skip` line for each function kept out: `loop=none` or `loop=exits`
   when the run starts, and `size` when its code did not fit at compile time.
-  At the end of the run, `exit op=OP count=N` counts the trips to the
-  interpreter at each opcode and `leaf count=N` the leaf builtins called
-  between two runs of compiled code.
+  At the end of the run, `exit op=OP count=N` counts generic `INTERPRET`
+  exits by opcode, and `leaf count=N` the leaf builtins called between two
+  runs of compiled code. Dedicated CALL/RETURN frame-transition exits are not
+  included in these counters.
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a hot function without a
