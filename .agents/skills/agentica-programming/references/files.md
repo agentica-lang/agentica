@@ -18,7 +18,6 @@ File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]  
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # lazy.md
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
 File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]]
-File.gunzip(src: String, dst: String, max_out_bytes: Int, timeout_ms: Int) -> Result[Int]
 File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
@@ -62,15 +61,6 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
   wait. The timeout covers the whole call; expiry (or a cancel) drops the
   result of a hash already running, and there is no handle. No snapshot:
   hash a temporary file, then `Path.rename` it into place.
-- `File.gunzip` decompresses one gzip member from `src` into a new file at
-  `dst` and returns the bytes written. Only gzip members decode (a zlib
-  wrapper or raw deflate is an error, as are bad headers, truncation,
-  corruption and any trailing bytes). `max_out_bytes` is 1..1073741824
-  and caps the output while streaming (a bomb is cut at the cap with its
-  partial conserved); compressed input past 268435456 bytes is an error.
-  The destination opens like `create_private`, so an existing path stays
-  intact. The timeout covers the whole call; expiry (or a cancel) drops
-  the result of work already running, and there is no handle.
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF
   before any line, or invalid UTF-8, is an error.
 - `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes:

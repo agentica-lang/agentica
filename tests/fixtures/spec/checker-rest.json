@@ -10309,5 +10309,187 @@
       "code": "CHECK-REDEFINED-NAME",
       "start": [1, 1]
     }
+  ],
+  "Zlib compresses bytes, files and streams with checked handles and progress": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  packed: Result[List[Int]] = Zlib.deflate([104, 105], 6, 1048576)",
+        "  back = Zlib.inflate(packed.unwrap!, 1048576).unwrap!",
+        "  gz = Zlib.gzip([104], 9, 1048576).unwrap!",
+        "  raw = Zlib.gunzip(gz, 1048576).unwrap!",
+        "  n: Result[Int] = Zlib.gzip_file(\"a\", \"b\", 6, 1048576, 1000)",
+        "  enc = Zlib.deflate_init(15, 6, 1073741824, 1073741824).unwrap!",
+        "  step = Zlib.deflate_next(enc, back, 65536).unwrap!",
+        "  out: List[Int] = step.output",
+        "  used: Int = step.consumed",
+        "  done: Bool = step.finished",
+        "  more: Bool = step.needs_input",
+        "  tail = Zlib.deflate_finish(enc, 65536).unwrap!",
+        "  closed: Result[Void] = Zlib.encoder_close(enc)",
+        "  dec = Zlib.inflate_init(-15, 1073741824, 1073741824).unwrap!",
+        "  fed = Zlib.inflate_next(dec, [], 65536).unwrap!",
+        "  ended: Result[Void] = Zlib.inflate_finish(dec)",
+        "  freed: Result[Void] = Zlib.decoder_close(dec)",
+        "  puts(out.size + used + tail.output.size + fed.output.size)",
+        "  puts(raw.size)",
+        "  puts(n.ok?)",
+        "  puts(done)",
+        "  puts(more)",
+        "  puts(closed.ok?)",
+        "  puts(ended.ok?)",
+        "  puts(freed.ok?)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Zlib.deflate(\"abc\", 6, 100)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 20],
+      "covers": "\"abc\"",
+      "expected": "List[Int]",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Zlib.deflate([1], \"6\", 100)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 25],
+      "covers": "\"6\"",
+      "expected": "Int",
+      "actual": "String",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = Zlib.inflate([1])",
+        "end",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 7],
+      "covers": "Zlib.inflate([1])",
+      "callee": "Zlib.inflate(data: List[Int], max_out_bytes: Int) -> Result[List[Int]]"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  s: String = Zlib.gzip([1], 6, 100)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 15],
+      "covers": "Zlib.gzip([1], 6, 100)",
+      "expected": "String",
+      "actual": "Result[List[Int]]"
+    },
+    {
+      "program": [
+        "struct Zlib",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct ZlibEncoder",
+        "  x: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "struct ZlibProgress",
+        "  x: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def squeeze(enc: ZlibEncoder) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  enc = Zlib.deflate_init(15, 6, 1073741824, 1073741824).unwrap!",
+        "  t: Task[Void] = Task.spawn_owning(&squeeze, enc)",
+        "  Task.await(t)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  enc = Zlib.deflate_init(15, 6, 1073741824, 1073741824).unwrap!",
+        "  File.close(enc, 1000)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 14],
+      "covers": "enc",
+      "expected": "FileHandle",
+      "actual": "ZlibEncoder"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  dec = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!",
+        "  Zlib.deflate_next(dec, [1], 65536)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 21],
+      "covers": "dec",
+      "expected": "ZlibEncoder",
+      "actual": "ZlibDecoder"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  enc = Zlib.deflate_init(15, 6, 1073741824, 1073741824).unwrap!",
+        "  Zlib.inflate_finish(enc)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 23],
+      "covers": "enc",
+      "expected": "ZlibDecoder",
+      "actual": "ZlibEncoder"
+    }
   ]
 }

@@ -76,27 +76,6 @@ end
 - `timeout_ms` covers the whole call: open, stream and digest. When it runs out the call returns `error("filesystem: operation timed out")`, while a hash already running finishes on its pool thread and its result is dropped; there is no handle to close. A cancelled task detaches the same way.
 - There is no snapshot: bytes hash in read order, so a concurrent writer changes the digest. To verify a download, write it to a temporary name, hash it, then `Path.rename` it into place.
 
-## File.gunzip
-
-```text
-File.gunzip(src: String, dst: String, max_out_bytes: Int, timeout_ms: Int) -> Result[Int]
-```
-
-Decompresses one gzip member from `src` into a new file at `dst` and returns the bytes written. It streams in fixed 64 KiB chunks with O(chunk) memory, so an archive far over the 1 MiB text cap still decompresses without holding it in memory.
-
-```agentica {mode="check"}
-def main() -> Void
-  case File.gunzip("notes.txt.gz", "notes.txt", 1073741824, 30000)
-    ok(bytes) -> puts("#{bytes} bytes written")
-    error(message) -> IO.warn("cannot decompress: #{message}")
-  end
-end
-```
-
-- Only gzip members decode: a zlib wrapper or raw deflate, a bad magic, method or reserved flags, and a truncated or corrupt stream give `error("filesystem: invalid gzip data")`. Any trailing bytes after the single member (a second member or zeros alike) give `error("filesystem: gzip has trailing bytes")`. A CRC32 or ISIZE mismatch gives `error("filesystem: gzip checksum mismatch")`.
-- `max_out_bytes` is 1 to 1073741824. Output past it gives `error("filesystem: decompressed output exceeds max_out_bytes")`, cut while streaming so the partial file never grows past it and is conserved on error. Compressed input past 268435456 bytes gives `error("filesystem: compressed input exceeds 268435456 bytes")`.
-- The source is read like `File.sha256` reads it (regular files only); the destination opens like `create_private`, so an existing path is an error and stays intact. `timeout_ms` covers the whole call; expiry or a cancel detaches like the other whole-file calls, while work already running runs to its end and its result is dropped.
-
 ## File.stat
 
 ```text
