@@ -150,14 +150,20 @@ static void test_oneshot_compress(void) {
   agc_value empty = byte_list(NULL, 0);
   agc_value empty_args[] = {empty, agc_int(6), agc_int(1048576)};
   check_list_bytes(ok(call("Zlib.deflate", 3, empty_args)), zlib_empty, sizeof zlib_empty);
-  /* Our gzip member is verified structurally: the header (with our OS byte
-     and the level-9 flags), the raw body and the CRC32/ISIZE trailer. */
+  /* Our gzip member is verified structurally: the fixed header bytes
+     (magic, method, flags, mtime, level-9 XFL), the raw body and the
+     CRC32/ISIZE trailer. The OS byte is excluded: zlib writes OS_CODE,
+     which is 3 on Unix but 10 on native Windows (zutil.h), so it is
+     host-dependent and no contract fixes it. */
   agc_value gz_args[] = {data, agc_int(9), agc_int(1048576)};
   const agc_list *gz = agc_as_list(&vm, ok(call("Zlib.gzip", 3, gz_args)));
   assert(agc_list_len(gz) == 10 + sizeof zlib_vec_raw_abc + 8);
   static const uint8_t gz_head[] = {0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03};
   static const uint8_t gz_tail[] = {0xc2, 0x41, 0x24, 0x35, 0x03, 0x00, 0x00, 0x00};
-  for (size_t k = 0; k < sizeof gz_head; k++) assert(agc_as_int(&vm, agc_list_get(gz, k)) == gz_head[k]);
+  for (size_t k = 0; k < sizeof gz_head; k++) {
+    if (k == 9) continue; /* OS byte: host-dependent, see above. */
+    assert(agc_as_int(&vm, agc_list_get(gz, k)) == gz_head[k]);
+  }
   for (size_t k = 0; k < sizeof zlib_vec_raw_abc; k++)
     assert(agc_as_int(&vm, agc_list_get(gz, 10 + k)) == zlib_vec_raw_abc[k]);
   for (size_t k = 0; k < sizeof gz_tail; k++)
