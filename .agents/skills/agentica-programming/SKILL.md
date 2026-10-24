@@ -52,6 +52,7 @@ Read only what the task needs.
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
 | `compression.md` | Zlib bytes, files and streams (deflate, zlib, gzip) |
+| `archive.md` | `std/archive` (explicit-allowlist TAR extraction into a new directory) |
 | `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid` |
 | `network.md` | TCP, TLS, HTTP client and server |
 | `tasks.md` | Task, `Task.map`, Channel, timeouts, cancel, who owns state |

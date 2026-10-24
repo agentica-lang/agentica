@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/archive` extracts an explicit allowlist of regular files from a plain or gzipped TAR into a new private directory (`Archive.extract_tar`), with fixed security ceilings and no extract-all.
 - `--jit on` (or `AGENTICA_JIT=on`) compiles hot functions that have a loop
   (Int and Float math, list, field, enum and Result reads) to machine code on
   x86-64: experimental, off by default.
