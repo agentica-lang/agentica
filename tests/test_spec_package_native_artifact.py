@@ -296,13 +296,37 @@ def test_gzip_archive_and_dot_member_alias(setup, tmp_path):
     assert open(first[1], "rb").read() == member_bytes(setup["lib_tar"], MEMBER)
 
 
-def test_zip_bytes_are_an_archive_error_not_a_format_guess(setup, tmp_path, mark):
+def test_zip_bytes_dispatch_by_magic_not_suffix(setup, tmp_path, mark):
     root = cache(tmp_path / "c0")
     served = fetch_bytes(setup["plain"] + "/t/sneaky.tar.gz")
-    assert served[:2] == b"PK"
+    assert served[:4] == b"PK\x03\x04"
+    # The .tar.gz suffix never decides: the ZIP magic routes to the ZIP extractor.
+    status, path = fetch(setup, root, setup["plain"] + "/t/sneaky.tar.gz", digest(served), "zipped.bin")
+    assert status == "ok"
+    assert open(path, "rb").read() == b"zip-bytes"
+    assert path == layout(setup, root, digest(served), "zipped.bin")[2]
+    # A member the ZIP lacks is missing, not a corrupt TAR: the bytes parsed as ZIP.
     assert fetch(setup, root, setup["plain"] + "/t/sneaky.tar.gz", digest(served)) == (
-        "err", "PKG-NATIVE-ARCHIVE", FILE, KEY + ".member")
+        "err", "PKG-NATIVE-MISSING", FILE, KEY + ".member")
     assert requests_since(setup, mark) != []
+
+
+def test_zip_member_reuses_cache_offline_and_corruption_is_a_hash_error(setup, tmp_path):
+    root = cache(tmp_path / "c0")
+    served = fetch_bytes(setup["plain"] + "/t/sneaky.tar.gz")
+    sha = digest(served)
+    path = warm(setup, root, setup["plain"] + "/t/sneaky.tar.gz", sha, "zipped.bin")
+    assert open(path, "rb").read() == b"zip-bytes"
+    pos = log_pos(setup)
+    assert cached(setup, root, sha, "zipped.bin") == ("ok", layout(setup, root, sha, "zipped.bin")[2])
+    assert requests_since(setup, pos) == []
+    archive = layout(setup, root, sha, "zipped.bin")[0]
+    with open(archive, "r+b") as handle:
+        handle.seek(20)
+        handle.write(b"\xff")
+    assert cached(setup, root, sha, "absent.bin") == ("err", "PKG-HASH-MISMATCH", FILE, KEY + ".sha256")
+    assert fetch(setup, root, closed_url(sha), sha, "absent.bin") == (
+        "err", "PKG-HASH-MISMATCH", FILE, KEY + ".sha256")
 
 
 def test_tar_under_zip_suffix_downloads(setup, tmp_path):
