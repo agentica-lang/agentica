@@ -18,7 +18,9 @@ Routes:
   /bad-chunk               invalid chunk framing
   /over-ceiling            Content-Length 256 MiB + 1, with no body
   /slow-head               sleeps 3 s, then a small 200 reply
-  /status/<code>           a short ASCII body with that status
+  /status/<code>           a short ASCII body with that status (a 3xx answer also carries
+                           Location: /bin/5, whose body differs, so a client that followed
+                           redirects would show it)
 """
 import http.server
 import importlib.util
@@ -71,10 +73,12 @@ class Web(http.server.BaseHTTPRequestHandler):
             for piece in pieces(count):
                 self.wfile.write(piece)
 
-    def reply(self, status, text):
+    def reply(self, status, text, location=None):
         data = text.encode()
         self.send_response(status)
         self.send_header("Content-Length", str(len(data)))
+        if location is not None:
+            self.send_header("Location", location)
         self.end_headers()
         self.wfile.write(data)
 
@@ -113,7 +117,8 @@ class Web(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(piece)
             self.close_connection = True
         elif len(parts) == 3 and parts[1] == "status" and parts[2].isdigit():
-            self.reply(int(parts[2]), "status %s" % parts[2])
+            code = int(parts[2])
+            self.reply(code, "status %s" % parts[2], location="/bin/5" if 300 <= code < 400 else None)
         else:
             self.reply(404, "no such route")
 

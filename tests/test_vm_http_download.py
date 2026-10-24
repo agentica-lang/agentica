@@ -73,6 +73,7 @@ def main() -> Void
   show(HTTP.download(pool, base + "/chunked/70000", dir + "/chunk.bin", options))
   show(HTTP.download(pool, base + "/close/70000", dir + "/close.bin", options))
   show(HTTP.download(pool, base + "/status/404", dir + "/missing.bin", options))
+  show(HTTP.download(pool, base + "/status/301", dir + "/moved.bin", options))
   HTTP.close_client(pool)
 end
 """.replace("SHOW", SHOW)
@@ -173,11 +174,14 @@ def test_small_bodies_in_every_framing_write_exact_bytes(tmp_path, ports):
     directory.mkdir()
     base = "http://127.0.0.1:%d" % ports["plain"]
     lines = output_lines(run_program(tmp_path, "main", MAIN_PROGRAM, [base, str(directory)]))
-    assert lines == ["200 5", "200 70000", "200 70000", "404 10"], lines
+    assert lines == ["200 5", "200 70000", "200 70000", "404 10", "301 10"], lines
     assert (directory / "five.bin").read_bytes() == expected_bytes(5)
     assert (directory / "chunk.bin").read_bytes() == expected_bytes(70000)
     assert (directory / "close.bin").read_bytes() == expected_bytes(70000)
     assert (directory / "missing.bin").read_bytes() == b"status 404"
+    # The 301 answer carries Location: /bin/5, whose body differs; a client that followed redirects would report
+    # 200 with the 5-byte pattern instead of 301 with this body, so these checks catch a follow.
+    assert (directory / "moved.bin").read_bytes() == b"status 301"
 
 
 def test_failures_keep_bounds_and_leave_what_the_policy_says(tmp_path, ports):

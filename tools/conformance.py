@@ -158,7 +158,7 @@ AREAS = {
     ),
     "network": (
         "TCP, TLS and HTTP, client and server, against independent peers",
-        ["tests/test_vm_tcp.py", "tests/test_vm_tls.py", "tests/test_vm_http.py"],
+        ["tests/test_vm_tcp.py", "tests/test_vm_tls.py", "tests/test_vm_http.py", "tests/test_vm_http_download.py"],
     ),
     "multicore": (
         "programs on four schedulers: the goldens, races between schedulers, the I/O thread",
