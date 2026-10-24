@@ -28,6 +28,13 @@ typedef enum {
 agc_zcodec *agc_zcodec_encode_begin(int window_bits, int level);
 agc_zcodec *agc_zcodec_decode_begin(int window_bits);
 
+/* The CRC32 of data (of len bytes) chained after crc: the zlib checksum
+   with the ZIP polynomial (RFC 1952 §8), for Zlib.crc32. An empty input
+   returns crc unchanged (zlib crc32(Z_NULL, 0) resets to zero, so the empty
+   case never reaches zlib). Pure: no stream, no handle, no retained
+   pointer. */
+uint32_t agc_zlib_crc32(uint32_t crc, const uint8_t *data, size_t len);
+
 /* Feeds the bytes at *inout (of *in_left bytes) through the codec into out
    (of out_cap bytes): advances *inout and shrinks *in_left by what was
    consumed, and writes the produced count. The encoder takes finish for its

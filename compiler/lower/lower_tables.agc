@@ -28,6 +28,7 @@ export VM_BUILTINS = Set.new([
   "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.deflate_file", "Zlib.inflate_file",
   "Zlib.gzip_file", "Zlib.gunzip_file", "Zlib.deflate_init", "Zlib.inflate_init", "Zlib.deflate_next",
   "Zlib.inflate_next", "Zlib.deflate_finish", "Zlib.inflate_finish", "Zlib.encoder_close", "Zlib.decoder_close",
+  "Zlib.crc32",
   "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove",
   "Path.rename",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",

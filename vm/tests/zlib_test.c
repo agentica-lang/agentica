@@ -104,9 +104,9 @@ static void check_progress(const agc_struct *p, size_t produced, int64_t consume
   assert(agc_as_bool(&vm, p->fields[3]) == needs_input);
 }
 
-/* The 16 public rows in the contract's order, with their arities and shared
-   marks: the one-shot and file calls are pure or pool work, while the
-   streaming calls touch the shared registry and run under rt->sync. */
+/* The 17 public rows in the contract's order, with their arities and shared
+   marks: the one-shot, file and checksum calls are pure or pool work, while
+   the streaming calls touch the shared registry and run under rt->sync. */
 static void test_table(void) {
   struct {
     const char *name;
@@ -118,6 +118,7 @@ static void test_table(void) {
     {"Zlib.gunzip_file", 4, false}, {"Zlib.deflate_init", 4, true}, {"Zlib.inflate_init", 3, true},
     {"Zlib.deflate_next", 3, true}, {"Zlib.inflate_next", 3, true}, {"Zlib.deflate_finish", 2, true},
     {"Zlib.inflate_finish", 1, true}, {"Zlib.encoder_close", 1, true}, {"Zlib.decoder_close", 1, true},
+    {"Zlib.crc32", 2, false},
   };
   assert(agc_zlib_builtin_count == sizeof expected / sizeof expected[0]);
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
@@ -263,6 +264,50 @@ static void test_oneshot_decode(void) {
   bad_magic[0] = 0x1e;
   agc_value magic[] = {byte_list(bad_magic, sizeof bad_magic), agc_int(100)};
   check_error(call("Zlib.gunzip", 2, magic), "zlib: invalid compressed data");
+}
+
+/* Zlib.crc32 against the published check value: "123456789" from seed 0 is
+   3421780262. Empty input returns the seed unchanged (even all-ones: the
+   codec helper never sees the empty call, since zlib would reset it to
+   zero), and chaining after the previous result matches a single pass. */
+static void test_crc32(void) {
+  static const uint8_t digits[] = "123456789";
+  assert(agc_zlib_crc32(0, NULL, 0) == 0);
+  assert(agc_zlib_crc32(0xffffffffu, NULL, 0) == 0xffffffffu);
+  assert(agc_zlib_crc32(0, digits, sizeof digits - 1) == 3421780262u);
+  agc_value whole[] = {byte_list(digits, sizeof digits - 1), agc_int(0)};
+  int64_t full = agc_as_int(&vm, ok(call("Zlib.crc32", 2, whole)));
+  assert(full == 3421780262LL);
+  /* Empty input returns the seed, including all-ones. */
+  agc_value empty0[] = {byte_list(NULL, 0), agc_int(0)};
+  assert(agc_as_int(&vm, ok(call("Zlib.crc32", 2, empty0))) == 0);
+  agc_value empty_ones[] = {byte_list(NULL, 0), agc_int(4294967295LL)};
+  assert(agc_as_int(&vm, ok(call("Zlib.crc32", 2, empty_ones))) == 4294967295LL);
+  /* Incremental: the second chunk chained after the first matches one pass. */
+  agc_value first[] = {byte_list(digits, 3), agc_int(0)};
+  int64_t head = agc_as_int(&vm, ok(call("Zlib.crc32", 2, first)));
+  agc_value rest[] = {byte_list(digits + 3, sizeof digits - 1 - 3), agc_int(head)};
+  assert(agc_as_int(&vm, ok(call("Zlib.crc32", 2, rest))) == full);
+  /* NUL and binary bytes hash like any other byte. */
+  static const uint8_t binary[] = {0x00, 0xff, 0x00, 0x80, 0x01};
+  agc_value bin[] = {byte_list(binary, sizeof binary), agc_int(0)};
+  assert(agc_as_int(&vm, ok(call("Zlib.crc32", 2, bin))) ==
+         (int64_t)agc_zlib_crc32(0, binary, sizeof binary));
+  /* A bad seed, a bad byte and an over-long input are the call's errors. */
+  agc_value low_seed[] = {byte_list(digits, 3), agc_int(-1)};
+  check_error(call("Zlib.crc32", 2, low_seed), "zlib: seed must be between 0 and 4294967295");
+  agc_value high_seed[] = {byte_list(digits, 3), agc_int(4294967296LL)};
+  check_error(call("Zlib.crc32", 2, high_seed), "zlib: seed must be between 0 and 4294967295");
+  agc_list_builder bad;
+  agc_list_builder_sized(&bad, 2);
+  agc_list_builder_push(&bad, agc_int(0x61));
+  agc_list_builder_push(&bad, agc_int(256));
+  agc_value bad_data[] = {agc_list_value(agc_list_builder_finish(&bad)), agc_int(0)};
+  check_error(call("Zlib.crc32", 2, bad_data), "zlib: bytes must be between 0 and 255");
+  static uint8_t big[1048577] = {0};
+  agc_value huge = byte_list(big, sizeof big);
+  agc_value big_args[] = {huge, agc_int(0)};
+  check_error(call("Zlib.crc32", 2, big_args), "zlib: input exceeds 1048576 bytes");
 }
 
 /* Streaming argument checks: the wrapper selection, level and lifetime caps
@@ -940,6 +985,7 @@ int main(void) {
   test_table();
   test_oneshot_compress();
   test_oneshot_decode();
+  test_crc32();
   test_stream_init_checks();
   test_stream_encode();
   test_stream_decode();

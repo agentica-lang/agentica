@@ -19,6 +19,20 @@ struct agc_zcodec {
   bool encoding, ready;
 };
 
+/* The CRC32 chained after crc: empty input returns crc (never zlib, whose
+   NULL call resets to zero), longer inputs run in uInt chunks so the cast
+   below never overflows even for a hostile length. */
+uint32_t agc_zlib_crc32(uint32_t crc, const uint8_t *data, size_t len) {
+  if (len == 0 || !data) return crc;
+  uLong acc = (uLong)crc;
+  for (size_t at = 0; at < len;) {
+    uInt take = len - at > (size_t)UINT_MAX ? UINT_MAX : (uInt)(len - at);
+    acc = crc32(acc, data + at, take);
+    at += take;
+  }
+  return (uint32_t)(acc & 0xffffffffUL);
+}
+
 static unsigned capped(size_t n) { return n > (size_t)UINT_MAX ? UINT_MAX : (unsigned)n; }
 
 /* The stream holds no caller pointer on any return: the service owns its
