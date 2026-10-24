@@ -44,10 +44,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the 32 digest bytes as `Result[List[Int]]`, the same bytes `Crypto.sha256`
   returns: it streams in fixed 64 KiB chunks with no 1 MiB cap, and only
   regular files are hashed.
-- `File.gunzip(src, dst, max_out_bytes, timeout_ms)` decompresses one gzip
-  member file-to-file and returns the bytes written as `Result[Int]`: one
-  member only, `max_out_bytes` 1 to 1073741824, destination created
-  exclusive.
+- `Zlib` compresses bytes, files and streams with DEFLATE: the zlib wrapper and gzip one-shots and file pairs, plus incremental streaming with progress and task-owned handles.
 
 ### Changed
 
