@@ -299,6 +299,7 @@ def test_each_deny_flag_turns_its_family_into_an_error_result(tmp_path, flag):
 GATED = (
     ("File.open", 'File.open("x.txt", "r", 1000)', "--deny-fs"),
     ("File.read_text", 'File.read_text("x.txt", 1000)', "--deny-fs"),
+    ("File.sha256", 'File.sha256("x.txt", 1000)', "--deny-fs"),
     ("File.write_text", 'File.write_text("x.txt", "a", 1000)', "--deny-fs"),
     ("File.append_text", 'File.append_text("x.txt", "a", 1000)', "--deny-fs"),
     ("File.stat", 'File.stat("x.txt", 1000)', "--deny-fs"),

@@ -39,6 +39,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `C.Function` in `extern` blocks calls and frees through C function pointers.
 - C structs passed and returned by value: `struct Name ... end` in an `extern`
   block, seen as a record.
+- `File.sha256(path, timeout_ms)` hashes a whole file with SHA-256 and returns
+  the 32 digest bytes as `Result[List[Int]]`, the same bytes `Crypto.sha256`
+  returns: it streams in fixed 64 KiB chunks with no 1 MiB cap, and only
+  regular files are hashed.
 
 ### Changed
 

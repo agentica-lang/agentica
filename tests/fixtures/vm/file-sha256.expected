@@ -1,0 +1,17 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 1713,
+  "stdout": [
+    "empty e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "abc ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    "crypto agrees true",
+    "missing -> error(\"filesystem: path does not refer to a regular file\")",
+    "directory -> error(\"filesystem: path does not refer to a regular file\")",
+    "empty path -> error(\"path->complete-path: contract violation\\n  expected: (or/c path-string? path-for-some-system?)\\n  given: \\\"\\\"\")",
+    "zero timeout -> error(\"filesystem: timeout must be positive milliseconds\")",
+    "negative timeout -> error(\"filesystem: timeout must be positive milliseconds\")",
+    ""
+  ],
+  "stderr": []
+}

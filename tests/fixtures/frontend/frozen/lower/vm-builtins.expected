@@ -16,6 +16,7 @@ File.open
 File.read_bytes
 File.read_line
 File.read_text
+File.sha256
 File.stat
 File.try_lock
 File.write

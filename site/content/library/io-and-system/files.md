@@ -6,7 +6,7 @@ description: Read and write files, list and create directories, and build paths.
 
 Every file function takes a timeout in milliseconds and returns a `Result`.
 
-- Text is UTF-8. One call reads or writes at most 1 MiB. Files have the permissions of the user who runs the program.
+- Text is UTF-8. One text call reads or writes at most 1 MiB (`File.sha256` streams bytes and has no cap). Files have the permissions of the user who runs the program.
 - With `--deny-fs` (or `--sandbox`), every call on this page except `Path.join`, and `Lazy.write_lines`, returns an error that begins with `denied: --deny-fs`.
 - Regular files use a pool of 4 threads, shared with DNS lookups and TLS certificate loading, so calls wait for a free thread when many run. Raise it (at most 1024) before the program starts: `UV_THREADPOOL_SIZE=16 agentica app.agc`.
 - Pipes, FIFOs and terminals skip the pool and wait on the event loop, so their timeout always ends the wait. `File.read_text` of a pipe reads until the writer closes it.
@@ -54,6 +54,27 @@ def main() -> Void
   end
 end
 ```
+
+## File.sha256
+
+```text
+File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]]
+```
+
+Hashes a whole file with SHA-256 and returns the 32 digest bytes, the same bytes `Crypto.sha256` gives for the same content. It streams the file in fixed 64 KiB chunks with O(chunk) memory, so an archive far over the 1 MiB text cap still hashes without holding it in memory.
+
+```agentica {mode="check"}
+def main() -> Void
+  case File.sha256("notes.txt", 1000)
+    ok(digest) -> puts("#{digest.size} digest bytes")
+    error(message) -> IO.warn("cannot hash: #{message}")
+  end
+end
+```
+
+- Only regular files are hashed, read from the first byte; symbolic links are followed. A missing path, a directory, a path that reopens one of the program's own pipes, and a FIFO, pipe or device give `error("filesystem: path does not refer to a regular file")`, the same error `File.read_text` gives them.
+- `timeout_ms` covers the whole call: open, stream and digest. When it runs out the call returns `error("filesystem: operation timed out")`, while a hash already running finishes on its pool thread and its result is dropped; there is no handle to close. A cancelled task detaches the same way.
+- There is no snapshot: bytes hash in read order, so a concurrent writer changes the digest. To verify a download, write it to a temporary name, hash it, then `Path.rename` it into place.
 
 ## File.stat
 

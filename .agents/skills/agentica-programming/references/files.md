@@ -17,6 +17,7 @@ File.each_line(path: String, buffer_bytes: Int, timeout_ms: Int) do |line| ... e
 File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]   # lazy.md
 Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]   # lazy.md
 File.read_text(path: String, timeout_ms: Int) -> Result[String]
+File.sha256(path: String, timeout_ms: Int) -> Result[List[Int]]
 File.write_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.append_text(path: String, text: String, timeout_ms: Int) -> Result[Void]
 File.stat(path: String, timeout_ms: Int) -> Result[FileInfo]
@@ -53,6 +54,13 @@ Path.rename(from: String, to: String, timeout_ms: Int) -> Result[Void]
 - Text is strict UTF-8. Whole-text helpers and each stream read or write are
   limited to 1 MiB. `read_bytes` takes 1..1048576 bytes and returns `ok([])` at
   EOF. Bytes are 0..255.
+- `File.sha256` hashes a whole regular file with SHA-256 and returns the 32
+  digest bytes (`Crypto.sha256` order and form; hex it yourself). It streams
+  in fixed 64 KiB chunks with no 1 MiB cap; symlinks are followed, and a
+  missing path, a directory, a FIFO, pipe or device is an error, never a
+  wait. The timeout covers the whole call; expiry (or a cancel) drops the
+  result of a hash already running, and there is no handle. No snapshot:
+  hash a temporary file, then `Path.rename` it into place.
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF
   before any line, or invalid UTF-8, is an error.
 - `File.stat` follows symlinks and returns `FileInfo(kind: String, size_bytes:

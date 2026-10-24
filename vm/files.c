@@ -11,6 +11,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 #include "services.h"
+#include "digest.h"
 #include "file_io.h"
 
 /* The bounds of buffer_bytes (File.each_line, File.foreach), on every platform: the stub below reads them too. */
@@ -56,7 +57,7 @@ typedef enum {
 typedef enum {
   OP_READ_TEXT, OP_WRITE_TEXT, OP_APPEND_TEXT, OP_STAT, OP_LIST, OP_MKDIR, OP_OPEN_READ, OP_OPEN_WRITE,
   OP_OPEN_APPEND, OP_READ_BYTES, OP_READ_LINE, OP_READ_BLOCK, OP_WRITE, OP_CLOSE, OP_REAL, OP_LSTAT,
-  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME
+  OP_OPEN_CREATE, OP_MKDIR_PRIVATE, OP_REMOVE, OP_TRY_LOCK, OP_RENAME, OP_SHA256
 } op_kind;
 
 typedef struct {
@@ -699,6 +700,76 @@ static void work_write_text(op *o) {
   agc_fs_close(fd);
 }
 
+/* The hash of a whole regular file, streamed in fixed chunks with O(chunk) memory: one private descriptor, read from
+   the start and closed on every return path. The fstat of the descriptor itself decides what is regular, so a rename
+   or a replacement between the path stat and the open cannot turn this into a read of a pipe or a device; the open
+   is non-blocking, a non-regular descriptor is refused before any blocking read, and the job never waits on the loop.
+   Only malloc'd memory is touched here, no GC pointer, and nothing raises. */
+static void work_sha256(op *o) {
+  int fd = open_for(o, true, false);
+  if (fd < 0) return;
+  agc_fs_info info;
+  if (agc_fs_fstat(fd, &info) != 0) {
+    int err = errno;
+    agc_fs_close(fd);
+    fail_op(o, FS_READ, err);
+    return;
+  }
+  if (!AGC_FS_ISREG(info.mode)) {
+    agc_fs_close(fd);
+    fail_op(o, FS_NOT_REGULAR, 0);
+    return;
+  }
+  blocking(fd);
+  /* The digest of the bytes in read order; a concurrent writer changes what is hashed, as with File.read_text. */
+  unsigned char digest[AGC_SHA256_BYTES];
+  agc_sha256_stream *hash = agc_sha256_begin();
+  uint8_t *buf = malloc(CHUNK);
+  if (!hash || !buf) {
+    agc_sha256_free(hash);
+    free(buf);
+    agc_fs_close(fd);
+    fail_op(o, FS_READ, ENOMEM);
+    return;
+  }
+  bool ok = true;
+  int err = 0;
+  for (;;) {
+    int64_t n = agc_fs_read(fd, buf, CHUNK);
+    if (n < 0 && errno == EINTR) continue;
+    if (n < 0) {
+      err = errno;
+      ok = false;
+      break;
+    }
+    if (n == 0) break;
+    if (!agc_sha256_update(hash, buf, (size_t)n)) {
+      err = EIO;
+      ok = false;
+      break;
+    }
+  }
+  if (ok && !agc_sha256_final(hash, digest)) {
+    err = EIO;
+    ok = false;
+  }
+  agc_sha256_free(hash);
+  free(buf);
+  agc_fs_close(fd);
+  if (!ok) {
+    fail_op(o, FS_READ, err);
+    return;
+  }
+  o->out = malloc(AGC_SHA256_BYTES);
+  if (!o->out) {
+    fail_op(o, FS_READ, ENOMEM);
+    return;
+  }
+  memcpy(o->out, digest, AGC_SHA256_BYTES);
+  o->out_len = AGC_SHA256_BYTES;
+  o->out_cap = AGC_SHA256_BYTES;
+}
+
 static void work_stat(op *o) {
   agc_fs_info info;
   if ((o->kind == OP_LSTAT ? agc_fs_stat(o->path, &info, false) : agc_fs_stat(o->path, &info, true)) != 0) {
@@ -1056,6 +1127,7 @@ static void work(void *data) {
     case OP_READ_BLOCK: work_read_block(o); break;
     case OP_WRITE: work_write(o); break;
     case OP_CLOSE: work_close(o); break;
+    case OP_SHA256: work_sha256(o); break;
   }
 }
 
@@ -1211,7 +1283,7 @@ static agc_value common_error(agc_vm *vm, const op *o) {
     case FS_TOO_BIG: return error_of("filesystem: file exceeds 1048576 bytes");
     case FS_OPEN:
       if (o->kind == OP_LIST) return os_error(vm, "directory-list: could not open directory", o->path, path_len, o->err);
-      if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ)
+      if (o->kind == OP_READ_TEXT || o->kind == OP_OPEN_READ || o->kind == OP_SHA256)
         return os_error(vm, "open-input-file: cannot open input file", o->path, path_len, o->err);
       return os_error(vm, "open-output-file: error opening file", o->path, path_len, o->err);
     case FS_IS_DIR: {
@@ -1359,6 +1431,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
     switch (o->kind) {
       case OP_READ_TEXT:
       case OP_READ_LINE: result = text_result(o); break;
+      case OP_SHA256: result = bytes_result(o); break;
       case OP_LIST: result = list_result(vm, o); break;
       case OP_REAL: result = real_result(o); break;
       case OP_READ_BYTES: result = bytes_result(o); break;
@@ -1468,6 +1541,12 @@ static agc_value builtin_append_text(agc_vm *vm, agc_value *args, uint32_t span)
 static agc_value builtin_stat(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   return path_op(vm, OP_STAT, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who, complete_expected);
+}
+
+static agc_value builtin_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
+  return path_op(vm, OP_SHA256, agc_as_string(vm, args[0]), agc_as_int(vm, args[1]), complete_who,
+                 complete_expected);
 }
 
 static agc_value builtin_lstat(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -2125,6 +2204,8 @@ const agc_builtin agc_file_builtins[] = {
   {"Path.real", 1, builtin_real, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Path.remove", 2, builtin_remove, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Path.rename", 3, builtin_rename, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  /* New rows go last: a C test may index a table by position. */
+  {"File.sha256", 2, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
 };
 
 const size_t agc_file_builtin_count = sizeof agc_file_builtins / sizeof agc_file_builtins[0];
