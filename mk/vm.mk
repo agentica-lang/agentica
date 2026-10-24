@@ -45,9 +45,9 @@ OSSL_DIR := vm/third_party/openssl
 FFI_DIR := vm/third_party/libffi
 ZLIB_DIR := vm/third_party/zlib
 YY_DEFS := -DYYJSON_DISABLE_WRITER=1 -DYYJSON_DISABLE_INCR_READER=1 -DYYJSON_DISABLE_FILE=1 -DYYJSON_DISABLE_UTILS=1 -DYYJSON_DISABLE_NON_STANDARD=1 -DYYJSON_DISABLE_FAST_FP_CONV=1
-# The vendored zlib build is inflate-only (no configure, no gz* I/O): the six sources the decoder needs.
-ZLIB_NAMES := adler32 crc32 inffast inflate inftrees zutil
-VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/gunzip_zlib.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c \
+# The vendored zlib build is codec-only (no configure, no gz* I/O): the eight sources deflate and inflate need.
+ZLIB_NAMES := adler32 crc32 deflate inffast inflate inftrees trees zutil
+VM_SRC := vm/value.c vm/text.c vm/map.c vm/list.c vm/unicode_data.c vm/loader.c vm/builtins.c vm/builtin_tables.c vm/strings.c vm/numbers.c vm/crypto.c vm/random.c vm/input.c vm/output.c vm/stdio_posix.c vm/stdio_windows.c vm/poll_posix.c vm/poll_windows.c vm/json.c vm/json_value.c vm/json_typed.c vm/loop.c vm/file_io.c vm/file_windows.c vm/files.c vm/zlib.c vm/zlib_codec.c vm/tree.c vm/stream.c vm/lazy.c vm/duplex.c vm/process.c vm/process_posix.c vm/process_windows.c vm/duplex_posix.c vm/duplex_windows.c vm/system.c vm/system_posix.c vm/system_windows.c vm/net_posix.c vm/net_windows.c vm/tcp.c vm/tls_openssl.c vm/tls_trust.c vm/tls_trust_posix.c vm/tls_trust_darwin.c vm/tls_trust_windows.c vm/digest_openssl.c vm/http_pico.c vm/http_body.c vm/http_fields.c vm/http_service.c vm/http_server.c vm/http_wire.c vm/logger.c vm/front_end.c vm/interp.c vm/task.c vm/runq.c vm/inbox.c vm/compute.c vm/sync.c vm/timers.c vm/task_map.c vm/channel.c vm/equal.c vm/testing.c vm/diag.c vm/trace.c vm/profile.c vm/ffi.c vm/ffi_libffi.c vm/ffi_none.c \
   vm/jit/jit.c vm/jit/emit_x64.c vm/jit/mem_posix.c vm/jit/mem_windows.c
 EXE :=
 VM_PIC := -fPIE
@@ -98,8 +98,9 @@ AGENTICA_GC ?= $(AGENTICA_GC_DEFAULT)
 AGENTICA_ZLIB ?= $(AGENTICA_ZLIB_DEFAULT)
 PKG_CONFIG ?= pkg-config
 GC_MIN := 8.2.0
-# The decoder only needs inflateInit2 with windowBits 31 (gzip members), inflate and inflateEnd: the gzip wrapper
-# support of inflateInit2 dates from the 1.2 series, so 1.2.0 is the floor, not the latest release.
+# The codec needs inflateInit2 and deflateInit2 with windowBits 15 (zlib), -15 (raw) and 31 (gzip), inflate,
+# deflate and their end calls: wrapper support in both directions dates from the 1.2 series, so 1.2.0 is the floor,
+# not the latest release.
 ZLIB_MIN := 1.2.0
 ifeq ($(filter $(AGENTICA_GC),system vendored),)
 $(error AGENTICA_GC must be system or vendored, not '$(AGENTICA_GC)')
@@ -313,7 +314,7 @@ $(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := -U NDEBUG
 
 $(VM_OBJ)/tls_openssl.o $(VM_OBJ)/digest_openssl.o: $(OSSL_DEP)
 
-$(VM_OBJ)/gunzip_zlib.o: $(ZLIB_DEP)
+$(VM_OBJ)/zlib.o $(VM_OBJ)/zlib_codec.o: $(ZLIB_DEP)
 
 $(VM_OBJ)/%.o: vm/%.c $(VM_OBJ_STAMP) | $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP)
 	@mkdir -p $(dir $@)

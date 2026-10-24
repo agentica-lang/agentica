@@ -156,6 +156,20 @@ extern const agc_builtin agc_json_builtins[];
 extern const size_t agc_json_builtin_count;
 extern const agc_builtin agc_file_builtins[];
 extern const size_t agc_file_builtin_count;
+/* The file jobs behind the Zlib.*_file builtins (vm/zlib.c validates
+   nothing; this call checks the paths, caps, level and timeout, then starts
+   the pool job): DEFLATE/INFLATE mean a zlib wrapper, GZIP/GUNZIP a gzip
+   member. Level applies to compression only. */
+typedef enum {
+  AGC_ZLIB_DEFLATE_FILE,
+  AGC_ZLIB_INFLATE_FILE,
+  AGC_ZLIB_GZIP_FILE,
+  AGC_ZLIB_GUNZIP_FILE
+} agc_zlib_file_kind;
+agc_value agc_zlib_file(agc_vm *vm, agc_zlib_file_kind kind, const agc_string *src, const agc_string *dst,
+                        int64_t level, int64_t max_out, int64_t timeout, uint32_t span);
+extern const agc_builtin agc_zlib_builtins[];
+extern const size_t agc_zlib_builtin_count;
 extern const agc_builtin agc_lazy_builtins[];
 extern const size_t agc_lazy_builtin_count;
 char *agc_system_env(const char *name);

@@ -14,6 +14,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_crypto_builtins, &agc_crypto_builtin_count},
   {agc_json_builtins, &agc_json_builtin_count},
   {agc_file_builtins, &agc_file_builtin_count},
+  {agc_zlib_builtins, &agc_zlib_builtin_count},
   {agc_lazy_builtins, &agc_lazy_builtin_count},
   {agc_task_builtins, &agc_task_builtin_count},
   {agc_task_map_builtins, &agc_task_map_builtin_count},
