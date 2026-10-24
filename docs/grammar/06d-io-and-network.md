@@ -236,12 +236,17 @@ Signatures are in
   `Result[ZlibProgress]`. `consumed` may be less than `data.size`; the
   caller owns the rest and presents it again, and trailing bytes after the
   stream end stay caller-owned through `consumed` and are never silently
-  dropped. `needs_input` asks for more input (or a finish), never for a
-  spin: when the codec may still drain output from its internal state after
-  the input is exhausted it answers false, so the caller calls again with
-  empty input and fresh room. A call that is neither finished, consuming nor
-  producing is an error. Empty input is valid for drains, and a 0-consumed
-  and 0-produced call is either finished or asks for input.
+  dropped. `needs_input` is true only when the call took all it was given
+  and left room in the output without finishing: it asks for more input
+  (or a finish), never for a spin. When it is false and bytes remain
+  unconsumed, the caller presents the remainder again with fresh room
+  first; when nothing remains, the caller drains with empty input and
+  fresh room. A 0-consumed and 0-produced call is either finished or asks
+  for input; an empty drain that asks for input never becomes a spin by
+  retrying the same empty input. A refused encoder quantum changes
+  nothing and may run again with a smaller positive `max_out`. A decoder
+  at its exact output budget still completes a trailer that produces no
+  bytes, while a true overflow fails without returning extra bytes.
   `Zlib.deflate_finish(enc, max_out)` drains the end of a stream; repeat it
   until `finished` is true, and new input after finishing starts is an
   error. `Zlib.inflate_finish(dec)` gives `Result[Void]`: `ok()` only once

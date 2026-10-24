@@ -78,7 +78,7 @@ Zlib.encoder_close(enc: ZlibEncoder) -> Result[Void]
 Zlib.decoder_close(dec: ZlibDecoder) -> Result[Void]
 ```
 
-The streaming calls compress or decompress in bounded steps: `window_bits` 15 is the zlib wrapper, -15 raw DEFLATE and 31 gzip. Each total cap is 1 to 1073741824, enforced before the output or state could exceed it, and each call takes at most 65536 input bytes with room for `max_out` 1 to 65536 output bytes.
+The streaming calls compress or decompress in bounded steps: `window_bits` 15 is the zlib wrapper, -15 raw DEFLATE and 31 gzip. Each total cap is 1 to 1073741824, enforced before the output or state could exceed it, and each call takes at most 65536 input bytes with room for `max_out` 1 to 65536 output bytes. A refused encoder quantum changes nothing and may run again with a smaller positive `max_out`; a decoder at its exact output budget still completes a trailer that produces no bytes, while a true overflow fails without returning extra bytes.
 
 ```agentica {mode="check"}
 def pump(enc: ZlibEncoder, data: List[Int]) -> List[Int]

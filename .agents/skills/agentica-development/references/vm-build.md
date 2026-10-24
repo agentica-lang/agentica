@@ -11,7 +11,7 @@ git submodule update --init          # fetch bdwgc, yyjson, libuv, picohttpparse
 make                                 # dist/agentica, the one binary, from bootstrap/stage0.agcb (Linux: the system libgc, OpenSSL 3 and zlib from pkg-config, dynamic: Debian libgc-dev libssl-dev zlib1g-dev pkg-config)
 make AGENTICA_GC=vendored            # libgc from the submodule (extra/gc.c) instead, static; the release, the GC-stress build and non-Linux hosts build this way
 make AGENTICA_OPENSSL=vendored       # OpenSSL from the submodule instead, static, built once per mode (needs Perl, a few minutes the first time); the release builds this way
-make AGENTICA_ZLIB=vendored          # zlib from the submodule instead, static, built per mode with the six inflate sources; the release and non-Linux hosts build this way
+make AGENTICA_ZLIB=vendored          # zlib from the submodule instead, static, built per mode with the eight codec sources; the release and non-Linux hosts build this way
 make vm-openssl                      # AGENTICA_OPENSSL=vendored: only build/vm/<mode>/openssl/libssl.a and libcrypto.a; AGENTICA_OPENSSL=system: check pkg-config and the version (3.0 or newer)
 make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # the OpenSSL build key (Configure and make lines, compiler, version, commit); CI caches by its hash
 make vm-third-party                  # only libgc (the vendored gc.o, or the system libgc check), yyjson, picohttpparser, libuv and (Linux x86_64, Windows x64, macOS) libffi for this mode
