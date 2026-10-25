@@ -27,8 +27,8 @@ MACOS = TARGET_OS == "darwin"
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
 NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux x86_64, Windows x64 and macOS only")
-POSIX_NATIVE_CALLS = host_only(not (NATIVE and (TARGET_OS.startswith("linux") or MACOS)),
-                               "public FILE try-lock is POSIX-only")
+# Keep native Windows in the test body to report #616 as a product gap, not host-only.
+NATIVE_STDIO_CASES = host_only(not NATIVE, "native calls are unsupported on this system")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both, and on
 # macOS libSystem (in the dyld shared cache, not on disk).
@@ -406,7 +406,7 @@ def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker):
                 stream.close()
 
 
-@POSIX_NATIVE_CALLS
+@NATIVE_STDIO_CASES
 @pytest.mark.parametrize("locked_stream, stream_id", [("stdout", 1), ("stderr", 2)])
 @pytest.mark.parametrize("ending, code", [("", 0), ("System.exit(7)", 7)])
 def test_settlement_skips_a_locked_c_standard_stream(tmp_path, peer, locked_stream, stream_id, ending, code):
