@@ -17,6 +17,7 @@
 #include "services.h"
 #include "file_io.h"
 #include "jit/jit.h"
+#include "stdio_diag.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -184,6 +185,7 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
    drained: the sockets are closed in goodbye (agc_io_goodbye), and the OS
    frees the other descriptors and the memory. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
+  agc_stdio_diag(AGC_DIAG_SETTLE_BEFORE, 0, 0);
   agc_processes_stop(vm);
   agc_io_children_stopped();
   say_goodbye(vm, outcome);
@@ -223,17 +225,21 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, agc_io_stop_signal());
   agc_stdio_flush(stdout);
   agc_stdio_flush(stderr);
+  agc_stdio_diag(AGC_DIAG_SETTLE_AFTER, 0, code);
   return code;
 }
 
 void agc_launch_exit(int code) {
 #if defined(__linux__) || defined(__APPLE__)
+  agc_stdio_diag(AGC_DIAG_EXIT_BEFORE, 0, code);
   sigset_t saved;
   agc_io_block_stop(&saved);
+  agc_stdio_diag(AGC_DIAG_STOP_BLOCKED, 0, code);
   int sig = agc_io_stop_signal();
   /* The stop signals stay blocked from here, so no handler runs after the state was read; agc_io_die_by unblocks
      SIG alone before it raises it. */
   if (sig) agc_io_die_by(sig);
+  agc_stdio_diag(AGC_DIAG_BEFORE_EXIT, 0, code);
   _exit(code);
 #elif defined(_WIN32)
   /* Not exit(): it runs the atexit handlers and flushes every C stream while a compute thread may hold a stream's

@@ -10,6 +10,7 @@
  * §16.9).
  */
 #include "core.h"
+#include "stdio_diag.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -578,11 +579,13 @@ bool agc_output_busy(agc_vm *vm) {
    write that has ended but whose done half has not run yet; that stream is left as it is too, which only costs the
    shutdown. */
 void agc_output_end(agc_vm *vm) {
+  agc_stdio_diag(AGC_DIAG_OUTPUT_END_BEFORE, 0, 0);
   agc_output *streams[2] = {&vm->rt->out, &vm->rt->err};
   for (size_t k = 0; k < 2; k++) {
     agc_output *s = streams[k];
     if (s->base == s && s->io && !held(s)) agc_stdio_end(s, &vm->rt->in);
   }
+  agc_stdio_diag(AGC_DIAG_OUTPUT_END_AFTER, 0, 0);
 }
 
 void agc_output_open(agc_vm *vm, agc_output *out, int fd) {

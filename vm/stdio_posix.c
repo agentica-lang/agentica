@@ -9,6 +9,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 #include "core.h"
+#include "stdio_diag.h"
 
 #include <errno.h>
 
@@ -43,17 +44,28 @@ struct agc_memstream {
 };
 
 agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
-  if (ftrylockfile(stream) != 0) return AGC_STDIO_BUSY;
+  uint8_t id = stream == stdout ? 1 : stream == stderr ? 2 : 0;
+  agc_stdio_diag(AGC_DIAG_TRYLOCK_BEFORE, id, 0);
+  int locked = ftrylockfile(stream);
+  agc_stdio_diag(AGC_DIAG_TRYLOCK_AFTER, id, locked);
+  if (locked != 0) return AGC_STDIO_BUSY;
   /* Keep the lock through fflush so another compute call cannot take it after the probe. */
   bool ok = true;
-  while (fflush(stream) != 0) {
-    if (errno != EINTR) {
+  while (true) {
+    agc_stdio_diag(AGC_DIAG_FFLUSH_BEFORE, id, 0);
+    int flushed = fflush(stream);
+    int flush_errno = errno;
+    agc_stdio_diag(AGC_DIAG_FFLUSH_AFTER, id, flushed ? flush_errno : 0);
+    if (flushed == 0) break;
+    if (flush_errno != EINTR) {
       ok = false;
       break;
     }
     clearerr(stream);
   }
+  agc_stdio_diag(AGC_DIAG_UNLOCK_BEFORE, id, 0);
   funlockfile(stream);
+  agc_stdio_diag(AGC_DIAG_UNLOCK_AFTER, id, 0);
   return ok ? AGC_STDIO_FLUSHED : AGC_STDIO_FLUSH_FAILED;
 }
 

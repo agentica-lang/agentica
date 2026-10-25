@@ -350,11 +350,38 @@ end
     assert (result.code, result.stdout, result.stderr) == (code, "1\n", "")
 
 
+def tsan_stdio_diagnostic_enabled():
+    if TARGET_OS != "linux":
+        return False
+    binary = os.path.realpath(os.environ.get("AGENTICA_VM_BINARY", ""))
+    test_executable = os.path.realpath(os.environ.get("AGENTICA_TEST_EXECUTABLE", ""))
+    expected = os.path.realpath("build/vm/tsan/agentica")
+    return binary == expected and test_executable == expected
+
+
+def format_stdio_diagnostic(data):
+    events = {
+        16: "settle-before", 17: "settle-after", 18: "output-end-before", 19: "output-end-after",
+        20: "exit-before", 21: "stop-blocked", 22: "before-exit", 32: "trylock-before",
+        33: "trylock-after", 34: "fflush-before", 35: "fflush-after", 36: "unlock-before", 37: "unlock-after",
+    }
+    records = []
+    for offset in range(0, len(data) - 5, 6):
+        event, stream = data[offset], data[offset + 1]
+        value = int.from_bytes(data[offset + 2:offset + 6], "little", signed=True)
+        stream_name = {0: "none", 1: "stdout", 2: "stderr"}.get(stream, str(stream))
+        records.append("%s:%s=%d" % (events.get(event, "event-%d" % event), stream_name, value))
+    if len(data) % 6:
+        records.append("truncated=" + data[len(data) // 6 * 6:].hex())
+    return ",".join(records)
+
+
 def capture_stdio_ready(read_streams, process, captured, locked_stream):
     readable, _, _ = select.select(read_streams, [], [], 0.05)
     for stream in readable:
-        name = "stdout" if stream is process.stdout else "stderr"
-        chunk = os.read(stream.fileno(), 65536)
+        name = "stdout" if stream is process.stdout else "stderr" if stream is process.stderr else "diagnostic"
+        fd = stream.fileno() if hasattr(stream, "fileno") else stream
+        chunk = os.read(fd, 65536)
         if not chunk:
             read_streams.remove(stream)
         else:
@@ -365,14 +392,33 @@ def capture_stdio_ready(read_streams, process, captured, locked_stream):
 
 
 def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker):
-    process = subprocess.Popen(cli() + ["--schedulers", "4", str(source)], stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
-                               start_new_session=True)
-    captured = {"stdout": bytearray(), "stderr": bytearray()}
+    diagnostic = tsan_stdio_diagnostic_enabled()
+    diag_read = diag_write = None
+    env = vm_environment()
+    spawn_options = {"start_new_session": True}
+    if diagnostic:
+        diag_read, diag_write = os.pipe2(os.O_NONBLOCK | os.O_CLOEXEC)
+        os.set_inheritable(diag_write, True)
+        env["AGC_616_TSAN_DIAG_FD"] = str(diag_write)
+        spawn_options["pass_fds"] = (diag_write,)
+    try:
+        process = subprocess.Popen(cli() + ["--schedulers", "4", str(source)], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, **spawn_options)
+    except BaseException:
+        if diag_read is not None:
+            os.close(diag_read)
+        if diag_write is not None:
+            os.close(diag_write)
+        raise
+    if diag_write is not None:
+        os.close(diag_write)
+    captured = {"stdout": bytearray(), "stderr": bytearray(), "diagnostic": bytearray()}
     stdout_done = False
     read_streams = [process.stdout]
     if locked_stream == "stdout":
         read_streams.append(process.stderr)
+    if diag_read is not None:
+        read_streams.append(diag_read)
     deadline = time.monotonic() + scaled(5)
     try:
         while not lock_marker.exists() and process.poll() is None and time.monotonic() < deadline:
@@ -392,7 +438,8 @@ def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker):
         deadline = time.monotonic() + scaled(3)
         while process.poll() is None and time.monotonic() < deadline:
             capture_stdio_ready(read_streams, process, captured, locked_stream)
-        assert process.poll() is not None, "settlement waited for the native FILE lock"
+        assert process.poll() is not None, "settlement waited for the native FILE lock; TSan phases: %s" % \
+            format_stdio_diagnostic(captured["diagnostic"])
         deadline = time.monotonic() + scaled(1)
         while read_streams and time.monotonic() < deadline:
             capture_stdio_ready(read_streams, process, captured, locked_stream)
@@ -404,6 +451,8 @@ def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker):
         for stream in (process.stdin, process.stdout, process.stderr):
             if stream is not None:
                 stream.close()
+        if diag_read is not None:
+            os.close(diag_read)
 
 
 @NATIVE_STDIO_CASES
