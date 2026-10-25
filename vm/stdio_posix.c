@@ -42,21 +42,6 @@ struct agc_memstream {
   size_t len;
 };
 
-agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
-  if (ftrylockfile(stream) != 0) return AGC_STDIO_BUSY;
-  /* Keep the lock through fflush so another compute call cannot take it after the probe. */
-  bool ok = true;
-  while (fflush(stream) != 0) {
-    if (errno != EINTR) {
-      ok = false;
-      break;
-    }
-    clearerr(stream);
-  }
-  funlockfile(stream);
-  return ok ? AGC_STDIO_FLUSHED : AGC_STDIO_FLUSH_FAILED;
-}
-
 /* kqueue calls these two devices always ready and they never wait for a reader, so the pool writes them like a file. */
 static bool never_waits(const struct stat *info) {
 #ifdef __APPLE__
