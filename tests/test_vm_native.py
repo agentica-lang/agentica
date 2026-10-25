@@ -95,25 +95,32 @@ def run_tsan_finalize_control(binary, hook, args, expected, tsan_options):
     read_fd = write_fd = None
     process = None
     try:
-        read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
-        os.set_blocking(write_fd, False)
-        env = vm_environment({"AGENTICA_TSAN_RELEASE_FD": write_fd,
+        env = vm_environment({"AGENTICA_TSAN_RELEASE_FD": None,
                              "AGENTICA_TSAN_RELEASE_READ_FD": None,
                              "AGENTICA_TSAN_PRIVATE_GATE_FD": None,
                              "TSAN_OPTIONS": tsan_options})
-        preload = [str(hook)]
-        if env.get("LD_PRELOAD"):
-            preload.append(env["LD_PRELOAD"])
-        env["LD_PRELOAD"] = os.pathsep.join(preload)
+        pass_fds = ()
+        if hook is not None:
+            read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
+            os.set_blocking(write_fd, False)
+            env["AGENTICA_TSAN_RELEASE_FD"] = str(write_fd)
+            preload = [str(hook)]
+            if env.get("LD_PRELOAD"):
+                preload.append(env["LD_PRELOAD"])
+            env["LD_PRELOAD"] = os.pathsep.join(preload)
+            pass_fds = (write_fd,)
         process = subprocess.Popen([str(binary), *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   env=env, start_new_session=True, pass_fds=(write_fd,))
-        os.close(write_fd)
-        write_fd = None
+                                   env=env, start_new_session=True, pass_fds=pass_fds)
+        if write_fd is not None:
+            os.close(write_fd)
+            write_fd = None
         stdout, stderr = process.communicate(timeout=scaled(20))
-        assert process.returncode == expected, stdout.decode(errors="replace") + stderr.decode(errors="replace")
-        assert os.read(read_fd, 2) == b"R", "TSan did not invoke the preloaded finalization hook"
-        assert os.read(read_fd, 1) == b"", "TSan finalization hook wrote more than one byte"
-        return stdout, stderr
+        if expected is not None:
+            assert process.returncode == expected, stdout.decode(errors="replace") + stderr.decode(errors="replace")
+        if hook is not None:
+            assert os.read(read_fd, 2) == b"R", "TSan did not invoke the preloaded finalization hook"
+            assert os.read(read_fd, 1) == b"", "TSan finalization hook wrote more than one byte"
+        return process.returncode, stdout, stderr
     finally:
         if process is not None and process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
@@ -139,13 +146,25 @@ def tsan_stdio_support(tmp_path_factory):
                     "-fsanitize=thread", "-fno-sanitize-recover=all", "-pthread", "-o", str(control),
                     str(FIXTURES / "native" / "tsan_finalize_control.c")], check=True)
     options = "halt_on_error=0:exitcode=83"
-    no_race, no_race_err = run_tsan_finalize_control(control, hook, [], 0, options)
+    no_race, no_race_out, no_race_err = run_tsan_finalize_control(control, hook, [], 0, options)
     assert no_race_err == b"", no_race_err.decode(errors="replace")
-    seven, seven_err = run_tsan_finalize_control(control, hook, ["seven"], 7, options)
+    seven, seven_out, seven_err = run_tsan_finalize_control(control, hook, ["seven"], 7, options)
     assert seven_err == b"", seven_err.decode(errors="replace")
-    race, race_err = run_tsan_finalize_control(control, hook, ["race"], 83, options)
+    race, race_out, race_err = run_tsan_finalize_control(control, hook, ["race"], 83, options)
     assert b"WARNING: ThreadSanitizer: data race" in race_err, race_err.decode(errors="replace")
     assert no_race == seven == race == b""
+    assert no_race_out == seven_out == race_out == b""
+
+    default_options = "halt_on_error=0"
+    default_race, default_out, default_report = run_tsan_finalize_control(
+        control, None, ["race"], None, default_options)
+    hooked_race, hooked_out, hooked_report = run_tsan_finalize_control(
+        control, hook, ["race"], None, default_options)
+    assert default_race != 0, default_report.decode(errors="replace")
+    assert hooked_race == default_race, hooked_report.decode(errors="replace")
+    assert b"WARNING: ThreadSanitizer: data race" in default_report, default_report.decode(errors="replace")
+    assert hooked_report == default_report, hooked_report.decode(errors="replace")
+    assert default_out == hooked_out == b""
     return {"peer": tsan_peer, "hook": hook}
 
 

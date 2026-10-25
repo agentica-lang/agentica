@@ -10,9 +10,8 @@
 #endif
 #include "core.h"
 
-#include <errno.h>
-
 #if defined(__linux__) || defined(__APPLE__)
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdlib.h>
