@@ -18,7 +18,8 @@ int __tsan_on_finalize(int failed) {
       int flags = fcntl(fd, F_GETFL);
       if (flags >= 0 && (flags & O_NONBLOCK)) {
         const unsigned char release = 0x52;
-        (void)write(fd, &release, sizeof release);
+        ssize_t written = write(fd, &release, sizeof release);
+        (void)written;
       }
     }
   }
