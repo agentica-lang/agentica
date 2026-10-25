@@ -12,19 +12,23 @@ import ctypes
 import json
 import os
 import platform
+import select
+import signal
 import subprocess
 import textwrap
 import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, host_only, require, run, tool, vm_environment
+from tests.agentica_test import FIXTURES, TARGET_OS, WINDOWS, cli, host_only, require, run, scaled, tool, vm_environment
 
 MACOS = TARGET_OS == "darwin"
 # The systems whose build has libffi; the others refuse native code at load, and the call cases skip there.
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
 NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux x86_64, Windows x64 and macOS only")
+POSIX_NATIVE_CALLS = host_only(not (NATIVE and (TARGET_OS.startswith("linux") or MACOS)),
+                               "public FILE try-lock is POSIX-only")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both, and on
 # macOS libSystem (in the dyld shared cache, not on disk).
@@ -344,6 +348,96 @@ end
 """ % (literal(peer), ending)
     result = agentica(program(tmp_path, main), timeout=20)
     assert (result.code, result.stdout, result.stderr) == (code, "1\n", "")
+
+
+def capture_stdio_ready(read_streams, process, captured, locked_stream):
+    readable, _, _ = select.select(read_streams, [], [], 0.05)
+    for stream in readable:
+        name = "stdout" if stream is process.stdout else "stderr"
+        chunk = os.read(stream.fileno(), 65536)
+        if not chunk:
+            read_streams.remove(stream)
+        else:
+            captured[name].extend(chunk)
+            if name == "stdout" and b"done\n" in captured[name] and locked_stream == "stdout":
+                read_streams.remove(process.stdout)
+    return b"done\n" in captured["stdout"]
+
+
+def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker):
+    process = subprocess.Popen(cli() + ["--schedulers", "4", str(source)], stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
+                               start_new_session=True)
+    captured = {"stdout": bytearray(), "stderr": bytearray()}
+    stdout_done = False
+    read_streams = [process.stdout]
+    if locked_stream == "stdout":
+        read_streams.append(process.stderr)
+    deadline = time.monotonic() + scaled(5)
+    try:
+        while not lock_marker.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert lock_marker.exists(), "native code did not acquire and mark the FILE lock"
+        time.sleep(scaled(0.25))
+        process.stdin.write(b"x")
+        process.stdin.close()
+        deadline = time.monotonic() + scaled(5)
+        while not main_marker.exists() and process.poll() is None and time.monotonic() < deadline:
+            stdout_done = capture_stdio_ready(read_streams, process, captured, locked_stream) or stdout_done
+        assert main_marker.exists(), "main did not reach the file marker after puts"
+        deadline = time.monotonic() + scaled(3)
+        while not stdout_done and process.poll() is None and time.monotonic() < deadline:
+            stdout_done = capture_stdio_ready(read_streams, process, captured, locked_stream)
+        assert stdout_done, f"VM stdout did not deliver done: {bytes(captured['stdout'])!r}"
+        deadline = time.monotonic() + scaled(3)
+        while process.poll() is None and time.monotonic() < deadline:
+            capture_stdio_ready(read_streams, process, captured, locked_stream)
+        assert process.poll() is not None, "settlement waited for the native FILE lock"
+        deadline = time.monotonic() + scaled(1)
+        while read_streams and time.monotonic() < deadline:
+            capture_stdio_ready(read_streams, process, captured, locked_stream)
+        return process.returncode, captured
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None:
+                stream.close()
+
+
+@POSIX_NATIVE_CALLS
+@pytest.mark.parametrize("locked_stream, stream_id", [("stdout", 1), ("stderr", 2)])
+@pytest.mark.parametrize("ending, code", [("", 0), ("System.exit(7)", 7)])
+def test_settlement_skips_a_locked_c_standard_stream(tmp_path, peer, locked_stream, stream_id, ending, code):
+    free_stream = "stderr" if locked_stream == "stdout" else "stdout"
+    main = '''extern "{library}"
+  compute def peer_hold_stdio(which: C.Int32, marker: C.String) -> C.Int32
+  def peer_buffer_stdio(which: C.Int32) -> C.Int32
+end
+
+def hold(n: Int) -> Int
+  return peer_hold_stdio({stream_id}, "{lock_marker}")
+end
+
+def main() -> Void
+  writer = Task.spawn(&hold, 0)
+  IO.read_bytes(1)
+  peer_buffer_stdio({free_stream_id})
+  puts("done")
+  File.write_text("{main_marker}", "after puts", 2000)
+  {ending}
+end
+'''.format(library=literal(peer), stream_id=stream_id, lock_marker=literal(tmp_path / "locked"),
+           main_marker=literal(tmp_path / "main-reached"), free_stream_id=3 - stream_id, ending=ending)
+    source = program(tmp_path, main)
+    assert agentica("check", source).code == 0
+    if WINDOWS:
+        pytest.skip("known-issue: #616 Windows final C stdio flush can wait for a compute-held stream lock")
+    result, captured = run_stdio_shutdown(source, locked_stream, tmp_path / "locked", tmp_path / "main-reached")
+    assert result == code
+    assert b"done\n" in captured["stdout"]
+    assert b"native-free\n" in captured[free_stream]
 
 
 # One pool thread (one scheduler) runs the first call while the other 49 wait in its queue. Once their tasks are

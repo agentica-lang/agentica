@@ -157,6 +157,34 @@ int32_t peer_write_stalled(void) {
 
 int32_t peer_write_started(void) { return atomic_load(&stalled); }
 
+#ifndef _WIN32
+/* Holds a standard C stream lock and then blocks writing to its pipe, marking lock ownership independently. */
+int32_t peer_hold_stdio(int32_t which, const char *marker) {
+  FILE *stream = which == 1 ? stdout : stderr;
+  static char block[1 << 16];
+  flockfile(stream);
+  (void)fwrite("native-locked\n", 1, sizeof "native-locked\n" - 1, stream);
+  int fd = open(marker, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) {
+    funlockfile(stream);
+    return -1;
+  }
+  ssize_t written = write(fd, "locked", 6);
+  close(fd);
+  if (written != 6) {
+    funlockfile(stream);
+    return -1;
+  }
+  for (;;) fwrite(block, 1, sizeof block, stream);
+}
+
+/* Leaves a small native C stdio buffer for the other standard stream to flush at settlement. */
+int32_t peer_buffer_stdio(int32_t which) {
+  FILE *stream = which == 1 ? stdout : stderr;
+  return (int32_t)fwrite("native-free\n", 1, sizeof "native-free\n" - 1, stream);
+}
+#endif
+
 #ifdef _WIN32
 /* For Native.wait_readable and wait_writable: a non-blocking connected pair of loopback TCP sockets that the peer owns,
    as a library owns its socket. Windows has no socketpair: the pair is a listen on 127.0.0.1 port 0, a connect and an

@@ -142,14 +142,6 @@ const char *agc_launch_self_path(int argc, char **argv, const char *fallback, ch
   return buffer;
 }
 
-static bool flush_stream(FILE *stream) {
-  while (fflush(stream) != 0) {
-    if (errno != EINTR) return false;
-    clearerr(stream);
-  }
-  return true;
-}
-
 static void flush_files(agc_vm *vm) {
   if (setjmp(vm->fail) == 0) {
     agc_io_flush_files(vm);
@@ -195,8 +187,8 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_processes_stop(vm);
   agc_io_children_stopped();
   say_goodbye(vm, outcome);
-  bool stdout_ok = flush_stream(stdout);
-  flush_stream(stderr);
+  bool stdout_ok = agc_stdio_flush(stdout) != AGC_STDIO_FLUSH_FAILED;
+  agc_stdio_flush(stderr);
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
   agc_files_close(vm);
@@ -208,7 +200,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   }
   const char *write_error = NULL;
   if (outcome->kind != AGC_FAILED && !agc_io_stop_signal()) {
-    if (!stdout_ok || !flush_stream(stdout))
+    if (!stdout_ok || agc_stdio_flush(stdout) == AGC_STDIO_FLUSH_FAILED)
       write_error = "cannot write to standard output";
     else if (agc_output_failed(&vm->rt->err))
       write_error = "cannot write to standard error";
@@ -229,8 +221,8 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
     code = (int)outcome->exit_code;
   }
   AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "end code=%d signal=%d", code, agc_io_stop_signal());
-  flush_stream(stdout);
-  flush_stream(stderr);
+  agc_stdio_flush(stdout);
+  agc_stdio_flush(stderr);
   return code;
 }
 
