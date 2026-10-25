@@ -91,6 +91,54 @@ def tsan_stdio_fixture_enabled():
             os.path.realpath(os.environ.get("AGENTICA_TEST_EXECUTABLE", "")) == expected)
 
 
+def assert_tsan_finalize_race_report(report):
+    assert report.count(b"WARNING:") == 1
+    assert report.count(b"WARNING: ThreadSanitizer: data race") == 1
+    assert b"tsan_finalize_control.c" in report
+    assert b"shared_value" in report
+    assert report.count(b"ThreadSanitizer: reported") == 1
+    assert report.count(b"ThreadSanitizer: reported 1 warnings") == 1
+
+
+def test_tsan_finalize_race_report_accepts_pid_and_thread_order_variation():
+    reports = [
+        b"""WARNING: ThreadSanitizer: data race (pid=101)
+    Write of size 4 at tsan_finalize_control.c:11:16 (thread T1)
+    Previous write of size 4 at tsan_finalize_control.c:19:18 (main thread)
+    Location is global 'shared_value'
+SUMMARY: ThreadSanitizer: reported 1 warnings
+""",
+        b"""WARNING: ThreadSanitizer: data race (pid=202)
+    Write of size 4 at tsan_finalize_control.c:19:18 (main thread)
+    Previous write of size 4 at tsan_finalize_control.c:11:16 (thread T1)
+    Location is global 'shared_value'
+SUMMARY: ThreadSanitizer: reported 1 warnings
+""",
+    ]
+    for report in reports:
+        assert_tsan_finalize_race_report(report)
+
+
+@pytest.mark.parametrize("report", [
+    b"SUMMARY: ThreadSanitizer: reported 1 warnings\n",
+    b"WARNING: ThreadSanitizer: lock-order-inversion\n"
+    b"tsan_finalize_control.c shared_value\n"
+    b"SUMMARY: ThreadSanitizer: reported 1 warnings\n",
+    b"WARNING: ThreadSanitizer: data race\nother_control.c shared_value\n"
+    b"SUMMARY: ThreadSanitizer: reported 1 warnings\n",
+    b"WARNING: ThreadSanitizer: data race\ntsan_finalize_control.c other_global\n"
+    b"SUMMARY: ThreadSanitizer: reported 1 warnings\n",
+    b"WARNING: ThreadSanitizer: data race\ntsan_finalize_control.c shared_value\n"
+    b"SUMMARY: ThreadSanitizer: reported 2 warnings\n",
+    b"WARNING: ThreadSanitizer: data race\ntsan_finalize_control.c shared_value\n"
+    b"WARNING: ThreadSanitizer: another warning\n"
+    b"SUMMARY: ThreadSanitizer: reported 1 warnings\n",
+])
+def test_tsan_finalize_race_report_rejects_unexpected_reports(report):
+    with pytest.raises(AssertionError):
+        assert_tsan_finalize_race_report(report)
+
+
 def run_tsan_finalize_control(binary, hook, args, expected, tsan_options):
     read_fd = write_fd = None
     process = None
@@ -151,7 +199,7 @@ def tsan_stdio_support(tmp_path_factory):
     seven, seven_out, seven_err = run_tsan_finalize_control(control, hook, ["seven"], 7, options)
     assert seven_err == b"", seven_err.decode(errors="replace")
     race, race_out, race_err = run_tsan_finalize_control(control, hook, ["race"], 83, options)
-    assert b"WARNING: ThreadSanitizer: data race" in race_err, race_err.decode(errors="replace")
+    assert_tsan_finalize_race_report(race_err)
     assert no_race_out == seven_out == race_out == b""
 
     default_options = "halt_on_error=0"
@@ -161,8 +209,8 @@ def tsan_stdio_support(tmp_path_factory):
         control, hook, ["race"], None, default_options)
     assert default_race != 0, default_report.decode(errors="replace")
     assert hooked_race == default_race, hooked_report.decode(errors="replace")
-    assert b"WARNING: ThreadSanitizer: data race" in default_report, default_report.decode(errors="replace")
-    assert hooked_report == default_report, hooked_report.decode(errors="replace")
+    assert_tsan_finalize_race_report(default_report)
+    assert_tsan_finalize_race_report(hooked_report)
     assert default_out == hooked_out == b""
     return {"peer": tsan_peer, "hook": hook}
 
