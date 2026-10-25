@@ -1,15 +1,12 @@
 ---
 name: vm-c-critic
 description: >-
-  Review a pull request or diff that changes the Agentica C VM (vm/*.c, vm/*.h,
-  vm/tests, the bytecode loader or the interpreter) for memory safety, undefined
-  behavior, hostile-bytecode safety, Boehm GC rules, scheduler and task
-  semantics, hot-path efficiency, and keeping the C core small and layered.
-  Drives the investigation with the gmem code tools (code_diff, code_outline,
-  find_symbol, code_imports), then proves suspicions by running small programs.
-  Use when asked for a critic, security review or safety review of a VM or C PR
-  in the agentica repository. Not for writing or fixing the C code,
-  front-end-only changes (compiler/), Agentica programs, or docs-only PRs.
+  Review a PR or diff changing the Agentica C VM (vm/*.c, vm/*.h, vm/tests,
+  the loader or interpreter) for memory safety, UB, hostile-bytecode safety,
+  GC rules, scheduler semantics, hot-path efficiency, and a small layered
+  core. Investigates with gmem code tools, then proves suspicions with small
+  programs. Use for critic, security or safety reviews of VM/C PRs. Not for
+  writing code, front-end-only changes, programs, or docs-only PRs.
 compatibility: >-
   Agentica repository checkout or worktree with git, gh, rg, ast-grep and make;
   gmem MCP code tools when listed.
@@ -17,10 +14,10 @@ compatibility: >-
 
 # VM C critic
 
-You review a C change to the Agentica VM and report defects with evidence. You
-do not edit the PR's code, commit or push. The VM runs untrusted `.agcb`
-files, so a memory bug is a security bug. The core must stay small enough for
-one person to hold in their head (`docs/vm/14-core-invariants.md`).
+You review a C change to the Agentica VM and report defects with evidence;
+you never edit the code, commit or push. The VM runs untrusted `.agcb` files,
+so a memory bug is a security bug. The core must stay small enough for one
+person to hold in their head (`docs/vm/14-core-invariants.md`).
 
 ## Inputs
 
@@ -36,7 +33,7 @@ edits, say so and review the PR head through a scratch worktree instead.
 ## Tool ladder (stop at the first that answers)
 
 - What changed, by symbol: gmem `code_diff` (`base: origin/<base>`,
-  `root: <worktree>`); else `git diff --stat` and
+  `root: <worktree>`); else `git diff --stat` with
   `git diff origin/<base>...HEAD`.
 - Exact hunks: `git diff origin/<base>...HEAD -- <path>`.
 - Shape of a file: gmem `code_outline`; else `rg -n '^[a-z].*\(' <file>`.
@@ -55,15 +52,15 @@ line ranges will not match the diff.
 
 ## Workflow
 
-1. **Recall once.** Call gmem `recall` (limit 3–5) naming the component, for
-   example "vm list trie builder", or "vm task cancel timer". Treat weak
-   results as nothing known.
+1. **Recall once.** Call gmem `recall` (limit 3–5) naming the component
+   ("vm list trie builder", "vm task cancel timer"). Treat weak results as
+   nothing known.
 2. **Load the rules.** Read `AGENTS.md`. From
    `.agents/skills/agentica-development/references/`, read `vm.md` ("Trust
    model") and `vm-c.md` (C style, failure and exit, Boehm GC), plus the
-   `vm-*.md` file that the "Read next" table of `vm.md` names for the touched
-   area. Read the sections of `docs/vm/14-core-invariants.md` (§14.1–§14.6) and
-   `docs/vm/15-layers.md` that the PR touches, plus the design doc of the area.
+   `vm-*.md` file the "Read next" table of `vm.md` names for the touched
+   area. Read the touched sections of `docs/vm/14-core-invariants.md`
+   (§14.1–§14.6) and `docs/vm/15-layers.md`, plus the area design doc.
 3. **Map the change** with `code_diff`, then cross-check with `git diff --stat`
    so no file is missed. Note new files, new `agc_*` exports, new opcodes,
    builtin table rows, new resource kinds and new fields in `agc_vm`,
@@ -87,7 +84,7 @@ line ranges will not match the diff.
   overflow, shifts by ≥ 64 or by a negative count, and narrowing casts are UB
   or silent bugs: compute on `uint64_t`.
 - Strings: an `agc_string` is not NUL-terminated for libc unless the code made
-  it so. Embedded NUL bytes must be rejected before libc calls.
+  it so; embedded NUL bytes must be rejected before libc calls.
 - `malloc` memory: freed on every path, including a `longjmp` from `agc_fail`
   that skips the cleanup, a cancelled task, a detached job and the end of the
   run. libuv requests get `uv_*_req_cleanup`.
@@ -137,10 +134,9 @@ a finding.
   `AGC_COST_SIZE`) is separate. Work that grows with input must charge turn
   cost. Report any path that does unbounded work for a constant charge, and any
   long CPU builtin that blocks other tasks well past one turn.
-- Diagnostics: one code with a span. Changes to diagnostic output (new JSON
+- Diagnostics: one code with a span. Diagnostic output changes (new JSON
   keys, new lines) must not break their readers: `stdlib/test/child.agc`
-  (`vm_shape?`), `compiler/bdd/bdd_runner.agc` and the tests that parse
-  `--json`.
+  (`vm_shape?`), `compiler/bdd/bdd_runner.agc`, the tests parsing `--json`.
 
 ### Efficiency
 
@@ -167,7 +163,7 @@ a finding.
   basename glob.
 - Platform code: a new `#ifdef` inside a shared function, two copies of one
   function under `#ifdef`, or one-system flags in a shared struct is a finding
-  (flag what the diff adds, not older code). The fix is a platform adapter
+  (flag what the diff adds, not older code). Fix with a platform adapter
   (`references/vm-c.md` of agentica-development, "Platform code").
 - C style and comments: apply `references/vm-c.md` of agentica-development
   ("C style"). Its *checked* rules run in `make vm-lint` and
@@ -195,14 +191,9 @@ a finding.
 
 ## Proving a finding
 
-Run only what the finding needs. Wrap every command:
-
-```bash
-timeout -k 10 300 <cmd>
-```
-
-Use a memory limit if your system has one. Use 600 seconds for builds. Exit 124
-means a timeout: retry once, then report it.
+Run only what the finding needs. Wrap every command in `timeout -k 10 300
+<cmd>`, with a memory limit when the system has one (600 seconds for builds).
+Exit 124 means a timeout: retry once, then report it.
 
 - Build the PR binary with `make -j8`. Run a program with
   `dist/agentica prog.agc`, plus `--json` or `--max-steps N` when they matter.
@@ -240,8 +231,7 @@ Not run
 
 - A blocker is a memory error, UB, a crash or hang reachable from a valid
   program or a hostile `.agcb`, a broken core rule (§14), or a CI-breaking
-  defect.
-- Line numbers come from the tools or the diff. Never invent them.
-- Prefer one real defect with a repro over a list of guesses. A suspicion you
-  could not prove goes under Minor as "suspected", with what would confirm it.
+  defect. Line numbers come from the tools or the diff; never invent them.
+- Prefer one real defect with a repro over a list of guesses. An unproven
+  suspicion goes under Minor as "suspected", with what would confirm it.
 - Write the report in the language of the request.

@@ -18,28 +18,24 @@ To decide whether a change needs new docs at all, use `documentation-writing`.
 
 ## 1. Discover
 
-Read the repository instructions and the documentation structure before
-editing. Discover, in order:
+Before editing, discover, in order:
 
-1. **The lifecycle rules of this repository.** Find the indexes and
-   conventions that already say where content lives when it is built, pending,
-   done or an idea, and adopt them instead of inventing a parallel system:
-   index files that assign a home per topic, rules about moving content when a
-   plan lands, and archived-history policies (what git keeps, what the doc
-   keeps).
+1. **The lifecycle rules.** The indexes that assign a home per topic, the
+   rules for moving content when a plan lands, and archived-history policies
+   (what git keeps, what the doc keeps). Adopt them instead of inventing a
+   parallel system.
 2. **The structure and generators.** Actual paths, build system, site
-   generators, tests that validate docs, and cross-tree wiring (an index that
-   concatenates files, an adapter with a hard file count). Never assume a
-   specific repository layout.
+   generators, tests that validate docs, and cross-tree wiring. Never assume
+   a specific repository layout.
 3. **Size outliers.** Record Markdown file count, bytes, lines, and estimated
    tokens by area (measure with `scripts/tokens.sh`, tiktoken `o200k_base`),
-   and rank the largest files. The top outliers are the first candidates: a big
-   always-loaded index or a big plan document is where pruning pays most.
+   and rank the largest files. Start with the top outliers: a big
+   always-loaded index or plan document is where pruning pays most.
 
-Identify the roles by purpose, not fixed paths: agent skills (`SKILL.md`:
-minimal, self-contained), skill resources (`references/`: on demand), internal
-docs (specs, decisions, design: authoritative), public docs (Hugo, MkDocs:
-only when in scope), code, tests and CLI (prefer over repeated facts).
+Identify roles by purpose, not path: skills (`SKILL.md`: minimal,
+self-contained), resources (`references/`: on demand), internal docs
+(authoritative), public docs (only when in scope), code, tests and CLI
+(prefer over repeated facts).
 
 For Agentica, do not crawl `site/content/` during a general docs audit. Include
 Hugo pages when requested or explicitly in scope, and inspect only relevant
@@ -56,8 +52,7 @@ Two classes of information decide what stays loaded:
   reference file, or a discovery command.
 
 Load a document because the task needs it, not because it exists. Check that
-each navigation path (indexes, links, agent-loading instructions, skill
-dependencies) reaches the relevant section without loading its siblings.
+each navigation path reaches its section without loading siblings.
 
 ## 2. Lifecycle dispositions
 
@@ -75,12 +70,11 @@ starting point; the repository's own lifecycle rules (§1) override it.
 | Decided against | One index line linking the rationale; no file |
 
 **Plan documents keep decisions, not recipes.** A plan file holds what was
-decided (the API surface, the semantics, one-way choices, rejected
-alternatives, open questions) and drops how it will be implemented step by
-step: which files to touch, which tests to write, which fixtures to rename.
-That fine design is decided again when the implementation PR happens, and
-written plan detail rots (it cites files and paths that later PRs delete).
-Keep the contract; cut the recipe. Never drop an owner decision.
+decided (API surface, semantics, one-way choices, rejected alternatives, open
+questions) and drops the implementation recipe (files to touch, tests to
+write, fixtures to rename). Recipe detail rots; it is re-decided at
+implementation. Keep the contract; cut the recipe. Never drop an owner
+decision.
 
 **Agentica map (verify before use):** `docs/grammar/` is the current language
 contract (the site renders it; one line per paragraph). `docs/vm/` is the VM
@@ -112,10 +106,10 @@ Find:
 
 Classify candidates as `keep`, `shorten`, `merge`, `delete`, or `investigate`.
 
-For each nontrivial candidate, record the exact location, claim, repository
-evidence, confidence (high/medium/low), and proposed disposition. Verify
-factual claims against current code, tests, config, history, or a later
-decision. "Already implemented" needs evidence, not memory:
+For each nontrivial candidate, record the exact location, claim, evidence,
+confidence (high/medium/low), and proposed disposition. Verify claims against
+current code, tests, config, history, or a later decision. "Already
+implemented" needs evidence, not memory:
 
 - the construct appears in the current contract (grammar, library reference,
   or VM docs), with its rules;
@@ -160,14 +154,9 @@ implementation details.
 
 ## 6. Prefer executable truth
 
-Before keeping manually maintained technical documentation, check whether the
-information can be retrieved reliably from:
-
-- Source code, types, schemas, and symbol search.
-- Tests, examples, and assertions.
-- CLI help, introspection, and generated API references.
-- Build scripts, configuration, and CI definitions.
-
+Before keeping manually maintained documentation, check whether the
+information is reliably retrievable from code, types, tests, examples, CLI
+help, introspection, schemas, build scripts, config, or CI definitions.
 Replace redundant inventories with discovery commands or pointers when cheaper
 and reliable. Preserve non-derivable knowledge (code describes behavior, not
 intent): design rationale, security invariants, compatibility promises,
@@ -181,7 +170,7 @@ coverage; the code, tests and skill references are their readers.
 
 ## 7. Edit safely
 
-- Respect scope, repository rules, existing changes, and user authorization.
+- Respect scope, repo rules, existing changes, and user authorization.
 - Work incrementally by topic. Prefer deletion and consolidation over
   rewriting.
 - Preserve normative contracts, unfinished work, important decisions, and
@@ -206,8 +195,8 @@ Handle source conflicts as in §3; never invent consensus.
 
 ## 8. Validate and report
 
-Validation is the only gate when the repository skips CI for docs-only PRs:
-nothing else checks the change, so run the checks that CI would have run.
+For docs-only PRs the repository skips CI, so validation is the only gate:
+run the checks that CI would have run.
 
 - `git diff --check` and the repo's Markdown prose rules (for Agentica: 80
   columns for `docs/` and `.agents/skills/`; the site keeps one line per

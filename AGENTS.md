@@ -15,8 +15,7 @@ compiler/           the front end in Agentica (§18), one folder per context
                     (builtins, prelude), analysis (queries shared by the CLI
                     and std/analysis); front_end.agc is the program the binary
                     carries
-Makefile, mk/       the build: defaults and `help` in the root; one mk/*.mk per
-                    area (vm, bootstrap, test, vm-test, windows, release, site),
+Makefile, mk/       the build (`help` in the root); one mk/*.mk per area,
                     included in a fixed order
 bootstrap/          stage0.agcb: a checked-in front end that the build starts from
 vm/                 C11 VM: values, interpreter, loader, GC, tasks, I/O, HTTP, JSON;
@@ -43,11 +42,11 @@ phase 13).
 - `poetry install --only test --no-root`: the pytest environment.
 - `make`: build `dist/agentica` (`git submodule update --init` first). Linux
   uses system libgc, OpenSSL and zlib (`pkg-config`);
-  `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored AGENTICA_ZLIB=vendored` links the vendored
-  ones statically. The build links a first binary with
-  `bootstrap/stage0.agcb`, compiles the front end three times and links the
-  final binary. `make fixed-point` checks it once more; `make stage0`
-  refreshes the seed (`references/ci.md` of the development skill).
+  `make AGENTICA_GC=vendored AGENTICA_OPENSSL=vendored AGENTICA_ZLIB=vendored` links them
+  statically. The build bootstraps from `bootstrap/stage0.agcb`, compiling
+  the front end three times. `make fixed-point` checks it once more;
+  `make stage0` refreshes the seed (`references/ci.md` of the development
+  skill).
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: a
   subset. `make test` alone runs everything (`JOBS=8` sets the workers).
 - `make vm-test`: the C tests. `make test-cli`: the command line tests.
@@ -58,15 +57,15 @@ phase 13).
 - `make vm-tsan`: the C tests of the code that threads share under
   ThreadSanitizer, in a build without libgc. `make test-shared`: the binary
   test modules with every lock and held check of the shared state on. Run
-  both when you change shared-state C code; CI runs them too.
+  both for shared-state C changes.
 - `make tests KIND=files` (the destructive filesystem cases) runs only in the
   Docker sandbox or an ephemeral CI runner, never on the host
   (`references/ci.md` of the development skill).
 - `make goldens` rewrites the VM goldens, `tests/fixtures/cli/forms.json` and
   the fast-tier front-end goldens; commit them. The slow-tier manifests of
   `tests/fixtures/frontend/frozen/` need the full `python3 tools/refreeze.py`.
-- The CI steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are
-  make targets, so they run locally the same way.
+- The steps of `ci.yml`, `sweep.yml` and the tests of `release.yml` are
+  make targets; run them locally the same way.
 
 ## Where to read
 
