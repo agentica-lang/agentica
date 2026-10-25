@@ -15,13 +15,13 @@ description: >-
 
 A release is one version bump PR, one annotated tag on its merge commit, one
 GitHub release made by `.github/workflows/release.yml`, hand-written notes,
-and a Pages rebuild. Do the steps in order. A pushed tag publishes, so stop
-and report if any check before it fails.
+and a Pages rebuild, in order. A pushed tag publishes: stop and report if any
+check before it fails.
 
 ## 0. Pick the version
 
-- The version is SemVer with no `v`: `0.5.0`, or `0.5.0-beta.1` for a
-  pre-release.
+- The version is SemVer with no `v` (`0.5.0`; `0.5.0-beta.1` for a
+  pre-release).
 - **Beta policy:** a release is a beta (`X.Y.Z-beta.N`) while a system lacks
   a feature that the others have (new VM features land on Linux first). From
   0.8.1 to 0.9.0 every release was a beta until Windows matched (#568); 0.9.0
@@ -33,7 +33,7 @@ and report if any check before it fails.
 
 ## 1. Version bump PR
 
-Make a worktree from `origin/master` (never switch the main checkout), on a
+Make a worktree from `origin/master` (never switch the main checkout) on a
 branch such as `release/<version>`. Change only:
 
 1. `VERSION`: the new version, one line.
@@ -51,10 +51,10 @@ branch such as `release/<version>`. Change only:
    - Read the entries once: they must say what users see. Mark a breaking
      change `**Breaking:**`.
 3. `bootstrap/stage0.agcb`: refresh it before every release. Run
-   `make fixed-point stage0`, check that the diff is only that one binary
-   file, run `make` again (it must build from the new stage0), and commit it.
-   CI rebuilds it from the base stage0 (`make stage0-check`) and must match.
-   If the old stage0 cannot compile `compiler/`, follow "Refreshing stage0" in
+   `make fixed-point stage0`, check the diff is only that one binary file,
+   run `make` again (it must build from the new stage0), and commit it. CI
+   rebuilds it from the base stage0 (`make stage0-check`) and must match. If
+   the old stage0 cannot compile `compiler/`, follow "Refreshing stage0" in
    `.agents/skills/agentica-development/references/ci.md`.
 
 Wrap every build in
@@ -69,8 +69,7 @@ Wrap every build in
 
 ## 2. Tag and publish
 
-Right away after the PR merges, tag its merge commit (no checkout of master
-needed):
+Right after the PR merges, tag its merge commit (no master checkout needed):
 
 ```bash
 git fetch origin
@@ -84,25 +83,21 @@ git push origin <version>
   builds, checks and smoke-tests the four archives, writes `SHA256SUMS`, and
   `publish` creates the release with empty notes. The job chain is described
   under "Release" in `.agents/skills/agentica-development/references/ci.md`.
-- Watch the run with one background loop:
-  `gh run list --workflow release.yml -L 3`, then `gh run watch <id>`.
+- Watch the run with one background loop: `gh run list --workflow
+  release.yml -L 3`, then `gh run watch <id>`.
 - If a job fails before `publish`, nothing is public yet. Read the log, fix it
-  on master with a normal PR, then ask the owner before you delete and re-push
-  the tag. Deleting a tag is outward-facing.
+  on master with a normal PR, then ask the owner before deleting and
+  re-pushing the tag. Deleting a tag is outward-facing.
 - `publish` creates a draft, then makes it public. If it fails in between, a
   draft release stays next to the pushed tag: check `gh release list`, and ask
   the owner before you edit or delete it.
 
 ## 3. Release notes
 
-`publish` leaves the notes empty. Write them by hand, short:
-
-- the key user-visible points;
-- the breaking changes;
-- for a beta, what is missing on which system;
-- a link to the CHANGELOG section for the details.
-
-Do not list PRs; the details stay in `CHANGELOG.md`.
+`publish` leaves the notes empty. Write them by hand, short: the key
+user-visible points, the breaking changes, for a beta what is missing on which
+system, and a link to the CHANGELOG section. Do not list PRs; details stay in
+`CHANGELOG.md`.
 
 ```bash
 gh release edit <version> --notes-file <file>
@@ -112,9 +107,9 @@ gh release edit <version> --notes-file <file>
 
 The site reads the version from `VERSION` (`make site` sets
 `site.Params.version`; the `release` shortcode links to the tag). But
-`pages.yml` runs only on pushes that touch `site/**`, the grammar docs, the
-workflow or the `Makefile`, and not `VERSION`. So after the release is
-published, rebuild the site by hand:
+`pages.yml` runs only on pushes touching `site/**`, the grammar docs, the
+workflow or the `Makefile`, not `VERSION`. So after publishing, rebuild the
+site by hand:
 
 ```bash
 gh workflow run pages.yml --ref master
@@ -137,8 +132,8 @@ that its release link opens the release.
 
 ## Gotchas
 
-- Signing and notarization (Apple Developer ID, Windows Authenticode) are not
-  set up. Never claim them in the notes.
+- Signing and notarization (Apple Developer ID, Windows Authenticode) are
+  not set up; never claim them in the notes.
 - A manual run of `release.yml` (`gh workflow run release.yml --ref <branch>`)
   only uploads artifacts. Use it to try a release change before tagging.
 - Never tag a commit whose `VERSION` differs from the tag: the `version` job

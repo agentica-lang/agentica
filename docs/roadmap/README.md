@@ -28,7 +28,8 @@ keeps their records.
   1. The JIT groundwork, without tier 2
      ([#622](https://github.com/sonic182/agentica/issues/622)): interpreter
      opcode and opcode-pair profile counters (done), `leaf` builtins (done),
-     then the helpers by pointer,
+     then the opcode helpers by pointer (direct compiled calls to non-leaf
+     builtins stay deferred beyond 0.10.0),
      errors without `longjmp` through compiled code and a W^X code memory.
      Smaller values ([#396](https://github.com/sonic182/agentica/issues/396))
      are deferred beyond 0.10.0.

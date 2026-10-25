@@ -1,10 +1,6 @@
 # FFI examples
 
-Small runnable examples of calling C from Agentica (`extern` blocks,
-`C` types, `Native`). They all use one tiny teaching library, `demo.c`
-(only the C library, no other dependencies): plain arithmetic, not a model.
-Each pattern is the same one real numeric or inference runtimes use, with a
-note saying which.
+Small runnable examples of calling C from Agentica (`extern` blocks, `C` types, `Native`), all against one tiny teaching library, `demo.c`: plain arithmetic, not a model. Each pattern is the same one real numeric or inference runtimes use.
 
 - [`calls.agc`](calls.agc): plain typed calls, plus one `compute def` whose
   input bounds the work (kept small here).

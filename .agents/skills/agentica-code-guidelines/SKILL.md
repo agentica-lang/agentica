@@ -9,7 +9,7 @@ description: >-
 
 # Agentica code guidelines
 
-Use on `.agc` that passes `agentica check`. Fix syntax or type errors first
+Use on `.agc` that passes `agentica check`; fix syntax or type errors first
 with `agentica-programming`. A diagnostic code in parentheses means the front
 end refuses that form. `[test]` means a repo test enforces the rule. Unmarked
 rules are review-only.
@@ -38,17 +38,16 @@ Change style only in code you touch. Restyle untouched code separately.
 ## Naming
 
 - `snake_case` for functions, variables, fields and files; `CamelCase` for
-  structs, enums and variants. The first letter is enforced
-  (`PARSE-UNEXPECTED-TOKEN`); the rest is style.
+  structs, enums and variants (only the first letter is enforced:
+  `PARSE-UNEXPECTED-TOKEN`).
 - Constants are `UPPER_SNAKE_CASE`, at least two characters
   (`PARSE-CONSTANT-NAME`). Name meaningful numbers; use `_` in large numbers.
-- Bool-returning functions end in `?` and read as questions; no `is_`. Bool
+- Bool-returning functions end in `?` and read as questions (no `is_`); Bool
   variables/fields are adjectives or `has_` names.
 - `!` means a function halts instead of returning a `Result`; give your own
   function `!` only when it halts. Default to returning `Result`.
 - Name by meaning, not type (`price`, not `int_value`). Avoid `do_x`/`x_impl`
-  twins; give a helper its own name. State the positive case first; avoid
-  `if !x ... else ...`.
+  twins. State the positive case first, not `if !x ... else ...`.
 
 ## Modules and docs
 
@@ -59,19 +58,18 @@ Change style only in code you touch. Restyle untouched code separately.
 - Export only names used by other files. Keep one topic per file; split files
   that grow into several topics.
 - Use `import Alias from "path"` for many names or possible collisions;
-  `import {a, B} from "path"` for one or two frequent names. A constant reads
-  through the alias too (`Mod.LIMIT`), so one import is enough; import a
-  constant by name only when it is used often.
+  `import {a, B} from "path"` for one or two frequent names. Constants read
+  through the alias too (`Mod.LIMIT`); import one by name only when used
+  often.
 - Add a descriptive local type alias when a composite/qualified type recurs;
   don't alias a short, clear type.
-- The first `##` block, then a blank line, is the module doc. Document as little
-  as possible (KISS; implicit over explicit). Only public code gets `##`: an
-  exported `def`, `struct` or `enum` (every export of `stdlib/` needs one;
-  `tests/test_stdlib_docs.py` checks it), saying what it returns or is, not how.
-  A private `def` never gets `##`; if it needs a note, use one `#` comment.
-  Comment complex code where its nature needs it. A field or variant gets a note
-  only when its name does not say enough. No doc that repeats the name or the
-  signature.
+- The first `##` block, then a blank line, is the module doc. Document as
+  little as possible (KISS; implicit over explicit). Only public code gets
+  `##`: an exported `def`, `struct` or `enum` (every `stdlib/` export needs
+  one; `tests/test_stdlib_docs.py` checks it), saying what it returns or is,
+  not how. A private `def` never gets `##` (one `#` comment when it needs a
+  note). A field or variant gets a note only when its name does not say
+  enough. No doc repeats the name or signature.
 - `#` comments explain why (rule, order, limit, trick), not the next line.
   Put them in a function body or above a `##` block, never between it and its
   declaration (`PARSE-DETACHED-DOC`). Remove commented-out code.
@@ -83,12 +81,12 @@ Change style only in code you touch. Restyle untouched code separately.
 - Prefer four or fewer parameters; group more in a struct, and give its
   optional fields defaults so a caller names only what differs. Put options
   last with defaults (`CHECK-DEFAULT-ORDER`).
-- Guard-return bad cases early. Keep nesting to three levels of `if`, `for`,
-  `while` and `case`.
+- Guard-return bad cases early. Nest `if`, `for`, `while` and `case` at most
+  three levels.
 - Return a struct/enum, not parallel lists, fixed-key maps or magic codes.
-- Use `for` for totals/results; collection methods for transforms. Blocks cannot
-  assign outer variables (`CHECK-CAPTURED-ASSIGNMENT`). Rebind only loop state;
-  use a new name for a new meaning.
+- Use `for` for totals/results, collection methods for transforms. Blocks
+  cannot assign outer variables (`CHECK-CAPTURED-ASSIGNMENT`). Rebind only
+  loop state; a new meaning gets a new name.
 - Test Bools directly (`if done`), not against `true`/`false`. Use `and`,
   `or`, `not`, not `&&` or `||`; name long predicates with a `?` function.
 
@@ -124,14 +122,13 @@ Change style only in code you touch. Restyle untouched code separately.
   why in a comment.
 - Error text is lowercase, has no final period, and includes the bad value.
   Don't swallow errors with `unwrap_or` unless the default is right; explain it.
-- Handle errors at the boundary (`main`, request handler) with `IO.warn`.
-  Use an enum for caller-visible outcomes; `error(msg)` for human-readable
-  failures.
+- Handle errors at the boundary (`main`, request handler) with `IO.warn`; an
+  enum for caller-visible outcomes, `error(msg)` for human-readable failures.
 
 ## Strings and collections
 
 - Build text with interpolation, not `+` or `.to_s`. Use a heredoc or a few
-  sentence-sized `+` pieces, never one piece per line.
+  sentence-sized `+` pieces, never one per line.
 - Use `List` for order, `Set` for membership, `Map` for keyed lookup, and a
   struct for a record with known fields.
 

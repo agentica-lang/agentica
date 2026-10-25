@@ -12,8 +12,8 @@ description: >-
 # Documentation writing
 
 **Document only when strictly necessary.** The default is no doc change.
-Change docs only when a reader would otherwise be wrong or blocked. To shrink
-docs that already grew, use `documentation-pruning`.
+Change docs only when a reader would otherwise be wrong or blocked. To
+shrink grown docs, use `documentation-pruning`.
 
 ## 1. Is a doc change needed?
 
@@ -23,8 +23,8 @@ Ask what changed and who reads about it:
   and the programming skill together (the AGENTS.md rule), plus a CHANGELOG
   entry.
 - **A design decision or contract:** the design doc (built: `docs/vm/`;
-  planned: the roadmap phase file). Write the decision and its reason, not the
-  recipe (files touched, steps taken).
+  planned: the roadmap phase file). Write the decision and its reason, not
+  the recipe.
 - **An implementation detail:** a code comment where the code is not obvious,
   or nothing.
 - **Progress or evidence:** the PR body, the roadmap tick or the CHANGELOG.
@@ -45,7 +45,7 @@ docs. Do not create files under `docs/` unless the user asks for one
 
 - Every claim maps to code, a test or a CI run you can name.
 - No "always", "every", "never" or "all" until you checked each case
-  (`rg` the sites, count them).
+  (`rg` the sites and count them).
 - Put the conditions in the sentence: "when libuv can assign its job object",
   not a bare "children die with the job".
 - Keep built and planned apart. Describe a rule in the grammar or the site
