@@ -15,27 +15,27 @@ description: >-
 
 # Agentica development
 
-`compiler/` (Agentica) compiles programs to bytecode; `vm/` (C11) runs them.
-Both are linked into one binary. The repo tree is in `AGENTS.md`; this file
-says how to work and which reference to read. Load only the references your
-change needs.
+`compiler/` (Agentica) compiles programs to bytecode; `vm/` (C11) runs them,
+both linked into one binary. The repo tree is in `AGENTS.md`; this file says
+how to work and which reference to read. Load only the references your change
+needs.
 
 - The rules of `AGENTS.md` apply (front end in `compiler/`, hand-edited data
   files, no placeholders for later phases). Read the active phase in
   `docs/roadmap/` first and build only what it asks.
-- One way per thing, and it is the Ruby form (name, method form, syntax), which
-  LLMs already know. A different Agentica name is only the internal builtin
-  name, with the Ruby name as its alias (`method_aliases` in
-  `check_tables.agc`); every user-facing text (help, diagnostics, docs, site,
-  skills) shows only the Ruby form (`s.strip`, not `String.trim`). A non-Ruby
-  habit gets a `help:` hint, not a second accepted form. Exception: Ruby's own
-  synonyms are all accepted (`length`/`size`, `collect`, `inject`, `detect`,
-  `member?`; `ruby_synonyms`), and the texts show only the most common one.
+- One way per thing, and it is the Ruby form (name, method form, syntax). A
+  different Agentica name is only the internal builtin name, with the Ruby
+  name as its alias (`method_aliases` in `check_tables.agc`); every
+  user-facing text (help, diagnostics, docs, site, skills) shows only the
+  Ruby form (`s.strip`, not `String.trim`). A non-Ruby habit gets a `help:`
+  hint, not a second accepted form. Exception: Ruby's own synonyms are all
+  accepted (`length`/`size`, `collect`, `inject`, `detect`, `member?`;
+  `ruby_synonyms`), and texts show only the most common one.
 
 ## Finding code
 
-- gmem tools when listed: `find_symbol`, `code_outline`, `code_imports`,
-  `code_diff`. They index top-level definitions only.
+- gmem tools when listed (`find_symbol`, `code_outline`, `code_imports`,
+  `code_diff`); they index top-level definitions only.
 - `rg` for text, call sites and references.
 - `.agc` structure:
   `ast-grep run --lang ruby -p 'File.open($$$)' stdlib/ tests/`
@@ -56,7 +56,7 @@ make dup-check                # jscpd: a new copy fails CI; share a helper inste
 ```
 
 Run what the change touches and the affected example with `dist/agentica`.
-Make runs one pytest process per module, so keep xdist off.
+One pytest process runs per module, so keep xdist off.
 
 ## Stage contract
 
@@ -72,7 +72,7 @@ Recipes for each kind are in `references/frontend.md` ("Common tasks"); this
 list gives the homes.
 
 - Keyword, operator, AST node, syntax: `compiler/syntax/` (lexer tables,
-  `ast.agc`, the parser), with a golden. Use the Ruby syntax when Ruby has one.
+  `ast.agc`, the parser), with a golden. Prefer the Ruby syntax.
 - Diagnostic code: where the problem is found, with its stage prefix (`LEX-`,
   `PARSE-`, `CHECK-`, `RUNTIME-`, `LOWER-`, `BYTECODE-`, `stages.md`), or
   `PKG-` (`Failure.fail_key` for a key path in `agentica.toml` or

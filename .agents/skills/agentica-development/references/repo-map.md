@@ -39,7 +39,7 @@ vm/               # the C11 VM; layers and the "Read next" table in references/v
   agentica.c      # main: `run`, else the front end in a first runtime, retired at the hand-off, then the program in a second
   embedded.h      # the symbols of the generated embedded.s (references/vm-build.md)
   jit/            # the JIT, core layer: jit.h (its one header), jit.c, emit_x64.c, mem_posix.c, mem_windows.c (references/vm-core.md)
-  third_party/    # submodules bdwgc, yyjson, libuv, picohttpparser, openssl, libffi (pins: docs/vm/10-dependencies-and-platforms.md)
+  third_party/    # submodules bdwgc, yyjson, libuv, picohttpparser, openssl, libffi, zlib (pins: docs/vm/10-dependencies-and-platforms.md)
   tests/          # C tests, plain asserts (references/vm-tests.md)
 tests/            # pytest modules test_<area>.py (VM tests: references/vm-tests.md)
   test_spec_<area>.py   # language rules through the CLI; helpers in spec_support.py
