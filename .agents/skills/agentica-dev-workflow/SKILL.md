@@ -100,8 +100,7 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
 
 - Code PRs need **CI** (`ci.yml`) green on the head commit, plus **Site
   examples** when the PR touches `site/content/` or its test. Docs-only PRs
-  skip `ci.yml` (an explicit docs-only exception); while checks are pending
-  GitHub refuses the merge as "not mergeable": wait, then merge.
+  skip `ci.yml` (an explicit docs-only exception) and do not wait for CI.
 - **Platforms** (`platforms.yml`: Windows, macOS Intel and ARM) runs on a PR
   only with the `platforms` label, and always on pushes to master. Add the
   label when the PR touches platform code (`vm/`, `#if` branches, processes,
