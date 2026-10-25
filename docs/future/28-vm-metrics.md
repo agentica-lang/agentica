@@ -22,45 +22,23 @@ small PRs, and a fourth after 17b:
 
 ### 28.1 Today
 
-- The VM has no metrics. VM tracing (`AGENTICA_VM_TRACE`) writes one line per
-  event; its `gc` category writes `collect at=turn|end count= heap= free=
-  since=` from Boehm's getters (`agc_gc_stats` in `vm/value.c`). Tracing is for
-  one run that a developer reads; it has no totals and nothing a dashboard can
-  poll.
-- The VM already keeps most of what an operator wants to see: Boehm's
-  `GC_get_gc_no`, `GC_get_heap_size`, `GC_get_free_bytes`,
-  `GC_get_bytes_since_gc` and `GC_get_total_bytes`; `next_task_id` (an
-  `_Atomic uint64_t` in `agc_runtime`, main is 1); `tasks_done`, which counts
-  every finished task except main (when main's turn ends with `done`, the run
-  loop in `vm/task.c` breaks out before `finish_task`, and `pending_tasks()`
-  relies on that); `steps_left` (counts down from `--max-steps` or
-  `INT64_MAX`); the run queue; and the resource registry (`vm/loop.c`), which
-  holds every open file handle, process, job, socket and listener.
-- Trace points sit at every event an operator would count. Each costs one test
-  of the trace mask when tracing is off (`AGC_TRACE_ON`, `vm/trace.h`).
-  `make TRACE=0` compiles them out.
-- I/O job kinds are named in their `agc_io_kind`: `file`, `lock`, `process`,
-  `sleep`, `stdin`, `tcp`. `lock` jobs are the timers of tasks waiting for a
-  handle's lock or on a channel, not I/O; `trace_finish` (`vm/loop.c`) skips
-  them, and also returns early when the job has no start time (it is saved only
-  while `io` tracing is on). A job's result is `ok`, `error` or `value` (a
-  builtin that returns a plain value, not a `Result`).
-- The run loop (`agc_vm_run` in `vm/task.c`): `dequeue`; if the queue is empty,
-  `agc_io_poll(vm, true)` (or the stall check) and back to `dequeue`; else run a
-  turn, `trace_turn`, `trace_gc`, then `finish_task` or `enqueue`, then
-  `agc_io_poll(vm, false)`, and back to `dequeue`. `agc_io_poll` returns at once
-  when the loop is not alive, so code inside it does not run on every turn.
-- Boehm can time collections itself: `GC_start_performance_measurement()` and
-  `GC_get_full_gc_total_time()` (milliseconds, all full collections; the VM
-  never turns on incremental mode). It has no per-collection callback with user
-  data: `GC_set_on_collection_event` takes a plain function, so timing each
-  collection would need a mutable global, which `vm/` forbids
-  (`docs/vm/10-io-multicore.md` §10.2.3, enforced by `make vm-lint`).
-- `vm/launch.c` ignores `SIGPIPE`. The libuv thread-pool threads start with
-  `SIGINT`, `SIGTERM` and `SIGHUP` blocked (`vm/loop.c`); Boehm's marker threads
-  do not, so the stop handler may run on any thread and only sets lock-free
-  atomics (§10.2.2, Stop signals). A metrics thread must start with them blocked
-  too (`agc_io_block_stop`).
+- The VM has no metrics. VM tracing (`AGENTICA_VM_TRACE`) writes one line
+  per event for one run that a developer reads; it has no totals and
+  nothing a dashboard can poll.
+- The VM already keeps most of what an operator wants to see: the GC
+  totals from Boehm, the task counters, `steps_left`, the run queue, and
+  the resource registry of open handles, processes, jobs, sockets and
+  listeners. A metric derived at scrape time from this state (28.2
+  rule 4) costs nothing between scrapes.
+- Trace points already sit at every event an operator would count, each
+  costing one mask test when tracing is off; a metrics hook shares that
+  test. The I/O job kinds and the dequeue points of the run loop place
+  the hooks (28.4).
+- Two constraints shape a metrics thread: Boehm has no per-collection
+  callback with user data, so per-collection timing would need a mutable
+  global, which `vm/` forbids; and the thread must start with the stop
+  signals blocked, like the pool threads, since the stop handler may run
+  on any thread (§10.2.2).
 
 ### 28.2 Rules
 

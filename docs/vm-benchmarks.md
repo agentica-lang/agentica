@@ -271,17 +271,16 @@ of one configuration. What changed (`vm/loader.c`, `vm/value.c`):
    `agc_gc_resume`): everything the loader allocates stays live until the load
    ends. The GC-stress build ignores the pause.
 
-Tried and dropped: a larger first heap (`GC_INITIAL_HEAP_SIZE` 4 to 8 MB, inside
-the noise); `madvise(MADV_POPULATE_READ)` of the carried front end (0.25 ms, a
-Linux-only call); a bump allocator for the small objects of the load (no
-change); `GC_DONT_GC=1` as a bound (1.2 ms, which the pause mostly takes).
+Tried and dropped, all inside the noise or Linux-only: a larger first
+heap (`GC_INITIAL_HEAP_SIZE` 4 to 8 MB); `madvise(MADV_POPULATE_READ)` of
+the carried front end (0.25 ms); a bump allocator for the small objects of
+the load; `GC_DONT_GC=1` as a bound (1.2 ms, which the pause mostly takes).
 
-Left, by worth: the loaded program is 4.6 MB of heap and page faults are half of
-the 8.3 ms. Reading the span table in place from the carried file would save
-about 1.7 ms, but the loader would have to keep the file bytes alive and the
-front end would load with less checking than a file given to `run` (not done).
-The collector is about a third of a hello check. The builtin catalog built at
-start (`Map.put`, `Set.new`, 2.4 ms of a 5 ms run) is 44e (static data).
+Left, by worth: page faults are half of the 8.3 ms; reading the span table
+in place would save about 1.7 ms but load the front end with less checking
+than a file given to `run` (not done). The collector is about a third of a
+hello check; the builtin catalog at start (`Map.put`, `Set.new`) is 44e
+(static data).
 
 ### Speed pass, second part: the lexer
 
@@ -312,11 +311,11 @@ came from fewer calls per token, not from a faster scan:
 3. The column of a position is `index + column_base`; the stack of open
    brackets keeps its last frame and size in locals.
 
-Tried and dropped: a `List[Bool]` table indexed by code (15 steps per character
+Tried and dropped: a `List[Bool]` table by code (15 steps per character
 against 9); unrolling the name scan by two (8.5 against 9, for more code).
-Counted, not built: lexing by pieces split on a marker character (about 22 M
-steps, needs a marker the text does not hold and a slow path), and lexing line
-by line (a line costs more than the comments save).
+Counted, not built: lexing by pieces split on a marker (about 22 M steps,
+needs a marker the text does not hold) and line by line (a line costs more
+than the comments save).
 
 ### Speed pass, third part: the interpreter loop
 
@@ -348,20 +347,12 @@ A `SIGPROF` sample of the front-end checks after this pass: the turn loop 41% to
 52% (a third of it the dispatch), the collector 21% to 26%, the loader about 10%
 of the gherkin check.
 
-Tried and dropped:
-
-- **Computed-goto dispatch:** GCC 14 cannot inline a function with a computed
-  goto, and it was slower on every loop benchmark (`arithmetic` +64%). The
-  `switch` stays.
-- **`MOVE` as two 8-byte copies** (to avoid a store-forwarding stall):
-  `arithmetic` +24%.
-- **Separate `ADD_I`, `SUB_I`, `MUL_I` handlers:** -10% to +16%, layout noise.
-- Kept although inside the noise: reading the span lazily (frees a register),
-  and the opcode range check before the jump table (the loader already rejects
-  unknown opcodes; a second line of defence).
-- Not tried: counting `STEP` in a local, because every failure path would have
-  to store it back before the `longjmp` (the budget of a crashed task is
-  observable).
+Tried and dropped: computed-goto dispatch (GCC 14 cannot inline it;
+`arithmetic` +64%, so the `switch` stays); `MOVE` as two 8-byte copies
+(`arithmetic` +24%); separate `ADD_I`, `SUB_I`, `MUL_I` handlers (layout
+noise). Kept inside the noise: lazy span reads and the opcode range check
+before the jump table (second line of defence). Not tried: counting `STEP`
+in a local (every failure path would store it back before the `longjmp`).
 
 ### Speed pass, shared small values (§34)
 
@@ -377,14 +368,9 @@ over seven padded layouts: 0.1448 s on master, 0.1111 s here (0.77; the gate of
 §34.4 is 10%). The other programs stay within 0.92 to 1.08 (layout noise), and
 the front end is neutral (it allocates 0.15% less).
 
-Tried and dropped:
-
-- **`CONCAT` with an empty side returns the other String:** a branch in the
-  hottest opcode, and real programs do not add empty Strings (the parser check
-  allocates the same).
-- **`filter` and `map` return the shared empty List:** the code is in
-  `resume_native` of `vm/interp.c`, which `File.each_line` also runs through;
-  one layout made that loop 12% slower.
-- **Not done:** the Strings of process output, TCP reads, `read_text`, HTTP
-  bodies and `Dir.list` (one allocation per I/O operation), and the `[]` of a
-  JSON array, whose builder has no vm.
+Tried and dropped: `CONCAT` with an empty side returning the other String
+(a branch in the hottest opcode, for a case real programs do not hit);
+`filter` and `map` returning the shared empty List (one layout made
+`File.each_line` 12% slower through the shared `resume_native` path).
+Not done: sharing the Strings of process output, TCP reads, `read_text`,
+HTTP bodies and `Dir.list`, and the `[]` of a JSON array.
