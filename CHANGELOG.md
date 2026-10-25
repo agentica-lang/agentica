@@ -8,73 +8,43 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Fixed
-
-- `Archive.extract_tar` accepts a destination that holds host backslashes (such as a cache root from the OS on Windows): the destination is normalized to the spelling the host join produces before the under-destination guard compares it, so a valid destination no longer looks like an escape.
+## [0.10.0] - 2026-10-25
 
 ### Added
 
-- A `[native]` entry may download its library: `{ url, sha256, member }` pins the TAR or ZIP archive and member per system, locked in `[[native-artifact]]` and fetched by `install`/`update` for the host; the archive format is detected from the file magic, never from the URL.
-
-- `std/archive` extracts an explicit allowlist of regular files from a plain or gzipped TAR into a new private directory (`Archive.extract_tar`), with fixed security ceilings and no extract-all.
-- `Archive.extract_zip` copies an explicit allowlist of regular files out of a classic single-disk ZIP (stored and raw deflate only) into a new private directory, with verified CRC32 and sizes for selected files and fixed read ceilings.
-- `--jit on` (or `AGENTICA_JIT=on`) compiles hot functions that have a loop
-  (Int and Float math, list, field, enum and Result reads, string joins and
-  text forms) to machine code on x86-64, with compiled CALL/RETURN frame
-  transitions through the interpreter; experimental, off by default.
-- HTTP.download streams a response body to a new file with bounded memory: binary-safe bodies up to 256 MiB, reported as status, headers and bytes written.
-- An exported constant is read through the module alias, like an exported
-  function: `Limits.MAX`, `Limits.NAMES.size`, `Limits.CONFIG.with(port: 81)`.
-  `Limits.MAX()` and `x: Limits.MAX` are now `CHECK-TYPE-MISMATCH`. A method
-  or field also reads on a variant written without parentheses
-  (`Level.High.to_s`).
-- Default values for struct fields: `retries: Int = 3` in a `struct`. A
-  constructor may leave out a field that has a default. The default follows
-  the rules of a parameter default.
-- A package can ship or name native libraries for its `extern` blocks:
-  `[native.NAME]` in its `agentica.toml` picks a file of its `native/` folder
-  or a system library name for `linux`, `macos` and `windows`. The files of
-  `native/` are part of the package hash in the lock. New codes
-  `PKG-NATIVE-PLATFORM` and `PKG-NATIVE-MISSING`.
-- Variadic C functions in `extern` blocks: `...` starts the variadic part
-  (`def open(path: C.String, flags: C.Int32, ..., mode: C.Int32) -> C.Int32`),
-  and `= "c_name"` after the result names the C function, so one function
-  can be declared in several shapes.
-- `C.Float` (32-bit `float`) for `extern` parameters, results and out
-  parameters.
-- Owned buffers and typed memory: `Native.memory_pointer`, `Native.free`,
-  `Native.get_int32`, `put_array_of_float32` and the other Ruby `ffi` forms.
-- `Native.memory_pointer(size) do |buf| ... end` frees the buffer when the
-  block ends, and `Native.put_bytes` writes a list of bytes.
-- `C.Function` in `extern` blocks calls and frees through C function pointers.
-- C structs passed and returned by value: `struct Name ... end` in an `extern`
-  block, seen as a record.
-- `File.sha256(path, timeout_ms)` hashes a whole file with SHA-256 and returns
-  the 32 digest bytes as `Result[List[Int]]`, the same bytes `Crypto.sha256`
-  returns: it streams in fixed 64 KiB chunks with no 1 MiB cap, and only
-  regular files are hashed.
-- `Zlib` compresses bytes, files and streams with DEFLATE: the zlib wrapper and gzip one-shots and file pairs, plus incremental streaming with progress and task-owned handles.
-- `Zlib.crc32(data, seed)` returns the CRC32 of bytes chained after a seed, for checksums of gzip members and ZIP entries.
-- Small FFI examples in `examples/ffi/`: a tiny C demo library plus programs showing plain native calls, structs by value with an owned resource and buffers, and a table of C function pointers.
-- A complete DuckDB example in `examples/ffi/duckdb/`: typed SQL queries with CSV and Parquet roundtrips through the C API of DuckDB v2.0.0 (the library is staged separately and never committed).
+- Packages can download pinned native libraries from TAR or ZIP archives;
+  `std/archive` safely extracts allowlisted TAR, gzip TAR and ZIP files.
+- Experimental, opt-in `--jit on` / `AGENTICA_JIT=on` compiles supported hot
+  loops to x86-64 machine code; compiled calls and returns transition through
+  the interpreter. ARM remains interpreter-only.
+- `HTTP.download` streams response bodies to files, with a 256 MiB limit.
+- Module aliases read exported constants, and enum variants support bare
+  method and field access.
+- Struct fields can have defaults.
+- Packages can declare native libraries for `extern` blocks
+  (`PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`).
+- `extern` supports variadic functions, `C.Float`, `C.Function`, C structs by
+  value, owned buffers and typed memory operations.
+- `File.sha256` hashes regular files in fixed-size chunks; `Zlib` adds DEFLATE,
+  gzip and CRC32 support for bytes, files and streams.
+- Added FFI and DuckDB examples.
 
 ### Changed
 
-- **Breaking:** `Native.string_at`/`bytes_at` are replaced by
-  `Native.get_string`/`get_bytes`, which take an offset
-  (`get_string(p, 0, length)`).
-- An `extern` block that declares a `resource` or a `struct` sits with the
-  types in the declaration order, with its `def`s, so a wrapper can keep the block and its
-  exported functions in one file. A block with neither keeps its rule.
-- **Breaking:** the files of the top-level `native/` folder of a package, of
-  any name, are now part of its hash, and so is its `agentica.toml` when
-  `native/` holds a file that is not `.agc` or the manifest has a `[native]`
-  table. A lock made before for a package with a non-`.agc` file in `native/`
-  must be updated with `agentica update`; other packages hash as before.
-- On Linux the VM links the system zlib dynamically by default
-  (`AGENTICA_ZLIB=system`, Debian: `zlib1g-dev`); `AGENTICA_ZLIB=vendored`
-  links the pinned submodule statically instead, as the release and the
-  macOS and Windows builds do.
+- **Breaking:** `Native.string_at` and `Native.bytes_at` are replaced by
+  `Native.get_string` and `Native.get_bytes`, which take an offset.
+- `extern` blocks declaring a resource or struct are placed with their types
+  and definitions.
+- **Breaking:** top-level package `native/` files affect package hashes, as
+  does `agentica.toml` when it declares native libraries or `native/` has
+  non-`.agc` files; update affected locks with `agentica update`.
+- Linux uses system zlib by default; `AGENTICA_ZLIB=vendored` selects the
+  pinned static library.
+
+### Fixed
+
+- `Archive.extract_tar` correctly accepts destinations containing host
+  backslashes, including Windows cache roots.
 
 ## [0.10.0-beta.1] - 2026-10-24
 
@@ -476,7 +446,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.10.0-beta.1...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.10.0...HEAD
+[0.10.0]: https://github.com/sonic182/agentica/compare/0.10.0-beta.1...0.10.0
 [0.10.0-beta.1]: https://github.com/sonic182/agentica/compare/0.9.0...0.10.0-beta.1
 [0.9.0]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...0.9.0
 [0.9.0-beta.2]: https://github.com/sonic182/agentica/compare/0.9.0-beta.1...0.9.0-beta.2
