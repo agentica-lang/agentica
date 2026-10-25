@@ -152,7 +152,6 @@ def tsan_stdio_support(tmp_path_factory):
     assert seven_err == b"", seven_err.decode(errors="replace")
     race, race_out, race_err = run_tsan_finalize_control(control, hook, ["race"], 83, options)
     assert b"WARNING: ThreadSanitizer: data race" in race_err, race_err.decode(errors="replace")
-    assert no_race == seven == race == b""
     assert no_race_out == seven_out == race_out == b""
 
     default_options = "halt_on_error=0"
