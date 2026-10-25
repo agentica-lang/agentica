@@ -133,10 +133,10 @@ end
   not yet started; a running one runs on and its result is dropped. A call that
   never returns holds a pool thread; once `--schedulers` are stuck, later
   compute calls wait. The function must be safe to call from another thread.
-  At process end on Linux and macOS, a standard C stream locked by a native
-  call is skipped by the final flush; its buffered C bytes may be lost. If the
-  lock is acquired, the flush can still block on the output descriptor. Windows
-  retains the blocking final flush.
+  At process end on Linux, a standard C stream locked by a native call is
+  skipped by the final flush; its buffered C bytes may be lost. If the lock is
+  acquired, the flush can still block on the output descriptor. macOS and
+  Windows retain the blocking final flush.
 - `Native.wait_readable(fd: Int, timeout_ms: Int) -> Result[Void]` and
   `Native.wait_writable` park the task until a descriptor of native code (a
   library's socket) can be read or written; other tasks run. For libraries in

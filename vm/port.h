@@ -56,7 +56,6 @@ typedef bool (*agc_more_fn)(void *data, agc_io_job *job);
 typedef struct agc_poller agc_poller;
 typedef struct agc_stdio agc_stdio;
 typedef struct agc_stdin_reader agc_stdin_reader;
-typedef enum { AGC_STDIO_FLUSHED, AGC_STDIO_BUSY, AGC_STDIO_FLUSH_FAILED } agc_stdio_flush_result;
 typedef struct agc_memstream agc_memstream;
 typedef struct agc_native agc_native;
 
@@ -721,8 +720,6 @@ void agc_poller_close(agc_poller *p);
    tells the reader of a Windows socket that the output is over, unless IN (stdin) is in a read of the same socket.
    try_first says a POLL target must be tried before the loop waits for it: a Unix socket polls writable only while a
    quarter of its buffer is used, so a wait can outlast the room a send would still find. */
-/* BUSY means the POSIX stream lock was already held; FAILED means an attempted flush failed. */
-agc_stdio_flush_result agc_stdio_flush(FILE *stream);
 bool agc_stdio_open(agc_vm *vm, agc_output *out, int fd);
 bool agc_stdio_try_first(const agc_output *out);
 bool agc_stdio_same(const agc_output *first, int fd);

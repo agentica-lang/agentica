@@ -82,15 +82,6 @@ struct agc_stdin_reader {
   atomic_int refs;
 };
 
-/* Windows keeps the existing blocking CRT flush; no public stream try-lock is used here. */
-agc_stdio_flush_result agc_stdio_flush(FILE *stream) {
-  while (fflush(stream) != 0) {
-    if (errno != EINTR) return AGC_STDIO_FLUSH_FAILED;
-    clearerr(stream);
-  }
-  return AGC_STDIO_FLUSHED;
-}
-
 /* How many of the N bytes at DATA end at a character boundary: a UTF-8 sequence cut by the end is left out. */
 static size_t whole_characters(const uint8_t *data, size_t n) {
   for (size_t back = 1; back <= 3 && back <= n; back++) {
