@@ -23,6 +23,7 @@ static void *race_writer(void *unused) {
 
 int main(int argc, char **argv) {
   if (argc > 1 && strcmp(argv[1], "race") == 0) {
+    /* Both stores are between rendezvous; neither barrier orders the stores with each other. */
     pthread_t thread;
     if (pthread_barrier_init(&race_barrier, NULL, 2) != 0) _exit(4);
     if (pthread_create(&thread, NULL, race_writer, NULL) != 0) _exit(2);
