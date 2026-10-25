@@ -27,7 +27,7 @@ MACOS = TARGET_OS == "darwin"
 NATIVE = (TARGET_OS.startswith("linux") and platform.machine() == "x86_64") or \
     (WINDOWS and platform.machine() in ("AMD64", "x86_64")) or MACOS
 NATIVE_CALLS = host_only(not NATIVE, "libffi is built for Linux x86_64, Windows x64 and macOS only")
-# Keep native Windows in the test body to report #616 as a product gap, not host-only.
+# Keep native non-Linux platforms in the test body to report #616 as an open gap, not host-only.
 NATIVE_STDIO_CASES = host_only(not NATIVE, "native calls are unsupported on this system")
 
 # The C library and the math library, found by name by the system loader. On Windows the UCRT holds both, and on
@@ -81,6 +81,72 @@ def literal(path):
 def peer(tmp_path_factory):
     """The path of the peer library, built once for the module."""
     return shared_library(tmp_path_factory, "peer", *(["-lws2_32"] if WINDOWS else []))
+
+
+def tsan_stdio_fixture_enabled():
+    if TARGET_OS != "linux":
+        return False
+    expected = os.path.realpath("build/vm/tsan/agentica")
+    return (os.path.realpath(os.environ.get("AGENTICA_VM_BINARY", "")) == expected and
+            os.path.realpath(os.environ.get("AGENTICA_TEST_EXECUTABLE", "")) == expected)
+
+
+def run_tsan_finalize_control(binary, hook, args, expected, tsan_options):
+    read_fd = write_fd = None
+    process = None
+    try:
+        read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
+        os.set_blocking(write_fd, False)
+        env = vm_environment({"AGENTICA_TSAN_RELEASE_FD": write_fd,
+                             "AGENTICA_TSAN_RELEASE_READ_FD": None,
+                             "AGENTICA_TSAN_PRIVATE_GATE_FD": None,
+                             "TSAN_OPTIONS": tsan_options})
+        preload = [str(hook)]
+        if env.get("LD_PRELOAD"):
+            preload.append(env["LD_PRELOAD"])
+        env["LD_PRELOAD"] = os.pathsep.join(preload)
+        process = subprocess.Popen([str(binary), *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   env=env, start_new_session=True, pass_fds=(write_fd,))
+        os.close(write_fd)
+        write_fd = None
+        stdout, stderr = process.communicate(timeout=scaled(20))
+        assert process.returncode == expected, stdout.decode(errors="replace") + stderr.decode(errors="replace")
+        assert os.read(read_fd, 2) == b"R", "TSan did not invoke the preloaded finalization hook"
+        assert os.read(read_fd, 1) == b"", "TSan finalization hook wrote more than one byte"
+        return stdout, stderr
+    finally:
+        if process is not None and process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait()
+        if read_fd is not None:
+            os.close(read_fd)
+        if write_fd is not None:
+            os.close(write_fd)
+
+
+@pytest.fixture(scope="module")
+def tsan_stdio_support(tmp_path_factory):
+    """Build test-only TSan hook/peer support once, with report and exit-status controls."""
+    if not tsan_stdio_fixture_enabled():
+        return None
+    tsan_peer = shared_library(tmp_path_factory, "tsan_stdio_peer",
+                               source=FIXTURES / "native" / "tsan_stdio_peer.c")
+    hook = shared_library(tmp_path_factory, "tsan_stdio_release",
+                          source=FIXTURES / "native" / "tsan_stdio_release.c")
+    control_dir = tmp_path_factory.mktemp("tsan-finalize-control")
+    control = control_dir / "tsan_finalize_control"
+    subprocess.run([tool("clang"), "-std=c11", "-O1", "-g", "-fno-omit-frame-pointer",
+                    "-fsanitize=thread", "-fno-sanitize-recover=all", "-pthread", "-o", str(control),
+                    str(FIXTURES / "native" / "tsan_finalize_control.c")], check=True)
+    options = "halt_on_error=0:exitcode=83"
+    no_race, no_race_err = run_tsan_finalize_control(control, hook, [], 0, options)
+    assert no_race_err == b"", no_race_err.decode(errors="replace")
+    seven, seven_err = run_tsan_finalize_control(control, hook, ["seven"], 7, options)
+    assert seven_err == b"", seven_err.decode(errors="replace")
+    race, race_err = run_tsan_finalize_control(control, hook, ["race"], 83, options)
+    assert b"WARNING: ThreadSanitizer: data race" in race_err, race_err.decode(errors="replace")
+    assert no_race == seven == race == b""
+    return {"peer": tsan_peer, "hook": hook}
 
 
 def program(tmp_path, text, name="program.agc"):
@@ -350,7 +416,7 @@ end
     assert (result.code, result.stdout, result.stderr) == (code, "1\n", "")
 
 
-def capture_stdio_ready(read_streams, process, captured, locked_stream):
+def capture_stdio_ready(read_streams, process, captured):
     readable, _, _ = select.select(read_streams, [], [], 0.05)
     for stream in readable:
         name = "stdout" if stream is process.stdout else "stderr"
@@ -359,43 +425,77 @@ def capture_stdio_ready(read_streams, process, captured, locked_stream):
             read_streams.remove(stream)
         else:
             captured[name].extend(chunk)
-            if name == "stdout" and b"done\n" in captured[name] and locked_stream == "stdout":
-                read_streams.remove(process.stdout)
     return b"done\n" in captured["stdout"]
 
 
-def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker):
-    process = subprocess.Popen(cli() + ["--schedulers", "4", str(source)], stdin=subprocess.PIPE,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=vm_environment(),
-                               start_new_session=True)
+def marker_is(path, expected):
+    try:
+        return path.read_bytes() == expected
+    except FileNotFoundError:
+        return False
+
+
+def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker, released_marker=None, tsan_support=None):
+    diagnostic = tsan_support is not None
+    owned_fds = []
+    release_read = release_write = gate_read = gate_write = None
+    try:
+        env = vm_environment()
+        spawn_options = {"start_new_session": True}
+        if diagnostic:
+            release_read, release_write = os.pipe2(os.O_CLOEXEC)
+            owned_fds.extend((release_read, release_write))
+            gate_read, gate_write = os.pipe2(os.O_CLOEXEC)
+            owned_fds.extend((gate_read, gate_write))
+            os.set_blocking(release_write, False)
+            env["AGENTICA_TSAN_RELEASE_FD"] = str(release_write)
+            env["AGENTICA_TSAN_RELEASE_READ_FD"] = str(release_read)
+            env["AGENTICA_TSAN_PRIVATE_GATE_FD"] = str(gate_read)
+            preload = [str(tsan_support["hook"])]
+            if env.get("LD_PRELOAD"):
+                preload.append(env["LD_PRELOAD"])
+            env["LD_PRELOAD"] = os.pathsep.join(preload)
+            spawn_options["pass_fds"] = (release_read, release_write, gate_read)
+        process = subprocess.Popen(cli() + ["--schedulers", "4", str(source)], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, **spawn_options)
+    except BaseException:
+        for fd in owned_fds:
+            os.close(fd)
+        raise
+    if diagnostic:
+        for fd in (release_read, release_write, gate_read):
+            os.close(fd)
+            owned_fds.remove(fd)
+
     captured = {"stdout": bytearray(), "stderr": bytearray()}
     stdout_done = False
-    read_streams = [process.stdout]
-    if locked_stream == "stdout":
-        read_streams.append(process.stderr)
+    read_streams = [process.stdout, process.stderr]
     deadline = time.monotonic() + scaled(5)
     try:
-        while not lock_marker.exists() and process.poll() is None and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert lock_marker.exists(), "native code did not acquire and mark the FILE lock"
+        while not marker_is(lock_marker, b"locked") and process.poll() is None and time.monotonic() < deadline:
+            capture_stdio_ready(read_streams, process, captured)
+        assert marker_is(lock_marker, b"locked"), "native code did not acquire and mark the FILE lock"
         time.sleep(scaled(0.25))
         process.stdin.write(b"x")
         process.stdin.close()
         deadline = time.monotonic() + scaled(5)
         while not main_marker.exists() and process.poll() is None and time.monotonic() < deadline:
-            stdout_done = capture_stdio_ready(read_streams, process, captured, locked_stream) or stdout_done
+            stdout_done = capture_stdio_ready(read_streams, process, captured) or stdout_done
         assert main_marker.exists(), "main did not reach the file marker after puts"
         deadline = time.monotonic() + scaled(3)
         while not stdout_done and process.poll() is None and time.monotonic() < deadline:
-            stdout_done = capture_stdio_ready(read_streams, process, captured, locked_stream)
+            stdout_done = capture_stdio_ready(read_streams, process, captured)
         assert stdout_done, f"VM stdout did not deliver done: {bytes(captured['stdout'])!r}"
         deadline = time.monotonic() + scaled(3)
         while process.poll() is None and time.monotonic() < deadline:
-            capture_stdio_ready(read_streams, process, captured, locked_stream)
+            capture_stdio_ready(read_streams, process, captured)
         assert process.poll() is not None, "settlement waited for the native FILE lock"
         deadline = time.monotonic() + scaled(1)
         while read_streams and time.monotonic() < deadline:
-            capture_stdio_ready(read_streams, process, captured, locked_stream)
+            capture_stdio_ready(read_streams, process, captured)
+        if diagnostic:
+            assert released_marker is not None and marker_is(released_marker, b"released"), \
+                "native lock owner did not acknowledge TSan's finalization release"
         return process.returncode, captured
     finally:
         if process.poll() is None:
@@ -404,37 +504,57 @@ def run_stdio_shutdown(source, locked_stream, lock_marker, main_marker):
         for stream in (process.stdin, process.stdout, process.stderr):
             if stream is not None:
                 stream.close()
+        for fd in owned_fds:
+            os.close(fd)
 
 
 @NATIVE_STDIO_CASES
 @pytest.mark.parametrize("locked_stream, stream_id", [("stdout", 1), ("stderr", 2)])
 @pytest.mark.parametrize("ending, code", [("", 0), ("System.exit(7)", 7)])
-def test_settlement_skips_a_locked_c_standard_stream(tmp_path, peer, locked_stream, stream_id, ending, code):
+def test_settlement_skips_a_locked_c_standard_stream(tmp_path, peer, tsan_stdio_support,
+                                                      locked_stream, stream_id, ending, code):
     free_stream = "stderr" if locked_stream == "stdout" else "stdout"
+    lock_path = literal(tmp_path / "locked")
+    release_path = literal(tmp_path / "released")
+    if tsan_stdio_support:
+        library = tsan_stdio_support["peer"]
+        hold = "peer_hold_stdio_tsan"
+        buffer = "peer_buffer_stdio_tsan"
+        hold_signature = f"compute def {hold}(which: C.Int32, marker: C.String, release_marker: C.String) -> C.Int32"
+        hold_call = f'{hold}({stream_id}, "{lock_path}", "{release_path}")'
+    else:
+        library = peer
+        hold = "peer_hold_stdio"
+        buffer = "peer_buffer_stdio"
+        hold_signature = f"compute def {hold}(which: C.Int32, marker: C.String) -> C.Int32"
+        hold_call = f'{hold}({stream_id}, "{lock_path}")'
     main = '''extern "{library}"
-  compute def peer_hold_stdio(which: C.Int32, marker: C.String) -> C.Int32
-  def peer_buffer_stdio(which: C.Int32) -> C.Int32
+  {hold_signature}
+  def {buffer}(which: C.Int32) -> C.Int32
 end
 
-def hold(n: Int) -> Int
-  return peer_hold_stdio({stream_id}, "{lock_marker}")
+def hold_stream(n: Int) -> Int
+  return {hold_call}
 end
 
 def main() -> Void
-  writer = Task.spawn(&hold, 0)
+  writer = Task.spawn(&hold_stream, 0)
   IO.read_bytes(1)
-  peer_buffer_stdio({free_stream_id})
+  {buffer}({free_stream_id})
   puts("done")
   File.write_text("{main_marker}", "after puts", 2000)
   {ending}
 end
-'''.format(library=literal(peer), stream_id=stream_id, lock_marker=literal(tmp_path / "locked"),
+'''.format(library=literal(library), hold_signature=hold_signature, hold_call=hold_call, buffer=buffer,
            main_marker=literal(tmp_path / "main-reached"), free_stream_id=3 - stream_id, ending=ending)
     source = program(tmp_path, main)
     assert agentica("check", source).code == 0
-    if WINDOWS:
-        pytest.skip("known-issue: #616 Windows final C stdio flush can wait for a compute-held stream lock")
-    result, captured = run_stdio_shutdown(source, locked_stream, tmp_path / "locked", tmp_path / "main-reached")
+    if not TARGET_OS.startswith("linux"):
+        host = "Windows" if WINDOWS else "macOS"
+        pytest.skip(f"known-issue: #616 {host} final C stdio flush remains blocking with a compute-held stream")
+    result, captured = run_stdio_shutdown(source, locked_stream, tmp_path / "locked", tmp_path / "main-reached",
+                                          tmp_path / "released" if tsan_stdio_support else None,
+                                          tsan_stdio_support)
     assert result == code
     assert b"done\n" in captured["stdout"]
     assert b"native-free\n" in captured[free_stream]
