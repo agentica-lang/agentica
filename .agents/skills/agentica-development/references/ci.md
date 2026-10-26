@@ -190,7 +190,7 @@ site and Markdown-only changes skip it; a newer push cancels an older run.
   nothing that builds may run beside it. `dup-check` runs even when an earlier
   step fails.
 - `vm-sanitizers` (`needs: test`, runs even if it fails): `vm-lint`, ASan C
-  tests and fuzz, `vm-layers`, the sanitizer binary's fixed point (about
+  tests, 60 s of libFuzzer (`vm-libfuzz-run`, `-seed=1`), `vm-layers`, the sanitizer binary's fixed point (about
   75 s and 1.8 GB: no GC) and Python modules, `vm-tsan`, `vm-tsan-run`, and
   GC stress (it links the release `stage2`, since it collects every 64
   allocations). It builds only when the merge commit changes `vm/`, the

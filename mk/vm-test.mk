@@ -1,7 +1,7 @@
 # The C tests and the checks of the VM: vm-test, TSan, GC stress, sanitizers, fuzz, multicore, the vendored-library
 # check, clang-tidy and the layer check. Their binaries use the build mode and the objects of mk/vm.mk.
 
-.PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-fuzz vm-libfuzz vm-libfuzz-run vm-gc-stress vm-trace-off \
+.PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-libfuzz vm-libfuzz-run vm-gc-stress vm-trace-off \
   vm-diff-build vm-diff-test sweep-full test-shared vm-jit-test vm-sanitize-build vm-sanitize-test vendored-check vendored-test \
   vm-layers
 
@@ -61,43 +61,37 @@ vm-tsan-run: dist/agentica$(EXE)
 # The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)
 
-$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
-	$(VM_LINK)
-
-# The corpus is every fixture compiled by the binary, JOBS at a time, into FUZZ_CORPUS_DIR
-FUZZ_CORPUS_DIR = $(VM_BUILD)/corpus
-FUZZ_CORPUS = mkdir -p $(FUZZ_CORPUS_DIR) && printf '%s\n' tests/fixtures/vm/*.agc | xargs -P $(JOBS) -I{} sh -c \
-  'dist/agentica$(EXE) compile "$$1" -o "$(FUZZ_CORPUS_DIR)/$$(basename "$$1" .agc).agcb"' sh {}
-
-# The fuzzers link the VM objects and no front end: they are internal artifacts of build/, never shipped.
-vm-fuzz: dist/agentica$(EXE) $(VM_BUILD)/agentica-vm-fuzz$(EXE)
-	$(FUZZ_CORPUS)
-	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(FUZZ_CORPUS_DIR)/*.agcb
-
 # libFuzzer (clang only): agc_fuzz_one behind LLVMFuzzerTestOneInput, on objects built with coverage hooks (LIBFUZZ=1).
 $(VM_BUILD)/agentica-vm-libfuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_libfuzzer.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK) -fsanitize=fuzzer
 
+# The fuzzer links the VM objects and no front end: an internal artifact of build/, never shipped.
 LIBFUZZ_DIR := build/vm/libfuzz
 vm-libfuzz:
 	$(MAKE) $(LIBFUZZ_DIR)/agentica-vm-libfuzz LIBFUZZ=1
+
+# The seed corpus is every fixture compiled by dist/agentica, JOBS at a time.
+FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' tests/fixtures/vm/*.agc | xargs -P $(JOBS) -I{} sh -c \
+  'dist/agentica$(EXE) compile "$$1" -o "$(LIBFUZZ_DIR)/seeds/$$(basename "$$1" .agc).agcb"' sh {}
 
 # A bounded run: LIBFUZZ_TIME seconds on LIBFUZZ_JOBS forked workers. New inputs go to corpus/, the compiled fixtures
 # stay in seeds/, crash-* files land in crashes/. Each input stops at 10,000 steps and 256 MB (agc_fuzz_one), but a
 # timed wait (a channel or await timeout) parks without steps and can take minutes of wall time: fork mode records such
 # an input as timeout-* and goes on, while a crash, a leak or an input past the RSS limit (room for 256 MB plus ASan's
-# quarantine) ends the run. The sub-make runs after dist/agentica, not beside it, because both write build/vm/flags.
+# quarantine) ends the run. ASAN_OPTIONS turns on the leak check that vm/value.c turns off for the other ASan builds:
+# agc_fuzz_one frees every block of an input. Fork mode keeps its jobs' inputs in TMPDIR, set under build/ because
+# /tmp is often a small tmpfs. The sub-make runs after dist/agentica, not beside it, because both write build/vm/flags.
 LIBFUZZ_TIME ?= 60
 LIBFUZZ_JOBS ?= 1
 LIBFUZZ_RSS_MB ?= 2048
 LIBFUZZ_FLAGS ?=
-vm-libfuzz-run: FUZZ_CORPUS_DIR = $(LIBFUZZ_DIR)/seeds
 vm-libfuzz-run: dist/agentica$(EXE)
 	$(FUZZ_CORPUS)
 	$(MAKE) vm-libfuzz
-	@mkdir -p $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/crashes
-	$(LIBFUZZ_DIR)/agentica-vm-libfuzz -fork=$(LIBFUZZ_JOBS) -ignore_timeouts=1 -ignore_ooms=0 -ignore_crashes=0 \
-	  -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=10 -artifact_prefix=$(LIBFUZZ_DIR)/crashes/ \
+	@mkdir -p $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/crashes $(LIBFUZZ_DIR)/tmp
+	ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_DIR)/tmp \
+	  $(LIBFUZZ_DIR)/agentica-vm-libfuzz -fork=$(LIBFUZZ_JOBS) \
+	  -ignore_timeouts=1 -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=10 -artifact_prefix=$(LIBFUZZ_DIR)/crashes/ \
 	  -print_final_stats=1 $(LIBFUZZ_FLAGS) $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/seeds
 
 # The golden tests compile with dist/agentica and run on the GC stress binary (AGENTICA_VM_BINARY): the front end does not

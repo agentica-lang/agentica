@@ -18,7 +18,6 @@
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
-# make vm-fuzz            mutate compiled fixtures and run them
 # make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
 # make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
@@ -138,7 +137,6 @@ VM_BUILD := build/vm/sanitize
 YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
 OSSL_CFLAGS := -g -fno-omit-frame-pointer
 DEBUG_MAP := $(DEBUG_MAPS)
-FUZZ_RUNS ?= 30000
 else ifeq ($(TSAN),1)
 VM_CC := clang
 VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=thread -fno-sanitize-recover=all -DAGC_NO_GC
@@ -148,7 +146,6 @@ VM_BUILD := build/vm/tsan
 YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=thread -fno-sanitize-recover=all
 OSSL_CFLAGS := -g -fno-omit-frame-pointer
 DEBUG_MAP := $(DEBUG_MAPS)
-FUZZ_RUNS ?= 30000
 else ifeq ($(GC_STRESS),1)
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O1 -g -DGC_DEBUG -DAGC_GC_STRESS $(VM_PIC)
@@ -166,7 +163,6 @@ GC_MODE := $(AGENTICA_GC)
 VM_BUILD := build/vm/release
 YY_CFLAGS := -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
 OSSL_CFLAGS := -fstack-protector-strong -D_FORTIFY_SOURCE=2
-FUZZ_RUNS ?= 100000
 endif
 # libffi for the native calls (vm/ffi_libffi.c), compiled from its sources like libuv, with the two headers that its
 # configure script would write made by the rules below. The source list is the one libffi's configure.host gives for

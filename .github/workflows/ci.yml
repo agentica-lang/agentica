@@ -237,7 +237,16 @@ jobs:
       - if: ${{ (github.event_name == 'workflow_dispatch' || steps.changes.outputs.trace == 'true') && steps.changes.outputs.c != 'false' }}
         run: make vm-trace-off
       - if: ${{ steps.changes.outputs.c != 'false' }}
-        run: make -j"$(nproc)" vm-test vm-fuzz
+        run: make -j"$(nproc)" vm-test
+      - name: vm-libfuzz-run, 60 s of libFuzzer with a fixed seed (a crash, leak or RSS overrun fails it)
+        if: ${{ !cancelled() && steps.changes.outputs.c != 'false' }}
+        run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME=60 LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS=-seed=1
+      - if: ${{ failure() && steps.changes.outputs.c != 'false' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: libfuzz-crashes
+          path: build/vm/libfuzz/crashes/
+          if-no-files-found: ignore
       - if: ${{ !cancelled() && steps.changes.outputs.c != 'false' }}
         run: make vm-layers
       - if: ${{ !cancelled() && steps.changes.outputs.c != 'false' }}

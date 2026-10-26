@@ -169,9 +169,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `RUNTIME-FRONT-END-ONLY` when `rt->front_end` is NULL, which it is for every
   runtime except the front end of the single binary; also `Std.source`
   (`agc_std_builtins`, not guarded), which reads the std sources of `rt->std`
-- `vm/fuzz.c`, `vm/fuzz_main.c`, `vm/fuzz_libfuzzer.c`: `agc_fuzz_one`, the
-  plain mutation driver and the libFuzzer entry point (not in the release
-  binary)
+- `vm/fuzz.c`, `vm/fuzz_libfuzzer.c`: `agc_fuzz_one` and the libFuzzer entry
+  point (not in the release binary)
 - `vm/jit/` (core, `docs/future/22-jit.md` §22; `--jit`, `AGENTICA_JIT`):
   `jit.h` is the one header, the interpreter's boundary first, then the emitter
   and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. `jit.c`

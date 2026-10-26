@@ -1,6 +1,6 @@
 /*
  * agc_fuzz_one: load one mutated .agcb file and, if it is accepted, run it.
- * Used by the fuzz driver only, never in the release binary. Driver layer.
+ * Used by the libFuzzer target (vm/fuzz_libfuzzer.c) only, never in the release binary. Driver layer.
  * Design: docs/vm/11-build-ci-supply-chain.md (Fuzzing).
  */
 #include "core.h"

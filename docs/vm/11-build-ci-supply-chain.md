@@ -59,8 +59,8 @@
 - The Agentica version is the one line of the `VERSION` file, which the Makefile
   reads with `cat`. Each mode compiles `vm/*.c`
   once into `build/vm/<mode>/obj/` (with `-MMD -MP`, so an edited header
-  recompiles only its users) and links the VM, the fuzz driver and the C tests
-  from those objects. `build/vm/flags` holds the compile and link line, so
+  recompiles only its users) and links the VM and the C tests from those
+  objects. `build/vm/flags` holds the compile and link line, so
   switching between a normal and a sanitizer build relinks.
 - Compiles go through ccache when it is on `PATH` and its cache directory is
   writable (`CCACHE=` turns it off). `CCACHE_BASEDIR` is the checkout, and the
@@ -72,8 +72,7 @@
   `-fno-sanitize-recover=all`. In this build `agc_alloc` uses `calloc` and never
   frees, so ASan guards every object. libgc is not built (`-DAGC_NO_GC`). Leak
   detection is off, and `allocator_may_return_null=1` lets a huge request reach
-  the out-of-memory exit (6.3). `make vm-test SANITIZE=1` and
-  `make vm-fuzz SANITIZE=1` use the same flags.
+  the out-of-memory exit (6.3). `make vm-test SANITIZE=1` uses the same flags.
 - `make vm-gc-stress` builds `build/vm/gcstress/agentica` (the binary, linked
   with the stage2 of the release build; it does not run the fixed point) with
   `GC_STRESS=1` (`-DGC_DEBUG -DAGC_GC_STRESS`, gcc). `agc_alloc` and
@@ -98,42 +97,36 @@
   run). Under `AGC_NO_GC` yyjson allocates through `agc_alloc_atomic`
   (`vm/json.c`), so its documents count toward this limit too. The VM itself
   sets no limit. `agc_fuzz_one` is linked only into the fuzz and test binaries.
-- The plain driver (`vm/fuzz_main.c`, `make vm-fuzz`) applies 1 to 4 mutations
-  per run (byte deletion and insertion, bit flips, random bytes, small or
-  maximal 16-bit operands). The corpus is every compiled program in
-  `tests/fixtures/vm/`, and examples join it as they enter the VM subset.
-- The driver's random sequence is fixed, so the short run of each PR is
-  reproducible: 30,000 mutants in the sanitizer job (`FUZZ_RUNS`), about 12 s.
-  `FUZZ_SEED=N` picks another sequence and is printed on stderr. In a sanitizer
-  build a crash prints the mutant's index and saves it to `fuzz-crash.agcb`.
-- The coverage-guided build (`vm/fuzz_libfuzzer.c`): `LLVMFuzzerTestOneInput`
+- The fuzzer is libFuzzer (`vm/fuzz_libfuzzer.c`): `LLVMFuzzerTestOneInput`
   calls `agc_fuzz_one`, so AFL++, honggfuzz and Centipede can drive it too.
   `make vm-libfuzz` builds the VM objects in the `LIBFUZZ=1` mode (clang,
   `-fsanitize=fuzzer-no-link,address,undefined`, `AGC_NO_GC`) into
   `build/vm/libfuzz/` and links `agentica-vm-libfuzz` with libFuzzer's
   runtime. Linux and clang only; never shipped.
-- `make vm-libfuzz-run` compiles the fixtures into `build/vm/libfuzz/seeds/`
-  and fuzzes for `LIBFUZZ_TIME` seconds (default 60) on `LIBFUZZ_JOBS` forked
-  workers (default 1), each with `-rss_limit_mb=2048` (`LIBFUZZ_RSS_MB`). New
-  inputs go to `build/vm/libfuzz/corpus/`, failures to
-  `build/vm/libfuzz/crashes/`. `LIBFUZZ_FLAGS` adds libFuzzer flags.
-- A crash, a leak or an input past the RSS limit ends the run. A timeout does
-  not: a timed wait (a channel or await timeout) parks without counting steps,
-  so a mutant with a large timeout can wait for minutes. Fork mode saves it as
-  `timeout-*` and goes on.
+- `make vm-libfuzz-run` compiles every program in `tests/fixtures/vm/` into
+  `build/vm/libfuzz/seeds/` and fuzzes for `LIBFUZZ_TIME` seconds (default 60)
+  on `LIBFUZZ_JOBS` forked workers (default 1), each with `-rss_limit_mb=2048`
+  (`LIBFUZZ_RSS_MB`). New inputs go to `build/vm/libfuzz/corpus/`, failures to
+  `build/vm/libfuzz/crashes/`. `LIBFUZZ_FLAGS` adds libFuzzer flags, such as
+  `-seed=N`.
+- A crash, a leak or an input past the RSS limit ends the run. The run turns
+  on the leak check (`ASAN_OPTIONS`) that `vm/value.c` turns off in the other
+  ASan builds, since `agc_fuzz_one` frees every block of an input.
+- A timeout does not end the run. A timed wait (a channel or await timeout)
+  parks without counting steps, so a mutant with a large timeout can wait for
+  minutes. Fork mode saves it as `timeout-*` and goes on.
 - `agc_fuzz_one` also sets `deny_run`: a mutant's strings are shell commands
   with mutated bytes, and a child process waits outside `--max-steps`.
 - There is no dictionary. The format has no section tags, and libFuzzer learns
   the magic, the format version and the builtin names from its `memcmp` and
   comparison hooks.
+- The sanitizer job of each C PR runs it for 60 s with `-seed=1` on every core
+  and uploads the crash files on failure.
 - `.github/workflows/fuzz.yml` runs by hand. It builds the libFuzzer target,
   fuzzes for the given number of seconds (default 3600) with a random seed,
   prints the commit and seed first, and uploads `build/vm/libfuzz/crashes/` on
   failure. `build/vm/libfuzz/agentica-vm-libfuzz crash-<sha>` or `agentica run
   --` on that file reproduces it.
-- The plain driver stays for the PR run: it reuses the sanitizer objects,
-  while the libFuzzer build compiles every VM object again (about 45 s on 8
-  cores). It can go once the libFuzzer job has been green for a while.
 
 ### Tests in make
 
@@ -166,7 +159,7 @@
 
 - **Job:** Linux sanitizers (`ci.yml`)
   - **Runner:** GitHub-hosted `ubuntu-latest`, clang and `libclang-rt-dev`
-  - **Runs:** sanitizer build, `vm-test`, differential and bytecode tests, fuzz
+  - **Runs:** sanitizer build, `vm-test`, differential and bytecode tests, libFuzzer
     run, GC stress run
 
 - **Job:** conformance matrix (`platforms.yml`), one per system:
