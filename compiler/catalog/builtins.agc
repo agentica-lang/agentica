@@ -179,17 +179,17 @@ export def default_present?(value: Model.Default) -> Bool
   end
 end
 
-## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain builtin with a single
-## form (the other rules and the prelude read the arguments by position, and a form picked by the number of arguments
-## would be ambiguous), a parameter after a default has one too unless it is the last and an Fn, and each default has
+## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain or Prelude builtin with
+## a single form (the other rules read the arguments by position, and a form picked by the number of arguments would
+## be ambiguous), a parameter after a default has one too unless it is the last and an Fn, and each default has
 ## the type of its parameter. The catalog text prints a problem, and a test fails on it.
 export def default_problem(entry: Model.Builtin) -> String
   if !defaulted?(entry)
     return ""
   end
 
-  if !plain?(entry.rule) or entry.alternatives.size > 0
-    return "a default needs a Plain builtin with no alternative form"
+  if !takes_defaults?(entry.rule) or entry.alternatives.size > 0
+    return "a default needs a Plain or Prelude builtin with no alternative form"
   end
 
   first = first_default(entry)
@@ -227,10 +227,11 @@ export def default_enums() -> Set[String]
   return Set.new(names)
 end
 
-# True for the Plain rule: the arguments are checked against the parameters, one each.
-def plain?(rule: Model.Rule) -> Bool
+# True for the Plain and Prelude rules: the arguments are checked against the parameters, one each.
+def takes_defaults?(rule: Model.Rule) -> Bool
   case rule
     Model.Rule.Plain -> return true
+    Model.Rule.Prelude -> return true
     _ -> return false
   end
 end

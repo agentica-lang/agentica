@@ -1,15 +1,17 @@
 ## The Lazy methods of the compiler prelude (docs/future/27-iteration-and-concurrency.md 27.4). Not a module: no
-## program imports it. A Lazy is an immutable recipe: a source (a list, a range, Lazy.produce, File.foreach or
-## ch.lazy) and the steps added after it. The functions here only give the generic signatures; the VM (vm/lazy.c)
-## builds the recipe and runs it. A step returns a new Lazy and runs nothing. A terminal (to_a, first, each, reduce,
-## find, write_lines) pulls one item at a time from the source through every step, so no step builds a list of all the
-## items, and an endless source ends as soon as a take, take_while, first or find has what it needs. Two terminals on
+## program imports it. A Lazy is an immutable recipe: a source (a list, a range, Lazy.produce, File.foreach,
+## File.chunks or ch.lazy) and the steps added after it. The functions here only give the generic signatures; the
+## VM (vm/lazy.c) builds the recipe and runs it. A step returns a new Lazy and runs nothing. A terminal (to_a, first,
+## each, reduce, find, write_lines, write_bytes) pulls one item at a time from the source through every step, so no
+## step builds a list of all the items, and an endless source ends as soon as a take, take_while, first or find has
+## what it needs. Two terminals on
 ## the same Lazy run the source twice; a channel cannot be read twice, so a second terminal on ch.lazy goes on with
 ## the values the first did not take. A failed `try` in any block of a Lazy method ends the pipeline: the terminal
 ## returns its error (the checker marks those `try`s and the lowering emits try-step for them).
 ##
-## A is the item type and B the type a callback gives. The Int after the Lazy in __lazy_test, __lazy_count and
-## __lazy_group picks the step; vm/lazy.c reads the same numbers.
+## A is the item type and B the type a callback gives. The Int after the Lazy in __lazy_test, __lazy_count,
+## __lazy_group and __lazy_zlib picks the step; vm/lazy.c reads the same numbers. The defaults of File.chunks, the
+## zlib steps and write_bytes are in their catalog rows: a call always passes every argument here.
 ##
 ## Cost: each item pulled from the source costs one step, and each callback a step plus its body, as in Range.each.
 ## A terminal can be switched out between items, so --max-steps, the turns of other tasks and a cancel reach it.
@@ -30,6 +32,12 @@ end
 # only in a terminal, which closes it before it returns.
 def from_file(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]
   return __lazy_file(path, buffer_bytes, timeout_ms)
+end
+
+# File.chunks. Argument 1 of the call is size: a size outside 1..16777216 is reported there. The file opens only in a
+# terminal, which closes it before it returns.
+def from_chunks(path: String, size: Int, timeout_ms: Int) -> Lazy[List[Int]]
+  return __lazy_chunks(path, size, timeout_ms)
 end
 
 # ch.lazy. Argument 1 of the call is timeout_ms: a negative timeout is reported there.
@@ -83,6 +91,32 @@ def chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]]
   return __lazy_chunk_while(lazy, f)
 end
 
+# The zlib steps: __lazy_zlib(lazy, kind, level, max_bytes) with kind 0 deflate, 1 raw deflate, 2 gzip, 3 inflate,
+# 4 raw inflate, 5 gunzip. A bad level or max_bytes is the error of the terminal, as in Zlib.deflate.
+def deflate(lazy: Lazy[List[Int]], level: Int, raw: Bool) -> Lazy[List[Int]]
+  if raw
+    return __lazy_zlib(lazy, 1, level, 0)
+  end
+
+  return __lazy_zlib(lazy, 0, level, 0)
+end
+
+def gzip(lazy: Lazy[List[Int]], level: Int) -> Lazy[List[Int]]
+  return __lazy_zlib(lazy, 2, level, 0)
+end
+
+def inflate(lazy: Lazy[List[Int]], raw: Bool, max_bytes: Int) -> Lazy[List[Int]]
+  if raw
+    return __lazy_zlib(lazy, 4, 0, max_bytes)
+  end
+
+  return __lazy_zlib(lazy, 3, 0, max_bytes)
+end
+
+def gunzip(lazy: Lazy[List[Int]], max_bytes: Int) -> Lazy[List[Int]]
+  return __lazy_zlib(lazy, 5, 0, max_bytes)
+end
+
 def to_a(lazy: Lazy[A]) -> Result[List[A]]
   return __lazy_to_a(lazy)
 end
@@ -107,4 +141,9 @@ end
 # write_lines. The path and timeout are checked when the terminal starts, as for File.foreach: a bad one is its error.
 def write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]
   return __lazy_write_lines(lazy, path, timeout_ms)
+end
+
+# write_bytes. As for write_lines, the path and timeout are checked when the terminal starts.
+def write_bytes(lazy: Lazy[List[Int]], path: String, timeout_ms: Int) -> Result[Int]
+  return __lazy_write_bytes(lazy, path, timeout_ms)
 end

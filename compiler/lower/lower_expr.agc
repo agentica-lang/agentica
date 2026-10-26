@@ -125,7 +125,7 @@ export def lower_call(
   shape = Defaults.Shape(required: count, total: count, fn_last: false)
   if fill.ok?
     shape = fill.unwrap!.shape
-  elsif builtin and Builtins.defaulted?(form.unwrap!)
+  elsif (builtin or prelude) and Builtins.defaulted?(form.unwrap!)
     shape = Defaults.builtin_shape(form.unwrap!)
   end
 
@@ -146,8 +146,7 @@ export def lower_call(
   elsif prelude
     # The span of each argument follows the span of the call, so the VM can name the argument a prelude function
     # rejects (docs/vm/03-ir-and-bytecode.md).
-    spans = [span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end)
-    fx = Lowering.emit(fx, "call", [base, cx.functions[target]], spans)
+    fx = Lowering.emit(fx, "call", [base, cx.functions[target]], builtin_spans(node, shape))
   else
     op = "call"
     if tail

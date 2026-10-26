@@ -8,8 +8,9 @@
 ## the call returns `ok`.
 ##
 ## The call validates the allowlist before touching the disk, creates the destination with `Dir.mkdir_private` (an
-## existing path is an error, a missing parent is an error), then streams the archive in 64 KiB reads without ever
-## holding the whole file, the whole decompressed stream or a skipped entry in memory. It scans the whole container
+## existing path is an error, a missing parent is an error), then streams the archive in 64 KiB chunks
+## (`File.chunks`, through `gunzip` for a gzipped one) without ever holding the whole file, the whole decompressed
+## stream or a skipped entry in memory. It scans the whole container
 ## through the two zero end blocks and the zeros-only padding after them, so a duplicate, a missing member or a bad
 ## checksum after a selected file is still an error. A gzipped archive must hold exactly one gzip member with its CRC
 ## and size verified and no trailing bytes. Only regular files are written, each with `create_private` and parents
@@ -55,41 +56,6 @@ struct Wanted
   segments: List[String]
 end
 
-# The compressed side of a gzipped archive: the file and the streaming decoder.
-struct GzipInput
-  handle: FileHandle
-  dec: ZlibDecoder
-end
-
-# The input handles. The top-level call owns this value, so every error path below it can close the handles.
-enum Input
-  Raw(FileHandle)
-  Gzip(GzipInput)
-end
-
-# The pure half of the read state: buffered output bytes, unfed compressed bytes, and the accounting of the caps.
-struct Cursor
-  carry: List[Int]
-  pending: List[Int]
-  raw_read: Int
-  out_total: Int
-  file_eof: Bool
-  stream_done: Bool
-end
-
-# The moved cursor with the bytes a take produced.
-struct TakeOut
-  cursor: Cursor
-  bytes: List[Int]
-end
-
-# The moved cursor with one 512-byte header, or the clean end of the stream.
-struct BlockOut
-  cursor: Cursor
-  done: Bool
-  block: List[Int]
-end
-
 # One parsed header: the raw name bytes, the size and the type flag.
 struct TarHeader
   name: List[Int]
@@ -127,16 +93,34 @@ struct Ctx
   seen_exact: Map[String, Bool]
 end
 
-# The moved cursor with the moved scan context after one entry.
-struct EntryOut
-  cursor: Cursor
-  ctx: Ctx
+# What the scan of the TAR stream waits for: a header block, the data of a PAX or GNU record, the data of an entry,
+# the padding after it, or (after the two zero blocks) nothing but zeros.
+enum Phase
+  Header
+  Meta
+  Data
+  Pad
+  Trailer
 end
 
-# The moved cursor with the moved scan context after one selected file.
-struct WriteOut
-  cursor: Cursor
+# The state of the scan between two chunks of the TAR stream. `carry` holds the bytes the phase still needs more of
+# (part of a header or of a record). `rest` is what the phase still takes; `size` is the whole record, entry or
+# padding, for the truncation message, and `what` names it. A selected entry writes to `out`, its wanted `index`,
+# under its case-folded name `fold`; an entry that is skipped has `out` "". `total` counts the bytes of the stream.
+struct Scan
   ctx: Ctx
+  carry: List[Int]
+  phase: Phase
+  zeros: Int
+  rest: Int
+  size: Int
+  what: String
+  typeflag: Int
+  entry: Int
+  out: String
+  index: Int
+  fold: String
+  total: Int
 end
 
 ## Returns the default options: a 30 s deadline and at most 256 MiB of extracted files.
@@ -205,24 +189,13 @@ export def extract_tar(src: String, members: List[String], dest_dir: String, opt
     return error("archive: source is not a regular file: #{src}")
   end
   try make_dest(dest, deadline)
-  handle = try open_src(src, deadline)
-  first = try read_first(handle, deadline, src)
+  first = try read_first(src, deadline)
   if first.size == 0
-    close_file(handle, close_budget(deadline))
     return error("archive: #{src} is empty, not a TAR archive")
   end
   gzip = false
   if first.size >= 2
     gzip = first[0] == GZIP_FIRST and first[1] == GZIP_SECOND
-  end
-  input: Input = Input.Raw(handle)
-  cur = Cursor(
-    carry: first, pending: [], raw_read: first.size, out_total: first.size, file_eof: false, stream_done: false,
-  )
-  if gzip
-    dec = try start_decoder(handle, deadline)
-    input = Input.Gzip(GzipInput(handle: handle, dec: dec))
-    cur = Cursor(carry: [], pending: first, raw_read: first.size, out_total: 0, file_eof: false, stream_done: false)
   end
   ctx = Ctx(
     dest: dest,
@@ -244,17 +217,27 @@ export def extract_tar(src: String, members: List[String], dest_dir: String, opt
     seen_fold: {},
     seen_exact: {},
   )
-  outcome = scan_all(cur, input, ctx, members, deadline, src)
-  close_input(input, deadline)
+  scan = Scan(
+    ctx: ctx,
+    carry: [],
+    phase: Phase.Header,
+    zeros: 0,
+    rest: 0,
+    size: 0,
+    what: "",
+    typeflag: 0,
+    entry: 0,
+    out: "",
+    index: -1,
+    fold: "",
+    total: 0,
+  )
+  outcome = scan_all(src, gzip, scan, members)
   if !outcome.ok?
     return error(Result.message(outcome))
   end
   return outcome
 end
-
-
-
-
 
 def smaller(a: Int, b: Int) -> Int
   if a < b
@@ -287,19 +270,6 @@ def close_file(handle: FileHandle, budget: Int) -> Void
   end
 end
 
-def close_input(input: Input, deadline: Int) -> Void
-  budget = close_budget(deadline)
-  case input
-    Input.Raw(handle) -> close_file(handle, budget)
-    Input.Gzip(g) ->
-      close_file(g.handle, budget)
-      case Zlib.decoder_close(g.dec)
-        ok(_) -> return
-        error(_) -> return
-      end
-  end
-end
-
 def stat_src(src: String, deadline: Int) -> Result[FileInfo]
   case File.lstat(src, try time_left(deadline))
     ok(found) -> return ok(found)
@@ -307,28 +277,15 @@ def stat_src(src: String, deadline: Int) -> Result[FileInfo]
   end
 end
 
-def open_src(src: String, deadline: Int) -> Result[FileHandle]
-  case File.open(src, "read", try time_left(deadline))
-    ok(opened) -> return ok(opened)
-    error(message) -> return error("archive: cannot open #{src}: #{message}")
-  end
-end
-
-def read_first(handle: FileHandle, deadline: Int, src: String) -> Result[List[Int]]
-  case File.read_bytes(handle, CHUNK, try time_left(deadline))
-    ok(bytes) -> return ok(bytes)
-    error(message) ->
-      close_file(handle, close_budget(deadline))
-      return error("archive: cannot read #{src}: #{message}")
-  end
-end
-
-def start_decoder(handle: FileHandle, deadline: Int) -> Result[ZlibDecoder]
-  case Zlib.inflate_init(31, INPUT_BYTES, SCAN_BYTES)
-    ok(decoder) -> return ok(decoder)
-    error(message) ->
-      close_file(handle, close_budget(deadline))
-      return error("archive: cannot start gzip decoding: #{message}")
+# The first bytes of the source, to tell a gzipped archive by its magic.
+def read_first(src: String, deadline: Int) -> Result[List[Int]]
+  case File.chunks(src, 2, try time_left(deadline)).first(1)
+    ok(chunks) ->
+      if chunks.size == 0
+        return ok([])
+      end
+      return ok(chunks[0])
+    error(message) -> return error("archive: cannot read #{src}: #{message}")
   end
 end
 
@@ -336,13 +293,6 @@ def make_dest(dest: String, deadline: Int) -> Result[Void]
   case Dir.mkdir_private(dest, try time_left(deadline))
     ok(_) -> return ok()
     error(message) -> return error("archive: cannot create #{dest}: #{message}")
-  end
-end
-
-def read_chunk(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[List[Int]]
-  case File.read_bytes(handle, n, try time_left(deadline))
-    ok(bytes) -> return ok(bytes)
-    error(message) -> return error("archive: cannot read #{src}: #{message}")
   end
 end
 
@@ -355,140 +305,6 @@ def strip_slashes(path: String) -> String
     out = String.slice(out, 0, String.length(out) - 1)
   end
   return out
-end
-
-# Reads until `carry` holds `need` bytes, the file ends, or a gzip member ends. Counts every byte against the caps.
-def fill(cur: Cursor, input: Input, need: Int, deadline: Int, src: String) -> Result[Cursor]
-  while cur.carry.size < need
-    case input
-      Input.Raw(handle) ->
-        if cur.file_eof
-          break
-        end
-        room = SCAN_BYTES - cur.out_total
-        if room <= 0
-          probe = try read_chunk(handle, 1, deadline, src)
-          if probe.size == 0
-            cur = cur.with(file_eof: true)
-            break
-          end
-          return error("archive: raw input exceeds 1073741824 bytes")
-        end
-        chunk = try read_chunk(handle, smaller(room, CHUNK), deadline, src)
-        if chunk.size == 0
-          cur = cur.with(file_eof: true)
-        else
-          cur = cur.with(
-            carry: List.concat(cur.carry, chunk),
-            out_total: cur.out_total + chunk.size,
-            raw_read: cur.raw_read + chunk.size,
-          )
-        end
-      Input.Gzip(g) ->
-        if cur.stream_done
-          break
-        end
-        if cur.pending.size == 0 and !cur.file_eof
-          room = INPUT_BYTES - cur.raw_read
-          if room <= 0
-            probe = try read_chunk(g.handle, 1, deadline, src)
-            if probe.size == 0
-              cur = cur.with(file_eof: true)
-            else
-              return error("archive: compressed input exceeds 268435456 bytes")
-            end
-          else
-            chunk = try read_chunk(g.handle, smaller(room, CHUNK), deadline, src)
-            if chunk.size == 0
-              cur = cur.with(file_eof: true)
-            else
-              cur = cur.with(
-                pending: List.concat(cur.pending, chunk),
-                raw_read: cur.raw_read + chunk.size,
-              )
-            end
-          end
-        else
-          feed = List.take(cur.pending, CHUNK)
-          rest = List.drop(cur.pending, feed.size)
-          quantum = smaller(SCAN_BYTES - cur.out_total, CHUNK)
-          if quantum <= 0
-            quantum = 1
-          end
-          if Time.monotonic_ms() >= deadline
-            return error("archive: operation timed out")
-          end
-          step = try inflate_step(g.dec, feed, quantum)
-          cur = cur.with(
-            pending: List.concat(List.drop(feed, step.consumed), rest),
-            carry: List.concat(cur.carry, step.output),
-            out_total: cur.out_total + step.output.size,
-          )
-          if cur.out_total > SCAN_BYTES
-            return error("archive: decompressed input exceeds 1073741824 bytes")
-          end
-          if step.finished
-            if cur.pending.size > 0
-              return error("archive: trailing bytes after the gzip member")
-            end
-            cur = cur.with(stream_done: true)
-          else
-            if feed.size == 0 and cur.pending.size == 0 and cur.file_eof and step.needs_input
-              return error("archive: gzip stream is truncated")
-            end
-          end
-        end
-    end
-  end
-  return ok(cur)
-end
-
-# Takes exactly `n` bytes, failing on truncation. Callers keep `n` small except through `skip_exact`.
-def take_exact(cur: Cursor, input: Input, n: Int, deadline: Int, src: String, what: String) -> Result[TakeOut]
-  if n < 0
-    return error("archive: negative read of #{n} bytes for #{what}")
-  end
-  if n == 0
-    return ok(TakeOut(cursor: cur, bytes: []))
-  end
-  got: List[Int] = []
-  rest = n
-  while rest > 0
-    cur = try fill(cur, input, smaller(rest, CHUNK), deadline, src)
-    if cur.carry.size == 0
-      return error("archive: truncated TAR data, needed #{n} bytes for #{what}")
-    end
-    k = smaller(rest, cur.carry.size)
-    got = List.concat(got, List.take(cur.carry, k))
-    cur = cur.with(carry: List.drop(cur.carry, k))
-    rest -= k
-  end
-  return ok(TakeOut(cursor: cur, bytes: got))
-end
-
-# Skips exactly `n` bytes without holding them, failing on truncation.
-def skip_exact(cur: Cursor, input: Input, n: Int, deadline: Int, src: String, what: String) -> Result[Cursor]
-  rest = n
-  while rest > 0
-    out = try take_exact(cur, input, smaller(rest, CHUNK), deadline, src, what)
-    cur = out.cursor
-    rest -= out.bytes.size
-  end
-  return ok(cur)
-end
-
-# Reads one 512-byte header, or reports the clean end of the stream.
-def next_block(cur: Cursor, input: Input, deadline: Int, src: String) -> Result[BlockOut]
-  cur = try fill(cur, input, HEADER_BYTES, deadline, src)
-  if cur.carry.size == 0
-    return ok(BlockOut(cursor: cur, done: true, block: []))
-  end
-  if cur.carry.size < HEADER_BYTES
-    return error("archive: truncated TAR data, needed 512 bytes for a header")
-  end
-  block = List.take(cur.carry, HEADER_BYTES)
-  cur = cur.with(carry: List.drop(cur.carry, HEADER_BYTES))
-  return ok(BlockOut(cursor: cur, done: false, block: block))
 end
 
 def is_zero_block(block: List[Int]) -> Bool
@@ -821,13 +637,6 @@ def join_one(parts: List[String]) -> Result[String]
   end
 end
 
-def inflate_step(dec: ZlibDecoder, feed: List[Int], quantum: Int) -> Result[ZlibProgress]
-  case Zlib.inflate_next(dec, feed, quantum)
-    ok(progress) -> return ok(progress)
-    error(message) -> return error("archive: gzip input is invalid: #{message}")
-  end
-end
-
 # True when `out` is the destination itself or lies directly below it. Either path separator counts: `Path.join`
 # uses the host one, and the joined segments themselves never hold a separator.
 def stays_under(out: String, dest: String) -> Bool
@@ -883,93 +692,171 @@ def make_parents(ctx: Ctx, segments: List[String], deadline: Int) -> Result[Ctx]
 end
 
 # Writes one selected regular file, streaming its content in bounded chunks within both output caps.
-def create_out(out: String, deadline: Int) -> Result[FileHandle]
-  case File.open(out, "create_private", try time_left(deadline))
-    ok(opened) -> return ok(opened)
+# Creates one selected file empty, with `create_private`: its data is appended chunk by chunk as it streams in, so no
+# handle stays open between two chunks and every error path leaves nothing open.
+def create_out(out: String, deadline: Int) -> Result[Void]
+  left = try time_left(deadline)
+  case File.open(out, "create_private", left)
+    ok(handle) ->
+      case File.close(handle, close_budget(deadline))
+        ok(_) -> return ok()
+        error(message) -> return error("archive: cannot finish #{out}: #{message}")
+      end
     error(message) -> return error("archive: cannot create #{out}: #{message}")
   end
 end
 
-def write_selected(
-  cur: Cursor,
-  input: Input,
-  ctx: Ctx,
-  index: Int,
-  size: Int,
-  deadline: Int,
-  src: String,
-) -> Result[WriteOut]
-  item = ctx.wanted[index]
-  out = try join_under(ctx.dest, item.segments)
-  fold = String.downcase(out)
-  if Map.has_key?(ctx.seen_fold, fold)
-    return error("archive: selected files collide on a case-insensitive system: #{out}")
+# Appends one piece of a selected file's data.
+def append_out(out: String, piece: List[Int], deadline: Int) -> Result[Void]
+  left = try time_left(deadline)
+  case File.open(out, "append", left)
+    ok(handle) ->
+      case File.write_bytes(handle, piece, left)
+        ok(_) ->
+          case File.close(handle, close_budget(deadline))
+            ok(_) -> return ok()
+            error(message) -> return error("archive: cannot finish #{out}: #{message}")
+          end
+        error(message) ->
+          close_file(handle, close_budget(deadline))
+          return error("archive: cannot write #{out}: #{message}")
+      end
+    error(message) -> return error("archive: cannot write #{out}: #{message}")
   end
-  ctx = try make_parents(ctx, item.segments, deadline)
-  if size > ctx.max_output or ctx.extracted + size > ctx.max_output
-    return error("archive: output exceeds #{ctx.max_output} bytes")
-  end
-  handle = try create_out(out, deadline)
-  rest = size
-  while rest > 0
-    piece = try take_exact(cur, input, smaller(rest, CHUNK), deadline, src, "file data of #{item.path}")
-    cur = piece.cursor
-    case File.write_bytes(handle, piece.bytes, try time_left(deadline))
-      ok(_) -> rest -= piece.bytes.size
-      error(message) ->
-        close_file(handle, close_budget(deadline))
-        return error("archive: cannot write #{out}: #{message}")
-    end
-  end
-  case File.close(handle, close_budget(deadline))
-    ok(_) -> ctx = ctx.with(
-      matched: List.set(ctx.matched, index, true),
-      counts: List.set(ctx.counts, index, size),
-      extracted: ctx.extracted + size,
-      seen_fold: Map.put(ctx.seen_fold, fold, true),
-      seen_exact: Map.put(ctx.seen_exact, out, true),
-    )
-    error(message) -> return error("archive: cannot finish #{out}: #{message}")
-  end
-  return ok(WriteOut(cursor: cur, ctx: ctx))
 end
 
-# Consumes one entry: metadata updates the overrides, a selected regular file is written, the rest is skipped.
-def consume_entry(
-  cur: Cursor,
-  input: Input,
-  block: List[Int],
-  entry: Int,
-  ctx: Ctx,
-  deadline: Int,
-  src: String,
-) -> Result[EntryOut]
-  header = try read_header(block, entry)
-  if header.typeflag == 120 or header.typeflag == 103
-    is_global = header.typeflag == 103
-    if header.size > META_BYTES - ctx.meta_used
-      return error("archive: metadata exceeds 65536 bytes at entry #{entry}")
-    end
-    data = try take_exact(cur, input, header.size, deadline, src, "PAX data")
-    next = try parse_pax(data.bytes, entry, is_global, ctx.with(meta_used: ctx.meta_used + header.size))
-    padded = try skip_pad(data.cursor, input, header.size, deadline, src)
-    return ok(EntryOut(cursor: padded, ctx: next))
+# Scans the whole TAR stream (the file, or its one gzip member) through the end blocks and the zero padding, writing
+# every selected file on the way, then names a member the archive never held.
+def scan_all(src: String, gzip: Bool, scan: Scan, members: List[String]) -> Result[List[Int]]
+  deadline = scan.ctx.deadline
+  stream = File.chunks(src, CHUNK, try time_left(deadline))
+  if gzip
+    stream = stream.with_index do |chunk: List[Int], index: Int| try within_input(chunk, index) end
+      .gunzip(SCAN_BYTES)
   end
-  if header.typeflag == 76 or header.typeflag == 75
+  outcome = stream.reduce(scan) do |sc: Scan, chunk: List[Int]| try feed(sc, chunk, gzip) end
+  case outcome
+    ok(done) ->
+      try check_end(done)
+      try check_missing(done.ctx, members)
+      return ok(done.ctx.counts)
+    error(message) -> return error(stream_error(message, src))
+  end
+end
+
+# A compressed chunk passes while the file bytes read so far stay within INPUT_BYTES: File.chunks gives CHUNK bytes
+# each, the last one fewer.
+def within_input(chunk: List[Int], index: Int) -> Result[List[Int]]
+  if index * CHUNK + chunk.size > INPUT_BYTES
+    return error("archive: compressed input exceeds 268435456 bytes")
+  end
+  return ok(chunk)
+end
+
+# The error of the stream as std/archive words it: its own errors as they are, a refusal of the gzip member, or a
+# failed read of the source.
+def stream_error(message: String, src: String) -> String
+  if String.starts_with?(message, "archive: ")
+    return message
+  end
+  if message == "zlib: trailing bytes after stream end"
+    return "archive: trailing bytes after the gzip member"
+  end
+  if message == "zlib: truncated stream"
+    return "archive: gzip stream is truncated"
+  end
+  if message == "zlib: output exceeds max_bytes"
+    return "archive: decompressed input exceeds 1073741824 bytes"
+  end
+  if String.starts_with?(message, "zlib: ")
+    return "archive: gzip input is invalid: #{message}"
+  end
+  return "archive: cannot read #{src}: #{message}"
+end
+
+# Takes one chunk of the TAR stream: each phase takes what it needs of the bytes held so far, and what a phase still
+# needs more of waits in `carry` for the next chunk.
+def feed(sc: Scan, chunk: List[Int], gzip: Bool) -> Result[Scan]
+  if Time.monotonic_ms() >= sc.ctx.deadline
+    return error("archive: operation timed out")
+  end
+  total = sc.total + chunk.size
+  if !gzip and total > SCAN_BYTES
+    return error("archive: raw input exceeds 1073741824 bytes")
+  end
+  buf = chunk
+  if sc.carry.size > 0
+    buf = List.concat(sc.carry, chunk)
+  end
+  sc = sc.with(carry: [], total: total)
+  while buf.size > 0
+    case sc.phase
+      Phase.Header ->
+        if buf.size < HEADER_BYTES
+          return ok(sc.with(carry: buf))
+        end
+        sc = try take_header(sc, List.take(buf, HEADER_BYTES))
+        buf = List.drop(buf, HEADER_BYTES)
+      Phase.Meta ->
+        if buf.size < sc.rest
+          return ok(sc.with(carry: buf))
+        end
+        sc = try take_meta(sc, List.take(buf, sc.rest))
+        buf = List.drop(buf, sc.size)
+      Phase.Data ->
+        n = smaller(sc.rest, buf.size)
+        sc = try take_data(sc, List.take(buf, n))
+        buf = List.drop(buf, n)
+      Phase.Pad ->
+        n = smaller(sc.rest, buf.size)
+        sc = after_pad(sc.with(rest: sc.rest - n))
+        buf = List.drop(buf, n)
+      Phase.Trailer ->
+        counts = List.tally(buf)
+        if Map.size(counts) != 1 or !Map.has_key?(counts, 0)
+          return error("archive: non-zero padding after the archive end")
+        end
+        buf = []
+    end
+  end
+  return ok(sc)
+end
+
+# One header block: a zero block counts toward the end, any other one starts an entry.
+def take_header(sc: Scan, block: List[Int]) -> Result[Scan]
+  if is_zero_block(block)
+    if sc.zeros + 1 == 2
+      return ok(sc.with(zeros: 2, phase: Phase.Trailer))
+    end
+    return ok(sc.with(zeros: sc.zeros + 1))
+  end
+  ctx = sc.ctx
+  if ctx.entries >= MAX_ENTRIES
+    return error("archive: too many entries, past 8192")
+  end
+  entry = ctx.entries + 1
+  sc = sc.with(zeros: 0, entry: entry, ctx: ctx.with(entries: entry))
+  return start_entry(sc, try read_header(block, entry))
+end
+
+# Starts one entry: a PAX or GNU record waits for its data, a selected regular file is created and its data
+# streamed into it, any other entry is skipped.
+def start_entry(sc: Scan, header: TarHeader) -> Result[Scan]
+  ctx = sc.ctx
+  entry = sc.entry
+  if header.typeflag == 120 or header.typeflag == 103 or header.typeflag == 76 or header.typeflag == 75
     if header.size > META_BYTES - ctx.meta_used
       return error("archive: metadata exceeds 65536 bytes at entry #{entry}")
     end
-    data = try take_exact(cur, input, header.size, deadline, src, "GNU long name data")
-    padded = try skip_pad(data.cursor, input, header.size, deadline, src)
-    ctx = ctx.with(meta_used: ctx.meta_used + header.size)
-    if header.typeflag == 76
-      trimmed = trim_nul(data.bytes)
-      if trimmed.size > NAME_BYTES
-        return error("archive: entry name is too long at entry #{entry}")
-      end
-      ctx = ctx.with(has_gnu_name: true, gnu_name: trimmed)
+    what = "GNU long name data"
+    if header.typeflag == 120 or header.typeflag == 103
+      what = "PAX data"
     end
-    return ok(EntryOut(cursor: padded, ctx: ctx))
+    sc = sc.with(phase: Phase.Meta, rest: header.size, size: header.size, what: what, typeflag: header.typeflag)
+    if header.size == 0
+      return take_meta(sc, [])
+    end
+    return ok(sc)
   end
   raw = header.name
   if ctx.local.has_path
@@ -1003,6 +890,7 @@ def consume_entry(
   if canon != ""
     index = find_match(ctx.wanted, canon)
   end
+  sc = sc.with(ctx: ctx, phase: Phase.Data, rest: size, size: size, what: "entry data", out: "", index: -1)
   if index >= 0
     try check_relative(canon, "entry name", " at entry #{entry}")
     if ctx.matched[index]
@@ -1011,19 +899,104 @@ def consume_entry(
     if !regular
       return error("archive: member is not a regular file: #{canon}")
     end
-    written = try write_selected(cur, input, ctx, index, size, deadline, src)
-    padded = try skip_pad(written.cursor, input, size, deadline, src)
-    return ok(EntryOut(cursor: padded, ctx: written.ctx))
+    sc = try open_selected(sc, index, size)
   end
-  cur = try skip_exact(cur, input, size, deadline, src, "entry data")
-  cur = try skip_pad(cur, input, size, deadline, src)
-  return ok(EntryOut(cursor: cur, ctx: ctx))
+  if size == 0
+    return end_data(sc)
+  end
+  return ok(sc)
 end
 
-# Skips the zero padding after `size` data bytes up to the next 512-byte block.
-def skip_pad(cur: Cursor, input: Input, size: Int, deadline: Int, src: String) -> Result[Cursor]
+# Checks the place of one selected file and creates it under the new base, within both output caps.
+def open_selected(sc: Scan, index: Int, size: Int) -> Result[Scan]
+  ctx = sc.ctx
+  item = ctx.wanted[index]
+  out = try join_under(ctx.dest, item.segments)
+  fold = String.downcase(out)
+  if Map.has_key?(ctx.seen_fold, fold)
+    return error("archive: selected files collide on a case-insensitive system: #{out}")
+  end
+  ctx = try make_parents(ctx, item.segments, ctx.deadline)
+  if size > ctx.max_output or ctx.extracted + size > ctx.max_output
+    return error("archive: output exceeds #{ctx.max_output} bytes")
+  end
+  try create_out(out, ctx.deadline)
+  return ok(sc.with(ctx: ctx, out: out, index: index, fold: fold, what: "file data of #{item.path}"))
+end
+
+# The data of a PAX or GNU record, then its padding.
+def take_meta(sc: Scan, data: List[Int]) -> Result[Scan]
+  ctx = sc.ctx.with(meta_used: sc.ctx.meta_used + sc.size)
+  if sc.typeflag == 120 or sc.typeflag == 103
+    ctx = try parse_pax(data, sc.entry, sc.typeflag == 103, ctx)
+  else
+    if sc.typeflag == 76
+      trimmed = trim_nul(data)
+      if trimmed.size > NAME_BYTES
+        return error("archive: entry name is too long at entry #{sc.entry}")
+      end
+      ctx = ctx.with(has_gnu_name: true, gnu_name: trimmed)
+    end
+  end
+  return ok(start_pad(sc.with(ctx: ctx), sc.size))
+end
+
+# One piece of an entry's data: written when the entry is selected, dropped when not.
+def take_data(sc: Scan, piece: List[Int]) -> Result[Scan]
+  if sc.out != ""
+    try append_out(sc.out, piece, sc.ctx.deadline)
+  end
+  sc = sc.with(rest: sc.rest - piece.size)
+  if sc.rest == 0
+    return end_data(sc)
+  end
+  return ok(sc)
+end
+
+# The end of an entry's data: a selected file counts, then the padding follows.
+def end_data(sc: Scan) -> Result[Scan]
+  if sc.out != ""
+    ctx = sc.ctx
+    ctx = ctx.with(
+      matched: List.set(ctx.matched, sc.index, true),
+      counts: List.set(ctx.counts, sc.index, sc.size),
+      extracted: ctx.extracted + sc.size,
+      seen_fold: Map.put(ctx.seen_fold, sc.fold, true),
+      seen_exact: Map.put(ctx.seen_exact, sc.out, true),
+    )
+    sc = sc.with(ctx: ctx, out: "", index: -1)
+  end
+  return ok(start_pad(sc, sc.size))
+end
+
+# The zero padding after `size` data bytes up to the next 512-byte block.
+def start_pad(sc: Scan, size: Int) -> Scan
   pad = (HEADER_BYTES - size % HEADER_BYTES) % HEADER_BYTES
-  return skip_exact(cur, input, pad, deadline, src, "entry padding")
+  return after_pad(sc.with(phase: Phase.Pad, rest: pad, size: pad, what: "entry padding"))
+end
+
+def after_pad(sc: Scan) -> Scan
+  if sc.rest == 0
+    return sc.with(phase: Phase.Header, size: 0)
+  end
+  return sc
+end
+
+# The stream ended: only the zeros after the two end blocks may end it.
+def check_end(sc: Scan) -> Result[Void]
+  case sc.phase
+    Phase.Trailer -> return ok()
+    Phase.Header ->
+      if sc.carry.size == 0
+        return error("archive: truncated archive, missing the two zero end blocks")
+      end
+      return error("archive: truncated TAR data, needed 512 bytes for a header")
+    Phase.Data ->
+      # The bytes the reader of a whole file wanted when the data ran out: what was left of its CHUNK-sized piece.
+      needed = smaller(sc.size - (sc.size - sc.rest) / CHUNK * CHUNK, CHUNK)
+      return error("archive: truncated TAR data, needed #{needed} bytes for #{sc.what}")
+    _ -> return error("archive: truncated TAR data, needed #{sc.size} bytes for #{sc.what}")
+  end
 end
 
 # Names every selected member that the archive never held.
@@ -1035,82 +1008,4 @@ def check_missing(ctx: Ctx, members: List[String]) -> Result[Void]
     end
   end
   return ok()
-end
-
-# Drains the bytes after the two zero end blocks: only zeros may follow, up to the caps.
-def check_padding(cur: Cursor, input: Input, deadline: Int, src: String) -> Result[Cursor]
-  while true
-    cur = try fill(cur, input, 1, deadline, src)
-    if cur.carry.size == 0
-      break
-    end
-    piece = List.take(cur.carry, smaller(cur.carry.size, CHUNK))
-    counts = List.tally(piece)
-    if Map.size(counts) != 1 or !Map.has_key?(counts, 0)
-      return error("archive: non-zero padding after the archive end")
-    end
-    cur = cur.with(carry: List.drop(cur.carry, piece.size))
-  end
-  return ok(cur)
-end
-
-# Proves a gzip member ends the file: any byte after it is trailing garbage.
-def check_trailing(cur: Cursor, input: Input, deadline: Int, src: String) -> Result[Cursor]
-  case input
-    Input.Raw(_) -> return ok(cur)
-    Input.Gzip(g) ->
-      while true
-        room = INPUT_BYTES - cur.raw_read
-        if room <= 0
-          probe = try read_chunk(g.handle, 1, deadline, src)
-          if probe.size == 0
-            break
-          end
-          return error("archive: compressed input exceeds 268435456 bytes")
-        end
-        chunk = try read_chunk(g.handle, smaller(room, CHUNK), deadline, src)
-        if chunk.size == 0
-          break
-        end
-        return error("archive: trailing bytes after the gzip member")
-      end
-      return ok(cur.with(file_eof: true))
-  end
-end
-
-# Scans the whole container through the end blocks, the padding and every selected payload.
-def scan_all(
-  cur: Cursor,
-  input: Input,
-  ctx: Ctx,
-  members: List[String],
-  deadline: Int,
-  src: String,
-) -> Result[List[Int]]
-  zeros = 0
-  while true
-    got = try next_block(cur, input, deadline, src)
-    cur = got.cursor
-    if got.done
-      return error("archive: truncated archive, missing the two zero end blocks")
-    end
-    if is_zero_block(got.block)
-      zeros += 1
-      if zeros == 2
-        break
-      end
-    else
-      zeros = 0
-      if ctx.entries >= MAX_ENTRIES
-        return error("archive: too many entries, past 8192")
-      end
-      done = try consume_entry(cur, input, got.block, ctx.entries + 1, ctx, deadline, src)
-      cur = done.cursor
-      ctx = done.ctx.with(entries: done.ctx.entries + 1)
-    end
-  end
-  cur = try check_padding(cur, input, deadline, src)
-  cur = try check_trailing(cur, input, deadline, src)
-  try check_missing(ctx, members)
-  return ok(ctx.counts)
 end
