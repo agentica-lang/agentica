@@ -39,16 +39,18 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   wanted = site.args.size - 1
   if !T.is?(callback.type, "Fn") or T.params(callback.type).size != wanted
-    return error(
-      State.fail(
-        cx,
-        callback.st,
-        "CHECK-TYPE-MISMATCH",
-        "#{site.selected.name} with #{wanted} argument(s) requires a function with #{wanted} parameter(s)",
-        Ast.expr_span(site.args[0]),
-      ),
+    message = (
+      "#{site.selected.name} expects a function with #{wanted} parameter(s) for #{wanted} argument(s), " +
+      "found #{spawn_found(callback.type)}; Task.spawn(&f) needs 0 parameters, Task.spawn(&f, arg) needs 1"
     )
+    span = Ast.expr_span(site.args[0])
+    if wanted == 0 and T.is?(callback.type, "Fn") and T.params(callback.type).size == 1
+      help = "pass its argument: Task.spawn(&f, x)"
+      return error(State.fail_help(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span, help))
+    end
+    return error(State.fail(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span))
   end
+
   if wanted == 0
     return ok(State.Out(st: callback.st, type: T.Type.Task(T.result(callback.type))))
   end
@@ -67,6 +69,14 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
     )
   end
   return ok(State.Out(st: handed.st, type: T.Type.Task(T.result(callback.type))))
+end
+
+# What a spawn was given in place of its function, for the message.
+def spawn_found(type: T.Type) -> String
+  if T.is?(type, "Fn")
+    return "a function with #{T.params(type).size} parameter(s)"
+  end
+  return T.to_text(type)
 end
 
 def c_pointer?(type: T.Type) -> Bool

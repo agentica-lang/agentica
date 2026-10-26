@@ -50,6 +50,11 @@ def main() -> Void
   IO.inspect(Task.await(Task.spawn(&nothing, 0)))
   Task.await(Task.spawn(&shout, 3))
   IO.inspect(Task.await(Task.spawn(&bare)))
+  base = 40
+  IO.inspect(Task.await(Task.spawn do
+    Task.sleep(1)
+    base + 2
+  end))
   offset = 100
   IO.inspect(Task.await(start(5) do |n|
     Task.sleep(1)

@@ -142,6 +142,9 @@ def block_target_help(name: String) -> String
   if name == "List.each_slice"
     return "each_slice returns the slices and takes no block: xs.each_slice(2).each do |pair| ... end"
   end
+  if name == "Task.spawn"
+    return "Task.spawn takes a block or a function reference, not both: Task.spawn do ... end or Task.spawn(&f, arg)"
+  end
   return "a block is only allowed when the last parameter is a function (Fn[...])"
 end
 

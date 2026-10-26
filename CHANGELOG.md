@@ -8,9 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
+  takes no argument.
+
 ### Fixed
 
-- `Task.spawn(&f)` starts a function that takes no parameter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
 
 ## [0.10.0] - 2026-10-25

@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 133,
+  "steps": 147,
   "stdout": [
     "Item(value: 42)",
     "Item(value: 42)",
@@ -13,6 +13,7 @@
     "nil",
     "task 3 ran",
     "7",
+    "42",
     "105",
     "done",
     ""
