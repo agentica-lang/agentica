@@ -620,7 +620,8 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
     The rows of the pure libraries (strings, numbers, lists, maps, JSON, `Path`)
     are not marked. A builtin that touches the task tree, a channel, the logger
     table, a handle's FIFO or stdin is marked, and so is every `IO` row that
-    reads stdin. The interpreter takes the lock around the steps of a stepper,
+    reads stdin. `Task.spawn_owning` is the exception: it walks its argument
+    unlocked and takes `rt->sync` itself to claim and hand over the handles. The interpreter takes the lock around the steps of a stepper,
     and `run_half` (`vm/loop.c`) around the halves of a job whose kind says
     `locked` (`agc_io_kind.locked`). The end of a task takes it in
     `agc_task_end_turn` and `agc_task_next`. The output builtins are not marked:

@@ -278,7 +278,8 @@ scheduler holds the task that the cancel reached it through until that turn ends
 already is counted through the top of its holder chain. `HttpWire.server` takes
 the listener off its owner's list, so ending the owner closes both, and a
 hand-off moves both. `Task.spawn_owning` fails with `RUNTIME-HANDLE-NOT-OWNED`
-when the caller does not own the handle or it is closed, before it makes a task.
+when the caller does not own a handle of its argument or it is closed, before it
+makes a task and before any handle of the argument moves (all or none).
 
 A resource of native code (`vm/ffi.c`) closes by running its C `free` once,
 on `Native.close` or at its owner's end. A `compute def` call holds its

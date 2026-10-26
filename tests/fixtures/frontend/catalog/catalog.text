@@ -614,7 +614,7 @@ builtin Task.spawn forms=2
   Task.spawn(function: Fn[R]) -> Task[R] shape=(Fn([], Var(R))) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with no argument in a lightweight task."
   Task.spawn(function: Fn[A, R], argument: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawn impl="Task.spawn" effects=["concurrency"] desc="Start a function with one argument in a lightweight task."
 builtin Task.spawn_owning forms=1
-  Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawnOwning impl="Task.spawn_owning" effects=["concurrency"] desc="Like Task.spawn, and gives the handle or Channel argument, which the calling task must own (an unowned Channel counts), to the new task; VM only."
+  Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R] shape=(Fn([Var(A)], Var(R)), Var(A)) -> Task(Var(R)) rule=TaskSpawnOwning impl="Task.spawn_owning" effects=["concurrency"] desc="Like Task.spawn, and gives the handle or Channel argument, or every one that a struct, enum, List, Map or Result argument holds, to the new task; the calling task must own each one (an unowned Channel counts); VM only."
 builtin Task.unobserved_crash forms=1
   Task.unobserved_crash() -> Result[String] shape=() -> Result(String) rule=Plain impl="Task.unobserved_crash" effects=["concurrency"] desc="Return the text of the first task crash no await has observed, or an error."
 builtin Test.assert forms=1

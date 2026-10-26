@@ -16,6 +16,20 @@
 #define RUNNEXT_LIMIT 3u
 #define SPIN_BUDGET_US 10u
 
+/* A set of pointers (open addressing, a power-of-two capacity, at most half full): the containers a walk has seen
+   and the resources it has found. Values are immutable and may share parts, so without it a value made of shared
+   halves would cost its unfolded size, which can be exponential in its memory. */
+typedef struct {
+  const void **slots;
+  size_t count, capacity;
+} pointer_set;
+
+/* The values a spawn_owning walk has still to visit (claim_all). */
+typedef struct {
+  agc_value *items;
+  size_t count, capacity;
+} value_stack;
+
 /* The state READY means "in the run queue": a task that spawns, yields or is woken is READY before it is pushed. The
    store is sequentially consistent because a cancel of a task that yields is a store-then-load pair like the one at the
    park (cancel_one stores the flag and reads the state; this stores the state and agc_task_next reads the flag): with
@@ -929,11 +943,12 @@ static agc_task *make_child(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   return child;
 }
 
-/* HANDED, when not NULL, moves to the child before it can end, so a child that starts cancelled closes it. */
-static agc_task *start_child(agc_vm *vm, agc_task *parent, agc_task *child, agc_resource *handed) {
+/* The HANDED resources (N of them) move to the child before it can end, so a child that starts cancelled closes
+   them. */
+static agc_task *start_child(agc_vm *vm, agc_task *parent, agc_task *child, agc_resource *const *handed, size_t n) {
   adopt(vm, parent, child);
   trace_spawn(vm, child, parent);
-  if (handed) agc_hand_over(handed, child);
+  for (size_t k = 0; k < n; k++) agc_hand_over(handed[k], child);
   if (!cancelled_parent(parent)) {
     enqueue(vm, child);
     return child;
@@ -952,7 +967,7 @@ agc_task *agc_task_spawn_test(agc_vm *vm, agc_value fn, uint32_t span, uint64_t 
   agc_task *child = make_child(vm, vm->task, fn, NULL, 0, span);
   child->test = child;
   agc_random_seed(&child->random, seed);
-  return start_child(vm, vm->task, child, NULL);
+  return start_child(vm, vm->task, child, NULL, 0);
 }
 
 /* A node of the task tree that never runs: the parent of an HTTP server's
@@ -971,15 +986,15 @@ agc_task *agc_task_group(agc_vm *vm) {
 }
 
 static agc_task *spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                              uint32_t span, agc_resource *handed) {
+                              uint32_t span, agc_resource *const *handed, size_t n) {
   agc_task *child = make_child(vm, parent, fn, args, argc, span);
   agc_random_seed(&child->random, agc_random_next(&vm->task->random));
-  return start_child(vm, parent, child, handed);
+  return start_child(vm, parent, child, handed, n);
 }
 
 agc_task *agc_task_spawn_seeded(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
                                 uint32_t span) {
-  return spawn_seeded(vm, parent, fn, args, argc, span, NULL);
+  return spawn_seeded(vm, parent, fn, args, argc, span, NULL, 0);
 }
 
 static agc_resource *owned_by_caller(agc_vm *vm, agc_value handle) {
@@ -998,9 +1013,159 @@ static agc_resource *claim(agc_vm *vm, agc_value handle, uint32_t span) {
   return r;
 }
 
+/* Whether V is a value that Task.spawn_owning hands over itself: a channel, a handle, a resource or a C.Pointer. The
+   list keeps step with agc_owned_of (vm/loop.c) and with holds_handle? of the checker. */
+static bool handle_tag(agc_value v) {
+  switch ((agc_tag)v.tag) {
+    case AGC_T_CHANNEL:
+    case AGC_T_HANDLE:
+    case AGC_T_SOCKET:
+    case AGC_T_LISTENER:
+    case AGC_T_PROCESS:
+    case AGC_T_HTTP_SERVER:
+    case AGC_T_C_RESOURCE:
+    case AGC_T_C_POINTER: return true;
+    default: return false;
+  }
+}
+
+/* Whether V can hold a handle inside it: a struct, an enum, a Result, a List or a Map. */
+static bool holder_tag(agc_value v) {
+  switch ((agc_tag)v.tag) {
+    case AGC_T_STRUCT:
+    case AGC_T_ENUM:
+    case AGC_T_RESULT:
+    case AGC_T_LIST:
+    case AGC_T_MAP: return true;
+    default: return false;
+  }
+}
+
+/* Whether V is a String, Int, Float or Bool. The items of a List and the values of a Map have one static type, so
+   when the first one is such a scalar none of them holds a handle. */
+/* Whether V is a handle or may hold one. A collection has one static type, so a list or map whose first item is
+   neither holds no handle. */
+static bool may_hold(agc_value v) { return handle_tag(v) || holder_tag(v); }
+
+/* Puts P in SLOTS (CAPACITY of them, a power of two, never full); false when it was already in. */
+static bool slot_put(const void **slots, size_t capacity, const void *p) {
+  size_t k = (size_t)(((uintptr_t)p >> 4) * 0x9E3779B97F4A7C15ull) & (capacity - 1);
+  for (; slots[k]; k = (k + 1) & (capacity - 1))
+    if (slots[k] == p) return false;
+  slots[k] = p;
+  return true;
+}
+
+/* Adds P (not NULL); false when it was already in. */
+static bool pointer_set_add(pointer_set *s, const void *p) {
+  if (2 * (s->count + 1) > s->capacity) {
+    size_t bigger = s->capacity ? agc_size_mul(s->capacity, 2) : 32;
+    const void **slots = agc_alloc(agc_size_mul(bigger, sizeof(void *)));
+    for (size_t k = 0; k < s->capacity; k++)
+      if (s->slots[k]) (void)slot_put(slots, bigger, s->slots[k]);
+    s->slots = slots;
+    s->capacity = bigger;
+  }
+  if (!slot_put(s->slots, s->capacity, p)) return false;
+  s->count++;
+  return true;
+}
+
+static void value_push(value_stack *s, agc_value v) {
+  if (s->count == s->capacity) {
+    size_t bigger = s->capacity ? agc_size_mul(s->capacity, 2) : 16;
+    agc_value *grown = agc_alloc(agc_size_mul(bigger, sizeof(agc_value)));
+    if (s->count) memcpy(grown, s->items, s->count * sizeof(agc_value));
+    s->items = grown;
+    s->capacity = bigger;
+  }
+  s->items[s->count++] = v;
+}
+
+/* Pushes V when it is a handle or may hold one; a scalar is left out. */
+static void push_part(value_stack *todo, agc_value v) {
+  if (may_hold(v)) value_push(todo, v);
+}
+
+static void push_value(agc_value v, void *todo) { push_part(todo, v); }
+
+/* The handle values inside ARG (through struct fields, enum payloads, Result values, list items and map values), each
+   object once. Values are immutable, so the walk needs no lock. Each container is walked once (a value may share its
+   parts, and its unfolded size can be exponential in its memory), so the walk is bounded by the size of the value in
+   memory. Map keys are Ints or Strings and are never walked. */
+static value_stack find_handles(agc_vm *vm, agc_value arg) {
+  pointer_set seen = {NULL, 0, 0}, found = {NULL, 0, 0};
+  value_stack todo = {NULL, 0, 0}, handles = {NULL, 0, 0};
+  push_part(&todo, arg);
+  while (todo.count) {
+    agc_value v = todo.items[--todo.count];
+    agc_charge(vm, 1);
+    if (handle_tag(v)) {
+      uint64_t word = agc_value_word(v);
+      if (!word || pointer_set_add(&found, (const void *)(uintptr_t)word)) value_push(&handles, v);
+      continue;
+    }
+    switch ((agc_tag)v.tag) {
+      case AGC_T_STRUCT: {
+        const agc_struct *x = agc_as_struct(vm, v);
+        if (pointer_set_add(&seen, x))
+          for (size_t k = 0; k < x->n; k++) push_part(&todo, x->fields[k]);
+        break;
+      }
+      case AGC_T_ENUM: {
+        const agc_enum *x = agc_as_enum(vm, v);
+        if (pointer_set_add(&seen, x))
+          for (size_t k = 0; k < x->n; k++) push_part(&todo, x->payload[k]);
+        break;
+      }
+      case AGC_T_RESULT: {
+        const agc_result *x = agc_as_result(vm, v);
+        if (pointer_set_add(&seen, x)) push_part(&todo, x->value);
+        break;
+      }
+      case AGC_T_LIST: {
+        /* A packed list (Int, Float) or one whose items cannot hold a handle is skipped. */
+        const agc_list *x = agc_as_list(vm, v);
+        if (!agc_list_len(x) || agc_list_kind(x) || !may_hold(agc_list_get(x, 0)) || !pointer_set_add(&seen, x))
+          break;
+        agc_list_cursor c;
+        agc_value item;
+        agc_list_cursor_begin(&c, x, 0);
+        while (agc_list_cursor_next(&c, &item)) push_part(&todo, item);
+        break;
+      }
+      case AGC_T_MAP: {
+        const agc_map *x = agc_as_map(vm, v);
+        agc_value first;
+        if (!x->size || (agc_map_any_value(x, &first) && !may_hold(first)) || !pointer_set_add(&seen, x)) break;
+        agc_map_each_value(x, push_value, &todo);
+        break;
+      }
+      default: break;
+    }
+  }
+  return handles;
+}
+
+/* Task.spawn_owning(&f, value): the new task gets VALUE as its argument and owns every handle in it, all or none. The
+   row is not shared: the walk over VALUE runs without rt->sync, which is taken only to claim the handles it found
+   (claim changes no owner, so a handle the caller does not own fails here before any of them moves), hand them over
+   and start the task. A bare handle needs no walk. */
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
-  agc_resource *r = claim(vm, handle, span);
-  return spawn_seeded(vm, parent, fn, &handle, 1, span, r);
+  value_stack found = {&handle, 1, 1};
+  if (!handle_tag(handle)) found = find_handles(vm, handle);
+  agc_resource *one;
+  agc_resource **handed = found.count > 1 ? agc_alloc(agc_size_mul(found.count, sizeof(*handed))) : &one;
+  pointer_set claimed = {NULL, 0, 0};
+  size_t n = 0;
+  agc_sync_take(vm);
+  for (size_t k = 0; k < found.count; k++) {
+    agc_resource *r = claim(vm, found.items[k], span);
+    if (found.count == 1 || pointer_set_add(&claimed, r)) handed[n++] = r;
+  }
+  agc_task *child = spawn_seeded(vm, parent, fn, &handle, 1, span, handed, n);
+  agc_sync_drop(vm);
+  return child;
 }
 
 /* Runs fn(arg) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
@@ -1018,7 +1183,7 @@ agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value
   root->result = agc_void();
   agc_task *child = make_child(vm, root, fn, &arg, 1, span);
   agc_random_seed(&child->random, child->id);
-  return start_child(vm, root, child, r);
+  return start_child(vm, root, child, &r, 1);
 }
 
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
@@ -1190,7 +1355,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.await_result", 1, builtin_await_result, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.await_result", 2, builtin_await_timeout_result, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Task.cancel", 1, builtin_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.spawn", 1, builtin_spawn_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
 };

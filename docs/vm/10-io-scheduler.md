@@ -147,9 +147,11 @@ section says how the scheduler and the loop keep them.
   guard, job resources, stream locks and `HttpClient` have no owner.
   `Task.spawn` moves nothing, so a handle that a helper returns is closed when
   the helper ends. The one hand-off is `Task.spawn_owning(&f, handle)` ([handle
-  ownership][task-rules]). `agc_task_spawn_owning` checks that the caller owns
-  an open handle, else `RUNTIME-HANDLE-NOT-OWNED` at the handle argument, before
-  any task is made. Then it moves the owner to the new task. `HttpWire.spawn`
+  ownership][task-rules]). `agc_task_spawn_owning` walks the argument without
+  `rt->sync` for the handles in it (a struct, enum, List, Map or Result may hold
+  several), then, under the lock, checks that the caller owns every one, open,
+  else `RUNTIME-HANDLE-NOT-OWNED` at the handle argument, before any task is
+  made. Then it moves all of them to the new task. `HttpWire.spawn`
   does the same (10.7.2).
   - A file's close is an `OP_CLOSE` job with no task. It waits while another job
     holds the file, also a detached one (`agc_io_finish` and `end_detached` pass

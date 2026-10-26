@@ -18,7 +18,7 @@ Starts `function(argument)` in a new task and returns its `Task` handle. Without
 A block is the function too: `Task.spawn do ... end` runs the block as a task, like Ruby's `Thread.new { }`, and it may capture locals. Give a block or a function reference, not both (`CHECK-BLOCK-TARGET`). `Task.spawn_owning` always takes the handle.
 
 - A file, socket, listener, process or server belongs to the task that opened it and closes when that task ends (returns, crashes or is cancelled). So open a long-lived handle in the task that keeps it, not in a helper.
-- `Task.spawn` moves nothing: a handle in the argument, or in a struct or list in it, stays with the caller. To give it away, use `Task.spawn_owning`.
+- `Task.spawn` moves nothing: a handle in the argument, or in a struct or list in it, stays with the caller. To give it away, use `Task.spawn_owning`, which also takes such a struct or list.
 
 ```agentica
 def greet(name: String) -> String
@@ -43,8 +43,9 @@ Task.spawn_owning(function: Fn[A, R], handle: A) -> Task[R]
 
 Starts `function(handle)` like `Task.spawn` and gives `handle` to the new task in the same call.
 
-- The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer`, `Channel[T]`, or a [native resource or owned buffer](/library/io-and-system/native/types/). Anything else (an `Int`, a struct that holds a socket, an `HttpClient`) is `CHECK-NOT-A-HANDLE`.
-- The caller must own the handle, and can still use it while the new task runs. Otherwise (not owned, already handed over, closed) the caller stops with `RUNTIME-HANDLE-NOT-OWNED` and no task is made.
+- The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer`, `Channel[T]`, or a [native resource or owned buffer](/library/io-and-system/native/types/), or a struct, enum, `List`, `Map` or `Result` that holds one. Anything else (an `Int`, a struct with no handle, an `HttpClient`) is `CHECK-NOT-A-HANDLE`.
+- A value that holds handles hands over every one of them: the new task gets the value and closes them all when it ends. An enum variant with no handle hands over nothing.
+- The caller must own each handle, and can still use it while the new task runs. Otherwise (not owned, already handed over, closed) the caller stops with `RUNTIME-HANDLE-NOT-OWNED`, no task is made and no handle moves.
 - A server loop can give each accepted connection to its own task, so a crash closes only that connection. A handed-over server takes its listener along and keeps serving after its creator ends.
 - A [Channel](/library/concurrency/channel/) has no opener, so any task can make the first hand-off. The ownership rules are in [a producer that owns the channel](/library/concurrency/channel/#a-producer-that-owns-the-channel).
 
