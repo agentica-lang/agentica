@@ -7,14 +7,13 @@
 ## (`tree`), whether the text follows the style rule blank_line_after_end (`styled`), the stub, and the type of each of
 ## its constants (type_code.agc). The tree digest is the SHA-256 of the text, of the shape of the file (the package it
 ## belongs to and the names its imports bind) and of the tree digests of the files it imports, so it changes when the
-## file or anything under it changes. A module whose tree digest is the
-## one its entry vouches for, and whose constants the entry types, is `clean`: every function body and constant in it
-## passed the check of that tree, and a new check of the same tree gives the same result, since a body is checked from
-## the text of its module and the declarations and constants of what it imports and nothing else. The checker skips
-## the bodies, constants and field defaults of the clean modules (`Checker.check_query_taking`) and reads the types of
-## their constants from the entry. `styled` is a fact about the text alone, so it does not need the tree: a text that
-## the entry says is styled is not lexed again for the style rule (check_style.agc); a text that breaks the rule is
-## never marked, and is lexed and reported as always.
+## file or anything under it changes. A module whose tree digest is the one its entry vouches for, and whose constants
+## the entry types, is `clean`: every function body and constant in it passed the check of that tree, and a new check
+## of the same tree gives the same result, since a body is checked from the text of its module and the declarations and
+## constants of what it imports and nothing else. The checker skips the bodies, constants and field defaults of the
+## clean modules (`Checker.check_query_taking`) and reads the types of their constants from the entry. `styled` is a
+## fact about the text alone, so it does not need the tree: a text that the entry says is styled is not lexed again for
+## the style rule (check_style.agc); a text that breaks the rule is never marked, and is lexed and reported as always.
 ##
 ## The stub is the text of the file with every private function, the statements of every other function body, and the
 ## value of every long constant, blanked. It has the same length, line breaks and offsets, so every span of a
@@ -347,13 +346,7 @@ def function_cut(text: String, node: Ast.FunctionDecl, whole: Bool) -> Result[Li
     end
   end
 
-  # The span of a function ends after the line break that follows its `end`.
-  stop = node.span.stop.offset
-  while stop > last and stop <= text.length and " \t\r\n".contains?(text.slice(stop - 1, 1))
-    stop -= 1
-  end
-
-  stop -= END_WORD.length
+  stop = end_offset(text, last, node.span.stop.offset) - END_WORD.length
   if stop < last or stop + END_WORD.length > text.length or text.slice(stop, END_WORD.length) != END_WORD
     return error("the body of #{node.name} does not end where the stub needs it to")
   end
@@ -363,6 +356,37 @@ def function_cut(text: String, node: Ast.FunctionDecl, whole: Bool) -> Result[Li
   end
 
   return ok([Cut(first: first, stop: stop, wrap: false)])
+end
+
+# The offset after the `end` that closes a function whose span stops at `stop`: the span goes on over the line break
+# that follows the `end`, and over a comment on its line. `floor` is before the `end`.
+def end_offset(text: String, floor: Int, stop: Int) -> Int
+  if stop > text.length
+    return stop
+  end
+
+  at = trimmed(text, floor, stop)
+  line = at
+  while line > floor and text.slice(line - 1, 1) != "\n"
+    line -= 1
+  end
+
+  mark = text.slice(line, at - line).index_of("#")
+  if mark.ok?
+    return trimmed(text, floor, line + mark.unwrap!)
+  end
+
+  return at
+end
+
+# `stop` moved back over the blanks and line breaks before it, down to `floor`.
+def trimmed(text: String, floor: Int, stop: Int) -> Int
+  at = stop
+  while at > floor and " \t\r\n".contains?(text.slice(at - 1, 1))
+    at -= 1
+  end
+
+  return at
 end
 
 def value_cut(node: Ast.ConstDecl) -> List[Cut]

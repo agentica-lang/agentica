@@ -22,11 +22,10 @@ FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "ri
 ## `styled`, which an earlier check found to follow the rule in this very text (modules/check_cache.agc), is not lexed.
 export def blank_line_after_end(
   linked: Linker.Linked,
-  styled: List[String] = [],
+  styled: Set[String],
 ) -> Ast.Optional[Failure.Problem]
-  skipped = Set.new(styled)
   for module in linked.modules
-    if module.blank_line_after_end and !skipped.include?(module.file)
+    if module.blank_line_after_end and !styled.include?(module.file)
       case problem_in(module.file, module.text)
         Ast.Optional.Present(problem) -> return Ast.Optional.Present(problem)
         Ast.Optional.Absent -> next

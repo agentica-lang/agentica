@@ -234,6 +234,17 @@ def test_the_stub_leaves_out_private_functions_and_keeps_the_exported_ones(ws):
     assert b"tidy" not in stubs[0]
 
 
+def test_a_comment_after_the_end_of_a_function_still_gives_a_stub(ws):
+    edit(ws, "mid", "return Deep.make(name)\nend", "return Deep.make(name)\nend # builds")
+    edit(ws, "deep", "return name.strip\nend", "return name.strip\nend # private")
+    assert settled(ws)[0][0] == 0
+    for marker in (b"export def pick", b"export struct Item"):
+        stubbed = [path.read_bytes() for path in entries(ws) if marker in path.read_bytes()]
+        assert len(stubbed) == 1
+        assert b"\nstub 0 " not in stubbed[0]
+        assert b"tidy" not in stubbed[0]
+
+
 def test_the_style_rule_is_found_in_a_module_that_has_an_entry(tmp_path):
     ws = build(tmp_path, extra="\n[style]\nblank_line_after_end = true\n")
     assert settled(ws)[0] == (0, '{"ok":true}\n', "")
@@ -247,7 +258,11 @@ def test_the_style_rule_is_found_in_a_module_that_has_an_entry(tmp_path):
     assert (problem["code"], problem["file"].endswith("deep.agc")) == ("CHECK-BLANK-LINE-AFTER-END", True)
     # The entry of the broken text says it is not marked. One that said so would be taken for true, which shows that
     # a marked module is not looked at: only a run that read the entry gives a different answer.
-    flagged = [path for path in entries(ws) if b"\nstyle 0\n" in path.read_bytes() and b"export struct Item" in path.read_bytes()]
+    flagged = []
+    for path in entries(ws):
+        raw = path.read_bytes()
+        if b"\nstyle 0\n" in raw and b"export struct Item" in raw:
+            flagged.append(path)
     assert len(flagged) == 1
     flagged[0].write_bytes(flagged[0].read_bytes().replace(b"\nstyle 0\n", b"\nstyle 1\n", 1))
     assert answers(ws)[0][0] == 0

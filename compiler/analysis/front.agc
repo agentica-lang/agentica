@@ -18,6 +18,9 @@ import SourceFile from "../syntax/source_file"
 import T from "../syntax/types"
 import Cache from "cache"
 
+# No file is known to follow the style rule: every file of a project that asks for it is looked at.
+NO_STYLED: Set[String] = Set.new([])
+
 ## What the root file is: it can be read as UTF-8, it cannot be read (the system's message), or it is not UTF-8
 ## (LEX-INVALID-UTF8, in that file).
 export enum Root
@@ -159,7 +162,7 @@ end
 ## The first style problem of a linked program: the files whose project asks for a rule that they break. Absent when
 ## none does. The style rules come after the type check, so a program that does not check reports that first.
 export def style_problem(linked: Linker.Linked) -> Ast.Optional[Problems.Problem]
-  return Style.blank_line_after_end(linked)
+  return Style.blank_line_after_end(linked, NO_STYLED)
 end
 
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
@@ -175,7 +178,8 @@ def link_reusing(cache: Cache.Cache, loaded: Modules.Loaded, settings: Env.Setti
   case Linker.link_loaded(loaded, settings)
     Linker.Linking.Failed(failure) -> return Outcome.Rejected(link_problem(failure))
     Linker.Linking.Done(program) ->
-      return checked_outcome(program, check_reusing(Cache.reusing(cache, loaded), program, settings).checking)
+      rechecked = check_reusing(Cache.reusing(cache, loaded), program, settings)
+      return checked_outcome(program, rechecked.checking, NO_STYLED)
   end
 end
 
@@ -200,7 +204,7 @@ def solve(cache: Cache.Cache, reaching: Cache.Cache, loaded: Modules.Loaded, set
     Linker.Linking.Done(program) ->
       reusing = Cache.reusing(cache, loaded)
       rechecked = check_reusing(reusing, program, settings)
-      style = style_after(rechecked.checking, program)
+      style = style_after(rechecked.checking, program, NO_STYLED)
       root = Cache.solved(loaded, program, rechecked.checking, style, Cache.held(cache, loaded))
       return Cache.remember(reaching, root, loaded, true, rechecked.taken)
   end
@@ -238,14 +242,14 @@ def skipped(
       # A module read from its stub keeps its text, so the style rules see every file; one whose entry says its text
       # follows the rule is not lexed again.
       styled = styled_files(loaded)
-      enter_checked(loaded, checked, settings, Set.new(styled))
+      enter_checked(loaded, checked, settings, styled)
       return checked_outcome(program, checking, styled)
   end
 end
 
 # The files of the walk whose text follows the style rule blank_line_after_end: those whose entry says so, and those of
 # a project that asks for the rule which are looked at now.
-def styled_files(loaded: Modules.Loaded) -> List[String]
+def styled_files(loaded: Modules.Loaded) -> Set[String]
   files: List[String] = []
   for key in loaded.order
     module = loaded.modules[key]
@@ -254,7 +258,7 @@ def styled_files(loaded: Modules.Loaded) -> List[String]
     end
   end
 
-  return files
+  return Set.new(files)
 end
 
 # Whether some stub of the walk is not vouched for: its module is parsed from a stub but its bodies are not known to be
@@ -335,17 +339,17 @@ end
 
 def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> Outcome
   if main_required
-    return checked_outcome(linked, Checker.check(linked, settings))
+    return checked_outcome(linked, Checker.check(linked, settings), NO_STYLED)
   end
 
-  return checked_outcome(linked, Checker.check_query(linked, settings))
+  return checked_outcome(linked, Checker.check_query(linked, settings), NO_STYLED)
 end
 
 # A program that checked still has to follow the style rules of its project (check_style.agc).
 def checked_outcome(
   linked: Linker.Linked,
   checking: Checker.Checking,
-  styled: List[String] = [],
+  styled: Set[String],
 ) -> Outcome
   return finished(linked, checking, style_after(checking, linked, styled))
 end
@@ -360,7 +364,7 @@ end
 def style_after(
   checking: Checker.Checking,
   linked: Linker.Linked,
-  styled: List[String] = [],
+  styled: Set[String],
 ) -> Ast.Optional[Problems.Problem]
   case checking
     Checker.Checking.Failed(_) -> return Ast.Optional.Absent
