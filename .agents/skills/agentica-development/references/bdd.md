@@ -210,7 +210,10 @@ are registered in `stdlib/MODULES`.
     reads the last line with `Report.from_json`, else `PREMATURE-EXIT`.
 - `stdlib/bdd.agc` (`std/bdd`): `step`, `run`, the `Context` value passed
   through each handler (scenario state, the step's doc string or table, the
-  program under test), `assert`, `set`/`get` and the program steps. The `then_*`
+  program under test), `assert`, `set`/`get`, `keep`/`call` (closures of type
+  `Fn[Json, Result[Json]]` that capture a scenario's non-JSON values; `Context`
+  cannot hold the step program's own type, since functions and structs are not
+  generic) and the program steps. The `then_*`
   checks compare with `Test.eq` (`agc_equal`; a `Json` line by its canonical
   text) and put the inspect texts of expected and actual in the `fail` record
   (`Json` as `JSON.encode`, the same text `agc_test_text` gives), so BDD and

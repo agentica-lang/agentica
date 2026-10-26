@@ -73,6 +73,9 @@ BDD.table(ctx: BDD.Context) -> List[List[String]]
 BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
 BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
 BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
+BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD.Context
+BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
+BDD.read_line(ctx: BDD.Context, timeout_ms: Int) -> Result[String]
 BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
 BDD.when_line(ctx: BDD.Context, text: String) -> BDD.Context
 BDD.when_input(ctx: BDD.Context, text: String) -> BDD.Context
@@ -86,11 +89,20 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
 - The context rule: most BDD calls take the scenario's `ctx` first and return
-  it; use the one they return. `BDD.doc_string`, `BDD.table` and `BDD.get` take
-  it and return their value (`started = BDD.given_program(ctx, "../app.agc")`,
-  then `BDD.when_line(started, "hi")`). A handler returns the context it ends
-  with; the next step gets it. Only `set` and `given_program` change it, but any
-  BDD call can end a handler or block. `BDD.Context` can be named, not built.
+  it; use the one they return. `BDD.doc_string`, `BDD.table`, `BDD.get`,
+  `BDD.call` and `BDD.read_line` take it and return their value (`started =
+  BDD.given_program(ctx, "../app.agc")`, then `BDD.when_line(started, "hi")`).
+  A handler returns the context it ends with; the next step gets it. Only
+  `set`, `keep` and `given_program` change it, but any BDD call can end a
+  handler or block. `BDD.Context` can be named, not built.
+- State that is not JSON (an open connection) goes in a service: `BDD.keep(ctx,
+  "db", service)` with a block `do |request| ... end` that captures the value
+  and answers a JSON request with a `Result[Json]`; a later step runs it with
+  `BDD.call(ctx, "db", request)` (an error for a missing name). Services start
+  empty in each scenario, and the handles close when the scenario ends.
+- `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
+  `Result[String]` (an error at the end of the output or a timeout, which also
+  closes the output), for steps that use the line instead of comparing it.
 - `BDD` is not a builtin: without the import `BDD.step` is `CHECK-UNKNOWN-NAME`
   with the import as help. `BDD.run` adds the predefined steps in front and
   never returns; run directly, a step program exits 2 with a hint.

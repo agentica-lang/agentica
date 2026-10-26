@@ -196,6 +196,36 @@ def test_a_task_receives_while_its_handler_sends_and_a_pending_read_fails_its_sc
     assert codes(report) == [None, "RUNTIME-BDD-PENDING-TASKS", None]
 
 
+def test_a_step_reads_the_next_line_as_a_result_that_fails_at_the_end_of_the_output_or_a_timeout(tmp_path):
+    directory = suite(tmp_path, {
+        "two.agc": 'def main() -> Void\n  puts("one")\n  puts("two")\nend\n',
+        "wait.agc": 'def main() -> Void\n  puts("one")\n  IO.flush()\n  ending = IO.gets()\nend\n',
+        "steps.agc": dedent(f"""\
+            import BDD from "std/bdd"
+
+            def main() -> Void
+              BDD.run([
+                BDD.step("the line is {{string}}") do |ctx, args|
+                  line = BDD.read_line(ctx, {ms(5000)})
+                  BDD.assert(ctx, line.ok? and line.unwrap! == args[0], "wrong line")
+                end,
+                BDD.step("no line comes within {{int}} milliseconds") do |ctx, args|
+                  line = BDD.read_line(ctx, args[0].to_i!)
+                  BDD.assert(ctx, not line.ok?, "a line came")
+                end,
+              ])
+            end
+            """),
+        "lines.feature": (
+            "Feature: Lines\nScenario: end\nGiven the Agentica program \"two.agc\"\n"
+            'Then the line is "one"\nAnd the line is "two"\nAnd no line comes within ' + ms(5000) + " milliseconds\n"
+            'Scenario: timeout\nGiven the Agentica program "wait.agc"\nThen the line is "one"\n'
+            "And no line comes within 100 milliseconds\n")})
+    report = json_test(directory / "lines.feature", "--steps", directory / "steps.agc")
+    assert report["ok"] is True, str(report)
+    assert report["passed"] == 2
+
+
 def test_a_seed_given_or_drawn_reaches_step_handlers_and_programs_under_test(tmp_path):
     draw = 'Random.int(1, 1000000).to_s + " " + Random.int(1, 1000000).to_s'
     directory = suite(tmp_path, {

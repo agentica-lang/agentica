@@ -14,6 +14,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
 - `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
   takes no argument.
+- `std/bdd`: `BDD.keep` and `BDD.call` keep a value that is not JSON (an open
+  connection) between the steps of a scenario, and `BDD.read_line` gives the
+  program's next output line to a step. (#685)
 
 ### Changed
 
