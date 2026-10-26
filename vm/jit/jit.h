@@ -66,8 +66,10 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    that sets `claimed[f]` (a compare-and-swap) compiles f, so no copy is ever made twice: another one that asks
    meanwhile interprets f until the code is published. `entries` are the entries counted in the `on` mode (the CALL
    exits, for a function without a loop), `last[f]` the pc of f's last entry, `passes[f]` its entries that landed at
-   or before the one before, `arena` the run's code memory (reserved at the first seal), `used` the bytes of it taken
-   and `batch` the code that waits for a seal (jit.c), `exits[op]` the INTERPRET exits at each opcode that went back
+   or before the one before, `arena` the current chunk of code memory (`chunk` bytes reserved, `chunk_used` of them
+   taken), `used` the bytes taken in all chunks, `cap` the most it may take (AGC_JIT_CODE_CAP, or `used` once the
+   memory failed), `page` the host's page size, and `batch` the code that waits for a seal (jit.c), all under
+   `lock`; `exits[op]` the INTERPRET exits at each opcode that went back
    to the turn loop, `leaves` the leaf builtins that run_compiled called itself and `transitions` the CALL and RETURN
    exits that it ran, all counted only while the jit trace is on. `native_only[f]` is set when `on` gives a function
    without a loop code only for native calls: compiled at a CALL exit from compiled code (the first when
@@ -89,6 +91,8 @@ typedef struct agc_jit {
   _Atomic uint32_t *last, *passes;
   _Atomic(uint8_t *) arena;
   struct agc_jit_batch *batch;
+  agc_lock *lock;
+  size_t page, cap, chunk, chunk_used;
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -137,11 +141,10 @@ bool agc_jit_mode_parse(const char *word, agc_jit_mode *mode);
 #define AGC_JIT_NATIVE_ENTRY 2
 #define AGC_JIT_NATIVE_DEPTH 256
 
-/* The run's code memory, reserved whole at its first seal, so the most code a run takes, counted in bytes, and the
-   most one function takes; past it, functions stay interpreted. Each seal takes the next whole 4 KiB pages of it,
-   which the functions sealed together share. */
+/* The most code memory a run takes, counted in bytes, and so the most one function takes; past it, functions stay
+   interpreted. It is reserved in chunks as it fills, and each seal takes the next whole pages of a chunk, which the
+   functions sealed together share. */
 #define AGC_JIT_CODE_CAP ((size_t)64 * 1024 * 1024)
-#define AGC_JIT_PAGE ((size_t)4096)
 
 /* Exit words share the status half with agc_status, so every status is below the first exit. */
 _Static_assert((int)AGC_STATUS_COUNT <= (int)AGC_JIT_EXIT_STEP, "an agc_status value overlaps the JIT's exits");
@@ -174,6 +177,10 @@ typedef struct {
   bool failed;
 } agc_emitter;
 
+/* The byte of the host's code that fills a gap no code runs (before the entry table, between two functions sealed
+   together): int3 on x86-64. */
+#define AGC_EMIT_PAD 0xCC
+
 /* The emitter of the host (emit_x64.c), one call for each kind of instruction. agc_emit_end lays out the epilogue,
    the exit stubs and the entry table, and returns the size of the finished code, or 0 when it failed. */
 void agc_emit_begin(agc_emitter *e, uint32_t count);
@@ -195,8 +202,9 @@ size_t agc_emit_end(agc_emitter *e);
 
 /* Code memory (mem_posix.c, mem_windows.c): a range of pages is reserved without access, then each part of it is
    opened writable, filled and sealed read and execute, once; never writable and executable at once, and never
-   writable again. The icache is flushed at the seal. Sizes and addresses are whole pages; unmap releases a whole
-   reservation. */
+   writable again. The icache is flushed at the seal. Sizes and addresses are whole pages of agc_jit_mem_page bytes;
+   unmap releases a whole reservation. */
+size_t agc_jit_mem_page(void);
 void *agc_jit_mem_reserve(size_t size);
 bool agc_jit_mem_open(void *pages, size_t size);
 bool agc_jit_mem_seal(void *pages, size_t size);

@@ -135,22 +135,27 @@ of compiled code, without the interpreter's loop.
   `CONCAT`, `TO_TEXT`, `LIST_LEN` and `LIST_GET` call their helper; `NOT`,
   `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and `RESULT_VALUE` read the value
   inline after a tag check.
-- Code memory: one reservation of 64 MiB per run (`AGC_JIT_CODE_CAP`, in
-  bytes), taken in whole pages from the start, one seal after the other. A
-  sealed page is never written again (another scheduler may run it), so
-  functions share pages only when sealed together: the code of a function
-  without a loop waits in a batch until the next `CALL` exit of a function in
-  it, the next function the interpreter enters, or 16 KiB of batch, so the
-  callees of one loop body that get hot together share one seal. Only the
+- Code memory: at most 64 MiB per run (`AGC_JIT_CODE_CAP`, in bytes),
+  reserved in chunks as it fills (1 MiB, then twice the last one, so the
+  address space follows the code under an address space limit; after a
+  failure of the memory nothing more compiles), each seal taking the next
+  whole pages of a chunk. A sealed page is never written again (another
+  scheduler may run it), so functions share pages only when sealed together:
+  the code of a function without a loop waits in a batch until 16
+  more `CALL` exits of a function in it, the next function the interpreter
+  enters, or 16 KiB of batch, so the callees of one loop body that get hot
+  together share one seal, also on several schedulers. Only the
   scheduler that claims a function compiles it; another one interprets it
   until the code is published.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
   and a `skip` line for each function kept out: `loop=none` or `loop=exits`
-  when the run starts, and `size` when its code did not fit at compile time.
-  At the end of the run, `exit op=OP count=N` counts generic `INTERPRET`
-  exits by opcode, `leaf count=N` the leaf builtins called between two
-  runs of compiled code, and `transition count=N` the `CALL` and `RETURN`
-  exits (a native call or return is not one).
+  when the run starts, and `size` when its code did not fit at compile time;
+  a `full` line for a function past the code memory, and a `memory` line
+  when the code memory failed (`pages=N`). At the end of the run,
+  `exit op=OP count=N` counts generic `INTERPRET` exits by opcode,
+  `leaf count=N` the leaf builtins called between two runs of compiled
+  code, and `transition count=N` the `CALL` and `RETURN` exits (a native
+  call or return is not one).
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
   switching in the middle of a loop, four schedulers, a function without a loop

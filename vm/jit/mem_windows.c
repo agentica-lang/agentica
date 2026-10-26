@@ -8,6 +8,12 @@
 
 #include <windows.h>
 
+size_t agc_jit_mem_page(void) {
+  SYSTEM_INFO info;
+  GetSystemInfo(&info);
+  return info.dwPageSize;
+}
+
 void *agc_jit_mem_reserve(size_t size) { return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS); }
 
 bool agc_jit_mem_open(void *pages, size_t size) {

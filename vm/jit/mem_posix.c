@@ -13,6 +13,12 @@
 #include "jit.h"
 
 #include <sys/mman.h>
+#include <unistd.h>
+
+size_t agc_jit_mem_page(void) {
+  long page = sysconf(_SC_PAGESIZE);
+  return page > 0 ? (size_t)page : 4096;
+}
 
 /* macOS on arm64 refuses executable pages without MAP_JIT; its emitter will map them so and switch them per thread
    with pthread_jit_write_protect_np in place of the mprotect below. No emitter runs there yet. Without access, the

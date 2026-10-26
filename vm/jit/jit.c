@@ -8,7 +8,6 @@
 
 #include <inttypes.h>
 #include <string.h>
-#include <uv.h>
 
 /* A part of a function that `on` measures: an innermost loop (one that holds no other loop's end) of SIZE
    instructions, or the whole of a function without a loop, with SIZE 0. OUT counts its instructions that leave
@@ -22,10 +21,9 @@ typedef struct {
   uint32_t callee, region;
 } call_site;
 
-/* The code that waits for a seal (seal_batch), under LOCK: BYTES[0 .. LEN) holds the code of FUNCTIONS[k] at
-   OFFSETS[k], SIZES[k] bytes long, for k below COUNT. */
+/* The code that waits for a seal (seal_batch), under the JIT's lock: BYTES[0 .. LEN) holds the code of FUNCTIONS[k]
+   at OFFSETS[k], SIZES[k] bytes long, for k below COUNT. */
 struct agc_jit_batch {
-  uv_mutex_t lock;
   uint8_t *bytes;
   size_t len, cap;
   uint32_t *functions, *offsets, *sizes;
@@ -276,20 +274,54 @@ static agc_jit_code skip(agc_jit *jit, uint32_t function) {
 /* Code memory is sealed by whole pages, and a sealed page is read-execute for good (another scheduler may be running
    its code), so no later function can be written into it. To share pages, the code of a function without a loop that
    `on` compiles for native calls waits in the batch, a buffer of ordinary memory, and is sealed with the functions
-   after it: at the next CALL exit of a function in it, when the interpreter enters a function that just compiled
-   (which must run now), or when the batch holds AGC_JIT_BATCH bytes. So functions that get hot between two calls of
-   one of them, such as the callees of one long loop body, share a seal. Each seal takes the next pages of the run's
-   code memory, each function at a multiple of 16 bytes. The batch, the reservation and `used` change under the lock. */
+   after it: at AGC_JIT_CALLEE_THRESHOLD more CALL exits of a function in it, when the interpreter enters a function
+   that just compiled (which must run now), or when the batch holds AGC_JIT_BATCH bytes. So functions that get hot
+   about together, such as the callees of one long loop body, share a seal, even when several schedulers run them.
+   Each seal takes the next pages of the run's code memory, each function at a multiple of 16 bytes. The batch, the
+   chunks, `cap` and `used` change under the lock. */
 #define CODE_ALIGN ((size_t)16)
-#define AGC_JIT_BATCH ((size_t)4 * AGC_JIT_PAGE)
+#define AGC_JIT_BATCH ((size_t)16 * 1024)
+/* The first chunk of code memory; each next one is twice as big, so the address space follows the code (an address
+   space limit counts reserved pages too). */
+#define AGC_JIT_FIRST_CHUNK ((size_t)1024 * 1024)
 
 static size_t aligned(size_t n) { return (n + CODE_ALIGN - 1) / CODE_ALIGN * CODE_ALIGN; }
-static size_t whole_pages(size_t n) { return (n + AGC_JIT_PAGE - 1) / AGC_JIT_PAGE * AGC_JIT_PAGE; }
+static size_t whole_pages(const agc_jit *jit, size_t n) { return (n + jit->page - 1) / jit->page * jit->page; }
+
+/* PAGES bytes of code memory, opened writable: the next pages of the current chunk, or of a new chunk reserved when
+   they do not fit it (twice as big as the last one, or only PAGES when that is refused). NULL when the memory
+   fails; then `cap` drops to `used`, so nothing is compiled any more (lock held). */
+static uint8_t *take(agc_jit *jit, size_t pages) {
+  uint8_t *arena = atomic_load_explicit(&jit->arena, memory_order_relaxed);
+  if (!arena || pages > jit->chunk - jit->chunk_used) {
+    size_t want = jit->chunk ? agc_size_mul(jit->chunk, 2) : AGC_JIT_FIRST_CHUNK;
+    if (want > AGC_JIT_CODE_CAP) want = AGC_JIT_CODE_CAP;
+    if (want < pages) want = pages;
+    arena = agc_jit_mem_reserve(want);
+    if (!arena && want > pages) arena = agc_jit_mem_reserve(want = pages);
+    if (!arena) {
+      AGC_TRACE(jit->trace, AGC_TRACE_JIT, "memory pages=%zu", pages);
+      jit->cap = atomic_load_explicit(&jit->used, memory_order_relaxed);
+      return NULL;
+    }
+    atomic_store_explicit(&jit->arena, arena, memory_order_relaxed);
+    jit->chunk = want;
+    jit->chunk_used = 0;
+  }
+  uint8_t *memory = arena + jit->chunk_used;
+  jit->chunk_used += pages;
+  atomic_store_explicit(&jit->used, atomic_load_explicit(&jit->used, memory_order_relaxed) + pages,
+                        memory_order_relaxed);
+  if (agc_jit_mem_open(memory, pages)) return memory;
+  AGC_TRACE(jit->trace, AGC_TRACE_JIT, "memory pages=%zu", pages);
+  jit->cap = atomic_load_explicit(&jit->used, memory_order_relaxed);
+  return NULL;
+}
 
 /* True when SIZE more bytes after the batch fit the code memory left (lock held). */
 static bool fits(agc_jit *jit, size_t size) {
   size_t used = atomic_load_explicit(&jit->used, memory_order_relaxed);
-  return size <= AGC_JIT_CODE_CAP && whole_pages(aligned(jit->batch->len) + size) <= AGC_JIT_CODE_CAP - used;
+  return size <= jit->cap && whole_pages(jit, aligned(jit->batch->len) + size) <= jit->cap - used;
 }
 
 /* Appends the SIZE bytes of CODE, the code of FUNCTION, to the batch (lock held). */
@@ -317,7 +349,7 @@ static void batch_add(struct agc_jit_batch *b, uint32_t function, const uint8_t 
     b->slots = slots;
   }
   /* int3 between two functions: never run. */
-  memset(b->bytes + b->len, 0xCC, at - b->len);
+  memset(b->bytes + b->len, AGC_EMIT_PAD, at - b->len);
   memcpy(b->bytes + at, code, size);
   b->len = at + size;
   b->functions[b->count] = function;
@@ -341,30 +373,28 @@ static void publish(agc_jit *jit, uint32_t function, agc_jit_code code, size_t s
 }
 
 /* Seals the batch, and after it the SIZE bytes of CODE, the code of FUNCTION, when CODE is not NULL, in the next pages
-   of the run's code memory, which is reserved at the first seal, and publishes them all; on a failure of the memory
-   they stay interpreted. The pages are opened writable, filled and sealed read-execute, and the code is published
-   only after the seal (lock held, and fits said yes for each function). */
+   of the run's code memory, and publishes them all. The pages are opened writable, filled and sealed read-execute,
+   and the code is published only after the seal. When the memory fails, they stay interpreted and nothing is
+   compiled any more (lock held, and fits said yes for each function). */
 static void seal_batch(agc_jit *jit, uint32_t function, const uint8_t *code, size_t size) {
   struct agc_jit_batch *b = jit->batch;
   size_t at = aligned(b->len), len = code ? at + size : b->len;
   if (!len) return;
-  uint8_t *arena = atomic_load_explicit(&jit->arena, memory_order_relaxed);
-  if (!arena) {
-    arena = agc_jit_mem_reserve(AGC_JIT_CODE_CAP);
-    atomic_store_explicit(&jit->arena, arena, memory_order_relaxed);
-  }
-  size_t used = atomic_load_explicit(&jit->used, memory_order_relaxed), pages = whole_pages(len);
-  uint8_t *memory = arena ? arena + used : NULL;
-  bool sealed = memory && agc_jit_mem_open(memory, pages);
+  size_t pages = whole_pages(jit, len);
+  uint8_t *memory = take(jit, pages);
+  bool sealed = memory != NULL;
   if (sealed) {
     if (b->len) memcpy(memory, b->bytes, b->len);
     if (code) {
-      memset(memory + b->len, 0xCC, at - b->len);
+      memset(memory + b->len, AGC_EMIT_PAD, at - b->len);
       memcpy(memory + at, code, size);
     }
     sealed = agc_jit_mem_seal(memory, pages);
+    if (!sealed) {
+      AGC_TRACE(jit->trace, AGC_TRACE_JIT, "memory pages=%zu", pages);
+      jit->cap = atomic_load_explicit(&jit->used, memory_order_relaxed);
+    }
   }
-  if (memory) atomic_store_explicit(&jit->used, used + pages, memory_order_relaxed);
   for (size_t k = 0; k < b->count; k++)
     publish(jit, b->functions[k], sealed ? (agc_jit_code)(uintptr_t)(memory + b->offsets[k]) : NULL, b->sizes[k]);
   if (code) publish(jit, function, sealed ? (agc_jit_code)(uintptr_t)(memory + at) : NULL, size);
@@ -386,7 +416,7 @@ static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
     return skip(jit, function);
   }
   struct agc_jit_batch *b = jit->batch;
-  uv_mutex_lock(&b->lock);
+  agc_lock_take(jit->lock);
   if (!fits(jit, size)) {
     AGC_TRACE(jit->trace, AGC_TRACE_JIT, "full function=%.*s", agc_trace_len(f->name->bytes), f->name->data);
     skip(jit, function);
@@ -396,7 +426,7 @@ static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
     batch_add(b, function, e.code, size);
     if (b->len >= AGC_JIT_BATCH) seal_batch(jit, 0, NULL, 0);
   }
-  uv_mutex_unlock(&b->lock);
+  agc_lock_drop(jit->lock);
   return atomic_load_explicit(&jit->code[function], memory_order_acquire);
 }
 
@@ -407,7 +437,8 @@ agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc) {
     /* An entry that lands at or before the previous one (a call lands at 0) is a pass: a new call, or a loop that went
        round. The returns and the turns inside one pass of a long loop body land further on each time, so a function
        whose loop runs only a few times stays interpreted however many entries it gets. */
-    uint32_t last = atomic_exchange_explicit(&jit->last[function], pc, memory_order_relaxed);
+    uint32_t last = atomic_load_explicit(&jit->last[function], memory_order_relaxed);
+    atomic_store_explicit(&jit->last[function], pc, memory_order_relaxed);
     uint32_t passes = atomic_load_explicit(&jit->passes[function], memory_order_relaxed);
     if (pc <= last && passes < AGC_JIT_PASSES)
       passes = atomic_fetch_add_explicit(&jit->passes[function], 1, memory_order_relaxed) + 1;
@@ -429,10 +460,11 @@ agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function) {
   uint32_t calls = atomic_fetch_add_explicit(&jit->entries[function], 1, memory_order_relaxed) + 1;
   if (calls < AGC_JIT_CALLEE_THRESHOLD) return NULL;
   if (calls == AGC_JIT_CALLEE_THRESHOLD) return compile(jit, function, false);
+  if (calls < 2 * AGC_JIT_CALLEE_THRESHOLD) return NULL;
   /* Still in the batch (or still compiling on another scheduler): seal what is there. */
-  uv_mutex_lock(&jit->batch->lock);
+  agc_lock_take(jit->lock);
   seal_batch(jit, 0, NULL, 0);
-  uv_mutex_unlock(&jit->batch->lock);
+  agc_lock_drop(jit->lock);
   return atomic_load_explicit(&jit->code[function], memory_order_acquire);
 }
 
@@ -477,7 +509,12 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   jit->passes = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->passes));
   jit->batch = agc_alloc(sizeof *jit->batch);
   memset(jit->batch, 0, sizeof *jit->batch);
-  if (uv_mutex_init(&jit->batch->lock) != 0) return NULL;
+  /* A mutex from the start: schedulers compile at once from their first turn. */
+  jit->lock = agc_lock_new("jit");
+  agc_lock_share(jit->lock);
+  jit->page = agc_jit_mem_page();
+  jit->cap = AGC_JIT_CODE_CAP;
+  jit->chunk = jit->chunk_used = 0;
   jit->exits = agc_alloc_atomic(sizeof *jit->exits * AGC_OP_COUNT);
   for (uint32_t k = 0; k < n; k++) {
     atomic_init(&jit->code[k], NULL);

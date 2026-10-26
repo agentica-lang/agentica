@@ -184,7 +184,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   turn loop; it walks a function
   once: each instruction (fused ones as their STEP or CONST) calls one
   `agc_emit_*` function; the scheduler that claims a function compiles it,
-  seals it in the run's code reservation (functions without a loop wait in a
+  seals it in the run's code memory chunks (functions without a loop wait in a
   batch to share pages) and publishes it with a release store
   (`agc_jit_code_of`, which also counts entries and passes for `on`).
   `emit_x64.c`: the machine code of each kind, the exit stubs and the entry
