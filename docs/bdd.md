@@ -90,8 +90,8 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
 The parser supports English `Feature`, `Background`, `Scenario`, `Example`,
 `Scenario Outline`, `Examples`, `Given`, `When`, `Then`, `And` and `But`. It
 returns the first error (`std/bdd/gherkin`). A location's column is 1, except a
-step's, which is its keyword's (after the indentation); a range runs to the end
-of the line.
+step's, which is its keyword's (after the indentation, spaces, tabs and form
+feeds); a range runs to the end of the line.
 
 - **Lines and tags.** Blank lines and `#` comments are skipped; `# language: en`
   is accepted, and any other `# language:` is `PARSE-GHERKIN-UNSUPPORTED`. Tags
@@ -113,7 +113,10 @@ of the line.
   name ends with ` (a, b)`: the row's values in the columns that the outline's
   name does not show, so each row has its own name in the report and for
   `--only` (`Name (sqlite, 42)`; a name that shows every column gets nothing).
-  A `<name>` that is not a column is `PARSE-GHERKIN-PARAMETER`. Several
+  An empty cell shows as `""` and a control character as `\n`, `\r`, `\t` or
+  `\xNN`. Identical rows keep identical names; the JSON `example` field (the
+  row's line) tells them apart. A `<name>` that is not a column is
+  `PARSE-GHERKIN-PARAMETER`. Several
   `Examples` blocks add their rows in order, and a row's tags are the Feature's,
   then the scenario's, then its `Examples` block's.
 - **Steps.** A step outside a Background or scenario, or after `Examples`, is

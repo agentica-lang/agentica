@@ -15,10 +15,10 @@ English syntax: `Feature`, one optional `Background` before scenarios,
 substituting `<column>` in names, steps, Doc Strings and tables; its name ends
 with ` (values)` of the columns the name does not show (`Name (sqlite, 42)`).
 Comments, tags and descriptions before steps are accepted; tags never skip
-tests. `Rule`, `*`, other keyword aliases and localized syntax fail
-explicitly. `And`/`But` inherit the previous kind. Triple-quote Doc Strings are dedented; include a final empty
-line to keep a trailing newline. Data Tables decode `\|`, `\\`, `\n`. One
-argument per step.
+tests. `Rule`, `*`, other keyword aliases and localized syntax fail explicitly.
+`And`/`But` inherit the previous kind. Triple-quote Doc Strings are dedented;
+include a final empty line to keep a trailing newline. Data Tables decode `\|`,
+`\\`, `\n`. One argument per step.
 
 Predefined step patterns (the keyword is irrelevant for matching):
 

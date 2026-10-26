@@ -239,9 +239,10 @@ are registered in `stdlib/MODULES`.
   keyword's) and the end column of the raw line, with no offset. An outline
   row's name gets ` (values)` of the columns its name does not show. Table rows
   and `<name>` substitution split the text and join it once, with no `+=` or
-  `push` per character or cell, so they cost linear time in the line. Building the step, row, Examples, draft and
-  scenario lists with `push` per line is still quadratic in the line count.
-  Goldens: `bdd-gherkin-outline`, `-sections` and `-arguments`.
+  `push` per character or cell, so they cost linear time in the line. Building
+  the step, row, Examples, draft and scenario lists with `push` per line is
+  still quadratic in the line count. Goldens: `bdd-gherkin-outline`, `-sections`
+  and `-arguments`.
 - `stdlib/bdd/match.agc` (`std/bdd/match`) compiles and matches step patterns
   and runs the duplicate and resolve checks, by hand with no regular
   expressions; it imports `gherkin` for `Diagnostic`, `Outcome` and `Step`, and

@@ -201,37 +201,58 @@ def test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_o
         '    end,\n  ])\nend')
     directory = bdd.suite({
         "steps.agc": steps,
-        "plain.feature": ("Feature: Plain\n\n  Scenario: plain\n    When a check passes\n    Then 9 is small\n"),
+        "plain.feature": "Feature: Plain\n\n  Scenario: plain\n    When a check passes\n    Then 9 is small\n",
         "background.feature": ("Feature: Background\n\n  Background:\n    Given a check passes\n"
                               "    Then 9 is small\n\n  Scenario: later\n    When a check passes\n"),
+        "bad.feature": "Feature: Bad\n\n    Rule: nope\n",
         "outline.feature": ("Feature: Outline\n\n  Scenario Outline: row\n    Then <n> is small\n\n  Examples:\n"
                             "    | kind   | n |\n    | sqlite | 2 |\n    | sqlite | 9 |\n    | pg     | 9 |\n\n"
-                            "  Scenario Outline: shown <kind>\n    Then <n> is small\n\n  Examples:\n"
-                            "    | kind | n |\n    | a    | 1 |\n    | b    | 7 |\n")})
+                            "  Scenario Outline: edge <n>\n    Then <n> is small\n\n  Examples:\n"
+                            "    | n | note   |\n    | 1 |        |\n    | 7 | a\\nb   |\n    | 7 | a\\nb   |\n")})
+    # Tab and CRLF indentation, and a form feed before the keyword, which `strip` removes like blanks.
+    with open(joined(directory, "crlf.feature"), "wb") as out:
+        out.write(b"Feature: Crlf\r\n\r\n\tScenario: tabs\r\n\t\tThen 9 is small\r\n"
+                  b"\tScenario: form feed\r\n\x0c  Then 9 is small\r\n")
     steps_file = joined(directory, "steps.agc")
 
-    def failed_at(name, line):
+    def failures(name):
+        """(scenario name, line, column) of each failed scenario of the feature; step and error agree."""
         feature = joined(directory, name + ".feature")
         status, report = bdd.json_test(feature, "--steps", steps_file)
         assert status == 1
-        failed = [item for item in report_cases(report) if item["status"] == "failed"]
-        problem = failed[0]["error"]
-        assert (problem["file"], problem["range"]["start"]) == (feature, {"line": line, "column": 5})
-        assert [step["location"]["line"] for step in failed[0]["steps"] if step["status"] == "failed"] == [line]
-        for style in ([], ["--ai"]):
-            assert "%s:%d:5 [RUNTIME-BDD-ASSERTION]" % (feature, line) in bdd.agentica_test(
-                *style, feature, "--steps", steps_file).stdout
-        return report
+        found = []
+        for item in report_cases(report):
+            if item["status"] == "failed":
+                start = item["error"]["range"]["start"]
+                assert item["error"]["file"] == feature
+                assert [step["location"] for step in item["steps"] if step["status"] == "failed"] == [
+                    {"file": feature, "line": start["line"], "column": start["column"]}]
+                found.append((item["name"], start["line"], start["column"]))
+        return report, found
 
-    failed_at("plain", 5)
-    failed_at("background", 5)
-    report = failed_at("outline", 4)
-    assert [(item["name"], item["status"]) for item in report_cases(report)] == [
-        ("row (sqlite, 2)", "passed"), ("row (sqlite, 9)", "failed"), ("row (pg, 9)", "failed"),
-        ("shown a (1)", "passed"), ("shown b (7)", "failed")]
-    only = joined(directory, "outline.feature")
-    _, one = bdd.json_test(only, "--steps", steps_file, "--only", "(sqlite, 9)")
+    assert failures("plain")[1] == [("plain", 5, 5)]
+    assert failures("background")[1] == [("later", 5, 5)]
+    assert failures("crlf")[1] == [("tabs", 4, 3), ("form feed", 6, 4)]
+    report, found = failures("outline")
+    assert found == [("row (sqlite, 9)", 4, 5), ("row (pg, 9)", 4, 5), ("edge 7 (a\\nb)", 13, 5),
+                     ("edge 7 (a\\nb)", 13, 5)]
+    assert [item["name"] for item in report_cases(report)][:5] == [
+        "row (sqlite, 2)", "row (sqlite, 9)", "row (pg, 9)", 'edge 1 ("")', "edge 7 (a\\nb)"]
+    # Identical rows keep one name; their example places tell them apart.
+    assert [item["example"]["line"] for item in report_cases(report)[-2:]] == [18, 19]
+
+    feature = joined(directory, "outline.feature")
+    _, one = bdd.json_test(feature, "--steps", steps_file, "--only", "(sqlite, 9)")
     assert [item["name"] for item in report_cases(one)] == ["row (sqlite, 9)"]
+    text = bdd.agentica_test(feature, "--steps", steps_file).stdout
+    assert "FAIL Outline / edge 7 (a\\nb)\n%s:13:5 [RUNTIME-BDD-ASSERTION] too big\n" % feature in text
+    ai = bdd.agentica_test("--ai", feature, "--steps", steps_file).stdout
+    assert "FAIL Outline / edge 7 (a\\nb) | %s:13:5 [RUNTIME-BDD-ASSERTION] too big\n" % feature in ai
+
+    # Only a step's place starts at its keyword: a parse error keeps column 1.
+    _, bad = bdd.json_test(joined(directory, "bad.feature"), "--steps", steps_file)
+    assert (file_error(bad)["code"], file_error(bad)["range"]["start"]) == (
+        "PARSE-GHERKIN-UNSUPPORTED", {"line": 3, "column": 1})
 
 
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
