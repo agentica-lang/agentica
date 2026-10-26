@@ -20,6 +20,8 @@ extern "/opt/lib/my peer.so"
   ## Variadic, under another C name.
   def peer_vsum(kinds: C.String, out n: C.Int32, ..., a: C.Int32, b: C.Double) -> C.Double = "peer_vmix"
   compute def peer_vnone(kinds: C.String, ...) -> C.Double = "peer_vmix"
+  ## Freed by a C name that starts with a capital letter.
+  resource Cap, free: PeerFree
   ## Freed through a function pointer that the call takes.
   resource Session, free: C.Function
   ## Through a C function pointer.

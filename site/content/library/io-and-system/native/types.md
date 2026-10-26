@@ -146,7 +146,7 @@ end
 
 ## Resources
 
-A resource is a C pointer that your program owns, such as an open stream or a database connection. `resource Name, free: c_function` in the block declares its type and the C function, in the same library, that frees it, as `void c_function(void *)`.
+A resource is a C pointer that your program owns, such as an open stream or a database connection. `resource Name, free: c_function` in the block declares its type and the C function, in the same library, that frees it, as `void c_function(void *)`. The name is as in C and may start with a capital letter, such as `PQfinish` or `SSL_free`; only the dotted `C.Function` (below) is read as a type.
 
 ```agentica {mode="check"}
 extern "libc.so.6"

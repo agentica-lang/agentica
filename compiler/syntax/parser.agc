@@ -2051,7 +2051,7 @@ def parse_extern_member(
   if resource_start?(e, pos)
     member = try parse_resource(e, pos, ids, doc, block)
     free = e.tokens[pos + 5].lexeme
-    if e.tokens[pos + 5].kind == "type-name"
+    if e.tokens[pos + 5].kind == "type-name" and e.tokens[pos + 6].kind == "dot"
       free = FUNCTION_TYPE
     end
     named = block.resources.put(e.tokens[pos + 1].lexeme, free)
@@ -2083,16 +2083,18 @@ def resource_start?(e: Base.Env, at: Int) -> Bool
 end
 
 # resource Name, free: c_name NL in an extern block, or free: C.Function, when each value has its own free function,
-# which the call that makes it takes. pos is the word resource.
+# which the call that makes it takes. pos is the word resource. The C name may start with a capital letter
+# (PQfinish, SSL_free): only a dotted type after the colon (C.Function) is read as a type, so a bare name is always a C
+# name, whatever types the program declares.
 def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], block: ExternBlock) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "type-name", "a resource name", false)
   after_comma = try Base.expect(e, after_name, "comma", "\",\"", false)
   after_word = try expect_word(e, after_comma, "free", "write resource Name, free: c_function")
   after_colon = try Base.expect(e, after_word, "colon", "\":\"", false)
-  if Base.kind_at(e, after_colon) == "type-name"
+  if Base.kind_at(e, after_colon) == "type-name" and Base.kind_at(e, after_colon + 1) == "dot"
     return parse_resource_by_pointer(e, pos, ids, doc, after_colon)
   end
-  after_free = try Base.expect(e, after_colon, "name", "the C name of the free function or C.Function", true)
+  after_free = try expect_c_name(e, after_colon, "the C name of the free function or C.Function")
   free = e.tokens[after_colon].lexeme
   if free.ends_with?("?") or free.ends_with?("!")
     return error(c_name_failure(e, after_colon, free))
@@ -2114,7 +2116,16 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], b
   return decl_at(node, stop, ids)
 end
 
-# The rest of resource Name, free: C.Function from at, the type after the colon: any other type is
+# The position after a C name at pos: a name (with a ? or ! left for the caller to reject) or a type-name, which is
+# only a name that starts with a capital letter.
+def expect_c_name(e: Base.Env, pos: Int, description: String) -> Result[Int]
+  if Base.kind_at(e, pos) == "type-name"
+    return ok(pos + 1)
+  end
+  return Base.expect(e, pos, "name", description, true)
+end
+
+# The rest of resource Name, free: C.Function from at, the dotted type after the colon: any type but C.Function is
 # PARSE-EXTERN-FUNCTION at it.
 def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], at: Int) -> Result[DeclAt]
   type = try Base.parse_type(e, at, ids)

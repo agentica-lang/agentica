@@ -402,6 +402,9 @@ void peer_res_free(void *p) {
   free(r);
 }
 
+/* The same free under a name that starts with a capital letter, as in libpq (PQfinish) and OpenSSL (SSL_free). */
+void PeerFree(void *p) { peer_res_free(p); }
+
 int32_t peer_res_get(void *p) { return ((peer_res *)p)->value; }
 int32_t peer_res_opens(void) { return atomic_load(&res_opens); }
 int32_t peer_res_frees(void) { return atomic_load(&res_frees); }
