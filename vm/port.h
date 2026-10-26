@@ -131,7 +131,7 @@ struct agc_stepper {
 typedef struct {
   agc_channel *channel;
   agc_value value;
-  uint64_t deadline, seq;
+  uint64_t seq;
   bool sending, reserved;
 } agc_channel_wait;
 
@@ -408,12 +408,14 @@ typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status
    needs no job, no registry slot and no libuv. `heap` is the heap that holds the entry (NULL when it is not armed),
    `index` its place there, `seq` the order of arming that breaks a tie between equal deadlines. `timed` says that the
    task's last park armed a timer; only the scheduler running the task touches it, so `resume` takes rt->sync to disarm
-   only when it is set (`heap` itself is read under the lock: the owner's fire clears it). */
+   only when it is set (`heap` itself is read under the lock: the owner's fire clears it). `pending` says the entry is
+   the `pending` slot of `heap`, not in its heap: its clock has not started, and `deadline` holds the length of the wait
+   (agc_task_park_within). */
 typedef struct {
   uint64_t deadline, seq;
   struct agc_timers *heap;
   size_t index;
-  bool timed;
+  bool timed, pending;
 } agc_timer;
 
 /* The armed timers of one scheduler: a binary min-heap of tasks ordered by (deadline, seq), in GC memory. Every change
@@ -421,12 +423,14 @@ typedef struct {
    from the arming scheduler's heap); `next_due` is the earliest deadline (UINT64_MAX when empty), written under the
    lock and read without it at the turn boundary of the owner. In a zeroed heap `next_due` is 0, a timer due at once:
    every turn would then take rt->sync to find nothing, so every scheduler context is made by agc_vm_init, which sets
-   UINT64_MAX. */
+   UINT64_MAX. `pending` is the one wait parked by agc_task_park_within whose clock has not started yet; it is changed
+   under the lock like the heap and read without it by the owner, at its turn boundary. */
 typedef struct agc_timers {
   struct agc_task **items;
   size_t count, cap;
   uint64_t seq;
   _Atomic uint64_t next_due;
+  _Atomic(struct agc_task *) pending;
 } agc_timers;
 
 struct agc_task {
@@ -510,7 +514,6 @@ struct agc_vm {
   agc_task *task;
   int64_t next_stop, stop_set, turn_left, batch, turn_cost_used;
   uint64_t gc_seen;
-  agc_timers timers;
   agc_profile *profile;
   bool yield, in_turn;
   /* How many times this scheduler has taken rt->sync and not dropped it (agc_sync_take), and the stream lock it holds, if
@@ -543,6 +546,9 @@ struct agc_vm {
   /* The steps this turn took from rt->steps_left: what it spent is turn_taken less what is left of the batch. Kept
      after the fields the loop reads, so they keep their offsets. */
   int64_t turn_taken;
+  /* Read at turn boundaries only, so it sits after every field the loop reads: a change of its size moves none of them
+     (one such move cost logger-disabled 14%, #629). */
+  agc_timers timers;
   jmp_buf fail, turn;
 };
 

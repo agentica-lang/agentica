@@ -316,6 +316,83 @@ def test_lazy_terminals_over_a_contended_channel_and_a_file_on_four_schedulers(t
         assert (result.code, result.stdout, result.stderr) == (0, expected, "")
 
 
+TIMED_WAITS = """\
+struct Pair
+  ping: Channel[Int]
+  pong: Channel[Int]
+end
+
+def echo(p: Pair) -> Int
+  n = 0
+  while n < 2000
+    v = p.ping.recv(5000).unwrap!
+    p.pong.send(v + 1, 5000).unwrap!
+    n += 1
+  end
+  return n
+end
+
+def lone(ch: Channel[Int]) -> Int
+  start = Time.monotonic_ms()
+  case ch.recv(40)
+    ok(_) -> return -1
+    error(_) -> return Time.monotonic_ms() - start
+  end
+end
+
+def spin(stop: Channel[Int]) -> Int
+  n = 0
+  while !stop.recv(0).ok?
+    n += 1
+  end
+  return n
+end
+
+def forever(ch: Channel[Int]) -> Int
+  case ch.recv(600000)
+    ok(v) -> return v
+    error(_) -> return -1
+  end
+end
+
+def main() -> Void
+  p = Pair(ping: Channel.new(1), pong: Channel.new(1))
+  worker = Task.spawn(&echo, p)
+  total = 0
+  for i in 0...2000
+    p.ping.send(i, 5000).unwrap!
+    total += p.pong.recv(5000).unwrap!
+  end
+  puts("#{total} #{Task.await(worker)}")
+  stop: Channel[Int] = Channel.new(1)
+  nobody: Channel[Int] = Channel.new(1)
+  busy = Task.spawn(&spin, stop)
+  waited = Task.await(Task.spawn(&lone, nobody))
+  stop.send(1, 5000).unwrap!
+  _ = Task.await(busy)
+  puts(waited >= 39 && waited < 5000)
+  idle: Channel[Int] = Channel.new(1)
+  stuck = Task.spawn(&forever, idle)
+  Task.sleep(0)
+  Task.cancel(stuck)
+  IO.inspect(idle.recv(20))
+end
+"""
+
+
+# A timed channel wait starts its clock late (agc_task_park_within, #629): a ping-pong never needs it; a recv that
+# nobody answers, beside a task that keeps the run queue busy (so on one scheduler the idle step never runs), still
+# times out after its full timeout, started at the next turn boundary; a task cancelled while its recv is pending
+# leaves nothing behind, and the next timed wait still times out.
+@pytest.mark.parametrize("schedulers", ["1", SCHEDULERS])
+def test_timed_channel_waits_keep_their_deadlines_and_a_pending_wait_is_cancelled(tmp_path, schedulers):
+    bytecode = program(tmp_path, "timed_waits", TIMED_WAITS)
+    result = run([*vm_command(), "--schedulers", schedulers, "--", bytecode], env=vm_environment({}),
+                 timeout=scaled(60))
+    expected = '%d 2000\ntrue\nerror("channel: timed out")\n' % (2000 * 2001 // 2)
+    assert (result.code, result.stdout, result.stderr) == (0, expected, "")
+
+
 SLEEPERS = """\
 def sleeper(ms: Int) -> Int
   Task.sleep(ms)

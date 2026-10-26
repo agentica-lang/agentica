@@ -333,7 +333,7 @@ the data.
   4,000,001 one-byte items also inside an ignored struct value, duplicate map
   and struct keys also when the struct does not have the key, tags, indefinite
   lengths, non-shortest heads, invalid UTF-8, Ints outside int64, trailing
-  bytes). The VM loader fuzzer (`make vm-fuzz`) gets a decode target too.
+  bytes). The VM loader fuzzer (`make vm-libfuzz`) gets a decode target too.
 - **Framing:** decode rejects trailing bytes, so a stream of messages needs
   framing. A message can be up to 64 MiB, but `Process.send_bytes` and
   `TCP.send_bytes` take at most 1 MiB per call, and `Process.read_bytes` and

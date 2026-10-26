@@ -8,6 +8,8 @@ extern "/opt/lib/my peer.so"
   def peer_accept(port: C.Int32, out conn: Conn, out count: C.Int64) -> C.Int32
   def peer_split(x: C.Double, out whole: C.Double) -> Void
   def peer_pair(conn: Conn, out other: Conn) -> Conn
+  resource Cap, free: PeerFree
+  def peer_cap() -> Cap
   resource Session, free: C.Function
   def peer_at(fn: C.Function, x: C.Int32) -> C.Int32
   compute def session_open(fn: C.Function, path: C.String, out s: Session, free: C.Function) -> C.Int32
@@ -44,6 +46,7 @@ def main() -> Void
   pair = peer_pair(conn)
   Native.close(pair.other)
   Native.close(pair.result.unwrap!)
+  Native.close(peer_cap().unwrap!)
   table = Native.memory_pointer(16)
   puts(peer_at(Native.get_pointer(table, 0), 1))
   opened = session_open(Native.get_pointer(table, 8), "s", Native.get_pointer(table, 0))

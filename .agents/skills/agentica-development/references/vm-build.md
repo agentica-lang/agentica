@@ -27,8 +27,8 @@ make vm-test TRACE=0                 # trace points compiled out (still type-che
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog.agcb   # sched,io,proc,tls,loader,gc
 AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # steps and calls per function and source file, time per builtin, Profile.measure sections, at the end of the run (not part of `all`)
 AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded AGENTICA_VM_TRACE_FILE=out.folded dist/agentica prog.agc   # folded stacks for flamegraph.pl, inferno, speedscope; AGENTICA_PROFILE_SAMPLE=N (default 1000 steps)
-make vm-fuzz                         # compile fixtures, mutate, run accepted mutants
-FUZZ_SEED=7 make vm-fuzz SANITIZE=1 FUZZ_RUNS=1000000   # another sequence; the fuzz.yml workflow (run by hand) picks a random seed
+make vm-libfuzz                      # libFuzzer target: LIBFUZZ=1 objects (clang, coverage hooks, ASan+UBSan) in build/vm/libfuzz/
+make vm-libfuzz-run LIBFUZZ_TIME=300 LIBFUZZ_JOBS=2   # coverage-guided run from the compiled fixtures; failures in build/vm/libfuzz/crashes/ (60 s per C PR; fuzz.yml by hand)
 make vm-gc-stress                    # GC_STRESS=1 build (collect every 64 allocations), vm-test and the golden tests; JOBS=n sets the test workers
 make vm-tsan                         # TSAN=1 build, no libgc: the threaded C tests (inbox, compute pool, outcome, run queue, wake, job, sync, output, timers, threads, net, process threads, jit compile race) under TSan
 make vm-tsan-run                     # a TSan agentica (front end of the release build) running tests/test_vm_multicore.py and the modules of test-multicore-modules

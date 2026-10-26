@@ -83,7 +83,7 @@ x.to_s() -> String                                       # Float
 String.from_bytes(data: List[Int]) -> Result[String]     # strict UTF-8; binary.md
 String.to_bytes(s: String) -> List[Int]                  # UTF-8 bytes, 0..255
 s.to_i() -> Result[Int]                                  # signed decimal; overflow is an error
-s.to_f() -> Result[Float]
+s.to_f() -> Result[Float]                                # 1.5, 1e+20, +inf.0: reads x.to_s back
 s.to_i!() -> Int                                         # halts on bad text (RUNTIME-INVALID-NUMBER)
 s.to_f!() -> Float
 ```

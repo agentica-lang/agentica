@@ -7,6 +7,7 @@
 #include "services.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -236,22 +237,43 @@ agc_number_status agc_parse_int(const uint8_t *s, size_t len, int64_t *value) {
   return AGC_NUMBER_OK;
 }
 
+static size_t digit_run(const uint8_t *s, size_t len, size_t i) {
+  while (i < len && s[i] >= '0' && s[i] <= '9') i++;
+  return i;
+}
+
+/* Reads [+-]digits[.digits][(e|E)[+-]digits], or exactly a form agc_float_text writes for infinity and NaN, so
+   every Float#to_s reads back. strtod rounds correctly and the VM never leaves the C locale; a huge exponent gives an
+   infinity or zero. Integer text keeps its old rule: "-0" is 0.0. */
 agc_number_status agc_parse_float(const uint8_t *s, size_t len, double *value) {
-  size_t i = len > 0 && (s[0] == '+' || s[0] == '-') ? 1 : 0, digits = 0;
-  while (i < len && s[i] >= '0' && s[i] <= '9') i++, digits++;
-  if (digits == 0) return AGC_NUMBER_INVALID;
-  bool fraction = i < len && s[i] == '.';
-  if (fraction) {
-    size_t after = 0;
-    for (i++; i < len && s[i] >= '0' && s[i] <= '9'; i++) after++;
-    if (after == 0) return AGC_NUMBER_INVALID;
+  static const char *const special[] = {"+inf.0", "-inf.0", "+nan.0"};
+  for (size_t k = 0; k < 3; k++)
+    if (len == 6 && memcmp(s, special[k], 6) == 0) {
+      *value = k == 2 ? NAN : k == 0 ? INFINITY : -INFINITY;
+      return AGC_NUMBER_OK;
+    }
+  size_t start = len > 0 && (s[0] == '+' || s[0] == '-') ? 1 : 0;
+  size_t i = digit_run(s, len, start);
+  if (i == start) return AGC_NUMBER_INVALID;
+  bool integer = true;
+  if (i < len && s[i] == '.') {
+    size_t after = digit_run(s, len, i + 1);
+    if (after == i + 1) return AGC_NUMBER_INVALID;
+    i = after;
+    integer = false;
+  }
+  if (i < len && (s[i] == 'e' || s[i] == 'E')) {
+    size_t sign = i + 1 < len && (s[i + 1] == '+' || s[i + 1] == '-') ? i + 2 : i + 1;
+    i = digit_run(s, len, sign);
+    if (i == sign) return AGC_NUMBER_INVALID;
+    integer = false;
   }
   if (i != len) return AGC_NUMBER_INVALID;
   char *text = agc_alloc_atomic(agc_size_add(len, 1));
   memcpy(text, s, len);
   text[len] = '\0';
   double x = strtod(text, NULL);
-  *value = !fraction && x == 0 ? 0.0 : x;
+  *value = integer && x == 0 ? 0.0 : x;
   return AGC_NUMBER_OK;
 }
 

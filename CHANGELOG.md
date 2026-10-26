@@ -13,9 +13,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
   takes no argument.
 
+### Changed
+
+- A timed channel `send` or `recv` that the other task answers within a turn
+  no longer reads the clock (far less system time where the clock is a system
+  call); the timeout may start up to one turn late.
+
 ### Fixed
 
+- `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
+- `Given the Agentica program` no longer stops a program after 1,000,000 steps; scenario timeouts bound it.
+- `String#to_f` reads exponents and `+inf.0`, `-inf.0`, `+nan.0`: `Float#to_s` reads back.
 
 ## [0.10.0] - 2026-10-25
 
