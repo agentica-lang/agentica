@@ -79,6 +79,8 @@ A step program builds a list with `BDD.step` in `main` and passes it to `BDD.run
 agentica test specs/ --steps steps.agc
 ```
 
+Without `--steps`, `agentica test` uses the nearest `steps.agc` found in the folder of each path that holds a `.feature` file (the path itself if it is a folder) or above it, up to the working directory, so `specs/steps.agc` needs no flag, also for `specs/auth/` or `specs/a.feature`. It applies only to a run with `.feature` files. If the paths lead to two different `steps.agc` files, the run fails with `RUNTIME-BDD-USAGE`; pass `--steps`. `--steps` overrides it.
+
 ```agentica {mode="check"}
 import BDD from "std/bdd"
 

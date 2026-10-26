@@ -33,8 +33,16 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   any other is skipped; a path named on the command line is used as given. A
   feature file over 1 MiB is `RUNTIME-BDD-IO`.
 - **`--steps FILE`** names the one step program (two is `RUNTIME-BDD-USAGE`). It
-  may come before or after `test`. Without it, only the predefined steps exist.
-  A program that does not compile is a file error even when no feature needs it.
+  may come before or after `test`. A program that does not compile is a file
+  error even when no feature needs it.
+- **Default step program.** Without `--steps`, a run with at least one
+  `.feature` file looks for `steps.agc` from each path that holds a feature
+  (the paths given, else `specs/` and `test/`): in the path if it is a folder,
+  else in the folder of the file, then in each parent folder up to the working
+  directory, never above it. The nearest one counts. If the paths lead to two
+  different files, the run fails with `RUNTIME-BDD-USAGE`; pass `--steps`. With
+  none, only the predefined steps exist. A run of unit tests alone never
+  compiles it.
 - **`--only TEXT`** (once, not empty; otherwise `RUNTIME-BDD-USAGE`) keeps the
   scenarios and tests whose name contains `TEXT`. If none matches, the run fails
   with `CHECK-BDD-EMPTY`.

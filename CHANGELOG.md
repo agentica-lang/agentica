@@ -17,6 +17,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `agentica test` without `--steps` uses the `steps.agc` found
+  in or above the folder of each path that holds a feature
+  (`specs/steps.agc` by default); two different ones are a usage error.
 - `check` and `type-at` keep checked imports in `_build/check/` (they now create `_build/` when a file has imports) and skip the parse and check of unchanged ones, which makes a warm run faster; `--no-cache` turns it off. (#630)
 - A timed channel `send` or `recv` that the other task answers within a turn
   no longer reads the clock (far less system time where the clock is a system

@@ -417,6 +417,71 @@ def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_wh
                         "no .feature or *_test.agc files found"]
 
 
+def test_a_steps_agc_near_the_paths_is_the_step_program_unless_steps_names_another(bdd):
+    feature = "Feature: Answer\nScenario: right\nThen the answer is 4\n"
+
+    def answer(passes):
+        return steps_program(main_running(
+            'BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, %s, "no") end' % passes))
+
+    project = bdd.suite({"other.agc": answer("false")})
+    bare = bdd.suite({})
+    for directory in (project, bare):
+        (directory / "specs" / "auth").mkdir(parents=True)
+        (directory / "specs" / "a.feature").write_text(feature, encoding="utf-8")
+        (directory / "specs" / "auth" / "b.feature").write_text(feature, encoding="utf-8")
+    (project / "specs" / "steps.agc").write_text(answer("true"), encoding="utf-8")
+
+    def statuses(*args, cwd):
+        status, report = bdd.json_test(*args, cwd=cwd)
+        return status, [item["status"] for item in report_cases(report)], report
+
+    # The default folders, a folder or a file named on the command line, and a subfolder or a file below the folder
+    # that holds steps.agc; also from another working folder, where only the folder of the path counts.
+    assert statuses(cwd=project)[:2] == (0, ["passed", "passed"])
+    assert statuses("specs/auth", cwd=project)[:2] == (0, ["passed"])
+    assert statuses("specs/a.feature", cwd=project)[:2] == (0, ["passed"])
+    assert statuses(joined(project, "specs"), cwd=bare)[:2] == (0, ["passed", "passed"])
+    assert statuses(joined(project, "specs/a.feature"), cwd=bare)[:2] == (0, ["passed"])
+    # The search stops at the working directory: steps.agc above it is not used.
+    status, cases, report = statuses(".", cwd=project / "specs" / "auth")
+    assert (status, cases) == (1, ["failed"])
+    assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
+    # --steps wins.
+    assert statuses("--steps", joined(project, "other.agc"), cwd=project)[:2] == (1, ["failed", "failed"])
+    # No steps.agc: every step is undefined, as before.
+    status, cases, report = statuses(cwd=bare)
+    assert (status, cases) == (1, ["failed", "failed"])
+    assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
+
+
+def test_two_different_steps_agc_files_are_a_usage_error_and_a_unit_test_run_never_compiles_one(bdd):
+    steps = steps_program(main_running('BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, true, "no") end'))
+    directory = bdd.suite({})
+    for name in ("specs", "test"):
+        (directory / name).mkdir()
+        (directory / name / "steps.agc").write_text(steps, encoding="utf-8")
+        (directory / name / "a.feature").write_text("Feature: A\nScenario: s\nThen the answer is 4\n", encoding="utf-8")
+    status, report = bdd.json_test(cwd=directory)
+    assert status == 2
+    assert report["files"][0]["error"]["code"] == "RUNTIME-BDD-USAGE"
+    # --steps settles it.
+    status, report = bdd.json_test("--steps", joined(directory, "specs/steps.agc"), cwd=directory)
+    assert (status, [item["status"] for item in report_cases(report)]) == (0, ["passed", "passed"])
+    # A folder that holds no feature is not searched, so its steps.agc does not count.
+    (directory / "test" / "a.feature").unlink()
+    (directory / "test" / "adds_test.agc").write_text(ADDS_TEST, encoding="utf-8")
+    status, report = bdd.json_test(cwd=directory)
+    assert (status, report["passed"]) == (0, 2)
+    # Without a feature file the broken test/steps.agc is not compiled.
+    units = bdd.suite({})
+    (units / "test").mkdir()
+    (units / "test" / "steps.agc").write_text("this does not compile", encoding="utf-8")
+    (units / "test" / "adds_test.agc").write_text(ADDS_TEST, encoding="utf-8")
+    status, report = bdd.json_test(cwd=units)
+    assert (status, report["passed"], report["file_errors"]) == (0, 1, 0)
+
+
 def test_a_report_of_several_mib_arrives_whole(bdd):
     # The runner is a captured child, and a captured stream keeps 1 MiB: the report travels in a file instead.
     names = ["case %d %s" % (number, "x" * 40000) for number in range(40)]
