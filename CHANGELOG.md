@@ -10,7 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `[style] blank_line_after_end = true` in `agentica.toml` requires an empty line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
+- `[style] blank_line_after_end = true` in `agentica.toml` requires an empty
+  line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
 
 ### Fixed
 

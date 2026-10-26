@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from tests.agentica_test import cli, run, vm_environment
+from tests.agentica_test import WINDOWS, cli, host_only, run, vm_environment
 from tests.package_support import Workspace, dependency
 from tests.spec_support import check_diagnostic
 
@@ -166,8 +166,8 @@ def importing(path):
     return 'import Util from "%s"\n\ndef main() -> Void\n  puts(Util.one())\nend\n' % path
 
 
-def run_check(root):
-    result = run(cli() + ["--json", "check", str(root)], env=vm_environment())
+def run_check(root, **variables):
+    result = run(cli() + ["--json", "check", str(root)], env=vm_environment(variables))
     return json.loads(result.stderr) if result.code else None
 
 
@@ -221,3 +221,42 @@ def test_a_file_of_a_package_is_not_checked(tmp_path):
     write(ws.project / "main.agc", program.replace("def main() -> Void\n", "def main() -> Void\n  if true\n  end\n"))
     result = run(cli() + ["--json", "check", str(ws.project / "main.agc")], cwd=ws.base, env=environment)
     assert json.loads(result.stderr)["code"] == "CHECK-BLANK-LINE-AFTER-END"
+
+
+def test_a_library_is_not_checked_even_when_its_folder_is_inside_the_project(tmp_path):
+    # vendor/ is a pkg/ root in the project folder. a.agc is a library and so is b.agc, which it imports.
+    write(tmp_path / "app" / "agentica.toml", ON)
+    write(tmp_path / "app" / "vendor" / "a.agc", 'import B from "b"\n\n' + BROKEN.replace("1", "B.one()", 1))
+    write(tmp_path / "app" / "vendor" / "b.agc", BROKEN)
+    write(tmp_path / "app" / "main.agc", importing("pkg/a").replace("Util", "A"))
+    roots = {"AGENTICA_PATH": str(tmp_path / "app" / "vendor")}
+    assert run_check(tmp_path / "app" / "main.agc", **roots) is None
+    # The same module imported by a relative path is a file of the project.
+    write(tmp_path / "app" / "main.agc", importing("vendor/b"))
+    problem = run_check(tmp_path / "app" / "main.agc", **roots)
+    assert (problem["code"], start(problem)) == ("CHECK-BLANK-LINE-AFTER-END", (4, 3))
+
+
+def test_a_file_of_agc_libs_is_not_checked(tmp_path):
+    write(tmp_path / "agentica.toml", ON)
+    write(tmp_path / "agc_libs" / "a.agc", 'import B from "b"\n\n' + BROKEN.replace("1", "B.one()", 1))
+    write(tmp_path / "agc_libs" / "b.agc", BROKEN)
+    write(tmp_path / "main.agc", importing("pkg/a").replace("Util", "A"))
+    roots = {"AGENTICA_PATH": ""}
+    assert run_check(tmp_path / "main.agc", **roots) is None
+    write(tmp_path / "main.agc", importing("agc_libs/b"))
+    assert run_check(tmp_path / "main.agc", **roots) is None
+
+
+@host_only(WINDOWS, "a symbolic link needs a privilege on Windows")
+def test_a_file_is_checked_where_its_real_path_is(tmp_path):
+    write(tmp_path / "shared" / "util.agc", BROKEN)
+    write(tmp_path / "app" / "agentica.toml", ON)
+    (tmp_path / "app" / "out.agc").symlink_to(tmp_path / "shared" / "util.agc")
+    write(tmp_path / "app" / "main.agc", importing("out"))
+    assert run_check(tmp_path / "app" / "main.agc") is None
+    # A link to a file inside the folder is that file.
+    write(tmp_path / "app" / "lib" / "util.agc", BROKEN)
+    (tmp_path / "app" / "in.agc").symlink_to(tmp_path / "app" / "lib" / "util.agc")
+    write(tmp_path / "app" / "main.agc", importing("in"))
+    assert run_check(tmp_path / "app" / "main.agc")["code"] == "CHECK-BLANK-LINE-AFTER-END"
