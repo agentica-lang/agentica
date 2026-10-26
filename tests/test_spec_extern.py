@@ -579,6 +579,26 @@ def test_a_c_function_is_the_function_to_call_or_a_free_function(tmp_path, signa
     assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
 
 
+# A free word that starts with a capital letter is a C name (libpq, OpenSSL), also one that is a type of the program;
+# only the dotted C.Function is the type.
+@pytest.mark.parametrize("free", ["PQfinish", "SSL_free", "XFree", "Thing", "C"])
+def test_a_resource_may_be_freed_by_a_c_name_with_a_capital(tmp_path, free):
+    text = 'struct Thing\n  x: Int\nend\n\nextern "/opt/libx.so"\n  resource Handle, free: %s\n' \
+           '  def make() -> Handle\nend\n' % free
+    assert check(source(tmp_path, text)).code == 0
+
+
+@pytest.mark.parametrize("members, code, start", [
+    ('  resource Handle, free: PQfinish\n  def pq_finish(h: Handle) -> Void = "PQfinish"', "PARSE-EXTERN-FREE", (3, 38)),
+    ("  resource Handle, free: PQfinish?", "LEX-UNEXPECTED-CHAR", (2, 34)),
+    ("  resource Handle, free: PQfinish extra", "PARSE-UNEXPECTED-TOKEN", (2, 35)),
+    ("  resource Handle, free: C.Pointer", "PARSE-EXTERN-FUNCTION", (2, 26)),
+])
+def test_a_capital_free_name_is_checked_like_any_c_name(tmp_path, members, code, start):
+    text = 'extern "/opt/libx.so"\n%s\nend\n' % members
+    assert at(problem_of(check(source(tmp_path, text))))[:2] == (code, start)
+
+
 @pytest.mark.parametrize("free, stop", [("C.Pointer", (2, 34)), ("C.Function[Int]", (2, 40))])
 def test_a_resource_is_freed_by_a_c_name_or_a_c_function(tmp_path, free, stop):
     text = 'extern "/opt/libx.so"\n  resource Thing, free: %s\nend\n' % free

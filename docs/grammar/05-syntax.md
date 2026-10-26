@@ -30,7 +30,7 @@ extern_function  = [ "compute" ], "def", NAME, "(", [ c_parameters ], ")",
 c_parameters     = c_parameter, { ",", c_parameter },
                    [ ",", "...", { ",", c_parameter } ], [ "," ] ;
 resource_decl    = "resource", TYPE_NAME, ",", "free", ":",
-                   ( NAME | "C", ".", "Function" ), NL ;
+                   ( NAME | TYPE_NAME | "C", ".", "Function" ), NL ;
 c_parameter      = [ "out" ], NAME, ":",
                    ( c_type | "C", ".", ( "Bytes" | "Function" ) | TYPE_NAME ) ;
 c_type           = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
@@ -83,7 +83,10 @@ block.
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function
-`c_name` of the same library (section 6d). It is a type for the rest of the
+`c_name` of the same library (section 6d). `c_name` is any C identifier, also
+one that starts with a capital letter (`PQfinish`, `SSL_free`): only the dotted
+`C.Function` after the colon is a type, so a bare name is always a C name,
+whatever types the program declares. It is a type for the rest of the
 language: `export` makes it importable, and it takes the place of a type in the
 declaration order. So does every `def` of a block that declares a resource or a
 struct, exported or not: such a block is one declaration among the types, and
