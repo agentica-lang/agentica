@@ -46,6 +46,7 @@ docs/doc_model.agc
 docs/signature.agc
 io/host.agc
 io/source_reader.agc
+modules/check_cache.agc
 modules/declarations.agc
 modules/import_help.agc
 modules/import_path.agc
@@ -57,6 +58,7 @@ modules/overlay.agc
 modules/resolve.agc
 modules/resolve_import.agc
 modules/rewrite.agc
+modules/type_code.agc
 modules/workspace.agc
 packages/git_source.agc
 packages/lock.agc

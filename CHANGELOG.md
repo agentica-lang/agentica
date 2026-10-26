@@ -15,6 +15,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `check` and `type-at` keep checked imports in `_build/check/` (they now create `_build/` when a file has imports) and skip the parse and check of unchanged ones, which makes a warm run faster; `--no-cache` turns it off. (#630)
 - A timed channel `send` or `recv` that the other task answers within a turn
   no longer reads the clock (far less system time where the clock is a system
   call); the timeout may start up to one turn late.
