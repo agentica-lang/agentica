@@ -11,6 +11,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - Linux shutdown skips a standard C stream already locked by native compute code.
+- `String#to_f` reads exponents (`1e+20`) and `+inf.0`, `-inf.0`, `+nan.0`, so
+  every `Float#to_s` reads back.
 
 ## [0.10.0] - 2026-10-25
 

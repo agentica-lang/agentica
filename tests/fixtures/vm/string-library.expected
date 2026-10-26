@@ -93,7 +93,7 @@
     "ok(0.1)",
     "ok(9007199254740992.0)",
     "ok(1.2345678901234568e+29)",
-    "error(\"cannot convert \\\"1e5\\\" to Float\")",
+    "ok(100000.0)",
     "error(\"cannot convert \\\"inf\\\" to Float\")",
     "error(\"cannot convert \\\"1.\\\" to Float\")",
     "error(\"cannot convert \\\".5\\\" to Float\")",

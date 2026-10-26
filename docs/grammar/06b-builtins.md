@@ -198,8 +198,12 @@ Expected types flow into these operations for empty collections and Results.
   "")` gives one character per element.
 - `s.to_i!` (`String.to_int!`) accepts a signed decimal:
   `RUNTIME-INVALID-NUMBER` for other text, `RUNTIME-INTEGER-OVERFLOW` outside
-  `Int`. `s.to_f!` (`String.to_float!`) rejects text that is not a real decimal
-  with `RUNTIME-INVALID-NUMBER`.
+  `Int`. `s.to_f!` (`String.to_float!`) accepts a signed decimal with an
+  optional fraction and exponent (`1.5E-3`, `1e+20`) and the forms `x.to_s`
+  writes for infinity and NaN (`+inf.0`, `-inf.0`, `+nan.0`), so `x.to_s.to_f`
+  gives `x` back. It rounds to the nearest Float; a value past the range
+  becomes an infinity or zero. Other text (`1e`, `.5`, ` 1`, `1_000.0`,
+  `Infinity`) is `RUNTIME-INVALID-NUMBER`.
 - `String.index_of` gives the character index of the first match (`ok(0)` for an
   empty part), or an error when absent. `String.at` halts with
   `RUNTIME-INDEX-OUT-OF-RANGE` outside the string.
