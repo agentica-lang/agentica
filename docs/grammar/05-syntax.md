@@ -74,13 +74,15 @@ body or a library given as a heredoc is `PARSE-UNEXPECTED-TOKEN`. A `##` doc
 goes on a `def` inside the block. Each function is a `def` for the rest of the
 language: `export` makes it importable, it takes the place of a `def` in the
 declaration order (except in a block that declares a resource, below), the
-whole block needs the blank line of a declaration, and the checker sees
-`C.Int32` and `C.Int64` as `Int`, `C.Double` and `C.Float` (a 32-bit `float`)
-as `Float`, `C.Bool` as `Bool` and `C.String` as `String`. `compute def`
-declares a function that runs off the scheduler while the task waits (section
-6d); `export` comes first. `extern` is contextual: it is a keyword only at the
-start of a top-level declaration, and `compute` only before `def` in an extern
-block.
+whole block needs the blank line of a declaration, and the checker sees the
+integer types (`C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`, `C.UInt8`,
+`C.UInt16`, `C.UInt32`, `C.Long`) as `Int`, `C.Double` and `C.Float` (a 32-bit
+`float`) as `Float`, `C.Bool` as `Bool` and `C.String` as `String`.
+`compute def` declares a function that runs off the scheduler while the task
+waits (section 6d); `export` comes first. `extern` is contextual: it is a
+keyword only at the start of a top-level declaration, and `compute` only before
+`def` in an extern block. `C.UInt64` and `C.ULong` are `PARSE-EXTERN-TYPE`:
+write `C.Int64` and `C.Long`, which carry the same bits.
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function
@@ -108,8 +110,8 @@ declares next to it, named after the function in CamelCase (`sqlite3_open` gives
 `Sqlite3Open`): a field `result` with the C result (none for `Void`), then one
 field per out parameter, in order, named after it. The record is exported with
 its function and has no place in the declaration order. An out parameter is
-`C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a
-resource of the block, whose field is the resource itself, not a `Result`;
+an integer type, `C.Double`, `C.Float`, `C.Bool`, `C.Pointer` or a resource of
+the block, whose field is the resource itself, not a `Result`;
 anything else is `PARSE-EXTERN-OUT` at the type. An out parameter named
 `result` of a function with a C result, an in and an out parameter of one name
 (at the later), and a function name with no letter for the record's name, are
@@ -127,9 +129,9 @@ variadic arguments, each with the C type the call passes, and they may be none.
 It comes after one C parameter at least, not counting a `C.Function`
 (`PARSE-EXTERN-VARIADIC-FIXED` at the `...`), at most once in a function, and
 only in an extern block (`PARSE-EXTERN-VARIADIC` at the `...`). A variadic
-parameter is not an out parameter, not `C.Bool`, which C promotes to `int`, and
-not `C.Float`, which C promotes to `double` (`PARSE-EXTERN-VARIADIC-TYPE`); the
-64 parameters count both parts.
+parameter is not an out parameter, not `C.Bool`, `C.Int8`, `C.Int16`, `C.UInt8`
+or `C.UInt16`, which C promotes to `int`, and not `C.Float`, which C promotes to
+`double` (`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count both parts.
 
 A `C.Function` parameter is the address of a C function, a `C.Pointer` for the
 checker. As the first parameter it makes the `def` a call through a function
@@ -152,7 +154,7 @@ and so is a `free:` type other than `C.Function`. A `C.Function` result is
 
 `struct Name ... end` in an extern block declares a C struct that the block's
 functions take and return by value (section 6d). Its fields come in the order of
-the C header, each `C.Int32`, `C.Int64`, `C.Double`, `C.Float`, `C.Bool`,
+the C header, each an integer type, `C.Double`, `C.Float`, `C.Bool`,
 `C.Pointer` or a struct declared above in the block; any other type, `C.String`,
 `C.Bytes`, `C.Function` and a resource included, is `PARSE-EXTERN-TYPE` at the
 type (a `char *` field is a `C.Pointer`). A struct with no field is

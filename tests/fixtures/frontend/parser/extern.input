@@ -2,7 +2,7 @@ extern "libm.so.6"
   ## The cosine.
   export def cos(x: C.Double) -> C.Double
 
-  def labs(n: C.Int64) -> C.Int64
+  def labs(n: C.Long) -> C.Long
 end
 
 extern "/opt/lib/my peer.so"
@@ -12,6 +12,8 @@ extern "/opt/lib/my peer.so"
   def peer(a: C.Int32, b: C.Bool, s: C.String) -> C.String
   def send(conn: Conn, data: C.Bytes, n: C.Int32) -> C.Pointer
   def tick() -> Void
+  ## The narrow, unsigned and long integers.
+  def peer_narrow(a: C.Int8, b: C.Int16, c: C.UInt8, d: C.UInt16, out e: C.UInt32, out f: C.Long) -> C.UInt8
   ## Runs on the compute pool.
   compute def crunch(n: C.Int64) -> C.Double
   ## Gives a connection and a count as out parameters.
