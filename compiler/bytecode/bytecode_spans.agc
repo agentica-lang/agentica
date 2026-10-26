@@ -16,6 +16,7 @@ export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int
   if count == 1 and first.spans.size == 1
     return intern_one(pool, first.file, first.spans[0])
   end
+
   keys: List[String] = []
   for offset in 0...count
     instr = body[at + offset]
@@ -23,11 +24,13 @@ export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int
       keys = keys.push(span_key(instr.file, span))
     end
   end
+
   key = keys.join(";")
   found = Pool.find(pool, key)
   if found.ok?
     return Pool.Interned(pool: pool, id: found.unwrap!)
   end
+
   return Pool.Interned(pool: Pool.add(pool, key, run_bytes(body, at, count), keys.size), id: pool.count)
 end
 
@@ -38,6 +41,7 @@ export def intern_one(pool: Pool.Pool, file: Int, span: Source.Span) -> Pool.Int
   if found.ok?
     return Pool.Interned(pool: pool, id: found.unwrap!)
   end
+
   return Pool.Interned(pool: Pool.add(pool, key, span_bytes(file, span), 1), id: pool.count)
 end
 
@@ -57,6 +61,7 @@ def run_bytes(body: List[Ir.Instr], at: Int, count: Int) -> List[Int]
       entry = entry.concat(span_bytes(instr.file, span))
     end
   end
+
   return entry
 end
 
@@ -77,6 +82,7 @@ def span_bytes(file: Int, span: Source.Span) -> List[Int]
       third % 256, third / 256, 0, 0, fourth % 256, fourth / 256, 0, 0,
     ]
   end
+
   return [
     file % 256, (file / 256) % 256, (file / 65_536) % 256, file / 16_777_216,
     first % 256, (first / 256) % 256, (first / 65_536) % 256, first / 16_777_216,

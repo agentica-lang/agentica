@@ -37,6 +37,7 @@ export def query_file(cache: Cache.Cache, path: String, settings: Env.Settings) 
   if !walked.ok?
     return Outcome.Rejected(Front.link_problem(Failure.unpack_failure(walked.message)))
   end
+
   case Cache.find(cache, walked.unwrap!)
     Cache.Found.Hit(root) -> return reused(cache, root, settings)
     Cache.Found.Miss -> return linked(cache, walked.unwrap!, settings)
@@ -47,7 +48,7 @@ def reused(cache: Cache.Cache, root: Cache.Root, settings: Env.Settings) -> Outc
   case root.checking
     Checker.Checking.Done(checked) ->
       front = Front.Checked(linked: root.linked, checked: checked)
-      return Outcome.Done(Recovered(front: front, problems: [], failed: []))
+      return Outcome.Done(Recovered(front: front, problems: styled([], root.style), failed: []))
     Checker.Checking.Failed(_) -> return recovered(cache, root.loaded, root.linked, settings)
   end
 end
@@ -74,6 +75,16 @@ def answered(program: Linker.Linked, recovering: Checker.Recovering) -> Outcome
     Checker.Recovering.Failed(problem) -> return Outcome.Rejected(problem)
     Checker.Recovering.Done(found) ->
       front = Front.Checked(linked: program, checked: found.checked)
-      return Outcome.Done(Recovered(front: front, problems: found.problems, failed: found.failed))
+      style = Front.style_problem(program)
+      return Outcome.Done(Recovered(front: front, problems: styled(found.problems, style), failed: found.failed))
+  end
+end
+
+# `problems` and, after them, the style problem of the program: Front.query_file gives it too, so `problems` is empty
+# exactly when that gives Done.
+def styled(problems: List[Problems.Problem], style: Ast.Optional[Problems.Problem]) -> List[Problems.Problem]
+  case style
+    Ast.Optional.Present(problem) -> return problems.push(problem)
+    Ast.Optional.Absent -> return problems
   end
 end

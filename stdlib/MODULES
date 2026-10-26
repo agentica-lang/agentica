@@ -3,6 +3,7 @@ analysis.agc
 bdd.agc
 bdd/gherkin.agc
 bdd/match.agc
+bdd/tags.agc
 binary.agc
 http.agc
 logger.agc

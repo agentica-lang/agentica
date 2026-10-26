@@ -31,10 +31,12 @@ export def write(program: Ir.Program, version: String) -> Written
   if version == ""
     return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty")))
   end
+
   result = build(program, version)
   if result.ok?
     return Written.Done(result.unwrap!)
   end
+
   return Written.Failed(Problems.unpack(result.message))
 end
 
@@ -46,6 +48,7 @@ def build(program: Ir.Program, version: String) -> Result[List[Int]]
     struct_index = struct_index.put(entry.name, at)
     at += 1
   end
+
   json = try JsonTypes.build(program, struct_index)
   # The span of the program is the first run of the span table.
   spans = Spans.intern_one(Pool.empty(), 0, program.span).pool
@@ -56,6 +59,7 @@ def build(program: Ir.Program, version: String) -> Result[List[Int]]
     tables = encoded.tables
     functions = Bytes.add_all(functions, encoded.parts)
   end
+
   out = (
     header(version)
     |> sources(program)
@@ -83,18 +87,22 @@ def check_limits(program: Ir.Program) -> Result[Void]
   if program.structs.size > MAX_U16
     return error(Failure.limit(program, 0, "structs", span))
   end
+
   variants = 0
   for entry in program.enums
     variants += entry.variants.size
   end
+
   if variants > MAX_U16
     return error(Failure.limit(program, 0, "enum variants", span))
   end
+
   for entry in program.structs
     if entry.fields.size > MAX_U16
       return error(Failure.limit(program, 0, "fields in one struct", span))
     end
   end
+
   for entry in program.enums
     for variant in entry.variants
       if variant.size > MAX_U16
@@ -102,9 +110,11 @@ def check_limits(program: Ir.Program) -> Result[Void]
       end
     end
   end
+
   if program.globals > MAX_U16
     return error(Failure.limit(program, 0, "module constants", span))
   end
+
   return ok()
 end
 
@@ -127,6 +137,7 @@ def sources(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
     chunks = Bytes.add(chunks, Bytes.string(source.name))
     chunks = Bytes.add(chunks, Bytes.string(source.text))
   end
+
   return chunks
 end
 
@@ -140,6 +151,7 @@ def structs(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
       chunks = Bytes.add(chunks, Bytes.string(field))
     end
   end
+
   return chunks
 end
 
@@ -154,5 +166,6 @@ def enums(out: List[List[Int]], program: Ir.Program) -> List[List[Int]]
       chunks = Bytes.add(chunks, Bytes.u32(variant.size))
     end
   end
+
   return chunks
 end

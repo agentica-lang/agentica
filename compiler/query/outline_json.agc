@@ -30,6 +30,7 @@ def import_json(file: String, declaration: Model.Import) -> Json
       "span": DocJson.span_json(file, name.range),
     })
   end
+
   return JSON.object({
     "path": JSON.from(declaration.path),
     "alias": DocJson.text_json(declaration.alias),

@@ -30,6 +30,7 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
   if extern?(node)
     return ok(st)
   end
+
   signature = cx.functions[node.name]
   here = st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature))
   checked = try DefaultChecks.check_types(cx, here, node, signature.params)
@@ -41,6 +42,7 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
     inner = State.record_bound(inner, param.id, [signature.params[index]])
     index += 1
   end
+
   inner = try check_block(cx, inner, node.body)
   if !T.is?(signature.result, "Void") and !Flow.block_returns?(node.body)
     return error(
@@ -54,6 +56,7 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
       ),
     )
   end
+
   return ok(State.leave(inner, here))
 end
 
@@ -63,6 +66,7 @@ export def check_block(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -
   for statement in statements
     current = try check_statement(cx, current, statement)
   end
+
   return ok(current)
 end
 
@@ -99,6 +103,7 @@ export def check_block_in(
   elsif !T.unknown?(known_result)
     slot = State.Slot.Known(known_result)
   end
+
   inside = st.with(
     loops: 0,
     result: slot,
@@ -115,6 +120,7 @@ export def check_block_in(
     inside = State.record_bound(inside, param.id, [types[index]])
     index += 1
   end
+
   done = try block_statements(cx, inside, block.body)
   result = block_result(done.st.result, done.type)
   if !T.is?(result, "Void") and T.unknown?(done.type) and !Flow.block_returns?(block.body)
@@ -129,6 +135,7 @@ export def check_block_in(
       ),
     )
   end
+
   block_type = T.Type.Fn(types, result)
   after = State.leave(done.st, st).with(result: st.result, capture: st.capture, loops: st.loops, step: st.step)
   return ok(State.Out(st: State.record_type(after, block.id, block_type), type: block_type))
@@ -148,6 +155,7 @@ def check_statement(cx: State.Cx, st: State.St, statement: Ast.Stmt) -> Result[S
       ),
     )
   end
+
   done = try statement_inside(cx, st.with(nest: st.nest + 1), statement)
   return ok(done.with(nest: st.nest))
 end
@@ -175,12 +183,14 @@ def check_loop_control(cx: State.Cx, st: State.St, node: Ast.LoopControl) -> Res
   if st.loops > 0
     return ok(st)
   end
+
   help = "use it inside while or for; a function cannot break its caller's loop, so return a value and test it there"
   case st.capture
     Ast.Optional.Present(capture) ->
       help = "inside a block, return leaves the block (Ruby's next); a block cannot break its caller's loop"
     Ast.Optional.Absent -> help = help
   end
+
   return error(
     State.fail_help(cx, st, "CHECK-LOOP-CONTROL", "#{node.kind} is only valid inside while or for", node.span, help),
   )
@@ -192,20 +202,24 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
     out = try State.expr(cx, st, node.value, T.Type.Unknown)
     return ok(out.st)
   end
+
   declared = T.Type.Unknown
   case node.type
     Ast.Optional.Present(annotation) -> declared = try Types.resolve_type(cx, st, annotation, false)
     Ast.Optional.Absent -> declared = declared
   end
+
   existing = State.lookup(st, node.name)
   if existing.ok?
     return check_assignment(cx, st, node, existing.unwrap!)
   end
+
   out = try State.expr(cx, st, node.value, declared)
   type = declared
   if T.unknown?(declared)
     type = out.type
   end
+
   introduced = try State.introduce(cx, out.st, node.name, type, node.span, false)
   return ok(State.record_bound(introduced, node.id, [type]))
 end
@@ -227,8 +241,10 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
           ),
         )
       end
+
     Ast.Optional.Absent -> existing = existing
   end
+
   case node.type
     Ast.Optional.Present(annotation) -> return error(
       State.fail(
@@ -241,6 +257,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
     )
     Ast.Optional.Absent -> existing = existing
   end
+
   if existing.immutable
     return error(
       State.fail_help(
@@ -253,6 +270,7 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
       ),
     )
   end
+
   out = try State.expr(cx, st, node.value, existing.type)
   return ok(out.st)
 end
@@ -292,6 +310,7 @@ def require_result(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) 
   if !T.is?(type, "Result")
     return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), type, span))
   end
+
   return ok(true)
 end
 
@@ -313,12 +332,14 @@ def check_if(cx: State.Cx, st: State.St, node: Ast.IfStmt) -> Result[State.St]
     inner = try check_block(cx, State.enter(condition.st), branch.body)
     current = State.leave(inner, condition.st)
   end
+
   case node.else_body
     Ast.Optional.Present(body) ->
       inner = try check_block(cx, State.enter(current), body)
       current = State.leave(inner, current)
     Ast.Optional.Absent -> current = current
   end
+
   return ok(current)
 end
 
@@ -342,10 +363,12 @@ def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
       ),
     )
   end
+
   element = T.Type.Int
   if !T.is?(type, "Range")
     element = T.item(type)
   end
+
   inner = try State.introduce(cx, State.enter(iterable.st), node.variable, element, node.span, true)
   inner = State.record_bound(inner, node.id, [element])
   inner = try in_loop(cx, inner, node.body)
@@ -367,13 +390,16 @@ def check_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.S
     if arms.wildcard or (names.ok? and all_covered?(names.unwrap!, arms.covered))
       return error(State.fail(cx, current, "CHECK-UNREACHABLE-CASE-ARM", "case arm is unreachable", arm.span))
     end
+
     checked = try check_arm(cx, current, arm, value_type, arms)
     current = checked.st
     arms = checked.arms
   end
+
   if !arms.wildcard
     try check_exhaustive(cx, current, node, value_type, names, arms)
   end
+
   return ok(current)
 end
 
@@ -400,10 +426,12 @@ def check_literal_arm(
   if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, pattern.value) end
     return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate literal case arm", arm.span))
   end
+
   body = try arm_body(cx, st, arm)
   if guarded?(arm)
     return ok(ArmDone(st: body, arms: arms))
   end
+
   return ok(ArmDone(st: body, arms: arms.with(literals: arms.literals.push(pattern.value))))
 end
 
@@ -421,6 +449,7 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
       ),
     )
   end
+
   return ok(true)
 end
 
@@ -436,9 +465,11 @@ def check_variant_arm(
   if !payload.ok?
     return error(variant_mismatch(cx, st, pattern, value_type))
   end
+
   if arms.covered.any? do |name: String| name == pattern.variant_name end
     return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate enum variant arm", arm.span))
   end
+
   types = payload.unwrap!
   bound = try bind_pattern(cx, State.enter(st), pattern, types)
   body = try check_arm_body(cx, bound, arm)
@@ -446,6 +477,7 @@ def check_variant_arm(
   if guarded?(arm) or !irrefutable?(pattern)
     return ok(ArmDone(st: State.leave(body, st), arms: arms))
   end
+
   return ok(ArmDone(st: State.leave(body, st), arms: arms.with(covered: arms.covered.push(pattern.variant_name))))
 end
 
@@ -482,6 +514,7 @@ def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types:
       ),
     )
   end
+
   current = State.record_bound(st, pattern.id, types)
   index = 0
   while index < types.size
@@ -492,12 +525,15 @@ def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types:
             State.fail(cx, current, "CHECK-VOID-TYPE", "a Void payload must be discarded with _", pattern.span),
           )
         end
+
         current = try State.introduce(cx, current, name, types[index], pattern.span, false)
       Ast.Slot.Skip -> current = current
       Ast.Slot.Nested(inner) -> current = try check_nested(cx, current, inner, types[index])
     end
+
     index += 1
   end
+
   return ok(current)
 end
 
@@ -512,6 +548,7 @@ def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -
       if !payload.ok?
         return error(variant_mismatch(cx, st, pattern, type))
       end
+
       return bind_pattern(cx, st, pattern, payload.unwrap!)
     Ast.Pattern.Wildcard(pattern) -> return ok(st)
   end
@@ -526,6 +563,7 @@ def check_arm_body(cx: State.Cx, bound: State.St, arm: Ast.CaseArm) -> Result[St
       current = checked.st
     Ast.Optional.Absent -> current = bound
   end
+
   return check_block(cx, current, arm.body)
 end
 
@@ -545,8 +583,10 @@ def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type)
       if definition.ok?
         return variant_payload(definition.unwrap!, pattern.variant_name, args)
       end
+
     _ -> return error("no such variant")
   end
+
   return error("no such variant")
 end
 
@@ -557,11 +597,13 @@ def variant_payload(definition: Model.EnumDef, variant_name: String, args: List[
     substitutions = substitutions.put(definition.parameters[index], args[index])
     index += 1
   end
+
   for variant in definition.variants
     if variant.name == variant_name
       return ok(Types.substitute_all(variant.payload, substitutions))
     end
   end
+
   return error("no such variant")
 end
 
@@ -581,6 +623,7 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
       )
     end
   end
+
   if T.is?(value_type, "Enum") and pattern.enum_name == T.name(value_type)
     return State.fail(
       cx,
@@ -590,6 +633,7 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
       pattern.span,
     )
   end
+
   variant = "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
   return State.fail(
     cx,
@@ -611,6 +655,7 @@ def variant_names(cx: State.Cx, value_type: T.Type) -> Result[List[String]]
       return ok(definition.unwrap!.variants.map do |variant: Model.Variant| variant.name end)
     end
   end
+
   return error("not an enum")
 end
 
@@ -631,6 +676,7 @@ def check_exhaustive(
       State.fail(cx, st, "CHECK-NON-EXHAUSTIVE-CASE", "case on a non-enum value requires a final _ arm", node.span),
     )
   end
+
   if !all_covered?(names.unwrap!, arms.covered)
     return error(
       State.fail(
@@ -642,6 +688,7 @@ def check_exhaustive(
       ),
     )
   end
+
   return ok(true)
 end
 
@@ -730,14 +777,17 @@ def block_parameter_types(
           ),
         )
       end
+
     Ast.Optional.Absent -> known = known
   end
+
   out: List[T.Type] = []
   index = 0
   while index < block.params.size
     out = out.push(try block_parameter_type(cx, st, block.params[index], known, index))
     index += 1
   end
+
   return ok(out)
 end
 
@@ -754,21 +804,25 @@ def block_parameter_type(
     Ast.Optional.Present(annotation) -> annotated = try Types.resolve_type(cx, st, annotation, false)
     Ast.Optional.Absent -> annotated = annotated
   end
+
   context = T.Type.Unknown
   case known
     Ast.Optional.Present(types) -> context = types[index]
     Ast.Optional.Absent -> context = context
   end
+
   if !T.unknown?(annotated) and !T.unknown?(context)
     if !T.same?(annotated, context)
       return error(State.mismatch(cx, st, context, annotated, param.span))
     end
+
     return ok(context)
   elsif !T.unknown?(annotated)
     return ok(annotated)
   elsif !T.unknown?(context)
     return ok(context)
   end
+
   return error(
     State.fail_help(
       cx,
@@ -787,12 +841,14 @@ def block_statements(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> 
   if statements.size == 0
     return ok(State.Out(st: st, type: T.Type.Unknown))
   end
+
   current = st
   index = 0
   while index < statements.size - 1
     current = try check_statement(cx, current, statements[index])
     index += 1
   end
+
   final = statements[statements.size - 1]
   case final
     Ast.Stmt.Expression(node) -> return final_expression(cx, current, node.value)
@@ -824,6 +880,7 @@ def final_known(cx: State.Cx, st: State.St, value: Ast.Expr, expected: T.Type) -
     try Unused.check_unused_value(cx, out.st, value, out.type)
     return ok(State.Out(st: out.st, type: T.Type.Unknown))
   end
+
   return State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Result"))
 end
 
@@ -840,6 +897,7 @@ def infer_result(last: T.Type) -> T.Type
   if T.unknown?(last)
     return T.Type.Void
   end
+
   return last
 end
 
@@ -851,6 +909,7 @@ def signature_text(node: Ast.FunctionDecl, signature: State.Signature) -> String
     parts = parts.push("#{node.params[index].name}: #{T.to_text(signature.params[index])}")
     index += 1
   end
+
   return "#{T.display_name(node.name)}(#{parts.join(", ")}) -> #{T.to_text(signature.result)}"
 end
 

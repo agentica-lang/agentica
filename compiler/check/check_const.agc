@@ -49,6 +49,7 @@ export def check_all(
   if entries.size == 0
     return ok(Done(cx: cx, st: st, order: []))
   end
+
   order = try order_of(cx, st, entries)
   current = Done(cx: cx, st: st, order: [])
   for index in order
@@ -58,6 +59,7 @@ export def check_all(
       current = try check_one(current, entries[index])
     end
   end
+
   return ok(current)
 end
 
@@ -72,6 +74,7 @@ def collect(modules: List[Linker.LinkedModule], kept: Set[String]) -> List[Entry
       end
     end
   end
+
   return found
 end
 
@@ -82,12 +85,14 @@ def check_one(done: Done, entry: Entry) -> Result[Done]
     Ast.Optional.Present(annotation) -> declared = try CheckTypes.resolve_type(here, done.st, annotation, false)
     Ast.Optional.Absent -> declared = declared
   end
+
   out = try State.expr(here, done.st, entry.decl.value, declared)
   try validate(here, out.st, entry.decl.value)
   type = out.type
   if !T.unknown?(declared)
     type = declared
   end
+
   return ok(
     Done(
       cx: done.cx.with(constants: done.cx.constants.put(entry.decl.name, type)),
@@ -107,6 +112,7 @@ def order_of(cx: State.Cx, st: State.St, entries: List[Entry]) -> Result[List[In
     index_of = index_of.put(entries[at].decl.name, at)
     at += 1
   end
+
   state: Map[String, Int] = {}
   emitted: List[Int] = []
   start = 0
@@ -133,8 +139,10 @@ def order_of(cx: State.Cx, st: State.St, entries: List[Entry]) -> Result[List[In
         end
       end
     end
+
     start += 1
   end
+
   return ok(emitted)
 end
 
@@ -149,10 +157,12 @@ def cycle_failure(cx: State.Cx, st: State.St, entries: List[Entry], stack: List[
   for visit in stack
     names = names.push(entries[visit.index].decl.name)
   end
+
   first = 0
   while names[first] != read.name
     first += 1
   end
+
   around = names.drop(first).push(read.name).map do |name: String| T.display_name(name) end
   here = cx.with(file: entries[stack[stack.size - 1].index].file)
   return State.fail_help(
@@ -178,6 +188,7 @@ def visit(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: Bool)
   for child in ConstWalk.children(node)
     try visit(cx, st, child, inside)
   end
+
   try refuse_form(cx, st, node, entry)
   return check_data(cx, st, node, block_allowed)
 end
@@ -208,6 +219,7 @@ def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed
         )
         _ -> return ok(true)
       end
+
     ConstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.BlockLit(found) ->
@@ -222,6 +234,7 @@ def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed
               ),
             )
           end
+
           return ok(true)
         _ -> return ok(true)
       end
@@ -238,6 +251,7 @@ def builtin_of(cx: State.Cx, st: State.St, node: ConstWalk.Node) -> Ast.Optional
           if cx.functions.has_key?(found.name)
             return Ast.Optional.Absent
           end
+
           return entry_named(cx, found.name)
         Ast.Expr.MethodCall(found) -> return entry_resolved(cx, st, found.id)
         Ast.Expr.FieldAccess(found) -> return entry_resolved(cx, st, found.id)
@@ -251,6 +265,7 @@ def entry_named(cx: State.Cx, name: String) -> Ast.Optional[Model.Builtin]
   if found.ok?
     return Ast.Optional.Present(found.unwrap!)
   end
+
   return Ast.Optional.Absent
 end
 
@@ -259,6 +274,7 @@ def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Ast.Optional[Model.Bu
   if !resolved.ok?
     return Ast.Optional.Absent
   end
+
   case resolved.unwrap!
     State.Resolved.Call(name, type) -> return entry_named(cx, name)
     _ -> return Ast.Optional.Absent
@@ -305,6 +321,7 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Ast.Optional[
           ),
         )
       end
+
       return refuse_effects(cx, st, span, entry)
     _ -> return refuse_effects(cx, st, span, entry)
   end
@@ -324,6 +341,7 @@ def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Ast.Opt
           ),
         )
       end
+
       return ok(true)
     Ast.Optional.Absent -> return ok(true)
   end
@@ -339,6 +357,7 @@ def check_data(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: 
       if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type, [])
         return ok(true)
       end
+
       return error(
         State.fail_help(
           cx,
@@ -356,6 +375,7 @@ def data_help(type: T.Type) -> String
   if T.is?(type, "Void")
     return "a constant's value must be data: write nil, not a Void call"
   end
+
   return (
     "a constant holds numbers, text, collections, structs and enums of those; " +
     "functions, tasks, channels and handles are not data"

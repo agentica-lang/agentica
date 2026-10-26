@@ -37,6 +37,7 @@ def one_error(file: String, code: String, message: String, options: Opts.Options
     if options.seeded
       seed = JSON.from(options.seed)
     end
+
     entry = {
       "path": JSON.from(file),
       "feature": JSON.from(""),
@@ -49,6 +50,7 @@ def one_error(file: String, code: String, message: String, options: Opts.Options
       "ok": JSON.from(false),
       "passed": JSON.from(0),
       "failed": JSON.from(0),
+      "skipped": JSON.from(0),
       "not_executed": JSON.from(0),
       "file_errors": JSON.from(1),
       "exit_code": JSON.from(2),
@@ -57,10 +59,12 @@ def one_error(file: String, code: String, message: String, options: Opts.Options
     }
     return Ending(code: 2, text: "#{JSON.encode(JSON.object(report))}\n")
   end
+
   separator = "\n"
   if options.style == "ai"
     separator = " | "
   end
+
   line = "FAIL #{file}#{separator}#{file}:1:1 [#{code}] #{message}\n"
-  return Ending(code: 2, text: "#{line}0 passed, 0 failed, 0 not executed, 1 file errors\n")
+  return Ending(code: 2, text: "#{line}0 passed, 0 failed, 0 skipped, 0 not executed, 1 file errors\n")
 end

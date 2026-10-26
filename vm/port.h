@@ -701,6 +701,10 @@ int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more);
+/* agc_io_start_then with FLAGS: AGC_JOB_FLUSH makes the end of the run wait for the job's pool work, within the flush
+   limit, even after its task gave it up (a timeout or a cancel), as for a detached flush. */
+agc_io_job *agc_io_start_flags(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                               agc_more_fn more, unsigned flags);
 #endif
 #if defined(__linux__) || defined(__APPLE__)
 int agc_fd_reopen(int fd, int access);

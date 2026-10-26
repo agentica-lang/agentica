@@ -34,6 +34,7 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> 
       _ -> struct_decls = struct_decls
     end
   end
+
   builtin_types = builtin_decodable()
   decodable = user_decodable(struct_decls, builtin_types, type_value)
   structs: List[Ir.StructDef] = []
@@ -43,25 +44,31 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_value: Bool) -> 
     if decodable.has_key?(decl.name)
       types = decodable[decl.name]
     end
+
     known = decodable.has_key?(decl.name)
     structs = structs.push(Ir.StructDef(name: decl.name, fields: fields, decodable: known, types: types))
   end
+
   structs = structs.concat(builtin_structs(used, builtin_types))
   enums: List[Ir.EnumDef] = []
   for decl in enum_decls
     variants = decl.variants.map do |variant: Ast.EnumVariant|
       Ir.VariantDef(name: variant.name, size: variant.payload_types.size)
     end
+
     enums = enums.push(Ir.EnumDef(name: decl.name, variants: variants))
   end
+
   for name in ENUMS.keys
     if used.include?(name)
       variants = ENUMS[name].variants.map do |variant: Model.Variant|
         Ir.VariantDef(name: variant.name, size: variant.payload.size)
       end
+
       enums = enums.push(Ir.EnumDef(name: name, variants: variants))
     end
   end
+
   return index(structs, enums)
 end
 
@@ -78,13 +85,16 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
       positions = positions.put(field, place)
       place += 1
     end
+
     user_types = user_types.put(entry.name, "Struct")
     infos = infos.put(entry.name, State.StructInfo(index: at, fields: entry.fields, positions: positions))
     if entry.decodable
       json_structs = json_structs.add(entry.name)
     end
+
     at += 1
   end
+
   variants: Map[String, Int] = {}
   id = 0
   for entry in enums
@@ -94,6 +104,7 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
       id += 1
     end
   end
+
   return Tables(
     structs: structs,
     enums: enums,
@@ -113,6 +124,7 @@ def builtin_decodable() -> Map[String, List[Types.Type]]
       found = found.put(name, types)
     end
   end
+
   return found
 end
 
@@ -127,6 +139,7 @@ def builtin_structs(used: Set[String], decodable: Map[String, List[Types.Type]])
       end
     end
   end
+
   found: List[Ir.StructDef] = []
   for name in BUILTIN_STRUCTS
     if wanted.include?(name)
@@ -135,9 +148,11 @@ def builtin_structs(used: Set[String], decodable: Map[String, List[Types.Type]])
       if decodable.has_key?(name)
         types = decodable[name]
       end
+
       found = found.push(Ir.StructDef(name: name, fields: fields, decodable: decodable.has_key?(name), types: types))
     end
   end
+
   return found
 end
 
@@ -150,10 +165,12 @@ def user_decodable(
   if !type_value
     return {}
   end
+
   names: Set[String] = Set.new(BUILTIN_STRUCTS)
   for decl in structs
     names = names.add(decl.name)
   end
+
   table = builtin
   for decl in structs
     types: List[Types.Type] = []
@@ -165,10 +182,12 @@ def user_decodable(
         Ast.Optional.Absent -> complete = false
       end
     end
+
     if complete
       table = table.put(decl.name, types)
     end
   end
+
   size = table.size + 1
   while table.size < size
     size = table.size
@@ -178,8 +197,10 @@ def user_decodable(
         kept = kept.put(name, table[name])
       end
     end
+
     table = kept
   end
+
   return table
 end
 
@@ -192,6 +213,7 @@ def references_known?(types: List[Types.Type], table: Map[String, List[Types.Typ
       end
     end
   end
+
   return true
 end
 
@@ -231,5 +253,6 @@ def json_field_type(ref: Ast.TypeRef, names: Set[String]) -> Ast.Optional[Types.
   elsif args.size == 0 and names.include?(ref.name)
     return Ast.Optional.Present(Types.Type.Struct(ref.name))
   end
+
   return Ast.Optional.Absent
 end

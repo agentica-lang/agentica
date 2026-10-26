@@ -14,6 +14,7 @@ export def hex() -> Result[String]
   if System.os() == "windows"
     return ok(hex_of(process_bytes()))
   end
+
   source = try File.open("/dev/urandom", "read", IO_TIMEOUT_MS)
   bytes: List[Int] = []
   while bytes.size < 16
@@ -22,8 +23,10 @@ export def hex() -> Result[String]
       File.close(source, IO_TIMEOUT_MS)
       return error("cannot read /dev/urandom")
     end
+
     bytes = bytes.concat(got.unwrap!)
   end
+
   try File.close(source, IO_TIMEOUT_MS)
   return ok(hex_of(bytes))
 end
@@ -33,6 +36,7 @@ export def hex_of(bytes: List[Int]) -> String
   digits = bytes.map do |byte: Int|
     "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}"
   end
+
   return digits.join("")
 end
 
@@ -45,11 +49,14 @@ def process_bytes() -> List[Int]
   while bytes.size < 8
     bytes = bytes.push(Random.int(0, 255))
   end
+
   for shift in [24, 16, 8, 0]
     bytes = bytes.push(now.shift_right(shift).bit_and(255))
   end
+
   for shift in [24, 16, 8, 0]
     bytes = bytes.push(pid.shift_right(shift).bit_and(255))
   end
+
   return bytes
 end

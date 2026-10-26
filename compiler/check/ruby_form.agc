@@ -16,20 +16,24 @@ export def method_key(name: String) -> String
   if aliased.ok?
     return aliased.unwrap!
   end
+
   entry = ENTRIES.get(name)
   if !entry.ok? or entry.unwrap!.parameters.size == 0
     return ""
   end
+
   kind = Types.tag(entry.unwrap!.parameters[0].type)
   module = Tables.method_modules().get(kind)
   if !module.ok? or !name.starts_with?("#{module.unwrap!}.")
     return ""
   end
+
   key = "#{kind}.#{name.slice(module.unwrap!.length + 1, name.length - module.unwrap!.length - 1)}"
   taken = Tables.method_aliases().get(key)
   if taken.ok? and taken.unwrap! != name
     return ""
   end
+
   return key
 end
 
@@ -39,6 +43,7 @@ export def method_name(name: String) -> String
   if key == ""
     return ""
   end
+
   return key.slice(key.index_of(".").unwrap! + 1, key.length - key.index_of(".").unwrap! - 1)
 end
 
@@ -60,9 +65,11 @@ export def signature_as(form: Model.Builtin, method: String) -> String
   if method == ""
     return ""
   end
+
   rest = form.parameters.drop(1).map do |parameter: Model.Named|
     "#{parameter.name}: #{Types.to_text(parameter.type)}"
   end
+
   return "#{form.parameters[0].name}.#{method}(#{rest.join(", ")}) -> #{Types.to_text(form.result)}"
 end
 
@@ -71,6 +78,7 @@ export def written_as?(name: String, method: String) -> Bool
   if method_name(name) == method
     return true
   end
+
   aliases = Tables.method_aliases()
   for key in Tables.ruby_synonyms()
     # A synonym that `method_aliases` lacks is skipped (a test keeps the two lists in step).
@@ -79,6 +87,7 @@ export def written_as?(name: String, method: String) -> Bool
       return true
     end
   end
+
   return false
 end
 
@@ -89,6 +98,7 @@ export def shown(name: String) -> String
   if method == "" or !entry.ok?
     return name
   end
+
   return "#{entry.unwrap!.parameters[0].name}.#{method}"
 end
 
@@ -108,5 +118,6 @@ def by_builtin() -> Map[String, String]
       found = found.put(target, key)
     end
   end
+
   return found
 end

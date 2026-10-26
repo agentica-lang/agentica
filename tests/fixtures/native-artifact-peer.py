@@ -176,7 +176,10 @@ class Web(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Length", "100")
             self.end_headers()
             self.wfile.write(b"0123456789")
-            self.connection.close()
+            # The server then shuts the socket down and closes it (a FIN after the bytes, no reset): the
+            # request was read in full. A bare socket close here would not end the connection while the
+            # handler's files still hold it.
+            self.close_connection = True
         else:
             self.send_response(404)
             self.send_header("Content-Length", "9")
@@ -187,6 +190,8 @@ class Web(http.server.BaseHTTPRequestHandler):
 class QuietServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
     allow_reuse_address = True
+    # The default queue holds 5 connections and a test opens 8 at once; Windows refuses a connection past it.
+    request_queue_size = 32
 
 
 def serve(server):

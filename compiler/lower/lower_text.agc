@@ -64,6 +64,7 @@ def lower_deeper(linked: Linker.Linked, checked: Checker.Checked, frames: Int) -
   if frames == 0
     return Lowering.lower(linked, checked)
   end
+
   done = lower_deeper(linked, checked, frames - 1)
   return done
 end
@@ -84,11 +85,13 @@ def program_lines(program: Ir.Program) -> List[String]
     lines = lines.push("source #{index} #{shown} chars=#{source.text.length}")
     index += 1
   end
+
   index = 0
   for entry in program.structs
     lines = lines.push(struct_line(index, entry))
     index += 1
   end
+
   id = 0
   for entry in program.enums
     names = ""
@@ -96,13 +99,16 @@ def program_lines(program: Ir.Program) -> List[String]
       names = "#{names} v#{id}=#{Text.quote(variant.name)}/#{variant.size}"
       id += 1
     end
+
     lines = lines.push("enum #{Text.quote(entry.name)}#{names}")
   end
+
   index = 0
   for function in program.functions
     lines = function_lines(lines, index, function, index == program.entry)
     index += 1
   end
+
   return lines
 end
 
@@ -113,6 +119,7 @@ def struct_line(index: Int, entry: Ir.StructDef) -> String
     types = entry.types.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
     line = "#{line} types=[#{types}]"
   end
+
   return line
 end
 
@@ -122,6 +129,7 @@ def function_lines(out: List[String], index: Int, function: Ir.Function, entry: 
   if entry
     head = "#{head} entry"
   end
+
   lines = out.push("#{head} @ #{span_text(function.file, function.span)}")
   for instr in function.body
     if instr.op == "label"
@@ -130,6 +138,7 @@ def function_lines(out: List[String], index: Int, function: Ir.Function, entry: 
       lines = lines.push(instr_line(instr))
     end
   end
+
   return lines
 end
 
@@ -139,14 +148,17 @@ def instr_line(instr: Ir.Instr) -> String
   if instr.op == "struct-with"
     shown = 4
   end
+
   at = 0
   while at < shown
     text = "#{text} #{arg_text(instr, at)}"
     at += 1
   end
+
   if instr.op == "const"
     text = "#{text} #{imm_text(instr.imm)}"
   end
+
   spans = instr.spans.map do |span: Source.Span| span_text(instr.file, span) end
   return "#{text} @ #{spans.join(" ")}"
 end
@@ -159,8 +171,10 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
     if at == 0
       return "r#{value} #{Text.quote(instr.name)}"
     end
+
     return value.to_s
   end
+
   if (op == "jump" and at == 0) or ((op == "jump-if-false" or op == "jump-if-true") and at == 1)
     return "L#{value}"
   elsif (op == "call" or op == "tail-call" or op == "closure") and at == 1
@@ -182,8 +196,10 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
     if value == 1
       return "..."
     end
+
     return ".."
   end
+
   return "r#{value}"
 end
 

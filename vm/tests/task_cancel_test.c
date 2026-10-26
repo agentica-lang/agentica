@@ -1,7 +1,7 @@
 /*
  * agc_task_cancel on the real scheduler, including a running task that
  * cancels itself after it took a handle, a task that spawns (and awaits) in the turn it was cancelled, and a task
- * parked as the caller of Task.map.
+ * parked as the caller of Task.map, and the timed waits of a run without a wall clock (the fuzz driver).
  */
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
@@ -1281,6 +1281,52 @@ static void test_map_late_closes(void) {
   call_int(&p, F_MAIN, B_CHECK, 2);
   run_done(&p, check_map_late_closes);
 }
+
+static uint64_t run_unclocked(prog *p, int64_t max_steps, agc_outcome *o) {
+  finish_fn(p, F_MAIN);
+  reset();
+  agc_vm vm;
+  agc_vm_init(&vm, &p->program, stdout, quiet, max_steps);
+  vm.rt->no_files = true;
+  uint64_t start = agc_clock_ms();
+  *o = agc_vm_run(&vm);
+  uint64_t took = agc_clock_ms() - start;
+  settle(&vm);
+  return took;
+}
+
+/* A run without a wall clock (no_files: the fuzz driver) waits 0 ms for every timeout, so a loop of hour-long channel
+   recvs, or of hour-long awaits of a task that never settles (its closes stay pending), spends its steps and ends at
+   RUNTIME-STEP-LIMIT at once, and a Task.map whose items never settle ends at its deadline at once. */
+static void test_unclocked_waits(void) {
+  for (int kind = 0; kind < 2; kind++) {
+    prog p;
+    new_prog(&p);
+    if (kind == 0) {
+      call_int(&p, F_MAIN, B_CH_NEW, 1);
+      emit(&p, F_MAIN, AGC_OP_MOVE, 0, SCRATCH, 1);
+    } else {
+      spawn(&p, F_MAIN, 0, F_CLOSER, 1);
+    }
+    uint32_t loop = p.fns[F_MAIN].count;
+    emit(&p, F_MAIN, AGC_OP_STEP, 1, 0, 1);
+    emit(&p, F_MAIN, AGC_OP_MOVE, SCRATCH, 0, 1);
+    emit(&p, F_MAIN, AGC_OP_CONST, SCRATCH + 1, constant(&p, 3600000), 1);
+    emit(&p, F_MAIN, AGC_OP_CALL_BUILTIN, SCRATCH, kind == 0 ? B_CH_RECV : B_AWAIT_TIMED, 1);
+    emit(&p, F_MAIN, AGC_OP_JUMP, 0, loop, 1);
+    agc_outcome o;
+    uint64_t took = run_unclocked(&p, 300, &o);
+    assert(o.kind == AGC_FAILED && strcmp(o.code, "RUNTIME-STEP-LIMIT") == 0 && took < 5000);
+  }
+  prog p;
+  new_prog(&p);
+  map_group(&p, F_MAP_CLOSING, 3, 3600000);
+  spawn(&p, F_MAIN, 0, F_MAP_GROUP, 0);
+  call_reg(&p, F_MAIN, B_AWAIT, 0, 1);
+  agc_outcome o;
+  uint64_t took = run_unclocked(&p, 1000, &o);
+  assert(o.kind == AGC_DONE && took < 5000 && mark_count == 1 && marks[0] == 991);
+}
 #endif
 
 int main(void) {
@@ -1310,6 +1356,7 @@ int main(void) {
   test_map_deadlines();
   test_map_closes();
   test_map_late_closes();
+  test_unclocked_waits();
   signal(SIGPIPE, SIG_IGN);
   test_output_waiter();
   assert(pipe(gate) == 0);

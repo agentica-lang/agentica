@@ -56,6 +56,7 @@ export def of_problem(problem: Problems.Problem) -> Diagnostic
     Diag.Help.Hint(text) -> help = text
     Diag.Help.NoHelp -> help = ""
   end
+
   return Diagnostic(
     code: problem.code,
     message: problem.message,

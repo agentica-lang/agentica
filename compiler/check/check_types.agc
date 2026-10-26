@@ -25,6 +25,7 @@ export def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bo
   if !contains_alias?(cx, ref)
     return resolve_expanded(cx, st, ref, completion)
   end
+
   expanded = try expand_alias(cx, st, ref, [], State.nesting_limit(), ref.span)
   return resolve_expanded(cx, st, expanded.ref, completion)
 end
@@ -35,6 +36,7 @@ export def resolve_all(cx: State.Cx, st: State.St, refs: List[TypeRef]) -> Resul
   for ref in refs
     out = out.push(try resolve_type(cx, st, ref, false))
   end
+
   return ok(out)
 end
 
@@ -45,6 +47,7 @@ export def alias_scope(cx: State.Cx, decl: Ast.TypeAliasDecl) -> State.Cx
   if decl.type_parameters.size == 0
     return cx
   end
+
   return cx.with(type_params: decl.type_parameters, prelude: true)
 end
 
@@ -88,6 +91,7 @@ export def encodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> B
   elsif Types.is?(type, "Struct")
     return struct_all?(cx, Types.name(type), seen, 0)
   end
+
   return false
 end
 
@@ -103,6 +107,7 @@ export def decodable?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> B
   elsif Types.is?(type, "Struct")
     return struct_all?(cx, Types.name(type), seen, 1)
   end
+
   return false
 end
 
@@ -123,6 +128,7 @@ export def data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
   elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     return nominal_data?(cx, type, seen)
   end
+
   return false
 end
 
@@ -189,11 +195,14 @@ export def unify(
       try State.ensure(cx, st, actual, previous.unwrap!, span)
       return ok(substitutions)
     end
+
     return ok(substitutions.put(Types.name(template), actual))
   end
+
   if composite?(template) and Types.tag(template) == Types.tag(actual)
     return unify_inside(cx, st, template, actual, substitutions, span)
   end
+
   try State.ensure(cx, st, actual, template, span)
   return ok(substitutions)
 end
@@ -202,6 +211,7 @@ def contains_alias?(cx: State.Cx, ref: TypeRef) -> Bool
   if !cx.type_params.any? do |item: String| item == ref.name end and cx.aliases.has_key?(ref.name)
     return true
   end
+
   return ref.args.any? do |arg: TypeRef| contains_alias?(cx, arg) end
 end
 
@@ -225,6 +235,7 @@ def expand_alias(
       ),
     )
   end
+
   left = remaining - 1
   name = ref.name
   parameter = cx.type_params.any? do |item: String| item == name end
@@ -233,6 +244,7 @@ def expand_alias(
     if ref.args.size != decl.type_parameters.size
       return error(State.fail(cx, st, "CHECK-UNKNOWN-TYPE", alias_arity_text(name, decl, ref), ref.span))
     end
+
     if seen.any? do |entry: String| entry == name end
       cycle = cycle_text(seen, name)
       return error(
@@ -246,6 +258,7 @@ def expand_alias(
         ),
       )
     end
+
     if seen.size >= State.nesting_limit()
       return error(
         State.fail_help(
@@ -258,14 +271,17 @@ def expand_alias(
         ),
       )
     end
+
     return expand_use(cx, st, decl, ref, seen, left, limit_span)
   end
+
   args: List[TypeRef] = []
   for arg in ref.args
     expanded = try expand_alias(cx, st, arg, seen, left, limit_span)
     args = args.push(expanded.ref)
     left = expanded.remaining
   end
+
   return ok(Expansion(ref: ref.with(args: args), remaining: left))
 end
 
@@ -286,6 +302,7 @@ def expand_use(
   if seen.size == 0
     budget_span = ref.span
   end
+
   left = remaining
   args: List[TypeRef] = []
   argument_refs = 0
@@ -295,6 +312,7 @@ def expand_use(
     argument_refs += ref_count(inner.ref)
     left = inner.remaining
   end
+
   inside = cx.with(type_params: decl.type_parameters)
   target = try expand_alias(inside, st, decl.target, seen.push(ref.name), left, budget_span)
   shape = relocate(target.ref, ref.span)
@@ -315,6 +333,7 @@ def expand_use(
       ),
     )
   end
+
   return ok(Expansion(ref: result, remaining: left))
 end
 
@@ -323,6 +342,7 @@ def alias_arity_text(name: String, decl: Ast.TypeAliasDecl, ref: TypeRef) -> Str
   if decl.type_parameters.size == 0
     return "type alias #{shown} takes no type arguments"
   end
+
   return "type alias #{shown} #{expects_text(decl.type_parameters.size, ref.args.size)}"
 end
 
@@ -340,10 +360,13 @@ def replace_parameters(ref: TypeRef, parameters: List[String], args: List[TypeRe
       if parameters[index] == ref.name
         return args[index]
       end
+
       index += 1
     end
+
     return ref
   end
+
   inner = ref.args.map do |arg: TypeRef| replace_parameters(arg, parameters, args) end
   return ref.with(args: inner)
 end
@@ -374,9 +397,11 @@ def check_capture(
       ),
     )
   end
+
   for arg in target.args
     try check_capture(cx, st, arg, parameters, span)
   end
+
   return ok(true)
 end
 
@@ -394,8 +419,10 @@ def check_unused_arguments(
     if !uses_name?(target, parameters[index])
       try resolve_expanded(cx, st, args[index], true)
     end
+
     index += 1
   end
+
   return ok(true)
 end
 
@@ -403,6 +430,7 @@ def uses_name?(ref: TypeRef, name: String) -> Bool
   if ref.args.size == 0
     return ref.name == name
   end
+
   return ref.args.any? do |arg: TypeRef| uses_name?(arg, name) end
 end
 
@@ -412,6 +440,7 @@ def ref_count(ref: TypeRef) -> Int
   for arg in ref.args
     total += ref_count(arg)
   end
+
   return total
 end
 
@@ -429,6 +458,7 @@ def cycle_text(seen: List[String], repeated: String) -> String
       names = names.push(name)
     end
   end
+
   names = names.push(repeated).map do |name: String| Types.display_name(name) end
   return names.join(" -> ")
 end
@@ -439,6 +469,7 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
   if args.size == 0
     return resolve_plain(cx, st, ref, completion)
   end
+
   if name == "Result" and args.size == 1
     return ok(Types.Type.Result(try resolve_expanded(cx, st, args[0], true)))
   elsif name == "Task" and args.size == 1
@@ -456,6 +487,7 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
   elsif name == "Set" and args.size == 1
     return resolve_set(cx, st, args[0])
   end
+
   return resolve_generic(cx, st, ref)
 end
 
@@ -469,6 +501,7 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     if !completion
       return error(State.fail(cx, st, "CHECK-VOID-TYPE", "Void is only valid in a completion type position", ref.span))
     end
+
     return ok(Types.Type.Void)
   elsif name == "Int"
     return ok(Types.Type.Int)
@@ -487,6 +520,7 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
   elsif OPAQUE_TYPES.include?(name) or cx.resources.include?(name)
     return ok(Types.Type.Opaque(name))
   end
+
   return resolve_generic(cx, st, ref)
 end
 
@@ -497,6 +531,7 @@ def resolve_function(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[
     params = params.push(try resolve_expanded(cx, st, args[index], false))
     index += 1
   end
+
   result = try resolve_expanded(cx, st, args[args.size - 1], true)
   return ok(Types.Type.Fn(params, result))
 end
@@ -514,6 +549,7 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
       ),
     )
   end
+
   return ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
 end
 
@@ -530,6 +566,7 @@ def resolve_set(cx: State.Cx, st: State.St, arg: TypeRef) -> Result[ResolvedType
       ),
     )
   end
+
   return ok(Types.Type.Set(element))
 end
 
@@ -550,19 +587,23 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
         ),
       )
     end
+
     args: List[ResolvedType] = []
     for arg in ref.args
       args = args.push(try resolve_expanded(cx, st, arg, false))
     end
+
     return ok(Types.Type.Enum(name, args))
   elsif cx.structs.has_key?(name) and ref.args.size == 0
     return ok(Types.Type.Struct(name))
   end
+
   candidates = cx.structs.keys.concat(cx.enums.keys)
   help = Help.foreign(cx.help, name)
   if help == ""
     help = Help.near(name, candidates, shared_type_names(cx))
   end
+
   return error(
     State.fail_maybe(
       cx,
@@ -603,6 +644,7 @@ def struct_all?(cx: State.Cx, name: String, seen: List[String], test: Int) -> Bo
   if seen.any? do |item: String| item == name end
     return true
   end
+
   inner = seen.push(name)
   for field in cx.structs[name]
     if test == 0 and !encodable?(cx, field.type, inner)
@@ -611,6 +653,7 @@ def struct_all?(cx: State.Cx, name: String, seen: List[String], test: Int) -> Bo
       return false
     end
   end
+
   return true
 end
 
@@ -623,9 +666,11 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
       return false
     end
   end
+
   if seen.any? do |item: String| item == key end
     return true
   end
+
   inner = seen.push(key)
   if Types.is?(type, "Struct")
     for field in cx.structs[name]
@@ -633,8 +678,10 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
         return false
       end
     end
+
     return true
   end
+
   for variant in cx.enums[name].variants
     for payload in variant.payload
       if !data?(cx, payload, inner)
@@ -642,6 +689,7 @@ def nominal_data?(cx: State.Cx, type: ResolvedType, seen: List[String]) -> Bool
       end
     end
   end
+
   return true
 end
 
@@ -650,6 +698,7 @@ def substitution(type: ResolvedType, name: String, substitutions: Map[String, Re
   if found.ok?
     return found.unwrap!
   end
+
   return type
 end
 
@@ -672,15 +721,18 @@ def unify_inside(
   if Types.is?(template, "Enum") and Types.name(template) != Types.name(actual)
     try State.ensure(cx, st, actual, template, span)
   end
+
   if pairs.size != others.size
     try State.ensure(cx, st, actual, template, span)
   end
+
   found = substitutions
   index = 0
   while index < pairs.size
     found = try unify(cx, st, pairs[index], others[index], found, span)
     index += 1
   end
+
   return ok(found)
 end
 

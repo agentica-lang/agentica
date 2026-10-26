@@ -29,13 +29,17 @@ DEPS_FOLDER = "deps"
 ## The package a file belongs to. package is its local name, root the real folder of its files in deps/ and label
 ## `name@version`, which names each of its files in the program (`pkg/name@version/path`). All are "" for the files of
 ## the project. natives says what each `extern "name"` of the files means (native_library.agc) and watched lists the
-## files that the bytecode cache must watch because of it.
+## files that the bytecode cache must watch because of it. blank_line_after_end is true for a file of a project whose
+## manifest turns on `[style] blank_line_after_end`; no other file has it. library is true for a file of a std/ or pkg/
+## library and for what such a file imports by a relative path: those files keep the style answer of their origin.
 export struct Origin
   package: String
   root: String
   label: String
   natives: Map[String, NativeLibrary.Target]
   watched: List[String]
+  blank_line_after_end: Bool
+  library: Bool
 end
 
 ## A package that the build has loaded and hashed: the same fields as its Origin, and the names its own manifest
@@ -52,7 +56,9 @@ end
 ## names the project declares, the system the build runs on (`os`, for the native libraries), the lock, the workspace
 ## of the project (none when it is in no workspace), the names that the manifests of the locked packages declare (by
 ## package name; check_manifests reads them before any file is loaded), the packages loaded so far (by name), and
-## `native_root`, the package cache root the downloaded native artifacts are verified from ("" when none).
+## `native_root`, the package cache root the downloaded native artifacts are verified from ("" when none), and
+## `style_dir`, the folder of the manifest when it turns on `[style] blank_line_after_end` ("" when it does not, or
+## when there is no manifest).
 export struct Scope
   deps: String
   os: String
@@ -64,6 +70,7 @@ export struct Scope
   declared: Map[String, List[String]]
   opened: Map[String, Opened]
   native_root: String
+  style_dir: String
 end
 
 ## How a `pkg/` import reads: a library of the pkg/ roots, or a package and the module inside it (a path with `.agc`).
@@ -103,6 +110,7 @@ export def scope_of(project: Project.Project) -> Scope
         declared: {},
         opened: {},
         native_root: "",
+        style_dir: "",
       )
     Project.Project.Declared(found) ->
       return Scope(
@@ -116,6 +124,7 @@ export def scope_of(project: Project.Project) -> Scope
         declared: {},
         opened: {},
         native_root: "",
+        style_dir: style_folder(found),
       )
   end
 end
@@ -134,14 +143,36 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
   end
 end
 
-## The origin of a file of the project: its folder's native libraries are the scope's.
+## The origin of the root file of the project: its folder's native libraries are the scope's. The root file is in the
+## folder of the manifest or below it, with no nearer manifest, so it has the style rule when the manifest asks for it.
 export def project_origin(scope: Scope) -> Origin
-  return Origin(package: "", root: "", label: "", natives: scope.natives, watched: scope.watched)
+  return Origin(
+    package: "",
+    root: "",
+    label: "",
+    natives: scope.natives,
+    watched: scope.watched,
+    blank_line_after_end: scope.style_dir != "",
+    library: false,
+  )
+end
+
+## The origin of the file `key` that a file with origin `importer` imports by a relative path: the same, except for the
+## style rule. A file has it only when the manifest of the root asks for it and the file is below the folder of that
+## manifest with no agentica.toml of its own nearer (the manifest of a folder inside is another project, and its keys
+## are not read), so a file outside that folder never has it, whoever imports it. A library file is not a file of the
+## project, wherever its folder is: what it imports keeps its origin.
+export def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: Origin, key: String) -> Origin
+  if importer.library
+    return importer
+  end
+
+  return importer.with(blank_line_after_end: Project.styled?(workspace, scope.style_dir, key))
 end
 
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
 export def library_origin() -> Origin
-  return Origin(package: "", root: "", label: "", natives: {}, watched: [])
+  return Origin(package: "", root: "", label: "", natives: {}, watched: [], blank_line_after_end: false, library: true)
 end
 
 ## Tells how the `pkg/` import path file (ending in .agc, a valid library path) reads. A declared name is a package,
@@ -159,10 +190,12 @@ export def match_import(scope: Scope, origin: Origin, file: String, site: Failur
   elsif declared?(names, parts[1])
     return ok(Match.Package(parts[1], parts.drop(2).join("/")))
   end
+
   if origin.package != ""
     message = "a file of a package imports only the packages its agentica.toml declares"
     return error(missing(site, message, "declare #{parts[1]} in the agentica.toml of #{origin.package}"))
   end
+
   return ok(Match.Library)
 end
 
@@ -181,14 +214,17 @@ export def open_package(
     if !locked.ok?
       return error(missing(site, "#{name} is not in the lock", "the lock must list #{name}"))
     end
+
     loaded = try load(workspace, scope, locked.unwrap!, site)
     opened = opened.put(name, loaded)
   end
+
   package = opened[name]
   target = workspace.real_path.call(Paths.join(package.root, rest))
   if !target.ok? or !workspace.file_exists.call(target.unwrap!)
     return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot find package module", Diag.Help.NoHelp))
   end
+
   inner = try confined(package.root, target.unwrap!, site)
   return ok(
     Located(
@@ -199,6 +235,8 @@ export def open_package(
         label: package.label,
         natives: package.natives,
         watched: package.watched,
+        blank_line_after_end: false,
+        library: false,
       ),
       name: stored_name(package.label, inner),
       opened: opened,
@@ -223,6 +261,7 @@ export def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Resu
   for locked in scope.lock.packages
     folders = folders.put(locked.name, folder_of(scope, locked))
   end
+
   return check_folders(workspace, scope, folders)
 end
 
@@ -235,6 +274,7 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
     if !folders.has_key?(locked.name) or folders[locked.name] == ""
       next
     end
+
     real = workspace.real_path.call(folders[locked.name])
     if real.ok? and workspace.directory_exists.call(real.unwrap!)
       case shape_of(workspace, real.unwrap!)
@@ -247,6 +287,7 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
       end
     end
   end
+
   return ok(scope.with(declared: declared))
 end
 
@@ -256,6 +297,7 @@ export def folder_of(scope: Scope, locked: Lock.Locked) -> String
   if locked.member
     return Members.folder_of(scope.members, locked.source)
   end
+
   return Paths.join(scope.deps, locked.name)
 end
 
@@ -270,12 +312,14 @@ def confined(root: String, file: String, site: Failure.Site) -> Result[String]
   if !Paths.inside?(root, file)
     return error(refuse(site, "an import cannot leave its package", "keep the path inside the package"))
   end
+
   below = Paths.path_parts(file).drop(Paths.path_parts(root).size)
   folders = below.take(below.size - 1)
   hidden = folders.any? do |part| PackageHash.skipped_folder?(part, false) end
   if hidden or (folders.size > 0 and PackageHash.skipped_folder?(folders[0], true))
     return error(refuse(site, "a hidden folder or agc_libs of a package cannot be imported", "move the module"))
   end
+
   return ok(below.join("/"))
 end
 
@@ -290,18 +334,22 @@ def load(
     message = "#{locked.name} is a workspace member, but this project is not in that workspace"
     return error(missing(site, message, "run agentica update to lock #{locked.name} as a fetched package"))
   end
+
   folder = folder_of(scope, locked)
   real = workspace.real_path.call(folder)
   if !real.ok? or !workspace.directory_exists.call(real.unwrap!)
     if locked.member
       return error(missing(site, "the folder #{folder} of #{locked.name} does not exist", "restore the member folder"))
     end
+
     message = "#{locked.name} is not in #{scope.deps}"
     return error(missing(site, message, "run agentica install to write the packages of the lock to #{scope.deps}"))
   end
+
   if !locked.member
     try verify(workspace, locked, real.unwrap!, folder, site)
   end
+
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
   native = try natives_of(workspace, scope, real.unwrap!, locked.member, locked.name)
   return ok(
@@ -335,6 +383,7 @@ def verify(
         help = "run agentica install to put the locked files back"
         return error(Failure.fail_at(site, "PKG-HASH-MISMATCH", message, Failure.hint(help)))
       end
+
       return ok()
   end
 end
@@ -347,14 +396,17 @@ def shape_of(workspace: Workspace.Workspace, root: String) -> Shape
   if !entries.ok?
     return Shape.Unlisted(entries.message)
   end
+
   for entry in entries.unwrap!
     if PackageHash.fold(entry.name) == MANIFEST_FILE and !regular?(entry.kind)
       return Shape.Unsafe(entry.name)
     end
   end
+
   if workspace.file_exists.call(Paths.join(root, MANIFEST_FILE))
     return Shape.Regular
   end
+
   return Shape.Absent
 end
 
@@ -378,6 +430,7 @@ def names_of(
   if scope.declared.has_key?(locked.name)
     return ok(scope.declared[locked.name])
   end
+
   return declared_names(workspace, scope, root, site)
 end
 
@@ -448,5 +501,15 @@ def allowed_names(scope: Scope, origin: Origin) -> List[String]
   elsif !scope.opened.has_key?(origin.package)
     return []
   end
+
   return scope.opened[origin.package].names
+end
+
+# The folder of the manifest when it asks for the style rule, else "".
+def style_folder(found: Project.Found) -> String
+  if found.manifest.blank_line_after_end
+    return found.dir
+  end
+
+  return ""
 end

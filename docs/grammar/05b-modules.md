@@ -158,7 +158,28 @@ import Sqlite from "pkg/sqlite/db"
   `[workspace]` (below). An unknown key at any level, a value of the wrong
   form, or a TOML syntax error is `PKG-MANIFEST-INVALID`. `name` is optional
   and follows the rule of a dependency name below. `max_line_width` is an
-  integer of 1 or more.
+  integer of 1 or more. `blank_line_after_end` is a boolean, false by default;
+  any other value is `PKG-MANIFEST-INVALID` at `style.blank_line_after_end`.
+- With `blank_line_after_end = true`, `agentica check` and every command that
+  checks a program require an empty line (only spaces or tabs) after each line
+  whose code is only `end`, in the files below the folder of that manifest
+  that have no `agentica.toml` of their own nearer. A file outside that folder
+  (`../shared/util.agc`), `std/`, a package, the `agc_libs/` of the folder, any
+  other `pkg/` library folder (and what its files import by a relative path),
+  and a file in a folder with its own manifest are not checked, even when the
+  root imports them. A link counts where its real path is. The key of a nested
+  manifest is not honored: a build reads only the manifest of its root. A
+  trailing `# comment` on the `end` line is allowed, but a comment line after
+  the `end` is not an empty line, so it needs one too, also before a closing
+  `end` and at the end of the file. A line that breaks it is
+  `CHECK-BLANK-LINE-AFTER-END`, at the `end`, reported after the type check
+  passes. These next lines need no empty line: one that starts with
+  `end`, `else`, `elsif`, `)`, `]` or `}`, and one that starts with `.name`
+  (the lexer joins it to the `end`). The end of the file needs none either: the
+  last `end` may have no final line break, one, or extra empty lines, in a
+  module file and in the main file. An `end` with more on its line (`end.size`,
+  `end)`) is not covered, and an `end` in a string, a heredoc or a comment
+  never counts.
 - A dependency is a local name and an inline table. The name is the key: a
   lowercase letter, then lowercase letters, digits, `_` and `-`, at most 64
   characters. It is the segment after `pkg/` in an import and has nothing to do
@@ -630,8 +651,8 @@ functions take the context first and return it; see
 [`library/testing/bdd.md`](../../site/content/library/testing/bdd.md) and
 [`bdd.md`](../bdd.md). `BDD.Context` can be named but not built: a context
 exists only inside a step, so use the context that a call returns. The modules
-`std/bdd/gherkin`, `std/bdd/match`, `std/test/report` and `std/test/runner` are
-internal to `agentica test` and unsupported.
+`std/bdd/gherkin`, `std/bdd/match`, `std/bdd/tags`, `std/test/report` and
+`std/test/runner` are internal to `agentica test` and unsupported.
 
 [agentica-link-1]: ../../site/content/library/data-structures/queue.md
 [agentica-link-2]: ../../site/content/library/text-and-data/binary.md

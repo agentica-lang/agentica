@@ -142,7 +142,7 @@ class UnitTest(TestCase):
         self.assertIsInstance(drawn["seed"], int)
         self.assertGreaterEqual(drawn["seed"], 0)
         text = run(cli() + ["--seed", "7", "test", seed], env=vm_environment()).stdout
-        self.assertTrue(text.endswith("0 passed, 2 failed, 0 not executed, 0 file errors, seed 7\n"), text)
+        self.assertTrue(text.endswith("0 passed, 2 failed, 0 skipped, 0 not executed, 0 file errors, seed 7\n"), text)
         status, none = self.json_test("--only", "nothing", seed)
         self.assertEqual((status, report_cases(none), file_codes(none)), (1, [], [("tests", None), ("", "CHECK-BDD-EMPTY")]))
         for arguments in [["--only", ""], ["--only", "a", "--only", "b"]]:

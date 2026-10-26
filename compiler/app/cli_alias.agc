@@ -25,6 +25,7 @@ export def targets(name: String) -> List[String]
   elsif parts.size != 1
     return []
   end
+
   found = from_aliases(method, kind)
     .concat(from_renamed(method, kind, modules))
     .concat(from_method_names(method, kind, modules))
@@ -32,6 +33,7 @@ export def targets(name: String) -> List[String]
   if public.size > MAX_TARGETS
     return []
   end
+
   # The builtins written as a method of that name come first: `join` is the join of a List before `Path.join`.
   written = public.filter do |target: String| RubyForm.written_as?(target, method) end
   return written.concat(public.filter do |target: String| !RubyForm.written_as?(target, method) end)
@@ -45,11 +47,13 @@ export def kind_hints(name: String) -> Map[String, String]
   if name.contains?(".")
     return found
   end
+
   for key in hints.keys.sort
     if key.ends_with?(".#{name}")
       found = found.put(key, hints[key])
     end
   end
+
   return found
 end
 
@@ -64,6 +68,7 @@ def from_aliases(method: String, kind: String) -> List[String]
       found = found.push(target)
     end
   end
+
   return found
 end
 
@@ -73,6 +78,7 @@ def from_renamed(method: String, kind: String, modules: Map[String, String]) -> 
   if !renamed.ok?
     return []
   end
+
   aliases = Tables.method_aliases()
   found: List[String] = []
   for receiver in modules.keys.sort
@@ -87,6 +93,7 @@ def from_renamed(method: String, kind: String, modules: Map[String, String]) -> 
       end
     end
   end
+
   return found
 end
 
@@ -99,5 +106,6 @@ def from_method_names(method: String, kind: String, modules: Map[String, String]
       found = found.push(candidate)
     end
   end
+
   return found
 end

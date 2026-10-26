@@ -30,6 +30,7 @@ export def json(found: Model.TypeAt) -> Json
   if found.partial
     return JSON.object(DiagnosticJson.partial(shape.put("type", typed(found.type)), found.diagnostics))
   end
+
   return JSON.object(shape)
 end
 
@@ -38,6 +39,7 @@ def typed(type: String) -> Json
   if type == ""
     return JSON.null()
   end
+
   return JSON.from(type)
 end
 
@@ -46,6 +48,7 @@ def definition_json(definition: List[Model.Definition]) -> Json
   if definition.size == 0
     return JSON.null()
   end
+
   found = definition[0]
   return JSON.object({
     "file": JSON.from(found.file),

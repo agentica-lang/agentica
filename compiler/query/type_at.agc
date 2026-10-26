@@ -61,12 +61,14 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
       if token == ""
         return nothing(asked, here)
       end
+
       # A local comes first: on the name of a binding, the innermost expression would be the one around it.
       case Locals.find(module, checked.bound, offset)
         Ast.Optional.Present(local) ->
           if local.local.kind == "discard"
             return nothing(asked, here)
           end
+
           return Diag.Outcome.Done(local_answer(linked, local))
         Ast.Optional.Absent ->
           # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
@@ -76,6 +78,7 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
               return Diag.Outcome.Done(found[0])
             end
           end
+
           return expression_answer(linked, checked, asked, offset, here)
       end
   end
@@ -94,6 +97,7 @@ export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
       end
     end
   end
+
   return written
 end
 
@@ -123,6 +127,7 @@ def kind_at(text: String, offset: Int) -> String
           return token.kind
         end
       end
+
       return ""
   end
 end
@@ -155,6 +160,7 @@ def type_token?(text: String, token: String, offset: Int) -> Bool
   if token == "type-name"
     return true
   end
+
   return token == "dot" and offset + 1 < text.length and CAPITALS.include?(text.at(offset + 1))
 end
 
@@ -199,10 +205,12 @@ def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offse
     kind = "name"
     builtin = builtin_of(checked, expr, definition)
   end
+
   case builtin
     Ast.Optional.Present(_) -> kind = "builtin"
     Ast.Optional.Absent -> kind = kind
   end
+
   return Answer(
     kind: kind,
     span: span,
@@ -239,6 +247,7 @@ def resolved(checked: Checker.Checked, id: Int) -> Ast.Optional[Model.Builtin]
   if !found.ok?
     return Ast.Optional.Absent
   end
+
   case found.unwrap!
     State.Resolved.Call(name, _) -> return public(name)
     _ -> return Ast.Optional.Absent
@@ -250,6 +259,7 @@ def public(name: String) -> Ast.Optional[Model.Builtin]
   if entry.ok?
     return Ast.Optional.Present(entry.unwrap!)
   end
+
   return Ast.Optional.Absent
 end
 
@@ -259,6 +269,7 @@ def source_text(text: String, span: Source.Span) -> String
   if span.start.offset < 0 or size < 0 or span.stop.offset > text.length
     return ""
   end
+
   return text.slice(span.start.offset, size)
 end
 
@@ -285,13 +296,16 @@ def on_head?(text: String, span: Source.Span, offset: Int) -> Bool
   if size > HEAD_LIMIT
     size = HEAD_LIMIT
   end
+
   if start < 0 or size <= 0 or start + size > text.length
     return false
   end
+
   head = 0
   written = text.slice(start, size)
   while head < size and HEAD_CHARS.include?(written.at(head))
     head += 1
   end
+
   return start <= offset and offset < start + head
 end

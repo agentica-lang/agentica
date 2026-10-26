@@ -31,6 +31,7 @@ export def ids_text(path: String, settings: Env.Settings) -> String
       lines = linked.modules.map do |module|
         "module #{Text.quote(module.name)} first=#{module.first_id} next=#{module.next_id}"
       end
+
       return lines.join("\n")
     Linker.Linking.Failed(failure) -> return root_failure_text(settings.workspace, path, failure)
   end
@@ -49,6 +50,7 @@ export def failure_text(workspace: Workspace.Workspace, root_dir: String, failur
   if failure.key_path != ""
     return "#{line} key=#{Text.quote(failure.key_path)}"
   end
+
   return line
 end
 
@@ -70,6 +72,7 @@ export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List
       lines = module_lines(lines, module, notes)
     end
   end
+
   return lines
 end
 
@@ -79,6 +82,7 @@ def module_lines(out: List[String], module: Linker.LinkedModule, notes: Map[Int,
   for decl in module.declarations
     lines = ParseText.print_decl(lines, at, "declaration", decl)
   end
+
   return lines
 end
 
@@ -88,5 +92,6 @@ def root_dir_of(workspace: Workspace.Workspace, path: String) -> String
   if real.ok?
     return Paths.directory_of(real.unwrap!)
   end
+
   return ""
 end

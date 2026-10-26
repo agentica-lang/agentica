@@ -45,5 +45,6 @@ def imports_of(program: Ast.Program) -> List[Ast.ImportDecl]
       Ast.Decl.Constant(_) -> imports = imports
     end
   end
+
   return imports
 end

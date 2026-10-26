@@ -34,8 +34,10 @@ export def object(diagnostic: Model.Diagnostic) -> Json
     labels = diagnostic.labels.map do |label: Model.Label|
       JSON.object({"range": range(label.range), "text": JSON.from(label.text)})
     end
+
     fields = fields.put("labels", JSON.array(labels))
   end
+
   return JSON.object(fields)
 end
 
@@ -58,6 +60,7 @@ def note(fields: Map[String, Json], key: String, text: String) -> Map[String, Js
   if text == ""
     return fields
   end
+
   return fields.put(key, JSON.from(text))
 end
 

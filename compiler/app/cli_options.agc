@@ -78,6 +78,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     elsif word == "--version"
       return Parsed.Answer(Reply.printed("#{version}\n"))
     end
+
     taken = values(word)
     if taken < 0
       return mistake("unknown switch: #{word}")
@@ -86,17 +87,21 @@ export def parse(arguments: List[String], version: String) -> Parsed
     elsif at + taken >= arguments.size
       return mistake("the \"#{word}\" option needs 1 argument, but 0 provided")
     end
+
     seen = seen.add(word)
     value = ""
     if taken > 0
       value = arguments[at + 1]
     end
+
     case apply(options, word, value)
       Applied.Changed(changed) -> options = changed
       Applied.Refused(message) -> return Parsed.Answer(Reply.failed(2, "agentica: #{message}\n"))
     end
+
     at += 1 + taken
   end
+
   return Parsed.Ready(options)
 end
 
@@ -113,10 +118,12 @@ def values(word: String) -> Int
   if word == "--steps"
     return 1
   end
+
   found = ONCE.get(word)
   if found.ok?
     return found.unwrap!
   end
+
   return -1
 end
 
@@ -125,6 +132,7 @@ def apply(options: Options, word: String, value: String) -> Applied
   if word.starts_with?("--deny-") or word == "--sandbox"
     return Applied.Changed(options.with(deny: options.deny.push(word)))
   end
+
   case word
     "--dump" -> return Applied.Changed(options.with(dump: true))
     "--dump-ir" -> return Applied.Changed(options.with(dump_ir: true))
@@ -145,6 +153,7 @@ def max_steps(options: Options, value: String) -> Applied
   if !digits?(value) or digits == "0"
     return Applied.Refused("--max-steps needs a positive integer")
   end
+
   return Applied.Changed(options.with(max_steps: digits))
 end
 
@@ -153,6 +162,7 @@ def seed(options: Options, value: String) -> Applied
   if !digits?(value) or digits.length > 10 or digits.to_i! > 2_147_483_647
     return Applied.Refused("--seed needs an integer from 0 to 2147483647")
   end
+
   return Applied.Changed(options.with(seed: digits))
 end
 
@@ -161,6 +171,7 @@ def schedulers(options: Options, value: String) -> Applied
   if !digits?(value) or digits.length > 4 or digits.to_i! < 1 or digits.to_i! > 1024
     return Applied.Refused("--schedulers needs an integer from 1 to 1024")
   end
+
   return Applied.Changed(options.with(schedulers: digits))
 end
 
@@ -168,6 +179,7 @@ def jit(options: Options, value: String) -> Applied
   if !JIT_MODES.include?(value)
     return Applied.Refused("--jit needs off, on or always")
   end
+
   return Applied.Changed(options.with(jit: value))
 end
 
@@ -176,6 +188,7 @@ def flush_timeout(options: Options, value: String) -> Applied
   if !digits?(value)
     return Applied.Refused("--flush-timeout needs a non-negative integer")
   end
+
   return Applied.Changed(options.with(flush_timeout: value))
 end
 
@@ -184,11 +197,13 @@ def digits?(text: String) -> Bool
   if text.length == 0
     return false
   end
+
   for character in text.split("")
     if !DIGITS.contains?(character)
       return false
     end
   end
+
   return true
 end
 
@@ -198,5 +213,6 @@ def without_leading_zeros(text: String) -> String
   while at < text.length - 1 and text.slice(at, 1) == "0"
     at += 1
   end
+
   return text.slice(at, text.length - at)
 end

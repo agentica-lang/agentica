@@ -50,6 +50,7 @@ export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
   if !embedded?(key)
     return workspace.read_text.call(key)
   end
+
   case settings.std
     Env.StdProvider.Folder(folder) -> return workspace.read_text.call(std_file(folder, key))
     Env.StdProvider.Embedded ->
@@ -57,6 +58,7 @@ export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
       if text.ok?
         return SourceFile.Read.Text(text.unwrap!)
       end
+
       return SourceFile.Read.Unreadable(text.message)
   end
 end
@@ -90,6 +92,7 @@ export def resolve_import(
     named = try Paths.inside_std(folder + file, site)
     return resolve_import(settings, build, importer, named, site)
   end
+
   return beside(settings.workspace, build, importer, file, site)
 end
 
@@ -107,10 +110,12 @@ def standard_for(settings: Env.Settings, file: String, site: Failure.Site, from_
   if file.starts_with?(INTERNAL) and !from_std
     return error(io_failure(site, "std/internal/ modules are private to the standard library"))
   end
+
   # The files of std/prelude/ are the compiler prelude, which no program imports (prelude_files.agc).
   if file.starts_with?("std/prelude/") or !std_exists?(settings, file)
     return error(io_failure(site, "unknown standard library module"))
   end
+
   return ok(file)
 end
 
@@ -126,6 +131,7 @@ def std_file(folder: String, key: String) -> String
     core = key.slice(INTERNAL_COMPILER.length, key.length - INTERNAL_COMPILER.length)
     return Paths.join(Paths.join(folder, "../compiler"), core)
   end
+
   return Paths.join(folder, std_path(key))
 end
 
@@ -170,11 +176,18 @@ def beside(
     written = Paths.folded(Paths.join(Paths.directory_of(importer.key), file))
     try Packages.stay_inside(importer.origin, written, site)
   end
+
   target = try relative(workspace, importer.key, file, site)
   if importer.origin.root != ""
     name = try Packages.stay_inside(importer.origin, target, site)
   end
-  return ok(Resolution(key: target, origin: importer.origin, name: name, scope: build.scope))
+
+  origin = importer.origin
+  if origin.root == ""
+    origin = Packages.file_origin(workspace, build.scope, origin, target)
+  end
+
+  return ok(Resolution(key: target, origin: origin, name: name, scope: build.scope))
 end
 
 def io_failure(site: Failure.Site, message: String) -> String
@@ -202,6 +215,7 @@ def library(
       return contained(settings.workspace, root, candidate, site)
     end
   end
+
   return error(io_failure(site, "cannot find library module"))
 end
 
@@ -219,23 +233,28 @@ def library_roots(
   if on_windows
     separator = ";"
   end
+
   configured: List[String] = []
   for entry in settings.env.agentica_path.split(separator)
     if entry == ""
       next
     end
+
     if !Paths.absolute?(entry, on_windows)
       return error(
         Failure.fail_at(site, "CHECK-IMPORT-PATH", "AGENTICA_PATH roots must be absolute", Diag.Help.NoHelp),
       )
     end
+
     configured = configured.push(entry)
   end
+
   first = [Paths.join(libs_dir, "agc_libs")]
   roots = first.concat(configured).concat(user_roots(settings.env, on_windows))
   if on_windows
     return ok(roots)
   end
+
   return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
 end
 
@@ -247,14 +266,18 @@ def user_roots(env: Env.Env, on_windows: Bool) -> List[String]
     if Paths.absolute?(env.local_app_data, true)
       return [Paths.join(env.local_app_data, "agentica/lib")]
     end
+
     return []
   end
+
   if env.xdg_data_home.starts_with?("/")
     return [Paths.join(env.xdg_data_home, "agentica/lib")]
   end
+
   if env.home == ""
     return []
   end
+
   return [Paths.join(env.home, ".local/share/agentica/lib")]
 end
 
@@ -265,9 +288,11 @@ def contained(workspace: Workspace.Workspace, root: String, candidate: String, s
   if !base.ok? or !target.ok?
     return error(io_failure(site, "cannot resolve import"))
   end
+
   if !Paths.inside?(base.unwrap!, target.unwrap!)
     return error(Failure.fail_at(site, "CHECK-IMPORT-PATH", "library path escapes its root", Diag.Help.NoHelp))
   end
+
   return ok(target.unwrap!)
 end
 
@@ -278,18 +303,22 @@ def relative(workspace: Workspace.Workspace, key: String, file: String, site: Fa
   if file.starts_with?("/") or file.contains?(String.from_code(0))
     return error(io_failure(site, "cannot resolve import"))
   end
+
   folder = Paths.directory_of(key)
   inner = Paths.directory_of(file)
   if inner != ""
     folder = Paths.join(folder, inner)
   end
+
   parent = workspace.real_path.call(folder)
   if !parent.ok? or !workspace.directory_exists.call(parent.unwrap!)
     return error(io_failure(site, "cannot resolve import"))
   end
+
   target = workspace.real_path.call(Paths.join(parent.unwrap!, Paths.last_part(file)))
   if !target.ok?
     return error(io_failure(site, "cannot read import"))
   end
+
   return ok(target.unwrap!)
 end

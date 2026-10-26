@@ -80,11 +80,13 @@ FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' tests/fixtures/vm/*
 # ASAN_OPTIONS turns on the leak check that vm/value.c turns off for the other ASan builds: agc_fuzz_one frees every
 # block of an input. Fork mode keeps its jobs' inputs in TMPDIR, set under build/ because /tmp is often a small tmpfs.
 # The sub-make runs after dist/agentica, not beside it, because both write build/vm/flags.
-# TODO: drop -ignore_timeouts and the mapping of exit code 70 once a timed wait (a channel or await timeout) is bounded
-# by steps; today it parks without counting them, so a mutant with a large timeout waits for minutes. Until then a
-# timeout is saved as timeout-* and listed after the run, but does not fail it. Fork mode exits with the last job's
-# code, so 70 (a timeout; agc_out_of_memory aborts in this build, and libFuzzer's own OOM is 71) maps to success.
+# A timeout (an input past LIBFUZZ_TIMEOUT seconds) fails the run too. agc_fuzz_one has no wall clock
+# (agc_timeout_length), so its steps bound every wait; but steps do not bound CPU work (a linear builtin on a large
+# string once per step), so a timeout can also be a slow input to triage. Fork mode saves a corpus or seed input that
+# fails its first pass and goes on without counting it, so the run also fails when crashes/ got a new crash, leak,
+# timeout or oom file (not a slow-unit one: an input slower than 10 s but under LIBFUZZ_TIMEOUT is no failure).
 LIBFUZZ_TIME ?= 60
+LIBFUZZ_TIMEOUT ?= 10
 LIBFUZZ_JOBS ?= 1
 LIBFUZZ_RSS_MB ?= 2048
 LIBFUZZ_FLAGS ?=
@@ -92,12 +94,15 @@ vm-libfuzz-run: dist/agentica$(EXE)
 	$(FUZZ_CORPUS)
 	$(MAKE) vm-libfuzz
 	@mkdir -p $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/crashes $(LIBFUZZ_DIR)/tmp
-	status=0; ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_DIR)/tmp \
-	  $(LIBFUZZ_DIR)/agentica-vm-libfuzz -fork=$(LIBFUZZ_JOBS) -ignore_timeouts=1 \
-	  -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=10 \
+	touch $(LIBFUZZ_DIR)/tmp/started; status=0; \
+	ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_DIR)/tmp \
+	  $(LIBFUZZ_DIR)/agentica-vm-libfuzz -fork=$(LIBFUZZ_JOBS) -ignore_timeouts=0 \
+	  -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=$(LIBFUZZ_TIMEOUT) \
 	  -artifact_prefix=$(LIBFUZZ_DIR)/crashes/ -print_final_stats=1 $(LIBFUZZ_FLAGS) \
-	  $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/seeds || status=$$?; [ $$status -ne 70 ] || status=0; \
-	for f in $(LIBFUZZ_DIR)/crashes/timeout-*; do [ -e "$$f" ] && echo "vm-libfuzz-run: timeout (not a failure yet): $$f"; done; \
+	  $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/seeds || status=$$?; \
+	new=$$(find $(LIBFUZZ_DIR)/crashes -type f -newer $(LIBFUZZ_DIR)/tmp/started \( -name 'crash-*' -o -name 'leak-*' \
+	  -o -name 'timeout-*' -o -name 'oom-*' \)); \
+	if [ -n "$$new" ]; then echo "vm-libfuzz-run: new failure files:"; echo "$$new"; [ $$status -ne 0 ] || status=1; fi; \
 	exit $$status
 
 # The golden tests compile with dist/agentica and run on the GC stress binary (AGENTICA_VM_BINARY): the front end does not

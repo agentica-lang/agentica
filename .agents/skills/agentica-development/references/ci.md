@@ -190,12 +190,14 @@ site and Markdown-only changes skip it; a newer push cancels an older run.
   nothing that builds may run beside it. `dup-check` runs even when an earlier
   step fails.
 - `vm-sanitizers` (`needs: test`, runs even if it fails): `vm-lint`, ASan C
-  tests, 60 s of libFuzzer (`vm-libfuzz-run`, `-seed=1`), `vm-layers`, the sanitizer binary's fixed point (about
-  75 s and 1.8 GB: no GC) and Python modules, `vm-tsan`, `vm-tsan-run`, and
-  GC stress (it links the release `stage2`, since it collects every 64
-  allocations). It builds only when the merge commit changes `vm/`, the
-  Makefile, `mk/*.mk`, `.gitmodules`, `.clang-tidy` or `ci.yml` (keep that
-  list in step with new C folders); a manual run always runs it.
+  tests, 60 s of libFuzzer (`vm-libfuzz-run`, `-seed=1`,
+  `LIBFUZZ_TIMEOUT=30`), `vm-layers`, the sanitizer binary's fixed point
+  (about 75 s and 1.8 GB: no GC) and Python modules, `vm-tsan`,
+  `vm-tsan-run`, and GC stress (it links the release `stage2`, since it
+  collects every 64 allocations). It builds only when the merge commit
+  changes `vm/`, the Makefile, `mk/*.mk`, `.gitmodules`, `.clang-tidy` or
+  `ci.yml` (keep that list in step with new C folders); a manual run always
+  runs it.
   `vm-trace-off` runs only on a manual run or a change to `vm/trace.*` or
   `vm/tests/trace_test.c`.
 - Both jobs set `AGENTICA_SWEEP=sampled` (seed from `GITHUB_SHA`; a failure
@@ -261,7 +263,8 @@ Skip rules, checked by the report:
 ## Other workflows
 
 - `fuzz.yml` (by hand): `make vm-libfuzz-run` for an hour (the `seconds`
-  input) on every core, random seed; uploads `build/vm/libfuzz/crashes/`.
+  input) on every core, random seed; a crash, leak or timeout fails it;
+  uploads `build/vm/libfuzz/crashes/` unless cancelled.
 - `sweep.yml`: Monday 03:00 UTC and by hand, `make sweep-full` on the
   release VM. Nothing else runs on a schedule.
 - `site-examples.yml` and `pages.yml`: `references/site.md`.

@@ -67,6 +67,7 @@ export def cache_root(env: Env.Env, file: String) -> Result[String]
     message = "there is no package cache folder: HOME is not set"
     return error(Failure.fail_file(file, "PKG-FETCH", message, Failure.hint("set HOME or XDG_CACHE_HOME")))
   end
+
   return ok(cache)
 end
 
@@ -76,6 +77,7 @@ export def cache_for(env: Env.Env, file: String, packages: List[Lock.Locked]) ->
   if packages.all? do |locked| locked.member end
     return ok("")
   end
+
   return cache_root(env, file)
 end
 
@@ -104,12 +106,14 @@ export def resolve(
     message = "git fetches a commit by its whole id, and #{source.ref} is only a part of it"
     return error(fail(place, "PKG-FETCH", "ref", message, "write the 40 (or 64) digits of the commit"))
   end
+
   # A ref is the commit already; a tag's commit is learnt from the fetch.
   pin = Lock.Locked(name: name, source: source, commit: source.ref, hash: "", member: false)
   made = make_temp(cache)
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
   end
+
   temp = made.unwrap!
   scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
   resolved = resolve_into(workspace, cache, place, scratch, pin)
@@ -124,9 +128,11 @@ export def fail(place: Place, code: String, key: String, message: String, help: 
   if key == ""
     path = place.entry
   end
+
   if help == ""
     return Failure.fail_key(place.file, path, code, message, Diag.Help.NoHelp)
   end
+
   return Failure.fail_key(place.file, path, code, message, Failure.hint(help))
 end
 
@@ -135,15 +141,18 @@ def inspect(workspace: Workspace.Workspace, place: Place, target: String, locked
   if !workspace.directory_exists.call(target) and !workspace.file_exists.call(target)
     return ok(Seen.Absent)
   end
+
   real = workspace.real_path.call(target)
   if !real.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot read #{target}", real.message))
   end
+
   case PackageHash.hash_folder(workspace, real.unwrap!)
     PackageHash.Hashed.Hash(found) ->
       if found == locked.hash
         return ok(Seen.Matches)
       end
+
       message = "the files of #{locked.name} in the cache are not the ones the lock names"
       return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "remove #{target} and run install again"))
     PackageHash.Hashed.Link(path) ->
@@ -165,6 +174,7 @@ def fetch(
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make a folder in the package cache #{cache}", made.message))
   end
+
   temp = made.unwrap!
   scratch = Scratch(temp: temp, repo: Paths.join(temp, "repo.git"), files: Paths.join(temp, "files"))
   filled = fetch_into(workspace, place, scratch, target, locked)
@@ -187,6 +197,7 @@ def remove_temp(temp: String) -> Void
       Process.close(child)
     end
   end
+
   Path.remove(temp, FS_TIMEOUT_MS)
 end
 
@@ -201,8 +212,10 @@ def make_temp(cache: String) -> Result[String]
     if made.ok?
       return ok(name)
     end
+
     failure = made.message
   end
+
   return error(failure)
 end
 
@@ -230,6 +243,7 @@ def copy_tree(place: Place, scratch: Scratch, commit: String, subdir: String) ->
     tree = "#{commit}:#{subdir}"
     try check_subdir(place, scratch, tree)
   end
+
   listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", tree]))
   case Tree.plan(listing)
     Tree.Plan.Refused(fault) -> return error(fail(place, fault.code, fault.key, fault.message, fault.help))
@@ -245,6 +259,7 @@ def check_subdir(place: Place, scratch: Scratch, tree: String) -> Result[Void]
   if String.from_bytes(kind).unwrap_or("").trim != "tree"
     return error(fail(place, "PKG-FETCH", "subdir", "#{tree} is not a folder", ""))
   end
+
   return ok()
 end
 
@@ -261,6 +276,7 @@ def resolve_into(
   if pin.source.ref != "" and commit != pin.source.ref
     return error(fail(place, "PKG-FETCH", "ref", "git fetched #{commit}, not #{pin.source.ref}", ""))
   end
+
   try copy_tree(place, scratch, commit, pin.source.subdir)
   hash = try hash_of(workspace, place, pin, scratch.files)
   locked = Lock.Locked(name: pin.name, source: pin.source, commit: commit, hash: hash, member: false)
@@ -275,6 +291,7 @@ def init_repository(place: Place, scratch: Scratch, locked: Lock.Locked) -> Resu
   if locked.commit.length == 64
     arguments = arguments.push("--object-format=sha256")
   end
+
   try git(place, scratch, arguments.push(scratch.repo))
   return ok()
 end
@@ -286,6 +303,7 @@ def fetch_pin(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Voi
   if locked.source.tag == ""
     wanted = locked.commit
   end
+
   arguments = [
     "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "--", locked.source.git,
     "+#{wanted}:#{PINNED}",
@@ -300,10 +318,12 @@ def check_commit(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[
   if commit == locked.commit
     return ok()
   end
+
   if locked.source.tag != ""
     message = "the tag #{locked.source.tag} of #{locked.name} is now #{commit}, and the lock has #{locked.commit}"
     return error(fail(place, "PKG-TAG-MOVED", "tag", message, "the lock is not changed; update it on purpose"))
   end
+
   return error(fail(place, "PKG-FETCH", "commit", "git fetched #{commit}, not #{locked.commit}", ""))
 end
 
@@ -319,10 +339,12 @@ def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make #{scratch.files}", made.message))
   end
+
   for blob in blobs
     data = try git(place, scratch, inside(scratch, ["cat-file", "blob", blob.oid]))
     try write_file(place, Paths.join(scratch.files, blob.path), data)
   end
+
   return ok()
 end
 
@@ -333,20 +355,24 @@ def write_file(place: Place, path: String, data: List[Int]) -> Result[Void]
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make #{folder}", made.message))
   end
+
   opened = File.open(path, "write", FS_TIMEOUT_MS)
   if !opened.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", opened.message))
   end
+
   handle = opened.unwrap!
   wrote = File.write_bytes(handle, data, FS_TIMEOUT_MS)
   if !wrote.ok?
     File.close(handle, FS_TIMEOUT_MS)
     return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", wrote.message))
   end
+
   closed = File.close(handle, FS_TIMEOUT_MS)
   if !closed.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", closed.message))
   end
+
   return ok()
 end
 
@@ -355,6 +381,7 @@ def check_hash(workspace: Workspace.Workspace, place: Place, files: String, lock
   if found == locked.hash
     return ok()
   end
+
   message = "the files fetched for #{locked.name} are not the ones the lock names (#{found})"
   return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "the lock is not changed; update it on purpose"))
 end
@@ -382,10 +409,12 @@ def move_into_place(
   if !made.ok?
     return error(fail(place, "PKG-FETCH", "", "cannot make the folder of #{target}", made.message))
   end
+
   moved = Path.rename(files, target, FS_TIMEOUT_MS)
   if moved.ok?
     return ok(Filled.Fetched)
   end
+
   seen = try inspect(workspace, place, target, locked)
   case seen
     Seen.Matches -> return ok(Filled.Present)
@@ -416,6 +445,7 @@ def git_at(place: Place, scratch: Scratch, key: String, arguments: List[String])
       if status != 0
         return error(fail(place, "PKG-FETCH", key, "git exited with status #{status}", brief(errors)))
       end
+
       return ok(output)
   end
 end
@@ -426,6 +456,7 @@ def git_text(place: Place, scratch: Scratch, arguments: List[String]) -> Result[
   if !text.ok?
     return error(fail(place, "PKG-FETCH", "git", "git gave text that is not UTF-8", ""))
   end
+
   return ok(text.unwrap!)
 end
 
@@ -434,5 +465,6 @@ def brief(errors: String) -> String
   if text.length > HELP_LIMIT
     return text.slice(0, HELP_LIMIT)
   end
+
   return text
 end

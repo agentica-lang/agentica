@@ -22,9 +22,11 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
     as_json = true
     rest = rest.take(rest.size - 1)
   end
+
   if rest.size != 1 or rest[0] == ""
     return Reply.Answer.Printed(Reply.failed(2, "usage: agentica doc PATH [--json]\n"))
   end
+
   path = rest[0]
   case QueryFiles.read(settings, path, false)
     SourceFile.Read.Unreadable(_) -> return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read #{path}\n"))
@@ -41,6 +43,7 @@ def documented(path: String, text: String, as_json: Bool) -> Reply.Answer
       if as_json
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(DocJson.json(path, module))}\n"))
       end
+
       return Reply.Answer.Printed(Reply.printed(DocText.text(path, module)))
   end
 end

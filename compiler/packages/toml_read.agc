@@ -34,6 +34,7 @@ export def parse(reading: Reading, text: String) -> Result[Map[String, Toml.Valu
   if !parsed.ok?
     return error(located(reading, position_of(text, parsed.message), parsed.message, Diag.Help.NoHelp))
   end
+
   return table(reading, parsed.unwrap!, "")
 end
 
@@ -52,6 +53,7 @@ export def child(path: String, key: String) -> String
   if path == ""
     return key
   end
+
   return "#{path}.#{key}"
 end
 
@@ -114,6 +116,7 @@ export def known_keys(
       return error(fail_help(reading, child(path, key), "unknown key", known_here))
     end
   end
+
   return ok()
 end
 
@@ -126,11 +129,13 @@ def position_of(source: String, message: String) -> Source.Position
   if words.size != 2 or !words[0].starts_with?("line ") or !words[1].starts_with?("column ")
     return start
   end
+
   line = words[0].slice(5, words[0].length - 5).to_i
   column = words[1].slice(7, words[1].length - 7).to_i
   if !line.ok? or !column.ok? or line.unwrap! < 1 or column.unwrap! < 1
     return start
   end
+
   # The offset counts the characters before the line (each with its line feed), then the column.
   before = 0
   lines = source.split("\n")
@@ -139,6 +144,7 @@ def position_of(source: String, message: String) -> Source.Position
       before += lines[index].length + 1
     end
   end
+
   return Source.Position(offset: before + column.unwrap! - 1, line: line.unwrap!, column: column.unwrap!)
 end
 
@@ -146,6 +152,7 @@ def fail_with(reading: Reading, key_path: String, message: String, help: Diag.He
   if key_path == ""
     return Failure.fail_file(reading.file, reading.code, message, help)
   end
+
   return Failure.fail_key(reading.file, key_path, reading.code, message, help)
 end
 

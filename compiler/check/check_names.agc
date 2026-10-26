@@ -25,6 +25,7 @@ export def receiver_kind(type: T.Type) -> String
   )
     return word
   end
+
   return ""
 end
 
@@ -35,6 +36,7 @@ export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
   if alias.ok?
     return alias.unwrap!
   end
+
   return catalog_method(cx, kind, name)
 end
 
@@ -50,10 +52,12 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
       names = names.push(key.slice(prefix.length, key.length - prefix.length))
     end
   end
+
   module = cx.help.modules.get(kind)
   if module.ok?
     names = names.concat(module_methods(cx, kind, "#{module.unwrap!}."))
   end
+
   unique: List[String] = []
   for name in names
     if !seen.include?(name) and ruby_method?(cx, kind, name) and !RubyForm.synonym?("#{kind}.#{name}")
@@ -61,6 +65,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
       unique = unique.push(name)
     end
   end
+
   return unique
 end
 
@@ -70,6 +75,7 @@ export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
   if RubyForm.method_key(name).starts_with?("#{kind}.")
     return RubyForm.method_name(name)
   end
+
   return ""
 end
 
@@ -79,6 +85,7 @@ export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> Stri
   if direct.ok?
     return direct.unwrap!
   end
+
   if kind == "Result" and string_method?(cx, name)
     return result_help(cx, name)
   elsif name == "nil?"
@@ -88,10 +95,12 @@ export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> Stri
     if kind == "Range"
       receiver = "(a..b)"
     end
+
     return "#{kind} methods are eager; #{name} is a step of Lazy: call .lazy first: #{receiver}.lazy.#{name}(...)"
   elsif kind == "Lazy" and catalog_method(cx, "List", name) != ""
     return "a Lazy runs only in a terminal; collect it first with try lz.to_a (or lz.first(n)), then call .#{name}"
   end
+
   return renamed_help(cx, kind, name)
 end
 
@@ -101,6 +110,7 @@ def lazy_step?(name: String) -> Bool
   if !entry.ok?
     return false
   end
+
   row = entry.unwrap!
   return T.is?(row.result, "Lazy") and row.parameters.size > 0 and T.is?(row.parameters[0].type, "Lazy")
 end
@@ -111,10 +121,12 @@ def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   if !module.ok?
     return ""
   end
+
   entry = ENTRIES.get("#{module.unwrap!}.#{name}")
   if entry.ok? and entry.unwrap!.parameters.size > 0 and T.tag(entry.unwrap!.parameters[0].type) == kind
     return entry.unwrap!.name
   end
+
   return ""
 end
 
@@ -129,6 +141,7 @@ def module_methods(cx: State.Cx, kind: String, prefix: String) -> List[String]
       end
     end
   end
+
   return names
 end
 
@@ -144,6 +157,7 @@ def result_help(cx: State.Cx, name: String) -> String
   if string_help != ""
     return "#{text}, then: #{string_help}"
   end
+
   return text
 end
 
@@ -160,6 +174,7 @@ def renamed_help(cx: State.Cx, kind: String, name: String) -> String
   if !candidates.ok?
     return ""
   end
+
   found: List[String] = []
   for candidate in candidates.unwrap!
     resolved = resolve_method(cx, kind, candidate)
@@ -168,11 +183,14 @@ def renamed_help(cx: State.Cx, kind: String, name: String) -> String
       if written == "" or RubyForm.ruby_name?(kind, candidate, resolved)
         written = candidate
       end
+
       found = found.push(written)
     end
   end
+
   if found.size == 0
     return ""
   end
+
   return "use #{found.uniq.map do |written: String| ".#{written}" end.join(" or ")}"
 end

@@ -70,6 +70,7 @@ export def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
   if result.ok?
     return Lowered.Done(result.unwrap!)
   end
+
   return Lowered.Failed(Failure.unpack(result.message))
 end
 
@@ -90,6 +91,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       end
     end
   end
+
   function_decls = functions.map do |entry: Located| entry.function end
   constant_decls = constants.map do |entry: LocatedConst| entry.constant end
   watched = Set.new(BUILTIN_STRUCTS.concat(ENUMS.keys))
@@ -104,12 +106,14 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   for file in files
     index_of = index_of.put(file, index_of.size)
   end
+
   by_name: Map[String, Int] = {}
   at = 0
   for entry in functions
     by_name = by_name.put(entry.function.name, at)
     at += 1
   end
+
   main_index = by_name["main"]
   cx = Lowering.Cx(
     types: checked.types,
@@ -133,11 +137,13 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   if start
     table_size += 1
   end
+
   table = Table(functions: [], blocks: {}, block_count: table_size)
   struct_decls: Map[String, Ast.StructDecl] = {}
   for entry in structs
     struct_decls = struct_decls.put(entry.decl.name, entry.decl)
   end
+
   for entry in functions
     params = entry.function.params.map do |param: Ast.Param| param.name end
     function = entry.function
@@ -151,26 +157,31 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
         )
     end
   end
+
   for entry in plan.kept
     file = files_of[entry.name]
     body = [Ast.Stmt.Return(Ast.Return(id: entry.id, value: Ast.Optional.Present(entry.value), span: entry.span))]
     table = try add_function(cx, table, file, index_of[file], entry.name, [], body, entry.span)
   end
+
   built = table.functions
   blocks = table.blocks
   block_count = table.block_count
   if start
     built = built.push(start_function(linked.root.span, plan, files_of, index_of, functions.size, main_index))
   end
+
   index = table_size
   while index < block_count
     built = built.push(blocks[index])
     index += 1
   end
+
   entry = main_index
   if start
     entry = functions.size + plan.kept.size
   end
+
   sources = modules.map do |module: Linker.LinkedModule| source_of(module) end
   kept_sources = used_sources(sources, files)
   return ok(Ir.Program(
@@ -189,6 +200,7 @@ def source_of(module: Linker.LinkedModule) -> Ir.SourceFile
   if module.file.starts_with?(PRELUDE_PREFIX)
     return Ir.SourceFile(file: module.file, name: module.name, text: "")
   end
+
   return Ir.SourceFile(file: module.file, name: module.name, text: module.text)
 end
 
@@ -207,6 +219,7 @@ def pin_prelude_spans(functions: List[Ir.Function], sources: List[Ir.SourceFile]
       found = found.push(function)
     end
   end
+
   return found
 end
 
@@ -224,6 +237,7 @@ def fills_of(functions: List[Located], index_of: Map[String, Int]) -> Map[String
       fills = fills.put(entry.function.name, fill)
     end
   end
+
   return fills
 end
 
@@ -238,11 +252,13 @@ def field_fills_of(structs: List[LocatedStruct], index_of: Map[String, Int]) -> 
         Ast.Optional.Absent -> values = values
       end
     end
+
     if values.size > 0
       fill = Lowering.FieldFill(values: values, file: entry.file, index: index_of[entry.file])
       fills = fills.put(entry.decl.name, fill)
     end
   end
+
   return fills
 end
 
@@ -276,6 +292,7 @@ def scan_all(
       type_value = true
     end
   end
+
   for decl in constants
     scan = Scans.scan_value(decl.value, watched)
     constant_scans = constant_scans.push(scan)
@@ -285,9 +302,11 @@ def scan_all(
       Ast.Optional.Absent -> written = written
     end
   end
+
   for decl in decls
     written = written.concat(declared_names(decl, watched))
   end
+
   return Scanned(
     function_scans: function_scans,
     constant_scans: constant_scans,
@@ -304,14 +323,17 @@ def declared_names(decl: Ast.Decl, watched: Set[String]) -> List[String]
       for field in node.fields
         found = found.concat(Scans.written_in(field.type, watched))
       end
+
     Ast.Decl.Enum(node) ->
       for variant in node.variants
         for ref in variant.payload_types
           found = found.concat(Scans.written_in(ref, watched))
         end
       end
+
     _ -> found = found
   end
+
   return found
 end
 
@@ -321,6 +343,7 @@ def mentioned_in(types: List[Types.Type], watched: Set[String]) -> List[String]
   for type in types
     found = found.concat(names_in(type, watched))
   end
+
   return found
 end
 
@@ -345,6 +368,7 @@ def names_in_all(types: List[Types.Type], watched: Set[String]) -> List[String]
   for type in types
     found = found.concat(names_in(type, watched))
   end
+
   return found
 end
 
@@ -352,6 +376,7 @@ def only(name: String, watched: Set[String]) -> List[String]
   if watched.include?(name)
     return [name]
   end
+
   return []
 end
 
@@ -361,9 +386,11 @@ def reads_of(plan: Const.Plan) -> Map[String, Lowering.Read]
   for name in plan.literals.keys
     reads = reads.put(name, Lowering.Read.Literal(plan.literals[name]))
   end
+
   for name in plan.slots.keys
     reads = reads.put(name, Lowering.Read.Slot(plan.slots[name]))
   end
+
   return reads
 end
 
@@ -382,6 +409,7 @@ def source_order(
       files = files.push(entry.file)
     end
   end
+
   for decl in kept
     file = files_of[decl.name]
     if !seen.include?(file)
@@ -389,6 +417,7 @@ def source_order(
       files = files.push(file)
     end
   end
+
   for entry in structs
     defaulted = entry.decl.fields.any? do |field: Ast.FieldDecl| Defaults.field_default?(field) end
     if !seen.include?(entry.file) and defaulted
@@ -396,6 +425,7 @@ def source_order(
       files = files.push(entry.file)
     end
   end
+
   return files
 end
 
@@ -405,6 +435,7 @@ def constant_files(constants: List[LocatedConst]) -> Map[String, String]
   for entry in constants
     files = files.put(entry.constant.name, entry.file)
   end
+
   return files
 end
 
@@ -414,6 +445,7 @@ def used_sources(sources: List[Ir.SourceFile], files: List[String]) -> List[Ir.S
   for source in sources
     by_file = by_file.put(source.file, source)
   end
+
   return files.map do |file: String| by_file[file] end
 end
 
@@ -432,6 +464,7 @@ def start_function(
     body = body.push(Ir.instr("global-set", [0, plan.slots[decl.name]], file, [decl.span]))
     offset += 1
   end
+
   body = body.push(Ir.instr("tail-call", [0, main_index], 0, [span]))
   body = body.push(Ir.Instr(op: "const", args: [0], imm: Ir.Imm.Void, name: "", file: 0, spans: [span]))
   body = body.push(Ir.instr("return", [0], 0, [span]))

@@ -3,6 +3,7 @@
 ## all run it, so what one of them accepts, the others accept.
 
 import Checker from "../check/checker"
+import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
@@ -77,8 +78,9 @@ export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings
   if !walked.ok?
     return Outcome.Rejected(link_problem(Failure.unpack_failure(walked.message)))
   end
+
   case Cache.find(cache, walked.unwrap!)
-    Cache.Found.Hit(root) -> return checked_outcome(root.linked, root.checking)
+    Cache.Found.Hit(root) -> return stored_outcome(root)
     Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
   end
 end
@@ -130,6 +132,7 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
   if !walked.ok?
     return cache
   end
+
   loaded = walked.unwrap!
   reaching = Cache.reaching(cache, loaded)
   if Cache.crowded?(reaching)
@@ -137,9 +140,11 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
     if !again.ok?
       return cache
     end
+
     loaded = again.unwrap!
     reaching = Cache.restart(cache, loaded)
   end
+
   case Cache.find(cache, loaded)
     Cache.Found.Hit(root) -> return Cache.remember(reaching, root, loaded, false, 0)
     Cache.Found.Miss -> return solve(cache, reaching, loaded, settings)
@@ -149,6 +154,12 @@ end
 ## Checks `linked`, a program that `Linker.link_programs` made from several files, as `query_file` does.
 export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome
   return check(linked, settings, false)
+end
+
+## The first style problem of a linked program: the files whose project asks for a rule that they break. Absent when
+## none does. The style rules come after the type check, so a program that does not check reports that first.
+export def style_problem(linked: Linker.Linked) -> Ast.Optional[Problems.Problem]
+  return Style.blank_line_after_end(linked)
 end
 
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
@@ -189,7 +200,8 @@ def solve(cache: Cache.Cache, reaching: Cache.Cache, loaded: Modules.Loaded, set
     Linker.Linking.Done(program) ->
       reusing = Cache.reusing(cache, loaded)
       rechecked = check_reusing(reusing, program, settings)
-      root = Cache.solved(loaded, program, rechecked.checking, Cache.held(cache, loaded))
+      style = style_after(rechecked.checking, program)
+      root = Cache.solved(loaded, program, rechecked.checking, style, Cache.held(cache, loaded))
       return Cache.remember(reaching, root, loaded, true, rechecked.taken)
   end
 end
@@ -214,17 +226,19 @@ def skipped(
     end
   end
 
-  case Checker.check_query_taking(program, settings, Set.new(clean), constants)
+  checking = Checker.check_query_taking(program, settings, Set.new(clean), constants)
+  case checking
     Checker.Checking.Failed(problem) ->
       if stand_in?(loaded, problem.file)
         return query_cached(cache, path, settings)
       end
 
       return Outcome.Rejected(problem)
-    Checker.Checking.Done(checked) ->
-      enter_checked(loaded, checked, settings)
-      return Outcome.Done(Checked(linked: program, checked: checked))
+    Checker.Checking.Done(checked) -> enter_checked(loaded, checked, settings)
   end
+
+  # A module read from its stub keeps its text, so the style rules see every file.
+  return checked_outcome(program, checking)
 end
 
 # Whether some stub of the walk is not vouched for: its module is parsed from a stub but its bodies are not known to be
@@ -297,12 +311,36 @@ def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) ->
   if main_required
     return checked_outcome(linked, Checker.check(linked, settings))
   end
+
   return checked_outcome(linked, Checker.check_query(linked, settings))
 end
 
+# A program that checked still has to follow the style rules of its project (check_style.agc).
 def checked_outcome(linked: Linker.Linked, checking: Checker.Checking) -> Outcome
+  return finished(linked, checking, style_after(checking, linked))
+end
+
+# The outcome for a root that the cache holds: its style problem was found when it was made, from the same texts and
+# the same projects (Cache.find compares both), so the modules are not lexed again.
+def stored_outcome(root: Cache.Root) -> Outcome
+  return finished(root.linked, root.checking, root.style)
+end
+
+# The style problem of `linked`, looked for only when it checked: a type error is reported first.
+def style_after(checking: Checker.Checking, linked: Linker.Linked) -> Ast.Optional[Problems.Problem]
+  case checking
+    Checker.Checking.Failed(_) -> return Ast.Optional.Absent
+    Checker.Checking.Done(_) -> return style_problem(linked)
+  end
+end
+
+def finished(linked: Linker.Linked, checking: Checker.Checking, style: Ast.Optional[Problems.Problem]) -> Outcome
   case checking
     Checker.Checking.Failed(problem) -> return Outcome.Rejected(problem)
-    Checker.Checking.Done(checked) -> return Outcome.Done(Checked(linked: linked, checked: checked))
+    Checker.Checking.Done(checked) ->
+      case style
+        Ast.Optional.Present(problem) -> return Outcome.Rejected(problem)
+        Ast.Optional.Absent -> return Outcome.Done(Checked(linked: linked, checked: checked))
+      end
   end
 end

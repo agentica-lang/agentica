@@ -176,6 +176,13 @@ void agc_task_park_within(agc_vm *vm, int64_t timeout_ms) {
   agc_task_park(vm, true);
 }
 
+/* A run of hand-made bytecode (rt->no_files: the fuzz driver) has no wall clock: Task.sleep only yields there, and a
+   timeout lasts 0 ms, so the task still parks, the others run until the next turn boundary, and then it times out.
+   A loop spends at least one step per wait (every backward jump lands on a STEP), so --max-steps bounds a mutant that
+   loops on timed waits, which a real timeout (say an hour per wait) would not. A lock on a handle keeps its timeout:
+   such a run opens no file, process or socket. */
+int64_t agc_timeout_length(const agc_vm *vm, int64_t ms) { return vm->rt->no_files ? 0 : ms; }
+
 /* Starts the pending wait under rt->sync, and returns the clock it read, or 0. */
 static uint64_t settle(agc_vm *vm) {
   uint64_t now = 0;

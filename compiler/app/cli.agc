@@ -89,6 +89,7 @@ def dispatch(session: Session) -> Int
   if words.size > 0
     first = words[0]
   end
+
   if first == "test"
     return test(session, words.drop(1))
   elsif first == "help"
@@ -110,24 +111,30 @@ def dispatch(session: Session) -> Int
   elsif first == "run"
     return emit(Reply.failed(2, Texts.run_first_text()))
   end
+
   rest = words
   if first == "check" or first == "compile"
     rest = words.drop(1)
   end
+
   if first == "check" and rest.size > 0 and rest[0] == "--stdin"
     return check_stdin(session, rest.drop(1))
   end
+
   usable = rest.size >= 1
   if first == "check"
     # `check FILE --stdin` would check the disk while the caller means the buffer.
     usable = usable and !rest.drop(1).any? do |word: String| word == "--stdin" end
   end
+
   if first == "compile"
     usable = rest.size == 3 and rest[1] == "-o" and !session.options.dump and !session.options.dump_ir
   end
+
   if !usable
     return emit(Reply.failed(2, Texts.usage_text()))
   end
+
   return program(session, first, rest)
 end
 
@@ -141,6 +148,7 @@ def install(session: Session, words: List[String]) -> Int
   if words.size != 0
     return emit(Reply.failed(2, Texts.usage_text()))
   end
+
   return answered(session, Install.run(session.settings, session.options.style), "")
 end
 
@@ -155,9 +163,11 @@ def answered(session: Session, answer: Reply.Answer, source: String) -> Int
       if problem.code.starts_with?("QUERY-")
         status = 2
       end
+
       if source == ""
         return reject(session, problem, problem.file, status)
       end
+
       return reject(session, problem, source, status)
   end
 end
@@ -169,6 +179,7 @@ def query(session: Session, verb: String, words: List[String]) -> Int
   if verb == "type-at"
     usage = CliQuery.type_at_usage()
   end
+
   case QueryOptions.parse(words, session.options.style, usage, true)
     QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
@@ -179,9 +190,11 @@ def query(session: Session, verb: String, words: List[String]) -> Int
           if verb != "outline"
             return position(styled, file, asked, usage)
           end
+
           if asked.stdin == ""
             return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings), file)
           end
+
           return with_buffer(styled, file) do |buffered: Session|
             answered(buffered, CliQuery.outline(file, asked.style, true, buffered.settings), file)
           end
@@ -199,6 +212,7 @@ def symbol(session: Session, words: List[String]) -> Int
       if asked.stdin == ""
         return answered(styled, CliQuery.symbol(asked, styled.settings), "")
       end
+
       return with_buffer(styled, asked.stdin) do |buffered: Session|
         answered(buffered, CliQuery.symbol(asked, buffered.settings), asked.stdin)
       end
@@ -220,13 +234,16 @@ def refs(session: Session, words: List[String]) -> Int
             found = CliQuery.refs_at(position, paths, asked.style, asked.partial, styled.settings)
             return answered(styled, found, position.file)
           end
+
           return with_buffer(styled, position.file) do |read: Session|
             answered(read, CliQuery.refs_at(position, paths, asked.style, asked.partial, read.settings), position.file)
           end
+
         CliQuery.RefsAsk.Named(name, paths) ->
           if asked.stdin == ""
             return answered(styled, CliQuery.refs_named(name, paths, "", asked.style, styled.settings), "")
           end
+
           return with_buffer(styled, asked.stdin) do |read: Session|
             answered(read, CliQuery.refs_named(name, paths, asked.stdin, asked.style, read.settings), asked.stdin)
           end
@@ -243,6 +260,7 @@ def position(session: Session, word: String, options: QueryOptions.Query, usage:
       if options.stdin == ""
         return answered(session, type_at(session, asked, options.partial), asked.file)
       end
+
       return with_buffer(session, asked.file) do |read: Session|
         answered(read, type_at(read, asked, options.partial), asked.file)
       end
@@ -262,6 +280,7 @@ def check_stdin(session: Session, files: List[String]) -> Int
   if files.size != 1 or !QueryOptions.file_name?(files[0])
     return emit(Reply.failed(2, Texts.usage_text()))
   end
+
   return with_buffer(session, files[0]) do |buffered: Session| program(buffered, "check", files) end
 end
 
@@ -291,6 +310,7 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
     settings = CheckCache.attach(session.settings, source, !session.options.no_cache)
     return verdict(session, source, Core.check(Cache.empty(), settings, source))
   end
+
   plan = cache_plan(session, verb, source)
   case BytecodeCache.lookup(plan, session.settings)
     BytecodeCache.Lookup.Hit(bytes) -> return start(session, rest, bytes)
@@ -325,6 +345,7 @@ def verdict(session: Session, source: String, found: Core.Verdict) -> Int
       if session.options.style == "json"
         return emit(Reply.printed("{\"ok\":true}\n"))
       end
+
       return emit(Reply.printed("check ok\n"))
   end
 end
@@ -351,12 +372,14 @@ def checked(
   elsif session.options.dump_ir
     return dump_ir(session, source, front)
   end
+
   case Pipeline.build_cached(front, session.settings, plan)
     Pipeline.Compiled.Rejected(problem) -> return reject(session, problem, source, 1)
     Pipeline.Compiled.Bytes(bytes) ->
       if verb == "compile"
         return save(rest[2], bytes)
       end
+
       return start(session, rest, bytes)
   end
 end
@@ -384,28 +407,35 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
   if options.max_steps != ""
     flags = flags.concat(["--max-steps", options.max_steps])
   end
+
   if options.seed != ""
     flags = flags.concat(["--seed", options.seed])
   end
+
   if options.flush_timeout != ""
     flags = flags.concat(["--flush-timeout", options.flush_timeout])
   end
+
   if options.schedulers != ""
     flags = flags.concat(["--schedulers", options.schedulers])
   end
+
   if options.jit != ""
     flags = flags.concat(["--jit", options.jit])
   end
+
   flags = flags.concat(options.deny)
   root = SourceRoot.option(source)
   if root != ""
     flags = flags.concat(["--source-root", root])
   end
+
   if options.style == "ai"
     flags = flags.push("--ai")
   elsif options.style == "json"
     flags = flags.push("--json")
   end
+
   return flags
 end
 
@@ -414,6 +444,7 @@ def save(output: String, bytes: List[Int]) -> Int
   if !SaveFile.bytes(output, bytes, SAVE_TIMEOUT).ok?
     return emit(Reply.failed(2, "agentica: cannot write #{output}\n"))
   end
+
   return 0
 end
 
@@ -431,6 +462,7 @@ def reject(session: Session, problem: Problems.Problem, source: String, status: 
     if Problems.at_source?(problem) and !QueryOptions.arguments?(problem)
       text = source_text(session, problem.file, root)
     end
+
     if style == "ai" and QueryOptions.arguments?(problem)
       IO.warn(Ai.ai(QueryOptions.unplaced(shown), text))
     elsif style == "ai"
@@ -441,6 +473,7 @@ def reject(session: Session, problem: Problems.Problem, source: String, status: 
       IO.warn(Plain.format(shown, text))
     end
   end
+
   return status
 end
 
@@ -454,6 +487,7 @@ def source_text(session: Session, file: String, root: Bool) -> String
   elsif !root and file.starts_with?("std/")
     return text_of(Resolve.read_source(settings, file))
   end
+
   return text_of(SourceReader.read_shown(file))
 end
 
@@ -475,14 +509,17 @@ def test(session: Session, words: List[String]) -> Int
   if binary == ""
     return emit(Reply.failed(2, Texts.test_without_binary_text()))
   end
+
   # The test files run in VMs that the driver starts, which do not get the flags, so they are refused instead of being
   # dropped without a word. Those VMs inherit AGENTICA_SCHEDULERS and AGENTICA_JIT, which set them for all of them.
   if options.schedulers != ""
     return emit(Reply.failed(2, "agentica: test does not take --schedulers; set AGENTICA_SCHEDULERS instead\n"))
   end
+
   if options.jit != ""
     return emit(Reply.failed(2, "agentica: test does not take --jit; set AGENTICA_JIT instead\n"))
   end
+
   driver: List[String] = [
     "--vm", binary, "--version", session.settings.version, "--style", options.style,
     "--test-timeout-ms", "30000",
@@ -490,15 +527,18 @@ def test(session: Session, words: List[String]) -> Int
   if options.seed != ""
     driver = driver.concat(["--seed", options.seed])
   end
+
   driver = driver.concat(["--agentica", binary, "--"])
   for steps in options.steps
     driver = driver.concat(["--steps", steps])
   end
+
   # The --deny-* flags and --sandbox in front of `test` mean the same as after it, where the driver reads them.
   driver = driver.concat(options.deny)
   if options.no_cache
     driver = driver.push("--no-cache")
   end
+
   case Opts.parse(driver.concat(words))
     Opts.Parsed.Broken(message) ->
       return emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))
@@ -516,8 +556,10 @@ def emit(reply: Reply.Reply) -> Int
   if reply.out != ""
     print(reply.out)
   end
+
   if reply.err != ""
     IO.warn(reply.err.slice(0, reply.err.length - 1))
   end
+
   return reply.code
 end

@@ -1041,6 +1041,30 @@ static void prelude_tests(void) {
   assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
 }
 
+/* agc_fuzz_one runs without a wall clock (no_files), so a loop of hour-long recvs on a channel nobody sends to ends
+   at its 10,000 steps at once instead of waiting an hour per recv (agc_timeout_length). */
+static void test_fuzz_timed_waits(void) {
+  static const agc_instr recv_loop[] = {
+    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_STEP, 1, 0, 0},
+    {AGC_OP_MOVE, 1, 0, 0}, {AGC_OP_CONST, 2, 2, 0}, {AGC_OP_CALL_BUILTIN, 1, 1, 0}, {AGC_OP_JUMP, 0, 3, 0}};
+  static const uint32_t recv_spans[] = {0, 0, 0, 0, 0, 0, 0, 0};
+  spec s = base();
+  s.builtin = "Channel.new";
+  s.builtin_arity = 1;
+  s.builtin2 = "Channel.recv";
+  s.builtin2_arity = 2;
+  s.second_int = 3600000;
+  s.code = recv_loop;
+  s.code_spans = recv_spans;
+  s.count = 8;
+  s.registers = 3;
+  buffer b = build(s);
+  uint64_t start = agc_clock_ms();
+  assert(agc_fuzz_one(b.data, b.len) == 1);
+  assert(agc_clock_ms() - start < 5000);
+  free(b.data);
+}
+
 int main(void) {
   agc_init();
   buffer b = build(base());
@@ -2043,6 +2067,7 @@ int main(void) {
   line_index_tests();
   table_count_tests();
   collector_tests();
+  test_fuzz_timed_waits();
 
   puts("loader tests passed");
   return 0;

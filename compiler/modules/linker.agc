@@ -19,6 +19,8 @@ import Rewrite from "rewrite"
 ## from here. named maps each local name of an import list (`create` of `import {make as create} from "models"`) to
 ## the linked name of what it stands for (`@2::make`), so a query can tell which declaration an imported name selects.
 ## watched are the files of its package that its extern functions may open (the bytecode cache watches them).
+## blank_line_after_end says that the manifest of its project asks for an empty line after every bare `end`
+## (check_style.agc).
 export struct LinkedModule
   key: String
   file: String
@@ -32,6 +34,7 @@ export struct LinkedModule
   named: Map[String, String]
   parsed: Ast.Program
   watched: List[String]
+  blank_line_after_end: Bool
 end
 
 ## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
@@ -98,6 +101,7 @@ export def program(linked: Linked) -> Ast.Program
   for module in linked.modules
     declarations = declarations.concat(module.declarations)
   end
+
   return Ast.Program(
     id: linked.root.id,
     declarations: declarations,
@@ -120,6 +124,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
   if loaded.order.size > 0
     ids = parser_ids(loaded)
   end
+
   pool = Pool(kept: [], held: {}, made: {}, failed: {})
   skipped: List[Left] = []
   kept: List[Modules.Entry] = []
@@ -135,9 +140,11 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
         end
     end
   end
+
   if kept.size == 0
     return Programs(linked: Ast.Optional.Absent, skipped: skipped)
   end
+
   together = Linked(
     root: loaded.modules[kept[0].key].program,
     root_dir: kept[0].root_dir,
@@ -165,6 +172,7 @@ export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linkin
       ),
     )
   end
+
   return Linking.Failed(Failure.unpack_failure(files.message))
 end
 
@@ -180,6 +188,7 @@ def reached(loaded: Modules.Loaded, key: String) -> List[String]
     if seen.has_key?(here)
       next
     end
+
     seen = seen.put(here, true)
     order = order.push(here)
     for imported in loaded.modules[here].imports.reverse
@@ -188,6 +197,7 @@ def reached(loaded: Modules.Loaded, key: String) -> List[String]
       end
     end
   end
+
   return order
 end
 
@@ -214,14 +224,17 @@ def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, 
           failure: Ast.Optional.Present(failure),
         )
       end
+
       made = made.put(file, rewritten.unwrap!)
       fresh = fresh.push(rewritten.unwrap!)
     end
   end
+
   held = pool.held
   for module in fresh
     held = held.put(module.key, true)
   end
+
   return Admission(
     pool: Pool(kept: pool.kept.concat(fresh), held: held, made: made, failed: failed),
     failure: Ast.Optional.Absent,
@@ -238,6 +251,7 @@ def parser_ids(loaded: Modules.Loaded) -> Int
       ids = next
     end
   end
+
   return ids
 end
 
@@ -247,6 +261,7 @@ def id_count(loaded: Modules.Loaded) -> Int
       return parser_ids(loaded) * 2
     end
   end
+
   return parser_ids(loaded)
 end
 
@@ -255,6 +270,7 @@ def receivers_at(loaded: Modules.Loaded) -> Int
   if id_count(loaded) > parser_ids(loaded)
     return parser_ids(loaded)
   end
+
   return -1
 end
 
@@ -265,6 +281,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
     module = try rewrite_module(loaded, settings, ids, key)
     out = out.push(module)
   end
+
   return ok(out)
 end
 
@@ -294,6 +311,7 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
       named: linked_names(module, loaded.modules),
       parsed: module.program,
       watched: module.origin.watched,
+      blank_line_after_end: module.origin.blank_line_after_end,
     ),
   )
 end
@@ -305,6 +323,7 @@ def linked_names(module: Modules.Module, modules: Map[String, Modules.Module]) -
     entry = module.named[local]
     out = out.put(local, modules[entry.target].prefix + entry.name)
   end
+
   return out
 end
 
@@ -316,9 +335,11 @@ def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]
   for target in module.aliases.values
     names = names.concat(structs_of(modules[target].prefix, modules[target].public))
   end
+
   for entry in module.named.values
     names = names.concat(structs_of(modules[entry.target].prefix, modules[entry.target].public))
   end
+
   return Set.new(names).to_a.sort
 end
 
@@ -332,5 +353,6 @@ def link_file_with(path: String, settings: Env.Settings, parses: Modules.Parses)
   if loaded.ok?
     return link_loaded(loaded.unwrap!, settings)
   end
+
   return Linking.Failed(Failure.unpack_failure(loaded.message))
 end

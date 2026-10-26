@@ -10,6 +10,7 @@
 
 import Pipeline from "../app/pipeline"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Compile from "bdd_compile"
 import Discover from "bdd_discover"
@@ -32,6 +33,9 @@ EMBEDDED_STEPS_SOURCE = "std/bdd.agc"
 # Where the tests are when no path is given.
 DEFAULT_PATHS = ["specs/", "test/"]
 
+# The file that is the step program when --steps is not given and a searched folder holds it.
+DEFAULT_STEPS_FILE = "steps.agc"
+
 # The step program, compiled: where its bytecode is (nothing is written when it did not compile; "" when it is the
 # default one that the binary carries), the source the runner names in reports, the folder for the VM's --source-root,
 # and the diagnostic that the runner reports in place of the steps ("" when it compiled).
@@ -50,19 +54,23 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   if options.steps.size > 1
     return Report.usage("one --steps program; import the other files from it", options)
   end
+
   found = File.stat(options.vm, IO_TIMEOUT)
   if !found.ok? or found.unwrap!.kind != "file"
     message = "cannot find agentica at #{options.vm}"
     return Report.infrastructure(message, options.vm, options)
   end
+
   temporary = RunDir.temporary_directory()
   if !temporary.ok?
     return Report.infrastructure(temporary.message, RunDir.temporary_candidates()[0], options)
   end
+
   claimed = RunDir.claim(temporary.unwrap!)
   if !claimed.ok?
     return Report.infrastructure(claimed.message, temporary.unwrap!, options)
   end
+
   run_directory = claimed.unwrap!
   RunDir.sweep(temporary.unwrap!, run_directory)
   ending = inside(run_directory.path, options, settings, temporary.unwrap!)
@@ -81,6 +89,7 @@ def inside(directory: String, options: Opts.Options, settings: Env.Settings, tem
   if embedded?(settings)
     return ended(prepare_and_run(directory, options, settings, Runner.Program.Embedded("runner")), options, temporary)
   end
+
   case compile_runner(directory, settings)
     Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
@@ -91,6 +100,7 @@ def inside(directory: String, options: Opts.Options, settings: Env.Settings, tem
       if !written.ok?
         return Report.infrastructure(written.message, temporary, options)
       end
+
       return ended(prepare_and_run(directory, options, settings, Runner.Program.File(file)), options, temporary)
   end
 end
@@ -100,6 +110,7 @@ def ended(ran: Result[Report.Ending], options: Opts.Options, temporary: String) 
   if !ran.ok?
     return Report.infrastructure(ran.message, temporary, options)
   end
+
   return ran.unwrap!
 end
 
@@ -109,6 +120,7 @@ def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compil
   if !written.ok?
     return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
   end
+
   return Compile.file(source, settings, "cannot read the runner", false)
 end
 
@@ -117,7 +129,6 @@ end
 def prepare_and_run(
   directory: String, options: Opts.Options, settings: Env.Settings, runner: Runner.Program
 ) -> Result[Report.Ending]
-  steps = try compile_steps(directory, options, settings)
   given = options.paths
   if given.size == 0
     given = DEFAULT_PATHS.filter do |path: String|
@@ -125,7 +136,23 @@ def prepare_and_run(
       found.ok? and found.unwrap!.kind == "directory"
     end
   end
-  entries = try compile_tests(Discover.discover(given), directory, settings, !options.no_cache)
+
+  discovered = Discover.discover(given)
+  chosen = options
+  # The default step program is compiled only for a run that has a feature file, and is looked for only from the paths
+  # that hold one, so an unrelated steps.agc beside unit tests does not break the run.
+  features = discovered.filter do |entry: Discover.Entry| entry.kind == "feature" and entry.problem == "" end
+  if options.steps.size == 0 and features.size > 0
+    defaults = default_steps(given.filter do |path: String| holds_feature?(path, features) end)
+    if defaults.size > 1
+      return ok(Report.usage("two step programs found: pass --steps FILE (#{defaults.join(", ")})", options))
+    end
+
+    chosen = options.with(steps: defaults)
+  end
+
+  steps = try compile_steps(directory, chosen, settings)
+  entries = try compile_tests(discovered, directory, settings, !options.no_cache)
   config = Runner.Config(
     vm: options.vm,
     steps_bytecode: steps.bytecode,
@@ -144,12 +171,76 @@ def prepare_and_run(
     test_timeout_ms: options.test_timeout_ms,
     report_path: "#{directory}/report.txt",
   )
-  try write_text("#{directory}/config.jsonl", Runner.config_text(config, entries))
+  try write_text("#{directory}/config.jsonl", Runner.config_text(config, entries, options.tags))
   ran = Runner.run(options, runner, "#{directory}/config.jsonl", config.report_path)
   case ran
     Runner.Ran.Reported(code, text) -> return ok(Report.Ending(code: code, text: "#{text}\n"))
     Runner.Ran.Failed(message) -> return ok(Report.infrastructure(message, options.vm, options))
   end
+end
+
+# The `steps.agc` that serves as the step program when --steps is not given: for each path, the nearest one in the
+# folder of the path (the path itself when it is a folder) or in a parent folder, up to the working directory and
+# not above it. Each file is listed once.
+def default_steps(searched: List[String]) -> List[String]
+  here = Path.cwd().unwrap_or("")
+  found: List[String] = []
+  for path in searched
+    file = steps_near(path, here)
+    if file != "" and !found.any? do |known: String| known == file end
+      found = found.push(file)
+    end
+  end
+
+  return found
+end
+
+# Whether `path` is one of `features` or a folder that holds one. Both are resolved as Discover.discover resolves them.
+def holds_feature?(path: String, features: List[Discover.Entry]) -> Bool
+  resolved = Path.resolve(path).unwrap_or(path)
+  below = resolved
+  if !below.ends_with?("/")
+    below = "#{below}/"
+  end
+
+  return features.any? do |entry: Discover.Entry| entry.path == resolved or entry.path.starts_with?(below) end
+end
+
+# The nearest `steps.agc` for one path, or "" when there is none. A path that cannot be resolved has none.
+def steps_near(path: String, here: String) -> String
+  resolved = Path.resolve(path)
+  if !resolved.ok?
+    return ""
+  end
+
+  folder = resolved.unwrap!
+  info = File.stat(folder, IO_TIMEOUT)
+  if !info.ok? or info.unwrap!.kind != "directory"
+    folder = Paths.directory_of(folder)
+  end
+
+  below = here
+  if !here.ends_with?("/")
+    below = "#{here}/"
+  end
+
+  inside = here != "" and (folder == here or folder.starts_with?(below))
+  while folder != ""
+    file = Paths.join(folder, DEFAULT_STEPS_FILE)
+    found = File.stat(file, IO_TIMEOUT)
+    if found.ok? and found.unwrap!.kind == "file"
+      return file
+    end
+
+    parent = Paths.directory_of(folder)
+    if !inside or folder == here or parent == folder
+      return ""
+    end
+
+    folder = parent
+  end
+
+  return ""
 end
 
 # The paths of the empty-run report: the first path given, or the first default folder.
@@ -158,6 +249,7 @@ def empty_path(given: List[String]) -> String
   if given.size > 0
     first = given[0]
   end
+
   return Path.resolve(first).unwrap_or(first)
 end
 
@@ -165,6 +257,7 @@ def empty_message(given: List[String]) -> String
   if given.size == 0
     return "no .feature or *_test.agc files found: neither specs/ nor test/ exists"
   end
+
   return "no .feature or *_test.agc files found"
 end
 
@@ -183,6 +276,7 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
     root = SourceRoot.option(options.steps[0])
     compiled = Compile.file(source, settings, "cannot read the step program #{options.steps[0]}", !options.no_cache)
   end
+
   bytecode = "#{directory}/steps.agcb"
   given = options.steps.size > 0
   case compiled
@@ -209,8 +303,10 @@ def compile_tests(
     else
       out = out.push(entry)
     end
+
     index += 1
   end
+
   return ok(out)
 end
 
@@ -220,5 +316,6 @@ def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings, 
     Pipeline.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
     Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end
+
   return ok(entry.with(bytecode: output, source_root: SourceRoot.option(entry.path), front_end: front_end))
 end

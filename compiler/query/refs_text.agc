@@ -13,12 +13,15 @@ export def text(found: Model.Refs) -> String
   for declared in found.definition
     lines = lines.push("#{OutlineText.place(declared.module, declared.name_range)} definition #{described(declared)}")
   end
+
   for use in found.references
     lines = lines.push("#{OutlineText.place(use.file, use.range)} #{use.kind}#{inside(use.function)}")
   end
+
   if lines.size == 0
     return ""
   end
+
   return "#{lines.join("\n")}\n"
 end
 
@@ -31,6 +34,7 @@ def inside(function: String) -> String
   if function == ""
     return ""
   end
+
   return " in #{function}"
 end
 
@@ -43,5 +47,6 @@ def described(found: Model.Symbol) -> String
   elsif ["struct", "enum", "alias", "resource", "constant"].any? do |kind: String| kind == found.kind end
     return "#{found.kind} #{found.name}"
   end
+
   return "#{found.kind} #{found.signature}"
 end
