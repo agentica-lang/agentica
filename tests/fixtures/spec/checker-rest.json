@@ -10836,6 +10836,26 @@
     {
       "program": [
         "def main() -> Void",
+        "  chunks: Lazy[List[Int]] = \"p\" |> File.chunks(4)",
+        "  dec = Zlib.inflate_init(-15, 1073741824, 1073741824).unwrap!",
+        "  step = Zlib.inflate_next(dec, [], 65536).unwrap!",
+        "  out: List[Int] = step.output",
+        "  used: Int = step.consumed",
+        "  done: Bool = step.finished",
+        "  more: Bool = step.needs_input",
+        "  ended: Result[Void] = Zlib.inflate_finish(dec)",
+        "  freed: Result[Void] = Zlib.decoder_close(dec)",
+        "  puts(out.size + used)",
+        "  puts(done and more and ended.ok? and freed.ok?)",
+        "  puts(chunks.to_a)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
         "  d = Zlib.deflate(\"abc\", 6, 100)",
         "end",
         ""
@@ -10946,7 +10966,7 @@
     },
     {
       "program": [
-        "def squeeze(dec: ZlibDecoder) -> Void",
+        "def squeeze(enc: ZlibEncoder) -> Void",
         "end",
         "",
         "def main() -> Void",
@@ -10956,7 +10976,7 @@
       ],
       "code": "CHECK-UNKNOWN-TYPE",
       "start": [1, 18],
-      "covers": "ZlibDecoder"
+      "covers": "ZlibEncoder"
     },
     {
       "program": [
@@ -11022,6 +11042,45 @@
       "expected": "Int",
       "actual": "String",
       "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(File.chunks().to_a)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 8],
+      "covers": "File.chunks()",
+      "callee": "File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]"
+    },
+    {
+      "program": [
+        "struct ZlibProgress",
+        "  x: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-REDEFINED-NAME"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  dec = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!",
+        "  File.close(dec, 1000)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [3, 14],
+      "covers": "dec",
+      "expected": "FileHandle",
+      "actual": "ZlibDecoder"
     }
   ]
 }

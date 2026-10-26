@@ -1727,7 +1727,7 @@ static agc_value write_out(agc_vm *vm, agc_value handle, file_state *st, const u
                            int64_t timeout) {
   op *o = new_op(vm, OP_WRITE);
   o->st = st;
-  o->in_len = st->end + len + (newline ? 1 : 0);
+  o->in_len = agc_size_add(agc_size_add(st->end, len), newline ? 1 : 0);
   o->in = malloc(o->in_len ? o->in_len : 1);
   if (!o->in) agc_out_of_memory();
   if (st->end) memcpy(o->in, st->buf, st->end);

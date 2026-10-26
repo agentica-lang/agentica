@@ -25,7 +25,8 @@ export VM_BUILTINS = Set.new([
   "File.read_bytes", "File.read_line", "File.write", "File.write_bytes", "File.flush", "File.close", "File.each_line",
   "File.read_text", "File.sha256", "File.write_text", "File.append_text", "File.stat", "File.lstat",
   "File.try_lock",
-  "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32",
+  "Zlib.deflate", "Zlib.inflate", "Zlib.gzip", "Zlib.gunzip", "Zlib.crc32", "Zlib.inflate_init", "Zlib.inflate_next",
+  "Zlib.inflate_finish", "Zlib.decoder_close",
   "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove",
   "Path.rename",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
@@ -81,7 +82,7 @@ export FLOAT_OPS: Map[String, String] = {
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
   "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Text", "HttpWire.Reply", "HttpWire.Job",
-  "HttpWire.Response"
+  "HttpWire.Response", "ZlibProgress"
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.

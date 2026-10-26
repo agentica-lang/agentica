@@ -363,6 +363,17 @@ def test_lazy_decoders_read_what_python_writes(lazy_peer, tmp_path):
                 result, out = lazy_case(lazy_peer, tmp_path, tag, DECODER[op], packed, size)
                 assert result.code == 0, result.stderr
                 assert (result.stdout, out) == ("ok(%d)\n" % len(data), data)
+    # A gzip member with every optional header field (FEXTRA, FNAME, FCOMMENT, FHCRC), framed by hand.
+    fextra = b"AB" + struct.pack("<H", 2) + b"xy"
+    head = b"\x1f\x8b\x08\x1e\x39\x30\x00\x00\x02\xff" + struct.pack("<H", len(fextra)) + fextra
+    head += b"myname.txt\x00" + b"a comment here\x00"
+    head += struct.pack("<H", zlib.crc32(head) & 0xFFFF)
+    payload = b"optheaders!" * 1000
+    framed = head + python_compress(payload, "raw_deflate", 9)
+    framed += struct.pack("<I", zlib.crc32(payload) & 0xFFFFFFFF) + struct.pack("<I", len(payload))
+    for size in (1, 65536):
+        result, out = lazy_case(lazy_peer, tmp_path, "headers-%d" % size, "gunzip", framed, size)
+        assert (result.code, result.stdout, out) == (0, "ok(%d)\n" % len(payload), payload), result.stderr
 
 
 def test_lazy_gzip_round_trips_multi_mib_and_agrees_with_hashlib(lazy_peer, tmp_path):
@@ -613,3 +624,311 @@ def test_lazy_frees_its_zlib_stream_when_it_stops_early(early_stop, tmp_path, mo
     assert any(e.startswith("file_close") for e in events), events
     assert events.index(next(e for e in events if e.startswith("zlib_close"))) < events.index(
         next(e for e in events if e.startswith("output_start stream=stdout"))), events
+
+
+# The streaming decoder of std/archive, kept until std/archive moves to the Lazy steps.
+def test_zlib_stream_raw_and_gzip_match_python(tmp_path):
+    data = bytes((k * 7) % 251 for k in range(70000))
+    comp = zlib.compressobj(6, zlib.DEFLATED, -15)
+    raw = comp.compress(data) + comp.flush()
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = []\n"
+        "  for byte in [%s]\n"
+        "    packed = packed.push(byte)\n"
+        "  end\n"
+        "  dec = Zlib.inflate_init(-15, 1073741824, 1073741824).unwrap!\n"
+        "  out: List[Int] = []\n"
+        "  rest: List[Int] = packed\n"
+        "  while rest.size > 0\n"
+        "    step = Zlib.inflate_next(dec, List.take(rest, 65536), 65536).unwrap!\n"
+        "    out = List.concat(out, step.output)\n"
+        "    rest = List.drop(rest, step.consumed)\n"
+        "  end\n"
+        "  Zlib.inflate_finish(dec).unwrap!\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "  puts(Test.eq(out, [%s]))\n"
+        "end\n" % (", ".join(str(b) for b in raw), ", ".join(str(b) for b in data))
+    )
+    result = run_source(tmp_path, "raw-in.agc", body, [])
+    assert result.code == 0, result.stderr
+    assert "ok()" in result.stdout, result.stdout
+
+
+def test_zlib_stream_pending_output_drains_from_empty_input(tmp_path):
+    data = bytes((k * 3) % 251 for k in range(70000))
+    packed = zlib.compress(data)
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!\n"
+        "  fed = Zlib.inflate_next(dec, packed, 65536).unwrap!\n"
+        "  out: List[Int] = fed.output\n"
+        "  if fed.needs_input\n"
+        '    puts("asked for more with pending output")\n'
+        "  end\n"
+        "  index = fed.consumed\n"
+        "  empty = Zlib.inflate_next(dec, [], 65536).unwrap!\n"
+        "  out = List.concat(out, empty.output)\n"
+        "  if empty.output.size == 0\n"
+        '    puts("empty drain stalled with output pending")\n'
+        "  end\n"
+        "  index = index + empty.consumed\n"
+        "  again = not empty.finished\n"
+        "  while again\n"
+        "    step = Zlib.inflate_next(dec, List.take(List.drop(packed, index), 65536), 65536).unwrap!\n"
+        "    out = List.concat(out, step.output)\n"
+        "    index = index + step.consumed\n"
+        "    again = not step.finished\n"
+        "  end\n"
+        "  Zlib.inflate_finish(dec).unwrap!\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "  puts(Test.eq(out, [%s]))\n"
+        "end\n" % (", ".join(str(b) for b in packed), ", ".join(str(b) for b in data))
+    )
+    result = run_source(tmp_path, "drain.agc", body, [])
+    assert result.code == 0, result.stderr
+    assert "asked for more" not in result.stdout, result.stdout
+    assert "stalled" not in result.stdout, result.stdout
+    assert "ok()" in result.stdout, result.stdout
+
+
+def test_zlib_stream_decoder_finish_needs_the_stream_end(tmp_path):
+    data = bytes((k * 3) % 251 for k in range(1000))
+    packed = zlib.compress(data)
+    half = packed[:len(packed) // 2]
+    body = (
+        "def main() -> Void\n"
+        "  fresh = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!\n"
+        "  puts(Zlib.inflate_finish(fresh))\n"
+        "  Zlib.decoder_close(fresh).unwrap!\n"
+        "  half = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!\n"
+        "  Zlib.inflate_next(half, [%s], 65536).unwrap!\n"
+        "  puts(Zlib.inflate_finish(half))\n"
+        "  Zlib.decoder_close(half).unwrap!\n"
+        "end\n" % ", ".join(str(b) for b in half)
+    )
+    result = run_source(tmp_path, "trunc.agc", body, [])
+    assert result.code == 0, result.stderr
+    assert result.stdout.startswith("error("), result.stdout
+
+
+def test_zlib_stream_keeps_trailing_bytes_caller_owned(tmp_path):
+    data = b"hi"
+    both = gzip.compress(data) + b"leftover"
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(31, 1073741824, 1073741824).unwrap!\n"
+        "  step = Zlib.inflate_next(dec, packed, 65536).unwrap!\n"
+        "  puts(Test.eq(step.output, [104, 105]))\n"
+        "  puts(step.finished)\n"
+        "  puts(step.consumed + 8 == packed.size)\n"
+        "  puts(Zlib.inflate_finish(dec))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "  puts(Zlib.gunzip(packed, 1048576))\n"
+        "end\n" % ", ".join(str(b) for b in both)
+    )
+    result = run_source(tmp_path, "trailing.agc", body, [])
+    assert result.code == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0] == "ok()", result.stdout
+    assert lines[1] == "true", result.stdout
+    assert lines[2] == "true", result.stdout
+    assert lines[3] == "ok()", result.stdout
+    assert lines[4].startswith("error("), result.stdout
+
+
+def test_zlib_stream_feeding_after_finished_is_an_error(tmp_path):
+    data = bytes((k * 3) % 251 for k in range(100))
+    packed = zlib.compress(data)
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!\n"
+        "  step = Zlib.inflate_next(dec, packed, 65536).unwrap!\n"
+        "  puts(step.finished)\n"
+        "  puts(Zlib.inflate_next(dec, [1], 65536))\n"
+        "  puts(Zlib.inflate_next(dec, [], 65536))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "end\n" % ", ".join(str(b) for b in packed)
+    )
+    result = run_source(tmp_path, "after-end.agc", body, [])
+    assert result.code == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0] == "true", result.stdout
+    assert lines[1].startswith("error("), result.stdout
+    assert lines[2].startswith("ok("), result.stdout
+
+
+def test_zlib_stream_empty_feed_before_input_asks_for_more(tmp_path):
+    body = (
+        "def main() -> Void\n"
+        "  dec = Zlib.inflate_init(15, 1073741824, 1073741824).unwrap!\n"
+        "  step = Zlib.inflate_next(dec, [], 65536).unwrap!\n"
+        "  puts(step.output.size)\n"
+        "  puts(step.consumed)\n"
+        "  puts(step.finished)\n"
+        "  puts(step.needs_input)\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "end\n"
+    )
+    result = run_source(tmp_path, "empty-feed.agc", body, [])
+    assert result.code == 0, result.stderr
+    assert result.stdout.splitlines() == ["0", "0", "false", "true"], result.stdout
+
+
+def test_zlib_stream_decoder_finishes_at_an_exact_output_budget(tmp_path):
+    for window, split in ((31, 15), (15, 7)):
+        packed = gzip.compress(b"abc") if window == 31 else zlib.compress(b"abc")
+        text = ", ".join(str(b) for b in packed)
+        body = (
+            "def main() -> Void\n"
+            "  packed: List[Int] = [%s]\n"
+            "  head = List.take(packed, %d)\n"
+            "  tail = List.drop(packed, %d)\n"
+            "  dec = Zlib.inflate_init(%d, 1073741824, 3).unwrap!\n"
+            "  first = Zlib.inflate_next(dec, head, 3).unwrap!\n"
+            "  puts(Test.eq(first.output, [97, 98, 99]))\n"
+            "  puts(first.consumed)\n"
+            "  puts(first.finished)\n"
+            "  step = Zlib.inflate_next(dec, tail, 1).unwrap!\n"
+            "  puts(Test.eq(step.output, []))\n"
+            "  puts(step.consumed)\n"
+            "  puts(step.finished)\n"
+            "  puts(Zlib.inflate_finish(dec))\n"
+            "  Zlib.decoder_close(dec).unwrap!\n"
+            "  wide = Zlib.inflate_init(%d, 1073741824, 3).unwrap!\n"
+            "  Zlib.inflate_next(wide, head, 3).unwrap!\n"
+            "  big = Zlib.inflate_next(wide, tail, 65536).unwrap!\n"
+            "  puts(Test.eq(big.output, []))\n"
+            "  puts(big.finished)\n"
+            "  puts(Zlib.inflate_finish(wide))\n"
+            "  Zlib.decoder_close(wide).unwrap!\n"
+            "end\n" % (text, split, split, window, window)
+        )
+        result = run_source(tmp_path, "exact-budget-%d.agc" % window, body, [])
+        assert result.code == 0, result.stderr
+        assert result.stdout.splitlines() == [
+            "ok()", str(split), "false", "ok()", str(len(packed) - split), "true", "ok()",
+            "ok()", "true", "ok()",
+        ], result.stdout
+
+
+def test_zlib_stream_decoder_reads_an_exact_budget_one_byte_at_a_time(tmp_path):
+    packed = gzip.compress(b"abc")
+    text = ", ".join(str(b) for b in packed)
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(31, 1073741824, 3).unwrap!\n"
+        "  out: List[Int] = []\n"
+        "  rest = packed\n"
+        "  rounds = 0\n"
+        "  ended = false\n"
+        "  while rest.size > 0\n"
+        "    step = Zlib.inflate_next(dec, List.take(rest, 1), 1).unwrap!\n"
+        "    out = List.concat(out, step.output)\n"
+        "    rest = List.drop(rest, step.consumed)\n"
+        "    ended = step.finished\n"
+        "    if step.finished\n"
+        "      puts(rest.size)\n"
+        "      rest = []\n"
+        "    end\n"
+        "    rounds = rounds + 1\n"
+        "    if rounds > 100\n"
+        '      puts("stuck")\n'
+        "      rest = []\n"
+        "    end\n"
+        "  end\n"
+        "  puts(Test.eq(out, [97, 98, 99]))\n"
+        "  puts(ended)\n"
+        "  puts(Zlib.inflate_finish(dec))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "end\n" % text
+    )
+    result = run_source(tmp_path, "exact-bytes.agc", body, [])
+    assert result.code == 0, result.stderr
+    assert result.stdout.splitlines() == ["0", "ok()", "true", "ok()"], result.stdout
+
+
+def test_zlib_stream_decoder_overflow_past_a_full_budget_fails_sticky(tmp_path):
+    packed = gzip.compress(b"abc")
+    text = ", ".join(str(b) for b in packed)
+    body = (
+        "def main() -> Void\n"
+        "  packed: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(31, 1073741824, 2).unwrap!\n"
+        "  out: List[Int] = []\n"
+        "  rest = packed\n"
+        "  rounds = 0\n"
+        "  failed = false\n"
+        "  while rest.size > 0\n"
+        "    step = Zlib.inflate_next(dec, List.take(rest, 1), 1)\n"
+        "    if step.ok?\n"
+        "      good = step.unwrap!\n"
+        "      out = List.concat(out, good.output)\n"
+        "      rest = List.drop(rest, good.consumed)\n"
+        "    else\n"
+        "      failed = true\n"
+        "      rest = []\n"
+        "    end\n"
+        "    rounds = rounds + 1\n"
+        "    if rounds > 100\n"
+        "      rest = []\n"
+        "    end\n"
+        "  end\n"
+        "  puts(Test.eq(out, [97, 98]))\n"
+        "  puts(failed)\n"
+        "  puts(Zlib.inflate_next(dec, List.take(packed, 1), 1))\n"
+        "  puts(Zlib.inflate_finish(dec))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "end\n" % text
+    )
+    result = run_source(tmp_path, "exact-overflow.agc", body, [])
+    assert result.code == 0, result.stderr
+    out_lines = result.stdout.splitlines()
+    assert out_lines[:2] == ["ok()", "true"], result.stdout
+    # Exact wording here pins the sticky failure: a retryable cap refusal
+    # would repeat the cap error and report truncation on finish instead.
+    assert out_lines[2:] == ['error("zlib: handle failed")'] * 2, result.stdout
+
+
+def test_zlib_stream_decoder_full_budget_keeps_trailer_and_input_errors(tmp_path):
+    packed = gzip.compress(b"abc")
+    bad = bytearray(packed)
+    bad[-1] ^= 0x01
+    good_text = ", ".join(str(b) for b in packed)
+    bad_text = ", ".join(str(b) for b in bad)
+    body = (
+        "def main() -> Void\n"
+        "  bad: List[Int] = [%s]\n"
+        "  dec = Zlib.inflate_init(31, 1073741824, 3).unwrap!\n"
+        "  Zlib.inflate_next(dec, List.take(bad, 15), 3).unwrap!\n"
+        "  puts(Zlib.inflate_next(dec, List.drop(bad, 15), 1))\n"
+        "  puts(Zlib.inflate_finish(dec))\n"
+        "  Zlib.decoder_close(dec).unwrap!\n"
+        "  good: List[Int] = [%s]\n"
+        "  short = Zlib.inflate_init(31, 1073741824, 3).unwrap!\n"
+        "  Zlib.inflate_next(short, List.take(good, 15), 3).unwrap!\n"
+        "  part = Zlib.inflate_next(short, List.take(List.drop(good, 15), 4), 1).unwrap!\n"
+        "  puts(part.output.size)\n"
+        "  puts(part.finished)\n"
+        "  puts(part.needs_input)\n"
+        "  puts(Zlib.inflate_finish(short))\n"
+        "  Zlib.decoder_close(short).unwrap!\n"
+        "  capped = Zlib.inflate_init(15, 5, 100).unwrap!\n"
+        "  puts(Zlib.inflate_next(capped, [120, 156, 75, 76, 74, 6], 100))\n"
+        "  Zlib.decoder_close(capped).unwrap!\n"
+        "end\n" % (bad_text, good_text)
+    )
+    result = run_source(tmp_path, "exact-errors.agc", body, [])
+    assert result.code == 0, result.stderr
+    lines = result.stdout.splitlines()
+    assert lines[0].startswith("error("), result.stdout
+    assert lines[1].startswith("error("), result.stdout
+    assert lines[2] == "0", result.stdout
+    assert lines[3] == "false", result.stdout
+    assert lines[4] == "true", result.stdout
+    assert lines[5].startswith("error("), result.stdout
+    assert lines[6].startswith("error("), result.stdout

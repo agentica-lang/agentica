@@ -556,14 +556,14 @@ begins with `denied: ` and the flag (`denied: --deny-fs`), and the program goes
 on. `--deny-run` turns off the `Process` starts; `--deny-net` every connect and
 listen of `TCP` and `TLS`, so `std/http` too, before any DNS lookup; `--deny-fs`
 every `File`, `Dir` and `Path` call but `Path.join`, `Lazy.write_lines`,
-`Lazy.write_bytes`, and a TLS call that names a file; `--deny-env`
-`System.env` (`System.os` and `System.pid` stay on: they hold no secret; the
-locale of error texts still follows `LANG`). Each turns on `--deny-native`, since native code could do the
-same. A program that can start processes escapes a single flag; use
+`Lazy.write_bytes`, and a TLS call that names a file; `--deny-env` `System.env`
+(`System.os` and `System.pid` stay on: they hold no secret; the locale of error
+texts still follows `LANG`). Each turns on `--deny-native`, since native code
+could do the same. A program that can start processes escapes a single flag; use
 `--sandbox`, or add `--deny-run`. `--sandbox` is all of them: the one flag for
 code you do not trust. They apply to the program, not to the front end.
-`agentica test` gives them to the test files, the step programs and the
-programs under test, not to its runner.
+`agentica test` gives them to the test files, the step programs and the programs
+under test, not to its runner.
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user

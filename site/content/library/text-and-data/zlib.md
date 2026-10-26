@@ -82,4 +82,15 @@ end
 - A decoder's `max_bytes` (at least 1) caps its whole output while it streams: the run ends with an error before a byte past it is handed on. Truncation, a bad checksum and a trailing byte end the run with an error too, and a bad `level` or `max_bytes` is the error of the run.
 - The run ends with the first error, and a run that stops early (`first`, `find`, a failed `try` in a block, an error or a cancel) frees its zlib stream and closes its file.
 - Only `File.chunks` and `write_bytes` carry the filesystem effect: with `--deny-fs` (or `--sandbox`) they give an error that begins with `denied: --deny-fs`, while the steps and the bytes calls run anywhere.
-- `Zlib` is a reserved type name.
+- `Zlib`, `ZlibDecoder` and `ZlibProgress` are reserved type names.
+
+## Streaming decoder
+
+```text
+Zlib.inflate_init(window_bits: Int, max_total_in: Int, max_total_out: Int) -> Result[ZlibDecoder]
+Zlib.inflate_next(dec: ZlibDecoder, data: List[Int], max_out: Int) -> Result[ZlibProgress]
+Zlib.inflate_finish(dec: ZlibDecoder) -> Result[Void]
+Zlib.decoder_close(dec: ZlibDecoder) -> Result[Void]
+```
+
+These calls are kept for now; the Lazy steps will replace them. `window_bits` is 15 (zlib), -15 (raw DEFLATE) or 31 (gzip), each total cap is 1 to 1073741824, and each call takes at most 65536 input bytes with room for `max_out` 1 to 65536 output bytes. Each step gives a `ZlibProgress(output, consumed, finished, needs_input)`: present what was not consumed again, and call again with empty input when `needs_input` is false. `inflate_finish` is `ok()` only after a whole checked stream end. Closing is idempotent; the handle moves with `Task.spawn_owning`, and a task that ends frees what it did not close.

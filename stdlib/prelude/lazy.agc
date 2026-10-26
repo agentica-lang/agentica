@@ -1,13 +1,13 @@
 ## The Lazy methods of the compiler prelude (docs/future/27-iteration-and-concurrency.md 27.4). Not a module: no
 ## program imports it. A Lazy is an immutable recipe: a source (a list, a range, Lazy.produce, File.foreach,
-## File.chunks or ch.lazy) and the steps added after it. The functions here only give the generic signatures; the
-## VM (vm/lazy.c) builds the recipe and runs it. A step returns a new Lazy and runs nothing. A terminal (to_a, first,
+## File.chunks or ch.lazy) and the steps added after it. The functions here only give the generic signatures; the VM
+## (vm/lazy.c) builds the recipe and runs it. A step returns a new Lazy and runs nothing. A terminal (to_a, first,
 ## each, reduce, find, write_lines, write_bytes) pulls one item at a time from the source through every step, so no
 ## step builds a list of all the items, and an endless source ends as soon as a take, take_while, first or find has
-## what it needs. Two terminals on
-## the same Lazy run the source twice; a channel cannot be read twice, so a second terminal on ch.lazy goes on with
-## the values the first did not take. A failed `try` in any block of a Lazy method ends the pipeline: the terminal
-## returns its error (the checker marks those `try`s and the lowering emits try-step for them).
+## what it needs. Two terminals on the same Lazy run the source twice; a channel cannot be read twice, so a second
+## terminal on ch.lazy goes on with the values the first did not take. A failed `try` in any block of a Lazy method
+## ends the pipeline: the terminal returns its error (the checker marks those `try`s and the lowering emits try-step
+## for them).
 ##
 ## A is the item type and B the type a callback gives. The Int after the Lazy in __lazy_test, __lazy_count,
 ## __lazy_group and __lazy_zlib picks the step; vm/lazy.c reads the same numbers. The defaults of File.chunks, the

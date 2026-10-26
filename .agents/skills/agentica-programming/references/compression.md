@@ -1,6 +1,6 @@
 # Compression
 
-`Zlib` is reserved. `deflate`/`inflate` are the zlib wrapper (RFC 1950),
+`Zlib`, `ZlibDecoder` and `ZlibProgress` are reserved. `deflate`/`inflate` are the zlib wrapper (RFC 1950),
 `gzip`/`gunzip` are gzip (RFC 1952); the Lazy steps also speak raw DEFLATE
 (RFC 1951) with `raw = true`. Decoders take one stream or member with its
 checksum verified; trailing bytes (a second member included) are an error,
@@ -18,6 +18,10 @@ lazy.inflate(raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[List[Int]]
 lazy.gzip(level: Int = 6) -> Lazy[List[Int]]
 lazy.gunzip(max_bytes: Int = 1073741824) -> Lazy[List[Int]]
 lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]
+Zlib.inflate_init(window_bits: Int, max_total_in: Int, max_total_out: Int) -> Result[ZlibDecoder]
+Zlib.inflate_next(dec: ZlibDecoder, data: List[Int], max_out: Int) -> Result[ZlibProgress]
+Zlib.inflate_finish(dec: ZlibDecoder) -> Result[Void]
+Zlib.decoder_close(dec: ZlibDecoder) -> Result[Void]
 ```
 
 ```ruby
@@ -47,3 +51,8 @@ end
 - `File.chunks` reads regular files only, `size` is 1..16777216 (outside it is
   `RUNTIME-INVALID-COUNT`); `write_bytes` creates or truncates (`lazy.md`).
   Only these two take `--deny-fs`; the steps and `Zlib` calls run anywhere.
+- The streaming decoder (`inflate_init` ... `decoder_close`) is kept for now;
+  the Lazy steps will replace it. Prefer `gunzip`/`inflate` on `File.chunks`.
+  `window_bits` is 15, -15 or 31; each call takes at most 65536 bytes with
+  `max_out` 1..65536; present the unconsumed rest again, and call again with
+  empty input while `needs_input` is false.

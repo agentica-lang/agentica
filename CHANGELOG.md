@@ -29,12 +29,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Breaking:** the Zlib streaming calls (`deflate_init`, `inflate_init`,
-  `deflate_next`, `inflate_next`, `deflate_finish`, `inflate_finish`,
-  `encoder_close`, `decoder_close`) and the types `ZlibEncoder`, `ZlibDecoder`
-  and `ZlibProgress` are removed: use the Lazy zlib steps.
+- **Breaking:** the Zlib streaming encoder (`deflate_init`, `deflate_next`,
+  `deflate_finish`, `encoder_close`) and the type `ZlibEncoder` are removed:
+  use the Lazy steps `deflate` and `gzip`.
 - **Breaking:** `Zlib.deflate_file`, `inflate_file`, `gzip_file` and
-  `gunzip_file` are removed: use `File.chunks(src).gzip.write_bytes(dst)`.
+  `gunzip_file` are removed: use `File.chunks(src).gzip.write_bytes(dst)`,
+  which overwrites an existing `dst`.
 - **Breaking:** the Zlib errors name `max_bytes` instead of `max_out_bytes`.
 - An integer argument or struct field of an extern function takes the bits of
   its type read as signed or unsigned, as `Native.put_int32` does: a
