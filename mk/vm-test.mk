@@ -83,7 +83,8 @@ FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' tests/fixtures/vm/*
 # A timeout (an input past LIBFUZZ_TIMEOUT seconds) fails the run too. agc_fuzz_one has no wall clock
 # (agc_timeout_length), so its steps bound every wait; but steps do not bound CPU work (a linear builtin on a large
 # string once per step), so a timeout can also be a slow input to triage. Fork mode saves a corpus or seed input that
-# fails its first pass and goes on without counting it, so the run also fails when crashes/ got a new file.
+# fails its first pass and goes on without counting it, so the run also fails when crashes/ got a new crash, leak,
+# timeout or oom file (not a slow-unit one: an input slower than 10 s but under LIBFUZZ_TIMEOUT is no failure).
 LIBFUZZ_TIME ?= 60
 LIBFUZZ_TIMEOUT ?= 10
 LIBFUZZ_JOBS ?= 1
@@ -99,7 +100,8 @@ vm-libfuzz-run: dist/agentica$(EXE)
 	  -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=$(LIBFUZZ_TIMEOUT) \
 	  -artifact_prefix=$(LIBFUZZ_DIR)/crashes/ -print_final_stats=1 $(LIBFUZZ_FLAGS) \
 	  $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/seeds || status=$$?; \
-	new=$$(find $(LIBFUZZ_DIR)/crashes -type f -newer $(LIBFUZZ_DIR)/tmp/started); \
+	new=$$(find $(LIBFUZZ_DIR)/crashes -type f -newer $(LIBFUZZ_DIR)/tmp/started \( -name 'crash-*' -o -name 'leak-*' \
+	  -o -name 'timeout-*' -o -name 'oom-*' \)); \
 	if [ -n "$$new" ]; then echo "vm-libfuzz-run: new failure files:"; echo "$$new"; [ $$status -ne 0 ] || status=1; fi; \
 	exit $$status
 

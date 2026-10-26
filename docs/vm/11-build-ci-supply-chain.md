@@ -133,7 +133,9 @@
   string, once per step), so a timeout can also be a slow input to triage, not
   only a wait.
 - Fork mode saves a corpus or seed input that fails its first pass and goes on
-  without counting it, so the run also fails when `crashes/` got a new file.
+  without counting it, so the run also fails when `crashes/` got a new
+  `crash-`, `leak-`, `timeout-` or `oom-` file (a `slow-unit-` file is no
+  failure).
 - `agc_fuzz_one` sets `deny_run`, `deny_env` and `deny_net`. A mutant's
   strings are shell commands with mutated bytes, and a child process or a
   network wait is outside `--max-steps`. The environment and the network
