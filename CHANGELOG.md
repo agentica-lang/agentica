@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The experimental x86-64 JIT (`--jit on`) calls compiled functions natively
+  and compiles small functions without a loop for its callers, so call-heavy
+  code runs in compiled code.
+
 ### Fixed
 
 - `agentica doc` and `agentica outline` list the re-exports of a facade file

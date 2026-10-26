@@ -70,14 +70,19 @@ function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
 every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
 and list opcodes, `EQ`, `NE`, `SAME`, `CONCAT`, `TO_TEXT`, `NOT`, `FIELD`, `IS_VARIANT`,
-`PAYLOAD`, `IS_OK`, `RESULT_VALUE` and the jumps have code. `CALL` and
-`RETURN` have dedicated exits: generated code returns to the interpreter C
-stack, which applies the shared frame transition and reloads compiled code at
-the new frame without executing that opcode in the generic interpreter switch.
-This is a compiled frame-transition trampoline, not a native nested ABI call.
-Other unsupported instructions (including builtins and allocations) leave the
-code for the interpreter. A leaf builtin is called between two runs of
-compiled code, without the interpreter's loop.
+`PAYLOAD`, `IS_OK`, `RESULT_VALUE` and the jumps have code. A `CALL` of a
+function that has code is a native call: compiled code pushes the frame as
+`push_frame` does, in frames and registers the task already has, and calls the
+callee's code, up to 256 calls deep on the C stack (`AGC_JIT_NATIVE_DEPTH`); the
+callee's `RETURN` pops it. Any exit inside the callee goes up through its
+callers' code unchanged, so the interpreter finds the callee's frame on top and
+the native calls are gone. A call that cannot be native (no code yet, an array
+to grow, the depth limit, the native depth) and a `RETURN` of a function not
+called natively take the `CALL` and `RETURN` exits: the interpreter runs the
+shared frame transition and goes on in the code of the new top frame when it
+has some. Other unsupported instructions (including builtins and allocations)
+leave the code for the interpreter. A leaf builtin is called between two runs
+of compiled code, without the interpreter's loop.
 
 - Decided once: the JIT looks at every function when the run starts. A
   function that `on` will not compile is never counted or walked again, and
@@ -88,14 +93,19 @@ compiled code, without the interpreter's loop.
   interpreter cost more than those few instructions save. Blocks of 3 to 7
   instructions that `filter`, `map` or `reduce` call a million times, and an
   empty function called 20 million times (about 13 ns more per call), ran
-  slower compiled.
+  slower compiled. So `on` gives such a function code only for native calls:
+  at its first `CALL` exit from compiled code, when none of its instructions
+  leaves (a leaf builtin counts here, as its exit unwinds the native calls);
+  the interpreter enters that code only to resume a frame of it, never at its
+  first instruction.
 - Why `on` also keeps out a loop that often leaves: each trip to the
   interpreter and back costs more than interpreting the few instructions
   around it saves (`print-lines`, `small-values` and `strings` of
   `benchmarks/`, whose loops leave every 4 to 9 instructions, ran 3 to 8%
   slower compiled). A function stays out when one of its innermost loops has
-  more than one instruction that leaves (a leaf builtin does not count) in
-  16 (`AGC_JIT_SPACING`).
+  more than one instruction that leaves (a leaf builtin, a `RETURN` and a
+  `CALL` of a function that may get code do not count) in 16
+  (`AGC_JIT_SPACING`).
 - Why no JIT when nothing compiles: the jit copy of the turn loop has the same
   handlers as the plain copy, but its machine code sits at other addresses,
   which alone made programs that compiled nothing 6 to 10% slower or faster
@@ -111,38 +121,42 @@ compiled code, without the interpreter's loop.
   contract says), and an instruction without code or a slow path (a wrong
   tag, a field index past the count), which the interpreter runs; the turn
   loop enters the code again when it reaches the next instruction, or at its
-  next reload. CALL and RETURN instead use dedicated frame-transition exits,
-  then reload at the callee or caller without the generic opcode switch.
+  next reload. A `CALL` or `RETURN` that is not native takes its own exit
+  (above).
 - Code: one pass, fixed code per instruction, the VM in rbx, the registers in
-  r12 and the constants in r13, the Int fast paths inline with their overflow
-  checks; `EQ` and `NE` call `agc_op_eq` and `agc_op_ne` for any pair other
-  than two Ints; the Float opcodes, `SAME`, `CONCAT`, `TO_TEXT`, `LIST_LEN`
-  and `LIST_GET` call their helper; `NOT`, `FIELD`, `IS_VARIANT`, `PAYLOAD`,
-  `IS_OK` and `RESULT_VALUE` read the value inline after a tag check. Each function has
-  its own pages (64 MiB in all); when two schedulers compile one function at
-  once, the first copy is kept.
+  r12, the constants in r13 and the native call depth in r14, the Int fast paths
+  inline with their overflow checks; `EQ` and `NE` call `agc_op_eq` and
+  `agc_op_ne` for any pair other than two Ints; the Float opcodes, `SAME`,
+  `CONCAT`, `TO_TEXT`, `LIST_LEN` and `LIST_GET` call their helper; `NOT`,
+  `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and `RESULT_VALUE` read the value
+  inline after a tag check. Each function has its own pages (64 MiB in all);
+  when two schedulers compile one function at once, the first copy is kept.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
   and a `skip` line for each function kept out: `loop=none` or `loop=exits`
   when the run starts, and `size` when its code did not fit at compile time.
   At the end of the run, `exit op=OP count=N` counts generic `INTERPRET`
-  exits by opcode, and `leaf count=N` the leaf builtins called between two
-  runs of compiled code. Dedicated CALL/RETURN frame-transition exits are not
-  included in these counters.
+  exits by opcode, `leaf count=N` the leaf builtins called between two
+  runs of compiled code, and `transition count=N` the `CALL` and `RETURN`
+  exits (a native call or return is not one).
 - Tests: `tests/test_vm_jit.py` (the three modes on a `--max-steps` sweep of
   three tasks in compiled loops, failures, a cancel, a turn ended by cost, `on`
-  switching in the middle of a loop, four schedulers, a hot function without a
-  loop that `on` keeps out, string joins and text forms in compiled code,
-  fields, lists,
-  enums, Results and Floats read in compiled code with the exit counts of the
-  trace), `make vm-jit-test` (the goldens and their sweeps and
-  `test_vm_multicore.py` with `AGENTICA_JIT=always`, which compiles every
-  function, in CI) and `vm/tests/jit_test.c` (bytes, exits, the read-execute
-  seal, a compile race, every opcode compiles, the results and statuses of
-  the helper calls and inline reads, also under `make vm-tsan`).
-- Known limits: a function with a loop that is called very often but whose
-  loop rarely runs still pays the entry and the exit at each call; and a
-  program with one function that `on` may compile keeps the jit copy of the
-  turn loop (and its layout effect) even if that function never gets hot.
+  switching in the middle of a loop, four schedulers, a function without a loop
+  that `on` compiles only for a compiled caller, string joins and text forms in
+  compiled code, fields, lists, enums, Results and Floats read in compiled code
+  with the exit counts of the trace, native calls with a `--max-steps` sweep, an
+  overflow and the depth limit inside natively called functions),
+  `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
+  with `AGENTICA_JIT=always`, which compiles every function, in CI) and
+  `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, a compile race,
+  every opcode compiles, the results and statuses of the helper calls and inline
+  reads, a native call's frame push and pop and its exits, also under
+  `make vm-tsan`).
+- Known limits: a function with a loop that is called very often from the
+  interpreter but whose loop rarely runs still pays the entry and the exit at
+  each call; a program with one function that `on` may compile keeps the jit
+  copy of the turn loop (and its layout effect) even if that function never
+  gets hot; and after an exit has unwound native calls (a turn that ends, a
+  builtin), each of those frames returns through the `RETURN` exit.
 
 **Helper contract** (`agc_op_*` and `agc_status` in `vm/core.h`): compiled code
 never calls `agc_fail`, because on Windows x64 `longjmp` unwinds the stack and

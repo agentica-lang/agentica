@@ -190,11 +190,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   and handles the exits as the interpreter handles that instruction: STEP runs
   `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
   leaf builtin itself or lets the loop run that one instruction, which enters
-  the code again at the next pc (`resume`).
+  the code again at the next pc (`resume`), CALL and RETURN the shared frame
+  handlers. A CALL of a function with code is native (`agc_emit_call`): an
+  exit inside the callee comes back with the callee's frame on top.
   A new instruction with code: a case in `has_code` and in the walk, its
   `agc_emit_*`, a case in `jit_test.c` and in `tests/test_vm_jit.py`; any
   slow path leaves for the interpreter; compiled code never fails,
-  allocates, parks, calls a builtin or moves a frame
+  allocates, parks or calls a builtin, and pushes or pops a frame only in
+  room the task already has. An edit of `turn_loop`, even in its jit copy,
+  changes the plain copy's machine code: keep JIT logic in `run_compiled`
 
 - `vm/list.c` (Lists, the persistent vector behind the opaque list API)
   - lists: `struct agc_list` is defined in `list_impl.h` and opaque everywhere

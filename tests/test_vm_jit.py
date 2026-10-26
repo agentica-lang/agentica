@@ -4,9 +4,9 @@ Each program runs with `--jit off`, `on` and `always`, which compiles every func
 those with a loop that seldom leaves compiled code, at their 100th entry). Compiled functions run the STEPs of their
 loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end inside them (by
 steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and four schedulers
-compile and run them at once. Calls and returns use compiled frame-transition
-exits; builtins and allocations without code run in the interpreter, and the
-code goes on after them.
+compile and run them at once. A call of a compiled function is a native call
+in compiled code; builtins and allocations without code run in the
+interpreter, and the code goes on after them.
 On an x86-64 host the jit trace must show the functions compiled; elsewhere nothing is compiled and the runs are the
 interpreter's, which must still match.
 """
@@ -275,6 +275,19 @@ LOOP_FREE = """def twice(x: Int) -> Int
   return x + x
 end
 
+def thrice(x: Int) -> Int
+  return x * 3
+end
+
+def noisy(n: Int) -> Int
+  k = 0
+  while k < n
+    puts(thrice(k))
+    k += 1
+  end
+  return k
+end
+
 def spin(n: Int) -> Int
   i = 0
   total = 0
@@ -293,8 +306,45 @@ def main() -> Void
     k += 1
   end
   puts(sum)
+  puts(noisy(150))
 end
 """
+
+# fib and down have no loop and are called natively from main's compiled loop and from their own compiled code. down
+# goes past the 64 frames a task starts with, so some calls grow the frames through the CALL exit, and its last calls
+# go deeper than AGC_JIT_NATIVE_DEPTH (256). The --max-steps sweep stops inside natively called frames.
+NATIVE = """def fib(n: Int) -> Int
+  if n < 2
+    return n
+  end
+  return fib(n - 1) + fib(n - 2)
+end
+
+def down(n: Int) -> Int
+  if n == 0
+    return 0
+  end
+  return down(n - 1) + 1
+end
+
+def main() -> Void
+  total = 0
+  i = 0
+  while i < 220
+    total = total + fib(12) + down(50 + i)
+    i += 1
+  end
+  puts(total)
+  puts("steps #{Profile.steps()}")
+end
+"""
+
+# Failures inside natively called functions, after main's loop is hot: the diagnostic, its span and the stack (each
+# caller's pc is the one after its CALL) must not depend on the tier. down passes the call depth limit.
+NATIVE_FAILURES = {
+    "overflow": ("RUNTIME-INTEGER-OVERFLOW", "if i < 150\n      x = grow(x % 1000)\n    else\n      x = grow(x)\n    end"),
+    "depth": ("RUNTIME-STACK-OVERFLOW", "x = x % 1000 + down(i * 80)"),
+}
 
 
 # build joins Strings in a loop (each join charges its bytes, so turns end by cost in compiled code as in the
@@ -481,14 +531,63 @@ def test_a_turn_that_ends_by_cost_in_compiled_code_ends_where_the_interpreters_d
     assert code == 0 and stdout.endswith("\n24\n"), (stdout, stderr)
 
 
-def test_on_keeps_a_hot_function_without_a_loop_in_the_interpreter(tmp_path):
+def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_path):
     bytecode = compile_text(LOOP_FREE, "loop_free", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["spin"] if X86_64 else [])
-    assert compiled(bytecode, tmp_path, "always") == (["main", "spin", "twice"] if X86_64 else [])
-    skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=twice " in line]
-    assert len(skips) == (1 if X86_64 else 0) and all(line.endswith(" loop=none") for line in skips), skips
+    # twice is called from main's compiled loop; thrice only from noisy, whose loop prints, so both stay interpreted.
+    assert compiled(bytecode, tmp_path, "on") == (["main", "spin", "twice"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "always") == (["main", "noisy", "spin", "thrice", "twice"] if X86_64 else [])
+    skips = [line for line in jit_trace(bytecode, tmp_path, "on") if " jit skip function=" in line]
+    assert skips == [] if not X86_64 else [line.split("skip ")[1] for line in skips] == ["function=noisy loop=exits"]
     code, stdout, stderr = assert_same(bytecode)
-    assert code == 0 and stdout.count("\n") == 1, stderr
+    assert code == 0 and stdout.count("\n") == 152, stderr
+
+
+def test_compiled_code_calls_compiled_functions_natively(tmp_path):
+    bytecode = compile_text(NATIVE, "native", tmp_path)
+    for mode in ("on", "always"):
+        assert compiled(bytecode, tmp_path, mode) == (["down", "fib", "main"] if X86_64 else [])
+    full = assert_same(bytecode)
+    assert full[0] == 0 and full[1].startswith("66770\n"), full
+    steps = int(full[1].split("steps ")[1])
+    assert_max_steps_sweep(bytecode, steps)
+    # Of the 137,390 calls of fib and down and their returns, only a few leave compiled code: the calls that grow the
+    # frames or pass the native depth, and the returns of the frames whose native calls an exit unwound (one for each
+    # turn that ends inside them, as the turn loop holds no native call).
+    lines = jit_trace(bytecode, tmp_path, "always")
+    transitions = sum(int(line.split("count=")[1]) for line in lines if " jit transition count=" in line)
+    assert transitions < (30000 if X86_64 else 1), transitions
+
+
+@pytest.mark.parametrize("case", sorted(NATIVE_FAILURES))
+def test_a_failure_in_a_natively_called_function_matches_the_interpreter(tmp_path, case):
+    code, statement = NATIVE_FAILURES[case]
+    bytecode = compile_text(f"""def grow(x: Int) -> Int
+  return x * 3 + 1
+end
+
+def down(n: Int) -> Int
+  if n == 0
+    return 0
+  end
+  return down(n - 1) + 1
+end
+
+def main() -> Void
+  puts("before")
+  x = 1
+  i = 0
+  while i < 1000
+    {statement}
+    i += 1
+  end
+  puts(x)
+end
+""", "native_failure", tmp_path)
+    callee = "down" if case == "depth" else "grow"
+    assert compiled(bytecode, tmp_path, "on") == (sorted([callee, "main"]) if X86_64 else [])
+    for style in ((), ("--json",)):
+        status, stdout, stderr = assert_same(bytecode, *style)
+        assert status == 1 and stdout == "before\n" and code in stderr, (style, stderr)
 
 
 def test_fields_lists_enums_results_and_floats_run_in_compiled_code(tmp_path):
