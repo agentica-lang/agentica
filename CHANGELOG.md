@@ -19,6 +19,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `Task.spawn_owning` takes a struct, enum, `List`, `Map` or `Result` that holds handles and hands over every one of them. (#673)
 - **Breaking:** `agentica test` without `--steps` uses the `steps.agc` found
   in or above the folder of each path that holds a feature
   (`specs/steps.agc` by default); two different ones are a usage error.

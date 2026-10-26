@@ -218,7 +218,9 @@ and a task's crash line (`"task":true`) carry it too.
 - `CHECK-CAPTURED-ASSIGNMENT`: a block assigns to an outer variable (use a `for`
   loop or `reduce`; for `xs.each do |w|` the help shows the loop).
 - `CHECK-NOT-A-HANDLE`: `Task.spawn_owning` with an argument that is not a
-  `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer` or `Channel[T]`.
+  `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer`, `Channel[T]`,
+  resource or owned buffer, nor a struct, enum, `List`, `Map` or `Result` that
+  holds one.
 - `CHECK-TYPE-ALIAS-CYCLE`: a type alias that expands to itself.
 - `CHECK-TOO-DEEP`: more than 1,000 levels of expressions and statements, or
   more than 1,000 type references in an expanded alias.

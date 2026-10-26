@@ -72,9 +72,12 @@ its owner closes it (then it gets the closed error).
 when it ends (a server takes its listener with it). Use it for a connection that
 a server loop passes to its own task; a crash then closes only that connection.
 The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`,
-`HttpServer` or `Channel[T]` (else `CHECK-NOT-A-HANDLE`, also for a struct or
-list holding one). A handle the caller does not own, one already handed over, or
-a closed one halts the caller with `RUNTIME-HANDLE-NOT-OWNED` at the argument.
+`HttpServer`, `Channel[T]`, native resource or owned buffer, or a struct, enum,
+`List`, `Map` or `Result` whose type holds one (else `CHECK-NOT-A-HANDLE`). The
+new task gets the value and owns every handle in it, so an enum
+`Conn.Sqlite(db)` hands over `db`. A handle the caller does not own, one already
+handed over, or a closed one halts the caller with `RUNTIME-HANDLE-NOT-OWNED` at
+the argument, and then none of the value's handles move.
 `Task.await` of an ended task returns after the regular files it owned are
 flushed and closed (not after a flush to a FIFO or pipe).
 
