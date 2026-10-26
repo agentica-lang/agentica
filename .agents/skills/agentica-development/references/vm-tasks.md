@@ -175,9 +175,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
       - `agc_task_builtins`: spawn with a per-task `Random` split (
         - `agc_task_spawn_seeded`)
       - and no move, `Task.spawn_owning` through `agc_task_spawn_owning` (
-        - the port function that also `HttpWire.spawn` calls: it fails with
-          `RUNTIME-HANDLE-NOT-OWNED` at the handle argument before it makes the
-          task, then spawns, seeds and hands the handle over)
+        - the port function that also `HttpWire.spawn` calls: it walks the
+          argument for its handles without `rt->sync` (`find_handles`), then
+          under the lock fails with `RUNTIME-HANDLE-NOT-OWNED` at the handle
+          argument before it makes the task or moves any handle, then spawns,
+          seeds and hands them all over)
       - two await entries with a FIFO of waiters and retry (
         - `agc_task_join`: clear `awaiting`, or enqueue on the target's waiters
           and park with retry

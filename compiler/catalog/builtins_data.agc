@@ -4389,8 +4389,9 @@ ROWS_51: List[Model.Builtin] = [
       implementation: "Task.spawn_owning",
       effects: ["concurrency"],
       description: (
-        "Like Task.spawn, and gives the handle or Channel argument, which the calling task must own (an unowned " +
-        "Channel counts), to the new task; VM only."
+        "Like Task.spawn, and gives the handle or Channel argument, or every one that a struct, enum, List, Map " +
+        "or Result argument holds, to the new task; the calling task must own each one (an unowned Channel " +
+        "counts); VM only."
       ),
       alternatives: [],
     ),

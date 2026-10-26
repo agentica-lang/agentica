@@ -48,11 +48,14 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 - Task.spawn takes Fn[A, R] and one argument, or an Fn[R] and none (a block
   works too: `Task.spawn do ... end`), and returns Task[R] and moves no
-  handle; Task.spawn_owning takes a handle type as the argument (the handle
-  types of the catalog, `compiler/catalog/builtins_data.agc`, else
-  `CHECK-NOT-A-HANDLE`; keep it in step with the tag list of `agc_owned_of` in
-  `vm/loop.c`, so a new handle kind goes into both) and gives it to the new task
-  (`RUNTIME-HANDLE-NOT-OWNED` at run time); a `Channel[T]` is accepted too (a
+  handle; Task.spawn_owning takes a handle type as the argument, or a struct,
+  enum, List, Map or Result whose type holds one (`holds_handle?` in
+  `compiler/check/check_collections.agc`, with the handle types of the catalog,
+  `compiler/catalog/builtins_data.agc`, else `CHECK-NOT-A-HANDLE`; keep it in
+  step with the tag lists of `agc_owned_of` in `vm/loop.c` and `handle_tag` in
+  `vm/task.c`, so a new handle kind goes into all three) and gives every handle
+  in it to the new task, all or none (`RUNTIME-HANDLE-NOT-OWNED` at run time);
+  a `Channel[T]` is accepted too (a
   `Channel` type in the checker): a channel is not in `agc_owned_of`, it gets
   its registry entry (no native object, `close` is the channel's own shut) from
   `agc_channel_claim` at the first hand-off, so an unowned channel can be handed

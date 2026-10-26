@@ -28,6 +28,18 @@ static long counter;
 static _Atomic int inside;
 static _Atomic int reset_taken;
 
+/* The rows whose mark differs from their table's, checked one by one. Task.spawn_owning walks its argument without
+   rt->sync and takes the lock itself to hand the handles over. */
+static const struct {
+  const char *name;
+  uint32_t arity;
+  bool shared;
+} expected[] = {
+    {"IO.gets", 0, true},          {"IO.read", 0, true},     {"File.read_line", 2, true}, {"File.close", 2, true},
+    {"puts", 1, false},            {"File.read_text", 2, false}, {"File.write_text", 3, false},
+    {"File.stat", 2, false},       {"Path.join", 1, false},  {"Task.spawn_owning", 2, false},
+};
+
 /* Before agc_share nothing is taken: the count stays 0 and a drop without a take is harmless. */
 static void test_solo(void) {
   agc_sync_take(&vm);
@@ -95,18 +107,25 @@ static void test_reset_frees_the_lock(void) {
   agc_sync_reset(&vm);
 }
 
-/* Every row of one table has the given mark. A table of a build without that service has one empty row. */
+static bool checked_by_row(const agc_builtin *b) {
+  for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++)
+    if (b->arity == expected[k].arity && strcmp(b->name, expected[k].name) == 0) return true;
+  return false;
+}
+
+/* Every row of one table has the given mark, but the rows of `expected`. A table of a build without that service has
+   one empty row. */
 static void table_marked(const agc_builtin *table, size_t count, bool shared) {
   for (size_t k = 0; k < count; k++) {
-    if (!table[k].fn) continue;
+    if (!table[k].fn || checked_by_row(&table[k])) continue;
     if (table[k].shared != shared) fprintf(stderr, "%s/%u: shared should be %d\n", table[k].name, table[k].arity, shared);
     assert(table[k].shared == shared);
   }
 }
 
 /* Which builtins the interpreter locks: marked by row. Every row of the tables of tasks, Task.map, channels, the
-   logger, processes, duplex channels, TCP and HTTP is locked; no row of the pure libraries (String, numbers, JSON,
-   Profile, Std) is.
+   logger, processes, duplex channels, TCP and HTTP is locked (but Task.spawn_owning, in `expected`); no row of the
+   pure libraries (String, numbers, JSON, Profile, Std) is.
    The mixed tables (the core one and File) are checked by row: stdin, handles and closes are locked, the output and
    the file calls that name a path are not. */
 static void test_builtin_classes(void) {
@@ -126,15 +145,6 @@ static void test_builtin_classes(void) {
   table_marked(agc_lazy_builtins, agc_lazy_builtin_count, false);
   table_marked(agc_profile_builtins, agc_profile_builtin_count, false);
   table_marked(agc_std_builtins, agc_std_builtin_count, false);
-  struct {
-    const char *name;
-    uint32_t arity;
-    bool shared;
-  } expected[] = {
-      {"IO.gets", 0, true},          {"IO.read", 0, true},     {"File.read_line", 2, true}, {"File.close", 2, true},
-      {"puts", 1, false},            {"File.read_text", 2, false}, {"File.write_text", 3, false},
-      {"File.stat", 2, false},       {"Path.join", 1, false},
-  };
   for (size_t k = 0; k < sizeof expected / sizeof expected[0]; k++) {
     const agc_builtin *b = agc_find_builtin((const uint8_t *)expected[k].name, strlen(expected[k].name), expected[k].arity);
     assert(b && b->shared == expected[k].shared);
