@@ -77,20 +77,6 @@ export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
   return error("no form with that arity")
 end
 
-## The index of the first parameter with a default, or the number of parameters when none has one.
-export def first_default(form: Model.Builtin) -> Int
-  at = 0
-  while at < form.parameters.size
-    if default_present?(form.parameters[at].default)
-      return at
-    end
-
-    at += 1
-  end
-
-  return at
-end
-
 ## True when some parameter of the form has a default.
 export def defaulted?(form: Model.Builtin) -> Bool
   return first_default(form) < form.parameters.size
@@ -181,10 +167,12 @@ end
 
 ## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain or Prelude builtin with
 ## a single form (the other rules read the arguments by position, and a form picked by the number of arguments would
-## be ambiguous), a parameter after a default has one too unless it is the last and an Fn, and each default has
-## the type of its parameter. The catalog text prints a problem, and a test fails on it.
+## be ambiguous), a parameter after a default has one too unless it is the last and an Fn, and each default has the
+## type of its parameter (a variant is one of its enum, with no payload). The catalog text prints a problem, and a test
+## fails on it.
 export def default_problem(entry: Model.Builtin) -> String
-  if !defaulted?(entry)
+  forms = [entry].concat(entry.alternatives)
+  if !forms.any? do |form: Model.Builtin| defaulted?(form) end
     return ""
   end
 
@@ -192,9 +180,8 @@ export def default_problem(entry: Model.Builtin) -> String
     return "a default needs a Plain or Prelude builtin with no alternative form"
   end
 
-  first = first_default(entry)
   last = entry.parameters.size - 1
-  at = first
+  at = first_default(entry)
   while at < entry.parameters.size
     parameter = entry.parameters[at]
     if !default_present?(parameter.default) and !(at == last and Types.is?(parameter.type, "Fn"))
@@ -202,7 +189,8 @@ export def default_problem(entry: Model.Builtin) -> String
     end
 
     if default_present?(parameter.default) and !default_fits?(parameter)
-      return "the default of #{parameter.name} is not a #{Types.to_text(parameter.type)}"
+      written = Types.to_text(parameter.type)
+      return "the default of #{parameter.name} is not #{article(written)} #{written}"
     end
 
     at += 1
@@ -212,7 +200,8 @@ export def default_problem(entry: Model.Builtin) -> String
 end
 
 ## The builtin enums that some builtin gives a default variant of: the lowering keeps them in the tables of every
-## program, because a call that leaves the argument out builds the variant with no expression that names the enum.
+## program, because a call that leaves the argument out builds the variant with no expression that names the enum. A
+## function, not a constant: a constant cannot call variant_enum.
 export def default_enums() -> Set[String]
   names: List[String] = []
   for row in BUILTIN_ROWS
@@ -227,6 +216,20 @@ export def default_enums() -> Set[String]
   return Set.new(names)
 end
 
+# The index of the first parameter with a default, or the number of parameters when none has one.
+def first_default(form: Model.Builtin) -> Int
+  at = 0
+  while at < form.parameters.size
+    if default_present?(form.parameters[at].default)
+      return at
+    end
+
+    at += 1
+  end
+
+  return at
+end
+
 # True for the Plain and Prelude rules: the arguments are checked against the parameters, one each.
 def takes_defaults?(rule: Model.Rule) -> Bool
   case rule
@@ -236,7 +239,7 @@ def takes_defaults?(rule: Model.Rule) -> Bool
   end
 end
 
-# True when the default has the type of its parameter. A variant must belong to the enum of the type.
+# True when the default has the type of its parameter.
 def default_fits?(parameter: Model.Named) -> Bool
   type = parameter.type
   case parameter.default
@@ -248,8 +251,29 @@ def default_fits?(parameter: Model.Named) -> Bool
     Model.Default.Nothing -> return Types.is?(type, "Nil")
     Model.Default.EmptyList -> return Types.is?(type, "List")
     Model.Default.EmptyMap -> return Types.is?(type, "Map")
-    Model.Default.Variant(name) -> return Types.is?(type, "Enum") and name.starts_with?("#{Types.name(type)}.")
+    Model.Default.Variant(name) -> return variant_fits?(type, name)
   end
+end
+
+# True for "Enum.Variant" when the type is that builtin enum and the variant exists with no payload.
+def variant_fits?(type: Types.Type, name: String) -> Bool
+  parts = name.split(".")
+  if parts.size != 2 or !Types.is?(type, "Enum") or Types.name(type) != parts[0] or !ENUMS.has_key?(parts[0])
+    return false
+  end
+
+  return ENUMS[parts[0]].variants.any? do |variant: Model.Variant|
+    variant.name == parts[1] and variant.payload.size == 0
+  end
+end
+
+# "an" before a vowel, else "a".
+def article(word: String) -> String
+  if "AEIOU".contains?(word.slice(0, 1))
+    return "an"
+  end
+
+  return "a"
 end
 
 # The enum of a default variant, or "".

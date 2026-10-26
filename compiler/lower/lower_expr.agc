@@ -123,9 +123,11 @@ export def lower_call(
   base = fx.next - 1
   fill = cx.fills.get(node.name)
   shape = Defaults.Shape(required: count, total: count, fn_last: false)
+  # A builtin or prelude form with defaults; `builtin` and `prelude` are true only when the form exists.
+  defaulted = (builtin or prelude) and Builtins.defaulted?(form.unwrap!)
   if fill.ok?
     shape = fill.unwrap!.shape
-  elsif (builtin or prelude) and Builtins.defaulted?(form.unwrap!)
+  elsif defaulted
     shape = Defaults.builtin_shape(form.unwrap!)
   end
 
@@ -133,8 +135,14 @@ export def lower_call(
   index = 0
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
-    out = try lower_argument(cx, fx, node, fill, form, shape, index)
-    fx = out.fx
+    if defaulted
+      out = try lower_builtin_argument(cx, fx, node, form.unwrap!, shape, index)
+      fx = out.fx
+    else
+      out = try lower_argument(cx, fx, node, fill, shape, index)
+      fx = out.fx
+    end
+
     index += 1
   end
 
@@ -164,22 +172,29 @@ export def lower_call(
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
-# The value of parameter param of a call: the argument that fills it, or its default value. A function or a builtin
-# with defaults gets all its arguments at the call site, so the bytecode and the VM know nothing about defaults.
+# The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
+# gets all its arguments at the call site, so the bytecode and the VM know nothing about defaults.
 def lower_argument(
-  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Result[Lowering.Fill], form: Result[Model.Builtin],
-  shape: Defaults.Shape, param: Int
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, fill: Result[Lowering.Fill], shape: Defaults.Shape, param: Int
 ) -> Result[Lowering.Out]
   source = Defaults.argument_for(shape, node.args.size, param)
   if source >= 0
     return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
   end
 
-  if fill.ok?
-    return lower_default(cx, fx, node, fill.unwrap!, param)
+  return lower_default(cx, fx, node, fill.unwrap!, param)
+end
+
+# The same for a builtin form with defaults: the default is the one of the parameter in its catalog row.
+def lower_builtin_argument(
+  cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, form: Model.Builtin, shape: Defaults.Shape, param: Int
+) -> Result[Lowering.Out]
+  source = Defaults.argument_for(shape, node.args.size, param)
+  if source >= 0
+    return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
   end
 
-  return lower_builtin_default(cx, fx, node, form.unwrap!.parameters[param].default)
+  return lower_builtin_default(cx, fx, node, form.parameters[param].default)
 end
 
 # The spans of a builtin call for the VM: the call's, then each argument's, in the order of the parameters; a default
