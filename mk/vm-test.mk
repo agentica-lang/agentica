@@ -80,9 +80,12 @@ FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' tests/fixtures/vm/*
 # ASAN_OPTIONS turns on the leak check that vm/value.c turns off for the other ASan builds: agc_fuzz_one frees every
 # block of an input. Fork mode keeps its jobs' inputs in TMPDIR, set under build/ because /tmp is often a small tmpfs.
 # The sub-make runs after dist/agentica, not beside it, because both write build/vm/flags.
-# A timeout (an input past 10 s) fails the run too: agc_fuzz_one has no wall clock (agc_timeout_length), so its steps
-# bound every wait.
+# A timeout (an input past LIBFUZZ_TIMEOUT seconds) fails the run too. agc_fuzz_one has no wall clock
+# (agc_timeout_length), so its steps bound every wait; but steps do not bound CPU work (a linear builtin on a large
+# string once per step), so a timeout can also be a slow input to triage. Fork mode saves a corpus or seed input that
+# fails its first pass and goes on without counting it, so the run also fails when crashes/ got a new file.
 LIBFUZZ_TIME ?= 60
+LIBFUZZ_TIMEOUT ?= 10
 LIBFUZZ_JOBS ?= 1
 LIBFUZZ_RSS_MB ?= 2048
 LIBFUZZ_FLAGS ?=
@@ -90,11 +93,15 @@ vm-libfuzz-run: dist/agentica$(EXE)
 	$(FUZZ_CORPUS)
 	$(MAKE) vm-libfuzz
 	@mkdir -p $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/crashes $(LIBFUZZ_DIR)/tmp
+	touch $(LIBFUZZ_DIR)/tmp/started; status=0; \
 	ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_DIR)/tmp \
 	  $(LIBFUZZ_DIR)/agentica-vm-libfuzz -fork=$(LIBFUZZ_JOBS) -ignore_timeouts=0 \
-	  -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=10 \
+	  -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=$(LIBFUZZ_TIMEOUT) \
 	  -artifact_prefix=$(LIBFUZZ_DIR)/crashes/ -print_final_stats=1 $(LIBFUZZ_FLAGS) \
-	  $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/seeds
+	  $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/seeds || status=$$?; \
+	new=$$(find $(LIBFUZZ_DIR)/crashes -type f -newer $(LIBFUZZ_DIR)/tmp/started); \
+	if [ -n "$$new" ]; then echo "vm-libfuzz-run: new failure files:"; echo "$$new"; [ $$status -ne 0 ] || status=1; fi; \
+	exit $$status
 
 # The golden tests compile with dist/agentica and run on the GC stress binary (AGENTICA_VM_BINARY): the front end does not
 # run under the stress. The binary links the stage2 that dist/agentica was built from.

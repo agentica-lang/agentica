@@ -1110,9 +1110,9 @@ static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool 
   }
   uint64_t now = agc_clock_ms();
   /* The first call always parks, even for a wait of 0 ms (agc_timeout_length); a retry with the deadline passed is a
-     timeout. */
+     timeout. 0 means "not set", so the stored deadline is made odd (at most 1 ms late), never 0. */
   if (!t->await_deadline)
-    t->await_deadline = now + (uint64_t)agc_timeout_length(vm, timeout);
+    t->await_deadline = (now + (uint64_t)agc_timeout_length(vm, timeout)) | 1;
   else if (t->await_deadline <= now) {
     t->await_deadline = 0;
     return await_timed_out(vm);

@@ -28,7 +28,7 @@ jobs:
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
       - run: test "$SECONDS_TO_FUZZ" -le 6000 || { echo "seconds must be at most 6000 (timeout-minutes is 120)" >&2; exit 1; }
       - run: make -j"$(nproc)" vm-libfuzz-run LIBFUZZ_TIME="$SECONDS_TO_FUZZ" LIBFUZZ_JOBS="$(nproc)" LIBFUZZ_FLAGS="-seed=$LIBFUZZ_SEED"
-      - if: failure()
+      - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: libfuzz-crashes
