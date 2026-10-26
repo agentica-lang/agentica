@@ -98,8 +98,9 @@ Notes by stage:
   (`symbol` or `refs` NAME in no linked module and no builtin) and
   `QUERY-AMBIGUOUS-NAME` (`refs_name.agc`); `QUERY-NO-EXPRESSION` is at the
   position. The stage reads the words (`query_options.agc`), picks the file
-  (`query_files.agc`) and lists declarations (`outline*.agc`). `outline` only
-  lexes and parses (its `LEX-` or `PARSE-` exits 1); `type-at` and `refs`
+  (`query_files.agc`) and lists declarations (`outline*.agc`). `outline` lexes
+  and parses, and links only a file with re-exports (its `LEX-` or `PARSE-`
+  exits 1); `type-at` and `refs`
   link and check, so any `LEX-`, `PARSE-`, `PKG-` or `CHECK-` code can come,
   exit 1; `symbol` exits 1 only when no file links.
 

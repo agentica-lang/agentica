@@ -113,7 +113,7 @@ export def outline(settings: Env.Settings, file: String, buffered: Bool) -> Outl
     SourceFile.Read.Unreadable(_) -> return Outlined.Unreadable
     SourceFile.Read.Invalid(at) -> return Outlined.Rejected(Front.stage_problem(file, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Text(text) ->
-      case Outline.of_text(text)
+      case Outline.of_file(settings, file, text)
         Diag.Outcome.Failed(problem) -> return Outlined.Rejected(Front.stage_problem(file, problem))
         Diag.Outcome.Done(found) ->
           return Outlined.Done(Convert.outline(QueryFiles.display(settings, file, buffered), found))

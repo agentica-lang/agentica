@@ -217,3 +217,24 @@ def test_an_exported_resource_is_documented_and_a_private_one_is_not(tmp_path):
     assert (db["signature"], db["summary"], start(db["span"])) == (
         "resource Db, free: db_close", "An open database.", (3, 3))
     assert items_by_name(report)["db_open"]["result"] == "Result[Db]"
+
+
+# A facade only re-exports: `doc` links it to find the originals and lists them with their docs, at the export line. A
+# facade whose import does not exist lists nothing and does not fail.
+def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
+    models = ("## A user.\nexport struct User\n  ## The name.\n  name: String\nend\n\n"
+              "## Makes a user.\nexport def make(name: String) -> User\n  return User(name: name)\nend\n")
+    facade = 'import Models from "models"\n\nexport Models.make\nexport Models.User\n'
+    (tmp_path / "models.agc").write_text(models, encoding="utf-8")
+    (tmp_path / "facade.agc").write_text(facade, encoding="utf-8")
+    result = doc("facade.agc", "--json", cwd=tmp_path)
+    assert (result.code, result.stderr) == (0, "")
+    items = items_by_name(json.loads(result.stdout))
+    assert list(items) == ["make", "User"]
+    assert (items["make"]["signature"], items["make"]["doc"]) == ("make(name: String) -> User", "Makes a user.")
+    assert (items["User"]["kind"], items["User"]["fields"][0]["doc"]) == ("struct", "The name.")
+    assert (start(items["make"]["span"]), start(items["User"]["span"])) == ((3, 1), (4, 1))
+    assert items["make"]["span"]["file"] == "facade.agc"
+    (tmp_path / "models.agc").unlink()
+    missing = doc("facade.agc", "--json", cwd=tmp_path)
+    assert (missing.code, json.loads(missing.stdout)["items"]) == (0, [])

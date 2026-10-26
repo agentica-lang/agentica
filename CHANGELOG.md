@@ -14,6 +14,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `agentica doc` and `agentica outline` list the re-exports of a facade file
+  with the doc of the original, and `agentica type-at` and `agentica refs`
+  write a re-exported type through the facade alias (`Web.Address`).
 - A block of unknown result type (`map`, `Native.memory_pointer`, `Task.map`)
   that returns `error(...)` before its `ok(...)` no longer needs an annotation.
 
