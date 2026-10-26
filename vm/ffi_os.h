@@ -25,10 +25,11 @@ typedef enum {
   AGC_C_RESOURCE, AGC_C_STRUCT, AGC_C_INT8, AGC_C_INT16, AGC_C_UINT8, AGC_C_UINT16, AGC_C_UINT32, AGC_C_LONG
 } agc_c_type;
 
-/* A C struct of a signature, in malloc memory: COUNT fields in order, each an integer type, AGC_C_DOUBLE, AGC_C_FLOAT,
-   AGC_C_BOOL, AGC_C_POINTER or AGC_C_STRUCT (its layout in nested[k], NULL for the others). agc_ffi_prepare fills size, align and offsets[k], as
-   libffi lays the struct out by the C rules of the platform. INDEX is the program's struct that it is (ffi.c's; the
-   adapter ignores it), and POINTERS counts its C.Pointer fields, nested ones included. */
+/* A C struct of a signature, in malloc memory: COUNT fields in order, each an integer type, AGC_C_DOUBLE,
+   AGC_C_FLOAT, AGC_C_BOOL, AGC_C_POINTER or AGC_C_STRUCT (its layout in nested[k], NULL for the others).
+   agc_ffi_prepare fills size, align and offsets[k], as libffi lays the struct out by the C rules of the platform.
+   INDEX is the program's struct that it is (ffi.c's; the adapter ignores it), and POINTERS counts its C.Pointer
+   fields, nested ones included. */
 typedef struct agc_c_struct {
   uint32_t count, index, pointers;
   size_t size, align;

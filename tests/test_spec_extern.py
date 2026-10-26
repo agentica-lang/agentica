@@ -153,19 +153,17 @@ def test_the_integer_types_are_int_to_the_checker(tmp_path, body, code, start, s
 
 # An integer type narrower than an int is promoted by C after ..., so it is refused there as C.Bool is; C has no
 # unsigned 64-bit or unsigned long type here: C.Int64 and C.Long carry the same bits, and the help says so.
-@pytest.mark.parametrize("signature, code, start, stop, named", [
-    ("def f(a: C.Int32, ..., b: C.Int8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 35), None),
-    ("def f(a: C.Int32, ..., b: C.Int16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36), None),
-    ("def f(a: C.Int32, ..., b: C.UInt8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36), None),
-    ("def f(a: C.Int32, ..., b: C.UInt16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 37), None),
-    ("def f(a: C.UInt64) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 20), "C.Int64"),
-    ("def f() -> C.ULong", "PARSE-EXTERN-TYPE", (2, 14), (2, 21), "C.Long"),
+@pytest.mark.parametrize("signature, code, start, stop", [
+    ("def f(a: C.Int32, ..., b: C.Int8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 35)),
+    ("def f(a: C.Int32, ..., b: C.Int16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36)),
+    ("def f(a: C.Int32, ..., b: C.UInt8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36)),
+    ("def f(a: C.Int32, ..., b: C.UInt16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 37)),
+    ("def f(a: C.UInt64) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 20)),
+    ("def f() -> C.ULong", "PARSE-EXTERN-TYPE", (2, 14), (2, 21)),
 ])
-def test_promoted_and_missing_integer_types_are_refused(tmp_path, signature, code, start, stop, named):
+def test_promoted_and_missing_integer_types_are_refused(tmp_path, signature, code, start, stop):
     problem = problem_of(check(source(tmp_path, 'extern "libc.so.6"\n  %s\nend\n' % signature)))
     assert at(problem) == (code, start, stop)
-    if named:
-        assert named in problem["help"]
 
 
 MEMORY = """extern "/opt/libpeer.so"

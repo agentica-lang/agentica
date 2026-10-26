@@ -8,7 +8,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 
 | C type | C | In Agentica |
 |---|---|---|
-| `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64` | `int8_t` to `int64_t` (`signed char`, `short`, `int`, `long long`) | `Int` |
+| `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64` | `int8_t` to `int64_t` (`signed char`, `short`, `int`, a 64-bit integer) | `Int` |
 | `C.UInt8`, `C.UInt16`, `C.UInt32` | `uint8_t` to `uint32_t` (`unsigned char`, `unsigned short`, `unsigned int`) | `Int`, never negative |
 | `C.Long` | `long`: 32 bits on Windows, 64 on Linux and macOS | `Int` |
 | `C.Double` | `double` | `Float` |
@@ -22,7 +22,7 @@ description: The C types of an extern block, variadic functions, reading memory 
 
 `C.Int` is `PARSE-EXTERN-TYPE`: write the width, `C.Int32` or `C.Int64`, or `C.Long` for a C `long`. A result may also be `Void`, a block may declare resources, and a parameter may be an out parameter (below). A function takes at most 64 parameters (`PARSE-EXTERN-ARITY`).
 
-- An integer argument takes the bits of its type, read as signed or as unsigned, as `Native.put_int8` to `put_int32` do: a `C.Int8` or `C.UInt8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1 (and a `C.Long` on Windows the same), and C gets the low bits, so `-1` is the `C.UInt32` 4294967295. A value outside fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
+- An integer argument takes the bits of its type, read as signed or as unsigned, as `Native.put_int8` to `put_int32` do: a `C.Int8` or `C.UInt8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1 (a `C.Long` the same on Windows and any `Int` elsewhere), and C gets the low bits, so `-1` is the `C.UInt32` 4294967295. A value outside fails with `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character with `RUNTIME-INVALID-CHARACTER`.
 - A signed integer result is sign-extended and an unsigned one zero-extended: a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as `C.Long`. The same bits cross, and a value above the signed maximum reads as negative, as `std/binary`'s `read_i64` reads it.
 - A `C.Float` argument is rounded to the nearest 32-bit float (one outside its range becomes an infinity), and a `C.Float` result is widened to a `Float` (`0.1` comes back as `0.10000000149011612`).
 - The C function gets a copy of each string, valid only during the call. A `C.String` result is copied; `NULL` gives `""`, and bytes that are not UTF-8 become U+FFFD. When NULL matters, declare the result `-> C.Pointer` and read it with `Native.get_string` (below).

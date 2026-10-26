@@ -2776,8 +2776,8 @@ def c_name?(text: String) -> Bool
   return text.split("").all? do |char: String| C_NAME_CHARS.include?(char) end
 end
 
-# PARSE-EXTERN-VARIADIC-TYPE for a parameter of the variadic part that C would promote (C.Bool, C.Float) or that is an
-# out parameter.
+# PARSE-EXTERN-VARIADIC-TYPE for a parameter of the variadic part that C would promote (C.Bool, C.Float and the four
+# integer types narrower than an int) or that is an out parameter.
 def variadic_type(param: Ast.Param, taken: ExternType, out: Bool) -> Result[Void]
   if out
     return error(

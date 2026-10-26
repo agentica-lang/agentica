@@ -116,10 +116,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   after `.`. The integer codes are `i l g h u w j n` (`C.Int32`, `C.Int64`,
   `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32`, `C.Long`; capitals
   out); `fits_bits` is the one range rule of arguments, fields and `put_*`, and
-  the four narrower than an int are refused after `.`. Every `Native.*` import counts as native code for the refusal at
-  load. The adapter `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and
-  macOS) opens libraries with `dlopen` or `LoadLibraryExW` and calls with
-  libffi; `vm/ffi_none.c` refuses elsewhere
+  the four narrower than an int are refused after `.`. Every `Native.*` import
+  counts as native code for the refusal at load. The adapter `vm/ffi_libffi.c`
+  (`AGC_FFI`, Linux x86_64, Windows x64 and macOS) opens libraries with `dlopen`
+  or `LoadLibraryExW` and calls with libffi; `vm/ffi_none.c` refuses elsewhere
 - `vm/numbers.c`: `Float`, `Time` and `Random` builtins (`agc_number_builtins`)
 - `vm/random.c`: xoshiro256** seeded with splitmix64, both public domain
   (`docs/vm/05-values-execution-builtins.md` §7.4)

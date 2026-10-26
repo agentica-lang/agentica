@@ -482,15 +482,15 @@ end
   05b-modules.md): `extern "NAME"` in a file of the package then opens the file
   it ships for the running system by its absolute path in `deps/`, or the
   system name it gives.
-- An argument is checked before the call: an integer takes the bits of its
-  type read as signed or as unsigned, as `put_int8` to `put_int32` do (a
-  `C.UInt8` or `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to
-  2^32 - 1, a `C.Long` on Windows the same), and C gets its low bits; one
-  outside is `RUNTIME-INTEGER-OVERFLOW`. A `C.String` with a NUL character is
-  `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
-  it may read only during the call. A `C.String` result is copied; `NULL` reads
-  as `""`, and bytes that are not UTF-8 become U+FFFD. A result that may be
-  NULL is declared `-> C.Pointer` and read with `Native.get_string`.
+- An argument is checked before the call: an integer takes the bits of its type
+  read as signed or as unsigned, as `put_int8` to `put_int32` do (a `C.UInt8` or
+  `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to 2^32 - 1, a
+  `C.Long` the same on Windows and any `Int` elsewhere), and C gets its low
+  bits; one outside is `RUNTIME-INTEGER-OVERFLOW`. A `C.String` with a NUL
+  character is `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each
+  string, which it may read only during the call. A `C.String` result is copied;
+  `NULL` reads as `""`, and bytes that are not UTF-8 become U+FFFD. A result
+  that may be NULL is declared `-> C.Pointer` and read with `Native.get_string`.
 - `C.Pointer` is a C pointer (`void *`), a builtin type that any code may hold.
   It may be NULL: `Native.null()` makes one and `Native.null?(p)` tests it.
   Pointers have no `==`. `IO.inspect` prints `<C.Pointer>`.
@@ -590,19 +590,18 @@ end
   parameters (take a `char **` as an out `C.Pointer`).
 - A `struct` of the block (section 5) is a C struct passed and returned by
   value, laid out as the C compiler of the system lays it out (libffi computes
-  the offsets): Ruby ffi's `class P < FFI::Struct; layout ...`. The program
-  sees a record, copied both ways. A struct result is a new record with each
-  field read from C (a `C.Bool` field is true when its byte is not 0). A struct
+  the offsets): Ruby ffi's `class P < FFI::Struct; layout ...`. The program sees
+  a record, copied both ways. A struct result is a new record with each field
+  read from C (a `C.Bool` field is true when its byte is not 0). A struct
   argument is copied into C memory for the call, each field checked as an
   argument is: an integer outside the bits of its type is
-  `RUNTIME-INTEGER-OVERFLOW`, a
-  `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field is
-  `RUNTIME-NATIVE-CLOSED`, all before C runs. A field is changed with `.with`
-  and the new record passed back (llama.cpp's params). A `C.Pointer` field is an
-  address that nothing tracks, so the memory it names must outlive C's use; a
-  `compute def` call holds the owned buffers in the fields of its struct
-  arguments as it holds its buffer arguments. A struct with a fixed array
-  field (`char name[16]`) cannot be declared yet.
+  `RUNTIME-INTEGER-OVERFLOW`, a `C.Float` is rounded, and a freed owned buffer
+  in a `C.Pointer` field is `RUNTIME-NATIVE-CLOSED`, all before C runs. A field
+  is changed with `.with` and the new record passed back (llama.cpp's params). A
+  `C.Pointer` field is an address that nothing tracks, so the memory it names
+  must outlive C's use; a `compute def` call holds the owned buffers in the
+  fields of its struct arguments as it holds its buffer arguments. A struct with
+  a fixed array field (`char name[16]`) cannot be declared yet.
 - A C function whose address is known only at run time, such as a slot of a
   table of function pointers (onnxruntime's `OrtApi`), is declared with a
   first parameter `fn: C.Function` (section 5) and called with that address,

@@ -79,9 +79,10 @@ integer types (`C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`, `C.UInt8`,
 `C.UInt16`, `C.UInt32`, `C.Long`) as `Int`, `C.Double` and `C.Float` (a 32-bit
 `float`) as `Float`, `C.Bool` as `Bool` and `C.String` as `String`.
 `compute def` declares a function that runs off the scheduler while the task
-waits (section 6d); `export` comes first. `extern` is contextual: it is a keyword only at the
-start of a top-level declaration, and `compute` only before `def` in an extern
-block.
+waits (section 6d); `export` comes first. `extern` is contextual: it is a
+keyword only at the start of a top-level declaration, and `compute` only before
+`def` in an extern block. `C.UInt64` and `C.ULong` are `PARSE-EXTERN-TYPE`:
+write `C.Int64` and `C.Long`, which carry the same bits.
 
 `resource Name, free: c_name` in an extern block declares a resource: a type for
 the C pointers that the block's functions return, freed by the C function
