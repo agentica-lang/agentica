@@ -20,6 +20,7 @@
 ## from 0. The checker's tables are indexed by id, so gaps cost memory, bounded by that factor.
 
 import Checker from "../check/checker"
+import Problems from "../diagnostics/problem"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
 import Ast from "../syntax/ast"
@@ -37,12 +38,15 @@ end
 ## which modules it was made from; `used` is the clock of the refresh that last wanted it. `good` is the last program
 ## of this root that checked, which is the current one when `checking` is a program. When the latest program does not
 ## check, `good` keeps a whole older one (modules, linked program and result) beside it: up to MAX_ROOTS of them,
-## outside the accounting of `pruned` and `crowded?`.
+## outside the accounting of `pruned` and `crowded?`. `style` is the first style problem of the program when it
+## checked (Front.style_problem): it depends on the texts and on which modules ask for a rule, and the fingerprint has
+## both, so a hit reuses it and does not lex the modules again. It is Absent when the program did not check.
 export struct Root
   loaded: Modules.Loaded
   fingerprint: String
   linked: Linker.Linked
   checking: Checker.Checking
+  style: Ast.Optional[Problems.Problem]
   good: Ast.Optional[Good]
   used: Int
 end
@@ -90,6 +94,7 @@ export def solved(
   loaded: Modules.Loaded,
   linked: Linker.Linked,
   checking: Checker.Checking,
+  style: Ast.Optional[Problems.Problem],
   before: Ast.Optional[Root],
 ) -> Root
   good: Ast.Optional[Good] = Ast.Optional.Absent
@@ -109,6 +114,7 @@ export def solved(
     fingerprint: fingerprint(loaded),
     linked: linked,
     checking: checking,
+    style: style,
     good: good,
     used: 0,
   )

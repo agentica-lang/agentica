@@ -144,6 +144,26 @@ export def check_dependencies(
   return ok()
 end
 
+## Whether the file `key` (a canonical path) follows the style keys of the manifest in `style_dir` ("" when no manifest
+## asks for a style rule): it is below that folder, no folder between them has an agentica.toml (that is another
+## project, whose own keys are not read) and it is not in the agc_libs/ of the folder, which holds libraries.
+export def styled?(workspace: Workspace.Workspace, style_dir: String, key: String) -> Bool
+  if style_dir == "" or !Paths.inside?(style_dir, key) or Paths.inside?(Paths.join(style_dir, "agc_libs"), key)
+    return false
+  end
+
+  here = Paths.directory_of(key)
+  while here != style_dir and Paths.inside?(style_dir, here)
+    if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))
+      return false
+    end
+
+    here = Paths.directory_of(here)
+  end
+
+  return true
+end
+
 # The folder with an agentica.toml that is the nearest to dir, going up; "" when there is none.
 def nearest(workspace: Workspace.Workspace, dir: String) -> String
   here = dir

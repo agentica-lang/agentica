@@ -1,9 +1,10 @@
 ## CHECK-BLANK-LINE-AFTER-END: the optional style rule of a project (`[style] blank_line_after_end = true` in
 ## agentica.toml, docs/grammar/05b-modules.md). A line whose code is only `end` must be followed by an empty line.
 ##
-## The rule reads the tokens of the file, so an `end` inside a string, a heredoc or a comment is never one. The tokens
-## say which lines hold code; the text says whether the line after is empty, since a comment line and an empty line
-## have no token.
+## The rule reads the tokens of the file, so an `end` inside a string, a heredoc or a comment is never one. A bare
+## `end` is a token with a line break on both sides. The tokens say whether the next line starts with a word that goes
+## on or closes a block; the text says whether it is empty, since a comment line and an empty line have no token. Only
+## the one line after each `end` is read, so the cost is the lexing of the file.
 
 import Diag from "../diagnostics/diagnostic"
 import Failure from "../diagnostics/problem"
@@ -16,22 +17,14 @@ import Tokens from "../syntax/token"
 # block `end` closed (`else`, `elsif`) or close the next one (`end`), and the closing brackets.
 FOLLOWERS = Set.new(["end", "else", "elsif", "right-paren", "right-bracket", "right-brace"])
 
-# What the tokens say about one line: how many start on it, and the kind of the leftmost one.
-struct Row
-  count: Int
-  column: Int
-  kind: String
-end
-
 ## The first `end` of `linked` that breaks the rule, among the files whose project asks for it, as a problem at that
 ## `end` (there is no empty line to point at). The files are taken in program order. Absent when none does.
 export def blank_line_after_end(linked: Linker.Linked) -> Ast.Optional[Failure.Problem]
   for module in linked.modules
     if module.blank_line_after_end
-      found = in_module(module)
-      case found
-        Ast.Optional.Present(_) -> return found
-        Ast.Optional.Absent -> found = found
+      case in_module(module)
+        Ast.Optional.Present(problem) -> return Ast.Optional.Present(problem)
+        Ast.Optional.Absent -> next
       end
     end
   end
@@ -46,64 +39,51 @@ def in_module(module: Linker.LinkedModule) -> Ast.Optional[Failure.Problem]
   end
 end
 
-# The problem at the first bare `end` of the file that is not followed by an empty line.
+# The problem at the first bare `end` of the file that is not followed by an empty line. An `end` is bare when a line
+# break comes before and after it: a trailing comment is no token, and a line that goes on with a leading `.name` has
+# no line break after it, so neither makes it less bare. The kind of a token is checked before its neighbours, so the
+# many other tokens cost one comparison.
 def first_missing(file: String, text: String, tokens: List[Tokens.Token]) -> Ast.Optional[Failure.Problem]
-  rows = rows_of(tokens)
-  lines = text.split("\n")
-  index = 0
-  while index < tokens.size
+  for index in 1...tokens.size - 1
     token = tokens[index]
-    if token.kind == "end" and rows[token.span.start.line].count == 1 and !continued?(tokens, index)
-      if needs_empty_line?(lines, rows, token.span.start.line + 1)
+    if token.kind == "end" and tokens[index - 1].kind == "NL" and tokens[index + 1].kind == "NL"
+      if needs_empty_line?(text, tokens, index + 1)
         return Ast.Optional.Present(missing(file, token))
       end
     end
-    index += 1
   end
   return Ast.Optional.Absent
 end
 
-# The rows by line number. A line break and the end of the file hold no code. The tokens of a `#{...}` in a heredoc
-# body come after the opener's line in the list, so a row is built from every token, not from its neighbours.
-def rows_of(tokens: List[Tokens.Token]) -> Map[Int, Row]
-  rows: Map[Int, Row] = {}
-  for token in tokens
-    if token.kind == "NL" or token.kind == "EOF"
-      next
+# Whether the line after the line break at `tokens[at]` must be empty and is not. The end of the file needs nothing. A
+# line of spaces and tabs (and the carriage return of a CRLF line break) is empty. Else the line must start with a
+# word of FOLLOWERS: the first token after the line breaks is the leftmost one of the next line that has code, and
+# only its own line, not the position in the list (a heredoc body puts the tokens of its `#{...}` after the opener's
+# line), says whether that line is the next one.
+def needs_empty_line?(text: String, tokens: List[Tokens.Token], at: Int) -> Bool
+  position = tokens[at].span.stop.offset
+  while position < text.length
+    char = text.slice(position, 1)
+    if char == "\n"
+      return false
+    elsif char != " " and char != "\t" and char != "\r"
+      return !follower?(tokens, at)
     end
-    line = token.span.start.line
-    column = token.span.start.column
-    if !rows.has_key?(line)
-      rows = rows.put(line, Row(count: 1, column: column, kind: token.kind))
-    else
-      row = rows[line]
-      if column < row.column
-        row = row.with(column: column, kind: token.kind)
-      end
-      rows = rows.put(line, row.with(count: row.count + 1))
-    end
+
+    position += 1
   end
-  return rows
+
+  return false
 end
 
-# Whether the code after the `end` at `index` goes on with a leading `.name`: the lexer joins that line to the `end`
-# (a comment line may sit between), so an empty line there would be a stray dot.
-def continued?(tokens: List[Tokens.Token], index: Int) -> Bool
-  return index + 1 < tokens.size and tokens[index + 1].kind == "dot"
-end
-
-# Whether the line `number` (1-based) must be empty and is not: it exists, it has something on it, and what it starts
-# with does not close or go on with the block. The end of the file needs nothing.
-def needs_empty_line?(lines: List[String], rows: Map[Int, Row], number: Int) -> Bool
-  if number > lines.size or blank?(lines[number - 1])
-    return false
+# Whether the first token after the line breaks from `at` is a FOLLOWERS word on the line right after the `end`'s.
+def follower?(tokens: List[Tokens.Token], at: Int) -> Bool
+  after = at + 1
+  while tokens[after].kind == "NL"
+    after += 1
   end
-  return !(rows.has_key?(number) and FOLLOWERS.include?(rows[number].kind))
-end
 
-# Only spaces and tabs (and the carriage return of a CRLF line break).
-def blank?(line: String) -> Bool
-  return line.split("").all? do |char: String| char == " " or char == "\t" or char == "\r" end
+  return tokens[after].span.start.line == tokens[at - 1].span.start.line + 1 and FOLLOWERS.include?(tokens[after].kind)
 end
 
 def missing(file: String, token: Tokens.Token) -> Failure.Problem

@@ -76,7 +76,7 @@ export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings
     return Outcome.Rejected(link_problem(Failure.unpack_failure(walked.message)))
   end
   case Cache.find(cache, walked.unwrap!)
-    Cache.Found.Hit(root) -> return checked_outcome(root.linked, root.checking)
+    Cache.Found.Hit(root) -> return stored_outcome(root)
     Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
   end
 end
@@ -155,7 +155,8 @@ def solve(cache: Cache.Cache, reaching: Cache.Cache, loaded: Modules.Loaded, set
     Linker.Linking.Done(program) ->
       reusing = Cache.reusing(cache, loaded)
       rechecked = check_reusing(reusing, program, settings)
-      root = Cache.solved(loaded, program, rechecked.checking, Cache.held(cache, loaded))
+      style = style_after(rechecked.checking, program)
+      root = Cache.solved(loaded, program, rechecked.checking, style, Cache.held(cache, loaded))
       return Cache.remember(reaching, root, loaded, true, rechecked.taken)
   end
 end
@@ -167,13 +168,30 @@ def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) ->
   return checked_outcome(linked, Checker.check_query(linked, settings))
 end
 
-# A program that checked still has to follow the style rules of its project (check_style.agc). They are not kept in the
-# cache: the modules say whether they are asked, and the cache tells a changed manifest by the shape of the modules.
+# A program that checked still has to follow the style rules of its project (check_style.agc).
 def checked_outcome(linked: Linker.Linked, checking: Checker.Checking) -> Outcome
+  return finished(linked, checking, style_after(checking, linked))
+end
+
+# The outcome for a root that the cache holds: its style problem was found when it was made, from the same texts and
+# the same projects (Cache.find compares both), so the modules are not lexed again.
+def stored_outcome(root: Cache.Root) -> Outcome
+  return finished(root.linked, root.checking, root.style)
+end
+
+# The style problem of `linked`, looked for only when it checked: a type error is reported first.
+def style_after(checking: Checker.Checking, linked: Linker.Linked) -> Ast.Optional[Problems.Problem]
+  case checking
+    Checker.Checking.Failed(_) -> return Ast.Optional.Absent
+    Checker.Checking.Done(_) -> return style_problem(linked)
+  end
+end
+
+def finished(linked: Linker.Linked, checking: Checker.Checking, style: Ast.Optional[Problems.Problem]) -> Outcome
   case checking
     Checker.Checking.Failed(problem) -> return Outcome.Rejected(problem)
     Checker.Checking.Done(checked) ->
-      case style_problem(linked)
+      case style
         Ast.Optional.Present(problem) -> return Outcome.Rejected(problem)
         Ast.Optional.Absent -> return Outcome.Done(Checked(linked: linked, checked: checked))
       end

@@ -174,7 +174,13 @@ def beside(
   if importer.origin.root != ""
     name = try Packages.stay_inside(importer.origin, target, site)
   end
-  return ok(Resolution(key: target, origin: importer.origin, name: name, scope: build.scope))
+
+  origin = importer.origin
+  if origin.root == ""
+    origin = Packages.file_origin(workspace, build.scope, origin, target)
+  end
+
+  return ok(Resolution(key: target, origin: origin, name: name, scope: build.scope))
 end
 
 def io_failure(site: Failure.Site, message: String) -> String
