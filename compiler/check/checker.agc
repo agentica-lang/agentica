@@ -115,6 +115,21 @@ export def check_query_reusing(linked: Linker.Linked, settings: Env.Settings, re
   return Rechecked(checking: finished(run(linked, settings, false, false, taken)), taken: taken.clean.size)
 end
 
+## Checks a linked program as `check_query` does, except that the modules of `clean` are not checked: not their
+## function bodies, constants or field defaults. The type of each of their constants is in `constants`, by linked name,
+## as a module that was checked leaves it (analysis/front.agc takes both from the cache of checked modules, modules/
+## check_cache.agc, which vouches for them). The first problem is the one `check_query` gives; the types of the nodes
+## of a clean module are not known (Unknown).
+export def check_query_taking(
+  linked: Linker.Linked,
+  settings: Env.Settings,
+  clean: Set[String],
+  constants: Map[String, T.Type],
+) -> Checking
+  st = State.fresh().with(types: State.no_types(ids_of(linked)))
+  return finished(run(linked, settings, false, false, Reuse.Taken(st: st, constants: constants, clean: clean)))
+end
+
 def recovered(result: Result[Recovered]) -> Recovering
   if result.ok?
     return Recovering.Done(result.unwrap!)

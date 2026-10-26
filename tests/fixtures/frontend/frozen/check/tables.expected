@@ -111,7 +111,7 @@ export def foreign_names() -> Map[String, String]
     "SizedQueue.new": "use Channel.new(capacity): ch: Channel[Int] = Channel.new(8)",
     "Task.async": "use Task.spawn(&f, arg), and Task.await(task) for its result",
     "Task.async_stream": "use Task.map(items, limit, timeout_ms) do |x| ... end, where the block gives a Result",
-    "Thread.new": "use Task.spawn(&f, arg), and Task.await(task) for its result",
+    "Thread.new": "use Task.spawn do ... end (or Task.spawn(&f, arg)), and Task.await(task) for its result",
     "break": "break is a statement on its own line inside while or for",
     "continue": "write next, on its own line, to skip to the next iteration",
     "elif": "write elsif: if a ... elsif b ... else ... end",

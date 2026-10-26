@@ -125,9 +125,9 @@ are registered in `stdlib/MODULES`.
   - In the runner, the seed is `--seed` or one drawn with `Random.int` and
     passed to every child (`--seed` always) and to the report.
   - Without `--steps`, `default_steps` (`bdd_driver.agc`) takes the nearest
-    `steps.agc` from each path up to the working directory, only when the run
-    has a feature file (two different files are a usage report), so the config
-    is the same as for `--steps`
+    `steps.agc` from each path that holds a feature up to the working
+    directory, only when the run has one (two different files are a usage
+    report), so the config is the same as for `--steps`
   - The steps are listed only when there is a feature (a `--steps` program that
     does not compile is still a file error without one)
   - a broken step program is one `steps` file error, and the test files still
@@ -239,12 +239,14 @@ are registered in `stdlib/MODULES`.
 - `stdlib/bdd/gherkin.agc` (`std/bdd/gherkin`) parses the English Gherkin
   subset with stable codes, the first error and spans. `parse(file, text)`
   returns `Outcome.Done(Feature)` or `Outcome.Failed(Diagnostic)` (the
-  `std/test/report` types); a `Span` is file, line, column 1 and the end column
-  of the raw line, with no offset. Table rows and `<name>` substitution split
-  the text and join it once, with no `+=` or `push` per character or cell, so
-  they cost linear time in the line. Building the step, row, Examples, draft and
-  scenario lists with `push` per line is still quadratic in the line count.
-  Goldens: `bdd-gherkin-outline`, `-sections` and `-arguments`.
+  `std/test/report` types); a `Span` is file, line, column 1 (a step's: its
+  keyword's) and the end column of the raw line, with no offset. An outline
+  row's name gets ` (values)` of the columns its name does not show. Table rows
+  and `<name>` substitution split the text and join it once, with no `+=` or
+  `push` per character or cell, so they cost linear time in the line. Building
+  the step, row, Examples, draft and scenario lists with `push` per line is
+  still quadratic in the line count. Goldens: `bdd-gherkin-outline`, `-sections`
+  and `-arguments`.
 - `stdlib/bdd/match.agc` (`std/bdd/match`) compiles and matches step patterns
   and runs the duplicate and resolve checks, by hand with no regular
   expressions; it imports `gherkin` for `Diagnostic`, `Outcome` and `Step`, and

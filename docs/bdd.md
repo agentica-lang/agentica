@@ -36,12 +36,12 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   may come before or after `test`. A program that does not compile is a file
   error even when no feature needs it.
 - **Default step program.** Without `--steps`, a run with at least one
-  `.feature` file looks for `steps.agc` from each path (the paths given, else
-  `specs/` and `test/`): in the path if it is a folder, else in the folder of
-  the file, then in each parent folder up to the working directory, never above
-  it. The nearest one counts. If the paths lead to two different files, the run
-  fails with `RUNTIME-BDD-USAGE`; pass `--steps`. With none, only the predefined
-  steps exist. A run of unit tests alone never compiles it.
+  `.feature` file looks for `steps.agc` from each path that holds a feature
+  (the paths given, else `specs/` and `test/`): in the path if it is a folder,
+  else in the folder of the file, then in each parent folder up to the working
+  directory, never above it. The nearest one counts. If the paths lead to two
+  different files, the run fails with `RUNTIME-BDD-USAGE`; pass `--steps`. With
+  none, only the predefined steps exist. A run of unit tests alone never compiles it.
 - **`--only TEXT`** (once, not empty; otherwise `RUNTIME-BDD-USAGE`) keeps the
   scenarios and tests whose name contains `TEXT`. If none matches, the run fails
   with `CHECK-BDD-EMPTY`.
@@ -96,8 +96,9 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
 
 The parser supports English `Feature`, `Background`, `Scenario`, `Example`,
 `Scenario Outline`, `Examples`, `Given`, `When`, `Then`, `And` and `But`. It
-returns the first error (`std/bdd/gherkin`). A location's column is 1, and its
-range runs to the end of the line.
+returns the first error (`std/bdd/gherkin`). A location's column is 1, except a
+step's, which is its keyword's (after the indentation, spaces, tabs and form
+feeds); a range runs to the end of the line.
 
 - **Lines and tags.** Blank lines and `#` comments are skipped; `# language: en`
   is accepted, and any other `# language:` is `PARSE-GHERKIN-UNSUPPORTED`. Tags
@@ -115,10 +116,16 @@ range runs to the end of the line.
 - **Outlines.** `Scenario Outline` needs an `Examples` block; `Examples` outside
   an outline is `PARSE-GHERKIN-EXAMPLES`, and so is a table with no header row,
   an empty or repeated header cell, or no rows. Each row is a scenario, with
-  `<name>` replaced in the name, steps, Doc Strings and cells. A `<name>` that
-  is not a column is `PARSE-GHERKIN-PARAMETER`. Several `Examples` blocks add
-  their rows in order, and a row's tags are the Feature's, then the scenario's,
-  then its `Examples` block's.
+  `<name>` replaced in the name, steps, Doc Strings and cells. The scenario's
+  name ends with ` (a, b)`: the row's values in the columns that the outline's
+  name does not show, so each row has its own name in the report and for
+  `--only` (`Name (sqlite, 42)`; a name that shows every column gets nothing).
+  An empty cell shows as `""` and a control character as `\n`, `\r`, `\t` or
+  `\xNN`. Identical rows keep identical names; the JSON `example` field (the
+  row's line) tells them apart. A `<name>` that is not a column is
+  `PARSE-GHERKIN-PARAMETER`. Several
+  `Examples` blocks add their rows in order, and a row's tags are the Feature's,
+  then the scenario's, then its `Examples` block's.
 - **Steps.** A step outside a Background or scenario, or after `Examples`, is
   `PARSE-GHERKIN-STEP`. `And` and `But` take the kind of the step before them in
   the section, and need one. The keyword does not matter for matching; the kind

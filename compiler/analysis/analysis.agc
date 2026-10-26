@@ -86,7 +86,7 @@ export def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Ve
     Front.Root.Unreadable(_) -> return Verdict.Unreadable
     Front.Root.Invalid(problem) -> return Verdict.Rejected(problem)
     Front.Root.Readable ->
-      case Front.query_cached(cache, path, settings)
+      case Front.query_checked(cache, path, settings)
         Front.Outcome.Rejected(problem) -> return Verdict.Rejected(problem)
         Front.Outcome.Done(_) -> return Verdict.Passed
       end
@@ -123,7 +123,7 @@ end
 ## The type and the definition at the position `asked` of a file of the disk (never a `std/` module), linked and
 ## checked with what it imports and without requiring `main`. `cache` only saves work, as for `check`.
 export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
-  case position_front(cache, settings, asked)
+  case position_front(cache, settings, asked, true)
     Fronted.Unreadable -> return Typed.Unreadable
     Fronted.Rejected(problem) -> return Typed.Rejected(problem)
     Fronted.Done(front) -> return located(settings, asked, front)
@@ -188,7 +188,7 @@ end
 ## and checked as for `type_at`) and what it imports; a file that only imports it is not seen: `refs_at` adds files.
 ## `cache` only saves work.
 export def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
-  case position_front(cache, settings, asked)
+  case position_front(cache, settings, asked, false)
     Fronted.Unreadable -> return Referenced.Unreadable
     Fronted.Rejected(problem) -> return Referenced.Rejected(problem)
     Fronted.Done(front) -> return referenced(settings, asked, front, [])
@@ -320,16 +320,26 @@ export def refused(message: String, path: String) -> Problems.Problem
   return QueryOptions.refusal(message, "").with(file: path)
 end
 
-def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Fronted
+# `skipping` is true for a question that reads only the root file's nodes (`type-at`), which may use the cache of
+# checked modules (Front.query_checked); `refs` reads the other files too.
+def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked, skipping: Bool) -> Fronted
   case Front.read_root(settings.workspace, asked.file)
     Front.Root.Unreadable(_) -> return Fronted.Unreadable
     Front.Root.Invalid(problem) -> return Fronted.Rejected(problem)
     Front.Root.Readable ->
-      case Front.query_cached(cache, asked.file, settings)
+      case asked_front(cache, settings, asked.file, skipping)
         Front.Outcome.Rejected(problem) -> return Fronted.Rejected(problem)
         Front.Outcome.Done(front) -> return Fronted.Done(front)
       end
   end
+end
+
+def asked_front(cache: Cache.Cache, settings: Env.Settings, file: String, skipping: Bool) -> Front.Outcome
+  if skipping
+    return Front.query_checked(cache, file, settings)
+  end
+
+  return Front.query_cached(cache, file, settings)
 end
 
 def partial_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Partly

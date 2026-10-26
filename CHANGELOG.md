@@ -10,16 +10,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `agentica test` without `--steps` uses the `steps.agc` found in or above the folder of each path (`specs/steps.agc` by default).
+- `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
+  takes no argument.
 
 ### Changed
 
+- **Breaking:** `agentica test` without `--steps` uses the `steps.agc` found
+  in or above the folder of each path that holds a feature
+  (`specs/steps.agc` by default); two different ones are a usage error.
+- `check` and `type-at` keep checked imports in `_build/check/` (they now create `_build/` when a file has imports) and skip the parse and check of unchanged ones, which makes a warm run faster; `--no-cache` turns it off. (#630)
 - A timed channel `send` or `recv` that the other task answers within a turn
   no longer reads the clock (far less system time where the clock is a system
   call); the timeout may start up to one turn late.
 
 ### Fixed
 
+- `agentica test` reports a failed step at its keyword's column.
+- Each `Scenario Outline` row is named `Name (values)`; names of outlines with unused columns change.
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
 - `Given the Agentica program` no longer stops a program after 1,000,000 steps; scenario timeouts bound it.

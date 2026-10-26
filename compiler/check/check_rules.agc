@@ -101,7 +101,7 @@ def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Mode
             cx,
             st,
             "CHECK-BLOCK-TARGET",
-            "\"#{entry.name}\" does not take a block: its last parameter is not a function",
+            block_target_message(entry.name),
             block.span,
             block_target_help(entry.name),
           ),
@@ -126,7 +126,7 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
             cx,
             st,
             "CHECK-BLOCK-TARGET",
-            "\"#{form.name}\" does not take a block: its last parameter is not a function",
+            block_target_message(form.name),
             block.span,
             block_target_help(form.name),
           ),
@@ -137,11 +137,24 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
   return ok(true)
 end
 
+# The message of a block given to a builtin that takes none. Task.spawn takes a block, but alone.
+def block_target_message(name: String) -> String
+  if name == "Task.spawn"
+    return "Task.spawn got a function reference and a block: it takes one of them, not both"
+  end
+
+  return "\"#{name}\" does not take a block: its last parameter is not a function"
+end
+
 # The help of a block given to a builtin that takes none: each_slice returns the slices, which each then walks.
 def block_target_help(name: String) -> String
   if name == "List.each_slice"
     return "each_slice returns the slices and takes no block: xs.each_slice(2).each do |pair| ... end"
   end
+  if name == "Task.spawn"
+    return "Task.spawn takes a block or a function reference, not both: Task.spawn do ... end or Task.spawn(&f, arg)"
+  end
+
   return "a block is only allowed when the last parameter is a function (Fn[...])"
 end
 

@@ -130,11 +130,11 @@ def prepare_and_run(
   end
   discovered = Discover.discover(given)
   chosen = options
-  # The default step program is compiled only for a run that has a feature file, so an unrelated steps.agc does not
-  # break a run of unit tests.
+  # The default step program is compiled only for a run that has a feature file, and is looked for only from the paths
+  # that hold one, so an unrelated steps.agc beside unit tests does not break the run.
   features = discovered.filter do |entry: Discover.Entry| entry.kind == "feature" and entry.problem == "" end
   if options.steps.size == 0 and features.size > 0
-    defaults = default_steps(given)
+    defaults = default_steps(given.filter do |path: String| holds_feature?(path, features) end)
     if defaults.size > 1
       return ok(Report.usage("two step programs found: pass --steps FILE (#{defaults.join(", ")})", options))
     end
@@ -184,6 +184,17 @@ def default_steps(searched: List[String]) -> List[String]
   end
 
   return found
+end
+
+# Whether `path` is one of `features` or a folder that holds one. Both are resolved as Discover.discover resolves them.
+def holds_feature?(path: String, features: List[Discover.Entry]) -> Bool
+  resolved = Path.resolve(path).unwrap_or(path)
+  below = resolved
+  if !below.ends_with?("/")
+    below = "#{below}/"
+  end
+
+  return features.any? do |entry: Discover.Entry| entry.path == resolved or entry.path.starts_with?(below) end
 end
 
 # The nearest `steps.agc` for one path, or "" when there is none. A path that cannot be resolved has none.

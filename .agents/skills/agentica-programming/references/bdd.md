@@ -5,9 +5,9 @@
 sorted order (folder links are not followed; a feature file is at most 1 MiB);
 the default paths are `specs/` and `test/`. `--steps FILE` names the one step
 program (repeating it is `RUNTIME-BDD-USAGE`); without it, a run with features
-uses the nearest `steps.agc` in the folder of each path (the path if a folder)
-or above it, up to the working directory (two different ones are
-`RUNTIME-BDD-USAGE`). Empty discovery fails. Exit codes: 0 all pass, 1
+uses the nearest `steps.agc` in the folder of each path that holds a feature
+(the path if a folder) or above it, up to the working directory (two different
+ones are `RUNTIME-BDD-USAGE`). Empty discovery fails. Exit codes: 0 all pass, 1
 verification fails, 2 infrastructure or usage fails. Programs under test run as
 local processes on the VM. File and output rules shared with unit tests:
 `testing.md`.
@@ -15,12 +15,13 @@ local processes on the VM. File and output rules shared with unit tests:
 English syntax: `Feature`, one optional `Background` before scenarios,
 `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and
 `Given`/`When`/`Then`/`And`/`But`. Each Examples row becomes a scenario,
-substituting `<column>` in names, steps, Doc Strings and tables. Comments, tags
-and descriptions before steps are accepted; tags never skip tests. `Rule`, `*`,
-other keyword aliases and localized syntax fail explicitly. `And`/`But` inherit
-the previous kind. Triple-quote Doc Strings are dedented; include a final empty
-line to keep a trailing newline. Data Tables decode `\|`, `\\`, `\n`. One
-argument per step.
+substituting `<column>` in names, steps, Doc Strings and tables; its name ends
+with ` (values)` of the columns the name does not show (`Name (sqlite, 42)`).
+Comments, tags and descriptions before steps are accepted; tags never skip
+tests. `Rule`, `*`, other keyword aliases and localized syntax fail explicitly.
+`And`/`But` inherit the previous kind. Triple-quote Doc Strings are dedented;
+include a final empty line to keep a trailing newline. Data Tables decode `\|`,
+`\\`, `\n`. One argument per step.
 
 Predefined step patterns (the keyword is irrelevant for matching):
 

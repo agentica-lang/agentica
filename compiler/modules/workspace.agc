@@ -40,6 +40,17 @@ export struct NativeRequest
   member: String
 end
 
+## The cache of checked modules (modules/check_cache.agc) as the core sees it. `on` says whether there is one; `read`
+## gives the text of the entry kept for a module, by the key of its file (a path, or the `std/` name), and `write`
+## replaces that entry and says whether it could. An entry is untrusted data: the core validates what it reads and
+## treats anything it cannot use as a miss. The machine decides where entries live and whether it may use them
+## (io/check_cache.agc).
+export struct CheckCache
+  on: Bool
+  read: Fn[String, Result[String]]
+  write: Fn[String, String, Bool]
+end
+
 ## What the core asks of the machine. Each function takes a path as the front end got it and never raises: a failure
 ## is data (`Read.Unreadable`, a `Result` error, `false`). `list_folder` gives the entries of a folder in no
 ## particular order, and `read_bytes` the whole content of a file, for the hash of a package. A path given to the
@@ -54,4 +65,19 @@ export struct Workspace
   list_folder: Fn[String, Result[List[Entry]]]
   read_bytes: Fn[String, Result[List[Int]]]
   native_artifact: Fn[NativeRequest, Result[String]]
+  check_cache: CheckCache
+end
+
+## The cache that holds nothing: the default of every workspace, so a stage that does not ask for the cache never sees
+## one.
+export def no_check_cache() -> CheckCache
+  return CheckCache(on: false, read: &no_entry, write: &no_write)
+end
+
+def no_entry(key: String) -> Result[String]
+  return error("there is no check cache")
+end
+
+def no_write(key: String, entry: String) -> Bool
+  return false
 end

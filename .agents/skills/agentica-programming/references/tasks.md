@@ -1,6 +1,7 @@
 # Tasks and channels
 
 ```text
+Task.spawn(f: Fn[R]) -> Task[R]
 Task.spawn(f: Fn[A, R], arg: A) -> Task[R]
 Task.spawn_owning(f: Fn[A, R], handle: A) -> Task[R]
 Task.await(task: Task[R]) -> R
@@ -13,11 +14,13 @@ Task.unobserved_crash() -> Result[String]
 ```
 
 Start tasks before awaiting them to overlap I/O. A task calls a named function
-with one argument (pass a struct for several values) and has its own variables.
+with one argument or none (pass a struct for several values) and has its own
+variables.
 Await returns the cached value and can repeat. `false`, `nil` and error Results
 are normal values. `Task[R]` has no constructor, equality, fields, indexing or
-JSON encoding; inspect prints `<Task>`. A block works as the task function
-through a `Fn` variable or parameter.
+JSON encoding; inspect prints `<Task>`. `Task.spawn do ... end` runs a
+block as the task (it may capture locals); give a block or `&f`, not both. A
+block that takes the argument goes through a `Fn` variable or parameter.
 
 A runtime error in a task other than `main` is a crash and ends only that task:
 its diagnostic prints at once (` in a task` after the code; `"task": true` in

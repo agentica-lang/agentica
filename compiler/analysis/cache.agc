@@ -20,6 +20,7 @@
 ## from 0. The checker's tables are indexed by id, so gaps cost memory, bounded by that factor.
 
 import Checker from "../check/checker"
+import CheckCache from "../modules/check_cache"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
 import Ast from "../syntax/ast"
@@ -235,7 +236,7 @@ end
 # that appeared and shadows an import) changes what the program means even when no text did. Every piece is written
 # with its length, so two different lists never give one text.
 def fingerprint(loaded: Modules.Loaded) -> String
-  parts = [piece(loaded.root_dir)]
+  parts = [CheckCache.piece(loaded.root_dir)]
   for key in loaded.order
     parts = parts.push(describe(loaded.modules[key]))
   end
@@ -247,7 +248,7 @@ def shapes(loaded: Modules.Loaded) -> Map[String, String]
   found: Map[String, String] = {}
   for key in loaded.order
     module = loaded.modules[key]
-    found = found.put(key, describe(module) + module.imports.map do |name: String| piece(name) end.join(""))
+    found = found.put(key, describe(module) + module.imports.map do |name: String| CheckCache.piece(name) end.join(""))
   end
   return found
 end
@@ -285,11 +286,7 @@ def describe(module: Modules.Module) -> String
   for local in module.named.keys.sort
     pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
   end
-  return pieces.map do |text: String| piece(text) end.join("")
-end
-
-def piece(text: String) -> String
-  return "#{text.length}:#{text}"
+  return pieces.map do |text: String| CheckCache.piece(text) end.join("")
 end
 
 def same_texts?(kept: Modules.Loaded, loaded: Modules.Loaded) -> Bool
