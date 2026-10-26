@@ -2,13 +2,13 @@
 
 The checksum is the zlib CRC32 (RFC 1952, the ZIP polynomial): a pure
 function of its byte list and seed, with no handle and no shared state.
-The peer hashes what it reads on stdin with the seed of argv[0] ("none" leaves the seed out, so the default of 0
-applies), so the
-empty input, NUL bytes, binary bytes and 1 MiB inputs all go through the
-same path as the fixed check vector ("123456789" from seed 0 is
-3421780262). Incremental calls chain the previous result as the next seed;
-empty input returns the seed unchanged, even 0xFFFFFFFF (zlib would reset
-an empty call to zero, so the VM never hands it one).
+The peer hashes what it reads on stdin with the seed of argv[0] ("none"
+leaves the seed out, so the default of 0 applies), so the empty input, NUL
+bytes, binary bytes and 1 MiB inputs all go through the same path as the
+fixed check vector ("123456789" from seed 0 is 3421780262). Incremental
+calls chain the previous result as the next seed; empty input returns the
+seed unchanged, even 0xFFFFFFFF (zlib would reset an empty call to zero, so
+the VM never hands it one).
 
 The refusals are the call's error Result (bad bytes, a seed outside
 0..4294967295, more than 1 MiB of input), while a wrong type or arity is
