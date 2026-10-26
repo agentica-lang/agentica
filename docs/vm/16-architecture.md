@@ -459,8 +459,9 @@ detached jobs, the handle lock FIFO, the owners and the one exit path are as in
   scheduler starts its clock at the end of its next turn, at its next such
   park, or before it sleeps. A task woken before then drops the entry, so a
   wait that the peer ends in its next turn never reads the clock (a system
-  call on a host with an HPET clock source, #629). The timeout is then late by
-  at most that turn.
+  call on a host with an HPET clock source, #629). Its timeout can then be late
+  by at most one more turn than that of another timer, which also waits for a
+  turn boundary to fire.
   The scheduler fires its due timers at its turn boundary and when its run queue
   is empty (`agc_timers_run`), by waking the task like any waker. Every change
   to a heap is made with `rt->sync` held. So any scheduler can remove the entry

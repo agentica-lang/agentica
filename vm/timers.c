@@ -102,7 +102,6 @@ static void start_pending(agc_vm *vm, uint64_t *now) {
   atomic_store_explicit(&h->pending, NULL, memory_order_relaxed);
   t->timer.pending = false;
   if (atomic_load_explicit(&t->state, memory_order_acquire) != AGC_TASK_PARKED) {
-    t->timer.deadline = 0;
     t->timer.heap = NULL;
     unclaim(vm, t);
     return;
@@ -124,7 +123,6 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t) {
   t->timer.heap = NULL;
   if (t->timer.pending) {
     t->timer.pending = false;
-    t->timer.deadline = 0;
     atomic_store_explicit(&h->pending, NULL, memory_order_relaxed);
     unclaim(vm, t);
     return;
@@ -162,9 +160,10 @@ void agc_task_park_until(agc_vm *vm, uint64_t deadline_ms, bool retry) {
 /* A wait that ends within a turn or two never needs its deadline, and on a host whose clock is a system call (an HPET
    clock source) reading it cost more than the channel operation (#629). So the clock starts late, at the first of: the
    end of the scheduler's next turn (agc_timers_run), the next park of this kind on the scheduler, which takes the slot,
-   and the moment it goes idle (agc_timers_settle). The timeout is late by at most that one turn, as a due timer
-   already is. Only one wait is pending per scheduler: every turn parks at most one task. */
-void agc_task_park_within(agc_vm *vm, int64_t timeout_ms, bool retry) {
+   and the moment it goes idle (agc_timers_settle). So the timeout is late by at most one more turn than another
+   timer's, which also waits for a turn boundary to fire. Only one wait is pending per scheduler: a turn parks at most
+   one task. */
+void agc_task_park_within(agc_vm *vm, int64_t timeout_ms) {
   agc_task *t = vm->task;
   agc_timers *h = &vm->timers;
   claim(vm, t);
@@ -174,7 +173,7 @@ void agc_task_park_within(agc_vm *vm, int64_t timeout_ms, bool retry) {
   t->timer.pending = true;
   t->timer.heap = h;
   atomic_store_explicit(&h->pending, t, memory_order_relaxed);
-  agc_task_park(vm, retry);
+  agc_task_park(vm, true);
 }
 
 /* Starts the pending wait under rt->sync, and returns the clock it read, or 0. */

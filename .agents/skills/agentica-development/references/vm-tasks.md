@@ -81,16 +81,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   order). A builtin that waits for a deadline calls `agc_task_parking`,
   registers its other waits, then `agc_task_park_until(vm, deadline_ms, retry)`
   (an `agc_clock_ms` value); no job. A channel wait calls
-  `agc_task_park_within(vm, timeout_ms, retry)`, which reads no clock: the
+  `agc_task_park_within(vm, timeout_ms)` (with retry), which reads no clock: the
   entry sits in the heap's `pending` slot until the end of the scheduler's next
   turn, its next such park or `agc_timers_settle` before it sleeps, and is
   dropped if the task was woken first (#629). `agc_timers_run` (turn boundary
-  and idle, in `agc_vm_run`) starts that clock and wakes the due tasks;
-  `resume` and `unlink_task` take the entry out (`agc_timers_disarm`). Every
-  change is made with `rt->sync` held, by any scheduler. The idle step (`idle_wait` in `vm/task.c`) runs the loop until
-  the nearest deadline with `agc_io_run_for(vm, ms, false)`;
-  `agc_runq_wait_until` does the same for a scheduler thread. Arm and disarm
-  keep `rt->timers_armed`, which the stall check at N > 1 reads.
+  and idle, in `agc_vm_run`) starts that clock and wakes the due tasks; `resume`
+  and `unlink_task` take the entry out (`agc_timers_disarm`). Every change is
+  made with `rt->sync` held, by any scheduler. The idle step (`idle_wait` in
+  `vm/task.c`) runs the loop until the nearest deadline with
+  `agc_io_run_for(vm, ms, false)`; `agc_runq_wait_until` does the same for a
+  scheduler thread. Arm and disarm keep `rt->timers_armed`, which the stall
+  check at N > 1 reads.
 - `vm/task_map.c`: `Task.map`: a stepper on the caller that starts, times and
   cancels the items.
 - `vm/channel.c`: The `Channel` builtins: a ring buffer, waiter queues and
@@ -245,8 +246,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     `wait_next`, and counters for the reserved values and slots.
   - A call that must wait parks with retry on the task's own timer
     (`agc_task_park_within`; no job, so no I/O trace line)
-  - a retry is told by `channel.channel == c`; it keeps the deadline the clock
-    started (`timer.deadline`, 0 if the timer was dropped unstarted).
+  - a retry is told by `channel.channel == c`; a waiter is woken only with a
+    reservation, by a close or by its timer, so a retry with neither timed out.
   - A value for a waiting receiver is reserved in the task (`channel.value`), a
     freed slot for the head sender (`channel.reserved`; `offer_slot` makes the
     offer after a `recv` and after a woken sender hands its value to a receiver)

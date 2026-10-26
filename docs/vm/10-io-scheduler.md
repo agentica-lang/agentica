@@ -354,8 +354,8 @@ section says how the scheduler and the loop keep them.
   a timer of the task whose clock starts late (`agc_task_park_within`,
   `vm/timers.c`, §16.9 "Timers"). There is no job, so no `io` trace line. The
   `sched` trace shows `timer_arm` when the clock starts and `timer_fire`. A
-  retry after the timer fired keeps the deadline that the clock started
-  (`timer.deadline`). A timeout of 0 tries once and never parks.
+  waiter wakes only with a reservation, by a close or by its timer, so a retry
+  with neither has timed out. A timeout of 0 tries once and never parks.
   - **Reservations.** A value that arrives while receivers wait is not put in
     the ring. The head receiver is popped, the value is stored in the task
     (`channel.value`), and the task is woken. This is a direct hand-off, so no

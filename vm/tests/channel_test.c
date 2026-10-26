@@ -445,8 +445,8 @@ static void test_reservation_beats_deadline(void) {
 
 /* A wait reads no clock when it parks (agc_task_park_within, #629). A peer that answers before the clock starts, even
    after the timeout has passed (a long turn of the peer), hands over its value and the timer is dropped unfired. A
-   wait still parked at the end of the next turn starts its clock there and times out at the deadline. A retry whose
-   deadline is exactly now times out without parking again. */
+   wait still parked at the end of the next turn starts its clock there and fires at the deadline, the first moment
+   the clock reaches it; the retry then times out without parking again. */
 static void test_clock_starts_late(void) {
   agc_value ch = make_channel(1);
   agc_task *a = make_task();
@@ -468,8 +468,8 @@ static void test_clock_starts_late(void) {
     while (nanosleep(&tick, &tick) != 0) {}
   }
   assert(agc_timers_run(&vm) && next_ready() == a);
+  assert(agc_clock_ms() >= deadline);
   settle();
-  a->timer.deadline = agc_clock_ms();
   assert(failed(now(a, RECV, args), "channel: timed out"));
   assert(!a->channel.channel && !a->timer.heap);
 }

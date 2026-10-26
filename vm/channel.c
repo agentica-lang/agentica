@@ -150,10 +150,9 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     stop_waiting(t);
     return timed_out_error();
   }
-  /* The first park starts no clock (agc_task_park_within). A retry follows a wake with no reservation, which only the
-     timer gives, so its deadline is the one the scheduler started; a timer dropped before it started (0) waits anew. */
-  uint64_t deadline = resumed(t, c) ? t->timer.deadline : 0;
-  if (deadline && deadline <= agc_clock_ms()) {
+  /* A waiter is woken with a reservation, by a close, or by its timer. The first two never get here, so a resumed
+     waiter's timer fired: it timed out. */
+  if (resumed(t, c)) {
     stop_waiting(t);
     return timed_out_error();
   }
@@ -166,10 +165,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  if (deadline)
-    agc_task_park_until(vm, deadline, true);
-  else
-    agc_task_park_within(vm, timeout, true);
+  agc_task_park_within(vm, timeout);
   return agc_void();
 }
 

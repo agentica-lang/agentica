@@ -34,7 +34,7 @@ static agc_task *parked_within(agc_vm *scheduler, int64_t ms) {
   scheduler->task = t;
   atomic_store(&t->state, AGC_TASK_RUNNING);
   agc_task_parking(scheduler);
-  agc_task_park_within(scheduler, ms, true);
+  agc_task_park_within(scheduler, ms);
   t->parking = false;
   assert(agc_task_commit_park(t));
   return t;
@@ -227,7 +227,7 @@ static void race_against_wake(bool pending) {
     agc_task_parking(&vm);
     agc_sync_take(&vm);
     if (pending)
-      agc_task_park_within(&vm, 60000, true);
+      agc_task_park_within(&vm, 60000);
     else
       agc_task_park_until(&vm, agc_clock_ms(), true);
     agc_sync_drop(&vm);

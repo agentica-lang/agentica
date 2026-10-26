@@ -410,7 +410,7 @@ typedef enum { AGC_LOCK_TAKEN, AGC_LOCK_WAIT, AGC_LOCK_TIMEOUT } agc_lock_status
    task's last park armed a timer; only the scheduler running the task touches it, so `resume` takes rt->sync to disarm
    only when it is set (`heap` itself is read under the lock: the owner's fire clears it). `pending` says the entry is
    the `pending` slot of `heap`, not in its heap: its clock has not started, and `deadline` holds the length of the wait
-   (agc_task_park_within) until it starts, or 0 once the entry is dropped unstarted. */
+   (agc_task_park_within). */
 typedef struct {
   uint64_t deadline, seq;
   struct agc_timers *heap;
