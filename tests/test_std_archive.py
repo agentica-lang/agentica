@@ -12,8 +12,6 @@ import pathlib
 import subprocess
 import tarfile
 
-import pytest
-
 from tests.agentica_test import ROOT, binary, run, vm_environment
 
 WINDOWS = os.name == "nt"
@@ -280,45 +278,41 @@ def test_option_and_member_validation(tmp_path):
     assert not (work / "d").exists()
 
 
-@pytest.mark.parametrize("member", [
+UNSAFE_MEMBERS = [
     ".", "./", "/", "/abs/path", "C:/drive", "C:drive", "\\\\unc\\share", "back\\slash",
     "with:colon", "a/../up", "a//empty", "a/", "trailing/.",
-])
-def test_unsafe_members_rejected_before_touching_disk(tmp_path, member):
+]
+
+
+def test_unsafe_members_rejected_before_touching_disk(tmp_path):
+    """One driver runs every member spelling; each call has its own destination, which must stay absent."""
     work = tmp_path
     (work / "empty.tar").write_bytes(b"")
-    escaped = member.replace("\\", "\\\\").replace('"', '\\"')
-    text = (
-        "def main() -> Void\n"
-        '  show("m", %s)\n'
-        '  puts("d-exists #{File.stat("d", 30000).ok?}")\n'
-        "end\n" % call_text("empty.tar", '"%s"' % escaped, "d", "Archive.options()")
-    )
-    lines = run_driver(work, "unsafe", SHOW + text)
-    assert lines[0].startswith("m error archive: "), member
-    assert lines[1] == "d-exists false", member
-    assert not (work / "d").exists()
+    calls = [("m%d" % n, "empty.tar", '"%s"' % member.replace("\\", "\\\\").replace('"', '\\"'), "d%d" % n,
+              "Archive.options()") for n, member in enumerate(UNSAFE_MEMBERS)]
+    lines = run_driver(work, "unsafe", driver(calls))
+    bad = [member for n, member in enumerate(UNSAFE_MEMBERS)
+           if not lines[n].startswith("m%d error archive: " % n) or (work / ("d%d" % n)).exists()]
+    assert not bad, (bad, lines)
 
 
-@pytest.mark.parametrize("first,second", [
+DUPLICATE_MEMBERS = [
     ("lib.so", "lib.so"),
     ("./lib.so", "lib.so"),
     ("Lib.so", "lib.so"),
     ("sub/a.txt", "SUB/a.txt"),
-])
-def test_duplicate_and_case_colliding_members_rejected(tmp_path, first, second):
+]
+
+
+def test_duplicate_and_case_colliding_members_rejected(tmp_path):
     work = tmp_path
     (work / "empty.tar").write_bytes(b"")
-    text = (
-        "def main() -> Void\n"
-        '  show("m", %s)\n'
-        '  puts("d-exists #{File.stat("d", 30000).ok?}")\n'
-        "end\n" % call_text("empty.tar", '"%s", "%s"' % (first, second), "d", "Archive.options()")
-    )
-    lines = run_driver(work, "dups", SHOW + text)
-    assert lines[0].startswith("m error archive: members "), (first, second)
-    assert lines[1] == "d-exists false"
-    assert not (work / "d").exists()
+    calls = [("m%d" % n, "empty.tar", q(first, second), "d%d" % n, "Archive.options()")
+             for n, (first, second) in enumerate(DUPLICATE_MEMBERS)]
+    lines = run_driver(work, "dups", driver(calls))
+    bad = [pair for n, pair in enumerate(DUPLICATE_MEMBERS)
+           if not lines[n].startswith("m%d error archive: members " % n) or (work / ("d%d" % n)).exists()]
+    assert not bad, (bad, lines)
 
 
 def make_link(target, link):

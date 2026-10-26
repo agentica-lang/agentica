@@ -814,9 +814,6 @@ def test_zlib_stream_raw_and_gzip_match_python(tmp_path):
     result = run_source(tmp_path, "raw-in.agc", body, [])
     assert result.code == 0, result.stderr
     assert "ok()" in result.stdout, result.stdout
-    out32 = run_source(tmp_path, "raw-out.agc", STREAM_ROUND_TRIP, ["x", "70000", "-15"])
-    assert out32.code == 0, out32.stderr
-    assert "ok()" in out32.stdout, out32.stdout
 
 
 def test_zlib_stream_raw_output_matches_python(tmp_path):
