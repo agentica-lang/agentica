@@ -9,8 +9,6 @@ byte are compared with binascii/zlib peers, never with zipfile reads.
 import binascii
 import os
 import pathlib
-
-import pytest
 import struct
 import zlib
 
@@ -154,6 +152,14 @@ def options(timeout=30000, max_out=268435456):
 
 
 def program(label, src, members, dest, opts):
+    return programs([(label, src, members, dest, opts)])
+
+
+def programs(calls):
+    """A driver that prints one line for each (label, src, members, dest, opts) call of `Archive.extract_zip`."""
+    body = "".join(
+        '  show("%s", Archive.extract_zip("%s", [%s], "%s", %s))\n' % (label, esc(src), quoted(members), esc(dest), opts)
+        for label, src, members, dest, opts in calls)
     return (
         'import Archive from "std/archive"\n'
         "\n"
@@ -169,14 +175,17 @@ def program(label, src, members, dest, opts):
         "end\n"
         "\n"
         "def main() -> Void\n"
-        '  show("%s", Archive.extract_zip("%s", [%s], "%s", %s))\n'
-        "end\n" % (label, esc(src), quoted(members), esc(dest), opts)
+        + body + "end\n"
     )
 
 
 def run_zip(work, name, src, members, dest, opts="Archive.options()"):
+    return run_calls(work, name, [(name, src, members, dest, opts)])
+
+
+def run_calls(work, name, calls):
     path = work / (name + ".agc")
-    path.write_text(program(name, src, members, dest, opts), encoding="utf-8")
+    path.write_text(programs(calls), encoding="utf-8")
     result = run([str(binary()), str(path)], cwd=work, env=vm_environment())
     assert result.code == 0, "%s: %s" % (name, result.stderr)
     assert result.stderr == "", name
@@ -767,35 +776,26 @@ def test_expired_deadline_aborts_long_reads(tmp_path):
     assert lines[0].startswith("deflated error archive: ") and "timed out" in lines[0]
 
 
-@pytest.mark.parametrize("variant", ["fwd", "back", "mixed", "cacheroot"])
-def test_destination_spellings_with_backslashes_extract(tmp_path, variant):
+def test_destination_spellings_with_backslashes_extract(tmp_path):
     """A destination may hold host backslashes (a cache root from the OS does): the join the
-    extractor uses normalizes them, so each spelling extracts on every system with no host skip."""
+    extractor uses normalizes them, so each spelling extracts on every system with no host skip.
+    The forward and cacheroot spellings are the absolute destination."""
     work = tmp_path
     stored_case(work)
     root = str(work)
-    if variant == "fwd":
-        dest = root.replace(os.sep, "/") + "/d-fwd"
-    elif variant == "back":
-        dest = root + "\\d-back"
-    elif variant == "mixed":
-        dest = root.replace(os.sep, "/") + "\\d-mix"
-    else:
-        dest = root + "/d-cache"
-    lines = run_zip(work, variant, "stored.zip", ["plain.txt", "sub/deep.bin"], dest)
-    assert lines == ["%s ok [%d, %d]" % (variant, len(STORED_HELLO), len(DEEP_DATA)), ""], lines
-    assert (pathlib.Path(dest) / "plain.txt").read_bytes() == STORED_HELLO
-    assert (pathlib.Path(dest) / "sub" / "deep.bin").read_bytes() == DEEP_DATA
-
-
-def test_absolute_destination_extracts(tmp_path):
-    work = tmp_path
-    stored_case(work)
-    dest = str(work / "abs-out")
-    lines = run_zip(work, "absolute", "stored.zip", ["plain.txt", "sub/deep.bin"], dest)
-    assert lines == ["absolute ok [%d, %d]" % (len(STORED_HELLO), len(DEEP_DATA)), ""]
-    assert (work / "abs-out" / "plain.txt").read_bytes() == STORED_HELLO
-    assert (work / "abs-out" / "sub" / "deep.bin").read_bytes() == DEEP_DATA
+    dests = {
+        "fwd": root.replace(os.sep, "/") + "/d-fwd",
+        "back": root + "\\d-back",
+        "mixed": root.replace(os.sep, "/") + "\\d-mix",
+        "cacheroot": root + "/d-cache",
+    }
+    calls = [(variant, "stored.zip", ["plain.txt", "sub/deep.bin"], dest, "Archive.options()")
+             for variant, dest in dests.items()]
+    lines = run_calls(work, "spellings", calls)
+    assert lines == ["%s ok [%d, %d]" % (variant, len(STORED_HELLO), len(DEEP_DATA)) for variant in dests] + [""], lines
+    for dest in dests.values():
+        assert (pathlib.Path(dest) / "plain.txt").read_bytes() == STORED_HELLO
+        assert (pathlib.Path(dest) / "sub" / "deep.bin").read_bytes() == DEEP_DATA
 
 
 def test_empty_archive_reports_missing_members(tmp_path):
