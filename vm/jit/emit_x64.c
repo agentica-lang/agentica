@@ -47,6 +47,22 @@ enum { CC_O = 0x0, CC_AE = 0x3, CC_E = 0x4, CC_NE = 0x5, CC_BE = 0x6, CC_A = 0x7
 /* The frame fields that a native CALL writes and RETURN reads (port.h). */
 #define FRAME_FIELD(name) ((int64_t)offsetof(agc_frame, name))
 #define TASK_FIELD(name) ((int64_t)offsetof(agc_task, name))
+#define FIELD_SIZE(type, name) sizeof(((type *)0)->name)
+
+/* agc_emit_call writes a frame as four dwords, a byte and a qword at these offsets, and indexes the frames by a
+   shift of 5; it reads frame_count, frame_capacity and depth as dwords and reg_capacity as a qword. */
+_Static_assert(sizeof(agc_frame) == 32, "the native CALL indexes frames by a shift of 5");
+_Static_assert(offsetof(agc_frame, function) == 0 && offsetof(agc_frame, pc) == 4 && offsetof(agc_frame, base) == 8 &&
+                 offsetof(agc_frame, ret) == 12 && offsetof(agc_frame, tail) == 16 &&
+                 offsetof(agc_frame, native) == 24,
+               "the native CALL writes the frame at these offsets");
+_Static_assert(FIELD_SIZE(agc_frame, pc) == 4 && FIELD_SIZE(agc_frame, base) == 4 && FIELD_SIZE(agc_frame, ret) == 4 &&
+                 FIELD_SIZE(agc_frame, function) == 4 && FIELD_SIZE(agc_frame, tail) == 1 &&
+                 FIELD_SIZE(agc_frame, native) == 8,
+               "the native CALL writes the frame fields with these sizes");
+_Static_assert(FIELD_SIZE(agc_task, frame_count) == 4 && FIELD_SIZE(agc_task, frame_capacity) == 4 &&
+                 FIELD_SIZE(agc_task, depth) == 4 && FIELD_SIZE(agc_task, reg_capacity) == 8,
+               "the native CALL reads the task's counts with these sizes");
 
 /* The two shapes of the opcode helpers (agc_op_* in core.h). */
 typedef agc_status (*binary_helper)(agc_vm *, agc_value *, const agc_value *, const agc_value *);
@@ -518,7 +534,6 @@ void agc_emit_call(agc_emitter *e, agc_instr in, uint32_t pc, uint64_t slot, uin
   exit_if(e, CC_A, AGC_JIT_EXIT_CALL, pc);
   /* rax = &frames[frame_count], the new frame; the caller's is the one before it. */
   BYTES(e, 0x48, 0xC1, 0xE0, 0x05); /* shl rax, 5 */
-  _Static_assert(sizeof(agc_frame) == 32, "the native CALL indexes frames by a shift of 5");
   op_mem(e, true, 0x03, RAX, RCX, TASK_FIELD(frames)); /* add rax, [rcx + frames] */
   op_mem(e, false, 0xC7, 0, RAX, FRAME_FIELD(pc) - 32); /* mov dword [rax - 32 + pc], pc + 1 */
   word32(e, pc + 1);

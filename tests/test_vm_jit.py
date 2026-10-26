@@ -542,6 +542,22 @@ def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_pat
     assert code == 0 and stdout.count("\n") == 152, stderr
 
 
+def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):
+    # f0 calls f1 ... f13, which prints: no function of the chain may get code, whatever the order of the functions in
+    # the file, so main's loop leaves at each call and nothing is compiled.
+    chain = "".join(f"def f{k}(x: Int) -> Int\n  return f{k + 1}(x + 1) + 1\nend\n\n" for k in range(13))
+    chain += "def f13(x: Int) -> Int\n  if x == 0 - 5\n    puts(x)\n  end\n  return x\nend\n\n"
+    chain += "def main() -> Void\n  t = 0\n  i = 0\n  while i < 3000\n    t = t + f0(i)\n    i += 1\n  end\n  puts(t)\nend\n"
+    bytecode = compile_text(chain, "chain", tmp_path)
+    lines = jit_trace(bytecode, tmp_path, "on")
+    assert [line for line in lines if " jit compile " in line or " jit transition " in line] == []
+    skips = sorted(line.split("skip ")[1] for line in lines if " jit skip " in line)
+    assert skips == (sorted([f"function=f{k} loop=none" for k in range(14)] + ["function=main loop=exits"])
+                     if X86_64 else []), skips
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout == "4576500\n", (stdout, stderr)
+
+
 def test_compiled_code_calls_compiled_functions_natively(tmp_path):
     bytecode = compile_text(NATIVE, "native", tmp_path)
     for mode in ("on", "always"):
@@ -550,9 +566,10 @@ def test_compiled_code_calls_compiled_functions_natively(tmp_path):
     assert full[0] == 0 and full[1].startswith("66770\n"), full
     steps = int(full[1].split("steps ")[1])
     assert_max_steps_sweep(bytecode, steps)
-    # Of the 137,390 calls of fib and down and their returns, only a few leave compiled code: the calls that grow the
-    # frames or pass the native depth, and the returns of the frames whose native calls an exit unwound (one for each
-    # turn that ends inside them, as the turn loop holds no native call).
+    # Of the 137,390 calls of fib and down and their returns, about a sixth leave compiled code: the calls that grow
+    # the frames or pass the native depth, and the returns of the frames whose native calls an exit unwound (each turn
+    # that ends inside them, as the turn loop holds no native call). Shallow calls stay native; a deep recursion
+    # returns through one exit per frame after each such unwind.
     lines = jit_trace(bytecode, tmp_path, "always")
     transitions = sum(int(line.split("count=")[1]) for line in lines if " jit transition count=" in line)
     assert transitions < (30000 if X86_64 else 1), transitions

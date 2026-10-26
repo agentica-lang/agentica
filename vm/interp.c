@@ -1172,7 +1172,7 @@ static __attribute__((noinline)) AGC_JIT_CALLER compiled_result run_compiled(agc
       case AGC_JIT_EXIT_RETURN: {
         agc_instr in = f->code[out.pc];
         if (AGC_TRACE_ON(jit->trace, AGC_TRACE_JIT)) agc_jit_count_transition(jit);
-        if (!return_instruction(vm, R[in.a]) || t->frame_count == 0) return COMPILED_DONE;
+        if (!return_instruction(vm, R[in.a])) return COMPILED_DONE;
         if (t->parking) return COMPILED_PARKED;
         if (vm->yield) return COMPILED_YIELD;
         /* The caller goes on in its code when it has some; a native frame or a caller without code reloads. */

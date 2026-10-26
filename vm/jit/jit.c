@@ -109,6 +109,61 @@ static const char *kept_out(const agc_program *p, const agc_function *f, agc_jit
   return NULL;
 }
 
+/* Each CALL of function g by function k: SLOT[g]++ alone (CALLERS NULL), or CALLERS[SLOT[g]++] = k. */
+static void call_edges(const agc_program *p, uint32_t *slot, uint32_t *callers) {
+  for (uint32_t k = 0; k < p->function_count; k++) {
+    const agc_function *f = &p->functions[k];
+    for (uint32_t pc = 0; pc < f->count; pc++) {
+      agc_instr in = f->code[pc];
+      uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
+      if (in.op != AGC_OP_CALL || bx >= p->function_count) continue;
+      if (callers)
+        callers[slot[bx]++] = k;
+      else
+        slot[bx]++;
+    }
+  }
+}
+
+/* Settles CALLABLE (all true on entry) for `on`: a call stays in compiled code only when its callee may get code,
+   which depends on the callee's own calls. A worklist over the reverse CALL edges evaluates each function once, and
+   again only when one of its callees drops out, so the start-up cost follows the program's size, not its call depth. */
+static void settle_callable(const agc_program *p, uint32_t *leaves, uint32_t *ends, bool *callable) {
+  size_t n = p->function_count;
+  /* Atomic GC memory is not zeroed. */
+  uint32_t *first = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *first));
+  memset(first, 0, (n + 1) * sizeof *first);
+  call_edges(p, first + 1, NULL);
+  for (size_t k = 0; k < n; k++) first[k + 1] += first[k];
+  size_t edges = first[n];
+  /* callers[first[g] .. first[g + 1]) are the functions with a CALL of g, filled through `fill`. */
+  uint32_t *callers = agc_alloc_atomic(agc_size_mul(edges ? edges : 1, sizeof *callers));
+  uint32_t *fill = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *fill));
+  memcpy(fill, first, (n + 1) * sizeof *fill);
+  call_edges(p, fill, callers);
+  /* The stack holds each function at most once (QUEUED): every function first, then the callers of each drop. */
+  uint32_t *stack = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *stack));
+  bool *queued = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *queued));
+  size_t top = 0;
+  for (uint32_t k = 0; k < n; k++) {
+    stack[top++] = k;
+    queued[k] = true;
+  }
+  while (top) {
+    uint32_t k = stack[--top];
+    queued[k] = false;
+    if (!callable[k] || !kept_out(p, &p->functions[k], AGC_JIT_ON, leaves, ends, callable)) continue;
+    callable[k] = false;
+    for (uint32_t e = first[k]; e < first[k + 1]; e++) {
+      uint32_t c = callers[e];
+      if (callable[c] && !queued[c]) {
+        stack[top++] = c;
+        queued[c] = true;
+      }
+    }
+  }
+}
+
 #if AGC_JIT_HOST
 /* The size of F's code, or 0 when an operand or the code did not fit. Its cases are the set of has_code, CALL and
    RETURN; other instructions leave for the interpreter. */
@@ -250,18 +305,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   _Atomic bool *native_only = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *native_only));
   bool *callable = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *callable));
   for (uint32_t k = 0; k < n; k++) callable[k] = true;
-  /* A call stays in compiled code only when its callee may get code, which depends on the callee's own calls: each
-     round drops the functions that leave given the last round's set. A few rounds settle the call chains of real
-     programs; a set that is still too wide after them only costs speed. */
-  for (int round = 0; mode == AGC_JIT_ON && round < 8; round++) {
-    bool changed = false;
-    for (uint32_t k = 0; k < n; k++) {
-      if (!callable[k] || !kept_out(program, &program->functions[k], mode, leaves, ends, callable)) continue;
-      callable[k] = false;
-      changed = true;
-    }
-    if (!changed) break;
-  }
+  if (mode == AGC_JIT_ON) settle_callable(program, leaves, ends, callable);
   bool any = false;
   for (uint32_t k = 0; k < n; k++) {
     const agc_function *f = &program->functions[k];
