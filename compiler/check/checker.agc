@@ -119,6 +119,7 @@ def recovered(result: Result[Recovered]) -> Recovering
   if result.ok?
     return Recovering.Done(result.unwrap!)
   end
+
   return Recovering.Failed(Failure.unpack(result.message))
 end
 
@@ -126,6 +127,7 @@ def finished(result: Result[Recovered]) -> Checking
   if result.ok?
     return Checking.Done(result.unwrap!.checked)
   end
+
   return Checking.Failed(Failure.unpack(result.message))
 end
 
@@ -135,6 +137,7 @@ def start(linked: Linker.Linked) -> State.Cx
   for module in linked.modules
     texts = texts.put(module.file, module.text)
   end
+
   return State.Cx(
     help: Help.tables(),
     structs: RECORDS,
@@ -173,6 +176,7 @@ def run(
     if taken.clean.include?(module.key)
       next
     end
+
     for decl in module.declarations
       case decl
         Ast.Decl.Struct(node) -> st = try DefaultChecks.check_field_types(cx.with(file: module.file), st, node)
@@ -180,12 +184,14 @@ def run(
       end
     end
   end
+
   problems: List[Failure.Problem] = []
   failed: List[String] = []
   for module in linked.modules
     if taken.clean.include?(module.key)
       next
     end
+
     here = cx.with(file: module.file)
     for decl in module.declarations
       case decl
@@ -199,10 +205,12 @@ def run(
           else
             return error(step.message)
           end
+
         _ -> st = st
       end
     end
   end
+
   # The prelude functions are attached in the order of the calls in `st.bodies`, and their ids start after the ids of
   # the program. With modules taken from an earlier check that order, and so those ids, can differ from a cold check;
   # no answer reads them, so nothing may rely on them.

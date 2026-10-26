@@ -37,6 +37,7 @@ export def query_file(cache: Cache.Cache, path: String, settings: Env.Settings) 
   if !walked.ok?
     return Outcome.Rejected(Front.link_problem(Failure.unpack_failure(walked.message)))
   end
+
   case Cache.find(cache, walked.unwrap!)
     Cache.Found.Hit(root) -> return reused(cache, root, settings)
     Cache.Found.Miss -> return linked(cache, walked.unwrap!, settings)

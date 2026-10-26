@@ -136,6 +136,7 @@ export def same?(a: Type, b: Type) -> Bool
   if tag(a) != tag(b)
     return false
   end
+
   case a
     Type.Opaque(found) -> return found == name(b)
     Type.Var(found) -> return found == name(b)
@@ -158,13 +159,16 @@ export def same_all?(a: List[Type], b: List[Type]) -> Bool
   if a.size != b.size
     return false
   end
+
   index = 0
   while index < a.size
     if !same?(a[index], b[index])
       return false
     end
+
     index += 1
   end
+
   return true
 end
 
@@ -173,6 +177,7 @@ export def result_of(type: Type) -> Type
   if unknown?(type)
     return type
   end
+
   return Type.Result(type)
 end
 
@@ -181,6 +186,7 @@ export def task_of(type: Type) -> Type
   if unknown?(type)
     return type
   end
+
   return Type.Task(type)
 end
 
@@ -189,6 +195,7 @@ export def list_of(type: Type) -> Type
   if unknown?(type)
     return type
   end
+
   return Type.List(type)
 end
 
@@ -197,6 +204,7 @@ export def only_list(type: Type) -> Type
   if is?(type, "List")
     return type
   end
+
   return Type.Unknown
 end
 
@@ -205,6 +213,7 @@ export def only_map(type: Type) -> Type
   if is?(type, "Map")
     return type
   end
+
   return Type.Unknown
 end
 
@@ -213,6 +222,7 @@ export def only_set(type: Type) -> Type
   if is?(type, "Set")
     return type
   end
+
   return Type.Unknown
 end
 
@@ -221,6 +231,7 @@ export def only_result_item(type: Type) -> Type
   if is?(type, "Result")
     return item(type)
   end
+
   return Type.Unknown
 end
 
@@ -230,13 +241,16 @@ export def display_name(name: String) -> String
   if not name.starts_with?("@")
     return name
   end
+
   digits_end = 1
   while digits_end < name.length and digit?(name.at(digits_end))
     digits_end += 1
   end
+
   if digits_end > 1 and name.length >= digits_end + 2 and name.slice(digits_end, 2) == "::"
     return name.slice(digits_end + 2, name.length - digits_end - 2)
   end
+
   return name
 end
 
@@ -307,6 +321,7 @@ def enum_text(name: String, args: List[Type], written: Map[String, String]) -> S
   if args.size == 0
     return written_name(name, written)
   end
+
   return "#{written_name(name, written)}[#{list_text_as(args, written)}]"
 end
 
@@ -320,10 +335,12 @@ def written_name(name: String, written: Map[String, String]) -> String
   if written.size == 0 or bare == name
     return bare
   end
+
   alias = written.get(name.slice(0, name.length - bare.length), "")
   if alias == ""
     return bare
   end
+
   return "#{alias}.#{bare}"
 end
 

@@ -31,6 +31,7 @@ export def check_builtin_call(
     try block_without_target(cx, st, node, entry)
     return error(arity_failure(cx, st, node, entry))
   end
+
   form = selected.unwrap!
   try check_block_target(cx, st, node, form)
   site = State.Site(node: node, args: node.args, selected: form, expected: expected)
@@ -54,6 +55,7 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
       ),
     )
   end
+
   return ok(true)
 end
 
@@ -67,6 +69,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     skipped = 1
     name = RubyForm.shown(entry.name)
   end
+
   counts = [entry].concat(entry.alternatives).map do |form: Model.Builtin| (form.parameters.size - skipped).to_s end
   expected = counts.join(" or ")
   message = "\"#{name}\" expects #{expected} argument(s), found #{node.args.size - skipped}"
@@ -79,6 +82,7 @@ def method_form?(node: Ast.Call) -> Bool
   if node.args.size == 0
     return false
   end
+
   case node.args[0]
     Ast.Expr.Typed(found) -> return true
     _ -> return false
@@ -91,6 +95,7 @@ def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Mode
   if node.args.size == 0
     return ok(true)
   end
+
   last = node.args[node.args.size - 1]
   without = Builtins.form_for(entry, node.args.size - 1)
   case last
@@ -107,8 +112,10 @@ def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Mode
           ),
         )
       end
+
     _ -> return ok(true)
   end
+
   return ok(true)
 end
 
@@ -117,6 +124,7 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
   if node.args.size == 0
     return ok(true)
   end
+
   last = node.args[node.args.size - 1]
   case last
     Ast.Expr.BlockLit(block) ->
@@ -132,8 +140,10 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
           ),
         )
       end
+
     _ -> return ok(true)
   end
+
   return ok(true)
 end
 
@@ -142,6 +152,7 @@ def block_target_help(name: String) -> String
   if name == "List.each_slice"
     return "each_slice returns the slices and takes no block: xs.each_slice(2).each do |pair| ... end"
   end
+
   return "a block is only allowed when the last parameter is a function (Fn[...])"
 end
 
@@ -173,6 +184,7 @@ def check_plain(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
     current = out.st
     index += 1
   end
+
   return ok(State.Out(st: current, type: site.selected.result))
 end
 
@@ -196,6 +208,7 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
   if !T.unknown?(expected) and !T.is?(expected, "Result")
     return error(State.mismatch(cx, message.st, expected, T.Type.Result(T.Type.Var("T")), span))
   end
+
   if T.unknown?(expected)
     return error(
       State.fail_help(
@@ -208,6 +221,7 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
       ),
     )
   end
+
   return ok(State.Out(st: message.st, type: expected))
 end
 
@@ -220,6 +234,7 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
     current = text.st
     target = site.args[1]
   end
+
   case target
     Ast.Expr.TypeName(node) -> return json_target(cx, current, node, decode)
     _ -> return error(
@@ -240,9 +255,11 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, decode: Bool) ->
   if !T.is?(type, "Struct") or !CheckTypes.decodable?(cx, type, [])
     return error(State.fail(cx, st, "CHECK-NOT-DECODABLE", "target contains types that cannot be decoded", node.span))
   end
+
   if decode
     return ok(State.Out(st: st, type: T.Type.Result(type)))
   end
+
   return ok(State.Out(st: st, type: T.Type.Json))
 end
 
@@ -260,9 +277,11 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
       ),
     )
   end
+
   if from
     return ok(State.Out(st: out.st, type: T.Type.Json))
   end
+
   return ok(State.Out(st: out.st, type: T.Type.String))
 end
 
@@ -273,6 +292,7 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
   if !T.same?(actual.type, wanted.type)
     return error(State.mismatch(cx, wanted.st, actual.type, wanted.type, Ast.expr_span(site.args[1])))
   end
+
   if !CheckTypes.data?(cx, actual.type, [])
     return error(
       State.fail_help(
@@ -288,6 +308,7 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
       ),
     )
   end
+
   return ok(State.Out(st: wanted.st, type: T.Type.Result(T.Type.Void)))
 end
 
@@ -318,6 +339,7 @@ def check_other_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.R
   if list_rule?(rule)
     return Lists.check_list_rule(cx, st, site, rule)
   end
+
   return Collections.check_collection_rule(cx, st, site, rule)
 end
 

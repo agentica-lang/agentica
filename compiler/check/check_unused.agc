@@ -13,6 +13,7 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
   if T.is?(type, "Void")
     return ok(true)
   end
+
   resolved = resolution(st, value)
   name = call_name(value, resolved)
   entry = ENTRIES.get(name)
@@ -28,6 +29,7 @@ export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type:
       ),
     )
   end
+
   return ok(true)
 end
 
@@ -45,6 +47,7 @@ def found_resolution(st: State.St, id: Int) -> Ast.Optional[State.Resolved]
   if found.ok?
     return Ast.Optional.Present(found.unwrap!)
   end
+
   return Ast.Optional.Absent
 end
 
@@ -76,9 +79,11 @@ def unused_result?(value: Ast.Expr, resolved: Ast.Optional[State.Resolved], entr
   if struct_update?(value) or yields_value?(resolved)
     return true
   end
+
   if !entry.ok?
     return false
   end
+
   found = entry.unwrap!
   return found.effects.size == 0 and !takes_function?(found) and !found.name.ends_with?("!")
 end
@@ -112,6 +117,7 @@ def unused_subject(name: String) -> String
   if name == ""
     return "this expression"
   end
+
   return name
 end
 
@@ -122,6 +128,7 @@ def unused_help(value: Ast.Expr, resolved: Ast.Optional[State.Resolved], entry: 
   if target != "" and keeps
     return "values are immutable, so this call changes nothing; assign the result, for example #{target} = ..."
   end
+
   return "values are immutable, so this call changes nothing; assign or use the result"
 end
 
@@ -141,6 +148,7 @@ def first_argument_name(args: List[Ast.Expr]) -> String
   if args.size == 0
     return ""
   end
+
   return name_of(args[0])
 end
 

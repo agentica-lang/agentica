@@ -14,8 +14,10 @@ export def bytes(path: String, data: List[Int], timeout_ms: Int) -> Result[Void]
       File.close(out, timeout_ms)
       return written
     end
+
     rest = rest.drop(PIECE)
   end
+
   return File.close(out, timeout_ms)
 end
 
@@ -31,6 +33,7 @@ export def replace(path: String, data: List[Int], replacing: Bool, timeout_ms: I
     Path.remove(fresh, timeout_ms)
     return written
   end
+
   if replacing
     moved = Path.rename(path, backup, timeout_ms)
     if !moved.ok?
@@ -38,17 +41,21 @@ export def replace(path: String, data: List[Int], replacing: Bool, timeout_ms: I
       return moved
     end
   end
+
   placed = Path.rename(fresh, path, timeout_ms)
   if !placed.ok?
     if replacing
       Path.rename(backup, path, timeout_ms)
     end
+
     Path.remove(fresh, timeout_ms)
     return placed
   end
+
   if replacing
     # The new file stands; a backup that cannot be removed is only a spare file.
     Path.remove(backup, timeout_ms)
   end
+
   return ok()
 end

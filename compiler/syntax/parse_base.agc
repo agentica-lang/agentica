@@ -150,6 +150,7 @@ export def kind_at(e: Env, index: Int) -> String
   if index < e.size
     return e.tokens[index].kind
   end
+
   return e.tokens[e.size - 1].kind
 end
 
@@ -160,14 +161,17 @@ export def constant_name?(text: String) -> Bool
   if codes.size < 2 or codes[0] < 65 or codes[0] > 90
     return false
   end
+
   index = 1
   while index < codes.size
     code = codes[index]
     if !((code >= 65 and code <= 90) or (code >= 48 and code <= 57) or code == 95)
       return false
     end
+
     index += 1
   end
+
   return true
 end
 
@@ -182,12 +186,15 @@ export def describe(token: Tokens.Token) -> String
   if token.lexeme == ""
     return token.kind
   end
+
   if token.kind == "NL"
     return "a newline"
   end
+
   if token.kind == "interp-middle" or token.kind == "interp-end"
     return "\"}\""
   end
+
   return Unicode.written_text(token.lexeme)
 end
 
@@ -200,12 +207,14 @@ export def unpack(text: String) -> Diag.Diagnostic
     consumed += parts[index].length + 1
     index += 1
   end
+
   body = text.slice(consumed, text.length - consumed)
   size = parts[8].to_i!
   help = Diag.Help.NoHelp
   if parts[7] == "1"
     help = Diag.Help.Hint(body.slice(size, body.length - size))
   end
+
   start = Source.Position(offset: parts[1].to_i!, line: parts[2].to_i!, column: parts[3].to_i!)
   stop = Source.Position(offset: parts[4].to_i!, line: parts[5].to_i!, column: parts[6].to_i!)
   return Diag.fail(parts[0], body.slice(0, size), Source.Span(start: start, stop: stop), help)
@@ -228,6 +237,7 @@ export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help)
   if token.kind == "DOC" and code != "PARSE-MISSING-BLANK-LINE"
     return detached_doc(token)
   end
+
   return pack(code, message, token.span, help)
 end
 
@@ -257,6 +267,7 @@ export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
   if e.nesting + levels > NESTING_LIMIT
     return error(too_deep(e, pos))
   end
+
   return ok(
     Env(
       tokens: e.tokens,
@@ -293,6 +304,7 @@ export def expect(e: Env, pos: Int, kind: String, description: String, suffix: B
   if token.kind == kind and !(kind == "name" and !suffix and decorated?(token.lexeme))
     return ok(pos + 1)
   end
+
   return error(found(e, pos, description))
 end
 
@@ -302,6 +314,7 @@ export def skip_newlines(e: Env, pos: Int) -> Int
   while e.tokens[cursor].kind == "NL"
     cursor += 1
   end
+
   return cursor
 end
 
@@ -340,6 +353,7 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
     name = "#{name}.#{e.tokens[cursor + 1].lexeme}"
     cursor = stop
   end
+
   args: List[Ast.TypeRef] = []
   next_id = ids
   if kind?(e, cursor, "left-bracket")
@@ -353,8 +367,10 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
       cursor = more.pos
       next_id = more.ids
     end
+
     cursor = try expect(e, cursor, "right-bracket", "\"]\"", false)
   end
+
   node = Ast.TypeRef(id: next_id, name: name, args: args, span: span_from(e, pos, cursor))
   return ok(TypeAt(node: node, pos: cursor, ids: next_id + 1))
 end
@@ -366,30 +382,38 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   if kind == "name"
     return parse_name_pattern(e, pos, ids)
   end
+
   if kind == "string" and heredoc?(token)
     return error(
       unexpected_help(e, pos, "a heredoc is not a pattern", "write the pattern as a \"...\" string literal"),
     )
   end
+
   if kind == "integer" or kind == "float" or kind == "string"
     return literal_pattern(e, ids, literal_value(token), pos, pos + 1)
   end
+
   if kind == "true" or kind == "false"
     return literal_pattern(e, ids, Ast.LitValue.Flag(kind == "true"), pos, pos + 1)
   end
+
   if kind == "nil"
     return literal_pattern(e, ids, Ast.LitValue.Nothing, pos, pos + 1)
   end
+
   if kind == "minus"
     number = e.tokens[pos + 1]
     if number.kind != "integer" and number.kind != "float"
       return error(unexpected(e, pos + 1, "expected a number after - in a pattern"))
     end
+
     return literal_pattern(e, ids, negated(literal_value(number)), pos, pos + 2)
   end
+
   if kind == "type-name"
     return parse_variant_pattern(e, pos, ids)
   end
+
   return error(unexpected(e, pos, "expected a pattern"))
 end
 
@@ -400,9 +424,11 @@ export def case_arm_start?(e: Env, pos: Int) -> Bool
   if stop < 0
     return false
   end
+
   if kind_at(e, stop) == "if"
     return guard_arrow(e, stop + 1) >= 0
   end
+
   return kind_at(e, stop) == "arrow"
 end
 
@@ -423,6 +449,7 @@ def pack(code: String, message: String, span: Source.Span, help: Diag.Help) -> S
       flag = "1"
     Diag.Help.NoHelp -> flag = "0"
   end
+
   return "#{code}\n#{fields.join("\n")}\n#{flag}\n#{message.length}\n#{rest}"
 end
 
@@ -465,22 +492,28 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
     if (lexeme == "ok" or lexeme == "error") and kind?(e, pos + 1, "left-paren")
       return nested_slot(e, pos, ids)
     end
+
     advanced = try expect(e, pos, "name", "a pattern binding or _", false)
     slot = Ast.Slot.Bind(lexeme, token.span)
     if lexeme == "_"
       slot = Ast.Slot.Skip
     end
+
     return ok(SlotAt(slot: slot, pos: advanced, ids: ids))
   end
+
   if LITERAL_KINDS.include?(kind)
     return nested_slot(e, pos, ids)
   end
+
   if kind == "type-name"
     return nested_slot(e, pos, ids)
   end
+
   if kind == "minus" and (kind_at(e, pos + 1) == "integer" or kind_at(e, pos + 1) == "float")
     return nested_slot(e, pos, ids)
   end
+
   return error(found(e, pos, "a pattern binding or _"))
 end
 
@@ -495,6 +528,7 @@ def parse_slots(e: Env, pos: Int, ids: Int, empty_help: String) -> Result[SlotsA
   if kind?(e, pos + 1, "right-paren")
     return error(unexpected_help(e, pos + 1, "a pattern with parentheses needs a binding or _", empty_help))
   end
+
   slots: List[Ast.Slot] = []
   cursor = pos + 1
   next_id = ids
@@ -510,6 +544,7 @@ def parse_slots(e: Env, pos: Int, ids: Int, empty_help: String) -> Result[SlotsA
       looping = false
     end
   end
+
   cursor = try expect(e, cursor, "right-paren", ")", false)
   return ok(SlotsAt(slots: slots, pos: cursor, ids: next_id))
 end
@@ -556,16 +591,19 @@ def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     node = Ast.Pattern.Wildcard(Ast.WildcardPattern(id: ids, span: token.span))
     return ok(PatternAt(node: node, pos: pos + 1, ids: ids + 1))
   end
+
   if (lexeme == "ok" or lexeme == "error") and kind?(e, pos + 1, "left-paren")
     parsed = try parse_slots(e, pos + 1, ids, "write #{lexeme}(_) to match without binding the value")
     variant = "Err"
     if lexeme == "ok"
       variant = "Ok"
     end
+
     # The node follows the ids of its nested patterns (post-order); with none, its id is `ids`, as it always was.
     node = pattern_node(e, parsed.ids, "Result", variant, parsed.slots, pos, parsed.pos)
     return ok(PatternAt(node: node, pos: parsed.pos, ids: parsed.ids + 1))
   end
+
   if lexeme == "when"
     return error(
       unexpected_help(
@@ -576,6 +614,7 @@ def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
       ),
     )
   end
+
   return error(unexpected(e, pos, "expected a pattern"))
 end
 
@@ -583,6 +622,7 @@ def variant_help(enum_name: String, variant_name: String) -> String
   if enum_name == "Result" or (enum_name == "Await" and variant_name == "Done")
     return "write #{enum_name}.#{variant_name}(_) to match without binding the value"
   end
+
   return "a variant without payload has no parentheses: #{enum_name}.#{variant_name}"
 end
 
@@ -597,6 +637,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
       ),
     )
   end
+
   cursor = try expect(e, pos + 1, "dot", "a dot between an enum and variant", false)
   after = try expect(e, cursor, "type-name", "a variant name", false)
   enum_name = e.tokens[pos].lexeme
@@ -608,6 +649,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     variant_name = e.tokens[cursor + 1].lexeme
     cursor = last
   end
+
   slots: List[Ast.Slot] = []
   next_id = ids
   if kind?(e, cursor, "left-paren")
@@ -616,6 +658,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     cursor = parsed.pos
     next_id = parsed.ids
   end
+
   node = pattern_node(e, next_id, enum_name, variant_name, slots, pos, cursor)
   return ok(PatternAt(node: node, pos: cursor, ids: next_id + 1))
 end
@@ -629,12 +672,15 @@ def variant_head_end(e: Env, index: Int) -> Int
     if segments >= 3 or kind_at(e, at + 1) != "type-name"
       return -1
     end
+
     at += 2
     segments += 1
   end
+
   if segments < 2
     return -1
   end
+
   return at
 end
 
@@ -647,6 +693,7 @@ def scan_item(e: Env, at: Int, inside: Bool) -> Scanned
     if (token.lexeme == "ok" or token.lexeme == "error") and kind_at(e, at + 1) == "left-paren"
       return Scanned(next: at + 2, opens: true)
     end
+
     if token.lexeme == "_" or inside
       return Scanned(next: at + 1, opens: false)
     end
@@ -665,6 +712,7 @@ def scan_item(e: Env, at: Int, inside: Bool) -> Scanned
       return Scanned(next: head, opens: false)
     end
   end
+
   return Scanned(next: -1, opens: false)
 end
 
@@ -679,6 +727,7 @@ def pattern_end(e: Env, start: Int) -> Int
     if item.next < 0
       return -1
     end
+
     cursor = item.next
     if item.opens
       open += 1
@@ -688,6 +737,7 @@ def pattern_end(e: Env, start: Int) -> Int
         if open == 0
           return cursor
         end
+
         following = kind_at(e, cursor)
         if following == "comma"
           cursor += 1
@@ -701,6 +751,7 @@ def pattern_end(e: Env, start: Int) -> Int
       end
     end
   end
+
   return -1
 end
 
@@ -714,7 +765,9 @@ def guard_arrow(e: Env, from: Int) -> Int
     elsif kind == "NL" or kind == "EOF"
       return -1
     end
+
     cursor += 1
   end
+
   return -1
 end

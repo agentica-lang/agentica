@@ -15,12 +15,14 @@ export def root(env: Env.Env) -> String
     if Paths.absolute?(env.local_app_data, true)
       return Paths.join(env.local_app_data, "agentica/cache/pkg")
     end
+
     return ""
   elsif env.xdg_cache_home.starts_with?("/")
     return Paths.join(env.xdg_cache_home, "agentica/pkg")
   elsif env.home != ""
     return Paths.join(env.home, ".cache/agentica/pkg")
   end
+
   return ""
 end
 
@@ -34,5 +36,6 @@ export def folder(root: String, source: GitSource.Source, commit: String) -> Str
   if source.subdir != ""
     name = "#{commit}@#{source.subdir.split("/").join("@")}"
   end
+
   return Paths.join(Paths.join(root, GitSource.cache_path(source.git)), name)
 end

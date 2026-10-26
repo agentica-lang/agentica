@@ -75,6 +75,7 @@ export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings
   if !walked.ok?
     return Outcome.Rejected(link_problem(Failure.unpack_failure(walked.message)))
   end
+
   case Cache.find(cache, walked.unwrap!)
     Cache.Found.Hit(root) -> return stored_outcome(root)
     Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
@@ -90,6 +91,7 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
   if !walked.ok?
     return cache
   end
+
   loaded = walked.unwrap!
   reaching = Cache.reaching(cache, loaded)
   if Cache.crowded?(reaching)
@@ -97,9 +99,11 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
     if !again.ok?
       return cache
     end
+
     loaded = again.unwrap!
     reaching = Cache.restart(cache, loaded)
   end
+
   case Cache.find(cache, loaded)
     Cache.Found.Hit(root) -> return Cache.remember(reaching, root, loaded, false, 0)
     Cache.Found.Miss -> return solve(cache, reaching, loaded, settings)
@@ -165,6 +169,7 @@ def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) ->
   if main_required
     return checked_outcome(linked, Checker.check(linked, settings))
   end
+
   return checked_outcome(linked, Checker.check_query(linked, settings))
 end
 

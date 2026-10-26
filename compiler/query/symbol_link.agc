@@ -32,11 +32,13 @@ export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: M
     root = rooted(roots, left.root)
     Skipped(file: QueryFiles.display(settings, root.key, true), problem: problem_of(left.failure, root))
   end
+
   modules: List[Linker.LinkedModule] = []
   case programs.linked
     Ast.Optional.Present(together) -> modules = together.modules
     Ast.Optional.Absent -> modules = modules
   end
+
   return Linked(program: programs.linked, modules: modules, skipped: skipped)
 end
 
@@ -54,5 +56,6 @@ def problem_of(failure: Failure.Failure, root: SymbolPaths.Root) -> Problems.Pro
   if failure.file == root.typed or failure.file == root.key
     return problem.with(key_path: failure.key_path, file: root.typed)
   end
+
   return problem.with(key_path: failure.key_path)
 end

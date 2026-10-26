@@ -81,11 +81,13 @@ export def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLin
   if linked.modules.size == 0
     return Outcome.Refused(linked.skipped[0].problem)
   end
+
   aliases = aliases_of(linked.modules, roots)
   matches = declared(linked.modules, aliases, name).concat(builtin(name))
   if matches.size == 0
     return Outcome.Refused(not_found(name, linked))
   end
+
   return Outcome.Found(Answer(matches: matches, skipped: linked.skipped))
 end
 
@@ -97,6 +99,7 @@ export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> A
     if item.name_span.start.offset == at
       return Ast.Optional.Present(item_match(module.key, item))
     end
+
     case item.detail
       Model.Detail.Struct(fields) ->
         for field in fields
@@ -104,16 +107,19 @@ export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> A
             return Ast.Optional.Present(field_match(module.key, item, field))
           end
         end
+
       Model.Detail.Enum(variants) ->
         for variant in variants
           if variant.name_span.start.offset == at
             return Ast.Optional.Present(variant_match(module.key, item, variant))
           end
         end
+
       Model.Detail.Function(_, _) -> next
       Model.Detail.Plain -> next
     end
   end
+
   return Ast.Optional.Absent
 end
 
@@ -129,6 +135,7 @@ def aliases_of(modules: List[Linker.LinkedModule], roots: List[SymbolPaths.Root]
       end
     end
   end
+
   return by_key
 end
 
@@ -138,6 +145,7 @@ def aliases_for(aliases: Map[String, List[String]], key: String) -> List[String]
   if found.ok?
     return found.unwrap!
   end
+
   return []
 end
 
@@ -154,6 +162,7 @@ def declared(
       end
     end
   end
+
   return found
 end
 
@@ -164,12 +173,15 @@ def written_names(module: Linker.LinkedModule, exported: Bool, aliases: Map[Stri
   if !exported
     return out
   end
+
   for alias in aliases_for(aliases, module.key).uniq
     out = out.push("#{alias}.")
   end
+
   if module.key.starts_with?("std/") and module.key.ends_with?(".agc")
     out = out.push("#{module.key.slice(0, module.key.length - 4)}.")
   end
+
   return out
 end
 
@@ -181,16 +193,19 @@ def of_item(file: String, item: Model.Item, prefix: String, name: String) -> Lis
   elsif !name.starts_with?("#{written}.")
     return []
   end
+
   member = name.slice(written.length + 1, name.length - written.length - 1)
   case item.detail
     Model.Detail.Struct(fields) ->
       return fields.filter do |field: Model.Field| field.name == member end.map do |field: Model.Field|
         field_match(file, item, field)
       end
+
     Model.Detail.Enum(variants) ->
       return variants.filter do |variant: Model.Variant| variant.name == member end.map do |variant: Model.Variant|
         variant_match(file, item, variant)
       end
+
     Model.Detail.Function(_, _) -> return []
     Model.Detail.Plain -> return []
   end
@@ -247,6 +262,7 @@ def builtin(name: String) -> List[Match]
   if !entry.ok?
     return []
   end
+
   here = Source.Position(offset: 0, line: 0, column: 0)
   nowhere = Source.Span(start: here, stop: here)
   return [
@@ -272,14 +288,17 @@ def not_found(name: String, linked: SymbolLink.Linked) -> Problems.Problem
     Ast.Optional.Present(text) -> hints = hints.push(text)
     Ast.Optional.Absent -> hints = hints
   end
+
   if linked.skipped.size > 0
     files = linked.skipped.map do |skipped: SymbolLink.Skipped| skipped.file end
     hints = hints.push("not searched: #{files.join(", ")}")
   end
+
   help = Diag.Help.NoHelp
   if hints.size > 0
     help = Diag.Help.Hint(hints.join("; "))
   end
+
   return QueryOptions.at_arguments("QUERY-NOT-FOUND", "#{name} is not declared in the linked files", help)
 end
 
@@ -299,5 +318,6 @@ def candidates(modules: List[Linker.LinkedModule]) -> List[String]
       end
     end
   end
+
   return names
 end

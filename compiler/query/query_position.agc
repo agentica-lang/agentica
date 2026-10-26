@@ -37,12 +37,14 @@ export def parse(word: String, usage: String) -> Parsed
   if parts.size < 3
     return Parsed.Refused(QueryOptions.refusal("#{word} is not FILE:LINE:COL", usage))
   end
+
   line = number(parts[parts.size - 2])
   column = number(parts[parts.size - 1])
   file = parts.take(parts.size - 2).join(":")
   if file == "" or line < 1 or column < 1
     return Parsed.Refused(QueryOptions.refusal("#{word} is not FILE:LINE:COL, from line 1 and column 1", usage))
   end
+
   return Parsed.Ready(Asked(file: file, line: line, column: column))
 end
 
@@ -53,17 +55,20 @@ export def locate(text: String, line: Int, column: Int) -> Located
   if lines.size == 0
     return Located.Outside(point(0, 1, 1))
   end
+
   start = 0
   at = 1
   while at < line and at <= lines.size
     start += lines[at - 1].length + 1
     at += 1
   end
+
   if line > lines.size
     return Located.Outside(point(text.length, lines.size, lines[lines.size - 1].length + 1))
   elsif column > lines[line - 1].length
     return Located.Outside(point(start + lines[line - 1].length, line, lines[line - 1].length + 1))
   end
+
   return Located.At(start + column - 1)
 end
 
@@ -94,8 +99,10 @@ def number(text: String) -> Int
   if text.length == 0 or text.length > MAX_DIGITS
     return 0
   end
+
   if !text.split("").all? do |character: String| character.code >= 48 and character.code <= 57 end
     return 0
   end
+
   return text.to_i!
 end

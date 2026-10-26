@@ -48,6 +48,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
       ),
     )
   end
+
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
   if owning and !handle?(cx, handed.type) and !T.is?(handed.type, "Channel") and !c_pointer?(handed.type)
     return error(
@@ -62,6 +63,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
       ),
     )
   end
+
   return ok(State.Out(st: handed.st, type: T.Type.Task(T.result(callback.type))))
 end
 
@@ -88,6 +90,7 @@ def check_native_close(cx: State.Cx, st: State.St, site: State.Site) -> Result[S
       ),
     )
   end
+
   return ok(State.Out(st: target.st, type: T.Type.Void))
 end
 
@@ -98,6 +101,7 @@ def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
       State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
     )
   end
+
   return ok(State.Out(st: target.st, type: T.item(target.type)))
 end
 
@@ -107,12 +111,14 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
   if T.is?(site.expected, "Enum") and T.name(site.expected) == "Await"
     context = T.Type.Task(T.args(site.expected)[0])
   end
+
   target = try State.expr(cx, st, site.args[0], context)
   if !T.is?(target.type, "Task")
     return error(
       State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
     )
   end
+
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
 end
@@ -151,6 +157,7 @@ def task_map_function(cx: State.Cx, st: State.St, site: State.Site, callback: As
       State.fail(cx, checked.st, "CHECK-TYPE-MISMATCH", "Task.map requires a function with one parameter", span),
     )
   end
+
   items = try Args.list_argument(cx, checked.st, site, T.Type.List(T.params(checked.type)[0]))
   counts = try task_map_counts(cx, items.st, site)
   return task_map_result(cx, counts.st, checked.type, span)
@@ -168,6 +175,7 @@ def task_map_block_result(expected: T.Type) -> T.Type
   if T.is?(expected, "List") and T.is?(T.item(expected), "Result")
     return T.item(expected)
   end
+
   return T.Type.Result(T.Type.Unknown)
 end
 
@@ -177,6 +185,7 @@ def task_map_result(cx: State.Cx, st: State.St, callback: T.Type, span: Source.S
   if !T.is?(result, "Result")
     return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), result, span))
   end
+
   return ok(State.Out(st: st, type: T.Type.List(result)))
 end
 
@@ -196,9 +205,11 @@ def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
       ),
     )
   end
+
   if !T.is?(site.expected, "Channel")
     return error(State.mismatch(cx, capacity.st, site.expected, T.Type.Channel(T.Type.Var("T")), span))
   end
+
   return ok(State.Out(st: capacity.st, type: site.expected))
 end
 
@@ -242,6 +253,7 @@ def check_block_value(
   if CheckTypes.has_variables?(wanted)
     wanted = T.Type.Unknown
   end
+
   callback = site.args[1]
   case callback
     Ast.Expr.BlockLit(block) ->
@@ -261,6 +273,7 @@ def check_block_value(
           ),
         )
       end
+
       return ok(State.Out(st: checked.st, type: T.result(checked.type)))
   end
 end
@@ -270,6 +283,7 @@ def block_parameters(params: List[T.Type]) -> String
   if params.size == 0
     return "with no parameters"
   end
+
   return "that takes #{params.map do |param: T.Type| T.to_text(param) end.join(", ")}"
 end
 
@@ -306,18 +320,21 @@ def check_map_get(cx: State.Cx, st: State.St, site: State.Site, with_default: Bo
   if with_default
     value_context = site.expected
   end
+
   current = st
   if T.unknown?(value_context) and with_default and Args.empty_map?(site.args[0])
     default = try State.expr(cx, current, site.args[2], T.Type.Unknown)
     current = default.st
     value_context = default.type
   end
+
   context = T.Type.Unknown
   if !T.unknown?(value_context)
     key = try State.expr(cx, current, site.args[1], T.Type.Unknown)
     current = key.st
     context = T.Type.Map(key.type, value_context)
   end
+
   target = try Args.map_argument(cx, current, site, context)
   key = try State.expr(cx, target.st, site.args[1], T.key(target.type))
   current = key.st
@@ -325,6 +342,7 @@ def check_map_get(cx: State.Cx, st: State.St, site: State.Site, with_default: Bo
     default = try State.expr(cx, current, site.args[2], T.value(target.type))
     return ok(State.Out(st: default.st, type: T.value(target.type)))
   end
+
   return ok(State.Out(st: current, type: T.Type.Result(T.value(target.type))))
 end
 
@@ -368,11 +386,13 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
   if T.is?(site.expected, "Set")
     context = T.Type.List(T.item(site.expected))
   end
+
   span = site.node.span
   if Args.empty_list?(items) and T.unknown?(context)
     if !T.unknown?(site.expected)
       return error(State.mismatch(cx, st, site.expected, T.Type.Set(T.Type.Var("T")), span))
     end
+
     return error(
       State.fail_help(
         cx,
@@ -387,6 +407,7 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
       ),
     )
   end
+
   list = try Args.list_argument(cx, st, site, context)
   element = T.item(list.type)
   if !CheckTypes.key_here?(cx, element)
@@ -400,6 +421,7 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
       ),
     )
   end
+
   return ok(State.Out(st: list.st, type: T.Type.Set(element)))
 end
 
@@ -416,10 +438,12 @@ def check_set_combine(cx: State.Cx, st: State.St, site: State.Site, subset: Bool
   if !subset
     context = T.only_set(site.expected)
   end
+
   target = try Args.set_argument(cx, st, site, context)
   other = try State.expr(cx, target.st, site.args[1], target.type)
   if subset
     return ok(State.Out(st: other.st, type: T.Type.Bool))
   end
+
   return ok(State.Out(st: other.st, type: target.type))
 end

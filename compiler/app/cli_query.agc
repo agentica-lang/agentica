@@ -86,6 +86,7 @@ export def outline(file: String, style: String, buffered: Bool, settings: Env.Se
       if style == "json"
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(OutlineJson.json(found))}\n"))
       end
+
       return Reply.Answer.Printed(Reply.printed(OutlineText.text(found)))
   end
 end
@@ -102,6 +103,7 @@ export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, set
   else
     asking = Core.type_at(Cache.empty(), settings, asked)
   end
+
   case asking
     Core.Typed.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, TYPE_AT_USAGE))
     Core.Typed.Rejected(problem) -> return Reply.Answer.Rejected(problem)
@@ -109,6 +111,7 @@ export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, set
       if style == "json"
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(TypeAtJson.json(found))}\n"))
       end
+
       text = TypeAtText.text(found)
       return Reply.Answer.Printed(Reply.Reply(code: 0, out: text, err: partial_text(found.diagnostics)))
   end
@@ -125,11 +128,13 @@ export def refs_ask(asked: QueryOptions.Query) -> RefsAsk
       if asked.partial and paths.size > 0
         return RefsAsk.Refused(QueryOptions.refusal("--partial takes FILE:LINE:COL alone", REFS_USAGE))
       end
+
       return found
     RefsAsk.Named(_, _) ->
       if asked.partial
         return RefsAsk.Refused(QueryOptions.refusal("--partial takes FILE:LINE:COL, not a NAME", REFS_USAGE))
       end
+
       return found
     RefsAsk.Refused(_) -> return found
   end
@@ -149,6 +154,7 @@ export def refs_at(
   if partial
     return refs_reply(Core.refs_partial(Cache.empty(), settings, asked), style, asked.file)
   end
+
   return refs_reply(Core.refs_at(Cache.empty(), settings, asked, paths, REFS_USAGE), style, asked.file)
 end
 
@@ -174,12 +180,14 @@ export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.An
   if asked.words.size > 0
     name = asked.words[0]
   end
+
   case Core.symbol(Cache.empty(), settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
     Core.Found.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Found.Done(found) ->
       if asked.style == "json"
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(SymbolJson.json(found))}\n"))
       end
+
       return Reply.Answer.Printed(
         Reply.Reply(code: 0, out: SymbolText.text(found), err: SymbolText.skipped_text(found)),
       )
@@ -194,6 +202,7 @@ def positioned(asked: QueryOptions.Query) -> RefsAsk
       QueryPosition.Parsed.Refused(_) -> return word_ask(asked.words)
     end
   end
+
   return word_ask(asked.words)
 end
 
@@ -204,6 +213,7 @@ def word_ask(words: List[String]) -> RefsAsk
   elsif !words[0].contains?(":")
     return RefsAsk.Named(words[0], words.drop(1))
   end
+
   case QueryPosition.parse(words[0], REFS_USAGE)
     QueryPosition.Parsed.Refused(problem) -> return RefsAsk.Refused(problem)
     QueryPosition.Parsed.Ready(position) -> return RefsAsk.At(position, words.drop(1))
@@ -220,6 +230,7 @@ def refs_reply(found: Core.Referenced, style: String, file: String) -> Reply.Ans
       if style == "json"
         return Reply.Answer.Printed(Reply.printed("#{JSON.encode(RefsJson.json(answer))}\n"))
       end
+
       return Reply.Answer.Printed(
         Reply.Reply(
           code: 0,
@@ -236,5 +247,6 @@ def partial_text(diagnostics: List[DiagnosticModel.Diagnostic]) -> String
   lines = diagnostics.map do |found: DiagnosticModel.Diagnostic|
     "partial #{OutlineText.place(found.file, found.range)}: #{found.code}\n"
   end
+
   return lines.join("")
 end

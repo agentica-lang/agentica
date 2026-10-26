@@ -20,6 +20,7 @@ export def u32(number: Int) -> List[Int]
   if number < 65_536
     return [number % 256, number / 256, 0, 0]
   end
+
   return [number % 256, (number / 256) % 256, (number / 65_536) % 256, number / 16_777_216]
 end
 
@@ -39,10 +40,12 @@ export def utf8(text: String) -> List[Int]
   if codes.all? do |code: Int| code < 128 end
     return codes
   end
+
   out: List[Int] = []
   for code in codes
     out = out.concat(encoded(code))
   end
+
   return out
 end
 
@@ -62,6 +65,7 @@ export def add(chunks: List[List[Int]], piece: List[Int]) -> List[List[Int]]
   if piece.size > SMALL_PIECE
     return chunks.push(piece)
   end
+
   last = chunks.size - 1
   return chunks.set(last, chunks[last].concat(piece))
 end
@@ -72,6 +76,7 @@ export def add_all(chunks: List[List[Int]], more: List[List[Int]]) -> List[List[
   for chunk in more
     out = add(out, chunk)
   end
+
   return out
 end
 
@@ -89,5 +94,6 @@ def encoded(code: Int) -> List[Int]
   elsif code < 65_536
     return [224 + code / 4096, 128 + (code / 64) % 64, 128 + code % 64]
   end
+
   return [240 + code / 262_144, 128 + (code / 4096) % 64, 128 + (code / 64) % 64, 128 + code % 64]
 end

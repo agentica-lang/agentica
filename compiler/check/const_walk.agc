@@ -37,10 +37,12 @@ export def references(root: Ast.Expr) -> List[Ast.ConstRef]
       Node.Expr(expr) -> found = push_read(found, expr)
       Node.Stmt(stmt) -> found = found
     end
+
     for child in children(node)
       work = work.push(child)
     end
   end
+
   return found.sort_by do |read: Ast.ConstRef| read_offset(read) end
 end
 
@@ -90,6 +92,7 @@ def entries(items: List[Ast.MapEntry]) -> List[Node]
   for entry in items
     out = out.push(Node.Expr(entry.key)).push(Node.Expr(entry.value))
   end
+
   return out
 end
 
@@ -101,6 +104,7 @@ def interpolated(parts: List[Ast.Part]) -> List[Node]
       Ast.Part.Text(text) -> out = out
     end
   end
+
   return out
 end
 
@@ -129,6 +133,7 @@ def if_children(node: Ast.IfStmt) -> List[Node]
   for branch in node.branches
     out = out.push(Node.Expr(branch.condition)).concat(stmts(branch.body))
   end
+
   case node.else_body
     Ast.Optional.Present(body) -> return out.concat(stmts(body))
     Ast.Optional.Absent -> return out
@@ -140,5 +145,6 @@ def case_children(node: Ast.CaseStmt) -> List[Node]
   for arm in node.arms
     out = out.concat(optional_value(arm.guard)).concat(stmts(arm.body))
   end
+
   return out
 end

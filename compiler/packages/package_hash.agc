@@ -49,6 +49,7 @@ export def hash_folder(workspace: Workspace.Workspace, root: String) -> Hashed
       if manifest_hashed?(workspace, root, paths)
         covered = covered.push(MANIFEST_FILE)
       end
+
       return hash_files(workspace, root, covered.sort)
   end
 end
@@ -61,25 +62,31 @@ export def manifest_hashed?(workspace: Workspace.Workspace, root: String, paths:
   if !entries.ok?
     return false
   end
+
   present = entries.unwrap!.any? do |entry: Workspace.Entry| entry.name == MANIFEST_FILE and regular?(entry.kind) end
   if !present
     return false
   end
+
   if paths.any? do |path: String| native_path?(path) and !source_file?(path) end
     return true
   end
+
   read = workspace.read_bytes.call(join(root, MANIFEST_FILE))
   if !read.ok?
     return false
   end
+
   text = String.from_bytes(read.unwrap!)
   if !text.ok?
     return false
   end
+
   parsed = Toml.parse(text.unwrap!)
   if !parsed.ok?
     return false
   end
+
   case parsed.unwrap!
     Toml.Value.Table(table) -> return table.has_key?("native")
     _ -> return false
@@ -98,6 +105,7 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
     if !entries.ok?
       return Listing.Stopped(Hashed.Unreadable(entries.message))
     end
+
     for entry in entries.unwrap!
       path = join(folder, entry.name)
       case entry.kind
@@ -105,18 +113,22 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
           if !skipped_folder?(entry.name, folder == "")
             pending = pending.push(path)
           end
+
         Workspace.EntryKind.Link ->
           if source_file?(entry.name) or native_path?(path) or native_root?(path)
             return Listing.Stopped(Hashed.Link(path))
           end
+
         Workspace.EntryKind.File ->
           if source_file?(entry.name) or (native_path?(path) and !native_junk?(entry.name))
             files = files.push(path)
           end
+
         _ -> next
       end
     end
   end
+
   return Listing.Files(files)
 end
 
@@ -177,13 +189,17 @@ export def concat_all(pieces: List[List[Int]]) -> List[Int]
       else
         merged = merged.push(level[index])
       end
+
       index += 2
     end
+
     level = merged
   end
+
   if level.size == 0
     return []
   end
+
   return level[0]
 end
 
@@ -205,8 +221,10 @@ def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]
     if !read.ok?
       return Hashed.Unreadable(read.message)
     end
+
     pieces = pieces.push(header(path, read.unwrap!.size).concat(read.unwrap!))
   end
+
   return Hashed.Hash("sha256:#{hex(Crypto.sha256(concat_all(pieces)))}")
 end
 
@@ -215,9 +233,11 @@ def join(folder: String, name: String) -> String
   if folder == ""
     return name
   end
+
   if name == ""
     return folder
   end
+
   return "#{folder}/#{name}"
 end
 

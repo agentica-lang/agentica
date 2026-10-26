@@ -36,14 +36,17 @@ export def plan(
       Ast.Optional.Present(imm) -> literals = literals.put(constants[at].name, imm)
       Ast.Optional.Absent -> literals = literals
     end
+
     at += 1
   end
+
   by_function: Map[String, Int] = {}
   at = 0
   while at < functions.size
     by_function = by_function.put(functions[at].name, at)
     at += 1
   end
+
   kept_set = kept_names(function_scans, by_function, constant_scans, by_name, literals)
   slot_set = kept_set
   for scan in function_scans
@@ -53,16 +56,19 @@ export def plan(
       end
     end
   end
+
   kept: List[Ast.ConstDecl] = []
   slots: Map[String, Int] = {}
   for name in order
     if kept_set.include?(name)
       kept = kept.push(constants[by_name[name]])
     end
+
     if slot_set.include?(name)
       slots = slots.put(name, slots.size)
     end
   end
+
   return Plan(kept: kept, slots: slots, literals: literals)
 end
 
@@ -75,10 +81,12 @@ export def literal_value(value: Ast.Expr) -> Ast.Optional[Ir.Imm]
       if node.op != "minus"
         return Ast.Optional.Absent
       end
+
       case node.operand
         Ast.Expr.Literal(inner) -> return negated(inner.value)
         _ -> return Ast.Optional.Absent
       end
+
     _ -> return Ast.Optional.Absent
   end
 end
@@ -102,6 +110,7 @@ def kept_names(
       pending = pending.concat(scan.calls)
     end
   end
+
   kept: Set[String] = Set.new([])
   at = 0
   while at < wanted.size
@@ -112,6 +121,7 @@ def kept_names(
       wanted = wanted.concat(constant_scans[by_name[name]].consts)
     end
   end
+
   return kept
 end
 
@@ -134,6 +144,7 @@ def negated(value: Ast.LitValue) -> Ast.Optional[Ir.Imm]
       if digits == INT_MIN_DIGITS
         return Ast.Optional.Present(Ir.Imm.Int(INT_MIN))
       end
+
       return Ast.Optional.Absent
     _ -> return Ast.Optional.Absent
   end

@@ -26,6 +26,7 @@ export def open(settings: Env.Settings, texts: Map[String, String]) -> Session
   for path in texts.keys
     session = update(session, path, texts[path])
   end
+
   return session
 end
 

@@ -33,10 +33,12 @@ export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Ty
   if !entry.ok? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
     return check_plain_call(cx, st, node)
   end
+
   out = try Rules.check_builtin_call(cx, st, node, expected, entry.unwrap!)
   if node.piped
     try check_pipe_method(cx, out.st, node, entry.unwrap!)
   end
+
   return ok(out)
 end
 
@@ -68,6 +70,7 @@ export def check_enum_constructor(
         ),
       )
     end
+
     return error(
       State.fail_maybe(
         cx,
@@ -79,6 +82,7 @@ export def check_enum_constructor(
       ),
     )
   end
+
   found = definition.unwrap!
   payload = variant_payload(found, variant_name)
   if !payload.ok?
@@ -92,6 +96,7 @@ export def check_enum_constructor(
       ),
     )
   end
+
   count = args.size + named
   if count != payload.unwrap!.size
     variant = "#{T.display_name(enum_name)}.#{variant_name}"
@@ -105,9 +110,11 @@ export def check_enum_constructor(
       ),
     )
   end
+
   if named > 0
     return error(State.fail(cx, st, "CHECK-ENUM-POSITIONAL-ARGS", "enum variants use positional arguments", span))
   end
+
   substitutions = expected_substitutions(found, expected)
   inferred = try infer_arguments(cx, st, payload.unwrap!, args, substitutions)
   return finish_constructor(cx, inferred.st, found, variant_name, inferred.substitutions, span, expected)
@@ -120,6 +127,7 @@ export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
   if parts.size == 2 and cx.enums.has_key?(parts[0])
     return check_enum_constructor(cx, st, parts[0], parts[1], [], node.args.size, node.span, expected)
   end
+
   return check_struct_construct(cx, st, node)
 end
 
@@ -140,6 +148,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
       ),
     )
   end
+
   name = T.name(target.type)
   if !updatable?(cx, node.visible, name)
     return error(
@@ -153,6 +162,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
       ),
     )
   end
+
   fields = try check_named_fields(cx, target.st, name, cx.structs[name], node.args)
   return ok(State.Out(st: fields.st, type: target.type))
 end
@@ -164,6 +174,7 @@ export def find_field(fields: List[Model.Named], name: String) -> Result[Model.N
       return ok(field)
     end
   end
+
   return error("no such field")
 end
 
@@ -173,6 +184,7 @@ def extent_text(cx: State.Cx, node: Ast.Expr) -> String
   if !text.ok?
     return ""
   end
+
   start = extent_start(node)
   stop = Ast.expr_span(node).stop.offset
   return text.unwrap!.slice(start, stop - start)
@@ -191,6 +203,7 @@ def call_start(call: Ast.Call) -> Int
   if call.piped
     return extent_start(call.args[0])
   end
+
   return call.span.start.offset
 end
 
@@ -199,6 +212,7 @@ def try_start(attempt: Ast.TryExpr) -> Int
   if inner < attempt.span.start.offset
     return inner
   end
+
   return attempt.span.start.offset
 end
 
@@ -216,14 +230,17 @@ def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.B
   if !selected.ok? or selected.unwrap!.parameters.size == 0
     return ok(true)
   end
+
   kind = Names.receiver_kind(selected.unwrap!.parameters[0].type)
   if kind == ""
     return ok(true)
   end
+
   method = Names.pipe_method_name(cx, kind, entry.name)
   if method == ""
     return ok(true)
   end
+
   return error(
     State.fail_help(
       cx,
@@ -243,6 +260,7 @@ def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   if simple_receiver?(left) and !piped?(left)
     receiver = extent_text(cx, left)
   end
+
   plain: List[String] = []
   block = false
   index = 1
@@ -251,15 +269,19 @@ def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
       Ast.Expr.BlockLit(found) -> block = true
       _ -> plain = plain.push(extent_text(cx, node.args[index]))
     end
+
     index += 1
   end
+
   text = "#{receiver}.#{method}"
   if plain.size > 0
     text = "#{text}(#{plain.join(", ")})"
   end
+
   if block
     text = "#{text} do ... end"
   end
+
   return text
 end
 
@@ -290,12 +312,14 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State
       ),
     )
   end
+
   signature = entry.unwrap!
   shape = signature.shape
   count = node.args.size
   if count < shape.required or count > shape.total
     return error(arity_failure(cx, st, node, signature))
   end
+
   current = st
   index = 0
   while index < count
@@ -303,6 +327,7 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[State
     current = out.st
     index += 1
   end
+
   return ok(State.Out(st: current, type: signature.result))
 end
 
@@ -314,6 +339,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.S
   if Defaults.has_defaults?(shape)
     wanted = "#{shape.required} to #{shape.total} arguments"
   end
+
   message = "\"#{name}\" expects #{wanted}, found #{node.args.size}"
   callee = "#{name}(#{T.list_text(signature.params)}) -> #{T.to_text(signature.result)}"
   return State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
@@ -334,6 +360,7 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
   elsif name.starts_with?("HTTP.")
     return "import HTTP from \"std/http\""
   end
+
   return Help.near(name, cx.functions.keys, PUBLIC_NAMES)
 end
 
@@ -341,6 +368,7 @@ def unknown_enum_help(name: String) -> String
   if name == "Result"
     return "Result has only Ok and Err: Result.Ok(value) or ok(value), Result.Err(\"message\") or error(\"message\")"
   end
+
   return ""
 end
 
@@ -351,6 +379,7 @@ def variant_payload(definition: Model.EnumDef, name: String) -> Result[List[T.Ty
       return ok(variant.payload)
     end
   end
+
   return error("no such variant")
 end
 
@@ -365,6 +394,7 @@ def expected_substitutions(definition: Model.EnumDef, expected: T.Type) -> Map[S
       index += 1
     end
   end
+
   return found
 end
 
@@ -394,15 +424,18 @@ def infer_arguments(
         ),
       )
     end
+
     wanted = context
     if Types.has_variables?(context)
       wanted = T.Type.Unknown
     end
+
     out = try State.expr(cx, current, args[index], wanted)
     current = out.st
     found = try Types.unify(cx, current, template, out.type, found, Ast.expr_span(args[index]))
     index += 1
   end
+
   return ok(Inferred(st: current, substitutions: found))
 end
 
@@ -437,6 +470,7 @@ def finish_constructor(
       ),
     )
   end
+
   args = definition.parameters.map do |parameter: String| substitutions[parameter] end
   type = try State.ensure(cx, st, T.Type.Enum(definition.name, args), expected, span)
   return ok(State.Out(st: st, type: type))
@@ -457,6 +491,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
       ),
     )
   end
+
   fields = cx.structs.get(name)
   if !fields.ok?
     return error(
@@ -470,6 +505,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
       ),
     )
   end
+
   checked = try check_named_fields(cx, st, name, fields.unwrap!, node.args)
   # A field with a default may be left out: the lowering fills it in at this construction.
   none: Set[String] = Set.new([])
@@ -488,6 +524,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct) -> R
       )
     end
   end
+
   return ok(State.Out(st: checked.st, type: T.Type.Struct(name)))
 end
 
@@ -516,15 +553,18 @@ def check_named_fields(
         ),
       )
     end
+
     if seen.include?(arg.name)
       return error(
         State.fail(cx, current, "CHECK-DUPLICATE-FIELD", "field \"#{arg.name}\" is given twice", arg.span),
       )
     end
+
     seen = seen.add(arg.name)
     out = try State.expr(cx, current, arg.value, field.unwrap!.type)
     current = out.st
   end
+
   return ok(Fields(st: current, seen: seen))
 end
 

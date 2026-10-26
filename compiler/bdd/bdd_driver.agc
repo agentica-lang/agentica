@@ -50,19 +50,23 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   if options.steps.size > 1
     return Report.usage("one --steps program; import the other files from it", options)
   end
+
   found = File.stat(options.vm, IO_TIMEOUT)
   if !found.ok? or found.unwrap!.kind != "file"
     message = "cannot find agentica at #{options.vm}"
     return Report.infrastructure(message, options.vm, options)
   end
+
   temporary = RunDir.temporary_directory()
   if !temporary.ok?
     return Report.infrastructure(temporary.message, RunDir.temporary_candidates()[0], options)
   end
+
   claimed = RunDir.claim(temporary.unwrap!)
   if !claimed.ok?
     return Report.infrastructure(claimed.message, temporary.unwrap!, options)
   end
+
   run_directory = claimed.unwrap!
   RunDir.sweep(temporary.unwrap!, run_directory)
   ending = inside(run_directory.path, options, settings, temporary.unwrap!)
@@ -81,6 +85,7 @@ def inside(directory: String, options: Opts.Options, settings: Env.Settings, tem
   if embedded?(settings)
     return ended(prepare_and_run(directory, options, settings, Runner.Program.Embedded("runner")), options, temporary)
   end
+
   case compile_runner(directory, settings)
     Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
@@ -91,6 +96,7 @@ def inside(directory: String, options: Opts.Options, settings: Env.Settings, tem
       if !written.ok?
         return Report.infrastructure(written.message, temporary, options)
       end
+
       return ended(prepare_and_run(directory, options, settings, Runner.Program.File(file)), options, temporary)
   end
 end
@@ -100,6 +106,7 @@ def ended(ran: Result[Report.Ending], options: Opts.Options, temporary: String) 
   if !ran.ok?
     return Report.infrastructure(ran.message, temporary, options)
   end
+
   return ran.unwrap!
 end
 
@@ -109,6 +116,7 @@ def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compil
   if !written.ok?
     return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
   end
+
   return Compile.file(source, settings, "cannot read the runner", false)
 end
 
@@ -125,6 +133,7 @@ def prepare_and_run(
       found.ok? and found.unwrap!.kind == "directory"
     end
   end
+
   entries = try compile_tests(Discover.discover(given), directory, settings, !options.no_cache)
   config = Runner.Config(
     vm: options.vm,
@@ -158,6 +167,7 @@ def empty_path(given: List[String]) -> String
   if given.size > 0
     first = given[0]
   end
+
   return Path.resolve(first).unwrap_or(first)
 end
 
@@ -165,6 +175,7 @@ def empty_message(given: List[String]) -> String
   if given.size == 0
     return "no .feature or *_test.agc files found: neither specs/ nor test/ exists"
   end
+
   return "no .feature or *_test.agc files found"
 end
 
@@ -183,6 +194,7 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
     root = SourceRoot.option(options.steps[0])
     compiled = Compile.file(source, settings, "cannot read the step program #{options.steps[0]}", !options.no_cache)
   end
+
   bytecode = "#{directory}/steps.agcb"
   given = options.steps.size > 0
   case compiled
@@ -209,8 +221,10 @@ def compile_tests(
     else
       out = out.push(entry)
     end
+
     index += 1
   end
+
   return ok(out)
 end
 
@@ -220,5 +234,6 @@ def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings, 
     Pipeline.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
     Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end
+
   return ok(entry.with(bytecode: output, source_root: SourceRoot.option(entry.path), front_end: front_end))
 end

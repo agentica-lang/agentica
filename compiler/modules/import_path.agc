@@ -22,9 +22,11 @@ export def directory_of(path: String) -> String
   if tail == path.length
     return ""
   end
+
   if tail + 1 == path.length
     return "/"
   end
+
   return path.slice(0, path.length - tail - 1)
 end
 
@@ -33,6 +35,7 @@ export def join(base: String, rest: String) -> String
   if base.ends_with?("/")
     return base + rest
   end
+
   return "#{base}/#{rest}"
 end
 
@@ -42,9 +45,11 @@ export def rooted?(path: String) -> Bool
   if path.starts_with?("/") or path.starts_with?("\\\\")
     return true
   end
+
   if path.length < 3
     return false
   end
+
   drive = String.code(path.at(0))
   separator = path.at(2)
   letter = drive >= 65 and drive <= 90 or drive >= 97 and drive <= 122
@@ -58,6 +63,7 @@ export def absolute?(path: String, on_windows: Bool) -> Bool
   if on_windows
     return path.starts_with?("\\") or rooted?(path)
   end
+
   return path.starts_with?("/")
 end
 
@@ -69,25 +75,30 @@ export def stored_name(root_dir: String, file: String) -> String
   if root_dir == "" or !rooted?(file)
     return file
   end
+
   from = path_parts(root_dir)
   to = path_parts(file)
   shared = 0
   while shared < from.size and shared < to.size and from[shared] == to[shared]
     shared = shared + 1
   end
+
   out: List[String] = []
   for index in shared...from.size
     out = out.push("..")
   end
+
   for index in shared...to.size
     out = out.push(to[index])
   end
+
   stored = out.join("/")
   # A user file under a std/ folder must not look like a standard module (the VM puts --source-root before every name
   # but those).
   if stored.starts_with?("std/")
     return "./#{stored}"
   end
+
   return stored
 end
 
@@ -97,10 +108,12 @@ export def stored_file(workspace: Workspace.Workspace, root_dir: String, file: S
   if file.starts_with?("std/") or file.starts_with?(PRELUDE_PREFIX)
     return file
   end
+
   real = workspace.real_path.call(file)
   if real.ok?
     return stored_name(root_dir, real.unwrap!)
   end
+
   return stored_name(root_dir, file)
 end
 
@@ -114,6 +127,7 @@ export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[Strin
   if has_stem
     stem = path.slice(0, path.length - 4)
   end
+
   guess = without_extension(path)
   if module_name?(path)
     return ok("#{path}.agc")
@@ -142,6 +156,7 @@ export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[Strin
       ),
     )
   end
+
   return error(
     refuse(
       site,
@@ -157,11 +172,13 @@ export def validate_library_path(path: String, site: Failure.Site) -> Result[Voi
   if path.contains?("\\")
     return error(invalid_library_path(site))
   end
+
   for part in path.split("/")
     if part == "" or part == "." or part == ".." or part.contains?(":")
       return error(invalid_library_path(site))
     end
   end
+
   return ok()
 end
 
@@ -179,6 +196,7 @@ export def inside_std(path: String, site: Failure.Site) -> Result[String]
       kept = kept.push(part)
     end
   end
+
   named = kept.join("/")
   try validate_library_path(named, site)
   return ok(named)
@@ -200,6 +218,7 @@ export def folded(path: String) -> String
       kept = kept.push(part)
     end
   end
+
   return kept.join("/")
 end
 
@@ -210,11 +229,13 @@ export def inside?(root: String, file: String) -> Bool
   if target.size < base.size
     return false
   end
+
   for index in 0...base.size
     if base[index] != target[index]
       return false
     end
   end
+
   return true
 end
 
@@ -238,5 +259,6 @@ def without_extension(path: String) -> String
   if pieces.size == 1
     return path
   end
+
   return path.slice(0, path.length - pieces[pieces.size - 1].length - 1)
 end

@@ -28,6 +28,7 @@ export def run(arguments: List[String], dir: String) -> Ran
   if !spawned.ok?
     return Ran.Missing(spawned.message)
   end
+
   child = spawned.unwrap!
   Process.close_stdin(child, CLOSE_TIMEOUT_MS)
   ran = finish(child)
@@ -44,16 +45,20 @@ def finish(child: Process) -> Ran
     if !got.ok?
       return Ran.Broken(got.message)
     end
+
     finished = got.unwrap!.size == 0
     pieces = pieces.push(got.unwrap!)
   end
+
   output = Process.output(child, GIT_TIMEOUT_MS)
   if !output.ok?
     return Ran.Broken(output.message)
   end
+
   waited = Process.wait(child, GIT_TIMEOUT_MS)
   if !waited.ok?
     return Ran.Broken(waited.message)
   end
+
   return Ran.Exited(waited.unwrap!, PackageHash.concat_all(pieces), output.unwrap!.stderr)
 end

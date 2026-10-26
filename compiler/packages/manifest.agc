@@ -100,6 +100,7 @@ export def find(manifest: Manifest, name: String) -> Result[Dependency]
       return ok(dependency)
     end
   end
+
   return error("#{name} is not a dependency")
 end
 
@@ -118,6 +119,7 @@ export def has_downloaded(manifest: Manifest) -> Bool
       end
     end
   end
+
   return false
 end
 
@@ -126,11 +128,13 @@ def optional_name(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Res
   if !root.has_key?("name")
     return ok("")
   end
+
   name = try Reader.text(reading, root["name"], "name")
   problem = GitSource.name_problem(name)
   if problem != ""
     return error(Reader.fail_help(reading, "name", "not a package name", problem))
   end
+
   return ok(name)
 end
 
@@ -140,6 +144,7 @@ def dependencies_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> R
   if !root.has_key?("dependencies")
     return ok(found)
   end
+
   entries = try Reader.table(reading, root["dependencies"], "dependencies")
   for name in entries.keys
     path = Reader.child("dependencies", name)
@@ -147,9 +152,11 @@ def dependencies_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> R
     if problem != ""
       return error(Reader.fail_help(reading, path, "not a package name", problem))
     end
+
     source = try source_of(reading, entries[name], path)
     found = found.push(Dependency(name: name, source: source))
   end
+
   return ok(found)
 end
 
@@ -161,14 +168,17 @@ def source_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resul
   if !entries.has_key?("git")
     return error(Reader.fail_help(reading, path, "missing key git", "only git sources exist: git = \"https://...\""))
   end
+
   git = try Reader.text(reading, entries["git"], Reader.child(path, "git"))
   problem = GitSource.git_problem(git)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "git"), "not a git URL", problem))
   end
+
   if entries.has_key?("tag") == entries.has_key?("ref")
     return error(Reader.fail_help(reading, path, "a dependency has a tag or a ref", "write exactly one of them"))
   end
+
   tag = ""
   ref = ""
   if entries.has_key?("tag")
@@ -184,6 +194,7 @@ def source_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resul
       return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", ref_problem))
     end
   end
+
   subdir = ""
   if entries.has_key?("subdir")
     subdir = try Reader.text(reading, entries["subdir"], Reader.child(path, "subdir"))
@@ -192,6 +203,7 @@ def source_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resul
       return error(Reader.fail_help(reading, Reader.child(path, "subdir"), "not a subdir", subdir_problem))
     end
   end
+
   return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref))
 end
 
@@ -201,6 +213,7 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
   if !root.has_key?("native")
     return ok(found)
   end
+
   entries = try Reader.table(reading, root["native"], "native")
   for name in entries.keys
     path = Reader.child("native", name)
@@ -208,6 +221,7 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
     if problem != ""
       return error(Reader.fail_help(reading, path, "not a library name", problem))
     end
+
     systems = try Reader.table(reading, entries[name], path)
     places: List[Place] = []
     for system in systems.keys
@@ -215,10 +229,13 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
       if !SYSTEMS.include?(system)
         return error(Reader.fail_help(reading, here, "not a system", "write linux, macos or windows"))
       end
+
       places = places.push(try place_of(reading, system, systems[system], here))
     end
+
     found = found.push(NativeLibrary(name: name, places: places))
   end
+
   return ok(found)
 end
 
@@ -233,22 +250,26 @@ def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: S
       help = "write exactly one of them"
       return error(Reader.fail_help(reading, path, "a library has a file, a system name or a download", help))
     end
+
     for key in ["url", "sha256", "member"]
       if !entries.has_key?(key)
         help = "write all three of them"
         return error(Reader.fail_help(reading, path, "a download has a url, a sha256 and a member", help))
       end
     end
+
     url = try Reader.text(reading, entries["url"], Reader.child(path, "url"))
     if !NativeArtifact.url_allowed?(url)
       message = "the url is not an https URL (or an http URL to 127.0.0.1 or [::1])"
       return error(Reader.fail_help(reading, Reader.child(path, "url"), "not a download URL", message))
     end
+
     sha = try Reader.text(reading, entries["sha256"], Reader.child(path, "sha256"))
     if !NativeArtifact.valid_sha?(sha)
       message = "the sha256 is not 64 lowercase hex digits"
       return error(Reader.fail_help(reading, Reader.child(path, "sha256"), "not a sha256", message))
     end
+
     member = try Reader.text(reading, entries["member"], Reader.child(path, "member"))
     case NativeArtifact.canonical_member(member)
       ok(_) -> return ok(Place(system: system, file: "", name: "", url: url, sha256: sha, member: member))
@@ -257,22 +278,27 @@ def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: S
         return error(Reader.fail_help(reading, Reader.child(path, "member"), "not a member", message))
     end
   end
+
   if entries.has_key?("file") == entries.has_key?("system")
     return error(Reader.fail_help(reading, path, "a library has a file or a system name", "write exactly one of them"))
   end
+
   if entries.has_key?("file")
     file = try Reader.text(reading, entries["file"], Reader.child(path, "file"))
     problem = file_problem(file)
     if problem != ""
       return error(Reader.fail_help(reading, Reader.child(path, "file"), "not a native file", problem))
     end
+
     return ok(Place(system: system, file: file, name: "", url: "", sha256: "", member: ""))
   end
+
   name = try Reader.text(reading, entries["system"], Reader.child(path, "system"))
   problem = system_problem(name)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "system"), "not a library name", problem))
   end
+
   return ok(Place(system: system, file: "", name: name, url: "", sha256: "", member: ""))
 end
 
@@ -282,13 +308,16 @@ def file_problem(file: String) -> String
   if problem != ""
     return problem
   end
+
   if !file.starts_with?("#{NATIVE_FOLDER}/")
     return "a native file is a path in the #{NATIVE_FOLDER}/ folder of the package"
   end
+
   # The hash and the copy leave these names out, so a library there would run unchecked.
   if file.split("/").any? do |part: String| PackageHash.native_junk?(part) end
     return "a native file is not Thumbs.db or desktop.ini, which the package leaves out"
   end
+
   return ""
 end
 
@@ -298,6 +327,7 @@ def system_problem(name: String) -> String
   if name.length == 0 or name.length > MAX_SYSTEM_NAME or bad
     return "a system library is a name such as libz.so.1, with no / \\ or : and at most #{MAX_SYSTEM_NAME} characters"
   end
+
   return ""
 end
 
@@ -308,6 +338,7 @@ def style_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[S
   if !root.has_key?("style")
     return ok(style)
   end
+
   entries = try Reader.table(reading, root["style"], "style")
   try Reader.known_keys(reading, entries, STYLE_KEYS, "style")
   if entries.has_key?("max_line_width")
@@ -315,11 +346,14 @@ def style_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[S
     if width < 1
       return error(Reader.fail(reading, "style.max_line_width", "the line width is at least 1"))
     end
+
     style = style.with(max_line_width: width)
   end
+
   if entries.has_key?("blank_line_after_end")
     on = try Reader.boolean(reading, entries["blank_line_after_end"], "style.blank_line_after_end")
     style = style.with(blank_line_after_end: on)
   end
+
   return ok(style)
 end

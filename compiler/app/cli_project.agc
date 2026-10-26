@@ -18,18 +18,22 @@ export def run(style: String, workspace: Workspace.Workspace, work: Fn[String, R
   if !cwd.ok?
     return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read the working folder\n"))
   end
+
   real = workspace.real_path.call(cwd.unwrap!)
   dir = cwd.unwrap!
   if real.ok?
     dir = real.unwrap!
   end
+
   done = work.call(dir)
   if !done.ok?
     return Reply.Answer.Rejected(Front.link_problem(Failure.unpack_failure(done.message)))
   end
+
   if style == "json"
     return Reply.Answer.Printed(Reply.printed("{\"ok\":true}\n"))
   end
+
   return Reply.Answer.Printed(Reply.printed(done.unwrap!))
 end
 

@@ -32,9 +32,11 @@ export def written_in(ref: Ast.TypeRef, watched: Set[String]) -> List[String]
   if watched.include?(ref.name)
     found = [ref.name]
   end
+
   for arg in ref.args
     found = found.concat(written_in(arg, watched))
   end
+
   return found
 end
 
@@ -44,6 +46,7 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
   for param in decl.params
     found = found.concat(written_in(param.type, watched))
   end
+
   return found
 end
 
@@ -62,8 +65,10 @@ def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan) -> Scan
       ConstWalk.Node.Expr(expr) -> found = see_expr(found, expr, watched)
       ConstWalk.Node.Stmt(stmt) -> found = see_stmt(found, stmt, watched)
     end
+
     work = work.concat(ConstWalk.children(node))
   end
+
   return found
 end
 
@@ -91,6 +96,7 @@ def named(written: List[String], name: String, watched: Set[String]) -> List[Str
   if watched.include?(name)
     return written.push(name)
   end
+
   return written
 end
 
@@ -105,6 +111,7 @@ def block_types(written: List[String], node: Ast.BlockLit, watched: Set[String])
   for param in node.params
     written = optional_type(written, param.type, watched)
   end
+
   return written
 end
 
@@ -112,6 +119,7 @@ def arm_names(written: List[String], arms: List[Ast.CaseArm], watched: Set[Strin
   for arm in arms
     written = pattern_names(written, arm.pattern, watched)
   end
+
   return written
 end
 
@@ -126,6 +134,7 @@ def pattern_names(written: List[String], pattern: Ast.Pattern, watched: Set[Stri
           _ -> written = written
         end
       end
+
       return written
     _ -> return written
   end

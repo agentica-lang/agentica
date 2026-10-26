@@ -102,6 +102,7 @@ export def checked(cache: Cache.Cache, settings: Env.Settings, path: String) -> 
     Verdict.Unreadable -> diagnostics = [DiagnosticModel.of_problem(unreadable(path))]
     Verdict.Rejected(problem) -> diagnostics = [DiagnosticModel.of_problem(named(settings, problem, path))]
   end
+
   return Convert.checked(QueryFiles.display(settings, path, true), diagnostics)
 end
 
@@ -145,6 +146,7 @@ export def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: Qu
       if found.problems.size == 0
         return located(settings, asked, found.front)
       end
+
       case PartialAt.answer(found.front.linked, found.front.checked, found.failed, asked)
         Diag.Outcome.Failed(problem) -> return Typed.Rejected(unanswered(found, asked, problem))
         Diag.Outcome.Done(answered) ->
@@ -169,12 +171,14 @@ export def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: Query
       if found.problems.size == 0
         return referenced(settings, asked, found.front, [])
       end
+
       case Refs.answer(found.front.linked, found.front.checked, asked)
         Diag.Outcome.Failed(problem) -> return Referenced.Rejected(unanswered(found, asked, problem))
         Diag.Outcome.Done(answered) ->
           if Refs.needs_types?(answered)
             return Referenced.Rejected(found.problems[0])
           end
+
           query = "#{asked.file}:#{asked.line}:#{asked.column}"
           marked = Convert.refs(query, answered, [], file_names(settings, answered))
           return Referenced.Done(
@@ -210,6 +214,7 @@ export def refs_at(
   if paths.size == 0
     return refs(cache, settings, asked)
   end
+
   case Front.read_root(settings.workspace, asked.file)
     Front.Root.Unreadable(_) -> return Referenced.Unreadable
     Front.Root.Invalid(problem) -> return Referenced.Rejected(problem)
@@ -225,6 +230,7 @@ export def refs_at(
               if program.modules[0].key != roots[0].key
                 return Referenced.Rejected(linked.skipped[0].problem)
               end
+
               case Front.query_linked(program, settings)
                 Front.Outcome.Rejected(problem) -> return Referenced.Rejected(named_in(settings, problem, roots))
                 Front.Outcome.Done(front) -> return referenced(settings, asked, front, linked.skipped)
@@ -249,6 +255,7 @@ export def refs_named(
   if name == ""
     return Referenced.Rejected(QueryOptions.refusal("missing NAME or FILE:LINE:COL", usage))
   end
+
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
     SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
     SymbolPaths.Expanded.Files(roots) ->
@@ -279,6 +286,7 @@ export def symbol(
   if name == ""
     return Found.Rejected(QueryOptions.refusal("missing NAME", usage))
   end
+
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
     SymbolPaths.Expanded.Refused(problem) -> return Found.Rejected(problem)
     SymbolPaths.Expanded.Files(roots) ->
@@ -297,6 +305,7 @@ export def named(settings: Env.Settings, problem: Problems.Problem, source: Stri
   if root?(problem.file, source, settings)
     return problem.with(file: source)
   end
+
   return problem
 end
 
@@ -306,6 +315,7 @@ export def root?(named: String, typed: String, settings: Env.Settings) -> Bool
   if named == typed
     return true
   end
+
   real = settings.workspace.real_path.call(typed)
   return real.ok? and real.unwrap! == named
 end
@@ -350,6 +360,7 @@ def unanswered(found: Partial.Recovered, asked: QueryPosition.Asked, missed: Dia
   if PartialAt.unclear?(found.front.linked, found.failed, asked)
     return found.problems[0]
   end
+
   return Front.stage_problem(asked.file, missed)
 end
 
@@ -418,6 +429,7 @@ def named_in(settings: Env.Settings, problem: Problems.Problem, roots: List[Symb
       return problem.with(file: root.typed)
     end
   end
+
   return problem
 end
 
@@ -428,12 +440,14 @@ def file_names(settings: Env.Settings, found: Refs.Answer) -> Map[String, String
     Ast.Optional.Present(declared) -> files = files.push(declared.file)
     Ast.Optional.Absent -> files = files
   end
+
   names: Map[String, String] = {}
   for file in files
     if !names.has_key?(file)
       names = names.put(file, QueryFiles.display(settings, file, true))
     end
   end
+
   return names
 end
 
@@ -442,5 +456,6 @@ def shown(settings: Env.Settings, match: Symbol.Match) -> Symbol.Match
   if match.file == ""
     return match
   end
+
   return match.with(file: QueryFiles.display(settings, match.file, true))
 end

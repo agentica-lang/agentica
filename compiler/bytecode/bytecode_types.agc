@@ -35,13 +35,17 @@ export def build(program: Ir.Program, struct_index: Map[String, Int]) -> Result[
         pool = found.pool
         chunks = Bytes.add(chunks, Bytes.u32(found.id))
       end
+
       count += 1
     end
+
     index += 1
   end
+
   if pool.count > MAX_U16
     return error(Failure.limit(program, 0, "JSON field types", program.span))
   end
+
   for entry in program.structs
     if entry.decodable
       for type in entry.types
@@ -52,6 +56,7 @@ export def build(program: Ir.Program, struct_index: Map[String, Int]) -> Result[
       end
     end
   end
+
   return ok(Section(types: pool, decodable: chunks, decodable_count: count))
 end
 
@@ -72,12 +77,14 @@ def type_id(
       if !Types.is?(key, "String")
         return error(unsupported(program, "a Map with a key that is not a String in a JSON field type"))
       end
+
       inner = try type_id(program, struct_index, pool, value)
       return ok(entry_of(inner.pool, 5, inner.id))
     Types.Type.Struct(name) ->
       if !struct_index.has_key?(name)
         return error(unsupported(program, "the struct #{name} in a JSON field type is not in the table"))
       end
+
       return ok(entry_of(pool, 6, struct_index[name]))
     _ -> return error(unsupported(program, "a JSON field type of #{Types.tag(type)}"))
   end

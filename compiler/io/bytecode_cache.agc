@@ -128,6 +128,7 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
   if !wanted or settings.self_path == ""
     return Plan.Off
   end
+
   case settings.std
     Env.StdProvider.Folder(_) -> return Plan.Off
     Env.StdProvider.Embedded ->
@@ -135,6 +136,7 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
       if made.ok?
         return Plan.On(made.unwrap!)
       end
+
       return Plan.Off
   end
 end
@@ -148,6 +150,7 @@ export def lookup(plan: Plan, settings: Env.Settings) -> Lookup
       if found.ok?
         return Lookup.Hit(found.unwrap!)
       end
+
       return Lookup.Miss
   end
 end
@@ -164,11 +167,13 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
       if !probes.ok?
         return false
       end
+
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
       libraries = library_lines(settings.workspace, sources)
       if !libraries.ok?
         return false
       end
+
       lines = lines.concat(libraries.unwrap!)
       text = [entry.key, "program #{digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
       return publish(entry, text, program)
@@ -188,11 +193,13 @@ def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedMod
   for module in modules
     paths = paths.concat(module.watched)
   end
+
   lines: List[String] = []
   for path in paths.uniq
     if !plain?(path)
       return error("the path has a line feed, a tab or a NUL")
     end
+
     if workspace.directory_exists.call(path)
       lines = lines.push("#{TREE_WORD}#{names_digest(workspace, path)} #{path}")
     else
@@ -200,6 +207,7 @@ def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedMod
       lines = lines.push("#{SOURCE_WORD}#{digest(read)} #{path}")
     end
   end
+
   return ok(lines)
 end
 
@@ -215,6 +223,7 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   if real.contains?("\n")
     return error("the path has a line feed")
   end
+
   build = try File.stat(settings.self_path, IO_TIMEOUT_MS)
   root_dir = Paths.directory_of(real)
   project = try Project.find(settings.workspace, root_dir)
@@ -234,6 +243,7 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
     build_dir = override.unwrap!
     beside = false
   end
+
   folder = Paths.join(build_dir, BYTECODE_FOLDER)
   name = "#{Paths.last_part(real)}-#{digest(String.to_bytes(real)).slice(0, 16)}.agcb"
   return ok(
@@ -261,8 +271,10 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
       for name in PROJECT_FILES
         parts = parts.push("#{name} #{file_digest(workspace, Paths.join(manifest.dir, name))}")
       end
+
       parts = parts.concat(workspace_parts(workspace, manifest))
   end
+
   return ok(digest(String.to_bytes(parts.join("\n"))))
 end
 
@@ -273,6 +285,7 @@ def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> Lis
   if found.members.root == ""
     return []
   end
+
   parts = ["workspace #{found.members.root} #{file_digest(workspace, Paths.join(found.members.root, MANIFEST_FILE))}"]
   for locked in found.lock.packages
     if locked.member
@@ -280,6 +293,7 @@ def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> Lis
       parts = parts.push("member #{folder} #{file_digest(workspace, Paths.join(folder, MANIFEST_FILE))}")
     end
   end
+
   return parts
 end
 
@@ -289,6 +303,7 @@ def file_digest(workspace: Workspace.Workspace, path: String) -> String
   if !read.ok?
     return "-"
   end
+
   return digest(read.unwrap!)
 end
 
@@ -311,6 +326,7 @@ def probe_lines(settings: Env.Settings, libs_dir: String, modules: List[Linker.L
           roots = try Resolve.search_roots(settings, libs_dir)
           searched = true
         end
+
         for root in roots
           lines = lines.push(try probe(workspace, Paths.join(root, file.slice(4, file.length - 4))))
         end
@@ -319,6 +335,7 @@ def probe_lines(settings: Env.Settings, libs_dir: String, modules: List[Linker.L
       end
     end
   end
+
   return ok(lines.uniq)
 end
 
@@ -327,13 +344,16 @@ def probe(workspace: Workspace.Workspace, path: String) -> Result[String]
   if !plain?(path)
     return error("the path has a line feed, a tab or a NUL")
   end
+
   if !workspace.file_exists.call(path)
     return ok("#{ABSENT_WORD}#{path}")
   end
+
   real = try workspace.real_path.call(path)
   if !plain?(real)
     return error("the path has a line feed, a tab or a NUL")
   end
+
   return ok("#{PRESENT_WORD}#{path}\t#{real}")
 end
 
@@ -361,9 +381,11 @@ def private_kind(path: String, kind: String, user: Int) -> Result[Void]
   if info.kind != kind
     return error("#{path} is not a #{kind}")
   end
+
   if user >= 0 and (info.user_id != user or info.mode.bit_and(GROUP_OTHER_WRITE) != 0)
     return error("#{path} is not private to this user")
   end
+
   return ok()
 end
 
@@ -376,12 +398,14 @@ def own_user() -> Result[Int]
   if System.os() == "windows"
     return ok(-1)
   end
+
   name = try RandomName.hex()
   places = ["/var/tmp", "/tmp"]
   from_environment = System.env("TMPDIR")
   if from_environment.ok? and from_environment.unwrap! != ""
     places = [from_environment.unwrap!].concat(places)
   end
+
   for place in places
     made_at = Paths.join(place, "agentica-id-#{name}")
     made = File.open(made_at, "create_private", IO_TIMEOUT_MS)
@@ -394,6 +418,7 @@ def own_user() -> Result[Int]
       end
     end
   end
+
   return error("cannot find out the user of this process")
 end
 
@@ -405,6 +430,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
   if !text.starts_with?("#{entry.key}\nprogram ")
     return error("the entry is for another build or program")
   end
+
   # The key has no line feed inside a line, so its lines are the first ones of the text, then the program line.
   lines = text.split("\n").drop(entry.key.split("\n").size)
   try check_lines(settings.workspace, lines.drop(1))
@@ -412,6 +438,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
   if lines[0] != "program #{digest(program)}" or !made_by?(program, settings.version)
     return error("the program of the entry is damaged")
   end
+
   return ok(program)
 end
 
@@ -422,10 +449,12 @@ def text_size(head: List[Int]) -> Result[Int]
   if text.length != HEAD_BYTES or !text.starts_with?(HEAD_WORD) or !text.ends_with?("\n")
     return error("not a cache entry")
   end
+
   size = try text.slice(HEAD_WORD.length, HEAD_DIGITS).to_int
   if size < 0 or size > MAX_TEXT_BYTES
     return error("the head of the entry is wrong")
   end
+
   return ok(size)
 end
 
@@ -447,6 +476,7 @@ def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[V
       return error("a line of the entry is wrong")
     end
   end
+
   return ok()
 end
 
@@ -454,6 +484,7 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
   if line.length <= SOURCE_WORD.length + DIGEST_CHARS + 1
     return error("a line of the entry is wrong")
   end
+
   wanted = line.slice(SOURCE_WORD.length, DIGEST_CHARS)
   from = SOURCE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
@@ -461,10 +492,12 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
   if path.contains?(String.from_code(0))
     return error("a line of the entry is wrong")
   end
+
   read = try workspace.read_bytes.call(path)
   if digest(read) != wanted
     return error("#{path} changed")
   end
+
   return ok()
 end
 
@@ -472,14 +505,17 @@ def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
   if line.length <= TREE_WORD.length + DIGEST_CHARS + 1
     return error("a line of the entry is wrong")
   end
+
   from = TREE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
   if path.contains?(String.from_code(0))
     return error("a line of the entry is wrong")
   end
+
   if names_digest(workspace, path) != line.slice(TREE_WORD.length, DIGEST_CHARS)
     return error("the native files of #{path} changed")
   end
+
   return ok()
 end
 
@@ -489,10 +525,12 @@ def check_present(workspace: Workspace.Workspace, rest: String) -> Result[Void]
   if parts.size != 2 or parts[0].contains?(String.from_code(0))
     return error("a line of the entry is wrong")
   end
+
   real = try workspace.real_path.call(parts[0])
   if real != parts[1]
     return error("#{parts[0]} leads somewhere else")
   end
+
   return ok()
 end
 
@@ -503,6 +541,7 @@ def made_by?(program: List[Int], version: String) -> Bool
   if program.size < VERSION_AT + wanted.size or program[8] != wanted.size
     return false
   end
+
   magic = String.from_bytes(program.take(MAGIC.length))
   found = String.from_bytes(program.take(VERSION_AT + wanted.size).drop(VERSION_AT))
   return magic.ok? and magic.unwrap! == MAGIC and found.ok? and found.unwrap! == version
@@ -517,9 +556,11 @@ def read_exact(handle: FileHandle, count: Int) -> Result[List[Int]]
     if got.size == 0
       return error("the entry ends too soon")
     end
+
     pieces = pieces.push(got)
     left -= got.size
   end
+
   return ok(PackageHash.concat_all(pieces))
 end
 
@@ -527,6 +568,7 @@ def piece(left: Int) -> Int
   if left < PIECE
     return left
   end
+
   return PIECE
 end
 
@@ -541,9 +583,11 @@ def read_rest(handle: FileHandle) -> Result[List[Int]]
     if total > MAX_PROGRAM_BYTES
       return error("the program of the entry is too large")
     end
+
     finished = got.size == 0
     pieces = pieces.push(got)
   end
+
   return ok(PackageHash.concat_all(pieces))
 end
 
@@ -556,10 +600,12 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
   if !prepare_folder(entry).ok?
     return false
   end
+
   suffix = RandomName.hex()
   if !suffix.ok?
     return false
   end
+
   body = String.to_bytes(text)
   data = String.to_bytes(head(body.size)).concat(body).concat(program)
   temporary = Paths.join(entry.folder, "#{Paths.last_part(entry.file)}.tmp-#{suffix.unwrap!}")
@@ -567,12 +613,14 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
     Path.remove(temporary, IO_TIMEOUT_MS)
     return false
   end
+
   sweep(entry.folder)
   remove_file(entry.file)
   if !Path.rename(temporary, entry.file, IO_TIMEOUT_MS).ok?
     Path.remove(temporary, IO_TIMEOUT_MS)
     return false
   end
+
   return true
 end
 
@@ -583,6 +631,7 @@ def prepare_folder(entry: Entry) -> Result[Void]
   if made and entry.beside
     write_private(Paths.join(entry.build, ".gitignore"), String.to_bytes("*\n"))
   end
+
   try private_folder(entry.folder)
   return ok()
 end
@@ -595,10 +644,12 @@ def private_folder(path: String) -> Result[Bool]
     try private_kind(path, "directory", user)
     return ok(false)
   end
+
   above = Paths.directory_of(path)
   if above != ""
     Dir.mkdir(above, IO_TIMEOUT_MS)
   end
+
   try Dir.mkdir_private(path, IO_TIMEOUT_MS)
   return ok(true)
 end
@@ -613,8 +664,10 @@ def write_private(path: String, data: List[Int]) -> Result[Void]
       File.close(out, IO_TIMEOUT_MS)
       return written
     end
+
     rest = rest.drop(PIECE)
   end
+
   return File.close(out, IO_TIMEOUT_MS)
 end
 
@@ -633,6 +686,7 @@ def sweep(folder: String) -> Void
   if !names.ok?
     return
   end
+
   now = Time.now_ms() / 1000
   for name in names.unwrap!
     if name.contains?(TEMP_MARK)
@@ -650,6 +704,7 @@ def head(size: Int) -> String
   while digits.length < HEAD_DIGITS
     digits = "0#{digits}"
   end
+
   return "#{HEAD_WORD}#{digits}\n"
 end
 

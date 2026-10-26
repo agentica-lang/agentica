@@ -34,6 +34,7 @@ export def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, 
   if block.params.size <= index
     return ok(T.Type.Unknown)
   end
+
   case block.params[index].type
     Ast.Optional.Present(annotation) -> return CheckTypes.resolve_type(cx, st, annotation, false)
     Ast.Optional.Absent -> return ok(T.Type.Unknown)
@@ -55,6 +56,7 @@ def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
       ),
     )
   end
+
   return ok(target)
 end
 
@@ -93,10 +95,12 @@ def check_sort_key(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Sp
   if !T.is?(callback, "Fn") or T.params(callback).size != 1
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by requires a key function with one parameter", span))
   end
+
   key = T.result(callback)
   if !T.is?(key, "Int") and !T.is?(key, "Float") and !T.is?(key, "String")
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by keys must be Int, Float or String", span))
   end
+
   return ok(true)
 end
 
@@ -109,6 +113,7 @@ def check_concat(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.O
     current = other.st
     context = other.type
   end
+
   target = try Args.list_argument(cx, current, site, context)
   second = try State.expr(cx, target.st, site.args[1], target.type)
   return ok(State.Out(st: second.st, type: target.type))
@@ -120,11 +125,13 @@ def check_count(cx: State.Cx, st: State.St, site: State.Site, at: Bool) -> Resul
   if at
     context = T.list_of(site.expected)
   end
+
   target = try Args.list_argument(cx, st, site, context)
   count = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   if at
     return ok(State.Out(st: count.st, type: T.item(target.type)))
   end
+
   return ok(State.Out(st: count.st, type: target.type))
 end
 
@@ -138,12 +145,14 @@ def check_append(cx: State.Cx, st: State.St, site: State.Site, set: Bool) -> Res
     current = first.st
     context = T.Type.List(first.type)
   end
+
   target = try Args.list_argument(cx, current, site, context)
   current = target.st
   if set
     index = try State.expr(cx, current, site.args[1], T.Type.Int)
     current = index.st
   end
+
   checked = try State.expr(cx, current, value, T.item(target.type))
   return ok(State.Out(st: checked.st, type: target.type))
 end
@@ -153,6 +162,7 @@ def check_repeat(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.O
   if T.is?(site.expected, "List")
     context = T.item(site.expected)
   end
+
   element = try State.expr(cx, st, site.args[0], context)
   count = try State.expr(cx, element.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: count.st, type: T.Type.List(element.type)))
@@ -167,15 +177,18 @@ def check_callback_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mode
     Ast.Expr.BlockLit(block) -> checked = try block_callback(cx, st, site, rule, block)
     _ -> checked = try State.expr(cx, st, callback, T.Type.Unknown)
   end
+
   arity = 1
   if reduces?(rule)
     arity = 2
   end
+
   if !T.is?(checked.type, "Fn") or T.params(checked.type).size != arity
     return error(
       State.fail(cx, checked.st, "CHECK-TYPE-MISMATCH", "wrong collection callback type", Ast.expr_span(callback)),
     )
   end
+
   return callback_result(cx, checked.st, site, rule, callback, checked.type)
 end
 
@@ -192,6 +205,7 @@ def block_callback(
   if reduces?(rule)
     position = 1
   end
+
   annotated = try annotated_parameter(cx, st, block, position)
   list = try Args.list_argument(cx, st, site, T.list_of(annotated))
   element = T.item(list.type)
@@ -199,9 +213,11 @@ def block_callback(
   if each?(rule)
     receiver = Ast.Optional.Present(site.args[0])
   end
+
   if reduces?(rule)
     return reduce_block(cx, list.st, site, block, element)
   end
+
   return Stmt.check_block_body(cx, list.st, block, Ast.Optional.Present([element]), block_result(rule), receiver)
 end
 
@@ -216,6 +232,7 @@ def reduce_block(
   if T.unknown?(start)
     start = try annotated_parameter(cx, st, block, 0)
   end
+
   accumulator = try State.expr(cx, st, site.args[1], start)
   return Stmt.check_block_body(
     cx,
@@ -269,14 +286,17 @@ def callback_result(
   if reduces?(rule)
     element = params[1]
   end
+
   current = st
   if !block?(callback)
     list = try Args.list_argument(cx, current, site, T.Type.List(element))
     current = list.st
   end
+
   if reduces?(rule)
     return reduce_result(cx, current, site, callback, params[0], result)
   end
+
   return plain_result(cx, current, rule, span, element, result)
 end
 
@@ -292,11 +312,13 @@ def reduce_result(
   if !T.same?(accumulator, result)
     return error(State.mismatch(cx, st, accumulator, result, span))
   end
+
   current = st
   if !block?(callback)
     initial = try State.expr(cx, current, site.args[1], result)
     current = initial.st
   end
+
   return ok(State.Out(st: current, type: result))
 end
 
@@ -329,6 +351,7 @@ def map_result(cx: State.Cx, st: State.St, span: Source.Span, result: T.Type) ->
   if T.is?(result, "Void")
     return error(State.fail(cx, st, "CHECK-VOID-VALUE", "map callbacks must return data", span))
   end
+
   return ok(State.Out(st: st, type: T.Type.List(result)))
 end
 
@@ -336,6 +359,7 @@ def require_type(cx: State.Cx, st: State.St, expected: T.Type, actual: T.Type, s
   if !T.same?(expected, actual)
     return error(State.mismatch(cx, st, expected, actual, span))
   end
+
   return ok(true)
 end
 

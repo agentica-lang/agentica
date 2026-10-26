@@ -31,12 +31,14 @@ export def closest_among(full_name: String, candidates: List[String], shared: Li
   if name.length <= 4
     limit = 1
   end
+
   pool: List[String] = []
   for candidate in candidates
     if file_prefix(candidate) == prefix
       pool = pool.push(Types.display_name(candidate))
     end
   end
+
   return nearest(name, pool.concat(shared).sort, limit)
 end
 
@@ -67,9 +69,11 @@ def nearest(name: String, ordered: List[String], limit: Int) -> Ast.Optional[Str
       end
     end
   end
+
   if best_distance > limit
     return Ast.Optional.Absent
   end
+
   return Ast.Optional.Present(best)
 end
 
@@ -78,6 +82,7 @@ def last_row(left: List[String], right: List[String], index: Int, previous: List
   if index > left.size
     return previous[right.size]
   end
+
   return last_row(left, right, index + 1, next_row(left[index - 1], right, index, previous))
 end
 
@@ -88,9 +93,11 @@ def next_row(character: String, right: List[String], index: Int, previous: List[
     if right[column - 1] == character
       cost = 0
     end
+
     best = smallest(previous[column] + 1, row[column - 1] + 1, previous[column - 1] + cost)
     row = row.push(best)
   end
+
   return row
 end
 
@@ -99,9 +106,11 @@ def smallest(a: Int, b: Int, c: Int) -> Int
   if b < least
     least = b
   end
+
   if c < least
     least = c
   end
+
   return least
 end
 
