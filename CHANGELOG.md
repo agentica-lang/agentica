@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- A timed channel `send` or `recv` that the other task answers within a turn
+  no longer reads the clock (far less system time where the clock is a system
+  call); the timeout may start up to one turn late.
+
 ### Fixed
 
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.

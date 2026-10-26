@@ -150,9 +150,9 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     stop_waiting(t);
     return timed_out_error();
   }
-  uint64_t now = agc_clock_ms();
-  if (!t->channel.deadline) t->channel.deadline = now + (uint64_t)timeout;
-  if (t->channel.deadline <= now) {
+  /* A waiter is woken with a reservation, by a close, or by its timer. The first two never get here, so a resumed
+     waiter's timer fired: it timed out. */
+  if (resumed(t, c)) {
     stop_waiting(t);
     return timed_out_error();
   }
@@ -165,7 +165,7 @@ static agc_value wait(agc_vm *vm, agc_channel *c, agc_task *t, int64_t timeout, 
     agc_task_enqueue(&c->senders, &c->senders_tail, t);
   else
     agc_task_enqueue(&c->receivers, &c->receivers_tail, t);
-  agc_task_park_until(vm, t->channel.deadline, true);
+  agc_task_park_within(vm, timeout);
   return agc_void();
 }
 
