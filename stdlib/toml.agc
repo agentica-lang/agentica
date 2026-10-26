@@ -816,7 +816,7 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
 end
 
 # The JSON number grammar is the TOML float grammar without underscores and a leading plus, and
-# its reader rounds correctly (String.to_float has no exponent). A zero keeps its sign.
+# its reader rounds correctly. A zero keeps its sign.
 def decimal_float(src: Src, pos: Int, digits: String, negative: Bool, stop: Int) -> Result[Parsed]
   x = Float.from_bits(9218868437227405312)
   json = JSON.parse(digits)
