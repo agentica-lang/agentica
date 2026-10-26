@@ -36,6 +36,7 @@ export def match_json(match: Model.Symbol) -> Json
       "help": match.help,
     })
   end
+
   fields: Map[String, Json] = {
     "kind": JSON.from(match.kind),
     "name": JSON.from(match.name),
@@ -52,6 +53,7 @@ export def match_json(match: Model.Symbol) -> Json
     written = JSON.array(match.payload.map do |type: String| JSON.from(type) end)
     return JSON.object(fields.put("payload", written).put("enum", JSON.from(match.owner)))
   end
+
   return JSON.object(fields)
 end
 

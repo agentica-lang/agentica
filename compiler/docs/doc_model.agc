@@ -81,6 +81,7 @@ export def declared(program: Ast.Program, text: String) -> List[Item]
       items = items.push(item)
     end
   end
+
   return items
 end
 
@@ -95,13 +96,16 @@ export def cleaned(doc: Ast.Optional[String]) -> Ast.Optional[String]
       while first < lines.size and lines[first].trim == ""
         first += 1
       end
+
       last = lines.size
       while last > first and lines[last - 1].trim == ""
         last -= 1
       end
+
       if first == last
         return Ast.Optional.Absent
       end
+
       return Ast.Optional.Present(lines.drop(first).take(last - first).join("\n"))
   end
 end
@@ -117,8 +121,10 @@ export def summary(doc: Ast.Optional[String]) -> Ast.Optional[String]
         if line.trim == ""
           return Ast.Optional.Present(words.join(" "))
         end
+
         words = words.push(line.trim)
       end
+
       return Ast.Optional.Present(words.join(" "))
   end
 end
@@ -173,6 +179,7 @@ def function_item(
       default: Signature.default_text(parameter.default, text),
     )
   end
+
   return Item(
     kind: "function",
     name: node.name,
@@ -202,6 +209,7 @@ def struct_item(
       doc: cleaned(field.doc),
     )
   end
+
   return Item(
     kind: "struct",
     name: node.name,
@@ -224,6 +232,7 @@ def enum_item(node: Ast.EnumDecl, doc: Ast.Optional[String], span: Source.Span, 
       doc: cleaned(variant.doc),
     )
   end
+
   return Item(
     kind: "enum",
     name: node.name,

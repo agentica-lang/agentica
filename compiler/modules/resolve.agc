@@ -43,12 +43,15 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
   if parts.size == 2
     return qualified(cx, parts[0], parts[1], want, span, hint)
   end
+
   if cx.me.named.has_key?(name)
     return imported_by_name(cx, cx.me.named[name], want, span)
   end
+
   if builtin_name?(cx, name, want)
     return ok(name)
   end
+
   return ok(cx.me.prefix + name)
 end
 
@@ -73,6 +76,7 @@ export def constant_identity(cx: Context, name: String) -> String
   if cx.me.names.has_key?(name) and Declarations.constant?(cx.me.names[name])
     return identity(cx, name)
   end
+
   if cx.me.named.has_key?(name)
     entry = cx.me.named[name]
     target = cx.modules[entry.target]
@@ -80,6 +84,7 @@ export def constant_identity(cx: Context, name: String) -> String
       return target.prefix + entry.name
     end
   end
+
   return ""
 end
 
@@ -92,10 +97,12 @@ export def alias_constant_identity(cx: Context, name: String) -> String
   if parts.size != 2 or !cx.me.aliases.has_key?(parts[0])
     return ""
   end
+
   target = cx.modules[cx.me.aliases[parts[0]]]
   if target.public.has_key?(parts[1]) and Declarations.constant?(target.public[parts[1]])
     return target.prefix + parts[1]
   end
+
   return ""
 end
 
@@ -120,17 +127,20 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
       seen = seen.push(own)
     end
   end
+
   for local in cx.me.named.keys
     entry = cx.me.named[local]
     if Declarations.constant?(cx.modules[entry.target].public[entry.name])
       seen = seen.push(local)
     end
   end
+
   help = Diag.Help.NoHelp
   case Suggest.did_you_mean_among(name, [], seen)
     Ast.Optional.Present(text) -> help = Failure.hint(text)
     Ast.Optional.Absent -> help = Diag.Help.NoHelp
   end
+
   return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"#{name}\"", help)
 end
 
@@ -162,6 +172,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   elsif function_wanted?(want) or std_record?(alias, member, want) or c_pointer?(alias, member, want)
     return ok("#{alias}.#{member}")
   end
+
   return error(
     Failure.fail_at(
       site(cx, span),
@@ -220,6 +231,7 @@ def alias_help(alias: String, hint: Bool) -> String
       "import a module with import #{alias} from \"path\", or declare enum #{alias}"
     )
   end
+
   return "import a module with import #{alias} from \"path\""
 end
 
@@ -232,6 +244,7 @@ def imported_by_name(cx: Context, entry: Modules.Named, want: Want, span: Source
       Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp),
     )
   end
+
   return ok(target.prefix + entry.name)
 end
 
@@ -247,11 +260,13 @@ def imported(cx: Context, target: Modules.Module, member: String, want: Want, sp
       ),
     )
   end
+
   if !right_kind?(target.public[member], want)
     return error(
       Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp),
     )
   end
+
   return ok(target.prefix + member)
 end
 

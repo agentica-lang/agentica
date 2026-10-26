@@ -71,6 +71,7 @@ export def declared_names(modules: List[Linker.LinkedModule]) -> Set[String]
       names = names.concat(declaration_names(declaration))
     end
   end
+
   return Set.new(names)
 end
 
@@ -103,6 +104,7 @@ export def innermost(sites: List[Site], offset: Int) -> Ast.Optional[Site]
       best_size = size
     end
   end
+
   return best
 end
 
@@ -131,9 +133,11 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Ast.Optional[Ta
             return Ast.Optional.Present(named(linked.unwrap!))
           end
         end
+
       _ -> next
     end
   end
+
   return Ast.Optional.Absent
 end
 
@@ -157,6 +161,7 @@ def scanned(
   for declaration in module.declarations
     out = out.concat(declaration_sites(scan, declaration))
   end
+
   return distinct(out.sort_by do |site: Site| site.reach.start.offset end)
 end
 
@@ -187,6 +192,7 @@ def distinct(sites: List[Site]) -> List[Site]
       out = out.push(site)
     end
   end
+
   return out
 end
 
@@ -214,6 +220,7 @@ def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
   if !record_result?(node)
     out = out.concat(type_sites(scan, node.result, []))
   end
+
   roots: List[Walk.Node] = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
   for param in node.params
     out = out.concat(type_sites(scan, param.type, []))
@@ -222,6 +229,7 @@ def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
       Ast.Optional.Absent -> roots = roots
     end
   end
+
   return out.concat(walk(scan, roots))
 end
 
@@ -231,6 +239,7 @@ def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
   if node.record_of == ""
     out = defined(scan, named(node.name), node.name_span)
   end
+
   roots: List[Walk.Node] = []
   for field in node.fields
     out = out.concat(defined(scan, member("field", node.name, field.name), field.name_span))
@@ -240,6 +249,7 @@ def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
       Ast.Optional.Absent -> roots = roots
     end
   end
+
   return out.concat(walk(scan, roots))
 end
 
@@ -261,6 +271,7 @@ def enum_sites(scan: Scan, node: Ast.EnumDecl) -> List[Site]
       out = out.concat(type_sites(scan, payload, node.type_parameters))
     end
   end
+
   return out
 end
 
@@ -272,6 +283,7 @@ def placed(scan: Scan, target: Target, kind: String, span: Source.Span, reach: S
   if scan.wanted != "" and scan.wanted != target.key
     return []
   end
+
   return [Site(target: target, kind: kind, span: span, reach: reach, function: scan.function)]
 end
 
@@ -287,8 +299,10 @@ def walk(scan: Scan, roots: List[Walk.Node]) -> List[Site]
       Walk.Node.Expr(expr) -> out = out.concat(expression_sites(scan, expr))
       Walk.Node.Stmt(stmt) -> out = out.concat(statement_sites(scan, stmt))
     end
+
     work = work.concat(Walk.children(node))
   end
+
   return out
 end
 
@@ -300,6 +314,7 @@ def statement_sites(scan: Scan, stmt: Ast.Stmt) -> List[Site]
       for arm in node.arms
         out = out.concat(pattern_sites(scan, arm.pattern))
       end
+
       return out
     _ -> return []
   end
@@ -325,6 +340,7 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
       for param in node.params
         out = out.concat(optional_type_sites(scan, param.type, []))
       end
+
       return out
     _ -> return []
   end
@@ -335,10 +351,12 @@ def access_sites(scan: Scan, id: Int, target: Ast.Expr, name: String, name_span:
   if scan.resolved.has_key?(id)
     return builtin_method_sites(scan, id, name_span)
   end
+
   owner = struct_of(scan, target)
   if !scan.declared.include?(owner)
     return []
   end
+
   return placed(scan, member("field", owner, name), "read", name_span, name_span)
 end
 
@@ -347,11 +365,13 @@ def builtin_method_sites(scan: Scan, id: Int, name_span: Source.Span) -> List[Si
   if !found.ok?
     return []
   end
+
   case found.unwrap!
     State.Resolved.Call(name, _) ->
       if CatalogJson.public(name).ok?
         return placed(scan, named(name), "call", name_span, name_span)
       end
+
       return []
     _ -> return []
   end
@@ -363,6 +383,7 @@ def struct_of(scan: Scan, target: Ast.Expr) -> String
   if id < scan.types.size
     return T.name(scan.types[id])
   end
+
   return ""
 end
 
@@ -372,14 +393,17 @@ def name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -
   if !user and !CatalogJson.public(name).ok?
     return []
   end
+
   parts = written(scan.text, start)
   if parts.size == 0
     return []
   end
+
   whole = Source.Span(start: parts[0].start, stop: parts[parts.size - 1].stop)
   if user
     return placed(scan, named(name), kind, parts[parts.size - 1], whole)
   end
+
   # A builtin is named with its namespace (`File.read`), which is part of the name.
   return placed(scan, named(name), kind, whole, whole)
 end
@@ -389,10 +413,12 @@ def type_name_sites(scan: Scan, name: String, start: Source.Position, kind: Stri
   if !scan.declared.include?(name) and !(scan.builtin_types and RESERVED.include?(name))
     return []
   end
+
   parts = written(scan.text, start)
   if parts.size == 0
     return []
   end
+
   last = parts[parts.size - 1]
   return placed(scan, named(name), kind, last, Source.Span(start: parts[0].start, stop: last.stop))
 end
@@ -410,6 +436,7 @@ def enum_part_sites(
   if !scan.declared.include?(enum_name) or parts.size < 2
     return []
   end
+
   enum_part = parts[parts.size - 2]
   variant_part = parts[parts.size - 1]
   reach = Source.Span(start: parts[0].start, stop: enum_part.stop)
@@ -424,10 +451,12 @@ def field_sites(scan: Scan, owner: String, args: List[Ast.NamedArg], kind: Strin
   if !scan.declared.include?(owner)
     return out
   end
+
   for arg in args
     span = Source.Span(start: arg.span.start, stop: after(arg.span.start, arg.name.length))
     out = out.concat(placed(scan, member("field", owner, arg.name), kind, span, span))
   end
+
   return out
 end
 
@@ -446,10 +475,13 @@ def pattern_sites(scan: Scan, pattern: Ast.Pattern) -> List[Site]
             _ -> work = work
           end
         end
+
       _ -> work = work
     end
+
     at += 1
   end
+
   return out
 end
 
@@ -473,8 +505,10 @@ def type_sites(scan: Scan, type: Ast.TypeRef, parameters: List[String]) -> List[
     if written and !made?(ref)
       out = out.concat(type_name_sites(scan, ref.name, ref.span.start, "type"))
     end
+
     work = work.concat(ref.args)
   end
+
   return out
 end
 
@@ -504,8 +538,10 @@ def written(text: String, start: Source.Position) -> List[Source.Span]
     elsif !NAME_CHARS.include?(character)
       break
     end
+
     at += 1
   end
+
   return piece(parts, start, from, at)
 end
 
@@ -514,6 +550,7 @@ def piece(parts: List[Source.Span], start: Source.Position, from: Int, to: Int) 
   if to <= from
     return parts
   end
+
   span = Source.Span(start: after(start, from), stop: after(start, to))
   return parts.push(span)
 end

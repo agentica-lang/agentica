@@ -30,6 +30,7 @@ export def type_text(type: Ast.TypeRef) -> String
         end
     end
   end
+
   return parts.join("")
 end
 
@@ -54,6 +55,7 @@ export def variant_text(name: String, payload: List[String]) -> String
   if payload.size == 0
     return name
   end
+
   return "#{name}(#{payload.join(", ")})"
 end
 
@@ -92,8 +94,10 @@ def closing(args: List[Ast.TypeRef]) -> List[Piece]
     if at > 0
       pieces = pieces.push(Piece.Text(", "))
     end
+
     at -= 1
   end
+
   return pieces
 end
 
@@ -110,5 +114,6 @@ def parameters_text(names: List[String]) -> String
   if names.size == 0
     return ""
   end
+
   return "[#{names.join(", ")}]"
 end

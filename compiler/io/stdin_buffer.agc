@@ -28,6 +28,7 @@ export def take() -> Taken
   if !bytes.ok?
     return Taken.Failed(bytes.message)
   end
+
   data = bytes.unwrap!
   read = SourceFile.decode(data)
   case read

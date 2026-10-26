@@ -29,6 +29,7 @@ def read_as(path: String, shown: Bool) -> SourceFile.Read
   if !opened.ok?
     return SourceFile.Read.Unreadable(opened.message)
   end
+
   handle = opened.unwrap!
   result = read_chunks(handle, shown)
   File.close(handle, IO_TIMEOUT_MS)
@@ -45,6 +46,7 @@ def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
     if !got.ok?
       return SourceFile.Read.Unreadable(got.message)
     end
+
     chunk = got.unwrap!
     finished = chunk.size == 0
     data = carry.concat(chunk)
@@ -52,6 +54,7 @@ def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
     if !finished
       cut = SourceFile.complete_prefix(data)
     end
+
     head = data.take(cut)
     carry = data.drop(cut)
     decoded = String.from_bytes(head)
@@ -63,5 +66,6 @@ def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
       return SourceFile.Read.Invalid(SourceFile.error_position(parts, head))
     end
   end
+
   return SourceFile.Read.Text(parts.join(""))
 end

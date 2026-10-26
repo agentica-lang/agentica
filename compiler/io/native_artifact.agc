@@ -50,6 +50,7 @@ export def cache_root(env: Env.Env, file: String) -> Result[String]
     message = "there is no place for the native artifact cache: HOME is not set"
     return error(Failure.fail_file(file, "PKG-FETCH", message, Failure.hint("set HOME or XDG_CACHE_HOME")))
   end
+
   return ok(cache)
 end
 
@@ -117,9 +118,11 @@ def fail(context: NativeArtifact.Context, code: String, key: String, message: St
   if key != ""
     path = Reader.child(context.key, key)
   end
+
   if help == ""
     return Failure.fail_key(context.file, path, code, message, Diag.Help.NoHelp)
   end
+
   return Failure.fail_key(context.file, path, code, message, Failure.hint(help))
 end
 
@@ -127,10 +130,12 @@ def checked_deadline(timeout_ms: Int, context: NativeArtifact.Context) -> Result
   if timeout_ms <= 0 or timeout_ms > MAX_TIMEOUT_MS
     return error(fail(context, "PKG-FETCH", "", "the timeout must be 1..86400000 milliseconds", ""))
   end
+
   now = Time.monotonic_ms()
   if now > MAX_CLOCK - timeout_ms
     return error(fail(context, "PKG-FETCH", "", "the clock is too far ahead for the timeout", ""))
   end
+
   return ok(now + timeout_ms)
 end
 
@@ -139,6 +144,7 @@ def checked_root(cache_root: String, context: NativeArtifact.Context) -> Result[
     message = "there is no place for the native artifact cache"
     return error(fail(context, "PKG-FETCH", "", message, "set HOME or XDG_CACHE_HOME"))
   end
+
   return ok(cache_root)
 end
 
@@ -147,6 +153,7 @@ def checked_sha(sha: String, context: NativeArtifact.Context) -> Result[String]
     message = "the sha256 is not 64 lowercase hex digits"
     return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, "write the 64 digits of the SHA-256"))
   end
+
   return ok(sha)
 end
 
@@ -164,6 +171,7 @@ def checked_url(url: String, context: NativeArtifact.Context) -> Result[String]
     message = "the url is not an https URL (or an http URL to 127.0.0.1 or [::1])"
     return error(fail(context, "PKG-FETCH", "url", message, ""))
   end
+
   return ok(url)
 end
 
@@ -172,6 +180,7 @@ def time_left(deadline: Int, context: NativeArtifact.Context) -> Result[Int]
   if left <= 0
     return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
   end
+
   return ok(left)
 end
 
@@ -194,32 +203,38 @@ def probe_member(
   if left <= 0
     return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
   end
+
   payload = NativeArtifact.payload_path(root, sha, digest, canonical)
   receipt = NativeArtifact.receipt_path(root, sha, digest)
   if !is_dir?(NativeArtifact.member_dir(root, sha, digest), left)
     return Probe.Missing
   end
+
   left = deadline - Time.monotonic_ms()
   if left <= 0
     return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
   end
+
   case File.read_text(receipt, left)
     ok(text) ->
       left = deadline - Time.monotonic_ms()
       if left <= 0
         return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
       end
+
       case File.sha256(payload, left)
         ok(found) ->
           if text.trim == NativeArtifact.hex_of(found)
             return Probe.Present(payload)
           end
+
           message = "the cached file is not the one its receipt names"
           return Probe.Broken(fail(context, "PKG-HASH-MISMATCH", "member", message, ""))
         error(_) ->
           message = "the cached file cannot be read"
           return Probe.Broken(fail(context, "PKG-HASH-MISMATCH", "member", message, ""))
       end
+
     error(_) ->
       message = "the cached receipt cannot be read"
       return Probe.Broken(fail(context, "PKG-HASH-MISMATCH", "member", message, ""))
@@ -236,27 +251,32 @@ def archive_state(
   if left <= 0
     return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
   end
+
   case File.stat(archive, left)
     ok(info) ->
       if info.kind != "file"
         message = "the cached archive is not a regular file"
         return ArchiveSeen.Broken(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
       end
+
       left = deadline - Time.monotonic_ms()
       if left <= 0
         return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
       end
+
       case File.sha256(archive, left)
         ok(found) ->
           if NativeArtifact.hex_of(found) == sha
             return ArchiveSeen.Ready
           end
+
           message = "the cached archive is not the one its sha256 names"
           return ArchiveSeen.Broken(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
         error(_) ->
           message = "the cached archive cannot be read"
           return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "sha256", message, ""))
       end
+
     error(_) -> return ArchiveSeen.Absent
   end
 end
@@ -300,11 +320,13 @@ def download_archive(
       HTTP.close_client(pool)
       return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
     end
+
     budgeted = NativeArtifact.hop_budget(consumed, TOTAL_BODY_BYTES)
     if !budgeted.ok?
       HTTP.close_client(pool)
       return error(fail(context, "PKG-FETCH", "url", "the download is larger than 256 MiB", ""))
     end
+
     remaining = budgeted.unwrap!
     dest = Paths.join(base, ".dl-#{System.pid()}-#{Random.int(0, 999999999)}-#{redirects}")
     options = HTTP.DownloadOptions(timeout_ms: left, max_total_bytes: remaining)
@@ -330,6 +352,7 @@ def download_archive(
             message = "the server answered with status #{got.status}"
             return error(fail(context, "PKG-FETCH", "url", message, ""))
           end
+
           case File.sha256(dest, deadline - Time.monotonic_ms())
             ok(found) ->
               if NativeArtifact.hex_of(found) != sha
@@ -337,6 +360,7 @@ def download_archive(
                 message = "the file is not the one its sha256 names"
                 return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
               end
+
               placed = publish_file(dest, NativeArtifact.archive_path(root, sha), sha, deadline, context)
               HTTP.close_client(pool)
               return placed
@@ -347,6 +371,7 @@ def download_archive(
         end
     end
   end
+
   HTTP.close_client(pool)
   return error(fail(context, "PKG-FETCH", "url", "cannot download the file", ""))
 end
@@ -362,23 +387,29 @@ def follow_redirect(
   if locations.size != 1
     return error(fail(context, "PKG-FETCH", "url", "the redirect holds no single location", ""))
   end
+
   next_url = ""
   case NativeArtifact.resolve_location(current, locations[0])
     ok(found) -> next_url = found
     error(_) -> return error(fail(context, "PKG-FETCH", "url", "the redirect location is not usable", ""))
   end
+
   if NativeArtifact.downgrade?(current, next_url)
     return error(fail(context, "PKG-FETCH", "url", "the redirect leaves https for http", ""))
   end
+
   if !NativeArtifact.url_allowed?(next_url)
     return error(fail(context, "PKG-FETCH", "url", "the redirect target is not an allowed URL", ""))
   end
+
   if seen.has_key?(next_url)
     return error(fail(context, "PKG-FETCH", "url", "the redirects loop", ""))
   end
+
   if redirects >= MAX_REDIRECTS
     return error(fail(context, "PKG-FETCH", "url", "too many redirects", ""))
   end
+
   return ok(next_url)
 end
 
@@ -400,11 +431,13 @@ def publish_file(
       if left <= 0
         return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
       end
+
       case File.sha256(target, left)
         ok(found) ->
           if NativeArtifact.hex_of(found) == sha
             return ok(target)
           end
+
           message = "the cached archive is not the one its sha256 names"
           return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
         error(_) ->
@@ -433,8 +466,10 @@ def publish_member(
         message = "the cached archive is not the one its sha256 names"
         return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
       end
+
     error(_) -> return error(fail(context, "PKG-FETCH", "sha256", "the cached archive cannot be read", ""))
   end
+
   parent = Paths.join(Paths.join(NativeArtifact.native_base(root), sha), "m")
   try make_parents(parent, deadline, context)
   tmp = try make_temp(parent, deadline, context)
@@ -448,24 +483,29 @@ def publish_member(
       hint = "name a file the archive holds"
       return error(fail(context, "PKG-NATIVE-MISSING", "member", "the archive holds no file for the member", hint))
     end
+
     if String.contains?(message, "timed out")
       return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
     end
+
     help = "only plain, gzipped TAR and ZIP archives are supported"
     return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a supported archive", help))
   end
+
   payload = Paths.join(dest, canonical)
   left = try time_left(deadline, context)
   found = File.sha256(payload, left)
   if !found.ok?
     return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a supported archive", ""))
   end
+
   receipt = Paths.join(tmp, "receipt")
   left = try time_left(deadline, context)
   wrote = File.write_text(receipt, NativeArtifact.hex_of(found.unwrap!), left)
   if !wrote.ok?
     return error(fail(context, "PKG-FETCH", "member", "the cache cannot be written", ""))
   end
+
   target = NativeArtifact.member_dir(root, sha, digest)
   left = try time_left(deadline, context)
   case Path.rename(tmp, target, left)
@@ -495,10 +535,12 @@ def extract_member(
   if left <= 0
     return error("the operation timed out")
   end
+
   fresh = Archive.Options(timeout_ms: left, max_output_bytes: options.max_output_bytes)
   if zipped
     return Archive.extract_zip(archive, [canonical], dest, fresh)
   end
+
   return Archive.extract_tar(archive, [canonical], dest, fresh)
 end
 
@@ -509,6 +551,7 @@ def zip_magic?(archive: String, deadline: Int) -> Bool
   if left <= 0
     return false
   end
+
   case File.open(archive, "read", left)
     ok(handle) ->
       left = deadline - Time.monotonic_ms()
@@ -516,17 +559,20 @@ def zip_magic?(archive: String, deadline: Int) -> Bool
         close_quiet(handle, deadline)
         return false
       end
+
       case File.read_bytes(handle, 4, left)
         ok(first) ->
           close_quiet(handle, deadline)
           if first.size < 4
             return false
           end
+
           return first[0] == 80 and first[1] == 75 and first[2] == 3 and first[3] == 4
         error(_) ->
           close_quiet(handle, deadline)
           return false
       end
+
     error(_) -> return false
   end
 end
@@ -538,6 +584,7 @@ def close_quiet(handle: FileHandle, deadline: Int) -> Void
   if left > 0 and left < budget
     budget = left
   end
+
   case File.close(handle, budget)
     ok(_) -> return
     error(_) -> return
@@ -553,16 +600,20 @@ def make_parents(path: String, deadline: Int, context: NativeArtifact.Context) -
     if info.unwrap!.kind == "directory"
       return ok()
     end
+
     return error(fail(context, "PKG-FETCH", "", "the cache holds a file where a folder goes", ""))
   end
+
   parent = Paths.directory_of(path)
   if parent != "" and parent != path
     try make_parents(parent, deadline, context)
   end
+
   left = deadline - Time.monotonic_ms()
   if left <= 0
     return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
   end
+
   case Dir.mkdir(path, left)
     ok(_) -> return ok()
     error(_) ->
@@ -571,9 +622,11 @@ def make_parents(path: String, deadline: Int, context: NativeArtifact.Context) -
       if fresh <= 0
         return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
       end
+
       if is_dir?(path, fresh)
         return ok()
       end
+
       message = "the cache folder cannot be made"
       return error(fail(context, "PKG-FETCH", "", message, ""))
   end
@@ -588,11 +641,13 @@ def make_temp(parent: String, deadline: Int, context: NativeArtifact.Context) ->
     if left <= 0
       return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
     end
+
     name = Paths.join(parent, ".tmp-#{System.pid()}-#{attempt}-#{Random.int(0, 999999999)}")
     case Dir.mkdir_private(name, left)
       ok(_) -> return ok(name)
       error(message) -> failure = message
     end
   end
+
   return error(fail(context, "PKG-FETCH", "", "cannot make a folder in the cache: #{failure}", ""))
 end

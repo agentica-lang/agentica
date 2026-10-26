@@ -24,6 +24,7 @@ export def json(found: Model.Refs) -> Json
   if found.partial
     return JSON.object(DiagnosticJson.partial(shape, found.diagnostics))
   end
+
   return JSON.object(shape)
 end
 
@@ -43,5 +44,6 @@ def definition_json(definition: List[Model.Symbol]) -> Json
   if definition.size == 0
     return JSON.null()
   end
+
   return SymbolJson.match_json(definition[0])
 end

@@ -66,12 +66,15 @@ export def parse(arguments: List[String]) -> Parsed
       at += 2
     end
   end
+
   if at >= arguments.size
     return Parsed.Broken("the driver options end with --")
   end
+
   if options.vm == "" or options.version == "" or options.agentica.size == 0
     return Parsed.Broken("--vm, --version and --agentica are required")
   end
+
   return user_arguments(options, arguments.drop(at + 1))
 end
 
@@ -100,6 +103,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       shown = shown.with(style: "ai")
     end
   end
+
   at = 0
   while at < words.size
     word = words[at]
@@ -107,6 +111,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       if at + 1 >= words.size
         return Parsed.Usage("option needs a value", shown)
       end
+
       value = words[at + 1]
       if word == "--steps"
         shown = shown.with(steps: shown.steps.push(value))
@@ -131,6 +136,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       else
         shown = shown.with(only: value)
       end
+
       at += 2
     elsif word == "--json" or word == "--ai"
       at += 1
@@ -147,5 +153,6 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       at += 1
     end
   end
+
   return Parsed.Ready(shown)
 end

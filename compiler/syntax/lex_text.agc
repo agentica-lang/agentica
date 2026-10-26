@@ -20,6 +20,7 @@ def value_text(token: Tokens.Token) -> String
       if text == token.lexeme
         return "="
       end
+
       return Text.quote(text)
     Tokens.Value.Whole(number) -> return number.to_s
     Tokens.Value.Huge(digits) -> return digits

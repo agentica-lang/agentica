@@ -141,9 +141,11 @@ export def no_types(count: Int) -> List[Types.Type]
     if left < MAX_REPEAT
       size = left
     end
+
     types = types.concat(List.repeat(Types.Type.Unknown, size))
     left -= size
   end
+
   return types
 end
 
@@ -183,6 +185,7 @@ export def fail_maybe(cx: Cx, st: St, code: String, message: String, span: Sourc
   if help == ""
     return fail(cx, st, code, message, span)
   end
+
   return fail_help(cx, st, code, message, span, help)
 end
 
@@ -210,6 +213,7 @@ export def ensure(cx: Cx, st: St, actual: Types.Type, expected: Types.Type, span
   if !Types.unknown?(expected) and !Types.same?(actual, expected)
     return error(mismatch(cx, st, expected, actual, span))
   end
+
   return ok(actual)
 end
 
@@ -267,6 +271,7 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
   if name == "_"
     return ok(st)
   end
+
   try reserve_local(cx, st, name, span)
   existing = st.vars.get(name)
   if existing.ok?
@@ -282,6 +287,7 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
         ),
       )
     end
+
     return error(
       fail_help(
         cx,
@@ -293,6 +299,7 @@ export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Sourc
       ),
     )
   end
+
   return ok(st.with(vars: st.vars.put(name, Binding(type: type, immutable: immutable, level: st.depth))))
 end
 
@@ -301,6 +308,7 @@ export def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) 
   if name == "ok" or name == "error"
     return error(fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{name}\" is a builtin constructor", span))
   end
+
   return ok(true)
 end
 
@@ -319,6 +327,7 @@ export def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Res
       ),
     )
   end
+
   return ok(true)
 end
 
@@ -333,5 +342,6 @@ export def hint_of(text: String) -> Diag.Help
   if text == ""
     return Diag.Help.NoHelp
   end
+
   return Diag.Help.Hint(text)
 end

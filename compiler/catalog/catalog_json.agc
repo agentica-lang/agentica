@@ -14,6 +14,7 @@ export def public(name: String) -> Result[Model.Builtin]
   if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name)
     return error("not a public builtin")
   end
+
   return Builtins.lookup(name)
 end
 
@@ -32,6 +33,7 @@ export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Jso
   if entry.alternatives.size == 0
     return form_json(entry, ruby)
   end
+
   forms = [entry].concat(entry.alternatives)
   return JSON.object({
     "name": JSON.from(entry.name),
@@ -45,6 +47,7 @@ def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
   parameters = form.parameters.map do |parameter: Model.Named|
     JSON.object({"name": JSON.from(parameter.name), "type": JSON.from(Types.to_text(parameter.type))})
   end
+
   return JSON.object({
     "name": JSON.from(form.name),
     "arity": JSON.from(form.parameters.size),
@@ -61,6 +64,7 @@ def text_or_null(text: String) -> Json
   if text == ""
     return JSON.null()
   end
+
   return JSON.from(text)
 end
 

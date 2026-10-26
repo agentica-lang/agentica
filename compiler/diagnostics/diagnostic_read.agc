@@ -14,6 +14,7 @@ export def read(text: String) -> Result[Model.Diagnostic]
       labels = labels.push(Model.Label(range: try range_of(item), text: try string(item, "text")))
     end
   end
+
   return ok(
     Model.Diagnostic(
       code: try string(root, "code"),
@@ -44,6 +45,7 @@ def note(object: Json, key: String) -> Result[String]
   if !has?(object, key)
     return ok("")
   end
+
   return string(object, key)
 end
 

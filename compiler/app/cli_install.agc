@@ -39,6 +39,7 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   if lock.packages.size == 0 and lock.artifacts.size == 0
     return ok("nothing to install\n")
   end
+
   lines: List[String] = []
   if lock.packages.size > 0
     cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
@@ -49,6 +50,7 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
         lines = lines.push("in the workspace #{label}")
         next
       end
+
       place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
       filled = try PackageFetch.fill(settings.workspace, cache, place, locked)
       case filled
@@ -57,16 +59,20 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
       end
     end
   end
+
   hosted = try fill_artifacts(settings, lock)
   if lines.size == 0
     if hosted == 0
       return ok("nothing to install\n")
     end
+
     if hosted == 1
       return ok("1 native artifact ready\n")
     end
+
     return ok("#{hosted} native artifacts ready\n")
   end
+
   return ok("#{lines.join("\n")}\n")
 end
 
@@ -79,12 +85,14 @@ def fill_artifacts(settings: Env.Settings, lock: Lock.Lock) -> Result[Int]
   if wanted.size == 0
     return ok(0)
   end
+
   cache = PackageCache.root(settings.env)
   if cache == ""
     message = "there is no package cache folder: HOME is not set"
     place = PackageFetch.Place(file: lock.file, entry: "native-artifact")
     return error(PackageFetch.fail(place, "PKG-FETCH", "", message, "set HOME or XDG_CACHE_HOME"))
   end
+
   for artifact in wanted
     source = NativeArtifact.Source(url: artifact.url, sha256: artifact.sha256, member: artifact.member)
     context = NativeArtifact.Context(file: lock.file, key: artifact_key(lock, artifact))
@@ -93,6 +101,7 @@ def fill_artifacts(settings: Env.Settings, lock: Lock.Lock) -> Result[Int]
       error(packed) -> return error(packed)
     end
   end
+
   return ok(wanted.size)
 end
 
@@ -104,6 +113,7 @@ def artifact_key(lock: Lock.Lock, artifact: Lock.Artifact) -> String
       return Reader.item("native-artifact", index)
     end
   end
+
   return "native-artifact"
 end
 
@@ -127,6 +137,7 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   if lock.packages.size == 0
     return ok()
   end
+
   cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
   folders: Map[String, String] = {}
   for locked in lock.packages
@@ -136,6 +147,7 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
       folders = folders.put(locked.name, PackageCache.folder(cache, locked.source, locked.commit))
     end
   end
+
   try PackageImport.check_folders(settings.workspace, scope, folders)
   return ok()
 end

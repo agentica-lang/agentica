@@ -80,18 +80,22 @@ def names_for(workspace: Workspace.Workspace, windows: Bool, file: String) -> Na
   if windows
     slashed = absolute.replace("\\", "/")
   end
+
   found = workspace.real_path.call(absolute)
   if found.ok?
     return Names(typed: file, absolute: absolute, key: found.unwrap!)
   end
+
   folder = Paths.directory_of(slashed)
   if folder == ""
     folder = "."
   end
+
   parent = workspace.real_path.call(folder)
   if !parent.ok?
     return Names(typed: file, absolute: absolute, key: absolute)
   end
+
   return Names(typed: file, absolute: absolute, key: Paths.join(parent.unwrap!, Paths.last_part(slashed)))
 end
 
@@ -106,6 +110,7 @@ def find(buffers: List[Buffer], path: String) -> List[Buffer]
       return [held]
     end
   end
+
   return []
 end
 
@@ -114,6 +119,7 @@ def read_buffer(workspace: Workspace.Workspace, buffers: List[Buffer], path: Str
   if found.size > 0
     return found[0].read
   end
+
   return workspace.read_text.call(path)
 end
 
@@ -123,5 +129,6 @@ def real_buffer(workspace: Workspace.Workspace, buffers: List[Buffer], path: Str
   if found.ok? or held.size == 0
     return found
   end
+
   return ok(held[0].names.key)
 end

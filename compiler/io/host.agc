@@ -76,14 +76,17 @@ def list_folder(path: String) -> Result[List[Workspace.Entry]]
   if !names.ok?
     return error(names.message)
   end
+
   entries: List[Workspace.Entry] = []
   for name in names.unwrap!
     info = File.lstat(Paths.join(path, name), STAT_TIMEOUT_MS)
     if !info.ok?
       return error(info.message)
     end
+
     entries = entries.push(Workspace.Entry(name: name, kind: entry_kind(info.unwrap!.kind)))
   end
+
   return ok(entries)
 end
 
@@ -102,6 +105,7 @@ def read_bytes(path: String) -> Result[List[Int]]
   if !opened.ok?
     return error(opened.message)
   end
+
   handle = opened.unwrap!
   data: List[Int] = []
   finished = false
@@ -111,9 +115,11 @@ def read_bytes(path: String) -> Result[List[Int]]
       File.close(handle, STAT_TIMEOUT_MS)
       return error(got.message)
     end
+
     finished = got.unwrap!.size == 0
     data = data.concat(got.unwrap!)
   end
+
   File.close(handle, STAT_TIMEOUT_MS)
   return ok(data)
 end
@@ -129,5 +135,6 @@ def variable(name: String) -> String
   if value.ok?
     return value.unwrap!
   end
+
   return ""
 end

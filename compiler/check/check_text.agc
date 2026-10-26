@@ -42,6 +42,7 @@ export def problem_text(workspace: Workspace.Workspace, root_dir: String, proble
     labels = problem.labels.map do |label: Failure.Label| "#{Text.span_text(label.span)} #{Text.quote(label.text)}" end
     line = "#{line} labels=[#{labels.join(", ")}]"
   end
+
   return "#{line} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
 end
 
@@ -62,6 +63,7 @@ def order_lines(checked: Checker.Checked) -> List[String]
   if checked.constants.size == 0
     return []
   end
+
   names = checked.constants.map do |name: String| Text.quote(name) end
   return ["constant-order [#{names.join(",")}]"]
 end
@@ -74,16 +76,20 @@ def notes_of(checked: Checker.Checked) -> Map[Int, String]
     if !T.unknown?(checked.types[index])
       notes = notes.put(index, " type=#{T.debug_text(checked.types[index])}")
     end
+
     index += 1
   end
+
   for id in checked.resolved.keys
     before = notes.get(id)
     text = ""
     if before.ok?
       text = before.unwrap!
     end
+
     notes = notes.put(id, "#{text} resolved=#{resolved_text(checked.resolved[id])}")
   end
+
   return notes
 end
 
@@ -100,5 +106,6 @@ def note(label: String, text: String) -> String
   if text == ""
     return ""
   end
+
   return label + Text.quote(text)
 end

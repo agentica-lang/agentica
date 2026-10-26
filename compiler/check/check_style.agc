@@ -28,6 +28,7 @@ export def blank_line_after_end(linked: Linker.Linked) -> Ast.Optional[Failure.P
       end
     end
   end
+
   return Ast.Optional.Absent
 end
 
@@ -52,6 +53,7 @@ def first_missing(file: String, text: String, tokens: List[Tokens.Token]) -> Ast
       end
     end
   end
+
   return Ast.Optional.Absent
 end
 

@@ -25,16 +25,19 @@ export def format(problem: Problems.Problem, text: String) -> String
   if !Problems.at_source?(problem)
     return without_source(problem)
   end
+
   lines = text.split("\n")
   marks = [mark(problem.span, "^", "", false, lines)]
   for label in problem.labels
     marks = marks.push(mark(label.span, "-", label.text, true, lines))
   end
+
   numbers = Set.new(marks.map do |m: Mark| m.line end).to_a.sort
   width = numbers[numbers.size - 1].to_s.length
   body = numbers.map do |number: Int|
     render(number, marks.filter do |m: Mark| m.line == number end, lines, width)
   end
+
   start = problem.span.start
   head = "#{problem.file}:#{start.line}:#{start.column} error[#{problem.code}]"
   return "#{head}\n#{problem.message}\n\n#{body.join("\n")}#{help_line(problem.help, width)}"
@@ -47,10 +50,12 @@ export def without_source(problem: Problems.Problem) -> String
   if problem.key_path != ""
     notes = notes.push("  = key: #{problem.key_path}")
   end
+
   notes = notes.concat(help_note(problem.help))
   if notes.size == 0
     return head
   end
+
   return "#{head}\n\n#{notes.join("\n")}"
 end
 
@@ -59,10 +64,12 @@ export def line_text(lines: List[String], number: Int) -> String
   if number < 1 or number > lines.size
     return ""
   end
+
   text = lines[number - 1]
   if text.ends_with?("\r")
     return text.slice(0, text.length - 1)
   end
+
   return text
 end
 
@@ -87,16 +94,20 @@ def mark(span: Source.Span, character: String, note: String, noted: Bool, lines:
   if room < 1
     room = 1
   end
+
   wanted = room
   if span.stop.line == line
     wanted = span.stop.column - column
   end
+
   if wanted > room
     wanted = room
   end
+
   if wanted < 1
     wanted = 1
   end
+
   return Mark(line: line, column: column, width: wanted, character: character, note: note, noted: noted)
 end
 
@@ -114,6 +125,7 @@ def padding(text: String, count: Int) -> String
       characters = characters.push(" ")
     end
   end
+
   return characters.join("")
 end
 
@@ -127,12 +139,14 @@ def render(number: Int, marks: List[Mark], lines: List[String], gutter: Int) -> 
       reach = m.column - 1 + m.width
     end
   end
+
   row = padding(text, reach).split("")
   for m in ordered
     for offset in 0...m.width
       row = row.set(m.column - 1 + offset, m.character)
     end
   end
+
   number_text = number.to_s
   shown = "#{number_text}#{spaces(gutter - number_text.length)}"
   parts = ["#{shown} | #{text}", "#{spaces(gutter)} | #{row.join("")}"]
@@ -141,5 +155,6 @@ def render(number: Int, marks: List[Mark], lines: List[String], gutter: Int) -> 
       parts = parts.push("#{spaces(gutter)} | #{padding(text, m.column - 1)}#{m.note}")
     end
   end
+
   return parts.join("\n")
 end

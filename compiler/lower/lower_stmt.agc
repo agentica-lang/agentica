@@ -31,11 +31,13 @@ export def lower_function(
       fx = fx.with(vars: fx.vars.put(param, fx.next - 1))
     end
   end
+
   count = fx.next
   for capture in captures
     fx = Lowering.alloc(fx)
     fx = fx.with(vars: fx.vars.put(capture, fx.next - 1))
   end
+
   last = statements.size - 1
   if block and last >= 0 and final_expression?(statements[last])
     fx = try lower_block(cx, fx, statements.take(last))
@@ -51,6 +53,7 @@ export def lower_function(
     fx = Lowering.emit_const(fx, slot, Ir.Imm.Void, span)
     fx = Lowering.emit_at(fx, "return", [slot], span)
   end
+
   made = Ir.Function(
     name: name,
     params: count,
@@ -82,6 +85,7 @@ def lower_block(cx: Lowering.Cx, fx: Lowering.Fx, statements: List[Ast.Stmt]) ->
   for statement in statements
     fx = try lower_statement(cx, fx, statement)
   end
+
   return ok(fx)
 end
 
@@ -94,8 +98,10 @@ def lower_statement(cx: Lowering.Cx, fx: Lowering.Fx, statement: Ast.Stmt) -> Re
     for item in fx.pending
       fx = fx.with(code: fx.code.push(item))
     end
+
     fx = fx.with(pending: [])
   end
+
   case statement
     Ast.Stmt.Binding(node) -> return lower_binding(cx, fx, node, saved)
     Ast.Stmt.Return(node) -> return lower_return(cx, fx, node, saved)
@@ -118,6 +124,7 @@ def lower_binding(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binding, saved: In
     out = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
     return ok(out.fx.with(next: saved))
   end
+
   existing = Lowering.lookup(fx, node.name)
   if existing >= 0
     out = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
@@ -125,8 +132,10 @@ def lower_binding(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binding, saved: In
     if out.slot != existing
       fx = Lowering.emit_at(fx, "move", [existing, out.slot], node.span)
     end
+
     return ok(fx.with(next: saved))
   end
+
   fx = Lowering.alloc(fx)
   slot = fx.next - 1
   out = try Expr.lower_expression(cx, fx, node.value, slot, false, false)
@@ -144,6 +153,7 @@ def lower_return(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Return, saved: Int)
           return ok(out.fx.with(next: saved))
         Ast.Optional.Absent -> fx = fx
       end
+
       out = try Expr.lower_expression(cx, fx, value, -1, true, false)
       fx = Lowering.emit_at(out.fx, "return", [out.slot], node.span)
     Ast.Optional.Absent ->
@@ -152,6 +162,7 @@ def lower_return(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Return, saved: Int)
       fx = Lowering.emit_const(fx, slot, Ir.Imm.Void, node.span)
       fx = Lowering.emit_at(fx, "return", [slot], node.span)
   end
+
   return ok(fx.with(next: saved))
 end
 
@@ -162,6 +173,7 @@ def tail_call(cx: Lowering.Cx, value: Ast.Expr) -> Ast.Optional[Ast.Call]
       if Builtins.ref(node.name, node.args.size).ok?
         return Ast.Optional.Absent
       end
+
       return Ast.Optional.Present(node)
     _ -> return Ast.Optional.Absent
   end
@@ -175,6 +187,7 @@ def lower_if(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IfStmt, saved: Int) -> 
     Ast.Optional.Present(body) -> has_else = true
     Ast.Optional.Absent -> has_else = false
   end
+
   index = 1
   for branch in node.branches
     fx = Lowering.new_label(fx)
@@ -186,13 +199,16 @@ def lower_if(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IfStmt, saved: Int) -> 
     if has_else or index < node.branches.size
       fx = Lowering.emit_at(fx, "jump", [end_label], node.span)
     end
+
     fx = Lowering.place(fx, skip)
     index += 1
   end
+
   case node.else_body
     Ast.Optional.Present(body) -> fx = try scoped(cx, fx, body)
     Ast.Optional.Absent -> fx = fx
   end
+
   return ok(Lowering.place(fx, end_label))
 end
 
@@ -218,10 +234,12 @@ def lower_control(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.LoopControl) -> Re
   if fx.loop_next < 0
     return error(Lowering.unsupported(cx, "this statement", node.span))
   end
+
   label = fx.loop_next
   if node.kind == "break"
     label = fx.loop_exit
   end
+
   return ok(Lowering.emit_at(fx, "jump", [label], node.span))
 end
 
@@ -231,6 +249,7 @@ def bind_variable(fx: Lowering.Fx, name: String, slot: Int) -> Lowering.Fx
   if name == "_"
     return fx
   end
+
   return fx.with(vars: fx.vars.put(name, slot))
 end
 
@@ -243,6 +262,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
     fx = try lower_range_for(cx, fx, node, span)
     return ok(fx.with(next: saved))
   end
+
   fx = Lowering.alloc(fx)
   items = fx.next - 1
   out = try Expr.lower_expression(cx, fx, node.iterable, items, false, false)
@@ -250,6 +270,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
   if Types.is?(type, "Set")
     fx = Lowering.emit_builtin(fx, items, "Set.to_a", 1, [span, span])
   end
+
   if node.body.size > 0
     fx = Lowering.alloc(Lowering.alloc(Lowering.alloc(Lowering.alloc(fx))))
     index = fx.next - 4
@@ -276,6 +297,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
       fx = fx.with(vars: fx.vars.put(node.variable, element))
       fx = fx.with(pending: [Ir.instr("list-get", [element, items, index], fx.file, [span])])
     end
+
     fx = try lower_block(cx, fx, node.body)
     fx = leave(fx, before)
     fx = fx.with(loop_next: outer_next, loop_exit: outer_exit)
@@ -286,6 +308,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
     fx = Lowering.emit_at(fx, "jump-if-true", [temp, top], span)
     fx = Lowering.place(fx, exit)
   end
+
   return ok(fx.with(next: saved))
 end
 
@@ -310,14 +333,18 @@ def lower_range_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, span: S
         if exclusive
           compare = "lt-i"
         end
+
         fx = Lowering.emit_at(right.fx, compare, [nonempty, bounds, last_slot], span)
       end
+
     _ -> literal = false
   end
+
   if !literal
     source = try Expr.lower_expression(cx, fx, node.iterable, -1, false, false)
     fx = Lowering.emit_at(source.fx, "range-bounds", [bounds, source.slot], span)
   end
+
   fx = Lowering.new_label(Lowering.new_label(Lowering.new_label(fx)))
   exit = fx.labels - 3
   top = fx.labels - 2
@@ -330,6 +357,7 @@ def lower_range_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, span: S
   if exclusive
     fx = Lowering.emit_at(fx, "sub-i", [last_slot, last_slot, one], span)
   end
+
   outer_next = fx.loop_next
   outer_exit = fx.loop_exit
   fx = fx.with(loop_next: increment, loop_exit: exit)
@@ -371,9 +399,11 @@ def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int)
     if index < node.arms.size
       fx = Lowering.emit_at(fx, "jump", [end_label], node.span)
     end
+
     fx = Lowering.place(fx, skip)
     index += 1
   end
+
   return ok(Lowering.place(fx, end_label).with(next: saved))
 end
 
@@ -396,12 +426,14 @@ def lower_test(
         if node.variant_name == "Ok"
           jump = "jump-if-false"
         end
+
         fx = Lowering.emit_at(fx, jump, [slot, skip], span)
       else
         id = cx.variants["#{node.enum_name}.#{node.variant_name}"]
         fx = Lowering.emit_at(fx, "is-variant", [slot, value, id], span)
         fx = Lowering.emit_at(fx, "jump-if-false", [slot, skip], span)
       end
+
       return test_nested(cx, fx, node, value, skip)
   end
 end
@@ -421,8 +453,10 @@ def test_nested(
         fx = try lower_test(cx, fx, inner, part, skip)
       _ -> fx = fx
     end
+
     item += 1
   end
+
   return ok(fx)
 end
 
@@ -431,6 +465,7 @@ def read_payload(fx: Lowering.Fx, node: Ast.VariantPattern, target: Int, value: 
   if node.enum_name == "Result"
     return Lowering.emit_at(fx, "result-value", [target, value], node.span)
   end
+
   return Lowering.emit_at(fx, "payload", [target, value, item], node.span)
 end
 
@@ -449,8 +484,10 @@ def lower_literal_test(
       if digits != "-#{INT_MIN_DIGITS}"
         return ok(Lowering.emit_at(fx, "jump", [skip], node.span))
       end
+
       imm = Ir.Imm.Int(INT_MIN)
   end
+
   fx = Lowering.alloc(fx)
   slot = fx.next - 1
   fx = Lowering.emit_const(fx, slot, imm, node.span)
@@ -480,12 +517,16 @@ def bind_payload(
               fx = read_payload(fx, node, part, value, item)
               fx = try bind_payload(cx, fx, inner, part)
             end
+
           Ast.Slot.Skip -> fx = fx
         end
+
         item += 1
       end
+
     _ -> fx = fx
   end
+
   return ok(fx)
 end
 

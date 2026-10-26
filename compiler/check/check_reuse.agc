@@ -51,6 +51,7 @@ export def take(
   if old.types.size >= before.ids
     usable = wanted
   end
+
   plan = planned(linked, before, old_constants, usable)
   st = State.fresh().with(
     types: types_of(linked, before, old.types, plan.stretches),
@@ -73,6 +74,7 @@ def planned(
   for module in before.modules
     earlier = earlier.put(module.key, module)
   end
+
   stretches: List[Stretch] = []
   clean: List[String] = []
   constants: Map[String, T.Type] = {}
@@ -80,19 +82,23 @@ def planned(
     if !wanted.include?(module.key) or !earlier.has_key?(module.key)
       next
     end
+
     old = earlier[module.key]
     if old.first_id != module.first_id or old.next_id != module.next_id
       next
     end
+
     found = constants_of(module, old_constants)
     if found.ok?
       for name in found.unwrap!.keys
         constants = constants.put(name, found.unwrap![name])
       end
+
       stretches = stretches.push(Stretch(first: module.first_id, next: module.next_id))
       clean = clean.push(module.key)
     end
   end
+
   ordered = stretches.sort_by do |stretch: Stretch| stretch.first end
   return Plan(stretches: joined(ordered), clean: Set.new(clean), constants: constants)
 end
@@ -109,6 +115,7 @@ def joined(ordered: List[Stretch]) -> List[Stretch]
       found = found.push(stretch)
     end
   end
+
   return found
 end
 
@@ -123,6 +130,7 @@ def constants_of(module: Linker.LinkedModule, old_constants: Map[String, T.Type]
       _ -> found = found
     end
   end
+
   return ok(found)
 end
 
@@ -136,6 +144,7 @@ def types_of(linked: Linker.Linked, before: Linker.Linked, old: List[T.Type], st
     types = types.concat(old.drop(stretch.first).take(stretch.next - stretch.first))
     at = stretch.next
   end
+
   if linked.receivers >= 0
     types = types.concat(State.no_types(linked.receivers - at))
     at = linked.receivers
@@ -146,9 +155,11 @@ def types_of(linked: Linker.Linked, before: Linker.Linked, old: List[T.Type], st
       else
         types = types.concat(State.no_types(stretch.next - stretch.first))
       end
+
       at = linked.receivers + stretch.next
     end
   end
+
   return types.concat(State.no_types(linked.ids - at))
 end
 
@@ -160,9 +171,11 @@ def placed(linked: Linker.Linked, before: Linker.Linked, stretches: List[Stretch
     if linked.receivers < 0
       return -1
     end
+
     local = id - before.receivers
     shift = linked.receivers
   end
+
   low = 0
   high = stretches.size
   while low < high
@@ -175,6 +188,7 @@ def placed(linked: Linker.Linked, before: Linker.Linked, stretches: List[Stretch
       return local + shift
     end
   end
+
   return -1
 end
 
@@ -191,6 +205,7 @@ def moved_resolved(
       found = found.put(at, old[id])
     end
   end
+
   return found
 end
 
@@ -207,6 +222,7 @@ def moved_bound(
       found = found.put(at, old[id])
     end
   end
+
   return found
 end
 
@@ -223,6 +239,7 @@ def moved_bodies(
       found = found.put(at, old[id])
     end
   end
+
   return found
 end
 
@@ -239,5 +256,6 @@ def moved_tries(
       found = found.push(at)
     end
   end
+
   return Set.new(found)
 end

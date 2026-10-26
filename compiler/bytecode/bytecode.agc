@@ -83,6 +83,7 @@ def write(root_dir: String, written: Writer.Written, output: String, settings: E
       if saved.ok?
         return "wrote #{bytes.size} bytes"
       end
+
       return "cannot write #{output}: #{saved.message}"
   end
 end

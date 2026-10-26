@@ -17,8 +17,10 @@ export def quote(text: String) -> String
       parts = parts.push(escaped(code))
       segment = index + 1
     end
+
     index += 1
   end
+
   parts = parts.push(text.slice(segment, codes.size - segment))
   parts = parts.push("\"")
   return parts.join("")

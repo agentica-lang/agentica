@@ -33,6 +33,7 @@ export def kind_of(path: String) -> String
   elsif path.ends_with?(".feature")
     return "feature"
   end
+
   return ""
 end
 
@@ -54,14 +55,17 @@ export def discover(given: List[String]) -> List[Entry]
       found = problem(found, path, "test path does not exist")
     end
   end
+
   entries = found.problems
   previous = ""
   for path in found.files.sort
     if path != previous
       entries = entries.push(entry(path, ""))
     end
+
     previous = path
   end
+
   return entries
 end
 
@@ -78,12 +82,14 @@ def walk(directory: String, found: Found) -> Found
   if !names.ok?
     return problem(found, directory, "cannot list the directory: #{names.message}")
   end
+
   after = found
   # The folder `deps/` beside an agentica.toml is the project's installed packages.
   project = names.unwrap!.any? do |name| name == MANIFEST_FILE end
   for name in names.unwrap!
     after = visit(Path.join([directory, name]).unwrap_or("#{directory}/#{name}"), name, project, after)
   end
+
   return after
 end
 
@@ -97,10 +103,12 @@ def visit(path: String, name: String, project: Bool, found: Found) -> Found
     if kind_of(name) != ""
       return problem(found, path, "the file name is not valid UTF-8")
     end
+
     return found
   elsif !info.ok?
     return problem(found, path, "cannot read the file information: #{info.message}")
   end
+
   kind = info.unwrap!.kind
   if bad_name and (kind == "directory" or kind_of(name) != "")
     return problem(found, path, "the file name is not valid UTF-8")
@@ -113,6 +121,7 @@ def visit(path: String, name: String, project: Bool, found: Found) -> Found
   elsif kind == "link"
     return follow(path, found)
   end
+
   return Found(problems: found.problems, files: found.files.push(path))
 end
 
@@ -122,5 +131,6 @@ def follow(path: String, found: Found) -> Found
   if target.ok? and target.unwrap!.kind != "directory"
     return Found(problems: found.problems, files: found.files.push(path))
   end
+
   return problem(found, path, "the symbolic link does not name a file")
 end

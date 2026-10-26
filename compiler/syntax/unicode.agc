@@ -16,9 +16,11 @@ export def hex(value: Int, width: Int) -> String
     parts = parts.push(digits.slice(rest % 16, 1))
     rest = rest / 16
   end
+
   while parts.size < width
     parts = parts.push("0")
   end
+
   return parts.reverse.join("")
 end
 
@@ -43,6 +45,7 @@ export def written(code: Int) -> String
       if code < 65_536
         return "#\\u#{hex(code, 4)}"
       end
+
       return "#\\U#{hex(code, 8)}"
   end
 end
@@ -54,6 +57,7 @@ export def written_text(text: String) -> String
   for character in text.split("")
     parts = parts.push(written_character(GRAPHIC_RANGES, String.code(character), character))
   end
+
   parts = parts.push("\"")
   return parts.join("")
 end
@@ -67,6 +71,7 @@ def in_ranges?(ranges: List[Int], code: Int, low: Int, high: Int) -> Bool
       high = middle
     end
   end
+
   return low * 2 < ranges.size and ranges[low * 2] <= code
 end
 
@@ -98,9 +103,11 @@ def written_character(ranges: List[Int], code: Int, character: String) -> String
       if (code > 32 and code < 127) or blank?(code) or in_ranges?(ranges, code, 0, ranges.size / 2)
         return character
       end
+
       if code < 65_536
         return "\\u#{hex(code, 4)}"
       end
+
       return "\\U#{hex(code, 8)}"
   end
 end

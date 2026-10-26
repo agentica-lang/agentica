@@ -25,6 +25,7 @@ export def decode(data: List[Int]) -> Read
   if decoded.ok?
     return Read.Text(decoded.unwrap!)
   end
+
   return Read.Invalid(error_position([], data))
 end
 
@@ -51,9 +52,11 @@ export def replace_invalid(data: List[Int]) -> String
       for k in 0...width
         out = out.push(data[at + k])
       end
+
       at += width
     end
   end
+
   return String.from_bytes(out).unwrap!
 end
 
@@ -68,14 +71,18 @@ export def complete_prefix(data: List[Int]) -> Int
     if byte < 128
       return size
     end
+
     if byte >= 192
       if lead_width(byte) > back
         return size - back
       end
+
       return size
     end
+
     back += 1
   end
+
   return size
 end
 
@@ -89,6 +96,7 @@ export def error_position(parts: List[String], head: List[Int]) -> Source.Positi
   if bad >= 0
     valid = bad
   end
+
   offset = 0
   line = 1
   since_newline = 0
@@ -103,6 +111,7 @@ export def error_position(parts: List[String], head: List[Int]) -> Source.Positi
       since_newline += last
     end
   end
+
   at = 0
   while at < valid
     byte = head[at]
@@ -115,8 +124,10 @@ export def error_position(parts: List[String], head: List[Int]) -> Source.Positi
         since_newline = 0
       end
     end
+
     at += 1
   end
+
   return Source.Position(offset: offset, line: line, column: since_newline + 1)
 end
 
@@ -125,12 +136,15 @@ def lead_width(byte: Int) -> Int
   if byte >= 194 and byte <= 223
     return 2
   end
+
   if byte >= 224 and byte <= 239
     return 3
   end
+
   if byte >= 240 and byte <= 244
     return 4
   end
+
   return 0
 end
 
@@ -142,8 +156,10 @@ def first_invalid(data: List[Int]) -> Int
     if width == 0
       return at
     end
+
     at += width
   end
+
   return -1
 end
 
@@ -154,29 +170,37 @@ def sequence_width(data: List[Int], at: Int) -> Int
   if lead < 128
     return 1
   end
+
   width = lead_width(lead)
   if width == 0 or at + width > data.size
     return 0
   end
+
   code = lead - 192
   if width == 3
     code = lead - 224
   end
+
   if width == 4
     code = lead - 240
   end
+
   for k in 1...width
     next_byte = data[at + k]
     if next_byte < 128 or next_byte > 191
       return 0
     end
+
     code = code * 64 + next_byte - 128
   end
+
   if (width == 3 and code < 2048) or (width == 4 and code < 65_536) or code > 1_114_111
     return 0
   end
+
   if code >= 55_296 and code <= 57_343
     return 0
   end
+
   return width
 end

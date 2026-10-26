@@ -18,8 +18,10 @@ export def write_bytes(path: String, bytes: List[Int]) -> Result[Void]
       File.close(out, IO_TIMEOUT)
       return written
     end
+
     rest = rest.drop(PIECE_BYTES)
   end
+
   return File.close(out, IO_TIMEOUT)
 end
 
@@ -32,12 +34,15 @@ export def write_text(path: String, text: String) -> Result[Void]
     if at + size > text.length
       size = text.length - at
     end
+
     written = File.write(out, text.slice(at, size), IO_TIMEOUT)
     if !written.ok?
       File.close(out, IO_TIMEOUT)
       return written
     end
+
     at += size
   end
+
   return File.close(out, IO_TIMEOUT)
 end

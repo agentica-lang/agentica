@@ -13,10 +13,12 @@ def main() -> Void
       first_id = path.slice(11, path.length - 11).to_i!
       next
     end
+
     if path == "--continue"
       continuing = true
       next
     end
+
     puts("== #{path}")
     case SourceReader.read(path)
       SourceFile.Read.Text(text) ->
@@ -25,6 +27,7 @@ def main() -> Void
         if continuing
           first_id = printed.next_id
         end
+
       SourceFile.Read.Invalid(at) -> puts(Text.diagnostic_line(SourceFile.invalid_utf8(at)))
       SourceFile.Read.Unreadable(message) -> puts("!! #{message}")
     end

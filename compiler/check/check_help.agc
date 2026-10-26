@@ -36,6 +36,7 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
       "with r.unwrap!, or with try inside a function that returns Result"
     )
   end
+
   return convert_help(expected, actual)
 end
 
@@ -45,6 +46,7 @@ export def foreign(tables: Tables, name: String) -> String
   if found.ok?
     return found.unwrap!
   end
+
   return ""
 end
 
@@ -71,6 +73,7 @@ export def field_help(name: String, fields: List[Model.Named]) -> String
   if guess == ""
     return all
   end
+
   return "#{guess} #{all}"
 end
 
@@ -83,6 +86,7 @@ def unwrap_form(expected: Types.Type) -> String
   elsif Types.is?(expected, "String")
     return "gets!"
   end
+
   return "such as s.to_i!"
 end
 
@@ -101,9 +105,11 @@ def convert_help(expected: Types.Type, actual: Types.Type) -> String
     if Types.is?(Types.item(expected), "Void")
       return "give a Result with ok() or error(\"message\")"
     end
+
     return "give a Result with ok(...) or error(\"message\")"
   elsif Types.is?(expected, "Int") and Types.is?(actual, "Float")
     return "convert it with x.to_i!, which truncates"
   end
+
   return ""
 end

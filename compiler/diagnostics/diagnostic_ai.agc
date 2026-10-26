@@ -24,6 +24,7 @@ export def ai(problem: Problems.Problem, text: String) -> String
     out = out.push("  at: #{problem.file}")
     out = field(out, "key", problem.key_path)
   end
+
   out = (
     out
     |> field("callee", problem.callee)
@@ -33,6 +34,7 @@ export def ai(problem: Problems.Problem, text: String) -> String
   for label in problem.labels
     out = out.push("  label: #{label.span.start.line}:#{label.span.start.column} #{label.text}")
   end
+
   out = field(out, "help", hint_text(problem.help))
   return out.join("\n")
 end
@@ -48,6 +50,7 @@ def field(out: List[String], name: String, value: String) -> List[String]
   if value == ""
     return out
   end
+
   return out.push("  #{name}: #{value}")
 end
 
@@ -59,9 +62,11 @@ def trim(text: String) -> String
   while first < last and space?(characters[first])
     first += 1
   end
+
   while last > first and space?(characters[last - 1])
     last -= 1
   end
+
   return text.slice(first, last - first)
 end
 
