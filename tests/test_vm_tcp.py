@@ -248,8 +248,14 @@ def trace_env(tmp_path):
 
 def test_client_reads_fragments_eof_resets_long_lines_and_timeouts_from_node_peers(tmp_path, adopt, node):
     _, ports = start_peer(adopt, node)
-    args = tuple(ports[name] for name in ("echo", "fragments", "reset", "long", "silent", "silent", "partial", "refused"))
-    result = run_text(tmp_path, "client", CLIENT_PROGRAM % args)
+    # The refused port stays bound, but never listens, until the client is done: a freed port could be taken by
+    # another listener on the host before the client dials it, and the connect would succeed.
+    with socket.socket(socket.AF_INET) as closed:
+        closed.bind(("127.0.0.1", 0))
+        ports["refused"] = closed.getsockname()[1]
+        args = tuple(ports[name] for name in ("echo", "fragments", "reset", "long", "silent", "silent", "partial",
+                                              "refused"))
+        result = run_text(tmp_path, "client", CLIENT_PROGRAM % args)
     assert result.code == 0, result.stderr
     assert result.stdout == ("ñ\n"
                              "ñ😀\n"
