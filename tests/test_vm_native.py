@@ -2430,6 +2430,7 @@ def main() -> Void
   puts([bad.result, sqlite3_errcode(db)])
   puts(sqlite3_errmsg(db).end_with?("syntax error"))
   puts(Native.closed?(bad.stmt))
+  Native.close(bad.stmt)
   puts(Native.closed?(db))
   Native.close(db)
   puts(Native.closed?(db))
