@@ -60,42 +60,51 @@ export def plan(listing: String) -> Plan
     if record == ""
       next
     end
+
     line = parse(record)
     if !line.ok?
       return Plan.Refused(Fault(code: "PKG-FETCH", key: "git", message: line.message, help: ""))
     end
+
     found = line.unwrap!
     parts = found.path.split("/")
     if skipped?(parts)
       next
     end
+
     name = parts[parts.size - 1]
     if !copied?(parts, name, found.mode)
       next
     end
+
     if LINK_MODES.include?(found.mode)
       message = "#{found.path} is a symbolic link or a submodule"
       return Plan.Refused(refusal("PKG-SYMLINK", message, "a package holds regular files only"))
     elsif !safe?(parts)
       return Plan.Refused(refusal("PKG-FETCH", "#{found.path} is not a safe path for a file", ""))
     end
+
     if found.size > MAX_FILE_BYTES
       message = "#{found.path} is #{found.size} bytes, and a file of a package is at most #{MAX_FILE_BYTES} bytes"
       return Plan.Refused(refusal("PKG-FETCH", message, "split the file, or leave it out of the package"))
     end
+
     total += found.size
     if total > MAX_TOTAL_BYTES
       message = "the files of the package are over #{MAX_TOTAL_BYTES} bytes together, at #{found.path}"
       return Plan.Refused(refusal("PKG-FETCH", message, "a package holds at most #{MAX_TOTAL_BYTES} bytes of files"))
     end
+
     key = PackageHash.fold(found.path)
     if folded.has_key?(key)
       message = "#{folded[key]} and #{found.path} differ only in case"
       return Plan.Refused(refusal("PKG-PATH-COLLISION", message, COLLISION_HELP))
     end
+
     folded = folded.put(key, found.path)
     chosen = chosen.push(Blob(path: found.path, oid: found.oid))
   end
+
   return Plan.Files(chosen)
 end
 
@@ -105,10 +114,12 @@ def parse(record: String) -> Result[Line]
   if !tab.ok?
     return error("git ls-tree gave a line with no tab")
   end
+
   fields = record.slice(0, tab.unwrap!).split(" ").filter do |field: String| field != "" end
   if fields.size != 4
     return error("git ls-tree gave a line with #{fields.size} fields")
   end
+
   path = record.slice(tab.unwrap! + 1, record.length - tab.unwrap! - 1)
   # A gitlink has no size ("-"); it is refused by its mode before its size matters.
   size = fields[3].to_i
@@ -122,6 +133,7 @@ def skipped?(parts: List[String]) -> Bool
       return true
     end
   end
+
   return false
 end
 
@@ -132,10 +144,12 @@ def copied?(parts: List[String], name: String, mode: String) -> Bool
   if parts.size == 1 and PackageHash.fold(name) == MANIFEST_FILE
     return name == MANIFEST_FILE or LINK_MODES.include?(mode)
   end
+
   path = parts.join("/")
   if LINK_MODES.include?(mode)
     return PackageHash.source_file?(name) or PackageHash.native_path?(path) or PackageHash.native_root?(path)
   end
+
   return PackageHash.source_file?(name) or (PackageHash.native_path?(path) and !PackageHash.native_junk?(name))
 end
 
@@ -147,6 +161,7 @@ def safe?(parts: List[String]) -> Bool
       return false
     end
   end
+
   return true
 end
 

@@ -45,9 +45,11 @@ export def name_problem(name: String) -> String
   if letters.size == 0 or letters.size > MAX_NAME
     return "a package name has 1 to #{MAX_NAME} characters"
   end
+
   if !NAME_FIRST.include?(letters[0]) or !letters.all? do |letter| NAME_REST.include?(letter) end
     return "a package name starts with a lowercase letter and holds only lowercase letters, digits, _ and -"
   end
+
   return ""
 end
 
@@ -57,28 +59,35 @@ export def git_problem(url: String) -> String
   if !url.starts_with?(HTTPS)
     return "a git URL starts with #{HTTPS}"
   end
+
   parts = identity(url).slice(HTTPS.length, identity(url).length - HTTPS.length).split("/")
   if parts.size != 3
     return "a git URL is #{HTTPS}host/owner/repo"
   end
+
   host = parts[0]
   if host == "" or host.starts_with?(".") or host.ends_with?(".") or host.contains?("..")
     return "the host of a git URL is a lowercase name such as github.com"
   end
+
   if !host.split("").all? do |letter| HOST_CHARACTERS.include?(letter) end
     return "the host of a git URL is lowercase letters, digits, . and - (no port, no user name)"
   end
+
   for segment in [parts[1], parts[2]]
     if segment == "" or segment == "." or segment == ".." or segment.starts_with?("-")
       return "the owner and the repository of a git URL are not empty, . or .. and do not start with -"
     end
+
     if !segment.split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
       return "the owner and the repository of a git URL hold only letters, digits, . _ and -"
     end
+
     if segment.ends_with?(".") or WINDOWS_DEVICES.include?(segment.split(".")[0].downcase)
       return "the owner and the repository of a git URL do not end in . and are not a Windows device name such as con"
     end
   end
+
   return ""
 end
 
@@ -89,9 +98,11 @@ export def tag_problem(tag: String) -> String
   if letters.size == 0 or letters.size > MAX_TAG
     return "a tag has 1 to #{MAX_TAG} characters"
   end
+
   if letters[0] == "." or letters[0] == "-" or !letters.all? do |letter| TAG_CHARACTERS.include?(letter) end
     return "a tag holds letters, digits, . _ + and -, and does not start with . or -"
   end
+
   return ""
 end
 
@@ -105,23 +116,29 @@ export def subdir_problem(subdir: String) -> String
   if subdir.length == 0 or subdir.length > MAX_SUBDIR
     return "a subdir has 1 to #{MAX_SUBDIR} characters"
   end
+
   for part in subdir.split("/")
     if part == ""
       return "a subdir is folder names joined by /, with no empty part, no leading / and no final /"
     end
+
     if part.starts_with?(".")
       return "a subdir has no hidden folder and no . or .. part"
     end
+
     if !part.split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
       return "the folders of a subdir hold only letters, digits, . _ and -"
     end
+
     if part.ends_with?(".") or WINDOWS_DEVICES.include?(part.split(".")[0].downcase)
       return "the folders of a subdir do not end in . and are not a Windows device name such as con"
     end
+
     if part.upcase.downcase == "agc_libs"
       return "a subdir has no agc_libs folder, which a package leaves out"
     end
   end
+
   return ""
 end
 
@@ -132,6 +149,7 @@ export def ref_problem(ref: String) -> String
   if letters.size < MIN_REF or letters.size > MAX_REF or !letters.all? do |letter| HEX.include?(letter) end
     return "a ref is #{MIN_REF} to #{MAX_REF} lowercase hex digits of a commit"
   end
+
   return ""
 end
 
@@ -141,6 +159,7 @@ export def commit_problem(commit: String) -> String
   if (letters.size != 40 and letters.size != 64) or !letters.all? do |letter| HEX.include?(letter) end
     return "a commit is 40 or 64 lowercase hex digits"
   end
+
   return ""
 end
 
@@ -149,6 +168,7 @@ export def identity(url: String) -> String
   if url.ends_with?(".git")
     return url.slice(0, url.length - 4)
   end
+
   return url
 end
 
@@ -163,6 +183,7 @@ export def pin(source: Source) -> String
   if source.tag != ""
     return source.tag
   end
+
   return source.ref
 end
 
@@ -172,6 +193,7 @@ export def version_label(source: Source, commit: String) -> String
   if source.tag != ""
     return source.tag
   end
+
   return commit.slice(0, SHORT_COMMIT)
 end
 
@@ -187,8 +209,10 @@ export def describe(source: Source) -> String
   if source.subdir != ""
     place = "#{source.git} (folder #{source.subdir})"
   end
+
   if source.tag != ""
     return "#{place} at tag #{source.tag}"
   end
+
   return "#{place} at ref #{source.ref}"
 end

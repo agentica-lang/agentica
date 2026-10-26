@@ -1676,10 +1676,13 @@ static bool fs_denied(agc_vm *vm, uint32_t span) {
   return vm->rt->deny_fs;
 }
 
+/* A write or close of a handle carries bytes that earlier calls already accepted: its pool work runs to its end after
+   a timeout, so the end of the run waits for it as a flush, or those bytes would be lost at the exit. */
 static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   o->vm = vm;
   if (!o->st || !o->st->poller) {
-    agc_io_start_then(vm, &file_io, o, context, timeout, more);
+    unsigned flags = o->kind == OP_WRITE || o->kind == OP_CLOSE ? AGC_JOB_FLUSH : 0;
+    agc_io_start_flags(vm, &file_io, o, context, timeout, more, flags);
     return agc_void();
   }
   if (step(o)) return done(vm, o, context);

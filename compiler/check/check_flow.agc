@@ -16,6 +16,7 @@ export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> Strin
   elsif body.size == 0
     return ""
   end
+
   last = body[body.size - 1]
   case last
     Ast.Stmt.If(node) -> return if_help(node, type_name)
@@ -39,14 +40,17 @@ export def captured_help(name: String, capture: State.Capture) -> String
   if capture.params.size == 1 and capture.params[0].name != "_"
     element = capture.params[0].name
   end
+
   path = ""
   case capture.each_receiver
     Ast.Optional.Present(receiver) -> path = path_text(receiver)
     Ast.Optional.Absent -> path = path
   end
+
   if path != "" and path.length <= 40
     return "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in #{path} ... end"
   end
+
   return (
     "blocks capture values; use a for loop, which can assign \"#{name}\": for #{element} in xs ... end, " +
     "or build it with xs.reduce(#{name}) do |acc, #{element}| ... end"
@@ -90,6 +94,7 @@ def if_holds_return?(node: Ast.IfStmt) -> Bool
   if node.branches.any? do |branch: Ast.IfBranch| contains_return?(branch.body) end
     return true
   end
+
   case node.else_body
     Ast.Optional.Present(body) -> return contains_return?(body)
     Ast.Optional.Absent -> return false
@@ -122,5 +127,6 @@ def field_path(node: Ast.FieldAccess) -> String
   if target == ""
     return ""
   end
+
   return "#{target}.#{node.name}"
 end

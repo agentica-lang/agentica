@@ -65,15 +65,18 @@ export def sync(
       if locked.member
         next
       end
+
       place = PackageFetch.Place(file: lock_file, entry: Reader.item("package", index))
       folder = PackageCache.folder(cache, locked.source, locked.commit)
       source = workspace.real_path.call(folder)
       if !source.ok?
         return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{folder}", source.message))
       end
+
       try put(workspace, deps, source.unwrap!, place, locked)
     end
   end
+
   fetched = packages.filter do |locked| !locked.member end
   kept = Set.new(fetched.map do |locked| locked.name end)
   members = packages.filter do |locked| locked.member end
@@ -83,6 +86,7 @@ export def sync(
       try remove(workspace, deps, name)
     end
   end
+
   return ok()
 end
 
@@ -99,6 +103,7 @@ export def put(
   if up_to_date?(workspace, deps, locked)
     return ok()
   end
+
   files = try chosen(workspace, source, place, locked)
   try prepare(workspace, deps)
   parent = try make_stage(deps)
@@ -116,11 +121,13 @@ def up_to_date?(workspace: Workspace.Workspace, deps: String, locked: Lock.Locke
   if !here.ok? or !folder?(here.unwrap!)
     return false
   end
+
   target = Paths.join(deps, locked.name)
   seen = kind_of(workspace, target)
   if !seen.ok? or !folder?(seen.unwrap!)
     return false
   end
+
   case PackageHash.hash_folder(workspace, target)
     PackageHash.Hashed.Hash(found) -> return found == locked.hash
     _ -> return false
@@ -144,10 +151,12 @@ def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
   if !folder?(here)
     return ok()
   end
+
   listed = workspace.list_folder.call(deps)
   if !listed.ok?
     return ok()
   end
+
   now = Time.now_ms() / 1000
   for entry in listed.unwrap!
     if entry.name.starts_with?(".tmp-") or entry.name.starts_with?(".old-")
@@ -158,6 +167,7 @@ def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
       end
     end
   end
+
   return ok()
 end
 
@@ -176,12 +186,14 @@ def chosen(
       if !entries.ok?
         return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", entries.message))
       end
+
       chosen = paths.sort
       for entry in entries.unwrap!
         if entry.name == MANIFEST_FILE and regular?(entry.kind)
           chosen = chosen.push(entry.name)
         end
       end
+
       return ok(chosen)
   end
 end
@@ -212,6 +224,7 @@ def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
       if !made.ok?
         return error(write_failure(deps, "cannot make #{deps}", made.message))
       end
+
       return ok()
     Kind.Folder -> return ok()
     Kind.Link ->
@@ -226,6 +239,7 @@ def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
   if !entries.ok?
     return error(write_failure(path, "cannot read the folder of #{path}", entries.message))
   end
+
   name = Paths.last_part(path)
   for entry in entries.unwrap!
     if entry.name == name
@@ -236,6 +250,7 @@ def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
       end
     end
   end
+
   return ok(Kind.Absent)
 end
 
@@ -248,8 +263,10 @@ def make_stage(deps: String) -> Result[String]
     if made.ok?
       return ok(name)
     end
+
     failure = made.message
   end
+
   return error(write_failure(deps, "cannot make a folder in #{deps}", failure))
 end
 
@@ -272,9 +289,11 @@ def stage_and_swap(
   if !made.ok?
     return error(write_failure(stage, "cannot make #{stage}", made.message))
   end
+
   for path in files
     try copy(workspace, source, stage, path)
   end
+
   case PackageHash.hash_folder(workspace, stage)
     PackageHash.Hashed.Hash(found) ->
       if found != locked.hash
@@ -282,11 +301,13 @@ def stage_and_swap(
         help = "remove the cache folder and run install"
         return error(PackageFetch.fail(place, "PKG-HASH-MISMATCH", "hash", message, help))
       end
+
     PackageHash.Hashed.Link(path) ->
       return error(PackageFetch.fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", ""))
     PackageHash.Hashed.Unreadable(message) ->
       return error(write_failure(stage, "cannot read the copy of #{locked.name}", message))
   end
+
   return swap(workspace, deps, stage, locked.name)
 end
 
@@ -297,14 +318,17 @@ def copy(workspace: Workspace.Workspace, source: String, stage: String, path: St
   if !read.ok?
     return error(write_failure(from, "cannot read #{from}", read.message))
   end
+
   made = Dir.mkdir(Paths.directory_of(to), FS_TIMEOUT_MS)
   if !made.ok?
     return error(write_failure(to, "cannot make the folder of #{to}", made.message))
   end
+
   written = SaveFile.bytes(to, read.unwrap!, FS_TIMEOUT_MS)
   if !written.ok?
     return error(write_failure(to, "cannot write #{to}", written.message))
   end
+
   return ok()
 end
 
@@ -321,6 +345,7 @@ def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: Stri
       return error(write_failure(target, "cannot replace #{target}", moved.message))
     end
   end
+
   placed = Path.rename(stage, target, FS_TIMEOUT_MS)
   if !placed.ok?
     if replacing
@@ -331,12 +356,15 @@ def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: Stri
         return error(write_failure(target, message, "#{placed.message}; #{back.message}"))
       end
     end
+
     return error(write_failure(target, "cannot write #{target}", placed.message))
   end
+
   if replacing
     # The new copy stands; an old one that cannot be removed is only a spare hidden folder.
     Path.remove(backup, FS_TIMEOUT_MS)
   end
+
   return ok()
 end
 
@@ -348,17 +376,20 @@ def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result
   if absent?(here)
     return ok()
   end
+
   try prepare(workspace, deps)
   target = Paths.join(deps, name)
   seen = try kind_of(workspace, target)
   if absent?(seen)
     return ok()
   end
+
   backup = Paths.join(deps, ".old-#{unique()}-#{name}")
   moved = Path.rename(target, backup, FS_TIMEOUT_MS)
   if !moved.ok?
     return error(write_failure(target, "cannot remove #{target}", moved.message))
   end
+
   # An old folder that cannot be removed is only a spare hidden folder.
   Path.remove(backup, FS_TIMEOUT_MS)
   return ok()

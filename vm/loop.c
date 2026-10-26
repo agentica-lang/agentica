@@ -1491,8 +1491,13 @@ static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value
    the wake (§10.2.3). */
 agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                               agc_more_fn more) {
+  return agc_io_start_flags(vm, kind, data, context, timeout_ms, more, 0);
+}
+
+agc_io_job *agc_io_start_flags(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+                               agc_more_fn more, unsigned flags) {
   agc_task_parking(vm);
-  job *j = start_job(vm, kind, data, context, timeout_ms, vm->task, more, 0);
+  job *j = start_job(vm, kind, data, context, timeout_ms, vm->task, more, flags);
   agc_task_park(vm, false);
   return j;
 }

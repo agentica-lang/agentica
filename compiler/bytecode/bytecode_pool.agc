@@ -41,5 +41,6 @@ export def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned
   if found.ok?
     return Interned(pool: pool, id: found.unwrap!)
   end
+
   return Interned(pool: add(pool, key, bytes, 1), id: pool.count)
 end

@@ -14,9 +14,11 @@ export def text(module: String, documented: Model.Module) -> String
     Ast.Optional.Present(doc) -> blocks = blocks.push(doc)
     Ast.Optional.Absent -> blocks = blocks
   end
+
   for item in documented.items
     blocks = blocks.concat(item_blocks(item))
   end
+
   return "#{blocks.join("\n\n")}\n"
 end
 
@@ -27,10 +29,12 @@ def item_blocks(item: Model.Item) -> List[String]
     Ast.Optional.Present(doc) -> blocks = blocks.push(doc)
     Ast.Optional.Absent -> blocks = blocks
   end
+
   parts = part_lines(item.detail)
   if parts.size > 0
     blocks = blocks.push(parts.join("\n"))
   end
+
   return blocks
 end
 

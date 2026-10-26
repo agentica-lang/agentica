@@ -27,13 +27,16 @@ export def shape(params: List[Ast.Param]) -> Shape
     if default?(params[index])
       first = index
     end
+
     index -= 1
   end
+
   fn_last = first < total and !default?(params[total - 1])
   required = first
   if fn_last
     required = first + 1
   end
+
   return Shape(required: required, total: total, fn_last: fn_last)
 end
 
@@ -47,6 +50,7 @@ export def param_of(shape: Shape, count: Int, index: Int) -> Int
   if shape.fn_last and index == count - 1
     return shape.total - 1
   end
+
   return index
 end
 
@@ -58,11 +62,14 @@ export def argument_for(shape: Shape, count: Int, param: Int) -> Int
     if param < count - 1
       return param
     end
+
     return -1
   end
+
   if param < count
     return param
   end
+
   return -1
 end
 

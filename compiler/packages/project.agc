@@ -39,12 +39,14 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
   if dir == ""
     return ok(Project.Bare)
   end
+
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
   members = try Members.find(workspace, dir)
   empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
   if manifest.dependencies.size == 0 and !Manifest.has_downloaded(manifest)
     return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: empty, members: members)))
   end
+
   if !workspace.file_exists.call(empty.file)
     if manifest.dependencies.size == 0
       return error(
@@ -56,6 +58,7 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
         ),
       )
     end
+
     return error(
       Failure.fail_file(
         empty.file,
@@ -65,6 +68,7 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
       ),
     )
   end
+
   lock = try Lock.read(workspace, empty.file)
   try check_dependencies(lock, manifest, members, false)
   return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
@@ -78,12 +82,14 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Re
   if dir == ""
     return ok(Project.Bare)
   end
+
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
   members = try Members.find(workspace, dir)
   lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
   if workspace.file_exists.call(lock.file)
     lock = try Lock.read(workspace, lock.file)
   end
+
   return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
 end
 
@@ -121,6 +127,7 @@ export def check_dependencies(
     if !found.ok?
       return error(stale(manifest.file, path, "#{dependency.name} is not in #{LOCK_FILE}"))
     end
+
     locked = found.unwrap!
     if !GitSource.same?(dependency.source, locked.source)
       wanted = GitSource.describe(dependency.source)
@@ -128,19 +135,24 @@ export def check_dependencies(
       if of_package
         return error(conflict(manifest.file, path, message))
       end
+
       return error(stale(manifest.file, path, message))
     end
+
     if Members.member?(members, dependency.source) != locked.member
       message = "#{dependency.name} is a workspace member, but #{LOCK_FILE} has it fetched"
       if locked.member
         message = "#{dependency.name} is not a workspace member of this project, but #{LOCK_FILE} has it as one"
       end
+
       if of_package
         return error(conflict(manifest.file, path, message))
       end
+
       return error(stale(manifest.file, path, message))
     end
   end
+
   return ok()
 end
 
@@ -171,12 +183,15 @@ def nearest(workspace: Workspace.Workspace, dir: String) -> String
     if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))
       return here
     end
+
     parent = Paths.directory_of(here)
     if parent == here
       return ""
     end
+
     here = parent
   end
+
   return ""
 end
 

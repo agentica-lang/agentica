@@ -190,10 +190,12 @@ export def match_import(scope: Scope, origin: Origin, file: String, site: Failur
   elsif declared?(names, parts[1])
     return ok(Match.Package(parts[1], parts.drop(2).join("/")))
   end
+
   if origin.package != ""
     message = "a file of a package imports only the packages its agentica.toml declares"
     return error(missing(site, message, "declare #{parts[1]} in the agentica.toml of #{origin.package}"))
   end
+
   return ok(Match.Library)
 end
 
@@ -212,14 +214,17 @@ export def open_package(
     if !locked.ok?
       return error(missing(site, "#{name} is not in the lock", "the lock must list #{name}"))
     end
+
     loaded = try load(workspace, scope, locked.unwrap!, site)
     opened = opened.put(name, loaded)
   end
+
   package = opened[name]
   target = workspace.real_path.call(Paths.join(package.root, rest))
   if !target.ok? or !workspace.file_exists.call(target.unwrap!)
     return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot find package module", Diag.Help.NoHelp))
   end
+
   inner = try confined(package.root, target.unwrap!, site)
   return ok(
     Located(
@@ -256,6 +261,7 @@ export def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Resu
   for locked in scope.lock.packages
     folders = folders.put(locked.name, folder_of(scope, locked))
   end
+
   return check_folders(workspace, scope, folders)
 end
 
@@ -268,6 +274,7 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
     if !folders.has_key?(locked.name) or folders[locked.name] == ""
       next
     end
+
     real = workspace.real_path.call(folders[locked.name])
     if real.ok? and workspace.directory_exists.call(real.unwrap!)
       case shape_of(workspace, real.unwrap!)
@@ -280,6 +287,7 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
       end
     end
   end
+
   return ok(scope.with(declared: declared))
 end
 
@@ -289,6 +297,7 @@ export def folder_of(scope: Scope, locked: Lock.Locked) -> String
   if locked.member
     return Members.folder_of(scope.members, locked.source)
   end
+
   return Paths.join(scope.deps, locked.name)
 end
 
@@ -303,12 +312,14 @@ def confined(root: String, file: String, site: Failure.Site) -> Result[String]
   if !Paths.inside?(root, file)
     return error(refuse(site, "an import cannot leave its package", "keep the path inside the package"))
   end
+
   below = Paths.path_parts(file).drop(Paths.path_parts(root).size)
   folders = below.take(below.size - 1)
   hidden = folders.any? do |part| PackageHash.skipped_folder?(part, false) end
   if hidden or (folders.size > 0 and PackageHash.skipped_folder?(folders[0], true))
     return error(refuse(site, "a hidden folder or agc_libs of a package cannot be imported", "move the module"))
   end
+
   return ok(below.join("/"))
 end
 
@@ -323,18 +334,22 @@ def load(
     message = "#{locked.name} is a workspace member, but this project is not in that workspace"
     return error(missing(site, message, "run agentica update to lock #{locked.name} as a fetched package"))
   end
+
   folder = folder_of(scope, locked)
   real = workspace.real_path.call(folder)
   if !real.ok? or !workspace.directory_exists.call(real.unwrap!)
     if locked.member
       return error(missing(site, "the folder #{folder} of #{locked.name} does not exist", "restore the member folder"))
     end
+
     message = "#{locked.name} is not in #{scope.deps}"
     return error(missing(site, message, "run agentica install to write the packages of the lock to #{scope.deps}"))
   end
+
   if !locked.member
     try verify(workspace, locked, real.unwrap!, folder, site)
   end
+
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
   native = try natives_of(workspace, scope, real.unwrap!, locked.member, locked.name)
   return ok(
@@ -368,6 +383,7 @@ def verify(
         help = "run agentica install to put the locked files back"
         return error(Failure.fail_at(site, "PKG-HASH-MISMATCH", message, Failure.hint(help)))
       end
+
       return ok()
   end
 end
@@ -380,14 +396,17 @@ def shape_of(workspace: Workspace.Workspace, root: String) -> Shape
   if !entries.ok?
     return Shape.Unlisted(entries.message)
   end
+
   for entry in entries.unwrap!
     if PackageHash.fold(entry.name) == MANIFEST_FILE and !regular?(entry.kind)
       return Shape.Unsafe(entry.name)
     end
   end
+
   if workspace.file_exists.call(Paths.join(root, MANIFEST_FILE))
     return Shape.Regular
   end
+
   return Shape.Absent
 end
 
@@ -411,6 +430,7 @@ def names_of(
   if scope.declared.has_key?(locked.name)
     return ok(scope.declared[locked.name])
   end
+
   return declared_names(workspace, scope, root, site)
 end
 
@@ -481,6 +501,7 @@ def allowed_names(scope: Scope, origin: Origin) -> List[String]
   elsif !scope.opened.has_key?(origin.package)
     return []
   end
+
   return scope.opened[origin.package].names
 end
 

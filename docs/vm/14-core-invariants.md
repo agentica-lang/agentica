@@ -190,6 +190,9 @@ flush. **When `main` ends, the program ends.** The steps are:
 1. kill child processes (`close_children`, about 2 seconds at most, driving the
    loop for their exit callbacks, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
+   the file flush includes a handle's write or close whose deadline passed
+   while its pool work had not ended, since that work holds bytes the program
+   wrote;
 3. exit: `_exit`, and `TerminateProcess` of the process itself on Windows
    (`agc_exit_now`). A compute call may still run there and hold a lock, such
    as a C stream's, and neither runs `atexit` handlers, the C streams' flush

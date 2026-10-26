@@ -82,10 +82,12 @@ export def find(cache: Cache, loaded: Modules.Loaded) -> Found
   if !cache.roots.has_key?(key)
     return Found.Miss
   end
+
   root = cache.roots[key]
   if root.fingerprint == fingerprint(loaded) and same_texts?(root.loaded, loaded)
     return Found.Hit(root)
   end
+
   return Found.Miss
 end
 
@@ -103,6 +105,7 @@ export def solved(
     Ast.Optional.Present(root) -> good = root.good
     Ast.Optional.Absent -> good = good
   end
+
   case checking
     Checker.Checking.Done(checked) ->
       good = Ast.Optional.Present(
@@ -110,6 +113,7 @@ export def solved(
       )
     Checker.Checking.Failed(_) -> good = good
   end
+
   return Root(
     loaded: loaded,
     fingerprint: fingerprint(loaded),
@@ -127,6 +131,7 @@ export def held(cache: Cache, loaded: Modules.Loaded) -> Ast.Optional[Root]
   if cache.roots.has_key?(key)
     return Ast.Optional.Present(cache.roots[key])
   end
+
   return Ast.Optional.Absent
 end
 
@@ -142,10 +147,12 @@ export def reusing(cache: Cache, loaded: Modules.Loaded) -> Ast.Optional[Checker
           if good.loaded.root_dir != loaded.root_dir
             return Ast.Optional.Absent
           end
+
           clean = unchanged(good, loaded)
           if clean.size == 0
             return Ast.Optional.Absent
           end
+
           return Ast.Optional.Present(Checker.Reusing(earlier: good.earlier, clean: clean))
       end
   end
@@ -163,6 +170,7 @@ export def reaching(cache: Cache, loaded: Modules.Loaded) -> Cache
       top = next
     end
   end
+
   return cache.with(parses: Modules.Parses(kept: kept, top: top))
 end
 
@@ -178,6 +186,7 @@ export def crowded?(cache: Cache) -> Bool
   for file in cache.parses.kept.values
     live += Ast.next_free_id(file.program) - file.first_id
   end
+
   return cache.parses.top > live * 2
 end
 
@@ -202,6 +211,7 @@ def counted(count: Int, one: Bool) -> Int
   if one
     return count + 1
   end
+
   return count
 end
 
@@ -210,10 +220,12 @@ def trimmed(roots: Map[String, Root]) -> Map[String, Root]
   if roots.size <= MAX_ROOTS
     return roots
   end
+
   oldest = roots.keys.sort_by do |key: String| roots[key].used end
   for key in oldest.take(roots.size - MAX_ROOTS)
     roots = roots.delete(key)
   end
+
   return roots
 end
 
@@ -233,6 +245,7 @@ def pruned(cache: Cache) -> Cache
       end
     end
   end
+
   return cache.with(parses: Modules.Parses(kept: kept, top: top))
 end
 
@@ -246,6 +259,7 @@ def fingerprint(loaded: Modules.Loaded) -> String
   for key in loaded.order
     parts = parts.push(describe(loaded.modules[key]))
   end
+
   return parts.join("")
 end
 
@@ -256,6 +270,7 @@ def shapes(loaded: Modules.Loaded) -> Map[String, String]
     module = loaded.modules[key]
     found = found.put(key, describe(module) + module.imports.map do |name: String| CheckCache.piece(name) end.join(""))
   end
+
   return found
 end
 
@@ -267,6 +282,7 @@ def unchanged(good: Good, loaded: Modules.Loaded) -> Set[String]
     same = good.shapes.has_key?(key) and good.shapes[key] == now[key]
     clean = clean.put(key, same and good.loaded.modules[key].text == loaded.modules[key].text)
   end
+
   # A module that imports a changed one is changed. A walk of the list settles a chain of imports per pass.
   settled = false
   while !settled
@@ -278,6 +294,7 @@ def unchanged(good: Good, loaded: Modules.Loaded) -> Set[String]
       end
     end
   end
+
   return Set.new(loaded.order.filter do |key: String| clean[key] end)
 end
 
@@ -289,10 +306,12 @@ def describe(module: Modules.Module) -> String
   for alias in module.aliases.keys.sort
     pieces = pieces.push(alias).push(module.aliases[alias])
   end
+
   pieces = pieces.push("#{module.named.size}")
   for local in module.named.keys.sort
     pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
   end
+
   return pieces.map do |text: String| CheckCache.piece(text) end.join("")
 end
 
@@ -302,5 +321,6 @@ def same_texts?(kept: Modules.Loaded, loaded: Modules.Loaded) -> Bool
       return false
     end
   end
+
   return true
 end

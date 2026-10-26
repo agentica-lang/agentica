@@ -99,6 +99,7 @@ def target_type(types: List[T.Type], target: Ast.Expr) -> T.Type
   if id < types.size
     return types[id]
   end
+
   return T.Type.Unknown
 end
 
@@ -114,6 +115,7 @@ def find(modules: List[Linker.LinkedModule], name: String) -> Ast.Optional[Found
   if name == ""
     return Ast.Optional.Absent
   end
+
   for module in modules
     for declaration in module.declarations
       if declared_name(declaration) == name
@@ -121,6 +123,7 @@ def find(modules: List[Linker.LinkedModule], name: String) -> Ast.Optional[Found
       end
     end
   end
+
   return Ast.Optional.Absent
 end
 
@@ -167,6 +170,7 @@ def variant(found: Ast.Optional[Found], name: String) -> Ast.Optional[Definition
               return Ast.Optional.Present(made("variant", name, at.module, item.span, item.name_span, said))
             end
           end
+
           return Ast.Optional.Absent
         _ -> return Ast.Optional.Absent
       end
@@ -185,6 +189,7 @@ def field(found: Ast.Optional[Found], name: String) -> Ast.Optional[Definition]
               return Ast.Optional.Present(made("field", name, at.module, item.span, item.name_span, said))
             end
           end
+
           return Ast.Optional.Absent
         _ -> return Ast.Optional.Absent
       end
@@ -235,6 +240,7 @@ def of_item(module: Linker.LinkedModule, linked: String) -> Described
       return Described(doc: item.doc, signature: item.signature, exported: item.exported)
     end
   end
+
   return nothing_said()
 end
 
@@ -250,6 +256,7 @@ def of_member(module: Linker.LinkedModule, owner: String, name: String) -> Descr
               return Described(doc: field.doc, signature: "#{field.name}: #{field.type}", exported: item.exported)
             end
           end
+
         Model.Detail.Enum(variants) ->
           for variant in variants
             if variant.name == name
@@ -260,10 +267,12 @@ def of_member(module: Linker.LinkedModule, owner: String, name: String) -> Descr
               )
             end
           end
+
         Model.Detail.Function(_, _) -> return nothing_said()
         Model.Detail.Plain -> return nothing_said()
       end
     end
   end
+
   return nothing_said()
 end

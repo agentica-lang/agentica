@@ -164,6 +164,7 @@ export def alloc(fx: Fx) -> Fx
   if next > high
     high = next
   end
+
   return fx.with(next: next, high: high)
 end
 
@@ -172,6 +173,7 @@ export def target(fx: Fx, want: Int) -> Out
   if want >= 0
     return Out(fx: fx, slot: want)
   end
+
   taken = alloc(fx)
   return Out(fx: taken, slot: taken.next - 1)
 end
@@ -182,6 +184,7 @@ export def release(fx: Fx, saved: Int, want: Int, dst: Int) -> Fx
   if want >= 0
     return fx.with(next: saved)
   end
+
   return fx.with(next: dst + 1)
 end
 
@@ -238,10 +241,12 @@ export def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) ->
   if vm_type?(cx, type) or (void and Types.is?(type, "Void"))
     return ok(true)
   end
+
   what = "this expression"
   if !Types.unknown?(type)
     what = "values of type #{Types.to_text(type)}"
   end
+
   return error(unsupported(cx, what, Ast.expr_span(expr)))
 end
 
@@ -251,5 +256,6 @@ def fn_type?(cx: Cx, params: List[Types.Type], result: Types.Type) -> Bool
       return false
     end
   end
+
   return Types.is?(result, "Void") or vm_type?(cx, result)
 end

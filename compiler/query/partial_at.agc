@@ -42,6 +42,7 @@ export def answer(
           if !in_failed?(linked, failed, offset)
             return typed
           end
+
           return named(linked, checked, offset, typed)
       end
   end
@@ -66,9 +67,11 @@ def in_failed?(linked: Linker.Linked, failed: List[String], offset: Int) -> Bool
         if At.holds?(node.span, offset) and failed.any? do |name: String| name == node.name end
           return true
         end
+
       _ -> next
     end
   end
+
   return false
 end
 
@@ -83,6 +86,7 @@ def named(
   sites = Sites.of_module(module, checked, Sites.declared_names(linked.modules), "").filter do |site: Sites.Site|
     LINKED_KINDS.include?(site.kind)
   end
+
   case Sites.innermost(sites, offset)
     Ast.Optional.Absent -> return missed
     Ast.Optional.Present(site) ->
@@ -116,6 +120,7 @@ def builtin_of(definition: Ast.Optional[Definitions.Definition], site: Sites.Sit
       if entry.ok?
         return Ast.Optional.Present(entry.unwrap!)
       end
+
       return Ast.Optional.Absent
   end
 end

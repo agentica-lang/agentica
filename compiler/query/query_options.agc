@@ -49,6 +49,7 @@ export def parse(arguments: List[String], style: String, usage: String, partial_
       if query.stdin != "" or at + 1 >= arguments.size or !file_name?(arguments[at + 1])
         return Parsed.Refused(refusal("--stdin needs one FILE, once", usage))
       end
+
       query = query.with(stdin: arguments[at + 1])
       at += 1
     elsif option?(word)
@@ -56,8 +57,10 @@ export def parse(arguments: List[String], style: String, usage: String, partial_
     else
       query = query.with(words: query.words.push(word))
     end
+
     at += 1
   end
+
   return Parsed.Ready(query)
 end
 

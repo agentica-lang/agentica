@@ -65,5 +65,6 @@ def shaped(
   if !T.is?(out.type, word)
     return error(State.mismatch(cx, out.st, shape, out.type, Ast.expr_span(site.args[0])))
   end
+
   return ok(out)
 end

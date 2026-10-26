@@ -54,12 +54,14 @@ export def temporary_candidates() -> List[String]
     names = ["TMPDIR", "TMP", "TEMP"]
     fixed = []
   end
+
   for name in names
     from_environment = System.env(name)
     if from_environment.ok?
       candidates = candidates.push(from_environment.unwrap!)
     end
   end
+
   return candidates.concat(fixed)
 end
 
@@ -72,6 +74,7 @@ export def temporary_directory() -> Result[String]
       return ok(path)
     end
   end
+
   return error("no temporary directory: none of #{candidates.join(", ")} is a directory")
 end
 
@@ -81,11 +84,13 @@ export def claim(temporary: String) -> Result[Run]
   if windows?()
     prefix = "agentica-bdd-"
   end
+
   current = try make_private(temporary, prefix)
   claimed = lock_and_name(temporary, current)
   if !claimed.ok?
     Path.remove(current, IO_TIMEOUT)
   end
+
   return claimed
 end
 
@@ -105,11 +110,13 @@ export def sweep(temporary: String, own: Run) -> Void
   if !owner.ok? or !names.ok?
     return
   end
+
   for name in names.unwrap!
     joined = Path.join([temporary, name])
     if !joined.ok?
       next
     end
+
     path = joined.unwrap!
     # The minimum age in seconds of the folder to remove, or -1 for a name that is not a run directory.
     age = -1
@@ -121,6 +128,7 @@ export def sweep(temporary: String, own: Run) -> Void
     elsif hex_name?(name, "agentica-bdd-new-")
       age = STALE_NEW_SECONDS
     end
+
     if age >= 0
       held = abandoned(path, owner.unwrap!.user_id, age)
       if held.ok?
@@ -159,9 +167,11 @@ def make_private(temporary: String, prefix: String) -> Result[String]
     if made.ok?
       return ok(path)
     end
+
     last = made.message
     attempt += 1
   end
+
   return error("cannot make a private directory in #{temporary}: #{last}")
 end
 
@@ -170,10 +180,12 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
   if shared
     return error("the temporary directory #{temporary} is shared and not sticky; set TMPDIR to a private folder")
   end
+
   if windows?()
     lock = try take_lock(current)
     return ok(Run(path: current, lock: lock))
   end
+
   name = try RandomName.hex()
   final = try Path.join([temporary, "agentica-bdd-#{name}"])
   lock = try take_lock(current)
@@ -182,6 +194,7 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
     File.close(lock, IO_TIMEOUT)
     return error("cannot name the run directory #{final}: #{renamed.message}")
   end
+
   return ok(Run(path: final, lock: lock))
 end
 
@@ -193,6 +206,7 @@ def take_lock(directory: String) -> Result[FileHandle]
   if taken.ok? and taken.unwrap!
     return ok(lock)
   end
+
   File.close(lock, IO_TIMEOUT)
   return error("cannot lock #{directory}")
 end
@@ -207,12 +221,14 @@ def shared_and_not_sticky?(temporary: String, own: String) -> Result[Bool]
   if windows?()
     return ok(false)
   end
+
   folder = try File.stat(temporary, IO_TIMEOUT)
   mine = try File.lstat(own, IO_TIMEOUT)
   mode = folder.mode
   if mode.bit_and(512) != 0
     return ok(false)
   end
+
   others_write = mode.bit_and(2) != 0
   group_write = mode.bit_and(16) != 0
   setgid = mode.bit_and(1024) != 0
@@ -226,11 +242,13 @@ def hex_name?(name: String, prefix: String) -> Bool
   if !name.starts_with?(prefix) or name.length == prefix.length
     return false
   end
+
   for digit in name.slice(prefix.length, name.length - prefix.length).split("")
     if !DIGITS.contains?(digit)
       return false
     end
   end
+
   return true
 end
 
@@ -245,14 +263,17 @@ def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
   if folder.kind != "directory" or folder.user_id != owner or lock_info.kind != "file"
     return error("not a run directory")
   end
+
   if age > 0 and Time.now_ms() / 1000 - folder.modified_seconds < age
     return error("too new to be abandoned")
   end
+
   lock = try File.open(lock_path, "read", IO_TIMEOUT)
   taken = File.try_lock(lock, IO_TIMEOUT)
   if taken.ok? and taken.unwrap!
     return ok(lock)
   end
+
   File.close(lock, IO_TIMEOUT)
   return error("the run is alive")
 end

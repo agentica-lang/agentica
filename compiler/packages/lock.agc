@@ -60,10 +60,12 @@ export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
   if !root.has_key?("version")
     return error(Reader.fail(reading, "version", "missing key"))
   end
+
   format = try Reader.integer(reading, root["version"], "version")
   if format != LOCK_FORMAT
     return error(Reader.fail(reading, "version", "this Agentica reads lock format #{LOCK_FORMAT}"))
   end
+
   packages: List[Locked] = []
   if root.has_key?("package")
     items = try Reader.array(reading, root["package"], "package")
@@ -74,10 +76,12 @@ export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
       if seen.include?(locked.name)
         return error(Reader.fail(reading, Reader.child(path, "name"), "package locked twice"))
       end
+
       seen = seen.add(locked.name)
       packages = packages.push(locked)
     end
   end
+
   artifacts: List[Artifact] = []
   if root.has_key?("native-artifact")
     items = try Reader.array(reading, root["native-artifact"], "native-artifact")
@@ -89,10 +93,12 @@ export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
       if seen.include?(key)
         return error(Reader.fail(reading, Reader.child(path, "system"), "native artifact locked twice"))
       end
+
       seen = seen.add(key)
       artifacts = artifacts.push(artifact)
     end
   end
+
   return ok(Lock(file: file, packages: packages, artifacts: artifacts))
 end
 
@@ -117,6 +123,7 @@ export def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
     version = Toml.Value.Int(LOCK_FORMAT)
     root = Toml.Value.Table({"version": version, "native-artifact": Toml.Value.Array(artifact_tables)})
   end
+
   # The keys are fixed and every value is a string or the version, so std/toml has no reason to refuse them.
   return Toml.encode(root).unwrap!
 end
@@ -128,6 +135,7 @@ export def find(lock: Lock, name: String) -> Result[Locked]
       return ok(locked)
     end
   end
+
   return error("#{name} is not in the lock")
 end
 
@@ -138,6 +146,7 @@ export def find_artifact(lock: Lock, package: String, library: String, system: S
       return ok(artifact)
     end
   end
+
   return error("#{package} #{library} #{system} is not in the lock")
 end
 
@@ -147,6 +156,7 @@ export def label(locked: Locked) -> String
   if locked.member
     return "#{locked.name}@workspace"
   end
+
   return "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
 end
 
@@ -159,14 +169,17 @@ def package_table(locked: Locked) -> Toml.Value
     pin = Toml.Value.Str(locked.source.tag)
     pin_key = "tag"
   end
+
   keys = {"name": Toml.Value.Str(locked.name), "git": Toml.Value.Str(locked.source.git)}
   if locked.source.subdir != ""
     keys = keys.put("subdir", Toml.Value.Str(locked.source.subdir))
   end
+
   keys = keys.put(pin_key, pin)
   if locked.member
     return Toml.Value.Table(keys.put("workspace", Toml.Value.Bool(true)))
   end
+
   return Toml.Value.Table(keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash)))
 end
 
@@ -202,6 +215,7 @@ def artifact_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Res
       return error(Reader.fail(reading, Reader.child(path, key), "missing key"))
     end
   end
+
   package = try text_of(reading, entries, path, "package")
   if package != ""
     problem = GitSource.name_problem(package)
@@ -209,26 +223,31 @@ def artifact_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Res
       return error(Reader.fail_help(reading, Reader.child(path, "package"), "not a package name", problem))
     end
   end
+
   library = try text_of(reading, entries, path, "library")
   problem = GitSource.name_problem(library)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "library"), "not a library name", problem))
   end
+
   system = try text_of(reading, entries, path, "system")
   if system != "linux" and system != "macos" and system != "windows"
     here = Reader.child(path, "system")
     return error(Reader.fail_help(reading, here, "not a system", "write linux, macos or windows"))
   end
+
   url = try text_of(reading, entries, path, "url")
   if !NativeArtifact.url_allowed?(url)
     message = "the url is not an https URL (or an http URL to 127.0.0.1 or [::1])"
     return error(Reader.fail_help(reading, Reader.child(path, "url"), "not a download URL", message))
   end
+
   sha = try text_of(reading, entries, path, "sha256")
   if !NativeArtifact.valid_sha?(sha)
     message = "the sha256 is not 64 lowercase hex digits"
     return error(Reader.fail_help(reading, Reader.child(path, "sha256"), "not a sha256", message))
   end
+
   member = try text_of(reading, entries, path, "member")
   case NativeArtifact.canonical_member(member)
     ok(_) ->
@@ -246,32 +265,39 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
   if entries.has_key?("workspace")
     required = ["name", "git"]
   end
+
   for key in required
     if !entries.has_key?(key)
       return error(Reader.fail(reading, Reader.child(path, key), "missing key"))
     end
   end
+
   name = try text_of(reading, entries, path, "name")
   problem = GitSource.name_problem(name)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "name"), "not a package name", problem))
   end
+
   source = try source_of(reading, entries, path)
   if entries.has_key?("workspace")
     return member_of(reading, entries, path, name, source)
   end
+
   commit = try text_of(reading, entries, path, "commit")
   problem = GitSource.commit_problem(commit)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "commit"), "not a commit", problem))
   end
+
   if source.ref != "" and !commit.starts_with?(source.ref)
     return error(Reader.fail(reading, Reader.child(path, "commit"), "the commit does not start with the ref"))
   end
+
   hash = try text_of(reading, entries, path, "hash")
   if hash.length != HASH_LENGTH or !hash.starts_with?(HASH_PREFIX) or !hex?(hash.slice(HASH_PREFIX.length, 64))
     return error(Reader.fail(reading, Reader.child(path, "hash"), "a hash is sha256: and 64 lowercase hex digits"))
   end
+
   return ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false))
 end
 
@@ -288,14 +314,17 @@ def member_of(
   if !flag
     return error(Reader.fail_help(reading, here, "workspace is true", "leave the key out for a fetched package"))
   end
+
   if source.subdir == ""
     return error(Reader.fail(reading, Reader.child(path, "subdir"), "a workspace member is a folder: missing key"))
   end
+
   for key in ["commit", "hash"]
     if entries.has_key?(key)
       return error(Reader.fail(reading, Reader.child(path, key), "a workspace member has no commit and no hash"))
     end
   end
+
   return ok(Locked(name: name, source: source, commit: "", hash: "", member: true))
 end
 
@@ -305,9 +334,11 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "git"), "not a git URL", problem))
   end
+
   if entries.has_key?("tag") == entries.has_key?("ref")
     return error(Reader.fail(reading, path, "a package has a tag or a ref: write exactly one of them"))
   end
+
   subdir = ""
   if entries.has_key?("subdir")
     subdir = try text_of(reading, entries, path, "subdir")
@@ -316,19 +347,23 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
       return error(Reader.fail_help(reading, Reader.child(path, "subdir"), "not a subdir", problem))
     end
   end
+
   if entries.has_key?("tag")
     tag = try text_of(reading, entries, path, "tag")
     problem = GitSource.tag_problem(tag)
     if problem != ""
       return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", problem))
     end
+
     return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ""))
   end
+
   ref = try text_of(reading, entries, path, "ref")
   problem = GitSource.ref_problem(ref)
   if problem != ""
     return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", problem))
   end
+
   return ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref))
 end
 

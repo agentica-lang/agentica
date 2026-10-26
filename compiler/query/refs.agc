@@ -54,6 +54,7 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
           if found.local.kind == "discard"
             return Diag.Outcome.Failed(Position.no_expression(asked, here))
           end
+
           return Diag.Outcome.Done(of_local(linked, checked, found.local))
         Ast.Optional.Absent -> return of_name(linked, checked, asked, offset, here)
       end
@@ -67,6 +68,7 @@ export def of_match(linked: Linker.Linked, checked: Checker.Checked, found: Symb
   if found.kind == "builtin"
     defined = Ast.Optional.Absent
   end
+
   return of_target(linked, checked, target_of(linked.modules, found), defined)
 end
 
@@ -89,6 +91,7 @@ export def definition_of(
   elsif target.kind == "variant"
     return Definitions.of_variant(modules, target.owner, target.name)
   end
+
   return Definitions.of_name(modules, target.name)
 end
 
@@ -100,6 +103,7 @@ def of_local(linked: Linker.Linked, checked: Checker.Checked, local: Locals.Loca
   uses = Locals.uses(module, checked.bound, local).map do |span: Source.Span|
     Reference(kind: "binding", function: function, file: module.file, span: span)
   end
+
   return Answer(
     definition: Ast.Optional.Present(of_definition(module.key, Definitions.of_local(module, local, type))),
     builtin: "",
@@ -131,6 +135,7 @@ def once(sorted: List[Reference]) -> List[Reference]
       out = out.push(found)
     end
   end
+
   return out
 end
 
@@ -149,6 +154,7 @@ def of_name(
     Ast.Optional.Present(target) -> return Diag.Outcome.Done(of_target(linked, checked, target, Ast.Optional.Absent))
     Ast.Optional.Absent -> declared = declared
   end
+
   own = Sites.of_module(root, checked, declared, "")
   case Sites.innermost(own, offset)
     Ast.Optional.Absent -> return Diag.Outcome.Failed(Position.no_expression(asked, here))
@@ -158,6 +164,7 @@ def of_name(
       for module in linked.modules.drop(1)
         found = found.concat(used(module, Sites.of_module(module, checked, declared, key), key))
       end
+
       return Diag.Outcome.Done(named_answer(linked, site.target, Ast.Optional.Absent, found))
   end
 end
@@ -167,11 +174,13 @@ def target_of(modules: List[Linker.LinkedModule], found: Symbol.Match) -> Sites.
   if found.kind == "builtin"
     return Sites.named(found.name)
   end
+
   home = modules.filter do |module: Linker.LinkedModule| module.key == found.file end
   prefix = home[0].prefix
   if found.kind == "field" or found.kind == "variant"
     return Sites.member(found.kind, "#{prefix}#{found.owner}", found.name)
   end
+
   return Sites.named("#{prefix}#{found.name}")
 end
 
@@ -187,6 +196,7 @@ def of_target(
   for module in linked.modules
     found = found.concat(used(module, Sites.of_module(module, checked, declared, target.key), target.key))
   end
+
   return named_answer(linked, target, defined, found)
 end
 
@@ -210,11 +220,13 @@ def named_answer(
     Ast.Optional.Absent -> definition = defined(linked.modules, target)
     Ast.Optional.Present(_) -> definition = given
   end
+
   builtin = ""
   case definition
     Ast.Optional.Absent -> builtin = target.name
     Ast.Optional.Present(_) -> builtin = ""
   end
+
   return Answer(definition: definition, builtin: builtin, references: references)
 end
 
@@ -236,8 +248,10 @@ def function_at(module: Linker.LinkedModule, offset: Int) -> String
         if node.span.start.offset <= offset and offset < node.span.stop.offset
           return T.display_name(node.name)
         end
+
       _ -> next
     end
   end
+
   return ""
 end

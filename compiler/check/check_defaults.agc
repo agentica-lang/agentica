@@ -26,8 +26,10 @@ export def check_parameters(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) 
           return error(order_failure(cx, st, param))
         end
     end
+
     index += 1
   end
+
   return ok(true)
 end
 
@@ -48,8 +50,10 @@ export def check_types(
         current = out.st
       Ast.Optional.Absent -> current = current
     end
+
     index += 1
   end
+
   return ok(current)
 end
 
@@ -74,8 +78,10 @@ export def check_field_types(cx: State.Cx, st: State.St, node: Ast.StructDecl) -
         current = out.st
       Ast.Optional.Absent -> current = current
     end
+
     index += 1
   end
+
   return ok(current)
 end
 
@@ -94,6 +100,7 @@ def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, remedy: String) -> 
   if constant?(value)
     return ok(true)
   end
+
   return error(
     State.fail_help(
       cx,
@@ -128,6 +135,7 @@ def number?(value: Ast.Expr) -> Bool
         Ast.LitValue.Real(number) -> return true
         _ -> return false
       end
+
     _ -> return false
   end
 end

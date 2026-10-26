@@ -97,20 +97,25 @@ export def lower_call(
   elsif form.ok?
     key = form.unwrap!.implementation
   end
+
   if key == "Task.await"
     key = try await_key(cx, node, checked, count)
   end
+
   builtin = key != "" and VM_BUILTINS.include?(key)
   if form.ok? and !builtin and !prelude
     return error(Lowering.unsupported(cx, "the builtin #{node.name}", span))
   end
+
   if !builtin and !cx.functions.has_key?(target)
     return error(Lowering.unsupported(cx, "the call to #{node.name}", span))
   end
+
   if !checked
     expr = Ast.Expr.Call(node)
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
   end
+
   fx = Lowering.step(fx, span)
   saved = fx.next
   fx = Lowering.alloc(fx)
@@ -120,6 +125,7 @@ export def lower_call(
   if fill.ok?
     total = fill.unwrap!.shape.total
   end
+
   index = 0
   while index < total
     fx = Lowering.alloc(fx.with(next: base + index))
@@ -127,6 +133,7 @@ export def lower_call(
     fx = out.fx
     index += 1
   end
+
   if builtin
     spans = [span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end)
     fx = Lowering.emit_builtin(fx, base, key, count, spans)
@@ -143,12 +150,15 @@ export def lower_call(
     if tail
       op = "tail-call"
     end
+
     fx = Lowering.emit_at(fx, op, [base, cx.functions[target]], span)
   end
+
   if want >= 0
     fx = Lowering.emit_at(fx, "move", [want, base], span)
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
+
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
@@ -161,9 +171,11 @@ def lower_argument(
   if fill.ok?
     source = Defaults.argument_for(fill.unwrap!.shape, node.args.size, param)
   end
+
   if source >= 0
     return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
   end
+
   return lower_default(cx, fx, node, fill.unwrap!, param)
 end
 
@@ -186,6 +198,7 @@ def typed(cx: Lowering.Cx, expr: Ast.Expr, known: Bool) -> Result[Bool]
   if known
     return ok(true)
   end
+
   return Lowering.require_type(cx, expr, false, Lowering.type_of(cx, expr))
 end
 
@@ -196,12 +209,15 @@ def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Res
   if checked or Types.unknown?(type)
     return error(Lowering.internal(cx, "lower: Task.await has no checked type", node.span))
   end
+
   if count == 2
     type = Types.args(type)[0]
   end
+
   if Types.is?(type, "Result")
     return ok("Task.await_result")
   end
+
   return ok("Task.await")
 end
 
@@ -212,6 +228,7 @@ def lower_name(fx: Lowering.Fx, node: Ast.NameRef, want: Int) -> Result[Lowering
     fx = Lowering.emit_at(fx, "move", [want, slot], node.span)
     return ok(Lowering.Out(fx: fx, slot: want))
   end
+
   return ok(Lowering.Out(fx: fx, slot: slot))
 end
 
@@ -225,6 +242,7 @@ def lower_literal(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Literal, want: Int
     Ast.LitValue.Nothing -> value = Ir.Imm.Nil
     Ast.LitValue.Huge(digits) -> return error(Lowering.internal(cx, "lower: integer literal out of range", node.span))
   end
+
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
   return ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, value, node.span), slot: made.slot))
@@ -238,10 +256,12 @@ def lower_const_read(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ConstRef, want:
   if !read.ok?
     return error(Lowering.internal(cx, "lower: constant #{node.name} has no slot", node.span))
   end
+
   case read.unwrap!
     Lowering.Read.Literal(value) -> fx = Lowering.emit_const(made.fx, made.slot, value, node.span)
     Lowering.Read.Slot(slot) -> fx = Lowering.emit_at(made.fx, "global", [made.slot, slot], node.span)
   end
+
   return ok(Lowering.Out(fx: fx, slot: made.slot))
 end
 
@@ -250,6 +270,7 @@ def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: 
   if !cx.json_structs.include?(node.name)
     return error(Lowering.unsupported(cx, "the type #{Types.display_name(node.name)}", node.span))
   end
+
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
   fx = Lowering.emit_const(made.fx, made.slot, Ir.Imm.Text(node.name), node.span)
@@ -267,10 +288,13 @@ def lower_unary_checked(
           if node.op == "minus" and digits == INT_MIN_DIGITS
             return lower_min_int(fx, node, literal, want)
           end
+
         _ -> fx = fx
       end
+
     _ -> fx = fx
   end
+
   try typed(cx, expr, known)
   return lower_unary(cx, fx, node, want)
 end
@@ -293,6 +317,7 @@ def lower_unary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Unary, want: Int) ->
   elsif Types.is?(Lowering.type_of(cx, node.operand), "Float")
     op = "neg-f"
   end
+
   fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.op_span)
   return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
@@ -314,6 +339,7 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     if op == "dot-dot-dot"
       exclusive = 1
     end
+
     fx = Lowering.emit_at(right.fx, "range", [dst, window, exclusive], node.op_span)
   elsif op == "and" or op == "or"
     fx = Lowering.new_label(fx)
@@ -323,6 +349,7 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     if op == "or"
       jump = "jump-if-true"
     end
+
     fx = Lowering.emit_at(left.fx, jump, [dst, end_label], node.op_span)
     right = try lower_expression(cx, fx, node.right, dst, false, false)
     fx = Lowering.place(right.fx, end_label)
@@ -334,6 +361,7 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     elsif Types.is?(side, "String")
       ops = STRING_OPS
     end
+
     left = try lower_expression(cx, fx, node.left, -1, false, false)
     right = try lower_expression(cx, left.fx, node.right, -1, false, false)
     fx = right.fx
@@ -347,6 +375,7 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
       fx = Lowering.emit_at(fx, ops[op], [dst, left.slot, right.slot], node.op_span)
     end
   end
+
   return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
 end
 
@@ -370,6 +399,7 @@ def lower_index(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IndexAccess, want: I
   if Types.is?(Lowering.static_type(cx, node.target), "Map")
     op = "map-get"
   end
+
   fx = Lowering.emit_at(index.fx, op, [made.slot, items.slot, index.slot], Ast.expr_span(node.index))
   return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
@@ -384,6 +414,7 @@ def lower_try(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TryExpr, want: Int) ->
   if cx.step_tries.include?(node.id)
     op = "try-step"
   end
+
   fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.span)
   return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
@@ -411,6 +442,7 @@ def lower_interpolation(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Interpolatio
       index += 1
     end
   end
+
   return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
 end
 
@@ -428,6 +460,7 @@ def text_of(fx: Lowering.Fx, type: Types.Type, slot: Int, span: Source.Span) -> 
   if Types.is?(type, "String")
     return ok(fx)
   end
+
   return ok(Lowering.emit_at(fx, "to-text", [slot, slot], span))
 end
 
@@ -446,6 +479,7 @@ def lower_block_lit(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.BlockLit, want: 
       captured = captured.push(name)
     end
   end
+
   index = fx.block_count
   fx = try cx.block.call(cx, fx, node, captured)
   slots = captured.map do |name: String| Lowering.lookup(fx, name) end
@@ -466,11 +500,13 @@ def lower_invoke(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Invoke, want: Int) 
     fx = out.fx
     index += 1
   end
+
   fx = Lowering.emit_at(fx, "call-value", [base, node.args.size], node.span)
   if want >= 0
     fx = Lowering.emit_at(fx, "move", [want, base], node.span)
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
+
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
@@ -481,8 +517,10 @@ def lower_closure(fx: Lowering.Fx, index: Int, slots: List[Int], span: Source.Sp
     for slot in slots
       fx = Lowering.emit_at(fx, "move", [want, slot], span)
     end
+
     return Lowering.Out(fx: Lowering.emit_at(fx, "closure", [want, index], span), slot: want)
   end
+
   saved = fx.next
   fx = Lowering.alloc(fx)
   base = fx.next - 1
@@ -493,14 +531,17 @@ def lower_closure(fx: Lowering.Fx, index: Int, slots: List[Int], span: Source.Sp
       fx = Lowering.alloc(fx)
       to = fx.next - 1
     end
+
     fx = Lowering.emit_at(fx, "move", [to, slots[at]], span)
     at += 1
   end
+
   fx = Lowering.emit_at(fx, "closure", [base, index], span)
   if want >= 0
     fx = Lowering.emit_at(fx, "move", [want, base], span)
     return Lowering.Out(fx: fx.with(next: saved), slot: want)
   end
+
   return Lowering.Out(fx: fx.with(next: base + 1), slot: base)
 end
 
@@ -514,6 +555,7 @@ def lower_method_checked(
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
     return lower_resolved(cx, fx, node.target, node.args, node.span, node.id, resolved.unwrap!, want, void)
   end
+
   try typed(cx, expr, known)
   return error(Lowering.unsupported(cx, "this expression", node.span))
 end
@@ -526,6 +568,7 @@ def lower_field_checked(
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
     return lower_resolved(cx, fx, node.target, [], node.span, node.id, resolved.unwrap!, want, void)
   end
+
   try typed(cx, expr, known)
   return lower_field(cx, fx, node, want)
 end
@@ -594,8 +637,10 @@ def referenced_names(body: List[Ast.Stmt]) -> List[String]
       ConstWalk.Node.Expr(expr) -> reads = push_name(reads, expr)
       ConstWalk.Node.Stmt(stmt) -> reads = reads
     end
+
     work = work.concat(ConstWalk.children(node))
   end
+
   ordered = reads.sort_by do |read: Ast.NameRef| read.span.start.offset end
   seen: Set[String] = Set.new([])
   names: List[String] = []
@@ -605,6 +650,7 @@ def referenced_names(body: List[Ast.Stmt]) -> List[String]
       names = names.push(read.name)
     end
   end
+
   return names
 end
 

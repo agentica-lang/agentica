@@ -252,6 +252,7 @@ def expect_head_end(e: Base.Env, pos: Int, description: String, form: String) ->
       ),
     )
   end
+
   return Base.expect(e, pos, "NL", description, false)
 end
 
@@ -274,9 +275,11 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
       ),
     )
   end
+
   if e.depth > 0 and token.kind == "end"
     return ok(pos)
   end
+
   return Base.expect(e, pos, "NL", description, false)
 end
 
@@ -285,9 +288,11 @@ def expect_end(e: Base.Env, pos: Int) -> Result[Int]
   if kind == "end"
     return ok(pos + 1)
   end
+
   if kind == "EOF"
     return error(Base.bail(e, pos, "PARSE-UNCLOSED-BLOCK", "unclosed block, expected \"end\"", Diag.Help.NoHelp))
   end
+
   return error(Base.found(e, pos, "\"end\""))
 end
 
@@ -326,6 +331,7 @@ def parse_expression(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   if kind != "dot-dot" and kind != "dot-dot-dot"
     return ok(left)
   end
+
   right = try parse_climb(inner, left.pos + 1, left.ids, 1)
   after = e.tokens[right.pos].kind
   if after == "dot-dot" or after == "dot-dot-dot"
@@ -338,6 +344,7 @@ def parse_expression(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       ),
     )
   end
+
   node = Ast.Expr.Binary(
     Ast.Binary(
       id: right.ids,
@@ -360,6 +367,7 @@ def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Ast.Optional[Ast.Expr]
       if call.piped or !call.parenthesized
         return Ast.Optional.Absent
       end
+
       return Ast.Optional.Present(
         Ast.Expr.Call(
           Ast.Call(
@@ -378,6 +386,7 @@ def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Ast.Optional[Ast.Expr]
           if call.piped or !call.parenthesized
             return Ast.Optional.Absent
           end
+
           inserted = Ast.Expr.Call(
             Ast.Call(
               id: call.id,
@@ -391,6 +400,7 @@ def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Ast.Optional[Ast.Expr]
           return Ast.Optional.Present(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
         _ -> return Ast.Optional.Absent
       end
+
     _ -> return Ast.Optional.Absent
   end
 end
@@ -399,6 +409,7 @@ def chained_message(level: Int) -> String
   if level == 3
     return "equality does not chain; combine two comparisons with \"and\""
   end
+
   return "comparison does not chain; write \"a < b and b < c\""
 end
 
@@ -425,6 +436,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
     if level == 0 or level < minimum
       return ok(Base.ExprAt(node: left, pos: cursor, ids: next_id))
     end
+
     operand_env = e
     if level != 3 and level != 4
       if level == run_level
@@ -433,8 +445,10 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
         run = 1
         run_level = level
       end
+
       operand_env = try Base.deepen(e, cursor, run)
     end
+
     if level == 5
       right_start = cursor + 1
       right = try parse_climb(operand_env, right_start, next_id, 6)
@@ -451,6 +465,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
             ),
           )
       end
+
       cursor = right.pos
       next_id = right.ids
     else
@@ -459,6 +474,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
       if following == level and (level == 3 or level == 4)
         return error(Base.bail(e, right.pos, "PARSE-CHAINED-COMPARISON", chained_message(level), Diag.Help.NoHelp))
       end
+
       left = Ast.Expr.Binary(
         Ast.Binary(
           id: right.ids,
@@ -473,6 +489,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
       next_id = right.ids + 1
     end
   end
+
   return error(Base.impossible(e, cursor))
 end
 
@@ -485,6 +502,7 @@ def parse_unary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     node = Ast.Expr.Try(Ast.TryExpr(id: operand.ids, operand: operand.node, span: Base.span_from(e, pos, operand.pos)))
     return expr_at(node, operand.pos, operand.ids)
   end
+
   if kind == "minus" or kind == "not"
     inner = try Base.enter(e, pos)
     operand = try parse_unary(inner, pos + 1, ids)
@@ -499,6 +517,7 @@ def parse_unary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     )
     return expr_at(node, operand.pos, operand.ids)
   end
+
   return parse_postfix(e, pos, ids)
 end
 
@@ -515,9 +534,11 @@ def block_name_help(name: String) -> String
   if name == "lambda" or name == "proc"
     return "there are no standalone lambdas: pass a block to a call (xs.map do |x| ... end) or use &name"
   end
+
   if name == "loop"
     return "there is no loop; use while true ... end, or a while condition"
   end
+
   return "to call a function, add parentheses: #{name}() do ... end; an if condition ends with a newline, not do"
 end
 
@@ -618,6 +639,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
             ),
           )
         end
+
         cursor = close
         next_id = args.ids + 1
       else
@@ -663,6 +685,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       return ok(Base.ExprAt(node: target, pos: cursor, ids: next_id))
     end
   end
+
   return error(Base.impossible(e, cursor))
 end
 
@@ -697,6 +720,7 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
       cursor = parsed.pos
       next_id = parsed.ids
     end
+
     params = params.push(
       Ast.BlockParam(
         id: next_id,
@@ -714,6 +738,7 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
       looping = false
     end
   end
+
   return ok(BlockParamsAt(params: params, pos: cursor, ids: next_id))
 end
 
@@ -724,6 +749,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   if e.tokens[cursor].kind == "or"
     return error(Base.unexpected(e, cursor, "a block without parameters has no bars; write do ... end"))
   end
+
   params: List[Ast.BlockParam] = []
   next_id = ids
   if e.tokens[cursor].kind == "pipe"
@@ -732,6 +758,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     cursor = parsed.pos
     next_id = parsed.ids
   end
+
   brace_at = -1
   form = ""
   if e.tokens[cursor].kind == "left-brace"
@@ -742,6 +769,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       form = "do |#{names.join(", ")}|"
     end
   end
+
   body = try parse_block(Base.with_block_body(e, brace_at, form), cursor, next_id, 1)
   close = try expect_end(e, body.pos)
   node = Ast.Expr.BlockLit(
@@ -755,6 +783,7 @@ def parse_expression_list(e: Base.Env, pos: Int, ids: Int, terminator: String) -
   if e.tokens[pos].kind == terminator
     return ok(Base.ExprsAt(nodes: nodes, pos: pos, ids: ids))
   end
+
   inner = Base.with_blocks(e, true)
   cursor = pos
   next_id = ids
@@ -773,6 +802,7 @@ def parse_expression_list(e: Base.Env, pos: Int, ids: Int, terminator: String) -
       looping = false
     end
   end
+
   return ok(Base.ExprsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
@@ -781,6 +811,7 @@ def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt
   if e.tokens[pos].kind == "right-paren"
     return ok(NamedArgsAt(nodes: nodes, pos: pos, ids: ids))
   end
+
   cursor = pos
   next_id = ids
   looping = true
@@ -807,6 +838,7 @@ def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt
       looping = false
     end
   end
+
   return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
@@ -840,6 +872,7 @@ def parse_update_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsA
       looping = false
     end
   end
+
   return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
@@ -849,6 +882,7 @@ def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
   if named and Base.kind_at(e, pos + 1) == "colon"
     return ok(pos + 2)
   end
+
   help = "name each field to change, as in value.with(age: 31)"
   if named
     return error(
@@ -860,6 +894,7 @@ def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
       ),
     )
   end
+
   return error(Base.unexpected_help(e, pos, "expected a field name, found #{Base.describe(e.tokens[pos])}", help))
 end
 
@@ -882,6 +917,7 @@ def parse_map_entry(e: Base.Env, pos: Int, ids: Int, block_form: String) -> Resu
       ),
     )
   end
+
   colon = try Base.expect(e, key.pos, "colon", "\":\"", false)
   value = try parse_expression(e, colon, key.ids)
   node = Ast.MapEntry(id: value.ids, key: key.node, value: value.node, span: Base.span_from(e, pos, value.pos))
@@ -893,6 +929,7 @@ def parse_map_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   if e.brace_at == pos
     block_form = e.brace_form
   end
+
   entries: List[Ast.MapEntry] = []
   cursor = pos + 1
   next_id = ids
@@ -914,6 +951,7 @@ def parse_map_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       end
     end
   end
+
   close = try Base.expect(e, cursor, "right-brace", "\"}\"", false)
   node = Ast.Expr.MapLit(Ast.MapLit(id: next_id, entries: entries, span: Base.span_from(e, pos, close)))
   return expr_at(node, close, next_id)
@@ -927,6 +965,7 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   if opening != ""
     parts = parts.push(Ast.Part.Text(opening))
   end
+
   cursor = pos + 1
   next_id = ids
   while true
@@ -939,6 +978,7 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       if text != ""
         parts = parts.push(Ast.Part.Text(text))
       end
+
       cursor = parsed.pos + 1
       if piece.kind == "interp-end"
         node = Ast.Expr.Interpolation(
@@ -952,6 +992,7 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       )
     end
   end
+
   return error(Base.impossible(e, cursor))
 end
 
@@ -972,6 +1013,7 @@ def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     name = e.tokens[cursor].lexeme
     cursor = stop
   end
+
   node = Ast.Expr.FunctionRef(Ast.FunctionRef(id: ids, name: name, span: Base.span_from(e, pos, cursor)))
   return expr_at(node, cursor, ids)
 end
@@ -1000,11 +1042,13 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       ),
     )
   end
+
   if e.tokens[paren].kind == "left-paren"
     args = try parse_expression_list(e, paren + 1, ids, "right-paren")
     close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
     return call_node(e, pos, token.lexeme, args.nodes, true, args.ids, close)
   end
+
   if token.lexeme == "gets" or token.lexeme == "gets!"
     no_args: List[Ast.Expr] = []
     node = Ast.Expr.Call(
@@ -1012,6 +1056,7 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     )
     return expr_at(node, paren, ids)
   end
+
   return expr_at(Ast.Expr.Name(Ast.NameRef(id: ids, name: token.lexeme, span: token.span)), paren, ids)
 end
 
@@ -1076,6 +1121,7 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
       ids,
     )
   end
+
   if kind == "dot"
     variant_pos = cursor + 1
     after_variant = try Base.expect(e, variant_pos, "type-name", "an enum variant", false)
@@ -1083,30 +1129,37 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
     if e.tokens[after_variant].kind == "left-paren"
       args = try parenthesized_arguments(e, after_variant, ids)
     end
+
     return enum_constructor_node(e, pos, qualified, e.tokens[variant_pos].lexeme, args, args.pos)
   end
+
   if kind == "left-paren" and name == "Result" and (member == "Ok" or member == "Err")
     args = try parenthesized_arguments(e, cursor, ids)
     helper = "error"
     if member == "Ok"
       helper = "ok"
     end
+
     return call_node(e, pos, helper, args.nodes, true, args.ids, args.pos)
   end
+
   if kind == "left-paren"
     inside = cursor + 1
     if e.tokens[inside].kind == "right-paren"
       no_named: List[Ast.NamedArg] = []
       return construct_node(e, pos, qualified, no_named, ids, inside + 1)
     end
+
     if e.tokens[inside].kind == "name" and Base.kind_at(e, inside + 1) == "colon"
       named = try parse_named_arguments(e, inside, ids)
       close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
       return construct_node(e, pos, qualified, named.nodes, named.ids, close)
     end
+
     args = try parenthesized_arguments(e, cursor, ids)
     return enum_constructor_node(e, pos, name, member, args, args.pos)
   end
+
   return expr_at(
     Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, span: Base.span_from(e, pos, cursor))),
     cursor,
@@ -1148,6 +1201,7 @@ def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
       )
     end
   end
+
   return call_node(e, pos, "#{name}.#{member.lexeme}", args.nodes, parenthesized, args.ids, cursor)
 end
 
@@ -1159,6 +1213,7 @@ def updates_constant?(e: Base.Env, name: Tokens.Token, dot: Int) -> Bool
   if member.kind != "name" or member.lexeme != "with" or e.tokens[dot + 2].kind != "left-paren"
     return false
   end
+
   return e.tokens[dot + 3].kind == "name" and e.tokens[dot + 4].kind == "colon" and Base.constant_name?(name.lexeme)
 end
 
@@ -1170,15 +1225,19 @@ def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
     return construct_node(e, pos, name.lexeme, named.nodes, named.ids, close)
   end
+
   if e.tokens[after].kind == "dot"
     if updates_constant?(e, name, after)
       return expr_at(Ast.Expr.TypeName(Ast.TypeName(id: ids, name: name.lexeme, span: name.span)), after, ids)
     end
+
     if e.tokens[after + 1].kind == "type-name"
       return parse_qualified_member(e, pos, ids)
     end
+
     return parse_module_call(e, pos, ids)
   end
+
   return expr_at(Ast.Expr.TypeName(Ast.TypeName(id: ids, name: name.lexeme, span: name.span)), after, ids)
 end
 
@@ -1189,35 +1248,45 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   if kind == "name"
     return parse_name_primary(e, pos, ids)
   end
+
   if kind == "integer" or kind == "float" or kind == "string"
     return expr_at(literal_node(token, Base.literal_value(token), ids), pos + 1, ids)
   end
+
   if kind == "left-paren"
     inner = try parse_expression(Base.with_blocks(e, true), pos + 1, ids)
     close = try Base.expect(e, inner.pos, "right-paren", "\")\"", false)
     return ok(Base.ExprAt(node: inner.node, pos: close, ids: inner.ids))
   end
+
   if kind == "type-name"
     return parse_construct(e, pos, ids)
   end
+
   if kind == "interp-start"
     return parse_interpolation(e, pos, ids)
   end
+
   if kind == "true" or kind == "false"
     return expr_at(literal_node(token, Ast.LitValue.Flag(kind == "true"), ids), pos + 1, ids)
   end
+
   if kind == "nil"
     return expr_at(literal_node(token, Ast.LitValue.Nothing, ids), pos + 1, ids)
   end
+
   if kind == "ampersand"
     return parse_function_ref(e, pos, ids)
   end
+
   if kind == "left-bracket"
     return parse_list_literal(e, pos, ids)
   end
+
   if kind == "left-brace"
     return parse_map_literal(e, pos, ids)
   end
+
   return error(
     Base.bail(
       e,
@@ -1240,37 +1309,46 @@ def primary_help(e: Base.Env, pos: Int) -> Diag.Help
   if token.kind == "do"
     return Base.hint("a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas")
   end
+
   if token.kind == "less" and pos > 0 and e.tokens[pos - 1].kind == "less" and adjacent?(e.tokens[pos - 1], token)
     return Base.hint("there is no << operator; add to a list with xs = xs.push(x)")
   end
+
   if token.kind == "dot" and Base.kind_at(e, pos + 1) == "name" and pos > 0 and e.tokens[pos - 1].kind == "NL"
     return Base.hint(
       "a line that starts with .name continues the expression on the line above, which must end in a value; " +
       "a blank line ends it",
     )
   end
+
   if token.kind != "divide" and token.kind != "multiply"
     return Diag.Help.NoHelp
   end
+
   before = ""
   if pos > 0 and adjacent?(e.tokens[pos - 1], token)
     before = e.tokens[pos - 1].kind
   end
+
   after = ""
   if pos + 1 < e.size and adjacent?(token, e.tokens[pos + 1])
     after = e.tokens[pos + 1].kind
   end
+
   if token.kind == "divide" and before == "divide"
     return Base.hint(
       "comments start with #, not //; there is no // operator, and / on two Ints already truncates toward zero",
     )
   end
+
   if token.kind == "divide" and after == "divide"
     return Base.hint("comments start with #, not //")
   end
+
   if (token.kind == "divide" and after == "multiply") or (token.kind == "multiply" and before == "divide")
     return Base.hint("comments start with #, not /* */")
   end
+
   return Diag.Help.NoHelp
 end
 
@@ -1298,6 +1376,7 @@ def parse_block(e: Base.Env, pos: Int, ids: Int, depth: Int) -> Result[Base.Stmt
       next_id = parsed.ids
     end
   end
+
   return ok(Base.StmtsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
@@ -1321,18 +1400,23 @@ def parse_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       ),
     )
   end
+
   if kind == "if"
     return parse_if(inner, pos, ids)
   end
+
   if kind == "while"
     return parse_while(inner, pos, ids)
   end
+
   if kind == "for"
     return parse_for(inner, pos, ids)
   end
+
   if kind == "case"
     return parse_case(inner, pos, ids)
   end
+
   return parse_simple_statement(inner, pos, ids)
 end
 
@@ -1346,6 +1430,7 @@ def parse_return(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     cursor = parsed.pos
     next_id = parsed.ids
   end
+
   stop = try expect_statement_end(e, cursor, "a newline after the statement")
   return stmt_at(
     Ast.Stmt.Return(Ast.Return(id: next_id, value: value, span: Base.span_from(e, pos, stop))),
@@ -1378,11 +1463,13 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
         ),
       )
     end
+
     parsed = try Base.parse_type(e, cursor + 1, next_id)
     type = Ast.Optional.Present(parsed.node)
     cursor = parsed.pos
     next_id = parsed.ids
   end
+
   assign = try Base.expect(e, cursor, "assign", "\"=\"", false)
   value = try parse_expression(e, assign, next_id)
   stop = try expect_statement_end(e, value.pos, "a newline after the statement")
@@ -1449,6 +1536,7 @@ def assignment_help(node: Ast.Expr) -> Diag.Help
       if Base.constant_name?(found.name)
         return Base.hint("constants are set at the top level and never change")
       end
+
       return Diag.Help.NoHelp
     _ -> return Diag.Help.NoHelp
   end
@@ -1458,6 +1546,7 @@ def keyword_message(name: String) -> String
   if name == "break" or name == "next"
     return "\"#{name}\" stands alone on its line"
   end
+
   return "\"#{name}\" is not a keyword"
 end
 
@@ -1505,6 +1594,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
       ),
     )
   end
+
   if name_target?(value.node)
     name = target_name(value.node)
     if name == "elif" or name == "elseif"
@@ -1517,10 +1607,12 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
         ),
       )
     end
+
     if !statement_end?(e, value.pos)
       if foreign_keyword?(name)
         return error(Base.unexpected_help(e, pos, keyword_message(name), keyword_help(name)))
       end
+
       return error(
         Base.unexpected(
           e,
@@ -1530,6 +1622,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
       )
     end
   end
+
   stop = try expect_statement_end(e, value.pos, "a newline after the statement")
   return stmt_at(
     Ast.Stmt.Expression(Ast.ExprStmt(id: value.ids, value: value.node, span: Base.span_from(e, pos, stop))),
@@ -1545,6 +1638,7 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
   if token.kind == "return"
     return parse_return(e, pos, ids)
   end
+
   if token.kind == "name"
     following = Base.kind_at(e, pos + 1)
     if (
@@ -1553,13 +1647,16 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
     )
       return parse_loop_control(e, pos, ids)
     end
+
     if following == "assign" or following == "colon"
       return parse_binding(e, pos, ids)
     end
+
     if COMPOUND_OPERATORS.get(following, "") != ""
       return parse_compound(e, pos, ids)
     end
   end
+
   return parse_expression_statement(e, pos, ids)
 end
 
@@ -1576,6 +1673,7 @@ def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
       ),
     )
   end
+
   if following.kind == "do"
     return error(
       Base.unexpected_help(
@@ -1586,6 +1684,7 @@ def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
       ),
     )
   end
+
   head = try expect_head_end(e, condition.pos, "a newline after the condition", "#{e.tokens[pos].lexeme} cond")
   body = try parse_block(e, head, condition.ids, 0)
   node = Ast.IfBranch(
@@ -1609,6 +1708,7 @@ def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     next_id = branch.ids
     looping = e.tokens[cursor].kind == "elsif"
   end
+
   else_body: Ast.Optional[List[Ast.Stmt]] = Ast.Optional.Absent
   if e.tokens[cursor].kind == "else"
     if e.tokens[cursor + 1].kind == "if"
@@ -1621,12 +1721,14 @@ def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
         ),
       )
     end
+
     head = try expect_head_end(e, cursor + 1, "a newline after else", "else")
     body = try parse_block(e, head, next_id, 0)
     else_body = Ast.Optional.Present(body.nodes)
     cursor = body.pos
     next_id = body.ids
   end
+
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
   return stmt_at(
@@ -1642,6 +1744,7 @@ def parse_while(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   if e.tokens[cursor].kind == "do"
     cursor += 1
   end
+
   head = try expect_head_end(e, cursor, "a newline after the condition", "while cond")
   body = try parse_block(e, head, condition.ids, 0)
   close = try expect_end(e, body.pos)
@@ -1663,6 +1766,7 @@ def parse_for(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   if e.tokens[cursor].kind == "do"
     cursor += 1
   end
+
   head = try expect_head_end(e, cursor, "a newline after the loop header", "for x in xs")
   body = try parse_block(e, head, iterable.ids, 0)
   close = try expect_end(e, body.pos)
@@ -1708,6 +1812,7 @@ def parse_case_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
       next_id = parsed.ids
     end
   end
+
   return ok(Base.StmtsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
@@ -1715,6 +1820,7 @@ def parse_arm_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
   if e.tokens[pos].kind == "NL"
     return parse_case_body(e, pos + 1, ids)
   end
+
   first = try parse_simple_statement(Base.with_depth(e, 0), pos, ids)
   rest = try parse_case_body(e, first.pos, first.ids)
   return ok(Base.StmtsAt(nodes: List.concat([first.node], rest.nodes), pos: rest.pos, ids: rest.ids))
@@ -1725,6 +1831,7 @@ def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
   if e.tokens[pos].kind != "if"
     return ok(GuardAt(node: Ast.Optional.Absent, pos: pos, ids: ids))
   end
+
   condition = try parse_expression(e, pos + 1, ids)
   return ok(GuardAt(node: Ast.Optional.Present(condition.node), pos: condition.pos, ids: condition.ids))
 end
@@ -1735,6 +1842,7 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   if e.tokens[cursor].kind == "do"
     cursor += 1
   end
+
   cursor = try expect_head_end(e, cursor, "a newline after the case value", "case value")
   arms: List[Ast.CaseArm] = []
   next_id = value.ids
@@ -1746,6 +1854,7 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       if arms.size == 0
         return error(Base.unexpected(e, cursor, "case requires at least one arm"))
       end
+
       looping = false
     elsif kind == "EOF"
       return error(unclosed_case(e, cursor))
@@ -1768,6 +1877,7 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
       next_id = body.ids + 1
     end
   end
+
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
   return stmt_at(
@@ -1788,6 +1898,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
   if e.tokens[pos].kind == "right-paren"
     return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, mark: mark, pos: pos, ids: ids))
   end
+
   cursor = pos
   next_id = ids
   looping = true
@@ -1810,9 +1921,11 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
           ),
         )
       end
+
       if out
         cursor += 1
       end
+
       outs = outs.push(out)
       after_name = try Base.expect(e, cursor, "name", "a parameter name", false)
       colon = try Base.expect(e, after_name, "colon", "\":\"", false)
@@ -1828,6 +1941,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
         after_type = value.pos
         param_id = value.ids
       end
+
       nodes = nodes.push(
         Ast.Param(
           id: param_id,
@@ -1841,6 +1955,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
       cursor = after_type
       next_id = param_id + 1
     end
+
     if e.tokens[cursor].kind == "comma"
       cursor += 1
       if e.tokens[cursor].kind == "right-paren"
@@ -1850,6 +1965,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
       looping = false
     end
   end
+
   return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, mark: mark, pos: cursor, ids: next_id))
 end
 
@@ -1868,6 +1984,7 @@ def variadic_marker(e: Base.Env, at: Int, count: Int, fixed: Int, extern: Bool) 
       ),
     )
   end
+
   if fixed >= 0
     return error(
       Base.bail(
@@ -1879,6 +1996,7 @@ def variadic_marker(e: Base.Env, at: Int, count: Int, fixed: Int, extern: Bool) 
       ),
     )
   end
+
   if count == 0
     return error(
       Base.bail(
@@ -1890,6 +2008,7 @@ def variadic_marker(e: Base.Env, at: Int, count: Int, fixed: Int, extern: Bool) 
       ),
     )
   end
+
   return ok(count)
 end
 
@@ -1917,6 +2036,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[Strin
       ),
     )
   end
+
   after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
   result = try Base.parse_type(e, after_arrow, params.ids)
   head = try expect_head_end(e, result.pos, "a newline after the function signature", "def name() -> Type")
@@ -1955,6 +2075,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       ),
     )
   end
+
   if Base.kind_at(e, library) == "interp-start"
     return error(
       Base.bail_span(
@@ -1965,6 +2086,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       ),
     )
   end
+
   after_library = try Base.expect(e, library, "string", "a library name", false)
   name = Base.token_text(e.tokens[library])
   # A relative path would resolve against the working directory, while imports resolve against the source file:
@@ -1980,6 +2102,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       ),
     )
   end
+
   cursor = try Base.expect(e, after_library, "NL", "a newline after the library name", false)
   block = ExternBlock(
     library: name, resources: {}, structs: {}, symbols: Set.new([]), with_types: declares_types?(e, cursor),
@@ -1998,6 +2121,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
       if exported
         at += 1
       end
+
       taken_member = try parse_extern_member(e, at, next_id, taken.doc, block)
       member = taken_member.decl
       block = taken_member.block
@@ -2008,6 +2132,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
         node = Ast.Decl.Export(Ast.ExportDecl(id: member_ids, declaration: member.node, doc: taken.doc, span: span))
         member_ids += 1
       end
+
       nodes = nodes.push(node)
       # The record comes after its function, so a lookup by the name's position finds the function first.
       for record in taken_member.records
@@ -2019,10 +2144,12 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
           nodes = nodes.push(record)
         end
       end
+
       cursor = member.pos
       next_id = member_ids
     end
   end
+
   stop = try expect_statement_end(e, cursor + 1, "a newline after end")
   return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
 end
@@ -2035,8 +2162,10 @@ def declares_types?(e: Base.Env, pos: Int) -> Bool
     if resource_start?(e, at) or e.tokens[at].kind == "struct"
       return true
     end
+
     at += 1
   end
+
   return false
 end
 
@@ -2054,26 +2183,32 @@ def parse_extern_member(
     if e.tokens[pos + 5].kind == "type-name" and e.tokens[pos + 6].kind == "dot"
       free = FUNCTION_TYPE
     end
+
     named = block.resources.put(e.tokens[pos + 1].lexeme, free)
     return ok(MemberAt(decl: member, block: block.with(resources: named), records: []))
   end
+
   if e.tokens[pos].kind == "struct"
     made = try parse_extern_struct(e, pos, ids, doc, block)
     laid_out = block.structs.put(e.tokens[pos + 1].lexeme, made.layout)
     return ok(MemberAt(decl: made.decl, block: block.with(structs: laid_out), records: []))
   end
+
   at = pos
   if compute_start?(e, at)
     at += 1
   end
+
   if e.tokens[at].kind != "def"
     return error(Base.found(e, at, "def, compute def, resource, struct or end in an extern block"))
   end
+
   member = try parse_extern_function(e, pos, at, ids, doc, block)
   symbols = block.symbols
   if member.symbol != ""
     symbols = symbols.add(member.symbol)
   end
+
   return ok(MemberAt(decl: member.decl, block: block.with(symbols: symbols), records: member.records))
 end
 
@@ -2094,14 +2229,17 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String], b
   if Base.kind_at(e, after_colon) == "type-name" and Base.kind_at(e, after_colon + 1) == "dot"
     return parse_resource_by_pointer(e, pos, ids, doc, after_colon)
   end
+
   after_free = try expect_c_name(e, after_colon, "the C name of the free function or C.Function")
   free = e.tokens[after_colon].lexeme
   if free.ends_with?("?") or free.ends_with?("!")
     return error(c_name_failure(e, after_colon, free))
   end
+
   if block.symbols.include?(free)
     return error(free_failure(e, after_colon, free))
   end
+
   stop = try expect_statement_end(e, after_free, "a newline after the resource")
   node = Ast.Decl.Resource(
     Ast.ResourceDecl(
@@ -2122,6 +2260,7 @@ def expect_c_name(e: Base.Env, pos: Int, description: String) -> Result[Int]
   if Base.kind_at(e, pos) == "type-name"
     return ok(pos + 1)
   end
+
   return Base.expect(e, pos, "name", description, true)
 end
 
@@ -2139,6 +2278,7 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional
       ),
     )
   end
+
   stop = try expect_statement_end(e, type.pos, "a newline after the resource")
   node = Ast.Decl.Resource(
     Ast.ResourceDecl(
@@ -2175,6 +2315,7 @@ def parse_extern_struct(
       if field.type.name == "C.Int" and field.type.args.size == 0
         help = EXTERN_INT_HELP
       end
+
       return error(
         Base.bail_span(
           "PARSE-EXTERN-TYPE",
@@ -2184,6 +2325,7 @@ def parse_extern_struct(
         ),
       )
     end
+
     codes = codes.push(code)
     if code.size == 1
       fields = fields.push(field.with(type: field.type.with(name: EXTERN_TYPES[code])))
@@ -2191,6 +2333,7 @@ def parse_extern_struct(
       fields = fields.push(field)
     end
   end
+
   layout = "{#{codes.join("")}}"
   try struct_size(node, layout)
   decl = try decl_at(Ast.Decl.Struct(node.with(fields: fields)), parsed.pos, parsed.ids)
@@ -2202,6 +2345,7 @@ def struct_field_code(type: Ast.TypeRef, block: ExternBlock) -> String
   if type.args.size > 0
     return ""
   end
+
   return STRUCT_FIELD_CODES.get(type.name, block.structs.get(type.name, ""))
 end
 
@@ -2218,6 +2362,7 @@ def struct_size(node: Ast.StructDecl, layout: String) -> Result[Void]
       ),
     )
   end
+
   depth = 0
   deepest = 0
   leaves = 0
@@ -2233,6 +2378,7 @@ def struct_size(node: Ast.StructDecl, layout: String) -> Result[Void]
       leaves += 1
     end
   end
+
   if leaves > STRUCT_MAX_FIELDS or deepest > STRUCT_MAX_DEPTH
     return error(
       Base.bail_span(
@@ -2243,6 +2389,7 @@ def struct_size(node: Ast.StructDecl, layout: String) -> Result[Void]
       ),
     )
   end
+
   return ok()
 end
 
@@ -2288,6 +2435,7 @@ def parse_extern_function(
   if name.ends_with?("?") or name.ends_with?("!")
     return error(c_name_failure(e, pos + 1, name))
   end
+
   after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
   params = try parse_parameters(e, after_open, ids, true)
   after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
@@ -2299,6 +2447,7 @@ def parse_extern_function(
     symbol_at = after_signature + 1
     after_signature = try symbol_string(e, symbol_at)
   end
+
   symbol = Base.token_text(e.tokens[symbol_at])
   callee = callee?(params, result.node, block)
   if callee and symbol_at != pos + 1
@@ -2311,9 +2460,11 @@ def parse_extern_function(
       ),
     )
   end
+
   if !callee and block.resources.values.any? do |free: String| free == symbol end
     return error(free_failure(e, symbol_at, symbol))
   end
+
   stop = try expect_statement_end(e, after_signature, "a newline after the extern function")
   next_id = result.ids
   codes: List[String] = []
@@ -2330,6 +2481,7 @@ def parse_extern_function(
       ),
     )
   end
+
   typed: List[Ast.Param] = []
   fields: List[Ast.FieldDecl] = []
   outs: List[Ast.NativeResource] = []
@@ -2338,6 +2490,7 @@ def parse_extern_function(
   if returned.code == "r" and block.resources[result.node.name] == FUNCTION_TYPE
     by_pointer = by_pointer.push(result.node)
   end
+
   free_params: List[Ast.Param] = []
   # The C.Function parameters before the ... of a variadic def, which C does not get.
   not_c = 0
@@ -2355,14 +2508,17 @@ def parse_extern_function(
         )
       Ast.Optional.Absent -> codes = codes
     end
+
     taken = try extern_type(param.type, false, block, next_id)
     next_id = taken.ids
     if index == params.fixed
       codes = codes.push(VARIADIC_MARK)
     end
+
     if params.fixed >= 0 and index >= params.fixed
       try variadic_type(param, taken, params.outs[index])
     end
+
     # An in and an out parameter of one name would be a parameter of the function and a field of its record; two of
     # the same side are the checker's CHECK-REDEFINED-NAME.
     if other_side?(params, index)
@@ -2375,6 +2531,7 @@ def parse_extern_function(
         ),
       )
     end
+
     if params.outs[index]
       field = try out_field(param, taken, returned.code)
       codes = codes.push(taken.code.upcase)
@@ -2391,17 +2548,22 @@ def parse_extern_function(
         if index != params.nodes.size - 1
           return error(function_failure(param.type))
         end
+
         code = "e"
         free_params = free_params.push(param)
       end
+
       if (code == "c" or code == "e") and index < params.fixed
         not_c += 1
       end
+
       codes = codes.push(code)
       typed = typed.push(param.with(type: taken.type))
     end
+
     index += 1
   end
+
   try free_function(by_pointer, free_params)
   if params.fixed > 0 and params.fixed == not_c
     return error(
@@ -2414,16 +2576,19 @@ def parse_extern_function(
       ),
     )
   end
+
   # An empty variadic part (`def printf(format: C.String, ...)`) still marks the call as variadic.
   if params.fixed == params.nodes.size
     codes = codes.push(VARIADIC_MARK)
   end
+
   resource = ""
   free = ""
   if returned.code == "r"
     resource = result.node.name
     free = block.resources[resource]
   end
+
   span = Base.span_from(e, start, stop)
   records: List[Ast.Decl] = []
   result_type = returned.type
@@ -2440,6 +2605,7 @@ def parse_extern_function(
         ),
       )
     end
+
     if returned.code != "v"
       first = Ast.FieldDecl(
         id: next_id,
@@ -2453,6 +2619,7 @@ def parse_extern_function(
       fields = [first].concat(fields)
       next_id += 1
     end
+
     made = Ast.StructDecl(
       id: next_id,
       name: record,
@@ -2466,6 +2633,7 @@ def parse_extern_function(
     result_type = Ast.TypeRef(id: next_id + 1, name: record, args: [], span: result.node.span)
     next_id += 2
   end
+
   node = Ast.Decl.Function(
     Ast.FunctionDecl(
       id: next_id,
@@ -2494,6 +2662,7 @@ def parse_extern_function(
   if callee
     symbol = ""
   end
+
   return ok(ExternAt(decl: decl, symbol: symbol, records: records))
 end
 
@@ -2515,10 +2684,12 @@ def callee?(params: ParamsAt, result: Ast.TypeRef, block: ExternBlock) -> Bool
   if params.nodes.size == 0 or params.outs[0]
     return false
   end
+
   first = params.nodes[0].type
   if first.name != FUNCTION_TYPE or first.args.size > 0
     return false
   end
+
   return params.nodes.size > 1 or block.resources.get(result.name, "") != FUNCTION_TYPE
 end
 
@@ -2536,6 +2707,7 @@ def free_function(made: List[Ast.TypeRef], free_params: List[Ast.Param]) -> Resu
       ),
     )
   end
+
   if made.size == 1 and free_params.size == 0
     return error(
       Base.bail_span(
@@ -2546,9 +2718,11 @@ def free_function(made: List[Ast.TypeRef], free_params: List[Ast.Param]) -> Resu
       ),
     )
   end
+
   if made.size == 0 and free_params.size == 1
     return error(function_failure(free_params[0].type))
   end
+
   return ok()
 end
 
@@ -2560,12 +2734,15 @@ def symbol_string(e: Base.Env, at: Int) -> Result[Int]
   if kind == "interp-start"
     stop = interpolation_end(e, at) + 1
   end
+
   if kind == "string" and !Base.heredoc?(e.tokens[at]) and c_name?(Base.token_text(e.tokens[at]))
     return ok(stop)
   end
+
   if kind != "string" and kind != "interp-start"
     return error(Base.found(e, at, "the C name of the function as a string"))
   end
+
   return error(
     Base.bail_span(
       "PARSE-EXTERN-SYMBOL",
@@ -2581,6 +2758,7 @@ def c_name?(text: String) -> Bool
   if text == "" or DIGITS.include?(text.slice(0, 1))
     return false
   end
+
   return text.split("").all? do |char: String| C_NAME_CHARS.include?(char) end
 end
 
@@ -2597,6 +2775,7 @@ def variadic_type(param: Ast.Param, taken: ExternType, out: Bool) -> Result[Void
       ),
     )
   end
+
   if !VARIADIC_CODES.include?(taken.code)
     return error(
       Base.bail_span(
@@ -2607,6 +2786,7 @@ def variadic_type(param: Ast.Param, taken: ExternType, out: Bool) -> Result[Void
       ),
     )
   end
+
   return ok()
 end
 
@@ -2624,6 +2804,7 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
       ),
     )
   end
+
   if taken.code == "s" or taken.code == "y" or taken.code == "c"
     return error(
       Base.bail_span(
@@ -2634,6 +2815,7 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
       ),
     )
   end
+
   if param.name == "result" and result != "v"
     return error(
       Base.bail_span(
@@ -2644,6 +2826,7 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
       ),
     )
   end
+
   field = Ast.FieldDecl(
     id: param.id,
     name: param.name,
@@ -2663,8 +2846,10 @@ def other_side?(params: ParamsAt, index: Int) -> Bool
     if params.nodes[at].name == params.nodes[index].name and params.outs[at] != params.outs[index]
       return true
     end
+
     at += 1
   end
+
   return false
 end
 
@@ -2685,6 +2870,7 @@ def record_name(name: String) -> String
   if joined == "" or !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(joined.slice(0, 1))
     return ""
   end
+
   return joined
 end
 
@@ -2705,6 +2891,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
       code = block.structs[ref.name]
     end
   end
+
   if code == ""
     help = EXTERN_TYPES_HELP
     if ref.name == "C.Int" and ref.args.size == 0
@@ -2712,6 +2899,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     elsif ref.name == FUNCTION_TYPE and ref.args.size == 0
       help = FUNCTION_RESULT_HELP
     end
+
     return error(
       Base.bail_span(
         "PARSE-EXTERN-TYPE",
@@ -2721,6 +2909,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
       ),
     )
   end
+
   if code.starts_with?("{")
     return ok(ExternType(code: code, type: ref, ids: ids))
   elsif code == "r" and result
@@ -2733,6 +2922,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     list = Ast.TypeRef(id: ids + 1, name: "List", args: [item], span: ref.span)
     return ok(ExternType(code: code, type: list, ids: ids + 2))
   end
+
   return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: ids))
 end
 
@@ -2751,6 +2941,7 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String])
     after_type = value.pos
     field_id = value.ids
   end
+
   stop = try Base.expect(e, after_type, "NL", "a newline after the field", false)
   node = Ast.FieldDecl(
     id: field_id,
@@ -2779,8 +2970,10 @@ def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String
       cursor = more.pos
       next_id = more.ids
     end
+
     cursor = try Base.expect(e, cursor, "right-paren", ")", false)
   end
+
   stop = try Base.expect(e, cursor, "NL", "a newline after the enum variant", false)
   node = Ast.EnumVariant(
     id: next_id,
@@ -2798,12 +2991,15 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   if member == "field"
     return kind == "name"
   end
+
   if member == "variant"
     return kind == "type-name"
   end
+
   if member == "extern"
     return kind == "def" or kind == "export" or compute_start?(e, pos) or resource_start?(e, pos)
   end
+
   return (
     kind == "def" or kind == "struct" or kind == "enum" or (kind == "export" and !reexport_start?(e, pos)) or
     constant_start?(e, pos) or (kind == "name" and e.tokens[pos].lexeme == "type")
@@ -2824,6 +3020,7 @@ def take_doc(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
   if block.next == "code" and e.tokens[pos + 1].kind == "NL" and starts_member?(e, pos + 2, member)
     return ok(DocAt(doc: Ast.Optional.Present(block.text), pos: pos + 2))
   end
+
   return error(Base.bail_detached(e, pos))
 end
 
@@ -2831,6 +3028,7 @@ def documented(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
   if e.tokens[pos].kind == "DOC"
     return take_doc(e, pos, member)
   end
+
   return ok(DocAt(doc: Ast.Optional.Absent, pos: pos))
 end
 
@@ -2861,6 +3059,7 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) -> 
       return error(Base.found(e, cursor, "a field name or \"end\""))
     end
   end
+
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
   node = Ast.StructDecl(
@@ -2880,6 +3079,7 @@ def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]
   if e.tokens[pos].kind != "left-bracket"
     return ok(TypeParametersAt(names: names, pos: pos))
   end
+
   cursor = try Base.expect(e, pos + 1, "type-name", "a type parameter", false)
   names = names.push(e.tokens[pos + 1].lexeme)
   while e.tokens[cursor].kind == "comma"
@@ -2887,6 +3087,7 @@ def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]
     names = names.push(e.tokens[cursor + 1].lexeme)
     cursor = after
   end
+
   cursor = try Base.expect(e, cursor, "right-bracket", "]", false)
   return ok(TypeParametersAt(names: names, pos: cursor))
 end
@@ -2913,9 +3114,11 @@ def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]) 
       return error(Base.found(e, cursor, "an enum variant or end"))
     end
   end
+
   if variants.size == 0
     return error(Base.unexpected(e, cursor, "an enum must declare at least one variant"))
   end
+
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
   node = Ast.Decl.Enum(
@@ -2959,15 +3162,19 @@ def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   if kind == "def"
     return parse_function_decl(e, pos, ids, absent)
   end
+
   if kind == "struct"
     return parse_struct_decl(e, pos, ids, absent)
   end
+
   if kind == "enum"
     return parse_enum_decl(e, pos, ids, absent)
   end
+
   if kind == "name" and e.tokens[pos].lexeme == "type"
     return parse_type_alias_decl(e, pos, ids, absent)
   end
+
   return error(Base.unexpected(e, pos, "export requires def, struct, enum, type, or a constant"))
 end
 
@@ -2985,9 +3192,11 @@ def constant_follows?(e: Base.Env, at: Int) -> Bool
   if Base.kind_at(e, cursor) == "DOC"
     cursor += 2
   end
+
   if Base.kind_at(e, cursor) == "export"
     cursor += 1
   end
+
   return constant_start?(e, cursor)
 end
 
@@ -3005,13 +3214,16 @@ def constant_suggestion(text: String) -> String
         out = out.push("_")
       end
     end
+
     out = out.push(letters[index])
     index += 1
   end
+
   snake = out.join("").upcase
   if Base.constant_name?(snake)
     return snake
   end
+
   return ""
 end
 
@@ -3020,6 +3232,7 @@ def constant_name_help(text: String) -> String
   if suggestion == ""
     return "write constant names in capitals with underscores, at least two characters, such as LIMIT"
   end
+
   return "write constant names in capitals with underscores: use #{suggestion}"
 end
 
@@ -3044,6 +3257,7 @@ def parse_constant_decl(
       ),
     )
   end
+
   type: Ast.Optional[Ast.TypeRef] = Ast.Optional.Absent
   cursor = name_at + 1
   next_id = ids
@@ -3053,6 +3267,7 @@ def parse_constant_decl(
     cursor = parsed.pos
     next_id = parsed.ids
   end
+
   assign = try Base.expect(e, cursor, "assign", "\"=\"", false)
   value = try parse_expression(e, assign, next_id)
   stop = try expect_statement_end(e, value.pos, "a newline after the statement")
@@ -3076,9 +3291,11 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]
   if kind == "export" and constant_start?(e, pos + 1)
     return parse_constant_decl(e, pos + 1, pos, ids, doc, true)
   end
+
   if constant_start?(e, pos)
     return parse_constant_decl(e, pos, pos, ids, doc, false)
   end
+
   if kind == "export"
     parsed = try parse_exportable(e, pos + 1, ids)
     node = Ast.Decl.Export(
@@ -3086,15 +3303,19 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Ast.Optional[String]
     )
     return decl_at(node, parsed.pos, parsed.ids)
   end
+
   if kind == "def"
     return parse_function_decl(e, pos, ids, doc)
   end
+
   if kind == "struct"
     return parse_struct_decl(e, pos, ids, doc)
   end
+
   if kind == "name" and e.tokens[pos].lexeme == "type"
     return parse_type_alias_decl(e, pos, ids, doc)
   end
+
   return parse_enum_decl(e, pos, ids, doc)
 end
 
@@ -3133,8 +3354,10 @@ def interpolation_end(e: Base.Env, start: Int) -> Int
         return at
       end
     end
+
     at += 1
   end
+
   return at
 end
 
@@ -3142,9 +3365,11 @@ def top_level_help(kind: String) -> String
   if kind == "end"
     return "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"
   end
+
   if kind == "else" or kind == "elsif"
     return "this else has no matching if"
   end
+
   return (
     "statements go inside a function: def main() -> Void ... end; " +
     "a file holds only def, struct, enum, type aliases, import, export and constants (NAME = value)"
@@ -3161,10 +3386,12 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   elsif kind == "left-brace"
     return parse_import_names(e, pos, ids)
   end
+
   message = "expected a module alias or \"{\", found #{Base.describe(e.tokens[pos + 1])}"
   if kind == "string"
     return error(Base.unexpected_help(e, pos + 1, message, "write import Alias from \"path\""))
   end
+
   return error(Base.unexpected(e, pos + 1, message))
 end
 
@@ -3175,6 +3402,7 @@ def expect_import_path(e: Base.Env, pos: Int) -> Result[Int]
       Base.unexpected_help(e, pos, "an import path is not a heredoc", "write the path as a \"...\" string literal"),
     )
   end
+
   return Base.expect(e, pos, "string", "an import path", false)
 end
 
@@ -3184,6 +3412,7 @@ def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   if Base.kind_at(e, pos + 2) == "comma"
     mixed = "write the alias and the names on two import lines"
   end
+
   after_from = try expect_word(e, pos + 2, "from", mixed)
   after_path = try expect_import_path(e, after_from)
   stop = try Base.expect(e, after_path, "NL", "a newline after import", false)
@@ -3223,10 +3452,12 @@ def expect_word(e: Base.Env, at: Int, word: String, help: String) -> Result[Int]
   if e.tokens[at].kind == "name" and e.tokens[at].lexeme == word
     return ok(at + 1)
   end
+
   message = "expected #{word}, found #{Base.describe(e.tokens[at])}"
   if help == ""
     return error(Base.unexpected(e, at, message))
   end
+
   return error(Base.unexpected_help(e, at, message, help))
 end
 
@@ -3242,6 +3473,7 @@ def parse_import_list(e: Base.Env, at: Int) -> Result[ImportNamesAt]
       ),
     )
   end
+
   nodes: List[Ast.ImportName] = []
   cursor = at
   looping = true
@@ -3264,6 +3496,7 @@ def parse_import_list(e: Base.Env, at: Int) -> Result[ImportNamesAt]
       return error(Base.unexpected_help(e, cursor, message, "separate names with commas: import {a, b} from \"path\""))
     end
   end
+
   return ok(ImportNamesAt(nodes: nodes, pos: cursor))
 end
 
@@ -3282,6 +3515,7 @@ def parse_import_name(e: Base.Env, at: Int) -> Result[ImportNameAt]
       ),
     )
   end
+
   return ok(
     ImportNameAt(
       node: Ast.ImportName(
@@ -3301,6 +3535,7 @@ def import_word(e: Base.Env, at: Int, description: String) -> Result[Int]
   if kind == "name" or kind == "type-name"
     return ok(at + 1)
   end
+
   return error(Base.found(e, at, description))
 end
 
@@ -3363,6 +3598,7 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
         ),
       )
     end
+
     cursor = Base.skip_newlines(e, cursor)
     kind = e.tokens[cursor].kind
     after_declaration = false
@@ -3416,6 +3652,7 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
       )
     end
   end
+
   return ok(
     Ast.Program(id: next_id, declarations: declarations, module_doc: module_doc, span: Base.span_from(e, 0, cursor)),
   )

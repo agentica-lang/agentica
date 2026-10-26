@@ -177,6 +177,7 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
       _ -> next
     end
   end
+
   return found
 end
 
@@ -205,6 +206,7 @@ export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Voi
     if record?(unwrap(decl))
       group = highest
     end
+
     if group < highest
       problem = Diag.fail(
         "CHECK-DECL-ORDER",
@@ -214,10 +216,12 @@ export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Voi
       )
       return error(Failure.from_stage(file, problem))
     end
+
     if group > highest
       highest = group
     end
   end
+
   return ok()
 end
 
@@ -239,6 +243,7 @@ def rank(decl: Ast.Decl) -> Int
         Ast.Decl.Function(inner) -> return function_rank(inner, 3)
         _ -> return 3
       end
+
     Ast.Decl.Function(node) -> return function_rank(node, 4)
   end
 end
@@ -251,6 +256,7 @@ def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
       if link.with_types
         return 2
       end
+
       return plain
     Ast.Optional.Absent -> return plain
   end
@@ -277,5 +283,6 @@ def entry_text(entry: Ast.ImportName) -> String
   if entry.name == entry.local
     return entry.name
   end
+
   return "#{entry.name} as #{entry.local}"
 end

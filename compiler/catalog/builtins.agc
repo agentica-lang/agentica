@@ -59,11 +59,13 @@ export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
   if entry.parameters.size == arity
     return ok(entry)
   end
+
   for alternative in entry.alternatives
     if alternative.parameters.size == arity
       return ok(alternative)
     end
   end
+
   return error("no form with that arity")
 end
 
@@ -89,6 +91,7 @@ export def form_signature(form: Model.Builtin) -> String
   parameters = form.parameters.map do |parameter: Model.Named|
     "#{parameter.name}: #{Types.to_text(parameter.type)}"
   end
+
   return "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
 end
 
@@ -97,5 +100,6 @@ def module_of(name: String) -> String
   if dot.ok?
     return name.slice(0, dot.unwrap!)
   end
+
   return ""
 end

@@ -27,6 +27,7 @@ export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expect
       ),
     )
   end
+
   return method_on(cx, target, node.id, node.target, node.name, node.args, node.span, expected)
 end
 
@@ -36,6 +37,7 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
   if field_target?(cx, target.type, node.name)
     return check_struct_field(cx, target.st, node, target.type)
   end
+
   return method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
 end
 
@@ -44,9 +46,11 @@ def field_target?(cx: State.Cx, target: T.Type, name: String) -> Bool
   if !T.is?(target, "Struct")
     return false
   end
+
   if name == "to_s" or name == "inspect"
     return Calls.find_field(cx.structs[T.name(target)], name).ok?
   end
+
   return true
 end
 
@@ -66,6 +70,7 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
       ),
     )
   end
+
   return ok(State.Out(st: st, type: field.unwrap!.type))
 end
 
@@ -78,11 +83,13 @@ def method_kind(cx: State.Cx, target: T.Type, kind: String, name: String) -> Str
       return found
     end
   end
+
   if name == "to_s" and CheckTypes.data?(cx, target, [])
     return "text"
   elsif name == "inspect" and CheckTypes.data?(cx, target, [])
     return "inspect"
   end
+
   return ""
 end
 
@@ -112,9 +119,11 @@ def method_on(
       ),
     )
   end
+
   if resolved == "self" or resolved == "text" or resolved == "inspect"
     return check_own_method(cx, target.st, id, resolved, type, name, args, span, expected)
   end
+
   typed = Ast.Expr.Typed(
     Ast.TypedTarget(id: Ast.expr_id(target_node), target: target_node, type: type, span: Ast.expr_span(target_node)),
   )
@@ -138,6 +147,7 @@ def check_own_method(
   if args.size > 0
     return error(State.fail(cx, st, "CHECK-ARITY", "\"#{name}\" takes no arguments", span))
   end
+
   result = T.Type.String
   how = State.Resolved.Text(type)
   if resolved == "self"
@@ -146,6 +156,7 @@ def check_own_method(
   elsif resolved == "inspect"
     how = State.Resolved.Inspect(type)
   end
+
   checked = try State.ensure(cx, st, result, expected, span)
   return ok(State.Out(st: State.record_resolved(st, id, how), type: checked))
 end
@@ -168,6 +179,7 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
   elsif CheckTypes.data?(cx, target, [])
     return Help.near(name, ["to_s", "inspect"], [])
   end
+
   return ""
 end
 
@@ -183,6 +195,7 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
     # No did-you-mean here: a field close to "with" is not a typo of it.
     return "with needs the fields to change, as in .with(field: value); #{Help.field_list(fields)}"
   end
+
   return "structs have no methods; #{Help.field_help(name, fields)}"
 end
 
@@ -192,11 +205,13 @@ def kind_help(cx: State.Cx, target: T.Type, kind: String, name: String) -> Strin
   if foreign != ""
     return foreign
   end
+
   names = method_names(cx, target, kind)
   guess = Help.near(name, names, [])
   if guess != ""
     return guess
   end
+
   return "#{T.to_text(target)} methods: #{names.sort.join(", ")}"
 end
 
@@ -208,6 +223,7 @@ def method_names(cx: State.Cx, target: T.Type, kind: String) -> List[String]
       ["to_s", "inspect"].filter do |own: String| !names.any? do |known: String| known == own end end,
     )
   end
+
   return names
 end
 

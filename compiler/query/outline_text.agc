@@ -14,13 +14,16 @@ export def text(outlined: Model.Outline) -> String
   for declaration in outlined.imports
     lines = lines.push("#{place(file, declaration.range)} #{import_text(declaration)}")
   end
+
   for item in outlined.items
     lines = lines.push("#{place(file, item.range)} #{declaration_text(item.kind, item.exported, item.signature)}")
     lines = lines.concat(member_lines(file, item))
   end
+
   if lines.size == 0
     return ""
   end
+
   return "#{lines.join("\n")}\n"
 end
 
@@ -35,9 +38,11 @@ export def declaration_text(kind: String, exported: Bool, signature: String) -> 
   if kind == "function"
     head = "def #{head}"
   end
+
   if exported
     return "export #{head}"
   end
+
   return head
 end
 
@@ -46,6 +51,7 @@ export def field_text(owner: String, name: String, type: String, default: String
   if default != ""
     return "field #{owner}.#{name}: #{type} = #{default}"
   end
+
   return "field #{owner}.#{name}: #{type}"
 end
 
@@ -59,6 +65,7 @@ def import_text(declaration: Model.Import) -> String
   if declaration.alias != ""
     return "import #{declaration.alias} from \"#{declaration.path}\""
   end
+
   names = declaration.names.map do |name: Model.ImportName| imported_name(name) end
   return "import {#{names.join(", ")}} from \"#{declaration.path}\""
 end
@@ -67,6 +74,7 @@ def imported_name(name: Model.ImportName) -> String
   if name.local == name.name
     return name.name
   end
+
   return "#{name.name} as #{name.local}"
 end
 
@@ -75,6 +83,7 @@ def member_lines(file: String, item: Model.Item) -> List[String]
   fields = item.fields.map do |field: Model.Field|
     "#{place(file, field.name_range)} #{field_text(item.name, field.name, field.type, field.default)}"
   end
+
   variants = item.variants.map do |variant: Model.Variant| variant_line(file, item.name, variant) end
   return fields.concat(variants)
 end

@@ -35,6 +35,7 @@ export def item(declared: DocModel.Item) -> Model.Item
       parameters = found.map do |parameter: DocModel.Parameter|
         Model.Parameter(name: parameter.name, type: parameter.type, default: text(parameter.default))
       end
+
       result = written
     DocModel.Detail.Struct(members) ->
       fields = members.map do |member: DocModel.Field|
@@ -46,6 +47,7 @@ export def item(declared: DocModel.Item) -> Model.Item
           doc: text(member.doc),
         )
       end
+
     DocModel.Detail.Enum(found) ->
       variants = found.map do |variant: DocModel.Variant|
         Model.Variant(
@@ -55,8 +57,10 @@ export def item(declared: DocModel.Item) -> Model.Item
           doc: text(variant.doc),
         )
       end
+
     DocModel.Detail.Plain -> parameters = parameters
   end
+
   return Model.Item(
     kind: declared.kind,
     name: declared.name,
@@ -100,6 +104,7 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
       signatures = Builtins.signature(entry).split("\n")
     Ast.Optional.Absent -> help = help
   end
+
   return Model.TypeAt(
     version: TYPE_AT_VERSION,
     position: Model.Place(file: file, line: asked.line, column: asked.column),
@@ -139,6 +144,7 @@ export def refs(
       definition = [symbol(declared.with(file: names.get(declared.file, declared.file)))]
     Ast.Optional.Absent -> definition = definition
   end
+
   return Model.Refs(
     version: REFS_VERSION,
     query: query,
@@ -176,6 +182,7 @@ def import_of(declaration: Ast.ImportDecl) -> Model.Import
   names = declaration.names.map do |name: Ast.ImportName|
     Model.ImportName(name: name.name, local: name.local, range: DiagnosticModel.range_of(name.span))
   end
+
   return Model.Import(
     path: declaration.path,
     alias: text(declaration.alias),
@@ -197,6 +204,7 @@ def symbol(match: Symbol.Match) -> Model.Symbol
       help = CatalogJson.builtin(entry, &RubyForm.signature)
       signatures = Builtins.signature(entry).split("\n")
   end
+
   return Model.Symbol(
     kind: match.kind,
     name: match.name,

@@ -43,6 +43,7 @@ export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Resul
   if st.bodies.size == 0
     return ok(Attached(st: st, modules: []))
   end
+
   wanted = wanted_functions(st.bodies.values)
   modules: List[Linker.LinkedModule] = []
   first_id = st.types.size
@@ -51,10 +52,12 @@ export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Resul
     modules = modules.push(loaded)
     first_id = loaded.next_id
   end
+
   texts = base.texts
   for module in modules
     texts = texts.put(module.file, module.text)
   end
+
   cx = base.with(prelude: true, type_params: variables(), texts: texts)
   cx = try Register.register(cx, modules)
   grown = st.with(types: st.types.concat(List.repeat(T.Type.Unknown, first_id - st.types.size)))
@@ -66,6 +69,7 @@ export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Resul
       end
     end
   end
+
   return ok(Attached(st: grown, modules: modules))
 end
 
@@ -81,10 +85,12 @@ def wanted_functions(keys: List[String]) -> Map[String, List[String]]
     if before.ok?
       names = before.unwrap!
     end
+
     if !names.any? do |name: String| name == function end
       found = found.put(module, names.push(function))
     end
   end
+
   return found
 end
 
@@ -100,12 +106,15 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
         if functions.any? do |name: String| name == node.name end
           kept = kept.push(Ast.Decl.Function(node.with(name: Names.prelude_name("#{module}::#{node.name}"))))
         end
+
       _ -> kept = kept
     end
   end
+
   if kept.size != functions.size
     return error(problem(file, "CHECK-UNKNOWN-NAME", "the prelude file lacks a function the catalog names"))
   end
+
   return ok(
     Linker.LinkedModule(
       key: "std/prelude/#{module}.agc",

@@ -14,6 +14,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
 - `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
   takes no argument.
+- `std/bdd`: `BDD.keep` and `BDD.call` keep a value that is not JSON (an open
+  connection) between the steps of a scenario, and `BDD.read_line` gives the
+  program's next output line to a step. (#685)
 - `agentica test --tags EXPR` keeps the scenarios whose tags match (`@a`, `not @a`, `and`, `or`).
 - `BDD.skip(ctx, reason)` ends a scenario as skipped; the exit code stays 0. **Breaking:** the text summary line now has `S skipped`, and `--json` has a `skipped` total, a scenario `reason` and the status `"skipped"`.
 
@@ -30,6 +33,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - `agentica test` reports a failed step at its keyword's column.
+- Bytes written to a file are no longer lost at exit when its `File.close` or `File.write` times out. (#696)
 - Each `Scenario Outline` row is named `Name (values)`; names of outlines with unused columns change.
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.

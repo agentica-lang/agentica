@@ -239,6 +239,7 @@ export def load_roots(roots: List[String], settings: Env.Settings, parses: Parse
       )
     end
   end
+
   return Roots(loaded: loaded_of(walk), entries: entries)
 end
 
@@ -284,6 +285,7 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
     # The folder is this root's own, not that of the root whose walk loaded the file.
     return ok(walk.with(root_dir: Paths.directory_of(known.unwrap!)))
   end
+
   file = workspace.resolve_path.call(root).unwrap_or(root)
   text = try root_text(workspace, root, file)
   key = workspace.real_path.call(root)
@@ -294,6 +296,7 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
       Failure.fail_at(Failure.Site(file: file, span: program.span), "CHECK-IMPORT-IO", key.message, Diag.Help.NoHelp),
     )
   end
+
   taken = try take(walk.kept, walk.next_id, key.unwrap!, file, text)
   root_dir = Paths.directory_of(key.unwrap!)
   project = try Project.find(workspace, root_dir)
@@ -323,6 +326,7 @@ def take(kept: Map[String, Kept], next_id: Int, key: String, file: String, text:
   if kept.has_key?(key) and kept[key].text == text
     return ok(Taken(program: kept[key].program, first_id: kept[key].first_id, fresh: false, stubbed: false))
   end
+
   program = try parse_source(file, text, next_id)
   return ok(Taken(program: program, first_id: next_id, fresh: true, stubbed: false))
 end
@@ -367,6 +371,7 @@ def run(settings: Env.Settings, walk: Walk) -> Result[Walk]
   if walk.stack.size == 0
     return ok(walk)
   end
+
   following = try step(settings, walk)
   return run(settings, following)
 end
@@ -376,9 +381,11 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
   if frame.next >= frame.imports.size
     return finish(walk, frame)
   end
+
   if frame.pending != ""
     return bind_names(settings, walk, frame, frame.imports[frame.next])
   end
+
   return read_import(settings, walk, frame, frame.imports[frame.next])
 end
 
@@ -527,6 +534,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   )
     return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
   end
+
   file = try Paths.module_file(decl, site)
   importer = Resolve.Importer(key: module.key, origin: module.origin)
   found = try Resolve.resolve_import(settings, walk.build, importer, file, site)
@@ -534,6 +542,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   if alias != ""
     aliases = aliases.put(alias, target)
   end
+
   noted = frame.with(imported: frame.imported.push(target))
   with_frame = replace_top(walk, after_read(noted, aliases, target, decl))
   # The packages loaded so far are kept whether or not this file is new.
@@ -544,6 +553,7 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
   elsif state == 0
     return ok(known)
   end
+
   return load_file(settings, known, found, site)
 end
 
@@ -552,6 +562,7 @@ def after_read(frame: Frame, aliases: Map[String, String], target: String, decl:
   if decl.names.size == 0
     return frame.with(aliases: aliases, next: frame.next + 1)
   end
+
   return frame.with(aliases: aliases, pending: target)
 end
 
@@ -563,6 +574,7 @@ def bind_names(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impor
   for entry in decl.names
     named = try bind_name(settings, frame, target, entry, named)
   end
+
   return ok(replace_top(walk, frame.with(named: named, next: frame.next + 1, pending: "")))
 end
 
@@ -584,6 +596,7 @@ def bind_name(
       ),
     )
   end
+
   kind = target.public[entry.name]
   at_local = Failure.Site(file: file, span: entry.local_span)
   if !rename_ok?(entry.local, kind)
@@ -596,6 +609,7 @@ def bind_name(
       ),
     )
   end
+
   taken = (
     frame.module.names.has_key?(entry.local) or
     frame.aliases.has_key?(entry.local) or
@@ -606,6 +620,7 @@ def bind_name(
       Failure.fail_at(at_local, "CHECK-REDEFINED-NAME", "duplicate or reserved imported name", Diag.Help.NoHelp),
     )
   end
+
   return ok(named.put(entry.local, Named(target: target.key, name: entry.name)))
 end
 
@@ -617,6 +632,7 @@ def rename_ok?(local: String, kind: Declarations.Kind) -> Bool
   elsif Declarations.function?(kind)
     return !Declarations.type_name?(local)
   end
+
   return Declarations.type_name?(local)
 end
 
@@ -652,6 +668,7 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
   if name == ""
     name = Paths.stored_name(walk.root_dir, key)
   end
+
   parsed = Parsed(
     key: key,
     file: key,
@@ -701,6 +718,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
   if walk.order.size == 0 and !walk.prefixed
     prefix = ""
   end
+
   module = Module(
     key: key,
     file: parsed.file,
@@ -766,6 +784,7 @@ def max_of(a: Int, b: Int) -> Int
   if a > b
     return a
   end
+
   return b
 end
 
@@ -773,6 +792,7 @@ def counted(parsed: Int, fresh: Bool) -> Int
   if fresh
     return parsed + 1
   end
+
   return parsed
 end
 
@@ -786,6 +806,7 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
     if Declarations.import?(kind)
       next
     end
+
     name = Declarations.name_of(wrapped)
     if names.has_key?(name) or BARE_NAMES.include?(name) or RESERVED.include?(name)
       return error(
@@ -797,10 +818,12 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
         ),
       )
     end
+
     names = names.put(name, kind)
     if Declarations.exported?(wrapped)
       public = public.put(name, kind)
     end
   end
+
   return ok(Collected(names: names, public: public))
 end

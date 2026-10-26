@@ -29,11 +29,13 @@ end
 struct Scenario
   settings: Settings
   state: Map[String, Json]
+  services: Map[String, Fn[Json, Result[Json]]]
   step: StepLine
   program: Program
 end
 
-## The state of one scenario: the values saved with `set`, the current step and the program under test.
+## The state of one scenario: the values saved with `set`, the services kept with `keep`, the current step and the
+## program under test.
 export struct Context
   ## The scenario's state.
   scenario: Scenario
@@ -127,6 +129,22 @@ export def get(ctx: Context, name: String) -> Result[Json]
   return error("missing scenario state")
 end
 
+## Returns the context with `service` kept under `name`, for the later steps of the same scenario. A service is a
+## function from a request to a result, both JSON: the way to keep a value that is not JSON, such as an open database
+## connection, which the function captures. The handles close when the scenario's child VM ends with the scenario.
+export def keep(ctx: Context, name: String, service: Fn[Json, Result[Json]]) -> Context
+  return with_services(ctx, ctx.scenario.services.put(name, service))
+end
+
+## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
+export def call(ctx: Context, name: String, request: Json) -> Result[Json]
+  found = ctx.scenario.services.get(name)
+  if not found.ok?
+    return error("missing scenario service")
+  end
+  return found.unwrap!.call(request)
+end
+
 ## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. One
 ## program may start per scenario.
 export def given_program(ctx: Context, path: String) -> Context
@@ -155,15 +173,31 @@ export def when_eof(ctx: Context) -> Context
   return ctx
 end
 
+## Returns the next output line of the program, waiting up to `timeout_ms` milliseconds. It is an error when the output
+## ended or no line came in time.
+export def read_line(ctx: Context, timeout_ms: Int) -> Result[String]
+  line = raw_line(ctx, timeout_ms)
+  if line.ok?
+    return line
+  end
+  if line.message == ended_text()
+    return error("stdout ended before a line")
+  elsif line.message == timed_out_text()
+    return error("no line within #{timeout_ms} milliseconds")
+  end
+  check(false, line.message)
+  return line
+end
+
 ## Checks that the next output line of the program is `expected`, waiting up to `timeout_ms` milliseconds.
 export def then_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
-  return compare_text(ctx, read_line(ctx, timeout_ms), expected)
+  return compare_text(ctx, next_line(ctx, timeout_ms), expected)
 end
 
 ## Checks that the next output line and `expected` are the same JSON value, in any key order, waiting up to
 ## `timeout_ms` milliseconds.
 export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
-  actual = read_line(ctx, timeout_ms)
+  actual = next_line(ctx, timeout_ms)
   left = JSON.parse(expected)
   right = JSON.parse(actual)
   if not left.ok? or not right.ok?
@@ -252,7 +286,8 @@ def serve(all: List[Step]) -> Void
     has_table: false,
     table: empty,
   )
-  ctx = Context(scenario: Scenario(settings: settings.unwrap!, state: {}, step: blank, program: Program.NotStarted))
+  ctx = Context(scenario: Scenario(settings: settings.unwrap!, state: {}, services: {}, step: blank,
+                                   program: Program.NotStarted))
   line = Process.parent_read_line(idle_ms())
   while line.ok?
     found = JSON.decode(line.unwrap!, StepLine)
@@ -331,8 +366,8 @@ def start(ctx: Context, path: String) -> Context
     end
     halt("RUNTIME-BDD-IO", spawned.message)
   end
-  return Context(scenario: Scenario(settings: settings, state: ctx.scenario.state, step: ctx.scenario.step,
-                                    program: Program.Running(spawned.unwrap!)))
+  return Context(scenario: Scenario(settings: settings, state: ctx.scenario.state, services: ctx.scenario.services,
+                                    step: ctx.scenario.step, program: Program.Running(spawned.unwrap!)))
 end
 
 def program(ctx: Context) -> Process
@@ -353,11 +388,15 @@ def send(ctx: Context, text: String) -> Context
   return ctx
 end
 
-def read_line(ctx: Context, timeout_ms: Int) -> String
+def raw_line(ctx: Context, timeout_ms: Int) -> Result[String]
   p = program(ctx)
   positive(timeout_ms)
-  line = Process.read_line(p, timeout_ms)
-  if not line.ok? and line.message == "process: end of input"
+  return Process.read_line(p, timeout_ms)
+end
+
+def next_line(ctx: Context, timeout_ms: Int) -> String
+  line = raw_line(ctx, timeout_ms)
+  if not line.ok? and line.message == ended_text()
     halt("RUNTIME-BDD-ASSERTION", "stdout ended before the expected line")
   end
   check(line.ok?, line.message)
@@ -391,7 +430,7 @@ def check(fine: Bool, message: String) -> Void
   if fine
     return
   end
-  if message == "network: operation timed out"
+  if message == timed_out_text()
     halt("RUNTIME-BDD-TIMEOUT", "BDD operation timed out")
   elsif message == over_text() or message == "process: line exceeds 1048576 bytes"
     halt("RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
@@ -426,13 +465,18 @@ def clip(text: String) -> String
 end
 
 def with_state(ctx: Context, state: Map[String, Json]) -> Context
-  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: state, step: ctx.scenario.step,
-                                    program: ctx.scenario.program))
+  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: state, services: ctx.scenario.services,
+                                    step: ctx.scenario.step, program: ctx.scenario.program))
+end
+
+def with_services(ctx: Context, services: Map[String, Fn[Json, Result[Json]]]) -> Context
+  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: ctx.scenario.state, services: services,
+                                    step: ctx.scenario.step, program: ctx.scenario.program))
 end
 
 def with_step(ctx: Context, current: StepLine) -> Context
-  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: ctx.scenario.state, step: current,
-                                    program: ctx.scenario.program))
+  return Context(scenario: Scenario(settings: ctx.scenario.settings, state: ctx.scenario.state,
+                                    services: ctx.scenario.services, step: current, program: ctx.scenario.program))
 end
 
 def halt(code: String, message: String) -> Void
@@ -478,6 +522,14 @@ end
 
 def record_text(fields: Map[String, Json]) -> String
   return "#{JSON.encode(JSON.object(fields))}\n"
+end
+
+def ended_text() -> String
+  return "process: end of input"
+end
+
+def timed_out_text() -> String
+  return "network: operation timed out"
 end
 
 def over_text() -> String
