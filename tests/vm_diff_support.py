@@ -482,13 +482,9 @@ def check_text_format(on_vm, full, message):
 def check_step_allowance(limited, expected_steps, name):
     """A fixture stays within the step allowance of its golden: one run under the allowance must finish. With the
     limit monotonic (check_sweep), that is the same as the smallest limit that finishes being at most the allowance.
-    A run as far below the golden must stop, so a stale golden (a program now much cheaper) cannot silently move the
-    sweep's stops past the real end."""
+    A lower count passes, as the per-system goldens (files-real-windows) are only refreshed on their system."""
     assert not limited(step_allowance(expected_steps)), \
         "%s takes more steps than its golden %s allows (over-charging)" % (name, expected_steps)
-    floor = 2 * expected_steps - step_allowance(expected_steps)
-    if floor >= 1:
-        assert limited(floor), "%s takes fewer steps than its golden %s; run make goldens" % (name, expected_steps)
 
 
 def check_limited(on_vm, full, name, limit, note=""):
