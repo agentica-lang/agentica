@@ -85,7 +85,8 @@ Weighed later (no fixed order):
    comes after the FFI.
 9. [#531](https://github.com/sonic182/agentica/issues/531), `type-at` on type
    names: done in 0.8.1 (#550).
-10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer.
+10. [#536](https://github.com/sonic182/agentica/issues/536): libFuzzer: done
+    (#670).
 11. Flaky tests [#528](https://github.com/sonic182/agentica/issues/528) and
     [#382](https://github.com/sonic182/agentica/issues/382): closed (#603
     fixed #528; #382 did not recur).

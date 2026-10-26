@@ -10,8 +10,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `agentica test --tags EXPR` keeps the scenarios whose tags match (`@a`, `not @a`, `and`, `or`), and `BDD.skip(ctx, reason)` ends a scenario as skipped; the summary line and `--json` count `skipped`, and the exit code stays 0.
-- `agentica test` without `--steps` uses the `steps.agc` of the first searched folder that has one (`specs/steps.agc` by default).
+- `agentica test` without `--steps` uses the `steps.agc` found in or above the folder of each path (`specs/steps.agc` by default).
+- `agentica test --tags EXPR` keeps the scenarios whose tags match (`@a`, `not @a`, `and`, `or`).
+- `BDD.skip(ctx, reason)` ends a scenario as skipped; the exit code stays 0. **Breaking:** the text summary line now has `S skipped`, and `--json` has a `skipped` total, a scenario `reason` and the status `"skipped"`.
+
+### Changed
+
+- A timed channel `send` or `recv` that the other task answers within a turn
+  no longer reads the clock (far less system time where the clock is a system
+  call); the timeout may start up to one turn late.
 
 ### Fixed
 

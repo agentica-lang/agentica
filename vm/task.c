@@ -656,8 +656,9 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
 /* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
    alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not, unless every
    armed timer is a service task's: those only end idle waits that no other task depends on, so the run still stalls
-   when the loop has nothing alive. */
+   when the loop has nothing alive. A pending channel wait starts its clock first, so it bounds the wait. */
 static bool idle_wait(agc_vm *vm) {
+  agc_timers_settle(vm);
   uint64_t due = agc_timers_next_due(vm);
   if (due == UINT64_MAX) return agc_io_poll(vm, true);
   uint64_t now = agc_clock_ms();
@@ -762,6 +763,8 @@ static void sched_turns(agc_vm *vm, void (*thread)(void *arg)) {
          leave a task of this scheduler behind. */
       t = agc_runq_spin(q);
       if (!t) {
+        /* After the spin, which often finds the peer that ends a pending channel wait; before the wait it bounds. */
+        agc_timers_settle(vm);
         uint64_t due = agc_timers_next_due(vm);
         t = due == UINT64_MAX ? agc_runq_wait(q) : agc_runq_wait_until(q, due);
       }
