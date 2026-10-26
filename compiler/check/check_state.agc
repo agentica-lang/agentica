@@ -93,7 +93,9 @@ end
 ## of the call (the lowering reads it). step is true inside the block of a Lazy method, where a failed `try` ends the
 ## pipeline instead of returning from the block, and step_tries holds the id of each such `try` (the lowering emits
 ## try-step for them). bound holds what each name binding introduced, by the id of its node (see record_bound); it is
-## for the queries (`agentica type-at`), and the lowering never reads it.
+## for the queries (`agentica type-at`), and the lowering never reads it. probe is true while a block is checked only
+## to learn its result type (Stmt.check_block_in): an error(...) with no expected type then has the type
+## Result[Unknown] and does not fix the result of the block, and nothing checked in that run is kept.
 export struct St
   types: List[Types.Type]
   resolved: Map[Int, Resolved]
@@ -109,6 +111,7 @@ export struct St
   step: Bool
   step_tries: Set[Int]
   bound: Map[Int, List[Types.Type]]
+  probe: Bool
 end
 
 ## A call of a builtin that has its own rule: the call, its arguments, the form of the builtin that takes that many
@@ -167,6 +170,7 @@ export def fresh() -> St
     step: false,
     step_tries: no_tries,
     bound: {},
+    probe: false,
   )
 end
 

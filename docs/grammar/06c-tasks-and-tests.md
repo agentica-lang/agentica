@@ -154,7 +154,7 @@ so `xs.map` stays the sequential `List.map`. The block gives a `Result[R]`,
 since the work it is for (HTTP, files, processes) already returns `Result`;
 `try` works in it, and a block that cannot fail ends with `ok(x)`. `R` comes
 from the expected type of the call (`r: List[Result[Int]] = Task.map(...)`) or
-else from the first value the block gives, so a block whose first value is
+else from the first `ok(...)` the block gives, so a block that gives only
 `error(...)` needs the annotation (`CHECK-RESULT-TYPE` otherwise). A block whose
 last expression is not a `Result` is `CHECK-TYPE-MISMATCH`, with a help that
 shows `ok(...)`. A function value works as the last argument: `Task.map(ids, 8,

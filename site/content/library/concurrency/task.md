@@ -238,7 +238,7 @@ failed: cannot convert "x" to Int
 value 20
 ```
 
-`R` comes from the expected type of the call, else from the block's first value. If that is `error(...)`, the checker says `CHECK-RESULT-TYPE`: annotate the variable (`results: List[Result[Int]] = Task.map(...)`). A function value works too: `Task.map(ids, 8, 5000, &fetch)`.
+`R` comes from the expected type of the call, else from the first `ok(...)` the block gives. If the block gives only `error(...)`, the checker says `CHECK-RESULT-TYPE`: annotate the variable (`results: List[Result[Int]] = Task.map(...)`). A function value works too: `Task.map(ids, 8, 5000, &fetch)`.
 
 `timeout_ms` is per item, from the start of its task to its end, including time spent waiting to run. A slow item is cancelled and its slot is `error("task: timed out")`. There is no total timeout: a call takes at most about `ceil(items / limit) * timeout_ms`.
 

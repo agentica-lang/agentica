@@ -44,7 +44,8 @@ error(message: String) -> Result[T]
   binding, a return, an argument, a field or a typed container element; `r =
   error("bad")` alone is `CHECK-RESULT-TYPE`. Lists and maps infer from the
   first element: `[ok(1), error("bad")]` infers, the reverse needs an
-  annotation.
+  annotation. A block of unknown result type (`map`, `Native.memory_pointer`)
+  takes it from its `ok(...)`, so `return error("bad")` may come first.
 - `try` evaluates its Result operand once: success gives the payload, an error
   returns from the current function, which must return a Result
   (`CHECK-TRY-CONTEXT`; never in `main`). The operand and the function's success
