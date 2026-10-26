@@ -361,13 +361,17 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   builtin's call span). Deep recursion through a callback must not use `return
   f(...)` in the block in a fixture: that is a tail call on the VM only.
 - Maps keep insertion order exactly: a HAMT from
-  key to value plus a reversed cons list of keys. A new key conses one cell; a
-  replaced key keeps its cell. Never keep order in an array copied on every put.
-  The hash is keyed per run, so nothing observable may depend on it; the
-  printer, `Map.keys` and `Map.values` walk the key list, not the trie.
-  `Map.delete` copies the trie path and the key list up to the key's cell
-  (the rest is shared); a missing key returns the same map. The key-list
-  copy makes it O(n), so it is `AGC_COST_SIZE`. `List.sort`
+  key to value plus a reversed cons list of keys. A new key conses one cell
+  carrying its insertion number (`seq`); a replaced key keeps its cell. Never
+  keep order in an array copied on every put. The hash is keyed per run, so
+  nothing observable may depend on it; the printer, `Map.keys` and `Map.values`
+  walk the key list, not the trie. `Map.delete` copies the trie path, shares
+  the key list and adds the key's `seq` to the map's `dropped` list: that cell
+  is dead, and walks skip dead cells by `seq` (a bitmap or a sorted merge, never
+  a key lookup). Once dead cells outnumber live ones, the delete rebuilds the
+  list without them in one block. A missing key returns the same map. It is
+  O(log32 n) amortized along one line of versions, so it is `AGC_COST_NONE`
+  like `Map.put`. `List.sort`
   reuses `agc_sort_by_keys` (`vm/interp.c`) with the items as their own
   keys. `MAP` and `Map.put` share
   `agc_map_put`; HAMT recursion is bounded by 14 levels, printing nested
@@ -382,11 +386,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   survivors first with lookups only, return the first set itself when none is
   dropped, and build the result in a second pass only otherwise. `subset?` and
   the set case of `agc_equal` call `agc_set_subset`, so the key-list layout
-  stays in `vm/map.c`. `Set.delete` is `agc_map_delete`, O(n) like
+  stays in `vm/map.c`. `Set.delete` is `agc_map_delete`, like
   `Map.delete`. `agc_equal` compares sets by size and membership (for
   `Test.eq`; there is no `==`) and charges the size. Set builtins are
-  `AGC_COST_SIZE` when they walk or copy a set or a list (`delete` too) and
-  `AGC_COST_NONE` for `add`, `include?`, `size` and `empty?`. A hostile `.agcb`
+  `AGC_COST_SIZE` when they walk or copy a set or a list and
+  `AGC_COST_NONE` for `add`, `delete`, `include?`, `size` and `empty?`. A hostile `.agcb`
   that puts a non-Int, non-String in a set stops in `agc_key_hash`
   (`agc_wrong_tag`).
 - Lists can share items, so a list's text can be exponential in the code that

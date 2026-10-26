@@ -169,27 +169,43 @@ on 20,000 keys: it copied the key list up to the key, so deleting half the map
 was quadratic. A C loop over `agc_map_put` showed the rest: 2.5 us a put on
 20,000 Int keys, nearly all copying, because every slot of a node, child links
 too, was a 48-byte entry, and a put copies a 32-slot root and a full second
-level. Two changes in `vm/map.c`, with the same output and steps:
+level. Two changes in `vm/map.c` (#704), with the same output and steps:
 
-- A delete counts its key's cell as dead and leaves the list as it is; a cell
-  is live while the table holds its key with the cell's insertion number, and
-  the list is rebuilt once the dead cells outnumber the live ones.
+- A delete adds its key's insertion number to the map's dropped list and
+  leaves the key list as it is. Walks skip the dead cells by number (a bitmap,
+  or a sorted merge when the numbers are sparse), never by a key lookup, so a
+  walk after one delete costs what it did. The list is rebuilt in one block
+  once the dead cells outnumber the live ones.
 - A node keeps its leaves, then its child pointers (8 bytes each), with a
   `datamap` and a `nodemap`; a child left with one key is pulled up.
 
 The C loop went from 2,500 to 1,050 ns a put (get 120 to 110 ns, delete 300,000
-to 1,300 ns). Size 8, five rounds, median, two link layouts (`map.o` in place
-and last), under load at times:
+to 1,300 ns). Run of 2026-10-26 against master `8a477867`, size 8, five rounds
+alternated, median s, in two link layouts (a: the usual link order, b: `map.o`
+last), load average 1.5 to 2.8:
 
-| Program | Before s | After s | Ratio |
+| Program | Before, layout a / b | After, layout a / b | Ratio a / b |
 |---|---:|---:|---:|
-| maps | 1.247 / 1.178 | 0.500 / 0.457 | 0.40 / 0.39 |
-| sets | 0.620 / 0.633 | 0.251 / 0.261 | 0.40 / 0.41 |
-| maze-bfs | 0.413 / 0.416 | 0.261 / 0.264 | 0.63 / 0.64 |
-| small-values | 0.804 / 0.812 | 0.710 / 0.717 | 0.88 / 0.88 |
+| maps | 1.399 / 1.222 | 0.470 / 0.539 | 0.34 / 0.44 |
+| sets | 0.657 / 0.682 | 0.256 / 0.258 | 0.39 / 0.38 |
+| maze-bfs | 0.443 / 0.441 | 0.278 / 0.276 | 0.63 / 0.63 |
 
-The other programs, which use no Map or Set, moved between 0.70 and 1.14 in
-one layout and between 0.97 and 1.11 in the other: layout noise.
+The other programs moved between 0.70 and 1.13 in layout a and between 0.93 and
+1.06 in layout b, with no direction common to both: layout noise.
+`small-values` (0.86 / 0.87) is in that band too and is not claimed.
+
+Map programs from the review, median of three alternated runs, s and peak RSS:
+
+| Program | Before | After |
+|---|---:|---:|
+| 100,000 String keys, delete one, `keys.size` 300 times | 1.53, 58 MB | 1.19, 50 MB |
+| 100,000 Int keys, delete one, 100 walks of `keys` and `values` | 4.94, 43 MB | 3.88, 43 MB |
+| 20,000 String keys, delete every other, then `m.delete(k)` for each key left | 8.58, 15 MB | 3.49, 18 MB |
+| 40 rounds of 20,000 Int `put` and `get` | 2.67, 11 MB | 1.08, 11 MB |
+
+The third row deletes again and again from one map at the rebuild threshold,
+so every delete rebuilds the key list; the rebuild is one pass over integers
+and one block.
 
 ## Struct update (15c)
 

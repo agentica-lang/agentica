@@ -79,7 +79,7 @@ first-insertion order; a key deleted and then put again goes to the end, as in
   libraries such as Cachex add that on top of ETS. This spec does not design
   that module; `Table` stays the small primitive.
 - **Costs:** `get`, `put`, `put_new`, `has_key?`, `delete` and `add` take at
-  most O(log n) in the table size (unlike `Map.delete`, which is O(n)). `size`
+  most O(log n) in the table size. `size`
   is O(1). Taking a snapshot for `keys` or `to_map` is O(1) and blocks no other
   task; building its list or map is O(n).
 - **Atomicity:** each call is atomic on its own. There are no transactions over

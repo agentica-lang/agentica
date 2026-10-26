@@ -161,7 +161,7 @@ m.key?(key: K) -> Bool
 Map.get(map: Map[K, V], key: K) -> Result[V]             # ok(value), or error when the key is missing
 Map.get(map: Map[K, V], key: K, default: V) -> V         # default is evaluated eagerly
 Map.put(map: Map[K, V], key: K, value: V) -> Map[K, V]   # returns a new map
-Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignored; O(n)
+Map.delete(map: Map[K, V], key: K) -> Map[K, V]          # absent keys are ignored; O(log n) amortized
 Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void      # f(key, value) in insertion order
 m.select(f: Fn[K, V, Bool]) -> Map[K, V]                 # keeps the entries f accepts, in order
 ```
@@ -176,7 +176,7 @@ m.select(f: Fn[K, V, Bool]) -> Map[K, V]                 # keeps the entries f a
 ```text
 Set.new(items: List[T]) -> Set[T]                        # T is Int or String; repeats dropped, first keeps its place
 Set.add(set: Set[T], value: T) -> Set[T]                 # a member leaves the set unchanged
-Set.delete(set: Set[T], value: T) -> Set[T]              # a missing element is ignored; O(n)
+Set.delete(set: Set[T], value: T) -> Set[T]              # a missing element is ignored; O(log n) amortized
 Set.include?(set: Set[T], value: T) -> Bool
 Set.size(set: Set[T]) -> Int                             # O(1)
 Set.empty?(set: Set[T]) -> Bool

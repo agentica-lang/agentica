@@ -9,6 +9,7 @@
  */
 #include "core.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #define HAMT_BITS 5u
@@ -48,6 +49,18 @@ struct agc_hamt {
   uint32_t datamap, nodemap, leaves, children;
   hamt_leaf leaf[];
 };
+
+/* The seqs of a map's dead key cells, from its dropped list: a cell is live
+   unless its seq is there (a key put back after a delete gets a new seq, so
+   only its old cell is dead). Building the set costs O(dead), not O(size).
+   When the seqs are dense, a bitmap over [lo, hi) answers; when they are
+   sparse, they are sorted from high to low and merged with the walk of the key
+   list, whose seqs fall. */
+typedef struct {
+  uint64_t *seqs, *bits;
+  uint64_t lo, hi;
+  size_t n, at;
+} seq_set;
 
 static uint64_t rotl(uint64_t x, unsigned b) { return (x << b) | (x >> (64 - b)); }
 
@@ -246,6 +259,7 @@ static agc_map *map_with(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value 
   result->table = table;
   result->size = added ? agc_size_add(m->size, 1) : m->size;
   result->dead = m->dead;
+  result->dropped = m->dropped;
   result->reversed = m->reversed;
   result->next_seq = m->next_seq;
   if (added) {
@@ -291,12 +305,48 @@ static const hamt_leaf *find(agc_vm *vm, const agc_hamt *node, uint64_t hash, ag
   return NULL;
 }
 
-/* A cell is dead once its key was deleted: the table no longer holds the key,
-   or holds it again under a later seq because it was put back. */
-static bool cell_live(agc_vm *vm, const agc_map *m, const agc_keys *cell) {
-  if (m->dead == 0) return true;
-  const hamt_leaf *leaf = find(vm, m->table, cell->hash, cell->key);
-  return leaf && leaf->seq == cell->seq;
+static int by_falling_seq(const void *a, const void *b) {
+  uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
+  return x < y ? 1 : x > y ? -1 : 0;
+}
+
+static void dead_begin(agc_vm *vm, const agc_map *m, seq_set *set) {
+  memset(set, 0, sizeof *set);
+  set->lo = m->next_seq;
+  set->hi = m->next_seq;
+  for (const agc_seqs *d = m->dropped; d; d = d->next) {
+    if (set->n == m->dead || d->seq >= m->next_seq) agc_fail(vm, "RUNTIME-INTERNAL", "map dead keys do not match", 0);
+    set->n++;
+    if (d->seq < set->lo) set->lo = d->seq;
+  }
+  if (set->n != m->dead) agc_fail(vm, "RUNTIME-INTERNAL", "map dead keys do not match", 0);
+  /* The bitmap takes no more words than an array of the seqs would. */
+  if (set->hi - set->lo <= (uint64_t)set->n * 64) {
+    size_t words = (size_t)((set->hi - set->lo) / 64 + 1);
+    set->bits = agc_alloc_atomic(agc_size_mul(words, sizeof(uint64_t)));
+    memset(set->bits, 0, words * sizeof(uint64_t));
+    for (const agc_seqs *d = m->dropped; d; d = d->next) {
+      uint64_t at = d->seq - set->lo;
+      set->bits[at / 64] |= (uint64_t)1 << (at % 64);
+    }
+    return;
+  }
+  set->seqs = agc_alloc_atomic(agc_size_mul(set->n, sizeof(uint64_t)));
+  size_t k = 0;
+  for (const agc_seqs *d = m->dropped; d; d = d->next) set->seqs[k++] = d->seq;
+  qsort(set->seqs, set->n, sizeof(uint64_t), by_falling_seq);
+}
+
+/* Whether seq is in the set. Called with falling seqs, as the key list gives
+   them. */
+static bool seq_in(seq_set *set, uint64_t seq) {
+  if (set->bits) {
+    if (seq < set->lo || seq >= set->hi) return false;
+    uint64_t at = seq - set->lo;
+    return (set->bits[at / 64] >> (at % 64)) & 1;
+  }
+  while (set->at < set->n && set->seqs[set->at] > seq) set->at++;
+  return set->at < set->n && set->seqs[set->at] == seq;
 }
 
 bool agc_map_get_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value *value) {
@@ -312,8 +362,14 @@ bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value) 
 agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
   agc_value *keys = agc_alloc(agc_size_mul(m->size, sizeof(agc_value)));
   size_t k = m->size;
-  for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next)
-    if (cell_live(vm, m, cell)) keys[--k] = cell->key;
+  if (m->dead == 0) {
+    for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next) keys[--k] = cell->key;
+  } else {
+    seq_set dead;
+    dead_begin(vm, m, &dead);
+    for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next)
+      if (!seq_in(&dead, cell->seq)) keys[--k] = cell->key;
+  }
   if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
   return keys;
 }
@@ -323,8 +379,11 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
 bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b) {
   if (a->size > b->size) return false;
   agc_value present;
+  seq_set dead = {NULL, NULL, 0, 0, 0, 0};
+  if (a->dead > 0) dead_begin(vm, a, &dead);
   for (const agc_keys *cell = a->reversed; cell; cell = cell->next)
-    if (cell_live(vm, a, cell) && !agc_map_get_hash(vm, b, cell->hash, cell->key, &present)) return false;
+    if ((a->dead == 0 || !seq_in(&dead, cell->seq)) && !agc_map_get_hash(vm, b, cell->hash, cell->key, &present))
+      return false;
   return true;
 }
 
@@ -332,11 +391,12 @@ bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b) {
    there (*removed stays false), or NULL when nothing is left. A child left
    with one leaf and no children is pulled up into its parent as a leaf, so
    every child holds at least two keys. */
-static agc_hamt *take(agc_vm *vm, const agc_hamt *node, unsigned shift, uint64_t hash, agc_value key, bool *removed) { // NOLINT(misc-no-recursion)
+static agc_hamt *take(agc_vm *vm, const agc_hamt *node, unsigned shift, uint64_t hash, agc_value key, bool *removed, uint64_t *seq) { // NOLINT(misc-no-recursion)
   if (shift >= HAMT_HASH_BITS) {
     for (uint32_t k = 0; k < node->leaves; k++) {
       if (key_equal(vm, node->leaf[k].key, key)) {
         *removed = true;
+        *seq = node->leaf[k].seq;
         return node->leaves == 1 ? NULL : collision_with(node, k, NULL);
       }
     }
@@ -347,12 +407,13 @@ static agc_hamt *take(agc_vm *vm, const agc_hamt *node, unsigned shift, uint64_t
     const hamt_leaf *leaf = &node->leaf[index_of(node->datamap, bit)];
     if (leaf->hash != hash || !key_equal(vm, leaf->key, key)) return (agc_hamt *)node;
     *removed = true;
+    *seq = leaf->seq;
     if (node->leaves + node->children == 1) return NULL;
     return reshape(node, bit, node->datamap & ~bit, node->nodemap, NULL, NULL);
   }
   if (!(node->nodemap & bit)) return (agc_hamt *)node;
   uint32_t at = index_of(node->nodemap, bit);
-  agc_hamt *child = take(vm, kids(node)[at], shift + HAMT_BITS, hash, key, removed);
+  agc_hamt *child = take(vm, kids(node)[at], shift + HAMT_BITS, hash, key, removed, seq);
   if (!*removed) return (agc_hamt *)node;
   if (!child) {
     if (node->leaves + node->children == 1) return NULL;
@@ -365,27 +426,31 @@ static agc_hamt *take(agc_vm *vm, const agc_hamt *node, unsigned shift, uint64_t
   return copy;
 }
 
-/* Rebuilds the key list of m without its dead cells. A delete only counts its
-   cell as dead, so deletes cost O(log n); this pass runs once the dead cells
-   outnumber the live ones, which keeps the list under twice the size. */
+/* Rebuilds the key list of m without its dead cells, in one block. A delete
+   only counts its cell as dead, so deletes cost O(log n); this pass runs once
+   the dead cells outnumber the live ones, which keeps the list under twice
+   the size. Only the block's first cell is pointed to from outside it. */
 static void compact_keys(agc_vm *vm, agc_map *m) {
-  const agc_keys *old = m->reversed;
-  agc_keys **tail = &m->reversed;
-  *tail = NULL;
-  for (const agc_keys *cell = old; cell; cell = cell->next) {
-    if (!cell_live(vm, m, cell)) continue;
-    agc_keys *copy = agc_alloc(sizeof(agc_keys));
-    *copy = *cell;
-    copy->next = NULL;
-    *tail = copy;
-    tail = &copy->next;
+  seq_set dead;
+  dead_begin(vm, m, &dead);
+  agc_keys *block = agc_alloc(agc_size_mul(m->size, sizeof(agc_keys)));
+  size_t k = 0;
+  for (const agc_keys *cell = m->reversed; cell && k < m->size; cell = cell->next) {
+    if (seq_in(&dead, cell->seq)) continue;
+    block[k] = *cell;
+    block[k].next = k + 1 < m->size ? &block[k + 1] : NULL;
+    k++;
   }
+  if (k != m->size) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", 0);
+  m->reversed = block;
+  m->dropped = NULL;
   m->dead = 0;
 }
 
 agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key) {
   bool removed = false;
-  agc_hamt *table = m->table ? take(vm, m->table, 0, hash, key, &removed) : NULL;
+  uint64_t seq = 0;
+  agc_hamt *table = m->table ? take(vm, m->table, 0, hash, key, &removed, &seq) : NULL;
   if (!removed) return (agc_map *)m;
   if (m->size == 1) return agc_as_map(vm, vm->rt->empty_map);
   agc_map *result = agc_new_map();
@@ -394,6 +459,10 @@ agc_map *agc_map_delete_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_va
   result->dead = m->dead + 1;
   result->reversed = m->reversed;
   result->next_seq = m->next_seq;
+  agc_seqs *dropped = agc_alloc(sizeof(agc_seqs));
+  dropped->seq = seq;
+  dropped->next = m->dropped;
+  result->dropped = dropped;
   if (result->dead > result->size) compact_keys(vm, result);
   return result;
 }

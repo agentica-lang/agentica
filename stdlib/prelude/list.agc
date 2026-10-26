@@ -5,8 +5,8 @@
 ## types. A runtime error of a function here is reported at the call of the program, not in this file.
 ##
 ## Cost: each function is O(n) in the steps of the VM and calls its callback once for each element, from the first to
-## the last. Nothing here calls concat, take, drop, reverse, sort, sort_by, Map.keys, Map.values or Map.delete inside a
-## loop or a callback (tests/test_stdlib_prelude.py reads this file for them), so no function is quadratic.
+## the last. Nothing here calls concat, take, drop, reverse, sort, sort_by, Map.keys or Map.values inside a loop or a
+## callback (tests/test_stdlib_prelude.py reads this file for them), so no function is quadratic.
 
 def find(list: List[A], f: Fn[A, Bool]) -> Result[A]
   for item in list
