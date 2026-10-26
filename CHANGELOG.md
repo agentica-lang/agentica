@@ -30,6 +30,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The experimental x86-64 JIT (`--jit on`) calls compiled functions natively
   and compiles small functions without a loop for its callers, so call-heavy
   code runs in compiled code.
+- `--jit on` starts faster on large programs (deciding what to compile no
+  longer grows with the square of the program's size) and compiles less code
+  that would run only a few times, so it uses less memory.
 - A warm `agentica check` and `agentica type-at` do less work: the cache of
   checked modules leaves out the private functions of the imports and does not
   lex a file again for `blank_line_after_end` (2.3 times faster on
