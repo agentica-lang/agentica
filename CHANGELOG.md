@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
 
 ## [0.10.0] - 2026-10-25
