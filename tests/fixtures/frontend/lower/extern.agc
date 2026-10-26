@@ -4,6 +4,7 @@ extern "/opt/lib/my peer.so"
   def peer(a: C.Int32, b: C.Bool, s: C.String) -> C.String
   def send(conn: Conn, data: C.Bytes, n: C.Int32) -> C.Pointer
   def tick() -> Void
+  def peer_narrow(a: C.Int8, b: C.UInt16, out c: C.UInt32) -> C.Long
   compute def crunch(n: C.Int64) -> C.Double
   def peer_accept(port: C.Int32, out conn: Conn, out count: C.Int64) -> C.Int32
   def peer_split(x: C.Double, out whole: C.Double) -> Void
@@ -23,6 +24,7 @@ extern "/opt/lib/my peer.so"
     scale: C.Float
     on: C.Bool
     data: C.Pointer
+    count: C.UInt32
   end
   def box_make(n: C.Int64) -> Box
   compute def box_area(fn: C.Function, b: Box, p: Pair, out area: C.Double) -> Box
@@ -34,6 +36,8 @@ end
 
 def main() -> Void
   tick()
+  narrow = peer_narrow(-1, 65_535)
+  puts(narrow.result + narrow.c)
   puts(peer(1, cos(0.0) > 0.5, "x"))
   puts(crunch(2))
   conn = peer_open("p").unwrap!

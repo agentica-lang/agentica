@@ -443,15 +443,23 @@ extern "libm.so.6"
 end
 ```
 
-- The C types are `C.Int32` (a 32-bit `int`, an `Int` in Agentica), `C.Int64`
-  (`int64_t`, `Int`), `C.Double` (`double`, `Float`), `C.Float` (a 32-bit
-  `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a `const char *`,
-  `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function pointer, below)
-  and the resources and structs of the block (below); a result may also be
-  `Void`. `C.Int`
-  is `PARSE-EXTERN-TYPE`: write the width. A function takes at most 64
-  parameters (`PARSE-EXTERN-ARITY`). A `Float` passed as a `C.Float` is rounded
-  to the nearest float, and one outside its range becomes an infinity.
+- The C types are the integers `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`
+  (`int8_t` to `int64_t`), `C.UInt8`, `C.UInt16`, `C.UInt32` (`uint8_t` to
+  `uint32_t`) and `C.Long` (`long`: 32 bits on Windows, 64 on Linux and
+  macOS), each an `Int` in Agentica, `C.Double` (`double`, `Float`), `C.Float`
+  (a 32-bit `float`, `Float`), `C.Bool` (`bool`, `Bool`), `C.String` (a
+  `const char *`, `String`), `C.Pointer`, `C.Bytes`, `C.Function` (a function
+  pointer, below) and the resources and structs of the block (below); a result
+  may also be `Void`. `C.Int` is `PARSE-EXTERN-TYPE`: write the width. A
+  function takes at most 64 parameters (`PARSE-EXTERN-ARITY`). A `Float` passed
+  as a `C.Float` is rounded to the nearest float, and one outside its range
+  becomes an infinity.
+- A signed integer result is sign-extended and an unsigned one zero-extended,
+  so a `C.UInt32` above 2^31 is a positive `Int`. There is no unsigned 64-bit
+  type: declare a `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as
+  `C.Long`. The same bits cross, and a value above the signed maximum reads as
+  negative, as `std/binary`'s `read_i64` reads it (`C.UInt64` and `C.ULong` are
+  `PARSE-EXTERN-TYPE`).
 - The library is a plain string literal: a name without `/`, which the system
   loader looks up, or an absolute path. Anything else is
   `PARSE-EXTERN-LIBRARY`. The library opens at the first call of one of its
@@ -474,8 +482,11 @@ end
   05b-modules.md): `extern "NAME"` in a file of the package then opens the file
   it ships for the running system by its absolute path in `deps/`, or the
   system name it gives.
-- An argument is checked before the call: a `C.Int32` outside 32 bits is
-  `RUNTIME-INTEGER-OVERFLOW`, and a `C.String` with a NUL character is
+- An argument is checked before the call: an integer takes the bits of its
+  type read as signed or as unsigned, as `put_int8` to `put_int32` do (a
+  `C.UInt8` or `C.Int8` takes -128 to 255, a `C.Int32` or `C.UInt32` -2^31 to
+  2^32 - 1, a `C.Long` on Windows the same), and C gets its low bits; one
+  outside is `RUNTIME-INTEGER-OVERFLOW`. A `C.String` with a NUL character is
   `RUNTIME-INVALID-CHARACTER`. The C function gets a copy of each string, which
   it may read only during the call. A `C.String` result is copied; `NULL` reads
   as `""`, and bytes that are not UTF-8 become U+FFFD. A result that may be
@@ -583,7 +594,8 @@ end
   sees a record, copied both ways. A struct result is a new record with each
   field read from C (a `C.Bool` field is true when its byte is not 0). A struct
   argument is copied into C memory for the call, each field checked as an
-  argument is: a `C.Int32` outside 32 bits is `RUNTIME-INTEGER-OVERFLOW`, a
+  argument is: an integer outside the bits of its type is
+  `RUNTIME-INTEGER-OVERFLOW`, a
   `C.Float` is rounded, and a freed owned buffer in a `C.Pointer` field is
   `RUNTIME-NATIVE-CLOSED`, all before C runs. A field is changed with `.with`
   and the new record passed back (llama.cpp's params). A `C.Pointer` field is an

@@ -86,9 +86,9 @@ export def lower(
   return ok(Ir.Function(name: name, params: count, captures: 0, slots: slots, body: body, file: index, span: span))
 end
 
-# Whether the function has out parameters: one of the codes is a capital.
+# Whether the function has out parameters: one of the codes is a capital (no other code holds one).
 def record?(native: Ast.Native) -> Bool
-  return native.codes.split("").any? do |code: String| "ILDFBPR".contains?(code) end
+  return native.codes.split("").any? do |code: String| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(code) end
 end
 
 # The codes of the signature with the index of each struct after its {. The structs come in the order of their {: the C

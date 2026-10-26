@@ -184,17 +184,122 @@ static uint64_t text_hash(const char *data, size_t len) {
   return h;
 }
 
+/* The integer type of a code of the signature or of a struct layout: i C.Int32, l C.Int64, g C.Int8, h C.Int16,
+   u C.UInt8, w C.UInt16, j C.UInt32 and n C.Long. False for any other code. */
+static bool int_type_of(char code, agc_c_type *type) {
+  switch (code) {
+    case 'i': *type = AGC_C_INT; return true;
+    case 'l': *type = AGC_C_INT64; return true;
+    case 'g': *type = AGC_C_INT8; return true;
+    case 'h': *type = AGC_C_INT16; return true;
+    case 'u': *type = AGC_C_UINT8; return true;
+    case 'w': *type = AGC_C_UINT16; return true;
+    case 'j': *type = AGC_C_UINT32; return true;
+    case 'n': *type = AGC_C_LONG; return true;
+    default: return false;
+  }
+}
+
+/* The case labels of the integer types of a signature, the types whose int_bits is not 0. */
+#define INT_CASES                                                                                                     \
+  case AGC_C_INT:                                                                                                     \
+  case AGC_C_INT64:                                                                                                   \
+  case AGC_C_INT8:                                                                                                    \
+  case AGC_C_INT16:                                                                                                   \
+  case AGC_C_UINT8:                                                                                                   \
+  case AGC_C_UINT16:                                                                                                  \
+  case AGC_C_UINT32:                                                                                                  \
+  case AGC_C_LONG
+
+/* The bits of an integer type of a signature (C.Long has the platform's: 32 on Windows, 64 elsewhere), 0 for the other
+   types. */
+static unsigned int_bits(agc_c_type type) {
+  switch (type) {
+    case AGC_C_INT8:
+    case AGC_C_UINT8: return 8;
+    case AGC_C_INT16:
+    case AGC_C_UINT16: return 16;
+    case AGC_C_INT:
+    case AGC_C_UINT32: return 32;
+    case AGC_C_INT64: return 64;
+    case AGC_C_LONG: return (unsigned)(sizeof(long) * CHAR_BIT);
+    default: return 0;
+  }
+}
+
+/* The one range rule of every integer that the VM writes into C, an argument, a struct field or a memory item of
+   Native.put_*: N fits in BITS read as signed or as unsigned (8 bits take -128 to 255). C then gets N's low bits, so
+   -1 and 255 are the same int8_t or uint8_t, as in C. */
+static bool fits_bits(int64_t n, unsigned bits) {
+  return bits >= 64 || (n >= -(INT64_C(1) << (bits - 1)) && n <= (INT64_C(1) << bits) - 1);
+}
+
+/* The C integer of TYPE at AT (a value slot or a struct field), which may be unaligned: a signed type is
+   sign-extended and an unsigned one zero-extended, so a C.UInt32 above 2^31 is a positive Int. */
+static agc_value int_load(agc_c_type type, const void *at) {
+  bool sign = type != AGC_C_UINT8 && type != AGC_C_UINT16 && type != AGC_C_UINT32;
+  switch (int_bits(type)) {
+    case 8: {
+      int8_t s;
+      uint8_t u;
+      memcpy(&s, at, sizeof s);
+      memcpy(&u, at, sizeof u);
+      return agc_int(sign ? (int64_t)s : (int64_t)u);
+    }
+    case 16: {
+      int16_t s;
+      uint16_t u;
+      memcpy(&s, at, sizeof s);
+      memcpy(&u, at, sizeof u);
+      return agc_int(sign ? (int64_t)s : (int64_t)u);
+    }
+    case 32: {
+      int32_t s;
+      uint32_t u;
+      memcpy(&s, at, sizeof s);
+      memcpy(&u, at, sizeof u);
+      return agc_int(sign ? (int64_t)s : (int64_t)u);
+    }
+    default: {
+      int64_t s;
+      memcpy(&s, at, sizeof s);
+      return agc_int(s);
+    }
+  }
+}
+
+/* Writes N, which fits_bits has checked, as the C integer of TYPE at AT, which may be unaligned: its low bits. */
+static void int_store(agc_c_type type, int64_t n, void *at) {
+  switch (int_bits(type)) {
+    case 8: {
+      uint8_t x = (uint8_t)n;
+      memcpy(at, &x, sizeof x);
+      break;
+    }
+    case 16: {
+      uint16_t x = (uint16_t)n;
+      memcpy(at, &x, sizeof x);
+      break;
+    }
+    case 32: {
+      uint32_t x = (uint32_t)n;
+      memcpy(at, &x, sizeof x);
+      break;
+    }
+    default: memcpy(at, &n, sizeof n); break;
+  }
+}
+
 /* The C type of a code of the signature; a capital is an out parameter of that type (*OUT set), for the types that
    can be one. */
 static bool c_type_of(char code, bool result, agc_c_type *type, bool *out) {
   *out = false;
-  if (!result && code != '\0' && strchr("ILDFBPR", code)) {
+  if (!result && code != '\0' && strchr("ILGHUWJNDFBPR", code)) {
     *out = true;
     code = (char)(code - 'A' + 'a');
   }
+  if (int_type_of(code, type)) return true;
   switch (code) {
-    case 'i': *type = AGC_C_INT; return true;
-    case 'l': *type = AGC_C_INT64; return true;
     case 'd': *type = AGC_C_DOUBLE; return true;
     case 'f': *type = AGC_C_FLOAT; return true;
     case 'b': *type = AGC_C_BOOL; return true;
@@ -266,9 +371,10 @@ static void struct_free(agc_c_struct *s) { // NOLINT(misc-no-recursion)
   free(s);
 }
 
-/* The layout of the struct "{N:CODES}" at *AT, whose braces group_length has checked, before END; *AT moves past it.
-   N is a struct of the program P with one field per code: i, l, d, f, b, p or a nested struct. *LEAVES counts the
-   fields of the whole tree, nested ones included. NULL when any part is wrong, with nothing left allocated. */
+/* The layout of the struct "{N:CODES}" at *AT, whose braces group_length has checked, before END; *AT moves past it. N
+   is a struct of the program P with one field per code: an integer code (int_type_of), d, f, b, p or a nested struct.
+   *LEAVES counts the fields of the whole tree, nested ones included. NULL when any part is wrong, with nothing left
+   allocated. */
 static agc_c_struct *struct_parse(const agc_program *p, const char **at, const char *end, uint32_t *leaves) { // NOLINT(misc-no-recursion)
   const char *c = *at + 1;
   uint32_t index = 0, digits = 0;
@@ -293,14 +399,12 @@ static agc_c_struct *struct_parse(const agc_program *p, const char **at, const c
   for (uint32_t k = 0; k < count && good; k++) {
     agc_c_type type = AGC_C_VOID;
     switch (*c) {
-      case 'i': type = AGC_C_INT; break;
-      case 'l': type = AGC_C_INT64; break;
       case 'd': type = AGC_C_DOUBLE; break;
       case 'f': type = AGC_C_FLOAT; break;
       case 'b': type = AGC_C_BOOL; break;
       case 'p': type = AGC_C_POINTER; break;
       case '{': type = AGC_C_STRUCT; break;
-      default: break;
+      default: (void)int_type_of(*c, &type); break;
     }
     s->types[k] = type;
     if (type == AGC_C_STRUCT) {
@@ -352,16 +456,17 @@ static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *
 
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the
    C name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
-   function has a "." among the codes where its variadic part starts, after one C parameter at least; the codes after it
-   are never an out parameter, a C.Bool or a C.Float, which C would promote. Each resource the call makes adds two words
-   after the C name, the C name of its free function and the resource's name, an identifier: the result's first (code
-   r), then each out resource's (code R), in order. A call through a C function pointer has the code c first: the
-   argument is the address to call, and SYMBOL (the def's name) is only shown. The code e, only as the last code (a
-   "." may follow), is the argument that holds the free function of each resource the call makes whose free word is
-   C.Function; the call has one exactly when such a resource needs it. A struct passed or returned by value is one code
-   "{N:CODES}": N is its index in the program's struct table and CODES has one code per field, in the struct's field
-   order, i, l, d, f, b, p or a nested struct; it is never an out parameter or after the ".". The front end writes it
-   (compiler/lower/lower_native.agc); the bytecode may hold anything, so every part is checked here. */
+   function has a "." among the codes where its variadic part starts, after one C parameter at least; the codes after
+   it are never an out parameter, a C.Bool, a C.Float or an integer narrower than an int, which C would promote. Each
+   resource the call makes adds two words after the C name, the C name of its free function and the resource's name, an
+   identifier: the result's first (code r), then each out resource's (code R), in order. A call through a C function
+   pointer has the code c first: the argument is the address to call, and SYMBOL (the def's name) is only shown. The
+   code e, only as the last code (a "." may follow), is the argument that holds the free function of each resource the
+   call makes whose free word is C.Function; the call has one exactly when such a resource needs it. A struct passed or
+   returned by value is one code "{N:CODES}": N is its index in the program's struct table and CODES has one code per
+   field, in the struct's field order, an integer code, d, f, b, p or a nested struct; it is never an out parameter or
+   after the ".". The front end writes it (compiler/lower/lower_native.agc); the bytecode may hold anything, so every
+   part is checked here. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
   size_t left = text->bytes;
@@ -421,9 +526,9 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
       continue;
     }
     if (!c_type_of(code, false, &params[count], &out[count])) bad_signature(vm, span);
-    if (k >= before &&
-        (out[count] || params[count] == AGC_C_BOOL || params[count] == AGC_C_FLOAT || params[count] == AGC_C_STRUCT))
-      bad_signature(vm, span);
+    bool promoted = params[count] == AGC_C_BOOL || params[count] == AGC_C_FLOAT ||
+                    (int_bits(params[count]) && int_bits(params[count]) < 32);
+    if (k >= before && (out[count] || promoted || params[count] == AGC_C_STRUCT)) bad_signature(vm, span);
     item_of[count] = k + 1;
     /* C gets a pointer to the slot of an out parameter. */
     c_params[count] = out[count] ? AGC_C_POINTER : params[count];
@@ -692,20 +797,17 @@ static void *pointer_of(agc_vm *vm, agc_value v) {
 }
 
 /* Checks argument V against its C type before anything is allocated, so a failure (agc_fail longjmps) leaks
-   nothing. A C.Int32 that does not fit in 32 bits and a C.String with a NUL inside fail: C cannot take them, and
+   nothing. An integer outside fits_bits of its type and a C.String with a NUL inside fail: C cannot take them, and
    cutting them short would call the function with another value. The items of a C.Bytes are checked while they are
    copied (copy_bytes), and whether a resource or an owned buffer is closed before and after that (check_open). A
    C.Float takes any Float: one outside the range of a float becomes an infinity (IEEE 754, C11 Annex F). A struct
    (LAYOUT) is a struct value of the program's type that the layout names, whose fields are checked the same way. */
 static void check_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layout, agc_value v, uint32_t span) { // NOLINT(misc-no-recursion)
   switch (type) {
-    case AGC_C_INT: {
-      int64_t n = agc_as_int(vm, v);
-      if (n < INT32_MIN || n > INT32_MAX)
-        agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a C.Int32 argument does not fit in 32 bits", span);
+    INT_CASES:
+      if (!fits_bits(agc_as_int(vm, v), int_bits(type)))
+        agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "an integer argument does not fit in the bits of its C type", span);
       break;
-    }
-    case AGC_C_INT64: agc_as_int(vm, v); break;
     case AGC_C_DOUBLE:
     case AGC_C_FLOAT: agc_as_float(vm, v); break;
     case AGC_C_BOOL: agc_as_bool(vm, v); break;
@@ -738,17 +840,11 @@ static void struct_write(agc_vm *vm, const agc_c_struct *layout, agc_value v, ui
   for (uint32_t k = 0; k < layout->count; k++) {
     uint8_t *at = base + layout->offsets[k];
     agc_value field = st->fields[k];
+    if (int_bits(layout->types[k])) {
+      int_store(layout->types[k], agc_as_int(vm, field), at);
+      continue;
+    }
     switch (layout->types[k]) {
-      case AGC_C_INT: {
-        int32_t n = (int32_t)agc_as_int(vm, field);
-        memcpy(at, &n, sizeof n);
-        break;
-      }
-      case AGC_C_INT64: {
-        int64_t n = agc_as_int(vm, field);
-        memcpy(at, &n, sizeof n);
-        break;
-      }
       case AGC_C_DOUBLE: {
         double x = agc_as_float(vm, field);
         memcpy(at, &x, sizeof x);
@@ -778,19 +874,11 @@ static agc_value struct_value(const agc_c_struct *layout, const uint8_t *base) {
   for (uint32_t k = 0; k < layout->count; k++) {
     const uint8_t *at = base + layout->offsets[k];
     agc_value field = agc_void();
+    if (int_bits(layout->types[k])) {
+      st->fields[k] = int_load(layout->types[k], at);
+      continue;
+    }
     switch (layout->types[k]) {
-      case AGC_C_INT: {
-        int32_t n;
-        memcpy(&n, at, sizeof n);
-        field = agc_int(n);
-        break;
-      }
-      case AGC_C_INT64: {
-        int64_t n;
-        memcpy(&n, at, sizeof n);
-        field = agc_int(n);
-        break;
-      }
       case AGC_C_DOUBLE: {
         double x;
         memcpy(&x, at, sizeof x);
@@ -825,8 +913,7 @@ static agc_c_value c_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *l
                               uint8_t *memory) {
   agc_c_value out = {0};
   switch (type) {
-    case AGC_C_INT: out.i = (int32_t)agc_as_int(vm, v); break;
-    case AGC_C_INT64: out.l = agc_as_int(vm, v); break;
+    INT_CASES: int_store(type, agc_as_int(vm, v), &out); break;
     case AGC_C_DOUBLE: out.d = agc_as_float(vm, v); break;
     /* An infinity when out of range: every target with native calls is IEEE 754 (C11 Annex F). */
     case AGC_C_FLOAT: out.f = (float)agc_as_float(vm, v); break;
@@ -959,8 +1046,7 @@ static agc_value text_value(const uint8_t *p, size_t n) {
 
 static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, void *free_at) {
   switch (e->result) {
-    case AGC_C_INT: return agc_int(r->i);
-    case AGC_C_INT64: return agc_int(r->l);
+    INT_CASES: return int_load(e->result, r);
     case AGC_C_DOUBLE: return agc_float(r->d);
     case AGC_C_FLOAT: return agc_float(r->f);
     case AGC_C_BOOL: return agc_bool(r->b);
@@ -982,8 +1068,7 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
    wrote, so a slot that does not hold 0 or 1 is never read as a _Bool. */
 static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc_c_value *slot, void *free_at) {
   switch (e->params[k]) {
-    case AGC_C_INT: return agc_int(slot->i);
-    case AGC_C_INT64: return agc_int(slot->l);
+    INT_CASES: return int_load(e->params[k], slot);
     case AGC_C_DOUBLE: return agc_float(slot->d);
     case AGC_C_FLOAT: return agc_float(slot->f);
     case AGC_C_BOOL: {
@@ -1377,11 +1462,8 @@ static void check_item(agc_vm *vm, item_kind kind, agc_value v, uint32_t span) {
   } else if (kind == ITEM_BYTE) {
     int64_t n = agc_as_int(vm, v);
     if (n < 0 || n > 255) agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "a byte must be 0 to 255", span);
-  } else {
-    int64_t n = agc_as_int(vm, v);
-    unsigned bits = (unsigned)ITEM_WIDTHS[kind] * 8;
-    if (bits < 64 && (n < -(INT64_C(1) << (bits - 1)) || n > (INT64_C(1) << bits) - 1))
-      agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "the value does not fit in the memory item", span);
+  } else if (!fits_bits(agc_as_int(vm, v), (unsigned)ITEM_WIDTHS[kind] * 8)) {
+    agc_fail(vm, "RUNTIME-INTEGER-OVERFLOW", "the value does not fit in the memory item", span);
   }
 }
 

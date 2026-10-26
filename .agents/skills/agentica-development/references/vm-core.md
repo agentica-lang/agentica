@@ -113,7 +113,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   (`memory_done`), so no free comes between the check and the copy while a read
   of a raw pointer runs beside the other schedulers. `Native.memory_pointer`
   and `Native.free` are shared rows. `C.Float` is code `f` (`F` out), refused
-  after `.`. Every `Native.*` import counts as native code for the refusal at
+  after `.`. The integer codes are `i l g h u w j n` (`C.Int32`, `C.Int64`,
+  `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32`, `C.Long`; capitals
+  out); `fits_bits` is the one range rule of arguments, fields and `put_*`, and
+  the four narrower than an int are refused after `.`. Every `Native.*` import counts as native code for the refusal at
   load. The adapter `vm/ffi_libffi.c` (`AGC_FFI`, Linux x86_64, Windows x64 and
   macOS) opens libraries with `dlopen` or `LoadLibraryExW` and calls with
   libffi; `vm/ffi_none.c` refuses elsewhere

@@ -14,7 +14,7 @@ VALID = """extern "libm.so.6"
   ## Runs on the compute pool.
   export compute def crunch(n: C.Int64) -> C.Double
 
-  def labs(n: C.Int64) -> C.Int64
+  def labs(n: C.Long) -> C.Long
 end
 
 extern "/opt/peer/libpeer.so"
@@ -115,6 +115,57 @@ def test_c_float_is_a_float_to_the_checker(tmp_path, body, code, start, stop):
         assert (result.code, result.stdout) == (0, '{"ok":true}\n')
     else:
         assert at(problem_of(result)) == (code, start, stop)
+
+
+INTEGERS = """extern "/opt/libpeer.so"
+  struct Packet
+    tag: C.Int8
+    flags: C.UInt8
+    kind: C.Int16
+    port: C.UInt16
+    oid: C.UInt32
+    length: C.Long
+  end
+  def narrow(a: C.Int8, b: C.Int16, c: C.UInt8, d: C.UInt16, e: C.UInt32, f: C.Long) -> C.UInt32
+  def read_header(h: Packet, out size: C.Long, out code: C.UInt8) -> Packet
+  def wide(n: C.Long) -> C.Int8
+  def vsum(n: C.Int32, ..., a: C.UInt32, b: C.Long) -> C.Long
+end
+
+def main() -> Void
+%s
+end
+"""
+
+
+# The integer types C.Int8, C.Int16, C.UInt8, C.UInt16, C.UInt32 and C.Long are Int to the checker as parameters,
+# results, out parameters, struct fields and (C.UInt32 and C.Long, which C does not promote) variadic parameters.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  h = read_header(Packet(tag: -1, flags: 255, kind: 2, port: 80, oid: 4_000_000_000, length: 9))\n"
+     "  n: Int = narrow(1, 2, 3, 4, 5, 6) + h.result.oid + h.size + h.code + wide(7) + vsum(2, 3, 4)\n  puts(n)",
+     None, None, None),
+    ("  puts(narrow(1, 2, 3, 4, 5.0, 6))", "CHECK-TYPE-MISMATCH", (17, 27), (17, 30)),
+    ("  s: String = wide(1)", "CHECK-TYPE-MISMATCH", (17, 15), (17, 22)),
+])
+def test_the_integer_types_are_int_to_the_checker(tmp_path, body, code, start, stop):
+    assert_checks(check(source(tmp_path, INTEGERS % body)), code, start, stop)
+
+
+# An integer type narrower than an int is promoted by C after ..., so it is refused there as C.Bool is; C has no
+# unsigned 64-bit or unsigned long type here: C.Int64 and C.Long carry the same bits, and the help says so.
+@pytest.mark.parametrize("signature, code, start, stop, named", [
+    ("def f(a: C.Int32, ..., b: C.Int8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 35), None),
+    ("def f(a: C.Int32, ..., b: C.Int16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36), None),
+    ("def f(a: C.Int32, ..., b: C.UInt8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36), None),
+    ("def f(a: C.Int32, ..., b: C.UInt16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 37), None),
+    ("def f(a: C.UInt64) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 20), "C.Int64"),
+    ("def f() -> C.ULong", "PARSE-EXTERN-TYPE", (2, 14), (2, 21), "C.Long"),
+])
+def test_promoted_and_missing_integer_types_are_refused(tmp_path, signature, code, start, stop, named):
+    problem = problem_of(check(source(tmp_path, 'extern "libc.so.6"\n  %s\nend\n' % signature)))
+    assert at(problem) == (code, start, stop)
+    if named:
+        assert named in problem["help"]
 
 
 MEMORY = """extern "/opt/libpeer.so"
@@ -682,7 +733,7 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
     assert check(source(tmp_path, text)).code == 0
 
 
-# A field of a C struct is C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in the
+# A field of a C struct is a C integer type, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in the
 # block: a C.String, C.Bytes, C.Function or resource field (whose lifetime the VM cannot follow), an Agentica type, a
 # struct declared below and C.Int are PARSE-EXTERN-TYPE at the type.
 @pytest.mark.parametrize("field, start, stop", [
@@ -694,6 +745,7 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
     ("xs: List[C.Int32]", (4, 9), (4, 22)),
     ("later: Later", (4, 12), (4, 17)),
     ("n: C.Int", (4, 8), (4, 13)),
+    ("n: C.UInt64", (4, 8), (4, 16)),
 ])
 def test_a_c_struct_field_has_a_c_value_type(tmp_path, field, start, stop):
     text = 'extern "/opt/libx.so"\n  resource Thing, free: thing_free\n  struct S\n    %s\n  end\n' \

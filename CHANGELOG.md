@@ -11,9 +11,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
+- Extern types `C.Int8`, `C.Int16`, `C.UInt8`, `C.UInt16`, `C.UInt32` and
+  `C.Long` (C `long`, 32 bits on Windows) for parameters, results, out
+  parameters and struct fields; unsigned results are never negative.
 
 ### Changed
 
+- An integer argument or struct field of an extern function takes the bits of
+  its type read as signed or unsigned, as `Native.put_int32` does: a
+  `C.Int32` takes up to 2^32 - 1.
 - The experimental x86-64 JIT (`--jit on`) calls compiled functions natively
   and compiles small functions without a loop for its callers, so call-heavy
   code runs in compiled code.
