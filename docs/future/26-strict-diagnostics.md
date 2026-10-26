@@ -152,11 +152,11 @@ variant as a value or a pattern (`Domain.Option.Some(x)`), and an enum type
 (`Domain.Option[Int]`). A use inside a function that is never called still
 counts: the rule is about the file's text, not about what runs.
 
-**Re-exports** ([section 25.2](25-ruby-typed-idioms.md#252-re-exports), roadmap
-15b): `export Url.parse` counts as a use of `Url`. A facade file that only
-re-exports is the main use of re-exports, and it must not need a fake call to
-keep its imports. 15b lands after this item (both at order step 7.6), so 15b
-marks the alias as used when it resolves a re-export, and its tests include a
+**Re-exports** (`docs/grammar/05b-modules.md`, roadmap 15b, built):
+`export Url.parse` counts as a use of `Url`. A facade file that only re-exports
+is the main use of re-exports, and it must not need a fake call to keep its
+imports. 15b landed before this item, so the check marks the alias as used when
+a re-export names it (`Declarations.reexports_of`), and its tests include a
 facade that only re-exports.
 
 **No side effects to keep.** An import has no effect besides its names: a module

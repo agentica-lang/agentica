@@ -190,6 +190,7 @@ export def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
       _ -> next
     end
   end
+
   return found
 end
 

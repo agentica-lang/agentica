@@ -184,9 +184,9 @@ Weighed later (no fixed order):
     warnings: `CHECK-UNUSED-IMPORT`, `CHECK-UNUSED-VARIABLE`,
     `CHECK-UNREACHABLE-CODE`, `CHECK-UNUSED-RESULT`, in the order 16a, 16c,
     16b, 16d; each PR migrates the repo's programs); then Ruby typed idioms
-    (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A): re-exports,
-    value equality, lambdas, `File.open` with a block (15b, 15d, 15e, 15i); one
-    small PR each
+    (phase 15, `docs/future/25-ruby-typed-idioms.md` §25, Part A): value
+    equality, lambdas, `File.open` with a block (15d, 15e, 15i; re-exports,
+    15b, are done); one small PR each
   - **Outcome:** Unused imports, unused variables, unreachable code and ignored
     `Result` values are errors, and there are no warnings; agents write the Ruby
     forms they know, still checked, immutable and with one canonical form

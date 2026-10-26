@@ -18,8 +18,8 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
 ## Exports and names
 
 `export struct`, `export enum`, `export def` and `export NAME = ...` (a
-constant) expose declarations; everything else is private. Imports cannot be
-re-exported. An exported signature may mention private types, but importers
+constant) expose declarations; everything else is private. An exported
+signature may mention private types, but importers
 cannot name or build them.
 
 - Through the alias: `Models.User` in annotations and JSON type arguments,
@@ -27,6 +27,13 @@ cannot name or build them.
   `&Models.greet` for a callback; imported enums: `Models.Option[T]`,
   `Models.Option.Some(value)`, and `Models.Option.Some(item)` in a pattern.
   Local names stay unqualified inside their own file.
+- Re-export: `export Url.parse` or `export Url.Address` (after the imports,
+  `Url` an alias of this file) passes on a name of an imported module, so a
+  facade file collects an API. The importer gets the original declaration
+  (`Web.Address` and `Url.Address` are one type, `&Web.parse` is `&Url.parse`);
+  the file adds no local name. No `as`, no wildcard. An unknown alias or name
+  is `CHECK-IMPORT-NAME`; a name that is also a declaration, re-export or
+  alias of the file is `CHECK-REDEFINED-NAME`.
 - Alias names are uppercase and cannot collide with declarations, other aliases,
   imported names or builtin names.
 

@@ -9,13 +9,14 @@ uppercase names are lexical tokens.
 ```ebnf
 program          = [ NL ], [ module_doc ], { declaration }, EOF ;
 module_doc       = DOC, NL, NL ;
-declaration      = import_decl | extern_decl
+declaration      = import_decl | reexport_decl | extern_decl
                  | [ DOC, NL ], ( constant_decl | function_decl | struct_decl | enum_decl | alias_decl
                  | "export", ( function_decl | struct_decl | enum_decl | alias_decl ) ) ;
 constant_decl    = [ "export" ], CONST_NAME, [ ":", type ], "=", expression, NL ;
 import_decl      = "import", ( TYPE_NAME | name_list ), "from", STRING, NL ;
 name_list        = "{", import_name, { ",", import_name }, [ "," ], "}" ;
 import_name      = ( NAME | TYPE_NAME ), [ "as", ( NAME | TYPE_NAME ) ] ;
+reexport_decl    = "export", TYPE_NAME, ".", ( NAME | TYPE_NAME ), NL ;
 
 function_decl    = "def", NAME, "(", [ parameters ], ")",
                    "->", type, NL, block, "end", NL ;
