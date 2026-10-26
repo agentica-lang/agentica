@@ -56,8 +56,9 @@ SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
 if SWEEP_MODE not in ("", "full", "sampled", "ends"):
     raise RuntimeError("AGENTICA_SWEEP must be full, sampled or ends, not %r" % SWEEP_MODE)
 SAMPLED_SWEEP = SWEEP_MODE == "sampled"
-# Fixtures whose every run is costly (1000 file rounds; three fixed sleeps): they get the `ends` sweep in every mode, as
-# the stop of a Task.map and of an HTTP client under --max-steps is swept by task-map-steps and http-client.
+# Fixtures whose every run is costly (1000 file rounds; three fixed sleeps): they get the `ends` sweep in every mode but
+# full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
+# task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
 ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc"}
 
 # What a run that outlived its time limit reports in place of an exit code.
@@ -480,9 +481,14 @@ def check_text_format(on_vm, full, message):
 
 def check_step_allowance(limited, expected_steps, name):
     """A fixture stays within the step allowance of its golden: one run under the allowance must finish. With the
-    limit monotonic (check_sweep), that is the same as the smallest limit that finishes being at most the allowance."""
+    limit monotonic (check_sweep), that is the same as the smallest limit that finishes being at most the allowance.
+    A run as far below the golden must stop, so a stale golden (a program now much cheaper) cannot silently move the
+    sweep's stops past the real end."""
     assert not limited(step_allowance(expected_steps)), \
         "%s takes more steps than its golden %s allows (over-charging)" % (name, expected_steps)
+    floor = 2 * expected_steps - step_allowance(expected_steps)
+    if floor >= 1:
+        assert limited(floor), "%s takes fewer steps than its golden %s; run make goldens" % (name, expected_steps)
 
 
 def check_limited(on_vm, full, name, limit, note=""):
@@ -677,7 +683,7 @@ def total_steps(limited):
 def fixture_limits(name, steps):
     """The --max-steps limits of a fixture, around the step count T of its golden (the check of the allowance proves
     that the VM's own count is not above it)."""
-    if SWEEP_MODE == "ends" or name in ENDS_ONLY_FIXTURES:
+    if SWEEP_MODE == "ends" or (name in ENDS_ONLY_FIXTURES and SWEEP_MODE != "full"):
         return end_limits(steps)
     return sampled_limits(steps, name) if SAMPLED_SWEEP else sweep_limits(steps)
 

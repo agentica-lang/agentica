@@ -291,9 +291,9 @@ def test_unsafe_members_rejected_before_touching_disk(tmp_path):
     calls = [("m%d" % n, "empty.tar", '"%s"' % member.replace("\\", "\\\\").replace('"', '\\"'), "d%d" % n,
               "Archive.options()") for n, member in enumerate(UNSAFE_MEMBERS)]
     lines = run_driver(work, "unsafe", driver(calls))
-    for n, member in enumerate(UNSAFE_MEMBERS):
-        assert lines[n].startswith("m%d error archive: " % n), member
-        assert not (work / ("d%d" % n)).exists(), member
+    bad = [member for n, member in enumerate(UNSAFE_MEMBERS)
+           if not lines[n].startswith("m%d error archive: " % n) or (work / ("d%d" % n)).exists()]
+    assert not bad, (bad, lines)
 
 
 DUPLICATE_MEMBERS = [
@@ -310,9 +310,9 @@ def test_duplicate_and_case_colliding_members_rejected(tmp_path):
     calls = [("m%d" % n, "empty.tar", q(first, second), "d%d" % n, "Archive.options()")
              for n, (first, second) in enumerate(DUPLICATE_MEMBERS)]
     lines = run_driver(work, "dups", driver(calls))
-    for n, pair in enumerate(DUPLICATE_MEMBERS):
-        assert lines[n].startswith("m%d error archive: members " % n), pair
-        assert not (work / ("d%d" % n)).exists(), pair
+    bad = [pair for n, pair in enumerate(DUPLICATE_MEMBERS)
+           if not lines[n].startswith("m%d error archive: members " % n) or (work / ("d%d" % n)).exists()]
+    assert not bad, (bad, lines)
 
 
 def make_link(target, link):

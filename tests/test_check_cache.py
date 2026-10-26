@@ -132,7 +132,7 @@ def warm_template(tmp_path_factory):
     the whole folder to start each case from."""
     base = tmp_path_factory.mktemp("check-cache-warm") / "base"
     template = build(base)
-    settled(template)
+    assert settled(template)[0][0] == 0
     snapshot = base.parent / "snapshot"
     shutil.copytree(base, snapshot, symlinks=True)
     return template, snapshot
