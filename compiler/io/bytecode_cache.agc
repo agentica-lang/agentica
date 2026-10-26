@@ -44,16 +44,12 @@ import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Resolve from "../modules/resolve_import"
 import Workspace from "../modules/workspace"
-import Members from "../packages/members"
 import PackageHash from "../packages/package_hash"
-import Project from "../packages/project"
+import CacheFiles from "cache_files"
 import RandomName from "random_name"
 
-# The folder of the project (or of the root file) that holds the build outputs, the folder of the entries in it, and
-# the variable that names another folder in place of the first.
-BUILD_FOLDER = "_build"
+# The folder of the entries, in the build folder (io/cache_files.agc).
 BYTECODE_FOLDER = "bytecode"
-BUILD_VARIABLE = "AGENTICA_BUILD_DIR"
 
 # The first line of the key; change it when the layout of an entry changes.
 FORMAT = "agentica-cache-3"
@@ -69,27 +65,12 @@ MAX_TEXT_BYTES = 16_777_216
 # The program is at most as large as the VM takes (AGC_MAX_FILE_BYTES).
 MAX_PROGRAM_BYTES = 268_435_456
 
-# The deadline of each system call, in milliseconds, and the most one File.read_bytes gives.
-IO_TIMEOUT_MS = 10_000
-PIECE = 1_048_576
-
 # The words that start the lines after the program line, and the digest length in hex.
 SOURCE_WORD = "source "
 TREE_WORD = "tree "
 ABSENT_WORD = "absent "
 PRESENT_WORD = "present "
 DIGEST_CHARS = 64
-
-# The files that decide which package or library an import reads, next to the manifest.
-MANIFEST_FILE = "agentica.toml"
-PROJECT_FILES = [MANIFEST_FILE, "agentica.lock"]
-
-# The write bits of the group and of others (020 and 002).
-GROUP_OTHER_WRITE = 18
-
-# A file that a run could not finish is left with this in its name; the next one to write removes the old ones.
-TEMP_MARK = ".agcb.tmp-"
-STALE_TEMP_SECONDS = 3600
 
 # The first bytes of a program: the magic, then the format version (4 bytes), then the length of the Agentica version
 # (4 bytes, little endian) and the version.
@@ -170,13 +151,13 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
         return false
       end
       lines = lines.concat(libraries.unwrap!)
-      text = [entry.key, "program #{digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
+      text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
       return publish(entry, text, program)
   end
 end
 
 def source_line(module: Linker.LinkedModule) -> String
-  return "#{SOURCE_WORD}#{digest(String.to_bytes(module.text))} #{module.key}"
+  return "#{SOURCE_WORD}#{CacheFiles.digest(String.to_bytes(module.text))} #{module.key}"
 end
 
 # One `source` line for each file that a native library of the program may come from or load (the manifest that names
@@ -197,7 +178,7 @@ def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedMod
       lines = lines.push("#{TREE_WORD}#{names_digest(workspace, path)} #{path}")
     else
       read = try workspace.read_bytes.call(path)
-      lines = lines.push("#{SOURCE_WORD}#{digest(read)} #{path}")
+      lines = lines.push("#{SOURCE_WORD}#{CacheFiles.digest(read)} #{path}")
     end
   end
   return ok(lines)
@@ -205,7 +186,7 @@ end
 
 # The digest of the names of the native/ files of a package folder.
 def names_digest(workspace: Workspace.Workspace, root: String) -> String
-  return digest(String.to_bytes(PackageHash.native_files(workspace, root).join("\n")))
+  return CacheFiles.digest(String.to_bytes(PackageHash.native_files(workspace, root).join("\n")))
 end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes
@@ -215,81 +196,20 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   if real.contains?("\n")
     return error("the path has a line feed")
   end
-  build = try File.stat(settings.self_path, IO_TIMEOUT_MS)
-  root_dir = Paths.directory_of(real)
-  project = try Project.find(settings.workspace, root_dir)
-  inputs = try inputs_digest(settings, project)
-  key = [
-    FORMAT,
-    "version #{settings.version}",
-    "build #{build.size_bytes}-#{build.modified_seconds} #{settings.self_path}",
-    "root #{real}",
-    "inputs #{inputs}",
-  ].join("\n")
-  libs_dir = Project.library_dir(project, root_dir)
-  override = System.env(BUILD_VARIABLE)
-  build_dir = Paths.join(libs_dir, BUILD_FOLDER)
-  beside = true
-  if override.ok? and override.unwrap! != ""
-    build_dir = override.unwrap!
-    beside = false
-  end
-  folder = Paths.join(build_dir, BYTECODE_FOLDER)
-  name = "#{Paths.last_part(real)}-#{digest(String.to_bytes(real)).slice(0, 16)}.agcb"
+  site = try CacheFiles.site(settings, real)
+  key = [FORMAT, "version #{settings.version}", site.binary, "root #{real}", site.inputs].join("\n")
+  folder = Paths.join(site.build, BYTECODE_FOLDER)
+  name = "#{Paths.last_part(real)}-#{CacheFiles.digest(String.to_bytes(real)).slice(0, 16)}.agcb"
   return ok(
     Entry(
-      build: build_dir,
+      build: site.build,
       folder: folder,
       file: Paths.join(folder, name),
       key: key,
-      beside: beside,
-      libs_dir: libs_dir,
+      beside: site.beside,
+      libs_dir: site.libs_dir,
     ),
   )
-end
-
-# What, besides the files an import reads, changes what a build makes of the root: the environment that places
-# libraries and packages, and the project (the manifest the build finds and its lock).
-def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[String]
-  workspace = settings.workspace
-  env = settings.env
-  parts = ["env #{env.agentica_path}|#{env.xdg_data_home}|#{env.xdg_cache_home}|#{env.home}|#{env.local_app_data}"]
-  case project
-    Project.Project.Bare -> parts = parts.push("project -")
-    Project.Project.Declared(manifest) ->
-      parts = parts.push("project #{manifest.dir}")
-      for name in PROJECT_FILES
-        parts = parts.push("#{name} #{file_digest(workspace, Paths.join(manifest.dir, name))}")
-      end
-      parts = parts.concat(workspace_parts(workspace, manifest))
-  end
-  return ok(digest(String.to_bytes(parts.join("\n"))))
-end
-
-# The workspace of the project (packages/members.agc): the manifest that holds the table, and the manifest of each
-# member the lock names, which decide the packages a build reads from the members' folders. The .agc files of a member
-# are sources of the entry like any other.
-def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> List[String]
-  if found.members.root == ""
-    return []
-  end
-  parts = ["workspace #{found.members.root} #{file_digest(workspace, Paths.join(found.members.root, MANIFEST_FILE))}"]
-  for locked in found.lock.packages
-    if locked.member
-      folder = Members.folder_of(found.members, locked.source)
-      parts = parts.push("member #{folder} #{file_digest(workspace, Paths.join(folder, MANIFEST_FILE))}")
-    end
-  end
-  return parts
-end
-
-# "-" for a file that is not there.
-def file_digest(workspace: Workspace.Workspace, path: String) -> String
-  read = workspace.read_bytes.call(path)
-  if !read.ok?
-    return "-"
-  end
-  return digest(read.unwrap!)
 end
 
 # What the resolver looked at for the imports of `modules`, as lines of the entry: for a `pkg/` import, every place of
@@ -342,59 +262,14 @@ def plain?(path: String) -> Bool
 end
 
 def read_entry(entry: Entry, settings: Env.Settings) -> Result[List[Int]]
-  user = try own_user()
-  try private_kind(entry.build, "directory", user)
-  try private_kind(entry.folder, "directory", user)
-  try private_kind(entry.file, "file", user)
-  handle = try File.open(entry.file, "read", IO_TIMEOUT_MS)
+  user = try CacheFiles.own_user()
+  try CacheFiles.private_kind(entry.build, "directory", user)
+  try CacheFiles.private_kind(entry.folder, "directory", user)
+  try CacheFiles.private_kind(entry.file, "file", user)
+  handle = try File.open(entry.file, "read", CacheFiles.IO_TIMEOUT_MS)
   read = read_whole(handle, entry, settings)
-  File.close(handle, IO_TIMEOUT_MS)
+  File.close(handle, CacheFiles.IO_TIMEOUT_MS)
   return read
-end
-
-# The folder or the file at `path` must be of this `kind` as it stands (File.lstat: a link is its own kind and is
-# refused) and, where the system has owners and modes (`user` is not -1), be owned by the user of this process and
-# writable by no one else. On Windows any real folder and file pass: the cache trusts its folder, with no owner or ACL
-# check, and a folder that other users can write is out of scope.
-def private_kind(path: String, kind: String, user: Int) -> Result[Void]
-  info = try File.lstat(path, IO_TIMEOUT_MS)
-  if info.kind != kind
-    return error("#{path} is not a #{kind}")
-  end
-  if user >= 0 and (info.user_id != user or info.mode.bit_and(GROUP_OTHER_WRITE) != 0)
-    return error("#{path} is not private to this user")
-  end
-  return ok()
-end
-
-# The user id of this process, which no builtin gives: the owner of a file made now with `create_private`, in the first
-# temporary folder that takes one. The name is random and the file is new and not followed, so a planted name or link
-# cannot give another id; a temporary folder that others can write without the sticky bit could still swap the file
-# between the create and the stat, which is a setting of the user's. -1 on Windows, where `user_id` is always 0 and
-# means nothing.
-def own_user() -> Result[Int]
-  if System.os() == "windows"
-    return ok(-1)
-  end
-  name = try RandomName.hex()
-  places = ["/var/tmp", "/tmp"]
-  from_environment = System.env("TMPDIR")
-  if from_environment.ok? and from_environment.unwrap! != ""
-    places = [from_environment.unwrap!].concat(places)
-  end
-  for place in places
-    made_at = Paths.join(place, "agentica-id-#{name}")
-    made = File.open(made_at, "create_private", IO_TIMEOUT_MS)
-    if made.ok?
-      File.close(made.unwrap!, IO_TIMEOUT_MS)
-      info = File.lstat(made_at, IO_TIMEOUT_MS)
-      Path.remove(made_at, IO_TIMEOUT_MS)
-      if info.ok?
-        return ok(info.unwrap!.user_id)
-      end
-    end
-  end
-  return error("cannot find out the user of this process")
 end
 
 def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Result[List[Int]]
@@ -409,7 +284,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
   lines = text.split("\n").drop(entry.key.split("\n").size)
   try check_lines(settings.workspace, lines.drop(1))
   program = try read_rest(handle)
-  if lines[0] != "program #{digest(program)}" or !made_by?(program, settings.version)
+  if lines[0] != "program #{CacheFiles.digest(program)}" or !made_by?(program, settings.version)
     return error("the program of the entry is damaged")
   end
   return ok(program)
@@ -462,7 +337,7 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
     return error("a line of the entry is wrong")
   end
   read = try workspace.read_bytes.call(path)
-  if digest(read) != wanted
+  if CacheFiles.digest(read) != wanted
     return error("#{path} changed")
   end
   return ok()
@@ -513,7 +388,7 @@ def read_exact(handle: FileHandle, count: Int) -> Result[List[Int]]
   pieces: List[List[Int]] = []
   left = count
   while left > 0
-    got = try File.read_bytes(handle, piece(left), IO_TIMEOUT_MS)
+    got = try File.read_bytes(handle, piece(left), CacheFiles.IO_TIMEOUT_MS)
     if got.size == 0
       return error("the entry ends too soon")
     end
@@ -524,10 +399,10 @@ def read_exact(handle: FileHandle, count: Int) -> Result[List[Int]]
 end
 
 def piece(left: Int) -> Int
-  if left < PIECE
+  if left < CacheFiles.PIECE
     return left
   end
-  return PIECE
+  return CacheFiles.PIECE
 end
 
 # The rest of the file, up to the size the VM takes.
@@ -536,7 +411,7 @@ def read_rest(handle: FileHandle) -> Result[List[Int]]
   total = 0
   finished = false
   while !finished
-    got = try File.read_bytes(handle, PIECE, IO_TIMEOUT_MS)
+    got = try File.read_bytes(handle, CacheFiles.PIECE, CacheFiles.IO_TIMEOUT_MS)
     total += got.size
     if total > MAX_PROGRAM_BYTES
       return error("the program of the entry is too large")
@@ -563,14 +438,14 @@ def publish(entry: Entry, text: String, program: List[Int]) -> Bool
   body = String.to_bytes(text)
   data = String.to_bytes(head(body.size)).concat(body).concat(program)
   temporary = Paths.join(entry.folder, "#{Paths.last_part(entry.file)}.tmp-#{suffix.unwrap!}")
-  if !write_private(temporary, data).ok?
-    Path.remove(temporary, IO_TIMEOUT_MS)
+  if !CacheFiles.write_private(temporary, data).ok?
+    Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
     return false
   end
-  sweep(entry.folder)
-  remove_file(entry.file)
-  if !Path.rename(temporary, entry.file, IO_TIMEOUT_MS).ok?
-    Path.remove(temporary, IO_TIMEOUT_MS)
+  CacheFiles.sweep(entry.folder)
+  CacheFiles.remove_file(entry.file)
+  if !Path.rename(temporary, entry.file, CacheFiles.IO_TIMEOUT_MS).ok?
+    Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
     return false
   end
   return true
@@ -579,70 +454,13 @@ end
 # Both folders must be ones this program may trust (private_kind), or be made now. The .gitignore goes in `_build/`
 # when the cache makes it there.
 def prepare_folder(entry: Entry) -> Result[Void]
-  made = try private_folder(entry.build)
+  user = try CacheFiles.own_user()
+  made = try CacheFiles.private_folder(entry.build, user)
   if made and entry.beside
-    write_private(Paths.join(entry.build, ".gitignore"), String.to_bytes("*\n"))
+    CacheFiles.write_private(Paths.join(entry.build, ".gitignore"), String.to_bytes("*\n"))
   end
-  try private_folder(entry.folder)
+  try CacheFiles.private_folder(entry.folder, user)
   return ok()
-end
-
-# A folder that exists must pass private_kind; one that does not is made with `Dir.mkdir_private`, one level only (the
-# folders above it are made with the default mode when they are missing). True when it was made now.
-def private_folder(path: String) -> Result[Bool]
-  if File.lstat(path, IO_TIMEOUT_MS).ok?
-    user = try own_user()
-    try private_kind(path, "directory", user)
-    return ok(false)
-  end
-  above = Paths.directory_of(path)
-  if above != ""
-    Dir.mkdir(above, IO_TIMEOUT_MS)
-  end
-  try Dir.mkdir_private(path, IO_TIMEOUT_MS)
-  return ok(true)
-end
-
-# A new file that only this user can use. `create_private` fails on a name that exists and never follows a link.
-def write_private(path: String, data: List[Int]) -> Result[Void]
-  out = try File.open(path, "create_private", IO_TIMEOUT_MS)
-  rest = data
-  while rest.size > 0
-    written = File.write_bytes(out, rest.take(PIECE), IO_TIMEOUT_MS)
-    if !written.ok?
-      File.close(out, IO_TIMEOUT_MS)
-      return written
-    end
-    rest = rest.drop(PIECE)
-  end
-  return File.close(out, IO_TIMEOUT_MS)
-end
-
-# Removes the file or the link at `path` (a link is removed as a link, never followed). A folder in its place stays
-# (the rename then fails and the entry is not written): `Path.remove` would delete the whole folder.
-def remove_file(path: String) -> Void
-  info = File.lstat(path, IO_TIMEOUT_MS)
-  if info.ok? and (info.unwrap!.kind == "file" or info.unwrap!.kind == "link")
-    Path.remove(path, IO_TIMEOUT_MS)
-  end
-end
-
-# Removes the temporary files that a run left (it died between the write and the rename) once they are an hour old.
-def sweep(folder: String) -> Void
-  names = Dir.list(folder, IO_TIMEOUT_MS)
-  if !names.ok?
-    return
-  end
-  now = Time.now_ms() / 1000
-  for name in names.unwrap!
-    if name.contains?(TEMP_MARK)
-      path = Paths.join(folder, name)
-      info = File.lstat(path, IO_TIMEOUT_MS)
-      if info.ok? and info.unwrap!.kind == "file" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
-        Path.remove(path, IO_TIMEOUT_MS)
-      end
-    end
-  end
 end
 
 def head(size: Int) -> String
@@ -653,6 +471,3 @@ def head(size: Int) -> String
   return "#{HEAD_WORD}#{digits}\n"
 end
 
-def digest(data: List[Int]) -> String
-  return RandomName.hex_of(Crypto.sha256(data))
-end

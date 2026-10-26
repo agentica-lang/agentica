@@ -9,10 +9,13 @@ Tasks run functions at the same time. See the tour page [Tasks](/tour/tasks/).
 ## Task.spawn
 
 ```text
+Task.spawn(function: Fn[R]) -> Task[R]
 Task.spawn(function: Fn[A, R], argument: A) -> Task[R]
 ```
 
-Starts `function(argument)` in a new task and returns its `Task` handle.
+Starts `function(argument)` in a new task and returns its `Task` handle. Without an argument, the function takes no parameter: `Task.spawn(&work)` starts `work()`.
+
+A block is the function too: `Task.spawn do ... end` runs the block as a task, like Ruby's `Thread.new { }`, and it may capture locals. Give a block or a function reference, not both (`CHECK-BLOCK-TARGET`). `Task.spawn_owning` always takes the handle.
 
 - A file, socket, listener, process or server belongs to the task that opened it and closes when that task ends (returns, crashes or is cancelled). So open a long-lived handle in the task that keeps it, not in a helper.
 - `Task.spawn` moves nothing: a handle in the argument, or in a struct or list in it, stays with the caller. To give it away, use `Task.spawn_owning`.

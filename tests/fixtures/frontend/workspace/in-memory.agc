@@ -59,6 +59,7 @@ def main() -> Void
     list_folder: &no_folder,
     read_bytes: &no_bytes,
     native_artifact: &no_native,
+    check_cache: Workspace.no_check_cache(),
   )
   env = Env.Env(agentica_path: "", xdg_data_home: "", xdg_cache_home: "", home: "", local_app_data: "", windows: false, os: "linux")
   settings = Env.settings(workspace, "stdlib", env)

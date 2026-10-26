@@ -113,13 +113,14 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       elsif word == "--tags"
         if shown.tags != ""
           return Parsed.Usage("one --tags EXPR", shown)
-        elsif value.strip == ""
-          return Parsed.Usage("--tags needs a non-empty EXPR", shown)
         end
 
         checked = Tags.compile(value)
         if !checked.ok?
           return Parsed.Usage("invalid --tags: #{checked.message}", shown)
+        elsif !Tags.filters?(checked.unwrap!)
+          # Only white space, which `compile` splits on, including the Unicode spaces that `strip` keeps.
+          return Parsed.Usage("--tags needs a non-empty EXPR", shown)
         end
 
         shown = shown.with(tags: value)

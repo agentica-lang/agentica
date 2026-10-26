@@ -194,6 +194,67 @@ def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(b
     assert results[5]["error"]["actual"] == '"missing definition"'
 
 
+def test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_own_names(bdd):
+    steps = steps_program(
+        'def main() -> Void\n  BDD.run([\n    BDD.step("a check passes") do |ctx, args| BDD.assert(ctx, true, "ok") end,\n'
+        '    BDD.step("{int} is small") do |ctx, args|\n      BDD.assert(ctx, args[0].to_i! < 5, "too big")\n'
+        '    end,\n  ])\nend')
+    directory = bdd.suite({
+        "steps.agc": steps,
+        "plain.feature": "Feature: Plain\n\n  Scenario: plain\n    When a check passes\n    Then 9 is small\n",
+        "background.feature": ("Feature: Background\n\n  Background:\n    Given a check passes\n"
+                              "    Then 9 is small\n\n  Scenario: later\n    When a check passes\n"),
+        "bad.feature": "Feature: Bad\n\n    Rule: nope\n",
+        "outline.feature": ("Feature: Outline\n\n  Scenario Outline: row\n    Then <n> is small\n\n  Examples:\n"
+                            "    | kind   | n |\n    | sqlite | 2 |\n    | sqlite | 9 |\n    | pg     | 9 |\n\n"
+                            "  Scenario Outline: edge <n>\n    Then <n> is small\n\n  Examples:\n"
+                            "    | n | note   |\n    | 1 |        |\n    | 7 | a\\nb   |\n    | 7 | a\\nb   |\n")})
+    # Tab and CRLF indentation, and a form feed before the keyword, which `strip` removes like blanks.
+    with open(joined(directory, "crlf.feature"), "wb") as out:
+        out.write(b"Feature: Crlf\r\n\r\n\tScenario: tabs\r\n\t\tThen 9 is small\r\n"
+                  b"\tScenario: form feed\r\n\x0c  Then 9 is small\r\n")
+    steps_file = joined(directory, "steps.agc")
+
+    def failures(name):
+        """(scenario name, line, column) of each failed scenario of the feature; step and error agree."""
+        feature = joined(directory, name + ".feature")
+        status, report = bdd.json_test(feature, "--steps", steps_file)
+        assert status == 1
+        found = []
+        for item in report_cases(report):
+            if item["status"] == "failed":
+                start = item["error"]["range"]["start"]
+                assert item["error"]["file"] == feature
+                assert [step["location"] for step in item["steps"] if step["status"] == "failed"] == [
+                    {"file": feature, "line": start["line"], "column": start["column"]}]
+                found.append((item["name"], start["line"], start["column"]))
+        return report, found
+
+    assert failures("plain")[1] == [("plain", 5, 5)]
+    assert failures("background")[1] == [("later", 5, 5)]
+    assert failures("crlf")[1] == [("tabs", 4, 3), ("form feed", 6, 4)]
+    report, found = failures("outline")
+    assert found == [("row (sqlite, 9)", 4, 5), ("row (pg, 9)", 4, 5), ("edge 7 (a\\nb)", 13, 5),
+                     ("edge 7 (a\\nb)", 13, 5)]
+    assert [item["name"] for item in report_cases(report)][:5] == [
+        "row (sqlite, 2)", "row (sqlite, 9)", "row (pg, 9)", 'edge 1 ("")', "edge 7 (a\\nb)"]
+    # Identical rows keep one name; their example places tell them apart.
+    assert [item["example"]["line"] for item in report_cases(report)[-2:]] == [18, 19]
+
+    feature = joined(directory, "outline.feature")
+    _, one = bdd.json_test(feature, "--steps", steps_file, "--only", "(sqlite, 9)")
+    assert [item["name"] for item in report_cases(one)] == ["row (sqlite, 9)"]
+    text = bdd.agentica_test(feature, "--steps", steps_file).stdout
+    assert "FAIL Outline / edge 7 (a\\nb)\n%s:13:5 [RUNTIME-BDD-ASSERTION] too big\n" % feature in text
+    ai = bdd.agentica_test("--ai", feature, "--steps", steps_file).stdout
+    assert "FAIL Outline / edge 7 (a\\nb) | %s:13:5 [RUNTIME-BDD-ASSERTION] too big\n" % feature in ai
+
+    # Only a step's place starts at its keyword: a parse error keeps column 1.
+    _, bad = bdd.json_test(joined(directory, "bad.feature"), "--steps", steps_file)
+    assert (file_error(bad)["code"], file_error(bad)["range"]["start"]) == (
+        "PARSE-GHERKIN-UNSUPPORTED", {"line": 3, "column": 1})
+
+
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
     directory = bdd.suite({"crash.feature": "Feature: Crash\nScenario: runtime\nThen execution crashes\n"})
     feature = joined(directory, "crash.feature")
@@ -395,18 +456,24 @@ def test_a_steps_agc_near_the_paths_is_the_step_program_unless_steps_names_anoth
 
 
 def test_two_different_steps_agc_files_are_a_usage_error_and_a_unit_test_run_never_compiles_one(bdd):
-    steps = steps_program(main_running('BDD.step("the answer is {int}") do |ctx, args| ctx end'))
+    steps = steps_program(main_running('BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, true, "no") end'))
     directory = bdd.suite({})
     for name in ("specs", "test"):
         (directory / name).mkdir()
         (directory / name / "steps.agc").write_text(steps, encoding="utf-8")
-    (directory / "specs" / "a.feature").write_text("Feature: A\nScenario: s\nThen the answer is 4\n", encoding="utf-8")
+        (directory / name / "a.feature").write_text("Feature: A\nScenario: s\nThen the answer is 4\n", encoding="utf-8")
     status, report = bdd.json_test(cwd=directory)
     assert status == 2
     assert report["files"][0]["error"]["code"] == "RUNTIME-BDD-USAGE"
-    # --steps settles it; and without a feature file the broken test/steps.agc is not compiled.
+    # --steps settles it.
     status, report = bdd.json_test("--steps", joined(directory, "specs/steps.agc"), cwd=directory)
-    assert (status, [item["status"] for item in report_cases(report)]) == (1, ["failed"])
+    assert (status, [item["status"] for item in report_cases(report)]) == (0, ["passed", "passed"])
+    # A folder that holds no feature is not searched, so its steps.agc does not count.
+    (directory / "test" / "a.feature").unlink()
+    (directory / "test" / "adds_test.agc").write_text(ADDS_TEST, encoding="utf-8")
+    status, report = bdd.json_test(cwd=directory)
+    assert (status, report["passed"]) == (0, 2)
+    # Without a feature file the broken test/steps.agc is not compiled.
     units = bdd.suite({})
     (units / "test").mkdir()
     (units / "test" / "steps.agc").write_text("this does not compile", encoding="utf-8")
@@ -496,7 +563,7 @@ def test_tags_select_scenarios_and_a_step_can_skip_its_scenario(bdd):
     assert names("--tags", "not not @fast")[1] == [("one", "passed")]
     assert names("--tags", "@fast\u00a0or\u2003@b")[1] == names("--tags", "@fast or @b")[1]
     # A bad expression is a usage error at the arguments, before anything is compiled.
-    for expression in ("not", "@a @b", "(@a)"):
+    for expression in ("not", "@a @b", "(@a)", "\u00a0"):
         status, _, report = names("--tags", expression)
         assert (status, report["files"][-1]["error"]["code"]) == (2, "RUNTIME-BDD-USAGE"), expression
         assert report["files"][-1]["error"]["file"] == "<arguments>"

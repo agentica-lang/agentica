@@ -47,6 +47,8 @@ Exit code `0`: every scenario passes or is skipped (also when all are skipped, s
 
 - `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
 - `--tags EXPR` keeps the scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not` binds tighter than `and`, and `and` tighter than `or`; no parentheses), as in `--tags "@db and not @slow"`. A scenario has the tags of its Feature and itself, and a `Scenario Outline` row also those of its `Examples` block. Unit test files have no tags, so they are left out. A bad expression exits with `2`.
+- A failed step is reported at its line and column in the feature file.
+- Each row of a `Scenario Outline` is named with the outline name and the row's values in the columns the name does not show, such as `Name (sqlite, 42)`, so `--only "(sqlite, 42)"` selects one row. Identical rows keep one name; `--json` has each row's line in `example`.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.
 - It also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`.
 
@@ -78,7 +80,7 @@ A step program builds a list with `BDD.step` in `main` and passes it to `BDD.run
 agentica test specs/ --steps steps.agc
 ```
 
-Without `--steps`, `agentica test` uses the nearest `steps.agc` found in the folder of each path (the path itself if it is a folder) or above it, up to the working directory, so `specs/steps.agc` needs no flag, also for `specs/auth/` or `specs/a.feature`. It applies only to a run with `.feature` files. If the paths lead to two different `steps.agc` files, the run fails with `RUNTIME-BDD-USAGE`; pass `--steps`. `--steps` overrides it.
+Without `--steps`, `agentica test` uses the nearest `steps.agc` found in the folder of each path that holds a `.feature` file (the path itself if it is a folder) or above it, up to the working directory, so `specs/steps.agc` needs no flag, also for `specs/auth/` or `specs/a.feature`. It applies only to a run with `.feature` files. If the paths lead to two different `steps.agc` files, the run fails with `RUNTIME-BDD-USAGE`; pass `--steps`. `--steps` overrides it.
 
 ```agentica {mode="check"}
 import BDD from "std/bdd"
