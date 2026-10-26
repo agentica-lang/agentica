@@ -222,6 +222,17 @@ end
     assert drawn["seed"] >= 0
 
 
+def test_a_program_under_test_runs_without_a_step_limit(tmp_path):
+    # Each loop pass is several steps, so 400,000 passes are well over the 1,000,000 steps the program once had.
+    directory = suite(tmp_path, {
+        "busy.agc": ("def main() -> Void\n  total = 0\n  for i in 0...400000\n    total = total + i\n  end\n"
+                     "  puts(total.to_s)\nend\n"),
+        "busy.feature": ('Feature: Busy\nScenario: more than 1,000,000 steps\nGiven the Agentica program "busy.agc"\n'
+                         "Then the program exits with code 0 within " + ms(20000) + " milliseconds\n"
+                         "And stdout is:\n" + doc("79999800000\n"))})
+    assert json_test(directory / "busy.feature")["ok"] is True
+
+
 def test_programs_under_test_wrong_output_literal_input_and_a_json_line_mismatch(tmp_path):
     directory = suite(tmp_path, {
         "buffered.agc": BUFFERED_PROGRAM, "output.agc": OUTPUT_PROGRAM, "json.agc": JSON_PROGRAM,

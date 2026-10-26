@@ -77,7 +77,8 @@ end
   tasks that use the same C memory at once race, as in C; each read or write of
   an owned buffer holds a lock.
 - `[export] resource Db, free: db_close` in a block declares a resource type,
-  freed by `void db_close(void *)` of the same library. Declare it above the
+  freed by `void db_close(void *)` of the same library (any C name, capitals
+  allowed: `free: PQfinish`; only `C.Function` is a type). Declare it above the
   `def`s that use it. `def db_open(...) -> Db` gives `Result[Db]` (NULL is
   `error("db_open returned NULL")`); the resource is owned by the calling
   task. `Native.close(db)` frees once (a second close does nothing); a call

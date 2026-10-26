@@ -89,8 +89,9 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
 
 The parser supports English `Feature`, `Background`, `Scenario`, `Example`,
 `Scenario Outline`, `Examples`, `Given`, `When`, `Then`, `And` and `But`. It
-returns the first error (`std/bdd/gherkin`). A location's column is 1, and its
-range runs to the end of the line.
+returns the first error (`std/bdd/gherkin`). A location's column is 1, except a
+step's, which is its keyword's (after the indentation, spaces, tabs and form
+feeds); a range runs to the end of the line.
 
 - **Lines and tags.** Blank lines and `#` comments are skipped; `# language: en`
   is accepted, and any other `# language:` is `PARSE-GHERKIN-UNSUPPORTED`. Tags
@@ -108,10 +109,16 @@ range runs to the end of the line.
 - **Outlines.** `Scenario Outline` needs an `Examples` block; `Examples` outside
   an outline is `PARSE-GHERKIN-EXAMPLES`, and so is a table with no header row,
   an empty or repeated header cell, or no rows. Each row is a scenario, with
-  `<name>` replaced in the name, steps, Doc Strings and cells. A `<name>` that
-  is not a column is `PARSE-GHERKIN-PARAMETER`. Several `Examples` blocks add
-  their rows in order, and a row's tags are the Feature's, then the scenario's,
-  then its `Examples` block's.
+  `<name>` replaced in the name, steps, Doc Strings and cells. The scenario's
+  name ends with ` (a, b)`: the row's values in the columns that the outline's
+  name does not show, so each row has its own name in the report and for
+  `--only` (`Name (sqlite, 42)`; a name that shows every column gets nothing).
+  An empty cell shows as `""` and a control character as `\n`, `\r`, `\t` or
+  `\xNN`. Identical rows keep identical names; the JSON `example` field (the
+  row's line) tells them apart. A `<name>` that is not a column is
+  `PARSE-GHERKIN-PARAMETER`. Several
+  `Examples` blocks add their rows in order, and a row's tags are the Feature's,
+  then the scenario's, then its `Examples` block's.
 - **Steps.** A step outside a Background or scenario, or after `Examples`, is
   `PARSE-GHERKIN-STEP`. `And` and `But` take the kind of the step before them in
   the section, and need one. The keyword does not matter for matching; the kind
@@ -158,9 +165,9 @@ steps"). Each is a handler in `std/bdd`:
 
 - **Step:** `the Agentica program {string}`
   - **What it does and its errors:** `Process.spawn_captured` of `agentica
-    [--seed N] --max-steps 1000000 PATH` in the feature's
-    directory, 30 s to start. A missing `.agc` file is `RUNTIME-BDD-PROGRAM`; a
-    missing `agentica` is `RUNTIME-BDD-INFRA`.
+    [--seed N] PATH` in the feature's directory, 30 s to start. A missing
+    `.agc` file is `RUNTIME-BDD-PROGRAM`; a missing `agentica` is
+    `RUNTIME-BDD-INFRA`.
 
 - **Step:** `I send ...`, `I close stdin`
   - **What it does and its errors:** `Process.send` or `Process.close_stdin`, 5
@@ -243,8 +250,9 @@ then no scenario runs.
 
 - **Host access.** BDD gives no isolation from the host: programs run with the
   user's permissions and environment. Programs under test start with the same
-  `agentica` command and `--max-steps 1000000`.
-- **Limits.** A scenario has a 30-second deadline from the start of its child.
+  `agentica` command and no step limit, as `agentica FILE.agc` does.
+- **Limits.** A scenario has a 30-second deadline from the start of its child;
+  it is the only bound on the CPU and memory of a program under test.
   Program-driving calls without a timeout get 5 seconds, and starting a program
   gets 30. The scenario child has 1,000,000 steps per step plus 1,000,000, and
   that budget also pays for `std/bdd`'s own work; builtins cost steps per call,

@@ -734,6 +734,31 @@ end
     ]
 
 
+# A free function whose C name starts with a capital letter (PQfinish, SSL_free) is looked up by that exact name: the
+# peer counts its calls, so Native.close frees it once.
+CAPITAL_FREE_EXTERN = """extern "{library}"
+  resource Cap, free: PeerFree
+  def peer_res_open(value: C.Int32) -> Cap
+  def peer_res_get(cap: Cap) -> C.Int32
+  def peer_res_frees() -> C.Int32
+end
+
+def main() -> Void
+  cap = peer_res_open(5).unwrap!
+  puts(peer_res_get(cap))
+  puts(peer_res_frees())
+  Native.close(cap)
+  puts(peer_res_frees())
+end
+"""
+
+
+@NATIVE_CALLS
+def test_a_resource_with_a_capital_free_name_is_freed_by_that_function(tmp_path, peer):
+    result = agentica(program(tmp_path, CAPITAL_FREE_EXTERN.format(library=literal(peer))))
+    assert (result.code, result.stdout, result.stderr) == (0, "5\n0\n1\n", "")
+
+
 # A call with a closed resource and a C.Bytes item that is not a byte stop the run at the extern function, before
 # the call; a closed resource is found first, even with a bad byte. Task.spawn_owning of a closed resource is
 # RUNTIME-HANDLE-NOT-OWNED.

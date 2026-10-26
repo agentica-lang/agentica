@@ -25,6 +25,7 @@ export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.W
     list_folder: &list_folder,
     read_bytes: &read_bytes,
     native_artifact: &no_native,
+    check_cache: Workspace.no_check_cache(),
   )
 end
 
