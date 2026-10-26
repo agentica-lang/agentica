@@ -222,17 +222,19 @@ def skipped(
     end
   end
 
-  case Checker.check_query_taking(program, settings, Set.new(clean), constants)
+  checking = Checker.check_query_taking(program, settings, Set.new(clean), constants)
+  case checking
     Checker.Checking.Failed(problem) ->
       if stand_in?(loaded, problem.file)
         return query_cached(cache, path, settings)
       end
 
       return Outcome.Rejected(problem)
-    Checker.Checking.Done(checked) ->
-      enter_checked(loaded, checked, settings)
-      return Outcome.Done(Checked(linked: program, checked: checked))
+    Checker.Checking.Done(checked) -> enter_checked(loaded, checked, settings)
   end
+
+  # A module read from its stub keeps its text, so the style rules see every file.
+  return checked_outcome(program, checking)
 end
 
 # Whether some stub of the walk is not vouched for: its module is parsed from a stub but its bodies are not known to be

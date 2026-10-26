@@ -110,9 +110,11 @@ def test_the_rule_covers_the_files_an_import_reads_and_not_std(tmp_path):
     (tmp_path / "util.agc").write_text("export def one() -> Int\n  if true\n    return 1\n  end\n  return 2\nend\n",
                                        encoding="utf-8")
     program = 'import Util from "util"\nimport Queue from "std/queue"\n\ndef main() -> Void\n  puts(Util.one())\nend\n'
-    problem = check(tmp_path, program)
-    assert (problem["code"], start(problem)) == ("CHECK-BLANK-LINE-AFTER-END", (4, 3))
-    assert problem["file"].endswith("util.agc")
+    # The second check reads util.agc from the stub that the check cache keeps, and still sees its text.
+    for _ in range(2):
+        problem = check(tmp_path, program)
+        assert (problem["code"], start(problem)) == ("CHECK-BLANK-LINE-AFTER-END", (4, 3))
+        assert problem["file"].endswith("util.agc")
 
 
 @pytest.mark.parametrize("tail", ["", "\n", "\n\n"], ids=["no line break", "one line break", "an extra empty line"])
