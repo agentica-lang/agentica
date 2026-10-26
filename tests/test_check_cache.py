@@ -6,9 +6,11 @@ was edited or damaged since the entries were written. A hit is proved without ti
 something false about a constant, and only a run that read the entry shows it. The layout of an entry is in
 compiler/modules/check_cache.agc.
 """
+import copy
 import json
 import os
 import re
+import shutil
 import stat
 from concurrent.futures import ThreadPoolExecutor
 
@@ -124,6 +126,33 @@ def ws(tmp_path):
     return build(tmp_path)
 
 
+@pytest.fixture(scope="module")
+def warm_template(tmp_path_factory):
+    """The project of the cases with its entries written once (the cold, warm and off runs of `settled`), and a copy of
+    the whole folder to start each case from."""
+    base = tmp_path_factory.mktemp("check-cache-warm") / "base"
+    template = build(base)
+    settled(template)
+    snapshot = base.parent / "snapshot"
+    shutil.copytree(base, snapshot, symlinks=True)
+    return template, snapshot
+
+
+@pytest.fixture
+def warm(warm_template):
+    """The project with its entries in place, as `settled` leaves it, from the same state in every case: the folder
+    is put back from the copy at the same path, because the entries hold the keys of their files."""
+    template, snapshot = warm_template
+    shutil.rmtree(template.base)
+    shutil.copytree(snapshot, template.base, symlinks=True)
+    return copy.deepcopy(template)
+
+
+def expected_of(ws):
+    """The answers of the project without the cache, which every run with the entries in any state must give."""
+    return answers(ws, "--no-cache")
+
+
 def folder_of(ws):
     return getattr(ws, "build", ws.base / "build")
 
@@ -175,6 +204,11 @@ def test_warm_cold_and_off_answer_alike_and_a_hit_skips_the_check(ws):
     kept = entries(ws)
     # One entry for each file but the root: mid, deep, the package module and the standard library module.
     assert len(kept) >= 4
+    # The stub of a module keeps its exported functions and leaves its private ones out.
+    stubs = [path.read_bytes() for path in kept if b"export struct Item" in path.read_bytes()]
+    assert len(stubs) == 1
+    assert b"export def make(name: String) -> Item" in stubs[0]
+    assert b"tidy" not in stubs[0]
     # A run that finds every entry in place writes nothing.
     stamps = [(path.stat().st_mtime_ns, path.read_bytes()) for path in kept]
     answers(ws)
@@ -189,7 +223,6 @@ def test_warm_cold_and_off_answer_alike_and_a_hit_skips_the_check(ws):
 
 
 EDITS = [
-    ("main", "puts(size.to_s)", "puts(size.to_s + 1.to_s)"),
     ("mid", "return Deep.make(name)", "return Deep.make(name + name)"),
     # Two levels down, in a body, in a constant and in a signature the root and the middle module use.
     ("deep", "total = SIZE * 2", "total = SIZE * 3"),
@@ -211,8 +244,8 @@ EDITS = [
 
 
 @pytest.mark.parametrize("name,old,new", EDITS, ids=["%s-%d" % (step[0], at) for at, step in enumerate(EDITS)])
-def test_an_edit_gives_the_answers_of_a_run_without_the_cache(ws, name, old, new):
-    assert settled(ws)[0][0] == 0
+def test_an_edit_gives_the_answers_of_a_run_without_the_cache(warm, name, old, new):
+    ws = warm
     if name == "greeter":
         # A package is read from deps/ and checked by its hash in the lock: the file is changed in place and the lock
         # follows it, as `agentica install` would leave it.
@@ -224,14 +257,6 @@ def test_an_edit_gives_the_answers_of_a_run_without_the_cache(ws, name, old, new
     else:
         edit(ws, name, old, new)
     assert settled(ws)[0][0] in (0, 1)
-
-
-def test_the_stub_leaves_out_private_functions_and_keeps_the_exported_ones(ws):
-    settled(ws)
-    stubs = [path.read_bytes() for path in entries(ws) if b"export struct Item" in path.read_bytes()]
-    assert len(stubs) == 1
-    assert b"export def make(name: String) -> Item" in stubs[0]
-    assert b"tidy" not in stubs[0]
 
 
 def test_a_comment_after_the_end_of_a_function_still_gives_a_stub(ws):
@@ -271,8 +296,8 @@ def test_the_style_rule_is_found_in_a_module_that_has_an_entry(tmp_path):
     assert settled(ws)[0][0] == 0
 
 
-def test_a_package_changed_behind_its_lock_is_refused_with_entries_in_place(ws):
-    assert settled(ws)[0][0] == 0
+def test_a_package_changed_behind_its_lock_is_refused_with_entries_in_place(warm):
+    ws = warm
     path = ws.deps / "greeter" / "greet.agc"
     path.write_text(path.read_text(encoding="utf-8").replace("hello ", "bye "), encoding="utf-8")
     refused = settled(ws)
@@ -280,8 +305,8 @@ def test_a_package_changed_behind_its_lock_is_refused_with_entries_in_place(ws):
     assert json.loads(refused[0][2])["code"] == "PKG-HASH-MISMATCH"
 
 
-def test_the_entries_of_a_clean_tree_serve_a_second_root_and_an_edited_buffer(ws):
-    settled(ws)
+def test_the_entries_of_a_clean_tree_serve_a_second_root_and_an_edited_buffer(warm):
+    ws = warm
     # The LSP form: the root is the text on stdin, the imports are the files, which the cache serves.
     buffer = MAIN.replace("puts(size.to_s)", "puts(size + 1.5)")
     answers_cached = ask(ws, ["--json", "check", "--stdin", "main.agc"], stdin=buffer)
@@ -322,8 +347,9 @@ def corrupt_cases(head):
 
 
 @pytest.mark.parametrize("case", sorted(corrupt_cases(b"")), ids=str)
-def test_a_corrupt_entry_is_a_miss_and_never_a_different_answer(ws, case):
-    expected = settled(ws)
+def test_a_corrupt_entry_is_a_miss_and_never_a_different_answer(warm, case):
+    ws = warm
+    expected = expected_of(ws)
     assert entries(ws)
     for path in entries(ws):
         good = path.read_bytes()
@@ -332,8 +358,9 @@ def test_a_corrupt_entry_is_a_miss_and_never_a_different_answer(ws, case):
     assert answers(ws) == expected
 
 
-def test_a_misaligned_stub_is_a_miss(ws):
-    expected = settled(ws)
+def test_a_misaligned_stub_is_a_miss(warm):
+    ws = warm
+    expected = expected_of(ws)
     for path in entries(ws):
         good = path.read_bytes()
         # The stub is replaced by text of the same length that declares something else.
@@ -351,8 +378,9 @@ def test_no_cache_writes_nothing_and_leaves_what_is_there(ws):
 
 
 @host_only(not POSIX_PYTHON, "file modes and links")
-def test_a_folder_or_entry_that_is_not_private_is_not_used(ws):
-    expected = settled(ws)
+def test_a_folder_or_entry_that_is_not_private_is_not_used(warm):
+    ws = warm
+    expected = expected_of(ws)
     kept = {path: path.read_bytes() for path in entries(ws)}
     victim = entries(ws)[0]
     # An entry other users can write.

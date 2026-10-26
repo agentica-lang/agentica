@@ -2210,9 +2210,11 @@ end
 
 
 # `agentica test` gives the flags to the VMs of the test files, not to the runner: in front of `test` or after it, a
-# test file that declares extern functions is a file error, and the other files still run, under --sandbox too.
+# test file that declares extern functions is a file error, and the other files still run, under --sandbox too. The
+# runner treats every flag alike, and test_deny_native_refuses_the_program_at_load shows that each one turns on
+# --deny-native, so the direct flag and the one that turns on all of them are enough here.
 @NATIVE_CALLS
-@pytest.mark.parametrize("flag", DENY_FLAGS)
+@pytest.mark.parametrize("flag", ["--deny-native", "--sandbox"])
 def test_test_refuses_a_test_file_with_extern_functions(tmp_path, flag):
     (tmp_path / "test").mkdir()
     program(tmp_path / "test", EXTERN_TEST, "native_test.agc")

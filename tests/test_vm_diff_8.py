@@ -21,11 +21,11 @@ from tests.agentica_test import (FIFO_FILE_REASON, RUN_TIMEOUT, TESTS, UNDER_WIN
                                  vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
     EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
-    check_limited, check_runaway, check_steps, check_sweep, check_text_format, decode, exit_status, execute,
+    check_limited, check_runaway, check_step_allowance, check_sweep, check_text_format, decode, exit_status, execute,
     fixture_programs,
     json_crash_free, last_limit, outcome, read_expected, read_expected_steps, run_fixture_vm, run_vm,
     run_vm_process, runaway_programs, step_allowance, step_limited, style_options, text_code, text_crash_free,
-    total_steps, shard_assignment)
+    shard_assignment)
 
 
 def posix_only(why):
@@ -503,10 +503,10 @@ def test_a_crlf_program_under_a_non_ascii_path_gives_the_expected_outcome(tmp_pa
             assert outcome(on_vm) == full, style
         else:
             check_text_format(on_vm, full, style)
-    total = total_steps(lambda limit: step_limited(run_fixture_vm(PLAIN, bytecode, limit, tmp_path)))
     expected_steps = read_expected_steps(original)
-    check_steps(total, expected_steps, "CRLF program")
-    limits = [1, total - 1, total, last_limit(expected_steps)]
+    check_step_allowance(lambda limit: step_limited(run_fixture_vm(PLAIN, bytecode, limit, tmp_path)), expected_steps,
+                         "CRLF program")
+    limits = [1, expected_steps - 1, expected_steps, last_limit(expected_steps)]
     check_sweep([run_vm(PLAIN, bytecode, limit, cwd=tmp_path) for limit in limits], limits, full, "CRLF program")
 
 

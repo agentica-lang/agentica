@@ -2,6 +2,7 @@
 (docs/future/39-semantic-cli.md, 39.6). The cases read the JSON form and assert the marker, kinds, spans, the codes and
 the exit codes, never message text; one case reads the text form."""
 import json
+import re
 
 import pytest
 
@@ -252,11 +253,23 @@ def test_each_diagnostic_of_an_answer_is_read_back_by_the_library_as_the_same_ob
         assert json.loads(read.stdout) == diagnostic
 
 
-def test_a_program_that_checks_gives_the_same_bytes_at_every_position_with_or_without_the_option(program):
-    lines = SMALL.split("\n")
+TOKEN = re.compile(r"\w+|\s+|\"[^\"]*\"|.")
+
+
+def token_columns(text):
+    """The columns that tell the positions of a line apart: the start of each token, the first run of blanks and the
+    end of the line. A column inside a token gives the answer of its start, which the spans of test_spec_type_at.py and
+    test_spec_refs.py ask back one by one."""
+    found = list(TOKEN.finditer(text))
+    columns = {token.start() + 1 for token in found if not token.group().isspace()}
+    blanks = [token.start() + 1 for token in found if token.group().isspace()]
+    return sorted(columns | set(blanks[:1]) | {len(text) + 1})
+
+
+def test_a_program_that_checks_gives_the_same_bytes_at_every_token_start_with_or_without_the_option(program):
     for verb in ("type-at", "refs"):
-        for line, text in enumerate(lines, 1):
-            for column in range(1, len(text) + 2):
+        for line, text in enumerate(SMALL.split("\n"), 1):
+            for column in token_columns(text):
                 plain = asked(verb, ("small.agc", (line, column)), cwd=program)
                 marked = asked(verb, ("small.agc", (line, column)), "--partial", cwd=program)
                 assert (marked.code, marked.stdout, marked.stderr) == (plain.code, plain.stdout, plain.stderr)
