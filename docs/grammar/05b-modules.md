@@ -164,14 +164,16 @@ import Sqlite from "pkg/sqlite/db"
   checks a program require an empty line (only spaces or tabs) after each line
   whose code is only `end`, in the files below the folder of that manifest
   that have no `agentica.toml` of their own nearer. A file outside that folder
-  (`../shared/util.agc`), `std/`, a package, the `agc_libs/` of the folder and a
-  file in a folder with its own manifest are not checked, even when the root
-  imports them: the key of a nested manifest is not honored, and a build reads
-  only the manifest of its root. A trailing `# comment` on the `end` line is
-  allowed, but a comment line after the `end` is not an empty line, so it needs
-  one too, also before a closing `end` and at the end of the file. A line that
-  breaks it is `CHECK-BLANK-LINE-AFTER-END`, at the `end`, reported after the
-  type check passes. These next lines need no empty line: one that starts with
+  (`../shared/util.agc`), `std/`, a package, the `agc_libs/` of the folder, any
+  other `pkg/` library folder (and what its files import by a relative path),
+  and a file in a folder with its own manifest are not checked, even when the
+  root imports them. A link counts where its real path is. The key of a nested
+  manifest is not honored: a build reads only the manifest of its root. A
+  trailing `# comment` on the `end` line is allowed, but a comment line after
+  the `end` is not an empty line, so it needs one too, also before a closing
+  `end` and at the end of the file. A line that breaks it is
+  `CHECK-BLANK-LINE-AFTER-END`, at the `end`, reported after the type check
+  passes. These next lines need no empty line: one that starts with
   `end`, `else`, `elsif`, `)`, `]` or `}`, and one that starts with `.name`
   (the lexer joins it to the `end`). The end of the file needs none either: the
   last `end` may have no final line break, one, or extra empty lines, in a
