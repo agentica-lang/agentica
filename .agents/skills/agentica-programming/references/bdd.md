@@ -12,10 +12,11 @@ shared with unit tests: `testing.md`.
 English syntax: `Feature`, one optional `Background` before scenarios,
 `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and
 `Given`/`When`/`Then`/`And`/`But`. Each Examples row becomes a scenario,
-substituting `<column>` in names, steps, Doc Strings and tables. Comments, tags
-and descriptions before steps are accepted; tags never skip tests. `Rule`, `*`,
-other keyword aliases and localized syntax fail explicitly. `And`/`But` inherit
-the previous kind. Triple-quote Doc Strings are dedented; include a final empty
+substituting `<column>` in names, steps, Doc Strings and tables; its name ends
+with ` (values)` of the columns the name does not show (`Name (sqlite, 42)`).
+Comments, tags and descriptions before steps are accepted; tags never skip
+tests. `Rule`, `*`, other keyword aliases and localized syntax fail
+explicitly. `And`/`But` inherit the previous kind. Triple-quote Doc Strings are dedented; include a final empty
 line to keep a trailing newline. Data Tables decode `\|`, `\\`, `\n`. One
 argument per step.
 

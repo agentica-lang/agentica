@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `agentica test` points a failed step at its keyword (column included), and each `Scenario Outline` row has its own name: the outline name plus the row's values, such as `Name (sqlite, 42)`.
 - `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
 - Linux shutdown skips a standard C stream already locked by native compute code.
 - `String#to_f` reads exponents and `+inf.0`, `-inf.0`, `+nan.0`: `Float#to_s` reads back.

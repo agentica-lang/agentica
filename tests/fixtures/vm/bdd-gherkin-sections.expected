@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 10557,
+  "steps": 10689,
   "stdout": [
     "PARSE-GHERKIN-HEADER sample.feature:1:1-1",
     "PARSE-GHERKIN-EMPTY sample.feature:1:1-15",

@@ -194,6 +194,46 @@ def test_a_failing_crashing_exiting_or_looping_handler_fails_only_its_scenario(b
     assert results[5]["error"]["actual"] == '"missing definition"'
 
 
+def test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_own_names(bdd):
+    steps = steps_program(
+        'def main() -> Void\n  BDD.run([\n    BDD.step("a check passes") do |ctx, args| BDD.assert(ctx, true, "ok") end,\n'
+        '    BDD.step("{int} is small") do |ctx, args|\n      BDD.assert(ctx, args[0].to_i! < 5, "too big")\n'
+        '    end,\n  ])\nend')
+    directory = bdd.suite({
+        "steps.agc": steps,
+        "plain.feature": ("Feature: Plain\n\n  Scenario: plain\n    When a check passes\n    Then 9 is small\n"),
+        "background.feature": ("Feature: Background\n\n  Background:\n    Given a check passes\n"
+                              "    Then 9 is small\n\n  Scenario: later\n    When a check passes\n"),
+        "outline.feature": ("Feature: Outline\n\n  Scenario Outline: row\n    Then <n> is small\n\n  Examples:\n"
+                            "    | kind   | n |\n    | sqlite | 2 |\n    | sqlite | 9 |\n    | pg     | 9 |\n\n"
+                            "  Scenario Outline: shown <kind>\n    Then <n> is small\n\n  Examples:\n"
+                            "    | kind | n |\n    | a    | 1 |\n    | b    | 7 |\n")})
+    steps_file = joined(directory, "steps.agc")
+
+    def failed_at(name, line):
+        feature = joined(directory, name + ".feature")
+        status, report = bdd.json_test(feature, "--steps", steps_file)
+        assert status == 1
+        failed = [item for item in report_cases(report) if item["status"] == "failed"]
+        problem = failed[0]["error"]
+        assert (problem["file"], problem["range"]["start"]) == (feature, {"line": line, "column": 5})
+        assert [step["location"]["line"] for step in failed[0]["steps"] if step["status"] == "failed"] == [line]
+        for style in ([], ["--ai"]):
+            assert "%s:%d:5 [RUNTIME-BDD-ASSERTION]" % (feature, line) in bdd.agentica_test(
+                *style, feature, "--steps", steps_file).stdout
+        return report
+
+    failed_at("plain", 5)
+    failed_at("background", 5)
+    report = failed_at("outline", 4)
+    assert [(item["name"], item["status"]) for item in report_cases(report)] == [
+        ("row (sqlite, 2)", "passed"), ("row (sqlite, 9)", "failed"), ("row (pg, 9)", "failed"),
+        ("shown a (1)", "passed"), ("shown b (7)", "failed")]
+    only = joined(directory, "outline.feature")
+    _, one = bdd.json_test(only, "--steps", steps_file, "--only", "(sqlite, 9)")
+    assert [item["name"] for item in report_cases(one)] == ["row (sqlite, 9)"]
+
+
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
     directory = bdd.suite({"crash.feature": "Feature: Crash\nScenario: runtime\nThen execution crashes\n"})
     feature = joined(directory, "crash.feature")

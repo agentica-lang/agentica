@@ -45,7 +45,7 @@ agentica test specs/
 
 Exit code `0`: every scenario passes. `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
 
-- `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
+- `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`. A failed step is reported at its line and column in the feature file. Each row of a `Scenario Outline` is named with the outline name and the row's values in the columns the name does not show, such as `Name (sqlite, 42)`, so `--only "(sqlite, 42)"` selects one row.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.
 - It also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`.
 

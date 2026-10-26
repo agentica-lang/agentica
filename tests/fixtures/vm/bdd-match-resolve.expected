@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 39964,
+  "steps": 41067,
   "stdout": [
     "Scenario: Remember 7",
     "scenario state is empty -> scenario state is empty []",
@@ -21,9 +21,9 @@
     "the program exits with code 0 within 1000 milliseconds -> the program exits with code {int} within {int} milliseconds [\"0\", \"1000\"]",
     "stdout is: -> stdout is: []",
     "Scenario: Unknown",
-    "missing definition -> CHECK-BDD-UNDEFINED sample.feature:27:1-29",
-    "I remember seven -> CHECK-BDD-UNDEFINED sample.feature:28:1-26",
-    "I close stdin please -> CHECK-BDD-UNDEFINED sample.feature:29:1-29",
+    "missing definition -> CHECK-BDD-UNDEFINED sample.feature:27:5-29",
+    "I remember seven -> CHECK-BDD-UNDEFINED sample.feature:28:5-26",
+    "I close stdin please -> CHECK-BDD-UNDEFINED sample.feature:29:5-29",
     "Scenario: ambiguous",
     "value is 1 -> CHECK-BDD-AMBIGUOUS sample.feature:3:1-16",
     "value is 2 -> value is {int} [\"2\"]",
