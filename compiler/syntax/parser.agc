@@ -35,26 +35,34 @@ COMPOUND_OPERATORS: Map[String, String] = {
   "modulo-assign": "modulo",
 }
 
-# The C types an extern function may take, with their codes (Ast.Native) and the Agentica types the program sees.
-# C.Function (code c, a C.Pointer to the program) is the address of a C function: as the first parameter the function
-# the def calls, as the last (code e) the free function of the resource the call makes.
+# The C types an extern function may take, with their codes (Ast.Native) and the Agentica types the program sees. The
+# integer types are the fixed widths and C.Long, the C long, 32 bits on Windows and 64 elsewhere (vm/ffi.c
+# int_type_of); an unsigned 64-bit integer is a C.Int64. C.Function (code c, a C.Pointer to the program) is the address
+# of a C function: as the first parameter the function the def calls, as the last (code e) the free function of the
+# resource the call makes.
 EXTERN_CODES = {
-  "C.Int32": "i", "C.Int64": "l", "C.Double": "d", "C.Float": "f", "C.Bool": "b", "C.String": "s", "C.Pointer": "p",
-  "C.Bytes": "y", "C.Function": "c",
+  "C.Int8": "g", "C.Int16": "h", "C.Int32": "i", "C.Int64": "l", "C.UInt8": "u", "C.UInt16": "w", "C.UInt32": "j",
+  "C.Long": "n", "C.Double": "d", "C.Float": "f", "C.Bool": "b", "C.String": "s", "C.Pointer": "p", "C.Bytes": "y",
+  "C.Function": "c",
 }
 EXTERN_TYPES = {
-  "i": "Int", "l": "Int", "d": "Float", "f": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "v": "Void",
-  "c": "C.Pointer", "e": "C.Pointer",
+  "g": "Int", "h": "Int", "i": "Int", "l": "Int", "u": "Int", "w": "Int", "j": "Int", "n": "Int", "d": "Float",
+  "f": "Float", "b": "Bool", "s": "String", "p": "C.Pointer", "v": "Void", "c": "C.Pointer", "e": "C.Pointer",
 }
+# The integer types named in the help texts.
+INT_NAMES = "C.Int8, C.Int16, C.Int32, C.Int64, C.UInt8, C.UInt16, C.UInt32, C.Long"
 EXTERN_TYPES_HELP = (
-  "extern functions take and return C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.String, C.Pointer or a " +
-  "struct or resource declared above in the same block, take C.Bytes or a C.Function, or return Void"
+  "extern functions take and return #{INT_NAMES}, C.Double, C.Float, C.Bool, C.String, C.Pointer or a struct " +
+  "or resource declared above in the same block, take C.Bytes or a C.Function, or return Void"
 )
 # The C types of a field of a struct of an extern block, with their codes; a field of a struct declared above in the
 # block has that struct's layout code ("{" and the codes of its fields, then "}"), so a layout nests.
-STRUCT_FIELD_CODES = {"C.Int32": "i", "C.Int64": "l", "C.Double": "d", "C.Float": "f", "C.Bool": "b", "C.Pointer": "p"}
+STRUCT_FIELD_CODES = {
+  "C.Int8": "g", "C.Int16": "h", "C.Int32": "i", "C.Int64": "l", "C.UInt8": "u", "C.UInt16": "w", "C.UInt32": "j",
+  "C.Long": "n", "C.Double": "d", "C.Float": "f", "C.Bool": "b", "C.Pointer": "p",
+}
 STRUCT_FIELD_HELP = (
-  "a field of a C struct is C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in " +
+  "a field of a C struct is #{INT_NAMES}, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in " +
   "the block; declare a char * field as C.Pointer and read the text with Native.get_string"
 )
 STRUCT_OUT_HELP = (
@@ -66,7 +74,7 @@ STRUCT_OUT_HELP = (
 STRUCT_MAX_FIELDS = 1024
 STRUCT_MAX_DEPTH = 16
 EXTERN_OUT_HELP = (
-  "an out parameter is C.Int32, C.Int64, C.Double, C.Float, C.Bool, C.Pointer or a resource of the block; " +
+  "an out parameter is #{INT_NAMES}, C.Double, C.Float, C.Bool, C.Pointer or a resource of the block; " +
   "take a char ** or a function pointer as an out C.Pointer"
 )
 # The type name of a function pointer, and the free word of a resource whose values each have their own free function.
@@ -76,20 +84,26 @@ FUNCTION_HELP = (
   "free: C.Function kind that the call makes"
 )
 FUNCTION_RESULT_HELP = "declare a function that returns a function pointer -> C.Pointer"
-# C.Int was the name of C.Int32 before the widths became explicit; it is refused, with no alias.
-EXTERN_INT_HELP = "write C.Int32 (a 32-bit int) or C.Int64 (a 64-bit integer) instead of C.Int"
+# The help of a C type name that is not one, said in its place. C.Int was the name of C.Int32 before the widths became
+# explicit; it is refused, with no alias. An unsigned type with no name of its own is the signed one of its width.
+TYPE_NAME_HELP = {
+  "C.Int": "write C.Int32 (a 32-bit int), C.Long (a long) or C.Int64 (a 64-bit integer) instead of C.Int",
+  "C.UInt64": "write C.Int64: it carries the same 64 bits, and a value above 2^63 - 1 reads as negative",
+  "C.ULong": "write C.Long: it carries the same bits, and a value above the largest long reads as negative",
+}
 EXTERN_LIBRARY_HELP = "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 EXTERN_SYMBOL_HELP = "write the C name as a plain string of letters, digits and _, such as = \"fcntl\""
 # The types that C's default argument promotions leave as they are, which the variadic part of an extern function
-# takes: C.Bool (promoted to int) and C.Float (promoted to double) are not.
-VARIADIC_CODES = Set.new(["i", "l", "d", "s", "p", "y", "r"])
+# takes: C.Bool, C.Int8, C.Int16, C.UInt8 and C.UInt16 (promoted to int) and C.Float (promoted to double) are not.
+VARIADIC_CODES = Set.new(["i", "l", "j", "n", "d", "s", "p", "y", "r"])
 # The code that marks where the variadic part starts in Ast.Native.codes.
 VARIADIC_MARK = "."
 DIGITS = Set.new("0123456789".split(""))
 C_NAME_CHARS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789".split(""))
 VARIADIC_HELP = (
-  "after ... a parameter is C.Int32, C.Int64, C.Double, C.String, C.Pointer, C.Bytes or a resource, " +
-  "and not an out parameter; pass a C.Bool there as C.Int32 and a C.Float as C.Double"
+  "after ... a parameter is C.Int32, C.Int64, C.UInt32, C.Long, C.Double, C.String, C.Pointer, C.Bytes or a " +
+  "resource, and not an out parameter; pass a C.Bool or an integer narrower than an int there as C.Int32 and a " +
+  "C.Float as C.Double"
 )
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
 EXTERN_MAX_PARAMS = 64
@@ -2312,8 +2326,8 @@ def parse_extern_struct(
     code = struct_field_code(field.type, block)
     if code == ""
       help = STRUCT_FIELD_HELP
-      if field.type.name == "C.Int" and field.type.args.size == 0
-        help = EXTERN_INT_HELP
+      if field.type.args.size == 0
+        help = TYPE_NAME_HELP.get(field.type.name, help)
       end
 
       return error(
@@ -2762,8 +2776,8 @@ def c_name?(text: String) -> Bool
   return text.split("").all? do |char: String| C_NAME_CHARS.include?(char) end
 end
 
-# PARSE-EXTERN-VARIADIC-TYPE for a parameter of the variadic part that C would promote (C.Bool, C.Float) or that is an
-# out parameter.
+# PARSE-EXTERN-VARIADIC-TYPE for a parameter of the variadic part that C would promote (C.Bool, C.Float and the four
+# integer types narrower than an int) or that is an out parameter.
 def variadic_type(param: Ast.Param, taken: ExternType, out: Bool) -> Result[Void]
   if out
     return error(
@@ -2894,8 +2908,8 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
 
   if code == ""
     help = EXTERN_TYPES_HELP
-    if ref.name == "C.Int" and ref.args.size == 0
-      help = EXTERN_INT_HELP
+    if TYPE_NAME_HELP.has_key?(ref.name) and ref.args.size == 0
+      help = TYPE_NAME_HELP[ref.name]
     elsif ref.name == FUNCTION_TYPE and ref.args.size == 0
       help = FUNCTION_RESULT_HELP
     end

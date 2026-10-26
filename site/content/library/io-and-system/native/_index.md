@@ -11,7 +11,7 @@ extern "libm.so.6"
   ## The cosine of x, in radians.
   export def cos(x: C.Double) -> C.Double
 
-  def labs(n: C.Int64) -> C.Int64
+  def labs(n: C.Long) -> C.Long
 end
 
 def main() -> Void

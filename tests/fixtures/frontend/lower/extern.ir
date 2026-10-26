@@ -1,12 +1,13 @@
-program 0:1:1-59:1 entry=15 globals=0
-source 0 "extern.agc" chars=1972
-struct s0 "PeerAccept" ["result","conn","count"]
-struct s1 "PeerSplit" ["whole"]
-struct s2 "PeerPair" ["result","other"]
-struct s3 "SessionOpen" ["result","s"]
-struct s4 "Pair" ["x","y"]
-struct s5 "Box" ["at","scale","on","data"]
-struct s6 "BoxArea" ["result","area"]
+program 0:1:1-63:1 entry=16 globals=0
+source 0 "extern.agc" chars=2129
+struct s0 "PeerNarrow" ["result","c"]
+struct s1 "PeerAccept" ["result","conn","count"]
+struct s2 "PeerSplit" ["whole"]
+struct s3 "PeerPair" ["result","other"]
+struct s4 "SessionOpen" ["result","s"]
+struct s5 "Pair" ["x","y"]
+struct s6 "Box" ["at","scale","on","data","count"]
+struct s7 "BoxArea" ["result","area"]
 fn0 "peer_open" params=1 captures=0 slots=3 @ 0:3:3-4:1
     step @ 0:3:3-4:1
     const r1 "rs peer_open peer_close Conn /opt/lib/my peer.so" @ 0:3:3-4:1
@@ -31,332 +32,364 @@ fn3 "tick" params=0 captures=0 slots=2 @ 0:6:3-7:1
     list r1 r0 0 @ 0:6:3-7:1
     call-builtin r0 "Native.call" 2 @ 0:6:3-7:1 0:6:3-7:1 0:6:3-7:1
     return r0 @ 0:6:3-7:1
-fn4 "crunch" params=1 captures=0 slots=3 @ 0:7:3-8:1
+fn4 "peer_narrow" params=2 captures=0 slots=6 @ 0:7:3-8:1
     step @ 0:7:3-8:1
-    const r1 "compute dl crunch /opt/lib/my peer.so" @ 0:7:3-8:1
-    list r2 r0 1 @ 0:7:3-8:1
-    call-builtin r1 "Native.call" 2 @ 0:7:3-8:1 0:7:3-8:1 0:7:3-8:1
-    return r1 @ 0:7:3-8:1
-fn5 "peer_accept" params=1 captures=0 slots=6 @ 0:8:3-9:1
+    const r2 "ngwJ peer_narrow /opt/lib/my peer.so" @ 0:7:3-8:1
+    list r3 r0 2 @ 0:7:3-8:1
+    call-builtin r2 "Native.call" 2 @ 0:7:3-8:1 0:7:3-8:1 0:7:3-8:1
+    const r5 int:0 @ 0:7:3-8:1
+    list-get r3 r2 r5 @ 0:7:3-8:1
+    const r5 int:1 @ 0:7:3-8:1
+    list-get r4 r2 r5 @ 0:7:3-8:1
+    struct r2 r3 s0 @ 0:7:3-8:1
+    return r2 @ 0:7:3-8:1
+fn5 "crunch" params=1 captures=0 slots=3 @ 0:8:3-9:1
     step @ 0:8:3-9:1
-    const r1 "iiRL peer_accept peer_close Conn /opt/lib/my peer.so" @ 0:8:3-9:1
+    const r1 "compute dl crunch /opt/lib/my peer.so" @ 0:8:3-9:1
     list r2 r0 1 @ 0:8:3-9:1
     call-builtin r1 "Native.call" 2 @ 0:8:3-9:1 0:8:3-9:1 0:8:3-9:1
-    const r5 int:0 @ 0:8:3-9:1
-    list-get r2 r1 r5 @ 0:8:3-9:1
-    const r5 int:1 @ 0:8:3-9:1
-    list-get r3 r1 r5 @ 0:8:3-9:1
-    const r5 int:2 @ 0:8:3-9:1
-    list-get r4 r1 r5 @ 0:8:3-9:1
-    struct r1 r2 s0 @ 0:8:3-9:1
     return r1 @ 0:8:3-9:1
-fn6 "peer_split" params=1 captures=0 slots=4 @ 0:9:3-10:1
+fn6 "peer_accept" params=1 captures=0 slots=6 @ 0:9:3-10:1
     step @ 0:9:3-10:1
-    const r1 "vdD peer_split /opt/lib/my peer.so" @ 0:9:3-10:1
+    const r1 "iiRL peer_accept peer_close Conn /opt/lib/my peer.so" @ 0:9:3-10:1
     list r2 r0 1 @ 0:9:3-10:1
     call-builtin r1 "Native.call" 2 @ 0:9:3-10:1 0:9:3-10:1 0:9:3-10:1
-    const r3 int:0 @ 0:9:3-10:1
-    list-get r2 r1 r3 @ 0:9:3-10:1
+    const r5 int:0 @ 0:9:3-10:1
+    list-get r2 r1 r5 @ 0:9:3-10:1
+    const r5 int:1 @ 0:9:3-10:1
+    list-get r3 r1 r5 @ 0:9:3-10:1
+    const r5 int:2 @ 0:9:3-10:1
+    list-get r4 r1 r5 @ 0:9:3-10:1
     struct r1 r2 s1 @ 0:9:3-10:1
     return r1 @ 0:9:3-10:1
-fn7 "peer_pair" params=1 captures=0 slots=5 @ 0:10:3-11:1
+fn7 "peer_split" params=1 captures=0 slots=4 @ 0:10:3-11:1
     step @ 0:10:3-11:1
-    const r1 "rrR peer_pair peer_close Conn peer_close Conn /opt/lib/my peer.so" @ 0:10:3-11:1
+    const r1 "vdD peer_split /opt/lib/my peer.so" @ 0:10:3-11:1
     list r2 r0 1 @ 0:10:3-11:1
     call-builtin r1 "Native.call" 2 @ 0:10:3-11:1 0:10:3-11:1 0:10:3-11:1
-    const r4 int:0 @ 0:10:3-11:1
-    list-get r2 r1 r4 @ 0:10:3-11:1
-    const r4 int:1 @ 0:10:3-11:1
-    list-get r3 r1 r4 @ 0:10:3-11:1
+    const r3 int:0 @ 0:10:3-11:1
+    list-get r2 r1 r3 @ 0:10:3-11:1
     struct r1 r2 s2 @ 0:10:3-11:1
     return r1 @ 0:10:3-11:1
-fn8 "peer_cap" params=0 captures=0 slots=2 @ 0:12:3-13:1
-    step @ 0:12:3-13:1
-    const r0 "r peer_cap PeerFree Cap /opt/lib/my peer.so" @ 0:12:3-13:1
-    list r1 r0 0 @ 0:12:3-13:1
-    call-builtin r0 "Native.call" 2 @ 0:12:3-13:1 0:12:3-13:1 0:12:3-13:1
-    return r0 @ 0:12:3-13:1
-fn9 "peer_at" params=2 captures=0 slots=4 @ 0:14:3-15:1
-    step @ 0:14:3-15:1
-    const r2 "ici peer_at /opt/lib/my peer.so" @ 0:14:3-15:1
-    list r3 r0 2 @ 0:14:3-15:1
-    call-builtin r2 "Native.call" 2 @ 0:14:3-15:1 0:14:3-15:1 0:14:3-15:1
-    return r2 @ 0:14:3-15:1
-fn10 "session_open" params=3 captures=0 slots=7 @ 0:15:3-16:1
+fn8 "peer_pair" params=1 captures=0 slots=5 @ 0:11:3-12:1
+    step @ 0:11:3-12:1
+    const r1 "rrR peer_pair peer_close Conn peer_close Conn /opt/lib/my peer.so" @ 0:11:3-12:1
+    list r2 r0 1 @ 0:11:3-12:1
+    call-builtin r1 "Native.call" 2 @ 0:11:3-12:1 0:11:3-12:1 0:11:3-12:1
+    const r4 int:0 @ 0:11:3-12:1
+    list-get r2 r1 r4 @ 0:11:3-12:1
+    const r4 int:1 @ 0:11:3-12:1
+    list-get r3 r1 r4 @ 0:11:3-12:1
+    struct r1 r2 s3 @ 0:11:3-12:1
+    return r1 @ 0:11:3-12:1
+fn9 "peer_cap" params=0 captures=0 slots=2 @ 0:13:3-14:1
+    step @ 0:13:3-14:1
+    const r0 "r peer_cap PeerFree Cap /opt/lib/my peer.so" @ 0:13:3-14:1
+    list r1 r0 0 @ 0:13:3-14:1
+    call-builtin r0 "Native.call" 2 @ 0:13:3-14:1 0:13:3-14:1 0:13:3-14:1
+    return r0 @ 0:13:3-14:1
+fn10 "peer_at" params=2 captures=0 slots=4 @ 0:15:3-16:1
     step @ 0:15:3-16:1
-    const r3 "compute icsRe session_open C.Function Session /opt/lib/my peer.so" @ 0:15:3-16:1
-    list r4 r0 3 @ 0:15:3-16:1
-    call-builtin r3 "Native.call" 2 @ 0:15:3-16:1 0:15:3-16:1 0:15:3-16:1
-    const r6 int:0 @ 0:15:3-16:1
-    list-get r4 r3 r6 @ 0:15:3-16:1
-    const r6 int:1 @ 0:15:3-16:1
-    list-get r5 r3 r6 @ 0:15:3-16:1
-    struct r3 r4 s3 @ 0:15:3-16:1
-    return r3 @ 0:15:3-16:1
-fn11 "session_named" params=2 captures=0 slots=4 @ 0:16:3-17:1
+    const r2 "ici peer_at /opt/lib/my peer.so" @ 0:15:3-16:1
+    list r3 r0 2 @ 0:15:3-16:1
+    call-builtin r2 "Native.call" 2 @ 0:15:3-16:1 0:15:3-16:1 0:15:3-16:1
+    return r2 @ 0:15:3-16:1
+fn11 "session_open" params=3 captures=0 slots=7 @ 0:16:3-17:1
     step @ 0:16:3-17:1
-    const r2 "rse session_named C.Function Session /opt/lib/my peer.so" @ 0:16:3-17:1
-    list r3 r0 2 @ 0:16:3-17:1
-    call-builtin r2 "Native.call" 2 @ 0:16:3-17:1 0:16:3-17:1 0:16:3-17:1
-    return r2 @ 0:16:3-17:1
-fn12 "box_make" params=1 captures=0 slots=3 @ 0:27:3-28:1
-    step @ 0:27:3-28:1
-    const r1 "{5:{4:il}fbp}l box_make /opt/lib/my peer.so" @ 0:27:3-28:1
-    list r2 r0 1 @ 0:27:3-28:1
-    call-builtin r1 "Native.call" 2 @ 0:27:3-28:1 0:27:3-28:1 0:27:3-28:1
-    return r1 @ 0:27:3-28:1
-fn13 "box_area" params=3 captures=0 slots=7 @ 0:28:3-29:1
-    step @ 0:28:3-29:1
-    const r3 "compute {5:{4:il}fbp}c{5:{4:il}fbp}{4:il}D box_area /opt/lib/my peer.so" @ 0:28:3-29:1
-    list r4 r0 3 @ 0:28:3-29:1
-    call-builtin r3 "Native.call" 2 @ 0:28:3-29:1 0:28:3-29:1 0:28:3-29:1
-    const r6 int:0 @ 0:28:3-29:1
-    list-get r4 r3 r6 @ 0:28:3-29:1
-    const r6 int:1 @ 0:28:3-29:1
-    list-get r5 r3 r6 @ 0:28:3-29:1
-    struct r3 r4 s6 @ 0:28:3-29:1
-    return r3 @ 0:28:3-29:1
-fn14 "cos" params=1 captures=0 slots=3 @ 0:32:3-33:1
-    step @ 0:32:3-33:1
-    const r1 "dd cos libm.so.6" @ 0:32:3-33:1
-    list r2 r0 1 @ 0:32:3-33:1
-    call-builtin r1 "Native.call" 2 @ 0:32:3-33:1 0:32:3-33:1 0:32:3-33:1
-    return r1 @ 0:32:3-33:1
-fn15 "main" params=0 captures=0 slots=12 entry @ 0:35:1-59:1
-    step @ 0:36:3-37:1
-    step @ 0:36:3-36:9
-    call r0 fn3 @ 0:36:3-36:9
-    step @ 0:37:3-38:1
-    step @ 0:37:3-37:37
-    step @ 0:37:8-37:36
-    step @ 0:37:13-37:14
-    const r1 int:1 @ 0:37:13-37:14
-    step @ 0:37:16-37:30
-    step @ 0:37:16-37:24
-    step @ 0:37:20-37:23
-    const r3 float:bits:0 @ 0:37:20-37:23
-    call r3 fn14 @ 0:37:16-37:24
-    step @ 0:37:27-37:30
-    const r4 float:bits:4602678819172646912 @ 0:37:27-37:30
-    lt-f r2 r4 r3 @ 0:37:25-37:26
-    step @ 0:37:32-37:35
-    const r3 "x" @ 0:37:32-37:35
-    call r1 fn1 @ 0:37:8-37:36
-    move r0 r1 @ 0:37:8-37:36
-    call-builtin r0 "puts" 1 @ 0:37:3-37:37 0:37:8-37:36
+    const r3 "compute icsRe session_open C.Function Session /opt/lib/my peer.so" @ 0:16:3-17:1
+    list r4 r0 3 @ 0:16:3-17:1
+    call-builtin r3 "Native.call" 2 @ 0:16:3-17:1 0:16:3-17:1 0:16:3-17:1
+    const r6 int:0 @ 0:16:3-17:1
+    list-get r4 r3 r6 @ 0:16:3-17:1
+    const r6 int:1 @ 0:16:3-17:1
+    list-get r5 r3 r6 @ 0:16:3-17:1
+    struct r3 r4 s4 @ 0:16:3-17:1
+    return r3 @ 0:16:3-17:1
+fn12 "session_named" params=2 captures=0 slots=4 @ 0:17:3-18:1
+    step @ 0:17:3-18:1
+    const r2 "rse session_named C.Function Session /opt/lib/my peer.so" @ 0:17:3-18:1
+    list r3 r0 2 @ 0:17:3-18:1
+    call-builtin r2 "Native.call" 2 @ 0:17:3-18:1 0:17:3-18:1 0:17:3-18:1
+    return r2 @ 0:17:3-18:1
+fn13 "box_make" params=1 captures=0 slots=3 @ 0:29:3-30:1
+    step @ 0:29:3-30:1
+    const r1 "{6:{5:il}fbpj}l box_make /opt/lib/my peer.so" @ 0:29:3-30:1
+    list r2 r0 1 @ 0:29:3-30:1
+    call-builtin r1 "Native.call" 2 @ 0:29:3-30:1 0:29:3-30:1 0:29:3-30:1
+    return r1 @ 0:29:3-30:1
+fn14 "box_area" params=3 captures=0 slots=7 @ 0:30:3-31:1
+    step @ 0:30:3-31:1
+    const r3 "compute {6:{5:il}fbpj}c{6:{5:il}fbpj}{5:il}D box_area /opt/lib/my peer.so" @ 0:30:3-31:1
+    list r4 r0 3 @ 0:30:3-31:1
+    call-builtin r3 "Native.call" 2 @ 0:30:3-31:1 0:30:3-31:1 0:30:3-31:1
+    const r6 int:0 @ 0:30:3-31:1
+    list-get r4 r3 r6 @ 0:30:3-31:1
+    const r6 int:1 @ 0:30:3-31:1
+    list-get r5 r3 r6 @ 0:30:3-31:1
+    struct r3 r4 s7 @ 0:30:3-31:1
+    return r3 @ 0:30:3-31:1
+fn15 "cos" params=1 captures=0 slots=3 @ 0:34:3-35:1
+    step @ 0:34:3-35:1
+    const r1 "dd cos libm.so.6" @ 0:34:3-35:1
+    list r2 r0 1 @ 0:34:3-35:1
+    call-builtin r1 "Native.call" 2 @ 0:34:3-35:1 0:34:3-35:1 0:34:3-35:1
+    return r1 @ 0:34:3-35:1
+fn16 "main" params=0 captures=0 slots=13 entry @ 0:37:1-63:1
     step @ 0:38:3-39:1
-    step @ 0:38:3-38:18
-    step @ 0:38:8-38:17
-    step @ 0:38:15-38:16
-    const r1 int:2 @ 0:38:15-38:16
-    call r1 fn4 @ 0:38:8-38:17
-    move r0 r1 @ 0:38:8-38:17
-    call-builtin r0 "puts" 1 @ 0:38:3-38:18 0:38:8-38:17
+    step @ 0:38:3-38:9
+    call r0 fn3 @ 0:38:3-38:9
     step @ 0:39:3-40:1
-    step @ 0:39:10-39:32
-    step @ 0:39:10-39:24
-    step @ 0:39:20-39:23
-    const r2 "p" @ 0:39:20-39:23
-    call r2 fn0 @ 0:39:10-39:24
-    move r1 r2 @ 0:39:10-39:24
-    call-builtin r1 "Result.unwrap!" 1 @ 0:39:10-39:32 0:39:10-39:24
-    move r0 r1 @ 0:39:10-39:32
+    step @ 0:39:12-39:35
+    step @ 0:39:24-39:26
+    step @ 0:39:25-39:26
+    const r2 int:1 @ 0:39:25-39:26
+    neg-i r1 r2 @ 0:39:24-39:25
+    step @ 0:39:28-39:34
+    const r2 int:65535 @ 0:39:28-39:34
+    call r1 fn4 @ 0:39:12-39:35
+    move r0 r1 @ 0:39:12-39:35
     step @ 0:40:3-41:1
-    step @ 0:40:3-40:44
-    step @ 0:40:8-40:43
-    step @ 0:40:21-40:42
-    step @ 0:40:26-40:30
-    move r3 r0 @ 0:40:26-40:30
-    step @ 0:40:32-40:38
-    step @ 0:40:33-40:34
-    const r5 int:1 @ 0:40:33-40:34
-    step @ 0:40:36-40:37
-    const r6 int:2 @ 0:40:36-40:37
-    list r4 r5 2 @ 0:40:32-40:38
-    step @ 0:40:40-40:41
-    const r5 int:2 @ 0:40:40-40:41
-    call r3 fn2 @ 0:40:21-40:42
-    move r2 r3 @ 0:40:21-40:42
-    call-builtin r2 "Native.null?" 1 @ 0:40:8-40:43 0:40:21-40:42
-    move r1 r2 @ 0:40:8-40:43
-    call-builtin r1 "puts" 1 @ 0:40:3-40:44 0:40:8-40:43
+    step @ 0:40:3-40:33
+    step @ 0:40:8-40:32
+    step @ 0:40:8-40:21
+    step @ 0:40:8-40:14
+    field r2 r0 0 @ 0:40:8-40:21
+    step @ 0:40:24-40:32
+    step @ 0:40:24-40:30
+    field r3 r0 1 @ 0:40:24-40:32
+    add-i r1 r2 r3 @ 0:40:22-40:23
+    call-builtin r1 "puts" 1 @ 0:40:3-40:33 0:40:8-40:32
     step @ 0:41:3-42:1
-    step @ 0:41:3-41:21
-    step @ 0:41:16-41:20
-    move r1 r0 @ 0:41:16-41:20
-    call-builtin r1 "Native.close" 1 @ 0:41:3-41:21 0:41:16-41:20
+    step @ 0:41:3-41:37
+    step @ 0:41:8-41:36
+    step @ 0:41:13-41:14
+    const r2 int:1 @ 0:41:13-41:14
+    step @ 0:41:16-41:30
+    step @ 0:41:16-41:24
+    step @ 0:41:20-41:23
+    const r4 float:bits:0 @ 0:41:20-41:23
+    call r4 fn15 @ 0:41:16-41:24
+    step @ 0:41:27-41:30
+    const r5 float:bits:4602678819172646912 @ 0:41:27-41:30
+    lt-f r3 r5 r4 @ 0:41:25-41:26
+    step @ 0:41:32-41:35
+    const r4 "x" @ 0:41:32-41:35
+    call r2 fn1 @ 0:41:8-41:36
+    move r1 r2 @ 0:41:8-41:36
+    call-builtin r1 "puts" 1 @ 0:41:3-41:37 0:41:8-41:36
     step @ 0:42:3-43:1
-    step @ 0:42:14-42:29
-    step @ 0:42:26-42:28
-    const r2 int:80 @ 0:42:26-42:28
-    call r2 fn5 @ 0:42:14-42:29
-    move r1 r2 @ 0:42:14-42:29
+    step @ 0:42:3-42:18
+    step @ 0:42:8-42:17
+    step @ 0:42:15-42:16
+    const r2 int:2 @ 0:42:15-42:16
+    call r2 fn5 @ 0:42:8-42:17
+    move r1 r2 @ 0:42:8-42:17
+    call-builtin r1 "puts" 1 @ 0:42:3-42:18 0:42:8-42:17
     step @ 0:43:3-44:1
-    step @ 0:43:3-43:41
-    step @ 0:43:8-43:40
-    step @ 0:43:8-43:23
-    step @ 0:43:8-43:16
-    field r3 r1 0 @ 0:43:8-43:23
-    step @ 0:43:26-43:40
-    step @ 0:43:26-43:34
-    field r4 r1 2 @ 0:43:26-43:40
-    add-i r2 r3 r4 @ 0:43:24-43:25
-    call-builtin r2 "puts" 1 @ 0:43:3-43:41 0:43:8-43:40
+    step @ 0:43:10-43:32
+    step @ 0:43:10-43:24
+    step @ 0:43:20-43:23
+    const r3 "p" @ 0:43:20-43:23
+    call r3 fn0 @ 0:43:10-43:24
+    move r2 r3 @ 0:43:10-43:24
+    call-builtin r2 "Result.unwrap!" 1 @ 0:43:10-43:32 0:43:10-43:24
+    move r1 r2 @ 0:43:10-43:32
     step @ 0:44:3-45:1
-    step @ 0:44:3-44:30
-    step @ 0:44:16-44:29
-    step @ 0:44:16-44:24
-    field r2 r1 1 @ 0:44:16-44:29
-    call-builtin r2 "Native.close" 1 @ 0:44:3-44:30 0:44:16-44:29
+    step @ 0:44:3-44:44
+    step @ 0:44:8-44:43
+    step @ 0:44:21-44:42
+    step @ 0:44:26-44:30
+    move r4 r1 @ 0:44:26-44:30
+    step @ 0:44:32-44:38
+    step @ 0:44:33-44:34
+    const r6 int:1 @ 0:44:33-44:34
+    step @ 0:44:36-44:37
+    const r7 int:2 @ 0:44:36-44:37
+    list r5 r6 2 @ 0:44:32-44:38
+    step @ 0:44:40-44:41
+    const r6 int:2 @ 0:44:40-44:41
+    call r4 fn2 @ 0:44:21-44:42
+    move r3 r4 @ 0:44:21-44:42
+    call-builtin r3 "Native.null?" 1 @ 0:44:8-44:43 0:44:21-44:42
+    move r2 r3 @ 0:44:8-44:43
+    call-builtin r2 "puts" 1 @ 0:44:3-44:44 0:44:8-44:43
     step @ 0:45:3-46:1
-    step @ 0:45:3-45:30
-    step @ 0:45:8-45:29
-    step @ 0:45:8-45:23
-    step @ 0:45:19-45:22
-    const r3 float:bits:4612811918334230528 @ 0:45:19-45:22
-    call r3 fn6 @ 0:45:8-45:23
-    field r2 r3 0 @ 0:45:8-45:29
-    call-builtin r2 "puts" 1 @ 0:45:3-45:30 0:45:8-45:29
+    step @ 0:45:3-45:21
+    step @ 0:45:16-45:20
+    move r2 r1 @ 0:45:16-45:20
+    call-builtin r2 "Native.close" 1 @ 0:45:3-45:21 0:45:16-45:20
     step @ 0:46:3-47:1
-    step @ 0:46:10-46:25
-    step @ 0:46:20-46:24
-    move r3 r0 @ 0:46:20-46:24
-    call r3 fn7 @ 0:46:10-46:25
-    move r2 r3 @ 0:46:10-46:25
+    step @ 0:46:14-46:29
+    step @ 0:46:26-46:28
+    const r3 int:80 @ 0:46:26-46:28
+    call r3 fn6 @ 0:46:14-46:29
+    move r2 r3 @ 0:46:14-46:29
     step @ 0:47:3-48:1
-    step @ 0:47:3-47:27
-    step @ 0:47:16-47:26
-    step @ 0:47:16-47:20
-    field r3 r2 1 @ 0:47:16-47:26
-    call-builtin r3 "Native.close" 1 @ 0:47:3-47:27 0:47:16-47:26
+    step @ 0:47:3-47:41
+    step @ 0:47:8-47:40
+    step @ 0:47:8-47:23
+    step @ 0:47:8-47:16
+    field r4 r2 0 @ 0:47:8-47:23
+    step @ 0:47:26-47:40
+    step @ 0:47:26-47:34
+    field r5 r2 2 @ 0:47:26-47:40
+    add-i r3 r4 r5 @ 0:47:24-47:25
+    call-builtin r3 "puts" 1 @ 0:47:3-47:41 0:47:8-47:40
     step @ 0:48:3-49:1
-    step @ 0:48:3-48:36
-    step @ 0:48:16-48:35
-    step @ 0:48:16-48:27
-    step @ 0:48:16-48:20
-    field r4 r2 0 @ 0:48:16-48:27
-    call-builtin r4 "Result.unwrap!" 1 @ 0:48:16-48:35 0:48:16-48:27
-    move r3 r4 @ 0:48:16-48:35
-    call-builtin r3 "Native.close" 1 @ 0:48:3-48:36 0:48:16-48:35
+    step @ 0:48:3-48:30
+    step @ 0:48:16-48:29
+    step @ 0:48:16-48:24
+    field r3 r2 1 @ 0:48:16-48:29
+    call-builtin r3 "Native.close" 1 @ 0:48:3-48:30 0:48:16-48:29
     step @ 0:49:3-50:1
-    step @ 0:49:3-49:35
-    step @ 0:49:16-49:34
-    step @ 0:49:16-49:26
-    call r5 fn8 @ 0:49:16-49:26
-    move r4 r5 @ 0:49:16-49:26
-    call-builtin r4 "Result.unwrap!" 1 @ 0:49:16-49:34 0:49:16-49:26
-    move r3 r4 @ 0:49:16-49:34
-    call-builtin r3 "Native.close" 1 @ 0:49:3-49:35 0:49:16-49:34
+    step @ 0:49:3-49:30
+    step @ 0:49:8-49:29
+    step @ 0:49:8-49:23
+    step @ 0:49:19-49:22
+    const r4 float:bits:4612811918334230528 @ 0:49:19-49:22
+    call r4 fn7 @ 0:49:8-49:23
+    field r3 r4 0 @ 0:49:8-49:29
+    call-builtin r3 "puts" 1 @ 0:49:3-49:30 0:49:8-49:29
     step @ 0:50:3-51:1
-    step @ 0:50:11-50:36
-    step @ 0:50:33-50:35
-    const r4 int:16 @ 0:50:33-50:35
-    call-builtin r4 "Native.memory_pointer" 1 @ 0:50:11-50:36 0:50:33-50:35
-    move r3 r4 @ 0:50:11-50:36
+    step @ 0:50:10-50:25
+    step @ 0:50:20-50:24
+    move r4 r1 @ 0:50:20-50:24
+    call r4 fn8 @ 0:50:10-50:25
+    move r3 r4 @ 0:50:10-50:25
     step @ 0:51:3-52:1
-    step @ 0:51:3-51:49
-    step @ 0:51:8-51:48
-    step @ 0:51:16-51:44
-    step @ 0:51:35-51:40
-    move r6 r3 @ 0:51:35-51:40
-    step @ 0:51:42-51:43
-    const r7 int:0 @ 0:51:42-51:43
-    call-builtin r6 "Native.get_pointer" 2 @ 0:51:16-51:44 0:51:35-51:40 0:51:42-51:43
-    move r5 r6 @ 0:51:16-51:44
-    step @ 0:51:46-51:47
-    const r6 int:1 @ 0:51:46-51:47
-    call r5 fn9 @ 0:51:8-51:48
-    move r4 r5 @ 0:51:8-51:48
-    call-builtin r4 "puts" 1 @ 0:51:3-51:49 0:51:8-51:48
+    step @ 0:51:3-51:27
+    step @ 0:51:16-51:26
+    step @ 0:51:16-51:20
+    field r4 r3 1 @ 0:51:16-51:26
+    call-builtin r4 "Native.close" 1 @ 0:51:3-51:27 0:51:16-51:26
     step @ 0:52:3-53:1
-    step @ 0:52:12-52:89
-    step @ 0:52:25-52:53
-    step @ 0:52:44-52:49
-    move r6 r3 @ 0:52:44-52:49
-    step @ 0:52:51-52:52
-    const r7 int:8 @ 0:52:51-52:52
-    call-builtin r6 "Native.get_pointer" 2 @ 0:52:25-52:53 0:52:44-52:49 0:52:51-52:52
-    move r5 r6 @ 0:52:25-52:53
-    step @ 0:52:55-52:58
-    const r6 "s" @ 0:52:55-52:58
-    step @ 0:52:60-52:88
-    step @ 0:52:79-52:84
-    move r8 r3 @ 0:52:79-52:84
-    step @ 0:52:86-52:87
-    const r9 int:0 @ 0:52:86-52:87
-    call-builtin r8 "Native.get_pointer" 2 @ 0:52:60-52:88 0:52:79-52:84 0:52:86-52:87
-    move r7 r8 @ 0:52:60-52:88
-    call r5 fn10 @ 0:52:12-52:89
-    move r4 r5 @ 0:52:12-52:89
+    step @ 0:52:3-52:36
+    step @ 0:52:16-52:35
+    step @ 0:52:16-52:27
+    step @ 0:52:16-52:20
+    field r5 r3 0 @ 0:52:16-52:27
+    call-builtin r5 "Result.unwrap!" 1 @ 0:52:16-52:35 0:52:16-52:27
+    move r4 r5 @ 0:52:16-52:35
+    call-builtin r4 "Native.close" 1 @ 0:52:3-52:36 0:52:16-52:35
     step @ 0:53:3-54:1
-    step @ 0:53:3-53:25
-    step @ 0:53:16-53:24
-    step @ 0:53:16-53:22
-    field r5 r4 1 @ 0:53:16-53:24
-    call-builtin r5 "Native.close" 1 @ 0:53:3-53:25 0:53:16-53:24
+    step @ 0:53:3-53:35
+    step @ 0:53:16-53:34
+    step @ 0:53:16-53:26
+    call r6 fn9 @ 0:53:16-53:26
+    move r5 r6 @ 0:53:16-53:26
+    call-builtin r5 "Result.unwrap!" 1 @ 0:53:16-53:34 0:53:16-53:26
+    move r4 r5 @ 0:53:16-53:34
+    call-builtin r4 "Native.close" 1 @ 0:53:3-53:35 0:53:16-53:34
     step @ 0:54:3-55:1
-    step @ 0:54:3-54:73
-    step @ 0:54:16-54:72
-    step @ 0:54:16-54:64
-    step @ 0:54:30-54:33
-    const r7 "t" @ 0:54:30-54:33
-    step @ 0:54:35-54:63
-    step @ 0:54:54-54:59
-    move r9 r3 @ 0:54:54-54:59
-    step @ 0:54:61-54:62
-    const r10 int:0 @ 0:54:61-54:62
-    call-builtin r9 "Native.get_pointer" 2 @ 0:54:35-54:63 0:54:54-54:59 0:54:61-54:62
-    move r8 r9 @ 0:54:35-54:63
-    call r7 fn11 @ 0:54:16-54:64
-    move r6 r7 @ 0:54:16-54:64
-    call-builtin r6 "Result.unwrap!" 1 @ 0:54:16-54:72 0:54:16-54:64
-    move r5 r6 @ 0:54:16-54:72
-    call-builtin r5 "Native.close" 1 @ 0:54:3-54:73 0:54:16-54:72
+    step @ 0:54:11-54:36
+    step @ 0:54:33-54:35
+    const r5 int:16 @ 0:54:33-54:35
+    call-builtin r5 "Native.memory_pointer" 1 @ 0:54:11-54:36 0:54:33-54:35
+    move r4 r5 @ 0:54:11-54:36
     step @ 0:55:3-56:1
-    step @ 0:55:9-55:20
-    step @ 0:55:18-55:19
-    const r6 int:3 @ 0:55:18-55:19
-    call r6 fn12 @ 0:55:9-55:20
-    move r5 r6 @ 0:55:9-55:20
+    step @ 0:55:3-55:49
+    step @ 0:55:8-55:48
+    step @ 0:55:16-55:44
+    step @ 0:55:35-55:40
+    move r7 r4 @ 0:55:35-55:40
+    step @ 0:55:42-55:43
+    const r8 int:0 @ 0:55:42-55:43
+    call-builtin r7 "Native.get_pointer" 2 @ 0:55:16-55:44 0:55:35-55:40 0:55:42-55:43
+    move r6 r7 @ 0:55:16-55:44
+    step @ 0:55:46-55:47
+    const r7 int:1 @ 0:55:46-55:47
+    call r6 fn10 @ 0:55:8-55:48
+    move r5 r6 @ 0:55:8-55:48
+    call-builtin r5 "puts" 1 @ 0:55:3-55:49 0:55:8-55:48
     step @ 0:56:3-57:1
-    step @ 0:56:11-56:81
-    step @ 0:56:20-56:48
-    step @ 0:56:39-56:44
-    move r8 r3 @ 0:56:39-56:44
-    step @ 0:56:46-56:47
-    const r9 int:0 @ 0:56:46-56:47
-    call-builtin r8 "Native.get_pointer" 2 @ 0:56:20-56:48 0:56:39-56:44 0:56:46-56:47
-    move r7 r8 @ 0:56:20-56:48
-    step @ 0:56:50-56:68
-    step @ 0:56:50-56:53
-    move r9 r5 @ 0:56:50-56:53
-    step @ 0:56:63-56:67
-    const r10 true @ 0:56:63-56:67
-    struct-with r8 r9 s5 [2] @ 0:56:50-56:68
-    step @ 0:56:70-56:80
-    step @ 0:56:78-56:79
-    const r10 int:1 @ 0:56:78-56:79
-    step @ 0:19:18-19:19
-    const r11 int:0 @ 0:19:18-19:19
-    struct r9 r10 s4 @ 0:56:70-56:80
-    call r7 fn13 @ 0:56:11-56:81
-    move r6 r7 @ 0:56:11-56:81
+    step @ 0:56:12-56:89
+    step @ 0:56:25-56:53
+    step @ 0:56:44-56:49
+    move r7 r4 @ 0:56:44-56:49
+    step @ 0:56:51-56:52
+    const r8 int:8 @ 0:56:51-56:52
+    call-builtin r7 "Native.get_pointer" 2 @ 0:56:25-56:53 0:56:44-56:49 0:56:51-56:52
+    move r6 r7 @ 0:56:25-56:53
+    step @ 0:56:55-56:58
+    const r7 "s" @ 0:56:55-56:58
+    step @ 0:56:60-56:88
+    step @ 0:56:79-56:84
+    move r9 r4 @ 0:56:79-56:84
+    step @ 0:56:86-56:87
+    const r10 int:0 @ 0:56:86-56:87
+    call-builtin r9 "Native.get_pointer" 2 @ 0:56:60-56:88 0:56:79-56:84 0:56:86-56:87
+    move r8 r9 @ 0:56:60-56:88
+    call r6 fn11 @ 0:56:12-56:89
+    move r5 r6 @ 0:56:12-56:89
     step @ 0:57:3-58:1
-    step @ 0:57:3-57:44
-    step @ 0:57:8-57:43
-    step @ 0:57:8-57:18
-    step @ 0:57:8-57:13
-    field r8 r6 1 @ 0:57:8-57:18
-    step @ 0:57:21-57:43
-    step @ 0:57:21-57:38
-    step @ 0:57:21-57:36
-    step @ 0:57:21-57:33
-    step @ 0:57:21-57:26
-    field r11 r6 0 @ 0:57:21-57:33
-    field r10 r11 0 @ 0:57:21-57:36
-    field r9 r10 1 @ 0:57:21-57:38
-    call-builtin r9 "Float.from_int" 1 @ 0:57:21-57:43 0:57:21-57:38
-    add-f r7 r8 r9 @ 0:57:19-57:20
-    call-builtin r7 "puts" 1 @ 0:57:3-57:44 0:57:8-57:43
-    const r7 void @ 0:35:1-59:1
-    return r7 @ 0:35:1-59:1
+    step @ 0:57:3-57:25
+    step @ 0:57:16-57:24
+    step @ 0:57:16-57:22
+    field r6 r5 1 @ 0:57:16-57:24
+    call-builtin r6 "Native.close" 1 @ 0:57:3-57:25 0:57:16-57:24
+    step @ 0:58:3-59:1
+    step @ 0:58:3-58:73
+    step @ 0:58:16-58:72
+    step @ 0:58:16-58:64
+    step @ 0:58:30-58:33
+    const r8 "t" @ 0:58:30-58:33
+    step @ 0:58:35-58:63
+    step @ 0:58:54-58:59
+    move r10 r4 @ 0:58:54-58:59
+    step @ 0:58:61-58:62
+    const r11 int:0 @ 0:58:61-58:62
+    call-builtin r10 "Native.get_pointer" 2 @ 0:58:35-58:63 0:58:54-58:59 0:58:61-58:62
+    move r9 r10 @ 0:58:35-58:63
+    call r8 fn12 @ 0:58:16-58:64
+    move r7 r8 @ 0:58:16-58:64
+    call-builtin r7 "Result.unwrap!" 1 @ 0:58:16-58:72 0:58:16-58:64
+    move r6 r7 @ 0:58:16-58:72
+    call-builtin r6 "Native.close" 1 @ 0:58:3-58:73 0:58:16-58:72
+    step @ 0:59:3-60:1
+    step @ 0:59:9-59:20
+    step @ 0:59:18-59:19
+    const r7 int:3 @ 0:59:18-59:19
+    call r7 fn13 @ 0:59:9-59:20
+    move r6 r7 @ 0:59:9-59:20
+    step @ 0:60:3-61:1
+    step @ 0:60:11-60:81
+    step @ 0:60:20-60:48
+    step @ 0:60:39-60:44
+    move r9 r4 @ 0:60:39-60:44
+    step @ 0:60:46-60:47
+    const r10 int:0 @ 0:60:46-60:47
+    call-builtin r9 "Native.get_pointer" 2 @ 0:60:20-60:48 0:60:39-60:44 0:60:46-60:47
+    move r8 r9 @ 0:60:20-60:48
+    step @ 0:60:50-60:68
+    step @ 0:60:50-60:53
+    move r10 r6 @ 0:60:50-60:53
+    step @ 0:60:63-60:67
+    const r11 true @ 0:60:63-60:67
+    struct-with r9 r10 s6 [2] @ 0:60:50-60:68
+    step @ 0:60:70-60:80
+    step @ 0:60:78-60:79
+    const r11 int:1 @ 0:60:78-60:79
+    step @ 0:20:18-20:19
+    const r12 int:0 @ 0:20:18-20:19
+    struct r10 r11 s5 @ 0:60:70-60:80
+    call r8 fn14 @ 0:60:11-60:81
+    move r7 r8 @ 0:60:11-60:81
+    step @ 0:61:3-62:1
+    step @ 0:61:3-61:44
+    step @ 0:61:8-61:43
+    step @ 0:61:8-61:18
+    step @ 0:61:8-61:13
+    field r9 r7 1 @ 0:61:8-61:18
+    step @ 0:61:21-61:43
+    step @ 0:61:21-61:38
+    step @ 0:61:21-61:36
+    step @ 0:61:21-61:33
+    step @ 0:61:21-61:26
+    field r12 r7 0 @ 0:61:21-61:33
+    field r11 r12 0 @ 0:61:21-61:36
+    field r10 r11 1 @ 0:61:21-61:38
+    call-builtin r10 "Float.from_int" 1 @ 0:61:21-61:43 0:61:21-61:38
+    add-f r8 r9 r10 @ 0:61:19-61:20
+    call-builtin r8 "puts" 1 @ 0:61:3-61:44 0:61:8-61:43
+    const r8 void @ 0:37:1-63:1
+    return r8 @ 0:37:1-63:1
