@@ -9,6 +9,21 @@ export def block_returns?(statements: List[Ast.Stmt]) -> Bool
   return statements.any? do |statement: Ast.Stmt| returns?(statement) end
 end
 
+## True when the statements give an error(...) call as the value of a return (also inside an if, a loop or a case arm)
+## or as the last expression. The call has no type of its own, so a block with such a value may need its result type
+## from another path (Stmt.check_block_in).
+export def gives_error?(statements: List[Ast.Stmt]) -> Bool
+  if statements.size == 0
+    return false
+  end
+
+  last = statements[statements.size - 1]
+  case last
+    Ast.Stmt.Expression(node) -> return error_call?(node.value) or error_returns?(statements)
+    _ -> return error_returns?(statements)
+  end
+end
+
 ## The help of CHECK-MISSING-RETURN: what is missing at the end of the body, or "".
 export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> String
   if !contains_return?(body)
@@ -129,4 +144,44 @@ def field_path(node: Ast.FieldAccess) -> String
   end
 
   return "#{target}.#{node.name}"
+end
+
+def error_returns?(statements: List[Ast.Stmt]) -> Bool
+  return statements.any? do |statement: Ast.Stmt| returns_error?(statement) end
+end
+
+def returns_error?(statement: Ast.Stmt) -> Bool
+  case statement
+    Ast.Stmt.Return(node) -> return returned_error?(node)
+    Ast.Stmt.If(node) -> return if_returns_error?(node)
+    Ast.Stmt.While(node) -> return error_returns?(node.body)
+    Ast.Stmt.For(node) -> return error_returns?(node.body)
+    Ast.Stmt.Case(node) -> return node.arms.any? do |arm: Ast.CaseArm| error_returns?(arm.body) end
+    _ -> return false
+  end
+end
+
+def returned_error?(node: Ast.Return) -> Bool
+  case node.value
+    Ast.Optional.Present(value) -> return error_call?(value)
+    Ast.Optional.Absent -> return false
+  end
+end
+
+def if_returns_error?(node: Ast.IfStmt) -> Bool
+  if node.branches.any? do |branch: Ast.IfBranch| error_returns?(branch.body) end
+    return true
+  end
+
+  case node.else_body
+    Ast.Optional.Present(body) -> return error_returns?(body)
+    Ast.Optional.Absent -> return false
+  end
+end
+
+def error_call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Call(node) -> return node.name == "error"
+    _ -> return false
+  end
 end

@@ -87,7 +87,42 @@ end
 
 ## check_block_body for the block of a Lazy method when step is true: a `try` in it (not in a block nested in it) ends
 ## the pipeline, whatever the block's result type (State.St.step).
+##
+## A block whose result is not known and that gives an error(...) call (Flow.gives_error?) is checked twice: a first
+## run (State.St.probe) learns the Result type from the other paths, such as an ok(...), and the second run checks the
+## block against it. The first run is the more lenient one, so a problem it finds is real and is the one reported. When
+## it finds no Result type, the block is checked as usual and the error(...) is refused.
 export def check_block_in(
+  cx: State.Cx,
+  st: State.St,
+  block: Ast.BlockLit,
+  known_params: Ast.Optional[List[T.Type]],
+  known_result: T.Type,
+  each_receiver: Ast.Optional[Ast.Expr],
+  step: Bool,
+) -> Result[State.Out]
+  if !st.probe and (T.unknown?(known_result) or settling?(known_result)) and Flow.gives_error?(block.body)
+    probed = check_block_run(cx, st.with(probe: true), block, known_params, known_result, each_receiver, step)
+    case probed
+      ok(out) ->
+        learned = T.result(out.type)
+        if T.is?(learned, "Result") and !T.unknown?(T.item(learned))
+          return check_block_run(cx, st, block, known_params, learned, each_receiver, step)
+        end
+
+      error(problem) -> return error(problem)
+    end
+  end
+
+  return check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
+end
+
+# A known_result of Result[Unknown]: the block must give a Result whose type the body decides.
+def settling?(known_result: T.Type) -> Bool
+  return T.is?(known_result, "Result") and T.unknown?(T.item(known_result))
+end
+
+def check_block_run(
   cx: State.Cx,
   st: State.St,
   block: Ast.BlockLit,
@@ -98,7 +133,7 @@ export def check_block_in(
 ) -> Result[State.Out]
   types = try block_parameter_types(cx, st, block, known_params)
   slot = State.Slot.Infer
-  if T.is?(known_result, "Result") and T.unknown?(T.item(known_result))
+  if settling?(known_result)
     slot = State.Slot.InferResult
   elsif !T.unknown?(known_result)
     slot = State.Slot.Known(known_result)
@@ -288,6 +323,10 @@ def return_inferred(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[Stat
   case node.value
     Ast.Optional.Present(value) ->
       out = try State.expr_completion(cx, st, value, T.Type.Unknown)
+      if unsettled?(out)
+        return ok(out.st)
+      end
+
       return ok(out.st.with(result: State.Slot.Known(out.type)))
     Ast.Optional.Absent -> return ok(st.with(result: State.Slot.Known(T.Type.Void)))
   end
@@ -299,10 +338,20 @@ def return_inferred_result(cx: State.Cx, st: State.St, node: Ast.Return) -> Resu
     Ast.Optional.Present(value) ->
       out = try State.expr_completion(cx, st, value, T.Type.Unknown)
       try require_result(cx, out.st, out.type, Ast.expr_span(value))
+      if unsettled?(out)
+        return ok(out.st)
+      end
+
       return ok(out.st.with(result: State.Slot.Known(out.type)))
     Ast.Optional.Absent ->
       return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), T.Type.Void, node.span))
   end
+end
+
+# While a block is probed, the value of an error(...) is a Result[Unknown], which says nothing about the result of the
+# block: a later return or the last expression has to give it.
+def unsettled?(out: State.Out) -> Bool
+  return out.st.probe and settling?(out.type)
 end
 
 # CHECK-TYPE-MISMATCH, with the help that shows ok(...), unless the type is a Result.

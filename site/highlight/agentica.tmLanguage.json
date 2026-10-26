@@ -417,6 +417,10 @@
     "numbers": {
       "patterns": [
         {
+          "match": "\\b[0-9](?:_?[0-9])*(?:\\.[0-9](?:_?[0-9])*)?[eE][+-]?[0-9](?:_?[0-9])*\\b",
+          "name": "constant.numeric.float.agentica"
+        },
+        {
           "match": "\\b[0-9](?:_?[0-9])*\\.[0-9](?:_?[0-9])*\\b",
           "name": "constant.numeric.float.agentica"
         },

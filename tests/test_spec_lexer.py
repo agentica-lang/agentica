@@ -75,6 +75,8 @@ DIAGNOSTICS = [
     ("trailing separator in the fraction", "1.5_", "LEX-INVALID-NUMBER", (1, 1, 1, 5), None),
     ("double separator in the fraction", "1.5__5", "LEX-INVALID-NUMBER", (1, 1, 1, 7), None),
     ("trailing separator after digits", "1_000_", "LEX-INVALID-NUMBER", (1, 1, 1, 7), None),
+    ("separator before the exponent", "1_e5", "LEX-INVALID-NUMBER", (1, 1, 1, 5), None),
+    ("trailing separator in the exponent", "1e5_", "LEX-INVALID-NUMBER", (1, 1, 1, 5), None),
     ("separator before a method", "x = 1_.times", "LEX-INVALID-NUMBER", (1, 5, 1, 7), None),
     # Characters and delimiters, with the C-style habits that get a help.
     ("unexpected character", "x @", "LEX-UNEXPECTED-CHAR", (1, 3), False),

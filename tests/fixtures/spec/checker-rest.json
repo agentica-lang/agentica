@@ -6423,6 +6423,85 @@
         ""
       ],
       "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  a = [1].map do |x|",
+        "    if x > 5",
+        "      return error(\"big\")",
+        "    end",
+        "",
+        "    ok(x)",
+        "  end",
+        "  b = Native.memory_pointer(4) do |buf|",
+        "    if Native.get_int32(buf, 0) != 0",
+        "      return error(\"set\")",
+        "    end",
+        "",
+        "    ok(\"zero\")",
+        "  end",
+        "  puts(a.size + b.unwrap_or(\"\").length)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b = Native.memory_pointer(4) do |buf|",
+        "    if Native.get_int32(buf, 0) != 0",
+        "      return error(\"set\")",
+        "    end",
+        "",
+        "    error(\"never ok\")",
+        "  end",
+        "  puts(b.ok?)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-RESULT-TYPE",
+      "start": [4, 14]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  r = Task.map([1, 2], 2, 1000) do |x|",
+        "    if x > 1",
+        "      return error(\"big\")",
+        "    end",
+        "",
+        "    ok(x)",
+        "  end",
+        "  puts(r.size)",
+        "end",
+        "",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  b = Native.memory_pointer(4) do |buf|",
+        "    if Native.get_int32(buf, 0) != 0",
+        "      return error(\"set\")",
+        "    end",
+        "",
+        "    y: Int = \"s\"",
+        "    ok(\"zero\")",
+        "  end",
+        "  puts(b.unwrap_or(\"\"))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [7, 14],
+      "covers": "\"s\""
     }
   ],
   "Result and builtin failures retain structured diagnostics": [
