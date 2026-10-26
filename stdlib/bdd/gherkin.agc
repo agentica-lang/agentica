@@ -60,6 +60,8 @@ end
 
 struct ExampleRow
   span: Report.Span
+  headers: List[String]
+  cells: List[String]
   bindings: Map[String, String]
   tags: List[String]
 end
@@ -171,8 +173,12 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         end
         rows = current.examples
         for row in block.rows.drop(1)
-          rows = rows.push(ExampleRow(span: row.span, bindings: bind(headers, row.cells), tags: example_tags))
+          bindings = bind(headers, row.cells)
+          rows = rows.push(
+            ExampleRow(span: row.span, headers: headers, cells: row.cells, bindings: bindings, tags: example_tags),
+          )
         end
+
         current = with_examples(current, rows)
         mode = "examples"
       else
@@ -212,7 +218,7 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         kind: kind,
         text: drop_blanks(rest_of(line, action.length)),
         argument: Argument.NoArgument,
-        span: where,
+        span: at_keyword(where, src.raws[cursor]),
       )
       if mode == "background"
         background = background.push(step)
@@ -333,6 +339,24 @@ def location(src: Source, index: Int) -> Report.Span
     at = src.raws.size - 1
   end
   return Report.Span(file: src.file, line: at + 1, column: 1, end_column: src.raws[at].length + 1)
+end
+
+# A step's place starts at its keyword, so a report points past the indentation. The skipped blanks are the ones
+# `strip` removes, since the line was classified through it.
+def at_keyword(where: Report.Span, raw: String) -> Report.Span
+  return Report.Span(file: where.file, line: where.line, column: strip_prefix(raw) + 1, end_column: where.end_column)
+end
+
+def strip_prefix(text: String) -> Int
+  count = 0
+  for c in text.split("")
+    if not " \t\n\r".include?(c) and c != String.from_code(12)
+      return count
+    end
+
+    count += 1
+  end
+  return count
 end
 
 def rest_of(text: String, start: Int) -> String
@@ -572,7 +596,8 @@ def collect(results: List[Result[String]]) -> Result[List[String]]
 end
 
 def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: ExampleRow) -> Result[Scenario]
-  name = try substitute(draft.name, row.bindings)
+  shown = try substitute(draft.name, row.bindings)
+  name = shown + row_suffix(draft.name, row)
   expanded: List[Step] = []
   for step in steps
     text = try substitute(step.text, row.bindings)
@@ -588,6 +613,45 @@ def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: Example
       example: Report.Example.Row(row.span),
     ),
   )
+end
+
+# The values of the columns that the outline's name does not show, as ` (a, b)`, so every row has its own name for
+# the report and `--only`. A name that shows every column gets nothing. Identical rows keep identical names; the
+# report's `example` place tells them apart.
+def row_suffix(name: String, row: ExampleRow) -> String
+  unused = (0...row.headers.size).to_a.filter do |i| not name.include?("<#{row.headers[i]}>") end
+  if unused.size == 0
+    return ""
+  end
+
+  values = unused.map do |i| flat(row.cells[i]) end
+  return " (#{values.join(", ")})"
+end
+
+# A cell as one visible piece of a name: empty is `""`, and a control character (a line feed would break the text
+# report) is written as `\n`, `\r`, `\t` or `\xNN`.
+def flat(cell: String) -> String
+  if cell == ""
+    return "\"\""
+  end
+
+  return cell.split("").map do |c| flat_char(c) end.join("")
+end
+
+def flat_char(c: String) -> String
+  code = c.code
+  if code == 10
+    return "\\n"
+  elsif code == 13
+    return "\\r"
+  elsif code == 9
+    return "\\t"
+  elsif code < 32 or code == 127
+    digits = "0123456789abcdef"
+    return "\\x#{digits.slice(code / 16, 1)}#{digits.slice(code % 16, 1)}"
+  end
+
+  return c
 end
 
 def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Result[Argument]

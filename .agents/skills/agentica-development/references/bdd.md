@@ -235,12 +235,14 @@ are registered in `stdlib/MODULES`.
 - `stdlib/bdd/gherkin.agc` (`std/bdd/gherkin`) parses the English Gherkin
   subset with stable codes, the first error and spans. `parse(file, text)`
   returns `Outcome.Done(Feature)` or `Outcome.Failed(Diagnostic)` (the
-  `std/test/report` types); a `Span` is file, line, column 1 and the end column
-  of the raw line, with no offset. Table rows and `<name>` substitution split
-  the text and join it once, with no `+=` or `push` per character or cell, so
-  they cost linear time in the line. Building the step, row, Examples, draft and
-  scenario lists with `push` per line is still quadratic in the line count.
-  Goldens: `bdd-gherkin-outline`, `-sections` and `-arguments`.
+  `std/test/report` types); a `Span` is file, line, column 1 (a step's: its
+  keyword's) and the end column of the raw line, with no offset. An outline
+  row's name gets ` (values)` of the columns its name does not show. Table rows
+  and `<name>` substitution split the text and join it once, with no `+=` or
+  `push` per character or cell, so they cost linear time in the line. Building
+  the step, row, Examples, draft and scenario lists with `push` per line is
+  still quadratic in the line count. Goldens: `bdd-gherkin-outline`, `-sections`
+  and `-arguments`.
 - `stdlib/bdd/match.agc` (`std/bdd/match`) compiles and matches step patterns
   and runs the duplicate and resolve checks, by hand with no regular
   expressions; it imports `gherkin` for `Diagnostic`, `Outcome` and `Step`, and
