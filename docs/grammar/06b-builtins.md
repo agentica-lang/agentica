@@ -415,8 +415,10 @@ of one file in source order, private ones too: imports, functions, structs with
 their fields, enums with their variants, type aliases, resources and constants,
 each with `exported`, its signature, its `##` doc and summary, and its span and
 the span of its name. FILE is a source file or a `std/` module name. It only
-lexes and parses the file, so its imports need not exist. `--stdin FILE` takes
-the text of FILE from standard input. A lex or parse error exits 1; a mistake in
+lexes and parses the file, so its imports need not exist; only a file that
+re-exports a name (`export Url.parse`) is linked, to list the original
+declaration with its doc, and one that does not link lists no re-export.
+`--stdin FILE` takes the text of FILE from standard input. A lex or parse error exits 1; a mistake in
 the arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
 
 `agentica type-at FILE:LINE:COL [--json]` gives the checked type of the

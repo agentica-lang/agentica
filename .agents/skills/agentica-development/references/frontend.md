@@ -26,10 +26,10 @@ with a packed `Problem` (`references/stages.md`).
 - Packages (`packages/`, §45): the manifest, the lock, the git source rules,
   the cache and the package import, all pure. The rules are in
   `docs/grammar/05b-modules.md`.
-- Docs (`docs/`, §32.5): `agentica doc` lexes and parses one module and imports
-  only `syntax/` and `diagnostics/`; the doc of an export is on its
-  `ExportDecl`. The command is `app/cli_doc.agc`; the tests are
-  `tests/test_spec_doc.py`.
+- Docs (`docs/`, §32.5): `agentica doc` lexes and parses one module; only a
+  module with re-exports is linked (`docs/doc_origins.agc`); the doc of an
+  export is on its `ExportDecl`. The command is `app/cli_doc.agc`; the tests
+  are `tests/test_spec_doc.py`.
 - Query (`query/`, §39): the commands `outline`, `type-at`, `symbol` and `refs`
   (`app/cli_query.agc`, the words read by `query/query_options.agc`). `outline`
   parses one file and lists the items of `compiler/docs/doc_model.agc`.

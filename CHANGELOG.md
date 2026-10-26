@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `agentica doc` and `agentica outline` list the re-exports of a facade file
+  with the doc of the original, and `agentica type-at` writes a re-exported
+  type through the facade alias (`Web.Address`).
+
 ## [0.11.0] - 2026-10-26
 
 ### Added

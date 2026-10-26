@@ -32,12 +32,12 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
     SourceFile.Read.Unreadable(_) -> return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read #{path}\n"))
     SourceFile.Read.Invalid(at) ->
       return Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
-    SourceFile.Read.Text(text) -> return documented(path, text, as_json)
+    SourceFile.Read.Text(text) -> return documented(settings, path, text, as_json)
   end
 end
 
-def documented(path: String, text: String, as_json: Bool) -> Reply.Answer
-  case Docs.of_text(text)
+def documented(settings: Env.Settings, path: String, text: String, as_json: Bool) -> Reply.Answer
+  case Docs.of_file(settings, path, text)
     Diag.Outcome.Failed(problem) -> return Reply.Answer.Rejected(Front.stage_problem(path, problem))
     Diag.Outcome.Done(module) ->
       if as_json

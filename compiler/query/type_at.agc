@@ -86,7 +86,9 @@ end
 
 ## The "@N::" prefix of each file that the root file imports under an alias, to that alias, so a type of such a file is
 ## written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases for one
-## file wins.
+## file wins. A type that such a file re-exports (`export Models.User`) is written through the alias of the file that
+## re-exports it, so the map holds its whole linked name too (`@2::User`), unless the root file imports its own file
+## under an alias.
 export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
   written: Map[String, String] = {}
   aliases = linked.modules[0].aliases
@@ -94,6 +96,19 @@ export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
     for module in linked.modules
       if module.key == aliases[alias] and module.prefix != "" and !written.has_key?(module.prefix)
         written = written.put(module.prefix, alias)
+      end
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      if module.key == aliases[alias]
+        for name in module.reexported.keys.sort
+          original = module.reexported[name]
+          if !written.has_key?(original) and !written.has_key?(prefix_of(original))
+            written = written.put(original, alias)
+          end
+        end
       end
     end
   end
@@ -113,6 +128,11 @@ end
 ## nothing.
 export def on_token?(text: String, offset: Int) -> Bool
   return kind_at(text, offset) != ""
+end
+
+# The "@N::" in front of a linked name; "" for a name of the root file.
+def prefix_of(name: String) -> String
+  return name.slice(0, name.length - T.display_name(name).length)
 end
 
 # The kind of the token that holds the character at `offset`; "" for none, a line break and the end included.
