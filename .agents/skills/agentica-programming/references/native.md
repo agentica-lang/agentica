@@ -83,9 +83,14 @@ end
   `error("db_open returned NULL")`); the resource is owned by the calling
   task. `Native.close(db)` frees once (a second close does nothing); a call
   with a closed resource is `RUNTIME-NATIVE-CLOSED`. The owner's end frees
-  what it did not close; `Task.spawn_owning(&f, db)` hands it on; `main`'s
-  return frees nothing. A `compute def` call keeps its resource until it
-  returns (a close or cancel meanwhile defers the free). A function that
+  what it did not close; `Task.spawn_owning(&f, db)` hands it on. A `compute
+  def` call keeps its resource until it returns (a close or cancel meanwhile
+  defers the free). The end of the run (`main` returns, `System.exit`, a crash
+  of `main`, the first stop signal) stops children, writes files, then frees
+  every resource and buffer still open (any task's), newest first; a held one
+  when its call returns, and queued compute calls never run. The frees share
+  the files' flush limit (`--flush-timeout`): a slower free is left, with one
+  stderr warning line. A function that
   returns a borrowed pointer must be `-> C.Pointer`, or it is freed twice. A
   `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
   never declare it in another). Resources and `C.Pointer` do not convert; no

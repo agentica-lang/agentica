@@ -503,8 +503,8 @@ end
   Agentica allocates, as a `C.Pointer` that goes wherever a `C.Pointer`
   parameter is (a negative size is `RUNTIME-INVALID-COUNT`). The calling task
   owns it like a resource: `Native.free(p)` frees it once (again does nothing),
-  the owner's end frees it, and when `main` returns the program ends without
-  freeing it. `Native.memory_pointer(size) do |p| ... end` gives a new buffer to
+  the owner's end frees it, and so does the end of the run, as for a resource
+  (below). `Native.memory_pointer(size) do |p| ... end` gives a new buffer to
   the block, frees it when the block ends (also when it returns an error early
   with `try`) and has the block's value; a buffer that the block hands to
   another task is left to that owner. `Task.spawn_owning` hands it over
@@ -553,11 +553,18 @@ end
   argument is copied. `Native.close(r)` runs `free` once and marks the resource
   closed; closing it again does nothing. If the owning task ends first (return,
   crash or cancel), its end runs `free`, as for a handle (section 6c), and
-  `Task.spawn_owning` hands a resource to another task. When `main` returns, the
-  program ends without freeing what is still open. A `compute def` call holds
-  its resource arguments until it returns: a close or the owner's end meanwhile
-  marks them closed, and `free` runs when the call ends. A resource and a
-  `C.Pointer` do not convert into each other. Every resource result is a new
+  `Task.spawn_owning` hands a resource to another task. A `compute def` call
+  holds its resource arguments until it returns: a close or the owner's end
+  meanwhile marks them closed, and `free` runs when the call ends. When the run
+  ends (`main` returns, `System.exit`, a crash of `main`, or the first
+  `SIGINT`, `SIGTERM` or `SIGHUP`), child programs stop, files are written, and
+  then every resource and owned buffer still open is freed, whatever task owns
+  it, newest first; one that a running `compute def` call holds is freed when
+  the call returns, and a queued compute call is never made. These frees and
+  the file writes share one flush limit (`--flush-timeout`): a `free` that takes
+  longer is left behind and stderr gets one warning line. A second stop signal
+  ends the run at once. A resource and a `C.Pointer` do not convert into each
+  other. Every resource result is a new
   pointer that the program owns: a function that returns a pointer it keeps (a
   borrowed one) must be declared `-> C.Pointer`, or its pointer is freed twice.
   A `def` of `db_close` in the same block is `PARSE-EXTERN-FREE`; the check

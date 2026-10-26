@@ -181,6 +181,14 @@ static void flush_files(agc_vm *vm) {
   agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
 }
 
+/* What native code still owns, freed after the files (agc_ffi_end); false when the flush limit ran out first. A failure
+   (the loop cannot start) frees nothing more. */
+static bool free_natives(agc_vm *vm) {
+  if (setjmp(vm->fail) == 0) return agc_ffi_end(vm);
+  agc_sync_reset(vm);
+  return false;
+}
+
 static void print_outcome(agc_vm *vm, const agc_outcome *outcome, agc_notice_mode mode) {
   agc_notice notice;
   agc_print_diagnostic(agc_notice_begin(&vm->rt->err, &notice), vm->rt->program, outcome, vm->rt->style, false);
@@ -207,9 +215,9 @@ static void say_goodbye(agc_vm *vm, agc_outcome *outcome) {
 }
 
 /* The one exit path (docs/vm/14-core-invariants.md, 14.4): the children,
-   then standard output and the files, then the exit. Nothing else is
-   drained: the sockets are closed in goodbye (agc_io_goodbye), and the OS
-   frees the other descriptors and the memory. */
+   then standard output and the files, then what native code still owns,
+   then the exit. Nothing else is drained: the sockets are closed in goodbye
+   (agc_io_goodbye), and the OS frees the other descriptors and the memory. */
 int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   agc_processes_stop(vm);
   agc_io_children_stopped();
@@ -219,10 +227,12 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
   agc_files_close(vm);
+  bool freed = free_natives(vm);
   stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
-  if (vm->rt->flush_expired) {
+  if (vm->rt->flush_expired || !freed) {
     agc_notice notice;
-    agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->style);
+    agc_print_flush_timeout(agc_notice_begin(&vm->rt->err, &notice), vm->rt->flush_timeout, vm->rt->flush_expired,
+                            !freed, vm->rt->style);
     agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
   }
   const char *write_error = NULL;

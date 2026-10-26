@@ -157,16 +157,33 @@ bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item)
   return true;
 }
 
-void agc_compute_close(agc_compute *pool) {
-  uv_mutex_lock(&pool->lock);
-  pool->closed = true;
-  /* Items that no thread took never run: the run is over. */
+/* Under the lock: the items that no thread took leave the queue and never run; returns how many. */
+static uint32_t drop_queue(agc_compute *pool) {
+  uint32_t dropped = pool->queued;
   for (agc_request *item = pool->first, *next; item; item = next) {
     next = item->next;
     free(item);
   }
   pool->first = pool->last = NULL;
   pool->queued = 0;
+  return dropped;
+}
+
+void agc_compute_drop_queued(agc_compute *pool) {
+  uv_mutex_lock(&pool->lock);
+  uint32_t dropped = drop_queue(pool);
+  uv_mutex_unlock(&pool->lock);
+  pool->running -= dropped;
+  agc_inbox_keep(pool->done, pool->running > 0);
+}
+
+bool agc_compute_idle(const agc_compute *pool) { return pool->running == 0; }
+
+void agc_compute_close(agc_compute *pool) {
+  uv_mutex_lock(&pool->lock);
+  pool->closed = true;
+  /* Items that no thread took never run: the run is over. */
+  (void)drop_queue(pool);
   uv_cond_broadcast(&pool->wake);
   uint32_t started = pool->started;
   for (uint32_t k = 0; k < started; k++) pool->workers[k].join = !pool->workers[k].busy;

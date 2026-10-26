@@ -23,6 +23,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   checked modules leaves out the private functions of the imports and does not
   lex a file again for `blank_line_after_end` (2.3 times faster on
   `compiler/`).
+- The end of the run (`main` returns, `System.exit`, a crash of `main`, a stop
+  signal) frees the native resources and buffers still open, after the files
+  are written and within the flush limit, so a C stream that `main` never
+  closed keeps what was written to it.
 
 ### Fixed
 

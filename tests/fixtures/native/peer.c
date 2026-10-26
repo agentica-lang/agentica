@@ -431,6 +431,55 @@ void *peer_res_open_later(int32_t value, int32_t limit_ms) {
   return peer_res_open(value);
 }
 
+/* For the end of the run, which the program cannot watch: a resource that writes down its own free. peer_note_open
+   makes one that appends the line TAG to the file PATH when peer_note_free frees it, so the file shows which frees ran
+   and in what order. peer_note_free_slow first sleeps 20 seconds, a free that hangs. peer_note_hold, a compute call,
+   appends "returned" once it has slept MS milliseconds, so a free that waits for it comes after that line. */
+typedef struct {
+  char path[1024];
+  char tag[64];
+} peer_note;
+
+static atomic_int note_holding;
+
+static void note_line(const char *path, const char *line) {
+  FILE *f = fopen(path, "a");
+  if (!f) return;
+  fputs(line, f);
+  fputc('\n', f);
+  fclose(f);
+}
+
+void *peer_note_open(const char *path, const char *tag) {
+  peer_note *n = calloc(1, sizeof *n);
+  if (!n) return NULL;
+  snprintf(n->path, sizeof n->path, "%s", path);
+  snprintf(n->tag, sizeof n->tag, "%s", tag);
+  return n;
+}
+
+void *peer_note_open_slow(const char *path, const char *tag) { return peer_note_open(path, tag); }
+
+void peer_note_free(void *p) {
+  peer_note *n = p;
+  note_line(n->path, n->tag);
+  free(n);
+}
+
+void peer_note_free_slow(void *p) {
+  sleep_ms(20000);
+  peer_note_free(p);
+}
+
+int32_t peer_note_hold(void *p, int32_t ms) {
+  atomic_fetch_add(&note_holding, 1);
+  sleep_ms(ms);
+  note_line(((peer_note *)p)->path, "returned");
+  return ms;
+}
+
+int32_t peer_note_holding(void) { return atomic_load(&note_holding); }
+
 /* For C.Bytes: the sum of the N bytes. */
 int32_t peer_bytes_sum(const uint8_t *bytes, int32_t n) {
   int32_t sum = 0;

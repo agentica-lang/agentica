@@ -1322,6 +1322,145 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "0\n0\n", "")
 
 
+NOTE_EXTERN = """extern "{library}"
+  resource Note, free: peer_note_free
+  resource SlowNote, free: peer_note_free_slow
+  def peer_note_open(path: C.String, tag: C.String) -> Note
+  def peer_note_open_slow(path: C.String, tag: C.String) -> SlowNote
+  compute def peer_note_hold(note: Note, ms: C.Int32) -> C.Int32
+  def peer_note_holding() -> C.Int32
+end
+
+"""
+
+
+def note_program(tmp_path, peer, main):
+    """The program NOTE_EXTERN + MAIN, with NOTES in MAIN replaced by the file that the peer's notes write to."""
+    notes = tmp_path / "notes.txt"
+    source = NOTE_EXTERN.format(library=literal(peer)) + main.replace("NOTES", literal(notes))
+    return program(tmp_path, source), notes
+
+
+def notes_of(notes):
+    return notes.read_text(encoding="utf-8").split("\n") if notes.exists() else None
+
+
+# The end of main frees what it still owns as a task's end does, newest first, whether main returns, exits or crashes:
+# the free of a note writes its tag down. The note closed already is not freed again. The docs' own example, a C stream
+# that main never closes, keeps what fputs wrote, and so does the stream of a task that still runs.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("ending, code", [("", 0), ("System.exit(3)", 3),
+                                          ('stop: Result[Int] = error("stop")\n  puts(stop.unwrap!)', 1)])
+def test_the_end_of_main_frees_what_is_still_open(tmp_path, peer, schedulers, ending, code):
+    main = """extern "%s"
+  resource Stream, free: fclose
+  def fopen(path: C.String, mode: C.String) -> Stream
+  def fputs(text: C.String, stream: Stream) -> C.Int32
+end
+
+def keep(path: String, opened: Channel[Int]) -> Void
+  stream = fopen(path, "w").unwrap!
+  fputs("from a task\\n", stream)
+  opened.send(1, 10_000).unwrap!
+  Task.sleep(60_000)
+end
+
+def main() -> Void
+  opened: Channel[Int] = Channel.new(1)
+  keeper = Task.spawn do keep("%s", opened) end
+  opened.recv(10_000).unwrap!
+  stream = fopen("%s", "w").unwrap!
+  fputs("from main\\n", stream)
+  a = peer_note_open("NOTES", "a").unwrap!
+  b = peer_note_open("NOTES", "b").unwrap!
+  c = peer_note_open("NOTES", "c").unwrap!
+  Native.close(b)
+  puts("main ends")
+  %s
+end
+""" % (LIBC, literal(tmp_path / "task.txt"), literal(tmp_path / "main.txt"), ending)
+    source, notes = note_program(tmp_path, peer, main)
+    result = agentica("--schedulers", schedulers, source, timeout=20)
+    assert (result.code, result.stdout) == (code, "main ends\n"), result.stderr
+    assert notes_of(notes) == ["b", "c", "a", ""]
+    assert (tmp_path / "main.txt").read_text(encoding="utf-8") == "from main\n"
+    assert (tmp_path / "task.txt").read_text(encoding="utf-8") == "from a task\n"
+
+
+# A resource that a running compute call holds is freed once the call returns, as at a task's end: the note's tag comes
+# after the line that the call writes before it returns. A compute call still queued behind it is never made.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_the_end_of_main_frees_a_held_resource_when_the_call_returns(tmp_path, peer, schedulers):
+    main = """def hold(note: Note) -> Int
+  return peer_note_hold(note, 1000)
+end
+
+def main() -> Void
+  note = peer_note_open("NOTES", "held").unwrap!
+  holders: List[Task[Int]] = []
+  for k in 1..SCHEDULERS
+    holders = holders.push(Task.spawn(&hold, note))
+  end
+  n = 0
+  while peer_note_holding() < SCHEDULERS and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  queued = Task.spawn(&hold, note)
+  Task.sleep(20)
+  puts(peer_note_holding())
+end
+""".replace("SCHEDULERS", schedulers)
+    source, notes = note_program(tmp_path, peer, main)
+    result = agentica("--schedulers", schedulers, source, timeout=20)
+    assert (result.code, result.stdout, result.stderr) == (0, schedulers + "\n", "")
+    assert notes_of(notes) == ["returned"] * int(schedulers) + ["held", ""]
+
+
+# A free that hangs holds the exit no longer than the flush limit: the run ends with its own code and one warning line,
+# and the frees made before it (newest first) have run.
+@NATIVE_CALLS
+def test_a_free_that_hangs_ends_at_the_flush_limit(tmp_path, peer):
+    main = """def main() -> Void
+  a = peer_note_open("NOTES", "a").unwrap!
+  slow = peer_note_open_slow("NOTES", "slow").unwrap!
+  b = peer_note_open("NOTES", "b").unwrap!
+  puts("main ends")
+end
+"""
+    source, notes = note_program(tmp_path, peer, main)
+    began = time.monotonic()
+    result = agentica("--json", "--flush-timeout", "300", source, timeout=20)
+    assert time.monotonic() - began < scaled(10)
+    assert (result.code, result.stdout) == (0, "main ends\n")
+    assert json.loads(result.stderr)["flush_timeout_ms"] == 300
+    assert notes_of(notes) == ["b", ""]
+
+
+# On SIGINT the run frees what native code owns, as it writes files, then ends by that signal.
+@NATIVE_CALLS
+@pytest.mark.skipif(WINDOWS, reason="POSIX signals")
+def test_a_stop_signal_frees_what_is_still_open(tmp_path, peer):
+    main = """def main() -> Void
+  note = peer_note_open("NOTES", "a").unwrap!
+  puts("ready")
+  Task.sleep(60_000)
+end
+"""
+    source, notes = note_program(tmp_path, peer, main)
+    child = subprocess.Popen(cli() + [str(source)], stdout=subprocess.PIPE, env=vm_environment(), text=True)
+    try:
+        assert child.stdout.readline() == "ready\n"
+        child.send_signal(signal.SIGINT)
+        assert child.wait(timeout=20) == -signal.SIGINT
+    finally:
+        child.kill()
+        child.wait()
+    assert notes_of(notes) == ["a", ""]
+
+
 OUT_EXTERN = """extern "{library}"
   resource Res, free: peer_res_free
   def peer_out_all(

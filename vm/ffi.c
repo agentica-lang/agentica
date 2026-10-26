@@ -47,6 +47,18 @@
    signature needs more than. */
 #define STRUCT_ROUND(size) (((size) + 15) & ~(size_t)15)
 
+/* The frees of one step of agc_ffi_end, copied out of GC memory for the thread that makes them, in order. */
+typedef struct {
+  agc_ffi_call *free;
+  void *at, *pointer;
+  bool buffer;
+} end_free;
+
+typedef struct {
+  size_t count;
+  end_free items[];
+} end_frees;
+
 /* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. A kind
    declared `free: C.Function` (by_pointer) frees through the address that the call got: its call has no symbol. */
 typedef struct {
@@ -587,14 +599,19 @@ static void free_pointer(agc_ffi_call *free_call, void *at, void *pointer) {
   agc_ffi_invoke(free_call, at, &arg, &unused);
 }
 
-/* Calls the free function of the resource, once; an owned buffer is malloc'd memory. */
+/* Frees POINTER: an owned buffer (BUFFER) is malloc'd memory, a resource goes to FREE_CALL as in free_pointer. */
+static void free_native(bool buffer, agc_ffi_call *free_call, void *at, void *pointer) {
+  if (buffer) {
+    free(pointer);
+  } else {
+    free_pointer(free_call, at, pointer);
+  }
+}
+
+/* Calls the free function of the resource, once. */
 static void call_free(agc_c_resource *res) {
   res->closed = res->freed = true;
-  if (res->buffer) {
-    free(res->pointer);
-  } else {
-    free_pointer(res->free, res->free_at, res->pointer);
-  }
+  free_native(res->buffer, res->free, res->free_at, res->pointer);
 }
 
 /* Frees the resource and drops its registry entry; under rt->sync, with no compute call holding it. */
@@ -627,6 +644,62 @@ static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
 static void release_resource(void *native) {
   agc_c_resource *res = native;
   if (!res->freed && !res->jobs) call_free(res);
+}
+
+static void make_end_frees(void *data) {
+  const end_frees *batch = data;
+  for (size_t k = 0; k < batch->count; k++) {
+    const end_free *f = &batch->items[k];
+    free_native(f->buffer, f->free, f->at, f->pointer);
+  }
+}
+
+static int newest_first(const void *a, const void *b) {
+  uint64_t x = (*(agc_resource *const *)a)->id, y = (*(agc_resource *const *)b)->id;
+  return x < y ? 1 : x > y ? -1 : 0;
+}
+
+/* Frees, on a thread apart and within BY, the resources and owned buffers of ITEMS (the registry, newest first) that
+   are still to free: all of them when compute calls may no longer hold one (HELD_LEFT is NULL), else those that none
+   holds, and *HELD_LEFT tells whether one was skipped. Each is marked freed here, before its free runs, so the end of
+   a compute call that the loop finishes meanwhile (release_held, discard) does not free it again. True when every
+   free has run. */
+static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *held_left, uint64_t by) {
+  end_frees *batch = malloc(sizeof *batch + agc_size_mul(count, sizeof(end_free)));
+  if (!batch) agc_out_of_memory();
+  batch->count = 0;
+  for (size_t k = 0; k < count; k++) {
+    agc_resource *r = items[k];
+    if (r->release != release_resource || !r->native) continue;
+    agc_c_resource *res = r->native;
+    if (res->freed) continue;
+    if (held_left && res->jobs) {
+      *held_left = true;
+      continue;
+    }
+    res->closed = res->freed = true;
+    batch->items[batch->count++] = (end_free){res->free, res->free_at, res->pointer, res->buffer};
+  }
+  if (!batch->count) {
+    free(batch);
+    return true;
+  }
+  bool done = agc_io_run_aside(vm, make_end_frees, batch, by);
+  if (done) free(batch);
+  return done;
+}
+
+bool agc_ffi_end(agc_vm *vm) {
+  /* agc_io_flush_files, which runs first, set the deadline. */
+  const agc_runtime *rt = vm->rt;
+  size_t count;
+  agc_resource **items = agc_registry_copy(vm, &count);
+  if (!count) return true;
+  qsort(items, count, sizeof *items, newest_first);
+  bool held = false;
+  if (!end_step(vm, items, count, &held, rt->flush_by)) return false;
+  if (!held) return true;
+  return agc_io_compute_quiet(vm, rt->flush_by) && end_step(vm, items, count, NULL, rt->flush_by);
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL) and owned by the calling task

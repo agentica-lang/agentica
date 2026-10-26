@@ -190,6 +190,13 @@ typedef struct {
   void *data;
 } poller_wait_call;
 
+/* A call of agc_io_run_aside: `done` is set on the loop's thread when the pool gives the item back. */
+typedef struct {
+  void (*fn)(void *data);
+  void *data;
+  bool done;
+} aside_call;
+
 /* The walks of the whole registry at the end of the run work on a copy taken under its lock: they run on the I/O
    thread once the scheduler threads have joined, and a release, a close or a sweep they cause unregisters entries
    (which moves the last one into the gap), so an entry of the copy that is gone is skipped by its slot. The copy is
@@ -345,6 +352,21 @@ void agc_unregister(agc_vm *vm, agc_resource *r) {
   reg->items[reg->count] = NULL;
   r->slot = SIZE_MAX;
   agc_lock_drop(reg->lock);
+}
+
+agc_resource **agc_registry_copy(agc_vm *vm, size_t *count) {
+  agc_registry *reg = vm->rt->registry;
+  *count = 0;
+  if (!reg) return NULL;
+  agc_lock_take(reg->lock);
+  agc_resource **items = NULL;
+  *count = reg->count;
+  if (reg->count) {
+    items = agc_alloc(agc_size_mul(reg->count, sizeof(agc_resource *)));
+    memcpy(items, reg->items, reg->count * sizeof(agc_resource *));
+  }
+  agc_lock_drop(reg->lock);
+  return items;
 }
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
@@ -1747,16 +1769,8 @@ static bool held(const agc_resource *r) {
 }
 
 static snapshot registry_snapshot(agc_vm *vm) {
-  snapshot shot = {NULL, 0};
-  agc_registry *reg = vm->rt->registry;
-  if (!reg) return shot;
-  agc_lock_take(reg->lock);
-  shot.count = reg->count;
-  if (shot.count) {
-    shot.items = agc_alloc(agc_size_mul(shot.count, sizeof(agc_resource *)));
-    memcpy(shot.items, reg->items, shot.count * sizeof(agc_resource *));
-  }
-  agc_lock_drop(reg->lock);
+  snapshot shot;
+  shot.items = agc_registry_copy(vm, &shot.count);
   return shot;
 }
 
@@ -1815,7 +1829,7 @@ static void close_files(agc_vm *vm) {
    at most the flush limit (30 seconds, --flush-timeout or AGENTICA_FLUSH_TIMEOUT_MS). */
 static void finish_flushes(agc_vm *vm) {
   if (!flushing(vm)) return;
-  uint64_t by = agc_clock_ms() + (uint64_t)vm->rt->flush_timeout;
+  uint64_t by = vm->rt->flush_by;
   for (;;) {
     drain(vm);
     if (!flushing(vm)) break;
@@ -1826,12 +1840,58 @@ static void finish_flushes(agc_vm *vm) {
 }
 
 void agc_io_flush_files(agc_vm *vm) {
+  vm->rt->flush_by = agc_clock_ms() + (uint64_t)vm->rt->flush_timeout;
   if (!vm->rt->loop) return;
   /* Closing a file wakes the tasks waiting on it, which changes the shared lists. */
   agc_sync_take(vm);
   close_files(vm);
   agc_sync_drop(vm);
   finish_flushes(vm);
+}
+
+bool agc_io_compute_quiet(agc_vm *vm, uint64_t by) {
+  agc_loop *loop = vm->rt->loop;
+  if (!loop || !loop->compute) return true;
+  agc_compute_drop_queued(loop->compute);
+  while (!agc_compute_idle(loop->compute)) {
+    uint64_t now = agc_clock_ms();
+    if (now >= by || !agc_io_run_for(vm, by - now, true)) break;
+  }
+  return agc_compute_idle(loop->compute);
+}
+
+static void aside_work(void *item) {
+  aside_call *a = item;
+  a->fn(a->data);
+}
+
+static void aside_finished(void *item) { ((aside_call *)item)->done = true; }
+
+/* A compute pool of one thread, made for the call: the run's own pool may be busy with calls that never end, and its
+   close detaches a thread that still works, as the exit needs. */
+bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t by) {
+  if (agc_clock_ms() >= by) return false;
+  agc_loop *loop = loop_of(vm);
+  aside_call *a = malloc(sizeof *a);
+  if (!a) agc_out_of_memory();
+  *a = (aside_call){fn, data, false};
+  agc_compute *pool = agc_compute_open(&loop->uv, 1, aside_finished);
+  if (!pool) {
+    free(a);
+    return false;
+  }
+  pool_mask saved;
+  pool_enter(&saved);
+  bool queued = agc_compute_submit(pool, aside_work, a);
+  pool_leave(&saved);
+  while (queued && !a->done) {
+    uint64_t now = agc_clock_ms();
+    if (now >= by || !agc_io_run_for(vm, by - now, true)) break;
+  }
+  bool done = a->done;
+  agc_compute_close(pool);
+  if (done) free(a);
+  return done;
 }
 
 /* The stop state outlives a loop when one process runs two VMs one after the other (the single binary's front end,
@@ -2101,4 +2161,18 @@ void agc_io_children_stopped(void) {}
 void agc_io_goodbye(agc_vm *vm) { (void)vm; }
 
 void agc_io_flush_files(agc_vm *vm) { (void)vm; }
+
+bool agc_io_compute_quiet(agc_vm *vm, uint64_t by) {
+  (void)vm;
+  (void)by;
+  return true;
+}
+
+/* No threads here, and no native calls either (vm/ffi_none.c), so nothing reaches it with a free to make. */
+bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t by) {
+  (void)vm;
+  (void)by;
+  fn(data);
+  return true;
+}
 #endif
