@@ -1043,9 +1043,9 @@ static bool holder_tag(agc_value v) {
 
 /* Whether V is a String, Int, Float or Bool. The items of a List and the values of a Map have one static type, so
    when the first one is such a scalar none of them holds a handle. */
-static bool scalar_tag(agc_value v) {
-  return v.tag == AGC_T_STRING || v.tag == AGC_T_INT || v.tag == AGC_T_FLOAT || v.tag == AGC_T_BOOL;
-}
+/* Whether V is a handle or may hold one. A collection has one static type, so a list or map whose first item is
+   neither holds no handle. */
+static bool may_hold(agc_value v) { return handle_tag(v) || holder_tag(v); }
 
 /* Puts P in SLOTS (CAPACITY of them, a power of two, never full); false when it was already in. */
 static bool slot_put(const void **slots, size_t capacity, const void *p) {
@@ -1084,7 +1084,7 @@ static void value_push(value_stack *s, agc_value v) {
 
 /* Pushes V when it is a handle or may hold one; a scalar is left out. */
 static void push_part(value_stack *todo, agc_value v) {
-  if (handle_tag(v) || holder_tag(v)) value_push(todo, v);
+  if (may_hold(v)) value_push(todo, v);
 }
 
 static void push_value(agc_value v, void *todo) { push_part(todo, v); }
@@ -1118,11 +1118,15 @@ static value_stack find_handles(agc_vm *vm, agc_value arg) {
           for (size_t k = 0; k < x->n; k++) push_part(&todo, x->payload[k]);
         break;
       }
-      case AGC_T_RESULT: push_part(&todo, agc_as_result(vm, v)->value); break;
+      case AGC_T_RESULT: {
+        const agc_result *x = agc_as_result(vm, v);
+        if (pointer_set_add(&seen, x)) push_part(&todo, x->value);
+        break;
+      }
       case AGC_T_LIST: {
-        /* A packed list (Int, Float) or one of scalars holds no handle. */
+        /* A packed list (Int, Float) or one whose items cannot hold a handle is skipped. */
         const agc_list *x = agc_as_list(vm, v);
-        if (!agc_list_len(x) || agc_list_kind(x) || scalar_tag(agc_list_get(x, 0)) || !pointer_set_add(&seen, x))
+        if (!agc_list_len(x) || agc_list_kind(x) || !may_hold(agc_list_get(x, 0)) || !pointer_set_add(&seen, x))
           break;
         agc_list_cursor c;
         agc_value item;
@@ -1133,7 +1137,7 @@ static value_stack find_handles(agc_vm *vm, agc_value arg) {
       case AGC_T_MAP: {
         const agc_map *x = agc_as_map(vm, v);
         agc_value first;
-        if (!x->size || (agc_map_any_value(x, &first) && scalar_tag(first)) || !pointer_set_add(&seen, x)) break;
+        if (!x->size || (agc_map_any_value(x, &first) && !may_hold(first)) || !pointer_set_add(&seen, x)) break;
         agc_map_each_value(x, push_value, &todo);
         break;
       }

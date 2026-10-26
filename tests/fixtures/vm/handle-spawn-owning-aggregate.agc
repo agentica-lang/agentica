@@ -62,7 +62,7 @@ def wrapped(r: Result[Socket]) -> Result[Int]
 end
 
 # Owns the inbox (handed over with the Pair) and hands over a Job with it and a socket it gets from the caller: the
-# spawn fails on the socket after the inbox passed its check, so the inbox stays with this task and its crash closes it.
+# spawn fails on the socket after the inbox passed its check, so the inbox stays here and this task's crash closes it.
 def give_half(pair: Pair) -> Result[Int]
   socket = try pair.sockets.recv(5000)
   Task.spawn_owning(&work, Job(conn: Conn.Plain(socket), inbox: pair.inbox))
