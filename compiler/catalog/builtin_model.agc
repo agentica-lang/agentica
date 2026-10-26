@@ -43,6 +43,7 @@ export enum Rule
   MapSize
   MapValues
   NativeClose
+  NativeClosed
   NativeMemoryBlock
   Ok
   OkVoid

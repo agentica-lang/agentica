@@ -90,6 +90,13 @@ end
   `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
   never declare it in another). Resources and `C.Pointer` do not convert; no
   `to_s` or JSON; inspects as `<Db>`.
+- `Native.closed?(x) -> Bool` asks before a call would stop the task with
+  `RUNTIME-NATIVE-CLOSED`, so a wrapper can return `error`: `true` after
+  `Native.close` (any task) or the owner's end (a resource a task returned
+  arrives closed), for a NULL out resource and for a freed owned buffer;
+  `false` for a live one (also while a `compute def` holds it) and for any
+  `C.Pointer` of C, NULL included. `true` is final; `false` can go stale if
+  another task may close `x`. Other types: `CHECK-TYPE-MISMATCH`.
 
   ~~~ruby
   extern "libc.so.6"
@@ -106,7 +113,9 @@ end
   per out parameter.
   An out resource field is the resource (not a `Result`): owned by the task
   when C wrote a pointer, closed (never freed, calls fail with
-  `RUNTIME-NATIVE-CLOSED`) when it is NULL, so check `result` first. An out
+  `RUNTIME-NATIVE-CLOSED`) when it is NULL, so check `result` or
+  `Native.closed?` first (comment-only SQL gives `SQLITE_OK` and a NULL
+  statement). An out
   named `result` beside a C result is `PARSE-EXTERN-OUT`.
 
   ~~~ruby

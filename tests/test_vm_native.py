@@ -1373,6 +1373,90 @@ end
     assert result.stdout.split("\n") == ["[10, 6, 15000000000, 42, 5]", "1.25", "true", "-1", "42", "1", ""]
 
 
+CLOSED_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  def peer_res_open(value: C.Int32) -> Res
+  def peer_res_get(res: Res) -> C.Int32
+  compute def peer_res_hold(res: Res, limit_ms: C.Int32) -> C.Int32
+  def peer_res_holding() -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_out_null(out res: Res) -> C.Int32
+  def peer_ptr_static() -> C.Pointer
+  def peer_set_flag() -> Void
+end
+
+def get(res: Res) -> Result[Int]
+  if Native.closed?(res)
+    return error("closed")
+  end
+
+  return ok(peer_res_get(res))
+end
+
+def opened(n: Int) -> Res
+  return peer_res_open(n).unwrap!
+end
+
+def close(res: Res) -> Bool
+  Native.close(res)
+  return Native.closed?(res)
+end
+
+def hold(res: Res) -> Int
+  return peer_res_hold(res, 20_000)
+end
+
+def main() -> Void
+  res = peer_res_open(1).unwrap!
+  puts([Native.closed?(res), Native.closed?(res)])
+  IO.inspect(get(res))
+  Native.close(res)
+  puts(Native.closed?(res))
+  IO.inspect(get(res))
+  puts(Native.closed?(peer_out_null().res))
+  other = peer_res_open(2).unwrap!
+  puts(Task.await(Task.spawn(&close, other)))
+  puts(Native.closed?(other))
+  puts(Native.closed?(Task.await(Task.spawn(&opened, 3))))
+  handed = peer_res_open(4).unwrap!
+  IO.inspect(Task.await(Task.spawn_owning(&get, handed)))
+  puts(Native.closed?(handed))
+  held = peer_res_open(5).unwrap!
+  holder = Task.spawn(&hold, held)
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  puts(Native.closed?(held))
+  Native.close(held)
+  puts("#{{Native.closed?(held)}} #{{peer_res_frees()}}")
+  peer_set_flag()
+  puts(Task.await(holder))
+  buf = Native.memory_pointer(8)
+  puts(Native.closed?(buf))
+  Native.free(buf)
+  puts([Native.closed?(buf), Native.closed?(Native.null()), Native.closed?(peer_ptr_static())])
+end
+"""
+
+
+# Native.closed? asks what a call would refuse with RUNTIME-NATIVE-CLOSED, so a wrapper can return an error instead:
+# false while the resource is live (also while a compute call in another task holds it), true after Native.close in
+# this task or another, for an out resource that C left NULL, after the end of the task that owned it (Task.spawn's
+# result, Task.spawn_owning's argument), and at once when it is closed while a compute call holds it, before the free
+# runs. An owned buffer is closed once freed; a C.Pointer of C, NULL included, never is.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_closed_tells_a_live_resource_from_a_closed_one(tmp_path, peer, schedulers):
+    result = agentica("--schedulers", schedulers, program(tmp_path, CLOSED_EXTERN.format(library=literal(peer))))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == [
+        "[false, false]", "ok(1)", "true", 'error("closed")', "true", "true", "true", "true", "ok(4)", "true",
+        "false", "true 4", "5", "false", "[true, false, false]", "",
+    ]
+
+
 # The record of an exported extern function is exported with it: another file names its type and reads its fields.
 @NATIVE_CALLS
 def test_the_record_of_an_out_call_crosses_an_import(tmp_path, peer):
@@ -2302,7 +2386,8 @@ end
 
 
 # sqlite3_open gives an out Db and sqlite3_prepare_v2 an out Stmt (and the tail as a C.Pointer). A table gets two
-# rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. An open
+# rows that a select reads back; bad SQL gives SQLITE_ERROR, its message, and a NULL Stmt, a closed resource. SQL of
+# only a comment is SQLITE_OK with a NULL Stmt too, which Native.closed? tells apart before the step (#672). An open
 # that fails (SQLITE_CANTOPEN, 14) still gives a live handle, which the wrapper reads and closes.
 @NATIVE_CALLS
 def test_the_system_sqlite_opens_a_database_and_queries_it_through_out_parameters(tmp_path, sqlite):
@@ -2321,6 +2406,9 @@ def run(db: Db, sql: String) -> Int
   if prepared.result != SQLITE_OK
     return prepared.result
   end
+  if Native.closed?(prepared.stmt)
+    return -1
+  end
   code = sqlite3_step(prepared.stmt)
   Native.close(prepared.stmt)
   return code
@@ -2331,6 +2419,7 @@ def main() -> Void
   puts(run(db, "create table t (id integer, name text)"))
   puts(run(db, "insert into t values (1, 'one')"))
   puts(run(db, "insert into t values (2, 'two')"))
+  puts(run(db, "-- only a comment"))
   query = sqlite3_prepare_v2(db, "select id, name from t order by id", -1)
   puts(query.result)
   while sqlite3_step(query.stmt) == SQLITE_ROW
@@ -2340,15 +2429,18 @@ def main() -> Void
   bad = sqlite3_prepare_v2(db, "select from nowhere", -1)
   puts([bad.result, sqlite3_errcode(db)])
   puts(sqlite3_errmsg(db).end_with?("syntax error"))
-  Native.close(bad.stmt)
+  puts(Native.closed?(bad.stmt))
+  puts(Native.closed?(db))
   Native.close(db)
+  puts(Native.closed?(db))
   IO.inspect(open("/no/such/dir/x.db"))
 end
 """
     result = agentica(program(tmp_path, "SQLITE_OK = 0\nSQLITE_ROW = 100\n\n" + SQLITE_OUT_EXTERN + main))
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout.split("\n") == [
-        "101", "101", "101", "0", "1 one", "2 two", "[1, 1]", "true", "14", 'error("sqlite open: 14")', "",
+        "101", "101", "101", "-1", "0", "1 one", "2 two", "[1, 1]", "true", "true", "false", "true", "14",
+        'error("sqlite open: 14")', "",
     ]
 
 

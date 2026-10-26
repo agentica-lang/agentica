@@ -127,6 +127,7 @@ Map.put
 Map.size
 Map.values
 Native.close
+Native.closed?
 Native.free
 Native.get_array_of_float32
 Native.get_array_of_float64
