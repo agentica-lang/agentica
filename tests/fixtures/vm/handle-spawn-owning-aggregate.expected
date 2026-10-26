@@ -1,0 +1,31 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 340,
+  "stdout": [
+    "plain: ok 2",
+    "plain: got 1",
+    "plain: channel: closed, closed? true",
+    "ok(\"from the worker\")",
+    "error(\"network: socket is closed\")",
+    "error(\"network: end of input\")",
+    "idle: ok 0",
+    "idle: got 1",
+    "idle: channel: closed, closed? true",
+    "listed: ok 2",
+    "ok(\"listed\")",
+    "ok(\"listed\")",
+    "error(\"network: end of input\")",
+    "borrowed: task crashed: RUNTIME-HANDLE-NOT-OWNED at @fixtures/vm/handle-spawn-owning-aggregate.agc:48:28: the calling task does not own this handle, or it is closed",
+    "ok()",
+    "ok(\"still mine\")",
+    "spare: ok 0",
+    "spare: got 1",
+    "spare: channel: closed, closed? true",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-HANDLE-NOT-OWNED\",\"file\":\"@fixtures/vm/handle-spawn-owning-aggregate.agc\",\"message\":\"the calling task does not own this handle, or it is closed\",\"range\":{\"end\":{\"column\":31,\"line\":48},\"start\":{\"column\":28,\"line\":48}},\"spawned_at\":{\"column\":33,\"file\":\"@fixtures/vm/handle-spawn-owning-aggregate.agc\",\"line\":81},\"stack\":[{\"column\":28,\"file\":\"@fixtures/vm/handle-spawn-owning-aggregate.agc\",\"function\":\"give_borrowed\",\"line\":48}],\"task\":true}",
+    ""
+  ]
+}

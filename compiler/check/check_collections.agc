@@ -34,7 +34,8 @@ end
 
 # Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
 # the form with no argument, for a function of no parameter. The owning form also hands over a handle, a channel or
-# an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is RUNTIME-HANDLE-NOT-OWNED).
+# an owned buffer (a C.Pointer, whose ownership the VM checks: one that C gave is RUNTIME-HANDLE-NOT-OWNED), or every
+# one of them that a struct, enum, List, Map or Result holds.
 def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> Result[State.Out]
   callback = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   wanted = site.args.size - 1
@@ -47,7 +48,8 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
   end
 
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
-  if owning and !handle?(cx, handed.type) and !T.is?(handed.type, "Channel") and !c_pointer?(handed.type)
+  none: Set[String] = Set.new([])
+  if owning and !holds_handle?(cx, handed.type, none)
     return error(
       State.fail_help(
         cx,
@@ -55,8 +57,8 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
         "CHECK-NOT-A-HANDLE",
         "Task.spawn_owning gives a handle to the new task, but the argument is #{T.to_text(handed.type)}",
         Ast.expr_span(site.args[1]),
-        "pass a FileHandle, Socket, Listener, Process, HttpServer, Channel, resource or owned buffer; Task.spawn " +
-        "passes any other value",
+        "pass a FileHandle, Socket, Listener, Process, HttpServer, Channel, resource or owned buffer, or a value " +
+        "that holds one; Task.spawn passes any other value",
       ),
     )
   end
@@ -105,6 +107,49 @@ end
 
 def handle?(cx: State.Cx, type: T.Type) -> Bool
   return T.is?(type, "Opaque") and (HANDLES.include?(T.name(type)) or cx.resources.include?(T.name(type)))
+end
+
+# True for a type Task.spawn_owning can hand over: a handle, a Channel or a C.Pointer, or a struct, enum, List, Map or
+# Result whose type holds one somewhere (through fields, variant payloads and type arguments). seen holds the struct
+# and enum names being visited, so a recursive type ends; a type argument is checked before the payloads, which then
+# need no substitution.
+def holds_handle?(cx: State.Cx, type: T.Type, seen: Set[String]) -> Bool
+  if handle?(cx, type) or c_pointer?(type) or T.is?(type, "Channel")
+    return true
+  end
+
+  case type
+    T.Type.Result(item) -> return holds_handle?(cx, item, seen)
+    T.Type.List(item) -> return holds_handle?(cx, item, seen)
+    T.Type.Map(key, value) -> return holds_handle?(cx, key, seen) or holds_handle?(cx, value, seen)
+    T.Type.Struct(name) -> return struct_holds_handle?(cx, name, seen)
+    T.Type.Enum(name, args) -> return enum_holds_handle?(cx, name, args, seen)
+    _ -> return false
+  end
+end
+
+def struct_holds_handle?(cx: State.Cx, name: String, seen: Set[String]) -> Bool
+  if seen.include?(name) or !cx.structs.has_key?(name)
+    return false
+  end
+
+  inner = seen.add(name)
+  return cx.structs[name].any? do |field: Model.Named| holds_handle?(cx, field.type, inner) end
+end
+
+def enum_holds_handle?(cx: State.Cx, name: String, args: List[T.Type], seen: Set[String]) -> Bool
+  if args.any? do |arg: T.Type| holds_handle?(cx, arg, seen) end
+    return true
+  end
+
+  if seen.include?(name) or !cx.enums.has_key?(name)
+    return false
+  end
+
+  inner = seen.add(name)
+  return cx.enums[name].variants.any? do |variant: Model.Variant|
+    variant.payload.any? do |part: T.Type| holds_handle?(cx, part, inner) end
+  end
 end
 
 # Native.close: one argument, a resource of an extern block.
