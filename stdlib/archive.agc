@@ -801,8 +801,9 @@ def feed(sc: Scan, chunk: List[Int], gzip: Bool) -> Result[Scan]
         if buf.size < sc.rest
           return ok(sc.with(carry: buf))
         end
-        sc = try take_meta(sc, List.take(buf, sc.rest))
-        buf = List.drop(buf, sc.size)
+        n = sc.rest
+        sc = try take_meta(sc, List.take(buf, n))
+        buf = List.drop(buf, n)
       Phase.Data ->
         n = smaller(sc.rest, buf.size)
         sc = try take_data(sc, List.take(buf, n))
