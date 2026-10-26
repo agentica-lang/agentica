@@ -337,6 +337,7 @@ def main() -> Void
   puts(db_exec(pool.db, "select 1", [0, 255], 2))
   raw: C.Pointer = db_handle(db)
   puts(Native.null?(raw) or Native.null?(Native.null()))
+  puts(Native.closed?(db) or Native.closed?(raw))
   puts(raw_len(raw))
   IO.inspect(db)
   puts(Task.await(Task.spawn_owning(&use, db)))
@@ -368,11 +369,14 @@ OPENER = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open()
 
 
 # The checker keeps resources, pointers and Results apart, and pointers and resources have no ==, to_s or JSON.
+# Native.close takes a resource; Native.closed? a resource or a C.Pointer, and gives a Bool.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  db: Db = db_open()", "CHECK-TYPE-MISMATCH", (8, 12), (8, 21)),
     ("  p: C.Pointer = db_open().unwrap!", "CHECK-TYPE-MISMATCH", (8, 18), (8, 27)),
     ("  puts(db_handle(Native.null()))", "CHECK-TYPE-MISMATCH", (8, 18), (8, 31)),
     ("  Native.close(Native.null())", "CHECK-TYPE-MISMATCH", (8, 16), (8, 29)),
+    ('  puts(Native.closed?("db"))', "CHECK-TYPE-MISMATCH", (8, 23), (8, 27)),
+    ("  n: Int = Native.closed?(db_open().unwrap!)", "CHECK-TYPE-MISMATCH", (8, 12), (8, 45)),
     ("  puts(Native.null() == Native.null())", "CHECK-TYPE-MISMATCH", (8, 22), (8, 24)),
     ("  puts(db_open().unwrap!)", "CHECK-TYPE-MISMATCH", (8, 8), (8, 25)),
     ("  puts(JSON.encode(db_open().unwrap!))", "CHECK-NOT-ENCODABLE", (8, 20), (8, 37)),

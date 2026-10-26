@@ -1212,6 +1212,23 @@ static agc_value builtin_native_null_p(agc_vm *vm, agc_value *args, uint32_t spa
   return agc_bool(!buffer_of(vm, args[0]) && agc_as_c_pointer(vm, args[0]) == NULL);
 }
 
+/* Native.closed?(value): true when the program can no longer use VALUE: a resource closed by Native.close or by the
+   end of the task that owned it, an out resource that C left NULL (closed from the start), and an owned buffer that
+   Native.free or its owner's end freed. A live resource or buffer is false, and so is a C.Pointer of C, NULL included:
+   it is not the program's to close (Native.null? tests NULL). A resource closed while a compute call still holds it is
+   true at once, though its free waits for the call. `closed` only ever goes from false to true, under rt->sync
+   (close_resource), so the read takes rt->sync as memory_at does; the row stays a leaf, since it takes and drops the
+   lock itself and does nothing else. */
+static agc_value builtin_native_closed_p(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  if (agc_is(args[0], AGC_T_C_POINTER)) return agc_bool(false);
+  const agc_c_resource *res = agc_as_c_resource(vm, args[0]);
+  agc_sync_take(vm);
+  bool closed = res->closed;
+  agc_sync_drop(vm);
+  return agc_bool(closed);
+}
+
 /* Native.pointer(address): the C.Pointer with this integer value, such as SQLITE_TRANSIENT, (void *)-1. */
 static agc_value builtin_native_pointer(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
@@ -1674,6 +1691,7 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
+  {"Native.closed?", 1, builtin_native_closed_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, true},
   {"Native.pointer", 1, builtin_native_pointer, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Native.get_string", 2, builtin_get_string, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},
   {"Native.get_string", 3, builtin_get_string_length, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false},

@@ -17,7 +17,8 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
   case rule
     Model.Rule.TaskSpawn -> return check_spawn(cx, st, site, false)
     Model.Rule.TaskSpawnOwning -> return check_spawn(cx, st, site, true)
-    Model.Rule.NativeClose -> return check_native_close(cx, st, site)
+    Model.Rule.NativeClose -> return check_native_target(cx, st, site, false)
+    Model.Rule.NativeClosed -> return check_native_target(cx, st, site, true)
     Model.Rule.TaskAwait -> return check_await(cx, st, site)
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
     Model.Rule.TaskMap -> return check_task_map(cx, st, site)
@@ -160,20 +161,32 @@ def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
   end
 end
 
-# Native.close: one argument, a resource of an extern block.
-def check_native_close(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+# Native.close and Native.closed?: one argument, a resource of an extern block. Native.closed? (CLOSED) also takes a
+# C.Pointer, since an owned buffer is freed like a resource is closed, and gives a Bool.
+def check_native_target(cx: State.Cx, st: State.St, site: State.Site, closed: Bool) -> Result[State.Out]
   target = try State.expr(cx, st, site.args[0], T.Type.Unknown)
-  if !T.is?(target.type, "Opaque") or !cx.resources.include?(T.name(target.type))
+  opaque = T.is?(target.type, "Opaque")
+  pointer = closed and opaque and T.name(target.type) == "C.Pointer"
+  if !pointer and (!opaque or !cx.resources.include?(T.name(target.type)))
+    name = "Native.close requires a resource"
+    if closed
+      name = "Native.closed? requires a resource or a C.Pointer"
+    end
+
     return error(
       State.fail_help(
         cx,
         target.st,
         "CHECK-TYPE-MISMATCH",
-        "Native.close requires a resource, found #{T.to_text(target.type)}",
+        "#{name}, found #{T.to_text(target.type)}",
         Ast.expr_span(site.args[0]),
         "a resource is a type declared with resource Name, free: c_function in an extern block",
       ),
     )
+  end
+
+  if closed
+    return ok(State.Out(st: target.st, type: T.Type.Bool))
   end
 
   return ok(State.Out(st: target.st, type: T.Type.Void))

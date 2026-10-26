@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Builtins can have default arguments, with the rules of a default parameter of
   a function: a call may leave out the trailing ones, and `agentica help` shows
   them (`seed: Int = 0`). `Zlib.crc32(data)` starts from seed 0.
+- `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
+  can return an `error`.
 
 ### Changed
 

@@ -577,6 +577,16 @@ end
   pool thread; a cancel drops the record, and an out resource of a call that
   ran is freed once when it returns. `C.String` and `C.Bytes` cannot be out
   parameters (take a `char **` as an out `C.Pointer`).
+- `Native.closed?(x)` is `true` when a call with `x` would be
+  `RUNTIME-NATIVE-CLOSED`: a resource closed by `Native.close` (in any task) or
+  by the end of its owning task (also the end of a task that returned it), a
+  NULL out resource, and an owned buffer that `Native.free`, its block or its
+  owner's end freed. A live resource or buffer is `false`, also while a
+  `compute def` call holds it; one closed during that call is `true` at once,
+  though `free` waits for the call. A `C.Pointer` of C is never closed (NULL
+  included: `Native.null?` tests that). `true` is final; `false` can be out of
+  date at once if another task may close `x`. It never stops the task and costs
+  as little as a field read. Any other argument is `CHECK-TYPE-MISMATCH`.
 - A `struct` of the block (section 5) is a C struct passed and returned by
   value, laid out as the C compiler of the system lays it out (libffi computes
   the offsets): Ruby ffi's `class P < FFI::Struct; layout ...`. The program
