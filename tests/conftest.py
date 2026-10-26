@@ -1,10 +1,12 @@
 """Shared fixtures for CLI-backed language tests."""
 
 import faulthandler
+import hashlib
 import json
 import os
 import signal
 import sys
+import tempfile
 import threading
 from collections.abc import Callable, Mapping
 from pathlib import Path
@@ -36,6 +38,22 @@ if os.name == "nt":
         return _write_text(self, data, encoding=encoding, errors=errors, newline="" if newline is None else newline)
 
     Path.write_text = _write_text_exactly
+
+
+def pytest_configure(config):
+    """Give each pytest run of a module its own temporary root.
+
+    make test runs one pytest per module in parallel. With a shared root, every run replaces the same
+    pytest-of-<user>/pytest-current link, and the cleanup of another run can fail on it at the end of the session
+    (FileNotFoundError in cleanup_dead_symlinks after all cases passed). A root per module set keeps the links apart and
+    still keeps pytest's last three numbered folders for debugging.
+    """
+    if config.option.basetemp is not None or "PYTEST_DEBUG_TEMPROOT" in os.environ:
+        return
+    name = hashlib.sha256(" ".join(sorted(map(str, config.args))).encode()).hexdigest()[:12]
+    root = Path(tempfile.gettempdir()) / "agentica-pytest" / name
+    root.mkdir(parents=True, exist_ok=True)
+    os.environ["PYTEST_DEBUG_TEMPROOT"] = str(root)
 
 
 @pytest.fixture
