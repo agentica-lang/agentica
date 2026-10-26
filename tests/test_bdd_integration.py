@@ -220,10 +220,14 @@ def test_a_step_reads_the_next_line_as_a_result_that_fails_at_the_end_of_the_out
             "Feature: Lines\nScenario: end\nGiven the Agentica program \"two.agc\"\n"
             'Then the line is "one"\nAnd the line is "two"\nAnd no line comes within ' + ms(5000) + " milliseconds\n"
             'Scenario: timeout\nGiven the Agentica program "wait.agc"\nThen the line is "one"\n'
-            "And no line comes within 100 milliseconds\n")})
+            "And no line comes within 100 milliseconds\n"
+            # A timeout stops the program: the next read is an I/O failure, and a read with no program is a context error.
+            'Scenario: read after a timeout\nGiven the Agentica program "wait.agc"\nThen the line is "one"\n'
+            "And no line comes within 100 milliseconds\nAnd the line is \"never\"\n"
+            'Scenario: read before a program\nThen the line is "one"\n')})
     report = json_test(directory / "lines.feature", "--steps", directory / "steps.agc")
-    assert report["ok"] is True, str(report)
-    assert report["passed"] == 2
+    assert [item["status"] for item in report_cases(report)] == ["passed", "passed", "failed", "failed"]
+    assert codes(report)[2:] == ["RUNTIME-BDD-IO", "RUNTIME-BDD-CONTEXT"]
 
 
 def test_a_seed_given_or_drawn_reaches_step_handlers_and_programs_under_test(tmp_path):

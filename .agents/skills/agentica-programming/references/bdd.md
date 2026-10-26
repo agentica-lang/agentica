@@ -1,21 +1,25 @@
 # BDD feature specifications
 
-`agentica test [PATH...] [--steps FILE] [--only TEXT] [--ai|--json]` runs
-`.feature` files and `*_test.agc` unit test files. It searches directories in
-sorted order (folder links are not followed; a feature file is at most 1 MiB);
-the default paths are `specs/` and `test/`. `--steps FILE` names the one step
-program (repeating it is `RUNTIME-BDD-USAGE`). Empty discovery fails. Exit
-codes: 0 all pass, 1 verification fails, 2 infrastructure or usage fails.
-Programs under test run as local processes on the VM. File and output rules
-shared with unit tests: `testing.md`.
+`agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
+[--ai|--json]` runs `.feature` files and `*_test.agc` unit test files. It
+searches directories in sorted order (folder links are not followed; a feature
+file is at most 1 MiB); the default paths are `specs/` and `test/`. `--steps
+FILE` names the one step program (repeating it is `RUNTIME-BDD-USAGE`); without
+it, a run with features uses the nearest `steps.agc` in the folder of each path
+that holds a feature
+(the path if a folder) or above it, up to the working directory (two different
+ones are `RUNTIME-BDD-USAGE`). Empty discovery fails. Exit codes: 0 all pass, 1
+verification fails, 2 infrastructure or usage fails. Programs under test run as
+local processes on the VM. File and output rules shared with unit tests:
+`testing.md`.
 
 English syntax: `Feature`, one optional `Background` before scenarios,
 `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and
 `Given`/`When`/`Then`/`And`/`But`. Each Examples row becomes a scenario,
 substituting `<column>` in names, steps, Doc Strings and tables; its name ends
 with ` (values)` of the columns the name does not show (`Name (sqlite, 42)`).
-Comments, tags and descriptions before steps are accepted; tags never skip
-tests. `Rule`, `*`, other keyword aliases and localized syntax fail explicitly.
+Comments, tags and descriptions before steps are accepted; only `--tags` uses
+tags. `Rule`, `*`, other keyword aliases and localized syntax fail explicitly.
 `And`/`But` inherit the previous kind. Triple-quote Doc Strings are dedented;
 include a final empty line to keep a trailing newline. Data Tables decode `\|`,
 `\\`, `\n`. One argument per step.
@@ -71,6 +75,7 @@ BDD.run(steps: List[BDD.Step]) -> Void
 BDD.doc_string(ctx: BDD.Context) -> String
 BDD.table(ctx: BDD.Context) -> List[List[String]]
 BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
+BDD.skip(ctx: BDD.Context, reason: String) -> BDD.Context
 BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
 BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
 BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD.Context
@@ -99,10 +104,12 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   "db", service)` with a block `do |request| ... end` that captures the value
   and answers a JSON request with a `Result[Json]`; a later step runs it with
   `BDD.call(ctx, "db", request)` (an error for a missing name). Services start
-  empty in each scenario, and the handles close when the scenario ends.
+  empty in each scenario. Keeping a name again replaces the service; the old
+  handle lives until the scenario ends (no close hook).
 - `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
-  `Result[String]` (an error at the end of the output or a timeout, which also
-  closes the output), for steps that use the line instead of comparing it.
+  `Result[String]` (an error at the end of the output or a timeout). A timeout stops
+  the program: later reads, sends and exit checks fail with `RUNTIME-BDD-IO`,
+  so it must be its last use.
 - `BDD` is not a builtin: without the import `BDD.step` is `CHECK-UNKNOWN-NAME`
   with the import as help. `BDD.run` adds the predefined steps in front and
   never returns; run directly, a step program exits 2 with a hint.
@@ -118,7 +125,10 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   text), each cut at 64 Ki characters.
 - Missing Doc Strings/tables fail (`RUNTIME-BDD-CONTEXT`); absent state returns
   an error Result. Every `Then` (And/But included) and every scenario must
-  perform a BDD assertion. A BDD failure ends the step at once.
+  perform a BDD assertion. A BDD failure ends the step at once. `BDD.skip` ends
+  it at once too: the scenario is `skipped` with the reason, its later steps are
+  `not_executed`, and the exit code stays 0, even when every scenario is
+  skipped (CI should check the `skipped` count).
 - Each scenario runs in its own child VM with empty state and no program,
   running Background again. A crash, `System.exit` (even 0,
   `RUNTIME-BDD-PREMATURE-EXIT`), step limit or loop fails only that scenario;
@@ -141,13 +151,18 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   million (library work included); output is limited to 1 MiB of unread stdout,
   1 MiB of stderr and 1 MiB of handler output per step.
 - `--only TEXT` (once, not empty) keeps scenarios and tests whose name contains
-  `TEXT`; no match is `CHECK-BDD-EMPTY`. Without `--seed N` every child shares
+  `TEXT`; no match is `CHECK-BDD-EMPTY`. `--tags EXPR` (once) keeps the
+  scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not`
+  before `and` before `or`; no parentheses). A scenario has its Feature's tags,
+  its own and its `Examples` block's; unit tests have none, so `--tags` leaves
+  them out. A bad expression is `RUNTIME-BDD-USAGE`; none kept is
+  `CHECK-BDD-EMPTY`. Without `--seed N` every child shares
   the seed the runner drew (`testing.md`). A `*_test.agc` file in `specs/` is a
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.
 - To run a suite from a program, start `agentica test --json` with
   `Process.spawn` and parse its report: `ok`, `passed`, `failed`,
-  `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
+  `skipped`, `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
 
 ## Diagnostics
 

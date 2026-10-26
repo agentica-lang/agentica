@@ -133,7 +133,7 @@ def test_the_custom_suite_passes_in_the_three_formats_with_outline_names_and_qui
         assert result.stdout == (
             "PASS Custom Agentica steps / Remember 7\nPASS Custom Agentica steps / Remember -3\n"
             "PASS Custom Agentica steps / Doc String and Data Table\nPASS Custom Agentica steps / Quoted capture\n"
-            "4 passed, 0 failed, 0 not executed, 0 file errors\n")
+            "4 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors\n")
 
 
 def test_the_runner_and_the_steps_the_binary_carries_give_the_report_of_ones_compiled_from_the_sources(bdd):
@@ -322,6 +322,10 @@ def test_a_service_keeps_a_native_resource_across_the_steps_of_one_scenario_and_
         "end\n",
         main_running(
             'BDD.step("a socket pair") do |ctx, args| open_pair(ctx, args) end',
+            'BDD.step("a broken service") do |ctx, args|\n'
+            '      BDD.keep(ctx, "broken") do |request| error("broken") end\n    end',
+            'BDD.step("the broken service fails") do |ctx, args|\n'
+            '      BDD.assert(ctx, not BDD.call(ctx, "broken", JSON.null()).ok?, "the error was lost")\n    end',
             'BDD.step("the pair carries {int}") do |ctx, args|\n'
             '      reply = BDD.call(ctx, "pair", JSON.from(args[0].to_i!))\n'
             "      BDD.assert(ctx, reply.ok? and JSON.int(reply.unwrap!).unwrap! == args[0].to_i!, \"wrong reply\")\n    end",
@@ -329,10 +333,13 @@ def test_a_service_keeps_a_native_resource_across_the_steps_of_one_scenario_and_
             '      BDD.assert(ctx, not BDD.call(ctx, "pair", JSON.null()).ok?, "service leaked between scenarios")\n    end'))
     directory = bdd.suite({
         "steps.agc": steps,
-        "services.feature": ("Feature: Services\nScenario: kept\nGiven a socket pair\nThen the pair carries 1\n"
-                             "And the pair carries 2\nScenario: fresh\nThen there is no pair\n")})
-    status, report = bdd.json_test(joined(directory, "services.feature"), "--steps", joined(directory, "steps.agc"))
-    assert (status, report["passed"]) == (0, 2), str(report)
+        "services.feature": ("Feature: Services\nBackground:\nGiven a socket pair\nAnd a broken service\n"
+                             "Scenario: kept\nThen the pair carries 1\nAnd the pair carries 2\n"
+                             "Scenario: error\nThen the broken service fails\n"),
+        "fresh.feature": "Feature: Fresh\nScenario: fresh\nThen there is no pair\n"})
+    status, report = bdd.json_test(joined(directory, "fresh.feature"), joined(directory, "services.feature"),
+                                   "--steps", joined(directory, "steps.agc"))
+    assert (status, report["passed"]) == (0, 3), str(report)
 
 
 def test_a_step_program_with_invalid_utf8_is_one_file_error_at_the_bad_byte(bdd):
@@ -442,6 +449,191 @@ def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_wh
         messages.append(problem["message"])
     assert messages == ["no .feature or *_test.agc files found: neither specs/ nor test/ exists",
                         "no .feature or *_test.agc files found"]
+
+
+def test_a_steps_agc_near_the_paths_is_the_step_program_unless_steps_names_another(bdd):
+    feature = "Feature: Answer\nScenario: right\nThen the answer is 4\n"
+
+    def answer(passes):
+        return steps_program(main_running(
+            'BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, %s, "no") end' % passes))
+
+    project = bdd.suite({"other.agc": answer("false")})
+    bare = bdd.suite({})
+    for directory in (project, bare):
+        (directory / "specs" / "auth").mkdir(parents=True)
+        (directory / "specs" / "a.feature").write_text(feature, encoding="utf-8")
+        (directory / "specs" / "auth" / "b.feature").write_text(feature, encoding="utf-8")
+    (project / "specs" / "steps.agc").write_text(answer("true"), encoding="utf-8")
+
+    def statuses(*args, cwd):
+        status, report = bdd.json_test(*args, cwd=cwd)
+        return status, [item["status"] for item in report_cases(report)], report
+
+    # The default folders, a folder or a file named on the command line, and a subfolder or a file below the folder
+    # that holds steps.agc; also from another working folder, where only the folder of the path counts.
+    assert statuses(cwd=project)[:2] == (0, ["passed", "passed"])
+    assert statuses("specs/auth", cwd=project)[:2] == (0, ["passed"])
+    assert statuses("specs/a.feature", cwd=project)[:2] == (0, ["passed"])
+    assert statuses(joined(project, "specs"), cwd=bare)[:2] == (0, ["passed", "passed"])
+    assert statuses(joined(project, "specs/a.feature"), cwd=bare)[:2] == (0, ["passed"])
+    # The search stops at the working directory: steps.agc above it is not used.
+    status, cases, report = statuses(".", cwd=project / "specs" / "auth")
+    assert (status, cases) == (1, ["failed"])
+    assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
+    # --steps wins.
+    assert statuses("--steps", joined(project, "other.agc"), cwd=project)[:2] == (1, ["failed", "failed"])
+    # No steps.agc: every step is undefined, as before.
+    status, cases, report = statuses(cwd=bare)
+    assert (status, cases) == (1, ["failed", "failed"])
+    assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
+
+
+def test_two_different_steps_agc_files_are_a_usage_error_and_a_unit_test_run_never_compiles_one(bdd):
+    steps = steps_program(main_running('BDD.step("the answer is {int}") do |ctx, args| BDD.assert(ctx, true, "no") end'))
+    directory = bdd.suite({})
+    for name in ("specs", "test"):
+        (directory / name).mkdir()
+        (directory / name / "steps.agc").write_text(steps, encoding="utf-8")
+        (directory / name / "a.feature").write_text("Feature: A\nScenario: s\nThen the answer is 4\n", encoding="utf-8")
+    status, report = bdd.json_test(cwd=directory)
+    assert status == 2
+    assert report["files"][0]["error"]["code"] == "RUNTIME-BDD-USAGE"
+    # --steps settles it.
+    status, report = bdd.json_test("--steps", joined(directory, "specs/steps.agc"), cwd=directory)
+    assert (status, [item["status"] for item in report_cases(report)]) == (0, ["passed", "passed"])
+    # A folder that holds no feature is not searched, so its steps.agc does not count.
+    (directory / "test" / "a.feature").unlink()
+    (directory / "test" / "adds_test.agc").write_text(ADDS_TEST, encoding="utf-8")
+    status, report = bdd.json_test(cwd=directory)
+    assert (status, report["passed"]) == (0, 2)
+    # Without a feature file the broken test/steps.agc is not compiled.
+    units = bdd.suite({})
+    (units / "test").mkdir()
+    (units / "test" / "steps.agc").write_text("this does not compile", encoding="utf-8")
+    (units / "test" / "adds_test.agc").write_text(ADDS_TEST, encoding="utf-8")
+    status, report = bdd.json_test(cwd=units)
+    assert (status, report["passed"], report["file_errors"]) == (0, 1, 0)
+
+
+TAGGED = """@suite
+Feature: Tagged
+
+  @fast
+  Scenario: one
+    Then it holds
+
+  @db @slow
+  Scenario: two
+    Then it holds
+
+  @db
+  Scenario: three
+    Then it skips
+    And it fails if run
+
+  Scenario Outline: out <n>
+    Then it holds
+
+    @a
+    Examples:
+      | n |
+      | 1 |
+
+    @b
+    Examples:
+      | n |
+      | 2 |
+"""
+
+SKIPPING = steps_program(main_running(
+    'BDD.step("it holds") do |ctx, args| BDD.assert(ctx, true, "no") end',
+    'BDD.step("it skips") do |ctx, args| BDD.skip(ctx, "needs a database") end',
+    'BDD.step("it fails if run") do |ctx, args| BDD.assert(ctx, false, "ran after the skip") end',
+    'BDD.step("the database is down") do |ctx, args| BDD.skip(ctx, "no database\\nat all") end'))
+
+BACKGROUND = """Feature: Background skip
+
+  Background:
+    Given the database is down
+
+  Scenario: first
+    Then it fails if run
+
+  Scenario: second
+    Then it fails if run
+"""
+
+
+def test_tags_select_scenarios_and_a_step_can_skip_its_scenario(bdd):
+    directory = bdd.suite({"t.feature": TAGGED, "steps.agc": SKIPPING})
+    feature = joined(directory, "t.feature")
+    steps = joined(directory, "steps.agc")
+
+    def names(*tags):
+        status, report = bdd.json_test(feature, "--steps", steps, *tags)
+        return status, [(item["name"], item["status"]) for item in report_cases(report)], report
+
+    # Everything runs without --tags; the skipped scenario is not a failure and its later steps do not run.
+    status, cases, report = names()
+    assert (status, [state for _, state in cases]) == (0, ["passed", "passed", "skipped", "passed", "passed"])
+    assert (report["passed"], report["failed"], report["skipped"], report["not_executed"]) == (4, 0, 1, 0)
+    skipped = report_cases(report)[2]
+    assert (skipped["reason"], skipped["error"]) == ("needs a database", None)
+    assert [step["status"] for step in skipped["steps"]] == ["skipped", "not_executed"]
+    assert [item["reason"] for item in report_cases(report)[:2]] == [None, None]
+
+    # A tag of the Feature reaches every scenario, one of an Examples block only its rows.
+    assert names("--tags", "@suite")[1] == cases
+    assert names("--tags", "@db and not @slow")[1] == [("three", "skipped")]
+    assert [name for name, _ in names("--tags", "@fast or @b")[1]] == ["one", "out 2"]
+    assert [name for name, _ in names("--tags", "not @db and not @a")[1]] == ["one", "out 2"]
+
+    # Both filters must hold; a filter that keeps nothing is CHECK-BDD-EMPTY, a bad one is a usage error.
+    assert [name for name, _ in names("--tags", "@db", "--only", "tw")[1]] == ["two"]
+    status, _, report = names("--tags", "@missing")
+    assert (status, report["files"][-1]["error"]["code"]) == (1, "CHECK-BDD-EMPTY")
+    # A `not` before a `not` cancels it, and any white space separates the words.
+    assert names("--tags", "not not @fast")[1] == [("one", "passed")]
+    assert names("--tags", "@fast\u00a0or\u2003@b")[1] == names("--tags", "@fast or @b")[1]
+    # A bad expression is a usage error at the arguments, before anything is compiled.
+    for expression in ("not", "@a @b", "(@a)", "\u00a0"):
+        status, _, report = names("--tags", expression)
+        assert (status, report["files"][-1]["error"]["code"]) == (2, "RUNTIME-BDD-USAGE"), expression
+        assert report["files"][-1]["error"]["file"] == "<arguments>"
+    status, _, report = names("--tags", "@a", "--tags", "@b")
+    assert (status, report["files"][-1]["error"]["code"]) == (2, "RUNTIME-BDD-USAGE")
+
+    only_skipped = bdd.agentica_test(feature, "--steps", steps, "--tags", "@db and not @slow")
+    assert (only_skipped.code, only_skipped.stderr) == (0, "")
+    assert only_skipped.stdout == ("SKIP Tagged / three\n  needs a database\n"
+                                   "0 passed, 0 failed, 1 skipped, 0 not executed, 0 file errors\n")
+    ai = bdd.agentica_test("--ai", feature, "--steps", steps, "--tags", "@db and not @slow")
+    assert ai.stdout.splitlines()[0] == "SKIP Tagged / three | needs a database"
+
+
+def test_a_background_step_can_skip_every_scenario_and_a_reason_shows_on_one_line(bdd):
+    directory = bdd.suite({"bg.feature": BACKGROUND, "steps.agc": SKIPPING})
+    path = joined(directory, "bg.feature")
+    status, report = bdd.json_test(path, "--steps", joined(directory, "steps.agc"))
+    # Every scenario is skipped at the Background step: the run still passes, with nothing passed.
+    assert (status, report["passed"], report["skipped"], report["ok"]) == (0, 0, 2, True)
+    first = report_cases(report)[0]
+    assert [step["status"] for step in first["steps"]] == ["skipped", "not_executed"]
+    assert first["reason"] == "no database\nat all"
+    result = bdd.agentica_test(path, "--steps", joined(directory, "steps.agc"))
+    assert result.stdout.splitlines()[:2] == ["SKIP Background skip / first", "  no database at all"]
+    ai = bdd.agentica_test("--ai", path, "--steps", joined(directory, "steps.agc"))
+    assert ai.stdout.splitlines()[0] == "SKIP Background skip / first | no database at all"
+
+
+def test_tags_leave_out_unit_test_files(bdd):
+    directory = bdd.suite({"t.feature": TAGGED, "steps.agc": SKIPPING, "adds_test.agc": ADDS_TEST})
+    steps = joined(directory, "steps.agc")
+    _, everything = bdd.json_test(directory, "--steps", steps)
+    _, tagged = bdd.json_test(directory, "--steps", steps, "--tags", "@fast")
+    assert [file["kind"] for file in everything["files"]] == ["tests", "feature"]
+    assert [file["kind"] for file in tagged["files"]] == ["feature"]
 
 
 def test_a_report_of_several_mib_arrives_whole(bdd):

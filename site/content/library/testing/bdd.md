@@ -43,9 +43,10 @@ Run it:
 agentica test specs/
 ```
 
-Exit code `0`: every scenario passes. `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
+Exit code `0`: every scenario passes or is skipped (also when all are skipped, so a CI job should check that the `skipped` count is the one it expects). `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
 
 - `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
+- `--tags EXPR` keeps the scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not` binds tighter than `and`, and `and` tighter than `or`; no parentheses), as in `--tags "@db and not @slow"`. A scenario has the tags of its Feature and itself, and a `Scenario Outline` row also those of its `Examples` block. Unit test files have no tags, so they are left out. A bad expression exits with `2`.
 - A failed step is reported at its line and column in the feature file.
 - Each row of a `Scenario Outline` is named with the outline name and the row's values in the columns the name does not show, such as `Name (sqlite, 42)`, so `--only "(sqlite, 42)"` selects one row. Identical rows keep one name; `--json` has each row's line in `example`.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.
@@ -78,6 +79,8 @@ A step program builds a list with `BDD.step` in `main` and passes it to `BDD.run
 ```sh
 agentica test specs/ --steps steps.agc
 ```
+
+Without `--steps`, `agentica test` uses the nearest `steps.agc` found in the folder of each path that holds a `.feature` file (the path itself if it is a folder) or above it, up to the working directory, so `specs/steps.agc` needs no flag, also for `specs/auth/` or `specs/a.feature`. It applies only to a run with `.feature` files. If the paths lead to two different `steps.agc` files, the run fails with `RUNTIME-BDD-USAGE`; pass `--steps`. `--steps` overrides it.
 
 ```agentica {mode="check"}
 import BDD from "std/bdd"
@@ -144,6 +147,32 @@ BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
 
 Fails the scenario with the message when the condition is `false`.
 
+## BDD.skip
+
+```text
+BDD.skip(ctx: BDD.Context, reason: String) -> BDD.Context
+```
+
+Ends the step and its scenario as skipped, with the reason in the report: the later steps do not run, and the run still passes. Use it when a scenario needs something the machine lacks.
+
+```agentica {mode="check"}
+import BDD from "std/bdd"
+
+def need_postgres(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  if System.env("POSTGRES_URL").ok?
+    return ctx
+  end
+
+  return BDD.skip(ctx, "POSTGRES_URL is not set")
+end
+
+def main() -> Void
+  BDD.run([BDD.step("a PostgreSQL server", &need_postgres)])
+end
+```
+
+The report shows `SKIP`, the summary counts `skipped`, and `--json` gives `"status": "skipped"` and the `reason`. Combine it with a tag, such as `@postgres`, and `--tags "not @postgres"` leaves those scenarios out altogether.
+
 ## BDD.set and BDD.get
 
 ```text
@@ -160,7 +189,7 @@ BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD
 BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
 ```
 
-Keep a value that is not JSON between the steps of one scenario, such as an open connection. The service is a function from a request to a result, both JSON, and it captures the value. `BDD.call` runs the service kept under `name`, or gives an error when there is none. Each scenario starts with no services. The handles close when the scenario's process ends. A step cannot leave a task running, so the service does its work in the calling step.
+Keep a value that is not JSON between the steps of one scenario, such as an open connection. The service is a function from a request to a result, both JSON, and it captures the value. `BDD.call` runs the service kept under `name`, or gives an error when there is none. Each scenario starts with no services. Keeping a name again replaces the service, and the old handle is not closed until the scenario's process ends (there is no close hook). A step cannot leave a task running, so the service does its work in the calling step.
 
 ```agentica {mode="check"}
 import BDD from "std/bdd"
@@ -235,7 +264,7 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
 
 The built-in steps as functions, to combine in your own steps. Pass on the context `BDD.given_program` returns: it holds the program.
 
-`BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout closes the program's output, as for `BDD.then_line`.
+`BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout stops the program under test, as for `BDD.then_line`: every later read, send or exit check fails with `RUNTIME-BDD-IO`, so make it the last use of the program.
 
 `stdout is:` compares the output that no line step has read yet. Output is kept up to 1 MiB per stream.
 

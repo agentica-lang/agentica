@@ -107,6 +107,15 @@ export def assert(ctx: Context, condition: Bool, message: String) -> Context
   return ctx
 end
 
+## Ends the scenario as skipped, with `reason` in the report. The step ends at once, like a failed assertion, and no
+## later step of the scenario runs. A skipped scenario is not a failure: the run can still pass.
+export def skip(ctx: Context, reason: String) -> Context
+  fields: Map[String, Json] = {"event": JSON.from("skip"), "reason": JSON.from(clip(reason))}
+  deliver(record_text(fields))
+  System.exit(0)
+  return ctx
+end
+
 ## Returns the context with `value` saved under `name`, for the later steps of the same scenario.
 export def set(ctx: Context, name: String, value: Json) -> Context
   return with_state(ctx, ctx.scenario.state.put(name, value))
@@ -129,10 +138,11 @@ end
 
 ## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
 export def call(ctx: Context, name: String, request: Json) -> Result[Json]
-  if ctx.scenario.services.has_key?(name)
-    return ctx.scenario.services.get(name).unwrap!.call(request)
+  found = ctx.scenario.services.get(name)
+  if not found.ok?
+    return error("missing scenario service")
   end
-  return error("missing scenario service")
+  return found.unwrap!.call(request)
 end
 
 ## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. One
