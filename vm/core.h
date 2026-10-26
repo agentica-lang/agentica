@@ -329,6 +329,9 @@ void agc_task_park_until(agc_vm *vm, uint64_t deadline_ms, bool retry);
 /* The same, with retry, for a wait that another task usually ends soon: it reads no clock, and the deadline is
  * TIMEOUT_MS after the moment the scheduler starts the clock, at the end of its next turn or before it goes idle. */
 void agc_task_park_within(agc_vm *vm, int64_t timeout_ms);
+/* The length to wait for a timeout of MS milliseconds (MS >= 0): MS, or 0 in a run without a wall clock (the fuzz
+ * driver). The channel, Task.await and Task.map timeouts pass through it. */
+int64_t agc_timeout_length(const agc_vm *vm, int64_t ms);
 void agc_timers_disarm(agc_vm *vm, agc_task *t);
 /* Wakes the tasks whose deadline has passed in this scheduler's heap, after it starts the clock of a wait parked before
  * the turn that just ran. Called at the turn boundary and when the run queue is empty; true when it woke any. With no

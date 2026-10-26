@@ -121,11 +121,13 @@
 - A crash, a leak or an input past the RSS limit fails the run. The run turns
   on the leak check (`ASAN_OPTIONS`) that `vm/value.c` turns off in the other
   ASan builds, since `agc_fuzz_one` frees every block of an input.
-- A timeout does not fail the run yet (`-ignore_timeouts=1`, and the run maps
-  exit code 70, a timeout, to success). A timed wait (a channel or await
-  timeout) parks without counting steps, so a mutant with a large timeout can
-  wait for minutes. The run saves it as `timeout-*` and lists those files at
-  the end. TODO: both go once timed waits are bounded by steps.
+- A timeout (an input that runs past 10 s) fails the run too
+  (`-ignore_timeouts=0`). Under `no_files` a run has no wall clock:
+  `Task.sleep` only yields, and a channel, `Task.await` or `Task.map` timeout
+  lasts 0 ms (`agc_timeout_length` in `vm/timers.c`). The task still parks,
+  the other tasks run until the next turn boundary, and then it times out.
+  A loop spends at least one step per wait (every backward jump lands on a
+  `STEP`), so `--max-steps 10000` bounds a mutant that loops on timed waits.
 - `agc_fuzz_one` sets `deny_run`, `deny_env` and `deny_net`. A mutant's
   strings are shell commands with mutated bytes, and a child process or a
   network wait is outside `--max-steps`. The environment and the network

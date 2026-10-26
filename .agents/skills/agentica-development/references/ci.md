@@ -261,7 +261,8 @@ Skip rules, checked by the report:
 ## Other workflows
 
 - `fuzz.yml` (by hand): `make vm-libfuzz-run` for an hour (the `seconds`
-  input) on every core, random seed; uploads `build/vm/libfuzz/crashes/`.
+  input) on every core, random seed; a crash, leak or timeout fails it and
+  uploads `build/vm/libfuzz/crashes/`.
 - `sweep.yml`: Monday 03:00 UTC and by hand, `make sweep-full` on the
   release VM. Nothing else runs on a schedule.
 - `site-examples.yml` and `pages.yml`: `references/site.md`.

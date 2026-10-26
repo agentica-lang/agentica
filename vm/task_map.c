@@ -182,7 +182,7 @@ static agc_value builtin_map(agc_vm *vm, agc_value *args, uint32_t span) {
   g->slots = agc_alloc(agc_size_mul(count, sizeof(agc_value)));
   g->count = count;
   g->limit = (size_t)limit;
-  g->timeout = timeout;
+  g->timeout = agc_timeout_length(vm, timeout);
   g->span = span;
   agc_task_stepper(vm, &g->stepper);
   return agc_void();
