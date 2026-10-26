@@ -27,7 +27,7 @@ compiler/         # the front end (§18.3): one folder per context; a new file g
   lower/          # the IR and lowering; lower_tables.agc holds VM_BUILTINS
   bytecode/       # the writer; bytecode_tables.agc holds the format and OPCODES (same order as agc_opcode in vm/value.h)
   diagnostics/    # Diagnostic, Outcome, the packed Problem, and the plain, AI and JSON forms
-  docs/           # `agentica doc` (§32.5; imports only syntax/ and diagnostics/)
+  docs/           # `agentica doc` (§32.5; imports syntax/, diagnostics/ and modules/, the last only to link a file with re-exports)
   query/          # outline, type-at, refs, symbol (§39)
   bdd/            # the `agentica test` driver (references/bdd.md)
   embedded/       # runner.agc and steps.agc: not stage inputs; compiled with stage2 and embedded in the binary

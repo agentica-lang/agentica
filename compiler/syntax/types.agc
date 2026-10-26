@@ -261,7 +261,8 @@ end
 
 ## The type as `to_text` prints it, except that a struct or an enum of another file is written through the import alias
 ## of the file that asks: `written` maps the "@N::" prefix of a linked name to that alias, so `@1::User` prints as
-## `Models.User` (`agentica type-at`). A prefix it does not map prints as the bare name.
+## `Models.User` (`agentica type-at`). A linked name that `written` maps itself (a type that a file re-exports) is
+## written through that alias too. A prefix it does not map prints as the bare name.
 export def to_text_as(type: Type, written: Map[String, String]) -> String
   case type
     Type.Int -> return "Int"
@@ -329,14 +330,14 @@ def list_text_as(types: List[Type], written: Map[String, String]) -> String
   return types.map do |type: Type| to_text_as(type, written) end.join(", ")
 end
 
-# The name with the alias of its file when `written` has one for the prefix of the linked name.
+# The name with the alias that `written` has for the linked name or, failing that, for its prefix.
 def written_name(name: String, written: Map[String, String]) -> String
   bare = display_name(name)
   if written.size == 0 or bare == name
     return bare
   end
 
-  alias = written.get(name.slice(0, name.length - bare.length), "")
+  alias = written.get(name, written.get(name.slice(0, name.length - bare.length), ""))
   if alias == ""
     return bare
   end

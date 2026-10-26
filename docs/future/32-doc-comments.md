@@ -62,8 +62,10 @@ end
 - `PATH` is a source file or a `std/` module name (`std/http`). A `PATH` that
   starts with `std/` always names an embedded standard module, as an import
   does: `std/prelude/` and a path with `.`, `..` or empty parts exit 2.
-- **Parse only.** `agentica doc` lexes and parses one module. It does not link
-  it, resolve its imports or type-check it, so it cannot fail on a dependency.
+- **Parse only.** `agentica doc` lexes and parses one module. It does not
+  resolve its imports or type-check it, so it cannot fail on a dependency. A
+  module that re-exports a name is linked to list the original declaration
+  with its doc; if it does not link, it lists no re-export.
   For a `std/` name the source is the copy embedded in the binary.
   - A lex or parse error gives that diagnostic and exit 1.
   - An unknown file or `std/` module gives exit 2, as `help` does.

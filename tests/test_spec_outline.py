@@ -243,3 +243,27 @@ def test_a_resource_of_an_extern_block_is_a_resource_item(tmp_path):
     db = items_by_name(report)["Db"]
     assert (db["signature"], db["doc"]) == ("resource Db, free: db_close", "An open database.")
     assert (start(db["span"]), start(db["name_span"]), end(db["name_span"])) == ((3, 3), (3, 19), (3, 21))
+
+
+def test_a_facade_lists_its_reexports_with_the_docs_of_the_originals(tmp_path):
+    models = "## Makes a user.\nexport def make(name: String) -> Int\n  return 1\nend\n"
+    facade = 'import Models from "models"\n\nexport Models.make\n\ndef hidden() -> Int\n  return 1\nend\n'
+    (tmp_path / "models.agc").write_text(models, encoding="utf-8")
+    (tmp_path / "facade.agc").write_text(facade, encoding="utf-8")
+    make = items_by_name(answer("facade.agc", cwd=tmp_path))["make"]
+    assert (make["exported"], make["signature"], make["doc"]) == (True, "make(name: String) -> Int", "Makes a user.")
+    assert (make["span"]["file"], start(make["name_span"]), end(make["name_span"])) == ("facade.agc", (3, 15), (3, 19))
+    result = outline("outline", "facade.agc", cwd=tmp_path)
+    assert result.stdout.split("\n")[1:3] == [
+        "facade.agc:3:1 export def make(name: String) -> Int",
+        "facade.agc:5:1 def hidden() -> Int",
+    ]
+
+
+def test_a_facade_of_a_facade_lists_the_original_declaration(tmp_path):
+    models = "## Makes a user.\nexport def make() -> Int\n  return 1\nend\n"
+    (tmp_path / "models.agc").write_text(models, encoding="utf-8")
+    (tmp_path / "inner.agc").write_text('import Models from "models"\n\nexport Models.make\n', encoding="utf-8")
+    (tmp_path / "outer.agc").write_text('import Inner from "inner"\n\nexport Inner.make\n', encoding="utf-8")
+    make = items_by_name(answer("outer.agc", cwd=tmp_path))["make"]
+    assert (make["signature"], make["doc"], make["span"]["file"]) == ("make() -> Int", "Makes a user.", "outer.agc")

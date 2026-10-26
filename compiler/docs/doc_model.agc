@@ -67,17 +67,26 @@ export struct Module
   items: List[Item]
 end
 
-## The exported API of a parsed program, in source order. Private declarations and imports are left out.
-export def of_program(program: Ast.Program, text: String) -> Module
-  items = declared(program, text).filter do |item: Item| item.exported end
+## The exported API of a parsed program, in source order. Private declarations and imports are left out. `origins` maps
+## each name the program re-exports to the item of the original declaration (doc_origins.agc); a re-export without an
+## entry is left out.
+export def of_program(program: Ast.Program, text: String, origins: Map[String, Item]) -> Module
+  items = declared_through(program, text, origins).filter do |item: Item| item.exported end
   return Module(doc: cleaned(program.module_doc), items: items)
 end
 
-## Every declaration of a parsed program that is not an import, private ones included, in source order.
+## Every declaration of a parsed program that is not an import, private ones included, in source order. A re-export
+## (`export Url.parse`) is not a declaration of the file, so it is left out.
 export def declared(program: Ast.Program, text: String) -> List[Item]
+  return declared_through(program, text, {})
+end
+
+## `declared`, and the re-exports of the program as the items in `origins`: the original declaration, with its doc and
+## signature, at the place of the `export` line, so every span of the item is in this file.
+export def declared_through(program: Ast.Program, text: String, origins: Map[String, Item]) -> List[Item]
   items: List[Item] = []
   for declaration in program.declarations
-    for item in items_of(declaration, text)
+    for item in items_of(declaration, text, origins)
       items = items.push(item)
     end
   end
@@ -130,7 +139,7 @@ export def summary(doc: Ast.Optional[String]) -> Ast.Optional[String]
 end
 
 # The item a top-level declaration gives: none for an import. The doc of an `export` sits on the export.
-def items_of(declaration: Ast.Decl, text: String) -> List[Item]
+def items_of(declaration: Ast.Decl, text: String, origins: Map[String, Item]) -> List[Item]
   case declaration
     Ast.Decl.Export(node) -> return inner_items(node.declaration, node.doc, node.span, text)
     Ast.Decl.Constant(node) -> return [constant_item(node, node.span, node.exported)]
@@ -140,7 +149,37 @@ def items_of(declaration: Ast.Decl, text: String) -> List[Item]
     Ast.Decl.TypeAlias(node) -> return [alias_item(node, node.doc, node.span, false)]
     Ast.Decl.Resource(node) -> return [resource_item(node, node.doc, node.span, false)]
     Ast.Decl.Import(_) -> return []
-    Ast.Decl.Reexport(_) -> return []
+    Ast.Decl.Reexport(node) -> return reexport_items(node, origins)
+  end
+end
+
+# The item of a re-export: the original's, put at the `export` line of this file. A field or a variant has no place of
+# its own in this file, so it takes the place of the name.
+def reexport_items(node: Ast.ReexportDecl, origins: Map[String, Item]) -> List[Item]
+  found = origins.get(node.name)
+  if !found.ok?
+    return []
+  end
+
+  origin = found.unwrap!
+  return [
+    origin.with(
+      exported: true,
+      span: node.span,
+      name_span: node.name_span,
+      detail: placed(origin.detail, node.name_span),
+    ),
+  ]
+end
+
+def placed(detail: Detail, at: Source.Span) -> Detail
+  case detail
+    Detail.Struct(fields) ->
+      return Detail.Struct(fields.map do |field: Field| field.with(span: at, name_span: at) end)
+    Detail.Enum(variants) ->
+      return Detail.Enum(variants.map do |variant: Variant| variant.with(span: at, name_span: at) end)
+    Detail.Function(_, _) -> return detail
+    Detail.Plain -> return detail
   end
 end
 
