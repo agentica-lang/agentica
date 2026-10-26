@@ -3581,6 +3581,59 @@
       "code": "CHECK-NOT-A-HANDLE",
       "start": [29, 28],
       "covers": "Box.Full(1)"
+    },
+    {
+      "program": [
+        "enum Tree",
+        "  Leaf(Socket)",
+        "  Node(List[Tree])",
+        "end",
+        "",
+        "def tree(t: Tree) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&tree, Tree.Node([]))",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "enum Conn",
+        "  Plain(Socket)",
+        "  Idle",
+        "end",
+        "",
+        "type Conns = List[Conn]",
+        "",
+        "def conns(c: Conns) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&conns, [Conn.Idle])",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "struct Unused",
+        "end",
+        "",
+        "def ints(xs: List[Int]) -> Void",
+        "end",
+        "",
+        "def main() -> Void",
+        "  Task.spawn_owning(&ints, [1])",
+        "end",
+        ""
+      ],
+      "code": "CHECK-NOT-A-HANDLE",
+      "start": [8, 28],
+      "covers": "[1]"
     }
   ],
   "channels check their element type and stay out of data operations": [

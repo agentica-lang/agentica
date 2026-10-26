@@ -253,6 +253,36 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
   return keys;
 }
 
+/* Calls VISIT with every value of M, in table order, with no hash and no charge. A path from the root has at most
+   HAMT_HASH_BITS / HAMT_BITS + 2 nodes (the last holds keys whose 64-bit hashes are equal), so the walk keeps its
+   path on a fixed stack. */
+void agc_map_each_value(const agc_map *m, void (*visit)(agc_value value, void *data), void *data) {
+  enum { PATH_MAX_NODES = HAMT_HASH_BITS / HAMT_BITS + 2 };
+  const agc_hamt *nodes[PATH_MAX_NODES];
+  uint32_t next[PATH_MAX_NODES];
+  size_t depth = 0;
+  if (m->table) {
+    nodes[0] = m->table;
+    next[0] = 0;
+    depth = 1;
+  }
+  while (depth) {
+    const agc_hamt *node = nodes[depth - 1];
+    if (next[depth - 1] == node->n) {
+      depth--;
+      continue;
+    }
+    const hamt_entry *entry = &node->entries[next[depth - 1]++];
+    if (!entry->child) {
+      visit(entry->value, data);
+      continue;
+    }
+    if (depth == PATH_MAX_NODES) agc_internal_abort("map table deeper than its hash");
+    nodes[depth] = entry->child;
+    next[depth++] = 0;
+  }
+}
+
 /* True when every element of a is in b. The key list is walked newest first
    because order does not matter here, and it needs no array. */
 bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b) {

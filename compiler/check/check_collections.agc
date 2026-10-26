@@ -48,8 +48,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
   end
 
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
-  none: Set[String] = Set.new([])
-  if owning and !holds_handle?(cx, handed.type, none)
+  if owning and !holds_handle?(cx, handed.type)
     return error(
       State.fail_help(
         cx,
@@ -113,45 +112,51 @@ def handle?(cx: State.Cx, type: T.Type) -> Bool
 end
 
 # True for a type Task.spawn_owning can hand over: a handle, a Channel or a C.Pointer, or a struct, enum, List, Map or
-# Result whose type holds one somewhere (through fields, variant payloads and type arguments). seen holds the struct
-# and enum names being visited, so a recursive type ends; a type argument is checked before the payloads, which then
-# need no substitution.
-def holds_handle?(cx: State.Cx, type: T.Type, seen: Set[String]) -> Bool
-  if handle?(cx, type) or c_pointer?(type) or T.is?(type, "Channel")
-    return true
+# Result whose type holds one somewhere (through fields, variant payloads and type arguments). The walk visits the
+# fields of each struct and the payloads of each enum once, so a recursive type ends and a type that names one struct
+# many times costs it once; the type arguments of an enum are walked at each use, and a type variable in a payload
+# holds nothing.
+def holds_handle?(cx: State.Cx, type: T.Type) -> Bool
+  todo = [type]
+  seen: Set[String] = Set.new([])
+  at = 0
+  while at < todo.size
+    current = todo[at]
+    at += 1
+    if handle?(cx, current) or c_pointer?(current) or T.is?(current, "Channel")
+      return true
+    end
+
+    todo = todo.concat(type_parts(cx, current, seen))
+    if T.is?(current, "Struct") or T.is?(current, "Enum")
+      seen = seen.add(T.name(current))
+    end
   end
 
+  return false
+end
+
+# The types inside a type that holds_handle? walks next: the item of a Result or List, the key and value of a Map, the
+# type arguments of an enum, and the fields or payloads of a struct or enum not seen yet.
+def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
   case type
-    T.Type.Result(item) -> return holds_handle?(cx, item, seen)
-    T.Type.List(item) -> return holds_handle?(cx, item, seen)
-    T.Type.Map(key, value) -> return holds_handle?(cx, key, seen) or holds_handle?(cx, value, seen)
-    T.Type.Struct(name) -> return struct_holds_handle?(cx, name, seen)
-    T.Type.Enum(name, args) -> return enum_holds_handle?(cx, name, args, seen)
-    _ -> return false
-  end
-end
+    T.Type.Result(item) -> return [item]
+    T.Type.List(item) -> return [item]
+    T.Type.Map(key, value) -> return [key, value]
+    T.Type.Struct(name) ->
+      if seen.include?(name) or !cx.structs.has_key?(name)
+        return []
+      end
 
-def struct_holds_handle?(cx: State.Cx, name: String, seen: Set[String]) -> Bool
-  if seen.include?(name) or !cx.structs.has_key?(name)
-    return false
-  end
+      return cx.structs[name].map do |field: Model.Named| field.type end
+    T.Type.Enum(name, args) ->
+      if seen.include?(name) or !cx.enums.has_key?(name)
+        return args
+      end
 
-  inner = seen.add(name)
-  return cx.structs[name].any? do |field: Model.Named| holds_handle?(cx, field.type, inner) end
-end
-
-def enum_holds_handle?(cx: State.Cx, name: String, args: List[T.Type], seen: Set[String]) -> Bool
-  if args.any? do |arg: T.Type| holds_handle?(cx, arg, seen) end
-    return true
-  end
-
-  if seen.include?(name) or !cx.enums.has_key?(name)
-    return false
-  end
-
-  inner = seen.add(name)
-  return cx.enums[name].variants.any? do |variant: Model.Variant|
-    variant.payload.any? do |part: T.Type| holds_handle?(cx, part, inner) end
+      payloads = cx.enums[name].variants.flat_map do |variant: Model.Variant| variant.payload end
+      return args.concat(payloads)
+    _ -> return []
   end
 end
 

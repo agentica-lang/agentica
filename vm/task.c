@@ -1013,7 +1013,8 @@ static agc_resource *claim(agc_vm *vm, agc_value handle, uint32_t span) {
   return r;
 }
 
-/* Whether V is a value that Task.spawn_owning hands over itself: a channel, a handle, a resource or a C.Pointer. */
+/* Whether V is a value that Task.spawn_owning hands over itself: a channel, a handle, a resource or a C.Pointer. The
+   list keeps step with agc_owned_of (vm/loop.c) and with holds_handle? of the checker. */
 static bool handle_tag(agc_value v) {
   switch ((agc_tag)v.tag) {
     case AGC_T_CHANNEL:
@@ -1028,19 +1029,44 @@ static bool handle_tag(agc_value v) {
   }
 }
 
-/* Adds P; false when it was already in. */
+/* Whether V can hold a handle inside it: a struct, an enum, a Result, a List or a Map. */
+static bool holder_tag(agc_value v) {
+  switch ((agc_tag)v.tag) {
+    case AGC_T_STRUCT:
+    case AGC_T_ENUM:
+    case AGC_T_RESULT:
+    case AGC_T_LIST:
+    case AGC_T_MAP: return true;
+    default: return false;
+  }
+}
+
+/* Whether V is a String, Int, Float or Bool. The items of a List and the values of a Map have one static type, so
+   when the first one is such a scalar none of them holds a handle. */
+static bool scalar_tag(agc_value v) {
+  return v.tag == AGC_T_STRING || v.tag == AGC_T_INT || v.tag == AGC_T_FLOAT || v.tag == AGC_T_BOOL;
+}
+
+/* Puts P in SLOTS (CAPACITY of them, a power of two, never full); false when it was already in. */
+static bool slot_put(const void **slots, size_t capacity, const void *p) {
+  size_t k = (size_t)(((uintptr_t)p >> 4) * 0x9E3779B97F4A7C15ull) & (capacity - 1);
+  for (; slots[k]; k = (k + 1) & (capacity - 1))
+    if (slots[k] == p) return false;
+  slots[k] = p;
+  return true;
+}
+
+/* Adds P (not NULL); false when it was already in. */
 static bool pointer_set_add(pointer_set *s, const void *p) {
   if (2 * (s->count + 1) > s->capacity) {
-    pointer_set grown = {NULL, 0, s->capacity ? agc_size_mul(s->capacity, 2) : 32};
-    grown.slots = agc_alloc(agc_size_mul(grown.capacity, sizeof(void *)));
+    size_t bigger = s->capacity ? agc_size_mul(s->capacity, 2) : 32;
+    const void **slots = agc_alloc(agc_size_mul(bigger, sizeof(void *)));
     for (size_t k = 0; k < s->capacity; k++)
-      if (s->slots[k]) (void)pointer_set_add(&grown, s->slots[k]);
-    *s = grown;
+      if (s->slots[k]) (void)slot_put(slots, bigger, s->slots[k]);
+    s->slots = slots;
+    s->capacity = bigger;
   }
-  size_t k = (size_t)(((uintptr_t)p >> 4) * 0x9E3779B97F4A7C15ull) & (s->capacity - 1);
-  for (; s->slots[k]; k = (k + 1) & (s->capacity - 1))
-    if (s->slots[k] == p) return false;
-  s->slots[k] = p;
+  if (!slot_put(s->slots, s->capacity, p)) return false;
   s->count++;
   return true;
 }
@@ -1056,88 +1082,88 @@ static void value_push(value_stack *s, agc_value v) {
   s->items[s->count++] = v;
 }
 
-/* Every handle inside ARG (through struct fields, enum payloads, Result values, list items and map keys and values),
-   each once, claimed: a handle the caller does not own fails the spawn here, before any of them moves. Each container
-   is walked once, so the walk is bounded by the size of the value in memory. Returns the count; *OUT holds them. */
-static size_t claim_all(agc_vm *vm, agc_value arg, uint32_t span, agc_resource ***out) {
+/* Pushes V when it is a handle or may hold one; a scalar is left out. */
+static void push_part(value_stack *todo, agc_value v) {
+  if (handle_tag(v) || holder_tag(v)) value_push(todo, v);
+}
+
+static void push_value(agc_value v, void *todo) { push_part(todo, v); }
+
+/* The handle values inside ARG (through struct fields, enum payloads, Result values, list items and map values), each
+   object once. Values are immutable, so the walk needs no lock. Each container is walked once (a value may share its
+   parts, and its unfolded size can be exponential in its memory), so the walk is bounded by the size of the value in
+   memory. Map keys are Ints or Strings and are never walked. */
+static value_stack find_handles(agc_vm *vm, agc_value arg) {
   pointer_set seen = {NULL, 0, 0}, found = {NULL, 0, 0};
-  value_stack todo = {NULL, 0, 0};
-  agc_resource **handed = NULL;
-  size_t n = 0, capacity = 0;
-  value_push(&todo, arg);
+  value_stack todo = {NULL, 0, 0}, handles = {NULL, 0, 0};
+  push_part(&todo, arg);
   while (todo.count) {
     agc_value v = todo.items[--todo.count];
     agc_charge(vm, 1);
     if (handle_tag(v)) {
-      agc_resource *r = claim(vm, v, span);
-      if (!pointer_set_add(&found, r)) continue;
-      if (n == capacity) {
-        capacity = capacity ? agc_size_mul(capacity, 2) : 4;
-        agc_resource **grown = agc_alloc(agc_size_mul(capacity, sizeof(*grown)));
-        if (n) memcpy(grown, handed, n * sizeof(*grown));
-        handed = grown;
-      }
-      handed[n++] = r;
+      uint64_t word = agc_value_word(v);
+      if (!word || pointer_set_add(&found, (const void *)(uintptr_t)word)) value_push(&handles, v);
       continue;
     }
     switch ((agc_tag)v.tag) {
       case AGC_T_STRUCT: {
         const agc_struct *x = agc_as_struct(vm, v);
         if (pointer_set_add(&seen, x))
-          for (size_t k = 0; k < x->n; k++) value_push(&todo, x->fields[k]);
+          for (size_t k = 0; k < x->n; k++) push_part(&todo, x->fields[k]);
         break;
       }
       case AGC_T_ENUM: {
         const agc_enum *x = agc_as_enum(vm, v);
         if (pointer_set_add(&seen, x))
-          for (size_t k = 0; k < x->n; k++) value_push(&todo, x->payload[k]);
+          for (size_t k = 0; k < x->n; k++) push_part(&todo, x->payload[k]);
         break;
       }
-      case AGC_T_RESULT: {
-        const agc_result *x = agc_as_result(vm, v);
-        if (pointer_set_add(&seen, x)) value_push(&todo, x->value);
-        break;
-      }
+      case AGC_T_RESULT: push_part(&todo, agc_as_result(vm, v)->value); break;
       case AGC_T_LIST: {
-        /* A list of one scalar kind (Int, Float, Bool) holds no handle. */
+        /* A packed list (Int, Float) or one of scalars holds no handle. */
         const agc_list *x = agc_as_list(vm, v);
-        if (agc_list_kind(x) || !pointer_set_add(&seen, x)) break;
+        if (!agc_list_len(x) || agc_list_kind(x) || scalar_tag(agc_list_get(x, 0)) || !pointer_set_add(&seen, x))
+          break;
         agc_list_cursor c;
         agc_value item;
         agc_list_cursor_begin(&c, x, 0);
-        while (agc_list_cursor_next(&c, &item)) value_push(&todo, item);
+        while (agc_list_cursor_next(&c, &item)) push_part(&todo, item);
         break;
       }
       case AGC_T_MAP: {
         const agc_map *x = agc_as_map(vm, v);
-        if (!x->size || !pointer_set_add(&seen, x)) break;
-        const agc_value *keys = agc_map_keys(vm, x, span);
-        for (size_t k = 0; k < x->size; k++) {
-          agc_value value;
-          if (!agc_map_get(vm, x, keys[k], &value))
-            agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
-          value_push(&todo, keys[k]);
-          value_push(&todo, value);
-        }
+        agc_value first;
+        if (!x->size || !agc_map_get(vm, x, x->reversed->key, &first) || scalar_tag(first) ||
+            !pointer_set_add(&seen, x))
+          break;
+        agc_map_each_value(x, push_value, &todo);
         break;
       }
       default: break;
     }
   }
-  *out = handed;
-  return n;
+  return handles;
 }
 
-/* Task.spawn_owning(&f, value): the new task gets VALUE as its argument and owns every handle in it, all or none. A
-   bare handle takes the short path with no walk. */
+/* Task.spawn_owning(&f, value): the new task gets VALUE as its argument and owns every handle in it, all or none. The
+   row is not shared: the walk over VALUE runs without rt->sync, which is taken only to claim the handles it found
+   (claim changes no owner, so a handle the caller does not own fails here before any of them moves), hand them over
+   and start the task. A bare handle needs no walk. */
 agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_value handle, uint32_t span) {
-  if (handle_tag(handle)) {
-    agc_resource *r = claim(vm, handle, span);
-    return spawn_seeded(vm, parent, fn, &handle, 1, span, &r, 1);
+  value_stack found = {&handle, 1, 1};
+  if (!handle_tag(handle)) found = find_handles(vm, handle);
+  agc_resource *one;
+  agc_resource **handed = found.count > 1 ? agc_alloc(agc_size_mul(found.count, sizeof(*handed))) : &one;
+  pointer_set claimed = {NULL, 0, 0};
+  size_t n = 0;
+  agc_sync_take(vm);
+  for (size_t k = 0; k < found.count; k++) {
+    agc_resource *r = claim(vm, found.items[k], span);
+    if (found.count == 1 || pointer_set_add(&claimed, r)) handed[n++] = r;
   }
-  agc_resource **handed;
-  size_t n = claim_all(vm, handle, span, &handed);
-  return spawn_seeded(vm, parent, fn, &handle, 1, span, handed, n);
+  agc_task *child = spawn_seeded(vm, parent, fn, &handle, 1, span, handed, n);
+  agc_sync_drop(vm);
+  return child;
 }
 
 /* Runs fn(arg) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
@@ -1327,7 +1353,7 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.await_result", 1, builtin_await_result, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.await_result", 2, builtin_await_timeout_result, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.unobserved_crash", 0, builtin_unobserved_crash, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
-  {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
+  {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, false, false},
   {"Task.cancel", 1, builtin_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
   {"Task.spawn", 1, builtin_spawn_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false},
 };
