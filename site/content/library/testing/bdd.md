@@ -43,9 +43,10 @@ Run it:
 agentica test specs/
 ```
 
-Exit code `0`: every scenario passes. `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
+Exit code `0`: every scenario passes or is skipped. `1`: one fails. `2`: the tests could not run (also a shared temporary directory without the sticky bit: set `TMPDIR` to a private folder).
 
 - `--ai` and `--json` change the report format. `--only TEXT` keeps scenarios and tests whose name contains `TEXT`.
+- `--tags EXPR` keeps the scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not` binds tighter than `and`, and `and` tighter than `or`; no parentheses), as in `--tags "@db and not @slow"`. A scenario has the tags of its Feature and itself, and a `Scenario Outline` row also those of its `Examples` block. Unit test files have no tags, so they are left out. A bad expression exits with `2`.
 - `--seed N` makes `Random` repeat in steps and programs. Without it, the runner draws one seed for every step program and program under test, and shows it when the run fails.
 - It also runs `*_test.agc` unit test files ([Test](/library/testing/test/)) in the same report. With no paths it searches `specs/` and `test/`.
 
@@ -143,6 +144,32 @@ BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
 ```
 
 Fails the scenario with the message when the condition is `false`.
+
+## BDD.skip
+
+```text
+BDD.skip(ctx: BDD.Context, reason: String) -> BDD.Context
+```
+
+Ends the step and its scenario as skipped, with the reason in the report: the later steps do not run, and the run still passes. Use it when a scenario needs something the machine lacks.
+
+```agentica {mode="check"}
+import BDD from "std/bdd"
+
+def need_postgres(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  if System.env("POSTGRES_URL").ok?
+    return ctx
+  end
+
+  return BDD.skip(ctx, "POSTGRES_URL is not set")
+end
+
+def main() -> Void
+  BDD.run([BDD.step("a PostgreSQL server", &need_postgres)])
+end
+```
+
+The report shows `SKIP`, the summary counts `skipped`, and `--json` gives `"status": "skipped"` and the `reason`. Combine it with a tag, such as `@postgres`, and `--tags "not @postgres"` leaves those scenarios out altogether.
 
 ## BDD.set and BDD.get
 

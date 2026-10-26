@@ -33,17 +33,20 @@ export struct Error
   original: Json
 end
 
-## The result of a scenario or a file: `Pass`, `Fail` with an error, or `NotExecuted`.
+## The result of a scenario or a file: `Pass`, `Fail` with an error, `Skipped` with the reason a step gave, or
+## `NotExecuted`.
 export enum Verdict
   Pass
   Fail(Error)
+  Skipped(String)
   NotExecuted
 end
 
-## The result of one step.
+## The result of one step. `Skipped` is the step that ended its scenario with `BDD.skip`.
 export enum StepStatus
   Passed
   Failed(Error)
+  Skipped
   NotExecuted
 end
 
@@ -79,6 +82,7 @@ end
 struct Totals
   passed: Int
   failed: Int
+  skipped: Int
   not_executed: Int
   file_errors: Int
   exit_code: Int
@@ -136,8 +140,8 @@ export def file_failure(path: String, kind: String, problem: Error, output: Stri
   return FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
-## Returns the exit code of a run: 0 when at least one scenario ran and nothing failed, 2 when any file or scenario
-## error is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
+## Returns the exit code of a run: 0 when there is a scenario and nothing failed or was left unexecuted (a skipped
+## scenario is not a failure), 2 when any file or scenario error is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
 export def exit_code(files: List[FileResult]) -> Int
   return totals(files).exit_code
 end
@@ -149,6 +153,7 @@ export def json(files: List[FileResult], seed: Int) -> Json
     "ok": JSON.from(sums.exit_code == 0),
     "passed": JSON.from(sums.passed),
     "failed": JSON.from(sums.failed),
+    "skipped": JSON.from(sums.skipped),
     "not_executed": JSON.from(sums.not_executed),
     "seed": JSON.from(seed),
     "file_errors": JSON.from(sums.file_errors),
@@ -163,7 +168,7 @@ export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
   sums = totals(files)
   chunks = files.map do |file| file_text(file, ai) end
   last = (
-    "#{sums.passed} passed, #{sums.failed} failed, #{sums.not_executed} not executed, " +
+    "#{sums.passed} passed, #{sums.failed} failed, #{sums.skipped} skipped, #{sums.not_executed} not executed, " +
     "#{sums.file_errors} file errors"
   )
   if sums.exit_code != 0
@@ -178,6 +183,10 @@ def totals(files: List[FileResult]) -> Totals
     n + file.scenarios.filter do |item| status(item.verdict) == "passed" end.size
   end
   skipped = files.reduce(0) do |n, file|
+    n + file.scenarios.filter do |item| status(item.verdict) == "skipped" end.size
+  end
+
+  not_run = files.reduce(0) do |n, file|
     n + file.scenarios.filter do |item| status(item.verdict) == "not_executed" end.size
   end
   file_errors = files.filter do |file| failed?(file.verdict) end.size
@@ -185,13 +194,13 @@ def totals(files: List[FileResult]) -> Totals
     severe?(file.verdict) or file.scenarios.any? do |item| severe?(item.verdict) end
   end
   code = 1
-  if scenarios > 0 and passed == scenarios and file_errors == 0
+  if scenarios > 0 and passed + skipped == scenarios and file_errors == 0
     code = 0
   elsif severe
     code = 2
   end
-  return Totals(passed: passed, failed: scenarios - passed - skipped, not_executed: skipped, file_errors: file_errors,
-                exit_code: code)
+  return Totals(passed: passed, failed: scenarios - passed - skipped - not_run, skipped: skipped,
+                not_executed: not_run, file_errors: file_errors, exit_code: code)
 end
 
 def failed?(verdict: Verdict) -> Bool
@@ -202,6 +211,7 @@ def severe?(verdict: Verdict) -> Bool
   case verdict
     Verdict.Fail(problem) -> return problem.code == "RUNTIME-BDD-INFRA" or problem.code == "RUNTIME-BDD-USAGE"
     Verdict.Pass -> return false
+    Verdict.Skipped(_) -> return false
     Verdict.NotExecuted -> return false
   end
 end
@@ -210,6 +220,7 @@ def status(verdict: Verdict) -> String
   case verdict
     Verdict.Pass -> return "passed"
     Verdict.Fail(_) -> return "failed"
+    Verdict.Skipped(_) -> return "skipped"
     Verdict.NotExecuted -> return "not_executed"
   end
 end
@@ -246,9 +257,20 @@ def scenario_json(item: ScenarioResult) -> Json
     "duration_ms": JSON.from(item.duration_ms),
     "steps": JSON.array(item.steps.map do |step| step_json(step) end),
     "error": verdict_json(item.verdict),
+    "reason": reason_json(item.verdict),
     "output": JSON.from(item.output),
   }
   return JSON.object(fields)
+end
+
+# The reason a step gave to `BDD.skip`, or null.
+def reason_json(verdict: Verdict) -> Json
+  case verdict
+    Verdict.Skipped(reason) -> return JSON.from(reason)
+    Verdict.Pass -> return JSON.null()
+    Verdict.Fail(_) -> return JSON.null()
+    Verdict.NotExecuted -> return JSON.null()
+  end
 end
 
 def step_json(step: StepResult) -> Json
@@ -257,6 +279,7 @@ def step_json(step: StepResult) -> Json
   case step.status
     StepStatus.Passed -> state = "passed"
     StepStatus.NotExecuted -> state = "not_executed"
+    StepStatus.Skipped -> state = "skipped"
     StepStatus.Failed(found) ->
       state = "failed"
       problem = error_json(found)
@@ -283,6 +306,7 @@ def verdict_json(verdict: Verdict) -> Json
   case verdict
     Verdict.Fail(problem) -> return error_json(problem)
     Verdict.Pass -> return JSON.null()
+    Verdict.Skipped(_) -> return JSON.null()
     Verdict.NotExecuted -> return JSON.null()
   end
 end
@@ -318,6 +342,7 @@ def file_text(file: FileResult, ai: Bool) -> String
       "FAIL #{file.path}#{separator(ai)}#{summary(problem, ai)}#{output_text(file.output, ai)}",
     ]
     Verdict.Pass -> head = []
+    Verdict.Skipped(_) -> head = []
     Verdict.NotExecuted -> head = []
   end
   label = file.feature
@@ -332,9 +357,20 @@ def scenario_text(label: String, item: ScenarioResult, ai: Bool) -> String
   case item.verdict
     Verdict.Pass -> return "PASS #{label} / #{item.name}"
     Verdict.NotExecuted -> return "NOT RUN #{label} / #{item.name}"
+    Verdict.Skipped(reason) -> return "SKIP #{label} / #{item.name}#{skip_text(reason, ai)}"
     Verdict.Fail(problem) ->
       return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem, ai)}#{output_text(item.output, ai)}"
   end
+end
+
+def skip_text(reason: String, ai: Bool) -> String
+  if reason == ""
+    return ""
+  elsif ai
+    return " | #{reason}"
+  end
+
+  return "\n  #{reason}"
 end
 
 def separator(ai: Bool) -> String

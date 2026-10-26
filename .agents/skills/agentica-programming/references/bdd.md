@@ -1,6 +1,6 @@
 # BDD feature specifications
 
-`agentica test [PATH...] [--steps FILE] [--only TEXT] [--ai|--json]` runs
+`agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--ai|--json]` runs
 `.feature` files and `*_test.agc` unit test files. It searches directories in
 sorted order (folder links are not followed; a feature file is at most 1 MiB);
 the default paths are `specs/` and `test/`. `--steps FILE` names the one step
@@ -14,7 +14,7 @@ English syntax: `Feature`, one optional `Background` before scenarios,
 `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and
 `Given`/`When`/`Then`/`And`/`But`. Each Examples row becomes a scenario,
 substituting `<column>` in names, steps, Doc Strings and tables. Comments, tags
-and descriptions before steps are accepted; tags never skip tests. `Rule`, `*`,
+and descriptions before steps are accepted; only `--tags` uses tags. `Rule`, `*`,
 other keyword aliases and localized syntax fail explicitly. `And`/`But` inherit
 the previous kind. Triple-quote Doc Strings are dedented; include a final empty
 line to keep a trailing newline. Data Tables decode `\|`, `\\`, `\n`. One
@@ -71,6 +71,7 @@ BDD.run(steps: List[BDD.Step]) -> Void
 BDD.doc_string(ctx: BDD.Context) -> String
 BDD.table(ctx: BDD.Context) -> List[List[String]]
 BDD.assert(ctx: BDD.Context, condition: Bool, message: String) -> BDD.Context
+BDD.skip(ctx: BDD.Context, reason: String) -> BDD.Context
 BDD.set(ctx: BDD.Context, name: String, value: Json) -> BDD.Context
 BDD.get(ctx: BDD.Context, name: String) -> Result[Json]
 BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
@@ -106,7 +107,9 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   text), each cut at 64 Ki characters.
 - Missing Doc Strings/tables fail (`RUNTIME-BDD-CONTEXT`); absent state returns
   an error Result. Every `Then` (And/But included) and every scenario must
-  perform a BDD assertion. A BDD failure ends the step at once.
+  perform a BDD assertion. A BDD failure ends the step at once. `BDD.skip` ends
+  it at once too: the scenario is `skipped` with the reason, its later steps are
+  `not_executed`, and the exit code stays 0.
 - Each scenario runs in its own child VM with empty state and no program,
   running Background again. A crash, `System.exit` (even 0,
   `RUNTIME-BDD-PREMATURE-EXIT`), step limit or loop fails only that scenario;
@@ -129,13 +132,18 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   million (library work included); output is limited to 1 MiB of unread stdout,
   1 MiB of stderr and 1 MiB of handler output per step.
 - `--only TEXT` (once, not empty) keeps scenarios and tests whose name contains
-  `TEXT`; no match is `CHECK-BDD-EMPTY`. Without `--seed N` every child shares
+  `TEXT`; no match is `CHECK-BDD-EMPTY`. `--tags EXPR` (once) keeps the
+  scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not`
+  before `and` before `or`; no parentheses). A scenario has its Feature's tags,
+  its own and its `Examples` block's; unit tests have none, so `--tags` leaves
+  them out. A bad expression is `RUNTIME-BDD-USAGE`; none kept is
+  `CHECK-BDD-EMPTY`. Without `--seed N` every child shares
   the seed the runner drew (`testing.md`). A `*_test.agc` file in `specs/` is a
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.
 - To run a suite from a program, start `agentica test --json` with
   `Process.spawn` and parse its report: `ok`, `passed`, `failed`,
-  `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
+  `skipped`, `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
 
 ## Diagnostics
 

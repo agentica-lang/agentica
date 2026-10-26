@@ -20,7 +20,7 @@ make test-bdd
 `agentica test` builds and installs nothing.
 
 ```text
-agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--ai|--json]
+agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--ai|--json]
 ```
 
 - **Discovery.** With no paths, `specs/` and `test/` are searched; a missing
@@ -36,10 +36,21 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   may come before or after `test`. Without it, the `steps.agc` of the first
   searched folder that has one is the step program (the folders named on the
   command line, else `specs/` and `test/`; not subfolders); with none, only the
-  predefined steps exist. `--steps` overrides it. A program that does not compile is a file error even when no feature needs it.
+  predefined steps exist. `--steps` overrides it. A program that does not
+  compile is a file error even when no feature needs it.
 - **`--only TEXT`** (once, not empty; otherwise `RUNTIME-BDD-USAGE`) keeps the
   scenarios and tests whose name contains `TEXT`. If none matches, the run fails
   with `CHECK-BDD-EMPTY`.
+- **`--tags EXPR`** (once, not empty; otherwise `RUNTIME-BDD-USAGE`) keeps the
+  scenarios whose tags match. `EXPR` is a small subset of Cucumber's tag
+  expressions: `@a` (has the tag), `not @a`, joined with `and` and `or`, with
+  `not` binding tighter than `and`, and `and` tighter than `or`; there are no
+  parentheses (`@db and not @slow`, `@fast or @smoke`). A scenario has the tags
+  of its Feature, its own, and, for a `Scenario Outline` row, those of its
+  `Examples` block. A bad expression is `RUNTIME-BDD-USAGE` (exit 2) and nothing
+  runs. Unit test files have no tags, so `--tags` leaves them out. With
+  `--only`, a scenario must pass both. If nothing is kept, the run fails with
+  `CHECK-BDD-EMPTY`.
 - **Seed.** Every run has one: `--seed N`, or one the runner draws. It reaches
   every step program, test file and program under test. A failing run's text
   report shows it on the summary line, so `--seed N` replays the run. The JSON
@@ -51,16 +62,19 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   them. With `--deny-run` (or `--sandbox`) a step cannot start a program under
   test. Under `--deny-fs` a missing program under test shows as exit 2 from
   its `agentica` command.
-- **Exit codes.** 0 when every scenario passes and there is at least one; 1 for
+- **Exit codes.** 0 when every scenario passes or is skipped and there is at
+  least one; 1 for
   verification failures or an empty suite; 2 for usage errors and any
   `RUNTIME-BDD-INFRA`. All three output formats give the same verdict.
-- **JSON report.** Keys: `ok`, `passed`, `failed`, `not_executed`,
+- **JSON report.** Keys: `ok`, `passed`, `failed`, `skipped`, `not_executed`,
   `file_errors`, `exit_code`, `seed`, `files`. Each file has `path`, `feature`,
   `kind` (`feature`, `tests`, `steps` for the step program, or `""`), `status`,
   `scenarios`, `error` and `output`. Each test is a scenario with `steps: []` at
   its `Test.test` call. A test is `passed`, `failed`, or `not_executed` (after a
-  test that ended the file's child VM).
-- **Text report.** `PASS`, `FAIL` or `NOT RUN`, then `file / name`. A failure
+  test that ended the file's child VM). A scenario is also `skipped`, with a
+  `reason` (null otherwise).
+- **Text report.** `PASS`, `FAIL`, `SKIP` or `NOT RUN`, then `file / name`. A
+  skip shows its reason on the next line (` | reason` with `--ai`). A failure
   that has a call stack (a runtime error in a test, or in a step handler) shows
   it under the diagnostic: the line `  stack, innermost first:`, then one line
   per frame (`name at file:line:column`). With `--ai` it is ` | stack ` and the
@@ -68,7 +82,7 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   stderr if their child VM died during them, the last 64 Ki characters. Stdout
   printed by `main` before `Test.run` belongs to the first test.
 - **Summary line.** The text report ends with
-  `N passed, M failed, K not executed, F file errors`, and `, seed S` is added
+  `N passed, M failed, S skipped, K not executed, F file errors`, and `, seed S` is added
   when the run fails.
 - **Limits.** Unread stdout over 1 MiB fails the running test with
   `RUNTIME-BDD-OUTPUT-LIMIT`. Stderr is captured for the whole file, up to 1
@@ -98,8 +112,8 @@ range runs to the end of the line.
   is accepted, and any other `# language:` is `PARSE-GHERKIN-UNSUPPORTED`. Tags
   start with `@` and each `@` needs a non-space character after it
   (`PARSE-GHERKIN-TAGS`). Tags before a step, or left at the end of the file,
-  are `PARSE-GHERKIN-TAGS`. Tags are copied into the report and never skip
-  anything.
+  are `PARSE-GHERKIN-TAGS`. Tags are copied into the report; `--tags` selects
+  by them.
 - **Headings.** A name is required except for `Background` and `Examples`
   (`PARSE-GHERKIN-HEADER`). One `Feature` comes first (`PARSE-GHERKIN-HEADER`).
   Free text is a description only before the first step, with no tags waiting
@@ -333,13 +347,17 @@ agentica test [PATH...] [--steps FILE]
   - **Meaning:** A passing assertion; the handler returned with no task left
     running; a BDD failure (the child then exits 1)
 
+- **Direction:** child to runner
+  - **Record:** `skip` (with `reason`)
+  - **Meaning:** `BDD.skip` ended the step (the child then exits 0)
+
 - **Direction:** list child to runner
   - **Record:** `step` records, then `ready`
   - **Meaning:** The definitions in order
 
 **Outcome of a step.** After sending step `i`, the runner reads the channel with
-`Process.channel_read_line`, up to the scenario deadline. After an `end` or
-`fail` record it reads what the handler printed with `Process.read_available`,
+`Process.channel_read_line`, up to the scenario deadline. After an `end`,
+`skip` or `fail` record it reads what the handler printed with `Process.read_available`,
 which the child flushed before the record:
 
 - **What happens:** `end`, and step `i` is a `Then` (or its `And`/`But`) with no
@@ -350,6 +368,11 @@ which the child flushed before the record:
 - **What happens:** `end` otherwise
   - **Step `i`:** passed
   - **Scenario error:** none
+
+- **What happens:** `skip` record
+  - **Step `i`:** skipped
+  - **Scenario:** skipped with that reason; the steps after `i` are
+    `not_executed`, the child is closed, and the run still passes
 
 - **What happens:** `fail` record
   - **Step `i`:** failed
@@ -389,7 +412,9 @@ closes each child on every path.
 - **Driver.** The driver (`compiler/bdd/bdd_driver.agc`, part of the front end
   of the binary, so it runs in the process that `agentica test` started) parses
   the options and writes the configuration to `config.jsonl`, one line per file,
-  so long lists never meet an argument or line limit. The runner writes its
+  so long lists never meet an argument or line limit. With `--tags`, one more
+  last line holds the expression as a JSON string (not a field of the first
+  line, which the runner decodes with no optional fields). The runner writes its
   report to a file of the run directory, which the driver prints, so a report is
   not limited to the 1 MiB that a captured stream keeps. If the runner fails
   with stderr output, the driver reports one `RUNTIME-BDD-INFRA` file error and

@@ -10,6 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica test --tags EXPR` keeps the scenarios whose tags match (`@a`, `not @a`, `and`, `or`), and `BDD.skip(ctx, reason)` ends a scenario as skipped; the summary line and `--json` count `skipped`, and the exit code stays 0.
 - `agentica test` without `--steps` uses the `steps.agc` of the first searched folder that has one (`specs/steps.agc` by default).
 
 ### Fixed

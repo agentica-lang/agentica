@@ -630,8 +630,8 @@ functions take the context first and return it; see
 [`library/testing/bdd.md`](../../site/content/library/testing/bdd.md) and
 [`bdd.md`](../bdd.md). `BDD.Context` can be named but not built: a context
 exists only inside a step, so use the context that a call returns. The modules
-`std/bdd/gherkin`, `std/bdd/match`, `std/test/report` and `std/test/runner` are
-internal to `agentica test` and unsupported.
+`std/bdd/gherkin`, `std/bdd/match`, `std/bdd/tags`, `std/test/report` and
+`std/test/runner` are internal to `agentica test` and unsupported.
 
 [agentica-link-1]: ../../site/content/library/data-structures/queue.md
 [agentica-link-2]: ../../site/content/library/text-and-data/binary.md

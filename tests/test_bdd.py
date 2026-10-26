@@ -133,7 +133,7 @@ def test_the_custom_suite_passes_in_the_three_formats_with_outline_names_and_qui
         assert result.stdout == (
             "PASS Custom Agentica steps / Remember 7\nPASS Custom Agentica steps / Remember -3\n"
             "PASS Custom Agentica steps / Doc String and Data Table\nPASS Custom Agentica steps / Quoted capture\n"
-            "4 passed, 0 failed, 0 not executed, 0 file errors\n")
+            "4 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors\n")
 
 
 def test_the_runner_and_the_steps_the_binary_carries_give_the_report_of_ones_compiled_from_the_sources(bdd):
@@ -383,6 +383,93 @@ def test_a_steps_agc_in_the_searched_folder_is_the_step_program_unless_steps_nam
     status, cases, report = statuses(cwd=bare)
     assert (status, cases) == (1, ["failed"])
     assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
+
+
+TAGGED = """@suite
+Feature: Tagged
+
+  @fast
+  Scenario: one
+    Then it holds
+
+  @db @slow
+  Scenario: two
+    Then it holds
+
+  @db
+  Scenario: three
+    Then it skips
+    And it fails if run
+
+  Scenario Outline: out <n>
+    Then it holds
+
+    @a
+    Examples:
+      | n |
+      | 1 |
+
+    @b
+    Examples:
+      | n |
+      | 2 |
+"""
+
+SKIPPING = steps_program(main_running(
+    'BDD.step("it holds") do |ctx, args| BDD.assert(ctx, true, "no") end',
+    'BDD.step("it skips") do |ctx, args| BDD.skip(ctx, "needs a database") end',
+    'BDD.step("it fails if run") do |ctx, args| BDD.assert(ctx, false, "ran after the skip") end'))
+
+
+def test_tags_select_scenarios_and_a_step_can_skip_its_scenario(bdd):
+    directory = bdd.suite({"t.feature": TAGGED, "steps.agc": SKIPPING})
+    feature = joined(directory, "t.feature")
+    steps = joined(directory, "steps.agc")
+
+    def names(*tags):
+        status, report = bdd.json_test(feature, "--steps", steps, *tags)
+        return status, [(item["name"], item["status"]) for item in report_cases(report)], report
+
+    # Everything runs without --tags; the skipped scenario is not a failure and its later steps do not run.
+    status, cases, report = names()
+    assert (status, [state for _, state in cases]) == (0, ["passed", "passed", "skipped", "passed", "passed"])
+    assert (report["passed"], report["failed"], report["skipped"], report["not_executed"]) == (4, 0, 1, 0)
+    skipped = report_cases(report)[2]
+    assert (skipped["reason"], skipped["error"]) == ("needs a database", None)
+    assert [step["status"] for step in skipped["steps"]] == ["skipped", "not_executed"]
+    assert [item["reason"] for item in report_cases(report)[:2]] == [None, None]
+
+    # A tag of the Feature reaches every scenario, one of an Examples block only its rows.
+    assert names("--tags", "@suite")[1] == cases
+    assert names("--tags", "@db and not @slow")[1] == [("three", "skipped")]
+    assert [name for name, _ in names("--tags", "@fast or @b")[1]] == ["one", "out 2"]
+    assert [name for name, _ in names("--tags", "not @db and not @a")[1]] == ["one", "out 2"]
+
+    # Both filters must hold; a filter that keeps nothing is CHECK-BDD-EMPTY, a bad one is a usage error.
+    assert [name for name, _ in names("--tags", "@db", "--only", "tw")[1]] == ["two"]
+    status, _, report = names("--tags", "@missing")
+    assert (status, report["files"][-1]["error"]["code"]) == (1, "CHECK-BDD-EMPTY")
+    for expression in ("not", "@a @b", "(@a)"):
+        status, _, report = names("--tags", expression)
+        assert (status, report["files"][-1]["error"]["code"]) == (2, "RUNTIME-BDD-USAGE"), expression
+    status, _, report = names("--tags", "@a", "--tags", "@b")
+    assert (status, report["files"][-1]["error"]["code"]) == (2, "RUNTIME-BDD-USAGE")
+
+    only_skipped = bdd.agentica_test(feature, "--steps", steps, "--tags", "@db and not @slow")
+    assert (only_skipped.code, only_skipped.stderr) == (0, "")
+    assert only_skipped.stdout == ("SKIP Tagged / three\n  needs a database\n"
+                                   "0 passed, 0 failed, 1 skipped, 0 not executed, 0 file errors\n")
+    ai = bdd.agentica_test("--ai", feature, "--steps", steps, "--tags", "@db and not @slow")
+    assert ai.stdout.splitlines()[0] == "SKIP Tagged / three | needs a database"
+
+
+def test_tags_leave_out_unit_test_files(bdd):
+    directory = bdd.suite({"t.feature": TAGGED, "steps.agc": SKIPPING, "adds_test.agc": ADDS_TEST})
+    steps = joined(directory, "steps.agc")
+    _, everything = bdd.json_test(directory, "--steps", steps)
+    _, tagged = bdd.json_test(directory, "--steps", steps, "--tags", "@fast")
+    assert [file["kind"] for file in everything["files"]] == ["tests", "feature"]
+    assert [file["kind"] for file in tagged["files"]] == ["feature"]
 
 
 def test_a_report_of_several_mib_arrives_whole(bdd):

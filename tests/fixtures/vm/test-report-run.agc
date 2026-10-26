@@ -79,6 +79,7 @@ def run_scenario(patterns: List[Match.Pattern], item: Gherkin.Scenario) -> Repor
               verdict = Report.Verdict.Fail(found)
             end
         end
+      Report.Verdict.Skipped(_) -> status = Report.StepStatus.Skipped
       Report.Verdict.NotExecuted -> status = Report.StepStatus.NotExecuted
     end
     results = results.push(Report.StepResult(text: step.text, location: step.span, status: status))
