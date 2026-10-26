@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 145,
+  "steps": 168,
   "stdout": [
     "0.0",
     "-7.0",
@@ -23,6 +23,12 @@
     "error cannot convert +inf.0 to Int",
     "error cannot convert -inf.0 to Int",
     "ok 0",
+    "0.0015",
+    "20000000000.0",
+    "100000.0",
+    "true",
+    "105000000000.0",
+    "true",
     ""
   ],
   "stderr": []

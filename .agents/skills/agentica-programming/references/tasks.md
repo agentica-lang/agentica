@@ -134,8 +134,8 @@ sequential `List.map`). A function value works as the last argument:
 
 The block gives a `Result[R]`; `try` works in it, and a block that cannot fail
 ends with `ok(x)`. Another last expression is `CHECK-TYPE-MISMATCH`. `R` comes
-from the expected type or the first value the block gives, so a block whose
-first value is `error(...)` needs `r: List[Result[Int]] = Task.map(...)`
+from the expected type or the first `ok(...)` the block gives, so a block that
+gives only `error(...)` needs `r: List[Result[Int]] = Task.map(...)`
 (`CHECK-RESULT-TYPE` otherwise).
 
 ```ruby

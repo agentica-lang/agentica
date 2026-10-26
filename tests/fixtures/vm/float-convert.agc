@@ -30,4 +30,10 @@ def main() -> Void
   show(inf.to_i)
   show((-inf).to_i)
   show(Float.to_int(0.000001))
+  puts(1.5e-3)
+  puts(2.0E+10)
+  puts(1e5)
+  puts(1.0e300 == 1e300)
+  puts(1_0.5e1_0)
+  puts("1.5e-3".to_f! == 1.5e-3)
 end

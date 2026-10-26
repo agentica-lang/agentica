@@ -122,7 +122,9 @@ documents.
 NAME       = LOWER_OR_UNDERSCORE, { LETTER | DIGIT | "_" }, [ "?" | "!" ] ;
 TYPE_NAME  = UPPER, { LETTER | DIGIT | "_" } ;
 INTEGER    = DIGIT, { [ "_" ], DIGIT } ;
-FLOAT      = DIGIT, { [ "_" ], DIGIT }, ".", DIGIT, { [ "_" ], DIGIT } ;
+FLOAT      = DIGIT, { [ "_" ], DIGIT }, [ ".", DIGIT, { [ "_" ], DIGIT } ], EXPONENT
+           | DIGIT, { [ "_" ], DIGIT }, ".", DIGIT, { [ "_" ], DIGIT } ;
+EXPONENT   = ( "e" | "E" ), [ "+" | "-" ], DIGIT, { [ "_" ], DIGIT } ;
 STRING     = '"', { STRING_CHAR | ESCAPE | INTERPOLATION }, '"' ;
 ESCAPE     = "\\", ( '"' | "\\" | "#" | "n" | "r" | "t" ) ;
 INTERPOLATION = "#{", expression, "}" ;
@@ -133,17 +135,22 @@ INTERPOLATION = "#{", expression, "}" ;
 except double quotes, backslash, newlines, and a `#` followed by `{`. `NL`,
 `DOC` and `EOF` are lexer tokens.
 
-The minus sign is an operator, not part of a literal. The core has no exponents
-or other number bases. A string literal cannot span lines; text of two or more
+The minus sign is an operator, not part of a literal. The core has no other
+number bases. An exponent follows the digits or the fraction, as in Ruby:
+`1.0e300`, `1.5e-3`, `2.0E+10` and `1e5` are Floats, and `Float#to_s` writes
+`1e+300`, which reads back. The `e` needs a digit before it and a digit after
+the optional sign, so `1.e5` is the call `1.e5` and `1e` is the Int `1` next to
+the name `e`. A string literal cannot span lines; text of two or more
 lines is a heredoc (below).
 
 A `_` may separate digits in `INTEGER` and in both parts of `FLOAT`: `1_000`,
-`1_000.000_5`. It is only visual: `1_000` is the same `Int` as `1000`, and the
-lexer drops the `_`s before it reads the value. `_` is allowed only between two
-digits. A trailing `_` (`1_`, `1_000_`, `1_a`), a double `__` (`1__0`) and a `_`
-next to the dot (`1_.5`, `1._5`) are `LEX-INVALID-NUMBER`, with the literal as
-written as the span: the run of digits and `_`, plus a `.` followed by a digit
-or a `_` and the run after it. A `.` followed by a `_` belongs to the number, so
+`1_000.000_5`, `1e1_0`. It is only visual: `1_000` is the same `Int` as `1000`,
+and the lexer drops the `_`s before it reads the value. `_` is allowed only
+between two digits. A trailing `_` (`1_`, `1_000_`, `1_a`), a double `__`
+(`1__0`) and a `_` next to the dot or the `e` (`1_.5`, `1._5`, `1_e5`) are
+`LEX-INVALID-NUMBER`, with the literal as written as the span: the run of
+digits and `_`, plus a `.` followed by a digit or a `_` and the run after it,
+plus an exponent. A `.` followed by a `_` belongs to the number, so
 `1._5` is an error; a `.` followed by a letter or by another `.` ends the number
 (`1_000.times`, `1_000..2_000`). `_1` is still a NAME. The text form of a number
 has no separators: `puts(1_000)` prints `1000`, and `String.to_int` and JSON

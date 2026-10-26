@@ -127,7 +127,9 @@ producer diagnostics retain their original code and span.
   `!` followed by `=` stays an operator, so `a!=b` is still `a != b`. The parser
   rejects suffixes on bindings, parameters, and fields. `try` is a keyword.
 - Number literals read digits and `_` in both parts (`1_000.000_5`), drop the
-  `_`s for the value and keep them in the lexeme. `LEX-INVALID-NUMBER` (a
+  `_`s for the value and keep them in the lexeme. An `e`/`E`, an optional sign
+  and a digit after digits or a fraction (`exponent_start`) make a Float, so
+  `1e5` and `1.5e-3` are Floats and `1.e5` is a call. `LEX-INVALID-NUMBER` (a
   trailing `_`, a `__`, or a `_` next to the dot) spans the literal as written.
   A `.` followed by a digit or `_` continues the number; a letter or another `.`
   ends it (`1_000.times`, `1_000..2_000`). The text conversions
@@ -327,9 +329,13 @@ error:
   else `Result[Unknown]`, and `check_block_body` turns `Result[Unknown]` into
   the `Slot.InferResult` slot (`check_state.agc`): `result_context?` accepts it,
   the first `return` or the last expression must be a `Result` and fixes its
-  type, and every later value must agree. A first value of `error(...)` has
-  nothing to infer from, so it stays `CHECK-RESULT-TYPE` (annotate the
-  variable).
+  type, and every later value must agree. An `error(...)` has nothing to infer
+  from: `check_block_in` checks a block of unknown result that gives one
+  (`Flow.gives_error?`) first with `St.probe` (an `error(...)` is then
+  `Result[Unknown]` and fixes nothing) to learn the type from its `ok(...)`,
+  then checks it again as if annotated. A block with no `ok(...)` stays
+  `CHECK-RESULT-TYPE` (annotate the variable). This holds for every block of an
+  unknown result (`map`, `Native.memory_pointer`).
 - Scopes are a stack of maps holding `name -> (type, immutable?)`. The `for`
   variable is immutable.
 - A plain binding to a visible name is an update and must keep its type; an
