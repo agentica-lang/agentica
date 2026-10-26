@@ -10,6 +10,7 @@
 
 import Pipeline from "../app/pipeline"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Compile from "bdd_compile"
 import Discover from "bdd_discover"
@@ -127,8 +128,22 @@ def prepare_and_run(
       found.ok? and found.unwrap!.kind == "directory"
     end
   end
-  steps = try compile_steps(directory, with_default_steps(options, given), settings)
-  entries = try compile_tests(Discover.discover(given), directory, settings, !options.no_cache)
+  discovered = Discover.discover(given)
+  chosen = options
+  # The default step program is compiled only for a run that has a feature file, so an unrelated steps.agc does not
+  # break a run of unit tests.
+  features = discovered.filter do |entry: Discover.Entry| entry.kind == "feature" and entry.problem == "" end
+  if options.steps.size == 0 and features.size > 0
+    defaults = default_steps(given)
+    if defaults.size > 1
+      return ok(Report.usage("two step programs found: pass --steps FILE (#{defaults.join(", ")})", options))
+    end
+
+    chosen = options.with(steps: defaults)
+  end
+
+  steps = try compile_steps(directory, chosen, settings)
+  entries = try compile_tests(discovered, directory, settings, !options.no_cache)
   config = Runner.Config(
     vm: options.vm,
     steps_bytecode: steps.bytecode,
@@ -155,22 +170,57 @@ def prepare_and_run(
   end
 end
 
-# Without --steps, the `steps.agc` of the first searched folder that has one is the step program, as if the user had
-# passed it. Only a folder counts (the given ones, or specs/ and test/), never a subfolder or a file path.
-def with_default_steps(options: Opts.Options, searched: List[String]) -> Opts.Options
-  if options.steps.size > 0
-    return options
-  end
-
-  for folder in searched
-    file = Path.join([folder, DEFAULT_STEPS_FILE]).unwrap_or(DEFAULT_STEPS_FILE)
-    found = File.stat(file, IO_TIMEOUT)
-    if found.ok? and found.unwrap!.kind == "file"
-      return options.with(steps: [file])
+# The `steps.agc` that serves as the step program when --steps is not given: for each path, the nearest one in the
+# folder of the path (the path itself when it is a folder) or in a parent folder, up to the working directory and
+# not above it. Each file is listed once.
+def default_steps(searched: List[String]) -> List[String]
+  here = Path.cwd().unwrap_or("")
+  found: List[String] = []
+  for path in searched
+    file = steps_near(path, here)
+    if file != "" and !found.any? do |known: String| known == file end
+      found = found.push(file)
     end
   end
 
-  return options
+  return found
+end
+
+# The nearest `steps.agc` for one path, or "" when there is none. A path that cannot be resolved has none.
+def steps_near(path: String, here: String) -> String
+  resolved = Path.resolve(path)
+  if !resolved.ok?
+    return ""
+  end
+
+  folder = resolved.unwrap!
+  info = File.stat(folder, IO_TIMEOUT)
+  if !info.ok? or info.unwrap!.kind != "directory"
+    folder = Paths.directory_of(folder)
+  end
+
+  below = here
+  if !here.ends_with?("/")
+    below = "#{here}/"
+  end
+
+  inside = here != "" and (folder == here or folder.starts_with?(below))
+  while folder != ""
+    file = Paths.join(folder, DEFAULT_STEPS_FILE)
+    found = File.stat(file, IO_TIMEOUT)
+    if found.ok? and found.unwrap!.kind == "file"
+      return file
+    end
+
+    parent = Paths.directory_of(folder)
+    if !inside or folder == here or parent == folder
+      return ""
+    end
+
+    folder = parent
+  end
+
+  return ""
 end
 
 # The paths of the empty-run report: the first path given, or the first default folder.

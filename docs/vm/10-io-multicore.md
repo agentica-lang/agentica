@@ -178,8 +178,7 @@ that still apply.
   does not see function-local `static` variables. The exceptions that stay, each
   marked `// NOLINT(cppcoreguidelines-avoid-non-const-global-variables)`:
   - the `AGC_NO_GC` block tracking in `vm/value.c` (fuzz and test builds,
-    single-threaded), the fuzz harness statics in `vm/fuzz.c` and
-    `vm/fuzz_main.c`;
+    single-threaded), the fuzz harness static in `vm/fuzz.c`;
   - the stop state of `vm/loop.c` (lock-free atomics, a pid and the wake
     handle; a function-local `static`, so not marked), since a signal handler
     gets no context (10.2.2, Stop signals);

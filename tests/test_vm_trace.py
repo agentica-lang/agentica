@@ -657,6 +657,58 @@ def test_a_sleep_traces_its_timer_arm_and_fire_under_sched(tmp_path, traced_vm):
     assert lines.index(arms[0]) < lines.index(fires[0])
 
 
+PING_PONG = """\
+struct Pair
+  ping: Channel[Int]
+  pong: Channel[Int]
+end
+
+def echo(p: Pair) -> Int
+  n = 0
+  while n < 200
+    v = p.ping.recv(5000).unwrap!
+    p.pong.send(v + 1, 5000).unwrap!
+    n += 1
+  end
+  return n
+end
+
+def main() -> Void
+  p = Pair(ping: Channel.new(1), pong: Channel.new(1))
+  worker = Task.spawn(&echo, p)
+  total = 0
+  for i in 0...200
+    p.ping.send(i, 5000).unwrap!
+    total += p.pong.recv(5000).unwrap!
+  end
+  puts("#{total} #{Task.await(worker)}")
+  IO.inspect(p.pong.recv(5))
+end
+"""
+
+
+def test_a_channel_ping_pong_arms_no_timer_and_a_wait_nobody_ends_arms_one_and_fires(tmp_path, traced_vm):
+    # On one scheduler each timed wait of the ping-pong is ended by the peer's next turn, before its clock starts
+    # (agc_task_park_within, #629), so no timer is armed and the clock is never read for it. The last recv has no
+    # sender: its clock starts when the scheduler goes idle, and its timer fires.
+    vm = traced_vm[0]
+    source = tmp_path / "ping.agc"
+    source.write_text(PING_PONG, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "ping.agcb")
+    path = tmp_path / "ping.trace"
+    settings = {"AGENTICA_SCHEDULERS": "1", "AGENTICA_VM_TRACE": "sched", "AGENTICA_VM_TRACE_FILE": path}
+    status, out, err = run_vm(vm, bytecode, settings)
+    assert (status, out, err) == (0, b'20100 200\nerror("channel: timed out")\n', b"")
+    lines = trace_lines(path)
+    arms = [line for line in lines if b" sched timer_arm " in line]
+    fires = [line for line in lines if b" sched timer_fire " in line]
+    assert len(arms) == 1 and len(fires) == 1, arms
+    arm = re.search(rb" sched timer_arm task=([0-9]+) in_ms=([0-9]+)$", arms[0])
+    fire = re.search(rb" sched timer_fire task=([0-9]+) late_ms=([0-9]+)$", fires[0])
+    assert arm and fire and arm.group(1) == fire.group(1), (arms, fires)
+    assert int(arm.group(2)) <= 5
+
+
 def test_task_cancel_traces_at_call_on_the_task_it_names_and_a_plain_line_on_a_descendant(tmp_path, traced_vm):
     vm = traced_vm[0]
     source = tmp_path / "stop.agc"

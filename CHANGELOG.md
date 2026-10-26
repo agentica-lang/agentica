@@ -10,7 +10,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `agentica test` without `--steps` uses the `steps.agc` of the first searched folder that has one (`specs/steps.agc` by default).
+- `agentica test` without `--steps` uses the `steps.agc` found in or above the folder of each path (`specs/steps.agc` by default).
+
+### Changed
+
+- A timed channel `send` or `recv` that the other task answers within a turn
+  no longer reads the clock (far less system time where the clock is a system
+  call); the timeout may start up to one turn late.
 
 ### Fixed
 

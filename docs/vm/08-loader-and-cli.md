@@ -370,7 +370,8 @@ copy with `bootstrap/stage0.agcb` in place of the front end
   stream=stdout|stderr` line and one `output_done` line per run of data. A lock
   wait of a handle has its own `lock_wait` line. Sleeps, channel waits, timed
   awaits and `Task.map` timers are not jobs and print no `io` line; `sched`
-  prints `timer_arm task=N in_ms=M` and `timer_fire task=N late_ms=M` for them.
+  prints `timer_arm task=N in_ms=M` and `timer_fire task=N late_ms=M` for them
+  (a channel wait arms only once its clock starts, §16.9 "Timers").
   `proc` prints `reap pid=N alive=1` when a child is still alive after its
   bound. `gc` lines (`collect at=turn|end count= heap= free= since=`) come from
   `trace_gc` in `vm/task.c`; `tls_handshake_done` carries `protocol` and

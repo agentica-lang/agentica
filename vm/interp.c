@@ -206,6 +206,10 @@ static void set_counter(agc_vm *vm) {
   int64_t c = vm->turn_left < vm->batch ? vm->turn_left : vm->batch;
   /* With the profile on, no STEP takes the fast path in the loop, so step_slow sees each one and counts it. */
   if (c < 0 || AGC_PROFILE_ON(vm)) c = 0;
+#ifdef AGC_NO_GC
+  /* Past the soft allocation limit the next STEP takes the slow path, which ends the run (agc_alloc_limit_check). */
+  if (agc_alloc_over_limit()) c = 0;
+#endif
   vm->next_stop = vm->stop_set = c;
 }
 
@@ -392,6 +396,9 @@ static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, 
 }
 
 static void step_slow(agc_vm *vm, int64_t n, uint32_t span) {
+#ifdef AGC_NO_GC
+  agc_alloc_limit_check();
+#endif
   if (AGC_PROFILE_ON(vm)) profile_steps(vm, n);
   sync_budget(vm);
   if (vm->batch < n) take_steps(vm, n - vm->batch + AGC_TURN_STEPS);

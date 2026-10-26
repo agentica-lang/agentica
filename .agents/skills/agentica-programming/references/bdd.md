@@ -4,11 +4,13 @@
 `.feature` files and `*_test.agc` unit test files. It searches directories in
 sorted order (folder links are not followed; a feature file is at most 1 MiB);
 the default paths are `specs/` and `test/`. `--steps FILE` names the one step
-program (repeating it is `RUNTIME-BDD-USAGE`); without it, the `steps.agc` of
-the first searched folder (given paths, else `specs/`, `test/`) that has one.
-Empty discovery fails. Exit codes: 0 all pass, 1 verification fails, 2
-infrastructure or usage fails. Programs under test run as local processes on
-the VM. File and output rules shared with unit tests: `testing.md`.
+program (repeating it is `RUNTIME-BDD-USAGE`); without it, a run with features
+uses the nearest `steps.agc` in the folder of each path (the path if a folder)
+or above it, up to the working directory (two different ones are
+`RUNTIME-BDD-USAGE`). Empty discovery fails. Exit codes: 0 all pass, 1
+verification fails, 2 infrastructure or usage fails. Programs under test run as
+local processes on the VM. File and output rules shared with unit tests:
+`testing.md`.
 
 English syntax: `Feature`, one optional `Background` before scenarios,
 `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and

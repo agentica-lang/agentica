@@ -1,7 +1,7 @@
 # The C tests and the checks of the VM: vm-test, TSan, GC stress, sanitizers, fuzz, multicore, the vendored-library
 # check, clang-tidy and the layer check. Their binaries use the build mode and the objects of mk/vm.mk.
 
-.PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-fuzz vm-gc-stress vm-trace-off \
+.PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-libfuzz vm-libfuzz-run vm-gc-stress vm-trace-off \
   vm-diff-build vm-diff-test sweep-full test-shared vm-jit-test vm-sanitize-build vm-sanitize-test vendored-check vendored-test \
   vm-layers
 
@@ -61,18 +61,44 @@ vm-tsan-run: dist/agentica$(EXE)
 # The C tests as programs, without running them: windows-docker-build builds them in a container.
 vm-test-binaries: $(VM_TESTS)
 
-$(VM_BUILD)/agentica-vm-fuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_main.o $(VM_LINK_LIBS) $(VM_STAMP)
-	$(VM_LINK)
+# libFuzzer (clang only): agc_fuzz_one behind LLVMFuzzerTestOneInput, on objects built with coverage hooks (LIBFUZZ=1).
+$(VM_BUILD)/agentica-vm-libfuzz$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM_OBJ)/fuzz_libfuzzer.o $(VM_LINK_LIBS) $(VM_STAMP)
+	$(VM_LINK) -fsanitize=fuzzer
 
-# The corpus is every fixture compiled by the binary, JOBS at a time
-FUZZ_CORPUS = printf '%s\n' tests/fixtures/vm/*.agc | xargs -P $(JOBS) -I{} sh -c \
-  'dist/agentica$(EXE) compile "$$1" -o "$(VM_BUILD)/corpus/$$(basename "$$1" .agc).agcb"' sh {}
+# The fuzzer links the VM objects and no front end: an internal artifact of build/, never shipped.
+LIBFUZZ_DIR := build/vm/libfuzz
+vm-libfuzz:
+	$(MAKE) $(LIBFUZZ_DIR)/agentica-vm-libfuzz LIBFUZZ=1
 
-# The fuzzer links the VM objects and no front end: it is an internal artifact of build/, never shipped.
-vm-fuzz: dist/agentica$(EXE) $(VM_BUILD)/agentica-vm-fuzz$(EXE)
-	@mkdir -p $(VM_BUILD)/corpus
+# The seed corpus is every fixture compiled by dist/agentica, JOBS at a time.
+FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' tests/fixtures/vm/*.agc | xargs -P $(JOBS) -I{} sh -c \
+  'dist/agentica$(EXE) compile "$$1" -o "$(LIBFUZZ_DIR)/seeds/$$(basename "$$1" .agc).agcb"' sh {}
+
+# A bounded run: LIBFUZZ_TIME seconds on LIBFUZZ_JOBS forked workers. New inputs go to corpus/, the compiled fixtures
+# stay in seeds/, crash-* files land in crashes/. Each input stops at 10,000 steps and 256 MB (agc_fuzz_one). A crash,
+# a leak or an input past the RSS limit (room for twice 256 MB plus ASan's quarantine) ends the run with an error.
+# ASAN_OPTIONS turns on the leak check that vm/value.c turns off for the other ASan builds: agc_fuzz_one frees every
+# block of an input. Fork mode keeps its jobs' inputs in TMPDIR, set under build/ because /tmp is often a small tmpfs.
+# The sub-make runs after dist/agentica, not beside it, because both write build/vm/flags.
+# TODO: drop -ignore_timeouts and the mapping of exit code 70 once a timed wait (a channel or await timeout) is bounded
+# by steps; today it parks without counting them, so a mutant with a large timeout waits for minutes. Until then a
+# timeout is saved as timeout-* and listed after the run, but does not fail it. Fork mode exits with the last job's
+# code, so 70 (a timeout; agc_out_of_memory aborts in this build, and libFuzzer's own OOM is 71) maps to success.
+LIBFUZZ_TIME ?= 60
+LIBFUZZ_JOBS ?= 1
+LIBFUZZ_RSS_MB ?= 2048
+LIBFUZZ_FLAGS ?=
+vm-libfuzz-run: dist/agentica$(EXE)
 	$(FUZZ_CORPUS)
-	$(VM_BUILD)/agentica-vm-fuzz $(FUZZ_RUNS) $(VM_BUILD)/corpus/*.agcb
+	$(MAKE) vm-libfuzz
+	@mkdir -p $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/crashes $(LIBFUZZ_DIR)/tmp
+	status=0; ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_DIR)/tmp \
+	  $(LIBFUZZ_DIR)/agentica-vm-libfuzz -fork=$(LIBFUZZ_JOBS) -ignore_timeouts=1 \
+	  -ignore_ooms=0 -ignore_crashes=0 -max_total_time=$(LIBFUZZ_TIME) -rss_limit_mb=$(LIBFUZZ_RSS_MB) -timeout=10 \
+	  -artifact_prefix=$(LIBFUZZ_DIR)/crashes/ -print_final_stats=1 $(LIBFUZZ_FLAGS) \
+	  $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/seeds || status=$$?; [ $$status -ne 70 ] || status=0; \
+	for f in $(LIBFUZZ_DIR)/crashes/timeout-*; do [ -e "$$f" ] && echo "vm-libfuzz-run: timeout (not a failure yet): $$f"; done; \
+	exit $$status
 
 # The golden tests compile with dist/agentica and run on the GC stress binary (AGENTICA_VM_BINARY): the front end does not
 # run under the stress. The binary links the stage2 that dist/agentica was built from.
