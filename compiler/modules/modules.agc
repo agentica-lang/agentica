@@ -21,12 +21,15 @@ import Lexer from "../syntax/lexer"
 import Parser from "../syntax/parser"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
+import T from "../syntax/types"
+import CheckCache from "check_cache"
 import Declarations from "declarations"
 import ImportHelp from "import_help"
 import Paths from "import_path"
 import Env from "link_env"
 import Failure from "link_failure"
 import Resolve from "resolve_import"
+import TypeCode from "type_code"
 import Workspace from "workspace"
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
@@ -38,7 +41,13 @@ end
 
 ## A file of the program once it is loaded. named maps each local name of an import list to what it names. name is the
 ## path the file is stored under (Paths.stored_name, or `pkg/name@version/path` for a file of a package), and origin
-## the package it belongs to. imports lists the keys of the files it imports, in the order of its import lines.
+## the package it belongs to. imports lists the keys of the files it imports, in the order of its import lines. The
+## last seven fields are for the cache of checked modules (check_cache.agc) and are empty or false for a walk that does
+## not use it, and for the root file: digest is the SHA-256 of the text, verified the tree digest that the cache's
+## entry for this text vouches for and held the types of its constants (as type_code.agc writes them), stubbed whether
+## program is the parse of the stub of that entry rather than of the text, tree the tree digest of this walk, and clean
+## whether the two are the same and the entry types every constant, so the bodies and constants need no check:
+## constants then has the type of each constant by its linked name.
 export struct Module
   key: String
   file: String
@@ -53,16 +62,26 @@ export struct Module
   aliases: Map[String, String]
   named: Map[String, Named]
   imports: List[String]
+  digest: String
+  verified: String
+  held: Map[String, String]
+  stubbed: Bool
+  tree: String
+  clean: Bool
+  constants: Map[String, T.Type]
 end
 
 ## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a
 ## file imported twice appears once. root_dir is the folder of the root file. parsed is the number of files that this
-## walk lexed and parsed; the others came from the Kept files it was given.
+## walk lexed and parsed (stubs included); the others came from the Kept files it was given. stubs counts the files
+## parsed from a stub, and clean the modules that are `clean`.
 export struct Loaded
   order: List[String]
   modules: Map[String, Module]
   root_dir: String
   parsed: Int
+  stubs: Int
+  clean: Int
 end
 
 ## A file parsed by an earlier walk: its text, the first id of its tree and the tree. It can stand for the file in a
@@ -106,6 +125,10 @@ struct Walk
   root_dir: String
   build: Resolve.Build
   prefixed: Bool
+  cached: Bool
+  stubs: Bool
+  stubbed: Int
+  clean: Int
 end
 
 # A file that was read and parsed, ready to join the walk.
@@ -117,6 +140,10 @@ struct Parsed
   first_id: Int
   name: String
   origin: Packages.Origin
+  digest: String
+  verified: String
+  held: Map[String, String]
+  stubbed: Bool
 end
 
 struct Collected
@@ -145,6 +172,7 @@ struct Taken
   program: Ast.Program
   first_id: Int
   fresh: Bool
+  stubbed: Bool
 end
 
 ## Parses nothing again: the files are numbered one after the other from 0.
@@ -163,9 +191,18 @@ end
 ## without `parses`.
 export def load_with(root: String, settings: Env.Settings, parses: Parses) -> Result[Loaded]
   finished = try load_root(settings, empty_walk(false, parses), root)
-  return ok(
-    Loaded(order: finished.order, modules: finished.done, root_dir: finished.root_dir, parsed: finished.parsed),
-  )
+  return ok(loaded_of(finished))
+end
+
+## Like `load`, using the check cache of the workspace (check_cache.agc): each file but the root gets its digest and
+## the tree digest of this walk, and is `clean` when the cache's entry for its text vouches for that tree. With `stubs`
+## a file whose text has an entry with a stub is parsed from the stub; the caller must then look at every `stubbed`
+## module, which is a stand-in until it is `clean`. With the cache off it is `load`. The walk, its order, its ids and
+## its failures are those of `load`, except that a stub has fewer nodes than its text.
+export def load_checked(root: String, settings: Env.Settings, stubs: Bool) -> Result[Loaded]
+  use = settings.workspace.check_cache.on
+  finished = try load_root(settings, empty_walk(false, no_parses()).with(cached: use, stubs: use and stubs), root)
+  return ok(loaded_of(finished))
 end
 
 ## Loads several roots into one set of modules: a file that two roots reach is read, parsed and entered once, and every
@@ -190,9 +227,18 @@ export def load_roots(roots: List[String], settings: Env.Settings, parses: Parse
       )
     end
   end
-  return Roots(
-    loaded: Loaded(order: walk.order, modules: walk.done, root_dir: walk.root_dir, parsed: walk.parsed),
-    entries: entries,
+  return Roots(loaded: loaded_of(walk), entries: entries)
+end
+
+# The modules a walk finished, as `Loaded`.
+def loaded_of(walk: Walk) -> Loaded
+  return Loaded(
+    order: walk.order,
+    modules: walk.done,
+    root_dir: walk.root_dir,
+    parsed: walk.parsed,
+    stubs: walk.stubbed,
+    clean: walk.clean,
   )
 end
 
@@ -211,6 +257,10 @@ def empty_walk(prefixed: Bool, parses: Parses) -> Walk
     root_dir: "",
     build: build,
     prefixed: prefixed,
+    cached: false,
+    stubs: false,
+    stubbed: 0,
+    clean: 0,
   )
 end
 
@@ -249,6 +299,10 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
     first_id: taken.first_id,
     name: Paths.stored_name(root_dir, key.unwrap!),
     origin: Packages.project_origin(scope),
+    digest: "",
+    verified: "",
+    held: {},
+    stubbed: false,
   )
   entered = try enter(settings, walk.with(root_dir: root_dir, build: build), first, taken.fresh)
   return run(settings, entered)
@@ -257,10 +311,27 @@ end
 # The tree of the file `key` with `text`: the kept one when its text is the same, and else the parse from `next_id`.
 def take(kept: Map[String, Kept], next_id: Int, key: String, file: String, text: String) -> Result[Taken]
   if kept.has_key?(key) and kept[key].text == text
-    return ok(Taken(program: kept[key].program, first_id: kept[key].first_id, fresh: false))
+    return ok(Taken(program: kept[key].program, first_id: kept[key].first_id, fresh: false, stubbed: false))
   end
   program = try parse_source(file, text, next_id)
-  return ok(Taken(program: program, first_id: next_id, fresh: true))
+  return ok(Taken(program: program, first_id: next_id, fresh: true, stubbed: false))
+end
+
+# The tree of an imported file for a walk that uses the check cache: the stub of its entry when the walk takes stubs
+# and the stub parses, else the parse of the text. An entry is only a hint, so a stub that does not parse is not a
+# failure: the text is parsed, and any failure it has is the one `load` gives.
+def take_cached(walk: Walk, key: String, text: String, entry: Ast.Optional[CheckCache.Entry]) -> Result[Taken]
+  case entry
+    Ast.Optional.Present(found) ->
+      if walk.stubs and found.stub != ""
+        stub = parse_source(key, found.stub, walk.next_id)
+        if stub.ok?
+          return ok(Taken(program: stub.unwrap!, first_id: walk.next_id, fresh: true, stubbed: true))
+        end
+      end
+    Ast.Optional.Absent -> entry = entry
+  end
+  return take(walk.kept, walk.next_id, key, key, text)
 end
 
 def start_span() -> Source.Span
@@ -305,11 +376,66 @@ def finish(walk: Walk, frame: Frame) -> Walk
     named: frame.named,
     imports: frame.imported,
   )
+  clean = 0
+  if module.digest != ""
+    # Every file it imports is done: the stack only finishes a file after the ones it read.
+    below = module.imports.map do |imported: String| walk.done[imported].tree end
+    tree = CheckCache.tree_digest(shape_of(module), module.digest, below)
+    module = module.with(tree: tree)
+    if module.verified == tree
+      module = vouched_clean(walk, module)
+    end
+    clean = counted(0, module.clean)
+  end
   return walk.with(
     stack: walk.stack.take(walk.stack.size - 1),
     seen: walk.seen.put(module.key, 0),
     done: walk.done.put(module.key, module),
+    clean: walk.clean + clean,
   )
+end
+
+# `module`, which its entry vouches for, as a clean module if the entry types every constant it declares and the types
+# can be read in this walk; else as it is, to be checked in full.
+def vouched_clean(walk: Walk, module: Module) -> Module
+  names = CheckCache.constant_names(module.program)
+  if names.size != module.held.size
+    return module
+  end
+  prefixes = {module.key: module.prefix}
+  if names.size > 0
+    for key in walk.done.keys
+      prefixes = prefixes.put(key, walk.done[key].prefix)
+    end
+  end
+  types: Map[String, T.Type] = {}
+  for name in names
+    if !module.held.has_key?(name)
+      return module
+    end
+    type = TypeCode.decode(module.held[name], prefixes)
+    if !type.ok?
+      return module
+    end
+    types = types.put(module.prefix + name, type.unwrap!)
+  end
+  return module.with(clean: true, constants: types)
+end
+
+# What describes a file apart from its text, for its tree digest: its key, its package, the keys its aliases name and
+# the names its imports bind. Not its prefix or its stored name, which depend on where the file sits in the walk and on
+# the root, and which a body check does not read, so a file checked under one root is clean under another.
+def shape_of(module: Module) -> String
+  origin = module.origin
+  pieces = [module.key, origin.package, origin.root, origin.label, "#{module.aliases.size}"]
+  for alias in module.aliases.keys.sort
+    pieces = pieces.push(alias).push(module.aliases[alias])
+  end
+  pieces = pieces.push("#{module.named.size}")
+  for local in module.named.keys.sort
+    pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
+  end
+  return pieces.map do |text: String| CheckCache.piece(text) end.join("")
 end
 
 # One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen). The
@@ -443,7 +569,13 @@ end
 def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, site: Failure.Site) -> Result[Walk]
   key = found.key
   text = try imported_text(settings, key, site)
-  taken = try take(walk.kept, walk.next_id, key, key, text)
+  digest = ""
+  entry: Ast.Optional[CheckCache.Entry] = Ast.Optional.Absent
+  if walk.cached
+    digest = CheckCache.text_digest(text)
+    entry = CheckCache.find(settings.workspace.check_cache, key, digest)
+  end
+  taken = try take_cached(walk, key, text, entry)
   name = found.name
   if name == ""
     name = Paths.stored_name(walk.root_dir, key)
@@ -456,6 +588,10 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
     first_id: taken.first_id,
     name: name,
     origin: found.origin,
+    digest: digest,
+    verified: vouched(entry),
+    held: held(entry),
+    stubbed: taken.stubbed,
   )
   return enter(settings, walk, parsed, taken.fresh)
 end
@@ -507,6 +643,13 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     aliases: {},
     named: {},
     imports: [],
+    digest: parsed.digest,
+    verified: parsed.verified,
+    held: parsed.held,
+    stubbed: parsed.stubbed,
+    tree: "",
+    clean: false,
+    constants: {},
   )
   frame = Frame(
     module: module,
@@ -524,8 +667,25 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
       order: walk.order.push(key),
       next_id: max_of(walk.next_id, Ast.next_free_id(program)),
       parsed: counted(walk.parsed, fresh),
+      stubbed: counted(walk.stubbed, parsed.stubbed),
     ),
   )
+end
+
+# The types of the constants that an entry holds, empty when there is no entry.
+def held(entry: Ast.Optional[CheckCache.Entry]) -> Map[String, String]
+  case entry
+    Ast.Optional.Present(found) -> return found.constants
+    Ast.Optional.Absent -> return {}
+  end
+end
+
+# The tree digest that an entry vouches for, "" when there is no entry.
+def vouched(entry: Ast.Optional[CheckCache.Entry]) -> String
+  case entry
+    Ast.Optional.Present(found) -> return found.tree
+    Ast.Optional.Absent -> return ""
+  end
 end
 
 # A file that came from the Kept files lies below the next id, so only a parsed one moves it.

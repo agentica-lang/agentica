@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `check` and `type-at` keep checked imports in `_build/check/` and skip the parse and check of unchanged ones (several times faster on a warm run); `--no-cache` turns it off. (#630)
+
 ### Fixed
 
 - Linux shutdown skips a standard C stream already locked by native compute code.

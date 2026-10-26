@@ -33,6 +33,7 @@ import DiagnosticJson from "../diagnostics/diagnostic_json"
 import Plain from "../diagnostics/diagnostic_plain"
 import Problems from "../diagnostics/problem"
 import BytecodeCache from "../io/bytecode_cache"
+import CheckCache from "../io/check_cache"
 import SaveFile from "../io/save_file"
 import SourceReader from "../io/source_reader"
 import StdinBuffer from "../io/stdin_buffer"
@@ -240,16 +241,18 @@ def position(session: Session, word: String, options: QueryOptions.Query, usage:
     QueryPosition.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryPosition.Parsed.Ready(asked) ->
       if options.stdin == ""
-        return answered(
-          session,
-          CliQuery.type_at(asked, session.options.style, options.partial, session.settings),
-          asked.file,
-        )
+        return answered(session, type_at(session, asked, options.partial), asked.file)
       end
       return with_buffer(session, asked.file) do |read: Session|
-        answered(read, CliQuery.type_at(asked, read.options.style, options.partial, read.settings), asked.file)
+        answered(read, type_at(read, asked, options.partial), asked.file)
       end
   end
+end
+
+# The answer of `type-at`, with the cache of checked modules of the project of the file unless `--no-cache`.
+def type_at(session: Session, asked: QueryPosition.Asked, partial: Bool) -> Reply.Answer
+  settings = CheckCache.attach(session.settings, asked.file, !session.options.no_cache)
+  return CliQuery.type_at(asked, session.options.style, partial, settings)
 end
 
 # `check --stdin FILE`: the text of FILE is the standard input. FILE need not exist, but its folder does: imports and
@@ -285,7 +288,8 @@ end
 def program(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
   if verb == "check"
-    return verdict(session, source, Core.check(Cache.empty(), session.settings, source))
+    settings = CheckCache.attach(session.settings, source, !session.options.no_cache)
+    return verdict(session, source, Core.check(Cache.empty(), settings, source))
   end
   plan = cache_plan(session, verb, source)
   case BytecodeCache.lookup(plan, session.settings)
