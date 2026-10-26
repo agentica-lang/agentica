@@ -19,6 +19,8 @@
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make vm-fuzz            mutate compiled fixtures and run them
+# make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
+# make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c, vm/jit/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
@@ -116,7 +118,18 @@ UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_DARWIN_UNLIMITED_SELECT
 endif
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
 DEBUG_MAPS = -fdebug-prefix-map=$(CURDIR)=. $(if $(filter-out $(CURDIR),$(PWD)),$(if $(filter $(CURDIR),$(shell cd '$(PWD)' 2>/dev/null && pwd -P)),-fdebug-prefix-map=$(PWD)=.))
-ifeq ($(SANITIZE),1)
+ifeq ($(LIBFUZZ),1)
+# The sanitizer flags plus libFuzzer's coverage hooks on every VM object; only agentica-vm-libfuzz links the runtime.
+# First in the chain, so LIBFUZZ=1 wins over a SANITIZE=1 in the environment (the CI sanitizer job sets it).
+VM_CC := clang
+VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=all -DAGC_NO_GC
+VM_LDFLAGS := -fsanitize=address,undefined $(VM_LIBS)
+GC_MODE := none
+VM_BUILD := build/vm/libfuzz
+YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all
+OSSL_CFLAGS := -g -fno-omit-frame-pointer
+DEBUG_MAP := $(DEBUG_MAPS)
+else ifeq ($(SANITIZE),1)
 VM_CC := clang
 VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined -fno-sanitize-recover=all -DAGC_NO_GC
 VM_LDFLAGS := -fsanitize=address,undefined $(VM_LIBS)

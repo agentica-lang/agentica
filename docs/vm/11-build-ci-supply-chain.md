@@ -106,11 +106,34 @@
   reproducible: 30,000 mutants in the sanitizer job (`FUZZ_RUNS`), about 12 s.
   `FUZZ_SEED=N` picks another sequence and is printed on stderr. In a sanitizer
   build a crash prints the mutant's index and saves it to `fuzz-crash.agcb`.
-- `.github/workflows/fuzz.yml` runs by hand. It builds the sanitizer VM, runs 5
-  million mutants with a random `FUZZ_SEED`, prints the commit and seed first,
-  and uploads `fuzz-crash.agcb` on failure. `agentica run --` on that file, or
-  the same commit, seed and run count, reproduces a failure.
-- Planned: a clang job that also builds the fuzzer with `-fsanitize=fuzzer`.
+- The coverage-guided build (`vm/fuzz_libfuzzer.c`): `LLVMFuzzerTestOneInput`
+  calls `agc_fuzz_one`, so AFL++, honggfuzz and Centipede can drive it too.
+  `make vm-libfuzz` builds the VM objects in the `LIBFUZZ=1` mode (clang,
+  `-fsanitize=fuzzer-no-link,address,undefined`, `AGC_NO_GC`) into
+  `build/vm/libfuzz/` and links `agentica-vm-libfuzz` with libFuzzer's
+  runtime. Linux and clang only; never shipped.
+- `make vm-libfuzz-run` compiles the fixtures into `build/vm/libfuzz/seeds/`
+  and fuzzes for `LIBFUZZ_TIME` seconds (default 60) on `LIBFUZZ_JOBS` forked
+  workers (default 1), each with `-rss_limit_mb=2048` (`LIBFUZZ_RSS_MB`). New
+  inputs go to `build/vm/libfuzz/corpus/`, failures to
+  `build/vm/libfuzz/crashes/`. `LIBFUZZ_FLAGS` adds libFuzzer flags.
+- A crash, a leak or an input past the RSS limit ends the run. A timeout does
+  not: a timed wait (a channel or await timeout) parks without counting steps,
+  so a mutant with a large timeout can wait for minutes. Fork mode saves it as
+  `timeout-*` and goes on.
+- `agc_fuzz_one` also sets `deny_run`: a mutant's strings are shell commands
+  with mutated bytes, and a child process waits outside `--max-steps`.
+- There is no dictionary. The format has no section tags, and libFuzzer learns
+  the magic, the format version and the builtin names from its `memcmp` and
+  comparison hooks.
+- `.github/workflows/fuzz.yml` runs by hand. It builds the libFuzzer target,
+  fuzzes for the given number of seconds (default 3600) with a random seed,
+  prints the commit and seed first, and uploads `build/vm/libfuzz/crashes/` on
+  failure. `build/vm/libfuzz/agentica-vm-libfuzz crash-<sha>` or `agentica run
+  --` on that file reproduces it.
+- The plain driver stays for the PR run: it reuses the sanitizer objects,
+  while the libFuzzer build compiles every VM object again (about 45 s on 8
+  cores). It can go once the libFuzzer job has been green for a while.
 
 ### Tests in make
 
