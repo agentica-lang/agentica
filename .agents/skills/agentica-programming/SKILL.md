@@ -51,7 +51,7 @@ Read only what the task needs.
 | `modules.md` | several files, `std/`, `pkg/`, packages |
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
-| `compression.md` | Zlib bytes, files and streams (deflate, zlib, gzip) |
+| `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
 | `archive.md` | `std/archive` (explicit-allowlist TAR extraction into a new directory) |
 | `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid` |
 | `network.md` | TCP, TLS, HTTP client and server |

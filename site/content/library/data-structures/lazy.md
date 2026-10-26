@@ -4,7 +4,7 @@ weight: 6
 description: Lazy pipelines over lists, ranges, endless sources, files and channels, run one item at a time by a terminal, with try in the blocks and a terminal that writes a file.
 ---
 
-A `Lazy[T]` is a recipe: a source and the steps after it. Building one does no work. A terminal (`to_a`, `first`, `each`, `reduce`, `find`, `write_lines`) runs it, and pulls one item at a time from the source through every step, so no step builds a list of all the items. A step returns a new `Lazy`; the old one is unchanged, and each terminal runs the source again from the start (a channel, which cannot be read twice, goes on where the last terminal stopped).
+A `Lazy[T]` is a recipe: a source and the steps after it. Building one does no work. A terminal (`to_a`, `first`, `each`, `reduce`, `find`, `write_lines`, `write_bytes`) runs it, and pulls one item at a time from the source through every step, so no step builds a list of all the items. A step returns a new `Lazy`; the old one is unchanged, and each terminal runs the source again from the start (a channel, which cannot be read twice, goes on where the last terminal stopped).
 
 Use a `Lazy` for an endless source, for the lines of a big file or the values of a channel, or when only the first few results of a long chain are needed. For a list you will walk whole, the eager [List](/library/data-structures/list/) methods are the one form.
 
@@ -32,6 +32,7 @@ List.lazy(list: List[A]) -> Lazy[A]
 Range.lazy(range: Range) -> Lazy[Int]
 Lazy.produce(seed: A, f: Fn[A, A]) -> Lazy[A]
 File.foreach(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]
+File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[List[Int]]
 Channel.lazy(channel: Channel[A], timeout_ms: Int) -> Lazy[A]
 ```
 
@@ -276,6 +277,29 @@ def main() -> Void
   end.write_lines("cents.txt", 1000)
   puts(done)
 end
+```
+
+## Zlib steps
+
+```text
+Lazy.deflate(lazy: Lazy[List[Int]], level: Int = 6, raw: Bool = false) -> Lazy[List[Int]]
+Lazy.inflate(lazy: Lazy[List[Int]], raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[List[Int]]
+Lazy.gzip(lazy: Lazy[List[Int]], level: Int = 6) -> Lazy[List[Int]]
+Lazy.gunzip(lazy: Lazy[List[Int]], max_bytes: Int = 1073741824) -> Lazy[List[Int]]
+Lazy.write_bytes(lazy: Lazy[List[Int]], path: String, timeout_ms: Int = 30000) -> Result[Int]
+```
+
+The steps compress or decompress a stream of byte chunks, such as the chunks of `File.chunks`, which reads a regular file `size` bytes (1 to 16777216) at a time; `write_bytes` writes the chunks to a file, created or truncated, and gives the bytes written. A decoder error, output past `max_bytes`, a bad `level` and a byte outside 0 to 255 end the terminal with that error; a run that stops early frees its zlib streams. [Zlib](/library/text-and-data/zlib/#streams) has the details.
+
+```agentica
+def main() -> Void
+  packed = [[104, 105], [], [33]].lazy.gzip.to_a.unwrap!
+  puts(packed.lazy.gunzip.to_a)
+end
+```
+
+```output
+ok([[104, 105, 33]])
 ```
 
 ## try in the blocks

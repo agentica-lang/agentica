@@ -19,9 +19,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   parameters and struct fields; unsigned results are never negative.
 - `Native.closed?(x)` tells a closed resource or a freed buffer, so a wrapper
   can return an `error`.
+- `File.chunks(path)` reads a file as a `Lazy` of byte chunks, and
+  `lazy.write_bytes(path)` writes byte chunks to a file.
+- Lazy zlib steps `deflate`, `inflate`, `gzip` and `gunzip` compress and
+  decompress a stream of byte chunks with bounded memory; `raw = true` is raw
+  DEFLATE.
+- `Zlib.deflate`, `inflate`, `gzip` and `gunzip` take default `level` (6) and
+  `max_bytes` (1048576).
 
 ### Changed
 
+- **Breaking:** the Zlib streaming calls (`deflate_init`, `inflate_init`,
+  `deflate_next`, `inflate_next`, `deflate_finish`, `inflate_finish`,
+  `encoder_close`, `decoder_close`) and the types `ZlibEncoder`, `ZlibDecoder`
+  and `ZlibProgress` are removed: use the Lazy zlib steps.
+- **Breaking:** `Zlib.deflate_file`, `inflate_file`, `gzip_file` and
+  `gunzip_file` are removed: use `File.chunks(src).gzip.write_bytes(dst)`.
+- **Breaking:** the Zlib errors name `max_bytes` instead of `max_out_bytes`.
 - An integer argument or struct field of an extern function takes the bits of
   its type read as signed or unsigned, as `Native.put_int32` does: a
   `C.Int32` takes up to 2^32 - 1.

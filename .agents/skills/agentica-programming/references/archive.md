@@ -3,7 +3,7 @@
 `import Archive from "std/archive"`. Copies an explicit allowlist of regular
 files out of a plain `.tar`, gzipped `.tar.gz`, or classic single-disk
 `.zip` (stored and raw deflate only) into a new private directory. Written
-in Agentica over the `Zlib` streaming decoder; every failure is an `error`
+in Agentica over `File.chunks` and the Lazy zlib steps; every failure is an `error`
 and none halts, whatever the input.
 
 ```text
