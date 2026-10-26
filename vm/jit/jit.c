@@ -2,14 +2,35 @@
  * The JIT tier (docs/future/22-jit.md §22): which functions to compile and when, the walk over a function's bytecode
  * that drives the host's emitter, and the code cache of a run. Every function can be compiled: an instruction without
  * code of its own leaves for the interpreter, which runs it and comes back. With `on`, only a function with a loop
- * that seldom leaves is compiled. Core layer.
+ * that seldom leaves is compiled, and the small functions it calls. Core layer.
  */
 #include "jit.h"
 
 #include <inttypes.h>
 #include <string.h>
+#include <uv.h>
 
-#define PAGE ((size_t)4096)
+/* A part of a function that `on` measures: an innermost loop (one that holds no other loop's end) of SIZE
+   instructions, or the whole of a function without a loop, with SIZE 0. OUT counts its instructions that leave
+   compiled code; once OUT * AGC_JIT_SPACING passes SIZE, its function OWNER stays out. */
+typedef struct {
+  uint32_t owner, size, out;
+} region;
+
+/* A CALL of function CALLEE inside region REGION. */
+typedef struct {
+  uint32_t callee, region;
+} call_site;
+
+/* The code that waits for a seal (seal_batch), under LOCK: BYTES[0 .. LEN) holds the code of FUNCTIONS[k] at
+   OFFSETS[k], SIZES[k] bytes long, for k below COUNT. */
+struct agc_jit_batch {
+  uv_mutex_t lock;
+  uint8_t *bytes;
+  size_t len, cap;
+  uint32_t *functions, *offsets, *sizes;
+  size_t count, slots;
+};
 
 /* The opcode a fused one starts with (vm/value.h): its STEP or CONST, compiled alone like the instruction after it,
    which the loader left in place. */
@@ -66,102 +87,116 @@ static bool has_code(uint32_t op) {
   }
 }
 
-/* True when IN makes the `on` heuristic count a trip out of compiled code. A CALL of a function that may get code
-   (CALLABLE) is a native call, and a RETURN runs once per call; a leaf builtin is called by run_compiled itself, which
-   LEAF says to count or not. */
-static bool leaves_code(const agc_program *p, agc_instr in, const bool *callable, bool leaf) {
+/* True when IN makes the `on` heuristic count a trip out of compiled code, when it is not a CALL of a function of the
+   program (settle counts those by their callee). A leaf builtin is called by run_compiled itself, which LEAF says to
+   count or not; a RETURN runs once per call. */
+static bool leaves_code(const agc_program *p, agc_instr in, bool leaf) {
   uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
   if (has_code(in.op) || in.op == AGC_OP_RETURN) return false;
-  if (in.op == AGC_OP_CALL) return bx >= p->function_count || !callable[bx];
+  if (in.op == AGC_OP_CALL) return bx >= p->function_count;
   return in.op != AGC_OP_CALL_BUILTIN || !p->builtins[bx]->leaf || leaf;
 }
 
-/* Why F stays in the interpreter with MODE, for the trace, or NULL when it may be compiled, with CALLABLE the
-   functions that may still get code. `always` compiles every function, so the tests run the emitter on all of them.
-   With `on`, a function without a loop runs each instruction at most once per entry, and an entry from the
-   interpreter, the exit and the RETURN there cost more than the few instructions it saves; it gets code only to be
-   called natively from compiled code, and only when none of its instructions leaves ("none" otherwise, where a leaf
-   builtin counts: its exit unwinds every native call). A function with an innermost loop (one that holds no other
-   loop's end) that goes back to the turn loop more than once in AGC_JIT_SPACING instructions stays out ("exits"):
-   each round trip costs about as much as interpreting that many instructions, so such a loop ran slower compiled.
-   LEAVES and ENDS are scratch arrays of f->count + 1 entries: counts before each pc, so that each loop is measured in
-   constant time. */
-static const char *kept_out(const agc_program *p, const agc_function *f, agc_jit_mode mode, uint32_t *leaves,
-                            uint32_t *ends, const bool *callable) {
-  if (mode != AGC_JIT_ON) return NULL;
-  leaves[0] = ends[0] = 0;
-  for (uint32_t pc = 0; pc < f->count; pc++) {
-    uint32_t start;
-    ends[pc + 1] = ends[pc] + backward(f->code[pc], pc, &start);
-    leaves[pc + 1] = leaves[pc] + leaves_code(p, f->code[pc], callable, false);
-  }
-  if (!ends[f->count]) {
-    for (uint32_t pc = 0; pc < f->count; pc++)
-      if (leaves_code(p, f->code[pc], callable, true)) return "none";
-    return NULL;
-  }
-  for (uint32_t pc = 0; pc < f->count; pc++) {
-    uint32_t start;
-    if (!backward(f->code[pc], pc, &start) || ends[pc] - ends[start] > 0) continue;
-    uint64_t size = (uint64_t)pc - start + 1, out = leaves[pc + 1] - leaves[start];
-    if (out * AGC_JIT_SPACING > size) return "exits";
-  }
-  return NULL;
-}
-
-/* Each CALL of function g by function k: SLOT[g]++ alone (CALLERS NULL), or CALLERS[SLOT[g]++] = k. */
-static void call_edges(const agc_program *p, uint32_t *slot, uint32_t *callers) {
-  for (uint32_t k = 0; k < p->function_count; k++) {
+/* Why `on` keeps a function out:
+   - A function without a loop runs each instruction at most once per entry, and an entry from the interpreter, the
+     exit and the RETURN there cost more than the few instructions it saves; it gets code only to be called natively
+     from compiled code, and only when none of its instructions leaves ("none" otherwise, where a leaf builtin counts:
+     its exit unwinds every native call).
+   - A function with an innermost loop that goes back to the turn loop more than once in AGC_JIT_SPACING instructions
+     stays out ("exits"): each round trip costs about as much as interpreting that many instructions, so such a loop
+     ran slower compiled.
+   A CALL leaves when its callee may not get code, which depends on the callee's own calls, so the decision is a fixed
+   point: every function starts callable, and a function that drops out counts one more leaving instruction in each
+   region that calls it. Innermost loops never overlap, so each instruction is in at most one region, and each call
+   site is counted once, when its callee drops: the work follows the program's size, whatever the order of the
+   functions or the size of a caller. */
+size_t agc_jit_settle(const agc_program *p, bool *callable, bool *looped, bool *calling) {
+  size_t n = p->function_count, longest = 0, jumps = 0, calls = 0, work = 0;
+  for (uint32_t k = 0; k < n; k++) {
     const agc_function *f = &p->functions[k];
+    if (f->count > longest) longest = f->count;
+    for (uint32_t pc = 0; pc < f->count; pc++) {
+      uint32_t start;
+      agc_instr in = f->code[pc];
+      jumps += backward(in, pc, &start);
+      calls += in.op == AGC_OP_CALL && ((uint32_t)in.b | ((uint32_t)in.c << 16)) < n;
+    }
+    work += f->count;
+  }
+  /* Atomic GC memory is not zeroed. ENDS[pc] counts the loop ends before pc; AT[pc] is the region of pc. */
+  uint32_t *ends = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *ends));
+  uint32_t *at = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *at));
+  region *regions = agc_alloc_atomic(agc_size_mul(n + jumps + 1, sizeof *regions));
+  call_site *sites = agc_alloc_atomic(agc_size_mul(calls + 1, sizeof *sites));
+  size_t region_count = 0, site_count = 0;
+  for (uint32_t k = 0; k < n; k++) {
+    const agc_function *f = &p->functions[k];
+    callable[k] = true;
+    calling[k] = false;
+    ends[0] = 0;
+    for (uint32_t pc = 0; pc < f->count; pc++) {
+      uint32_t start;
+      ends[pc + 1] = ends[pc] + backward(f->code[pc], pc, &start);
+      at[pc] = UINT32_MAX;
+    }
+    looped[k] = ends[f->count] > 0;
+    if (!looped[k]) {
+      regions[region_count] = (region){k, 0, 0};
+      for (uint32_t pc = 0; pc < f->count; pc++) at[pc] = (uint32_t)region_count;
+      region_count++;
+    }
+    for (uint32_t pc = 0; looped[k] && pc < f->count; pc++) {
+      uint32_t start;
+      if (!backward(f->code[pc], pc, &start) || ends[pc] - ends[start] > 0) continue;
+      regions[region_count] = (region){k, pc - start + 1, 0};
+      for (uint32_t q = start; q <= pc; q++) at[q] = (uint32_t)region_count;
+      region_count++;
+    }
     for (uint32_t pc = 0; pc < f->count; pc++) {
       agc_instr in = f->code[pc];
       uint32_t bx = (uint32_t)in.b | ((uint32_t)in.c << 16);
-      if (in.op != AGC_OP_CALL || bx >= p->function_count) continue;
-      if (callers)
-        callers[slot[bx]++] = k;
+      bool call = in.op == AGC_OP_CALL && bx < n;
+      calling[k] |= call;
+      if (at[pc] == UINT32_MAX) continue;
+      if (call)
+        sites[site_count++] = (call_site){bx, at[pc]};
       else
-        slot[bx]++;
+        regions[at[pc]].out += leaves_code(p, in, !looped[k]);
     }
+    work += 2 * (size_t)f->count;
   }
-}
-
-/* Settles CALLABLE (all true on entry) for `on`: a call stays in compiled code only when its callee may get code,
-   which depends on the callee's own calls. A worklist over the reverse CALL edges evaluates each function once, and
-   again only when one of its callees drops out, so the start-up cost follows the program's size, not its call depth. */
-static void settle_callable(const agc_program *p, uint32_t *leaves, uint32_t *ends, bool *callable) {
-  size_t n = p->function_count;
-  /* Atomic GC memory is not zeroed. */
+  /* by_callee[first[g] .. first[g + 1]) are the regions of the call sites of g. */
   uint32_t *first = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *first));
   memset(first, 0, (n + 1) * sizeof *first);
-  call_edges(p, first + 1, NULL);
+  for (size_t s = 0; s < site_count; s++) first[sites[s].callee + 1]++;
   for (size_t k = 0; k < n; k++) first[k + 1] += first[k];
-  size_t edges = first[n];
-  /* callers[first[g] .. first[g + 1]) are the functions with a CALL of g, filled through `fill`. */
-  uint32_t *callers = agc_alloc_atomic(agc_size_mul(edges ? edges : 1, sizeof *callers));
   uint32_t *fill = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *fill));
   memcpy(fill, first, (n + 1) * sizeof *fill);
-  call_edges(p, fill, callers);
-  /* The stack holds each function at most once (QUEUED): every function first, then the callers of each drop. */
-  uint32_t *stack = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *stack));
-  bool *queued = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *queued));
+  uint32_t *by_callee = agc_alloc_atomic(agc_size_mul(site_count + 1, sizeof *by_callee));
+  for (size_t s = 0; s < site_count; s++) by_callee[fill[sites[s].callee]++] = sites[s].region;
+  /* The stack holds each function that dropped, once, until its call sites are counted. */
+  uint32_t *stack = agc_alloc_atomic(agc_size_mul(n + 1, sizeof *stack));
   size_t top = 0;
-  for (uint32_t k = 0; k < n; k++) {
-    stack[top++] = k;
-    queued[k] = true;
-  }
-  while (top) {
-    uint32_t k = stack[--top];
-    queued[k] = false;
-    if (!callable[k] || !kept_out(p, &p->functions[k], AGC_JIT_ON, leaves, ends, callable)) continue;
-    callable[k] = false;
-    for (uint32_t e = first[k]; e < first[k + 1]; e++) {
-      uint32_t c = callers[e];
-      if (callable[c] && !queued[c]) {
-        stack[top++] = c;
-        queued[c] = true;
-      }
+  for (size_t r = 0; r < region_count; r++) {
+    uint32_t k = regions[r].owner;
+    if (callable[k] && (uint64_t)regions[r].out * AGC_JIT_SPACING > regions[r].size) {
+      callable[k] = false;
+      stack[top++] = k;
     }
   }
+  while (top) {
+    uint32_t g = stack[--top];
+    for (uint32_t e = first[g]; e < first[g + 1]; e++) {
+      region *r = &regions[by_callee[e]];
+      r->out++;
+      if (callable[r->owner] && (uint64_t)r->out * AGC_JIT_SPACING > r->size) {
+        callable[r->owner] = false;
+        stack[top++] = r->owner;
+      }
+    }
+    work += first[g + 1] - first[g];
+  }
+  return work + site_count;
 }
 
 #if AGC_JIT_HOST
@@ -238,7 +273,111 @@ static agc_jit_code skip(agc_jit *jit, uint32_t function) {
   return NULL;
 }
 
-static agc_jit_code compile(agc_jit *jit, uint32_t function) {
+/* Code memory is sealed by whole pages, and a sealed page is read-execute for good (another scheduler may be running
+   its code), so no later function can be written into it. To share pages, the code of a function without a loop that
+   `on` compiles for native calls waits in the batch, a buffer of ordinary memory, and is sealed with the functions
+   after it: at the next CALL exit of a function in it, when the interpreter enters a function that just compiled
+   (which must run now), or when the batch holds AGC_JIT_BATCH bytes. So functions that get hot between two calls of
+   one of them, such as the callees of one long loop body, share a seal. Each seal takes the next pages of the run's
+   code memory, each function at a multiple of 16 bytes. The batch, the reservation and `used` change under the lock. */
+#define CODE_ALIGN ((size_t)16)
+#define AGC_JIT_BATCH ((size_t)4 * AGC_JIT_PAGE)
+
+static size_t aligned(size_t n) { return (n + CODE_ALIGN - 1) / CODE_ALIGN * CODE_ALIGN; }
+static size_t whole_pages(size_t n) { return (n + AGC_JIT_PAGE - 1) / AGC_JIT_PAGE * AGC_JIT_PAGE; }
+
+/* True when SIZE more bytes after the batch fit the code memory left (lock held). */
+static bool fits(agc_jit *jit, size_t size) {
+  size_t used = atomic_load_explicit(&jit->used, memory_order_relaxed);
+  return size <= AGC_JIT_CODE_CAP && whole_pages(aligned(jit->batch->len) + size) <= AGC_JIT_CODE_CAP - used;
+}
+
+/* Appends the SIZE bytes of CODE, the code of FUNCTION, to the batch (lock held). */
+static void batch_add(struct agc_jit_batch *b, uint32_t function, const uint8_t *code, size_t size) {
+  size_t at = aligned(b->len);
+  if (at + size > b->cap) {
+    size_t cap = b->cap ? b->cap : AGC_JIT_BATCH;
+    while (cap < at + size) cap = agc_size_mul(cap, 2);
+    uint8_t *bytes = agc_alloc_atomic(cap);
+    if (b->len) memcpy(bytes, b->bytes, b->len);
+    b->bytes = bytes;
+    b->cap = cap;
+  }
+  if (b->count == b->slots) {
+    size_t slots = b->slots ? agc_size_mul(b->slots, 2) : 64;
+    uint32_t *lists[3] = {b->functions, b->offsets, b->sizes};
+    for (int k = 0; k < 3; k++) {
+      uint32_t *list = agc_alloc_atomic(agc_size_mul(slots, sizeof *list));
+      if (b->count) memcpy(list, lists[k], b->count * sizeof *list);
+      lists[k] = list;
+    }
+    b->functions = lists[0];
+    b->offsets = lists[1];
+    b->sizes = lists[2];
+    b->slots = slots;
+  }
+  /* int3 between two functions: never run. */
+  memset(b->bytes + b->len, 0xCC, at - b->len);
+  memcpy(b->bytes + at, code, size);
+  b->len = at + size;
+  b->functions[b->count] = function;
+  b->offsets[b->count] = (uint32_t)at;
+  b->sizes[b->count++] = (uint32_t)size;
+}
+
+/* FUNCTION's code at CODE, SIZE bytes, published, or FUNCTION kept interpreted when CODE is NULL. */
+static void publish(agc_jit *jit, uint32_t function, agc_jit_code code, size_t size) {
+  const agc_function *f = &jit->program->functions[function];
+  if (!code) {
+    skip(jit, function);
+    return;
+  }
+  atomic_store_explicit(&jit->code[function], code, memory_order_release);
+  /* From now on the reload tests a function compiled for native calls, and run_compiled enters it only to resume a
+     frame. */
+  if (agc_jit_native_only(jit, function)) atomic_store_explicit(&jit->skip[function], false, memory_order_relaxed);
+  AGC_TRACE(jit->trace, AGC_TRACE_JIT, "compile function=%.*s instructions=%" PRIu32 " bytes=%zu",
+            agc_trace_len(f->name->bytes), f->name->data, f->count, size);
+}
+
+/* Seals the batch, and after it the SIZE bytes of CODE, the code of FUNCTION, when CODE is not NULL, in the next pages
+   of the run's code memory, which is reserved at the first seal, and publishes them all; on a failure of the memory
+   they stay interpreted. The pages are opened writable, filled and sealed read-execute, and the code is published
+   only after the seal (lock held, and fits said yes for each function). */
+static void seal_batch(agc_jit *jit, uint32_t function, const uint8_t *code, size_t size) {
+  struct agc_jit_batch *b = jit->batch;
+  size_t at = aligned(b->len), len = code ? at + size : b->len;
+  if (!len) return;
+  uint8_t *arena = atomic_load_explicit(&jit->arena, memory_order_relaxed);
+  if (!arena) {
+    arena = agc_jit_mem_reserve(AGC_JIT_CODE_CAP);
+    atomic_store_explicit(&jit->arena, arena, memory_order_relaxed);
+  }
+  size_t used = atomic_load_explicit(&jit->used, memory_order_relaxed), pages = whole_pages(len);
+  uint8_t *memory = arena ? arena + used : NULL;
+  bool sealed = memory && agc_jit_mem_open(memory, pages);
+  if (sealed) {
+    if (b->len) memcpy(memory, b->bytes, b->len);
+    if (code) {
+      memset(memory + b->len, 0xCC, at - b->len);
+      memcpy(memory + at, code, size);
+    }
+    sealed = agc_jit_mem_seal(memory, pages);
+  }
+  if (memory) atomic_store_explicit(&jit->used, used + pages, memory_order_relaxed);
+  for (size_t k = 0; k < b->count; k++)
+    publish(jit, b->functions[k], sealed ? (agc_jit_code)(uintptr_t)(memory + b->offsets[k]) : NULL, b->sizes[k]);
+  if (code) publish(jit, function, sealed ? (agc_jit_code)(uintptr_t)(memory + at) : NULL, size);
+  b->len = b->count = 0;
+}
+
+/* Compiles FUNCTION: its code runs from now on when NOW is set, else it joins the batch. Returns its code, or NULL
+   while it waits in the batch, when it stays interpreted, or when another scheduler compiles it. */
+static agc_jit_code compile(agc_jit *jit, uint32_t function, bool now) {
+  bool unclaimed = false;
+  if (!atomic_compare_exchange_strong_explicit(&jit->claimed[function], &unclaimed, true, memory_order_acq_rel,
+                                               memory_order_acquire))
+    return atomic_load_explicit(&jit->code[function], memory_order_acquire);
   const agc_function *f = &jit->program->functions[function];
   agc_emitter e;
   size_t size = emit_function(&e, jit, f);
@@ -246,49 +385,55 @@ static agc_jit_code compile(agc_jit *jit, uint32_t function) {
     AGC_TRACE(jit->trace, AGC_TRACE_JIT, "skip function=%.*s size", agc_trace_len(f->name->bytes), f->name->data);
     return skip(jit, function);
   }
-  size_t pages = (size + PAGE - 1) / PAGE * PAGE;
-  if (atomic_fetch_add(&jit->used, pages) + pages > AGC_JIT_CODE_CAP) {
-    atomic_fetch_sub(&jit->used, pages);
+  struct agc_jit_batch *b = jit->batch;
+  uv_mutex_lock(&b->lock);
+  if (!fits(jit, size)) {
     AGC_TRACE(jit->trace, AGC_TRACE_JIT, "full function=%.*s", agc_trace_len(f->name->bytes), f->name->data);
-    return skip(jit, function);
+    skip(jit, function);
+  } else if (now) {
+    seal_batch(jit, function, e.code, size);
+  } else {
+    batch_add(b, function, e.code, size);
+    if (b->len >= AGC_JIT_BATCH) seal_batch(jit, 0, NULL, 0);
   }
-  void *memory = agc_jit_mem_map(size);
-  if (memory) memcpy(memory, e.code, size);
-  if (!memory || !agc_jit_mem_seal(memory, size)) {
-    if (memory) agc_jit_mem_unmap(memory, size);
-    atomic_fetch_sub(&jit->used, pages);
-    return skip(jit, function);
-  }
-  agc_jit_code code = (agc_jit_code)(uintptr_t)memory;
-  agc_jit_code first = NULL;
-  if (!atomic_compare_exchange_strong_explicit(&jit->code[function], &first, code, memory_order_acq_rel,
-                                               memory_order_acquire)) {
-    agc_jit_mem_unmap(memory, size);
-    atomic_fetch_sub(&jit->used, pages);
-    return first;
-  }
-  AGC_TRACE(jit->trace, AGC_TRACE_JIT, "compile function=%.*s instructions=%" PRIu32 " bytes=%zu",
-            agc_trace_len(f->name->bytes), f->name->data, f->count, size);
-  return code;
+  uv_mutex_unlock(&b->lock);
+  return atomic_load_explicit(&jit->code[function], memory_order_acquire);
 }
 
-agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function) {
+agc_jit_code agc_jit_code_of(agc_jit *jit, uint32_t function, uint32_t pc) {
   agc_jit_code code = atomic_load_explicit(&jit->code[function], memory_order_acquire);
   if (code || atomic_load_explicit(&jit->skip[function], memory_order_relaxed)) return code;
-  if (jit->mode == AGC_JIT_ON &&
-      atomic_fetch_add_explicit(&jit->entries[function], 1, memory_order_relaxed) + 1 < AGC_JIT_THRESHOLD)
-    return NULL;
-  return compile(jit, function);
+  if (jit->mode == AGC_JIT_ON) {
+    /* An entry that lands at or before the previous one (a call lands at 0) is a pass: a new call, or a loop that went
+       round. The returns and the turns inside one pass of a long loop body land further on each time, so a function
+       whose loop runs only a few times stays interpreted however many entries it gets. */
+    uint32_t last = atomic_exchange_explicit(&jit->last[function], pc, memory_order_relaxed);
+    uint32_t passes = atomic_load_explicit(&jit->passes[function], memory_order_relaxed);
+    if (pc <= last && passes < AGC_JIT_PASSES)
+      passes = atomic_fetch_add_explicit(&jit->passes[function], 1, memory_order_relaxed) + 1;
+    /* The counts stop at their thresholds, so they never wrap. */
+    uint32_t entries = atomic_load_explicit(&jit->entries[function], memory_order_relaxed);
+    if (entries < AGC_JIT_THRESHOLD)
+      entries = atomic_fetch_add_explicit(&jit->entries[function], 1, memory_order_relaxed) + 1;
+    if (entries < AGC_JIT_THRESHOLD || passes < AGC_JIT_PASSES) return NULL;
+  }
+  return compile(jit, function, true);
 }
 
 agc_jit_code agc_jit_callee_code(agc_jit *jit, uint32_t function) {
   agc_jit_code code = atomic_load_explicit(&jit->code[function], memory_order_acquire);
   /* A function the interpreter enters gets its code (and its entries counted) at the reload. */
   if (code || !agc_jit_native_only(jit, function)) return code;
-  code = compile(jit, function);
-  /* From now on the reload tests it, and run_compiled enters it only to resume a frame. */
-  if (code) atomic_store_explicit(&jit->skip[function], false, memory_order_relaxed);
-  return code;
+  /* One that calls may run any number of instructions (it may recurse), so its first exit compiles it, at once. */
+  if (jit->calling[function]) return compile(jit, function, true);
+  uint32_t calls = atomic_fetch_add_explicit(&jit->entries[function], 1, memory_order_relaxed) + 1;
+  if (calls < AGC_JIT_CALLEE_THRESHOLD) return NULL;
+  if (calls == AGC_JIT_CALLEE_THRESHOLD) return compile(jit, function, false);
+  /* Still in the batch (or still compiling on another scheduler): seal what is there. */
+  uv_mutex_lock(&jit->batch->lock);
+  seal_batch(jit, 0, NULL, 0);
+  uv_mutex_unlock(&jit->batch->lock);
+  return atomic_load_explicit(&jit->code[function], memory_order_acquire);
 }
 
 agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_trace *trace) {
@@ -296,22 +441,20 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   /* Each function is decided once, here: a function kept out is never counted or walked again, and a run where every
      function is kept out has no JIT (nothing is allocated), so it runs the plain copy of the turn loop, the code of
      --jit off. */
-  size_t n = program->function_count, longest = 0;
-  for (uint32_t k = 0; k < n; k++)
-    if (program->functions[k].count > longest) longest = program->functions[k].count;
-  uint32_t *leaves = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *leaves));
-  uint32_t *ends = agc_alloc_atomic(agc_size_mul(longest + 1, sizeof *ends));
+  size_t n = program->function_count;
   _Atomic bool *skip = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *skip));
   _Atomic bool *native_only = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *native_only));
   bool *callable = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *callable));
-  for (uint32_t k = 0; k < n; k++) callable[k] = true;
-  if (mode == AGC_JIT_ON) settle_callable(program, leaves, ends, callable);
+  bool *looped = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *looped));
+  bool *calling = agc_alloc_atomic(agc_size_mul(n ? n : 1, sizeof *calling));
+  if (mode == AGC_JIT_ON) agc_jit_settle(program, callable, looped, calling);
   bool any = false;
   for (uint32_t k = 0; k < n; k++) {
     const agc_function *f = &program->functions[k];
-    const char *why = kept_out(program, f, mode, leaves, ends, callable);
+    bool on = mode == AGC_JIT_ON;
+    const char *why = !on || callable[k] ? NULL : looped[k] ? "exits" : "none";
     /* With `on`, a function without a loop that may get code is entered only by native calls. */
-    bool native = !why && mode == AGC_JIT_ON && !ends[f->count], entered = !why && !native;
+    bool native = !why && on && !looped[k], entered = !why && !native;
     atomic_init(&skip[k], !entered);
     atomic_init(&native_only[k], native);
     if (entered)
@@ -326,16 +469,27 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   jit->trace = trace;
   jit->skip = skip;
   jit->native_only = native_only;
+  jit->calling = calling;
   jit->code = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->code));
   jit->entries = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->entries));
+  jit->claimed = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->claimed));
+  jit->last = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->last));
+  jit->passes = agc_alloc_atomic(agc_size_mul(n, sizeof *jit->passes));
+  jit->batch = agc_alloc(sizeof *jit->batch);
+  memset(jit->batch, 0, sizeof *jit->batch);
+  if (uv_mutex_init(&jit->batch->lock) != 0) return NULL;
   jit->exits = agc_alloc_atomic(sizeof *jit->exits * AGC_OP_COUNT);
   for (uint32_t k = 0; k < n; k++) {
     atomic_init(&jit->code[k], NULL);
     atomic_init(&jit->entries[k], 0);
+    atomic_init(&jit->claimed[k], false);
+    atomic_init(&jit->last[k], UINT32_MAX);
+    atomic_init(&jit->passes[k], 0);
   }
   for (uint32_t op = 0; op < AGC_OP_COUNT; op++) atomic_init(&jit->exits[op], 0);
   atomic_init(&jit->leaves, 0);
   atomic_init(&jit->transitions, 0);
+  atomic_init(&jit->arena, NULL);
   atomic_init(&jit->used, 0);
   return jit;
 }

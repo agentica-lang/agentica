@@ -65,7 +65,10 @@ and the exit, which returns `{status, pc}`. `jit.c` walks the bytecode,
 **Built (x86-64):** `--jit MODE` (or `AGENTICA_JIT`; the flag wins): `off`,
 the default; `on`, which compiles a function that has a loop at its 100th
 entry (a call, a return into it, or a turn that starts in it; counted only
-until it compiles); `always`, every
+until it compiles) once 32 of its entries were passes (an entry at or
+before the pc of the one before: a call, or a loop that went round), so a
+long loop body that runs a few times stays interpreted however many calls
+it makes; `always`, every
 function at its first entry, for tests. Only the user's program is
 compiled; the front end stays in the interpreter. On another architecture
 every mode runs the interpreter. `MOVE`, `CONST`, `STEP`, the Int, Float
@@ -93,11 +96,13 @@ of compiled code, without the interpreter's loop.
   interpreter cost more than those few instructions save. Blocks of 3 to 7
   instructions that `filter`, `map` or `reduce` call a million times, and an
   empty function called 20 million times (about 13 ns more per call), ran
-  slower compiled. So `on` gives such a function code only for native calls:
-  at its first `CALL` exit from compiled code, when none of its instructions
-  leaves (a leaf builtin counts here, as its exit unwinds the native calls);
-  the interpreter enters that code only to resume a frame of it, never at its
-  first instruction.
+  slower compiled. So `on` gives such a function code only for native calls,
+  when none of its instructions leaves (a leaf builtin counts here, as its
+  exit unwinds the native calls): at its first `CALL` exit from compiled
+  code when it calls a function (it may recurse), else at its 16th
+  (`AGC_JIT_CALLEE_THRESHOLD`), since a compile costs about as much as
+  interpreting thousands of instructions; the interpreter enters that code
+  only to resume a frame of it, never at its first instruction.
 - Why `on` also keeps out a loop that often leaves: each trip to the
   interpreter and back costs more than interpreting the few instructions
   around it saves (`print-lines`, `small-values` and `strings` of
@@ -129,8 +134,16 @@ of compiled code, without the interpreter's loop.
   `agc_op_ne` for any pair other than two Ints; the Float opcodes, `SAME`,
   `CONCAT`, `TO_TEXT`, `LIST_LEN` and `LIST_GET` call their helper; `NOT`,
   `FIELD`, `IS_VARIANT`, `PAYLOAD`, `IS_OK` and `RESULT_VALUE` read the value
-  inline after a tag check. Each function has its own pages (64 MiB in all);
-  when two schedulers compile one function at once, the first copy is kept.
+  inline after a tag check.
+- Code memory: one reservation of 64 MiB per run (`AGC_JIT_CODE_CAP`, in
+  bytes), taken in whole pages from the start, one seal after the other. A
+  sealed page is never written again (another scheduler may run it), so
+  functions share pages only when sealed together: the code of a function
+  without a loop waits in a batch until the next `CALL` exit of a function in
+  it, the next function the interpreter enters, or 16 KiB of batch, so the
+  callees of one loop body that get hot together share one seal. Only the
+  scheduler that claims a function compiles it; another one interprets it
+  until the code is published.
 - `AGENTICA_VM_TRACE=jit` writes a `compile` line for each compiled function
   and a `skip` line for each function kept out: `loop=none` or `loop=exits`
   when the run starts, and `size` when its code did not fit at compile time.
@@ -147,7 +160,9 @@ of compiled code, without the interpreter's loop.
   overflow and the depth limit inside natively called functions),
   `make vm-jit-test` (the goldens and their sweeps and `test_vm_multicore.py`
   with `AGENTICA_JIT=always`, which compiles every function, in CI) and
-  `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, a compile race,
+  `vm/tests/jit_test.c` (bytes, exits, the read-execute seal, functions
+  packed in one reservation up to its cap, a batch sealed in one page, the
+  work of settling `on` bounded by the program's size, a compile race,
   every opcode compiles, the results and statuses of the helper calls and inline
   reads, a native call's frame push and pop and its exits, also under
   `make vm-tsan`).

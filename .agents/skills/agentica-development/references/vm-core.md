@@ -175,18 +175,22 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `jit.h` is the one header, the interpreter's boundary first, then the emitter
   and code memory that only `vm/jit/` and `vm/tests/jit_test.c` use. `jit.c`
   decides every function once in `agc_jit_new` (for `on`, a backward jump and
-  innermost loops that seldom leave the code), sets `skip` for the rest and
-  returns NULL when no function is left, so that run takes the plain turn
-  loop; it walks a function
+  innermost loops that seldom leave the code, a fixed point that
+  `agc_jit_settle` reaches in time linear in the program), sets `skip` for the
+  rest and returns NULL when no function is left, so that run takes the plain
+  turn loop; it walks a function
   once: each instruction (fused ones as their STEP or CONST) calls one
-  `agc_emit_*` function; it maps, seals and publishes the code with a release
-  CAS (`agc_jit_code_of`, which also counts entries for `on`). `emit_x64.c`: the
-  machine code of each kind, the exit stubs and the entry table, for the SysV
-  and Win64 argument registers (`AGC_JIT_HOST` is 0 elsewhere and nothing is
-  compiled). `mem_posix.c`, `mem_windows.c`: W^X pages, written then sealed
-  read-execute. `run_compiled` in `vm/interp.c` enters at each reload of the
-  jit copy of `turn_loop` (after the one-byte `agc_jit_may_run` test; the
-  plain copy has no JIT test, as one cost arithmetic 20% by code layout alone)
+  `agc_emit_*` function; the scheduler that claims a function compiles it,
+  seals it in the run's code reservation (functions without a loop wait in a
+  batch to share pages) and publishes it with a release store
+  (`agc_jit_code_of`, which also counts entries and passes for `on`).
+  `emit_x64.c`: the machine code of each kind, the exit stubs and the entry
+  table, for the SysV and Win64 argument registers (`AGC_JIT_HOST` is 0
+  elsewhere and nothing is compiled). `mem_posix.c`, `mem_windows.c`: W^X
+  pages, reserved, opened writable, then sealed read-execute. `run_compiled`
+  in `vm/interp.c` enters at each reload of the jit copy of `turn_loop`
+  (after the one-byte `agc_jit_may_run` test; the plain copy has no JIT test,
+  as one cost arithmetic 20% by code layout alone)
   and handles the exits as the interpreter handles that instruction: STEP runs
   `step_slow`, COST `apply_cost`, a failure `op_failed`, INTERPRET calls a
   leaf builtin itself or lets the loop run that one instruction, which enters

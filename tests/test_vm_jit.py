@@ -1,7 +1,8 @@
 """The JIT tier (`--jit`, docs/future/22-jit.md §22) changes no exit code, output, diagnostic, span or step count.
 
 Each program runs with `--jit off`, `on` and `always`, which compiles every function at its first entry (`on` only
-those with a loop that seldom leaves compiled code, at their 100th entry). Compiled functions run the STEPs of their
+those with a loop that seldom leaves compiled code, at their 100th entry, and small functions without a loop after
+several calls from compiled code). Compiled functions run the STEPs of their
 loops in compiled code, so the `--max-steps` sweep stops inside them, the turns of several tasks end inside them (by
 steps and by turn cost), their failures leave them, `on` switches to them in the middle of a loop, and four schedulers
 compile and run them at once. A call of a compiled function is a native call
@@ -540,6 +541,56 @@ def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_pat
     assert skips == [] if not X86_64 else [line.split("skip ")[1] for line in skips] == ["function=noisy loop=exits"]
     code, stdout, stderr = assert_same(bytecode)
     assert code == 0 and stdout.count("\n") == 152, stderr
+
+
+def test_on_compiles_a_function_without_a_loop_only_after_several_calls_from_compiled_code(tmp_path):
+    # main's loop compiles; hot is then called from it 300 times, rare 6 times (fewer than the 16 calls that make a
+    # function without a loop hot), so only hot gets code. always compiles all three.
+    bytecode = compile_text("""def hot(x: Int) -> Int
+  return x + 1
+end
+
+def rare(x: Int) -> Int
+  return x * 2
+end
+
+def main() -> Void
+  total = 0
+  i = 0
+  while i < 400
+    total = total + hot(i)
+    if i % 50 == 0
+      total = total + rare(i)
+    end
+    i += 1
+  end
+  puts(total)
+end
+""", "callee_threshold", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["hot", "main"] if X86_64 else [])
+    assert compiled(bytecode, tmp_path, "always") == (["hot", "main", "rare"] if X86_64 else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout == "83000\n", (stdout, stderr)
+
+
+@pytest.mark.parametrize("passes", [3, 40])
+def test_on_compiles_a_long_loop_body_only_after_enough_passes(tmp_path, passes):
+    # Each pass of main's loop returns into it from 60 calls: 180 entries in 3 passes are not enough, since only an
+    # entry at or before the previous one is a pass; 40 passes are (it compiles at the 32nd).
+    calls = "".join(f"    acc = (acc + f{k}(i)) % 1000003\n" for k in range(60))
+    functions = "".join(f"def f{k}(x: Int) -> Int\n  return x + {k}\nend\n\n" for k in range(60))
+    bytecode = compile_text(functions + f"""def main() -> Void
+  acc = 0
+  i = 0
+  while i < {passes}
+{calls}    i += 1
+  end
+  puts(acc)
+end
+""", "passes", tmp_path)
+    assert compiled(bytecode, tmp_path, "on") == (["main"] if X86_64 and passes == 40 else [])
+    code, stdout, stderr = assert_same(bytecode)
+    assert code == 0 and stdout == f"{sum(i * 60 + 1770 for i in range(passes))}\n", (stdout, stderr)
 
 
 def test_on_settles_a_call_chain_whose_last_callee_leaves(tmp_path):

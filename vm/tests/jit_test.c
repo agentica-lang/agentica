@@ -1,7 +1,8 @@
 /*
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
  * failures that leave the result register alone, native calls), the code memory sealed read-execute, never writable
- * then, and one copy kept when several threads compile a function at once.
+ * then, functions packed one after the other in it up to its cap, one copy made when several threads compile a
+ * function at once, and the `on` decision settled in time that follows the program's size.
  */
 #include "../jit/jit.h"
 #include "test_support.h"
@@ -52,7 +53,7 @@ static agc_jit_code compile(one_function *f) {
   program_of(f);
   agc_jit *jit = agc_jit_new(&f->program, AGC_JIT_ALWAYS, &quiet);
   assert(jit);
-  return agc_jit_code_of(jit, 0);
+  return agc_jit_code_of(jit, 0, 0);
 }
 
 static void expect_exit(agc_jit_exit got, uint32_t status, uint32_t pc) {
@@ -143,8 +144,8 @@ static AGC_JIT_CALLER void native_calls(void) {
   };
   agc_program program = {.functions = fns, .function_count = 2, .constants = constants, .constant_count = 2};
   agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
-  assert(jit && agc_jit_code_of(jit, 1));
-  agc_jit_code code = agc_jit_code_of(jit, 0);
+  assert(jit && agc_jit_code_of(jit, 1, 0));
+  agc_jit_code code = agc_jit_code_of(jit, 0, 0);
   assert(code);
   agc_task *t = vm.task, saved = *vm.task;
   agc_frame frames[2] = {{.function = 0}};
@@ -451,9 +452,9 @@ static AGC_JIT_CALLER void string_build_cost(void) {
   vm.task->turn_cost = 0;
 }
 
-/* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): each gets the one copy
-   that was published, and the copies that lost the race were unmapped. The barrier lets them start together, so
-   more than one compiles and the losing side of the compare-and-swap runs. */
+/* Several schedulers ask for the code of one function at once (`make vm-tsan` runs this): one claims it and compiles
+   it, and the others get NULL (they interpret it meanwhile) or the one copy that was published; no second copy takes
+   code memory. The barrier lets them start together, so the losing side of the claim runs. */
 #define RACERS 4
 static agc_jit *race_jit;
 static agc_jit_code race_code[RACERS];
@@ -462,7 +463,7 @@ static uv_barrier_t race_start;
 static void race_one(void *arg) {
   assert(agc_gc_thread_enter());
   uv_barrier_wait(&race_start);
-  race_code[(uintptr_t)arg] = agc_jit_code_of(race_jit, 0);
+  race_code[(uintptr_t)arg] = agc_jit_code_of(race_jit, 0, 0);
   agc_gc_thread_leave();
 }
 
@@ -476,9 +477,10 @@ static void compile_race(void) {
   uv_thread_t threads[RACERS];
   for (uintptr_t k = 0; k < RACERS; k++) assert(uv_thread_create(&threads[k], race_one, (void *)k) == 0);
   for (size_t k = 0; k < RACERS; k++) assert(uv_thread_join(&threads[k]) == 0);
-  for (size_t k = 0; k < RACERS; k++) assert(race_code[k] && race_code[k] == race_code[0]);
-  assert(agc_jit_code_of(race_jit, 0) == race_code[0]);
-  assert(atomic_load(&race_jit->used) == 4096);
+  agc_jit_code code = agc_jit_code_of(race_jit, 0, 0);
+  assert(code);
+  for (size_t k = 0; k < RACERS; k++) assert(!race_code[k] || race_code[k] == code);
+  assert(atomic_load(&race_jit->used) == AGC_JIT_PAGE);
   uv_barrier_destroy(&race_start);
 }
 
@@ -514,7 +516,7 @@ static AGC_JIT_CALLER void every_opcode_compiles(void) {
     emit(&f, AGC_OP_RETURN, 0, 0, 0);
     program_of(&f);
     agc_jit *jit = agc_jit_new(&f.program, AGC_JIT_ALWAYS, &quiet);
-    if (!jit || !agc_jit_code_of(jit, 0)) {
+    if (!jit || !agc_jit_code_of(jit, 0, 0)) {
       fprintf(stderr, "jit-test: %s does not compile\n", agc_opcode_name(op));
       assert(0);
     }
@@ -564,21 +566,26 @@ static void ineligible(void) {
 /* mov eax, 42; ret */
 static const uint8_t forty_two[] = {0xB8, 42, 0, 0, 0, 0xC3};
 
-/* The permissions of the mapping that holds P in /proc/self/maps ("rw-p", "r-xp"), Linux only. */
-static bool mapped_as(const void *p, const char *want) {
 #ifdef __linux__
+/* The range and the permissions ("rw-p", "r-xp") of the mapping of /proc/self/maps that holds P; false if none does. */
+static bool mapping_of(const void *p, unsigned long *lo, unsigned long *hi, char perms[8]) {
   FILE *maps = fopen("/proc/self/maps", "r");
   assert(maps);
   char line[512];
   bool found = false;
-  while (!found && fgets(line, sizeof line, maps)) {
-    unsigned long lo, hi;
-    char perms[8];
-    if (sscanf(line, "%lx-%lx %7s", &lo, &hi, perms) == 3 && (uintptr_t)p >= lo && (uintptr_t)p < hi)
-      found = strcmp(perms, want) == 0;
-  }
+  while (!found && fgets(line, sizeof line, maps))
+    found = sscanf(line, "%lx-%lx %7s", lo, hi, perms) == 3 && (uintptr_t)p >= *lo && (uintptr_t)p < *hi;
   fclose(maps);
   return found;
+}
+#endif
+
+/* True when the mapping that holds P has the permissions WANT, Linux only. */
+static bool mapped_as(const void *p, const char *want) {
+#ifdef __linux__
+  unsigned long lo, hi;
+  char perms[8];
+  return mapping_of(p, &lo, &hi, perms) && strcmp(perms, want) == 0;
 #else
   (void)p;
   (void)want;
@@ -586,15 +593,139 @@ static bool mapped_as(const void *p, const char *want) {
 #endif
 }
 
+/* True when P and Q are in one mapping, Linux only. */
+static bool one_mapping(const void *p, const void *q) {
+#ifdef __linux__
+  unsigned long lo, hi;
+  char perms[8];
+  return mapping_of(p, &lo, &hi, perms) && (uintptr_t)q >= lo && (uintptr_t)q < hi;
+#else
+  (void)p;
+  (void)q;
+  return true;
+#endif
+}
+
+/* A reservation has no access; a page of it is opened writable, filled and sealed read-execute, and the next page
+   keeps no access. */
 static AGC_JIT_CALLER void code_memory(void) {
-  uint8_t *pages = agc_jit_mem_map(sizeof forty_two);
-  assert(pages && mapped_as(pages, "rw-p"));
+  uint8_t *pages = agc_jit_mem_reserve(2 * AGC_JIT_PAGE);
+  assert(pages && mapped_as(pages, "---p") && mapped_as(pages + AGC_JIT_PAGE, "---p"));
+  assert(agc_jit_mem_open(pages, AGC_JIT_PAGE));
+  assert(mapped_as(pages, "rw-p") && mapped_as(pages + AGC_JIT_PAGE, "---p"));
   memcpy(pages, forty_two, sizeof forty_two);
-  assert(agc_jit_mem_seal(pages, sizeof forty_two));
-  assert(mapped_as(pages, "r-xp"));
+  assert(agc_jit_mem_seal(pages, AGC_JIT_PAGE));
+  assert(mapped_as(pages, "r-xp") && mapped_as(pages + AGC_JIT_PAGE, "---p"));
   int (*fn)(void) = (int (*)(void))(uintptr_t)pages;
   assert(fn() == 42);
-  agc_jit_mem_unmap(pages, sizeof forty_two);
+  agc_jit_mem_unmap(pages, 2 * AGC_JIT_PAGE);
+}
+
+/* The code of a run is one reservation: each function `always` compiles is sealed at once, in the next whole pages,
+   read-execute in one mapping, with no access past them, and the cap counts the bytes taken. A function that fits
+   the last page gets it; the next one does not fit and stays interpreted. Each function here returns its index. */
+static AGC_JIT_CALLER void arena(void) {
+  static const agc_trace quiet = {0};
+  enum { COUNT = 4 };
+  static agc_instr code[COUNT][2];
+  static uint32_t spans[2] = {0};
+  agc_value constants[COUNT];
+  agc_function fns[COUNT];
+  memset(fns, 0, sizeof fns);
+  for (uint32_t k = 0; k < COUNT; k++) {
+    constants[k] = agc_int(k);
+    code[k][0] = (agc_instr){AGC_OP_CONST, 1, (uint16_t)k, 0};
+    code[k][1] = (agc_instr){AGC_OP_RETURN, 1, 0, 0};
+    fns[k] = (agc_function){.name = agc_make_string("f", 1, 1), .registers = 2, .code = code[k], .spans = spans,
+                            .count = 2};
+  }
+  agc_program program = {.functions = fns, .function_count = COUNT, .constants = constants, .constant_count = COUNT};
+  agc_jit *jit = agc_jit_new(&program, AGC_JIT_ALWAYS, &quiet);
+  assert(jit && !atomic_load(&jit->arena));
+  uint8_t *first = (uint8_t *)(uintptr_t)agc_jit_code_of(jit, 0, 0);
+  uint8_t *second = (uint8_t *)(uintptr_t)agc_jit_code_of(jit, 1, 0);
+  uint8_t *base = atomic_load(&jit->arena);
+  assert(first == base && second == base + AGC_JIT_PAGE && atomic_load(&jit->used) == 2 * AGC_JIT_PAGE);
+  assert(mapped_as(first, "r-xp") && one_mapping(first, second) && mapped_as(base + 2 * AGC_JIT_PAGE, "---p"));
+  agc_value R[2] = {agc_nil(), agc_nil()};
+  expect_exit(((agc_jit_code)(uintptr_t)second)(&vm, R, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[1], agc_int(1)));
+  atomic_store(&jit->used, AGC_JIT_CODE_CAP - AGC_JIT_PAGE);
+  agc_jit_code last = agc_jit_code_of(jit, 2, 0);
+  assert((uint8_t *)(uintptr_t)last == base + AGC_JIT_CODE_CAP - AGC_JIT_PAGE);
+  assert(mapped_as(base + AGC_JIT_CODE_CAP - 1, "r-xp"));
+  assert(atomic_load(&jit->used) == AGC_JIT_CODE_CAP);
+  expect_exit(last(&vm, R, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[1], agc_int(2)));
+  assert(!agc_jit_code_of(jit, 3, 0) && !agc_jit_may_run(jit, 3) && atomic_load(&jit->used) == AGC_JIT_CODE_CAP);
+}
+
+/* With `on`, functions without a loop compiled for native calls wait in the batch from their
+   AGC_JIT_CALLEE_THRESHOLD-th CALL exit, and the next seal (here at the next exit of one of them) publishes them
+   together: they share one page of code memory, 16 bytes apart at most past the first one's end. Function 0 has
+   a loop, so the run has a JIT; functions 1 and 2 return their index. */
+static AGC_JIT_CALLER void batch(void) {
+  static const agc_trace quiet = {0};
+  static agc_instr loop[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_JUMP, 0, 0, 0}};
+  static agc_instr one[] = {{AGC_OP_CONST, 1, 1, 0}, {AGC_OP_RETURN, 1, 0, 0}};
+  static agc_instr two[] = {{AGC_OP_CONST, 1, 2, 0}, {AGC_OP_RETURN, 1, 0, 0}};
+  static uint32_t spans[2] = {0};
+  agc_value constants[3] = {agc_int(0), agc_int(1), agc_int(2)};
+  agc_function fns[3] = {
+    {.name = agc_make_string("loop", 4, 4), .registers = 2, .code = loop, .spans = spans, .count = 2},
+    {.name = agc_make_string("one", 3, 3), .registers = 2, .code = one, .spans = spans, .count = 2},
+    {.name = agc_make_string("two", 3, 3), .registers = 2, .code = two, .spans = spans, .count = 2},
+  };
+  agc_program program = {.functions = fns, .function_count = 3, .constants = constants, .constant_count = 3};
+  agc_jit *jit = agc_jit_new(&program, AGC_JIT_ON, &quiet);
+  assert(jit && agc_jit_native_only(jit, 1) && agc_jit_native_only(jit, 2));
+  for (uint32_t call = 1; call <= AGC_JIT_CALLEE_THRESHOLD; call++)
+    assert(!agc_jit_callee_code(jit, 1) && !agc_jit_callee_code(jit, 2));
+  assert(atomic_load(&jit->claimed[1]) && atomic_load(&jit->claimed[2]) && !atomic_load(&jit->arena));
+  assert(!agc_jit_may_run(jit, 1) && atomic_load(&jit->used) == 0);
+  uint8_t *first = (uint8_t *)(uintptr_t)agc_jit_callee_code(jit, 1);
+  uint8_t *second = (uint8_t *)(uintptr_t)atomic_load(&jit->code[2]);
+  assert(first == atomic_load(&jit->arena) && second > first && second < first + AGC_JIT_PAGE);
+  assert((size_t)(second - first) % 16 == 0 && atomic_load(&jit->used) == AGC_JIT_PAGE);
+  assert(mapped_as(first, "r-xp") && agc_jit_may_run(jit, 1) && agc_jit_may_run(jit, 2));
+  agc_value R[2] = {agc_nil(), agc_nil()};
+  expect_exit(((agc_jit_code)(uintptr_t)first)(&vm, R, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[1], agc_int(1)));
+  expect_exit(((agc_jit_code)(uintptr_t)second)(&vm, R, constants, 0), AGC_JIT_EXIT_RETURN, 1);
+  assert(same_bits(R[1], agc_int(2)));
+}
+
+/* A loop in the last function calls each of the CALLEES functions once; the even ones call a builtin that is not a
+   leaf, so they leave compiled code and stay out with `on`, and the caller's loop leaves too often then. Settling
+   reads each instruction a few times and counts each call site once, so its work stays within a small multiple of
+   the program's size (a caller walked again at each callee that drops out made it grow with the square). */
+static void settle_is_linear(void) {
+  enum { CALLEES = 20000 };
+  agc_instr *leaving = agc_alloc_atomic(2 * sizeof *leaving), *quiet = agc_alloc_atomic(sizeof *quiet);
+  leaving[0] = (agc_instr){AGC_OP_CALL_BUILTIN, 0, 0, 0};
+  leaving[1] = quiet[0] = (agc_instr){AGC_OP_RETURN, 0, 0, 0};
+  agc_instr *loop = agc_alloc_atomic((CALLEES + 2) * sizeof *loop);
+  loop[0] = (agc_instr){AGC_OP_STEP, 1, 0, 0};
+  for (uint32_t k = 0; k < CALLEES; k++) loop[k + 1] = (agc_instr){AGC_OP_CALL, 0, (uint16_t)k, (uint16_t)(k >> 16)};
+  loop[CALLEES + 1] = (agc_instr){AGC_OP_JUMP, 0, 0, 0};
+  agc_function *fns = agc_alloc((CALLEES + 1) * sizeof *fns);
+  size_t total = 0;
+  for (uint32_t k = 0; k <= CALLEES; k++) {
+    fns[k] = (agc_function){.registers = 2};
+    fns[k].code = k == CALLEES ? loop : k % 2 ? quiet : leaving;
+    fns[k].count = k == CALLEES ? CALLEES + 2 : k % 2 ? 1 : 2;
+    total += fns[k].count;
+  }
+  agc_builtin other = {.leaf = false};
+  const agc_builtin *builtins[1] = {&other};
+  agc_program program = {.functions = fns, .function_count = CALLEES + 1, .builtins = builtins};
+  bool *callable = agc_alloc_atomic(CALLEES + 1), *looped = agc_alloc_atomic(CALLEES + 1);
+  bool *calling = agc_alloc_atomic(CALLEES + 1);
+  size_t work = agc_jit_settle(&program, callable, looped, calling);
+  if (work > 5 * total) fprintf(stderr, "jit-test: settling did %zu units of work for %zu instructions\n", work, total);
+  assert(work <= 5 * total);
+  for (uint32_t k = 0; k < CALLEES; k++) assert(callable[k] == (k % 2 == 1) && !looped[k] && !calling[k]);
+  assert(!callable[CALLEES] && looped[CALLEES] && calling[CALLEES]);
 }
 #endif
 
@@ -604,6 +735,9 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
 #if AGC_JIT_HOST
   code_memory();
+  arena();
+  batch();
+  settle_is_linear();
   compile_race();
   cap_inside_an_offset();
   bytes();
