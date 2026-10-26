@@ -161,6 +161,7 @@ def with_default_steps(options: Opts.Options, searched: List[String]) -> Opts.Op
   if options.steps.size > 0
     return options
   end
+
   for folder in searched
     file = Path.join([folder, DEFAULT_STEPS_FILE]).unwrap_or(DEFAULT_STEPS_FILE)
     found = File.stat(file, IO_TIMEOUT)
@@ -168,6 +169,7 @@ def with_default_steps(options: Opts.Options, searched: List[String]) -> Opts.Op
       return options.with(steps: [file])
     end
   end
+
   return options
 end
 
