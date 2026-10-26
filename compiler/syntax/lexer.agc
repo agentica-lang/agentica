@@ -34,6 +34,7 @@ NAME_STARTS = Set.new("abcdefghijklmnopqrstuvwxyz_".split(""))
 
 ## The characters of a number: digits and `_`. Never the sentinel `""`, as for NAME_CHARS.
 NUMBER_CHARS = Set.new("0123456789_".split(""))
+DIGITS = Set.new("0123456789".split(""))
 
 ## Where a comment or a doc line ends: a line break, or the sentinel that follows the last character of the text.
 LINE_ENDS = Set.new(["\n", "\r", ""])
@@ -637,6 +638,13 @@ def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Ou
     index = skip_in(chars, index + 1, NUMBER_CHARS)
   end
 
+  # An exponent needs a digit before the `e` and after the optional sign, as in Ruby (`1e5` is a Float, `1.e5` is
+  # not); the sign is not a separate token.
+  exponent = exponent_start(chars, index)
+  if exponent >= 0
+    index = skip_in(chars, exponent, NUMBER_CHARS)
+  end
+
   start = Source.position(first, line, line_start)
   stop = Source.position(index, line, line_start)
   if invalid_separator?(chars, first, index)
@@ -651,7 +659,7 @@ def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Ou
   end
 
   digits = input.text.slice(first, index - first).replace("_", "")
-  if fractional
+  if fractional or exponent >= 0
     return Diag.Outcome.Done(token(input.text, "float", Tokens.Value.Real(digits.to_f!), start, stop))
   end
 
@@ -1453,13 +1461,31 @@ def unterminated(start: Source.Position, stop: Source.Position) -> Diag.Diagnost
   return Diag.fail("LEX-UNTERMINATED-STRING", "unterminated string", span(start, stop), Diag.Help.NoHelp)
 end
 
+# Where the digits of an exponent start when an `e` or `E` at `index` begins one (`e5`, `E-5`, `e+5`), else -1.
+def exponent_start(chars: List[String], index: Int) -> Int
+  if chars[index] != "e" and chars[index] != "E"
+    return -1
+  end
+
+  digits = index + 1
+  if chars[digits] == "+" or chars[digits] == "-"
+    digits += 1
+  end
+
+  if DIGITS.include?(chars[digits])
+    return digits
+  end
+
+  return -1
+end
+
 def invalid_separator?(chars: List[String], from: Int, stop: Int) -> Bool
   index = from
   while index < stop
     char = chars[index]
     if char == "_"
       following = at(chars, stop, index + 1)
-      if following == "" or following == "_" or following == "."
+      if !DIGITS.include?(following)
         return true
       end
     elsif char == "." and at(chars, stop, index + 1) == "_"

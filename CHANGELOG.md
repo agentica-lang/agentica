@@ -8,11 +8,17 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
+
 ### Fixed
 
 - `agentica doc` and `agentica outline` list the re-exports of a facade file
   with the doc of the original, and `agentica type-at` and `agentica refs`
   write a re-exported type through the facade alias (`Web.Address`).
+- A block of unknown result type (`map`, `Native.memory_pointer`, `Task.map`)
+  that returns `error(...)` before its `ok(...)` no longer needs an annotation.
 
 ## [0.11.0] - 2026-10-26
 

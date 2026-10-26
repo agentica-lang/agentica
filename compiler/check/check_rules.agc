@@ -213,13 +213,17 @@ def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   return ok(State.Out(st: out.st, type: T.Type.Result(out.type)))
 end
 
-# error(message) needs the Result type from its context.
+# error(message) needs the Result type from its context, except while a block is probed for its result type.
 def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   message = try State.expr(cx, st, site.args[0], T.Type.String)
   expected = site.expected
   span = site.node.span
   if !T.unknown?(expected) and !T.is?(expected, "Result")
     return error(State.mismatch(cx, message.st, expected, T.Type.Result(T.Type.Var("T")), span))
+  end
+
+  if T.unknown?(expected) and message.st.probe
+    return ok(State.Out(st: message.st, type: T.Type.Result(T.Type.Unknown)))
   end
 
   if T.unknown?(expected)

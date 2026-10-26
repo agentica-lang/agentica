@@ -24,6 +24,24 @@ end
 3.75
 ```
 
+## Exponents
+
+A Float can end in an exponent, `e` or `E` with an optional sign: `1.5e-3` is `0.0015` and `2.0E+10` is `20000000000.0`. A digit must come before the `e`, so `1.e5` is not a number, and `1e5` is a Float.
+
+```agentica
+def main() -> Void
+  puts(1.5e-3)
+  puts(2.0E+10)
+  puts(1e5)
+end
+```
+
+```output
+0.0015
+20000000000.0
+100000.0
+```
+
 ## Long numbers
 
 A `_` between digits is only visual: `1_000` is the same `Int` as `1000`.
