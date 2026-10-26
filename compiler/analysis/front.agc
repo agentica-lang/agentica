@@ -94,23 +94,28 @@ export def query_checked(cache: Cache.Cache, path: String, settings: Env.Setting
   if !settings.workspace.check_cache.on or cache.roots.size > 0 or cache.parses.kept.size > 0
     return query_cached(cache, path, settings)
   end
+
   first = Modules.load_checked(path, settings, true)
   if !first.ok?
     return query_cached(cache, path, settings)
   end
+
   loaded = first.unwrap!
   if unvouched?(loaded)
     second = Modules.load_checked(path, settings, false)
     if !second.ok?
       return query_cached(cache, path, settings)
     end
+
     loaded = second.unwrap!
   end
+
   case Linker.link_loaded(loaded, settings)
     Linker.Linking.Failed(failure) ->
       if stand_in?(loaded, failure.file)
         return query_cached(cache, path, settings)
       end
+
       return Outcome.Rejected(link_problem(failure))
     Linker.Linking.Done(program) -> return skipped(cache, path, settings, loaded, program)
   end
@@ -208,11 +213,13 @@ def skipped(
       end
     end
   end
+
   case Checker.check_query_taking(program, settings, Set.new(clean), constants)
     Checker.Checking.Failed(problem) ->
       if stand_in?(loaded, problem.file)
         return query_cached(cache, path, settings)
       end
+
       return Outcome.Rejected(problem)
     Checker.Checking.Done(checked) ->
       enter_checked(loaded, checked, settings)
@@ -240,16 +247,19 @@ def enter_checked(loaded: Modules.Loaded, checked: Checker.Checked, settings: En
   for key in loaded.order
     keys = keys.put(loaded.modules[key].prefix, key)
   end
+
   for key in loaded.order.drop(1)
     module = loaded.modules[key]
     if module.digest == "" or module.clean
       next
     end
+
     stub = ""
     case CheckCache.stub_of(module.text, module.program)
       Ast.Optional.Present(found) -> stub = found
       Ast.Optional.Absent -> stub = stub
     end
+
     constants = coded_constants(module, checked, keys)
     # Without the types of all its constants a module is never clean, so its stub would not be used either.
     if constants.ok?
@@ -276,8 +286,10 @@ def coded_constants(
     if !checked.constant_types.has_key?(linked)
       return error("the check recorded no type for #{linked}")
     end
+
     found = found.put(name, try TypeCode.encode(checked.constant_types[linked], keys))
   end
+
   return ok(found)
 end
 

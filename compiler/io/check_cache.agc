@@ -21,6 +21,7 @@
 
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
+import CheckCache from "../modules/check_cache"
 import Workspace from "../modules/workspace"
 import CacheFiles from "cache_files"
 import RandomName from "random_name"
@@ -41,6 +42,7 @@ export struct Plan
   build: String
   folder: String
   head: String
+  inputs: String
   beside: Bool
   user: Int
   present: Bool
@@ -54,6 +56,7 @@ export def attach(settings: Env.Settings, root: String, wanted: Bool) -> Env.Set
   if !planned.ok?
     return settings
   end
+
   return settings.with(workspace: settings.workspace.with(check_cache: port(planned.unwrap!)))
 end
 
@@ -62,6 +65,7 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Result[Pl
   if !wanted or settings.self_path == ""
     return error("the cache is off")
   end
+
   case settings.std
     Env.StdProvider.Folder(_) -> return error("the front end reads a stdlib folder")
     Env.StdProvider.Embedded -> return planned(settings, root)
@@ -75,15 +79,23 @@ def planned(settings: Env.Settings, root: String) -> Result[Plan]
   if real.contains?("\n")
     return error("the path has a line feed")
   end
+
   site = try CacheFiles.site(settings, real)
   user = try CacheFiles.own_user()
   folder = Paths.join(site.build, CHECK_FOLDER)
   present = try folders_present(site.build, folder, user)
-  if present
-    CacheFiles.sweep(folder)
-  end
   head = [FORMAT, "version #{settings.version}", site.binary, site.inputs].join("\n")
-  return ok(Plan(build: site.build, folder: folder, head: head, beside: site.beside, user: user, present: present))
+  return ok(
+    Plan(
+      build: site.build,
+      folder: folder,
+      head: head,
+      inputs: site.inputs,
+      beside: site.beside,
+      user: user,
+      present: present,
+    ),
+  )
 end
 
 # Whether the folders exist and are private (a folder that is there and is not private is an error: the cache is off),
@@ -92,6 +104,7 @@ def folders_present(build: String, folder: String, user: Int) -> Result[Bool]
   if !File.lstat(build, CacheFiles.IO_TIMEOUT_MS).ok? or !File.lstat(folder, CacheFiles.IO_TIMEOUT_MS).ok?
     return ok(false)
   end
+
   try CacheFiles.private_kind(build, "directory", user)
   try CacheFiles.private_kind(folder, "directory", user)
   return ok(true)
@@ -115,9 +128,10 @@ def as_writer(f: Fn[String, String, Bool]) -> Fn[String, String, Bool]
   return f
 end
 
-# The path of the entry for the file `key`.
+# The path of the entry for the file `key`. The name holds the project inputs too, so two projects that share a build
+# folder (AGENTICA_BUILD_DIR) do not replace each other's entries for a file they both import.
 def entry_path(plan: Plan, key: String) -> String
-  name = CacheFiles.digest(String.to_bytes(key)).slice(0, NAME_CHARS)
+  name = CacheFiles.digest(String.to_bytes(CheckCache.piece(plan.inputs) + key)).slice(0, NAME_CHARS)
   return Paths.join(plan.folder, "#{name}#{ENTRY_END}")
 end
 
@@ -127,6 +141,7 @@ def read_entry(plan: Plan, key: String) -> Result[String]
   if !plan.present
     return error("there is no entry")
   end
+
   path = entry_path(plan, key)
   try CacheFiles.private_kind(path, "file", plan.user)
   text = try File.read_text(path, CacheFiles.IO_TIMEOUT_MS)
@@ -134,6 +149,7 @@ def read_entry(plan: Plan, key: String) -> Result[String]
   if !text.starts_with?(wanted)
     return error("the entry is for another build or project")
   end
+
   return ok(text.slice(wanted.length, text.length - wanted.length))
 end
 
@@ -144,21 +160,26 @@ def write_entry(plan: Plan, key: String, text: String) -> Bool
   if !prepare(plan).ok?
     return false
   end
+
+  CacheFiles.sweep(plan.folder)
   suffix = RandomName.hex()
   if !suffix.ok?
     return false
   end
+
   path = entry_path(plan, key)
   temporary = "#{path}#{CacheFiles.TEMP_MARK}#{suffix.unwrap!}"
   if !CacheFiles.write_private(temporary, String.to_bytes("#{plan.head}\n#{text}")).ok?
     Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
     return false
   end
+
   CacheFiles.remove_file(path)
   if !Path.rename(temporary, path, CacheFiles.IO_TIMEOUT_MS).ok?
     Path.remove(temporary, CacheFiles.IO_TIMEOUT_MS)
     return false
   end
+
   return true
 end
 
@@ -169,6 +190,7 @@ def prepare(plan: Plan) -> Result[Void]
   if made and plan.beside
     CacheFiles.write_private(Paths.join(plan.build, ".gitignore"), String.to_bytes("*\n"))
   end
+
   try CacheFiles.private_folder(plan.folder, plan.user)
   return ok()
 end

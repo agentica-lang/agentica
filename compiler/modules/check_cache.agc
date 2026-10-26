@@ -29,7 +29,7 @@ import Declarations from "declarations"
 import Workspace from "workspace"
 
 # The first line of an entry and of every tree digest; change it when the meaning of an entry changes.
-FORMAT = "agentica-check-1"
+FORMAT = "agentica-check-2"
 
 # The digest of a tree and of a text is 64 hex digits; an entry without a vouched tree holds this in its place.
 DIGEST_CHARS = 64
@@ -43,6 +43,9 @@ ELIDE_FROM = 24
 
 # The digits of the length of the stub in an entry, at most.
 SIZE_DIGITS = 12
+
+# The longest line of the head that holds the length of the stub and its digest.
+STUB_LINE_CHARS = 12 + 1 + 64
 
 # The line of a constant in the tail of an entry: this word, the name and the type, with one space between.
 CONSTANT_WORD = "const"
@@ -97,6 +100,7 @@ export def constant_names(program: Ast.Program) -> List[String]
       _ -> next
     end
   end
+
   return names.sort
 end
 
@@ -105,10 +109,12 @@ export def find(cache: Workspace.CheckCache, key: String, digest: String) -> Ast
   if !cache.on
     return Ast.Optional.Absent
   end
+
   raw = cache.read.call(key)
   if !raw.ok?
     return Ast.Optional.Absent
   end
+
   return decode(raw.unwrap!, digest)
 end
 
@@ -118,8 +124,12 @@ export def encode(digest: String, entry: Entry) -> String
   if tree == ""
     tree = NO_TREE
   end
-  head = [FORMAT, "text #{digest}", "tree #{tree}", "stub #{entry.stub.length}"].join("\n")
-  lines = entry.constants.keys.sort.map do |name: String| "\n#{CONSTANT_WORD} #{name} #{entry.constants[name]}" end
+
+  head = [FORMAT, "text #{digest}", "tree #{tree}", "stub #{entry.stub.length} #{text_digest(entry.stub)}"].join("\n")
+  lines = entry.constants.keys.sort.map do |name: String|
+    "\n#{CONSTANT_WORD} #{name} #{escaped(entry.constants[name])}"
+  end
+
   return head + "\n" + entry.stub + lines.join("")
 end
 
@@ -128,6 +138,7 @@ export def store(cache: Workspace.CheckCache, key: String, digest: String, entry
   if !cache.on
     return false
   end
+
   return cache.write.call(key, encode(digest, entry))
 end
 
@@ -138,6 +149,7 @@ export def stub_of(text: String, program: Ast.Program) -> Ast.Optional[String]
   if !cuts.ok? or cuts.unwrap!.size == 0
     return Ast.Optional.Absent
   end
+
   pieces: List[String] = []
   at = 0
   for cut in cuts.unwrap!
@@ -145,10 +157,12 @@ export def stub_of(text: String, program: Ast.Program) -> Ast.Optional[String]
     pieces = pieces.push(replacement(text.slice(cut.first, cut.stop - cut.first), cut.wrap))
     at = cut.stop
   end
+
   stub = pieces.push(text.slice(at, text.length - at)).join("")
   if stub.length == text.length and same_declarations?(program, stub)
     return Ast.Optional.Present(stub)
   end
+
   return Ast.Optional.Absent
 end
 
@@ -159,29 +173,46 @@ def decode(raw: String, digest: String) -> Ast.Optional[Entry]
   if !raw.starts_with?(head) or raw.length < head.length + DIGEST_CHARS + 1
     return Ast.Optional.Absent
   end
+
   tree = raw.slice(head.length, DIGEST_CHARS)
   rest = raw.slice(head.length + DIGEST_CHARS, raw.length - head.length - DIGEST_CHARS)
   if !rest.starts_with?("\nstub ")
     return Ast.Optional.Absent
   end
+
   after = rest.slice(6, rest.length - 6)
   at = after.index_of("\n")
-  if !at.ok? or at.unwrap! > SIZE_DIGITS
+  if !at.ok? or at.unwrap! > STUB_LINE_CHARS
     return Ast.Optional.Absent
   end
-  size = after.slice(0, at.unwrap!).to_i()
+
+  sizes = after.slice(0, at.unwrap!).split(" ")
+  if sizes.size != 2 or sizes[0].length > SIZE_DIGITS
+    return Ast.Optional.Absent
+  end
+
+  size = sizes[0].to_i()
   start = at.unwrap! + 1
   if !size.ok? or size.unwrap! < 0 or start + size.unwrap! > after.length
     return Ast.Optional.Absent
   end
+
+  # A stub that is not the one whose digest the entry holds was damaged, and the entry is dropped.
+  stub = after.slice(start, size.unwrap!)
+  if text_digest(stub) != sizes[1]
+    return Ast.Optional.Absent
+  end
+
   constants = decode_constants(after.slice(start + size.unwrap!, after.length - start - size.unwrap!))
   if !constants.ok?
     return Ast.Optional.Absent
   end
+
   if tree == NO_TREE
     tree = ""
   end
-  return Ast.Optional.Present(Entry(tree: tree, stub: after.slice(start, size.unwrap!), constants: constants.unwrap!))
+
+  return Ast.Optional.Present(Entry(tree: tree, stub: stub, constants: constants.unwrap!))
 end
 
 # The constants of the tail of an entry: nothing, or a line feed and a `const NAME TYPE` line for each.
@@ -190,18 +221,43 @@ def decode_constants(tail: String) -> Result[Map[String, String]]
   if tail == ""
     return ok(found)
   end
+
   lines = tail.split("\n")
   if lines[0] != ""
     return error("the entry has text after the stub")
   end
+
+  prefix = "#{CONSTANT_WORD} "
   for line in lines.drop(1)
-    parts = line.split(" ")
-    if parts.size != 3 or parts[0] != CONSTANT_WORD or parts[1] == "" or parts[2] == "" or found.has_key?(parts[1])
+    if !line.starts_with?(prefix)
       return error("a constant line of the entry is wrong")
     end
-    found = found.put(parts[1], parts[2])
+
+    # The name ends at the first space; the type is the rest, which may hold spaces (the key of a file).
+    rest = line.slice(prefix.length, line.length - prefix.length)
+    space = rest.index_of(" ")
+    if !space.ok? or space.unwrap! == 0 or space.unwrap! + 1 >= rest.length
+      return error("a constant line of the entry is wrong")
+    end
+
+    name = rest.slice(0, space.unwrap!)
+    if found.has_key?(name)
+      return error("a constant appears twice in the entry")
+    end
+
+    found = found.put(name, unescaped(rest.slice(space.unwrap! + 1, rest.length - space.unwrap! - 1)))
   end
+
   return ok(found)
+end
+
+# A type text on one line: the key of a file may hold a line feed.
+def escaped(text: String) -> String
+  return text.replace("%", "%25").replace("\n", "%0A")
+end
+
+def unescaped(text: String) -> String
+  return text.replace("%0A", "\n").replace("%25", "%")
 end
 
 # The pieces of the text to blank: the statements of each function body, from the first statement up to the `end` that
@@ -217,14 +273,17 @@ def cuts_of(text: String, declarations: List[Ast.Decl]) -> Result[List[Cut]]
       Ast.Decl.Constant(node) -> found = value_cut(node)
       _ -> next
     end
+
     for cut in found
       if cut.first < floor or cut.stop > text.length
         return error("the cuts overlap")
       end
+
       cuts = cuts.push(cut)
       floor = cut.stop
     end
   end
+
   return ok(cuts)
 end
 
@@ -232,6 +291,7 @@ def body_cut(text: String, node: Ast.FunctionDecl) -> Result[List[Cut]]
   if node.body.size == 0
     return ok([])
   end
+
   first = Ast.stmt_span(node.body[0]).start.offset
   last = Ast.stmt_span(node.body[node.body.size - 1]).stop.offset
   # The span of a function ends after the line break that follows its `end`.
@@ -239,10 +299,12 @@ def body_cut(text: String, node: Ast.FunctionDecl) -> Result[List[Cut]]
   while stop > last and stop <= text.length and " \t\r\n".contains?(text.slice(stop - 1, 1))
     stop -= 1
   end
+
   stop -= END_WORD.length
   if stop < last or stop + END_WORD.length > text.length or text.slice(stop, END_WORD.length) != END_WORD
     return error("the body of #{node.name} does not end where the stub needs it to")
   end
+
   return ok([Cut(first: first, stop: stop, wrap: false)])
 end
 
@@ -251,6 +313,7 @@ def value_cut(node: Ast.ConstDecl) -> List[Cut]
   if span.stop.offset - span.start.offset < ELIDE_FROM
     return []
   end
+
   return [Cut(first: span.start.offset, stop: span.stop.offset, wrap: true)]
 end
 
@@ -272,12 +335,14 @@ def replacement(piece: String, wrap: Bool) -> String
       return piece
     end
   end
+
   out: List[String] = []
   at = 0
   for line in lines
     out = out.push(cell(widths[at], at, last, wrap, zero) + carriage(line))
     at += 1
   end
+
   return out.join("\n")
 end
 
@@ -286,6 +351,7 @@ def carriage(line: String) -> String
   if line.ends_with?("\r")
     return "\r"
   end
+
   return ""
 end
 
@@ -297,19 +363,24 @@ def zero_line(widths: List[Int]) -> Int
     if widths[0] >= 3
       return 0
     end
+
     return -1
   end
+
   at = 0
   while at <= last
     room = 1
     if at == 0 or at == last
       room = 2
     end
+
     if widths[at] >= room
       return at
     end
+
     at += 1
   end
+
   return -1
 end
 
@@ -320,23 +391,28 @@ def cell(width: Int, at: Int, last: Int, wrap: Bool, zero: Int) -> String
     if at == 0 or at == last
       return blanks(width)
     end
+
     return commented(width)
   elsif last == 0
     return "(0" + blanks(width - 3) + ")"
   end
+
   opening = ""
   closing = ""
   if at == 0
     opening = "("
   end
+
   if at == last
     closing = ")"
   end
+
   if at == zero
     return opening + "0" + blanks(width - opening.length - 1 - closing.length) + closing
   elsif at == 0 or at == last
     return opening + blanks(width - opening.length - closing.length) + closing
   end
+
   return commented(width)
 end
 
@@ -345,6 +421,7 @@ def commented(width: Int) -> String
   if width == 0
     return ""
   end
+
   return "#" + blanks(width - 1)
 end
 
@@ -355,6 +432,7 @@ def blanks(count: Int) -> String
     out = out + BLANKS
     left -= BLANK_RUN
   end
+
   return out + BLANKS.slice(0, left)
 end
 
@@ -375,6 +453,7 @@ def same_list?(whole: List[Ast.Decl], stub: List[Ast.Decl]) -> Bool
   if whole.size != stub.size
     return false
   end
+
   at = 0
   while at < whole.size
     here = Declarations.span_of(whole[at])
@@ -386,8 +465,10 @@ def same_list?(whole: List[Ast.Decl], stub: List[Ast.Decl]) -> Bool
     )
       return false
     end
+
     at += 1
   end
+
   return true
 end
 

@@ -74,14 +74,13 @@ end
 ## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a
 ## file imported twice appears once. root_dir is the folder of the root file. parsed is the number of files that this
 ## walk lexed and parsed (stubs included); the others came from the Kept files it was given. stubs counts the files
-## parsed from a stub, and clean the modules that are `clean`.
+## parsed from a stub.
 export struct Loaded
   order: List[String]
   modules: Map[String, Module]
   root_dir: String
   parsed: Int
   stubs: Int
-  clean: Int
 end
 
 ## A file parsed by an earlier walk: its text, the first id of its tree and the tree. It can stand for the file in a
@@ -128,7 +127,6 @@ struct Walk
   cached: Bool
   stubs: Bool
   stubbed: Int
-  clean: Int
 end
 
 # A file that was read and parsed, ready to join the walk.
@@ -238,7 +236,6 @@ def loaded_of(walk: Walk) -> Loaded
     root_dir: walk.root_dir,
     parsed: walk.parsed,
     stubs: walk.stubbed,
-    clean: walk.clean,
   )
 end
 
@@ -260,7 +257,6 @@ def empty_walk(prefixed: Bool, parses: Parses) -> Walk
     cached: false,
     stubs: false,
     stubbed: 0,
-    clean: 0,
   )
 end
 
@@ -329,8 +325,10 @@ def take_cached(walk: Walk, key: String, text: String, entry: Ast.Optional[Check
           return ok(Taken(program: stub.unwrap!, first_id: walk.next_id, fresh: true, stubbed: true))
         end
       end
+
     Ast.Optional.Absent -> entry = entry
   end
+
   return take(walk.kept, walk.next_id, key, key, text)
 end
 
@@ -376,7 +374,6 @@ def finish(walk: Walk, frame: Frame) -> Walk
     named: frame.named,
     imports: frame.imported,
   )
-  clean = 0
   if module.digest != ""
     # Every file it imports is done: the stack only finishes a file after the ones it read.
     below = module.imports.map do |imported: String| walk.done[imported].tree end
@@ -385,13 +382,12 @@ def finish(walk: Walk, frame: Frame) -> Walk
     if module.verified == tree
       module = vouched_clean(walk, module)
     end
-    clean = counted(0, module.clean)
   end
+
   return walk.with(
     stack: walk.stack.take(walk.stack.size - 1),
     seen: walk.seen.put(module.key, 0),
     done: walk.done.put(module.key, module),
-    clean: walk.clean + clean,
   )
 end
 
@@ -402,23 +398,28 @@ def vouched_clean(walk: Walk, module: Module) -> Module
   if names.size != module.held.size
     return module
   end
+
   prefixes = {module.key: module.prefix}
   if names.size > 0
     for key in walk.done.keys
       prefixes = prefixes.put(key, walk.done[key].prefix)
     end
   end
+
   types: Map[String, T.Type] = {}
   for name in names
     if !module.held.has_key?(name)
       return module
     end
+
     type = TypeCode.decode(module.held[name], prefixes)
     if !type.ok?
       return module
     end
+
     types = types.put(module.prefix + name, type.unwrap!)
   end
+
   return module.with(clean: true, constants: types)
 end
 
@@ -431,10 +432,12 @@ def shape_of(module: Module) -> String
   for alias in module.aliases.keys.sort
     pieces = pieces.push(alias).push(module.aliases[alias])
   end
+
   pieces = pieces.push("#{module.named.size}")
   for local in module.named.keys.sort
     pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
   end
+
   return pieces.map do |text: String| CheckCache.piece(text) end.join("")
 end
 
@@ -575,6 +578,7 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
     digest = CheckCache.text_digest(text)
     entry = CheckCache.find(settings.workspace.check_cache, key, digest)
   end
+
   taken = try take_cached(walk, key, text, entry)
   name = found.name
   if name == ""

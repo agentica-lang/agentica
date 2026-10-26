@@ -8,7 +8,9 @@ compiler/modules/check_cache.agc.
 """
 import json
 import os
+import re
 import stat
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -102,19 +104,24 @@ end
 '''
 
 
-@pytest.fixture
-def ws(tmp_path):
-    workspace = Workspace(tmp_path)
+def build(base, extra=""):
+    """The project of the cases under `base`; `extra` is text for the end of its manifest."""
+    workspace = Workspace(base)
     workspace.add_package("greeter", GIT, {"greet.agc": GREET}, tag="v1.0.0")
-    workspace.write_manifest({"greeter": dependency(GIT, tag="v1.0.0")})
+    workspace.write_manifest({"greeter": dependency(GIT, tag="v1.0.0")}, extra)
     workspace.write_lock()
     for name, text in (("main", MAIN), ("mid", MID), ("deep", DEEP), ("shapes", SHAPES)):
         (workspace.project / (name + ".agc")).write_text(text, encoding="utf-8")
     return workspace
 
 
+@pytest.fixture
+def ws(tmp_path):
+    return build(tmp_path)
+
+
 def folder_of(ws):
-    return ws.base / "build"
+    return getattr(ws, "build", ws.base / "build")
 
 
 def entries(ws):
@@ -232,6 +239,11 @@ def test_the_entries_of_a_clean_tree_serve_a_second_root_and_an_edited_buffer(ws
     assert answers_cached.code == 1
 
 
+def change_digit(found):
+    """The match of the stub line with the first hex digit of its digest changed."""
+    return found.group(1) + (b"1" if found.group(2) == b"0" else b"0")
+
+
 def corrupt_cases(head):
     """Entries that are not what a run wrote, each as a function from the good bytes."""
     lines = head.split(b"\n")
@@ -245,6 +257,8 @@ def corrupt_cases(head):
         "stub size too large": lambda good: good.replace(b"\nstub ", b"\nstub 9", 1),
         "stub size negative": lambda good: good.replace(b"\nstub ", b"\nstub -", 1),
         "stub size not a number": lambda good: good.replace(b"\nstub ", b"\nstub x", 1),
+        "stub digest wrong": lambda good: re.sub(rb"(\nstub \d+ )([0-9a-f])", change_digit, good, count=1),
+        "stub digest missing": lambda good: re.sub(rb"(\nstub \d+) [0-9a-f]{64}", rb"\1", good, count=1),
         "constant line wrong": lambda good: good + b"\nconst",
         "constant type wrong": lambda good: good.replace(b"\nconst SIZE i", b"\nconst SIZE T9:no", 1),
         "constant type deep": lambda good: good.replace(b"\nconst SIZE i", b"\nconst SIZE " + b"L" * 500 + b"i", 1),
@@ -313,3 +327,52 @@ def test_a_folder_or_entry_that_is_not_private_is_not_used(ws):
     folder.symlink_to(moved)
     assert answers(ws) == answers(ws, "--no-cache")
     assert os.path.islink(folder)
+
+
+def stamps(ws):
+    return {path.name: (path.stat().st_mtime_ns, path.read_bytes()) for path in entries(ws)}
+
+
+def test_a_path_with_a_space_still_hits(tmp_path):
+    # The type of a struct or enum constant holds the key of its file, which has the spaces of the path.
+    spaced = build(tmp_path / "my project")
+    expected = settled(spaced)
+    assert expected[0] == (0, '{"ok":true}\n', "")
+    assert any(b"\nconst ORIGIN T@" in path.read_bytes() and b" project" in path.read_bytes() for path in entries(spaced))
+    kept = stamps(spaced)
+    assert answers(spaced) == expected
+    assert stamps(spaced) == kept
+
+
+def test_a_program_without_imports_makes_no_build_folder(tmp_path):
+    (tmp_path / "hello.agc").write_text('def main() -> Void\n  puts("hi")\nend\n', encoding="utf-8")
+    env = vm_environment({"AGENTICA_BUILD_DIR": None})
+    for words in (["check", "hello.agc"], ["type-at", "hello.agc:2:3"]):
+        done = run(cli() + ["--json", *words], cwd=tmp_path, env=env)
+        assert done.code == 0, done.stderr
+    assert not (tmp_path / "_build").exists()
+
+
+def test_two_projects_with_one_build_folder_keep_their_own_entries(tmp_path):
+    shared = tmp_path / "shared"
+    first = build(tmp_path / "one")
+    second = build(tmp_path / "two", extra="\n[style]\nmax_line_width = 100\n")
+    first.build = second.build = shared
+    expected = (settled(first), settled(second))
+    # Both import std/queue: with one name for its entry they would replace each other on every run.
+    kept = stamps(first)
+    assert answers(first) == expected[0]
+    assert answers(second) == expected[1]
+    assert stamps(first) == kept
+
+
+def test_runs_at_the_same_time_give_one_answer_and_leave_valid_entries(ws):
+    expected = answers(ws, "--no-cache")
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        together = list(pool.map(lambda _: answers(ws), range(6)))
+    assert together == [expected] * 6
+    assert not list((folder_of(ws) / "check").glob("*tmp*"))
+    # Every entry is valid: another run finds all of them and writes nothing.
+    kept = stamps(ws)
+    assert answers(ws) == expected
+    assert stamps(ws) == kept

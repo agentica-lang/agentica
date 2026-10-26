@@ -10,7 +10,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `check` and `type-at` keep checked imports in `_build/check/` and skip the parse and check of unchanged ones (several times faster on a warm run); `--no-cache` turns it off. (#630)
+- `check` and `type-at` keep checked imports in `_build/check/` (they now create `_build/` when a file has imports) and skip the parse and check of unchanged ones, which makes a warm run faster; `--no-cache` turns it off. (#630)
 
 ### Fixed
 

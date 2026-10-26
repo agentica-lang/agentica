@@ -338,6 +338,7 @@ def asked_front(cache: Cache.Cache, settings: Env.Settings, file: String, skippi
   if skipping
     return Front.query_checked(cache, file, settings)
   end
+
   return Front.query_cached(cache, file, settings)
 end
 

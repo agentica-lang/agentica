@@ -62,6 +62,7 @@ export def decode(text: String, prefixes: Map[String, String]) -> Result[T.Type]
   if found.next != text.length
     return error("the type has text after it")
   end
+
   return ok(found.type)
 end
 
@@ -69,6 +70,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
   if depth > MAX_DEPTH
     return error("the type is too deep")
   end
+
   case type
     T.Type.Int -> return ok("i")
     T.Type.Float -> return ok("f")
@@ -101,6 +103,7 @@ def list_text(types: List[T.Type], keys: Map[String, String], depth: Int) -> Res
   for type in types
     parts = parts.push(try written(type, keys, depth + 1))
   end
+
   return ok(parts.join(""))
 end
 
@@ -110,14 +113,17 @@ def name_text(name: String, keys: Map[String, String]) -> Result[String]
   if !name.starts_with?("@")
     return ok(name_plain(name))
   end
+
   split = name.index_of("::")
   if !split.ok?
     return error("the name has a prefix that does not end")
   end
+
   prefix = name.slice(0, split.unwrap! + 2)
   if !keys.has_key?(prefix)
     return error("the name belongs to a file that is not in the walk")
   end
+
   local = name.slice(prefix.length, name.length - prefix.length)
   return ok("@" + name_plain(keys[prefix]) + name_plain(local))
 end
@@ -130,15 +136,18 @@ def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) 
   if depth > MAX_DEPTH or at >= text.length
     return error("the type ends too soon or is too deep")
   end
+
   letter = text.slice(at, 1)
   if SIMPLE.has_key?(letter)
     return ok(Read(type: SIMPLE[letter], next: at + 1))
   end
+
   after = at + 1
   if "RKCZLS".contains?(letter)
     item = try read_type(text, after, depth + 1, prefixes)
     return ok(Read(type: around(letter, item.type), next: item.next))
   end
+
   case letter
     "O" ->
       named = try read_name(text, after, prefixes)
@@ -189,6 +198,7 @@ def read_list(text: String, count: Counted, depth: Int, prefixes: Map[String, St
     at = item.next
     left -= 1
   end
+
   return ok(Types(types: types, next: at))
 end
 
@@ -198,9 +208,11 @@ def read_count(text: String, at: Int) -> Result[Counted]
   while stop < text.length and "0123456789".contains?(text.slice(stop, 1))
     stop += 1
   end
+
   if stop == at or stop - at > MAX_DIGITS or stop >= text.length or text.slice(stop, 1) != ":"
     return error("the type has a number that is not one")
   end
+
   return ok(Counted(value: text.slice(at, stop - at).to_i!(), next: stop + 1))
 end
 
@@ -210,6 +222,7 @@ def read_plain(text: String, at: Int) -> Result[Named]
   if length.next + length.value > text.length
     return error("the type has a name that ends too soon")
   end
+
   return ok(Named(name: text.slice(length.next, length.value), next: length.next + length.value))
 end
 
@@ -219,13 +232,16 @@ def read_name(text: String, at: Int, prefixes: Map[String, String]) -> Result[Na
   if at >= text.length
     return error("the type ends too soon")
   end
+
   if text.slice(at, 1) != "@"
     return read_plain(text, at)
   end
+
   key = try read_plain(text, at + 1)
   local = try read_plain(text, key.next)
   if !prefixes.has_key?(key.name)
     return error("the type names a file that is not in the walk")
   end
+
   return ok(Named(name: prefixes[key.name] + local.name, next: local.next))
 end

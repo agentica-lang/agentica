@@ -60,6 +60,7 @@ export def site(settings: Env.Settings, real: String) -> Result[Site]
     build_dir = override.unwrap!
     beside = false
   end
+
   return ok(
     Site(
       build: build_dir,
@@ -80,9 +81,11 @@ export def private_kind(path: String, kind: String, user: Int) -> Result[Void]
   if info.kind != kind
     return error("#{path} is not a #{kind}")
   end
+
   if user >= 0 and (info.user_id != user or info.mode.bit_and(GROUP_OTHER_WRITE) != 0)
     return error("#{path} is not private to this user")
   end
+
   return ok()
 end
 
@@ -95,12 +98,14 @@ export def own_user() -> Result[Int]
   if System.os() == "windows"
     return ok(-1)
   end
+
   name = try RandomName.hex()
   places = ["/var/tmp", "/tmp"]
   from_environment = System.env("TMPDIR")
   if from_environment.ok? and from_environment.unwrap! != ""
     places = [from_environment.unwrap!].concat(places)
   end
+
   for place in places
     made_at = Paths.join(place, "agentica-id-#{name}")
     made = File.open(made_at, "create_private", IO_TIMEOUT_MS)
@@ -113,6 +118,7 @@ export def own_user() -> Result[Int]
       end
     end
   end
+
   return error("cannot find out the user of this process")
 end
 
@@ -123,10 +129,12 @@ export def private_folder(path: String, user: Int) -> Result[Bool]
     try private_kind(path, "directory", user)
     return ok(false)
   end
+
   above = Paths.directory_of(path)
   if above != ""
     Dir.mkdir(above, IO_TIMEOUT_MS)
   end
+
   try Dir.mkdir_private(path, IO_TIMEOUT_MS)
   return ok(true)
 end
@@ -141,8 +149,10 @@ export def write_private(path: String, data: List[Int]) -> Result[Void]
       File.close(out, IO_TIMEOUT_MS)
       return written
     end
+
     rest = rest.drop(PIECE)
   end
+
   return File.close(out, IO_TIMEOUT_MS)
 end
 
@@ -161,6 +171,7 @@ export def sweep(folder: String) -> Void
   if !names.ok?
     return
   end
+
   now = Time.now_ms() / 1000
   for name in names.unwrap!
     if name.contains?(TEMP_MARK)
@@ -190,8 +201,10 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
       for name in PROJECT_FILES
         parts = parts.push("#{name} #{file_digest(workspace, Paths.join(manifest.dir, name))}")
       end
+
       parts = parts.concat(workspace_parts(workspace, manifest))
   end
+
   return ok(digest(String.to_bytes(parts.join("\n"))))
 end
 
@@ -202,6 +215,7 @@ def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> Lis
   if found.members.root == ""
     return []
   end
+
   parts = ["workspace #{found.members.root} #{file_digest(workspace, Paths.join(found.members.root, MANIFEST_FILE))}"]
   for locked in found.lock.packages
     if locked.member
@@ -209,6 +223,7 @@ def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> Lis
       parts = parts.push("member #{folder} #{file_digest(workspace, Paths.join(folder, MANIFEST_FILE))}")
     end
   end
+
   return parts
 end
 
@@ -218,5 +233,6 @@ def file_digest(workspace: Workspace.Workspace, path: String) -> String
   if !read.ok?
     return "-"
   end
+
   return digest(read.unwrap!)
 end
