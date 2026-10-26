@@ -8,41 +8,51 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-26
+
 ### Added
 
-- `export Alias.name` re-exports a name that the file imports, so a facade
-  module can collect the API of several files. (#675)
+- `export Alias.name` re-exports an imported name, so one facade module can
+  hold the API of a package of several files.
 - `[style] blank_line_after_end = true` in `agentica.toml` requires an empty
   line after a bare `end` (`CHECK-BLANK-LINE-AFTER-END`).
-- `Task.spawn(&f)` and `Task.spawn do ... end` start a function or block that
-  takes no argument.
-- `std/bdd`: `BDD.keep` and `BDD.call` keep a value that is not JSON (an open
-  connection) between the steps of a scenario, and `BDD.read_line` gives the
-  program's next output line to a step. (#685)
-- `agentica test --tags EXPR` keeps the scenarios whose tags match (`@a`, `not @a`, `and`, `or`).
-- `BDD.skip(ctx, reason)` ends a scenario as skipped; the exit code stays 0. **Breaking:** the text summary line now has `S skipped`, and `--json` has a `skipped` total, a scenario `reason` and the status `"skipped"`.
+- `Task.spawn(&f)` and `Task.spawn do ... end` take a function or block with
+  no argument.
+- `agentica test --tags EXPR` keeps the scenarios whose tags match.
+- `BDD.keep` and `BDD.call` keep a non-JSON value, such as an open
+  connection, between the steps of a scenario; `BDD.read_line` gives a step
+  the program's next output line.
+- **Breaking:** `BDD.skip(ctx, reason)` ends a scenario as skipped; the text
+  summary has `S skipped`, and `--json` has `skipped`, `reason` and the status
+  `"skipped"`.
 
 ### Changed
 
-- **Breaking:** `agentica test` without `--steps` uses the `steps.agc` found
-  in or above the folder of each path that holds a feature
-  (`specs/steps.agc` by default); two different ones are a usage error.
-- `check` and `type-at` keep checked imports in `_build/check/` (they now create `_build/` when a file has imports) and skip the parse and check of unchanged ones, which makes a warm run faster; `--no-cache` turns it off. (#630)
-- A timed channel `send` or `recv` that the other task answers within a turn
-  no longer reads the clock (far less system time where the clock is a system
-  call); the timeout may start up to one turn late.
+- **Breaking:** `agentica test` without `--steps` uses the nearest
+  `steps.agc` of each path that holds a feature; two different ones are a
+  usage error.
+- `Task.spawn_owning` takes a struct, enum, List, Map or Result that holds
+  handles and hands them all over, or none.
+- `check` and `type-at` keep checked imports in `_build/check/`, so a warm run
+  is about 5 times faster; `--no-cache` turns it off.
 - `Map.delete` and `Set.delete` are much faster on large maps, and
   `put`/`add` are about 2.5 times faster.
+- A timed channel `send` or `recv` answered within a turn no longer reads the
+  clock.
 
 ### Fixed
 
-- `agentica test` reports a failed step at its keyword's column.
-- Bytes written to a file are no longer lost at exit when its `File.close` or `File.write` times out. (#696)
-- Each `Scenario Outline` row is named `Name (values)`; names of outlines with unused columns change.
-- `resource Name, free: PQfinish` accepts a C free function whose name starts with a capital letter.
-- Linux shutdown skips a standard C stream already locked by native compute code.
-- `Given the Agentica program` no longer stops a program after 1,000,000 steps; scenario timeouts bound it.
-- `String#to_f` reads exponents and `+inf.0`, `-inf.0`, `+nan.0`: `Float#to_s` reads back.
+- Bytes written to a file are no longer lost at exit when its `File.close`
+  or `File.write` times out.
+- `agentica test` reports a failed step at its keyword's column, and names
+  each `Scenario Outline` row `Name (values)`.
+- `Given the Agentica program` no longer stops a program after 1,000,000
+  steps.
+- `resource Name, free: PQfinish` accepts a C free function that starts with
+  a capital letter.
+- Linux shutdown skips a standard C stream already locked by native compute
+  code.
+- `String#to_f` reads exponents and `+inf.0`, `-inf.0`, `+nan.0`.
 
 ## [0.10.0] - 2026-10-25
 
@@ -482,7 +492,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/sonic182/agentica/compare/0.10.0...HEAD
+[unreleased]: https://github.com/sonic182/agentica/compare/0.11.0...HEAD
+[0.11.0]: https://github.com/sonic182/agentica/compare/0.10.0...0.11.0
 [0.10.0]: https://github.com/sonic182/agentica/compare/0.10.0-beta.1...0.10.0
 [0.10.0-beta.1]: https://github.com/sonic182/agentica/compare/0.9.0...0.10.0-beta.1
 [0.9.0]: https://github.com/sonic182/agentica/compare/0.9.0-beta.2...0.9.0
