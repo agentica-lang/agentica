@@ -44,12 +44,13 @@ end
 ## the package it belongs to. reexports maps each name the file re-exports (`export Url.parse`) to the module that
 ## declares it and its name there: a chain is already followed, so the key is that of the original declaration, and
 ## `public` holds the name too, with the kind of the original. imports lists the keys of the files it imports, in the
-## order of its import lines. The last seven fields are for the cache of checked modules (check_cache.agc) and are
+## order of its import lines. The last eight fields are for the cache of checked modules (check_cache.agc) and are
 ## empty or false for a walk that does not use it, and for the root file: digest is the SHA-256 of the text, verified
-## the tree digest that the cache's entry for this text vouches for and held the types of its constants (as
-## type_code.agc writes them), stubbed whether program is the parse of the stub of that entry rather than of the text,
-## tree the tree digest of this walk, and clean whether the two are the same and the entry types every constant, so the
-## bodies and constants need no check: constants then has the type of each constant by its linked name.
+## the tree digest that the cache's entry for this text vouches for, styled whether the entry says the text follows the
+## style rule blank_line_after_end, and held the types of its constants (as type_code.agc writes them), stubbed whether
+## program is the parse of the stub of that entry rather than of the text, tree the tree digest of this walk, and clean
+## whether the two are the same and the entry types every constant, so the bodies and constants need no check:
+## constants then has the type of each constant by its linked name.
 export struct Module
   key: String
   file: String
@@ -67,6 +68,7 @@ export struct Module
   imports: List[String]
   digest: String
   verified: String
+  styled: Bool
   held: Map[String, String]
   stubbed: Bool
   tree: String
@@ -143,6 +145,7 @@ struct Parsed
   origin: Packages.Origin
   digest: String
   verified: String
+  styled: Bool
   held: Map[String, String]
   stubbed: Bool
 end
@@ -314,6 +317,7 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
     origin: Packages.project_origin(scope),
     digest: "",
     verified: "",
+    styled: false,
     held: {},
     stubbed: false,
   )
@@ -693,6 +697,7 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
     origin: found.origin,
     digest: digest,
     verified: vouched(entry),
+    styled: styled(entry),
     held: held(entry),
     stubbed: taken.stubbed,
   )
@@ -750,6 +755,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     imports: [],
     digest: parsed.digest,
     verified: parsed.verified,
+    styled: parsed.styled,
     held: parsed.held,
     stubbed: parsed.stubbed,
     tree: "",
@@ -790,6 +796,14 @@ def vouched(entry: Ast.Optional[CheckCache.Entry]) -> String
   case entry
     Ast.Optional.Present(found) -> return found.tree
     Ast.Optional.Absent -> return ""
+  end
+end
+
+# Whether an entry says that the text follows the style rule blank_line_after_end, false when there is no entry.
+def styled(entry: Ast.Optional[CheckCache.Entry]) -> Bool
+  case entry
+    Ast.Optional.Present(found) -> return found.styled
+    Ast.Optional.Absent -> return false
   end
 end
 

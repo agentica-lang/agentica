@@ -71,18 +71,20 @@ with a packed `Problem` (`references/stages.md`).
   The check cache (`modules/check_cache.agc`, `analysis/front.agc`
   `query_checked`, `io/check_cache.agc`; `check` and `type-at` only): one file
   per imported source in `_build/check/` holds the text digest, the tree digest
-  at which the module passed a check, a same-length stub (bodies blanked) and
-  the constant types (`modules/type_code.agc`). A module whose tree digest (text,
-  shape, imports' digests) the entry vouches for is `clean`: its bodies and
-  constants are not checked, and it is parsed from the stub. A walk with a
-  stubbed module that is not clean is redone without stubs, and a problem in a
-  stubbed file falls back to `query_cached`, so the answer is the cold one. The
-  core reaches the folder through `Workspace.check_cache`; the safe-file rules
-  are shared with the bytecode cache (`io/cache_files.agc`). Anything the core
-  or the CLI adds to `Modules` or `Checker` that new entries depend on must be
-  in the tree digest (`Modules.shape_of`); `test_check_cache.py` compares cold,
-  warm and `--no-cache` runs. A module of `compiler/` that `std/analysis` needs
-  goes in `stdlib/CORE`.
+  at which the module passed a check, whether the text follows
+  `blank_line_after_end` (skips the lexing of the style rule), a same-length
+  stub (bodies and private functions blanked) and the constant types
+  (`modules/type_code.agc`). A module whose tree digest (text, shape, imports'
+  digests) the entry vouches for is `clean`: its bodies and constants are not
+  checked, and it is parsed from the stub. A walk with a stubbed module that is
+  not clean is redone without stubs, and a problem in a stubbed file falls back
+  to `query_cached`, so the answer is the cold one. The core reaches the folder
+  through `Workspace.check_cache`; the safe-file rules are shared with the
+  bytecode cache (`io/cache_files.agc`). Anything the core or the CLI adds to
+  `Modules` or `Checker` that new entries depend on must be in the tree digest
+  (`Modules.shape_of`); `test_check_cache.py` compares cold, warm and
+  `--no-cache` runs. A module of `compiler/` that `std/analysis` needs goes in
+  `stdlib/CORE`.
 
 ### Pure core, one port
 

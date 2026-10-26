@@ -3,23 +3,27 @@
 ## again either. The machine keeps one entry for each file of a program (io/check_cache.agc, `Workspace.CheckCache`);
 ## this file decides what an entry says and when it may be used, and does no I/O.
 ##
-## An entry holds four things about the text of one file: its SHA-256, the tree digest at which the file passed a check
-## (`tree`), the stub, and the type of each of its constants (type_code.agc). The tree digest is the SHA-256 of the
-## text, of the shape of the file (the package it belongs to and the names its imports bind) and of the tree digests of
-## the files it imports, so it changes when the file or anything under it changes. A module whose tree digest is the
-## one its entry vouches for, and whose constants the entry types, is `clean`: every function body and constant in it
-## passed the check of that tree, and a new check of the same tree gives the same result, since a body is checked from
-## the text of its module and the declarations and constants of what it imports and nothing else. The checker skips
-## the bodies, constants and field defaults of the clean modules (`Checker.check_query_taking`) and reads the types of
-## their constants from the entry.
+## An entry holds five things about the text of one file: its SHA-256, the tree digest at which the file passed a check
+## (`tree`), whether the text follows the style rule blank_line_after_end (`styled`), the stub, and the type of each of
+## its constants (type_code.agc). The tree digest is the SHA-256 of the text, of the shape of the file (the package it
+## belongs to and the names its imports bind) and of the tree digests of the files it imports, so it changes when the
+## file or anything under it changes. A module whose tree digest is the one its entry vouches for, and whose constants
+## the entry types, is `clean`: every function body and constant in it passed the check of that tree, and a new check
+## of the same tree gives the same result, since a body is checked from the text of its module and the declarations and
+## constants of what it imports and nothing else. The checker skips the bodies, constants and field defaults of the
+## clean modules (`Checker.check_query_taking`) and reads the types of their constants from the entry. `styled` is a
+## fact about the text alone, so it does not need the tree: a text that the entry says is styled is not lexed again for
+## the style rule (check_style.agc); a text that breaks the rule is never marked, and is lexed and reported as always.
 ##
-## The stub is the text of the file with the statements of every function body, and the value of every long constant,
-## blanked. It has the same length, line breaks and offsets, so every span of a declaration is the one the whole text
-## gives, and it lexes and parses much faster than the text. The loader parses the stub of a file whose text digest an
-## entry holds, in place of the text (Modules.load_checked); the module is then `stubbed`, and is used only while it is
-## `clean`, since its bodies are not there to be checked. A stub is made from a parse of the text and is kept only
-## after it parses again with the same declarations (`stub_of`). An entry that cannot be decoded, or that is for
-## another text, is a miss; nothing here halts or gives a different diagnostic because of what an entry holds.
+## The stub is the text of the file with every private function, the statements of every other function body, and the
+## value of every long constant, blanked. It has the same length, line breaks and offsets, so every span of a
+## declaration is the one the whole text gives, and it lexes and parses much faster than the text. A private function
+## is left out because an importer cannot name it and the bodies of a clean module are not checked. The loader parses
+## the stub of a file whose text digest an entry holds, in place of the text (Modules.load_checked); the module is then
+## `stubbed`, and is used only while it is `clean`, since its bodies are not there to be checked. A stub is made from a
+## parse of the text and is kept only after it parses again with the same declarations (`stub_of`). An entry that
+## cannot be decoded, or that is for another text, is a miss; nothing here halts or gives a different diagnostic
+## because of what an entry holds.
 
 import Diag from "../diagnostics/diagnostic"
 import Ast from "../syntax/ast"
@@ -29,7 +33,7 @@ import Declarations from "declarations"
 import Workspace from "workspace"
 
 # The first line of an entry and of every tree digest; change it when the meaning of an entry changes.
-FORMAT = "agentica-check-2"
+FORMAT = "agentica-check-3"
 
 # The digest of a tree and of a text is 64 hex digits; an entry without a vouched tree holds this in its place.
 DIGEST_CHARS = 64
@@ -40,6 +44,11 @@ END_WORD = "end"
 
 # A constant whose value is shorter than this keeps its value in the stub: it is cheap to read and to check.
 ELIDE_FROM = 24
+
+# What follows the tree digest in an entry: the style line and the start of the stub line, which are as long as each
+# other.
+STYLED_STUB = "\nstyle 1\nstub "
+UNSTYLED_STUB = "\nstyle 0\nstub "
 
 # The digits of the length of the stub in an entry, at most.
 SIZE_DIGITS = 12
@@ -57,11 +66,13 @@ BLANKS = (
   "                                                                "
 )
 
-## What an entry says about the text whose digest was asked for: `tree` is "" when no check vouches for it, `stub` is
-## "" when the entry has none, and `constants` holds the type of each constant of the file by its name, as
-## type_code.agc writes it (all of them, or none).
+## What an entry says about the text whose digest was asked for: `tree` is "" when no check vouches for it, `styled` is
+## true when the text has no `end` that the style rule blank_line_after_end refuses (false when it breaks the rule, or
+## nobody looked), `stub` is "" when the entry has none, and `constants` holds the type of each constant of the file by
+## its name, as type_code.agc writes it (all of them, or none).
 export struct Entry
   tree: String
+  styled: Bool
   stub: String
   constants: Map[String, String]
 end
@@ -118,14 +129,20 @@ export def find(cache: Workspace.CheckCache, key: String, digest: String) -> Ast
   return decode(raw.unwrap!, digest)
 end
 
-## The text of an entry for the text with `digest`: four lines of head, the stub, then one line for each constant.
+## The text of an entry for the text with `digest`: five lines of head, the stub, then one line for each constant.
 export def encode(digest: String, entry: Entry) -> String
   tree = entry.tree
   if tree == ""
     tree = NO_TREE
   end
 
-  head = [FORMAT, "text #{digest}", "tree #{tree}", "stub #{entry.stub.length} #{text_digest(entry.stub)}"].join("\n")
+  head = [
+    FORMAT,
+    "text #{digest}",
+    "tree #{tree}",
+    "style #{styled_digit(entry.styled)}",
+    "stub #{entry.stub.length} #{text_digest(entry.stub)}",
+  ].join("\n")
   lines = entry.constants.keys.sort.map do |name: String|
     "\n#{CONSTANT_WORD} #{name} #{escaped(entry.constants[name])}"
   end
@@ -176,11 +193,12 @@ def decode(raw: String, digest: String) -> Ast.Optional[Entry]
 
   tree = raw.slice(head.length, DIGEST_CHARS)
   rest = raw.slice(head.length + DIGEST_CHARS, raw.length - head.length - DIGEST_CHARS)
-  if !rest.starts_with?("\nstub ")
+  styled = rest.starts_with?(STYLED_STUB)
+  if !styled and !rest.starts_with?(UNSTYLED_STUB)
     return Ast.Optional.Absent
   end
 
-  after = rest.slice(6, rest.length - 6)
+  after = rest.slice(STYLED_STUB.length, rest.length - STYLED_STUB.length)
   at = after.index_of("\n")
   if !at.ok? or at.unwrap! > STUB_LINE_CHARS
     return Ast.Optional.Absent
@@ -212,7 +230,7 @@ def decode(raw: String, digest: String) -> Ast.Optional[Entry]
     tree = ""
   end
 
-  return Ast.Optional.Present(Entry(tree: tree, stub: stub, constants: constants.unwrap!))
+  return Ast.Optional.Present(Entry(tree: tree, styled: styled, stub: stub, constants: constants.unwrap!))
 end
 
 # The constants of the tail of an entry: nothing, or a line feed and a `const NAME TYPE` line for each.
@@ -251,6 +269,14 @@ def decode_constants(tail: String) -> Result[Map[String, String]]
   return ok(found)
 end
 
+def styled_digit(styled: Bool) -> String
+  if styled
+    return "1"
+  end
+
+  return "0"
+end
+
 # A type text on one line: the key of a file may hold a line feed.
 def escaped(text: String) -> String
   return text.replace("%", "%25").replace("\n", "%0A")
@@ -269,7 +295,7 @@ def cuts_of(text: String, declarations: List[Ast.Decl]) -> Result[List[Cut]]
   for wrapped in declarations
     found: List[Cut] = []
     case Declarations.unwrap(wrapped)
-      Ast.Decl.Function(node) -> found = try body_cut(text, node)
+      Ast.Decl.Function(node) -> found = try function_cut(text, node, droppable?(wrapped, node))
       Ast.Decl.Constant(node) -> found = value_cut(node)
       _ -> next
     end
@@ -287,25 +313,80 @@ def cuts_of(text: String, declarations: List[Ast.Decl]) -> Result[List[Cut]]
   return ok(cuts)
 end
 
-def body_cut(text: String, node: Ast.FunctionDecl) -> Result[List[Cut]]
-  if node.body.size == 0
+# Whether the stub can leave out the whole of a function: a private one, which the importers of its file cannot name
+# and whose body a clean module does not check. An extern one stays, and so does one with a doc, so that the doc stays
+# on the declaration it is for.
+def droppable?(wrapped: Ast.Decl, node: Ast.FunctionDecl) -> Bool
+  if Declarations.exported?(wrapped)
+    return false
+  end
+
+  case node.native
+    Ast.Optional.Present(_) -> return false
+    Ast.Optional.Absent ->
+      case node.doc
+        Ast.Optional.Present(_) -> return false
+        Ast.Optional.Absent -> return true
+      end
+  end
+end
+
+# The cut of a function: the statements of its body, or all of it when `whole`.
+def function_cut(text: String, node: Ast.FunctionDecl, whole: Bool) -> Result[List[Cut]]
+  if node.body.size == 0 and !whole
     return ok([])
   end
 
-  first = Ast.stmt_span(node.body[0]).start.offset
-  last = Ast.stmt_span(node.body[node.body.size - 1]).stop.offset
-  # The span of a function ends after the line break that follows its `end`.
-  stop = node.span.stop.offset
-  while stop > last and stop <= text.length and " \t\r\n".contains?(text.slice(stop - 1, 1))
-    stop -= 1
+  first = node.span.start.offset
+  last = first
+  if node.body.size > 0
+    last = Ast.stmt_span(node.body[node.body.size - 1]).stop.offset
+    if !whole
+      first = Ast.stmt_span(node.body[0]).start.offset
+    end
   end
 
-  stop -= END_WORD.length
+  stop = end_offset(text, last, node.span.stop.offset) - END_WORD.length
   if stop < last or stop + END_WORD.length > text.length or text.slice(stop, END_WORD.length) != END_WORD
     return error("the body of #{node.name} does not end where the stub needs it to")
   end
 
+  if whole
+    stop += END_WORD.length
+  end
+
   return ok([Cut(first: first, stop: stop, wrap: false)])
+end
+
+# The offset after the `end` that closes a function whose span stops at `stop`: the span goes on over the line break
+# that follows the `end`, and over a comment on its line. `floor` is before the `end`.
+def end_offset(text: String, floor: Int, stop: Int) -> Int
+  if stop > text.length
+    return stop
+  end
+
+  at = trimmed(text, floor, stop)
+  line = at
+  while line > floor and text.slice(line - 1, 1) != "\n"
+    line -= 1
+  end
+
+  mark = text.slice(line, at - line).index_of("#")
+  if mark.ok?
+    return trimmed(text, floor, line + mark.unwrap!)
+  end
+
+  return at
+end
+
+# `stop` moved back over the blanks and line breaks before it, down to `floor`.
+def trimmed(text: String, floor: Int, stop: Int) -> Int
+  at = stop
+  while at > floor and " \t\r\n".contains?(text.slice(at - 1, 1))
+    at -= 1
+  end
+
+  return at
 end
 
 def value_cut(node: Ast.ConstDecl) -> List[Cut]
@@ -444,8 +525,20 @@ def same_declarations?(program: Ast.Program, stub: String) -> Bool
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, 0)
         Diag.Outcome.Failed(_) -> return false
-        Diag.Outcome.Done(parsed) -> return same_list?(program.declarations, parsed.declarations)
+        Diag.Outcome.Done(parsed) -> return same_list?(kept_declarations(program.declarations), parsed.declarations)
       end
+  end
+end
+
+# The declarations that a stub keeps: all but the private functions it leaves out.
+def kept_declarations(declarations: List[Ast.Decl]) -> List[Ast.Decl]
+  return declarations.select do |wrapped: Ast.Decl| kept?(wrapped) end
+end
+
+def kept?(wrapped: Ast.Decl) -> Bool
+  case wrapped
+    Ast.Decl.Function(node) -> return !droppable?(wrapped, node)
+    _ -> return true
   end
 end
 

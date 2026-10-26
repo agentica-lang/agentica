@@ -12,6 +12,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Float literals take an exponent: `1.0e300`, `1.5e-3`, `2.0E+10`, `1e5`.
 
+### Changed
+
+- A warm `agentica check` and `agentica type-at` do less work: the cache of
+  checked modules leaves out the private functions of the imports and does not
+  lex a file again for `blank_line_after_end` (2.3 times faster on
+  `compiler/`).
+
 ### Fixed
 
 - `agentica doc` and `agentica outline` list the re-exports of a facade file
