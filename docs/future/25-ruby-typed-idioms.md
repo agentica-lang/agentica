@@ -528,5 +528,5 @@ one exists.
    some fields replaced, keeping the others:
    `def logged(base: Storage) -> Storage` returns `base.with(get: ...)`,
    where the new `get` logs and then calls `base.get`.
-3. A facade module passes on names from other modules with re-exports (25.2),
-   like Elixir's `defdelegate`.
+3. A facade module passes on names from other modules with re-exports
+   (`docs/grammar/05b-modules.md`), like Elixir's `defdelegate`.

@@ -504,3 +504,27 @@ class TestModuleRules:
                                                            "export Url.parse\n" + MAIN})
         assert after_import[1] is None
         assert start(self.assert_rejected(after_declaration, "PARSE-MISSING-BLANK-LINE")) == (5, 1)
+
+    def test_a_re_export_next_to_other_forms_a_doc_a_constant_a_cycle_and_its_own_alias(self):
+        url = {"url.agc": self.URL}
+        value = "export struct Value\n  n: Int\nend\n\n"
+        cycle_url = ('import Facade from "facade"\n\n'
+                     "export def parse(text: String) -> Int\n  return 1\nend\n\n")
+        root = 'import Facade from "facade"\n\n' + MAIN
+        cases = [
+            # (files, code, file, line, column)
+            ({**url, "facade.agc": 'import Url from "url"\n\n## Doc.\nexport Url.parse\n', "root.agc": root},
+             "PARSE-DETACHED-DOC", "facade.agc", 3, 1),
+            ({**url, "facade.agc": 'import Url from "url"\n\nLIMIT = 1\n\nexport Url.parse\n', "root.agc": root},
+             "CHECK-DECL-ORDER", "facade.agc", 5, 1),
+            ({"url.agc": cycle_url, "facade.agc": 'import Url from "url"\n\nexport Url.parse\n', "root.agc": root},
+             "CHECK-IMPORT-CYCLE", "url.agc", 1, 1),
+            ({"value.agc": value, "facade.agc": 'import Value from "value"\n\nexport Value.Value\n', "root.agc": root},
+             "CHECK-REDEFINED-NAME", "facade.agc", 3, 14),
+        ]
+        results = self.checks([(files, "root.agc", None) for files, *_rest in cases])
+        for (_files, code, file, line, column), checked in zip(cases, results):
+            problem = self.assert_rejected(checked, code, line=line, file=file)
+            assert start(problem) == (line, column)
+        # The alias of the facade is the usual cause of the last one, so the diagnostic says what to do.
+        assert results[3][1]["help"]

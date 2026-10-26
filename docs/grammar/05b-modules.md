@@ -93,7 +93,9 @@ and a dot only for a re-export, so there is no clash with `export def`,
   re-exportable.
 - The name must not be the name of a declaration of the file, of another
   re-export or of an import alias of the file: `CHECK-REDEFINED-NAME` at the
-  name.
+  name. So the alias of a facade must differ from the names it re-exports:
+  `import Value from "value"` with `export Value.Value` is an error; write
+  `import V from "value"` and `export V.Value`.
 - It is the same declaration, not a copy. A program that imports both
   `web.agc` and `url.agc` sees `Web.Address` and `Url.Address` as one type, and
   `&Web.parse` and `&Url.parse` are the same function. A re-export of a
@@ -105,8 +107,8 @@ and a dot only for a re-export, so there is no clash with `export def`,
 - Re-exports come with the imports, may follow each other and the imports
   directly, and after a declaration need the blank line
   (`PARSE-MISSING-BLANK-LINE`); they are in the first group of
-  `CHECK-DECL-ORDER`. A `##` doc before a
-  re-export is `PARSE-DETACHED-DOC`: the doc stays on the original.
+  `CHECK-DECL-ORDER`. A `##` doc before a re-export is `PARSE-DETACHED-DOC`:
+  the doc stays on the original.
 - An exported signature may still mention a private type that importers cannot
   name, as before.
 

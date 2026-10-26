@@ -33,7 +33,9 @@ cannot name or build them.
   (`Web.Address` and `Url.Address` are one type, `&Web.parse` is `&Url.parse`);
   the file adds no local name. No `as`, no wildcard. An unknown alias or name
   is `CHECK-IMPORT-NAME`; a name that is also a declaration, re-export or
-  alias of the file is `CHECK-REDEFINED-NAME`.
+  alias of the file is `CHECK-REDEFINED-NAME`, so the alias must differ from
+  the names it re-exports: `import V from "value"` with `export V.Value`, not
+  `import Value ...` with `export Value.Value`.
 - Alias names are uppercase and cannot collide with declarations, other aliases,
   imported names or builtin names.
 

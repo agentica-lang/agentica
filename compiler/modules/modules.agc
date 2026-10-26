@@ -450,7 +450,12 @@ def bind_reexports(walk: Walk, module: Module) -> Result[Module]
 
     if public.has_key?(decl.name) or module.names.has_key?(decl.name) or module.aliases.has_key?(decl.name)
       return error(
-        Failure.fail_at(at_name, "CHECK-REDEFINED-NAME", "duplicate or reserved re-exported name", Diag.Help.NoHelp),
+        Failure.fail_at(
+          at_name,
+          "CHECK-REDEFINED-NAME",
+          "duplicate or reserved re-exported name",
+          Failure.hint(clash_help(module, decl.name)),
+        ),
       )
     end
 
@@ -464,6 +469,15 @@ def bind_reexports(walk: Walk, module: Module) -> Result[Module]
   end
 
   return ok(module.with(public: public, reexports: reexports))
+end
+
+# What to do about a re-exported name that is already taken: the alias of the file is the usual cause.
+def clash_help(module: Module, name: String) -> String
+  if module.aliases.has_key?(name)
+    return "an import alias of this file has that name; rename the alias, as in import V from \"path\""
+  end
+
+  return "another declaration or re-export of this file has that name"
 end
 
 # `module`, which its entry vouches for, as a clean module if the entry types every constant it declares and the types
